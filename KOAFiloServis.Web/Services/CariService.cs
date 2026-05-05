@@ -1,4 +1,4 @@
-using KOAFiloServis.Shared.Entities;
+﻿using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
 using KOAFiloServis.Web.Models;
 using Microsoft.EntityFrameworkCore;
@@ -1028,6 +1028,45 @@ public class CariService : ICariService
         }
 
         return uyarilar.OrderBy(u => u.KalanGun).ToList();
+    }
+
+    // ---- Sefer Ücretleri ----
+    public async Task<List<CariSeferUcreti>> GetSeferUcretleriAsync(int cariId)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.CariSeferUcretleri
+            .AsNoTracking()
+            .Include(x => x.Guzergah)
+            .Where(x => x.CariId == cariId && !x.IsDeleted)
+            .OrderByDescending(x => x.Aktif)
+            .ThenByDescending(x => x.GecerlilikBaslangic)
+            .ToListAsync();
+    }
+
+    public async Task<CariSeferUcreti> AddSeferUcretiAsync(CariSeferUcreti ucret)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        context.CariSeferUcretleri.Add(ucret);
+        await context.SaveChangesAsync();
+        return ucret;
+    }
+
+    public async Task<CariSeferUcreti> UpdateSeferUcretiAsync(CariSeferUcreti ucret)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        context.CariSeferUcretleri.Update(ucret);
+        await context.SaveChangesAsync();
+        return ucret;
+    }
+
+    public async Task<bool> DeleteSeferUcretiAsync(int ucretId)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var entity = await context.CariSeferUcretleri.FirstOrDefaultAsync(x => x.Id == ucretId);
+        if (entity == null) return false;
+        entity.IsDeleted = true;
+        await context.SaveChangesAsync();
+        return true;
     }
 }
 

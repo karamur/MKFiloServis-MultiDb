@@ -1,4 +1,4 @@
-using KOAFiloServis.Shared.Entities;
+﻿using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Models;
 
 namespace KOAFiloServis.Web.Services;
@@ -31,6 +31,12 @@ public interface ICariService
 
     // Vade Uyarıları
     Task<List<CariVadeUyari>> GetVadeUyarilariAsync(int? cariId = null, int yaklasmaSuresiGun = 7);
+
+    // Sefer Ücretleri (taşıma tedarikçisi cari için birden fazla sefer ücreti)
+    Task<List<CariSeferUcreti>> GetSeferUcretleriAsync(int cariId);
+    Task<CariSeferUcreti> AddSeferUcretiAsync(CariSeferUcreti ucret);
+    Task<CariSeferUcreti> UpdateSeferUcretiAsync(CariSeferUcreti ucret);
+    Task<bool> DeleteSeferUcretiAsync(int ucretId);
 }
 
 /// <summary>

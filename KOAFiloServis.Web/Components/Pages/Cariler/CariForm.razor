@@ -4,6 +4,7 @@
 @using KOAFiloServis.Web.Services
 @inject ICariService CariService
 @inject IMuhasebeService MuhasebeService
+@inject IGuzergahService GuzergahService
 @inject IToastService ToastService
 @inject NavigationManager Navigation
 @rendermode InteractiveServer
@@ -159,6 +160,98 @@
                     </div>
                 }
 
+                @if (cari.CariTipi == CariTipi.Tedarikci || cari.CariTipi == CariTipi.MusteriTedarikci)
+                {
+                    <hr />
+                    <h5 class="mb-3"><i class="bi bi-file-earmark-medical me-2 text-info"></i>Taşıma Sözleşmesi</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Sözleşme No</label>
+                                <InputText @bind-Value="cari.SozlesmeNo" class="form-control" />
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Sözleşme Başlangıç</label>
+                                <InputDate @bind-Value="cari.SozlesmeBaslangicTarihi" class="form-control" />
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Sözleşme Bitiş</label>
+                                <InputDate @bind-Value="cari.SozlesmeBitisTarihi" class="form-control" />
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (IsEdit)
+                    {
+                        <h6 class="mt-4 mb-2">
+                            <i class="bi bi-cash-stack me-2 text-success"></i>Sefer Ücretleri
+                            <small class="text-muted">(birden fazla sefer ücreti tanımlayabilirsiniz)</small>
+                        </h6>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="min-width:140px;">Tanım *</th>
+                                        <th>Güzergah</th>
+                                        <th class="text-end" style="width:140px;">Sefer Ücreti *</th>
+                                        <th style="width:150px;">Geç. Başlangıç</th>
+                                        <th style="width:150px;">Geç. Bitiş</th>
+                                        <th class="text-center" style="width:80px;">Aktif</th>
+                                        <th style="width:80px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (seferUcretleri.Count == 0)
+                                    {
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted">Henüz sefer ücreti tanımı yok.</td>
+                                        </tr>
+                                    }
+                                    @foreach (var u in seferUcretleri)
+                                    {
+                                        <tr>
+                                            <td><input class="form-control form-control-sm" @bind="u.Tanim" placeholder="Örn. Tek yön" /></td>
+                                            <td>
+                                                <select class="form-select form-select-sm" @bind="u.GuzergahId">
+                                                    <option value="">-- Tüm güzergahlar --</option>
+                                                    @foreach (var g in guzergahlar)
+                                                    {
+                                                        <option value="@g.Id">@g.GuzergahAdi</option>
+                                                    }
+                                                </select>
+                                            </td>
+                                            <td><input type="number" step="0.01" class="form-control form-control-sm text-end" @bind="u.SeferUcreti" /></td>
+                                            <td><input type="date" class="form-control form-control-sm" @bind="u.GecerlilikBaslangic" /></td>
+                                            <td><input type="date" class="form-control form-control-sm" @bind="u.GecerlilikBitis" /></td>
+                                            <td class="text-center"><input type="checkbox" class="form-check-input" @bind="u.Aktif" /></td>
+                                            <td class="text-center">
+                                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => SeferUcretiSil(u)" title="Sil">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-success" @onclick="SeferUcretiEkle">
+                            <i class="bi bi-plus-lg me-1"></i>Sefer Ücreti Ekle
+                        </button>
+                    }
+                    else
+                    {
+                        <div class="alert alert-secondary small mb-0">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Sefer ücretleri, cari kaydı oluşturulduktan sonra düzenleme ekranında tanımlanabilir.
+                        </div>
+                    }
+                }
+
                 <hr />
 
                 <div class="d-flex gap-2">
@@ -180,6 +273,9 @@
 
     private Cari cari = new() { Aktif = true };
     private List<MuhasebeHesap>? muhasebeHesaplar;
+    private List<Guzergah> guzergahlar = new();
+    private List<CariSeferUcreti> seferUcretleri = new();
+    private List<int> silinenSeferUcretiIdleri = new();
     private bool IsEdit => Id.HasValue;
 
     protected override async Task OnInitializedAsync()
@@ -194,12 +290,29 @@
         }
         catch { }
 
+        try
+        {
+            guzergahlar = await GuzergahService.GetActiveAsync();
+        }
+        catch
+        {
+            guzergahlar = new List<Guzergah>();
+        }
+
         if (IsEdit)
         {
             var existing = await CariService.GetByIdAsync(Id!.Value);
             if (existing != null)
             {
                 cari = existing;
+                try
+                {
+                    seferUcretleri = await CariService.GetSeferUcretleriAsync(cari.Id);
+                }
+                catch
+                {
+                    seferUcretleri = new List<CariSeferUcreti>();
+                }
             }
             else
             {
@@ -212,6 +325,26 @@
             cari.CariTipi = CariTipi.Musteri;
             cari.Aktif = true;
         }
+    }
+
+    private void SeferUcretiEkle()
+    {
+        seferUcretleri.Add(new CariSeferUcreti
+        {
+            CariId = cari.Id,
+            Tanim = "Tek yön",
+            GecerlilikBaslangic = DateTime.Today,
+            Aktif = true
+        });
+    }
+
+    private void SeferUcretiSil(CariSeferUcreti ucret)
+    {
+        if (ucret.Id > 0)
+        {
+            silinenSeferUcretiIdleri.Add(ucret.Id);
+        }
+        seferUcretleri.Remove(ucret);
     }
 
     private async Task Kaydet()
@@ -227,11 +360,14 @@
             if (IsEdit)
             {
                 await CariService.UpdateAsync(cari);
+                await SeferUcretleriniKaydetAsync();
                 ToastService.ShowSuccess($"{cari.Unvan} basariyla guncellendi.");
             }
             else
             {
-                await CariService.CreateAsync(cari);
+                var olusan = await CariService.CreateAsync(cari);
+                cari.Id = olusan.Id;
+                await SeferUcretleriniKaydetAsync();
                 ToastService.ShowSuccess($"{cari.Unvan} basariyla olusturuldu.");
             }
             Navigation.NavigateTo("/cariler");
@@ -239,6 +375,29 @@
         catch (Exception ex)
         {
             ToastService.ShowError($"Hata: {ex.Message}");
+        }
+    }
+
+    private async Task SeferUcretleriniKaydetAsync()
+    {
+        foreach (var id in silinenSeferUcretiIdleri.Distinct())
+        {
+            try { await CariService.DeleteSeferUcretiAsync(id); } catch { }
+        }
+        silinenSeferUcretiIdleri.Clear();
+
+        foreach (var u in seferUcretleri)
+        {
+            if (string.IsNullOrWhiteSpace(u.Tanim)) continue;
+            u.CariId = cari.Id;
+            if (u.Id == 0)
+            {
+                await CariService.AddSeferUcretiAsync(u);
+            }
+            else
+            {
+                await CariService.UpdateSeferUcretiAsync(u);
+            }
         }
     }
 

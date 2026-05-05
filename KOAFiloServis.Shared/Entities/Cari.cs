@@ -1,4 +1,4 @@
-namespace KOAFiloServis.Shared.Entities;
+﻿namespace KOAFiloServis.Shared.Entities;
 
 /// <summary>
 /// Cari hesap (Musteri/Tedarikci/Firma/Personel)
@@ -50,6 +50,11 @@ public class Cari : BaseEntity
     public int? SoforId { get; set; }
     public virtual Sofor? Sofor { get; set; }
 
+    // Taşıma tedarikçi sözleşme bilgileri (Tedarikçi/Müşteri+Tedarikçi cariler için)
+    public string? SozlesmeNo { get; set; }
+    public DateTime? SozlesmeBaslangicTarihi { get; set; }
+    public DateTime? SozlesmeBitisTarihi { get; set; }
+
     // Navigation Properties
     public virtual ICollection<Fatura> Faturalar { get; set; } = new List<Fatura>();
     public virtual ICollection<Guzergah> Guzergahlar { get; set; } = new List<Guzergah>();
@@ -58,6 +63,7 @@ public class Cari : BaseEntity
     public virtual ICollection<CariIletisimNot> IletisimNotlari { get; set; } = new List<CariIletisimNot>();
     public virtual ICollection<Hatirlatici> Hatirlaticilar { get; set; } = new List<Hatirlatici>();
     public virtual ICollection<CariHatirlatma> CariHatirlatmalar { get; set; } = new List<CariHatirlatma>();
+    public virtual ICollection<CariSeferUcreti> SeferUcretleri { get; set; } = new List<CariSeferUcreti>();
 }
 
 public enum CariTipi

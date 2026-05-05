@@ -62,6 +62,7 @@ public class ApplicationDbContext : DbContext
 
     // Cari Modulu
     public DbSet<Cari> Cariler { get; set; }
+    public DbSet<CariSeferUcreti> CariSeferUcretleri { get; set; }
 
     // Filo Servis Modulu
     public DbSet<Sofor> Soforler { get; set; }
@@ -365,6 +366,33 @@ public class ApplicationDbContext : DbContext
 
             // Global Query Filter: IsDeleted + Multi-tenant
             entity.HasQueryFilter(e => !e.IsDeleted && 
+                (TenantFilterDisabled || e.SirketId == null || e.SirketId == TenantId));
+        });
+
+        // CariSeferUcreti - Bir cariye birden fazla sefer ücreti tanımlanabilir
+        modelBuilder.Entity<CariSeferUcreti>(entity =>
+        {
+            entity.HasIndex(e => new { e.CariId, e.GuzergahId, e.GecerlilikBaslangic });
+            entity.Property(e => e.Tanim).HasMaxLength(150);
+            entity.Property(e => e.Aciklama).HasMaxLength(500);
+            entity.Property(e => e.SeferUcreti).HasPrecision(18, 2);
+
+            entity.HasOne(e => e.Cari)
+                .WithMany(c => c.SeferUcretleri)
+                .HasForeignKey(e => e.CariId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Guzergah)
+                .WithMany()
+                .HasForeignKey(e => e.GuzergahId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.Sirket)
+                .WithMany()
+                .HasForeignKey(e => e.SirketId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(e => !e.IsDeleted &&
                 (TenantFilterDisabled || e.SirketId == null || e.SirketId == TenantId));
         });
 
