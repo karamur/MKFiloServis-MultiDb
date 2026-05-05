@@ -5,6 +5,8 @@
 @inject ICariService CariService
 @inject ITasimaTedarikciService TasimaTedarikciService
 @inject IBudgetService BudgetService
+@inject IExcelService ExcelService
+@inject IPdfService PdfService
 @inject NavigationManager Navigation
 @inject IToastService ToastService
 @inject IJSRuntime JS
@@ -483,16 +485,84 @@
 
     private async Task ExcelIndir()
     {
-        ToastService.ShowInfo("Excel hazırlanıyor...");
-        // Excel export implementasyonu
-        await Task.CompletedTask;
+        if (mutabakatRapor == null)
+        {
+            ToastService.ShowWarning("Önce mutabakat oluşturun");
+            return;
+        }
+
+        try
+        {
+            var headers = new[] { "Tarih", "Belge No", "Açıklama", "Borç", "Alacak", "Bakiye" };
+            var rows = new List<object[]>
+            {
+                new object[] { mutabakatRapor.BaslangicTarihi.AddDays(-1).ToString("dd.MM.yyyy"), "", "DEVİR", 0m, 0m, mutabakatRapor.DonemBasiBakiye }
+            };
+            rows.AddRange(mutabakatRapor.Hareketler.Select(h => new object[]
+            {
+                h.Tarih.ToString("dd.MM.yyyy"),
+                h.BelgeNo,
+                h.Aciklama,
+                h.Borc,
+                h.Alacak,
+                h.Bakiye
+            }));
+            rows.Add(new object[] { "", "", "TOPLAM", mutabakatRapor.ToplamBorc, mutabakatRapor.ToplamAlacak, mutabakatRapor.DonemSonuBakiye });
+
+            var sheetName = $"Mutabakat_{mutabakatRapor.CariKodu}";
+            var bytes = ExcelService.CreateExcel(headers, rows, sheetName.Length > 31 ? sheetName[..31] : sheetName);
+            var fileName = $"Mutabakat_{mutabakatRapor.CariKodu}_{mutabakatRapor.BaslangicTarihi:yyyyMMdd}_{mutabakatRapor.BitisTarihi:yyyyMMdd}.xlsx";
+            await JS.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(bytes),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            ToastService.ShowSuccess("Excel indirildi");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Excel oluşturulamadı: " + ex.Message);
+        }
     }
 
     private async Task PdfIndir()
     {
-        ToastService.ShowInfo("PDF hazırlanıyor...");
-        // PDF export implementasyonu
-        await Task.CompletedTask;
+        if (mutabakatRapor == null)
+        {
+            ToastService.ShowWarning("Önce mutabakat oluşturun");
+            return;
+        }
+
+        try
+        {
+            var model = new MutabakatPdfModel
+            {
+                CariKodu = mutabakatRapor.CariKodu,
+                CariUnvan = mutabakatRapor.CariUnvan,
+                VergiNo = mutabakatRapor.VergiNo,
+                BaslangicTarihi = mutabakatRapor.BaslangicTarihi,
+                BitisTarihi = mutabakatRapor.BitisTarihi,
+                DonemBasiBakiye = mutabakatRapor.DonemBasiBakiye,
+                ToplamBorc = mutabakatRapor.ToplamBorc,
+                ToplamAlacak = mutabakatRapor.ToplamAlacak,
+                DonemSonuBakiye = mutabakatRapor.DonemSonuBakiye,
+                Hareketler = mutabakatRapor.Hareketler.Select(h => new MutabakatPdfHareket
+                {
+                    Tarih = h.Tarih,
+                    BelgeNo = h.BelgeNo,
+                    Aciklama = h.Aciklama,
+                    Borc = h.Borc,
+                    Alacak = h.Alacak,
+                    Bakiye = h.Bakiye
+                }).ToList()
+            };
+
+            var bytes = PdfService.GenerateMutabakatPdf(model);
+            var fileName = $"Mutabakat_{mutabakatRapor.CariKodu}_{mutabakatRapor.BaslangicTarihi:yyyyMMdd}_{mutabakatRapor.BitisTarihi:yyyyMMdd}.pdf";
+            await JS.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(bytes), "application/pdf");
+            ToastService.ShowSuccess("PDF indirildi");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("PDF oluşturulamadı: " + ex.Message);
+        }
     }
 
     private async Task EmailGonder()

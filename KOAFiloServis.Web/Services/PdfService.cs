@@ -1,4 +1,4 @@
-using KOAFiloServis.Shared.Entities;
+﻿using KOAFiloServis.Shared.Entities;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -441,6 +441,112 @@ public class PdfService : IPdfService
                     table.Cell().Background(Colors.Grey.Lighten3).Padding(5).AlignRight().Text($"{faturalar.Sum(f => f.KalanTutar):N2} ?").Bold();
                 });
             }
+        });
+    }
+
+    public byte[] GenerateMutabakatPdf(MutabakatPdfModel model)
+    {
+        var document = Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.Margin(30);
+                page.DefaultTextStyle(x => x.FontSize(10));
+
+                page.Header().Element(c => ComposeHeader(c, $"CARİ MUTABAKAT\n{model.CariUnvan}"));
+                page.Content().Element(c => ComposeMutabakatContent(c, model));
+                page.Footer().Element(ComposeFooter);
+            });
+        });
+
+        return document.GeneratePdf();
+    }
+
+    private void ComposeMutabakatContent(IContainer container, MutabakatPdfModel model)
+    {
+        container.Column(col =>
+        {
+            // Cari bilgileri
+            col.Item().Border(1).Padding(10).Row(row =>
+            {
+                row.RelativeItem().Column(c =>
+                {
+                    c.Item().Text("Cari Kodu:").Bold();
+                    c.Item().Text(model.CariKodu);
+                    c.Item().PaddingTop(5).Text("Cari Ünvan:").Bold();
+                    c.Item().Text(model.CariUnvan);
+                    c.Item().PaddingTop(5).Text("Vergi No:").Bold();
+                    c.Item().Text(string.IsNullOrWhiteSpace(model.VergiNo) ? "-" : model.VergiNo);
+                });
+
+                row.RelativeItem().Column(c =>
+                {
+                    c.Item().Text("Dönem:").Bold();
+                    c.Item().Text($"{model.BaslangicTarihi:dd.MM.yyyy} - {model.BitisTarihi:dd.MM.yyyy}");
+                    c.Item().PaddingTop(5).Text("Dönem Başı Bakiye:").Bold();
+                    c.Item().Text($"{model.DonemBasiBakiye:N2} TL");
+                    c.Item().PaddingTop(5).Text("Dönem Sonu Bakiye:").Bold();
+                    c.Item().Text($"{model.DonemSonuBakiye:N2} TL").Bold();
+                });
+            });
+
+            col.Item().PaddingVertical(15);
+
+            // Hareketler tablosu
+            col.Item().Table(table =>
+            {
+                table.ColumnsDefinition(columns =>
+                {
+                    columns.RelativeColumn(1);
+                    columns.RelativeColumn(1);
+                    columns.RelativeColumn(3);
+                    columns.RelativeColumn(1);
+                    columns.RelativeColumn(1);
+                    columns.RelativeColumn(1);
+                });
+
+                table.Header(header =>
+                {
+                    header.Cell().Background(Colors.Grey.Lighten2).Padding(5).Text("Tarih").Bold();
+                    header.Cell().Background(Colors.Grey.Lighten2).Padding(5).Text("Belge No").Bold();
+                    header.Cell().Background(Colors.Grey.Lighten2).Padding(5).Text("Açıklama").Bold();
+                    header.Cell().Background(Colors.Grey.Lighten2).Padding(5).AlignRight().Text("Borç").Bold();
+                    header.Cell().Background(Colors.Grey.Lighten2).Padding(5).AlignRight().Text("Alacak").Bold();
+                    header.Cell().Background(Colors.Grey.Lighten2).Padding(5).AlignRight().Text("Bakiye").Bold();
+                });
+
+                foreach (var h in model.Hareketler)
+                {
+                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).Text(h.Tarih.ToString("dd.MM.yyyy"));
+                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).Text(h.BelgeNo);
+                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).Text(h.Aciklama);
+                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).AlignRight().Text($"{h.Borc:N2}");
+                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).AlignRight().Text($"{h.Alacak:N2}");
+                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).AlignRight().Text($"{h.Bakiye:N2}");
+                }
+
+                // Toplam
+                table.Cell().ColumnSpan(3).Background(Colors.Grey.Lighten3).Padding(5).Text("TOPLAM").Bold();
+                table.Cell().Background(Colors.Grey.Lighten3).Padding(5).AlignRight().Text($"{model.ToplamBorc:N2}").Bold();
+                table.Cell().Background(Colors.Grey.Lighten3).Padding(5).AlignRight().Text($"{model.ToplamAlacak:N2}").Bold();
+                table.Cell().Background(Colors.Grey.Lighten3).Padding(5).AlignRight().Text($"{model.DonemSonuBakiye:N2}").Bold();
+            });
+
+            col.Item().PaddingTop(30).Row(row =>
+            {
+                row.RelativeItem().Border(1).Padding(15).Column(c =>
+                {
+                    c.Item().Text("Mutabakat Eden").Bold();
+                    c.Item().PaddingTop(40).Text("İmza / Kaşe").FontSize(9).FontColor(Colors.Grey.Medium);
+                });
+                row.ConstantItem(20);
+                row.RelativeItem().Border(1).Padding(15).Column(c =>
+                {
+                    c.Item().Text("Mutabık Kalınan").Bold();
+                    c.Item().PaddingTop(40).Text("İmza / Kaşe").FontSize(9).FontColor(Colors.Grey.Medium);
+                });
+            });
         });
     }
 }
