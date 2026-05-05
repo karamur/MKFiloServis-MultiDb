@@ -55,11 +55,11 @@
         @if (HasMenuYetki("menu.ebys"))
         {
             <div class="nav-section">
-                <div class="nav-section-header" @onclick="() => ToggleSection(15)" style="cursor: pointer;">
+                <div class="nav-section-header" @onclick="() => ToggleSection(NavSection.Ebys)" style="cursor: pointer;">
                     <span><i class="bi bi-folder2-open me-2"></i>EBYS BELGE YÖNETİMİ</span>
-                    <i class="bi @(expandedSections[15] ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                    <i class="bi @(IsExpanded(NavSection.Ebys) ? "bi-chevron-up" : "bi-chevron-down")"></i>
                 </div>
-                @if (expandedSections[15])
+                @if (IsExpanded(NavSection.Ebys))
                 {
                     <div class="nav-section-content">
                         @if (HasYetki("ebys.oku") || HasYetki("belgeuyari.oku"))
@@ -104,11 +104,11 @@
         @if (HasMenuYetki("menu.cari"))
         {
             <div class="nav-section">
-                <div class="nav-section-header" @onclick="() => ToggleSection(0)" style="cursor: pointer;">
+                <div class="nav-section-header" @onclick="() => ToggleSection(NavSection.Cari)" style="cursor: pointer;">
                     <span><i class="bi bi-people-fill me-2"></i>CARİ YÖNETİMİ</span>
-                    <i class="bi @(expandedSections[0] ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                    <i class="bi @(IsExpanded(NavSection.Cari) ? "bi-chevron-up" : "bi-chevron-down")"></i>
                 </div>
-                @if (expandedSections[0])
+                @if (IsExpanded(NavSection.Cari))
                 {
                     <div class="nav-section-content">
                         @* === CARİ KAYIT === *@
@@ -171,11 +171,11 @@
         @if (HasMenuYetki("menu.filoservis"))
         {
             <div class="nav-section">
-                <div id="nav-section-filo-toggle" class="nav-section-header" @onclick="() => ToggleSection(1)" style="cursor: pointer;">
+                <div id="nav-section-filo-toggle" class="nav-section-header" @onclick="() => ToggleSection(NavSection.FiloServis)" style="cursor: pointer;">
                     <span><i class="bi bi-truck me-2"></i>FILO SERVIS</span>
-                    <i class="bi @(expandedSections[1] ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                    <i class="bi @(IsExpanded(NavSection.FiloServis) ? "bi-chevron-up" : "bi-chevron-down")"></i>
                 </div>
-                @if (expandedSections[1])
+                @if (IsExpanded(NavSection.FiloServis))
                 {
                     <div class="nav-section-content">
                         @if (HasYetki("araclar.oku"))
@@ -322,11 +322,11 @@
         @if (HasMenuYetki("menu.muhasebe"))
         {
             <div class="nav-section">
-                <div class="nav-section-header" @onclick="() => ToggleSection(7)" style="cursor: pointer;">
+                <div class="nav-section-header" @onclick="() => ToggleSection(NavSection.Muhasebe)" style="cursor: pointer;">
                     <span><i class="bi bi-journal-text me-2"></i>MUHASEBE</span>
-                    <i class="bi @(expandedSections[7] ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                    <i class="bi @(IsExpanded(NavSection.Muhasebe) ? "bi-chevron-up" : "bi-chevron-down")"></i>
                 </div>
-                @if (expandedSections[7])
+                @if (IsExpanded(NavSection.Muhasebe))
                 {
                     <div class="nav-section-content">
                         @if (HasYetki("muhasebedash.oku"))
@@ -383,11 +383,11 @@
         @if (HasMenuYetki("menu.personel"))
         {
             <div class="nav-section">
-                <div class="nav-section-header" @onclick="() => ToggleSection(5)" style="cursor: pointer;">
+                <div class="nav-section-header" @onclick="() => ToggleSection(NavSection.Personel)" style="cursor: pointer;">
                     <span><i class="bi bi-people-fill me-2"></i>PERSONEL</span>
-                    <i class="bi @(expandedSections[5] ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                    <i class="bi @(IsExpanded(NavSection.Personel) ? "bi-chevron-up" : "bi-chevron-down")"></i>
                 </div>
-                @if (expandedSections[5])
+                @if (IsExpanded(NavSection.Personel))
                 {
                     <div class="nav-section-content">
                         @* === PERSONEL KAYIT === *@
@@ -460,11 +460,11 @@
         @if (HasMenuYetki("menu.fatura"))
         {
             <div class="nav-section">
-                <div class="nav-section-header" @onclick="() => ToggleSection(2)" style="cursor: pointer;">
+                <div class="nav-section-header" @onclick="() => ToggleSection(NavSection.Fatura)" style="cursor: pointer;">
                     <span><i class="bi bi-receipt me-2"></i>FATURA İŞLEMLERİ</span>
-                    <i class="bi @(expandedSections[2] ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                    <i class="bi @(IsExpanded(NavSection.Fatura) ? "bi-chevron-up" : "bi-chevron-down")"></i>
                 </div>
-                @if (expandedSections[2])
+                @if (IsExpanded(NavSection.Fatura))
                 {
                     <div class="nav-section-content">
                         @if (HasYetki("faturalar.oku"))
@@ -529,11 +529,11 @@
         @if (HasYetki("ihale.oku") || HasYetki("raporlar.oku"))
         {
             <div class="nav-section">
-                <div class="nav-section-header" @onclick="() => ToggleSection(14)" style="cursor: pointer;">
+                <div class="nav-section-header" @onclick="() => ToggleSection(NavSection.Ihale)" style="cursor: pointer;">
                     <span><i class="bi bi-briefcase me-2"></i>İHALE HAZIRLIK</span>
-                    <i class="bi @(expandedSections[14] ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                    <i class="bi @(IsExpanded(NavSection.Ihale) ? "bi-chevron-up" : "bi-chevron-down")"></i>
                 </div>
-                @if (expandedSections[14])
+                @if (IsExpanded(NavSection.Ihale))
                 {
                     <div class="nav-section-content">
                         <div class="nav-item px-3">
@@ -550,11 +550,11 @@
         @if (HasMenuYetki("menu.bankakasa"))
         {
             <div class="nav-section">
-                <div class="nav-section-header" @onclick="() => ToggleSection(3)" style="cursor: pointer;">
+                <div class="nav-section-header" @onclick="() => ToggleSection(NavSection.BankaKasa)" style="cursor: pointer;">
                     <span><i class="bi bi-bank me-2"></i>BANKA / KASA</span>
-                    <i class="bi @(expandedSections[3] ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                    <i class="bi @(IsExpanded(NavSection.BankaKasa) ? "bi-chevron-up" : "bi-chevron-down")"></i>
                 </div>
-                @if (expandedSections[3])
+                @if (IsExpanded(NavSection.BankaKasa))
                 {
                     <div class="nav-section-content">
                         @if (HasYetki("bankahesap.oku"))
@@ -595,11 +595,11 @@
         @if (HasMenuYetki("menu.butce"))
         {
             <div class="nav-section">
-                <div class="nav-section-header" @onclick="() => ToggleSection(11)" style="cursor: pointer;">
+                <div class="nav-section-header" @onclick="() => ToggleSection(NavSection.Butce)" style="cursor: pointer;">
                     <span><i class="bi bi-wallet2 me-2"></i>BÜTÇE MODÜLÜ</span>
-                    <i class="bi @(expandedSections[11] ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                    <i class="bi @(IsExpanded(NavSection.Butce) ? "bi-chevron-up" : "bi-chevron-down")"></i>
                 </div>
-                @if (expandedSections[11])
+                @if (IsExpanded(NavSection.Butce))
                 {
                     <div class="nav-section-content">
                         @if (HasYetki("butceanaliz.oku"))
@@ -643,11 +643,11 @@
         @if (HasMenuYetki("menu.satis"))
         {
             <div class="nav-section">
-                <div class="nav-section-header" @onclick="() => ToggleSection(12)" style="cursor: pointer;">
+                <div class="nav-section-header" @onclick="() => ToggleSection(NavSection.Satis)" style="cursor: pointer;">
                     <span><i class="bi bi-car-front-fill me-2"></i>SATIŞ / KİRALAMA</span>
-                    <i class="bi @(expandedSections[12] ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                    <i class="bi @(IsExpanded(NavSection.Satis) ? "bi-chevron-up" : "bi-chevron-down")"></i>
                 </div>
-                @if (expandedSections[12])
+                @if (IsExpanded(NavSection.Satis))
                 {
                     <div class="nav-section-content">
                         @if (HasYetki("satis.oku"))
@@ -713,11 +713,11 @@
         @if (HasMenuYetki("menu.stok"))
         {
             <div class="nav-section">
-                <div class="nav-section-header" @onclick="() => ToggleSection(13)" style="cursor: pointer;">
+                <div class="nav-section-header" @onclick="() => ToggleSection(NavSection.Stok)" style="cursor: pointer;">
                     <span><i class="bi bi-box-seam me-2"></i>STOK / ENVANTER</span>
-                    <i class="bi @(expandedSections[13] ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                    <i class="bi @(IsExpanded(NavSection.Stok) ? "bi-chevron-up" : "bi-chevron-down")"></i>
                 </div>
-                @if (expandedSections[13])
+                @if (IsExpanded(NavSection.Stok))
                 {
                     <div class="nav-section-content">
                         @if (HasYetki("stok.oku"))
@@ -747,11 +747,11 @@
         @if (HasMenuYetki("menu.checklist"))
         {
             <div class="nav-section">
-                <div class="nav-section-header" @onclick="() => ToggleSection(9)" style="cursor: pointer;">
+                <div class="nav-section-header" @onclick="() => ToggleSection(NavSection.Checklist)" style="cursor: pointer;">
                     <span><i class="bi bi-clipboard-check me-2"></i>CHECKLIST</span>
-                    <i class="bi @(expandedSections[9] ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                    <i class="bi @(IsExpanded(NavSection.Checklist) ? "bi-chevron-up" : "bi-chevron-down")"></i>
                 </div>
-                @if (expandedSections[9])
+                @if (IsExpanded(NavSection.Checklist))
                 {
                     <div class="nav-section-content">
                         @if (HasYetki("checklist.oku"))
@@ -779,11 +779,11 @@
         @if (HasMenuYetki("menu.raporlar"))
         {
             <div class="nav-section">
-                <div class="nav-section-header" @onclick="() => ToggleSection(4)" style="cursor: pointer;">
+                <div class="nav-section-header" @onclick="() => ToggleSection(NavSection.Raporlar)" style="cursor: pointer;">
                     <span><i class="bi bi-bar-chart-fill me-2"></i>RAPORLAR</span>
-                    <i class="bi @(expandedSections[4] ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                    <i class="bi @(IsExpanded(NavSection.Raporlar) ? "bi-chevron-up" : "bi-chevron-down")"></i>
                 </div>
-                @if (expandedSections[4])
+                @if (IsExpanded(NavSection.Raporlar))
                 {
                     <div class="nav-section-content">
                         @* === PERSONEL RAPORLARI === *@
@@ -908,11 +908,11 @@
         @if (HasMenuYetki("menu.ayarlar"))
         {
             <div class="nav-section">
-                <div class="nav-section-header" @onclick="() => ToggleSection(6)" style="cursor: pointer;">
+                <div class="nav-section-header" @onclick="() => ToggleSection(NavSection.Ayarlar)" style="cursor: pointer;">
                     <span><i class="bi bi-gear-fill me-2"></i>AYARLAR</span>
-                    <i class="bi @(expandedSections[6] ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                    <i class="bi @(IsExpanded(NavSection.Ayarlar) ? "bi-chevron-up" : "bi-chevron-down")"></i>
                 </div>
-                @if (expandedSections[6])
+                @if (IsExpanded(NavSection.Ayarlar))
                 {
                     <div class="nav-section-content">
                         @if (HasYetki("firmayonetim.oku"))
@@ -1174,7 +1174,25 @@
 </div>
 
 @code {
-    private bool[] expandedSections = new bool[16];
+    private enum NavSection
+    {
+        Cari,
+        FiloServis,
+        Fatura,
+        BankaKasa,
+        Raporlar,
+        Personel,
+        Ayarlar,
+        Muhasebe,
+        Checklist,
+        Butce,
+        Satis,
+        Stok,
+        Ihale,
+        Ebys
+    }
+
+    private HashSet<NavSection> expandedSections = new();
     private HashSet<string> kullaniciYetkileri = new();
     private HashSet<string> kullaniciYetkiPrefixleri = new();
     private bool yetkilerYuklendi = false;
@@ -1319,13 +1337,15 @@
         ["menu.satis"] = new[] { "satis.oku", "piyasa.oku", "raporlar.oku" },
     };
 
-    private void ToggleSection(int index)
+    private void ToggleSection(NavSection section)
     {
-        if (index < expandedSections.Length)
+        if (!expandedSections.Add(section))
         {
-            expandedSections[index] = !expandedSections[index];
+            expandedSections.Remove(section);
         }
     }
+
+    private bool IsExpanded(NavSection section) => expandedSections.Contains(section);
 }
 
 
