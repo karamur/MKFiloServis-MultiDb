@@ -1,4 +1,6 @@
-@using KOAFiloServis.Web.Services.Interfaces
+﻿@using KOAFiloServis.Web.Services.Interfaces
+@using Microsoft.Extensions.Logging
+@inject ILogger<EbysAIPanel> Logger
 
 <div class="ebys-ai-panel @(Expanded ? "expanded" : "collapsed")">
     <div class="panel-header" @onclick="TogglePanel">
@@ -277,7 +279,15 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _aiDurum = await AIService.DurumKontrolAsync();
+        try
+        {
+            _aiDurum = await AIService.DurumKontrolAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "EbysAIPanel AI durum kontrolu basarisiz oldu");
+            _aiDurum = new AIDurumBilgi { OllamaAktif = false };
+        }
     }
 
     private void TogglePanel()
@@ -331,6 +341,7 @@
         }
         catch (Exception ex)
         {
+            Logger.LogWarning(ex, "EbysAIPanel dosya islemede hata (DosyaAdi={DosyaAdi})", file?.Name);
             _ocrSonuc = new OcrSonuc
             {
                 Basarili = false,
@@ -369,6 +380,7 @@
         }
         catch (Exception ex)
         {
+            Logger.LogWarning(ex, "EbysAIPanel siniflandirma hatasi (BelgeTipi={BelgeTipi})", _seciliBelgeTipi);
             _siniflandirmaSonuc = new BelgeSiniflandirmaSonuc
             {
                 Basarili = false,
@@ -403,6 +415,7 @@
         }
         catch (Exception ex)
         {
+            Logger.LogWarning(ex, "EbysAIPanel ozet olusturma hatasi");
             _ozetSonuc = $"Özet oluşturulamadı: {ex.Message}";
         }
         finally
