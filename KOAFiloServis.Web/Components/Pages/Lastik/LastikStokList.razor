@@ -17,6 +17,27 @@
         </button>
     </div>
 
+    <!-- Sekmeler -->
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <button class="nav-link @(aktifSekme == "liste" ? "active" : "")" @onclick='() => SekmeDegistir("liste")'>
+                <i class="bi bi-list me-1"></i>Stok Listesi
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(aktifSekme == "plaka" ? "active" : "")" @onclick='() => SekmeDegistir("plaka")'>
+                <i class="bi bi-truck me-1"></i>Plaka Bazlı Envanter
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(aktifSekme == "eksik" ? "active" : "")" @onclick='() => SekmeDegistir("eksik")'>
+                <i class="bi bi-exclamation-triangle me-1"></i>Eksik Sezon Lastiği
+            </button>
+        </li>
+    </ul>
+
+    @if (aktifSekme == "liste")
+    {
     <!-- Aktif / Pasif Filtre -->
     <div class="card mb-3">
         <div class="card-body py-2">
@@ -162,6 +183,131 @@
             </div>
         </div>
     }
+    } @* aktifSekme == liste *@
+
+    @if (aktifSekme == "plaka")
+    {
+        @if (plakaEnvanteri == null)
+        {
+            <div class="text-center"><div class="spinner-border" role="status"></div></div>
+        }
+        else if (!plakaEnvanteri.Any())
+        {
+            <div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>Hiçbir araca atanmış aktif lastik kaydı yok.</div>
+        }
+        else
+        {
+            <div class="card">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered align-middle mb-0">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Plaka</th>
+                                    <th>Araç</th>
+                                    <th class="text-center">Takılı</th>
+                                    <th class="text-center">Yedek</th>
+                                    <th class="text-center">Yaz</th>
+                                    <th class="text-center">Kış</th>
+                                    <th>Lastikler</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var p in plakaEnvanteri)
+                                {
+                                    <tr>
+                                        <td><strong>@p.Plaka</strong></td>
+                                        <td><small>@p.AracBilgisi</small></td>
+                                        <td class="text-center"><span class="badge bg-primary">@p.TakiliSayisi</span></td>
+                                        <td class="text-center"><span class="badge bg-secondary">@p.YedekSayisi</span></td>
+                                        <td class="text-center">
+                                            @if (p.YazVar) { <i class="bi bi-check-circle-fill text-success"></i> }
+                                            else { <i class="bi bi-x-circle-fill text-danger"></i> }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (p.KisVar) { <i class="bi bi-check-circle-fill text-success"></i> }
+                                            else { <i class="bi bi-x-circle-fill text-danger"></i> }
+                                        </td>
+                                        <td>
+                                            @foreach (var l in p.Lastikler)
+                                            {
+                                                <div class="small">
+                                                    @if (l.Takili)
+                                                    {
+                                                        <span class="badge bg-primary me-1"><i class="bi bi-truck"></i> Takılı</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-light text-dark border me-1"><i class="bi bi-archive"></i> Yedek (@(l.DepoAdi ?? "-"))</span>
+                                                    }
+                                                    <span class="badge @GetSezonBadge(l.Sezon) me-1">@GetSezonText(l.Sezon)</span>
+                                                    <strong>@l.Marka</strong> @l.Ebat
+                                                    <span class="badge @GetDurumBadge(l.Durum) ms-1">@GetDurumText(l.Durum)</span>
+                                                    @if (!string.IsNullOrWhiteSpace(l.SeriNo)) { <small class="text-muted ms-1">@l.SeriNo</small> }
+                                                </div>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="p-2 text-muted small">Toplam: <strong>@plakaEnvanteri.Count</strong> plaka</div>
+                </div>
+            </div>
+        }
+    }
+
+    @if (aktifSekme == "eksik")
+    {
+        @if (eksikSezonRapor == null)
+        {
+            <div class="text-center"><div class="spinner-border" role="status"></div></div>
+        }
+        else if (!eksikSezonRapor.Any())
+        {
+            <div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>Tüm plakalarda yaz ve kış lastiği mevcut.</div>
+        }
+        else
+        {
+            <div class="card">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-striped mb-0">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Plaka</th>
+                                    <th>Araç</th>
+                                    <th class="text-center">Yaz</th>
+                                    <th class="text-center">Kış</th>
+                                    <th class="text-center">Toplam Lastik</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var e in eksikSezonRapor)
+                                {
+                                    <tr>
+                                        <td><strong>@e.Plaka</strong></td>
+                                        <td><small>@e.AracBilgisi</small></td>
+                                        <td class="text-center">
+                                            @if (e.YazEksik) { <span class="badge bg-danger">Eksik</span> }
+                                            else { <span class="badge bg-success">Var</span> }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (e.KisEksik) { <span class="badge bg-danger">Eksik</span> }
+                                            else { <span class="badge bg-success">Var</span> }
+                                        </td>
+                                        <td class="text-center">@e.ToplamLastikSayisi</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="p-2 text-muted small">Toplam: <strong>@eksikSezonRapor.Count</strong> plaka eksik sezona sahip.</div>
+                </div>
+            </div>
+        }
+    }
 </div>
 
 <!-- Form Modal -->
@@ -189,10 +335,53 @@
                                 </InputSelect>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label class="form-label">Marka</label>
-                                <InputText @bind-Value="editStok.Marka" class="form-control" placeholder="Bridgestone, Michelin..." />
+                                <label class="form-label">Araç (Plaka)</label>
+                                <div class="position-relative">
+                                    <input type="text" class="form-control" placeholder="Plaka veya araç ara... (boş = depoda)"
+                                           value="@formAracArama"
+                                           @oninput="FormAracAramaGuncelle"
+                                           @onfocus="() => formAracDropAcik = true"
+                                           @onblur="FormAracDropKapat" />
+                                    @if (formAracDropAcik && formFiltreliAraclar.Any())
+                                    {
+                                        <div class="dropdown-menu show w-100" style="max-height:220px;overflow-y:auto;z-index:1060;">
+                                            <button type="button" class="dropdown-item" @onmousedown="() => FormAracSec(null)">
+                                                <span class="text-muted">-- Atama Yok (Depoda) --</span>
+                                            </button>
+                                            @foreach (var a in formFiltreliAraclar)
+                                            {
+                                                <button type="button" class="dropdown-item" @onmousedown="() => FormAracSec(a)">
+                                                    <strong>@a.AktifPlaka</strong> — @a.Marka @a.Model
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+                                </div>
                             </div>
                         </div>
+                        @if (editStok.Id == 0)
+                        {
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">Adet *</label>
+                                    <InputNumber @bind-Value="yeniAdet" class="form-control" min="1" max="20" />
+                                    <small class="text-muted">Aynı özelliklerde belirtilen adette ayrı stok kaydı oluşturulur (1-20).</small>
+                                </div>
+                                <div class="col-md-8 mb-3">
+                                    <label class="form-label">Marka</label>
+                                    <InputText @bind-Value="editStok.Marka" class="form-control" placeholder="Bridgestone, Michelin..." />
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="row">
+                                <div class="col-md-12 mb-3">
+                                    <label class="form-label">Marka</label>
+                                    <InputText @bind-Value="editStok.Marka" class="form-control" placeholder="Bridgestone, Michelin..." />
+                                </div>
+                            </div>
+                        }
                         <div class="row">
                             <div class="col-md-4 mb-3">
                                 <label class="form-label">Ebat *</label>
@@ -296,6 +485,9 @@
     private List<LastikDepo> depolar = new();
     private List<Arac> tumAraclar = new();
     private List<Arac> filtreliAraclar = new();
+    private List<LastikPlakaEnvanteri>? plakaEnvanteri;
+    private List<LastikEksikSezonSatiri>? eksikSezonRapor;
+    private string aktifSekme = "liste";
     private LastikStok editStok = new();
     private LastikStok? silinecek;
     private LastikStok? pasifYapilacak;
@@ -309,12 +501,61 @@
     private string filtreAracArama = string.Empty;
     private bool aracDropAcik = false;
 
+    // Form: adet bazlı kayıt + araç seçimi
+    private int yeniAdet = 1;
+    private string formAracArama = string.Empty;
+    private bool formAracDropAcik = false;
+    private List<Arac> formFiltreliAraclar = new();
+
     protected override async Task OnInitializedAsync()
     {
         depolar = await LastikService.GetDepoListAsync();
         tumAraclar = await AracService.GetAllAsync();
         filtreliAraclar = tumAraclar;
+        formFiltreliAraclar = tumAraclar;
         await YukleStoklar();
+    }
+
+    private async Task SekmeDegistir(string sekme)
+    {
+        aktifSekme = sekme;
+        if (sekme == "plaka" && plakaEnvanteri == null)
+            plakaEnvanteri = await LastikService.GetPlakaBazliEnvanterAsync();
+        else if (sekme == "eksik" && eksikSezonRapor == null)
+            eksikSezonRapor = await LastikService.GetEksikSezonRaporuAsync();
+    }
+
+    private async Task RaporlariYenile()
+    {
+        if (plakaEnvanteri != null)
+            plakaEnvanteri = await LastikService.GetPlakaBazliEnvanterAsync();
+        if (eksikSezonRapor != null)
+            eksikSezonRapor = await LastikService.GetEksikSezonRaporuAsync();
+    }
+
+    private void FormAracAramaGuncelle(ChangeEventArgs e)
+    {
+        formAracArama = e.Value?.ToString() ?? string.Empty;
+        formFiltreliAraclar = string.IsNullOrWhiteSpace(formAracArama)
+            ? tumAraclar
+            : tumAraclar.Where(a =>
+                (a.AktifPlaka?.Contains(formAracArama, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.Marka?.Contains(formAracArama, StringComparison.OrdinalIgnoreCase) ?? false))
+              .ToList();
+        formAracDropAcik = true;
+    }
+
+    private void FormAracSec(Arac? arac)
+    {
+        editStok.AracId = arac?.Id;
+        formAracArama = arac != null ? $"{arac.AktifPlaka} {arac.Marka} {arac.Model}".Trim() : string.Empty;
+        formAracDropAcik = false;
+    }
+
+    private async Task FormAracDropKapat()
+    {
+        await Task.Delay(200);
+        formAracDropAcik = false;
     }
 
     private async Task YukleStoklar()
@@ -367,6 +608,9 @@
     private void YeniStok()
     {
         editStok = new LastikStok { Sezon = LastikSezon.YazLastigi, Durum = LastikDurum.Kullanilabilir, Aktif = true };
+        yeniAdet = 1;
+        formAracArama = string.Empty;
+        formFiltreliAraclar = tumAraclar;
         showForm = true;
     }
 
@@ -380,6 +624,10 @@
             YedekMi = s.YedekMi, Durum = s.Durum,
             Aktif = s.Aktif, Notlar = s.Notlar
         };
+        yeniAdet = 1;
+        var arac = s.AracId.HasValue ? tumAraclar.FirstOrDefault(a => a.Id == s.AracId.Value) : null;
+        formAracArama = arac != null ? $"{arac.AktifPlaka} {arac.Marka} {arac.Model}".Trim() : string.Empty;
+        formFiltreliAraclar = tumAraclar;
         showForm = true;
     }
 
@@ -389,13 +637,23 @@
         try
         {
             if (editStok.Id == 0)
-                await LastikService.CreateStokAsync(editStok);
+            {
+                if (yeniAdet < 1) yeniAdet = 1;
+                if (yeniAdet > 20) yeniAdet = 20;
+                if (yeniAdet == 1)
+                    await LastikService.CreateStokAsync(editStok);
+                else
+                    await LastikService.CreateStokToplualAsync(editStok, yeniAdet);
+            }
             else
                 await LastikService.UpdateStokAsync(editStok);
 
             showForm = false;
             await YukleStoklar();
-            ToastService.ShowSuccess("Lastik kaydedildi.");
+            await RaporlariYenile();
+            ToastService.ShowSuccess(editStok.Id == 0 && yeniAdet > 1
+                ? $"{yeniAdet} adet lastik kaydedildi."
+                : "Lastik kaydedildi.");
         }
         catch (Exception ex)
         {

@@ -1,4 +1,4 @@
-using KOAFiloServis.Shared.Entities;
+﻿using KOAFiloServis.Shared.Entities;
 
 namespace KOAFiloServis.Web.Services.Interfaces;
 
@@ -16,10 +16,18 @@ public interface ILastikService
     Task<List<LastikStok>> GetStokListAsync(int? depoId = null, bool? aktif = true);
     Task<LastikStok?> GetStokByIdAsync(int id);
     Task<LastikStok> CreateStokAsync(LastikStok stok);
+    /// <summary>Aynı özelliklerde (marka/ebat/sezon/depo/araç vb.) belirtilen adette lastik kaydı oluşturur.</summary>
+    Task<List<LastikStok>> CreateStokToplualAsync(LastikStok sablon, int adet);
     Task<LastikStok> UpdateStokAsync(LastikStok stok);
     Task DeleteStokAsync(int id);
     /// <summary>Lastiği pasife alır (hurda / atıldı)</summary>
     Task PasifAlAsync(int id);
+
+    // --- Plaka Bazlı Envanter ve Eksik Sezon Raporu ---
+    /// <summary>Her araç için, o araca atanmış (takılı veya yedek) lastiklerin listesini döner.</summary>
+    Task<List<LastikPlakaEnvanteri>> GetPlakaBazliEnvanterAsync();
+    /// <summary>Yaz ve/veya kış lastiği takılı olmayan plakaların listesini döner.</summary>
+    Task<List<LastikEksikSezonSatiri>> GetEksikSezonRaporuAsync();
 
     // --- Değişim ---
     Task<List<LastikDegisim>> GetDegisimListAsync(int? aracId = null, DateTime? baslangic = null, DateTime? bitis = null);
@@ -73,4 +81,41 @@ public sealed class LastikAracPlakaSatiri
     public DateTime GirisTarihi { get; set; }
     public DateTime? CikisTarihi { get; set; }
     public bool Aktif { get; set; }
+}
+
+/// <summary>Plaka bazlı lastik envanteri (araç + ona atanmış aktif lastikler).</summary>
+public sealed class LastikPlakaEnvanteri
+{
+    public int AracId { get; set; }
+    public string Plaka { get; set; } = string.Empty;
+    public string AracBilgisi { get; set; } = string.Empty;
+    public List<LastikPlakaEnvanterSatiri> Lastikler { get; set; } = new();
+    public int TakiliSayisi { get; set; }
+    public int YedekSayisi { get; set; }
+    public bool YazVar { get; set; }
+    public bool KisVar { get; set; }
+}
+
+public sealed class LastikPlakaEnvanterSatiri
+{
+    public int StokId { get; set; }
+    public string? Marka { get; set; }
+    public string Ebat { get; set; } = string.Empty;
+    public LastikSezon Sezon { get; set; }
+    public LastikDurum Durum { get; set; }
+    public string? SeriNo { get; set; }
+    public bool Takili { get; set; }
+    public bool Yedek { get; set; }
+    public string? DepoAdi { get; set; }
+}
+
+/// <summary>Yaz ve/veya kış lastiği eksik olan plakalar için rapor satırı.</summary>
+public sealed class LastikEksikSezonSatiri
+{
+    public int AracId { get; set; }
+    public string Plaka { get; set; } = string.Empty;
+    public string AracBilgisi { get; set; } = string.Empty;
+    public bool YazEksik { get; set; }
+    public bool KisEksik { get; set; }
+    public int ToplamLastikSayisi { get; set; }
 }

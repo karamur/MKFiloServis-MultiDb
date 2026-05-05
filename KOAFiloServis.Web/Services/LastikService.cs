@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using KOAFiloServis.Web.Data;
 using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Services.Interfaces;
@@ -108,6 +108,36 @@ public class LastikService : ILastikService
         ctx.LastikStoklar.Add(stok);
         await ctx.SaveChangesAsync();
         return stok;
+    }
+
+    public async Task<List<LastikStok>> CreateStokToplualAsync(LastikStok sablon, int adet)
+    {
+        if (adet < 1) adet = 1;
+        if (adet > 20) adet = 20;
+
+        await using var ctx = await _contextFactory.CreateDbContextAsync();
+        var liste = new List<LastikStok>(adet);
+        for (int i = 0; i < adet; i++)
+        {
+            var yeni = new LastikStok
+            {
+                SirketId = sablon.SirketId,
+                DepoId = sablon.DepoId,
+                AracId = sablon.AracId,
+                YedekMi = sablon.YedekMi,
+                Marka = sablon.Marka,
+                Ebat = sablon.Ebat,
+                Sezon = sablon.Sezon,
+                SeriNo = sablon.SeriNo,
+                Durum = sablon.Durum,
+                Aktif = sablon.Aktif,
+                Notlar = sablon.Notlar
+            };
+            ctx.LastikStoklar.Add(yeni);
+            liste.Add(yeni);
+        }
+        await ctx.SaveChangesAsync();
+        return liste;
     }
 
     public async Task<LastikStok> UpdateStokAsync(LastikStok stok)
@@ -371,6 +401,125 @@ public class LastikService : ILastikService
             TakiliLastikler = takiliLastikler,
             Hareketler = hareketler
         };
+    }
+
+    public async Task<List<LastikPlakaEnvanteri>> GetPlakaBazliEnvanterAsync()
+    {
+        await using var ctx = await _contextFactory.CreateDbContextAsync();
+
+        var araclar = await ctx.Araclar
+            .AsNoTracking()
+            .Where(a => !a.IsDeleted)
+            .Select(a => new
+            {
+                a.Id,
+                a.AktifPlaka,
+                a.Marka,
+                a.Model,
+                a.ModelYili
+            })
+            .OrderBy(a => a.AktifPlaka)
+            .ToListAsync();
+
+        var stoklar = await ctx.LastikStoklar
+            .AsNoTracking()
+            .Include(s => s.Depo)
+            .Where(s => !s.IsDeleted && s.Aktif && s.AracId != null)
+            .ToListAsync();
+
+        var stokByArac = stoklar.GroupBy(s => s.AracId!.Value)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var sonuc = new List<LastikPlakaEnvanteri>(araclar.Count);
+        foreach (var a in araclar)
+        {
+            if (!stokByArac.TryGetValue(a.Id, out var liste))
+                continue;
+
+            var satirlar = liste
+                .OrderBy(s => s.YedekMi)
+                .ThenBy(s => s.Sezon)
+                .ThenBy(s => s.Marka)
+                .Select(s => new LastikPlakaEnvanterSatiri
+                {
+                    StokId = s.Id,
+                    Marka = s.Marka,
+                    Ebat = s.Ebat,
+                    Sezon = s.Sezon,
+                    Durum = s.Durum,
+                    SeriNo = s.SeriNo,
+                    Yedek = s.YedekMi,
+                    Takili = !s.YedekMi,
+                    DepoAdi = s.Depo?.DepoAdi
+                })
+                .ToList();
+
+            sonuc.Add(new LastikPlakaEnvanteri
+            {
+                AracId = a.Id,
+                Plaka = a.AktifPlaka ?? "-",
+                AracBilgisi = $"{a.Marka} {a.Model} {a.ModelYili}".Trim(),
+                Lastikler = satirlar,
+                TakiliSayisi = satirlar.Count(x => x.Takili),
+                YedekSayisi = satirlar.Count(x => x.Yedek),
+                YazVar = satirlar.Any(x => x.Sezon == LastikSezon.YazLastigi || x.Sezon == LastikSezon.DortMevsim),
+                KisVar = satirlar.Any(x => x.Sezon == LastikSezon.KisLastigi || x.Sezon == LastikSezon.DortMevsim)
+            });
+        }
+
+        return sonuc;
+    }
+
+    public async Task<List<LastikEksikSezonSatiri>> GetEksikSezonRaporuAsync()
+    {
+        await using var ctx = await _contextFactory.CreateDbContextAsync();
+
+        var araclar = await ctx.Araclar
+            .AsNoTracking()
+            .Where(a => !a.IsDeleted)
+            .Select(a => new
+            {
+                a.Id,
+                a.AktifPlaka,
+                a.Marka,
+                a.Model,
+                a.ModelYili
+            })
+            .OrderBy(a => a.AktifPlaka)
+            .ToListAsync();
+
+        var stoklar = await ctx.LastikStoklar
+            .AsNoTracking()
+            .Where(s => !s.IsDeleted && s.Aktif && s.AracId != null)
+            .Select(s => new { s.AracId, s.Sezon })
+            .ToListAsync();
+
+        var stokByArac = stoklar.GroupBy(s => s.AracId!.Value)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var sonuc = new List<LastikEksikSezonSatiri>();
+        foreach (var a in araclar)
+        {
+            stokByArac.TryGetValue(a.Id, out var liste);
+            liste ??= new();
+
+            var yazVar = liste.Any(x => x.Sezon == LastikSezon.YazLastigi || x.Sezon == LastikSezon.DortMevsim);
+            var kisVar = liste.Any(x => x.Sezon == LastikSezon.KisLastigi || x.Sezon == LastikSezon.DortMevsim);
+
+            if (!yazVar || !kisVar)
+            {
+                sonuc.Add(new LastikEksikSezonSatiri
+                {
+                    AracId = a.Id,
+                    Plaka = a.AktifPlaka ?? "-",
+                    AracBilgisi = $"{a.Marka} {a.Model} {a.ModelYili}".Trim(),
+                    YazEksik = !yazVar,
+                    KisEksik = !kisVar,
+                    ToplamLastikSayisi = liste.Count
+                });
+            }
+        }
+        return sonuc;
     }
 
     private static string FormatTakilanHareket(LastikDegisim degisim)

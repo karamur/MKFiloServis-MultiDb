@@ -63,6 +63,9 @@
                     <button class="btn btn-sm btn-outline-secondary" @onclick="FiltreSifirla">
                         <i class="bi bi-x-circle me-1"></i>Temizle
                     </button>
+                    <button class="btn btn-sm btn-outline-info ms-1" @onclick="SecilenPlakaGecmisiAc" disabled="@(filtreAracId == null)" title="Secilen plakanin tum lastik gecmisi">
+                        <i class="bi bi-clock-history me-1"></i>Plaka Gecmisi
+                    </button>
                 </div>
             </div>
         </div>
@@ -282,14 +285,14 @@
                             </div>
                             <div class="card-body">
                                 <div class="row g-2 mb-3">
-                                    <div class="col-md-4">
+                                    <div class="col-md-3">
                                         <label class="form-label">Giriş Şekli</label>
                                         <select class="form-select" value="@degisimGirisSekli" @onchange="DegisimSekliDegisti">
                                             <option value="standart">Standart 4'lü</option>
                                             <option value="adet">Adet bazlı</option>
                                         </select>
                                     </div>
-                                    <div class="col-md-4">
+                                    <div class="col-md-2">
                                         <label class="form-label">Adet</label>
                                         <select class="form-select" value="@degisimAdet" @onchange="DegisimAdetDegisti" disabled="@(degisimGirisSekli == "standart")">
                                             <option value="1">1</option>
@@ -297,6 +300,50 @@
                                             <option value="3">3</option>
                                             <option value="4">4</option>
                                         </select>
+                                    </div>
+                                </div>
+
+                                <div class="alert alert-light border py-2 mb-3">
+                                    <div class="small text-muted mb-2">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        Aşağıdaki ortak alanlar tüm satırlara uygulanır. İstediğiniz satırı tablodan ayrıca özelleştirebilirsiniz.
+                                    </div>
+                                    <div class="row g-2 align-items-end">
+                                        <div class="col-md-4">
+                                            <label class="form-label mb-1">Ortak Takılan Stok</label>
+                                            <select class="form-select form-select-sm" value="@ortakTakilanStokId" @onchange="OrtakTakilanStokDegisti">
+                                                <option value="">-- Seçim yok --</option>
+                                                @foreach (var s in stoklar)
+                                                {
+                                                    <option value="@s.Id">@s.Ebat @s.Marka (@s.Depo?.DepoAdi)</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label mb-1">Ortak Kaynak Depo</label>
+                                            <select class="form-select form-select-sm" value="@ortakKaynakDepoId" @onchange="OrtakKaynakDepoDegisti">
+                                                <option value="">-- Seçim yok --</option>
+                                                @foreach (var d in depolar)
+                                                {
+                                                    <option value="@d.Id">@d.DepoAdi</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label mb-1">Ortak Hedef Depo (Sökülen)</label>
+                                            <select class="form-select form-select-sm" value="@ortakHedefDepoId" @onchange="OrtakHedefDepoDegisti">
+                                                <option value="">-- Seçim yok --</option>
+                                                @foreach (var d in depolar)
+                                                {
+                                                    <option value="@d.Id">@d.DepoAdi</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <button type="button" class="btn btn-sm btn-outline-primary w-100" @onclick="OrtakAlanlariUygula">
+                                                <i class="bi bi-arrow-down-square me-1"></i>Hepsine Uygula
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -408,9 +455,19 @@
                 <div class="modal-body">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <h6 class="mb-0">Anlik Takili Lastikler</h6>
-                        <button class="btn btn-sm btn-primary" @onclick="() => YeniDegisimAracIcin(seciliAracDetay.AracId)">
-                            <i class="bi bi-plus-lg me-1"></i>Bu Arac Icin Yeni Degisim
-                        </button>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="form-check form-switch m-0">
+                                <input class="form-check-input" type="checkbox" id="detayTumGecmisChk"
+                                       checked="@detayTumGecmis"
+                                       @onchange="DetayKapsamiDegisti" />
+                                <label class="form-check-label small" for="detayTumGecmisChk">
+                                    Tum Gecmisi Goster
+                                </label>
+                            </div>
+                            <button class="btn btn-sm btn-primary" @onclick="() => YeniDegisimAracIcin(seciliAracDetay.AracId)">
+                                <i class="bi bi-plus-lg me-1"></i>Bu Arac Icin Yeni Degisim
+                            </button>
+                        </div>
                     </div>
 
                     @if (!seciliAracDetay.TakiliLastikler.Any())
@@ -487,10 +544,21 @@
                         </div>
                     }
 
-                    <h6 class="mb-2">Degisim Hareketleri (Donemsel)</h6>
+                    <h6 class="mb-2">
+                        Degisim Hareketleri
+                        @if (detayTumGecmis)
+                        {
+                            <span class="badge bg-info text-dark ms-1">Tum Gecmis</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary ms-1">Donemsel</span>
+                        }
+                        <span class="badge bg-light text-dark border ms-1">@seciliAracDetay.Hareketler.Count kayit</span>
+                    </h6>
                     @if (!seciliAracDetay.Hareketler.Any())
                     {
-                        <div class="alert alert-info py-2 mb-0">Secili donemde hareket bulunamadi.</div>
+                        <div class="alert alert-info py-2 mb-0">@(detayTumGecmis ? "Bu arac icin hic hareket bulunamadi." : "Secili donemde hareket bulunamadi.")</div>
                     }
                     else
                     {
@@ -565,6 +633,8 @@
     private List<LastikStok> stoklar = new();
     private List<LastikAracDonemOzet> aracDonemOzetleri = new();
     private LastikAracDetay? seciliAracDetay;
+    private int? seciliAracDetayId;
+    private bool detayTumGecmis = true;
     private LastikDegisim editDegisim = new();
     private LastikDegisim? silinecek;
     private bool showForm;
@@ -578,6 +648,9 @@
     private int degisimAdet = 4;
     private string serbestNot = string.Empty;
     private List<LastikDegisimSatirForm> degisimSatirlari = new();
+    private int? ortakTakilanStokId;
+    private int? ortakKaynakDepoId;
+    private int? ortakHedefDepoId;
     private static readonly string[] StandartPozisyonlar = ["On Sol", "On Sag", "Arka Sol", "Arka Sag"];
     private string filtreBaslangicStr => filtreBaslangic?.ToString("yyyy-MM-dd") ?? string.Empty;
     private string filtreBitisStr => filtreBitis?.ToString("yyyy-MM-dd") ?? string.Empty;
@@ -664,8 +737,28 @@
 
     private async Task AracDetayAc(int aracId)
     {
-        seciliAracDetay = await LastikService.GetAracDetayAsync(aracId, filtreBaslangic, filtreBitis);
+        // Geçmişi tüm tarihler için göstermek üzere filtreyi yoksayıyoruz.
+        detayTumGecmis = true;
+        seciliAracDetayId = aracId;
+        seciliAracDetay = await LastikService.GetAracDetayAsync(aracId, null, null);
         showAracDetayModal = seciliAracDetay != null;
+    }
+
+    private async Task SecilenPlakaGecmisiAc()
+    {
+        if (filtreAracId.HasValue)
+            await AracDetayAc(filtreAracId.Value);
+    }
+
+    private async Task DetayKapsamiDegisti(ChangeEventArgs e)
+    {
+        detayTumGecmis = e.Value is bool b ? b : bool.TryParse(e.Value?.ToString(), out var v) && v;
+        if (seciliAracDetayId.HasValue)
+        {
+            seciliAracDetay = detayTumGecmis
+                ? await LastikService.GetAracDetayAsync(seciliAracDetayId.Value, null, null)
+                : await LastikService.GetAracDetayAsync(seciliAracDetayId.Value, filtreBaslangic, filtreBitis);
+        }
     }
 
     private void YeniDegisimAracIcin(int aracId)
@@ -679,6 +772,9 @@
         degisimGirisSekli = "standart";
         degisimAdet = 4;
         serbestNot = string.Empty;
+        ortakTakilanStokId = null;
+        ortakKaynakDepoId = null;
+        ortakHedefDepoId = null;
         HazirlaDegisimSatirlari(degisimAdet);
         showAracDetayModal = false;
         showForm = true;
@@ -733,6 +829,9 @@
         degisimGirisSekli = "standart";
         degisimAdet = 4;
         serbestNot = string.Empty;
+        ortakTakilanStokId = null;
+        ortakKaynakDepoId = null;
+        ortakHedefDepoId = null;
         HazirlaDegisimSatirlari(degisimAdet);
         showForm = true;
     }
@@ -852,6 +951,37 @@
         degisimGirisSekli = "standart";
         degisimAdet = 4;
         HazirlaDegisimSatirlari(degisimAdet);
+    }
+
+    private void OrtakTakilanStokDegisti(ChangeEventArgs e)
+    {
+        ortakTakilanStokId = string.IsNullOrEmpty(e.Value?.ToString()) ? null : int.Parse(e.Value!.ToString()!);
+        OrtakAlanlariUygula();
+    }
+
+    private void OrtakKaynakDepoDegisti(ChangeEventArgs e)
+    {
+        ortakKaynakDepoId = string.IsNullOrEmpty(e.Value?.ToString()) ? null : int.Parse(e.Value!.ToString()!);
+        OrtakAlanlariUygula();
+    }
+
+    private void OrtakHedefDepoDegisti(ChangeEventArgs e)
+    {
+        ortakHedefDepoId = string.IsNullOrEmpty(e.Value?.ToString()) ? null : int.Parse(e.Value!.ToString()!);
+        OrtakAlanlariUygula();
+    }
+
+    private void OrtakAlanlariUygula()
+    {
+        foreach (var s in degisimSatirlari)
+        {
+            if (ortakTakilanStokId.HasValue)
+                s.TakilanStokId = ortakTakilanStokId;
+            if (ortakKaynakDepoId.HasValue)
+                s.KaynakDepoId = ortakKaynakDepoId;
+            if (ortakHedefDepoId.HasValue)
+                s.HedefDepoId = ortakHedefDepoId;
+        }
     }
 
     private void HazirlaDegisimSatirlari(int adet)
