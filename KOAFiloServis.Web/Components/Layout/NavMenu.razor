@@ -362,9 +362,6 @@
                                     <i class="bi bi-receipt me-2"></i> Muhasebe Fisleri
                                 </NavLink>
                             </div>
-                        }
-                        @if (HasYetki("muhasebefis.oku"))
-                        {
                             <div class="nav-item px-3">
                                 <NavLink class="nav-link" href="muhasebe/muhasbelestirme">
                                     <i class="bi bi-journal-check me-2"></i> Muhasebeleştirme
@@ -914,12 +911,12 @@
                                 </NavLink>
                             </div>
                         }
-                                    </div>
-                                }
-                            </div>
-                        }
+                    </div>
+                }
+            </div>
+        }
 
-                        <!-- AYARLAR -->
+        <!-- AYARLAR -->
         @if (HasMenuYetki("menu.ayarlar"))
         {
             <div class="nav-section">
@@ -968,27 +965,27 @@
                             </div>
                             <div class="nav-item px-3">
                                 <NavLink class="nav-link" href="ayarlar/muhasebe-cari">
-                                            <i class="bi bi-journal-text me-2 text-primary"></i> Cari / Muhasebe Ayarları
-                                            </NavLink>
-                                        </div>
-                                    }
-                                    <div class="nav-item px-3">
-                                        <NavLink class="nav-link" href="ayarlar/profil">
-                                            <i class="bi bi-person-circle me-2 text-success"></i> Profilim
-                                        </NavLink>
-                                    </div>
-                                    <div class="nav-item px-3">
-                                        <NavLink class="nav-link" href="ayarlar/bildirimler">
-                                            <i class="bi bi-bell me-2 text-warning"></i> Bildirimlerim
-                                        </NavLink>
-                                    </div>
-                                    <div class="nav-item px-3">
-                                        <NavLink class="nav-link" href="ayarlar/belge-uyari">
-                                            <i class="bi bi-shield-exclamation me-2 text-danger"></i> Belge Uyarı Ayarları
-                                        </NavLink>
-                                    </div>
-                                    @if (HasYetki("kullanici.oku"))
-                                    {
+                                    <i class="bi bi-journal-text me-2 text-primary"></i> Cari / Muhasebe Ayarları
+                                </NavLink>
+                            </div>
+                        }
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="ayarlar/profil">
+                                <i class="bi bi-person-circle me-2 text-success"></i> Profilim
+                            </NavLink>
+                        </div>
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="ayarlar/bildirimler">
+                                <i class="bi bi-bell me-2 text-warning"></i> Bildirimlerim
+                            </NavLink>
+                        </div>
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="ayarlar/belge-uyari">
+                                <i class="bi bi-shield-exclamation me-2 text-danger"></i> Belge Uyarı Ayarları
+                            </NavLink>
+                        </div>
+                        @if (HasYetki("kullanici.oku"))
+                        {
                             <div class="nav-item px-3">
                                 <NavLink class="nav-link" href="ayarlar/kullanicilar">
                                     <i class="bi bi-person-badge me-2 text-info"></i> Kullanici Yonetimi
