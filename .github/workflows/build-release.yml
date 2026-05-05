@@ -1,4 +1,4 @@
-﻿name: Build and Release
+﻿name: Build Setup EXEs and Release
 
 on:
   push:
@@ -7,161 +7,148 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version number (e.g., 1.0.0)'
+        description: 'Surum (orn. 1.0.5)'
         required: true
-        default: '1.0.0'
+        default: '1.0.5'
+      prerelease:
+        description: 'On surum (pre-release) olarak yayinla'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
 
 env:
   DOTNET_VERSION: '10.0.x'
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
 
 jobs:
-  build:
+  build-installer:
+    name: Build Inno Setup EXE
     runs-on: windows-latest
-    
+
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
-        
-    - name: Restore dependencies
-      run: dotnet restore
-      
-    - name: Build
-      run: dotnet build --configuration Release --no-restore
-      
-    - name: Determine version
-      id: version
-      run: |
-        if ("${{ github.event.inputs.version }}" -ne "") {
-          $version = "${{ github.event.inputs.version }}"
-        } elseif ("${{ github.ref_name }}" -match "^v(.+)$") {
-          $version = $matches[1]
-        } else {
-          $version = "1.0.0"
-        }
-        echo "VERSION=$version" >> $env:GITHUB_OUTPUT
-      shell: pwsh
-      
-    - name: Publish Web Application
-      run: |
-        dotnet publish CRMFiloServis.Web/CRMFiloServis.Web.csproj `
-          -c Release `
-          -o ./publish `
-          --self-contained false `
-          -p:DebugType=None `
-          -p:DebugSymbols=false
-      shell: pwsh
-      
-    - name: Prepare Release Package
-      run: |
-        $version = "${{ steps.version.outputs.VERSION }}"
-        $packageDir = "./artifacts/CRMFiloServis-v$version"
-        
-        # Create package directory
-        New-Item -ItemType Directory -Path $packageDir -Force
-        
-        # Copy published files
-        Copy-Item -Path "./publish/*" -Destination $packageDir -Recurse -Force
-        
-        # Remove unnecessary files
-        Get-ChildItem -Path $packageDir -Filter "*.pdb" -Recurse | Remove-Item -Force
-        Get-ChildItem -Path $packageDir -Filter "*.Development.json" -Recurse | Remove-Item -Force
-        Remove-Item -Path "$packageDir/appsettings.json" -Force -ErrorAction SilentlyContinue
-        
-        # Create production appsettings.json (SQLite)
-        $settings = @{
-          DatabaseProvider = "SQLite"
-          ConnectionStrings = @{
-            DefaultConnection = "Data Source=CRMFiloServis.db"
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: .NET SDK kurulumu
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Surumu belirle
+        id: version
+        shell: pwsh
+        run: |
+          if ('${{ github.event.inputs.version }}' -ne '') {
+            $v = '${{ github.event.inputs.version }}'
+          } elseif ('${{ github.ref_name }}' -match '^v(.+)$') {
+            $v = $Matches[1]
+          } else {
+            $v = '0.0.0'
           }
-          OpenAI = @{
-            ApiKey = ""
-            Model = "gpt-4o-mini"
-            BaseUrl = "https://api.openai.com/v1"
+          "VERSION=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Surum: $v"
+
+      - name: Inno Setup 6 kurulumu
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress --yes
+          $iscc = (Get-ChildItem 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe', 'C:\Program Files\Inno Setup 6\ISCC.exe' -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+          if (-not $iscc) { throw 'ISCC.exe bulunamadi' }
+          Write-Host "ISCC: $iscc"
+
+      - name: NuGet restore
+        run: dotnet restore
+
+      - name: Setup paketlerini uret (publish + Inno Setup)
+        shell: pwsh
+        working-directory: setup
+        run: |
+          .\build.ps1 -Version '${{ steps.version.outputs.VERSION }}'
+
+      - name: Ciktilari dogrula
+        id: artifacts
+        shell: pwsh
+        run: |
+          $v = '${{ steps.version.outputs.VERSION }}'
+          $outDir = "setup/output/v$v"
+          if (-not (Test-Path $outDir)) { throw "Cikti klasoru yok: $outDir" }
+          $files = Get-ChildItem -Path $outDir -Filter '*.exe' -File
+          if ($files.Count -eq 0) { throw 'Hic .exe uretilmedi' }
+          Write-Host "Uretilen dosyalar:"
+          $files | ForEach-Object { Write-Host "  - $($_.Name) ($([math]::Round($_.Length / 1MB, 2)) MB)" }
+          "OUT_DIR=$outDir" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: SHA256 dosyalarini uret
+        shell: pwsh
+        working-directory: ${{ steps.artifacts.outputs.OUT_DIR }}
+        run: |
+          Get-ChildItem -Filter '*.exe' | ForEach-Object {
+            $hash = (Get-FileHash -Algorithm SHA256 -Path $_.FullName).Hash.ToLower()
+            "$hash  $($_.Name)" | Out-File -FilePath "$($_.Name).sha256" -Encoding ascii -NoNewline
+            Write-Host "$($_.Name): $hash"
           }
-          PythonScraper = @{
-            BaseUrl = "http://localhost:5050"
-            Enabled = $false
-          }
-          Logging = @{
-            LogLevel = @{
-              Default = "Warning"
-              "Microsoft.AspNetCore" = "Warning"
-              "Microsoft.EntityFrameworkCore" = "Warning"
-            }
-          }
-          AllowedHosts = "*"
-        }
-        $settings | ConvertTo-Json -Depth 10 | Out-File "$packageDir/appsettings.json" -Encoding UTF8
-        
-        # Copy deployment scripts
-        Copy-Item -Path "./deploy/start.bat" -Destination $packageDir -Force
-        Copy-Item -Path "./deploy/install.ps1" -Destination $packageDir -Force
-        
-        # Create required directories
-        @("Backups", "Logs", "Uploads") | ForEach-Object {
-          $dir = Join-Path $packageDir $_
-          New-Item -ItemType Directory -Path $dir -Force
-          "" | Out-File "$dir/.gitkeep"
-        }
-        
-        # Create README
-        @"
-        # CRM Filo Servis v$version
-        
-        ## Hizli Baslangic
-        1. start.bat dosyasini cift tiklayin
-        2. Tarayicida http://localhost:5190 adresine gidin
-        3. Kullanici: admin / Sifre: Admin123!
-        
-        ## Gereksinimler
-        - Windows 10/11 veya Windows Server 2016+
-        - .NET 10 Runtime
-        
-        ## Destek
-        GitHub: https://github.com/karamur/CRMFiloServis
-        "@ | Out-File "$packageDir/BENIOKU.txt" -Encoding UTF8
-        
-        # Create ZIP
-        Compress-Archive -Path "$packageDir/*" -DestinationPath "./artifacts/CRMFiloServis-v$version.zip" -Force
-      shell: pwsh
-      
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: CRMFiloServis-v${{ steps.version.outputs.VERSION }}
-        path: ./artifacts/CRMFiloServis-v${{ steps.version.outputs.VERSION }}.zip
-        retention-days: 90
-        
-    - name: Create Release
-      if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v1
-      with:
-        files: ./artifacts/CRMFiloServis-v${{ steps.version.outputs.VERSION }}.zip
-        draft: false
-        prerelease: false
-        generate_release_notes: true
-        body: |
-          ## CRM Filo Servis v${{ steps.version.outputs.VERSION }}
-          
-          ### 📦 Kurulum
-          1. ZIP dosyasını indirin ve çıkarın
-          2. `start.bat` dosyasını çalıştırın
-          3. Tarayıcıda `http://localhost:5190` adresine gidin
-          
-          ### 🔐 Varsayılan Giriş
-          - Kullanıcı: `admin`
-          - Şifre: `Admin123!`
-          
-          ### ⚙️ Gereksinimler
-          - Windows 10/11 veya Windows Server 2016+
-          - [.NET 10 Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)
-          
-          ### 📝 Veritabanı
-          SQLite kullanılır, kurulum gerektirmez. Veriler `CRMFiloServis.db` dosyasında saklanır.
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Artifact yukle
+        uses: actions/upload-artifact@v4
+        with:
+          name: KOAFiloServis-Setup-v${{ steps.version.outputs.VERSION }}
+          path: |
+            ${{ steps.artifacts.outputs.OUT_DIR }}/*.exe
+            ${{ steps.artifacts.outputs.OUT_DIR }}/*.sha256
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: GitHub Release olustur
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', steps.version.outputs.VERSION) }}
+          name: KOAFiloServis v${{ steps.version.outputs.VERSION }}
+          draft: ${{ github.event_name == 'workflow_dispatch' }}
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            ${{ steps.artifacts.outputs.OUT_DIR }}/*.exe
+            ${{ steps.artifacts.outputs.OUT_DIR }}/*.sha256
+          body: |
+            ## KOAFiloServis v${{ steps.version.outputs.VERSION }}
+
+            Windows icin imzasiz kurulum paketleri (Inno Setup 6 ile uretildi).
+
+            ### Indirilebilir Paketler
+
+            | Dosya | Aciklama |
+            |---|---|
+            | `KOAFiloServisKurulum-${{ steps.version.outputs.VERSION }}.exe` | **Tam kurulum** - Web (IIS) + Lisans + DataSync |
+            | `KOAFiloServisGuncelle-${{ steps.version.outputs.VERSION }}.exe` | Mevcut kurulum uzerine guncelleme |
+            | `KOAFiloServisKurulumMusteri-${{ steps.version.outputs.VERSION }}.exe` | Musteri dagitim paketi |
+            | `KOALisansArac-${{ steps.version.outputs.VERSION }}.exe` | Bagimsiz lisans yonetim araci |
+            | `*.sha256` | Ilgili EXE icin SHA256 saglama dosyasi |
+
+            ### Hizli Kurulum
+
+            1. `KOAFiloServisKurulum-${{ steps.version.outputs.VERSION }}.exe` dosyasini indirin
+            2. Sag tiklayip **Yonetici olarak calistir** secin
+            3. "On Hazirlik" adiminda IIS / .NET Hosting Bundle eksikse otomatik kurulum secenegini isaretleyin
+            4. Kurulum bitince `http://localhost:5190` adresinden acin
+
+            ### Gereksinimler
+
+            - Windows 10 / 11 veya Windows Server 2016+
+            - .NET 10 ASP.NET Core Hosting Bundle (kurulum sirasinda otomatik yuklenebilir)
+            - IIS rolu (kurulum sirasinda otomatik etkinlestirilebilir)
+
+            ### SHA256 Dogrulama
+
+            ```powershell
+            Get-FileHash KOAFiloServisKurulum-${{ steps.version.outputs.VERSION }}.exe -Algorithm SHA256
+            ```
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
