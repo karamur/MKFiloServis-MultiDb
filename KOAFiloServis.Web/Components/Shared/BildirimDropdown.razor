@@ -1,10 +1,12 @@
-@implements IAsyncDisposable
+﻿@implements IAsyncDisposable
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
+@using Microsoft.Extensions.Logging
 @inject ICRMService CRMService
 @inject AppAuthenticationStateProvider AuthProvider
 @inject IToastService ToastService
 @inject NavigationManager Navigation
+@inject ILogger<BildirimDropdown> Logger
 
 <div class="dropdown">
     <button class="btn btn-light btn-sm border position-relative" type="button" data-bs-toggle="dropdown" title="Bildirimler">
@@ -21,12 +23,12 @@
         <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom bg-light">
             <div>
                 <strong>Bildirimler</strong>
-                <div><small class="text-muted">@okunmamisSayisi okunmam��</small></div>
+                <div><small class="text-muted">@okunmamisSayisi okunmamis</small></div>
             </div>
             @if (okunmamisSayisi > 0)
             {
                 <button class="btn btn-link btn-sm text-decoration-none p-0" @onclick="TumunuOkunduYap">
-                    T�m�n� okundu yap
+                    Tumunu okundu yap
                 </button>
             }
         </div>
@@ -72,7 +74,7 @@
         }
 
         <div class="border-top p-2 text-center bg-light">
-            <a class="btn btn-sm btn-outline-primary w-100" href="/crm/bildirimler">T�m bildirimleri a�</a>
+            <a class="btn btn-sm btn-outline-primary w-100" href="/crm/bildirimler">Tum bildirimleri ac</a>
         </div>
     </div>
 </div>
@@ -108,11 +110,15 @@
             using var timer = new PeriodicTimer(TimeSpan.FromSeconds(20));
             while (await timer.WaitForNextTickAsync(cancellationToken))
             {
-                await InvokeAsync(async () => await BildirimleriYukleAsync(true));
+                await InvokeAsync(() => BildirimleriYukleAsync(true));
             }
         }
         catch (OperationCanceledException)
         {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "BildirimDropdown izleme dongusunde hata olustu");
         }
     }
 
@@ -139,6 +145,10 @@
             okunmamisSayisi = yeniOkunmamisSayisi;
             oncekiOkunmamisSayisi = yeniOkunmamisSayisi;
             ilkYuklemeTamamlandi = true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "BildirimDropdown bildirimler yuklenirken hata olustu (KullaniciId={KullaniciId})", aktifKullaniciId);
         }
         finally
         {
@@ -175,7 +185,7 @@
 
         okunmamisSayisi = 0;
         oncekiOkunmamisSayisi = 0;
-        ToastService.ShowSuccess("Bildirimler okundu olarak i�aretlendi.");
+        ToastService.ShowSuccess("Bildirimler okundu olarak isaretlendi.");
     }
 
     private static string GetIcon(BildirimTipi tip) => tip switch
@@ -208,10 +218,10 @@
     {
         var fark = DateTime.UtcNow - tarih;
 
-        if (fark.TotalMinutes < 1) return "Az �nce";
-        if (fark.TotalMinutes < 60) return $"{(int)fark.TotalMinutes} dk �nce";
-        if (fark.TotalHours < 24) return $"{(int)fark.TotalHours} sa �nce";
-        if (fark.TotalDays < 7) return $"{(int)fark.TotalDays} g�n �nce";
+        if (fark.TotalMinutes < 1) return "Az once";
+        if (fark.TotalMinutes < 60) return $"{(int)fark.TotalMinutes} dk once";
+        if (fark.TotalHours < 24) return $"{(int)fark.TotalHours} sa once";
+        if (fark.TotalDays < 7) return $"{(int)fark.TotalDays} gun once";
 
         return tarih.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
     }
