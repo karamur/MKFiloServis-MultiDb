@@ -1,11 +1,13 @@
 ﻿@inherits LayoutComponentBase
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.Logging
 @inject KOAFiloServis.Web.Services.IKullaniciService KullaniciService
 @inject KOAFiloServis.Web.Services.ILisansService LisansService
 @inject KOAFiloServis.Web.Services.IFirmaService FirmaService
 @inject KOAFiloServis.Web.Services.AppAuthenticationStateProvider AuthProvider
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject ILogger<MainLayout> Logger
 
 <AuthorizeView>
     <Authorized>
@@ -209,7 +211,10 @@
                 var theme = await JS.InvokeAsync<string>("darkMode.init");
                 isDarkMode = theme == "dark";
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "MainLayout dark mode baslatilirken hata olustu");
+            }
 
             // Circuit yeniden bağlandığında storage'dan kullanıcıyı geri yükle
             if (!AuthProvider.IsAuthenticated)
@@ -218,10 +223,12 @@
                 if (restored)
                 {
                     aktifKullanici = AuthProvider.GetAktifKullanici();
-                    try { await LisansKontrol(); } catch { }
+                    try { await LisansKontrol(); }
+                    catch (Exception ex) { Logger.LogWarning(ex, "MainLayout lisans kontrolu sirasinda hata olustu (restore)"); }
                     if (lisansGecerli)
                     {
-                        try { await FirmalariYukle(); } catch { }
+                        try { await FirmalariYukle(); }
+                        catch (Exception ex) { Logger.LogWarning(ex, "MainLayout firmalar yuklenirken hata olustu (restore)"); }
                     }
                 }
                 else
@@ -278,8 +285,9 @@
                 await FirmalariYukle();
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Logger.LogError(ex, "MainLayout OnInitializedAsync sirasinda hata olustu");
             isInitialized = true;
             aktifKullanici = null;
         }
@@ -319,6 +327,7 @@
         }
         catch (Exception ex)
         {
+            Logger.LogError(ex, "MainLayout lisans kontrolu sirasinda hata olustu");
             lisansGecerli = false;
             lisansHataMesaji = $"Lisans kontrolu sirasinda hata: {ex.Message}";
         }
@@ -333,7 +342,10 @@
             aktifFirmaId = aktifFirma.FirmaId;
             aktifFirmaAdi = aktifFirma.FirmaAdi;
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "MainLayout firmalar yuklenirken hata olustu");
+        }
     }
 
     private void FirmaSecildi(KOAFiloServis.Shared.Entities.Firma firma)
@@ -350,6 +362,10 @@
         try
         {
             await KullaniciService.CikisYapAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "MainLayout cikis yapilirken hata olustu");
         }
         finally
         {
