@@ -752,6 +752,12 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(e => e.CariId)
                 .OnDelete(DeleteBehavior.SetNull);
 
+            // Arac iliskisi (ozellikle personel cebinden arac masraflari icin)
+            entity.HasOne(e => e.Arac)
+                .WithMany()
+                .HasForeignKey(e => e.AracId)
+                .OnDelete(DeleteBehavior.SetNull);
+
             // Personel cebinden harcama ilişkisi
             entity.HasOne(e => e.PersonelCebinden)
                 .WithMany()

@@ -1,4 +1,4 @@
-using KOAFiloServis.Shared.Entities;
+﻿using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -701,6 +701,8 @@ public class StokService : IStokService
             .Include(s => s.Arac)
             .Include(s => s.ServisciCari)
             .Include(s => s.Parcalar)
+            .Include(s => s.Fatura)
+            .Include(s => s.AracMasraf)
             .AsQueryable();
 
         if (aracId.HasValue)

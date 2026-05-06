@@ -72,10 +72,12 @@ public class BankaKasaHareket : BaseEntity
     // Foreign Keys
     public int BankaHesapId { get; set; }
     public int? CariId { get; set; } // Iliskili cari varsa
+    public int? AracId { get; set; } // Iliskili arac varsa (ozellikle personel cebinden arac masraflari icin)
 
     // Navigation Properties
     public virtual BankaHesap BankaHesap { get; set; } = null!;
     public virtual Cari? Cari { get; set; }
+    public virtual Arac? Arac { get; set; }
     public virtual ICollection<OdemeEslestirme> OdemeEslestirmeleri { get; set; } = new List<OdemeEslestirme>();
 
     /// <summary>

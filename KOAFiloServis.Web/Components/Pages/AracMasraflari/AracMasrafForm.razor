@@ -3,6 +3,7 @@
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
 @inject IAracMasrafService AracMasrafService
+@inject IBankaKasaHareketService HareketService
 @inject IAracService AracService
 @inject IMasrafKalemiService MasrafKalemiService
 @inject IGuzergahService GuzergahService
@@ -13,11 +14,11 @@
 @inject NavigationManager Navigation
 @rendermode InteractiveServer
 
-<PageTitle>@(IsEdit ? "Masraf Düzenle" : "Yeni Araç Masrafı")</PageTitle>
+<PageTitle>@PageTitleText</PageTitle>
 
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h3><i class="bi bi-cash-stack me-2"></i>@(IsEdit ? "Masraf Düzenle" : "Yeni Araç Masrafı")</h3>
+        <h3><i class="bi bi-cash-stack me-2"></i>@PageTitleText</h3>
         <button class="btn btn-secondary" @onclick="Geri">
             <i class="bi bi-arrow-left me-1"></i>Geri
         </button>
@@ -211,6 +212,15 @@
     [Parameter]
     public int? Id { get; set; }
 
+    [SupplyParameterFromQuery]
+    public string? odemeTipiQuery { get; set; }
+
+    [SupplyParameterFromQuery]
+    public int? soforId { get; set; }
+
+    [SupplyParameterFromQuery]
+    public int? aracId { get; set; }
+
     private AracMasraf masraf = new();
     private List<Arac> araclar = new();
     private List<Arac> filtreliAraclar = new();
@@ -225,6 +235,10 @@
     private string plakaArama = string.Empty;
     private bool plakaDropAcik = false;
 
+    private string PageTitleText => IsEdit 
+        ? (odemeTipi == "Personel" ? "Personel Cebinden Masrafı Düzenle" : "Masraf Düzenle")
+        : (odemeTipi == "Personel" ? "Yeni Personel Cebinden Masrafı" : "Yeni Araç Masrafı");
+
     protected override async Task OnInitializedAsync()
     {
         araclar = await AracService.GetActiveAsync();
@@ -238,7 +252,21 @@
         var startDate = endDate.AddDays(-30);
         servisCalismalar = await ServisCalismaService.GetByDateRangeAsync(startDate, endDate);
 
-        if (IsEdit)
+        // Apply query parameters if present (yeni giriş ise ön-doldur)
+        if (!IsEdit)
+        {
+            if (!string.IsNullOrEmpty(odemeTipiQuery))
+                odemeTipi = odemeTipiQuery;
+
+            if (soforId.HasValue && odemeTipi == "Personel")
+                masraf.SoforId = soforId.Value;
+
+            if (aracId.HasValue)
+                masraf.AracId = aracId.Value;
+
+            masraf.MasrafTarihi = DateTime.Today;
+        }
+        else
         {
             var existing = await AracMasrafService.GetByIdAsync(Id!.Value);
             if (existing != null)
@@ -251,12 +279,16 @@
             }
             else
             {
-                Navigation.NavigateTo("/arac-masraflari");
+                Navigation.NavigateTo("/bakim-onarim");
             }
         }
-        else
+
+        // Update plaka display if aracId is set
+        if (masraf.AracId > 0)
         {
-            masraf.MasrafTarihi = DateTime.Today;
+            var seciliArac = araclar.FirstOrDefault(a => a.Id == masraf.AracId);
+            if (seciliArac != null)
+                plakaArama = $"{seciliArac.AktifPlaka} - {seciliArac.Marka} {seciliArac.Model}";
         }
     }
 
@@ -310,6 +342,12 @@
         masraf.SoforId = odemeTipi == "Personel" ? masraf.SoforId : null;
         masraf.CariId = odemeTipi == "Cari" ? masraf.CariId : null;
 
+        masraf.OdemeKaynak = odemeTipi switch
+        {
+            "Personel" => MasrafOdemeKaynak.PersonelCebinden,
+            _ => MasrafOdemeKaynak.Kasa
+        };
+
         if (odemeTipi == "Personel" && !masraf.SoforId.HasValue)
         {
             ToastService.ShowWarning("Personel cebinden ödeme için personel seçiniz.");
@@ -345,7 +383,7 @@
                     : "Masraf kaydı oluşturuldu.");
             }
 
-            Navigation.NavigateTo("/arac-masraflari");
+            Navigation.NavigateTo("/bakim-onarim");
         }
         catch (Exception ex)
         {
@@ -356,7 +394,7 @@
 
     private void Geri()
     {
-        Navigation.NavigateTo("/arac-masraflari");
+        Navigation.NavigateTo("/bakim-onarim");
     }
 
     private string GetKategoriText(MasrafKategori kategori) => kategori switch

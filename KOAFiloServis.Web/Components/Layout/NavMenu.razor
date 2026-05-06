@@ -198,6 +198,11 @@
                                                 <i class="bi bi-folder2-open me-2 text-warning"></i> Araç Evrakları
                                             </NavLink>
                                         </div>
+                                        <div class="nav-item px-3">
+                                            <NavLink class="nav-link" href="bakim-onarim">
+                                                <i class="bi bi-wrench-adjustable-circle me-2 text-danger"></i> Bakım-Onarım Kayıtları
+                                            </NavLink>
+                                        </div>
                                     </div>
                                 }
                             </div>
@@ -222,11 +227,6 @@
                                     <i class="bi bi-calendar-check-fill me-2"></i> Servis Çalışmaları
                                 </NavLink>
                             </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="stok/servis">
-                                    <i class="bi bi-tools me-2 text-warning"></i> Servis Kayıtları
-                                </NavLink>
-                            </div>
                         }
                         @if (HasYetki("toplucalisma.oku"))
                         {
@@ -249,14 +249,7 @@
                                 </NavLink>
                             </div>
                         }
-                        @if (HasYetki("aracmasraf.oku"))
-                        {
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="arac-masraflari">
-                                    <i class="bi bi-receipt me-2"></i> Araç Masrafları
-                                </NavLink>
-                            </div>
-                        }
+
 
 
                             <div class="nav-item px-3 mt-2 pt-2 border-top text-muted small">

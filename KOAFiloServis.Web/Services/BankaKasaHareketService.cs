@@ -1,4 +1,4 @@
-using KOAFiloServis.Shared.Entities;
+﻿using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
 using KOAFiloServis.Web.Models;
 using Microsoft.EntityFrameworkCore;
@@ -26,6 +26,7 @@ public class BankaKasaHareketService : IBankaKasaHareketService
             .Include(h => h.BankaHesap)
             .Include(h => h.Cari)
             .Include(h => h.PersonelCebinden)
+            .Include(h => h.Arac)
             .OrderByDescending(h => h.IslemTarihi)
             .ToListAsync();
     }
@@ -37,6 +38,7 @@ public class BankaKasaHareketService : IBankaKasaHareketService
             .Include(h => h.BankaHesap)
             .Include(h => h.Cari)
             .Include(h => h.PersonelCebinden)
+            .Include(h => h.Arac)
             .AsQueryable();
 
         // Arama filtresi
@@ -168,8 +170,10 @@ public class BankaKasaHareketService : IBankaKasaHareketService
         return await QueryHareketler(context)
             .Include(h => h.BankaHesap)
             .Include(h => h.Cari)
+            .Include(h => h.PersonelCebinden)
+            .Include(h => h.Arac)
             .Include(h => h.OdemeEslestirmeleri)
-                .ThenInclude(e => e.Fatura)
+            .ThenInclude(e => e.Fatura)
             .FirstOrDefaultAsync(h => h.Id == id);
     }
 

@@ -1,9 +1,10 @@
-﻿@page "/finans/personel-odenecekler"
+@page "/finans/personel-odenecekler"
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
 @inject IBankaKasaHareketService HareketService
 @inject IBankaHesapService BankaHesapService
 @inject ISoforService SoforService
+@inject IAracService AracService
 @inject IToastService ToastService
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
@@ -137,12 +138,13 @@
                             </th>
                             <th>Tarih</th>
                             <th>Personel</th>
+                            <th>Plaka</th>
                             <th>Açıklama</th>
                             <th>Belge No</th>
                             <th class="text-end">Tutar</th>
                             <th class="text-center">Durum</th>
                             <th>Ödeme Tarihi</th>
-                            <th style="width: 100px;"></th>
+                            <th style="width: 150px;"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -161,6 +163,16 @@
                                 <td>
                                     <strong>@item.PersonelCebinden?.TamAd</strong>
                                     <small class="text-muted d-block">@item.PersonelCebinden?.SoforKodu</small>
+                                </td>
+                                <td>
+                                    @if (item.Arac != null)
+                                    {
+                                        <span class="badge bg-light text-dark border"><i class="bi bi-truck me-1"></i>@item.Arac.AktifPlaka</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">-</span>
+                                    }
                                 </td>
                                 <td>@TruncateText(item.Aciklama, 40)</td>
                                 <td>@(item.BelgeNo ?? "-")</td>
@@ -181,21 +193,26 @@
                                     @(item.PersonelOdemeTarihi?.ToString("dd.MM.yyyy") ?? "-")
                                 </td>
                                 <td>
-                                    @if (!item.PersoneleOdendi)
-                                    {
-                                        <button class="btn btn-sm btn-success" @onclick="() => TekOdeAsync(item)" title="Ödendi İşaretle">
-                                            <i class="bi bi-check2"></i>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        @if (!item.PersoneleOdendi)
+                                        {
+                                            <button class="btn btn-success" @onclick="() => TekOdeAsync(item)" title="Ödendi İşaretle">
+                                                <i class="bi bi-check2"></i>
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button class="btn btn-outline-warning" @onclick="() => OdemeIptalAsync(item)" title="Ödeme İptal">
+                                                <i class="bi bi-arrow-counterclockwise"></i>
+                                            </button>
+                                        }
+                                        <button class="btn btn-outline-primary" @onclick="() => DuzenleAc(item)" title="Düzenle">
+                                            <i class="bi bi-pencil"></i>
                                         </button>
-                                    }
-                                    else
-                                    {
-                                        <button class="btn btn-sm btn-outline-warning" @onclick="() => OdemeIptalAsync(item)" title="Ödeme İptal">
-                                            <i class="bi bi-arrow-counterclockwise"></i>
+                                        <button class="btn btn-outline-danger" @onclick="() => SilAsync(item)" title="Sil">
+                                            <i class="bi bi-trash"></i>
                                         </button>
-                                    }
-                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => SilAsync(item)" title="Sil">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
+                                    </div>
                                 </td>
                             </tr>
                         }
@@ -255,11 +272,92 @@
     }
 </div>
 
+@if (duzenleModalGoster && duzenleHareket != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Personel Cebinden Kaydını Düzenle</h5>
+                    <button type="button" class="btn-close" @onclick="DuzenleKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Personel</label>
+                        <select class="form-select" @bind="duzenleHareket.PersonelCebindenId">
+                            <option value="">Seçiniz...</option>
+                            @foreach (var p in personeller)
+                            {
+                                <option value="@p.Id">@p.TamAd (@p.SoforKodu)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Araç (Plaka) <span class="text-muted">(opsiyonel)</span></label>
+                        <select class="form-select" @bind="duzenleHareket.AracId">
+                            <option value="">-- Araç Seçiniz --</option>
+                            @foreach (var a in araclar)
+                            {
+                                <option value="@a.Id">@a.AktifPlaka — @a.Marka @a.Model</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Tutar *</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" @bind="duzenleHareket.Tutar" step="0.01" min="0.01" />
+                                <span class="input-group-text">₺</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Tarih</label>
+                            <input type="date" class="form-control" @bind="duzenleHareket.IslemTarihi" />
+                        </div>
+                    </div>
+                    <div class="mb-3 mt-2">
+                        <label class="form-label small text-muted">Açıklama</label>
+                        <input type="text" class="form-control" @bind="duzenleHareket.Aciklama" placeholder="Açıklama..." />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Belge No</label>
+                        <input type="text" class="form-control" @bind="duzenleHareket.BelgeNo" placeholder="Belge no..." />
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="chkOdendi" @bind="duzenleHareket.PersoneleOdendi" />
+                        <label class="form-check-label" for="chkOdendi">Personele Ödendi</label>
+                    </div>
+                    @if (duzenleHareket.PersoneleOdendi)
+                    {
+                        <div class="mb-3 mt-2">
+                            <label class="form-label small text-muted">Ödeme Tarihi</label>
+                            <input type="date" class="form-control"
+                                   value="@(duzenleHareket.PersonelOdemeTarihi?.ToString("yyyy-MM-dd"))"
+                                   @onchange="(e) => duzenleHareket.PersonelOdemeTarihi = ParseDate(e.Value)" />
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="DuzenleKapat">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="DuzenleKaydetAsync" disabled="@isDuzenleniyor">
+                        @if (isDuzenleniyor)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-check-lg me-1"></i>Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<BankaKasaHareket> tumKayitlar = new();
     private List<BankaKasaHareket> odenecekler = new();
     private List<BankaKasaHareket> secilenler = new();
     private List<Sofor> personeller = new();
+    private List<Arac> araclar = new();
     private List<PersonelOdemeOzet> personelOzetleri = new();
 
     private int filtrePersonelId = 0;
@@ -267,6 +365,11 @@
     private DateTime? filtreBitis;
     private string filtreDurum = "bekleyen";
     private bool isLoading = true;
+
+    // Düzenleme modalı
+    private bool duzenleModalGoster = false;
+    private BankaKasaHareket? duzenleHareket = null;
+    private bool isDuzenleniyor = false;
 
     // Özet değişkenler
     private decimal toplamBekleyen = 0;
@@ -278,6 +381,7 @@
     protected override async Task OnInitializedAsync()
     {
         personeller = (await SoforService.GetAllAsync()).Where(s => s.Aktif).ToList();
+        araclar = (await AracService.GetActiveAsync()).OrderBy(a => a.AktifPlaka).ToList();
         await LoadDataAsync();
     }
 
@@ -508,6 +612,79 @@
         }
     }
 
+    private void DuzenleAc(BankaKasaHareket item)
+    {
+        duzenleHareket = new BankaKasaHareket
+        {
+            Id = item.Id,
+            IslemNo = item.IslemNo,
+            BelgeNo = item.BelgeNo,
+            Tutar = item.Tutar,
+            IslemTarihi = item.IslemTarihi,
+            Aciklama = item.Aciklama,
+            PersonelCebindenId = item.PersonelCebindenId,
+            HareketTipi = item.HareketTipi,
+            BankaHesapId = item.BankaHesapId,
+            IslemKaynak = item.IslemKaynak,
+            CariId = item.CariId,
+            AracId = item.AracId,
+            MuhasebeFisId = item.MuhasebeFisId,
+            PersoneleOdendi = item.PersoneleOdendi,
+            PersonelOdemeTarihi = item.PersonelOdemeTarihi
+        };
+        duzenleModalGoster = true;
+    }
+
+    private void DuzenleKapat()
+    {
+        duzenleModalGoster = false;
+        duzenleHareket = null;
+    }
+
+    private async Task DuzenleKaydetAsync()
+    {
+        if (duzenleHareket == null) return;
+        if (duzenleHareket.Tutar <= 0)
+        {
+            ToastService.ShowWarning("Tutar 0'dan büyük olmalıdır.");
+            return;
+        }
+        if (!duzenleHareket.PersonelCebindenId.HasValue)
+        {
+            ToastService.ShowWarning("Personel seçiniz.");
+            return;
+        }
+        if (duzenleHareket.PersoneleOdendi && !duzenleHareket.PersonelOdemeTarihi.HasValue)
+        {
+            duzenleHareket.PersonelOdemeTarihi = DateTime.Today;
+        }
+        if (!duzenleHareket.PersoneleOdendi)
+        {
+            duzenleHareket.PersonelOdemeTarihi = null;
+        }
+
+        isDuzenleniyor = true;
+        try
+        {
+            await HareketService.UpdateAsync(duzenleHareket);
+            ToastService.ShowSuccess("Kayıt güncellendi.");
+            duzenleModalGoster = false;
+            duzenleHareket = null;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+        finally
+        {
+            isDuzenleniyor = false;
+        }
+    }
+
+    private static DateTime? ParseDate(object? raw)
+        => raw == null ? null : DateTime.TryParse(raw.ToString(), out var d) ? d : null;
+
     private async Task FiltreleriSifirla()
     {
         filtrePersonelId = 0;
@@ -538,3 +715,4 @@
         public decimal OdenenTutar { get; set; }
     }
 }
+

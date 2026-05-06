@@ -6,6 +6,7 @@
 @inject IBankaHesapService BankaHesapService
 @inject ICariService CariService
 @inject ISoforService SoforService
+@inject IAracService AracService
 @inject IMuhasebeService MuhasebeService
 @inject IBudgetService BudgetService
 @inject IPersonelFinansService PersonelFinansService
@@ -133,6 +134,21 @@
                             <small class="text-info">
                                 <i class="bi bi-info-circle me-1"></i>
                                 Bu tutar personele geri ödenecekler listesine eklenecektir.
+                            </small>
+                        </div>
+                        <!-- Araç (Opsiyonel) -->
+                        <div class="mb-3">
+                            <label class="form-label small text-muted mb-1">Araç (Plaka) <span class="text-muted">(opsiyonel)</span></label>
+                            <select class="form-select" @bind="hareket.AracId">
+                                <option value="">-- Araç Seçiniz --</option>
+                                @foreach (var a in araclar)
+                                {
+                                    <option value="@a.Id">@a.AktifPlaka — @a.Marka @a.Model</option>
+                                }
+                            </select>
+                            <small class="text-muted">
+                                <i class="bi bi-truck me-1"></i>
+                                Araç masrafı ise plaka seçin; bakım-onarım kayıtlarında listelenecektir.
                             </small>
                         </div>
                     }
@@ -459,6 +475,16 @@
                                 }
                             </select>
                         </div>
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">Araç (Plaka) <span class="text-muted">(opsiyonel)</span></label>
+                            <select class="form-select" @bind="duzenleHareket.AracId">
+                                <option value="">-- Araç Seçiniz --</option>
+                                @foreach (var a in araclar)
+                                {
+                                    <option value="@a.Id">@a.AktifPlaka — @a.Marka @a.Model</option>
+                                }
+                            </select>
+                        </div>
                     }
                 </div>
                 <div class="modal-footer">
@@ -491,6 +517,7 @@
     private List<BankaKasaHareket> personeleOdenecekler = new();
     private List<StokKarti> stokKartlari = new();
     private List<MasrafKalem> masrafKalemleri = new();
+    private List<Arac> araclar = new();
 
     private int filtreHesapId = 0;
     private bool muhasebeFisiOlustur = false;
@@ -518,6 +545,7 @@
         tumHesaplar = (await BankaHesapService.GetAllAsync()).Where(h => h.Aktif).ToList();
         cariler = await CariService.GetAllAsync();
         personeller = await SoforService.GetAllAsync();
+        araclar = (await AracService.GetActiveAsync()).OrderBy(a => a.AktifPlaka).ToList();
         stokKartlari = await StokService.GetStokKartlariAsync(aktif: true);
 
         await FiltreleHesaplariAsync();
@@ -744,6 +772,8 @@
         duzenleHareket = new BankaKasaHareket
         {
             Id = h.Id,
+            IslemNo = h.IslemNo,
+            BelgeNo = h.BelgeNo,
             Tutar = h.Tutar,
             IslemTarihi = h.IslemTarihi,
             Aciklama = h.Aciklama,
@@ -751,6 +781,9 @@
             HareketTipi = h.HareketTipi,
             BankaHesapId = h.BankaHesapId,
             IslemKaynak = h.IslemKaynak,
+            CariId = h.CariId,
+            AracId = h.AracId,
+            MuhasebeFisId = h.MuhasebeFisId,
             PersoneleOdendi = h.PersoneleOdendi,
             PersonelOdemeTarihi = h.PersonelOdemeTarihi
         };
