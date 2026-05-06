@@ -241,14 +241,6 @@
                                 <i class="bi bi-journal-check me-2 text-success"></i> Filo Puantaj
                             </NavLink>
                         </div>
-                        @if (HasYetki("masrafkalem.oku"))
-                        {
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="masraf-kalemleri">
-                                    <i class="bi bi-list-task me-2"></i> Masraf Kalemleri
-                                </NavLink>
-                            </div>
-                        }
 
 
 
@@ -881,6 +873,14 @@
                                 </NavLink>
                             </div>
                         }
+                        @if (HasYetki("masrafkalem.oku"))
+                        {
+                            <div class="nav-item px-3">
+                                <NavLink class="nav-link" href="masraf-kalemleri">
+                                    <i class="bi bi-list-task me-2"></i> Masraf Kalemleri
+                                </NavLink>
+                            </div>
+                        }
                         <div class="nav-item px-3">
                             <NavLink class="nav-link" href="ayarlar/profil">
                                 <i class="bi bi-person-circle me-2 text-success"></i> Profilim
@@ -1275,7 +1275,7 @@
     {
         ["menu.crm"] = new() { "bildirim", "mesaj", "email", "hatirlatici" },
         ["menu.cari"] = new() { "cari", "cariler", "kesilenfatura", "gelenfatura" },
-        ["menu.filoservis"] = new() { "arac", "araclar", "guzergah", "guzergahlar", "serviscalisma", "toplucalisma", "masrafkalem", "aracmasraf", "filo", "hakedis" },
+        ["menu.filoservis"] = new() { "arac", "araclar", "guzergah", "guzergahlar", "serviscalisma", "toplucalisma", "aracmasraf", "filo", "hakedis" },
         ["menu.muhasebe"] = new() { "muhasebe", "hesapplani", "muhasebefis", "muhaseberapor", "malianaliz" },
         ["menu.personel"] = new() { "personel", "maas", "izin" },
         ["menu.fatura"] = new() { "fatura", "faturalar", "faturahazirlik", "kesilenfatura", "gelenfatura" },
@@ -1284,7 +1284,7 @@
         ["menu.checklist"] = new() { "checklist", "checklistmali" },
         ["menu.raporlar"] = new() { "rapor", "raporlar", "raporozmal", "raporkirala", "raporkomisyon", "raporservis", "raporfatura", "rapormasraf", "raporekstre" },
         ["menu.satis"] = new() { "satis", "piyasa", "ilan" },
-        ["menu.ayarlar"] = new() { "firma", "ayarlar", "kullanici", "rol", "veritabani", "sistemdurumu", "aktivitelog", "yedekleme", "guncelleme", "destektalebi", "piyasakaynak" },
+        ["menu.ayarlar"] = new() { "firma", "ayarlar", "kullanici", "rol", "veritabani", "sistemdurumu", "aktivitelog", "yedekleme", "guncelleme", "destektalebi", "piyasakaynak", "masrafkalem" },
         ["menu.ebys"] = new() { "ebys", "evrak", "belgeuyari" },
         ["menu.stok"] = new() { "stok" },
     };
@@ -1305,6 +1305,7 @@
 
     private bool IsExpanded(NavSection section) => expandedSections.Contains(section);
 }
+
 
 
 
