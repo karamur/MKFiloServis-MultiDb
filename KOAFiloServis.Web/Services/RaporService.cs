@@ -139,7 +139,7 @@ public class RaporService : IRaporService
 
         var data = await query.OrderByDescending(m => m.MasrafTarihi).ToListAsync();
 
-        return data.Select(m => new AracMasrafRaporItem
+        var items = data.Select(m => new AracMasrafRaporItem
         {
             MasrafTarihi = m.MasrafTarihi,
             Plaka = m.Arac?.AktifPlaka ?? string.Empty,
@@ -151,6 +151,36 @@ public class RaporService : IRaporService
             Aciklama = m.Aciklama,
             ArizaKaynakli = m.ArizaKaynaklimi
         }).ToList();
+
+        // Servis kayıtlarını da dahil et (AracMasraf bağlantısı olmayanlar)
+        var servisQuery = context.ServisKayitlari
+            .Include(s => s.Arac)
+            .Include(s => s.ServisciCari)
+            .Where(s => s.ServisTarihi >= startDate && s.ServisTarihi <= endDate && !s.IsDeleted)
+            .Where(s => s.AracMasrafId == null); // sadece henüz masrafa bağlanmamış servisler
+
+        if (aracId.HasValue)
+            servisQuery = servisQuery.Where(s => s.AracId == aracId.Value);
+
+        if (sahiplikTipi.HasValue)
+            servisQuery = servisQuery.Where(s => s.Arac.SahiplikTipi == sahiplikTipi.Value);
+
+        var servisler = await servisQuery.OrderByDescending(s => s.ServisTarihi).ToListAsync();
+
+        items.AddRange(servisler.Select(s => new AracMasrafRaporItem
+        {
+            MasrafTarihi = s.ServisTarihi,
+            Plaka = s.Arac?.AktifPlaka ?? string.Empty,
+            MasrafKalemi = s.ServisAdi,
+            Kategori = "Servis",
+            GuzergahAdi = s.ServisciCari?.Unvan,
+            Tutar = s.ToplamTutar > 0 ? s.ToplamTutar : (s.IscilikTutari + s.ParcaTutari + s.KdvTutar),
+            BelgeNo = null,
+            Aciklama = s.Aciklama,
+            ArizaKaynakli = false
+        }));
+
+        return items.OrderByDescending(i => i.MasrafTarihi).ToList();
     }
 
     public async Task<CariEkstre> GetCariEkstreAsync(
@@ -377,11 +407,21 @@ public class RaporService : IRaporService
             .ToListAsync();
 
         // Masrafları getir (gider)
+        // AracMasraflari
         var masraflar = await context.AracMasraflari
             .Include(m => m.MasrafKalemi)
             .Where(m => m.AracId == aracId)
             .Where(m => m.MasrafTarihi >= startDate && m.MasrafTarihi <= endDate)
             .Where(m => !m.IsDeleted)
+            .AsNoTracking()
+            .ToListAsync();
+
+        // ServisKaydi giderleri (AracMasraf bağlantısı olmayanlar)
+        var servisGiderleri = await context.ServisKayitlari
+            .Where(s => s.AracId == aracId)
+            .Where(s => s.ServisTarihi >= startDate && s.ServisTarihi <= endDate)
+            .Where(s => !s.IsDeleted)
+            .Where(s => s.AracMasrafId == null)
             .AsNoTracking()
             .ToListAsync();
 
@@ -420,7 +460,10 @@ public class RaporService : IRaporService
         };
 
         // Masraf detayları (kategori bazlı)
-        var toplamMasraf = masraflar.Sum(m => m.Tutar);
+        var servisToplamMasraf = servisGiderleri.Sum(s => s.ToplamTutar > 0 ? s.ToplamTutar : (s.IscilikTutari + s.ParcaTutari + s.KdvTutar));
+        var toplamMasraf = masraflar.Sum(m => m.Tutar) + servisToplamMasraf;
+        ozet.ToplamMasraf = masraflar.Sum(m => m.Tutar) + servisToplamMasraf;
+
         ozet.MasrafDetaylari = masraflar
             .GroupBy(m => new { m.MasrafKalemiId, m.MasrafKalemi.MasrafAdi })
             .Select(g => new AracMasrafDetay
@@ -431,6 +474,10 @@ public class RaporService : IRaporService
                 Adet = g.Count(),
                 Oran = toplamMasraf > 0 ? g.Sum(m => m.Tutar) / toplamMasraf * 100 : 0
             })
+            .ToList()
+            .Concat(servisToplamMasraf > 0
+                ? new[] { new AracMasrafDetay { MasrafKalemiId = 0, MasrafKalemiAdi = "Servis/Bakım (Yeni Servis)", ToplamTutar = servisToplamMasraf, Adet = servisGiderleri.Count, Oran = toplamMasraf > 0 ? servisToplamMasraf / toplamMasraf * 100 : 0 } }
+                : Array.Empty<AracMasrafDetay>())
             .OrderByDescending(d => d.ToplamTutar)
             .ToList();
 
@@ -537,15 +584,29 @@ public class RaporService : IRaporService
 
         var masraflar = await masrafQuery.AsNoTracking().ToListAsync();
 
+        // ServisKaydi giderleri (AracMasraf bağlantısı olmayanlar)
+        var servisKayitlariQuery = context.ServisKayitlari
+            .Include(s => s.Arac)
+            .Where(s => s.ServisTarihi >= startDate && s.ServisTarihi <= endDate)
+            .Where(s => !s.IsDeleted)
+            .Where(s => s.AracMasrafId == null);
+
+        if (sahiplikTipi.HasValue)
+            servisKayitlariQuery = servisKayitlariQuery.Where(s => s.Arac.SahiplikTipi == sahiplikTipi.Value);
+
+        var servisKayitlari = await servisKayitlariQuery.AsNoTracking().ToListAsync();
+
         var aySayisi = ((endDate.Year - startDate.Year) * 12) + endDate.Month - startDate.Month + 1;
 
         var sonuclar = araclar.Select(arac =>
         {
             var aracCalismalari = calismalar.Where(c => c.AracId == arac.Id).ToList();
             var aracMasraflari = masraflar.Where(m => m.AracId == arac.Id).ToList();
+            var aracServisleri = servisKayitlari.Where(s => s.AracId == arac.Id).ToList();
 
             var toplamGelir = aracCalismalari.Sum(c => c.Fiyat ?? c.Guzergah.BirimFiyat);
-            var toplamMasraf = aracMasraflari.Sum(m => m.Tutar);
+            var toplamMasraf = aracMasraflari.Sum(m => m.Tutar) +
+                               aracServisleri.Sum(s => s.ToplamTutar > 0 ? s.ToplamTutar : (s.IscilikTutari + s.ParcaTutari + s.KdvTutar));
             var kiraBedeli = arac.SahiplikTipi == AracSahiplikTipi.Kiralik ? (arac.AylikKiraBedeli ?? 0) * aySayisi : 0;
 
             decimal komisyon = 0;

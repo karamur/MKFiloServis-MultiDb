@@ -736,14 +736,25 @@ public class StokService : IStokService
     public async Task<ServisKaydi> CreateServisKaydiAsync(ServisKaydi servis)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        // Toplam tutar hesapla
-        servis.ParcaTutari = servis.Parcalar?.Sum(p => p.Miktar * p.BirimFiyat) ?? 0;
+        // Kalemleri normalize et ve toplamları hesapla
+        servis.Parcalar = NormalizeServisParcalari(servis.Parcalar);
+        var (parcaToplami, iscilikToplami, kdvToplami) = HesaplaServisKalemToplamlari(servis.Parcalar);
+
+        servis.ParcaTutari = parcaToplami;
+        servis.IscilikTutari = iscilikToplami;
+
         var toplamNet = servis.IscilikTutari + servis.ParcaTutari;
-        servis.KdvTutar = toplamNet * servis.KdvOrani / 100;
+        if (!servis.KdvManuelMi)
+            servis.KdvTutar = kdvToplami;
+
+        servis.KdvOrani = toplamNet > 0 ? Math.Round(servis.KdvTutar / toplamNet * 100, 2) : 0;
         servis.ToplamTutar = toplamNet + servis.KdvTutar;
         servis.CreatedAt = DateTime.UtcNow;
 
         context.ServisKayitlari.Add(servis);
+        await context.SaveChangesAsync();
+
+        await StogaKaydetParcalariAsync(context, servis);
         await context.SaveChangesAsync();
 
         // Arac km guncelle
@@ -776,7 +787,7 @@ public class StokService : IStokService
         existing.ServisTipi = servis.ServisTipi;
         existing.ServisAdi = servis.ServisAdi;
         existing.Aciklama = servis.Aciklama;
-        existing.IscilikTutari = servis.IscilikTutari;
+        existing.KdvManuelMi = servis.KdvManuelMi;
         existing.KdvOrani = servis.KdvOrani;
         existing.Kilometre = servis.Kilometre;
         existing.Durum = servis.Durum;
@@ -786,9 +797,10 @@ public class StokService : IStokService
 
         // Parcalari guncelle
         context.ServisParcalar.RemoveRange(existing.Parcalar);
-        if (servis.Parcalar != null)
+        var normalizedParcalar = NormalizeServisParcalari(servis.Parcalar);
+        if (normalizedParcalar.Any())
         {
-            foreach (var parca in servis.Parcalar)
+            foreach (var parca in normalizedParcalar)
             {
                 parca.ServisKaydiId = existing.Id;
                 context.ServisParcalar.Add(parca);
@@ -796,14 +808,183 @@ public class StokService : IStokService
         }
 
         // Toplam tutar hesapla
-        existing.ParcaTutari = servis.Parcalar?.Sum(p => p.Miktar * p.BirimFiyat) ?? 0;
+        var (parcaToplami, iscilikToplami, kdvToplami) = HesaplaServisKalemToplamlari(normalizedParcalar);
+        existing.ParcaTutari = parcaToplami;
+        existing.IscilikTutari = iscilikToplami;
         var toplamNet = existing.IscilikTutari + existing.ParcaTutari;
-        existing.KdvTutar = toplamNet * existing.KdvOrani / 100;
+        existing.KdvTutar = existing.KdvManuelMi ? servis.KdvTutar : kdvToplami;
+        existing.KdvOrani = toplamNet > 0 ? Math.Round(existing.KdvTutar / toplamNet * 100, 2) : 0;
         existing.ToplamTutar = toplamNet + existing.KdvTutar;
         existing.UpdatedAt = DateTime.UtcNow;
 
+        // Güncellemede aynı servis için daha önce oluşturulmuş stoğa kaydet girişlerini temizle
+        await GeriAlServisStokGirisleriAsync(context, existing.Id);
+        existing.Parcalar = normalizedParcalar;
+        await StogaKaydetParcalariAsync(context, existing);
+
         await context.SaveChangesAsync();
         return existing;
+    }
+
+    private static List<ServisParca> NormalizeServisParcalari(IEnumerable<ServisParca>? parcalar)
+    {
+        if (parcalar == null)
+            return new List<ServisParca>();
+
+        return parcalar
+            .Where(p => !string.IsNullOrWhiteSpace(p.ParcaAdi))
+            .Select(p => new ServisParca
+            {
+                ServisKaydiId = p.ServisKaydiId,
+                StokKartiId = p.StokKartiId,
+                KalemTipi = p.KalemTipi,
+                ParcaAdi = p.ParcaAdi.Trim(),
+                Miktar = p.Miktar <= 0 ? 1 : p.Miktar,
+                Birim = string.IsNullOrWhiteSpace(p.Birim) ? "Adet" : p.Birim.Trim(),
+                BirimFiyat = p.BirimFiyat,
+                KdvOrani = p.KdvOrani,
+                StogaKaydet = p.KalemTipi == ServisKalemTipi.Malzeme && p.StogaKaydet,
+                Aciklama = p.Aciklama
+            })
+            .ToList();
+    }
+
+    private static (decimal ParcaToplami, decimal IscilikToplami, decimal KdvToplami) HesaplaServisKalemToplamlari(IEnumerable<ServisParca> parcalar)
+    {
+        decimal parcaToplami = 0;
+        decimal iscilikToplami = 0;
+        decimal kdvToplami = 0;
+
+        foreach (var kalem in parcalar)
+        {
+            var kalemNet = kalem.Miktar * kalem.BirimFiyat;
+            kdvToplami += kalemNet * kalem.KdvOrani / 100;
+
+            if (kalem.KalemTipi == ServisKalemTipi.Iscilik)
+                iscilikToplami += kalemNet;
+            else
+                parcaToplami += kalemNet;
+        }
+
+        return (parcaToplami, iscilikToplami, kdvToplami);
+    }
+
+    private async Task StogaKaydetParcalariAsync(ApplicationDbContext context, ServisKaydi servis)
+    {
+        if (servis.Parcalar == null || !servis.Parcalar.Any())
+            return;
+
+        var belgeNo = $"SRV-{servis.Id}";
+        var stokParcalari = servis.Parcalar
+            .Where(p => p.KalemTipi == ServisKalemTipi.Malzeme && p.StogaKaydet && p.Miktar > 0)
+            .ToList();
+
+        foreach (var parca in stokParcalari)
+        {
+            var stokKarti = await context.StokKartlari
+                .FirstOrDefaultAsync(s => !s.IsDeleted && s.StokAdi == parca.ParcaAdi);
+
+            if (stokKarti == null)
+            {
+                stokKarti = new StokKarti
+                {
+                    StokKodu = await GetNextStokKoduInternalAsync(context, StokTipi.YedekParca),
+                    StokAdi = parca.ParcaAdi,
+                    Aciklama = "Yeni Servis ekranından otomatik oluşturuldu",
+                    StokTipi = StokTipi.YedekParca,
+                    AltTipi = StokAltTipi.Diger,
+                    Birim = string.IsNullOrWhiteSpace(parca.Birim) ? "Adet" : parca.Birim,
+                    AlisFiyati = parca.BirimFiyat,
+                    SatisFiyati = parca.BirimFiyat,
+                    KdvOrani = parca.KdvOrani,
+                    StokTakibiYapilsin = true,
+                    Aktif = true,
+                    VarsayilanTedarikciId = servis.ServisciCariId,
+                    CreatedAt = DateTime.UtcNow
+                };
+                context.StokKartlari.Add(stokKarti);
+                await context.SaveChangesAsync();
+            }
+
+            var hareket = new StokHareket
+            {
+                StokKartiId = stokKarti.Id,
+                IslemTarihi = DateTime.SpecifyKind(servis.ServisTarihi, DateTimeKind.Utc),
+                BelgeNo = belgeNo,
+                HareketTipi = StokHareketTipi.ServisGiris,
+                Miktar = parca.Miktar,
+                BirimFiyat = parca.BirimFiyat,
+                CariId = servis.ServisciCariId,
+                AracId = servis.AracId,
+                AracMasrafId = servis.AracMasrafId,
+                Aciklama = $"Servis kaydı stoğa kayıt: {servis.ServisAdi} - {parca.ParcaAdi}",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            context.StokHareketler.Add(hareket);
+            stokKarti.MevcutStok += parca.Miktar;
+            stokKarti.AlisFiyati = parca.BirimFiyat;
+            stokKarti.KdvOrani = parca.KdvOrani;
+            stokKarti.UpdatedAt = DateTime.UtcNow;
+        }
+    }
+
+    private async Task GeriAlServisStokGirisleriAsync(ApplicationDbContext context, int servisKaydiId)
+    {
+        var belgeNo = $"SRV-{servisKaydiId}";
+        var hareketler = await context.StokHareketler
+            .Where(h => !h.IsDeleted && h.BelgeNo == belgeNo && h.HareketTipi == StokHareketTipi.ServisGiris)
+            .ToListAsync();
+
+        if (!hareketler.Any())
+            return;
+
+        var stokIds = hareketler.Select(h => h.StokKartiId).Distinct().ToList();
+        var stoklar = await context.StokKartlari
+            .Where(s => stokIds.Contains(s.Id))
+            .ToDictionaryAsync(s => s.Id);
+
+        foreach (var hareket in hareketler)
+        {
+            if (stoklar.TryGetValue(hareket.StokKartiId, out var stok))
+            {
+                stok.MevcutStok -= hareket.Miktar;
+                stok.UpdatedAt = DateTime.UtcNow;
+            }
+
+            hareket.IsDeleted = true;
+            hareket.UpdatedAt = DateTime.UtcNow;
+        }
+    }
+
+    private static async Task<string> GetNextStokKoduInternalAsync(ApplicationDbContext context, StokTipi tip)
+    {
+        var prefix = tip switch
+        {
+            StokTipi.Mal => "MAL",
+            StokTipi.Hizmet => "HZM",
+            StokTipi.Arac => "ARC",
+            StokTipi.YedekParca => "YDP",
+            StokTipi.SarfMalzeme => "SRF",
+            StokTipi.Demirbas => "DMR",
+            _ => "STK"
+        };
+
+        var lastStok = await context.StokKartlari
+            .IgnoreQueryFilters()
+            .Where(s => s.StokKodu.StartsWith(prefix))
+            .OrderByDescending(s => s.StokKodu)
+            .FirstOrDefaultAsync();
+
+        int nextNum = 1;
+        if (lastStok != null)
+        {
+            var numPart = lastStok.StokKodu.Replace(prefix, "");
+            if (int.TryParse(numPart, out var num))
+                nextNum = num + 1;
+        }
+
+        return $"{prefix}{nextNum:D5}";
     }
 
     public async Task DeleteServisKaydiAsync(int id)

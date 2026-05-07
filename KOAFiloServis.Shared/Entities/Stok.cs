@@ -234,12 +234,15 @@ public class ServisKaydi : BaseEntity
     // Notlar
     public string? Notlar { get; set; }
 
+    // KDV manuel düzeltme
+    public bool KdvManuelMi { get; set; } = false;
+
     // Navigation - Servis parcalari
     public virtual ICollection<ServisParca> Parcalar { get; set; } = new List<ServisParca>();
 }
 
 /// <summary>
-/// Servis Parcasi - Serviste kullanilan parcalar
+/// Servis Parcasi - Serviste kullanilan parcalar / iscilik kalemleri
 /// </summary>
 public class ServisParca : BaseEntity
 {
@@ -249,6 +252,9 @@ public class ServisParca : BaseEntity
     // Stok karti (varsa)
     public int? StokKartiId { get; set; }
     public virtual StokKarti? StokKarti { get; set; }
+
+    // Kalem tipi: Malzeme veya Iscilik
+    public ServisKalemTipi KalemTipi { get; set; } = ServisKalemTipi.Malzeme;
 
     [StringLength(200)]
     public string ParcaAdi { get; set; } = string.Empty;
@@ -261,6 +267,14 @@ public class ServisParca : BaseEntity
     public decimal BirimFiyat { get; set; }
     [NotMapped]
     public decimal ToplamTutar => Miktar * BirimFiyat;
+
+    // KDV orani (kalem bazli)
+    public decimal KdvOrani { get; set; } = 20;
+    [NotMapped]
+    public decimal KdvTutar => ToplamTutar * KdvOrani / 100;
+
+    // Stoğa kaydet (sadece malzeme kalemleri icin)
+    public bool StogaKaydet { get; set; } = false;
 
     public string? Aciklama { get; set; }
 }
@@ -369,6 +383,12 @@ public enum ServisDurum
     Devam = 2,
     Tamamlandi = 3,
     IptalEdildi = 4
+}
+
+public enum ServisKalemTipi
+{
+    Malzeme = 1,
+    Iscilik = 2
 }
 
 #endregion

@@ -52,6 +52,7 @@
                             <option value="Ozmal">Özmal</option>
                             <option value="Kiralik">Kiralık</option>
                             <option value="Komisyon">Komisyon</option>
+                            <option value="Tedarikci">Tedarikçi</option>
                         </select>
                     </div>
                 </div>
@@ -200,7 +201,9 @@
     // Sahiplik tipine göre filtrelenmiş araçlar
     private IEnumerable<Arac> filtreliAraclar => string.IsNullOrEmpty(secilenSahiplikTipi) 
         ? araclar 
-        : araclar.Where(a => a.SahiplikTipi.ToString() == secilenSahiplikTipi);
+        : secilenSahiplikTipi == "Tedarikci"
+            ? araclar.Where(a => a.SahiplikTipi == AracSahiplikTipi.Tedarikci || a.SahiplikTipi == AracSahiplikTipi.Diger)
+            : araclar.Where(a => a.SahiplikTipi.ToString() == secilenSahiplikTipi);
 
     protected override async Task OnInitializedAsync()
     {

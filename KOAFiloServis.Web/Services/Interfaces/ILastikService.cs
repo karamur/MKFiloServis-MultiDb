@@ -60,6 +60,11 @@ public interface ILastikService
     // --- Rapor / Araç Detay ---
     Task<List<LastikAracDonemOzet>> GetAracDonemOzetListAsync(DateTime? baslangic = null, DateTime? bitis = null);
     Task<LastikAracDetay?> GetAracDetayAsync(int aracId, DateTime? baslangic = null, DateTime? bitis = null);
+
+    // --- Sezon Ayarları ---
+    Task<List<LastikSezonAyar>> GetSezonAyarlarAsync();
+    Task<LastikSezonAyar> UpsertSezonAyarAsync(LastikSezonAyar ayar);
+    Task<LastikSezonDurum> GetSezonDurumAsync();
 }
 
 public sealed class LastikAracDonemOzet
@@ -111,6 +116,7 @@ public sealed class LastikPlakaEnvanteri
     public int AracId { get; set; }
     public string Plaka { get; set; } = string.Empty;
     public string AracBilgisi { get; set; } = string.Empty;
+    public DateTime? SonDegisimTarihi { get; set; }
     public List<LastikPlakaEnvanterSatiri> Lastikler { get; set; } = new();
     public int TakiliSayisi { get; set; }
     public int YedekSayisi { get; set; }
@@ -137,6 +143,7 @@ public sealed class LastikEksikSezonSatiri
     public int AracId { get; set; }
     public string Plaka { get; set; } = string.Empty;
     public string AracBilgisi { get; set; } = string.Empty;
+    public DateTime? SonDegisimTarihi { get; set; }
     public bool YazEksik { get; set; }
     public bool KisEksik { get; set; }
     public int ToplamLastikSayisi { get; set; }
@@ -178,5 +185,35 @@ public sealed class LastikCopeyAtilanSatiri
     public string? Notlar { get; set; }
 }
 
+/// <summary>Aktif sezon durumu ve değişim yapılması gereken araç listesi.</summary>
+public sealed class LastikSezonDurum
+{
+    /// <summary>Bugünün içinde bulunduğu aktif sezon ayarı (null = ayarsız)</summary>
+    public LastikSezonAyar? AktifSezon { get; set; }
 
+    /// <summary>Bir sonraki sezon ayarı</summary>
+    public LastikSezonAyar? SonrakiSezon { get; set; }
 
+    /// <summary>Sonraki sezon başlangıcına kalan gün (null = bilinmiyor)</summary>
+    public int? SonrakiSezonKalanGun { get; set; }
+
+    /// <summary>Uyarı eşiğine girildi mi (kalan gün ≤ UyariOncesiGun)</summary>
+    public bool UyariAktif { get; set; }
+
+    /// <summary>Aktif sezonda lastik değişimi yapması gereken araçlar</summary>
+    public List<LastikSezonDegisimGereken> DegisimGerekenler { get; set; } = new();
+}
+
+/// <summary>Sezon lastik değişimi yapması gereken araç satırı.</summary>
+public sealed class LastikSezonDegisimGereken
+{
+    public int AracId { get; set; }
+    public string Plaka { get; set; } = string.Empty;
+    public string AracBilgisi { get; set; } = string.Empty;
+    /// <summary>Şu an takılı lastiklerin sezon özeti</summary>
+    public string TakiliSezonOzeti { get; set; } = string.Empty;
+    /// <summary>Bu sezon içinde mevsimlik değişim yapıldı mı</summary>
+    public bool BuSezonDegisimYapildi { get; set; }
+    /// <summary>En son değişim tarihi</summary>
+    public DateTime? SonDegisimTarihi { get; set; }
+}

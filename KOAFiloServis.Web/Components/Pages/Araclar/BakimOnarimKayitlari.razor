@@ -299,17 +299,121 @@
                                 <InputText class="form-control" @bind-Value="editingServis.ServisAdi" />
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label">İşçilik Tutarı</label>
-                                <InputNumber class="form-control" @bind-Value="editingServis.IscilikTutari" />
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">KDV Oranı (%)</label>
-                                <InputNumber class="form-control" @bind-Value="editingServis.KdvOrani" />
-                            </div>
-                            <div class="col-md-4">
                                 <div class="form-check mt-4">
                                     <InputCheckbox class="form-check-input" @bind-Value="editingServis.GarantiKapsaminda" id="garanti" />
                                     <label class="form-check-label" for="garanti">Garanti Kapsamında</label>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <label class="form-label mb-0">Servis Kalemleri</label>
+                                    <div class="btn-group btn-group-sm">
+                                        <button type="button" class="btn btn-outline-primary" @onclick="() => KalemEkle(ServisKalemTipi.Malzeme)">
+                                            <i class="bi bi-plus-circle me-1"></i>Malzeme Ekle
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary" @onclick="() => KalemEkle(ServisKalemTipi.Iscilik)">
+                                            <i class="bi bi-plus-circle me-1"></i>İşçilik Ekle
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="table-responsive border rounded">
+                                    <table class="table table-sm align-middle mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="min-width: 110px;">Kalem Tipi</th>
+                                                <th style="min-width: 220px;">Açıklama</th>
+                                                <th style="width: 90px;">Miktar</th>
+                                                <th style="width: 100px;">Birim</th>
+                                                <th style="width: 120px;">Birim Fiyat</th>
+                                                <th style="width: 100px;">KDV %</th>
+                                                <th style="width: 120px;">KDV Tutar</th>
+                                                <th style="width: 120px;">Net Tutar</th>
+                                                <th style="width: 110px;">Stoğa Kaydet</th>
+                                                <th style="width: 60px;"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @if (editingServis.Parcalar.Any())
+                                            {
+                                                @foreach (var kalem in editingServis.Parcalar)
+                                                {
+                                                    <tr>
+                                                        <td>
+                                                            <InputSelect class="form-select form-select-sm" @bind-Value="kalem.KalemTipi" @bind-Value:after="ServisKalemleriniHesapla">
+                                                                <option value="@ServisKalemTipi.Malzeme">Malzeme</option>
+                                                                <option value="@ServisKalemTipi.Iscilik">İşçilik</option>
+                                                            </InputSelect>
+                                                        </td>
+                                                        <td>
+                                                            <InputText class="form-control form-control-sm" @bind-Value="kalem.ParcaAdi" @bind-Value:after="ServisKalemleriniHesapla" />
+                                                        </td>
+                                                        <td>
+                                                            <InputNumber class="form-control form-control-sm" @bind-Value="kalem.Miktar" @bind-Value:after="ServisKalemleriniHesapla" />
+                                                        </td>
+                                                        <td>
+                                                            <InputText class="form-control form-control-sm" @bind-Value="kalem.Birim" @bind-Value:after="ServisKalemleriniHesapla" />
+                                                        </td>
+                                                        <td>
+                                                            <InputNumber class="form-control form-control-sm" @bind-Value="kalem.BirimFiyat" @bind-Value:after="ServisKalemleriniHesapla" />
+                                                        </td>
+                                                        <td>
+                                                            <InputSelect class="form-select form-select-sm" @bind-Value="kalem.KdvOrani" @bind-Value:after="ServisKalemleriniHesapla">
+                                                                @foreach (var kdv in servisKdvSecenekleri)
+                                                                {
+                                                                    <option value="@kdv">@kdv</option>
+                                                                }
+                                                            </InputSelect>
+                                                        </td>
+                                                        <td class="text-end fw-semibold">@ServisKalemKdv(kalem).ToString("N2") ₺</td>
+                                                        <td class="text-end fw-semibold">@ServisKalemNet(kalem).ToString("N2") ₺</td>
+                                                        <td class="text-center">
+                                                            @if (kalem.KalemTipi == ServisKalemTipi.Malzeme)
+                                                            {
+                                                                <InputCheckbox class="form-check-input" @bind-Value="kalem.StogaKaydet" @bind-Value:after="ServisKalemleriniHesapla" />
+                                                            }
+                                                        </td>
+                                                        <td class="text-center">
+                                                            <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => KalemSil(kalem)">
+                                                                <i class="bi bi-trash"></i>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <tr>
+                                                    <td colspan="10" class="text-center text-muted py-3">
+                                                        Kalem yok. Malzeme veya işçilik kalemi ekleyin.
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label">Malzeme Toplamı</label>
+                                <input class="form-control" value="@editingServis.ParcaTutari.ToString("N2")" readonly />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">İşçilik Toplamı</label>
+                                <input class="form-control" value="@editingServis.IscilikTutari.ToString("N2")" readonly />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">KDV Toplamı</label>
+                                <InputNumber class="form-control" @bind-Value="editingServis.KdvTutar" @bind-Value:after="ServisKalemleriniHesapla" disabled="@(!editingServis.KdvManuelMi)" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Genel Toplam</label>
+                                <input class="form-control fw-semibold" value="@editingServis.ToplamTutar.ToString("N2")" readonly />
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="form-check mt-2">
+                                    <InputCheckbox class="form-check-input" @bind-Value="editingServis.KdvManuelMi" @bind-Value:after="ServisKalemleriniHesapla" id="kdvmanuel" />
+                                    <label class="form-check-label" for="kdvmanuel">KDV Toplamını Manuel Düzelt</label>
                                 </div>
                             </div>
                             <div class="col-12">
@@ -476,6 +580,7 @@
     private Hareket? detayHareket;
     private bool showDeleteModal = false;
     private Hareket? silinecekHareket;
+    private readonly decimal[] servisKdvSecenekleri = [0, 1, 8, 10, 18, 20];
 
     // Araç bazlı açık satır
     private int? acikAracId;
@@ -1035,8 +1140,22 @@
             ServisTarihi = DateTime.Today,
             ServisTipi = ServisTipi.PeriyodikBakim,
             KdvOrani = 20,
-            Durum = ServisDurum.Tamamlandi
+            Durum = ServisDurum.Tamamlandi,
+            KdvManuelMi = false,
+            Parcalar =
+            [
+                new ServisParca
+                {
+                    KalemTipi = ServisKalemTipi.Malzeme,
+                    ParcaAdi = string.Empty,
+                    Miktar = 1,
+                    Birim = "Adet",
+                    BirimFiyat = 0,
+                    KdvOrani = 20
+                }
+            ]
         };
+        ServisKalemleriniHesapla();
         showServisModal = true;
     }
 
@@ -1072,13 +1191,99 @@
                 Aciklama = s.Aciklama,
                 IscilikTutari = s.IscilikTutari,
                 KdvOrani = s.KdvOrani,
+                KdvTutar = s.KdvTutar,
+                ToplamTutar = s.ToplamTutar,
+                KdvManuelMi = s.KdvManuelMi,
                 Kilometre = s.Kilometre,
                 Durum = s.Durum,
                 GarantiKapsaminda = s.GarantiKapsaminda,
-                Notlar = s.Notlar
+                Notlar = s.Notlar,
+                Parcalar = s.Parcalar.Select(p => new ServisParca
+                {
+                    Id = p.Id,
+                    ServisKaydiId = p.ServisKaydiId,
+                    StokKartiId = p.StokKartiId,
+                    KalemTipi = p.KalemTipi,
+                    ParcaAdi = p.ParcaAdi,
+                    Miktar = p.Miktar,
+                    Birim = p.Birim,
+                    BirimFiyat = p.BirimFiyat,
+                    KdvOrani = p.KdvOrani,
+                    StogaKaydet = p.StogaKaydet,
+                    Aciklama = p.Aciklama
+                }).ToList()
             };
+            if (!editingServis.Parcalar.Any())
+                KalemEkle(ServisKalemTipi.Malzeme);
+            ServisKalemleriniHesapla();
             showServisModal = true;
         }
+    }
+
+    private void KalemEkle(ServisKalemTipi tip)
+    {
+        if (editingServis == null)
+            return;
+
+        editingServis.Parcalar.Add(new ServisParca
+        {
+            KalemTipi = tip,
+            ParcaAdi = string.Empty,
+            Miktar = 1,
+            Birim = tip == ServisKalemTipi.Iscilik ? "Saat" : "Adet",
+            BirimFiyat = 0,
+            KdvOrani = 20,
+            StogaKaydet = false
+        });
+
+        ServisKalemleriniHesapla();
+    }
+
+    private void KalemSil(ServisParca kalem)
+    {
+        if (editingServis == null)
+            return;
+
+        editingServis.Parcalar.Remove(kalem);
+        ServisKalemleriniHesapla();
+    }
+
+    private static decimal ServisKalemNet(ServisParca kalem)
+        => (kalem.Miktar <= 0 ? 1 : kalem.Miktar) * kalem.BirimFiyat;
+
+    private static decimal ServisKalemKdv(ServisParca kalem)
+        => ServisKalemNet(kalem) * kalem.KdvOrani / 100;
+
+    private void ServisKalemleriniHesapla()
+    {
+        if (editingServis == null)
+            return;
+
+        foreach (var kalem in editingServis.Parcalar)
+        {
+            if (kalem.Miktar <= 0)
+                kalem.Miktar = 1;
+            if (string.IsNullOrWhiteSpace(kalem.Birim))
+                kalem.Birim = kalem.KalemTipi == ServisKalemTipi.Iscilik ? "Saat" : "Adet";
+            if (kalem.KalemTipi == ServisKalemTipi.Iscilik)
+                kalem.StogaKaydet = false;
+        }
+
+        editingServis.ParcaTutari = editingServis.Parcalar
+            .Where(k => k.KalemTipi == ServisKalemTipi.Malzeme)
+            .Sum(ServisKalemNet);
+
+        editingServis.IscilikTutari = editingServis.Parcalar
+            .Where(k => k.KalemTipi == ServisKalemTipi.Iscilik)
+            .Sum(ServisKalemNet);
+
+        var kdvToplami = editingServis.Parcalar.Sum(ServisKalemKdv);
+        if (!editingServis.KdvManuelMi)
+            editingServis.KdvTutar = kdvToplami;
+
+        var netToplam = editingServis.ParcaTutari + editingServis.IscilikTutari;
+        editingServis.KdvOrani = netToplam > 0 ? Math.Round(editingServis.KdvTutar / netToplam * 100, 2) : 0;
+        editingServis.ToplamTutar = netToplam + editingServis.KdvTutar;
     }
 
     private async Task SaveServis()
@@ -1086,6 +1291,7 @@
         if (editingServis == null || editingServis.AracId == 0) return;
         try
         {
+            ServisKalemleriniHesapla();
             isSaving = true;
             if (editingServis.Id > 0)
             {

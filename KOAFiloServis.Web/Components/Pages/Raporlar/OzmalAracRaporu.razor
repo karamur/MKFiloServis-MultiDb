@@ -4,11 +4,11 @@
 @inject IMaliAnalizService MaliAnalizService
 @rendermode InteractiveServer
 
-<PageTitle>©zmal Araç Raporu</PageTitle>
+<PageTitle>Özmal Araç Raporu</PageTitle>
 
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3><i class="bi bi-truck me-2"></i>©zmal Araç Raporu (Personel Servis Hizmeti)</h3>
+        <h3><i class="bi bi-truck me-2"></i>Özmal Araç Raporu (Personel Servis Hizmeti)</h3>
         <div class="d-flex gap-2">
             <select class="form-select" style="width: 120px;" @bind="secilenYil" @bind:after="YenileData">
                 @for (int y = DateTime.Today.Year; y >= DateTime.Today.Year - 3; y--)
@@ -42,7 +42,7 @@
                 <div class="card bg-success text-white">
                     <div class="card-body text-center">
                         <h6 class="text-white-50">Toplam Gelir</h6>
-                        <h3>@rapor.ToplamGelir.ToString("N0") ?</h3>
+                        <h3>@rapor.ToplamGelir.ToString("N0") ₺</h3>
                     </div>
                 </div>
             </div>
@@ -50,7 +50,7 @@
                 <div class="card bg-danger text-white">
                     <div class="card-body text-center">
                         <h6 class="text-white-50">Toplam Gider</h6>
-                        <h3>@rapor.ToplamGider.ToString("N0") ?</h3>
+                        <h3>@rapor.ToplamGider.ToString("N0") ₺</h3>
                     </div>
                 </div>
             </div>
@@ -58,7 +58,7 @@
                 <div class="card @(rapor.NetKar >= 0 ? "bg-primary" : "bg-warning") text-white">
                     <div class="card-body text-center">
                         <h6 class="text-white-50">Net Kar</h6>
-                        <h3>@rapor.NetKar.ToString("N0") ?</h3>
+                        <h3>@rapor.NetKar.ToString("N0") ₺</h3>
                     </div>
                 </div>
             </div>
@@ -72,7 +72,7 @@
             </div>
         </div>
 
-        <!-- Araç Detaylar© -->
+        <!-- Araç Detayları -->
         @foreach (var arac in rapor.AracDetaylari.OrderByDescending(a => a.NetKar))
         {
             <div class="card mb-3">
@@ -89,10 +89,10 @@
                     </div>
                     <div class="text-end">
                         <span class="badge @(arac.NetKar >= 0 ? "bg-success" : "bg-danger") fs-6">
-                            Net: @arac.NetKar.ToString("N0") ?
+                            Net: @arac.NetKar.ToString("N0") ₺
                         </span>
                         <br />
-                        <small class="text-muted">Karl©l©k: %@arac.KarlilikOrani.ToString("N1")</small>
+                        <small class="text-muted">Karlılık: %@arac.KarlilikOrani.ToString("N1")</small>
                     </div>
                 </div>
                 <div class="card-body">
@@ -103,15 +103,15 @@
                             <table class="table table-sm">
                                 <tr>
                                     <td>Sefer Geliri (@arac.SeferSayisi sefer)</td>
-                                    <td class="text-end text-success">@arac.SeferGeliri.ToString("N0") ?</td>
+                                    <td class="text-end text-success">@arac.SeferGeliri.ToString("N0") ₺</td>
                                 </tr>
                                 <tr>
                                     <td>Ek Gelirler</td>
-                                    <td class="text-end text-success">@arac.EkGelirler.ToString("N0") ?</td>
+                                    <td class="text-end text-success">@arac.EkGelirler.ToString("N0") ₺</td>
                                 </tr>
                                 <tr class="table-success">
                                     <th>Toplam Gelir</th>
-                                    <th class="text-end">@arac.ToplamGelir.ToString("N0") ?</th>
+                                    <th class="text-end">@arac.ToplamGelir.ToString("N0") ₺</th>
                                 </tr>
                             </table>
                         </div>
@@ -121,35 +121,35 @@
                             <h6 class="text-danger"><i class="bi bi-arrow-down-circle me-1"></i>Giderler</h6>
                             <table class="table table-sm">
                                 <tr>
-                                    <td>Şoför maaş©</td>
-                                    <td class="text-end text-danger">@arac.SoforMasrafi.ToString("N0") ?</td>
+                                    <td>Şoför Maaşı</td>
+                                    <td class="text-end text-danger">@arac.SoforMasrafi.ToString("N0") ₺</td>
                                 </tr>
                                 <tr>
                                     <td>AkarYakıt</td>
-                                    <td class="text-end text-danger">@arac.AkaryakitMasrafi.ToString("N0") ?</td>
+                                    <td class="text-end text-danger">@arac.AkaryakitMasrafi.ToString("N0") ₺</td>
                                 </tr>
                                 <tr>
-                                    <td>Bakım/Onar©m</td>
-                                    <td class="text-end text-danger">@arac.BakimMasrafi.ToString("N0") ?</td>
+                                    <td>Bakım/Onarım</td>
+                                    <td class="text-end text-danger">@arac.BakimMasrafi.ToString("N0") ₺</td>
                                 </tr>
                                 <tr>
                                     <td>Sigorta</td>
-                                    <td class="text-end text-danger">@arac.SigortaMasrafi.ToString("N0") ?</td>
+                                    <td class="text-end text-danger">@arac.SigortaMasrafi.ToString("N0") ₺</td>
                                 </tr>
                                 <tr>
                                     <td>Diğer</td>
-                                    <td class="text-end text-danger">@arac.DigerMasraflar.ToString("N0") ?</td>
+                                    <td class="text-end text-danger">@arac.DigerMasraflar.ToString("N0") ₺</td>
                                 </tr>
                                 <tr class="table-danger">
                                     <th>Toplam Gider</th>
-                                    <th class="text-end">@arac.ToplamGider.ToString("N0") ?</th>
+                                    <th class="text-end">@arac.ToplamGider.ToString("N0") ₺</th>
                                 </tr>
                             </table>
                         </div>
 
-                        <!-- ©al©©İlan Güzergahlar -->
+                        <!-- Çalışılan Güzergahlar -->
                         <div class="col-md-4">
-                            <h6 class="text-info"><i class="bi bi-signpost me-1"></i>©al©©İlan Güzergahlar</h6>
+                            <h6 class="text-info"><i class="bi bi-signpost me-1"></i>Çalışılan Güzergahlar</h6>
                             @if (arac.CalistigiGuzergahlar.Any())
                             {
                                 <table class="table table-sm">
@@ -169,7 +169,7 @@
                                                     <br /><small class="text-muted">@guzergah.MusteriUnvan</small>
                                                 </td>
                                                 <td class="text-center">@guzergah.SeferSayisi</td>
-                                                <td class="text-end text-success">@guzergah.Gelir.ToString("N0") ?</td>
+                                                <td class="text-end text-success">@guzergah.Gelir.ToString("N0") ₺</td>
                                             </tr>
                                         }
                                     </tbody>
@@ -177,7 +177,7 @@
                             }
                             else
                             {
-                                <p class="text-muted">Bu d©nemde sefer yok</p>
+                                <p class="text-muted">Bu dönemde sefer yok</p>
                             }
                         </div>
                     </div>
@@ -188,7 +188,7 @@
         @if (!rapor.AracDetaylari.Any())
         {
             <div class="alert alert-info">
-                <i class="bi bi-info-circle me-2"></i>Bu d©nemde ©zmal Araç verisi bulunmuyor.
+                <i class="bi bi-info-circle me-2"></i>Bu dönemde Özmal Araç verisi bulunmuyor.
             </div>
         }
     }

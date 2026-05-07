@@ -161,3 +161,43 @@ public enum LastikDegisimTipi
     Periyodik = 3,
     Diger = 4
 }
+
+public enum LastikSezonTipi
+{
+    Yaz = 1,
+    Kis = 2
+}
+
+/// <summary>
+/// Mevsimlik lastik değişim dönem ayarları.
+/// Her sezon (Yaz/Kış) için başlangıç/bitiş ayı-günü ve uyarı eşiği tanımlanır.
+/// </summary>
+public class LastikSezonAyar : BaseEntity
+{
+    public int? SirketId { get; set; }
+    public virtual Sirket? Sirket { get; set; }
+
+    /// <summary>Dönem adı (ör: "Yaz Dönemi", "Kış Dönemi")</summary>
+    public string Ad { get; set; } = string.Empty;
+
+    /// <summary>Sezon tipi: Yaz veya Kış</summary>
+    public LastikSezonTipi SezonTipi { get; set; }
+
+    /// <summary>Dönem başlangıç ayı (1-12)</summary>
+    public int BaslangicAyi { get; set; }
+
+    /// <summary>Dönem başlangıç günü (1-31)</summary>
+    public int BaslangicGunu { get; set; }
+
+    /// <summary>Dönem bitiş ayı (1-12)</summary>
+    public int BitisAyi { get; set; }
+
+    /// <summary>Dönem bitiş günü (1-31)</summary>
+    public int BitisGunu { get; set; }
+
+    /// <summary>Dönem başlamadan kaç gün önce uyarı gösterilsin</summary>
+    public int UyariOncesiGun { get; set; } = 14;
+
+    public string? Notlar { get; set; }
+    public bool Aktif { get; set; } = true;
+}

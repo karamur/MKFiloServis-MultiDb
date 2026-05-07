@@ -222,18 +222,26 @@
         }
         else
         {
-            <div class="d-flex align-items-center gap-2 mb-2">
+            <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+                <button type="button" class="btn btn-sm @(plakaYazFiltresiAktif ? "btn-warning" : "btn-outline-warning")"
+                        @onclick="() => { plakaYazFiltresiAktif = !plakaYazFiltresiAktif; if (plakaYazFiltresiAktif) plakaKisFiltresiAktif = false; }">
+                    <i class="bi bi-sun me-1"></i>Sadece Yaz Lastiği Olanlar
+                    @if (plakaYazFiltresiAktif)
+                    {
+                        <span class="badge bg-dark ms-1">@plakaEnvanteri.Count(p => p.YazVar)</span>
+                    }
+                </button>
                 <button type="button" class="btn btn-sm @(plakaKisFiltresiAktif ? "btn-primary" : "btn-outline-primary")"
-                        @onclick="() => plakaKisFiltresiAktif = !plakaKisFiltresiAktif">
+                        @onclick="() => { plakaKisFiltresiAktif = !plakaKisFiltresiAktif; if (plakaKisFiltresiAktif) plakaYazFiltresiAktif = false; }">
                     <i class="bi bi-snow2 me-1"></i>Sadece Kış Lastiği Olanlar
                     @if (plakaKisFiltresiAktif)
                     {
                         <span class="badge bg-white text-primary ms-1">@plakaEnvanteri.Count(p => p.KisVar)</span>
                     }
                 </button>
-                @if (plakaKisFiltresiAktif)
+                @if (plakaKisFiltresiAktif || plakaYazFiltresiAktif)
                 {
-                    <small class="text-muted"><i class="bi bi-funnel-fill me-1"></i>@plakaEnvanteri.Count(p => p.KisVar) / @plakaEnvanteri.Count plaka</small>
+                    <small class="text-muted"><i class="bi bi-funnel-fill me-1"></i>@FiltreliPlakaListesi.Count / @plakaEnvanteri.Count plaka</small>
                 }
             </div>
             <div class="card">
@@ -244,103 +252,93 @@
                                 <tr>
                                     <th>Plaka</th>
                                     <th>Araç</th>
+                                    <th class="text-center">Son Değişim</th>
                                     <th class="text-center">Takılı</th>
                                     <th class="text-center">Yedek</th>
                                     <th class="text-center">Yaz</th>
                                     <th class="text-center">Kış</th>
-                                    <th>Kış Takılı</th>
-                                    <th>Kış Depo</th>
-                                    <th>Lastikler</th>
+                                    <th class="text-center" style="width:80px;"></th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var p in (plakaKisFiltresiAktif ? plakaEnvanteri.Where(x => x.KisVar).ToList() : plakaEnvanteri))
+                                @foreach (var p in FiltreliPlakaListesi)
                                 {
-                                    <tr>
+                                    var acik = acikDetaylar.Contains(p.AracId);
+                                    <tr class="@(acik ? "table-active" : "")" style="cursor:pointer;" @onclick="() => ToggleDetay(p.AracId)">
                                         <td><strong>@p.Plaka</strong></td>
-                                        <td><small>@p.AracBilgisi</small></td>
+                                        <td><small class="text-muted">@p.AracBilgisi</small></td>
+                                        <td class="text-center">
+                                            <span class="badge @GetSonDegisimBadgeClass(p.SonDegisimTarihi)">
+                                                @GetSonDegisimText(p.SonDegisimTarihi)
+                                            </span>
+                                        </td>
                                         <td class="text-center"><span class="badge bg-primary">@p.TakiliSayisi</span></td>
                                         <td class="text-center"><span class="badge bg-secondary">@p.YedekSayisi</span></td>
                                         <td class="text-center">
-                                            @if (p.YazVar) { <i class="bi bi-check-circle-fill text-success"></i> }
-                                            else { <i class="bi bi-x-circle-fill text-danger"></i> }
+                                            @if (p.YazVar) { <i class="bi bi-check-circle-fill text-success fs-5"></i> }
+                                            else { <i class="bi bi-x-circle-fill text-danger fs-5"></i> }
                                         </td>
                                         <td class="text-center">
-                                            @if (p.KisVar) { <i class="bi bi-check-circle-fill text-success"></i> }
-                                            else { <i class="bi bi-x-circle-fill text-danger"></i> }
+                                            @if (p.KisVar) { <i class="bi bi-check-circle-fill text-success fs-5"></i> }
+                                            else { <i class="bi bi-x-circle-fill text-danger fs-5"></i> }
                                         </td>
-                                        <td>
-                                            @{
-                                                var kisTakili = GetKisTakiliLastikleri(p);
-                                            }
-                                            @if (kisTakili.Any())
-                                            {
-                                                @foreach (var l in kisTakili)
-                                                {
-                                                    <div class="small">
-                                                        <span class="badge bg-primary me-1"><i class="bi bi-truck"></i> Takılı</span>
-                                                        <strong>@l.Marka</strong> @l.Ebat
-                                                        @if (!string.IsNullOrWhiteSpace(l.SeriNo))
-                                                        {
-                                                            <small class="text-muted ms-1">@l.SeriNo</small>
-                                                        }
-                                                    </div>
-                                                }
-                                            }
-                                            else
-                                            {
-                                                <span class="text-muted small">-</span>
-                                            }
-                                        </td>
-                                        <td>
-                                            @{
-                                                var kisDepo = GetKisDepoLastikleri(p);
-                                            }
-                                            @if (kisDepo.Any())
-                                            {
-                                                @foreach (var l in kisDepo)
-                                                {
-                                                    <div class="small">
-                                                        <span class="badge bg-light text-dark border me-1"><i class="bi bi-archive"></i> Depo</span>
-                                                        <strong>@l.Marka</strong> @l.Ebat
-                                                        <small class="text-muted ms-1">(@(l.DepoAdi ?? "-"))</small>
-                                                        @if (!string.IsNullOrWhiteSpace(l.SeriNo))
-                                                        {
-                                                            <small class="text-muted ms-1">@l.SeriNo</small>
-                                                        }
-                                                    </div>
-                                                }
-                                            }
-                                            else
-                                            {
-                                                <span class="text-muted small">-</span>
-                                            }
-                                        </td>
-                                        <td>
-                                            @foreach (var l in p.Lastikler)
-                                            {
-                                                <div class="small">
-                                                    @if (l.Takili)
-                                                    {
-                                                        <span class="badge bg-primary me-1"><i class="bi bi-truck"></i> Takılı</span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="badge bg-light text-dark border me-1"><i class="bi bi-archive"></i> Yedek (@(l.DepoAdi ?? "-"))</span>
-                                                    }
-                                                    <span class="badge @GetSezonBadge(l.Sezon) me-1">@GetSezonText(l.Sezon)</span>
-                                                    <strong>@l.Marka</strong> @l.Ebat
-                                                    <span class="badge @GetDurumBadge(l.Durum) ms-1">@GetDurumText(l.Durum)</span>
-                                                    @if (!string.IsNullOrWhiteSpace(l.SeriNo)) { <small class="text-muted ms-1">@l.SeriNo</small> }
-                                                </div>
-                                            }
+                                        <td class="text-center">
+                                            <button class="btn btn-sm @(acik ? "btn-secondary" : "btn-outline-secondary")" @onclick:stopPropagation="true" @onclick="() => ToggleDetay(p.AracId)" title="Detayı Göster/Gizle">
+                                                <i class="bi bi-@(acik ? "chevron-up" : "chevron-down")"></i>
+                                            </button>
                                         </td>
                                     </tr>
+                                    @if (acik)
+                                    {
+                                        <tr class="table-light">
+                                            <td colspan="8" class="p-0 border-top-0">
+                                                <div class="px-3 py-2">
+                                                    <table class="table table-sm table-bordered mb-0 bg-white">
+                                                        <thead class="table-secondary">
+                                                            <tr>
+                                                                <th>Konum</th>
+                                                                <th>Sezon</th>
+                                                                <th>Marka / Ebat</th>
+                                                                <th>Durum</th>
+                                                                <th>Depo</th>
+                                                                <th>Seri No</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @foreach (var l in p.Lastikler)
+                                                            {
+                                                                <tr>
+                                                                    <td>
+                                                                        @if (l.Takili)
+                                                                        {
+                                                                            <span class="badge bg-primary"><i class="bi bi-truck me-1"></i>Takılı</span>
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <span class="badge bg-light text-dark border"><i class="bi bi-archive me-1"></i>Depoda</span>
+                                                                        }
+                                                                    </td>
+                                                                    <td><span class="badge @GetSezonBadge(l.Sezon)">@GetSezonText(l.Sezon)</span></td>
+                                                                    <td>
+                                                                        @if (!string.IsNullOrEmpty(l.Marka)) { <strong>@l.Marka</strong><span class="text-muted ms-1">@l.Ebat</span> }
+                                                                        else { <span>@l.Ebat</span> }
+                                                                    </td>
+                                                                    <td><span class="badge @GetDurumBadge(l.Durum)">@GetDurumText(l.Durum)</span></td>
+                                                                    <td><small class="text-muted">@(l.DepoAdi ?? "—")</small></td>
+                                                                    <td><small class="text-muted">@(l.SeriNo ?? "—")</small></td>
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
                                 }
                             </tbody>
                         </table>
                     </div>
-                    <div class="p-2 text-muted small">Toplam: <strong>@(plakaKisFiltresiAktif ? plakaEnvanteri.Count(x => x.KisVar) : plakaEnvanteri.Count)</strong> plaka @(plakaKisFiltresiAktif ? $"(filtreli, tümü: {plakaEnvanteri.Count})" : "")</div>
+                    <div class="p-2 text-muted small">Toplam: <strong>@FiltreliPlakaListesi.Count</strong> plaka @((plakaKisFiltresiAktif || plakaYazFiltresiAktif) ? $"(filtreli, tümü: {plakaEnvanteri.Count})" : "")</div>
                 </div>
             </div>
         }
@@ -366,6 +364,7 @@
                                 <tr>
                                     <th>Plaka</th>
                                     <th>Araç</th>
+                                    <th class="text-center">Son Değişim</th>
                                     <th class="text-center">Yaz</th>
                                     <th class="text-center">Kış</th>
                                     <th class="text-center">Toplam Lastik</th>
@@ -377,6 +376,11 @@
                                     <tr>
                                         <td><strong>@e.Plaka</strong></td>
                                         <td><small>@e.AracBilgisi</small></td>
+                                        <td class="text-center">
+                                            <span class="badge @GetSonDegisimBadgeClass(e.SonDegisimTarihi)">
+                                                @GetSonDegisimText(e.SonDegisimTarihi)
+                                            </span>
+                                        </td>
                                         <td class="text-center">
                                             @if (e.YazEksik) { <span class="badge bg-danger">Eksik</span> }
                                             else { <span class="badge bg-success">Var</span> }
@@ -809,6 +813,20 @@
     private bool aracDropAcik = false;
     private bool plakaKisFiltresiAktif = false;
     private bool? filtreTakimaDurum = null; // null = Tümü, true = Takılı, false = Depoda
+    private bool plakaYazFiltresiAktif = false;
+    private HashSet<int> acikDetaylar = new();
+
+    private List<LastikPlakaEnvanteri> FiltreliPlakaListesi
+    {
+        get
+        {
+            if (plakaEnvanteri == null) return new List<LastikPlakaEnvanteri>();
+            IEnumerable<LastikPlakaEnvanteri> query = plakaEnvanteri;
+            if (plakaKisFiltresiAktif) query = query.Where(x => x.KisVar);
+            if (plakaYazFiltresiAktif) query = query.Where(x => x.YazVar);
+            return query.ToList();
+        }
+    }
 
     // Form: adet bazlı kayıt + araç seçimi
     private int yeniAdet = 1;
@@ -1123,19 +1141,35 @@
         _ => d.ToString()
     };
 
-    private static List<LastikPlakaEnvanterSatiri> GetKisTakiliLastikleri(LastikPlakaEnvanteri p)
+    private static string GetSonDegisimBadgeClass(DateTime? sonDegisimTarihi)
     {
-        return p.Lastikler
-            .Where(l => l.Sezon == LastikSezon.KisLastigi && l.Takili)
-            .ToList();
+        var gun = GetGecenGun(sonDegisimTarihi);
+        if (!gun.HasValue) return "bg-secondary";
+        if (gun.Value >= 90) return "bg-danger";
+        if (gun.Value >= 60) return "bg-warning text-dark";
+        if (gun.Value >= 30) return "bg-info text-dark";
+        return "bg-success";
     }
 
-    private static List<LastikPlakaEnvanterSatiri> GetKisDepoLastikleri(LastikPlakaEnvanteri p)
+    private static string GetSonDegisimText(DateTime? sonDegisimTarihi)
     {
-        return p.Lastikler
-            .Where(l => l.Sezon == LastikSezon.KisLastigi && !l.Takili)
-            .ToList();
+        var gun = GetGecenGun(sonDegisimTarihi);
+        if (!gun.HasValue) return "-";
+        return $"{sonDegisimTarihi:dd.MM.yyyy} ({gun.Value} gün)";
     }
+
+    private static int? GetGecenGun(DateTime? tarih)
+    {
+        if (!tarih.HasValue) return null;
+        return Math.Max(0, (DateTime.Today - tarih.Value.Date).Days);
+    }
+
+    private void ToggleDetay(int aracId)
+    {
+        if (!acikDetaylar.Add(aracId))
+            acikDetaylar.Remove(aracId);
+    }
+
 }
 
 

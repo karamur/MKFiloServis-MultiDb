@@ -293,6 +293,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<LastikDepo> LastikDepolar { get; set; }
     public DbSet<LastikStok> LastikStoklar { get; set; }
     public DbSet<LastikDegisim> LastikDegisimler { get; set; }
+    public DbSet<LastikSezonAyar> LastikSezonAyarlari { get; set; }
 
     public DbSet<AppAyarlari> AppAyarlari { get; set; }
 

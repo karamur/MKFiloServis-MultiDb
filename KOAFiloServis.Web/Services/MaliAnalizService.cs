@@ -589,11 +589,12 @@ public class MaliAnalizService : IMaliAnalizService
     /// </summary>
     private static async Task<List<Arac>> GetSegmentAraclariAsync(ApplicationDbContext context, AracSahiplikTipi tip)
     {
-        return await context.Araclar
+        var araclar = await context.Araclar
             .Include(a => a.KiralikCari)
             .Include(a => a.KomisyoncuCari)
             .Where(a => a.SahiplikTipi == tip && a.Aktif && !a.IsDeleted)
             .ToListAsync();
+        return araclar.DistinctBy(a => a.Id).ToList();
     }
 
     private async Task<SegmentAnaliz> GetOzmalSegmentAnalizAsync(ApplicationDbContext context, DateTime baslangic, DateTime bitis)

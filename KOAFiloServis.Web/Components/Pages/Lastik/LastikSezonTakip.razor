@@ -1,0 +1,449 @@
+@page "/lastik/sezon-takip"
+@using KOAFiloServis.Shared.Entities
+@using KOAFiloServis.Web.Services
+@using KOAFiloServis.Web.Services.Interfaces
+@inject ILastikService LastikService
+@inject IToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>Sezon Lastik Takibi</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="bi bi-calendar2-range me-2"></i>Sezon Lastik Takibi</h3>
+        <button class="btn btn-outline-secondary btn-sm" @onclick="YenileAsync">
+            <i class="bi bi-arrow-clockwise me-1"></i>Yenile
+        </button>
+    </div>
+
+    @if (yukleniyor)
+    {
+        <div class="text-center py-5"><div class="spinner-border" role="status"></div></div>
+    }
+    else
+    {
+        <!-- Durum Kartları -->
+        <div class="row g-3 mb-4">
+            <!-- Aktif Sezon -->
+            <div class="col-md-4">
+                <div class="card h-100 border-@(durum?.AktifSezon != null ? "success" : "secondary")">
+                    <div class="card-header bg-@(durum?.AktifSezon != null ? "success" : "secondary") text-white">
+                        <i class="bi bi-check-circle me-1"></i>Aktif Sezon
+                    </div>
+                    <div class="card-body">
+                        @if (durum?.AktifSezon != null)
+                        {
+                            <h5 class="card-title">@durum.AktifSezon.Ad</h5>
+                            <p class="card-text text-muted small">
+                                @durum.AktifSezon.BaslangicGunu/@durum.AktifSezon.BaslangicAyi
+                                — @durum.AktifSezon.BitisGunu/@durum.AktifSezon.BitisAyi
+                            </p>
+                            <span class="badge bg-success fs-6">
+                                @(durum.AktifSezon.SezonTipi == LastikSezonTipi.Yaz ? "☀️ Yaz Dönemi" : "❄️ Kış Dönemi")
+                            </span>
+                        }
+                        else
+                        {
+                            <p class="text-muted">Aktif sezon bulunamadı. Sezon ayarlarını yapılandırın.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sonraki Sezon -->
+            <div class="col-md-4">
+                <div class="card h-100 border-@(durum?.UyariAktif == true ? "warning" : "info")">
+                    <div class="card-header bg-@(durum?.UyariAktif == true ? "warning" : "info") @(durum?.UyariAktif == true ? "" : "text-white")">
+                        <i class="bi bi-clock me-1"></i>Sonraki Sezon
+                    </div>
+                    <div class="card-body">
+                        @if (durum?.SonrakiSezon != null)
+                        {
+                            <h5 class="card-title">@durum.SonrakiSezon.Ad</h5>
+                            <p class="card-text text-muted small">
+                                @durum.SonrakiSezon.BaslangicGunu/@durum.SonrakiSezon.BaslangicAyi
+                                — @durum.SonrakiSezon.BitisGunu/@durum.SonrakiSezon.BitisAyi
+                            </p>
+                            @if (durum.SonrakiSezonKalanGun.HasValue)
+                            {
+                                <span class="badge bg-@(durum.UyariAktif ? "warning text-dark" : "info") fs-6">
+                                    @durum.SonrakiSezonKalanGun gün kaldı
+                                </span>
+                                @if (durum.UyariAktif)
+                                {
+                                    <div class="alert alert-warning mt-2 py-1 px-2 small mb-0">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>Sezon değişimi yaklaşıyor!
+                                    </div>
+                                }
+                            }
+                        }
+                        else
+                        {
+                            <p class="text-muted">Sonraki sezon ayarlanmamış.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Değişim Gereken Araç Sayısı -->
+            <div class="col-md-4">
+                <div class="card h-100 border-@(degisimSayisi > 0 ? "danger" : "success")">
+                    <div class="card-header bg-@(degisimSayisi > 0 ? "danger" : "success") text-white">
+                        <i class="bi bi-truck me-1"></i>Değişim Gereken Araçlar
+                    </div>
+                    <div class="card-body text-center">
+                        <h1 class="display-4 text-@(degisimSayisi > 0 ? "danger" : "success")">@degisimSayisi</h1>
+                        <p class="text-muted">araç sezon lastiği bekliyor</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sezon Ayarları -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-gear me-2"></i>Dönem Ayarları</span>
+                <button class="btn btn-sm btn-primary" @onclick="YeniSezonAyari">
+                    <i class="bi bi-plus-lg me-1"></i>Yeni Dönem
+                </button>
+            </div>
+            <div class="card-body p-0">
+                @if (!ayarlar.Any())
+                {
+                    <div class="p-3 text-muted"><i class="bi bi-info-circle me-2"></i>Henüz sezon ayarı yok. "Yeni Dönem" ile ekleyin.</div>
+                }
+                else
+                {
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Ad</th>
+                                <th>Sezon</th>
+                                <th>Başlangıç</th>
+                                <th>Bitiş</th>
+                                <th>Uyarı (gün)</th>
+                                <th>Durum</th>
+                                <th style="width:100px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var a in ayarlar)
+                            {
+                                <tr>
+                                    <td><strong>@a.Ad</strong></td>
+                                    <td>
+                                        @if (a.SezonTipi == LastikSezonTipi.Yaz)
+                                        { <span class="badge bg-warning text-dark">☀️ Yaz</span> }
+                                        else
+                                        { <span class="badge bg-primary">❄️ Kış</span> }
+                                    </td>
+                                    <td>@a.BaslangicGunu/@a.BaslangicAyi</td>
+                                    <td>@a.BitisGunu/@a.BitisAyi</td>
+                                    <td>@a.UyariOncesiGun gün</td>
+                                    <td>
+                                        @if (a.Aktif)
+                                        { <span class="badge bg-success">Aktif</span> }
+                                        else
+                                        { <span class="badge bg-secondary">Pasif</span> }
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => DuzenleAyar(a)">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+
+        <!-- Değişim Gereken Araçlar Tablosu -->
+        @if (durum?.AktifSezon != null && (durum.DegisimGerekenler.Any() || durum.UyariAktif))
+        {
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <i class="bi bi-exclamation-circle me-2"></i>
+                    @(durum.AktifSezon.SezonTipi == LastikSezonTipi.Yaz ? "☀️ Yaz" : "❄️ Kış") Lastiği Takılması Gereken Araçlar
+                </div>
+                <div class="card-body p-0">
+                    @if (!durum.DegisimGerekenler.Any())
+                    {
+                        <div class="p-3 text-success"><i class="bi bi-check-circle me-2"></i>Tüm araçlarda uygun sezon lastiği takılı.</div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Plaka</th>
+                                        <th>Araç</th>
+                                        <th>Takılı Lastik Durumu</th>
+                                        <th>Bu Sezon Değişim</th>
+                                        <th>Son Değişim</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var g in durum.DegisimGerekenler.OrderBy(x => x.BuSezonDegisimYapildi).ThenBy(x => x.Plaka))
+                                    {
+                                        <tr class="@(g.BuSezonDegisimYapildi ? "" : "table-warning")">
+                                            <td><strong>@g.Plaka</strong></td>
+                                            <td>@g.AracBilgisi</td>
+                                            <td><span class="small">@g.TakiliSezonOzeti</span></td>
+                                            <td>
+                                                @if (g.BuSezonDegisimYapildi)
+                                                { <span class="badge bg-success">Yapıldı</span> }
+                                                else
+                                                { <span class="badge bg-danger">Yapılmadı</span> }
+                                            </td>
+                                            <td>
+                                                <span class="badge @GetSonDegisimBadgeClass(g.SonDegisimTarihi)">
+                                                    @GetSonDegisimText(g.SonDegisimTarihi)
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        else if (durum?.AktifSezon == null)
+        {
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                Aktif dönem ayarı bulunamadı. Yukarıdan Yaz ve Kış dönemlerini tanımlayın.
+            </div>
+        }
+    }
+</div>
+
+<!-- Sezon Ayarı Modal -->
+@if (modalAcik)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-calendar2-range me-2"></i>
+                        @(editingAyar.Id == 0 ? "Yeni Dönem Ayarı" : "Dönem Ayarını Düzenle")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="ModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Dönem Adı <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="editingAyar.Ad" placeholder="ör: Yaz Dönemi 2026" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Sezon Tipi</label>
+                        <select class="form-select" @bind="editingAyar.SezonTipi">
+                            <option value="@LastikSezonTipi.Yaz">☀️ Yaz</option>
+                            <option value="@LastikSezonTipi.Kis">❄️ Kış</option>
+                        </select>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Başlangıç Ay</label>
+                            <select class="form-select" @bind="editingAyar.BaslangicAyi">
+                                @for (int m = 1; m <= 12; m++)
+                                {
+                                    var ay = m;
+                                    <option value="@ay">@AyAdi(ay)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Başlangıç Gün</label>
+                            <input type="number" class="form-control" @bind="editingAyar.BaslangicGunu" min="1" max="31" />
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Bitiş Ay</label>
+                            <select class="form-select" @bind="editingAyar.BitisAyi">
+                                @for (int m = 1; m <= 12; m++)
+                                {
+                                    var ay = m;
+                                    <option value="@ay">@AyAdi(ay)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Bitiş Gün</label>
+                            <input type="number" class="form-control" @bind="editingAyar.BitisGunu" min="1" max="31" />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Uyarı Eşiği (gün öncesi)</label>
+                        <input type="number" class="form-control" @bind="editingAyar.UyariOncesiGun" min="0" max="90" />
+                        <div class="form-text">Dönem başlamadan kaç gün önce uyarı gösterilsin.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notlar</label>
+                        <textarea class="form-control" rows="2" @bind="editingAyar.Notlar"></textarea>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="aktifCheck" @bind="editingAyar.Aktif" />
+                        <label class="form-check-label" for="aktifCheck">Aktif</label>
+                    </div>
+                    @if (!string.IsNullOrEmpty(hataMesaji))
+                    {
+                        <div class="alert alert-danger mt-2 py-1 small">@hataMesaji</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="ModalKapat">İptal</button>
+                    <button class="btn btn-primary" @onclick="KaydetAyar" disabled="@kaydediyor">
+                        @if (kaydediyor) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        <i class="bi bi-floppy me-1"></i>Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool yukleniyor = true;
+    private bool modalAcik = false;
+    private bool kaydediyor = false;
+    private string? hataMesaji;
+
+    private List<LastikSezonAyar> ayarlar = new();
+    private LastikSezonDurum? durum;
+    private LastikSezonAyar editingAyar = new();
+
+    private int degisimSayisi => durum?.DegisimGerekenler.Count(x => !x.BuSezonDegisimYapildi) ?? 0;
+
+    protected override async Task OnInitializedAsync() => await YukleAsync();
+
+    private async Task YukleAsync()
+    {
+        yukleniyor = true;
+        try
+        {
+            ayarlar = await LastikService.GetSezonAyarlarAsync();
+            durum = await LastikService.GetSezonDurumAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Veriler yüklenemedi: " + ex.Message);
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private async Task YenileAsync() => await YukleAsync();
+
+    private void YeniSezonAyari()
+    {
+        editingAyar = new LastikSezonAyar
+        {
+            Ad = "",
+            SezonTipi = LastikSezonTipi.Yaz,
+            BaslangicAyi = 4,
+            BaslangicGunu = 1,
+            BitisAyi = 10,
+            BitisGunu = 31,
+            UyariOncesiGun = 14,
+            Aktif = true
+        };
+        hataMesaji = null;
+        modalAcik = true;
+    }
+
+    private void DuzenleAyar(LastikSezonAyar ayar)
+    {
+        editingAyar = new LastikSezonAyar
+        {
+            Id = ayar.Id,
+            Ad = ayar.Ad,
+            SezonTipi = ayar.SezonTipi,
+            BaslangicAyi = ayar.BaslangicAyi,
+            BaslangicGunu = ayar.BaslangicGunu,
+            BitisAyi = ayar.BitisAyi,
+            BitisGunu = ayar.BitisGunu,
+            UyariOncesiGun = ayar.UyariOncesiGun,
+            Notlar = ayar.Notlar,
+            Aktif = ayar.Aktif,
+            SirketId = ayar.SirketId
+        };
+        hataMesaji = null;
+        modalAcik = true;
+    }
+
+    private async Task KaydetAyar()
+    {
+        if (string.IsNullOrWhiteSpace(editingAyar.Ad))
+        {
+            hataMesaji = "Dönem adı zorunludur.";
+            return;
+        }
+        if (editingAyar.BaslangicAyi < 1 || editingAyar.BaslangicAyi > 12 ||
+            editingAyar.BitisAyi < 1 || editingAyar.BitisAyi > 12)
+        {
+            hataMesaji = "Ay değerleri 1-12 arasında olmalıdır.";
+            return;
+        }
+
+        kaydediyor = true;
+        hataMesaji = null;
+        try
+        {
+            await LastikService.UpsertSezonAyarAsync(editingAyar);
+            ToastService.ShowSuccess("Dönem ayarı kaydedildi.");
+            modalAcik = false;
+            await YukleAsync();
+        }
+        catch (Exception ex)
+        {
+            var inner = ex.InnerException?.Message ?? "";
+            hataMesaji = "Hata: " + ex.Message + (string.IsNullOrEmpty(inner) ? "" : " | " + inner);
+        }
+        finally
+        {
+            kaydediyor = false;
+        }
+    }
+
+    private void ModalKapat() => modalAcik = false;
+
+    private static string AyAdi(int ay) => ay switch
+    {
+        1 => "Ocak", 2 => "Şubat", 3 => "Mart", 4 => "Nisan",
+        5 => "Mayıs", 6 => "Haziran", 7 => "Temmuz", 8 => "Ağustos",
+        9 => "Eylül", 10 => "Ekim", 11 => "Kasım", 12 => "Aralık",
+        _ => ay.ToString()
+    };
+
+    private static string GetSonDegisimBadgeClass(DateTime? sonDegisimTarihi)
+    {
+        var gun = GetGecenGun(sonDegisimTarihi);
+        if (!gun.HasValue) return "bg-secondary";
+        if (gun.Value >= 90) return "bg-danger";
+        if (gun.Value >= 60) return "bg-warning text-dark";
+        if (gun.Value >= 30) return "bg-info text-dark";
+        return "bg-success";
+    }
+
+    private static string GetSonDegisimText(DateTime? sonDegisimTarihi)
+    {
+        var gun = GetGecenGun(sonDegisimTarihi);
+        if (!gun.HasValue) return "-";
+        return $"{sonDegisimTarihi:dd.MM.yyyy} ({gun.Value} gün)";
+    }
+
+    private static int? GetGecenGun(DateTime? tarih)
+    {
+        if (!tarih.HasValue) return null;
+        return Math.Max(0, (DateTime.Today - tarih.Value.Date).Days);
+    }
+}

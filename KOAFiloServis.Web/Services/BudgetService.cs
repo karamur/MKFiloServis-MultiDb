@@ -885,7 +885,7 @@ public class BudgetService : IBudgetService
             .Where(o => o.OdemeYil == yil && o.OdemeAy == ay);
 
         if (firmaId.HasValue)
-            query = query.Where(o => o.FirmaId == firmaId.Value);
+            query = query.Where(o => o.FirmaId == firmaId.Value || o.FirmaId == null);
 
         var odemeler = await query.ToListAsync();
 
@@ -928,7 +928,7 @@ public class BudgetService : IBudgetService
         var query = context.BudgetOdemeler.Where(o => o.OdemeYil == yil);
 
         if (firmaId.HasValue)
-            query = query.Where(o => o.FirmaId == firmaId.Value);
+            query = query.Where(o => o.FirmaId == firmaId.Value || o.FirmaId == null);
 
         var odemeler = await query.ToListAsync();
 
@@ -1340,7 +1340,7 @@ public class BudgetService : IBudgetService
             .Where(o => o.OdemeYil == yil && o.OdemeAy == ay);
 
         if (firmaId.HasValue)
-            query = query.Where(o => o.FirmaId == firmaId.Value);
+            query = query.Where(o => o.FirmaId == firmaId.Value || o.FirmaId == null);
 
         var odemeler = await query.OrderBy(o => o.OdemeTarihi).ToListAsync();
 

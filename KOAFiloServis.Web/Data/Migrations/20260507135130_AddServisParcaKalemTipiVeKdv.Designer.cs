@@ -3,17 +3,20 @@ using System;
 using KOAFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace KOAFiloServis.Web.Migrations
+namespace KOAFiloServis.Web.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260507135130_AddServisParcaKalemTipiVeKdv")]
+    partial class AddServisParcaKalemTipiVeKdv
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -9973,9 +9976,6 @@ namespace KOAFiloServis.Web.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
-                    b.Property<bool>("KdvManuelMi")
-                        .HasColumnType("boolean");
-
                     b.Property<decimal>("KdvOrani")
                         .HasPrecision(5, 2)
                         .HasColumnType("numeric(5,2)");
@@ -10059,12 +10059,6 @@ namespace KOAFiloServis.Web.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
-                    b.Property<int>("KalemTipi")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("KdvOrani")
-                        .HasColumnType("numeric");
-
                     b.Property<decimal>("Miktar")
                         .HasPrecision(18, 4)
                         .HasColumnType("numeric(18,4)");
@@ -10076,9 +10070,6 @@ namespace KOAFiloServis.Web.Migrations
 
                     b.Property<int>("ServisKaydiId")
                         .HasColumnType("integer");
-
-                    b.Property<bool>("StogaKaydet")
-                        .HasColumnType("boolean");
 
                     b.Property<int?>("StokKartiId")
                         .HasColumnType("integer");

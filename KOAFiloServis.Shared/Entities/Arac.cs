@@ -150,7 +150,8 @@ public enum AracSahiplikTipi
     Ozmal = 1,
     Kiralik = 2,
     Komisyon = 3,
-    Diger = 4
+    Diger = 4,
+    Tedarikci = 5
 }
 
 public enum KiraHesaplamaTipi
