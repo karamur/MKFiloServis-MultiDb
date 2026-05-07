@@ -1,10 +1,6 @@
-using System.Xml.Serialization;
+﻿using System.Xml.Serialization;
 
 namespace KOAFiloServis.Web.Models;
-
-/// <summary>
-/// E-Fatura XML oluşturma için model sınıfları (GİB UBL-TR 1.2 formatı)
-/// </summary>
 
 #region Ana E-Fatura Modeli
 
@@ -676,3 +672,4 @@ public static class EFaturaProfilIdleri
 }
 
 #endregion
+
