@@ -1,0 +1,558 @@
+﻿@page "/raporlar/arac-yillik-karlilik"
+@using System.Globalization
+@using System.IO
+@using ClosedXML.Excel
+@using KOAFiloServis.Shared.Entities
+@using KOAFiloServis.Web.Services
+@using KOAFiloServis.Web.Services.Interfaces
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IServisCalismaService ServisCalismaService
+@inject IAracMasrafService AracMasrafService
+@inject IAracService AracService
+@inject IToastService ToastService
+@inject IJSRuntime JS
+@attribute [Authorize]
+
+<PageTitle>Araç Yıllık Karlılık</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-graph-up-arrow me-2 text-success"></i>Araç Yıllık Karlılık Trendi</h2>
+            <p class="text-muted mb-0">Araç bazında aylık gelir, gider ve kâr/zarar analizi</p>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body py-3">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small">Yıl</label>
+                    <select class="form-select form-select-sm" @bind="yil" @bind:after="LoadAsync">
+                        @for (int y = DateTime.Today.Year - 3; y <= DateTime.Today.Year + 1; y++)
+                        {
+                            <option value="@y">@y</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Sahiplik</label>
+                    <select class="form-select form-select-sm" @bind="sahiplikFiltre" @bind:after="ChartCiz">
+                        <option value="-1">Tümü</option>
+                        @foreach (AracSahiplikTipi t in Enum.GetValues(typeof(AracSahiplikTipi)))
+                        {
+                            <option value="@((int)t)">@t</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Görünüm</label>
+                    <select class="form-select form-select-sm" @bind="metrik" @bind:after="ChartCiz">
+                        <option value="kar">Kâr / Zarar</option>
+                        <option value="gelir">Gelir</option>
+                        <option value="gider">Gider</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="cbBosGizle"
+                               @bind="bosAracGizle" @bind:after="ChartCiz" />
+                        <label class="form-check-label small" for="cbBosGizle">Hareketsiz araçları gizle</label>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="cbZarar"
+                               @bind="sadeceZarar" @bind:after="ChartCiz" />
+                        <label class="form-check-label small text-danger" for="cbZarar">Sadece zararda olanlar</label>
+                    </div>
+                </div>
+                <div class="col-md-1 text-end">
+                    <button class="btn btn-outline-primary btn-sm w-100" @onclick="ExcelIndir" disabled="@yukleniyor">
+                        <i class="bi bi-file-earmark-excel"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (yukleniyor)
+    {
+        <div class="card"><div class="card-body p-4 text-center text-muted">
+            <div class="spinner-border spinner-border-sm me-2"></div> Yükleniyor...
+        </div></div>
+    }
+    else
+    {
+        var matris = HesaplaMatris();
+        var gosterilen = FiltreUygula(matris);
+
+        <!-- Özet kartlar -->
+        <div class="row g-2 mb-3">
+            <div class="col-md-3">
+                <div class="card border-info shadow-sm">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">Aktif Araç</div>
+                        <div class="fs-4 fw-bold text-info">@gosterilen.Count(m => m.Gelir.Sum() > 0 || m.Gider.Sum() > 0)</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-success shadow-sm">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">Yıllık Gelir</div>
+                        <div class="fs-4 fw-bold text-success">@gosterilen.Sum(m => m.Gelir.Sum()).ToString("N2") ₺</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-danger shadow-sm">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">Yıllık Gider</div>
+                        <div class="fs-4 fw-bold text-danger">@gosterilen.Sum(m => m.Gider.Sum()).ToString("N2") ₺</div>
+                    </div>
+                </div>
+            </div>
+            @{
+                var toplamGelir = gosterilen.Sum(m => m.Gelir.Sum());
+                var toplamGider = gosterilen.Sum(m => m.Gider.Sum());
+                var toplamKar = toplamGelir - toplamGider;
+                var marj = toplamGelir > 0 ? (toplamKar / toplamGelir * 100m) : 0m;
+                var karClass = toplamKar >= 0 ? "border-success" : "border-danger";
+                var karText = toplamKar >= 0 ? "text-success" : "text-danger";
+            }
+            <div class="col-md-3">
+                <div class="card @karClass shadow-sm">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">Net Kâr (Marj %@marj.ToString("N1"))</div>
+                        <div class="fs-4 fw-bold @karText">@toplamKar.ToString("N2") ₺</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grafikler -->
+        <div class="row g-3 mb-3">
+            <div class="col-lg-8">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light">
+                        <strong>
+                            <i class="bi bi-graph-up me-1"></i>
+                            Aylık Trend — @(metrik switch { "gelir" => "Gelir", "gider" => "Gider", _ => "Kâr/Zarar" }) (Top @top araç)
+                        </strong>
+                    </div>
+                    <div class="card-body" style="height: 360px;">
+                        <canvas id="aracKarlilikChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light">
+                        <strong><i class="bi bi-bar-chart me-1"></i>Yıllık Net Kâr (Top @top)</strong>
+                    </div>
+                    <div class="card-body" style="height: 360px;">
+                        <canvas id="aracKarBarChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Matris tablo -->
+        <div class="card">
+            <div class="card-header bg-light d-flex justify-content-between">
+                <strong><i class="bi bi-table me-1"></i>Aylık Matris — @yil (@(metrik switch { "gelir" => "Gelir", "gider" => "Gider", _ => "Kâr/Zarar" }))</strong>
+                <span class="text-muted small">@gosterilen.Count araç</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="min-width:60px;">#</th>
+                                <th style="min-width:200px;">Araç</th>
+                                @for (int m = 1; m <= 12; m++)
+                                {
+                                    <th class="text-end" style="min-width:90px;">
+                                        @(new DateTime(2000, m, 1).ToString("MMM", new CultureInfo("tr-TR")))
+                                    </th>
+                                }
+                                <th class="text-end" style="min-width:110px;">Toplam</th>
+                                <th class="text-end" style="min-width:80px;">Marj %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!gosterilen.Any())
+                            {
+                                <tr><td colspan="16" class="text-center text-muted p-4">
+                                    <i class="bi bi-inbox fs-4 d-block mb-2"></i>Bu yıl için kayıt bulunamadı.
+                                </td></tr>
+                            }
+                            else
+                            {
+                                int sira = 1;
+                                foreach (var a in gosterilen.OrderByDescending(x => x.NetKar).ThenBy(x => x.Plaka))
+                                {
+                                    <tr>
+                                        <td>@(sira++)</td>
+                                        <td>
+                                            <strong>@a.Plaka</strong>
+                                            <div class="small text-muted">
+                                                @a.MarkaModel
+                                                <span class="badge bg-light text-dark ms-1">@a.Sahiplik</span>
+                                            </div>
+                                        </td>
+                                        @for (int m = 0; m < 12; m++)
+                                        {
+                                            decimal v = metrik switch
+                                            {
+                                                "gelir" => a.Gelir[m],
+                                                "gider" => a.Gider[m],
+                                                _ => a.Gelir[m] - a.Gider[m]
+                                            };
+                                            string cls = metrik == "kar"
+                                                ? (v > 0 ? "text-success" : (v < 0 ? "text-danger" : "text-muted"))
+                                                : (v > 0 ? "" : "text-muted");
+                                            <td class="text-end @cls">@(v != 0 ? v.ToString("N2") : "-")</td>
+                                        }
+                                        @{
+                                            decimal toplam = metrik switch
+                                            {
+                                                "gelir" => a.Gelir.Sum(),
+                                                "gider" => a.Gider.Sum(),
+                                                _ => a.NetKar
+                                            };
+                                            string topCls = metrik == "kar"
+                                                ? (toplam >= 0 ? "text-success" : "text-danger")
+                                                : "text-success";
+                                        }
+                                        <td class="text-end fw-bold @topCls">@toplam.ToString("N2")</td>
+                                        <td class="text-end small @(a.MarjYuzde >= 0 ? "text-success" : "text-danger")">
+                                            @(a.Gelir.Sum() > 0 ? a.MarjYuzde.ToString("N1") + "%" : "-")
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr class="fw-bold">
+                                <td colspan="2">TOPLAM</td>
+                                @for (int m = 0; m < 12; m++)
+                                {
+                                    decimal sum = metrik switch
+                                    {
+                                        "gelir" => gosterilen.Sum(x => x.Gelir[m]),
+                                        "gider" => gosterilen.Sum(x => x.Gider[m]),
+                                        _ => gosterilen.Sum(x => x.Gelir[m] - x.Gider[m])
+                                    };
+                                    <td class="text-end">@(sum != 0 ? sum.ToString("N2") : "-")</td>
+                                }
+                                <td class="text-end">
+                                    @(metrik switch
+                                    {
+                                        "gelir" => gosterilen.Sum(x => x.Gelir.Sum()).ToString("N2"),
+                                        "gider" => gosterilen.Sum(x => x.Gider.Sum()).ToString("N2"),
+                                        _ => gosterilen.Sum(x => x.NetKar).ToString("N2")
+                                    })
+                                </td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-2 small text-muted">
+            <i class="bi bi-info-circle me-1"></i>
+            Gelir: <strong>ServisCalisma</strong> (iptal/yapılamayan hariç), tutar = (Fiyat ?? Guzergah.BirimFiyat) × sefer çarpanı.
+            Gider: <strong>AracMasraf</strong> (tüm masraf kalemleri).
+            Sahiplik filtresi <code>Arac.AracSahiplikTipi</code> üzerinden uygulanır.
+        </div>
+    }
+</div>
+
+@code {
+    private bool yukleniyor = true;
+    private int yil = DateTime.Today.Year;
+    private int sahiplikFiltre = -1;
+    private string metrik = "kar";
+    private bool bosAracGizle = true;
+    private bool sadeceZarar = false;
+    private const int top = 8;
+
+    private List<ServisCalisma> kayitlar = new();
+    private List<AracMasraf> masraflar = new();
+    private List<Arac> araclar = new();
+    private bool firstRenderDone = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { araclar = await AracService.GetAllAsync(); }
+        catch { araclar = new(); }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        yukleniyor = true;
+        StateHasChanged();
+        try
+        {
+            var bas = new DateTime(yil, 1, 1);
+            var bit = new DateTime(yil, 12, 31, 23, 59, 59);
+            kayitlar = await ServisCalismaService.GetByDateRangeAsync(bas, bit);
+            masraflar = await AracMasrafService.GetByDateRangeAsync(bas, bit);
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Veri yüklenemedi: {ex.Message}");
+            kayitlar = new(); masraflar = new();
+        }
+        finally { yukleniyor = false; }
+
+        if (firstRenderDone)
+            await ChartCiz();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            firstRenderDone = true;
+            await ChartCiz();
+        }
+    }
+
+    private static int SeferSayisinaCevir(ServisTuru t) => t switch
+    {
+        ServisTuru.SabahAksam => 2,
+        _ => 1
+    };
+
+    private record AracKarlilikRow(
+        int AracId, string Plaka, string MarkaModel, string Sahiplik,
+        AracSahiplikTipi SahiplikTipi,
+        decimal[] Gelir, decimal[] Gider)
+    {
+        public decimal NetKar => Gelir.Sum() - Gider.Sum();
+        public decimal MarjYuzde => Gelir.Sum() > 0 ? (NetKar / Gelir.Sum() * 100m) : 0m;
+    }
+
+    private List<AracKarlilikRow> HesaplaMatris()
+    {
+        var aktifKayit = kayitlar
+            .Where(k => k.Durum != CalismaDurum.IptalEdildi && k.Durum != CalismaDurum.ArizaNedeniyleYapilamadi)
+            .ToList();
+
+        // Araç havuzu: kayıtlardan + masraflardan + tüm araçlar
+        var havuzIds = aktifKayit.Select(k => k.AracId)
+            .Concat(masraflar.Select(m => m.AracId))
+            .Concat(araclar.Select(a => a.Id))
+            .Distinct()
+            .ToList();
+
+        var aracMap = araclar.ToDictionary(a => a.Id);
+
+        var result = new List<AracKarlilikRow>();
+        foreach (var aId in havuzIds)
+        {
+            aracMap.TryGetValue(aId, out var arac);
+            // arac null olabilir; kayıttaki nav'dan dene
+            if (arac == null)
+                arac = aktifKayit.FirstOrDefault(k => k.AracId == aId)?.Arac
+                    ?? masraflar.FirstOrDefault(m => m.AracId == aId)?.Arac;
+
+            string plaka = arac?.AktifPlaka ?? $"#{aId}";
+            string mm = arac != null
+                ? string.Join(" ", new[] { arac.Marka, arac.Model }.Where(s => !string.IsNullOrWhiteSpace(s)))
+                : "";
+            var sahip = arac?.SahiplikTipi ?? AracSahiplikTipi.Ozmal;
+
+            var gelir = new decimal[12];
+            var gider = new decimal[12];
+
+            foreach (var k in aktifKayit.Where(x => x.AracId == aId))
+            {
+                int idx = k.CalismaTarihi.Month - 1;
+                if (idx < 0 || idx > 11) continue;
+                int sefer = SeferSayisinaCevir(k.ServisTuru);
+                decimal birim = k.Fiyat ?? k.Guzergah?.BirimFiyat ?? 0m;
+                gelir[idx] += birim * sefer;
+            }
+            foreach (var m in masraflar.Where(x => x.AracId == aId))
+            {
+                int idx = m.MasrafTarihi.Month - 1;
+                if (idx < 0 || idx > 11) continue;
+                gider[idx] += m.Tutar;
+            }
+
+            result.Add(new AracKarlilikRow(aId, plaka, mm, sahip.ToString(), sahip, gelir, gider));
+        }
+        return result;
+    }
+
+    private List<AracKarlilikRow> FiltreUygula(List<AracKarlilikRow> matris)
+    {
+        IEnumerable<AracKarlilikRow> q = matris;
+        if (sahiplikFiltre >= 0)
+            q = q.Where(m => (int)m.SahiplikTipi == sahiplikFiltre);
+        if (bosAracGizle)
+            q = q.Where(m => m.Gelir.Sum() > 0 || m.Gider.Sum() > 0);
+        if (sadeceZarar)
+            q = q.Where(m => m.NetKar < 0);
+        return q.ToList();
+    }
+
+    private async Task ChartCiz()
+    {
+        if (!firstRenderDone || yukleniyor) return;
+        try
+        {
+            var matris = FiltreUygula(HesaplaMatris());
+            var topN = matris
+                .OrderByDescending(m => Math.Abs(metrik switch
+                {
+                    "gelir" => m.Gelir.Sum(),
+                    "gider" => m.Gider.Sum(),
+                    _ => m.NetKar
+                }))
+                .Take(top)
+                .ToList();
+
+            var labels = Enumerable.Range(1, 12)
+                .Select(m => new DateTime(2000, m, 1).ToString("MMM", new CultureInfo("tr-TR")))
+                .ToArray();
+
+            var datasets = topN.Select(a => new
+            {
+                label = a.Plaka,
+                data = Enumerable.Range(0, 12).Select(i => metrik switch
+                {
+                    "gelir" => a.Gelir[i],
+                    "gider" => a.Gider[i],
+                    _ => a.Gelir[i] - a.Gider[i]
+                }).ToArray()
+            }).ToArray();
+
+            await JS.InvokeVoidAsync("filoKpiCharts.renderKurumTrend", "aracKarlilikChart", labels, datasets);
+
+            // Yıllık net kâr bar (her zaman kâr göster)
+            var karlar = matris.OrderByDescending(m => m.NetKar).Take(top).ToList();
+            var barLabels = karlar.Select(a => a.Plaka).ToArray();
+            var barData = karlar.Select(a => a.NetKar).ToArray();
+            await JS.InvokeVoidAsync("filoKpiCharts.renderKurumToplamBar", "aracKarBarChart", barLabels, barData);
+        }
+        catch
+        {
+            // Chart.js yüklenmemiş olabilir
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("filoKpiCharts.destroyAll"); } catch { }
+    }
+
+    private async Task ExcelIndir()
+    {
+        try
+        {
+            var matris = FiltreUygula(HesaplaMatris());
+
+            using var wb = new XLWorkbook();
+
+            // Sheet 1: Karlilik (Gelir-Gider-Net)
+            var ws = wb.Worksheets.Add($"Karlilik {yil}");
+            ws.Cell(1, 1).Value = $"Araç Yıllık Karlılık — {yil}";
+            ws.Cell(1, 1).Style.Font.Bold = true;
+            ws.Cell(1, 1).Style.Font.FontSize = 13;
+            ws.Range(1, 1, 1, 8).Merge();
+
+            string[] basliklar = { "#", "Plaka", "Marka/Model", "Sahiplik",
+                "Yıllık Gelir", "Yıllık Gider", "Net Kâr", "Marj %" };
+            for (int i = 0; i < basliklar.Length; i++)
+                ws.Cell(3, i + 1).Value = basliklar[i];
+            var hr = ws.Range(3, 1, 3, basliklar.Length);
+            hr.Style.Font.Bold = true;
+            hr.Style.Fill.BackgroundColor = XLColor.LightSteelBlue;
+
+            int r = 4, sira = 1;
+            foreach (var a in matris.OrderByDescending(x => x.NetKar))
+            {
+                ws.Cell(r, 1).Value = sira++;
+                ws.Cell(r, 2).Value = a.Plaka;
+                ws.Cell(r, 3).Value = a.MarkaModel;
+                ws.Cell(r, 4).Value = a.Sahiplik;
+                ws.Cell(r, 5).Value = a.Gelir.Sum();
+                ws.Cell(r, 6).Value = a.Gider.Sum();
+                ws.Cell(r, 7).Value = a.NetKar;
+                ws.Cell(r, 8).Value = a.MarjYuzde;
+                if (a.NetKar < 0)
+                    ws.Range(r, 1, r, 8).Style.Font.FontColor = XLColor.Red;
+                r++;
+            }
+            ws.Cell(r, 4).Value = "TOPLAM";
+            ws.Cell(r, 5).Value = matris.Sum(x => x.Gelir.Sum());
+            ws.Cell(r, 6).Value = matris.Sum(x => x.Gider.Sum());
+            ws.Cell(r, 7).Value = matris.Sum(x => x.NetKar);
+            ws.Range(r, 1, r, 8).Style.Font.Bold = true;
+            ws.Range(r, 1, r, 8).Style.Fill.BackgroundColor = XLColor.LightYellow;
+            ws.Columns().AdjustToContents();
+
+            // Sheet 2-4: Aylık matris (gelir / gider / kar)
+            void WriteMatris(string name, Func<AracKarlilikRow, int, decimal> getter, string label)
+            {
+                var w = wb.Worksheets.Add(name);
+                w.Cell(1, 1).Value = $"{label} — {yil}";
+                w.Cell(1, 1).Style.Font.Bold = true;
+                w.Cell(1, 1).Style.Font.FontSize = 13;
+                w.Range(1, 1, 1, 15).Merge();
+
+                w.Cell(3, 1).Value = "#";
+                w.Cell(3, 2).Value = "Plaka";
+                w.Cell(3, 3).Value = "Marka/Model";
+                for (int m = 1; m <= 12; m++)
+                    w.Cell(3, 3 + m).Value = new DateTime(2000, m, 1).ToString("MMMM", new CultureInfo("tr-TR"));
+                w.Cell(3, 16).Value = "Toplam";
+                var h = w.Range(3, 1, 3, 16);
+                h.Style.Font.Bold = true;
+                h.Style.Fill.BackgroundColor = XLColor.LightSteelBlue;
+
+                int rr = 4, ss = 1;
+                foreach (var a in matris.OrderByDescending(x => x.NetKar))
+                {
+                    w.Cell(rr, 1).Value = ss++;
+                    w.Cell(rr, 2).Value = a.Plaka;
+                    w.Cell(rr, 3).Value = a.MarkaModel;
+                    decimal sumRow = 0m;
+                    for (int m = 0; m < 12; m++)
+                    {
+                        decimal v = getter(a, m);
+                        w.Cell(rr, 4 + m).Value = v;
+                        sumRow += v;
+                    }
+                    w.Cell(rr, 16).Value = sumRow;
+                    rr++;
+                }
+                w.Columns().AdjustToContents();
+            }
+
+            WriteMatris("Aylik Gelir", (a, m) => a.Gelir[m], "Aylık Gelir");
+            WriteMatris("Aylik Gider", (a, m) => a.Gider[m], "Aylık Gider");
+            WriteMatris("Aylik Kar", (a, m) => a.Gelir[m] - a.Gider[m], "Aylık Kâr/Zarar");
+
+            using var stream = new MemoryStream();
+            wb.SaveAs(stream);
+            var fileName = $"arac_yillik_karlilik_{yil}.xlsx";
+            await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, Convert.ToBase64String(stream.ToArray()));
+            ToastService.ShowSuccess("Excel indirildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Excel indirilemedi: {ex.GetBaseException().Message}");
+        }
+    }
+}
