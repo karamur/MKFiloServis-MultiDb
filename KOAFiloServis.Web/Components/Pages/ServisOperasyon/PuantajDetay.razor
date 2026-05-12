@@ -4,6 +4,8 @@
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
 @inject IServisKontratService KontratService
+@inject IFaturaService FaturaService
+@inject IToastService ToastService
 @inject NavigationManager Nav
 @rendermode InteractiveServer
 
@@ -45,6 +47,23 @@
                     <button class="btn btn-outline-secondary ms-1" @onclick="Kapat">
                         <i class="bi bi-lock me-1"></i>Kapat
                     </button>
+                }
+                @if (puantaj.Durum != ServisPuantajDurum.Taslak && puantaj.ServisKontrat != null)
+                {
+                    @if (puantaj.ServisKontrat.Tip == ServisKontratTip.Tedarikci
+                         && (puantaj.OdemeToplam ?? 0) > 0
+                         && puantaj.ServisKontrat.TasimaTedarikci?.CariId != null)
+                    {
+                        <button class="btn btn-warning ms-1" @onclick="GelenFaturaTaslakOlustur" disabled="@faturaIslemde" title="Tedarikçi alış faturası taslağı oluştur">
+                            <i class="bi bi-receipt me-1"></i>Gelen Fatura Taslağı
+                        </button>
+                    }
+                    @if (puantaj.ServisKontrat.KurumCariId != null && puantaj.TahsilatToplam > 0)
+                    {
+                        <button class="btn btn-primary ms-1" @onclick="GidenFaturaTaslakOlustur" disabled="@faturaIslemde" title="Kuruma satış faturası taslağı oluştur">
+                            <i class="bi bi-receipt-cutoff me-1"></i>Giden Fatura Taslağı
+                        </button>
+                    }
                 }
             </div>
         </div>
@@ -512,6 +531,109 @@
     {
         await KontratService.DeleteOdemeAsync(odemeId);
         await Yukle();
+    }
+
+    // ── Fatura taslağı oluşturma ──
+    private bool faturaIslemde = false;
+
+    private async Task GidenFaturaTaslakOlustur()
+    {
+        if (puantaj?.ServisKontrat?.KurumCariId == null) return;
+        await FaturaTaslakOlusturOrtak(
+            cariId: puantaj.ServisKontrat.KurumCariId.Value,
+            yon: FaturaYonu.Giden,
+            tip: FaturaTipi.SatisFaturasi);
+    }
+
+    private async Task GelenFaturaTaslakOlustur()
+    {
+        if (puantaj?.ServisKontrat?.TasimaTedarikci?.CariId == null) return;
+        await FaturaTaslakOlusturOrtak(
+            cariId: puantaj.ServisKontrat.TasimaTedarikci.CariId.Value,
+            yon: FaturaYonu.Gelen,
+            tip: FaturaTipi.AlisFaturasi);
+    }
+
+    private async Task FaturaTaslakOlusturOrtak(int cariId, FaturaYonu yon, FaturaTipi tip)
+    {
+        if (puantaj == null || puantaj.ServisKontrat == null) return;
+        try
+        {
+            faturaIslemde = true;
+            StateHasChanged();
+
+            decimal birim = yon == FaturaYonu.Giden
+                ? puantaj.TahsilatBirimFiyat
+                : (puantaj.OdemeBirimFiyat ?? 0);
+            decimal toplam = yon == FaturaYonu.Giden
+                ? puantaj.TahsilatToplam
+                : (puantaj.OdemeToplam ?? 0);
+
+            if (toplam <= 0)
+            {
+                ToastService.ShowWarning("Fatura tutarı 0; önce puantaj tutarlarını kontrol edin.");
+                return;
+            }
+
+            var faturaNo = await FaturaService.GenerateNextFaturaNoAsync(tip, yon);
+            var ay = AyAdi(puantaj.Ay);
+            var aciklama = $"{puantaj.ServisKontrat.KontratKodu} - {ay} {puantaj.Yil} servis hizmeti";
+
+            decimal kdvOran = 20m;
+            decimal araToplam = Math.Round(toplam / (1 + kdvOran / 100m), 2);
+            decimal kdvTutar = Math.Round(toplam - araToplam, 2);
+            decimal birimNet = puantaj.CalismaSayisi > 0
+                ? Math.Round(araToplam / puantaj.CalismaSayisi, 4)
+                : araToplam;
+
+            var fatura = new Fatura
+            {
+                FaturaNo = faturaNo,
+                FaturaTarihi = DateTime.Today,
+                VadeTarihi = DateTime.Today.AddDays(30),
+                FaturaTipi = tip,
+                FaturaYonu = yon,
+                EFaturaTipi = EFaturaTipi.EArsiv,
+                Durum = FaturaDurum.Beklemede,
+                CariId = cariId,
+                Aciklama = aciklama,
+                AraToplam = araToplam,
+                KdvOrani = kdvOran,
+                KdvTutar = kdvTutar,
+                GenelToplam = toplam,
+                FaturaKalemleri = new List<FaturaKalem>
+                {
+                    new FaturaKalem
+                    {
+                        SiraNo = 1,
+                        Aciklama = aciklama,
+                        Miktar = puantaj.CalismaSayisi > 0 ? puantaj.CalismaSayisi : 1m,
+                        Birim = puantaj.ServisKontrat.TahsilatTip == ServisFiyatTip.SeferBazi ? "Sefer"
+                              : puantaj.ServisKontrat.TahsilatTip == ServisFiyatTip.Gunluk ? "Gün"
+                              : "Ay",
+                        BirimFiyat = puantaj.CalismaSayisi > 0 ? birimNet : araToplam,
+                        KdvOrani = kdvOran,
+                        KdvTutar = kdvTutar,
+                        ToplamTutar = toplam,
+                        KalemTipi = FaturaKalemTipi.Servis,
+                        AltTipi = FaturaKalemAltTipi.TasimaHizmeti
+                    }
+                }
+            };
+
+            var saved = await FaturaService.CreateAsync(fatura);
+            ToastService.ShowSuccess($"Fatura taslağı oluşturuldu: {saved.FaturaNo}");
+            Nav.NavigateTo($"/faturalar/{saved.Id}");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Fatura taslağı oluşturulamadı: {ex.GetBaseException().Message}");
+        }
+        finally
+        {
+            faturaIslemde = false;
+            StateHasChanged();
+        }
     }
 
     private static string AyAdi(int ay) => ay switch
