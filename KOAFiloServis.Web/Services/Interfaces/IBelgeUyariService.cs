@@ -239,6 +239,7 @@ public class AracBelgeTabloKalemi
     public string SaseNo { get; set; } = string.Empty;
     public string MarkaModel { get; set; } = string.Empty;
     public AracTipi AracTipi { get; set; }
+    public AracSahiplikTipi SahiplikTipi { get; set; }
     public bool Aktif { get; set; }
     public bool Secili { get; set; } = false;
 

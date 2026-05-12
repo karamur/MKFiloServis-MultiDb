@@ -1,4 +1,4 @@
-@page "/lastik/stok"
+﻿@page "/lastik/stok"
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
 @using KOAFiloServis.Web.Services.Interfaces
@@ -116,6 +116,19 @@
                     {
                         <small class="text-success"><i class="bi bi-check-circle me-1"></i>@filtreAracArama</small>
                     }
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" @bind="filtreSahiplikTipi" @bind:after="YukleStoklar">
+                        <option value="Tumu">Sahiplik: Tümü</option>
+                        @foreach (AracSahiplikTipi sahiplik in Enum.GetValues(typeof(AracSahiplikTipi)))
+                        {
+                            <option value="@sahiplik.ToString()">@GetSahiplikText(sahiplik)</option>
+                        }
+                    </select>
+                    <div class="form-check form-check-sm mt-1">
+                        <input class="form-check-input" type="checkbox" id="chkStokSahiplikHaric" @bind="filtreSahiplikHaric" @bind:after="YukleStoklar" disabled="@(filtreSahiplikTipi == "Tumu")" />
+                        <label class="form-check-label small text-muted" for="chkStokSahiplikHaric">Hariç tut</label>
+                    </div>
                 </div>
             </div>
         </div>
@@ -984,8 +997,32 @@
             sonuc = sonuc.Where(s => s.AracId != null);
         else if (filtreTakimaDurum == false)
             sonuc = sonuc.Where(s => s.AracId == null);
+        if (filtreSahiplikTipi != "Tumu" && Enum.TryParse<AracSahiplikTipi>(filtreSahiplikTipi, out var sht))
+        {
+            sonuc = sonuc.Where(s =>
+            {
+                var ar = s.Arac ?? s.KaynakArac;
+                if (ar is null) return filtreSahiplikHaric; // araç yoksa: dahil et yalnızca hariç tut modunda
+                return filtreSahiplikHaric ? ar.SahiplikTipi != sht : ar.SahiplikTipi == sht;
+            });
+        }
         stoklar = sonuc.ToList();
+        await Task.CompletedTask;
     }
+
+    // Sahiplik filtresi alanları
+    private string filtreSahiplikTipi = "Tumu";
+    private bool filtreSahiplikHaric;
+
+    private static string GetSahiplikText(AracSahiplikTipi sahiplik) => sahiplik switch
+    {
+        AracSahiplikTipi.Ozmal => "Özmal",
+        AracSahiplikTipi.Kiralik => "Kiralık",
+        AracSahiplikTipi.Komisyon => "Komisyon",
+        AracSahiplikTipi.Diger => "Diğer",
+        AracSahiplikTipi.Tedarikci => "Tedarikçi",
+        _ => sahiplik.ToString()
+    };
 
     private async Task TakimaDurumFiltreDegistir(bool? durum)
     {

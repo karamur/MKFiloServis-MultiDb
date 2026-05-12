@@ -92,6 +92,10 @@
                             <option value="@sahiplik.ToString()">@GetSahiplikText(sahiplik)</option>
                         }
                     </select>
+                    <div class="form-check form-check-sm mt-1">
+                        <input class="form-check-input" type="checkbox" id="chkSahiplikHaric" @bind="filtreSahiplikHaric" disabled="@(filtreSahiplikTipi == "Tumu")" />
+                        <label class="form-check-label small text-muted" for="chkSahiplikHaric">Hariç tut</label>
+                    </div>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label small">Sınıf</label>
@@ -628,6 +632,7 @@
     private int? filtreKoltukSayisi;
     private string filtreSinif = "Tumu";
     private string filtreSahiplikTipi = "Tumu";
+    private bool filtreSahiplikHaric;
     private string filtreSinifTipi = "Tumu";
     private int? filtreYil;
     private int? filtreAy;
@@ -711,10 +716,12 @@
             sorgu = sorgu.Where(a => a.AracSinifi == aracSinifi);
         }
 
-        // Sahiplik Tipi
+        // Sahiplik Tipi (Hariç tut destekli)
         if (filtreSahiplikTipi != "Tumu" && Enum.TryParse<AracSahiplikTipi>(filtreSahiplikTipi, out var sahiplikTipi))
         {
-            sorgu = sorgu.Where(a => a.SahiplikTipi == sahiplikTipi);
+            sorgu = filtreSahiplikHaric
+                ? sorgu.Where(a => a.SahiplikTipi != sahiplikTipi)
+                : sorgu.Where(a => a.SahiplikTipi == sahiplikTipi);
         }
 
         // Kayıt Yılı
@@ -742,6 +749,7 @@
         filtreKoltukSayisi = null;
         filtreSinif = "Tumu";
         filtreSahiplikTipi = "Tumu";
+        filtreSahiplikHaric = false;
         filtreSinifTipi = "Tumu";
         filtreYil = null;
         filtreAy = null;
@@ -816,6 +824,7 @@
     {
         AracSinifi.PersonelTasiti => "Personel Taşıtı",
         AracSinifi.OkulTasiti => "Okul Taşıtı",
+        AracSinifi.Hususi => "Hususi",
         _ => sinif.ToString()
     };
 
@@ -833,6 +842,7 @@
     {
         AracSinifi.PersonelTasiti => "bg-primary",
         AracSinifi.OkulTasiti => "bg-warning text-dark",
+        AracSinifi.Hususi => "bg-info text-dark",
         _ => "bg-secondary"
     };
 

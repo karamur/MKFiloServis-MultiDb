@@ -564,6 +564,7 @@ public class BelgeUyariService : IBelgeUyariService
                 MarkaModel = $"{a.Marka} {a.Model}".Trim(),
                 AracTipi = a.AracTipi,
                 Aktif = a.Aktif,
+                SahiplikTipi = a.SahiplikTipi,
                 TasimaTedarikciId = a.TasimaTedarikciId,
                 TasimaTedarikciUnvan = a.TasimaTedarikci?.Unvan,
                 ToplamEvrakSayisi = sutunlar.Length,

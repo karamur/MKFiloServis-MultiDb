@@ -61,6 +61,20 @@
                     <input type="date" class="form-control form-control-sm" value="@filtreBitisStr" @onchange="BitisDegisti" />
                 </div>
                 <div class="col-md-2">
+                    <label class="form-label mb-1">Sahiplik</label>
+                    <select class="form-select form-select-sm" @bind="filtreSahiplikTipi">
+                        <option value="Tumu">Tümü</option>
+                        @foreach (AracSahiplikTipi sahiplik in Enum.GetValues(typeof(AracSahiplikTipi)))
+                        {
+                            <option value="@sahiplik.ToString()">@GetSahiplikText(sahiplik)</option>
+                        }
+                    </select>
+                    <div class="form-check form-check-sm mt-1">
+                        <input class="form-check-input" type="checkbox" id="chkLastikSahiplikHaric" @bind="filtreSahiplikHaric" disabled="@(filtreSahiplikTipi == "Tumu")" />
+                        <label class="form-check-label small text-muted" for="chkLastikSahiplikHaric">Hariç tut</label>
+                    </div>
+                </div>
+                <div class="col-md-2">
                     <button class="btn btn-sm btn-outline-secondary" @onclick="FiltreSifirla">
                         <i class="bi bi-x-circle me-1"></i>Temizle
                     </button>
@@ -147,7 +161,7 @@
     {
         <div class="text-center"><div class="spinner-border" role="status"></div></div>
     }
-    else if (!degisimler.Any())
+    else if (!GosterilenDegisimler.Any())
     {
         <div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>Değişim kaydı bulunamadı.</div>
     }
@@ -172,7 +186,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var d in degisimler)
+                            @foreach (var d in GosterilenDegisimler)
                             {
                                 <tr>
                                     <td><strong>@d.DegisimTarihi.ToString("dd.MM.yyyy")</strong></td>
@@ -1100,8 +1114,33 @@
         filtreAracId = null;
         filtreBaslangic = null;
         filtreBitis = null;
+        filtreSahiplikTipi = "Tumu";
+        filtreSahiplikHaric = false;
         await Filtrele();
     }
+
+    // Sahiplik filtresi (UI tarafından)
+    private string filtreSahiplikTipi = "Tumu";
+    private bool filtreSahiplikHaric;
+
+    private IEnumerable<LastikDegisim> GosterilenDegisimler =>
+        (degisimler ?? new List<LastikDegisim>()).Where(d =>
+        {
+            if (filtreSahiplikTipi == "Tumu") return true;
+            if (d.Arac is null) return false;
+            if (!Enum.TryParse<AracSahiplikTipi>(filtreSahiplikTipi, out var s)) return true;
+            return filtreSahiplikHaric ? d.Arac.SahiplikTipi != s : d.Arac.SahiplikTipi == s;
+        });
+
+    private static string GetSahiplikText(AracSahiplikTipi sahiplik) => sahiplik switch
+    {
+        AracSahiplikTipi.Ozmal => "Özmal",
+        AracSahiplikTipi.Kiralik => "Kiralık",
+        AracSahiplikTipi.Komisyon => "Komisyon",
+        AracSahiplikTipi.Diger => "Diğer",
+        AracSahiplikTipi.Tedarikci => "Tedarikçi",
+        _ => sahiplik.ToString()
+    };
 
     private async Task YukleAracDonemOzeti()
     {

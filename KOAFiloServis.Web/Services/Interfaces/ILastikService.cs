@@ -1,4 +1,4 @@
-using KOAFiloServis.Shared.Entities;
+﻿using KOAFiloServis.Shared.Entities;
 
 namespace KOAFiloServis.Web.Services.Interfaces;
 
@@ -220,4 +220,6 @@ public sealed class LastikSezonDegisimGereken
     public bool BuSezonDegisimYapildi { get; set; }
     /// <summary>En son değişim tarihi</summary>
     public DateTime? SonDegisimTarihi { get; set; }
+    /// <summary>Aracın sahiplik tipi (filtreleme amaçlı)</summary>
+    public KOAFiloServis.Shared.Entities.AracSahiplikTipi SahiplikTipi { get; set; }
 }

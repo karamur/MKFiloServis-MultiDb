@@ -1,4 +1,4 @@
-@page "/araclar/yeni"
+﻿@page "/araclar/yeni"
 @page "/araclar/{Id:int}"
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
@@ -164,19 +164,22 @@
                             </div>
                         </div>
                     }
-                    <div class="col-md-4">
-                        <div class="mb-3">
-                            <label class="form-label">Taşıma Tedarikçisi</label>
-                            <InputSelect @bind-Value="arac.TasimaTedarikciId" class="form-select">
-                                <option value="">-- Yok --</option>
-                                @foreach (var t in tasimaTedarikciler)
-                                {
-                                    <option value="@t.Id">@t.Unvan</option>
-                                }
-                            </InputSelect>
-                            <small class="text-muted">Alt yüklenici aracıysa seçin</small>
+                    @if (arac.SahiplikTipi == AracSahiplikTipi.Tedarikci)
+                    {
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Taşıma Tedarikçisi</label>
+                                <InputSelect @bind-Value="arac.TasimaTedarikciId" class="form-select">
+                                    <option value="">-- Yok --</option>
+                                    @foreach (var t in tasimaTedarikciler)
+                                    {
+                                        <option value="@t.Id">@t.Unvan</option>
+                                    }
+                                </InputSelect>
+                                <small class="text-muted">Alt yüklenici aracıysa seçin</small>
+                            </div>
                         </div>
-                    </div>
+                    }
                 </div>
 
                 @if (arac.SahiplikTipi == AracSahiplikTipi.Kiralik)
@@ -705,6 +708,9 @@
     [Parameter]
     public int? Id { get; set; }
 
+    [SupplyParameterFromQuery(Name = "tedarikciId")]
+    public int? TedarikciIdQuery { get; set; }
+
     private Arac arac = new();
     private List<Cari> tedarikciCariler = new();
     private List<TasimaTedarikci> tasimaTedarikciler = new();
@@ -786,7 +792,8 @@
             Aktif = true,
             AracTipi = AracTipi.Minibus,
             AracSinifi = AracSinifi.PersonelTasiti,
-            SahiplikTipi = AracSahiplikTipi.Ozmal
+            SahiplikTipi = TedarikciIdQuery.HasValue ? AracSahiplikTipi.Tedarikci : AracSahiplikTipi.Ozmal,
+            TasimaTedarikciId = TedarikciIdQuery
         };
 
         plaka = string.Empty;
@@ -857,6 +864,12 @@
             arac.AylikKiraBedeli = null;
             arac.SeferBasinaKiraBedeli = null;
             arac.KiraHesaplamaTipi = null;
+        }
+
+        // Sahiplik Tedarikçi değilse taşıma tedarikçisi temizlenir
+        if (arac.SahiplikTipi != AracSahiplikTipi.Tedarikci)
+        {
+            arac.TasimaTedarikciId = null;
         }
 
         if (!arac.KomisyonVar)
@@ -1074,6 +1087,7 @@
     {
         AracSinifi.PersonelTasiti => "Personel Taşıtı",
         AracSinifi.OkulTasiti => "Okul Taşıtı",
+        AracSinifi.Hususi => "Hususi",
         _ => sinif.ToString()
     };
 

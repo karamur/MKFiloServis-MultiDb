@@ -142,7 +142,8 @@ public enum AracTipi
 public enum AracSinifi
 {
     PersonelTasiti = 1,
-    OkulTasiti = 2
+    OkulTasiti = 2,
+    Hususi = 3
 }
 
 public enum AracSahiplikTipi

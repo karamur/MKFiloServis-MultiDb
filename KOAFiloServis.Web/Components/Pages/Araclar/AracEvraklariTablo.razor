@@ -111,6 +111,14 @@
                     </select>
                 </div>
                 <div class="col-md-2">
+                    <label class="form-label small mb-1">Sahiplik</label>
+                    <select class="form-select form-select-sm" @bind="sahiplikFiltre">
+                        <option value="ozmal">Özmal / Kiralık</option>
+                        <option value="tedarikci">Tedarikçi</option>
+                        <option value="">Tümü</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
                     <label class="form-label small mb-1">Belge Filtresi</label>
                     <select class="form-select form-select-sm" @bind="belgeFiltre">
                         <option value="">Tümü</option>
@@ -342,6 +350,7 @@
     private string aktifFiltre = string.Empty;
     private string belgeFiltre = string.Empty;
     private string seviyeFiltre = "tumu"; // "gecmis" | "yedi" | "otuz" | "tumu"
+    private string sahiplikFiltre = "ozmal"; // "ozmal" | "tedarikci" | "" (tümü)
 
     // Açık satır
     private int? acikAracId;
@@ -406,6 +415,12 @@
             "otuz" => GetTumTarihler(p).Any(t => t >= DateTime.Today && (t - DateTime.Today).Days <= 30),
             _ => true
         })
+        .Where(p => sahiplikFiltre switch
+        {
+            "ozmal" => p.SahiplikTipi != AracSahiplikTipi.Tedarikci,
+            "tedarikci" => p.SahiplikTipi == AracSahiplikTipi.Tedarikci,
+            _ => true
+        })
         .ToList();
 
     protected override async Task OnInitializedAsync()
@@ -445,6 +460,7 @@
         aktifFiltre = string.Empty;
         belgeFiltre = string.Empty;
         seviyeFiltre = "tumu";
+        sahiplikFiltre = "ozmal";
     }
 
     private void TumunuSecToggle()

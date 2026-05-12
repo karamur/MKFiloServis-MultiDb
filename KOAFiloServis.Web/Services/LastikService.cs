@@ -1243,7 +1243,7 @@ public class LastikService : ILastikService
             var araclar = await ctx.Araclar
                 .AsNoTracking()
                 .Where(a => !a.IsDeleted)
-                .Select(a => new { a.Id, a.AktifPlaka, a.Marka, a.Model, a.ModelYili })
+                .Select(a => new { a.Id, a.AktifPlaka, a.Marka, a.Model, a.ModelYili, a.SahiplikTipi })
                 .OrderBy(a => a.AktifPlaka)
                 .ToListAsync();
 
@@ -1302,7 +1302,8 @@ public class LastikService : ILastikService
                     AracBilgisi = $"{a.Marka} {a.Model} {a.ModelYili}".Trim(),
                     TakiliSezonOzeti = sezonOzeti,
                     BuSezonDegisimYapildi = dogruSezonVar,
-                    SonDegisimTarihi = sonDegisimTarihi
+                    SonDegisimTarihi = sonDegisimTarihi,
+                    SahiplikTipi = a.SahiplikTipi
                 });
             }
 
