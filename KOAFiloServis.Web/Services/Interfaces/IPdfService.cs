@@ -9,6 +9,7 @@ public interface IPdfService
     byte[] GenerateBelgeUyariRaporuPdf(List<BelgeUyari> uyarilar);
     byte[] GenerateCariEkstresPdf(Cari cari, List<Fatura> faturalar, List<BankaKasaHareket> hareketler);
     byte[] GenerateMutabakatPdf(MutabakatPdfModel model);
+    byte[] GenerateHakedisPdf(Hakedis hakedis, string? referansAd = null);
 }
 
 public class MutabakatPdfModel

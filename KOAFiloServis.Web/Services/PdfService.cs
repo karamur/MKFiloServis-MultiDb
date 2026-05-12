@@ -549,4 +549,158 @@ public class PdfService : IPdfService
             });
         });
     }
+
+    public byte[] GenerateHakedisPdf(Hakedis hakedis, string? referansAd = null)
+    {
+        var baslik = $"HAKEDİŞ - {hakedis.Tip.ToString().ToUpper()}\n{hakedis.Yil}/{hakedis.Ay:D2}";
+        var document = Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.Margin(30);
+                page.DefaultTextStyle(x => x.FontSize(9));
+
+                page.Header().Element(c => ComposeHeader(c, baslik));
+                page.Content().Element(c => ComposeHakedisContent(c, hakedis, referansAd));
+                page.Footer().Element(ComposeFooter);
+            });
+        });
+
+        return document.GeneratePdf();
+    }
+
+    private void ComposeHakedisContent(IContainer container, Hakedis h, string? referansAd)
+    {
+        container.Column(col =>
+        {
+            // Hakediş başlık bilgileri
+            col.Item().Border(1).Padding(10).Row(row =>
+            {
+                row.RelativeItem().Column(c =>
+                {
+                    c.Item().Text("Hakediş No:").Bold();
+                    c.Item().Text($"#{h.Id}");
+                    c.Item().PaddingTop(5).Text("Dönem:").Bold();
+                    c.Item().Text($"{h.Yil} / {h.Ay:D2}");
+                    c.Item().PaddingTop(5).Text("Tip:").Bold();
+                    c.Item().Text(h.Tip.ToString());
+                    c.Item().PaddingTop(5).Text("Durum:").Bold();
+                    c.Item().Text(h.Durum.ToString());
+                });
+                row.RelativeItem().Column(c =>
+                {
+                    c.Item().Text("Referans:").Bold();
+                    c.Item().Text(referansAd ?? $"#{h.ReferansId}");
+                    c.Item().PaddingTop(5).Text("Toplam Sefer:").Bold();
+                    c.Item().Text(h.ToplamSeferSayisi.ToString("N2"));
+                    c.Item().PaddingTop(5).Text("Birim Fiyat:").Bold();
+                    c.Item().Text($"{h.BirimFiyat:N2} TL");
+                    if (h.OnayTarihi.HasValue)
+                    {
+                        c.Item().PaddingTop(5).Text("Onay:").Bold();
+                        c.Item().Text($"{h.OnaylayanKisi} - {h.OnayTarihi:dd.MM.yyyy HH:mm}");
+                    }
+                });
+            });
+
+            col.Item().PaddingVertical(15);
+
+            // Detay tablosu
+            if (h.Detaylar?.Any() == true)
+            {
+                col.Item().Text("DETAYLAR").Bold().FontSize(11);
+                col.Item().PaddingVertical(5);
+
+                col.Item().Table(table =>
+                {
+                    table.ColumnsDefinition(columns =>
+                    {
+                        columns.RelativeColumn(1.2f);  // Tarih
+                        columns.RelativeColumn(1.2f);  // Servis
+                        columns.RelativeColumn(1.2f);  // Plaka
+                        columns.RelativeColumn(1.5f);  // Şoför
+                        columns.RelativeColumn(2);     // Güzergah
+                        columns.RelativeColumn(0.8f);  // Sefer
+                        columns.RelativeColumn(1);     // B.Fiyat
+                        columns.RelativeColumn(1);     // Tutar
+                    });
+
+                    table.Header(header =>
+                    {
+                        header.Cell().Background(Colors.Grey.Lighten2).Padding(4).Text("Tarih").Bold();
+                        header.Cell().Background(Colors.Grey.Lighten2).Padding(4).Text("Servis").Bold();
+                        header.Cell().Background(Colors.Grey.Lighten2).Padding(4).Text("Plaka").Bold();
+                        header.Cell().Background(Colors.Grey.Lighten2).Padding(4).Text("Şoför").Bold();
+                        header.Cell().Background(Colors.Grey.Lighten2).Padding(4).Text("Güzergah").Bold();
+                        header.Cell().Background(Colors.Grey.Lighten2).Padding(4).AlignRight().Text("Sefer").Bold();
+                        header.Cell().Background(Colors.Grey.Lighten2).Padding(4).AlignRight().Text("B.Fiyat").Bold();
+                        header.Cell().Background(Colors.Grey.Lighten2).Padding(4).AlignRight().Text("Tutar").Bold();
+                    });
+
+                    foreach (var d in h.Detaylar.OrderBy(x => x.Tarih).ThenBy(x => x.Id))
+                    {
+                        table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).Text(d.Tarih.ToString("dd.MM.yyyy"));
+                        table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).Text(d.ServisTuru.ToString());
+                        table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).Text(d.Arac?.AktifPlaka ?? "-");
+                        table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).Text(d.Sofor?.TamAd ?? "-");
+                        table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).Text(d.Guzergah?.GuzergahAdi ?? "-");
+                        table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).AlignRight().Text(d.SeferSayisi.ToString("N2"));
+                        table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).AlignRight().Text($"{d.BirimFiyat:N2}");
+                        table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).AlignRight().Text($"{d.Tutar:N2}");
+                    }
+
+                    // Detay toplam
+                    table.Cell().ColumnSpan(5).Background(Colors.Grey.Lighten3).Padding(5).Text("TOPLAM").Bold();
+                    table.Cell().Background(Colors.Grey.Lighten3).Padding(5).AlignRight().Text(h.Detaylar.Sum(x => x.SeferSayisi).ToString("N2")).Bold();
+                    table.Cell().Background(Colors.Grey.Lighten3).Padding(5);
+                    table.Cell().Background(Colors.Grey.Lighten3).Padding(5).AlignRight().Text($"{h.Detaylar.Sum(x => x.Tutar):N2}").Bold();
+                });
+            }
+
+            col.Item().PaddingVertical(10);
+
+            // Genel toplam
+            col.Item().AlignRight().Width(250).Column(totals =>
+            {
+                totals.Item().Row(r =>
+                {
+                    r.RelativeItem().Text("Ara Toplam:");
+                    r.RelativeItem().AlignRight().Text($"{h.Tutar:N2} TL");
+                });
+                totals.Item().Row(r =>
+                {
+                    r.RelativeItem().Text($"KDV (%{h.KdvOran:N0}):");
+                    r.RelativeItem().AlignRight().Text($"{h.KdvTutar:N2} TL");
+                });
+                totals.Item().PaddingTop(5).BorderTop(1).Row(r =>
+                {
+                    r.RelativeItem().Text("Genel Toplam:").Bold().FontSize(11);
+                    r.RelativeItem().AlignRight().Text($"{h.GenelToplam:N2} TL").Bold().FontSize(11);
+                });
+            });
+
+            if (!string.IsNullOrWhiteSpace(h.Notlar))
+            {
+                col.Item().PaddingTop(15).Text("Notlar:").Bold();
+                col.Item().Text(h.Notlar);
+            }
+
+            // İmza alanları
+            col.Item().PaddingTop(30).Row(row =>
+            {
+                row.RelativeItem().Border(1).Padding(15).Column(c =>
+                {
+                    c.Item().Text("Hazırlayan").Bold();
+                    c.Item().PaddingTop(40).Text("İmza / Kaşe").FontSize(9).FontColor(Colors.Grey.Medium);
+                });
+                row.ConstantItem(20);
+                row.RelativeItem().Border(1).Padding(15).Column(c =>
+                {
+                    c.Item().Text("Onaylayan").Bold();
+                    c.Item().PaddingTop(40).Text("İmza / Kaşe").FontSize(9).FontColor(Colors.Grey.Medium);
+                });
+            });
+        });
+    }
 }

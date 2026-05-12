@@ -11,6 +11,7 @@
 @inject IAracService AracService
 @inject IToastService ToastService
 @inject IJSRuntime JS
+@inject IPdfService PdfService
 @attribute [Authorize]
 
 <PageTitle>Operasyonel Hakediş</PageTitle>
@@ -212,6 +213,9 @@
                                             <button class="btn btn-outline-secondary" title="Detaylar" @onclick="() => DetayAc(h)">
                                                 <i class="bi bi-eye"></i>
                                             </button>
+                                            <button class="btn btn-outline-danger" title="PDF İndir" @onclick="() => PdfIndir(h)">
+                                                <i class="bi bi-file-earmark-pdf"></i>
+                                            </button>
                                             @if (h.Durum == HakedisDurum.Taslak)
                                             {
                                                 <button class="btn btn-outline-success" title="Onayla" @onclick="() => Onayla(h)">
@@ -255,8 +259,11 @@
                                                         }
                                                     </h6>
                                                     <div>
-                                                        <button class="btn btn-sm btn-outline-success" @onclick="() => DetayExcelIndir(aktifH)" disabled="@(aktifH.Detaylar == null || !aktifH.Detaylar.Any())">
+                                                        <button class="btn btn-sm btn-outline-success me-1" @onclick="() => DetayExcelIndir(aktifH)" disabled="@(aktifH.Detaylar == null || !aktifH.Detaylar.Any())">
                                                             <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => PdfIndir(aktifH)">
+                                                            <i class="bi bi-file-earmark-pdf me-1"></i>PDF
                                                         </button>
                                                     </div>
                                                 </div>
@@ -1076,6 +1083,38 @@
             }
             catch (Exception ex) { ToastService.ShowError($"Detay yüklenemedi: {ex.Message}"); }
             finally { detayYukleniyorId = null; }
+        }
+    }
+
+    private async Task PdfIndir(Hakedis h)
+    {
+        try
+        {
+            Hakedis? full;
+            if (detayCache.TryGetValue(h.Id, out var cached))
+            {
+                full = cached;
+            }
+            else
+            {
+                full = await HakedisService.GetByIdAsync(h.Id);
+                if (full != null) detayCache[h.Id] = full;
+            }
+
+            if (full == null)
+            {
+                ToastService.ShowError("Hakediş bulunamadı.");
+                return;
+            }
+
+            var pdf = PdfService.GenerateHakedisPdf(full, ReferansAdi(full));
+            var fileName = $"Hakedis_{full.Tip}_{full.Yil}{full.Ay:D2}_{full.Id}.pdf";
+            await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, Convert.ToBase64String(pdf));
+            ToastService.ShowSuccess("PDF indirildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"PDF oluşturulamadı: {ex.Message}");
         }
     }
 
