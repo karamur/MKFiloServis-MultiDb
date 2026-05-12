@@ -1,4 +1,4 @@
-@page "/personel/puantaj"
+﻿@page "/personel/puantaj"
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
 @using KOAFiloServis.Web.Models
@@ -47,6 +47,10 @@
             </button>
             <button class="btn btn-outline-primary btn-sm" @onclick="ExcelExport" disabled="@(isLoading || !puantajListesi.Any())">
                 <i class="bi bi-file-earmark-excel me-1"></i>Excel
+            </button>
+            <button class="btn btn-outline-success btn-sm" @onclick="VakifbankExport" disabled="@(isLoading || !puantajListesi.Any(p => p.OnayDurumu == PersonelPuantajOnayDurumu.Onaylandi))"
+                    title="Onaylı personeller için Vakıfbank ödeme listesi">
+                <i class="bi bi-bank me-1"></i>Vakıfbank
             </button>
             <button class="btn btn-outline-secondary btn-sm" @onclick="YenileAsync" disabled="@isLoading">
                 <i class="bi bi-arrow-clockwise"></i>
@@ -245,8 +249,19 @@
                         <button class="btn btn-outline-warning btn-sm" @onclick="TopluOnayaGonder" disabled="@(!filtrelenmisListe.Any(p => p.OnayDurumu == PersonelPuantajOnayDurumu.Taslak || p.OnayDurumu == PersonelPuantajOnayDurumu.Reddedildi))">
                             <i class="bi bi-send-check me-1"></i>Tümünü Onaya Gönder
                         </button>
-                        <button class="btn btn-outline-info btn-sm" @onclick="HesaplaVeGuncelle" disabled="@(!puantajListesi.Any())">
-                            <i class="bi bi-calculator me-1"></i>Hesapla
+                        <button class="btn btn-outline-success btn-sm" @onclick="TopluOnayla" disabled="@(!filtrelenmisListe.Any(p => p.OnayDurumu == PersonelPuantajOnayDurumu.OnayBekliyor))">
+                            <i class="bi bi-check-all me-1"></i>Tümünü Onayla (@filtrelenmisListe.Count(p => p.OnayDurumu == PersonelPuantajOnayDurumu.OnayBekliyor))
+                        </button>
+                        <button class="btn btn-outline-info btn-sm" @onclick="HesaplaVeGuncelle" disabled="@(!puantajListesi.Any() || isLoading)">
+                            @if (isLoading)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-calculator me-1"></i>
+                            }
+                            Hesapla
                         </button>
                     </div>
                 </div>
@@ -276,6 +291,7 @@
                                 <th class="text-center bg-light" style="min-width: 40px;" title="Mazeret">M</th>
                                 <th class="text-center bg-light" style="min-width: 50px;" title="Fazla Mesai">FM</th>
                                 <th class="text-center bg-light" style="min-width: 110px;" title="Onay Durumu">Onay</th>
+                                <th class="text-center bg-light" style="min-width: 105px;" title="Net Ödeme">Net ₺</th>
                                 <th class="text-center bg-light" style="min-width: 120px;" title="İşlem">İşlem</th>
                             </tr>
                         </thead>
@@ -387,6 +403,19 @@
                                         }
                                     </td>
                                     <td class="text-center">
+                                        <div>
+                                            <span class="fw-bold text-dark" style="font-size:0.75rem;">@puantaj.NetOdeme.ToString("N0") ₺</span>
+                                            @if (puantaj.BrutMaas > 0 && puantaj.BrutMaas != puantaj.NetOdeme)
+                                            {
+                                                <br /><small class="text-muted" style="font-size:0.6rem;">Brüt: @puantaj.BrutMaas.ToString("N0") ₺</small>
+                                            }
+                                            @if (puantaj.Odendi)
+                                            {
+                                                <br /><span class="badge bg-success" style="font-size:0.55rem;">Ödendi</span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
                                         <div class="btn-group btn-group-sm">
                                             @if (puantaj.OnayDurumu == PersonelPuantajOnayDurumu.Taslak || puantaj.OnayDurumu == PersonelPuantajOnayDurumu.Reddedildi)
                                             {
@@ -446,6 +475,7 @@
                                     <td class="text-center text-danger">@filtrelenmisListe.Sum(p => p.MazeretGunu)</td>
                                     <td class="text-center text-info">@filtrelenmisListe.Sum(p => p.FazlaMesaiSaat).ToString("0.#")</td>
                                     <td class="text-center">@filtrelenmisListe.Count(p => p.OnayDurumu == PersonelPuantajOnayDurumu.Onaylandi)</td>
+                                    <td class="text-center fw-bold text-dark" style="font-size:0.75rem;">@filtrelenmisListe.Sum(p => p.NetOdeme).ToString("N0") ₺</td>
                                     <td class="text-center">
                                         @{
                                             var toplamSaat = filtrelenmisListe
@@ -1662,6 +1692,22 @@
         }
     }
 
+    private async Task VakifbankExport()
+    {
+        try
+        {
+            var bytes = await PuantajService.ExportVakifbankOdemeListesiAsync(filtreFirmaId, filtreYil, filtreAy);
+            var base64 = Convert.ToBase64String(bytes);
+            var fileName = $"Vakifbank_Odeme_{GetAyAdi(filtreAy)}_{filtreYil}.xlsx";
+            await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, base64);
+            ShowBildirim("Başarılı", "Vakıfbank ödeme listesi indirildi.", "success");
+        }
+        catch (Exception ex)
+        {
+            ShowBildirim("Hata", $"Vakıfbank export hatası: {ex.Message}", "danger");
+        }
+    }
+
     private void ModalKapat()
     {
         showModal = false;
@@ -1687,6 +1733,33 @@
 
         await YenileAsync();
         ShowBildirim("Başarılı", $"{adaylar.Count} puantaj kaydı onaya gönderildi.", "success");
+    }
+
+    private async Task TopluOnayla()
+    {
+        var adaylar = filtrelenmisListe
+            .Where(p => p.OnayDurumu == PersonelPuantajOnayDurumu.OnayBekliyor)
+            .ToList();
+
+        if (!adaylar.Any())
+        {
+            ShowBildirim("Bilgi", "Onaylanacak puantaj bulunamadı.", "info");
+            return;
+        }
+
+        var onay = await JS.InvokeAsync<bool>("confirm", $"{adaylar.Count} adet puantaj onaylanacak. Devam edilsin mi?");
+        if (!onay) return;
+
+        var aktifKullanici = await KullaniciService.GetAktifKullaniciAsync();
+        var onaylayan = aktifKullanici?.AdSoyad ?? aktifKullanici?.KullaniciAdi ?? "Sistem";
+
+        foreach (var puantaj in adaylar)
+        {
+            await PuantajService.OnaylaAsync(puantaj.Id, onaylayan);
+        }
+
+        await YenileAsync();
+        ShowBildirim("Başarılı", $"{adaylar.Count} puantaj onaylandı.", "success");
     }
 
     private async Task OnayaGonder(int puantajId)

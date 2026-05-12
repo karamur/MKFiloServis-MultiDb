@@ -1,4 +1,4 @@
-@page "/servis-operasyon/puantaj/{Id:int}"
+﻿@page "/servis-operasyon/puantaj/{Id:int}"
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
 @using KOAFiloServis.Shared.Entities
@@ -96,7 +96,7 @@
             }
         </div>
 
-        @* Ödeme düzenle formu *@
+        @* Puantaj düzenle formu *@
         @if (!string.IsNullOrEmpty(mesaj))
         {
             <div class="alert alert-success py-2 alert-dismissible">
@@ -104,6 +104,91 @@
                 <button type="button" class="btn-close" @onclick='() => mesaj = null'></button>
             </div>
         }
+
+        @* Puantaj Bilgileri Düzenleme *@
+        <div class="card shadow-sm mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center py-2 bg-light">
+                <span><i class="bi bi-pencil-square me-1"></i>Puantaj Bilgileri</span>
+                @if (!puantajDuzenlemeAcik)
+                {
+                    <button class="btn btn-sm btn-outline-primary" @onclick="() => PuantajDuzenlemeAc()"
+                            disabled="@(puantaj.Durum == ServisPuantajDurum.Kapandi)">
+                        <i class="bi bi-pencil me-1"></i>Düzenle
+                    </button>
+                }
+            </div>
+            <div class="card-body py-2">
+                @if (puantajDuzenlemeAcik)
+                {
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Çalışma Sayısı (@(puantaj.ServisKontrat != null ? GetFiyatTipText(puantaj.ServisKontrat.TahsilatTip) : "adet"))</label>
+                            <input type="number" class="form-control form-control-sm" @bind="editCalismaSayisi" step="0.5" min="0" @oninput="CalismaSayisiDegisti" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Tahsilat Birim Fiyat (₺)</label>
+                            <input type="number" class="form-control form-control-sm" @bind="editTahsilatBirimFiyat" step="0.01" min="0" @oninput="CalismaSayisiDegisti" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Tahsilat Toplam (₺)</label>
+                            <input type="number" class="form-control form-control-sm" @bind="editTahsilatToplam" step="0.01" min="0" />
+                            <small class="text-muted">Hesaplanan: @((editCalismaSayisi * editTahsilatBirimFiyat).ToString("N2")) ₺</small>
+                        </div>
+                        @if (puantaj.ServisKontrat?.Tip == ServisKontratTip.Tedarikci)
+                        {
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Ödeme Toplam (₺)</label>
+                                <input type="number" class="form-control form-control-sm" @bind="editOdemeToplam" step="0.01" min="0" />
+                            </div>
+                        }
+                        <div class="col-12">
+                            <label class="form-label small">Notlar</label>
+                            <input class="form-control form-control-sm" @bind="editNotlar" placeholder="Açıklama..." />
+                        </div>
+                        <div class="col-12 text-end">
+                            <button class="btn btn-sm btn-secondary me-2" @onclick="() => puantajDuzenlemeAcik = false">İptal</button>
+                            <button class="btn btn-sm btn-primary" @onclick="PuantajBilgiKaydet">
+                                <i class="bi bi-check me-1"></i>Kaydet
+                            </button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="row g-2 text-center">
+                        <div class="col-md-3">
+                            <small class="text-muted d-block">Çalışma Sayısı</small>
+                            <strong>@puantaj.CalismaSayisi.ToString("N1")</strong>
+                            <small class="text-muted d-block">@(puantaj.ServisKontrat != null ? GetFiyatTipText(puantaj.ServisKontrat.TahsilatTip) : "")</small>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted d-block">Birim Fiyat</small>
+                            <strong>@puantaj.TahsilatBirimFiyat.ToString("N2") ₺</strong>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted d-block">Tahsilat Tutarı</small>
+                            <strong class="text-primary">@puantaj.TahsilatToplam.ToString("N2") ₺</strong>
+                        </div>
+                        @if (puantaj.OdemeToplam.HasValue)
+                        {
+                            <div class="col-md-3">
+                                <small class="text-muted d-block">Ödeme Tutarı</small>
+                                <strong class="text-danger">@puantaj.OdemeToplam.Value.ToString("N2") ₺</strong>
+                                <small class="text-success d-block">Kâr: @((puantaj.TahsilatToplam - puantaj.OdemeToplam.Value).ToString("N2")) ₺</small>
+                            </div>
+                        }
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(puantaj.Notlar))
+                    {
+                        <div class="mt-2 p-2 bg-light rounded small text-muted">
+                            <i class="bi bi-chat-text me-1"></i>@puantaj.Notlar
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        @* Ödeme düzenle formu *@
 
         <div class="row g-3">
             @* Tahsilatlar *@
@@ -318,6 +403,14 @@
     private ServisTahsilat yeniTahsilat = new();
     private ServisOdeme yeniOdeme = new();
 
+    // Puantaj bilgileri düzenleme
+    private bool puantajDuzenlemeAcik = false;
+    private decimal editCalismaSayisi = 0;
+    private decimal editTahsilatBirimFiyat = 0;
+    private decimal editTahsilatToplam = 0;
+    private decimal? editOdemeToplam = null;
+    private string? editNotlar = null;
+
     private decimal tahsilEdilen => puantaj?.Tahsilatlar.Where(t => t.Tahsil && !t.IsDeleted).Sum(t => t.Tutar) ?? 0;
     private decimal odenen => puantaj?.Odemeler.Where(o => o.Odendi && !o.IsDeleted).Sum(o => o.Tutar) ?? 0;
 
@@ -329,6 +422,37 @@
     }
 
     private async Task Yukle() => puantaj = await KontratService.GetPuantajAsync(Id);
+
+    private void PuantajDuzenlemeAc()
+    {
+        if (puantaj == null) return;
+        editCalismaSayisi = puantaj.CalismaSayisi;
+        editTahsilatBirimFiyat = puantaj.TahsilatBirimFiyat;
+        editTahsilatToplam = puantaj.TahsilatToplam;
+        editOdemeToplam = puantaj.OdemeToplam;
+        editNotlar = puantaj.Notlar;
+        puantajDuzenlemeAcik = true;
+    }
+
+    private void CalismaSayisiDegisti()
+    {
+        if (editTahsilatBirimFiyat > 0)
+            editTahsilatToplam = editCalismaSayisi * editTahsilatBirimFiyat;
+    }
+
+    private async Task PuantajBilgiKaydet()
+    {
+        if (puantaj == null) return;
+        puantaj.CalismaSayisi = editCalismaSayisi;
+        puantaj.TahsilatBirimFiyat = editTahsilatBirimFiyat;
+        puantaj.TahsilatToplam = editTahsilatToplam;
+        puantaj.OdemeToplam = editOdemeToplam;
+        puantaj.Notlar = editNotlar;
+        await KontratService.UpdatePuantajAsync(puantaj);
+        puantajDuzenlemeAcik = false;
+        await Yukle();
+        mesaj = "Puantaj bilgileri güncellendi.";
+    }
 
     private async Task Onayla()
     {
