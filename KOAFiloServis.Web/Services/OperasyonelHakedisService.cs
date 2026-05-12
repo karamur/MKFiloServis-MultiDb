@@ -349,4 +349,116 @@ public class OperasyonelHakedisService : IOperasyonelHakedisService
             MevcutHakedisDurum: mevcut?.Durum
         );
     }
+
+    public async Task<TopluHakedisSonuc> TopluUretAsync(HakedisTipi tip, int yil, int ay, int? sirketId = null)
+    {
+        if (yil < 2000 || ay < 1 || ay > 12)
+            throw new ArgumentException("Geçersiz dönem (yıl/ay).");
+
+        var donemBas = new DateTime(yil, ay, 1);
+        var donemSon = donemBas.AddMonths(1);
+
+        // 1) Dönem puantajlarından distinct referans id'leri çek
+        List<int> referansIds;
+        Dictionary<int, string> referansAdlari = new();
+
+        await using (var ctx = await _contextFactory.CreateDbContextAsync())
+        {
+            switch (tip)
+            {
+                case HakedisTipi.Kurum:
+                    referansIds = await ctx.FiloGunlukPuantajlar
+                        .Where(p => p.Tarih >= donemBas && p.Tarih < donemSon)
+                        .Select(p => p.KurumFirmaId)
+                        .Distinct()
+                        .ToListAsync();
+                    referansAdlari = await ctx.Firmalar
+                        .Where(f => referansIds.Contains(f.Id))
+                        .ToDictionaryAsync(f => f.Id, f => f.FirmaAdi);
+                    break;
+
+                case HakedisTipi.Tedarikci:
+                    referansIds = await ctx.FiloGunlukPuantajlar
+                        .Where(p => p.Tarih >= donemBas && p.Tarih < donemSon
+                                    && p.Arac != null
+                                    && p.Arac.SahiplikTipi == AracSahiplikTipi.Tedarikci
+                                    && p.Arac.TasimaTedarikciId != null)
+                        .Select(p => p.Arac!.TasimaTedarikciId!.Value)
+                        .Distinct()
+                        .ToListAsync();
+                    referansAdlari = await ctx.TasimaTedarikciler
+                        .Where(t => referansIds.Contains(t.Id))
+                        .ToDictionaryAsync(t => t.Id, t => t.Unvan);
+                    break;
+
+                case HakedisTipi.Arac:
+                    referansIds = await ctx.FiloGunlukPuantajlar
+                        .Where(p => p.Tarih >= donemBas && p.Tarih < donemSon)
+                        .Select(p => p.AracId)
+                        .Distinct()
+                        .ToListAsync();
+                    referansAdlari = await ctx.Araclar
+                        .Where(a => referansIds.Contains(a.Id))
+                        .ToDictionaryAsync(a => a.Id, a => a.Plaka);
+                    break;
+
+                default:
+                    referansIds = new List<int>();
+                    break;
+            }
+        }
+
+        var satirlar = new List<TopluHakedisSatir>();
+        int uretilen = 0, atlanan = 0, hatali = 0;
+        decimal toplamTutar = 0m;
+
+        foreach (var refId in referansIds)
+        {
+            var ad = referansAdlari.TryGetValue(refId, out var n) ? n : $"#{refId}";
+
+            // Mevcut Onaylı/Faturalı/Tahsil/Ödendi kayıt varsa atla
+            await using (var ctx = await _contextFactory.CreateDbContextAsync())
+            {
+                var mevcut = await ctx.Hakedisler
+                    .Where(h => h.Tip == tip && h.ReferansId == refId && h.Yil == yil && h.Ay == ay
+                                && h.Durum != HakedisDurum.Iptal && h.Durum != HakedisDurum.Taslak)
+                    .Select(h => new { h.Id, h.Durum })
+                    .FirstOrDefaultAsync();
+
+                if (mevcut != null)
+                {
+                    atlanan++;
+                    satirlar.Add(new TopluHakedisSatir(
+                        refId, ad, "Atlandı",
+                        $"Mevcut {mevcut.Durum} hakediş (#{mevcut.Id}) bulunduğu için atlandı.",
+                        mevcut.Id, 0m, 0m));
+                    continue;
+                }
+            }
+
+            try
+            {
+                var h = await UretInternalAsync(tip, refId, yil, ay, sirketId);
+                uretilen++;
+                toplamTutar += h.GenelToplam;
+                satirlar.Add(new TopluHakedisSatir(
+                    refId, ad, "Üretildi", null, h.Id, h.GenelToplam, h.ToplamSeferSayisi));
+            }
+            catch (Exception ex)
+            {
+                hatali++;
+                satirlar.Add(new TopluHakedisSatir(
+                    refId, ad, "Hata", ex.GetBaseException().Message, null, 0m, 0m));
+            }
+        }
+
+        return new TopluHakedisSonuc(
+            ToplamReferans: referansIds.Count,
+            UretilenAdet: uretilen,
+            AtlananAdet: atlanan,
+            HataliAdet: hatali,
+            ToplamTutar: toplamTutar,
+            Satirlar: satirlar.OrderByDescending(s => s.Tutar).ToList()
+        );
+    }
 }

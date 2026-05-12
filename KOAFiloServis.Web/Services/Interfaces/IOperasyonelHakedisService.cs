@@ -48,6 +48,13 @@ public interface IOperasyonelHakedisService
     /// Hakediş üretmeden önce tahmini değerleri döndürür (puantaj sayısı, sefer, tutar, çakışma uyarısı).
     /// </summary>
     Task<HakedisOnizleme> OnizleAsync(HakedisTipi tip, int referansId, int yil, int ay);
+
+    /// <summary>
+    /// Verilen dönem ve tip için, dönem puantajlarında geçen tüm referansları (Kurum/Tedarikçi/Araç)
+    /// tespit edip her biri için ayrı hakediş üretir. Mevcut Onaylı/Faturalı kayıtlar atlanır,
+    /// Taslak kayıtların üzerine yazılır.
+    /// </summary>
+    Task<TopluHakedisSonuc> TopluUretAsync(HakedisTipi tip, int yil, int ay, int? sirketId = null);
 }
 
 /// <summary>Hakediş üretim önizleme sonucu.</summary>
@@ -59,4 +66,24 @@ public record HakedisOnizleme(
     bool MevcutOnayliVar,
     int? MevcutHakedisId,
     HakedisDurum? MevcutHakedisDurum
+);
+
+/// <summary>Toplu hakediş üretim sonucu.</summary>
+public record TopluHakedisSonuc(
+    int ToplamReferans,
+    int UretilenAdet,
+    int AtlananAdet,
+    int HataliAdet,
+    decimal ToplamTutar,
+    List<TopluHakedisSatir> Satirlar
+);
+
+public record TopluHakedisSatir(
+    int ReferansId,
+    string ReferansAd,
+    string Sonuc,        // "Üretildi" | "Atlandı" | "Hata"
+    string? Mesaj,
+    int? HakedisId,
+    decimal Tutar,
+    decimal Sefer
 );
