@@ -1,4 +1,4 @@
-﻿@page "/operasyonel-hakedis"
+@page "/operasyonel-hakedis"
 @using System.IO
 @using System.IO.Compression
 @using ClosedXML.Excel
@@ -13,6 +13,7 @@
 @inject IToastService ToastService
 @inject IJSRuntime JS
 @inject IPdfService PdfService
+@inject NavigationManager Nav
 @attribute [Authorize]
 
 <PageTitle>Operasyonel Hakediş</PageTitle>
@@ -248,6 +249,12 @@
                                             {
                                                 <button class="btn btn-outline-primary" title="Faturaya Dönüştür" @onclick="() => FaturayaDonustur(h)">
                                                     <i class="bi bi-receipt"></i>
+                                                </button>
+                                            }
+                                            @if (h.Durum == HakedisDurum.Faturalandi && h.FaturaId.HasValue)
+                                            {
+                                                <button class="btn btn-outline-info" title="Faturayı Aç" @onclick="() => FaturaAc(h)">
+                                                    <i class="bi bi-box-arrow-up-right"></i>
                                                 </button>
                                             }
                                             @if (h.Durum != HakedisDurum.Faturalandi && h.Durum != HakedisDurum.Iptal)
@@ -1222,9 +1229,15 @@
         {
             var f = await HakedisService.FaturayaDonustureAsync(h.Id, DateTime.Today);
             ToastService.ShowSuccess($"Fatura oluşturuldu: {f.FaturaNo}");
-            await LoadAsync();
+            Nav.NavigateTo($"/faturalar/{f.Id}");
         }
         catch (Exception ex) { ToastService.ShowError(ex.Message); }
+    }
+
+    private void FaturaAc(Hakedis h)
+    {
+        if (h.FaturaId.HasValue)
+            Nav.NavigateTo($"/faturalar/{h.FaturaId.Value}");
     }
 
     private async Task DetayAc(Hakedis h)
@@ -1644,3 +1657,10 @@
         _ => "bg-light text-dark"
     };
 }
+
+
+
+
+
+
+
