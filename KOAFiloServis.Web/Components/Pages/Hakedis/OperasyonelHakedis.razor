@@ -198,19 +198,19 @@
                                            checked="@TumuSecili"
                                            @onchange="OnTumuSecChanged" />
                                 </th>
-                                <th>Dönem</th>
-                                <th>Tip</th>
-                                <th>Referans</th>
-                                <th class="text-end">Sefer</th>
-                                <th class="text-end">Tutar</th>
-                                <th class="text-end">KDV</th>
-                                <th class="text-end">Genel Toplam</th>
-                                <th>Durum</th>
+                                <th class="user-select-none" style="cursor:pointer;" @onclick='() => SiralamaDegistir("Donem")'>Dönem @SiralamaIkon("Donem")</th>
+                                <th class="user-select-none" style="cursor:pointer;" @onclick='() => SiralamaDegistir("Tip")'>Tip @SiralamaIkon("Tip")</th>
+                                <th class="user-select-none" style="cursor:pointer;" @onclick='() => SiralamaDegistir("Referans")'>Referans @SiralamaIkon("Referans")</th>
+                                <th class="text-end user-select-none" style="cursor:pointer;" @onclick='() => SiralamaDegistir("Sefer")'>Sefer @SiralamaIkon("Sefer")</th>
+                                <th class="text-end user-select-none" style="cursor:pointer;" @onclick='() => SiralamaDegistir("Tutar")'>Tutar @SiralamaIkon("Tutar")</th>
+                                <th class="text-end user-select-none" style="cursor:pointer;" @onclick='() => SiralamaDegistir("Kdv")'>KDV @SiralamaIkon("Kdv")</th>
+                                <th class="text-end user-select-none" style="cursor:pointer;" @onclick='() => SiralamaDegistir("GenelToplam")'>Genel Toplam @SiralamaIkon("GenelToplam")</th>
+                                <th class="user-select-none" style="cursor:pointer;" @onclick='() => SiralamaDegistir("Durum")'>Durum @SiralamaIkon("Durum")</th>
                                 <th class="text-center" style="width:240px;">İşlemler</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var h in hakedisler)
+                            @foreach (var h in SiraliHakedisler)
                             {
                                 <tr class="@(seciliIds.Contains(h.Id) ? "table-active" : null)">
                                     <td class="text-center">
@@ -743,6 +743,56 @@
     private List<Firma> firmalar = new();
     private List<TasimaTedarikci> tedarikciler = new();
     private List<Arac> araclar = new();
+
+    // Sıralama state
+    private string siralamaKolon = "Donem";
+    private bool siralamaAzalan = true;
+
+    private IEnumerable<Hakedis> SiraliHakedisler
+    {
+        get
+        {
+            IEnumerable<Hakedis> q = hakedisler;
+            q = siralamaKolon switch
+            {
+                "Donem" => siralamaAzalan
+                    ? q.OrderByDescending(h => h.Yil).ThenByDescending(h => h.Ay).ThenByDescending(h => h.Id)
+                    : q.OrderBy(h => h.Yil).ThenBy(h => h.Ay).ThenBy(h => h.Id),
+                "Tip" => Sirala(q, h => h.Tip.ToString()),
+                "Referans" => Sirala(q, h => ReferansAdi(h)),
+                "Sefer" => Sirala(q, h => h.ToplamSeferSayisi),
+                "Tutar" => Sirala(q, h => h.Tutar),
+                "Kdv" => Sirala(q, h => h.KdvTutar),
+                "GenelToplam" => Sirala(q, h => h.GenelToplam),
+                "Durum" => Sirala(q, h => h.Durum.ToString()),
+                _ => q
+            };
+            return q;
+        }
+    }
+
+    private IOrderedEnumerable<Hakedis> Sirala<TKey>(IEnumerable<Hakedis> q, Func<Hakedis, TKey> selector)
+        => siralamaAzalan ? q.OrderByDescending(selector) : q.OrderBy(selector);
+
+    private void SiralamaDegistir(string kolon)
+    {
+        if (siralamaKolon == kolon)
+            siralamaAzalan = !siralamaAzalan;
+        else
+        {
+            siralamaKolon = kolon;
+            siralamaAzalan = false;
+        }
+    }
+
+    private MarkupString SiralamaIkon(string kolon)
+    {
+        if (siralamaKolon != kolon)
+            return new MarkupString("<i class=\"bi bi-arrow-down-up text-muted small ms-1\"></i>");
+        return new MarkupString(siralamaAzalan
+            ? "<i class=\"bi bi-arrow-down small ms-1\"></i>"
+            : "<i class=\"bi bi-arrow-up small ms-1\"></i>");
+    }
 
     protected override async Task OnInitializedAsync()
     {
