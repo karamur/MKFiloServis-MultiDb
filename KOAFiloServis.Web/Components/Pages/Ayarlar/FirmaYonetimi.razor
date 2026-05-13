@@ -41,6 +41,36 @@
         </div>
     }
 
+    @if (!isLoading && firmalar.Any())
+    {
+        <div class="card mb-3">
+            <div class="card-body py-2">
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-4">
+                        <input type="text" class="form-control form-control-sm" placeholder="Ara: ad, ünvan, vergi no..." @bind="aramaMetni" @bind:event="oninput" />
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-select form-select-sm" @bind="durumFiltre">
+                            <option value="">Tümü (Aktif + Pasif)</option>
+                            <option value="aktif">Yalnızca Aktif</option>
+                            <option value="pasif">Yalnızca Pasif</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-select form-select-sm" @bind="cariFiltre">
+                            <option value="">Cari: Hepsi</option>
+                            <option value="eksik">Yalnızca Cari Eksik</option>
+                            <option value="atanmis">Yalnızca Cari Atanmış</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 text-muted small">
+                        Gösterilen: <strong>@FiltreliFirmalar.Count</strong> / @firmalar.Count
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
     @if (isLoading)
     {
         <div class="text-center py-5">
@@ -50,7 +80,7 @@
     else
     {
         <div class="row g-3">
-            @foreach (var firma in firmalar)
+            @foreach (var firma in FiltreliFirmalar)
             {
                 <div class="col-md-6 col-lg-4">
                     <div class="card h-100 @(firma.VarsayilanFirma ? "border-primary" : "")">
@@ -315,6 +345,29 @@
     private string? logoHata;
     private int? atamaYukleniyorFirmaId;
     private bool topluAtaYukleniyor = false;
+    private string aramaMetni = string.Empty;
+    private string durumFiltre = string.Empty;
+    private string cariFiltre = string.Empty;
+
+    private List<Firma> FiltreliFirmalar => firmalar
+        .Where(f => string.IsNullOrWhiteSpace(aramaMetni)
+            || (f.FirmaAdi?.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (f.UnvanTam?.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (f.VergiNo?.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (f.FirmaKodu?.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase) ?? false))
+        .Where(f => durumFiltre switch
+        {
+            "aktif" => f.Aktif,
+            "pasif" => !f.Aktif,
+            _ => true
+        })
+        .Where(f => cariFiltre switch
+        {
+            "eksik" => f.CariId == null,
+            "atanmis" => f.CariId != null,
+            _ => true
+        })
+        .ToList();
 
     private async Task TumOnerileriAtaFirma()
     {
@@ -327,13 +380,24 @@
                 .Where(x => x.Oneri != null)
                 .ToList();
             int basarili = 0;
+            int hata = 0;
             foreach (var h in hedefler)
             {
-                h.Firma.CariId = h.Oneri!.Id;
-                await FirmaService.UpdateAsync(h.Firma);
-                basarili++;
+                try
+                {
+                    h.Firma.CariId = h.Oneri!.Id;
+                    await FirmaService.UpdateAsync(h.Firma);
+                    basarili++;
+                }
+                catch
+                {
+                    hata++;
+                }
             }
-            ToastService.ShowSuccess($"{basarili} firma için Cari ataması yapıldı.");
+            if (basarili > 0)
+                ToastService.ShowSuccess($"{basarili} firma için Cari ataması yapıldı.");
+            if (hata > 0)
+                ToastService.ShowError($"{hata} firma ataması başarısız.");
             await YenileAsync();
         }
         catch (Exception ex)
