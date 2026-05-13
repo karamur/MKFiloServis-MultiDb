@@ -392,6 +392,14 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(e => e.SirketId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // Cari -> Firma (FirmaId) ilişkisini EXPLICIT tanımla.
+            // Aksi halde Firma.CariId tarafındaki HasOne<Cari>().WithMany() Cari.Firma navigation'ını
+            // o ilişkiye bağlayıp shadow "FirmaId1" sütunu üretebiliyor.
+            entity.HasOne(e => e.Firma)
+                .WithMany()
+                .HasForeignKey(e => e.FirmaId)
+                .OnDelete(DeleteBehavior.SetNull);
+
             // Global Query Filter: IsDeleted + Multi-tenant
             entity.HasQueryFilter(e => !e.IsDeleted && 
                 (TenantFilterDisabled || e.SirketId == null || e.SirketId == TenantId));
