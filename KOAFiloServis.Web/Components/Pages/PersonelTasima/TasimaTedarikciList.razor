@@ -217,6 +217,20 @@
                                 <span class="badge bg-warning-subtle text-warning border border-warning" title="Cari bağlantısı yok - mutabakat çalışmaz">
                                     <i class="bi bi-exclamation-triangle"></i> Eksik
                                 </span>
+                                var oneri = OneriCariBul(t);
+                                if (oneri != null)
+                                {
+                                    <button class="btn btn-sm btn-outline-success ms-1 py-0"
+                                            title="@($"Öneri: {oneri.CariKodu} - {oneri.Unvan}")"
+                                            disabled="@(atamaYukleniyorId == t.Id)"
+                                            @onclick="() => OneriyiAta(t, oneri)">
+                                        @if (atamaYukleniyorId == t.Id)
+                                        { <span class="spinner-border spinner-border-sm"></span> }
+                                        else
+                                        { <i class="bi bi-magic"></i> }
+                                        <span class="small">Ata: @oneri.CariKodu</span>
+                                    </button>
+                                }
                             }
                         </td>
                         <td class="text-center">@(personelSayilari.GetValueOrDefault(t.Id))</td>
@@ -268,6 +282,40 @@
     private bool yukleniyor = true;
     private string aramaMetni = string.Empty;
     private string durumFiltre = string.Empty;
+    private int? atamaYukleniyorId;
+
+    private Cari? OneriCariBul(TasimaTedarikci t)
+    {
+        if (cariler.Count == 0) return null;
+        if (!string.IsNullOrWhiteSpace(t.VergiNo))
+        {
+            var v = cariler.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c.VergiNo)
+                && string.Equals(c.VergiNo!.Trim(), t.VergiNo!.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (v != null) return v;
+        }
+        if (!string.IsNullOrWhiteSpace(t.Unvan))
+        {
+            var u = cariler.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c.Unvan)
+                && string.Equals(c.Unvan!.Trim(), t.Unvan!.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (u != null) return u;
+        }
+        return null;
+    }
+
+    private async Task OneriyiAta(TasimaTedarikci t, Cari c)
+    {
+        try
+        {
+            atamaYukleniyorId = t.Id;
+            t.CariId = c.Id;
+            t.Cari = c;
+            await TedarikciService.UpdateAsync(t);
+        }
+        finally
+        {
+            atamaYukleniyorId = null;
+        }
+    }
 
     private List<Cari> FiltreliCariler => string.IsNullOrWhiteSpace(cariArama)
         ? new()
