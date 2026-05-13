@@ -1,10 +1,13 @@
 ﻿@page "/puantaj/mutabakat"
+@using System.Text
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
 @using KOAFiloServis.Web.Services.Interfaces
+@using Microsoft.JSInterop
 @inject IPuantajEslestirmeService EslestirmeService
 @inject IFirmaService FirmaService
 @inject IToastService ToastService
+@inject IJSRuntime JS
 @rendermode InteractiveServer
 
 <PageTitle>Puantaj-Fatura Mutabakat</PageTitle>
@@ -12,6 +15,9 @@
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h3><i class="bi bi-clipboard-data me-2"></i>Puantaj ↔ Fatura Mutabakat</h3>
+        <button class="btn btn-success btn-sm" @onclick="ExportCsv" disabled="@(!HasData)">
+            <i class="bi bi-file-earmark-spreadsheet me-1"></i> CSV / Excel İndir
+        </button>
     </div>
 
     <div class="card mb-3">
@@ -81,7 +87,7 @@
                     <tbody>
                         @foreach (var r in cariRows)
                         {
-                            <tr class="@DurumClass(r.Fark)">
+                            <tr class="@DurumClass(r.Fark)" style="cursor:pointer" @onclick="() => CariDetayAc(r)">
                                 <td>@r.CariUnvan</td>
                                 <td class="text-end">@r.TahakkukEdenTutar.ToString("N2")</td>
                                 <td class="text-end">@r.KesilenFaturaTutari.ToString("N2")</td>
@@ -134,7 +140,7 @@
                     <tbody>
                         @foreach (var r in tedarikciRows)
                         {
-                            <tr class="@DurumClass(r.Fark)">
+                            <tr class="@DurumClass(r.Fark)" style="cursor:pointer" @onclick="() => TedarikciDetayAc(r)">
                                 <td>@r.TedarikciUnvan</td>
                                 <td class="text-end">@r.TahakkukEdenTutar.ToString("N2")</td>
                                 <td class="text-end">@r.GelenFaturaTutari.ToString("N2")</td>
@@ -167,6 +173,117 @@
     }
 </div>
 
+@* ====================== DETAY MODAL ====================== *@
+@if (detayAcik && detay != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)" @onclick="DetayKapat">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable" @onclick:stopPropagation="true">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-zoom-in me-2"></i>Mutabakat Detayı: <strong>@detay.Baslik</strong>
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="DetayKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-4">
+                            <div class="card border-primary">
+                                <div class="card-body p-2 text-center">
+                                    <div class="small text-muted">Tahakkuk (Puantaj)</div>
+                                    <div class="h5 mb-0 text-primary">@detay.TahakkukToplam.ToString("N2")</div>
+                                    <div class="small">@detay.Puantajlar.Count adet</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-info">
+                                <div class="card-body p-2 text-center">
+                                    <div class="small text-muted">Fatura</div>
+                                    <div class="h5 mb-0 text-info">@detay.FaturaToplam.ToString("N2")</div>
+                                    <div class="small">@detay.Faturalar.Count adet</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-@(detay.Fark == 0 ? "success" : "danger")">
+                                <div class="card-body p-2 text-center">
+                                    <div class="small text-muted">Fark</div>
+                                    <div class="h5 mb-0 text-@(detay.Fark == 0 ? "success" : "danger")">@detay.Fark.ToString("N2")</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-7">
+                            <h6><i class="bi bi-calendar2-check me-1"></i> Puantaj Kayıtları</h6>
+                            <div style="max-height:50vh; overflow-y:auto">
+                                <table class="table table-sm table-striped">
+                                    <thead class="table-light"><tr><th>Tarih</th><th>Araç</th><th>Şoför</th><th>Güzergah</th><th class="text-end">Sefer</th><th class="text-end">Tutar</th><th>Fat.</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var p in detay.Puantajlar)
+                                        {
+                                            <tr>
+                                                <td>@p.Tarih.ToString("dd.MM")</td>
+                                                <td><small>@p.AracPlaka</small></td>
+                                                <td><small>@p.Sofor</small></td>
+                                                <td><small>@p.Guzergah</small></td>
+                                                <td class="text-end">@p.SeferSayisi</td>
+                                                <td class="text-end">@p.Tutar.ToString("N2")</td>
+                                                <td>
+                                                    @if (p.Faturalandi)
+                                                    { <span class="badge bg-success">✓</span> }
+                                                    else
+                                                    { <span class="badge bg-secondary">-</span> }
+                                                </td>
+                                            </tr>
+                                        }
+                                        @if (detay.Puantajlar.Count == 0)
+                                        { <tr><td colspan="7" class="text-center text-muted">Puantaj kaydı yok</td></tr> }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="col-md-5">
+                            <h6><i class="bi bi-receipt me-1"></i> Faturalar</h6>
+                            <div style="max-height:50vh; overflow-y:auto">
+                                <table class="table table-sm table-striped">
+                                    <thead class="table-light"><tr><th>Tarih</th><th>Fatura No</th><th class="text-end">Tutar</th><th>Bağlı</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var f in detay.Faturalar)
+                                        {
+                                            <tr>
+                                                <td>@f.Tarih.ToString("dd.MM")</td>
+                                                <td><small>@f.FaturaNo</small></td>
+                                                <td class="text-end">@f.Tutar.ToString("N2")</td>
+                                                <td>
+                                                    @if (f.PuantajaBagli)
+                                                    { <span class="badge bg-success">✓</span> }
+                                                    else
+                                                    { <span class="badge bg-warning text-dark">?</span> }
+                                                </td>
+                                            </tr>
+                                        }
+                                        @if (detay.Faturalar.Count == 0)
+                                        { <tr><td colspan="4" class="text-center text-muted">Fatura yok</td></tr> }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-success" @onclick="ExportDetayCsv">
+                        <i class="bi bi-file-earmark-spreadsheet me-1"></i> Detayı CSV İndir
+                    </button>
+                    <button class="btn btn-secondary" @onclick="DetayKapat">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private int firmaId = 0;
     private DateTime baslangic = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
@@ -176,6 +293,11 @@
     private List<Firma> firmalar = new();
     private List<CariFaturaMutabakatRow> cariRows = new();
     private List<TasimaTedarikciMutabakatRow> tedarikciRows = new();
+
+    private bool detayAcik = false;
+    private MutabakatDetay? detay;
+
+    private bool HasData => cariRows.Count > 0 || tedarikciRows.Count > 0;
 
     protected override async Task OnInitializedAsync()
     {
@@ -189,6 +311,70 @@
         cariRows = await EslestirmeService.GetCariMutabakatAsync(firmaId, baslangic, bitis);
         tedarikciRows = await EslestirmeService.GetTasimaTedarikciMutabakatAsync(firmaId, baslangic, bitis);
         ToastService.ShowSuccess($"Mutabakat hesaplandı: {cariRows.Count} cari, {tedarikciRows.Count} tedarikçi.");
+    }
+
+    private async Task CariDetayAc(CariFaturaMutabakatRow r)
+    {
+        detay = await EslestirmeService.GetCariMutabakatDetayAsync(firmaId, r.CariId, baslangic, bitis);
+        detayAcik = true;
+    }
+    private async Task TedarikciDetayAc(TasimaTedarikciMutabakatRow r)
+    {
+        detay = await EslestirmeService.GetTasimaTedarikciMutabakatDetayAsync(firmaId, r.TedarikciId, baslangic, bitis);
+        detayAcik = true;
+    }
+    private void DetayKapat() { detayAcik = false; detay = null; }
+
+    private async Task ExportCsv()
+    {
+        var sb = new StringBuilder();
+        // UTF-8 BOM Excel için
+        sb.Append('\uFEFF');
+        if (tab == "cari")
+        {
+            sb.AppendLine("Cari;Tahakkuk;Kesilen Fatura;Fark;Puantaj Sayisi;Fatura Sayisi;Durum");
+            foreach (var r in cariRows)
+                sb.AppendLine($"{Csv(r.CariUnvan)};{r.TahakkukEdenTutar:F2};{r.KesilenFaturaTutari:F2};{r.Fark:F2};{r.PuantajSayisi};{r.FaturaSayisi};{r.Durum}");
+        }
+        else
+        {
+            sb.AppendLine("Tedarikci;Tahakkuk;Gelen Fatura;Fark;Puantaj Sayisi;Fatura Sayisi;Durum");
+            foreach (var r in tedarikciRows)
+                sb.AppendLine($"{Csv(r.TedarikciUnvan)};{r.TahakkukEdenTutar:F2};{r.GelenFaturaTutari:F2};{r.Fark:F2};{r.PuantajSayisi};{r.FaturaSayisi};{r.Durum}");
+        }
+        await IndirCsv($"mutabakat_{tab}_{baslangic:yyyyMMdd}_{bitis:yyyyMMdd}.csv", sb.ToString());
+    }
+
+    private async Task ExportDetayCsv()
+    {
+        if (detay == null) return;
+        var sb = new StringBuilder();
+        sb.Append('\uFEFF');
+        sb.AppendLine($"Mutabakat Detayi - {detay.Baslik}");
+        sb.AppendLine($"Tahakkuk Toplam;{detay.TahakkukToplam:F2}");
+        sb.AppendLine($"Fatura Toplam;{detay.FaturaToplam:F2}");
+        sb.AppendLine($"Fark;{detay.Fark:F2}");
+        sb.AppendLine();
+        sb.AppendLine("PUANTAJLAR");
+        sb.AppendLine("Tarih;Arac;Sofor;Guzergah;Sefer;Tutar;Faturalandi");
+        foreach (var p in detay.Puantajlar)
+            sb.AppendLine($"{p.Tarih:dd.MM.yyyy};{Csv(p.AracPlaka)};{Csv(p.Sofor)};{Csv(p.Guzergah)};{p.SeferSayisi};{p.Tutar:F2};{(p.Faturalandi ? "Evet" : "Hayir")}");
+        sb.AppendLine();
+        sb.AppendLine("FATURALAR");
+        sb.AppendLine("Tarih;Fatura No;Tutar;Puantaja Bagli");
+        foreach (var f in detay.Faturalar)
+            sb.AppendLine($"{f.Tarih:dd.MM.yyyy};{Csv(f.FaturaNo)};{f.Tutar:F2};{(f.PuantajaBagli ? "Evet" : "Hayir")}");
+        await IndirCsv($"mutabakat_detay_{detay.Baslik}_{baslangic:yyyyMMdd}_{bitis:yyyyMMdd}.csv", sb.ToString());
+    }
+
+    private static string Csv(string? s) => string.IsNullOrEmpty(s) ? "" : s.Replace(";", ",").Replace("\r", " ").Replace("\n", " ");
+
+    private async Task IndirCsv(string fileName, string content)
+    {
+        var bytes = Encoding.UTF8.GetBytes(content);
+        var b64 = Convert.ToBase64String(bytes);
+        await JS.InvokeVoidAsync("eval",
+            $"(function(){{var a=document.createElement('a');a.href='data:text/csv;base64,{b64}';a.download='{fileName}';document.body.appendChild(a);a.click();document.body.removeChild(a);}})()");
     }
 
     private string DurumClass(decimal fark) => fark switch

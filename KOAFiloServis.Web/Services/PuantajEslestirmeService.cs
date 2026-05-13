@@ -430,4 +430,110 @@ public class PuantajEslestirmeService : IPuantajEslestirmeService
         }
         return gun;
     }
+
+    // ============== Drill-down Detay ==============
+    public async Task<MutabakatDetay> GetCariMutabakatDetayAsync(int firmaId, int cariId, DateTime baslangic, DateTime bitis)
+    {
+        await using var ctx = await _contextFactory.CreateDbContextAsync();
+        var cari = await ctx.Cariler.AsNoTracking().FirstOrDefaultAsync(c => c.Id == cariId);
+        var detay = new MutabakatDetay { Baslik = cari?.Unvan ?? "(?)" };
+        if (cari == null) return detay;
+
+        // KurumFirmaId(ler)i: Firma.FirmaAdi == Cari.Unvan eşlemesi
+        var firmaIds = await ctx.Firmalar
+            .Where(f => f.FirmaAdi.ToLower() == cari.Unvan.ToLower())
+            .Select(f => f.Id).ToListAsync();
+
+        var puantajlar = await ctx.FiloGunlukPuantajlar
+            .Include(p => p.Arac).Include(p => p.Sofor).Include(p => p.Guzergah)
+            .Where(p => p.FirmaId == firmaId
+                && p.Tarih >= baslangic && p.Tarih <= bitis
+                && !p.IsDeleted
+                && firmaIds.Contains(p.KurumFirmaId)
+                && p.TahakkukEdenKurumUcreti > 0)
+            .OrderBy(p => p.Tarih)
+            .ToListAsync();
+
+        detay.Puantajlar = puantajlar.Select(p => new MutabakatDetayPuantaj
+        {
+            Id = p.Id,
+            Tarih = p.Tarih,
+            AracPlaka = p.Arac?.AktifPlaka ?? "",
+            Sofor = p.Sofor != null ? $"{p.Sofor.Ad} {p.Sofor.Soyad}" : "",
+            Guzergah = p.Guzergah?.GuzergahAdi ?? "",
+            SeferSayisi = p.SeferSayisi,
+            Tutar = p.TahakkukEdenKurumUcreti,
+            Faturalandi = p.KurumFaturaKesildiMi,
+            FaturaId = p.KurumFaturaId
+        }).ToList();
+
+        var faturalar = await ctx.Faturalar
+            .Where(f => f.CariId == cariId && f.FaturaYonu == FaturaYonu.Giden
+                && f.FaturaTarihi >= baslangic && f.FaturaTarihi <= bitis
+                && (firmaId == 0 || f.SirketId == null || f.SirketId == firmaId))
+            .OrderBy(f => f.FaturaTarihi)
+            .ToListAsync();
+
+        var bagliFaturaIds = puantajlar.Where(p => p.KurumFaturaId.HasValue).Select(p => p.KurumFaturaId!.Value).ToHashSet();
+        detay.Faturalar = faturalar.Select(f => new MutabakatDetayFatura
+        {
+            Id = f.Id,
+            Tarih = f.FaturaTarihi,
+            FaturaNo = f.FaturaNo ?? "",
+            Tutar = f.GenelToplam,
+            PuantajaBagli = bagliFaturaIds.Contains(f.Id)
+        }).ToList();
+        return detay;
+    }
+
+    public async Task<MutabakatDetay> GetTasimaTedarikciMutabakatDetayAsync(int firmaId, int tedarikciId, DateTime baslangic, DateTime bitis)
+    {
+        await using var ctx = await _contextFactory.CreateDbContextAsync();
+        var ted = await ctx.TasimaTedarikciler.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tedarikciId);
+        var detay = new MutabakatDetay { Baslik = ted?.Unvan ?? "(?)" };
+        if (ted == null) return detay;
+
+        var puantajlar = await ctx.FiloGunlukPuantajlar
+            .Include(p => p.Arac).Include(p => p.Sofor).Include(p => p.Guzergah)
+            .Where(p => p.FirmaId == firmaId
+                && p.Tarih >= baslangic && p.Tarih <= bitis
+                && !p.IsDeleted
+                && p.Arac != null && p.Arac.TasimaTedarikciId == tedarikciId
+                && p.TahakkukEdenTaseronUcreti > 0)
+            .OrderBy(p => p.Tarih)
+            .ToListAsync();
+
+        detay.Puantajlar = puantajlar.Select(p => new MutabakatDetayPuantaj
+        {
+            Id = p.Id,
+            Tarih = p.Tarih,
+            AracPlaka = p.Arac?.AktifPlaka ?? "",
+            Sofor = p.Sofor != null ? $"{p.Sofor.Ad} {p.Sofor.Soyad}" : "",
+            Guzergah = p.Guzergah?.GuzergahAdi ?? "",
+            SeferSayisi = p.SeferSayisi,
+            Tutar = p.TahakkukEdenTaseronUcreti,
+            Faturalandi = p.TaseronOdemeYapildiMi,
+            FaturaId = p.TedarikciOdemeFaturaId
+        }).ToList();
+
+        if (ted.CariId.HasValue)
+        {
+            var faturalar = await ctx.Faturalar
+                .Where(f => f.CariId == ted.CariId.Value && f.FaturaYonu == FaturaYonu.Gelen
+                    && f.FaturaTarihi >= baslangic && f.FaturaTarihi <= bitis)
+                .OrderBy(f => f.FaturaTarihi)
+                .ToListAsync();
+            var bagliFaturaIds = puantajlar.Where(p => p.TedarikciOdemeFaturaId.HasValue)
+                .Select(p => p.TedarikciOdemeFaturaId!.Value).ToHashSet();
+            detay.Faturalar = faturalar.Select(f => new MutabakatDetayFatura
+            {
+                Id = f.Id,
+                Tarih = f.FaturaTarihi,
+                FaturaNo = f.FaturaNo ?? "",
+                Tutar = f.GenelToplam,
+                PuantajaBagli = bagliFaturaIds.Contains(f.Id)
+            }).ToList();
+        }
+        return detay;
+    }
 }

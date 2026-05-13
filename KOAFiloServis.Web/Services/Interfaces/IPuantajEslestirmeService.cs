@@ -58,6 +58,42 @@ public interface IPuantajEslestirmeService
     /// Taşıma Tedarikçisi bazlı gelen vs. tahakkuk eden fatura mutabakatı
     /// </summary>
     Task<List<TasimaTedarikciMutabakatRow>> GetTasimaTedarikciMutabakatAsync(int firmaId, DateTime baslangic, DateTime bitis);
+
+    // ============== Mutabakat Detay (Drill-down) ==============
+    Task<MutabakatDetay> GetCariMutabakatDetayAsync(int firmaId, int cariId, DateTime baslangic, DateTime bitis);
+    Task<MutabakatDetay> GetTasimaTedarikciMutabakatDetayAsync(int firmaId, int tedarikciId, DateTime baslangic, DateTime bitis);
+}
+
+public class MutabakatDetay
+{
+    public string Baslik { get; set; } = string.Empty;
+    public List<MutabakatDetayPuantaj> Puantajlar { get; set; } = new();
+    public List<MutabakatDetayFatura> Faturalar { get; set; } = new();
+    public decimal TahakkukToplam => Puantajlar.Sum(p => p.Tutar);
+    public decimal FaturaToplam => Faturalar.Sum(f => f.Tutar);
+    public decimal Fark => FaturaToplam - TahakkukToplam;
+}
+
+public class MutabakatDetayPuantaj
+{
+    public int Id { get; set; }
+    public DateTime Tarih { get; set; }
+    public string AracPlaka { get; set; } = string.Empty;
+    public string Sofor { get; set; } = string.Empty;
+    public string Guzergah { get; set; } = string.Empty;
+    public decimal SeferSayisi { get; set; }
+    public decimal Tutar { get; set; }
+    public bool Faturalandi { get; set; }
+    public int? FaturaId { get; set; }
+}
+
+public class MutabakatDetayFatura
+{
+    public int Id { get; set; }
+    public DateTime Tarih { get; set; }
+    public string FaturaNo { get; set; } = string.Empty;
+    public decimal Tutar { get; set; }
+    public bool PuantajaBagli { get; set; }
 }
 
 /// <summary>
