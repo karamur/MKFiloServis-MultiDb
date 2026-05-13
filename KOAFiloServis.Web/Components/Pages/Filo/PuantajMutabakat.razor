@@ -93,14 +93,25 @@
         <li class="nav-item">
             <a class="nav-link @(tab == "cari" ? "active" : "")" href="javascript:void(0)" @onclick='() => tab = "cari"'>
                 <i class="bi bi-person-vcard me-1"></i> Cari (Müşteri / Kesilen Fatura)
-                <span class="badge bg-primary ms-1">@cariRows.Count</span>
+                <span class="badge bg-primary ms-1">@FilteredCariRows.Count / @cariRows.Count</span>
             </a>
         </li>
         <li class="nav-item">
             <a class="nav-link @(tab == "tedarikci" ? "active" : "")" href="javascript:void(0)" @onclick='() => tab = "tedarikci"'>
                 <i class="bi bi-truck-front me-1"></i> Taşıma Tedarikçisi (Gelen Fatura)
-                <span class="badge bg-warning text-dark ms-1">@tedarikciRows.Count</span>
+                <span class="badge bg-warning text-dark ms-1">@FilteredTedarikciRows.Count / @tedarikciRows.Count</span>
             </a>
+        </li>
+        <li class="nav-item ms-auto d-flex align-items-center gap-2">
+            <div class="form-check form-switch m-0" title="Farkı tolerans altında olan satırları gizle">
+                <input class="form-check-input" type="checkbox" id="chkSadeceFark" @bind="sadeceFarkliGoster" />
+                <label class="form-check-label small" for="chkSadeceFark">Sadece farklı olanlar</label>
+            </div>
+            <div class="input-group input-group-sm" style="width:170px" title="Tolerans (mutlak fark)">
+                <span class="input-group-text">±</span>
+                <input type="number" min="0" step="0.01" class="form-control" @bind="farkTolerans" />
+                <span class="input-group-text">₺</span>
+            </div>
         </li>
     </ul>
 
@@ -124,7 +135,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var r in cariRows)
+                        @foreach (var r in FilteredCariRows)
                         {
                             <tr class="@DurumClass(r.Fark)" style="cursor:pointer" @onclick="() => CariDetayAc(r)">
                                 <td>@r.CariUnvan</td>
@@ -140,15 +151,19 @@
                         {
                             <tr><td colspan="7" class="text-center text-muted p-3">Veri yok. Tarih aralığı seçip Hesapla'ya basın.</td></tr>
                         }
+                        else if (FilteredCariRows.Count == 0)
+                        {
+                            <tr><td colspan="7" class="text-center text-muted p-3">Tolerans (±@farkTolerans.ToString("N2") ₺) içinde, gösterilecek farklı satır yok.</td></tr>
+                        }
                     </tbody>
-                    @if (cariRows.Count > 0)
+                    @if (FilteredCariRows.Count > 0)
                     {
                         <tfoot class="table-light">
                             <tr>
-                                <th>TOPLAM</th>
-                                <th class="text-end">@cariRows.Sum(x => x.TahakkukEdenTutar).ToString("N2")</th>
-                                <th class="text-end">@cariRows.Sum(x => x.KesilenFaturaTutari).ToString("N2")</th>
-                                <th class="text-end">@cariRows.Sum(x => x.Fark).ToString("N2")</th>
+                                <th>TOPLAM (@(sadeceFarkliGoster ? "farklı" : "tümü"))</th>
+                                <th class="text-end">@FilteredCariRows.Sum(x => x.TahakkukEdenTutar).ToString("N2")</th>
+                                <th class="text-end">@FilteredCariRows.Sum(x => x.KesilenFaturaTutari).ToString("N2")</th>
+                                <th class="text-end">@FilteredCariRows.Sum(x => x.Fark).ToString("N2")</th>
                                 <th colspan="3"></th>
                             </tr>
                         </tfoot>
@@ -177,7 +192,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var r in tedarikciRows)
+                        @foreach (var r in FilteredTedarikciRows)
                         {
                             <tr class="@DurumClass(r.Fark)" style="cursor:pointer" @onclick="() => TedarikciDetayAc(r)">
                                 <td>@r.TedarikciUnvan</td>
@@ -193,15 +208,19 @@
                         {
                             <tr><td colspan="7" class="text-center text-muted p-3">Veri yok.</td></tr>
                         }
+                        else if (FilteredTedarikciRows.Count == 0)
+                        {
+                            <tr><td colspan="7" class="text-center text-muted p-3">Tolerans (±@farkTolerans.ToString("N2") ₺) içinde, gösterilecek farklı satır yok.</td></tr>
+                        }
                     </tbody>
-                    @if (tedarikciRows.Count > 0)
+                    @if (FilteredTedarikciRows.Count > 0)
                     {
                         <tfoot class="table-light">
                             <tr>
-                                <th>TOPLAM</th>
-                                <th class="text-end">@tedarikciRows.Sum(x => x.TahakkukEdenTutar).ToString("N2")</th>
-                                <th class="text-end">@tedarikciRows.Sum(x => x.GelenFaturaTutari).ToString("N2")</th>
-                                <th class="text-end">@tedarikciRows.Sum(x => x.Fark).ToString("N2")</th>
+                                <th>TOPLAM (@(sadeceFarkliGoster ? "farklı" : "tümü"))</th>
+                                <th class="text-end">@FilteredTedarikciRows.Sum(x => x.TahakkukEdenTutar).ToString("N2")</th>
+                                <th class="text-end">@FilteredTedarikciRows.Sum(x => x.GelenFaturaTutari).ToString("N2")</th>
+                                <th class="text-end">@FilteredTedarikciRows.Sum(x => x.Fark).ToString("N2")</th>
                                 <th colspan="3"></th>
                             </tr>
                         </tfoot>
@@ -338,6 +357,16 @@
     private List<TasimaTedarikci> eksikCariTedarikciler => tumTedarikciler.Where(t => t.Aktif && t.CariId == null).ToList();
     private Firma? SelectedFirma => firmalar.FirstOrDefault(f => f.Id == firmaId);
 
+    private bool sadeceFarkliGoster = false;
+    private decimal farkTolerans = 0.01m;
+
+    private List<CariFaturaMutabakatRow> FilteredCariRows => sadeceFarkliGoster
+        ? cariRows.Where(r => Math.Abs(r.Fark) > farkTolerans).ToList()
+        : cariRows;
+    private List<TasimaTedarikciMutabakatRow> FilteredTedarikciRows => sadeceFarkliGoster
+        ? tedarikciRows.Where(r => Math.Abs(r.Fark) > farkTolerans).ToList()
+        : tedarikciRows;
+
     private bool detayAcik = false;
     private MutabakatDetay? detay;
 
@@ -378,13 +407,13 @@
         if (tab == "cari")
         {
             sb.AppendLine("Cari;Tahakkuk;Kesilen Fatura;Fark;Puantaj Sayisi;Fatura Sayisi;Durum");
-            foreach (var r in cariRows)
+            foreach (var r in FilteredCariRows)
                 sb.AppendLine($"{Csv(r.CariUnvan)};{r.TahakkukEdenTutar:F2};{r.KesilenFaturaTutari:F2};{r.Fark:F2};{r.PuantajSayisi};{r.FaturaSayisi};{r.Durum}");
         }
         else
         {
             sb.AppendLine("Tedarikci;Tahakkuk;Gelen Fatura;Fark;Puantaj Sayisi;Fatura Sayisi;Durum");
-            foreach (var r in tedarikciRows)
+            foreach (var r in FilteredTedarikciRows)
                 sb.AppendLine($"{Csv(r.TedarikciUnvan)};{r.TahakkukEdenTutar:F2};{r.GelenFaturaTutari:F2};{r.Fark:F2};{r.PuantajSayisi};{r.FaturaSayisi};{r.Durum}");
         }
         await IndirCsv($"mutabakat_{tab}_{baslangic:yyyyMMdd}_{bitis:yyyyMMdd}.csv", sb.ToString());
