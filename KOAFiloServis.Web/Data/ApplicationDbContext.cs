@@ -149,6 +149,10 @@ public class ApplicationDbContext : DbContext
     public DbSet<FiloGuzergahEslestirme> FiloGuzergahEslestirmeleri { get; set; }
     public DbSet<FiloGunlukPuantaj> FiloGunlukPuantajlar { get; set; }
 
+    // Puantaj Kalıcı Eşleştirme Modülü (Firma+Araç+Şoför ve Firma+Güzergah)
+    public DbSet<FirmaAracSoforEslestirme> FirmaAracSoforEslestirmeleri { get; set; }
+    public DbSet<FirmaGuzergahEslestirme> FirmaGuzergahEslestirmeleri { get; set; }
+
     // Hakediş ve Araç Maliyet Modülü
     public DbSet<Hakedis> Hakedisler { get; set; }
     public DbSet<HakedisDetay> HakedisDetaylari { get; set; }
@@ -1822,6 +1826,49 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<FiloGunlukPuantaj>()
             .HasQueryFilter(e => !e.IsDeleted && (e.Arac == null || !e.Arac.IsDeleted));
+
+        // FirmaAracSoforEslestirme - Kurum+Araç+Şoför kalıcı eşleştirme
+        modelBuilder.Entity<FirmaAracSoforEslestirme>(entity =>
+        {
+            entity.HasIndex(e => new { e.FirmaId, e.KurumCariId, e.AracId, e.SoforId });
+            entity.HasIndex(e => new { e.KurumCariId, e.Aktif });
+
+            entity.HasOne(e => e.KurumCari)
+                .WithMany()
+                .HasForeignKey(e => e.KurumCariId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Arac)
+                .WithMany()
+                .HasForeignKey(e => e.AracId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Sofor)
+                .WithMany()
+                .HasForeignKey(e => e.SoforId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(e => !e.IsDeleted);
+        });
+
+        // FirmaGuzergahEslestirme - Kurum+Güzergah kalıcı eşleştirme
+        modelBuilder.Entity<FirmaGuzergahEslestirme>(entity =>
+        {
+            entity.HasIndex(e => new { e.FirmaId, e.KurumCariId, e.GuzergahId });
+            entity.HasIndex(e => new { e.KurumCariId, e.Aktif });
+
+            entity.HasOne(e => e.KurumCari)
+                .WithMany()
+                .HasForeignKey(e => e.KurumCariId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Guzergah)
+                .WithMany()
+                .HasForeignKey(e => e.GuzergahId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(e => !e.IsDeleted);
+        });
 
         // Hakediş + Hakediş Detay + Araç Maliyet Snapshot (yeni modül)
         modelBuilder.Entity<Hakedis>()

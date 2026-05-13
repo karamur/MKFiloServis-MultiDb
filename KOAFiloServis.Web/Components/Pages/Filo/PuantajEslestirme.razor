@@ -1,0 +1,379 @@
+﻿@page "/puantaj/eslestirme"
+@using KOAFiloServis.Shared.Entities
+@using KOAFiloServis.Web.Services
+@using KOAFiloServis.Web.Services.Interfaces
+@inject IPuantajEslestirmeService EslestirmeService
+@inject IFirmaService FirmaService
+@inject IToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>Puantaj Eşleştirme</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="bi bi-diagram-3 me-2"></i>Puantaj Kalıcı Eşleştirme</h3>
+        <div class="d-flex gap-2">
+            <select class="form-select" style="min-width:240px" @bind="firmaId">
+                <option value="0">-- Firma Seçin --</option>
+                @foreach (var f in firmalar)
+                {
+                    <option value="@f.Id">@f.FirmaAdi</option>
+                }
+            </select>
+            <button class="btn btn-primary" @onclick="VerileriYukle">
+                <i class="bi bi-arrow-clockwise me-1"></i> Yükle
+            </button>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <a class="nav-link @(activeTab == "aracsofor" ? "active" : "")" href="javascript:void(0)" @onclick='() => activeTab = "aracsofor"'>
+                <i class="bi bi-truck me-1"></i> Kurum + Araç + Şoför
+                <span class="badge bg-primary ms-1">@aracSoforEslestirmeleri.Count</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(activeTab == "guzergah" ? "active" : "")" href="javascript:void(0)" @onclick='() => activeTab = "guzergah"'>
+                <i class="bi bi-signpost-split me-1"></i> Kurum + Güzergah
+                <span class="badge bg-success ms-1">@guzergahEslestirmeleri.Count</span>
+            </a>
+        </li>
+    </ul>
+
+    @if (firmaId == 0)
+    {
+        <div class="alert alert-info">Lütfen önce bir firma seçin.</div>
+    }
+    else if (activeTab == "aracsofor")
+    {
+        @* ---------------- ARAÇ + ŞOFÖR EŞLEŞTİRME ---------------- *@
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="card h-100 border-warning">
+                    <div class="card-header bg-warning bg-opacity-25 d-flex justify-content-between">
+                        <strong><i class="bi bi-truck me-1"></i> Eşleşmemiş Araç+Şoför</strong>
+                        <span class="badge bg-warning text-dark">@eslesmeyenAraclar.Count</span>
+                    </div>
+                    <div class="card-body p-2" style="max-height:60vh; overflow-y:auto;">
+                        <input class="form-control form-control-sm mb-2" placeholder="Plaka ara..." @bind="aracArama" @bind:event="oninput" />
+                        @foreach (var a in FiltreliAraclar)
+                        {
+                            <div class="form-check border rounded p-2 mb-1">
+                                <input class="form-check-input" type="checkbox"
+                                       checked="@secimAraclar.Contains(a.Id)"
+                                       @onchange="(e) => ToggleArac(a.Id, (bool)e.Value!)" />
+                                <label class="form-check-label">
+                                    <strong>@a.AktifPlaka</strong>
+                                    <select class="form-select form-select-sm mt-1" @onchange="(e) => SetSofor(a.Id, e.Value?.ToString())">
+                                        <option value="0">-- Şoför seç --</option>
+                                        @foreach (var s in soforler)
+                                        {
+                                            <option value="@s.Id" selected="@(secimSoforDict.GetValueOrDefault(a.Id) == s.Id)">@s.Ad @s.Soyad</option>
+                                        }
+                                    </select>
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card h-100 border-info">
+                    <div class="card-header bg-info bg-opacity-25 d-flex justify-content-between">
+                        <strong><i class="bi bi-arrow-left-right me-1"></i> Eşleştir</strong>
+                        <span class="badge bg-info">@(secimAraclar.Count) × @(secimKurumlar.Count)</span>
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted">
+                            Sol panelden araç+şoför, sağ panelden kurum seçin.<br />
+                            <strong>Kombinasyon</strong>: 1-1, 1-N, N-1, N-N desteklenir.
+                        </p>
+                        <div class="mb-3">
+                            <label class="form-label">Varsayılan Birim Ücret (Sefer)</label>
+                            <input type="number" step="0.01" class="form-control" @bind="topluBirimUcret" />
+                        </div>
+                        <button class="btn btn-success w-100"
+                                disabled="@(secimAraclar.Count == 0 || secimKurumlar.Count == 0 || EksikSoforVar)"
+                                @onclick="TopluAracSoforEslestir">
+                            <i class="bi bi-link-45deg me-1"></i>
+                            @(secimAraclar.Count * secimKurumlar.Count) Eşleştirme Oluştur
+                        </button>
+                        @if (EksikSoforVar)
+                        {
+                            <div class="alert alert-warning mt-2 mb-0 small">Tüm seçili araçlar için şoför seçilmeli.</div>
+                        }
+
+                        <hr />
+                        <h6>Mevcut Eşleştirmeler</h6>
+                        <div style="max-height:30vh; overflow-y:auto;">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Kurum</th><th>Araç/Şoför</th><th>Ücret</th><th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var e in aracSoforEslestirmeleri.Take(50))
+                                    {
+                                        <tr>
+                                            <td><small>@e.KurumCari?.Unvan</small></td>
+                                            <td><small>@e.Arac?.AktifPlaka / @e.Sofor?.Ad @e.Sofor?.Soyad</small></td>
+                                            <td><small>@e.VarsayilanBirimUcret.ToString("N2")</small></td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => SilAracSofor(e.Id)">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card h-100 border-success">
+                    <div class="card-header bg-success bg-opacity-25 d-flex justify-content-between">
+                        <strong><i class="bi bi-building me-1"></i> Eşleşmemiş Kurum (Cari)</strong>
+                        <span class="badge bg-success">@eslesmeyenKurumlar.Count</span>
+                    </div>
+                    <div class="card-body p-2" style="max-height:60vh; overflow-y:auto;">
+                        <input class="form-control form-control-sm mb-2" placeholder="Kurum ara..." @bind="kurumArama" @bind:event="oninput" />
+                        @foreach (var c in FiltreliKurumlar)
+                        {
+                            <div class="form-check border rounded p-2 mb-1">
+                                <input class="form-check-input" type="checkbox"
+                                       checked="@secimKurumlar.Contains(c.Id)"
+                                       @onchange="(e) => ToggleKurum(c.Id, (bool)e.Value!)" />
+                                <label class="form-check-label">@c.Unvan</label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        @* ---------------- GÜZERGAH EŞLEŞTİRME ---------------- *@
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="card h-100 border-warning">
+                    <div class="card-header bg-warning bg-opacity-25 d-flex justify-content-between">
+                        <strong><i class="bi bi-signpost-split me-1"></i> Eşleşmemiş Güzergah</strong>
+                        <span class="badge bg-warning text-dark">@eslesmeyenGuzergahlar.Count</span>
+                    </div>
+                    <div class="card-body p-2" style="max-height:60vh; overflow-y:auto;">
+                        <input class="form-control form-control-sm mb-2" placeholder="Güzergah ara..." @bind="guzergahArama" @bind:event="oninput" />
+                        @foreach (var g in FiltreliGuzergahlar)
+                        {
+                            <div class="form-check border rounded p-2 mb-1">
+                                <input class="form-check-input" type="checkbox"
+                                       checked="@secimGuzergahlar.Contains(g.Id)"
+                                       @onchange="(e) => ToggleGuzergah(g.Id, (bool)e.Value!)" />
+                                <label class="form-check-label">@g.GuzergahAdi</label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card h-100 border-info">
+                    <div class="card-header bg-info bg-opacity-25 d-flex justify-content-between">
+                        <strong><i class="bi bi-arrow-left-right me-1"></i> Eşleştir</strong>
+                        <span class="badge bg-info">@(secimGuzergahlar.Count) × @(secimKurumlar2.Count)</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <label class="form-label">Sefer Ücreti</label>
+                            <input type="number" step="0.01" class="form-control" @bind="seferUcreti" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">KDV (%)</label>
+                            <input type="number" class="form-control" @bind="kdvOrani" />
+                        </div>
+                        <button class="btn btn-success w-100"
+                                disabled="@(secimGuzergahlar.Count == 0 || secimKurumlar2.Count == 0)"
+                                @onclick="TopluGuzergahEslestir">
+                            <i class="bi bi-link-45deg me-1"></i>
+                            @(secimGuzergahlar.Count * secimKurumlar2.Count) Eşleştirme Oluştur
+                        </button>
+
+                        <hr />
+                        <h6>Mevcut Eşleştirmeler</h6>
+                        <div style="max-height:30vh; overflow-y:auto;">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr><th>Kurum</th><th>Güzergah</th><th>Ücret</th><th></th></tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var e in guzergahEslestirmeleri.Take(50))
+                                    {
+                                        <tr>
+                                            <td><small>@e.KurumCari?.Unvan</small></td>
+                                            <td><small>@e.Guzergah?.GuzergahAdi</small></td>
+                                            <td><small>@e.SeferUcreti.ToString("N2")</small></td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => SilGuzergah(e.Id)">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card h-100 border-success">
+                    <div class="card-header bg-success bg-opacity-25 d-flex justify-content-between">
+                        <strong><i class="bi bi-building me-1"></i> Eşleşmemiş Kurum (Cari)</strong>
+                        <span class="badge bg-success">@eslesmeyenKurumlar2.Count</span>
+                    </div>
+                    <div class="card-body p-2" style="max-height:60vh; overflow-y:auto;">
+                        <input class="form-control form-control-sm mb-2" placeholder="Kurum ara..." @bind="kurumArama2" @bind:event="oninput" />
+                        @foreach (var c in FiltreliKurumlar2)
+                        {
+                            <div class="form-check border rounded p-2 mb-1">
+                                <input class="form-check-input" type="checkbox"
+                                       checked="@secimKurumlar2.Contains(c.Id)"
+                                       @onchange="(e) => ToggleKurum2(c.Id, (bool)e.Value!)" />
+                                <label class="form-check-label">@c.Unvan</label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private int firmaId = 0;
+    private string activeTab = "aracsofor";
+
+    private List<Firma> firmalar = new();
+    private List<Sofor> soforler = new();
+
+    // Tab1: Araç+Şoför
+    private List<Arac> eslesmeyenAraclar = new();
+    private List<Cari> eslesmeyenKurumlar = new();
+    private List<FirmaAracSoforEslestirme> aracSoforEslestirmeleri = new();
+    private HashSet<int> secimAraclar = new();
+    private HashSet<int> secimKurumlar = new();
+    private Dictionary<int, int> secimSoforDict = new(); // aracId -> soforId
+    private decimal topluBirimUcret = 0;
+    private string aracArama = string.Empty;
+    private string kurumArama = string.Empty;
+
+    // Tab2: Güzergah
+    private List<Guzergah> eslesmeyenGuzergahlar = new();
+    private List<Cari> eslesmeyenKurumlar2 = new();
+    private List<FirmaGuzergahEslestirme> guzergahEslestirmeleri = new();
+    private HashSet<int> secimGuzergahlar = new();
+    private HashSet<int> secimKurumlar2 = new();
+    private decimal seferUcreti = 0;
+    private int kdvOrani = 20;
+    private string guzergahArama = string.Empty;
+    private string kurumArama2 = string.Empty;
+
+    private IEnumerable<Arac> FiltreliAraclar => string.IsNullOrWhiteSpace(aracArama)
+        ? eslesmeyenAraclar
+        : eslesmeyenAraclar.Where(a => (a.AktifPlaka ?? "").Contains(aracArama, StringComparison.OrdinalIgnoreCase));
+    private IEnumerable<Cari> FiltreliKurumlar => string.IsNullOrWhiteSpace(kurumArama)
+        ? eslesmeyenKurumlar
+        : eslesmeyenKurumlar.Where(c => c.Unvan.Contains(kurumArama, StringComparison.OrdinalIgnoreCase));
+    private IEnumerable<Guzergah> FiltreliGuzergahlar => string.IsNullOrWhiteSpace(guzergahArama)
+        ? eslesmeyenGuzergahlar
+        : eslesmeyenGuzergahlar.Where(g => g.GuzergahAdi.Contains(guzergahArama, StringComparison.OrdinalIgnoreCase));
+    private IEnumerable<Cari> FiltreliKurumlar2 => string.IsNullOrWhiteSpace(kurumArama2)
+        ? eslesmeyenKurumlar2
+        : eslesmeyenKurumlar2.Where(c => c.Unvan.Contains(kurumArama2, StringComparison.OrdinalIgnoreCase));
+
+    private bool EksikSoforVar => secimAraclar.Any(aId => !secimSoforDict.ContainsKey(aId) || secimSoforDict[aId] == 0);
+
+    protected override async Task OnInitializedAsync()
+    {
+        firmalar = (await FirmaService.GetAllAsync()).ToList();
+        if (firmalar.Count > 0) firmaId = firmalar[0].Id;
+        await VerileriYukle();
+    }
+
+    private async Task VerileriYukle()
+    {
+        if (firmaId == 0) return;
+        // Şoförler ortak
+        var allSoforler = await EslestirmeServiceSoforler();
+        soforler = allSoforler;
+
+        // Tab1
+        eslesmeyenAraclar = await EslestirmeService.GetEslesmeyenAraclarAsync(firmaId);
+        eslesmeyenKurumlar = await EslestirmeService.GetEslesmeyenKurumlarAsync(firmaId);
+        aracSoforEslestirmeleri = await EslestirmeService.GetAracSoforEslestirmeleriAsync(firmaId);
+
+        // Tab2
+        eslesmeyenGuzergahlar = await EslestirmeService.GetEslesmeyenGuzergahlarAsync(firmaId);
+        eslesmeyenKurumlar2 = await EslestirmeService.GetGuzergahsiZKurumlarAsync(firmaId);
+        guzergahEslestirmeleri = await EslestirmeService.GetGuzergahEslestirmeleriAsync(firmaId);
+
+        secimAraclar.Clear(); secimKurumlar.Clear(); secimSoforDict.Clear();
+        secimGuzergahlar.Clear(); secimKurumlar2.Clear();
+    }
+
+    // Bağımsız servis kullanmamak için DI'dan IFiloKomisyonService alınabilirdi; basit olsun diye context üzerinden:
+    [Inject] private IFiloKomisyonService FiloKomisyon { get; set; } = default!;
+    private async Task<List<Sofor>> EslestirmeServiceSoforler() => await FiloKomisyon.GetSoforlerAsync();
+
+    private void ToggleArac(int id, bool sec)
+    {
+        if (sec) secimAraclar.Add(id); else { secimAraclar.Remove(id); secimSoforDict.Remove(id); }
+    }
+    private void ToggleKurum(int id, bool sec) { if (sec) secimKurumlar.Add(id); else secimKurumlar.Remove(id); }
+    private void ToggleGuzergah(int id, bool sec) { if (sec) secimGuzergahlar.Add(id); else secimGuzergahlar.Remove(id); }
+    private void ToggleKurum2(int id, bool sec) { if (sec) secimKurumlar2.Add(id); else secimKurumlar2.Remove(id); }
+
+    private void SetSofor(int aracId, string? soforIdStr)
+    {
+        if (int.TryParse(soforIdStr, out var sId) && sId > 0)
+            secimSoforDict[aracId] = sId;
+        else
+            secimSoforDict.Remove(aracId);
+    }
+
+    private async Task TopluAracSoforEslestir()
+    {
+        var liste = secimAraclar.Select(aId => (aId, secimSoforDict[aId])).ToList();
+        var n = await EslestirmeService.TopluAracSoforEslestirAsync(firmaId, liste, secimKurumlar.ToList(), topluBirimUcret);
+        ToastService.ShowSuccess($"{n} eşleştirme oluşturuldu.");
+        await VerileriYukle();
+    }
+
+    private async Task TopluGuzergahEslestir()
+    {
+        var n = await EslestirmeService.TopluGuzergahEslestirAsync(firmaId, secimGuzergahlar.ToList(), secimKurumlar2.ToList(), seferUcreti, kdvOrani);
+        ToastService.ShowSuccess($"{n} eşleştirme oluşturuldu.");
+        await VerileriYukle();
+    }
+
+    private async Task SilAracSofor(int id)
+    {
+        await EslestirmeService.DeleteAracSoforEslestirmeAsync(id);
+        ToastService.ShowSuccess("Eşleştirme silindi.");
+        await VerileriYukle();
+    }
+
+    private async Task SilGuzergah(int id)
+    {
+        await EslestirmeService.DeleteGuzergahEslestirmeAsync(id);
+        ToastService.ShowSuccess("Eşleştirme silindi.");
+        await VerileriYukle();
+    }
+}

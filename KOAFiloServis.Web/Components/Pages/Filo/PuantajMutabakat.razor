@@ -1,0 +1,206 @@
+﻿@page "/puantaj/mutabakat"
+@using KOAFiloServis.Shared.Entities
+@using KOAFiloServis.Web.Services
+@using KOAFiloServis.Web.Services.Interfaces
+@inject IPuantajEslestirmeService EslestirmeService
+@inject IFirmaService FirmaService
+@inject IToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>Puantaj-Fatura Mutabakat</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="bi bi-clipboard-data me-2"></i>Puantaj ↔ Fatura Mutabakat</h3>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Firma</label>
+                    <select class="form-select" @bind="firmaId">
+                        <option value="0">-- Firma --</option>
+                        @foreach (var f in firmalar)
+                        {
+                            <option value="@f.Id">@f.FirmaAdi</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Başlangıç</label>
+                    <input type="date" class="form-control" @bind="baslangic" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Bitiş</label>
+                    <input type="date" class="form-control" @bind="bitis" />
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-primary w-100" @onclick="HesaplaMutabakat" disabled="@(firmaId == 0)">
+                        <i class="bi bi-calculator me-1"></i> Mutabakatı Hesapla
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <a class="nav-link @(tab == "cari" ? "active" : "")" href="javascript:void(0)" @onclick='() => tab = "cari"'>
+                <i class="bi bi-person-vcard me-1"></i> Cari (Müşteri / Kesilen Fatura)
+                <span class="badge bg-primary ms-1">@cariRows.Count</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(tab == "tedarikci" ? "active" : "")" href="javascript:void(0)" @onclick='() => tab = "tedarikci"'>
+                <i class="bi bi-truck-front me-1"></i> Taşıma Tedarikçisi (Gelen Fatura)
+                <span class="badge bg-warning text-dark ms-1">@tedarikciRows.Count</span>
+            </a>
+        </li>
+    </ul>
+
+    @if (tab == "cari")
+    {
+        <div class="card">
+            <div class="card-header bg-primary bg-opacity-10">
+                <strong>Cari Bazlı Mutabakat</strong> - Tahakkuk (puantajdan) vs Kesilen Fatura
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Cari (Kurum)</th>
+                            <th class="text-end">Tahakkuk Tutar</th>
+                            <th class="text-end">Kesilen Fatura</th>
+                            <th class="text-end">Fark</th>
+                            <th class="text-center">Puantaj #</th>
+                            <th class="text-center">Fatura #</th>
+                            <th>Durum</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in cariRows)
+                        {
+                            <tr class="@DurumClass(r.Fark)">
+                                <td>@r.CariUnvan</td>
+                                <td class="text-end">@r.TahakkukEdenTutar.ToString("N2")</td>
+                                <td class="text-end">@r.KesilenFaturaTutari.ToString("N2")</td>
+                                <td class="text-end fw-bold">@r.Fark.ToString("N2")</td>
+                                <td class="text-center">@r.PuantajSayisi</td>
+                                <td class="text-center">@r.FaturaSayisi</td>
+                                <td><span class="badge @DurumBadge(r.Fark)">@r.Durum</span></td>
+                            </tr>
+                        }
+                        @if (cariRows.Count == 0)
+                        {
+                            <tr><td colspan="7" class="text-center text-muted p-3">Veri yok. Tarih aralığı seçip Hesapla'ya basın.</td></tr>
+                        }
+                    </tbody>
+                    @if (cariRows.Count > 0)
+                    {
+                        <tfoot class="table-light">
+                            <tr>
+                                <th>TOPLAM</th>
+                                <th class="text-end">@cariRows.Sum(x => x.TahakkukEdenTutar).ToString("N2")</th>
+                                <th class="text-end">@cariRows.Sum(x => x.KesilenFaturaTutari).ToString("N2")</th>
+                                <th class="text-end">@cariRows.Sum(x => x.Fark).ToString("N2")</th>
+                                <th colspan="3"></th>
+                            </tr>
+                        </tfoot>
+                    }
+                </table>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-header bg-warning bg-opacity-25">
+                <strong>Taşıma Tedarikçisi Mutabakat</strong> - Tahakkuk vs Gelen Fatura
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Tedarikçi</th>
+                            <th class="text-end">Tahakkuk Tutar</th>
+                            <th class="text-end">Gelen Fatura</th>
+                            <th class="text-end">Fark</th>
+                            <th class="text-center">Puantaj #</th>
+                            <th class="text-center">Fatura #</th>
+                            <th>Durum</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in tedarikciRows)
+                        {
+                            <tr class="@DurumClass(r.Fark)">
+                                <td>@r.TedarikciUnvan</td>
+                                <td class="text-end">@r.TahakkukEdenTutar.ToString("N2")</td>
+                                <td class="text-end">@r.GelenFaturaTutari.ToString("N2")</td>
+                                <td class="text-end fw-bold">@r.Fark.ToString("N2")</td>
+                                <td class="text-center">@r.PuantajSayisi</td>
+                                <td class="text-center">@r.FaturaSayisi</td>
+                                <td><span class="badge @DurumBadge(r.Fark)">@r.Durum</span></td>
+                            </tr>
+                        }
+                        @if (tedarikciRows.Count == 0)
+                        {
+                            <tr><td colspan="7" class="text-center text-muted p-3">Veri yok.</td></tr>
+                        }
+                    </tbody>
+                    @if (tedarikciRows.Count > 0)
+                    {
+                        <tfoot class="table-light">
+                            <tr>
+                                <th>TOPLAM</th>
+                                <th class="text-end">@tedarikciRows.Sum(x => x.TahakkukEdenTutar).ToString("N2")</th>
+                                <th class="text-end">@tedarikciRows.Sum(x => x.GelenFaturaTutari).ToString("N2")</th>
+                                <th class="text-end">@tedarikciRows.Sum(x => x.Fark).ToString("N2")</th>
+                                <th colspan="3"></th>
+                            </tr>
+                        </tfoot>
+                    }
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private int firmaId = 0;
+    private DateTime baslangic = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime bitis = DateTime.Today;
+    private string tab = "cari";
+
+    private List<Firma> firmalar = new();
+    private List<CariFaturaMutabakatRow> cariRows = new();
+    private List<TasimaTedarikciMutabakatRow> tedarikciRows = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        firmalar = (await FirmaService.GetAllAsync()).ToList();
+        if (firmalar.Count > 0) firmaId = firmalar[0].Id;
+    }
+
+    private async Task HesaplaMutabakat()
+    {
+        if (firmaId == 0) return;
+        cariRows = await EslestirmeService.GetCariMutabakatAsync(firmaId, baslangic, bitis);
+        tedarikciRows = await EslestirmeService.GetTasimaTedarikciMutabakatAsync(firmaId, baslangic, bitis);
+        ToastService.ShowSuccess($"Mutabakat hesaplandı: {cariRows.Count} cari, {tedarikciRows.Count} tedarikçi.");
+    }
+
+    private string DurumClass(decimal fark) => fark switch
+    {
+        0 => "table-success",
+        > 0 => "table-warning",
+        < 0 => "table-danger"
+    };
+    private string DurumBadge(decimal fark) => fark switch
+    {
+        0 => "bg-success",
+        > 0 => "bg-warning text-dark",
+        < 0 => "bg-danger"
+    };
+}
