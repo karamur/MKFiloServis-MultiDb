@@ -471,15 +471,7 @@
         sahiplikFiltreHaric = false;
     }
 
-    private static string GetSahiplikText(AracSahiplikTipi tip) => tip switch
-    {
-        AracSahiplikTipi.Ozmal => "Özmal",
-        AracSahiplikTipi.Kiralik => "Kiralık",
-        AracSahiplikTipi.Komisyon => "Komisyon",
-        AracSahiplikTipi.Tedarikci => "Tedarikçi",
-        AracSahiplikTipi.Diger => "Diğer",
-        _ => tip.ToString()
-    };
+    private static string GetSahiplikText(AracSahiplikTipi tip) => SahiplikHelper.GetMetin(tip);
 
     private void TumunuSecToggle()
     {

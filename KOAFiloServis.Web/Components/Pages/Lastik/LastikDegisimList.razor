@@ -1132,15 +1132,7 @@
             return filtreSahiplikHaric ? d.Arac.SahiplikTipi != s : d.Arac.SahiplikTipi == s;
         });
 
-    private static string GetSahiplikText(AracSahiplikTipi sahiplik) => sahiplik switch
-    {
-        AracSahiplikTipi.Ozmal => "Özmal",
-        AracSahiplikTipi.Kiralik => "Kiralık",
-        AracSahiplikTipi.Komisyon => "Komisyon",
-        AracSahiplikTipi.Diger => "Diğer",
-        AracSahiplikTipi.Tedarikci => "Tedarikçi",
-        _ => sahiplik.ToString()
-    };
+    private static string GetSahiplikText(AracSahiplikTipi sahiplik) => SahiplikHelper.GetMetin(sahiplik);
 
     private async Task YukleAracDonemOzeti()
     {
