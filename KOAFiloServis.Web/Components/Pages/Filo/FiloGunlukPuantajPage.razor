@@ -1,4 +1,4 @@
-﻿@page "/filo-gunluk-puantaj"
+@page "/filo-gunluk-puantaj"
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Data
 @using KOAFiloServis.Web.Services
@@ -27,6 +27,147 @@
         </button>
     </div>
 
+    @if (topluPanelAcik)
+    {
+        <div class="card mb-3 border-primary">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-journal-plus me-2"></i>Toplu Puantaj Oluştur</span>
+                <button type="button" class="btn btn-sm btn-light" @onclick="PuantajOlusturModuAcKapat">Kapat</button>
+            </div>
+            <div class="card-body">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label small">Kurum *</label>
+                        <select class="form-select form-select-sm" value="@secilenKurumId" @onchange="KurumSecimiDegisti">
+                            <option value="0">-- Kurum Seçiniz --</option>
+                            @foreach (var f in firmalar)
+                            {
+                                <option value="@f.Id">@f.FirmaAdi</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Kapasite</label>
+                        <select class="form-select form-select-sm" @bind="secilenKapasite">
+                            <option value="0">Güzergah kartından</option>
+                            @foreach (var k in kapasiteSecenekleri)
+                            {
+                                <option value="@k">@k</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Gün</label>
+                        <input type="number" min="1" max="31" class="form-control form-control-sm" @bind="secilenGun" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Sefer Sayısı</label>
+                        <input type="number" min="0.5" step="0.5" class="form-control form-control-sm" @bind="secilenSeferSayisi" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">Ara (Güzergah/Plaka/Şoför)</label>
+                        <input class="form-control form-control-sm" @bind="puantajAramaMetni" />
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2 mb-3">
+                    <button class="btn btn-sm btn-outline-primary" @onclick="TopluSatirlarOlustur" disabled="@(secilenKurumId == 0)">
+                        <i class="bi bi-list-check me-1"></i>Satırları Getir
+                    </button>
+                    <button class="btn btn-sm btn-success" @onclick="TopluPuantajKaydet" disabled="@(isSaving || !topluSatirlar.Any())">
+                        <i class="bi bi-save me-1"></i>Toplu Puantaj Kaydet
+                    </button>
+                </div>
+
+                @if (topluSatirlar.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th></th>
+                                    <th>Kurum</th>
+                                    <th>Güzergah</th>
+                                    <th>Araç</th>
+                                    <th>Şoför</th>
+                                    <th>Telefon</th>
+                                    <th>Yön</th>
+                                    <th>Gelir</th>
+                                    <th>Gider</th>
+                                    <th>Kapasite</th>
+                                    <th>Gün</th>
+                                    <th>Sefer</th>
+                                    <th>Firma Tipi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var satir in topluSatirlar)
+                                {
+                                    <tr>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => SatirDetayToggle(satir.EslestirmeId)">
+                                                <i class="bi @(SatirDetayAcikMi(satir.EslestirmeId) ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                                            </button>
+                                        </td>
+                                        <td>@satir.KurumAdi</td>
+                                        <td>@satir.GuzergahAdi</td>
+                                        <td>@satir.AracPlaka</td>
+                                        <td>@satir.SoforAdi</td>
+                                        <td>@(string.IsNullOrWhiteSpace(satir.SoforTelefon) ? "-" : satir.SoforTelefon)</td>
+                                        <td><span class="badge @ServisTuruBadge(satir.ServisTuru)">@ServisTuruAdi(satir.ServisTuru)</span></td>
+                                        <td class="text-end">@satir.GelirFiyat.ToString("N2")</td>
+                                        <td class="text-end">@satir.GiderFiyat.ToString("N2")</td>
+                                        <td>
+                                            <input type="number" class="form-control form-control-sm" min="0" @bind="satir.Kapasite" />
+                                        </td>
+                                        <td>
+                                            <input type="number" class="form-control form-control-sm" min="1" max="31" @bind="satir.Gun" />
+                                        </td>
+                                        <td>
+                                            <input type="number" class="form-control form-control-sm" min="0.5" step="0.5" @bind="satir.SeferSayisi" />
+                                        </td>
+                                        <td>@satir.FirmaTipi</td>
+                                    </tr>
+                                    @if (SatirDetayAcikMi(satir.EslestirmeId))
+                                    {
+                                        <tr class="table-secondary">
+                                            <td></td>
+                                            <td colspan="12">
+                                                <div class="row g-2 align-items-end">
+                                                    <div class="col-md-3">
+                                                        <label class="form-label small mb-1">Şoför Değiştir</label>
+                                                        <select class="form-select form-select-sm" @bind="satir.SoforId">
+                                                            @foreach (var s in soforler)
+                                                            {
+                                                                <option value="@s.Id">@s.TamAd</option>
+                                                            }
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <label class="form-label small mb-1">Araç Değiştir</label>
+                                                        <select class="form-select form-select-sm" @bind="satir.AracId">
+                                                            @foreach (var a in araclar)
+                                                            {
+                                                                <option value="@a.Id">@a.Plaka</option>
+                                                            }
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label small mb-1">Not</label>
+                                                        <input class="form-control form-control-sm" @bind="satir.Notlar" />
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
     <!-- Filtre -->
     <div class="card mb-3">
         <div class="card-body py-3">
@@ -334,6 +475,17 @@
 }
 
 @code {
+    private bool topluPanelAcik = false;
+    private int secilenKurumId = 0;
+    private int secilenKapasite = 0;
+    private int secilenGun = DateTime.Today.Day;
+    private decimal secilenSeferSayisi = 1m;
+    private string puantajAramaMetni = string.Empty;
+    private List<FiloGuzergahEslestirme> tumEslestirmeler = new();
+    private List<int> kapasiteSecenekleri = new() { 8, 12, 16, 20, 27, 31, 46 };
+    private List<TopluPuantajSatiri> topluSatirlar = new();
+    private Dictionary<int, bool> satirDetayAcik = new();
+
     private bool yukleniyor = true;
     private bool isSaving = false;
     private bool kayitModalAcik = false;
@@ -365,6 +517,149 @@
         await LoadAsync();
     }
 
+    private async Task LoadEslestirmelerAsync()
+    {
+        await using var ctx = await DbContextFactory.CreateDbContextAsync();
+        tumEslestirmeler = await ctx.FiloGuzergahEslestirmeleri
+            .Include(x => x.KurumFirma)
+            .Include(x => x.Guzergah)
+            .Include(x => x.Arac)
+            .Include(x => x.Sofor)
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.KurumFirma!.FirmaAdi)
+            .ThenBy(x => x.Guzergah!.GuzergahAdi)
+            .ToListAsync();
+    }
+
+    private IEnumerable<FiloGuzergahEslestirme> FiltreliEslestirmeler =>
+        tumEslestirmeler
+            .Where(x => secilenKurumId == 0 || x.KurumFirmaId == secilenKurumId)
+            .Where(x => string.IsNullOrWhiteSpace(puantajAramaMetni)
+                || (x.Guzergah?.GuzergahAdi ?? string.Empty).Contains(puantajAramaMetni, StringComparison.OrdinalIgnoreCase)
+                || (x.Arac?.AktifPlaka ?? string.Empty).Contains(puantajAramaMetni, StringComparison.OrdinalIgnoreCase)
+                || (x.Sofor?.TamAd ?? string.Empty).Contains(puantajAramaMetni, StringComparison.OrdinalIgnoreCase));
+
+    private void PuantajOlusturModuAcKapat()
+    {
+        topluPanelAcik = !topluPanelAcik;
+        if (!topluPanelAcik)
+        {
+            topluSatirlar.Clear();
+            satirDetayAcik.Clear();
+            secilenKurumId = 0;
+            puantajAramaMetni = string.Empty;
+        }
+    }
+
+    private void KurumSecimiDegisti(ChangeEventArgs e)
+    {
+        if (int.TryParse(e?.Value?.ToString(), out var kurumId)) secilenKurumId = kurumId;
+        else secilenKurumId = 0;
+
+        topluSatirlar.Clear();
+        satirDetayAcik.Clear();
+    }
+
+    private async Task TopluSatirlarOlustur()
+    {
+        if (secilenKurumId <= 0)
+        {
+            ToastService.ShowWarning("Önce kurum seçmelisiniz.");
+            return;
+        }
+
+        var seciliKurum = firmalar.FirstOrDefault(f => f.Id == secilenKurumId);
+        topluSatirlar = FiltreliEslestirmeler.Select(es => new TopluPuantajSatiri
+        {
+            EslestirmeId = es.Id,
+            KurumId = es.KurumFirmaId,
+            KurumAdi = seciliKurum?.FirmaAdi ?? es.KurumFirma?.FirmaAdi ?? "-",
+            GuzergahId = es.GuzergahId,
+            GuzergahAdi = es.Guzergah?.GuzergahAdi ?? "-",
+            AracId = es.AracId,
+            AracPlaka = es.Arac?.AktifPlaka ?? "-",
+            SoforId = es.SoforId,
+            SoforAdi = es.Sofor?.TamAd ?? "-",
+            SoforTelefon = es.Sofor?.Telefon,
+            ServisTuru = es.ServisTuru,
+            GelirFiyat = es.KurumaKesilecekUcret,
+            GiderFiyat = es.TaseronaOdenenUcret,
+            Kapasite = secilenKapasite > 0 ? secilenKapasite : Math.Max(es.Guzergah?.PersonelSayisi ?? 0, 0),
+            Gun = secilenGun,
+            SeferSayisi = secilenSeferSayisi,
+            FirmaTipi = FirmaTipiniBelirle(es.Arac)
+        }).ToList();
+
+        satirDetayAcik = topluSatirlar.ToDictionary(x => x.EslestirmeId, _ => false);
+        if (!topluSatirlar.Any()) ToastService.ShowInfo("Seçili kurum için eşleştirme bulunamadı.");
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void SatirDetayToggle(int eslestirmeId)
+    {
+        if (!satirDetayAcik.ContainsKey(eslestirmeId)) satirDetayAcik[eslestirmeId] = true;
+        else satirDetayAcik[eslestirmeId] = !satirDetayAcik[eslestirmeId];
+    }
+
+    private bool SatirDetayAcikMi(int eslestirmeId) => satirDetayAcik.TryGetValue(eslestirmeId, out var acik) && acik;
+
+    private async Task TopluPuantajKaydet()
+    {
+        if (!topluSatirlar.Any())
+        {
+            ToastService.ShowWarning("Önce satırları oluşturmalısınız.");
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            await using var ctx = await DbContextFactory.CreateDbContextAsync();
+            foreach (var satir in topluSatirlar)
+            {
+                var gun = Math.Clamp(satir.Gun, 1, DateTime.DaysInMonth(filtreBaslangic.Year, filtreBaslangic.Month));
+                var tarih = new DateTime(filtreBaslangic.Year, filtreBaslangic.Month, gun);
+                var entity = new FiloGunlukPuantaj
+                {
+                    FirmaId = satir.KurumId,
+                    Tarih = tarih,
+                    FiloGuzergahEslestirmeId = satir.EslestirmeId,
+                    KurumFirmaId = satir.KurumId,
+                    GuzergahId = satir.GuzergahId,
+                    AracId = satir.AracId,
+                    SoforId = satir.SoforId,
+                    Durum = OperasyonDurumu.Gitti,
+                    ServisTuru = satir.ServisTuru,
+                    SeferSayisi = satir.SeferSayisi,
+                    PuantajCarpani = 1m,
+                    TahakkukEdenKurumUcreti = satir.GelirFiyat * satir.SeferSayisi,
+                    TahakkukEdenTaseronUcreti = satir.GiderFiyat * satir.SeferSayisi,
+                    Notlar = satir.Notlar
+                };
+                ctx.FiloGunlukPuantajlar.Add(entity);
+            }
+
+            await ctx.SaveChangesAsync();
+            ToastService.ShowSuccess($"{topluSatirlar.Count} satır toplu puantaj kaydedildi.");
+            await LoadAsync();
+            topluSatirlar.Clear();
+            satirDetayAcik.Clear();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Toplu puantaj kaydedilemedi: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private static string FirmaTipiniBelirle(Arac? arac)
+    {
+        if (arac == null) return "Cari";
+        return arac.SahiplikTipi == AracSahiplikTipi.Tedarikci ? "Tedarikçi" : "Cari";
+    }
     private async Task LoadAsync()
     {
         yukleniyor = true;
@@ -604,4 +899,25 @@
         OperasyonDurumu.Iptal_KurumTarafindan => "bg-danger",
         _ => "bg-light text-dark"
     };
-}
+
+    private sealed class TopluPuantajSatiri
+    {
+        public int EslestirmeId { get; set; }
+        public int KurumId { get; set; }
+        public string KurumAdi { get; set; } = string.Empty;
+        public int GuzergahId { get; set; }
+        public string GuzergahAdi { get; set; } = string.Empty;
+        public int AracId { get; set; }
+        public string AracPlaka { get; set; } = string.Empty;
+        public int SoforId { get; set; }
+        public string SoforAdi { get; set; } = string.Empty;
+        public string? SoforTelefon { get; set; }
+        public ServisTuru ServisTuru { get; set; }
+        public decimal GelirFiyat { get; set; }
+        public decimal GiderFiyat { get; set; }
+        public int Kapasite { get; set; }
+        public int Gun { get; set; }
+        public decimal SeferSayisi { get; set; }
+        public string FirmaTipi { get; set; } = "Cari";
+        public string? Notlar { get; set; }
+    }}
