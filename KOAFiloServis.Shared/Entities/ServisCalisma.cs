@@ -1,12 +1,16 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace KOAFiloServis.Shared.Entities;
 
 /// <summary>
 /// Servis �al��ma kay�tlar� - Hangi g�n, hangi ara�, hangi �of�r, hangi g�zergahta �al��t�
 /// </summary>
-public class ServisCalisma : BaseEntity
+public class ServisCalisma : BaseEntity, IFirmaTenant
 {
+    // Aşama C3 (K4): firma bazlı izolasyon.
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     public DateTime CalismaTarihi { get; set; }
     public ServisTuru ServisTuru { get; set; }
     public decimal? Fiyat { get; set; } // Override fiyat, null ise g�zergah fiyat� kullan�l�r

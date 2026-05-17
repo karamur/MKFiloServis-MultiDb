@@ -5,7 +5,7 @@ namespace KOAFiloServis.Shared.Entities;
 /// <summary>
 /// Fatura bilgileri
 /// </summary>
-public class Fatura : BaseEntity
+public class Fatura : BaseEntity, IFirmaTenant
 {
     /// <summary>
     /// Multi-tenant: Şirket ID (null = sistem geneli)

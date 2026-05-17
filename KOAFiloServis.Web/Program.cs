@@ -623,6 +623,14 @@ await RunScopedSafeAsync(app, "DbSeeder", async services =>
     await DbSeeder.SeedAsync(context);
 });
 
+// Tenant Aşama C2: IFirmaTenant tablolarındaki NULL FirmaId değerlerini varsayılan firma ile doldur.
+await RunScopedSafeAsync(app, "TenantC2_FirmaIdBackfill", async services =>
+{
+    var context = services.GetRequiredService<ApplicationDbContext>();
+    var logger = services.GetRequiredService<ILogger<Program>>();
+    await KOAFiloServis.Web.Data.Migrations.TenantFirmaIdBackfillMigrationHelper.BackfillAsync(context, logger);
+});
+
 await RunScopedSafeAsync(app, "SeedAdmin", async services =>
 {
     var kullaniciService = services.GetRequiredService<IKullaniciService>();

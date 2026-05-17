@@ -4,6 +4,7 @@
 @inject KOAFiloServis.Web.Services.IKullaniciService KullaniciService
 @inject KOAFiloServis.Web.Services.ILisansService LisansService
 @inject KOAFiloServis.Web.Services.IFirmaService FirmaService
+@inject KOAFiloServis.Web.Services.IAktifFirmaProvider AktifFirmaProvider
 @inject KOAFiloServis.Web.Services.AppAuthenticationStateProvider AuthProvider
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
@@ -255,6 +256,19 @@
                 Logger.LogWarning(ex, "MainLayout dark mode baslatilirken hata olustu");
             }
 
+            // Aktif firmayı ProtectedLocalStorage'dan geri yükle (circuit reset / refresh sonrası).
+            // Bu çağrı interaktif circuit'te yapılmalı; OnInitializedAsync prerender olabileceği için
+            // burada yapıyoruz.
+            var firmaRestored = false;
+            try
+            {
+                firmaRestored = await AktifFirmaProvider.TryRestoreAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "MainLayout aktif firma restore sirasinda hata olustu");
+            }
+
             // Circuit yeniden bağlandığında storage'dan kullanıcıyı geri yükle
             if (!AuthProvider.IsAuthenticated)
             {
@@ -284,6 +298,12 @@
                         return;
                     }
                 }
+            }
+            else if (firmaRestored && lisansGecerli)
+            {
+                // Auth zaten vardı ama firma yeni restore edildi → üst bardaki firma adını tazele.
+                try { await FirmalariYukle(); }
+                catch (Exception ex) { Logger.LogWarning(ex, "MainLayout firmalar yuklenirken hata olustu (firma restore)"); }
             }
 
             _authChecked = true;

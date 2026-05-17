@@ -1,10 +1,14 @@
-﻿namespace KOAFiloServis.Shared.Entities;
+namespace KOAFiloServis.Shared.Entities;
 
 /// <summary>
 /// Masraf kalemleri tan�mlar�
 /// </summary>
-public class MasrafKalemi : BaseEntity
+public class MasrafKalemi : BaseEntity, IFirmaTenant
 {
+    // Aşama C3 (K4): firma bazlı izolasyon.
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     public string MasrafKodu { get; set; } = string.Empty;
     public string MasrafAdi { get; set; } = string.Empty;
     public MasrafKategori Kategori { get; set; }

@@ -6,8 +6,12 @@ namespace KOAFiloServis.Shared.Entities;
 /// <summary>
 /// Stok Karti - Urun/Hizmet/Arac/Servis tanimi
 /// </summary>
-public class StokKarti : BaseEntity
+public class StokKarti : BaseEntity, IFirmaTenant
 {
+    // Aşama C3 (K4): firma bazlı izolasyon. Nullable; C2 deseni gereği backfill sonrası NOT NULL'a alınacak.
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     [Required]
     [StringLength(50)]
     public string StokKodu { get; set; } = string.Empty;
@@ -70,8 +74,12 @@ public class StokKarti : BaseEntity
 /// <summary>
 /// Stok Kategorisi
 /// </summary>
-public class StokKategori : BaseEntity
+public class StokKategori : BaseEntity, IFirmaTenant
 {
+    // Aşama C3 (K4): firma bazlı izolasyon.
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     [Required]
     [StringLength(100)]
     public string KategoriAdi { get; set; } = string.Empty;
@@ -98,8 +106,12 @@ public class StokKategori : BaseEntity
 /// <summary>
 /// Stok Hareketi - Giris/Cikis kayitlari
 /// </summary>
-public class StokHareket : BaseEntity
+public class StokHareket : BaseEntity, IFirmaTenant
 {
+    // Aşama C3 (K4): firma bazlı izolasyon.
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     public int StokKartiId { get; set; }
     public virtual StokKarti StokKarti { get; set; } = null!;
 

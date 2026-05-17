@@ -2936,6 +2936,17 @@ public class ApplicationDbContext : DbContext
 
             var builder = modelBuilder.Entity(entityType.ClrType);
 
+            // Aşama C2-b (K9): FirmaId artık veritabanı tarafında NOT NULL olmalı.
+            // Interface int? olarak kalsa da burada zorunlu yapıyoruz; bu sayede
+            // EF migration'ı AlterColumn -> NOT NULL üretir ve runtime'da NULL kayıt
+            // tenant filter altında "kaybolmaz".
+            // İstisna: [TenantNullableFirmaId] ile işaretli entity'ler henüz C3 backfill
+            // sürecinde olduğu için bu adımı atlar; sonraki migration'da attribute kaldırılınca NOT NULL'a alınır.
+            if (!Attribute.IsDefined(entityType.ClrType, typeof(TenantNullableFirmaIdAttribute)))
+            {
+                builder.Property("FirmaId").IsRequired();
+            }
+
             // EF Core 10: Aynı entity'de hem anonymous hem named filter olamaz.
             // IFirmaTenant entity'leri için OnModelCreating içinde önceden tanımlanmış
             // anonymous filter (örn. !IsDeleted) varsa onu "SoftDelete" adıyla taşı, sonra
@@ -2993,15 +3004,22 @@ public class ApplicationDbContext : DbContext
     {
         var aktif = ResolveAktifFirmaProvider();
         var firmaId = aktif?.AktifFirmaId ?? 0;
-        if (firmaId == 0) return; // Firma seçilmemiş → otomatik atama yapma
 
         foreach (var entry in ChangeTracker.Entries<IFirmaTenant>())
         {
             if (entry.State != EntityState.Added) continue;
-            if (!entry.Entity.FirmaId.HasValue || entry.Entity.FirmaId == 0)
+            if (entry.Entity.FirmaId.HasValue && entry.Entity.FirmaId.Value > 0) continue;
+
+            if (firmaId == 0)
             {
-                entry.Entity.FirmaId = firmaId;
+                // Aşama C2-b (K9): FirmaId artık DB tarafında NOT NULL. Aktif firma seçilmeden
+                // tenant entity insert etmek artık sessiz geçilmiyor; net hata fırlatıyoruz.
+                throw new InvalidOperationException(
+                    $"Aktif firma seçili olmadan '{entry.Entity.GetType().Name}' kaydı eklenemez. " +
+                    "Lütfen IAktifFirmaProvider üzerinden aktif firmayı set edin veya entity.FirmaId değerini elle atayın.");
             }
+
+            entry.Entity.FirmaId = firmaId;
         }
     }
 

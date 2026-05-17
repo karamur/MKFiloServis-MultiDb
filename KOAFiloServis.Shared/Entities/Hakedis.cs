@@ -8,9 +8,15 @@ namespace KOAFiloServis.Shared.Entities;
 /// FiloGunlukPuantaj + ServisPuantaj kayıtlarından toplulaştırılarak üretilir.
 /// Onaylandıktan sonra Gelir veya Gider faturasına dönüştürülebilir.
 /// </summary>
-public class Hakedis : BaseEntity
+public class Hakedis : BaseEntity, IFirmaTenant
 {
+    /// <summary>K1: Aktif firma (tenant). C3 backfill sonrası NOT NULL'a alınır.</summary>
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
+    [Obsolete("K1: Legacy Sirket alanı. FirmaId'ye geçildi. Veri taşıma sonrası kaldırılacak.")]
     public int? SirketId { get; set; }
+    [Obsolete("K1: Legacy Sirket navigation. FirmaId/Firma kullanılacak.")]
     public virtual Sirket? Sirket { get; set; }
 
     [Required]
@@ -64,8 +70,12 @@ public class Hakedis : BaseEntity
 /// Hakediş detay satırı – her bir gün/sefer kaydını saklar.
 /// Hakediş PDF'inin kalemlerini ve denetim izini sağlar.
 /// </summary>
-public class HakedisDetay : BaseEntity
+public class HakedisDetay : BaseEntity, IFirmaTenant
 {
+    /// <summary>K1: Aktif firma (tenant). Parent Hakedis ile aynı firmaya bağlanır.</summary>
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     [Required]
     public int HakedisId { get; set; }
     public virtual Hakedis? Hakedis { get; set; }
