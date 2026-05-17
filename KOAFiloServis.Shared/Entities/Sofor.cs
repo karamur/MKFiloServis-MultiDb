@@ -5,8 +5,13 @@ namespace KOAFiloServis.Shared.Entities;
 /// <summary>
 /// Personel bilgileri (Şoför, Ofis Çalışanı, Yönetici vb.)
 /// </summary>
-public class Sofor : BaseEntity, IFirmaTenant
+public class Sofor : BaseEntity, IKopyalanabilirTenant
 {
+    /// <summary>Firma kopyalama (K8) audit: kaynak firma Id'si.</summary>
+    public int? KaynakFirmaId { get; set; }
+    /// <summary>Firma kopyalama (K8) audit: kaynak kayıt Id'si.</summary>
+    public int? KaynakKayitId { get; set; }
+
     /// <summary>
     /// LEGACY — Eski multi-tenant Sirket kavramı. Yeni mimari `FirmaId` kullanır.
     /// </summary>

@@ -205,6 +205,7 @@ builder.Services.AddScoped<ITenantService, TenantService>();
 builder.Services.AddScoped<IAktifFirmaProvider, AktifFirmaProvider>();
 builder.Services.AddScoped<IFirmaService, FirmaService>();
 builder.Services.AddScoped<IFirmalarArasiTransferService, FirmalarArasiTransferService>();
+builder.Services.AddScoped<IFirmaKopyalamaService, FirmaKopyalamaService>();
 builder.Services.AddSingleton<ILisansService, LisansService>(); // Singleton - lisans cache
 builder.Services.AddScoped<IKullaniciService, KullaniciService>(); // Scoped - her circuit kendi oturumunu yonetir
 builder.Services.AddScoped<ICariService, CariService>();

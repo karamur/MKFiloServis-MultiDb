@@ -33,7 +33,7 @@
 | C | Master entity'lere FirmaId zorunlu (Cari, Kurum, Guzergah, Sofor, Arac, BankaHesap, Stok, MasrafKalemi…) | ⏳ devam (C1 tamam) | TenantC1_AddFirmaIdToMasterEntities |
 | D | AracSahiplikTipi sadeleştirme + masraf sahibi helper | ✅ tamam | (commit edilecek) |
 | E | Kasa/Banka firma bazlı + FirmalarArasiTransfer | ✅ tamam (UI E2'ye ertelendi) | TenantE1_AddFirmaIdToBankaKasaAndFirmalarArasiTransfer |
-| F | FirmaKopyalamaService + UI (toplu/tekil checkbox) | ⏳ devam | - |
+| F | FirmaKopyalamaService + UI (toplu/tekil checkbox) | ✅ tamam (servis + UI + migration) | TenantF1_AddKopyalanabilirTenantAuditColumns |
 | G | Hakediş Puantaj ekranı (Excel benzeri tablo) | ⬜ bekliyor | - |
 | H | Login sonrası firma seçim ekranı + üst bar firma değiştirici | ⬜ bekliyor | - |
 
@@ -100,38 +100,43 @@
 3. Aşama bitince satırını `✅ tamam` yap, commit at, bir sonraki aşamayı `⏳ devam` yap.
 4. Veri kaybı olmaması için Aşama B-C'deki migration sırasını **bozma** (nullable → doldur → required).
 
-### Şu Anki Devam Noktası (Aşama F — FirmaKopyalamaService + UI)
+### Şu Anki Devam Noktası (Aşama G — Hakediş Puantaj ekranı)
 
-**Aşama E tamam:**
+**Aşama F tamam:**
 
-- `BankaHesap` ve `BankaKasaHareket` artık `IFirmaTenant` + nullable `FirmaId` taşıyor; SirketId `[Obsolete]`.
-- Yeni entity: `FirmalarArasiTransfer` (KaynakFirmaId/HedefFirmaId/KaynakHesapId/HedefHesapId/Tutar/Tarih/Aciklama + oluşturulan iki BankaKasaHareket id'si). `[TenantFilterIgnore]` ile işaretli (transfer iki firmaya da görünür).
-- `FirmalarArasiTransferService` (Scoped) eklendi: `CreateAsync` tek transferden iki `BankaKasaHareket` üretiyor (kaynakta Çıkış / hedefte Giriş), her birinin FirmaId'si elle doğru tarafın firmasına set ediliyor (SaveChanges aktif firmayı yanlış tarafa atamasın diye). Hesap-firma sahiplik kontrolleri yapılıyor.
-- `IptalEtAsync` her iki hareketi soft-delete'liyor.
-- Migration: `TenantE1_AddFirmaIdToBankaKasaAndFirmalarArasiTransfer` (BankaHesap.FirmaId, BankaKasaHareket.FirmaId nullable + FirmalarArasiTransferler tablosu + FK'lar).
-- DI: `IFirmalarArasiTransferService` Scoped olarak `Program.cs`'e eklendi.
+- Yeni interface `IKopyalanabilirTenant` (`IFirmaTenant`'ı genişletir; `KaynakFirmaId`, `KaynakKayitId`).
+- 5 master entity bu interface'i implement ediyor: `Cari`, `Kurum`, `Guzergah`, `Arac`, `Sofor`. (`MasrafKalemi` global tanım kümesi olduğu için kapsam dışı.)
+- `IFirmaKopyalamaService` + `FirmaKopyalamaService` (Scoped, `IDbContextFactory` üzerinden çalışır):
+  - `ListeleAsync(modul, kaynakFirmaId, hedefFirmaId)` → hedef kod kümesi ile karşılaştırıp `HedefteVarMi` işaretler.
+  - `KopyalaAsync(modul, kaynakFirmaId, hedefFirmaId, ids)` → transaction içinde clone üretir; `FirmaId = hedef`, `KaynakFirmaId/KaynakKayitId` set edilir; aynı kod hedefte varsa atlanır.
+  - Per-modul kurallar: `Cari` → `MuhasebeHesapId`/`PersonelAvansHesapId`/`SoforId` null'lanır; `Kurum` → `CariId` null'lanır; `Guzergah` → `VarsayilanAracId`/`VarsayilanSoforId`/`KurumId`/`CariId`/`FaturaKalemId` null'lanır; `Arac` → `KiralikCariId`/`KomisyoncuCariId`/`TasimaTedarikciId` null'lanır, `PlakaGecmisi`/`AracEvrak`/`AracMasraf`/`KiralikPlakaTakip` kopyalanmaz; `Sofor` → `TasimaTedarikciId` null'lanır.
+  - Tüm sorgular `IgnoreQueryFilters()` kullanıyor; bu sayede aktif firma kaynak firma olmasa da kopyalama yapılabilir.
+- DI: `IFirmaKopyalamaService` Scoped olarak `Program.cs`'e eklendi.
+- UI: `Pages/Ayarlar/FirmaKopyalama.razor` (route: `/ayarlar/firma-kopyalama`) — kaynak/hedef firma + modül seçimi, kod bazlı çakışma görselleştirmesi (sarı satır), tek tek + "tümünü seç" checkbox, kopya sonrası özet toast.
+- Migration: `TenantF1_AddKopyalanabilirTenantAuditColumns` — 5 tabloya `KaynakFirmaId`/`KaynakKayitId` nullable int kolonları eklendi.
+- `dotnet build` 0 error, 0 warning.
 
-**E2 (UI) ertelendi** — şimdilik servis API yeterli; "FirmalarArasiTransfer.razor" sayfası Aşama F + H ile birlikte tek seferde yapılacak (üst bar firma değiştirici + transfer + kopyalama UI'ı aynı menüye ekleniyor).
-
-**Aşama F hedefi:** Şirketler arası kopyalama (K8). Toplu/tekil seçim, sadece master kartlar (Cari, Kurum, Guzergah, Arac, Sofor, MasrafKalemi), hareketler kopyalanmaz. Kopya üzerinde `KaynakFirmaId` + `KaynakKayitId` audit alanları.
+**Aşama G hedefi:** Hakediş puantaj ekranı (Excel benzeri tablo). Firma bazlı çalışacak (aktif firma + dönem üzerinden).
 
 **Sıradaki adımlar:**
 
-1. `BaseEntity`'ye veya yeni `KaynakKayitAuditAttribute`'la (tercih: hafif, sadece kopyalanırsa anlam taşıyor) shadow property iki kolon: `KaynakFirmaId int?`, `KaynakKayitId int?`. Ya da daha basit: `IKopyalanabilirTenant` interface (KaynakFirmaId, KaynakKayitId). Öneri: **interface**, gerek olan entity'lere zamanla eklenir.
-2. `IFirmaKopyalamaService`: `KopyalaAsync<T>(int kaynakFirmaId, int hedefFirmaId, IEnumerable<int> kayitIds)` generic; her entity tipinde clone + new key + Audit set + FirmaId = hedef.
-3. UI: `Pages/Ayarlar/FirmaKopyalama.razor` (kaynak firma seç, hedef firma seç, modul radio: Cari/Kurum/Guzergah/Arac/Sofor/MasrafKalemi, listede checkbox + "Tümünü seç").
-4. Per-modul özel mantık: Arac kopyalanırken `PlakaGecmisi` kopyalanmasın (sadece master). Cari kopyalanırken `MuhasebeHesapId` null'lansın (her firmanın kendi muhasebe hesap planları var).
+1. UI menüye `Ayarlar → Şirketler Arası Kopyalama` link'i ekle (henüz menüye eklenmedi; Aşama H'deki üst bar firma değiştirici ile aynı menü grubunda olacak).
+2. `dotnet ef database update` ile F1 migration'ı uygulayan kullanıcıya hatırlatma — veri kaybı yok, sadece yeni kolonlar.
 
-**Başlamadan önce yap:** Aşama E commit + push.
+**Başlamadan önce yap:** Aşama F commit + push.
 ```
 git add docs/TENANT_MIGRATION_PLAN.md \
-        KOAFiloServis.Shared/Entities/BankaHesap.cs \
-        KOAFiloServis.Shared/Entities/BankaKasaHareket.cs \
-        KOAFiloServis.Shared/Entities/FirmalarArasiTransfer.cs \
-        KOAFiloServis.Web/Data/ApplicationDbContext.cs \
-        KOAFiloServis.Web/Services/FirmalarArasiTransferService.cs \
+        KOAFiloServis.Shared/Entities/Cari.cs \
+        KOAFiloServis.Shared/Entities/Kurum.cs \
+        KOAFiloServis.Shared/Entities/Guzergah.cs \
+        KOAFiloServis.Shared/Entities/Arac.cs \
+        KOAFiloServis.Shared/Entities/Sofor.cs \
+        KOAFiloServis.Shared/Entities/IKopyalanabilirTenant.cs \
+        KOAFiloServis.Web/Services/IFirmaKopyalamaService.cs \
+        KOAFiloServis.Web/Services/FirmaKopyalamaService.cs \
+        KOAFiloServis.Web/Components/Pages/Ayarlar/FirmaKopyalama.razor \
         KOAFiloServis.Web/Program.cs \
         KOAFiloServis.Web/Migrations/
-git commit -m "tenant: Aşama E - Kasa/Banka FirmaId + FirmalarArasiTransfer (K6)"
+git commit -m "tenant: Aşama F - FirmaKopyalamaService + UI (K8)"
 git push origin main
 ```

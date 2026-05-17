@@ -5,8 +5,13 @@ namespace KOAFiloServis.Shared.Entities;
 /// <summary>
 /// Müşteri / Kurum kartı bilgileri
 /// </summary>
-public class Kurum : BaseEntity, IFirmaTenant
+public class Kurum : BaseEntity, IKopyalanabilirTenant
 {
+    /// <summary>Firma kopyalama (K8) audit: kaynak firma Id'si.</summary>
+    public int? KaynakFirmaId { get; set; }
+    /// <summary>Firma kopyalama (K8) audit: kaynak kayıt Id'si.</summary>
+    public int? KaynakKayitId { get; set; }
+
     /// <summary>
     /// Tenant: Bu kurum kartının ait olduğu firma. (K3+K4)
     /// Nullable: Aşama C "doldur" adımında varsayılan firma ile güncellenir; ardından NOT NULL.
