@@ -335,6 +335,48 @@ Faz 5.1 sonrasında `TenantService.TransferCariAsync` ve `TransferFaturaAsync` a
 
 ---
 
+## 📦 SÜRÜM 1.0.20 (Bu oturum sonu — kurulum paketi)
+
+**Tarih:** 2026-05-18  
+**Setup paketi:** `setup\output\v1.0.20\KOAFiloServisKurulum-1.0.20.exe`  
+**CHANGELOG:** Bkz. `CHANGELOG.md` — `[1.0.20]` bölümü  
+**Release notes:** `setup\RELEASE-NOTES-v1.0.20.md`
+
+### Bu sürümün kapsamı (3 oturum birleşik)
+1. **Faz 5.3-B1 + B2** (commit `e29cc98`): CariSeferUcreti IFirmaTenant + DbContext ölü kod + TenantService dosya silme (~700 satır)
+2. **Kapasite hotfix** (commit `c9d204e`): `42703` snapshot-DB drift düzeltmesi
+3. **Faz 5.3-B3-i** (commit `739df5f`): 21 navigation silme + Sirket entity dosya silme + FK drop + _LEGACY_ rename
+
+### Kümülatif kazanım
+- ~1470 satır legacy kod silindi
+- Build warning: 38 → 5
+- 3 yeni migration DB'ye uygulandı (`TenantB1_*`, `TenantCExt2_*`, `TenantB3i_*`)
+
+### YARIN DEVAM NOKTASI — Faz 5.3-B4 (kapanış)
+
+**ÖNCELİKLİ HAZIRLIK:**
+1. **DB BACKUP AL** (kritik):
+   ```pwsh
+   pg_dump -h localhost -U postgres -d KOAFiloServis -F c -f "backup-before-B4-2026-05-19.dump"
+   ```
+2. Backup dosyasını güvenli yere kopyala (en az 2 kopya).
+
+**B4 KAPSAM:**
+
+| # | İş | Risk |
+|---|---|------|
+| 1 | Entity'lerden `int? SirketId` property + `[Obsolete]` attribute'ları sil (14 dosya) | Düşük (entity-level) |
+| 2 | Migration `TenantB4_DropSirketIdColumns`: 14+ tabloda `SirketId` kolonu DROP (PL/pgSQL idempotent) | **Yüksek** (veri kaybı) |
+| 3 | `_LEGACY_Sirketler` ve `_LEGACY_SirketTransferLoglari` tabloları DROP | **Yüksek** (veri kaybı) |
+| 4 | `AuditLog.SirketId` semantik kararı (FirmaId rename / koru) | Orta |
+| 5 | Build + DB uygulama + 1.0.21 sürüm | Düşük |
+
+**B4 BAŞLAMA KOMUTU:** "kaldığımız yerden devam / Faz 5.3-B4 başla"
+
+> **DİKKAT:** B4 yapılmadan önce yedek almak ZORUNLUDUR. Kolon drop'u ve tablo drop'u geri alınamaz.
+
+---
+
 ## ✅ FAZ 5.3-B3-i TAMAMLANDI (Bu oturum)
 
 ### Bu oturumda yapılanlar
