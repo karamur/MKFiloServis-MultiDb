@@ -335,6 +335,79 @@ Faz 5.1 sonrasında `TenantService.TransferCariAsync` ve `TransferFaturaAsync` a
 
 ---
 
+## ✅ FAZ 5.3-B3-i TAMAMLANDI (Bu oturum)
+
+### Bu oturumda yapılanlar
+
+**Faz 5.3-B3-i (Sirket navigation + entity dosya silme + FK drop migration)**:
+
+#### Drift kontrolü (önceki Kapasite hotfix sonrası emniyet)
+- `dotnet ef migrations has-pending-model-changes` → **"No changes have been made to the model since the last migration"** → snapshot temiz, drift yok ✅
+- Kapasite olayı izole bir vakaymış.
+
+#### Entity dosya değişiklikleri (14 dosya, 21 navigation silme)
+- 13 entity'den `virtual Sirket? Sirket` navigation property silindi:
+  - `Arac`, `AracMaliyetSnapshot`, `AuditLog`, `BankaHesap`, `BankaKasaHareket`, `CariSeferUcreti`, `Guzergah`, `Hakedis`, `Kapasite`, `KullaniciVeLisans`, `Sofor`, `TasimaTedarikci`
+  - `Lastik.cs` (4 sınıf: `LastikDepo`, `LastikStok`, `LastikDegisim`, `LastikSezonAyar`)
+  - `ServisKontrat.cs` (4 sınıf: `ServisKontrat`, `ServisPuantaj`, `ServisOdeme`, `ServisTahsilat`)
+  - `TasimaTedarikci.cs` (`TasimaTedarikciIs` da dahil)
+- `[Obsolete]` attribute olan navigation'larda attribute da silindi
+- **`int? SirketId` korundu** → B4'te DB kolon drop'u ile birlikte silinecek
+- `Sirket.cs` ve `SirketTransferLog.cs` entity dosyaları **silindi**
+
+#### DbContext temizliği
+- 11 `HasOne(e => e.Sirket).WithMany().HasForeignKey(e => e.SirketId)...` FK mapping bloğu silindi
+- `modelBuilder.Entity<Sirket>(...)` konfigürasyonu silindi (~20 satır)
+- `ConfigureSirketTransferLog(modelBuilder)` metodu ve çağrısı silindi (~35 satır)
+- `DbSet<Sirket> Sirketler` ve `DbSet<SirketTransferLog> SirketTransferLoglari` silindi
+- Kapasite index'inden `SirketId, KapasiteAdi` composite unique kaldırıldı (FirmaId composite yeterli)
+- BankaKasaHareket index'inden `SirketId, IslemTarihi` kaldırıldı
+
+#### Migration `20260518140619_TenantB3i_DropSirketNavigationAndEntity`
+- **Kritik karar**: Auto-üretilen migration `DropTable("Sirketler")` ve `DropTable("SirketTransferLoglari")` içeriyordu → manuel olarak **RENAME** ile değiştirildi (`_LEGACY_` prefix). Veri korunur, B4'te DROP edilecek.
+- PL/pgSQL idempotent yapı:
+  - 21 `FK_*_Sirketler_SirketId` constraint dinamik drop (information_schema'dan tarama)
+  - `IX_*_SirketId` index'leri dinamik drop
+  - `Sirketler` → `_LEGACY_Sirketler` RENAME (idempotent)
+  - `SirketTransferLoglari` → `_LEGACY_SirketTransferLoglari` RENAME
+- Down(): rename'i tersine alır (FK ve indeksler için manuel önceki migration'lara dönüş gerekir)
+- PostgreSQL'e başarıyla uygulandı ✅
+
+#### Hotfix (önceki context'ten)
+- **`20260518135021_TenantCExt2_AddFirmaIdToKapasite`** (Kapasite.FirmaId eksik kolon, commit `c9d204e`): KapasiteService'in `42703: column k.FirmaId does not exist` hatasını çözer. PL/pgSQL idempotent: FirmaId nullable kolon + IX_Kapasiteler_FirmaId_KapasiteAdi + FK Restrict + backfill.
+
+#### Build & commit
+- Build: **0 error, 5 warning** (önceki 7 → 5)
+- Commit `739df5f` push edildi
+
+### Bir sonraki oturumda yapılacak adaylar (öncelik sırası)
+
+**ÖNCELİK 1 — Faz 5.3-B4 (DB kolon DROP migration + _LEGACY_ tablo DROP)**:
+- **YÜKSEK RİSK:** DB backup şart. Geri dönüş yok.
+- Kapsam:
+  - 14+ entity tablosunda `SirketId` kolonu DROP (PL/pgSQL idempotent, `TenantZ1` şablonu)
+  - Entity'lerden `int? SirketId` property silme (ve Obsolete attribute'ları)
+  - `_LEGACY_Sirketler` ve `_LEGACY_SirketTransferLoglari` tabloları DROP
+  - **İstisna karar:** `AuditLog.SirketId` semantik olarak "aktif firma id'si" tutuyor (`AuditLogService` yazıyor). Ya kolon adı `FirmaId`'ye RENAME edilir ya da semantic olarak korunur. Karar B4 başlangıcında verilecek.
+
+**ÖNCELİK 2 — Faz 5.2 (Firma.CariId drop)**: Hâlâ iş tarafı onayı önerilir.
+
+**ÖNCELİK 3 — Teknik Borç #1 (True Excel grid)**.
+
+### Açık dosyalar / referans (bu oturum sonu)
+- 📌 `docs/TENANT_MIGRATION_PLAN.md` (bookmark)
+- ✅ `KOAFiloServis.Web/Data/Migrations/20260518140619_TenantB3i_DropSirketNavigationAndEntity.cs` (DB'ye uygulandı)
+- ✅ `KOAFiloServis.Web/Data/Migrations/20260517212717_TenantZ1_DropLegacyCariFaturaSirketColumns.cs` (B4 şablonu — PL/pgSQL idempotent drop)
+- 🔒 DB'de `_LEGACY_Sirketler` + `_LEGACY_SirketTransferLoglari` tabloları duruyor (B4'te DROP edilecek)
+
+### Git durumu (bu oturum sonu)
+- Branch: `main`, push edildi
+- Son commit'ler: `c9d204e` Kapasite hotfix, `739df5f` Faz 5.3-B3-i
+
+**Devam komutu (sonraki oturum):** "kaldığımız yerden devam" → Faz 5.3-B4 başlat. **ÖNCELİKLE DB BACKUP AL** (pg_dump). Sonra SirketId kolon drop migration + _LEGACY_ tablo drop migration.
+
+---
+
 ## ✅ FAZ 5.3-B1 + B2 TAMAMLANDI (Bu oturum)
 
 ### Bu oturumda yapılanlar
