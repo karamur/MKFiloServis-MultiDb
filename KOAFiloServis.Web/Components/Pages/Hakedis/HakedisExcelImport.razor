@@ -1,0 +1,609 @@
+@page "/hakedis-excel-import"
+@using KOAFiloServis.Shared.Entities
+@using KOAFiloServis.Web.Services
+@using Microsoft.AspNetCore.Authorization
+@inject IHakedisService HakedisService
+@inject IToastService ToastService
+@inject NavigationManager NavigationManager
+@attribute [Authorize]
+
+<PageTitle>Hakedis Excel Import</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-file-earmark-excel me-2"></i>Hakedis Excel Import</h2>
+            <p class="text-muted mb-0">Excel dosyasından hakedis/puantaj kayıtlarını içe aktarın</p>
+        </div>
+        <div>
+            <a href="/hakedis-tablosu" class="btn btn-outline-primary">
+                <i class="bi bi-table me-1"></i> Hakedis Tablosu
+            </a>
+        </div>
+    </div>
+
+    <!-- Dönem ve Dosya Seçimi -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-calendar me-2"></i>1. Dönem ve Dosya Seçimi</h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-2">
+                    <label class="form-label">Yıl *</label>
+                    <select class="form-select" @bind="yil">
+                        @for (int y = DateTime.Now.Year + 1; y >= 2020; y--)
+                        {
+                            <option value="@y">@y</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Ay *</label>
+                    <select class="form-select" @bind="ay">
+                        <option value="1">Ocak</option>
+                        <option value="2">Şubat</option>
+                        <option value="3">Mart</option>
+                        <option value="4">Nisan</option>
+                        <option value="5">Mayıs</option>
+                        <option value="6">Haziran</option>
+                        <option value="7">Temmuz</option>
+                        <option value="8">Ağustos</option>
+                        <option value="9">Eylül</option>
+                        <option value="10">Ekim</option>
+                        <option value="11">Kasım</option>
+                        <option value="12">Aralık</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Excel Dosyası *</label>
+                    <InputFile class="form-control" OnChange="OnFileSelected" accept=".xlsx,.xls" />
+                    @if (!string.IsNullOrEmpty(dosyaAdi))
+                    {
+                        <small class="text-success"><i class="bi bi-check-circle me-1"></i>@dosyaAdi</small>
+                    }
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" @bind="otomatikOlustur" id="chkOtoOlustur" />
+                        <label class="form-check-label" for="chkOtoOlustur">
+                            Eksik kayıtları otomatik oluştur
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Kolon Eşleştirme -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-grid-3x3 me-2"></i>2. Excel Kolon Eşleştirme</h5>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="ToggleKolonAyarlari">
+                <i class="bi @(showKolonAyarlari ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                @(showKolonAyarlari ? "Gizle" : "Göster")
+            </button>
+        </div>
+        @if (showKolonAyarlari)
+        {
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-2">
+                        <label class="form-label small">Başlangıç Satırı</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.BaslangicSatiri" min="1" />
+                    </div>
+                </div>
+                <hr />
+                <div class="row g-2">
+                    <div class="col-md-2">
+                        <label class="form-label small">Kurum (Kolon)</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.KurumKolonu" min="0" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Güzergah</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.GuzergahKolonu" min="0" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Gelir</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.GelirKolonu" min="0" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Gider</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.GiderKolonu" min="0" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Yön</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.YonKolonu" min="0" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Plaka</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.PlakaKolonu" min="0" />
+                    </div>
+                </div>
+                <div class="row g-2 mt-2">
+                    <div class="col-md-2">
+                        <label class="form-label small">Şoför</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.SoforKolonu" min="0" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Şoför Telefon</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.SoforTelefonKolonu" min="0" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Fatura Kesici</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.FaturaKesiciKolonu" min="0" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Fat. Telefon</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.FaturaKesiciTelefonKolonu" min="0" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Gün (Çarpan)</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.GunKolonu" min="0" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Toplam Gider</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.ToplamGiderKolonu" min="0" />
+                    </div>
+                </div>
+                <div class="row g-2 mt-2">
+                    <div class="col-md-2">
+                        <label class="form-label small">Gider KDV %20</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.GiderKdv20Kolonu" min="0" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Gider KDV %10</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.GiderKdv10Kolonu" min="0" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Gider Kesinti</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.GiderKesintiKolonu" min="0" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Ödenecek</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.OdenecekKolonu" min="0" />
+                    </div>
+                </div>
+
+                <h6 class="mt-3 text-success"><i class="bi bi-arrow-up-circle me-1"></i>Gelir Detay Kolonları</h6>
+                <div class="row g-2 mt-1">
+                    <div class="col-md-2">
+                        <label class="form-label small">Toplam Gelir</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.ToplamGelirKolonu" min="0" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Gelir KDV %20</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.GelirKdv20Kolonu" min="0" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Gelir KDV %10</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.GelirKdv10Kolonu" min="0" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Gelir Kesinti</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.GelirKesintiKolonu" min="0" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Alınacak</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.AlinacakKolonu" min="0" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Fark (opsiyonel)</label>
+                        <input type="number" class="form-control form-control-sm" @bind="eslestirme.FarkKolonu" min="0" />
+                    </div>
+                </div>
+
+                <div class="mt-3">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Kolon numarası 0 ise o alan atlanır. Başlangıç satırı genellikle 2'dir (başlık satırı 1 ise).
+                    </small>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Önizleme ve İşlem -->
+    <div class="d-flex gap-2 mb-4">
+        <button class="btn btn-primary" @onclick="OnizlemeYap" disabled="@(isLoading || excelStream == null)">
+            @if (isLoading && !isImporting)
+            {
+                <span class="spinner-border spinner-border-sm me-1"></span>
+            }
+            <i class="bi bi-search me-1"></i> Önizleme Yap
+        </button>
+        
+        @if (onizlemeSatirlari.Any())
+        {
+            <button class="btn btn-success" @onclick="ImportYap" disabled="@isImporting">
+                @if (isImporting)
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                }
+                <i class="bi bi-download me-1"></i> İçe Aktar (@onizlemeSatirlari.Count satır)
+            </button>
+        }
+    </div>
+
+    <!-- Önizleme Özeti -->
+    @if (onizlemeSatirlari.Any())
+    {
+        <div class="row mb-4">
+            <div class="col-md-2">
+                <div class="card bg-primary text-white">
+                    <div class="card-body py-2 text-center">
+                        <h4 class="mb-0">@onizlemeSatirlari.Count</h4>
+                        <small>Toplam Satır</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card bg-success text-white">
+                    <div class="card-body py-2 text-center">
+                        <h4 class="mb-0">@onizlemeSatirlari.Count(s => s.KurumEslesti)</h4>
+                        <small>Kurum Eşleşti</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card bg-info text-white">
+                    <div class="card-body py-2 text-center">
+                        <h4 class="mb-0">@onizlemeSatirlari.Count(s => s.GuzergahEslesti)</h4>
+                        <small>Güzergah Eşleşti</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card bg-warning text-dark">
+                    <div class="card-body py-2 text-center">
+                        <h4 class="mb-0">@onizlemeSatirlari.Count(s => s.AracEslesti)</h4>
+                        <small>Araç Eşleşti</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card bg-secondary text-white">
+                    <div class="card-body py-2 text-center">
+                        <h4 class="mb-0">@onizlemeSatirlari.Count(s => s.SoforEslesti)</h4>
+                        <small>Şoför Eşleşti</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card bg-dark text-white">
+                    <div class="card-body py-2 text-center">
+                        <h4 class="mb-0">@onizlemeSatirlari.Sum(s => s.Alinacak).ToString("N0") ₺</h4>
+                        <small>Toplam Alınacak</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card bg-danger text-white">
+                    <div class="card-body py-2 text-center">
+                        <h4 class="mb-0">@onizlemeSatirlari.Sum(s => s.Odenecek).ToString("N0") ₺</h4>
+                        <small>Toplam Ödenecek</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card @(onizlemeSatirlari.Sum(s => s.Fark) >= 0 ? "bg-success" : "bg-danger") text-white">
+                    <div class="card-body py-2 text-center">
+                        <h4 class="mb-0">@onizlemeSatirlari.Sum(s => s.Fark).ToString("N0") ₺</h4>
+                        <small>Toplam Fark</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Önizleme Tablosu -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-table me-2"></i>3. Veri Önizleme</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                    <table class="table table-sm table-hover table-striped mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>#</th>
+                                <th>Kurum</th>
+                                <th>Güzergah</th>
+                                <th>Yön</th>
+                                <th>Plaka</th>
+                                <th>Şoför</th>
+                                <th>Fatura Kesici</th>
+                                <th class="text-end">Gün</th>
+                                <th class="text-end">Gelir</th>
+                                <th class="text-end text-success">Alınacak</th>
+                                <th class="text-end">Gider</th>
+                                <th class="text-end text-danger">Ödenecek</th>
+                                <th class="text-end">Fark</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var satir in onizlemeSatirlari)
+                            {
+                                <tr>
+                                    <td>@satir.SatirNo</td>
+                                    <td>
+                                        @if (satir.KurumEslesti)
+                                        {
+                                            <span class="badge bg-success"><i class="bi bi-check"></i></span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-warning"><i class="bi bi-plus"></i></span>
+                                        }
+                                        @satir.KurumAdi
+                                    </td>
+                                    <td>
+                                        @if (satir.GuzergahEslesti)
+                                        {
+                                            <span class="badge bg-success"><i class="bi bi-check"></i></span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-warning"><i class="bi bi-plus"></i></span>
+                                        }
+                                        @satir.GuzergahAdi
+                                    </td>
+                                    <td>@satir.Yon</td>
+                                    <td>
+                                        @if (satir.AracEslesti)
+                                        {
+                                            <span class="badge bg-success"><i class="bi bi-check"></i></span>
+                                        }
+                                        @satir.Plaka
+                                    </td>
+                                    <td>
+                                        @if (satir.SoforEslesti)
+                                        {
+                                            <span class="badge bg-success"><i class="bi bi-check"></i></span>
+                                        }
+                                        else if (!string.IsNullOrEmpty(satir.SoforAdi))
+                                        {
+                                            <span class="badge bg-warning"><i class="bi bi-plus"></i></span>
+                                        }
+                                        @satir.SoforAdi
+                                    </td>
+                                    <td>
+                                        @if (satir.FaturaKesiciEslesti)
+                                        {
+                                            <span class="badge bg-success"><i class="bi bi-check"></i></span>
+                                        }
+                                        else if (!string.IsNullOrEmpty(satir.FaturaKesiciAdi))
+                                        {
+                                            <span class="badge bg-warning"><i class="bi bi-plus"></i></span>
+                                        }
+                                        @satir.FaturaKesiciAdi
+                                    </td>
+                                    <td class="text-end">@satir.Gun.ToString("N1")</td>
+                                    <td class="text-end">@satir.Gelir.ToString("N2")</td>
+                                    <td class="text-end text-success fw-bold">@satir.Alinacak.ToString("N2")</td>
+                                    <td class="text-end">@satir.Gider.ToString("N2")</td>
+                                    <td class="text-end text-danger fw-bold">@satir.Odenecek.ToString("N2")</td>
+                                    <td class="text-end @(satir.Fark >= 0 ? "text-success" : "text-danger") fw-bold">@satir.Fark.ToString("N2")</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr class="fw-bold">
+                                <td colspan="8" class="text-end">TOPLAM:</td>
+                                <td class="text-end">@onizlemeSatirlari.Sum(s => s.Gelir).ToString("N2")</td>
+                                <td class="text-end text-success">@onizlemeSatirlari.Sum(s => s.Alinacak).ToString("N2")</td>
+                                <td class="text-end">@onizlemeSatirlari.Sum(s => s.Gider).ToString("N2")</td>
+                                <td class="text-end text-danger">@onizlemeSatirlari.Sum(s => s.Odenecek).ToString("N2")</td>
+                                <td class="text-end @(onizlemeSatirlari.Sum(s => s.Fark) >= 0 ? "text-success" : "text-danger")">@onizlemeSatirlari.Sum(s => s.Fark).ToString("N2")</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-3">
+            <small class="text-muted">
+                <span class="badge bg-success"><i class="bi bi-check"></i></span> Sistemde eşleşti &nbsp;
+                <span class="badge bg-warning"><i class="bi bi-plus"></i></span> Yeni oluşturulacak (otomatik oluşturma açıksa)
+            </small>
+        </div>
+    }
+
+    <!-- Import Geçmişi -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Import Geçmişi</h5>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Tarih</th>
+                        <th>Dosya</th>
+                        <th>Dönem</th>
+                        <th>Durum</th>
+                        <th>Toplam</th>
+                        <th>Başarılı</th>
+                        <th>Hatalı</th>
+                        <th>Oto Firma</th>
+                        <th>Oto Güzergah</th>
+                        <th>Oto Şoför</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var imp in importGecmisi)
+                    {
+                        <tr>
+                            <td>@imp.ImportTarihi.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                            <td>@imp.DosyaAdi</td>
+                            <td>@imp.Ay/@imp.Yil</td>
+                            <td>
+                                <span class="badge @GetDurumBadge(imp.Durum)">@GetDurumText(imp.Durum)</span>
+                            </td>
+                            <td>@imp.ToplamSatir</td>
+                            <td class="text-success">@imp.BasariliSatir</td>
+                            <td class="text-danger">@imp.HataliSatir</td>
+                            <td>@imp.OtoOlusturulanFirma</td>
+                            <td>@imp.OtoOlusturulanGuzergah</td>
+                            <td>@imp.OtoOlusturulanSofor</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (!importGecmisi.Any())
+            {
+                <div class="text-center text-muted py-3">
+                    <i class="bi bi-inbox fs-1"></i>
+                    <p class="mb-0">Henüz import geçmişi yok</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private int yil = DateTime.Now.Year;
+    private int ay = DateTime.Now.Month;
+    private string? dosyaAdi;
+    private Stream? excelStream;
+    private bool otomatikOlustur = true;
+    private bool showKolonAyarlari = false;
+    private bool isLoading = false;
+    private bool isImporting = false;
+
+    private HakedisKolonEslestirme eslestirme = new();
+    private List<HakedisExcelSatiri> onizlemeSatirlari = new();
+    private List<PuantajExcelImport> importGecmisi = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadImportGecmisi();
+    }
+
+    private async Task LoadImportGecmisi()
+    {
+        importGecmisi = await HakedisService.GetImportGecmisiAsync();
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file != null)
+        {
+            dosyaAdi = file.Name;
+            excelStream = new MemoryStream();
+            await file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024).CopyToAsync(excelStream);
+            excelStream.Position = 0;
+            onizlemeSatirlari.Clear();
+        }
+    }
+
+    private async Task OnizlemeYap()
+    {
+        if (excelStream == null)
+        {
+            ToastService.ShowError("Lütfen bir Excel dosyası seçin.");
+            return;
+        }
+
+        isLoading = true;
+        try
+        {
+            excelStream.Position = 0;
+            onizlemeSatirlari = await HakedisService.ExcelOnizlemeAsync(excelStream, eslestirme);
+            
+            if (!onizlemeSatirlari.Any())
+            {
+                ToastService.ShowWarning("Excel dosyasında veri bulunamadı.");
+            }
+            else
+            {
+                ToastService.ShowSuccess($"{onizlemeSatirlari.Count} satır okundu.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ImportYap()
+    {
+        if (!onizlemeSatirlari.Any())
+        {
+            ToastService.ShowError("Önce önizleme yapın.");
+            return;
+        }
+
+        isImporting = true;
+        try
+        {
+            var result = await HakedisService.ExcelImportAsync(
+                onizlemeSatirlari, 
+                yil, 
+                ay, 
+                dosyaAdi ?? "import.xlsx",
+                "system", // TODO: Aktif kullanıcı
+                otomatikOlustur);
+
+            if (result.HataliSatir > 0)
+            {
+                ToastService.ShowWarning($"{result.BasariliSatir} satır aktarıldı, {result.HataliSatir} hata oluştu.");
+            }
+            else
+            {
+                ToastService.ShowSuccess($"{result.BasariliSatir} satır başarıyla aktarıldı.");
+            }
+
+            if (result.OtoOlusturulanFirma > 0 || result.OtoOlusturulanGuzergah > 0 || result.OtoOlusturulanSofor > 0)
+            {
+                ToastService.ShowInfo($"Otomatik oluşturulan: {result.OtoOlusturulanFirma} firma, {result.OtoOlusturulanGuzergah} güzergah, {result.OtoOlusturulanSofor} şoför");
+            }
+
+            await LoadImportGecmisi();
+            onizlemeSatirlari.Clear();
+            
+            // Hakedis tablosuna yönlendir
+            NavigationManager.NavigateTo($"/hakedis-tablosu?yil={yil}&ay={ay}");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+        finally
+        {
+            isImporting = false;
+        }
+    }
+
+    private void ToggleKolonAyarlari()
+    {
+        showKolonAyarlari = !showKolonAyarlari;
+    }
+
+    private string GetDurumBadge(ImportDurum durum) => durum switch
+    {
+        ImportDurum.Bekliyor => "bg-secondary",
+        ImportDurum.Eslestiriliyor => "bg-info",
+        ImportDurum.OnayBekliyor => "bg-warning",
+        ImportDurum.Isleniyor => "bg-primary",
+        ImportDurum.Tamamlandi => "bg-success",
+        ImportDurum.Hata => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private string GetDurumText(ImportDurum durum) => durum switch
+    {
+        ImportDurum.Bekliyor => "Bekliyor",
+        ImportDurum.Eslestiriliyor => "Eşleştiriliyor",
+        ImportDurum.OnayBekliyor => "Onay Bekliyor",
+        ImportDurum.Isleniyor => "İşleniyor",
+        ImportDurum.Tamamlandi => "Tamamlandı",
+        ImportDurum.Hata => "Hata",
+        _ => "Bilinmiyor"
+    };
+}

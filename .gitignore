@@ -97,3 +97,6 @@ archive/
 .env.*
 !.env.example
 
+
+# AI agent / editor settings
+.claude/
