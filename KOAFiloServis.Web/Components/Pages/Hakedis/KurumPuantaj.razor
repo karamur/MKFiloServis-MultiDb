@@ -1,0 +1,602 @@
+@page "/kurum-puantaj"
+@using KOAFiloServis.Shared.Entities
+@using KOAFiloServis.Web.Services
+@using Microsoft.AspNetCore.Authorization
+@inject IKurumPuantajService KurumPuantajService
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+<PageTitle>Kurum Puantaj</PageTitle>
+
+<style>
+    .puantaj-table th, .puantaj-table td { font-size: .80rem; padding: 3px 5px; white-space: nowrap; }
+    .puantaj-table input[type=number] { width: 36px; text-align: center; padding: 1px 2px; font-size:.78rem; border:1px solid #ced4da; border-radius:3px; }
+    .puantaj-table input[type=number]:focus { outline: none; border-color:#0d6efd; box-shadow: 0 0 0 2px rgba(13,110,253,.2); }
+    .gun-hdr { text-align:center; width:30px; min-width:28px; }
+    .col-guzergah { min-width:160px; max-width:200px; }
+    .col-arac { min-width:90px; }
+    .col-sofor { min-width:110px; }
+    .col-yon { min-width:80px; }
+    .col-toplam { min-width:55px; font-weight:700; background:#f0f7ff; text-align:center; }
+    .hafta-sonu { background:#fff8e1 !important; }
+    .satir-degisik { background:#e8f5e9 !important; }
+    .guzergah-grup th { background:#e3eeff; font-weight:600; font-size:.79rem; }
+    .sticky-col { position:sticky; left:0; z-index:2; background:#fff; }
+    .sticky-col2 { position:sticky; left:160px; z-index:2; background:#fff; }
+</style>
+
+<div class="container-fluid px-3">
+
+    <!-- Başlık -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h3 class="mb-0"><i class="bi bi-calendar3 me-2 text-primary"></i>Kurum Puantaj</h3>
+            <p class="text-muted small mb-0">Kurum bazlı güzergah / araç günlük sefer puantajı</p>
+        </div>
+        <div class="d-flex gap-2">
+            @if (degisiklikVar)
+            {
+                <button class="btn btn-success" @onclick="TopluKaydet" disabled="@kaydediliyor">
+                    @if (kaydediliyor) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    else { <i class="bi bi-floppy me-1"></i> }
+                    Tümünü Kaydet
+                </button>
+            }
+            <button class="btn btn-outline-secondary" @onclick="SablonOlustur" disabled="@yukleniyor">
+                <i class="bi bi-magic me-1"></i> Şablon Oluştur
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtre Çubuğu -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold mb-1">Kurum</label>
+                    <select class="form-select form-select-sm" @bind="seciliKurumId" @bind:after="KurumDegisti">
+                        <option value="0">— Kurum seçin —</option>
+                        @foreach (var k in kurumlar)
+                        {
+                            <option value="@k.Id">@k.KurumAdi</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <label class="form-label small fw-semibold mb-1">Yıl</label>
+                    <select class="form-select form-select-sm" style="width:90px" @bind="seciliYil" @bind:after="LoadData">
+                        @for (int y = DateTime.Now.Year + 1; y >= 2022; y--)
+                        {
+                            <option value="@y">@y</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <label class="form-label small fw-semibold mb-1">Ay</label>
+                    <select class="form-select form-select-sm" style="width:110px" @bind="seciliAy" @bind:after="LoadData">
+                        @for (int m = 1; m <= 12; m++)
+                        {
+                            <option value="@m">@AyAdi(m)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <label class="form-label small fw-semibold mb-1">Görünüm</label>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn @(gorunumDetayli ? "btn-primary" : "btn-outline-primary")"
+                                @onclick="@(() => gorunumDetayli = true)">
+                            <i class="bi bi-grid-3x3-gap"></i> Günlük
+                        </button>
+                        <button class="btn @(!gorunumDetayli ? "btn-primary" : "btn-outline-primary")"
+                                @onclick="@(() => gorunumDetayli = false)">
+                            <i class="bi bi-list-columns"></i> Özet
+                        </button>
+                    </div>
+                </div>
+                @if (kayitlar.Any())
+                {
+                    <div class="col-auto ms-auto text-muted small align-self-end">
+                        <strong>@kayitlar.Count</strong> satır &nbsp;|&nbsp;
+                        Toplam sefer: <strong>@kayitlar.Sum(k => k.SeferGunuToplami)</strong>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    @if (yukleniyor)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="text-muted mt-2">Yükleniyor…</p>
+        </div>
+    }
+    else if (seciliKurumId == 0)
+    {
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-building fs-1 opacity-25"></i>
+            <p class="mt-2">Lütfen bir kurum seçin.</p>
+        </div>
+    }
+    else if (!kayitlar.Any())
+    {
+        <div class="alert alert-info d-flex align-items-center gap-2">
+            <i class="bi bi-info-circle-fill"></i>
+            <span>
+                Bu dönem için kayıt yok.
+                <button class="btn btn-sm btn-primary ms-2" @onclick="SablonOlustur">
+                    <i class="bi bi-magic me-1"></i> Şablon Oluştur
+                </button>
+            </span>
+        </div>
+    }
+    else
+    {
+        <!-- Toplu seçim araç çubuğu -->
+        <div class="d-flex gap-2 mb-2 flex-wrap">
+            <button class="btn btn-sm btn-outline-secondary" @onclick="TumGunleriAc">
+                <i class="bi bi-check2-all me-1"></i> Tüm Günler = 1
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="TumGunleriSifirla">
+                <i class="bi bi-x-circle me-1"></i> Tüm Günler = 0
+            </button>
+            <span class="vr"></span>
+            <small class="text-muted align-self-center">
+                <i class="bi bi-square-fill text-warning me-1"></i>Haftasonu
+                &nbsp;
+                <span class="badge bg-success-subtle text-success border">Değiştirildi</span>
+            </small>
+        </div>
+
+        @if (gorunumDetayli)
+        {
+            <!-- ─── GÜNLÜK DETAYLI TABLO ─────────────────────────────── -->
+            <div class="table-responsive" style="overflow-x:auto; max-height:72vh; overflow-y:auto;">
+                <table class="table table-bordered table-sm puantaj-table align-middle">
+                    <thead class="table-light" style="position:sticky;top:0;z-index:3;">
+                        <tr>
+                            <th class="sticky-col col-guzergah">Güzergah</th>
+                            <th class="sticky-col2 col-arac">Araç</th>
+                            <th class="col-sofor">Şoför</th>
+                            <th class="col-yon">Yön</th>
+                            @for (int g = 1; g <= AydakiGunSayisi(); g++)
+                            {
+                                var tarih = new DateTime(seciliYil, seciliAy, g);
+                                <th class="gun-hdr @(HaftaSonuMu(tarih) ? "hafta-sonu" : "")">
+                                    <div>@g</div>
+                                    <div style="font-size:.65rem;color:#888">@tarih.ToString("ddd", new System.Globalization.CultureInfo("tr-TR"))</div>
+                                </th>
+                            }
+                            <th class="col-toplam">Top.</th>
+                            <th style="width:60px">İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var grup in GrupluKayitlar())
+                        {
+                            <!-- Güzergah grup başlığı -->
+                            <tr class="guzergah-grup">
+                                <td colspan="@(4 + AydakiGunSayisi() + 2)" class="py-1 px-2">
+                                    <i class="bi bi-signpost-split me-1 text-primary"></i>
+                                    <strong>@grup.Key</strong>
+                                    <span class="badge bg-primary-subtle text-primary ms-2">@grup.Value.Count araç</span>
+                                    <span class="text-muted ms-2 small">Toplam: <strong>@grup.Value.Sum(k=>k.SeferGunuToplami)</strong> sefer</span>
+                                </td>
+                            </tr>
+
+                            @foreach (var kayit in grup.Value)
+                            {
+                                <tr class="@(degisikSatirlar.Contains(kayit) ? "satir-degisik" : "")">
+                                    <td class="sticky-col col-guzergah text-truncate" style="max-width:200px" title="@kayit.Guzergah?.GuzergahAdi">
+                                        @kayit.Guzergah?.GuzergahAdi
+                                    </td>
+                                    <td class="sticky-col2 col-arac fw-semibold">@kayit.Plaka</td>
+                                    <td class="col-sofor text-truncate" style="max-width:130px" title="@kayit.SoforAdi">@kayit.SoforAdi</td>
+                                    <td class="col-yon">
+                                        <select class="form-select form-select-sm py-0" style="font-size:.76rem"
+                                                value="@kayit.Yon"
+                                                @onchange="e => YonDegisti(kayit, e)">
+                                            <option value="@PuantajYon.Sabah">Sabah</option>
+                                            <option value="@PuantajYon.Aksam">Akşam</option>
+                                            <option value="@PuantajYon.SabahAksam">S+A</option>
+                                        </select>
+                                    </td>
+                                    @for (int g = 1; g <= AydakiGunSayisi(); g++)
+                                    {
+                                        var gunNo = g;
+                                        var tarih = new DateTime(seciliYil, seciliAy, gunNo);
+                                        <td class="@(HaftaSonuMu(tarih) ? "hafta-sonu" : "")">
+                                            <input type="number" min="0" max="2"
+                                                   value="@kayit.GetGunDeger(gunNo)"
+                                                   @onchange="e => GunDegerDegisti(kayit, gunNo, e)"
+                                                   @onclick="e => { }" />
+                                        </td>
+                                    }
+                                    <td class="col-toplam">@kayit.SeferGunuToplami</td>
+                                    <td>
+                                        <div class="d-flex gap-1">
+                                            <button class="btn btn-xs btn-outline-primary p-1" title="Düzenle"
+                                                    @onclick="() => TekKayitDuzenle(kayit)">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <button class="btn btn-xs btn-outline-danger p-1" title="Sil"
+                                                    @onclick="() => KayitSil(kayit)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <!-- ─── ÖZET TABLO ──────────────────────────────────────── -->
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm puantaj-table align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Güzergah</th>
+                            <th>Araç</th>
+                            <th>Şoför</th>
+                            <th>Yön</th>
+                            <th class="text-center">Sefer Sayısı</th>
+                            <th class="text-center">Toplam Gün</th>
+                            <th style="width:60px">İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var kayit in kayitlar)
+                        {
+                            <tr class="@(degisikSatirlar.Contains(kayit) ? "satir-degisik" : "")">
+                                <td>@kayit.Guzergah?.GuzergahAdi</td>
+                                <td class="fw-semibold">@kayit.Plaka</td>
+                                <td>@kayit.SoforAdi</td>
+                                <td>
+                                    <select class="form-select form-select-sm py-0" style="width:90px;font-size:.76rem"
+                                            value="@kayit.Yon"
+                                            @onchange="e => YonDegisti(kayit, e)">
+                                        <option value="@PuantajYon.Sabah">Sabah</option>
+                                        <option value="@PuantajYon.Aksam">Akşam</option>
+                                        <option value="@PuantajYon.SabahAksam">S+A</option>
+                                    </select>
+                                </td>
+                                <td class="text-center">
+                                    <input type="number" min="0" max="31" style="width:55px;text-align:center"
+                                           class="form-control form-control-sm d-inline-block"
+                                           value="@kayit.SeferSayisi"
+                                           @onchange="e => SeferSayisiDegisti(kayit, e)" />
+                                </td>
+                                <td class="col-toplam">@kayit.SeferGunuToplami</td>
+                                <td>
+                                    <div class="d-flex gap-1">
+                                        <button class="btn btn-xs btn-outline-primary p-1" title="Günlük Düzenle"
+                                                @onclick="() => TekKayitDuzenle(kayit)">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button class="btn btn-xs btn-outline-danger p-1" title="Sil"
+                                                @onclick="() => KayitSil(kayit)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
+
+<!-- ── Tek Kayıt Düzenle Modal ─────────────────────────────────────────────── -->
+@if (duzenleKayit != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-pencil-square me-2"></i>
+                        @duzenleKayit.Guzergah?.GuzergahAdi — @duzenleKayit.Plaka
+                        <small class="text-muted ms-2">(@AyAdi(seciliAy) @seciliYil)</small>
+                    </h5>
+                    <button class="btn-close" @onclick="() => duzenleKayit = null"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small">Şoför</label>
+                            <input class="form-control form-control-sm" @bind="duzenleKayit.SoforAdi" placeholder="Şoför adı" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Yön</label>
+                            <select class="form-select form-select-sm" @bind="duzenleKayit.Yon">
+                                <option value="@PuantajYon.Sabah">Sabah</option>
+                                <option value="@PuantajYon.Aksam">Akşam</option>
+                                <option value="@PuantajYon.SabahAksam">Sabah + Akşam</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Sefer/Gün</label>
+                            <input type="number" class="form-control form-control-sm" @bind="duzenleKayit.SeferSayisi" min="0" max="4" />
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end gap-2">
+                            <button class="btn btn-sm btn-outline-success" @onclick="() => DuzenleTumGunleriDoldur(1)">
+                                <i class="bi bi-check-all me-1"></i>Tümü=1
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => DuzenleTumGunleriDoldur(0)">
+                                <i class="bi bi-x me-1"></i>Sıfırla
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Gün tablosu -->
+                    <table class="table table-sm table-bordered puantaj-table">
+                        <thead class="table-light">
+                            <tr>
+                                @for (int g = 1; g <= AydakiGunSayisi(); g++)
+                                {
+                                    var tarih = new DateTime(seciliYil, seciliAy, g);
+                                    <th class="gun-hdr @(HaftaSonuMu(tarih) ? "hafta-sonu" : "")">
+                                        <div>@g</div>
+                                        <div style="font-size:.62rem;color:#888">@tarih.ToString("ddd", new System.Globalization.CultureInfo("tr-TR"))</div>
+                                    </th>
+                                }
+                                <th class="col-toplam">Top.</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                @for (int g = 1; g <= AydakiGunSayisi(); g++)
+                                {
+                                    var gunNo = g;
+                                    var tarih = new DateTime(seciliYil, seciliAy, gunNo);
+                                    <td class="@(HaftaSonuMu(tarih) ? "hafta-sonu" : "")">
+                                        <input type="number" min="0" max="2"
+                                               value="@duzenleKayit.GetGunDeger(gunNo)"
+                                               @onchange="e => DuzenleGunDegisti(gunNo, e)" />
+                                    </td>
+                                }
+                                <td class="col-toplam">@duzenleKayit.SeferGunuToplami</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => duzenleKayit = null">İptal</button>
+                    <button class="btn btn-primary" @onclick="TekKayitKaydet" disabled="@kaydediliyor">
+                        @if (kaydediliyor) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        <i class="bi bi-floppy me-1"></i> Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    // ── State ─────────────────────────────────────────────────────────────────
+    List<Kurum>       kurumlar      = [];
+    List<PuantajKayit> kayitlar     = [];
+    HashSet<PuantajKayit> degisikSatirlar = [];
+
+    int  seciliKurumId = 0;
+    int  seciliYil     = DateTime.Now.Year;
+    int  seciliAy      = DateTime.Now.Month;
+    bool yukleniyor    = false;
+    bool kaydediliyor  = false;
+    bool gorunumDetayli = true;
+
+    PuantajKayit? duzenleKayit = null;
+
+    bool degisiklikVar => degisikSatirlar.Count > 0;
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    protected override async Task OnInitializedAsync()
+    {
+        kurumlar = await KurumPuantajService.GetAktifKurumlarAsync();
+    }
+
+    // ── Filtre olayları ───────────────────────────────────────────────────────
+    async Task KurumDegisti()
+    {
+        degisikSatirlar.Clear();
+        await LoadData();
+    }
+
+    async Task LoadData()
+    {
+        if (seciliKurumId == 0) { kayitlar = []; return; }
+        yukleniyor = true;
+        StateHasChanged();
+        try
+        {
+            kayitlar = await KurumPuantajService.GetPuantajlarAsync(seciliYil, seciliAy, seciliKurumId);
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    async Task SablonOlustur()
+    {
+        if (seciliKurumId == 0) return;
+        yukleniyor = true;
+        StateHasChanged();
+        try
+        {
+            kayitlar = await KurumPuantajService.SablonOlusturAsync(seciliKurumId, seciliYil, seciliAy);
+            degisikSatirlar.Clear();
+            ToastService.ShowSuccess("Şablon oluşturuldu. Değişiklik yaparken 'Tümünü Kaydet' ile kaydedin.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Şablon oluşturulamadı: {ex.Message}");
+        }
+        finally { yukleniyor = false; }
+    }
+
+    // ── Toplu kaydet ──────────────────────────────────────────────────────────
+    async Task TopluKaydet()
+    {
+        kaydediliyor = true;
+        try
+        {
+            await KurumPuantajService.TopluSavePuantajAsync(degisikSatirlar);
+            degisikSatirlar.Clear();
+            await LoadData();
+            ToastService.ShowSuccess("Tüm değişiklikler kaydedildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Kayıt hatası: {ex.Message}");
+        }
+        finally { kaydediliyor = false; }
+    }
+
+    // ── Hücre değişim olayları ────────────────────────────────────────────────
+    void GunDegerDegisti(PuantajKayit kayit, int gun, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int deger))
+        {
+            kayit.SetGunDeger(gun, Math.Clamp(deger, 0, 2));
+            degisikSatirlar.Add(kayit);
+        }
+    }
+
+    void YonDegisti(PuantajKayit kayit, ChangeEventArgs e)
+    {
+        if (Enum.TryParse<PuantajYon>(e.Value?.ToString(), out var yon))
+        {
+            kayit.Yon = yon;
+            degisikSatirlar.Add(kayit);
+        }
+    }
+
+    void SeferSayisiDegisti(PuantajKayit kayit, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int s))
+        {
+            kayit.SeferSayisi = Math.Clamp(s, 0, 31);
+            degisikSatirlar.Add(kayit);
+        }
+    }
+
+    // ── Toplu doldur / sıfırla ────────────────────────────────────────────────
+    void TumGunleriAc()
+    {
+        foreach (var k in kayitlar)
+        {
+            for (int g = 1; g <= AydakiGunSayisi(); g++) k.SetGunDeger(g, 1);
+            degisikSatirlar.Add(k);
+        }
+    }
+
+    void TumGunleriSifirla()
+    {
+        foreach (var k in kayitlar)
+        {
+            for (int g = 1; g <= AydakiGunSayisi(); g++) k.SetGunDeger(g, 0);
+            degisikSatirlar.Add(k);
+        }
+    }
+
+    // ── Tek kayıt düzenle ─────────────────────────────────────────────────────
+    void TekKayitDuzenle(PuantajKayit kayit)
+    {
+        // Derin kopya (modal iptal edilirse orijinal bozulmasın)
+        duzenleKayit = new PuantajKayit
+        {
+            Id         = kayit.Id,
+            GuzergahId = kayit.GuzergahId,
+            Guzergah   = kayit.Guzergah,
+            AracId     = kayit.AracId,
+            Arac       = kayit.Arac,
+            Plaka      = kayit.Plaka,
+            SoforId    = kayit.SoforId,
+            SoforAdi   = kayit.SoforAdi,
+            Yon        = kayit.Yon,
+            SeferSayisi= kayit.SeferSayisi,
+            Yil        = kayit.Yil,
+            Ay         = kayit.Ay
+        };
+        for (int g = 1; g <= 31; g++) duzenleKayit.SetGunDeger(g, kayit.GetGunDeger(g));
+    }
+
+    void DuzenleGunDegisti(int gun, ChangeEventArgs e)
+    {
+        if (duzenleKayit == null) return;
+        if (int.TryParse(e.Value?.ToString(), out int d))
+            duzenleKayit.SetGunDeger(gun, Math.Clamp(d, 0, 2));
+    }
+
+    void DuzenleTumGunleriDoldur(int deger)
+    {
+        if (duzenleKayit == null) return;
+        for (int g = 1; g <= AydakiGunSayisi(); g++) duzenleKayit.SetGunDeger(g, deger);
+    }
+
+    async Task TekKayitKaydet()
+    {
+        if (duzenleKayit == null) return;
+        kaydediliyor = true;
+        try
+        {
+            var kaydedilen = await KurumPuantajService.SavePuantajAsync(duzenleKayit);
+            // Listedeki satırı güncelle
+            var idx = kayitlar.FindIndex(k => k.Id == kaydedilen.Id || (k.GuzergahId == kaydedilen.GuzergahId && k.AracId == kaydedilen.AracId));
+            if (idx >= 0)
+            {
+                kayitlar[idx] = kaydedilen;
+                degisikSatirlar.Remove(kayitlar[idx]);
+            }
+            else
+            {
+                kayitlar.Add(kaydedilen);
+            }
+            duzenleKayit = null;
+            ToastService.ShowSuccess("Kayıt güncellendi.");
+        }
+        catch (Exception ex) { ToastService.ShowError($"Hata: {ex.Message}"); }
+        finally { kaydediliyor = false; }
+    }
+
+    async Task KayitSil(PuantajKayit kayit)
+    {
+        if (kayit.Id == 0) { kayitlar.Remove(kayit); return; }
+        try
+        {
+            await KurumPuantajService.DeletePuantajAsync(kayit.Id);
+            kayitlar.Remove(kayit);
+            degisikSatirlar.Remove(kayit);
+            ToastService.ShowSuccess("Kayıt silindi.");
+        }
+        catch (Exception ex) { ToastService.ShowError($"Silinemedi: {ex.Message}"); }
+    }
+
+    // ── Yardımcı ─────────────────────────────────────────────────────────────
+    Dictionary<string, List<PuantajKayit>> GrupluKayitlar()
+        => kayitlar
+            .GroupBy(k => k.Guzergah?.GuzergahAdi ?? "—")
+            .OrderBy(g => g.Key)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+    int AydakiGunSayisi() => DateTime.DaysInMonth(seciliYil, seciliAy);
+
+    static bool HaftaSonuMu(DateTime tarih)
+        => tarih.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
+
+    static string AyAdi(int ay) => ay switch
+    {
+        1=>"Ocak",2=>"Şubat",3=>"Mart",4=>"Nisan",5=>"Mayıs",6=>"Haziran",
+        7=>"Temmuz",8=>"Ağustos",9=>"Eylül",10=>"Ekim",11=>"Kasım",12=>"Aralık",_=>"?"
+    };
+}
+

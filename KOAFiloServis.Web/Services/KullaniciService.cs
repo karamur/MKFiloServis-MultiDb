@@ -331,7 +331,7 @@ public class KullaniciService : IKullaniciService
                 _logger.LogWarning("Kullanici kilitlendi (5 basarisiz deneme): {KullaniciAdi}", kullaniciAdi);
             }
             context.Kullanicilar.Update(kullanici);
-            await context.SaveChangesAsync();
+            await SaveWithLogAsync(context, kullaniciAdi);
 
             _logger.LogWarning("Giris basarisiz - sifre hatali: {KullaniciAdi}", kullaniciAdi);
             return new KullaniciGirisSonuc { Basarili = false, Mesaj = "Sifre hatali" };
@@ -344,7 +344,7 @@ public class KullaniciService : IKullaniciService
         if (kullanici.IkiFaktorAktif && !string.IsNullOrWhiteSpace(kullanici.IkiFaktorSecretKey))
         {
             context.Kullanicilar.Update(kullanici);
-            await context.SaveChangesAsync();
+            await SaveWithLogAsync(context, kullaniciAdi);
 
             return new KullaniciGirisSonuc
             {
@@ -357,7 +357,7 @@ public class KullaniciService : IKullaniciService
         }
 
         context.Kullanicilar.Update(kullanici);
-        await context.SaveChangesAsync();
+        await SaveWithLogAsync(context, kullaniciAdi);
 
         // Authentication state guncelle - async versiyon
         await _authProvider.GirisYapAsync(kullanici);
@@ -385,13 +385,36 @@ public class KullaniciService : IKullaniciService
             return new KullaniciGirisSonuc { Basarili = false, Mesaj = "Doğrulama kodu geçersiz." };
 
         context.Kullanicilar.Update(kullanici);
-        await context.SaveChangesAsync();
+        await SaveWithLogAsync(context, kullanici.KullaniciAdi);
 
         await _authProvider.GirisYapAsync(kullanici);
 
         _logger.LogInformation("2FA ile basarili giris: {KullaniciAdi}", kullanici.KullaniciAdi);
 
         return new KullaniciGirisSonuc { Basarili = true, Kullanici = kullanici };
+    }
+
+    private async Task SaveWithLogAsync(ApplicationDbContext context, string kullaniciAdi)
+    {
+        try
+        {
+            await context.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex)
+        {
+            _logger.LogError(ex, "SaveChanges HATASI (DbUpdate): Kullanici={KullaniciAdi}, Inner={Inner}, InnerMsg={InnerMsg}, Stack={Stack}",
+                kullaniciAdi,
+                ex.InnerException?.GetType().Name,
+                ex.InnerException?.Message,
+                ex.InnerException?.StackTrace);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "SaveChanges HATASI (Genel): Kullanici={KullaniciAdi}, Type={Type}, Msg={Msg}, Stack={Stack}",
+                kullaniciAdi, ex.GetType().Name, ex.Message, ex.StackTrace);
+            throw;
+        }
     }
 
     public async Task CikisYapAsync()

@@ -2904,10 +2904,12 @@ public class ApplicationDbContext : DbContext
 
             if (firmaId == 0)
             {
-                // Aşama C2-b (K9): FirmaId artık DB tarafında NOT NULL. Aktif firma seçilmeden
-                // tenant entity insert etmek artık sessiz geçilmiyor; net hata fırlatıyoruz.
+                var entryType = entry.Entity.GetType().Name;
+                var stackTrace = Environment.StackTrace;
+                Console.WriteLine($"[AssignFirmaTenantId] HATA: '{entryType}' Added ama aktif firma yok.");
+                Console.WriteLine($"[AssignFirmaTenantId] Stack (ilk 5): {string.Join(" <- ", stackTrace.Split('\n').Take(5))}");
                 throw new InvalidOperationException(
-                    $"Aktif firma seçili olmadan '{entry.Entity.GetType().Name}' kaydı eklenemez. " +
+                    $"Aktif firma seçili olmadan '{entryType}' kaydı eklenemez. " +
                     "Lütfen IAktifFirmaProvider üzerinden aktif firmayı set edin veya entity.FirmaId değerini elle atayın.");
             }
 

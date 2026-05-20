@@ -1,4 +1,4 @@
-﻿@using KOAFiloServis.Web.Services
+@using KOAFiloServis.Web.Services
 @using KOAFiloServis.Shared.Entities
 @using Microsoft.Extensions.Logging
 @implements IDisposable
@@ -379,23 +379,8 @@
                                             </NavLink>
                                         </div>
                                         <div class="nav-item px-3">
-                                            <NavLink class="nav-link" href="operasyon/filo-gunluk-puantaj">
-                                                <i class="bi bi-journal-plus me-2 text-success"></i> Puantaj
-                                            </NavLink>
-                                        </div>
-                                        <div class="nav-item px-3">
-                                            <NavLink class="nav-link" href="operasyon/filo-hakedis">
-                                                <i class="bi bi-cash-coin me-2 text-success"></i> Hakediş
-                                            </NavLink>
-                                        </div>
-                                        <div class="nav-item px-3">
-                                            <NavLink class="nav-link" href="hakedis-tablosu">
-                                                <i class="bi bi-table me-2 text-success"></i> Hakediş/Puantaj Tablosu
-                                            </NavLink>
-                                        </div>
-                                        <div class="nav-item px-3">
-                                            <NavLink class="nav-link" href="operasyonel-hakedis">
-                                                <i class="bi bi-receipt-cutoff me-2 text-success"></i> Operasyonel Hakediş
+                                            <NavLink class="nav-link" href="kurum-puantaj">
+                                                <i class="bi bi-calendar3-range me-2 text-primary"></i> Kurum Puantaj
                                             </NavLink>
                                         </div>
                                         <div class="nav-item px-3">
@@ -1499,6 +1484,7 @@
 
     private bool IsExpanded(NavSection section) => expandedSections.Contains(section);
 }
+
 
 
 

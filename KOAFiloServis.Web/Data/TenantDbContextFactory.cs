@@ -47,8 +47,6 @@ public sealed class TenantDbContextFactory : IDbContextFactory<ApplicationDbCont
 
     private DbContextOptions<ApplicationDbContext> BuildOptions(string connectionString)
     {
-        AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
-
         var builder = new DbContextOptionsBuilder<ApplicationDbContext>();
         builder.UseNpgsql(connectionString, npgsqlOptions =>
         {

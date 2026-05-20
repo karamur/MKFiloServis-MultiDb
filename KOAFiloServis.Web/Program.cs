@@ -1,4 +1,4 @@
-﻿using KOAFiloServis.Web.Components;
+using KOAFiloServis.Web.Components;
 using KOAFiloServis.Web.Data;
 using KOAFiloServis.Web.Helpers;
 using KOAFiloServis.Web.Jobs;
@@ -28,6 +28,10 @@ using System.Text.Json;
 ExcelPackage.License.SetNonCommercialPersonal("KOAFiloServis");
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Npgsql EnableLegacyTimestampBehavior: herhangi bir UseNpgsql() cagrisindan ONCE set edilmeli.
+// Npgsql static constructor bu switch'i ilk kez UseNpgsql()'de okur ve cache'ler.
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 // Database Provider Secimi (dbsettings.json varsa onu oncele)
 var dbProvider = builder.Configuration.GetValue<string>("DatabaseProvider") ?? "PostgreSQL";
@@ -108,9 +112,6 @@ builder.Services.AddPooledDbContextFactory<ApplicationDbContext>((sp, options) =
 
     if (dbProvider == "PostgreSQL")
     {
-        // PostgreSQL timestamp ayari
-        AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
-
         options.UseNpgsql(defaultConnectionString, npgsqlOptions =>
         {
             npgsqlOptions.EnableRetryOnFailure(
@@ -170,7 +171,6 @@ builder.Services.AddPooledDbContextFactory<MasterDbContext>((sp, options) =>
 
     if (dbProvider == "PostgreSQL")
     {
-        AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
         options.UseNpgsql(masterConnStr, npgsqlOptions =>
         {
             npgsqlOptions.EnableRetryOnFailure(
@@ -309,6 +309,7 @@ builder.Services.AddScoped<IMuhasebeService, MuhasebeService>();
 builder.Services.AddScoped<ISatisService, SatisService>();
 builder.Services.AddScoped<IKurumService, KurumService>();
 builder.Services.AddScoped<IPuantajService, PuantajService>();
+builder.Services.AddScoped<IKurumPuantajService, KurumPuantajService>();
 builder.Services.AddScoped(typeof(KOAFiloServis.Web.Services.Interfaces.IFiloKomisyonService), typeof(FiloKomisyonService));
 builder.Services.AddScoped<KOAFiloServis.Web.Services.Interfaces.IPuantajEslestirmeService, PuantajEslestirmeService>();
 builder.Services.AddScoped<IPiyasaKaynakService, PiyasaKaynakService>(); // Piyasa Kaynak Yonetimi (once kaydet)
@@ -848,5 +849,6 @@ app.MapControllers(); // API Controller'larini haritalandir
 app.MapHub<AracTakipHub>("/hubs/aractakip"); // SignalR Araç Takip Hub'ı
 
 app.Run();
+
 
 
