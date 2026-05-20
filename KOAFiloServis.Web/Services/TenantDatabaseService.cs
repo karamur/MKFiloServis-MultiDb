@@ -59,8 +59,11 @@ public sealed class TenantDatabaseService : ITenantDatabaseService
         optionsBuilder.UseNpgsql(tenantConnStr);
         await using var context = new ApplicationDbContext(optionsBuilder.Options);
 
-        await context.Database.MigrateAsync();
-        _logger.LogInformation("Tenant DB migration uygulandi: {DbName}", databaseName);
+        // EnsureCreated: mevcut modelden semayi direkt olusturur.
+        // MigrateAsync yerine kullaniyoruz cunku 80+ migration'in bazilari
+        // legacy kolonlara (orn. KiralayiciCariId) referans verip kiriliyor.
+        var created = await context.Database.EnsureCreatedAsync();
+        _logger.LogInformation("Tenant DB sema olusturuldu (yeni={IsNew}): {DbName}", created, databaseName);
 
         // Master DB'de Firma.DatabaseName guncelle
         await using var masterCtx = await _masterFactory.CreateDbContextAsync();

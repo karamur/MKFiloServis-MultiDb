@@ -789,6 +789,39 @@ await RunScopedSafeAsync(app, "SeedDefaultEvrakTanimlari", async services =>
     await ozlukService.SeedDefaultEvrakTanimlariAsync();
 });
 
+// Tum aktif firmalar icin otomatik tenant DB olustur (varsa gecer)
+await RunScopedSafeAsync(app, "AutoCreateTenantDatabases", async services =>
+{
+    var masterFactory = services.GetRequiredService<IDbContextFactory<MasterDbContext>>();
+    var tenantDbService = services.GetRequiredService<ITenantDatabaseService>();
+    var logger = services.GetRequiredService<ILogger<Program>>();
+
+    using var masterCtx = await masterFactory.CreateDbContextAsync();
+    var firmasWithoutDb = await masterCtx.Firmalar
+        .Where(f => f.Aktif && !f.IsDeleted && f.DatabaseName == null)
+        .ToListAsync();
+
+    if (firmasWithoutDb.Count == 0)
+    {
+        logger.LogInformation("Tum firmalarin tenant DB'si mevcut.");
+        return;
+    }
+
+    logger.LogInformation("{Count} firma icin tenant DB olusturulacak...", firmasWithoutDb.Count);
+    foreach (var firma in firmasWithoutDb)
+    {
+        try
+        {
+            await tenantDbService.CreateTenantDatabaseAsync(firma.Id, migrateData: true);
+            logger.LogInformation("Firma {FirmaId} ({FirmaAdi}) tenant DB olusturuldu.", firma.Id, firma.FirmaAdi);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Firma {FirmaId} ({FirmaAdi}) tenant DB olusturulamadi.", firma.Id, firma.FirmaAdi);
+        }
+    }
+});
+
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
