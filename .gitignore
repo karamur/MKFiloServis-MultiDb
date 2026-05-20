@@ -1,4 +1,4 @@
-﻿# Visual Studio
+# Visual Studio
 .vs/
 *.user
 *.userosscache
@@ -100,3 +100,10 @@ archive/
 
 # AI agent / editor settings
 .claude/
+
+# Buyuk publish/kurulum dosyalari (GitHub 100MB limiti)
+publish/
+KURULUM/*.rar
+KURULUM/*.zip
+**/.playwright/
+**/node.exe
