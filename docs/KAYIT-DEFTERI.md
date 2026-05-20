@@ -61,7 +61,10 @@ Faz 1 Adım 1: `Firma` entity'sine `DatabaseName` alanı eklenmesi.
 
 ## 📅 20.05.2026 — Faz 1 Uygulama Oturumu (İkinci Kısım)
 
-### Commit: (aşağıda)
+### Commit: `cba5d90`
+```
+feat(multi-db): Faz 1 altyapi - Database-Per-Firma hybrid mimari kurulumu
+```
 
 ### ✅ Faz 1 — Tamamlanan Adımlar
 
@@ -87,7 +90,19 @@ Faz 1 Adım 1: `Firma` entity'sine `DatabaseName` alanı eklenmesi.
 
 **Tamamlanan:** Altyapı (entity, provider, factory, DI, migration) kuruldu, build temiz.
 **Ertelenen:** ApplicationDbContext master tablo temizliği, MasterDbContext migration'ı, DbInitializer güncellemesi.
-**Bekleyen:** Runtime smoke test (uygulama çalıştırılıp mevcut shared-DB akışının sorunsuz olduğu doğrulanacak).
+
+### 🧪 Runtime Smoke Test (20.05.2026 - 3. Kısım)
+
+| Kontrol | Sonuç |
+|---------|:-----:|
+| `dotnet ef database update` — migration uygulama | ✅ `MultiDbFaz1_AddFirmaDatabaseName` başarıyla uygulandı |
+| `dotnet run` — uygulama başlatma | ✅ `Now listening on: http://0.0.0.0:5190` |
+| Startup görevleri (Seed, Quartz, GPS) | ✅ Tümü başarılı |
+| Uygulama log'larında hata/exception | ✅ **0 hata** |
+| `GET /` — giriş sayfası | ✅ HTTP 200, "Giris - Koa Filo Servis" |
+| `GET /login` — login sayfası | ✅ HTTP 200 |
+
+**Sonuç:** ✅ Uygulama sorunsuz başlıyor, login sayfası açılıyor, hiçbir hata yok.
 
 ### ⚠️ Güncel Riskler
 
@@ -95,7 +110,7 @@ Faz 1 Adım 1: `Firma` entity'sine `DatabaseName` alanı eklenmesi.
 |------|:-----:|
 | V1 (70+ entity) vs V2 (24 entity) kararı | 🔴 Karar bekliyor |
 | MasterDbContext migration cascade | 🟡 Faz 2'de çözülecek |
-| Runtime smoke test henüz yapılmadı | 🔴 Yapılacak |
+| Runtime smoke test | ✅ **TAMAMLANDI** — uygulama başlıyor, login açılıyor, 0 hata |
 | `KullaniciService` + auth servisleri hala ApplicationDbContext kullanıyor | 🟡 Faz 2'de güncellenecek |
 | Cross-tenant (TumFirmalar) dedicated DB'de çalışmaz | 🟡 Faz 2'de ele alınacak |
 
