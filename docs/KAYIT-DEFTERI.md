@@ -5,6 +5,102 @@
 
 ---
 
+## 📅 20.05.2026 — Database-Per-Firma Faz 1 Başlangıç Oturumu
+
+### Yapılanlar
+
+| # | İş | Detay |
+|---|-----|-------|
+| 1 | `AIAsistan.razor` kaldırıldı | Derleme hatası olan sayfa tamamen silindi, `NavMenu.razor`'daki link kaldırıldı |
+| 2 | Build doğrulandı | `dotnet build` → 0 hata, 5 uyarı (önceden mevcut) |
+| 3 | Mimari keşif tamamlandı | ApplicationDbContext, TenantAwareDbContextFactory, IAktifFirmaProvider, IFirmaTenant, Firma entity, Program.cs DI, appsettings.json incelendi |
+| 4 | Faz planı hazırlandı | 6 fazlı Database-Per-Firma geçiş planı (Faz 0-6) oluşturuldu |
+| 5 | Kayıt defteri formatı belirlendi | Tarih+amaç, commit, değişen dosyalar, değişiklik özeti, test/build sonucu, risk/açık işler, faz durumu, karar+gerekçe |
+
+### 🏗️ MİMARİ KARAR — Faz 1 Yaklaşımı
+
+**Karar:** Hybrid model ile kademeli geçiş.
+
+**Gerekçe:**
+- `Firma.DatabaseName == null` → eski shared DB modu (mevcut çalışan sistem)
+- `Firma.DatabaseName != null` → yeni tenant DB modu (tam izolasyon)
+- Aynı `ApplicationDbContext` her iki modda da çalışır — tenant query filter shared modda izolasyon sağlar, dedicated modda zararsız no-op olur
+- `MasterDbContext` sadece global tabloları (Firmalar, Kullanicilar, Lisans) yönetir
+
+### 📋 Faz 1 Uygulama Planı (Özet)
+
+| Sıra | Adım | Dosya |
+|:----:|------|-------|
+| 1 | `Firma` entity'sine `DatabaseName` ekle | `Shared/Entities/Firma.cs` |
+| 2 | `ITenantConnectionStringProvider` arayüzü | `Web/Services/` (YENİ) |
+| 3 | `TenantConnectionStringProvider` implementasyonu | `Web/Services/` (YENİ) |
+| 4 | `MasterDbContext` oluştur | `Web/Data/` (YENİ) |
+| 5 | `ApplicationDbContext`'ten master tabloları çıkar | `Web/Data/ApplicationDbContext.cs` |
+| 6 | `TenantDbContextFactory` (eskisini replace et) | `Web/Data/` (YENİ + SİL) |
+| 7 | `appsettings.json`'a `MasterConnection` ekle | `Web/appsettings.json` |
+| 8 | `Program.cs` DI kayıtlarını güncelle | `Web/Program.cs` |
+| 9 | `FirmaService` + master tablo servislerini güncelle | `Web/Services/` |
+| 10 | Migration klasörlerini düzenle | `Data/Migrations/` |
+| 11 | `DbInitializer` güncelle | `Web/Data/DbInitializer.cs` |
+| 12 | Build + smoke test | — |
+
+### ⚠️ Riskler / Açık İşler
+
+| Risk | Durum |
+|------|:-----:|
+| V1 (70+ entity) vs V2 (24 entity) kararı — V2 öneriliyor | 🔴 Karar bekliyor |
+| `LisansService` singleton ama MasterDbContext scoped | Çözüm: `IDbContextFactory<MasterDbContext>` |
+| Cross-tenant (TumFirmalar) sorgular dedicated DB'de çalışmaz | Faz 1'de sadece shared-DB firmalar için destek |
+| Pooling per-tenant DB'ler için optimize değil | Faz 2'de `ConcurrentDictionary` cache |
+
+### 🎯 Sonraki Adım
+
+Faz 1 Adım 1: `Firma` entity'sine `DatabaseName` alanı eklenmesi.
+
+---
+
+## 📅 20.05.2026 — Faz 1 Uygulama Oturumu (İkinci Kısım)
+
+### Commit: (aşağıda)
+
+### ✅ Faz 1 — Tamamlanan Adımlar
+
+| # | Adım | Değişen Dosyalar | Özet |
+|---|------|-----------------|------|
+| 1 | `Firma` + `AktifFirmaBilgisi` güncelle | `Shared/Entities/Firma.cs`, `Web/Services/FirmaService.cs` | `DatabaseName` alanı eklendi, `AktifFirmaBilgisi`'ne taşındı |
+| 2 | `ITenantConnectionStringProvider` + implementasyon | `Web/Services/ITenantConnectionStringProvider.cs` (YENİ), `Web/Services/TenantConnectionStringProvider.cs` (YENİ) | Dinamik connection string çözümleyici: `DatabaseName == null` → shared DB, `!= null` → tenant DB |
+| 3 | `MasterDbContext` oluştur | `Web/Data/MasterDbContext.cs` (YENİ) | 6 çekirdek global tablo: Firmalar, Kullanicilar, Lisanslar, Roller, RolYetkileri, AppAyarlari. Navigation property temizliği yapıldı |
+| 4 | ApplicationDbContext temizliği | — | **ERTELENDİ:** FK kırılma riski nedeniyle tüm entity'ler korundu. Faz 4'te yapılacak |
+| 5 | `TenantDbContextFactory` (eskisini replace) | `Web/Data/TenantDbContextFactory.cs` (YENİ), `TenantAwareDbContextFactory.cs` (SİL) | `ITenantConnectionStringProvider` ile dinamik DB bağlantısı, pooling Faz 2'de |
+| 6-7 | `appsettings.json` + `Program.cs` DI | `Web/appsettings.json`, `Web/Program.cs` | `MasterConnection` eklendi (şimdilik shared DB ile aynı), `TenantDatabase` bölümü eklendi, DI kayıtları güncellendi, `PooledDbContextFactoryHolder` kaldırıldı |
+| 8 | Master tablo servisleri güncelle | `Web/Services/LisansService.cs`, `Web/Services/FirmaService.cs` | `LisansService`: `PooledDbContextFactoryHolder` → `IDbContextFactory<MasterDbContext>`, `FirmaService`: `IDbContextFactory<ApplicationDbContext>` → `IDbContextFactory<MasterDbContext>` |
+| 9 | Migration | `Web/Migrations/..._MultiDbFaz1_AddFirmaDatabaseName.cs` (YENİ) | `Firmalar` tablosuna `DatabaseName` kolonu eklendi (varchar(100), nullable) |
+| 10 | Build doğrulama | — | `dotnet build` → **0 hata, 5 uyarı** ✅ |
+
+### 🏗️ MİMARİ KARAR — MasterDbContext Migration Ertelendi
+
+**Karar:** MasterDbContext migration'ı Faz 2'ye ertelendi. Faz 1'de Master DB fiziksel olarak ayrılmadı, `MasterConnection` şimdilik DefaultConnection ile aynı shared DB'yi gösteriyor.
+
+**Gerekçe:** MasterDbContext entity keşfi (navigation property cascade) 41+ tablo oluşturmaya çalıştı. MasterDbContext'in sadece 6 core tabloyla sınırlanması için kapsamlı `Ignore<>()` konfigürasyonu gerekiyor. Bu iş Faz 2'de Master DB fiziksel ayrımıyla birlikte yapılacak.
+
+### 📊 Faz 1 Durumu: 🟡 KISMEN TAMAMLANDI
+
+**Tamamlanan:** Altyapı (entity, provider, factory, DI, migration) kuruldu, build temiz.
+**Ertelenen:** ApplicationDbContext master tablo temizliği, MasterDbContext migration'ı, DbInitializer güncellemesi.
+**Bekleyen:** Runtime smoke test (uygulama çalıştırılıp mevcut shared-DB akışının sorunsuz olduğu doğrulanacak).
+
+### ⚠️ Güncel Riskler
+
+| Risk | Durum |
+|------|:-----:|
+| V1 (70+ entity) vs V2 (24 entity) kararı | 🔴 Karar bekliyor |
+| MasterDbContext migration cascade | 🟡 Faz 2'de çözülecek |
+| Runtime smoke test henüz yapılmadı | 🔴 Yapılacak |
+| `KullaniciService` + auth servisleri hala ApplicationDbContext kullanıyor | 🟡 Faz 2'de güncellenecek |
+| Cross-tenant (TumFirmalar) dedicated DB'de çalışmaz | 🟡 Faz 2'de ele alınacak |
+
+---
+
 ## 📅 14.05.2026 — AI Asistan + Mimari Karar Oturumu
 
 ### Commit: `952a546`

@@ -16,11 +16,11 @@ namespace KOAFiloServis.Web.Services;
 /// </summary>
 public class FirmaService : IFirmaService
 {
-    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+    private readonly IDbContextFactory<MasterDbContext> _contextFactory;
     private readonly IAktifFirmaProvider _aktifFirmaProvider;
 
     public FirmaService(
-        IDbContextFactory<ApplicationDbContext> contextFactory,
+        IDbContextFactory<MasterDbContext> contextFactory,
         IAktifFirmaProvider aktifFirmaProvider)
     {
         _contextFactory = contextFactory;
@@ -143,6 +143,7 @@ public class FirmaService : IFirmaService
                 FirmaAdi = varsayilan.FirmaAdi,
                 AktifDonemYil = varsayilan.AktifDonemYil,
                 AktifDonemAy = varsayilan.AktifDonemAy,
+                DatabaseName = varsayilan.DatabaseName,
                 TumFirmalar = false
             }
             : new AktifFirmaBilgisi
@@ -152,6 +153,7 @@ public class FirmaService : IFirmaService
                 FirmaAdi = "Firma Yok",
                 AktifDonemYil = DateTime.Today.Year,
                 AktifDonemAy = DateTime.Today.Month,
+                DatabaseName = null,
                 TumFirmalar = false
             };
 
@@ -172,6 +174,7 @@ public class FirmaService : IFirmaService
             FirmaAdi = firma.FirmaAdi,
             AktifDonemYil = firma.AktifDonemYil,
             AktifDonemAy = firma.AktifDonemAy,
+            DatabaseName = firma.DatabaseName,
             TumFirmalar = false
         });
     }

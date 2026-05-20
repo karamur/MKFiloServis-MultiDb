@@ -59,6 +59,14 @@ public class Firma : BaseEntity
     // Muhasebe Donem Bilgisi
     public int AktifDonemYil { get; set; } = DateTime.Today.Year;
     public int AktifDonemAy { get; set; } = DateTime.Today.Month;
+
+    /// <summary>
+    /// Per-firma dedicated database adı (örn: "kofa_firma_001").
+    /// NULL = firma halen shared (legacy) veritabanında.
+    /// Dolu = firmanın kendi isolated veritabanı var.
+    /// </summary>
+    [StringLength(100)]
+    public string? DatabaseName { get; set; }
 }
 
 /// <summary>
@@ -72,4 +80,5 @@ public class AktifFirmaBilgisi
     public int AktifDonemYil { get; set; } = DateTime.Today.Year;
     public int AktifDonemAy { get; set; } = DateTime.Today.Month;
     public bool TumFirmalar { get; set; } = false;
+    public string? DatabaseName { get; set; }
 }

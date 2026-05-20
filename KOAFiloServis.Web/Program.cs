@@ -139,52 +139,57 @@ builder.Services.AddPooledDbContextFactory<ApplicationDbContext>((sp, options) =
 // Tenant-aware factory: pooled factory'yi sarmala, her context'e scoped IServiceProvider enjekte et.
 // Bu, IAktifFirmaProvider'ın resolve edilebilmesini ve global query filter'ların (firma izolasyonu)
 // servisler (AracService, KapasiteService, vb.) içinden de devreye girmesini sağlar.
-// Pooled factory'nin orijinal service descriptor'ını yakala ve scoped wrapper ile değiştir.
+// Yeni TenantDbContextFactory ITenantConnectionStringProvider ile dinamik connection string çözümler.
 {
     var pooledDescriptor = builder.Services.Single(d =>
         d.ServiceType == typeof(IDbContextFactory<ApplicationDbContext>));
     builder.Services.Remove(pooledDescriptor);
-
-    // Singleton holder: orijinal pooled factory'yi descriptor'dan çözümler (recursion yok).
-    builder.Services.AddSingleton<PooledDbContextFactoryHolder>(sp =>
-    {
-        IDbContextFactory<ApplicationDbContext> inner;
-        if (pooledDescriptor.ImplementationFactory != null)
-        {
-            inner = (IDbContextFactory<ApplicationDbContext>)pooledDescriptor.ImplementationFactory(sp);
-        }
-        else if (pooledDescriptor.ImplementationInstance != null)
-        {
-            inner = (IDbContextFactory<ApplicationDbContext>)pooledDescriptor.ImplementationInstance;
-        }
-        else if (pooledDescriptor.ImplementationType != null)
-        {
-            inner = (IDbContextFactory<ApplicationDbContext>)ActivatorUtilities.CreateInstance(sp, pooledDescriptor.ImplementationType);
-        }
-        else
-        {
-            throw new InvalidOperationException("Pooled IDbContextFactory<ApplicationDbContext> descriptor çözümlenemedi.");
-        }
-        return new PooledDbContextFactoryHolder(inner);
-    });
 }
 
-// DbContext - Pooled holder'dan al ve scoped IServiceProvider'ı bağla
-// IAktifFirmaProvider sorgu zamanında lazy olarak çözümlenir (döngüsel bağımlılık önlenir)
+// ITenantConnectionStringProvider - firma bazlı dinamik connection string çözümleyici
+builder.Services.AddScoped<ITenantConnectionStringProvider, TenantConnectionStringProvider>();
+
+// TenantDbContextFactory: aktif firmanın DatabaseName'ine göre doğru DB'ye bağlanır
+builder.Services.AddScoped<IDbContextFactory<ApplicationDbContext>, TenantDbContextFactory>();
+
+// Scoped ApplicationDbContext - TenantDbContextFactory üzerinden dinamik bağlantı ile
 builder.Services.AddScoped<ApplicationDbContext>(sp =>
 {
-    var holder = sp.GetRequiredService<PooledDbContextFactoryHolder>();
-    var context = holder.Inner.CreateDbContext();
-    context.SetServiceProvider(sp);
-    return context;
+    var factory = sp.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+    return factory.CreateDbContext();
 });
 
-// IDbContextFactory<ApplicationDbContext>'i scoped TenantAwareDbContextFactory ile override et.
-// Tüm servisler (Araç, Kapasite, Hakediş, vb.) bu interface üzerinden context alır; böylece
-// factory yolundan oluşturulan context'ler de SetServiceProvider çağrılmış ve tenant filter aktif olur.
-// Singleton servisler (örn. LisansService) bu scoped factory'i tüketemez; onlar doğrudan
-// PooledDbContextFactoryHolder kullanmalıdır (tenant-bağımsız global tablolar için uygundur).
-builder.Services.AddScoped<IDbContextFactory<ApplicationDbContext>, TenantAwareDbContextFactory>();
+// MasterDbContext - global tablolar (Firmalar, Kullanicilar, Lisans, Roller, RolYetkileri)
+builder.Services.AddPooledDbContextFactory<MasterDbContext>((sp, options) =>
+{
+    var masterConnStr = builder.Configuration.GetConnectionString("MasterConnection")
+        ?? defaultConnectionString;
+
+    if (dbProvider == "PostgreSQL")
+    {
+        AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+        options.UseNpgsql(masterConnStr, npgsqlOptions =>
+        {
+            npgsqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
+                errorCodesToAdd: null);
+            npgsqlOptions.CommandTimeout(30);
+            npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "public");
+        });
+    }
+    else
+    {
+        options.UseSqlite(masterConnStr);
+    }
+    options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
+});
+
+builder.Services.AddScoped<MasterDbContext>(sp =>
+{
+    var factory = sp.GetRequiredService<IDbContextFactory<MasterDbContext>>();
+    return factory.CreateDbContext();
+});
 
 // Authentication - Her circuit (tarayici baglantisi) icin bagimsiz oturum yonetimi
 // Scoped: Her Blazor circuit kendi oturumunu yonetir - farkli PC/tarayicilar birbirini etkilemez
