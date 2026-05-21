@@ -337,6 +337,101 @@
                     <InputTextArea @bind-Value="guzergah.Notlar" class="form-control" rows="2" />
                 </div>
 
+                @* ── Seferler ── *@
+                <hr class="my-3" />
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0"><i class="bi bi-calendar2-week me-1"></i>Seferler</h6>
+                </div>
+
+                <div class="row g-2 align-items-end mb-2">
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Sefer Sayısı</label>
+                        <input type="number" min="1" max="50" class="form-control form-control-sm"
+                               value="@seferKalemleri.Count"
+                               @onchange="e => { if (int.TryParse(e.Value?.ToString(), out var n)) SeferSayisiDegistir(n); }" />
+                    </div>
+                    <div class="col-md-4">
+                        <button type="button" class="btn btn-sm btn-outline-primary"
+                                @onclick="TumSeferlereUygula">
+                            <i class="bi bi-arrow-down-square me-1"></i>1. Seferi Tum Seferlere Uygula
+                        </button>
+                    </div>
+                </div>
+
+                @if (seferKalemleri.Count > 0)
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered align-middle mb-2">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Sefer Tipi</th>
+                                    <th>Kapasite</th>
+                                    <th>Arac Plakasi</th>
+                                    <th>Sofor Ad</th>
+                                    <th>Sofor Telefon</th>
+                                    <th>Firma / Tedarikci</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (int si = 0; si < seferKalemleri.Count; si++)
+                                {
+                                    var kalem = seferKalemleri[si];
+                                    var siraNo = si + 1;
+                                    <tr>
+                                        <td class="text-center">@siraNo</td>
+                                        <td>
+                                            <select class="form-select form-select-sm" value="@kalem.SeferTipi.ToString()"
+                                                    @onchange="e => kalem.SeferTipi = Enum.Parse<SeferTipi>(e.Value!.ToString()!)">
+                                                @foreach (var tip in Enum.GetValues<SeferTipi>())
+                                                {
+                                                    <option value="@tip">@tip</option>
+                                                }
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <select class="form-select form-select-sm" value="@(kalem.KapasiteAdi ?? "")"
+                                                    @onchange="e => kalem.KapasiteAdi = string.IsNullOrWhiteSpace(e.Value?.ToString()) ? null : e.Value.ToString()">
+                                                <option value="">-- Seciniz --</option>
+                                                @foreach (var k in kapasiteSecenekleri)
+                                                {
+                                                    <option value="@k.Label">@k.Label</option>
+                                                }
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <select class="form-select form-select-sm" value="@(kalem.AracId?.ToString() ?? "")"
+                                                    @onchange="async e => await SeferAracDegisti(kalem, int.TryParse(e.Value?.ToString(), out var aid) ? aid : (int?)null)">
+                                                <option value="">-- Seciniz --</option>
+                                                @foreach (var arac in araclar.OrderBy(a => a.AktifPlaka))
+                                                {
+                                                    if (!string.IsNullOrWhiteSpace(arac.AktifPlaka))
+                                                    {
+                                                        var ek = arac.SahiplikTipi == AracSahiplikTipi.Tedarikci ? " [T]" : "";
+                                                        <option value="@arac.Id">@(arac.AktifPlaka)@ek</option>
+                                                    }
+                                                }
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <input type="text" class="form-control form-control-sm" value="@kalem.SoforAd"
+                                                   @onchange="e => kalem.SoforAd = e.Value?.ToString()" />
+                                        </td>
+                                        <td>
+                                            <input type="text" class="form-control form-control-sm" value="@kalem.SoforTelefon"
+                                                   @onchange="e => kalem.SoforTelefon = e.Value?.ToString()" />
+                                        </td>
+                                        <td>
+                                            <input type="text" class="form-control form-control-sm" value="@kalem.Firma"
+                                                   @onchange="e => kalem.Firma = e.Value?.ToString()" />
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+
                 @if (!string.IsNullOrWhiteSpace(kayitHataMesaji))
                 {
                     <div class="alert alert-danger py-2">
@@ -377,6 +472,7 @@
     private string? secilenAracPlakaBilgi;
     private decimal oncekiSeferTipiCarpani = 1m;
     private int secilenKurumId;
+    private List<SeferKalem> seferKalemleri = new();
     private bool secilenKurumCariYok;
     private string kurumArama = string.Empty;
     private List<Kurum> kurumOnerileri = new();
@@ -469,6 +565,7 @@
         oncekiSeferTipiCarpani = GetSeferTipiCarpani(guzergah.SeferTipi);
         await AracSecimiDegistiAsync();
         await SoforDegistiAsync();
+        SeferleriniVarsayilanOlustur();
 
         // Mevcut güzergahın KurumId/CariId'sinden kurumu/cariyi UI'da göster (edit modunda)
         if (IsEdit)
@@ -899,4 +996,96 @@
     }
 
     private sealed record PersonelAracInfo(int SoforId, string AdSoyad, string? Telefon, string? FirmaAdi);
+
+    // ── Sefer yonetimi ────────────────────────────────────────────
+    private void SeferleriniVarsayilanOlustur()
+    {
+        seferKalemleri = new List<SeferKalem> { YeniSeferKalem(), YeniSeferKalem() };
+    }
+
+    private SeferKalem YeniSeferKalem() => new()
+    {
+        SeferTipi = guzergah.SeferTipi,
+        KapasiteAdi = kapasiteSecenekleri.FirstOrDefault(k => k.Value == guzergah.PersonelSayisi).Label,
+        AracId = guzergah.VarsayilanAracId,
+        SoforAd = guzergah.VarsayilanSofor?.TamAd,
+        SoforTelefon = guzergah.VarsayilanSofor?.Telefon
+    };
+
+    private void SeferSayisiDegistir(int yeniSayi)
+    {
+        if (yeniSayi < 1) yeniSayi = 1;
+        if (yeniSayi > 50) yeniSayi = 50;
+        while (seferKalemleri.Count < yeniSayi)
+            seferKalemleri.Add(YeniSeferKalem());
+        while (seferKalemleri.Count > yeniSayi)
+            seferKalemleri.RemoveAt(seferKalemleri.Count - 1);
+    }
+
+    private void TumSeferlereUygula()
+    {
+        if (seferKalemleri.Count == 0) return;
+        var ilk = seferKalemleri[0];
+        for (int i = 1; i < seferKalemleri.Count; i++)
+        {
+            seferKalemleri[i] = new SeferKalem
+            {
+                SeferTipi = ilk.SeferTipi,
+                KapasiteAdi = ilk.KapasiteAdi,
+                AracId = ilk.AracId,
+                SoforAd = ilk.SoforAd,
+                SoforTelefon = ilk.SoforTelefon,
+                Firma = ilk.Firma
+            };
+        }
+    }
+
+    private async Task SeferAracDegisti(SeferKalem kalem, int? aracId)
+    {
+        kalem.AracId = aracId;
+        kalem.SoforAd = null;
+        kalem.SoforTelefon = null;
+        kalem.Firma = null;
+        if (!aracId.HasValue) return;
+        try
+        {
+            await using var ctx = await DbContextFactory.CreateDbContextAsync();
+            var arac = await ctx.Araclar.AsNoTracking()
+                .Include(a => a.KiralikCari)
+                .Include(a => a.KomisyoncuCari)
+                .FirstOrDefaultAsync(a => a.Id == aracId.Value);
+            if (arac == null) return;
+            if (arac.SahiplikTipi == AracSahiplikTipi.Tedarikci)
+            {
+                kalem.Firma = arac.KiralikCari?.Unvan ?? arac.KomisyoncuCari?.Unvan;
+                var eslesme = await ctx.Set<FiloGuzergahEslestirme>()
+                    .AsNoTracking()
+                    .Where(e => e.AracId == aracId.Value && !e.IsDeleted)
+                    .OrderByDescending(e => e.Id)
+                    .FirstOrDefaultAsync();
+                if (eslesme != null)
+                {
+                    var sofor = await ctx.Soforler.AsNoTracking().FirstOrDefaultAsync(s => s.Id == eslesme.SoforId);
+                    if (sofor != null) { kalem.SoforAd = sofor.TamAd; kalem.SoforTelefon = sofor.Telefon; }
+                }
+            }
+            else if (aktifAracSoforMap.TryGetValue(aracId.Value, out var info))
+            {
+                kalem.SoforAd = info.AdSoyad;
+                kalem.SoforTelefon = info.Telefon;
+            }
+        }
+        catch { }
+        StateHasChanged();
+    }
+
+    private class SeferKalem
+    {
+        public SeferTipi SeferTipi { get; set; } = SeferTipi.SabahAksam;
+        public string? KapasiteAdi { get; set; }
+        public int? AracId { get; set; }
+        public string? SoforAd { get; set; }
+        public string? SoforTelefon { get; set; }
+        public string? Firma { get; set; }
+    }
 }
