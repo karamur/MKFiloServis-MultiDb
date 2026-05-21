@@ -821,6 +821,14 @@ await RunScopedSafeAsync(app, "LastikSezonAyarMigration", async services =>
     await KOAFiloServis.Web.Data.Migrations.LastikSezonAyarMigrationHelper.ApplyLastikSezonAyarAsync(context);
 });
 
+// Sprint S1: PuantajKayitlar tablosuna Slot, KurumId, IsverenFirmaId kolonlarini ekle
+await RunScopedSafeAsync(app, "PuantajSlotMigration", async services =>
+{
+    var context = services.GetRequiredService<ApplicationDbContext>();
+    var logger = services.GetRequiredService<ILogger<Program>>();
+    await KOAFiloServis.Web.Data.Migrations.PuantajSlotMigrationHelper.ApplyAsync(context, logger);
+});
+
 await RunScopedSafeAsync(app, "SeedDefaultEvrakTanimlari", async services =>
 {
     var ozlukService = services.GetRequiredService<IPersonelOzlukService>();

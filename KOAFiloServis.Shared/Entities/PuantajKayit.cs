@@ -20,11 +20,20 @@ public class PuantajKayit : BaseEntity
     public int? KurumCariId { get; set; }
     public virtual Cari? KurumCari { get; set; }
     public string? KurumAdi { get; set; } // Excel'den gelen ham değer
+    public int? KurumId { get; set; } // Kurum entity referansı (Cari'den ayrı)
+    public virtual Kurum? Kurum { get; set; }
+
+    // İşveren Firma (hangi firma adına çalışılıyor)
+    public int? IsverenFirmaId { get; set; }
+    public virtual Firma? IsverenFirma { get; set; }
 
     // Güzergah (Semt)
     public int? GuzergahId { get; set; }
     public virtual Guzergah? Guzergah { get; set; }
     public string? GuzergahAdi { get; set; } // Excel'den gelen ham değer
+
+    // Sefer Slot (günlük zaman dilimi)
+    public SeferSlot Slot { get; set; } = SeferSlot.Sabah;
 
     // Yön (S=Sabah, A=Akşam, S/A=Sabah-Akşam)
     public PuantajYon Yon { get; set; } = PuantajYon.SabahAksam;
@@ -312,6 +321,16 @@ public class PuantajEslestirmeOneri : BaseEntity
 }
 
 #region Enums
+
+/// <summary>
+/// Sefer slot türleri (günlük operasyonel zaman dilimi)
+/// </summary>
+public enum SeferSlot
+{
+    Sabah = 1,
+    Aksam = 2,
+    Mesai = 3
+}
 
 /// <summary>
 /// Puantaj yön türleri

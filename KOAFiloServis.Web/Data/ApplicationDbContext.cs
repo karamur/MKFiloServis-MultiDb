@@ -1425,7 +1425,7 @@ public class ApplicationDbContext : DbContext
         // PuantajKayit - Excel import ve manuel giriş
         modelBuilder.Entity<PuantajKayit>(entity =>
         {
-            entity.HasIndex(e => new { e.Yil, e.Ay, e.GuzergahId, e.AracId });
+            entity.HasIndex(e => new { e.Yil, e.Ay, e.GuzergahId, e.AracId, e.Slot });
             entity.HasIndex(e => new { e.Yil, e.Ay, e.KurumCariId });
             entity.Property(e => e.KurumAdi).HasMaxLength(200);
             entity.Property(e => e.GuzergahAdi).HasMaxLength(200);
@@ -1480,6 +1480,14 @@ public class ApplicationDbContext : DbContext
             entity.HasOne(e => e.FaturaKesiciCari)
                 .WithMany()
                 .HasForeignKey(e => e.FaturaKesiciCariId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.Kurum)
+                .WithMany()
+                .HasForeignKey(e => e.KurumId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.IsverenFirma)
+                .WithMany()
+                .HasForeignKey(e => e.IsverenFirmaId)
                 .OnDelete(DeleteBehavior.SetNull);
             entity.HasQueryFilter(e => !e.IsDeleted);
         });

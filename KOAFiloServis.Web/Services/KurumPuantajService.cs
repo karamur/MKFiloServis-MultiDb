@@ -123,14 +123,15 @@ public sealed class KurumPuantajService : IKurumPuantajService
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
 
-        // Upsert: Güzergah + Araç + Yıl + Ay kombinasyonu unique
+        // Upsert: Güzergah + Araç + Yıl + Ay + Slot kombinasyonu unique
         var mevcut = await db.PuantajKayitlar
             .FirstOrDefaultAsync(p =>
                 !p.IsDeleted &&
                 p.GuzergahId == kayit.GuzergahId &&
                 p.AracId     == kayit.AracId &&
                 p.Yil        == kayit.Yil &&
-                p.Ay         == kayit.Ay);
+                p.Ay         == kayit.Ay &&
+                p.Slot       == kayit.Slot);
 
         if (mevcut == null)
         {
@@ -145,9 +146,12 @@ public sealed class KurumPuantajService : IKurumPuantajService
             mevcut.SoforId      = kayit.SoforId;
             mevcut.SoforAdi     = kayit.SoforAdi;
             mevcut.Plaka        = kayit.Plaka;
+            mevcut.Slot         = kayit.Slot;
             mevcut.Yon          = kayit.Yon;
             mevcut.Gun          = kayit.Gun;
             mevcut.SeferSayisi  = kayit.SeferSayisi;
+            mevcut.KurumId      = kayit.KurumId;
+            mevcut.IsverenFirmaId = kayit.IsverenFirmaId;
             mevcut.UpdatedAt    = DateTime.UtcNow;
         }
 
@@ -168,7 +172,8 @@ public sealed class KurumPuantajService : IKurumPuantajService
                     p.GuzergahId == kayit.GuzergahId &&
                     p.AracId     == kayit.AracId &&
                     p.Yil        == kayit.Yil &&
-                    p.Ay         == kayit.Ay);
+                    p.Ay         == kayit.Ay &&
+                    p.Slot       == kayit.Slot);
 
             if (mevcut == null)
             {
@@ -182,9 +187,12 @@ public sealed class KurumPuantajService : IKurumPuantajService
                 mevcut.SoforId      = kayit.SoforId;
                 mevcut.SoforAdi     = kayit.SoforAdi;
                 mevcut.Plaka        = kayit.Plaka;
+                mevcut.Slot         = kayit.Slot;
                 mevcut.Yon          = kayit.Yon;
                 mevcut.Gun          = kayit.Gun;
                 mevcut.SeferSayisi  = kayit.SeferSayisi;
+                mevcut.KurumId      = kayit.KurumId;
+                mevcut.IsverenFirmaId = kayit.IsverenFirmaId;
                 mevcut.UpdatedAt    = DateTime.UtcNow;
             }
         }
@@ -236,26 +244,32 @@ public sealed class KurumPuantajService : IKurumPuantajService
 
             if (!eslestirmeler.Any() && guzergah.VarsayilanArac != null)
             {
-                // Sadece varsayılan araçla tek satır
-                EkleEksikSatir(sonuc, mevcutlar, guzergah, guzergah.VarsayilanArac.Id,
-                    guzergah.VarsayilanArac.AktifPlaka ?? guzergah.VarsayilanArac.Plaka,
-                    guzergah.VarsayilanSoforId,
-                    guzergah.VarsayilanSofor != null ? $"{guzergah.VarsayilanSofor.Ad} {guzergah.VarsayilanSofor.Soyad}" : null,
-                    yil, ay);
+                // Varsayılan araçla, her slot için satır
+                foreach (SeferSlot slot in Enum.GetValues<SeferSlot>())
+                {
+                    EkleEksikSatir(sonuc, mevcutlar, guzergah, guzergah.VarsayilanArac.Id,
+                        guzergah.VarsayilanArac.AktifPlaka ?? guzergah.VarsayilanArac.Plaka,
+                        guzergah.VarsayilanSoforId,
+                        guzergah.VarsayilanSofor != null ? $"{guzergah.VarsayilanSofor.Ad} {guzergah.VarsayilanSofor.Soyad}" : null,
+                        yil, ay, slot);
+                }
             }
             else
             {
                 foreach (var e in eslestirmeler)
                 {
                     var soforAdi = e.Sofor != null ? $"{e.Sofor.Ad} {e.Sofor.Soyad}" : null;
-                    EkleEksikSatir(sonuc, mevcutlar, guzergah, e.AracId,
-                        e.Arac?.AktifPlaka ?? e.Arac?.Plaka,
-                        e.SoforId, soforAdi, yil, ay);
+                    foreach (SeferSlot slot in Enum.GetValues<SeferSlot>())
+                    {
+                        EkleEksikSatir(sonuc, mevcutlar, guzergah, e.AracId,
+                            e.Arac?.AktifPlaka ?? e.Arac?.Plaka,
+                            e.SoforId, soforAdi, yil, ay, slot);
+                    }
                 }
             }
         }
 
-        return sonuc.OrderBy(p => p.GuzergahId).ThenBy(p => p.Plaka).ToList();
+        return sonuc.OrderBy(p => p.GuzergahId).ThenBy(p => p.Plaka).ThenBy(p => p.Slot).ToList();
     }
 
     private static void EkleEksikSatir(
@@ -264,9 +278,10 @@ public sealed class KurumPuantajService : IKurumPuantajService
         Guzergah guzergah,
         int aracId, string? plaka,
         int? soforId, string? soforAdi,
-        int yil, int ay)
+        int yil, int ay,
+        SeferSlot slot = SeferSlot.Sabah)
     {
-        var varMi = mevcutlar.Any(p => p.GuzergahId == guzergah.Id && p.AracId == aracId);
+        var varMi = mevcutlar.Any(p => p.GuzergahId == guzergah.Id && p.AracId == aracId && p.Slot == slot);
         if (varMi) return;
 
         sonuc.Add(new PuantajKayit
@@ -279,6 +294,7 @@ public sealed class KurumPuantajService : IKurumPuantajService
             SoforAdi    = soforAdi,
             Yil         = yil,
             Ay          = ay,
+            Slot        = slot,
             Yon         = guzergah.SeferTipi switch
             {
                 SeferTipi.Sabah      => PuantajYon.Sabah,
