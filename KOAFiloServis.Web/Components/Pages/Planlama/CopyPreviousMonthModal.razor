@@ -1,0 +1,251 @@
+@using KOAFiloServis.Shared.Entities
+@using KOAFiloServis.Web.Services
+
+<div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-copy me-2"></i>Onceki Aydan Kopyala
+                </h5>
+                <button type="button" class="btn-close" @onclick="OnKapat"></button>
+            </div>
+            <div class="modal-body">
+                @if (adim == 1)
+                {
+                    @* Adim 1: Filtre secimi *@
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Kaynak Donem</label>
+                            <div class="form-control bg-light">@kaynakAyAdi @kaynakYil</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Hedef Donem</label>
+                            <div class="form-control bg-light">@hedefAyAdi @HedefYil</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Kurum Filtresi</label>
+                            <select class="form-select" @bind="seciliKurumId">
+                                <option value="">Tum Kurumlar</option>
+                                @foreach (var k in Kurumlar)
+                                {
+                                    <option value="@k.Id">@k.KurumAdi</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Slot Filtresi</label>
+                            <select class="form-select" @bind="seciliSlot">
+                                <option value="">Tum Slotlar</option>
+                                @foreach (SeferSlot s in Enum.GetValues<SeferSlot>())
+                                {
+                                    <option value="@((int)s)">@s</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                }
+                else if (adim == 2)
+                {
+                    @* Adim 2: Onizleme ve sonuc *@
+                    <div class="text-center mb-3">
+                        <h6>Kopyalama Sonucu</h6>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <div class="card border-success">
+                                <div class="card-body text-center py-3">
+                                    <h4 class="text-success mb-0">@basariliSayisi</h4>
+                                    <small class="text-muted">Basariyla Kopyalandi</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-warning">
+                                <div class="card-body text-center py-3">
+                                    <h4 class="text-warning mb-0">@cakisanSayisi</h4>
+                                    <small class="text-muted">Cakisma Uyarisi</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-secondary">
+                                <div class="card-body text-center py-3">
+                                    <h4 class="text-secondary mb-0">@atlananSayisi</h4>
+                                    <small class="text-muted">Atlandi (Zaten Mevcut)</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    @if (cakismaDetaylari.Any())
+                    {
+                        <div class="alert alert-warning">
+                            <strong>Cakisma Detaylari:</strong>
+                            <ul class="mb-0 mt-2 small">
+                                @foreach (var c in cakismaDetaylari.Take(10))
+                                {
+                                    <li>@c</li>
+                                }
+                                @if (cakismaDetaylari.Count > 10)
+                                {
+                                    <li>... ve @(cakismaDetaylari.Count - 10) tane daha</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="OnKapat">Iptal</button>
+                @if (adim == 1)
+                {
+                    <button type="button" class="btn btn-primary" @onclick="KopyalamayiBaslat" disabled="@isliyor">
+                        <i class="bi bi-play me-1"></i>
+                        @(isliyor ? "Kopyalaniyor..." : $"Kopyalamayi Baslat ({kopyalanacakSayi} kayit)")
+                    </button>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-success" @onclick="KopyalananlariYukle">
+                        <i class="bi bi-check-lg me-1"></i> Kopyalananlari Yukle
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int HedefYil { get; set; }
+    [Parameter, EditorRequired] public int HedefAy { get; set; }
+    [Parameter, EditorRequired] public List<Kurum> Kurumlar { get; set; } = null!;
+    [Parameter, EditorRequired] public EventCallback<List<PuantajKayit>> OnKopyalandi { get; set; }
+    [Parameter, EditorRequired] public EventCallback OnKapat { get; set; }
+
+    [Inject] private IKurumPuantajService PuantajService { get; set; } = null!;
+
+    private int adim = 1;
+    private bool isliyor;
+
+    private int seciliKurumId;
+    private string seciliSlot = "";
+
+    private int kaynakAy => HedefAy == 1 ? 12 : HedefAy - 1;
+    private int kaynakYil => HedefAy == 1 ? HedefYil - 1 : HedefYil;
+
+    private string kaynakAyAdi => new DateTime(2024, kaynakAy, 1).ToString("MMMM");
+    private string hedefAyAdi => new DateTime(2024, HedefAy, 1).ToString("MMMM");
+
+    private int kopyalanacakSayi;
+    private int basariliSayisi;
+    private int cakisanSayisi;
+    private int atlananSayisi;
+    private List<string> cakismaDetaylari = new();
+    private List<PuantajKayit> kopyalananKayitlar = new();
+
+    private async Task KopyalamayiBaslat()
+    {
+        isliyor = true;
+        try
+        {
+            // Kaynak aydan puantajlari al
+            var kaynakKayitlar = await PuantajService.GetPuantajlarAsync(kaynakYil, kaynakAy, seciliKurumId);
+
+            // Slot filtresi
+            if (!string.IsNullOrEmpty(seciliSlot))
+            {
+                var slot = (SeferSlot)int.Parse(seciliSlot);
+                kaynakKayitlar = kaynakKayitlar.Where(k => k.Slot == slot).ToList();
+            }
+
+            kopyalanacakSayi = kaynakKayitlar.Count;
+
+            // Hedef ayda zaten var mi kontrolu
+            var hedefKayitlar = await PuantajService.GetPuantajlarAsync(HedefYil, HedefAy, seciliKurumId);
+
+            kopyalananKayitlar.Clear();
+            cakismaDetaylari.Clear();
+            basariliSayisi = 0;
+            atlananSayisi = 0;
+
+            foreach (var k in kaynakKayitlar)
+            {
+                // Ayni guzergah+arac+slot kombinasyonu hedefte var mi?
+                var zatenVar = hedefKayitlar.Any(h =>
+                    h.GuzergahId == k.GuzergahId && h.AracId == k.AracId && h.Slot == k.Slot);
+
+                if (zatenVar)
+                {
+                    atlananSayisi++;
+                    continue;
+                }
+
+                var yeni = new PuantajKayit
+                {
+                    GuzergahId = k.GuzergahId,
+                    GuzergahAdi = k.GuzergahAdi,
+                    AracId = k.AracId,
+                    Plaka = k.Plaka,
+                    SoforId = k.SoforId,
+                    SoforAdi = k.SoforAdi,
+                    KurumId = k.KurumId,
+                    KurumCariId = k.KurumCariId,
+                    IsverenFirmaId = k.IsverenFirmaId,
+                    Slot = k.Slot,
+                    Yon = k.Yon,
+                    Yil = HedefYil,
+                    Ay = HedefAy,
+                    SeferSayisi = k.SeferSayisi,
+                    Gun = k.Gun,
+                    BirimGelir = k.BirimGelir,
+                    BirimGider = k.BirimGider,
+                    SoforOdemeTipi = k.SoforOdemeTipi,
+                    Notlar = k.Notlar
+                };
+
+                // Gun degerlerini kopyala
+                for (int g = 1; g <= 31; g++)
+                    yeni.SetGunDeger(g, k.GetGunDeger(g));
+
+                kopyalananKayitlar.Add(yeni);
+                basariliSayisi++;
+            }
+
+            // Cakisma simülasyonu
+            if (kopyalananKayitlar.Any())
+            {
+                var conflictResult = await PuantajService.CheckConflictsAsync(kopyalananKayitlar);
+                cakisanSayisi = conflictResult.Conflicts.Count;
+
+                if (conflictResult.HasBlocking)
+                {
+                    cakismaDetaylari = conflictResult.Conflicts
+                        .Where(c => c.Severity == ConflictSeverity.Blocking)
+                        .Select(c => c.Mesaj)
+                        .Distinct()
+                        .ToList();
+                }
+                else if (conflictResult.HasWarning)
+                {
+                    cakismaDetaylari = conflictResult.Conflicts
+                        .Where(c => c.Severity == ConflictSeverity.Warning)
+                        .Select(c => c.Mesaj)
+                        .Distinct()
+                        .ToList();
+                }
+            }
+
+            adim = 2;
+        }
+        catch (Exception ex)
+        {
+            cakismaDetaylari.Add($"Hata: {ex.Message}");
+        }
+        finally { isliyor = false; }
+    }
+
+    private async Task KopyalananlariYukle()
+    {
+        await OnKopyalandi.InvokeAsync(kopyalananKayitlar);
+    }
+}

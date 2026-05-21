@@ -253,6 +253,15 @@ else
                         OnKapat="() => duzenleKayit = null" />
 }
 
+@if (kopyalamaModaliAcik)
+{
+    <CopyPreviousMonthModal HedefYil="seciliYil"
+                             HedefAy="seciliAy"
+                             Kurumlar="kurumlar"
+                             OnKopyalandi="KopyalamaTamamlandi"
+                             OnKapat="() => kopyalamaModaliAcik = false" />
+}
+
 @code {
     private bool yukleniyor = true;
     private bool kaydediliyor;
@@ -266,6 +275,7 @@ else
     private string seciliSlot = "";
 
     private PuantajKayit? duzenleKayit;
+    private bool kopyalamaModaliAcik;
     private ConflictResult? sonConflict;
     private Dictionary<PuantajKayit, List<ConflictItem>> catismaHaritasi = new();
     private bool kontrolEdiliyor;
@@ -399,23 +409,19 @@ else
         finally { yukleniyor = false; }
     }
 
-    private async Task OncekiAydanKopyala()
-    {
-        var hedefAy = seciliAy;
-        var hedefYil = seciliYil;
-        var kaynakAy = hedefAy == 1 ? 12 : hedefAy - 1;
-        var kaynakYil = hedefAy == 1 ? hedefYil - 1 : hedefYil;
+    private void OncekiAydanKopyala() => kopyalamaModaliAcik = true;
 
-        var kaynakKayitlar = await KurumPuantajService.GetPuantajlarAsync(kaynakYil, kaynakAy, seciliKurumId);
-        foreach (var k in kaynakKayitlar)
+    private async Task KopyalamaTamamlandi(List<PuantajKayit> kopyalananlar)
+    {
+        kopyalamaModaliAcik = false;
+        if (!kopyalananlar.Any())
         {
-            k.Id = 0;
-            k.Yil = hedefYil;
-            k.Ay = hedefAy;
+            ToastService.ShowInfo("Kopyalanacak kayit bulunamadi.");
+            return;
         }
-        kayitlar.AddRange(kaynakKayitlar);
-        foreach (var k in kaynakKayitlar) degisenSatirlar.Add(k);
-        ToastService.ShowSuccess($"{kaynakKayitlar.Count} kayit kopyalandi. Kaydetmek icin 'Tumunu Kaydet' dugmesine basin.");
+        kayitlar.AddRange(kopyalananlar);
+        foreach (var k in kopyalananlar) degisenSatirlar.Add(k);
+        ToastService.ShowSuccess($"{kopyalananlar.Count} kayit yuklendi. Kaydetmek icin 'Tumunu Kaydet' dugmesine basin.");
     }
 
     private string SlotBadgeClass(SeferSlot slot) => slot switch
