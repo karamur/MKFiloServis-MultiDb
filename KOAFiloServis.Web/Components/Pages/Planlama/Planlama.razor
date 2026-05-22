@@ -123,6 +123,7 @@ else
                                 <th>Kaynak</th>
                                 <th>Finans</th>
                                 <th>Yon</th>
+                                <th class="text-center">Onay</th>
                                 <th class="text-center">Sefer</th>
                                 <th class="text-center" style="min-width:200px">Gun / Gunluk Dagilim</th>
                                 <th class="text-end" style="cursor:pointer" @onclick='() => SiralamaYap("BirimGelir")'>
@@ -156,6 +157,16 @@ else
                                     <td><span class="badge @(k.KaynakTipi == PlanlamaKaynakTipi.Kendi ? "bg-primary" : "bg-secondary")">@k.KaynakTipi</span></td>
                                     <td><span class="badge @(k.FinansYonu == PlanlamaFinansYonu.Gelen ? "bg-success" : k.FinansYonu == PlanlamaFinansYonu.Giden ? "bg-danger" : "bg-info")">@k.FinansYonu</span></td>
                                     <td>@k.Yon</td>
+                                    <td class="text-center">
+                                        @if (k.OnayDurum == PuantajOnayDurum.Onaylandi)
+                                        { <span class="badge bg-success">Onaylandi</span> }
+                                        else if (k.OnayDurum == PuantajOnayDurum.OnayBekliyor)
+                                        { <span class="badge bg-warning text-dark">Onay Bekliyor</span> }
+                                        else if (k.OnayDurum == PuantajOnayDurum.Reddedildi)
+                                        { <span class="badge bg-danger">Reddedildi</span> }
+                                        else
+                                        { <span class="badge bg-secondary">Taslak</span> }
+                                    </td>
                                     <td class="text-center">@k.SeferSayisi</td>
                                     <td class="text-center" style="position:relative;">
                                         <div class="d-flex align-items-center gap-1 justify-content-center">
