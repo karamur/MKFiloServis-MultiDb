@@ -87,6 +87,37 @@ else
             </div>
         </div>
 
+        @if (toplamGelir > 0 || toplamGider > 0)
+        {
+            var netKar = toplamGelir - toplamGider;
+            <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                    <div class="card border-success">
+                        <div class="card-body text-center py-3">
+                            <h6 class="text-muted">Toplam Gelir</h6>
+                            <h3 class="text-success">@toplamGelir.ToString("N2") TL</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-danger">
+                        <div class="card-body text-center py-3">
+                            <h6 class="text-muted">Toplam Gider</h6>
+                            <h3 class="text-danger">@toplamGider.ToString("N2") TL</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card @(netKar >= 0 ? "border-primary" : "border-danger")">
+                        <div class="card-body text-center py-3">
+                            <h6 class="text-muted">Net Kar/Zarar</h6>
+                            <h3 class="@(netKar >= 0 ? "text-primary" : "text-danger")">@netKar.ToString("N2") TL</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
         <div class="row g-3">
             <div class="col-md-4">
                 <div class="card">
@@ -179,6 +210,8 @@ else
     private int tedarikciSayisi;
     private int oncekiToplamSefer;
     private int oncekiCakisanSayisi;
+    private decimal toplamGelir;
+    private decimal toplamGider;
     private Dictionary<string, int> slotDagilimi = new();
     private Dictionary<string, int> finansDagilimi = new();
     private Dictionary<string, int> kaynakDagilimi = new();
@@ -199,6 +232,7 @@ else
             cakisanDetay.Clear();
             toplamSefer = cakisanSayisi = faturaBekleyen = tedarikciSayisi = 0;
             oncekiToplamSefer = oncekiCakisanSayisi = 0;
+            toplamGelir = toplamGider = 0;
 
             var kayitlar = await PuantajService.GetPuantajlarAsync(seciliYil, seciliAy);
             toplamSefer = kayitlar.Count;
@@ -216,6 +250,8 @@ else
 
             if (kayitlar.Any())
             {
+                toplamGelir = kayitlar.Sum(k => k.BirimGelir * k.Gun);
+                toplamGider = kayitlar.Sum(k => k.BirimGider * k.Gun);
                 slotDagilimi = kayitlar.GroupBy(k => k.Slot.ToString()).ToDictionary(g => g.Key, g => g.Count());
                 finansDagilimi = kayitlar.GroupBy(k => k.FinansYonu.ToString()).ToDictionary(g => g.Key, g => g.Count());
                 kaynakDagilimi = kayitlar.GroupBy(k => k.KaynakTipi.ToString()).ToDictionary(g => g.Key, g => g.Count());
