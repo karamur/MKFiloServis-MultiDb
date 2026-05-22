@@ -20,7 +20,7 @@ public interface IKurumPuantajService
 
     // ── PuantajKayit CRUD ──────────────────────────────────────────────────────
     /// <summary>Belirtilen dönem + kurum için mevcut puantaj kayıtlarını döner.</summary>
-    Task<List<PuantajKayit>> GetPuantajlarAsync(int yil, int ay, int kurumId);
+    Task<List<PuantajKayit>> GetPuantajlarAsync(int yil, int ay, int? kurumId = null);
 
     /// <summary>Tek PuantajKayit satırını döner.</summary>
     Task<PuantajKayit?> GetPuantajByIdAsync(int id);

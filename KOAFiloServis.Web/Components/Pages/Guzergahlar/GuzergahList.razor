@@ -6,6 +6,7 @@
 @inject IKurumService KurumService
 @inject IKapasiteService KapasiteService
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 @rendermode InteractiveServer
 
 <PageTitle>Güzergahlar</PageTitle>
@@ -24,6 +25,9 @@
                     <i class="bi bi-map"></i>
                 </button>
             </div>
+            <button class="btn btn-outline-success" @onclick="ExportCsv">
+                <i class="bi bi-file-earmark-excel me-1"></i>Excel
+            </button>
             <button class="btn btn-primary" @onclick="YeniGuzergah">
                 <i class="bi bi-plus-lg me-1"></i>Yeni Güzergah
             </button>
@@ -164,7 +168,7 @@
                         </div>
                     </div>
                     <div class="mt-2 small text-muted">
-                        Toplam: <strong>@FiltrelenmisGuzergahlar.Count()</strong> kayıt gösteriliyor (@guzergahlar.Count toplam)
+                        Toplam: <strong>@filtreliToplam</strong> kayıt (@guzergahlar.Count toplam)
                         <button class="btn btn-link btn-sm py-0" @onclick="FiltreleriTemizle">Filtreleri Temizle</button>
                     </div>
                 </div>
@@ -189,7 +193,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var guzergah in FiltrelenmisGuzergahlar)
+                                @foreach (var guzergah in SayfalanmisGuzergahlar)
                                 {
                                     <tr>
                                         <td><strong>@guzergah.GuzergahKodu</strong></td>
@@ -232,6 +236,34 @@
                             </tbody>
                         </table>
                     </div>
+                    @if (toplamSayfa > 1)
+                    {
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <small class="text-muted">Sayfa @sayfaNo / @toplamSayfa</small>
+                            <nav>
+                                <ul class="pagination pagination-sm mb-0">
+                                    <li class="page-item @(sayfaNo <= 1 ? "disabled" : "")">
+                                        <button class="page-link" @onclick="() => SayfayaGit(1)">««</button>
+                                    </li>
+                                    <li class="page-item @(sayfaNo <= 1 ? "disabled" : "")">
+                                        <button class="page-link" @onclick="() => SayfayaGit(sayfaNo - 1)">«</button>
+                                    </li>
+                                    @foreach (var s in SayfaNumaralari())
+                                    {
+                                        <li class="page-item @(s == sayfaNo ? "active" : "")">
+                                            <button class="page-link" @onclick="() => SayfayaGit(s)">@s</button>
+                                        </li>
+                                    }
+                                    <li class="page-item @(sayfaNo >= toplamSayfa ? "disabled" : "")">
+                                        <button class="page-link" @onclick="() => SayfayaGit(sayfaNo + 1)">»</button>
+                                    </li>
+                                    <li class="page-item @(sayfaNo >= toplamSayfa ? "disabled" : "")">
+                                        <button class="page-link" @onclick="() => SayfayaGit(toplamSayfa)">»»</button>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
+                    }
                 </div>
             </div>
         }
@@ -333,6 +365,44 @@
         return kurumlar.FirstOrDefault(k => k.CariId == cariId)?.KurumAdi;
     }
 
+    private int sayfaNo = 1;
+    private int sayfaBoyutu = 25;
+    private int filtreliToplam => FiltrelenmisGuzergahlar.Count();
+    private int toplamSayfa => Math.Max(1, (int)Math.Ceiling((double)filtreliToplam / sayfaBoyutu));
+
+    private IEnumerable<Guzergah> SayfalanmisGuzergahlar =>
+        FiltrelenmisGuzergahlar.Skip((sayfaNo - 1) * sayfaBoyutu).Take(sayfaBoyutu);
+
+    private void SayfayaGit(int sayfa)
+    {
+        sayfaNo = Math.Clamp(sayfa, 1, toplamSayfa);
+    }
+
+    private List<int> SayfaNumaralari()
+    {
+        var sayfalar = new List<int>();
+        var bas = Math.Max(1, sayfaNo - 2);
+        var son = Math.Min(toplamSayfa, sayfaNo + 2);
+        for (int i = bas; i <= son; i++) sayfalar.Add(i);
+        return sayfalar;
+    }
+
+    private async Task ExportCsv()
+    {
+        var data = FiltrelenmisGuzergahlar.ToList();
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Kod,Guzergah Adi,Kurum,Cari,Kapasite,Gelir,Gider,SeferTipi,Durum");
+        foreach (var g in data)
+        {
+            var kurum = g.Kurum?.KurumAdi ?? KurumAdiBul(g.CariId) ?? "";
+            sb.AppendLine($"\"{g.GuzergahKodu}\",\"{g.GuzergahAdi}\",\"{kurum}\",\"{g.Cari?.Unvan ?? ""}\",\"{KapasiteAdiBul(g) ?? ""}\",{g.GelirFiyat},{g.GiderFiyat},{g.SeferTipi},{(g.Aktif ? "Aktif" : "Pasif")}");
+        }
+
+        var bytes = System.Text.Encoding.UTF8.GetPreamble().Concat(System.Text.Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
+        var base64 = Convert.ToBase64String(bytes);
+        await JS.InvokeVoidAsync("downloadFile", "guzergahlar.csv", "data:text/csv;charset=utf-8;base64," + base64);
+    }
+
     private void FiltreleriTemizle()
     {
         filtreKurumId = 0;
@@ -340,6 +410,7 @@
         filtreSeferTipi = string.Empty;
         filtreDurum = "aktif";
         filtreArama = string.Empty;
+        sayfaNo = 1;
     }
 
     protected override async Task OnInitializedAsync()

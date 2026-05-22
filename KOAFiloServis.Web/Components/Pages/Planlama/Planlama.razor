@@ -306,7 +306,7 @@ else
     private List<Sofor> soforListesi = new();
     private HashSet<PuantajKayit> degisenSatirlar = new();
 
-    private int seciliKurumId;
+    private int? seciliKurumId;
     private int seciliYil = DateTime.Now.Year;
     private int seciliAy = DateTime.Now.Month;
     private string seciliSlot = "";
@@ -353,7 +353,7 @@ else
         {
             Yil = seciliYil,
             Ay = seciliAy,
-            KurumId = seciliKurumId > 0 ? seciliKurumId : null,
+            KurumId = seciliKurumId,
             Slot = string.IsNullOrEmpty(seciliSlot) ? SeferSlot.Sabah : (SeferSlot)int.Parse(seciliSlot),
             SeferSayisi = 1,
             Gun = 0
@@ -456,10 +456,15 @@ else
 
     private async Task SablonOlustur()
     {
+        if (!seciliKurumId.HasValue || seciliKurumId.Value == 0)
+        {
+            ToastService.ShowInfo("Sablon olusturmak icin bir Kurum secin.");
+            return;
+        }
         yukleniyor = true;
         try
         {
-            kayitlar = await KurumPuantajService.SablonOlusturAsync(seciliKurumId, seciliYil, seciliAy);
+            kayitlar = await KurumPuantajService.SablonOlusturAsync(seciliKurumId.Value, seciliYil, seciliAy);
             ToastService.ShowSuccess("Sablon olusturuldu.");
         }
         finally { yukleniyor = false; }

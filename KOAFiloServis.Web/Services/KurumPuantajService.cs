@@ -85,15 +85,15 @@ public sealed class KurumPuantajService : IKurumPuantajService
 
     // ── PuantajKayit CRUD ─────────────────────────────────────────────────────
 
-    public async Task<List<PuantajKayit>> GetPuantajlarAsync(int yil, int ay, int kurumId)
+    public async Task<List<PuantajKayit>> GetPuantajlarAsync(int yil, int ay, int? kurumId = null)
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
 
-        // KurumId → Güzergahların KurumId alanından filtrele
-        var guzergahIds = await db.Guzergahlar
-            .Where(g => !g.IsDeleted && g.KurumId == kurumId)
-            .Select(g => g.Id)
-            .ToListAsync();
+        // KurumId → Güzergahların KurumId alanından filtrele (null = tum kurumlar)
+        var guzergahQuery = db.Guzergahlar.Where(g => !g.IsDeleted);
+        if (kurumId.HasValue && kurumId.Value > 0)
+            guzergahQuery = guzergahQuery.Where(g => g.KurumId == kurumId.Value);
+        var guzergahIds = await guzergahQuery.Select(g => g.Id).ToListAsync();
 
         return await db.PuantajKayitlar
             .Include(p => p.Guzergah)
@@ -429,8 +429,8 @@ public sealed class KurumPuantajService : IKurumPuantajService
 
             if (!eslestirmeler.Any() && guzergah.VarsayilanArac != null)
             {
-                // Varsayılan araçla, her slot için satır
-                foreach (SeferSlot slot in Enum.GetValues<SeferSlot>())
+                // Varsayılan araçla, sadece güzergahın SeferTipi'ne uygun slotlar
+                foreach (var slot in SeferTipindenSlotlara(guzergah.SeferTipi))
                 {
                     EkleEksikSatir(sonuc, mevcutlar, guzergah, guzergah.VarsayilanArac.Id,
                         guzergah.VarsayilanArac.AktifPlaka ?? guzergah.VarsayilanArac.Plaka,
@@ -444,7 +444,7 @@ public sealed class KurumPuantajService : IKurumPuantajService
                 foreach (var e in eslestirmeler)
                 {
                     var soforAdi = e.Sofor != null ? $"{e.Sofor.Ad} {e.Sofor.Soyad}" : null;
-                    foreach (SeferSlot slot in Enum.GetValues<SeferSlot>())
+                    foreach (var slot in SeferTipindenSlotlara(guzergah.SeferTipi))
                     {
                         EkleEksikSatir(sonuc, mevcutlar, guzergah, e.AracId,
                             e.Arac?.AktifPlaka ?? e.Arac?.Plaka,
