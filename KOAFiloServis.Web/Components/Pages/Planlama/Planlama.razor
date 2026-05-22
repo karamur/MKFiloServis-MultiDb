@@ -36,6 +36,9 @@ else
                 <button class="btn btn-outline-secondary me-2" @onclick="OncekiAydanKopyala">
                     <i class="bi bi-copy me-1"></i> Onceki Aydan Kopyala
                 </button>
+                <button class="btn btn-outline-danger me-2" @onclick="DonemTemizle">
+                    <i class="bi bi-eraser me-1"></i> Donem Temizle
+                </button>
                 <button class="btn btn-primary" @onclick="YeniKayitAc">
                     <i class="bi bi-plus-lg me-1"></i> Yeni Sefer
                 </button>
@@ -554,6 +557,24 @@ else
     }
 
     private void OncekiAydanKopyala() => kopyalamaModaliAcik = true;
+
+    private async Task DonemTemizle()
+    {
+        if (kayitlar.Count == 0) return;
+        var silinenSayi = kayitlar.Count;
+        yukleniyor = true;
+        try
+        {
+            foreach (var k in kayitlar)
+                await KurumPuantajService.DeletePuantajAsync(k.Id);
+            kayitlar.Clear();
+            degisenSatirlar.Clear();
+            sonConflict = null;
+            catismaHaritasi.Clear();
+            ToastService.ShowSuccess($"Donem temizlendi: {silinenSayi} kayit silindi.");
+        }
+        finally { yukleniyor = false; }
+    }
 
     private async Task KopyalamaTamamlandi(List<PuantajKayit> kopyalananlar)
     {

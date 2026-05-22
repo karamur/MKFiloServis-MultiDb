@@ -18,8 +18,25 @@
 else
 {
     <div class="container-fluid">
-        <h4 class="mb-3"><i class="bi bi-speedometer2 me-2"></i>Planlama Dashboard</h4>
-        <p class="text-muted">@seciliAyAdi @seciliYil — Operasyon KPI Ozeti</p>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h4 class="mb-1"><i class="bi bi-speedometer2 me-2"></i>Planlama Dashboard</h4>
+                <p class="text-muted small mb-0">Operasyon KPI Ozeti</p>
+            </div>
+            <div class="d-flex gap-2 align-items-center">
+                <select class="form-select form-select-sm" style="width:80px" @bind="seciliYil" @bind:after="DonemDegisti">
+                    @for (int y = DateTime.Now.Year; y >= DateTime.Now.Year - 2; y--)
+                    { <option value="@y">@y</option> }
+                </select>
+                <select class="form-select form-select-sm" style="width:110px" @bind="seciliAy" @bind:after="DonemDegisti">
+                    @for (int a = 1; a <= 12; a++)
+                    { <option value="@a">@(new DateTime(2024, a, 1).ToString("MMMM"))</option> }
+                </select>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="YenidenYukle" disabled="@yukleniyor">
+                    <i class="bi bi-arrow-repeat"></i>
+                </button>
+            </div>
+        </div>
 
         <div class="row g-3 mb-4">
             <div class="col-md-3">
@@ -169,8 +186,20 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        await VeriYukleAsync();
+    }
+
+    private async Task VeriYukleAsync()
+    {
+        yukleniyor = true;
         try
         {
+            // Reset
+            slotDagilimi.Clear(); finansDagilimi.Clear(); kaynakDagilimi.Clear();
+            cakisanDetay.Clear();
+            toplamSefer = cakisanSayisi = faturaBekleyen = tedarikciSayisi = 0;
+            oncekiToplamSefer = oncekiCakisanSayisi = 0;
+
             var kayitlar = await PuantajService.GetPuantajlarAsync(seciliYil, seciliAy);
             toplamSefer = kayitlar.Count;
 
@@ -179,7 +208,6 @@ else
             var oncekiYil = seciliAy == 1 ? seciliYil - 1 : seciliYil;
             var oncekiKayitlar = await PuantajService.GetPuantajlarAsync(oncekiYil, oncekiAy);
             oncekiToplamSefer = oncekiKayitlar.Count;
-            oncekiCakisanSayisi = 0;
             if (oncekiKayitlar.Any())
             {
                 var prevConflicts = await PuantajService.CheckConflictsAsync(oncekiKayitlar);
@@ -188,18 +216,11 @@ else
 
             if (kayitlar.Any())
             {
-                slotDagilimi = kayitlar.GroupBy(k => k.Slot.ToString())
-                    .ToDictionary(g => g.Key, g => g.Count());
-
-                finansDagilimi = kayitlar.GroupBy(k => k.FinansYonu.ToString())
-                    .ToDictionary(g => g.Key, g => g.Count());
-
-                kaynakDagilimi = kayitlar.GroupBy(k => k.KaynakTipi.ToString())
-                    .ToDictionary(g => g.Key, g => g.Count());
-
+                slotDagilimi = kayitlar.GroupBy(k => k.Slot.ToString()).ToDictionary(g => g.Key, g => g.Count());
+                finansDagilimi = kayitlar.GroupBy(k => k.FinansYonu.ToString()).ToDictionary(g => g.Key, g => g.Count());
+                kaynakDagilimi = kayitlar.GroupBy(k => k.KaynakTipi.ToString()).ToDictionary(g => g.Key, g => g.Count());
                 tedarikciSayisi = kayitlar.Count(k => k.KaynakTipi == PlanlamaKaynakTipi.Tedarikci);
                 faturaBekleyen = kayitlar.Count(k => !k.GelirFaturaKesildi && k.BirimGelir > 0 && k.Gun > 0);
-
                 var conflicts = await PuantajService.CheckConflictsAsync(kayitlar);
                 cakisanSayisi = conflicts.Conflicts.Count;
                 cakisanDetay = conflicts.Conflicts.Take(50).ToList();
@@ -208,6 +229,9 @@ else
         catch (Exception ex) { Logger.LogWarning(ex, "Dashboard verisi yuklenemedi"); }
         finally { yukleniyor = false; }
     }
+
+    private async Task DonemDegisti() => await VeriYukleAsync();
+    private async Task YenidenYukle() => await VeriYukleAsync();
 
     private string SlotBarClass(string slot) => slot switch
     {

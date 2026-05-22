@@ -140,7 +140,7 @@
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Onay Durumu</label>
-                        <select class="form-select" @bind="Kayit.OnayDurum">
+                        <select class="form-select" @bind="Kayit.OnayDurum" @bind:after="OnayDurumDegisti">
                             @foreach (PuantajOnayDurum d in Enum.GetValues<PuantajOnayDurum>())
                             {
                                 <option value="@d">@d</option>
@@ -302,6 +302,20 @@
         filtrelenmisAraclar = seferAracIds.Any()
             ? AracListesi.Where(a => seferAracIds.Contains(a.Id)).ToList()
             : AracListesi;
+    }
+
+    private void OnayDurumDegisti()
+    {
+        if (Kayit.OnayDurum == PuantajOnayDurum.Onaylandi)
+        {
+            Kayit.OnaylayanKullanici ??= "manuel";
+            Kayit.OnayTarihi = DateTime.UtcNow;
+        }
+        else if (Kayit.OnayDurum == PuantajOnayDurum.Taslak)
+        {
+            Kayit.OnaylayanKullanici = null;
+            Kayit.OnayTarihi = null;
+        }
     }
 
     private async Task Kaydet()
