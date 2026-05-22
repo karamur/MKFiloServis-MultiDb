@@ -203,7 +203,7 @@ begin
     WizardForm.Caption := '{#MyAppName} Kurulum Sihirbazi';
 end;
 
-function InitializeSetup(): Boolean();
+function InitializeSetup(): Boolean;
 var
   PrevPath, Msg: String;
   ResultCode: Integer;

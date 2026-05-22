@@ -1,11 +1,6 @@
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
-@inject IAracService AracService
-@inject ISoforService SoforService
-@inject IGuzergahService GuzergahService
-@inject IFirmaService FirmaService
 @inject IGuzergahSeferService GuzergahSeferService
-@inject IKurumPuantajService KurumPuantajService
 
 <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -33,7 +28,7 @@
                         <label class="form-label">Isveren Firma</label>
                         <select class="form-select" @bind="Kayit.IsverenFirmaId">
                             <option value="">Seciniz...</option>
-                            @foreach (var f in firmalar)
+                            @foreach (var f in Firmalar)
                             {
                                 <option value="@f.Id">@f.FirmaAdi</option>
                             }
@@ -43,7 +38,7 @@
                         <label class="form-label">Guzergah</label>
                         <select class="form-select" @bind="Kayit.GuzergahId" @bind:after="GuzergahDegisti">
                             <option value="">Seciniz...</option>
-                            @foreach (var g in guzergahListesi)
+                            @foreach (var g in GuzergahListesi)
                             {
                                 <option value="@g.Id">@g.GuzergahAdi</option>
                             }
@@ -71,7 +66,7 @@
                         <label class="form-label">Arac</label>
                         <select class="form-select" @bind="Kayit.AracId">
                             <option value="">Seciniz...</option>
-                            @foreach (var a in aracListesi)
+                            @foreach (var a in filtrelenmisAraclar)
                             {
                                 <option value="@a.Id">@a.AktifPlaka</option>
                             }
@@ -81,7 +76,7 @@
                         <label class="form-label">Sofor</label>
                         <select class="form-select" @bind="Kayit.SoforId">
                             <option value="">Seciniz...</option>
-                            @foreach (var s in soforListesi)
+                            @foreach (var s in SoforListesi)
                             {
                                 <option value="@s.Id">@s.TamAd</option>
                             }
@@ -92,7 +87,7 @@
                         <input type="number" class="form-control" @bind="Kayit.SeferSayisi" min="1" />
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">Gun (Carpan)</label>
+                        <label class="form-label">Gun (Carpan) <small class="text-muted">- gun grid'den otomatik</small></label>
                         <input type="number" class="form-control" @bind="Kayit.Gun" step="0.5" min="0" />
                     </div>
                     <div class="col-md-4">
@@ -147,6 +142,76 @@
                         <label class="form-label">Notlar</label>
                         <textarea class="form-control" rows="2" @bind="Kayit.Notlar"></textarea>
                     </div>
+
+                    @* Gun Bazli Puantaj Grid *@
+                    <div class="col-12">
+                        <div class="card bg-light">
+                            <div class="card-header py-2 d-flex justify-content-between align-items-center"
+                                 @onclick="() => gunGridAcik = !gunGridAcik" style="cursor:pointer;">
+                                <span><i class="bi bi-calendar3 me-2"></i>Gun Bazli Puantaj</span>
+                                <div>
+                                    <span class="badge bg-primary me-2">Toplam: @Kayit.SeferGunuToplami gun</span>
+                                    <i class="bi @(gunGridAcik ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                                </div>
+                            </div>
+                            @if (gunGridAcik)
+                            {
+                                <div class="card-body py-2">
+                                    <div class="d-flex flex-wrap gap-1 mb-2">
+                                        <button class="btn btn-outline-primary btn-sm" @onclick="() => HepsiniSec(1)" title="Tum gunlere tek sefer ata">
+                                            <i class="bi bi-grid me-1"></i>Tum Gunler Tek
+                                        </button>
+                                        <button class="btn btn-outline-primary btn-sm" @onclick="() => HepsiniSec(2)" title="Tum gunlere S+A ata">
+                                            <i class="bi bi-grid-fill me-1"></i>Tum Gunler S+A
+                                        </button>
+                                        <button class="btn btn-outline-success btn-sm" @onclick="() => SadeceHaftaIci(1)" title="Sadece hafta ici tek sefer">
+                                            <i class="bi bi-briefcase me-1"></i>Sadece HaftaIci
+                                        </button>
+                                        <button class="btn btn-outline-success btn-sm" @onclick="() => SadeceHaftaIci(2)" title="Sadece hafta ici S+A">
+                                            <i class="bi bi-briefcase-fill me-1"></i>HI S+A
+                                        </button>
+                                        <button class="btn btn-outline-danger btn-sm" @onclick="Temizle" title="Tum gunleri sifirla">
+                                            <i class="bi bi-eraser me-1"></i>Temizle
+                                        </button>
+                                    </div>
+                                    <div class="d-flex flex-column gap-1">
+                                        @for (int hafta = 0; hafta < 5; hafta++)
+                                        {
+                                            <div class="d-flex gap-1">
+                                                @for (int gun = hafta * 7 + 1; gun <= Math.Min(hafta * 7 + 7, 31); gun++)
+                                                {
+                                                    var gunNo = gun;
+                                                    var deger = Kayit.GetGunDeger(gunNo);
+                                                    var cellClass = deger switch
+                                                    {
+                                                        2 => "bg-primary text-white",
+                                                        1 => "bg-primary bg-opacity-25",
+                                                        _ => "bg-white"
+                                                    };
+                                                    <div class="text-center rounded @cellClass"
+                                                         style="width:36px; height:36px; line-height:36px; font-size:12px; cursor:pointer; border:1px solid #dee2e6; user-select:none;"
+                                                         @onclick="() => GunToggle(gunNo)"
+                                                         title="Gun @gunNo: @(deger == 2 ? "S+A" : deger == 1 ? "Tek Sefer" : "Gitmedi")">
+                                                        @gunNo
+                                                    </div>
+                                                }
+                                                @for (int bos = (hafta * 7 + 7) - 31; bos > 0 && bos < 7; bos--)
+                                                {
+                                                    <div style="width:36px;"></div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                    <div class="mt-2 small text-muted">
+                                        <span class="me-2"><span class="badge bg-white text-dark border">1</span> Gitmedi</span>
+                                        <span class="me-2"><span class="badge bg-primary bg-opacity-25">1</span> Tek Sefer</span>
+                                        <span><span class="badge bg-primary">1</span> S+A</span>
+                                        <span class="ms-2">(tiklayarak degistir: 0 → 1 → 2 → 0)</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -162,38 +227,72 @@
 @code {
     [Parameter, EditorRequired] public PuantajKayit Kayit { get; set; } = null!;
     [Parameter, EditorRequired] public List<Kurum> Kurumlar { get; set; } = null!;
+    [Parameter, EditorRequired] public List<Firma> Firmalar { get; set; } = null!;
+    [Parameter, EditorRequired] public List<Guzergah> GuzergahListesi { get; set; } = null!;
+    [Parameter, EditorRequired] public List<Arac> AracListesi { get; set; } = null!;
+    [Parameter, EditorRequired] public List<Sofor> SoforListesi { get; set; } = null!;
     [Parameter, EditorRequired] public EventCallback<PuantajKayit> OnKaydet { get; set; }
     [Parameter, EditorRequired] public EventCallback OnKapat { get; set; }
 
     private bool kaydediliyor;
-    private List<Firma> firmalar = new();
-    private List<Guzergah> guzergahListesi = new();
-    private List<Arac> aracListesi = new();
-    private List<Sofor> soforListesi = new();
+    private bool gunGridAcik = true;
+    private List<Arac> filtrelenmisAraclar = new();
 
-    protected override async Task OnInitializedAsync()
+    private void GunToggle(int gun)
     {
-        firmalar = await FirmaService.GetAktifFirmalarAsync();
-        guzergahListesi = await GuzergahService.GetActiveAsync();
-        aracListesi = await AracService.GetActiveAsync();
-        soforListesi = await SoforService.GetActiveAsync();
+        var mevcut = Kayit.GetGunDeger(gun);
+        var yeni = mevcut >= 2 ? 0 : mevcut + 1;
+        Kayit.SetGunDeger(gun, yeni);
+        Kayit.HesaplaPuantajToplam();
+    }
+
+    private void HepsiniSec(int deger)
+    {
+        for (int g = 1; g <= 31; g++)
+            Kayit.SetGunDeger(g, deger);
+        Kayit.HesaplaPuantajToplam();
+    }
+
+    private void SadeceHaftaIci(int deger)
+    {
+        // Hedef ayin ilk gunune gore hafta ici hesapla
+        var ilkGun = new DateTime(Kayit.Yil > 0 ? Kayit.Yil : DateTime.Now.Year, Kayit.Ay > 0 ? Kayit.Ay : 1, 1);
+        for (int g = 1; g <= DateTime.DaysInMonth(ilkGun.Year, ilkGun.Month); g++)
+        {
+            var tarih = new DateTime(ilkGun.Year, ilkGun.Month, g);
+            Kayit.SetGunDeger(g, tarih.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday) ? deger : 0);
+        }
+        for (int g = DateTime.DaysInMonth(ilkGun.Year, ilkGun.Month) + 1; g <= 31; g++)
+            Kayit.SetGunDeger(g, 0);
+        Kayit.HesaplaPuantajToplam();
+    }
+
+    private void Temizle()
+    {
+        for (int g = 1; g <= 31; g++)
+            Kayit.SetGunDeger(g, 0);
+        Kayit.HesaplaPuantajToplam();
+    }
+
+    protected override void OnParametersSet()
+    {
+        filtrelenmisAraclar = AracListesi;
     }
 
     private async Task GuzergahDegisti()
     {
         if (!Kayit.GuzergahId.HasValue)
         {
-            aracListesi = await AracService.GetActiveAsync();
+            filtrelenmisAraclar = AracListesi;
             return;
         }
 
         var seferler = await GuzergahSeferService.GetByGuzergahIdAsync(Kayit.GuzergahId.Value);
         var seferAracIds = seferler.Where(s => s.AracId.HasValue).Select(s => s.AracId!.Value).Distinct().ToList();
 
-        if (seferAracIds.Any())
-            aracListesi = (await AracService.GetActiveAsync()).Where(a => seferAracIds.Contains(a.Id)).ToList();
-        else
-            aracListesi = await AracService.GetActiveAsync();
+        filtrelenmisAraclar = seferAracIds.Any()
+            ? AracListesi.Where(a => seferAracIds.Contains(a.Id)).ToList()
+            : AracListesi;
     }
 
     private async Task Kaydet()

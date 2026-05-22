@@ -1,5 +1,7 @@
+using System.Reflection;
 using KOAFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 
 namespace KOAFiloServis.Web.Services;
@@ -67,6 +69,13 @@ public sealed class TenantDatabaseService : ITenantDatabaseService
         var created = await context.Database.EnsureCreatedAsync();
         _logger.LogInformation("Tenant DB sema olusturuldu (yeni={IsNew}): {DbName}", created, databaseName);
 
+        // Mevcut tum migration'lari __EFMigrationsHistory'ye kaydet (baseline)
+        // Boylece gelecekteki Migrate() cagrilari sadece yeni migration'lari uygular
+        if (created)
+        {
+            await BaselineMigrationsAsync(context, tenantConnStr);
+        }
+
         // Master DB'de Firma.DatabaseName guncelle
         firma.DatabaseName = databaseName;
         await masterCtx.SaveChangesAsync();
@@ -76,6 +85,43 @@ public sealed class TenantDatabaseService : ITenantDatabaseService
         if (migrateData)
         {
             await MigrateFirmaDataAsync(firmaId);
+        }
+    }
+
+    private async Task BaselineMigrationsAsync(DbContext context, string connectionString)
+    {
+        try
+        {
+            var migrationType = typeof(Migration);
+            var migrationTypes = Assembly.GetExecutingAssembly()
+                .GetTypes()
+                .Where(t => t.IsClass && !t.IsAbstract && migrationType.IsAssignableFrom(t))
+                .ToList();
+
+            if (!migrationTypes.Any()) return;
+
+            await using var conn = new NpgsqlConnection(connectionString);
+            await conn.OpenAsync();
+
+            var inserted = 0;
+            foreach (var type in migrationTypes)
+            {
+                var attr = type.GetCustomAttribute<MigrationAttribute>();
+                if (attr?.Id == null) continue;
+
+                await using var cmd = new NpgsqlCommand(
+                    "INSERT INTO \"__EFMigrationsHistory\" (\"MigrationId\", \"ProductVersion\") VALUES (@id, '10.0.0') ON CONFLICT DO NOTHING",
+                    conn);
+                cmd.Parameters.AddWithValue("@id", attr.Id);
+                var rows = await cmd.ExecuteNonQueryAsync();
+                if (rows > 0) inserted++;
+            }
+
+            _logger.LogInformation("Migration baseline: {Inserted}/{Total} migration kaydedildi", inserted, migrationTypes.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Migration baseline olusturulamadi (kritik degil, manuel mudahale gerekebilir)");
         }
     }
 

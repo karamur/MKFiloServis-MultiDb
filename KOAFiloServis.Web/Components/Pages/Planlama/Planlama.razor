@@ -7,6 +7,9 @@
 @inject IKurumPuantajService KurumPuantajService
 @inject IKullaniciService KullaniciService
 @inject IFirmaService FirmaService
+@inject IAracService AracService
+@inject ISoforService SoforService
+@inject IGuzergahService GuzergahService
 @inject IToastService ToastService
 @inject NavigationManager Navigation
 @inject ILogger<Planlama> Logger
@@ -117,7 +120,7 @@ else
                                 <th>Finans</th>
                                 <th>Yon</th>
                                 <th class="text-center">Sefer</th>
-                                <th class="text-center">Gun</th>
+                                <th class="text-center" style="min-width:200px">Gun / Gunluk Dagilim</th>
                                 <th class="text-end">Birim Gelir</th>
                                 <th class="text-end">Birim Gider</th>
                                 <th style="width:120px">Islem</th>
@@ -146,14 +149,33 @@ else
                                     <td><span class="badge @(k.FinansYonu == PlanlamaFinansYonu.Gelen ? "bg-success" : k.FinansYonu == PlanlamaFinansYonu.Giden ? "bg-danger" : "bg-info")">@k.FinansYonu</span></td>
                                     <td>@k.Yon</td>
                                     <td class="text-center">@k.SeferSayisi</td>
-                                    <td class="text-center">
-                                        @k.Gun
-                                        @if (catisanGunler.Any())
+                                    <td class="text-center" style="position:relative;">
+                                        <div class="d-flex align-items-center gap-1 justify-content-center">
+                                            <span class="fw-bold small">@k.Gun</span>
+                                            @if (catisanGunler.Any())
+                                            {
+                                                <span class="badge @(catisanGunler.Any(c => c.Severity == ConflictSeverity.Blocking) ? "bg-danger" : "bg-warning text-dark")"
+                                                      title="@string.Join("; ", catisanGunler.Select(c => $"Gun {c.Gun}: {c.Kural} - {c.Mesaj}"))">
+                                                    @catisanGunler.Count
+                                                </span>
+                                            }
+                                        </div>
+                                        @if (k.SeferGunuToplami > 0)
                                         {
-                                            <span class="badge @(catisanGunler.Any(c => c.Severity == ConflictSeverity.Blocking) ? "bg-danger" : "bg-warning text-dark") ms-1"
-                                                  title="@string.Join("; ", catisanGunler.Select(c => $"Gun {c.Gun}: {c.Kural} - {c.Mesaj}"))">
-                                                @catisanGunler.Count
-                                            </span>
+                                            var gunTooltipLines = new List<string>();
+                                            for (int g = 1; g <= 31; g++)
+                                            {
+                                                var d = k.GetGunDeger(g);
+                                                if (d > 0) gunTooltipLines.Add($"Gun {g}: {(d == 2 ? "S+A" : "Tek Sefer")}");
+                                            }
+                                            <div class="d-flex mt-1 justify-content-center" style="gap:1px;" title="@string.Join(", ", gunTooltipLines)">
+                                                @for (int gun = 1; gun <= 31; gun++)
+                                                {
+                                                    var deger = k.GetGunDeger(gun);
+                                                    var color = deger == 2 ? "#0d6efd" : deger == 1 ? "#198754" : "#e9ecef";
+                                                    <div style="width:4px; height:12px; background:@color; border-radius:1px;"></div>
+                                                }
+                                            </div>
                                         }
                                     </td>
                                     <td class="text-end">@k.BirimGelir.ToString("N2")</td>
@@ -253,6 +275,10 @@ else
 {
     <PlanlamaEditModal Kayit="duzenleKayit"
                         Kurumlar="kurumlar"
+                        Firmalar="firmalar"
+                        GuzergahListesi="guzergahListesi"
+                        AracListesi="aracListesi"
+                        SoforListesi="soforListesi"
                         OnKaydet="KayitKaydetCallback"
                         OnKapat="() => duzenleKayit = null" />
 }
@@ -271,6 +297,10 @@ else
     private bool kaydediliyor;
     private List<Kurum> kurumlar = new();
     private List<PuantajKayit> kayitlar = new();
+    private List<Firma> firmalar = new();
+    private List<Guzergah> guzergahListesi = new();
+    private List<Arac> aracListesi = new();
+    private List<Sofor> soforListesi = new();
     private HashSet<PuantajKayit> degisenSatirlar = new();
 
     private int seciliKurumId;
@@ -288,8 +318,16 @@ else
     {
         try
         {
-            kurumlar = await KurumPuantajService.GetAktifKurumlarAsync();
-            await VeriYukle();
+            var tasks = new Task[]
+            {
+                Task.Run(async () => kurumlar = await KurumPuantajService.GetAktifKurumlarAsync()),
+                Task.Run(async () => firmalar = await FirmaService.GetAktifFirmalarAsync()),
+                Task.Run(async () => guzergahListesi = await GuzergahService.GetActiveAsync()),
+                Task.Run(async () => aracListesi = await AracService.GetActiveAsync()),
+                Task.Run(async () => soforListesi = await SoforService.GetActiveAsync()),
+                VeriYukle()
+            };
+            await Task.WhenAll(tasks);
         }
         catch (Exception ex)
         {
@@ -323,8 +361,10 @@ else
 
     private async Task KayitKaydetCallback(PuantajKayit kayit)
     {
+        if (kayit.Id == 0 && !kayitlar.Contains(kayit))
+            kayitlar.Add(kayit);
+        degisenSatirlar.Add(kayit);
         duzenleKayit = null;
-        await VeriYukle();
     }
 
     private async Task KayitSil(PuantajKayit k)
