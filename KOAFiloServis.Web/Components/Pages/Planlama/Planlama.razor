@@ -263,13 +263,13 @@ else
                                     <td>@k.Yon</td>
                                     <td class="text-center">
                                         @if (k.OnayDurum == PuantajOnayDurum.Onaylandi)
-                                        { <span class="badge bg-success">Onaylandi</span> }
+                                        { <span class="badge bg-success" style="cursor:pointer" @onclick="() => OnayToggle(k)" title="Onayı kaldır">Onaylandi</span> }
                                         else if (k.OnayDurum == PuantajOnayDurum.OnayBekliyor)
-                                        { <span class="badge bg-warning text-dark">Onay Bekliyor</span> }
+                                        { <span class="badge bg-warning text-dark" style="cursor:pointer" @onclick="() => OnayToggle(k)" title="Onayla">Onay Bekliyor</span> }
                                         else if (k.OnayDurum == PuantajOnayDurum.Reddedildi)
-                                        { <span class="badge bg-danger">Reddedildi</span> }
+                                        { <span class="badge bg-danger" style="cursor:pointer" @onclick="() => OnayToggle(k)" title="Taslak yap">Reddedildi</span> }
                                         else
-                                        { <span class="badge bg-secondary">Taslak</span> }
+                                        { <span class="badge bg-secondary" style="cursor:pointer" @onclick="() => OnayToggle(k)" title="Onayla">Taslak</span> }
                                     </td>
                                     <td class="text-center">@k.SeferSayisi</td>
                                     <td class="text-center" style="position:relative;">
@@ -791,6 +791,16 @@ else
             _ => slotGrubu.OrderBy(k => k.Guzergah?.GuzergahAdi)
         };
         return siralamaAlani is "Guzergah" or "Arac" ? q : (siralamaArtan ? q.ThenBy(k => k.Guzergah?.GuzergahAdi) : q.ThenByDescending(k => k.Guzergah?.GuzergahAdi));
+    }
+
+    private void OnayToggle(PuantajKayit kayit)
+    {
+        kayit.OnayDurum = kayit.OnayDurum == PuantajOnayDurum.Onaylandi
+            ? PuantajOnayDurum.Taslak
+            : PuantajOnayDurum.Onaylandi;
+        kayit.OnaylayanKullanici = kayit.OnayDurum == PuantajOnayDurum.Onaylandi ? "hizli" : null;
+        kayit.OnayTarihi = kayit.OnayDurum == PuantajOnayDurum.Onaylandi ? DateTime.UtcNow : null;
+        degisenSatirlar.Add(kayit);
     }
 
     private void GunInlineToggle(PuantajKayit kayit, int gun)
