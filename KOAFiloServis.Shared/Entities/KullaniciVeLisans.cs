@@ -222,6 +222,8 @@ public static class SistemRolleri
                 Yetkiler.RaporlarOku, Yetkiler.RaporlarExport,
                 // Yedek
                 Yetkiler.YedeklemeOku, Yetkiler.YedeklemeOlustur,
+                // Planlama
+                Yetkiler.MenuPlanlama, Yetkiler.PlanlamaOku, Yetkiler.PlanlamaDashboardOku,
             },
 
             Operasyon => new List<string>
@@ -229,6 +231,7 @@ public static class SistemRolleri
                 Yetkiler.Dashboard,
                 // Ana Menu Erisim
                 Yetkiler.MenuFiloServis, Yetkiler.MenuPersonel, Yetkiler.MenuStokEnvanter, Yetkiler.MenuRaporlar,
+                Yetkiler.MenuPlanlama,
                 // Arac
                 Yetkiler.AraclarOku, Yetkiler.AraclarYaz, Yetkiler.AraclarDuzenle,
                 // Guzergah
@@ -246,6 +249,9 @@ public static class SistemRolleri
                 Yetkiler.StokDashboardOku, Yetkiler.StokKartlariOku, Yetkiler.AracIslemOku, Yetkiler.ServisKaydiOku,
                 // Rapor
                 Yetkiler.RaporlarOku,
+                // Planlama
+                Yetkiler.PlanlamaOku, Yetkiler.PlanlamaYaz, Yetkiler.PlanlamaDashboardOku,
+                Yetkiler.PlanlamaSablonOlustur, Yetkiler.PlanlamaCakismaKontrol, Yetkiler.PlanlamaTopluKaydet,
             },
 
             SatisTemsilcisi => new List<string>
@@ -352,6 +358,7 @@ public static class Yetkiler
     public const string MenuStokEnvanter = "menu.stok";
     public const string MenuAyarlar = "menu.ayarlar";
     public const string MenuHolding = "menu.holding";
+    public const string MenuPlanlama = "menu.planlama";
 
     // === CRM MODULU YETKILERI ===
     
@@ -563,6 +570,14 @@ public static class Yetkiler
     public const string HoldingPersonelGiderOku = "holding.personelgider.oku";
     public const string HoldingHakedisOku = "holding.hakedis.oku";
     public const string HoldingVeriTopla = "holding.veritopla";
+
+    // -- Planlama (Operasyon Planlama) --
+    public const string PlanlamaOku = "planlama.oku";
+    public const string PlanlamaYaz = "planlama.yaz";
+    public const string PlanlamaDashboardOku = "planlama.dashboard.oku";
+    public const string PlanlamaSablonOlustur = "planlama.sablon";
+    public const string PlanlamaCakismaKontrol = "planlama.cakisma";
+    public const string PlanlamaTopluKaydet = "planlama.kaydet";
 
     // -- Satis Dashboard --
     public const string SatisDashboardOku = "satisdash.oku";
@@ -938,6 +953,31 @@ public static class Yetkiler
                 {
                     new(RaporlarOku, "Goruntuleme", "bi-eye"),
                     new(RaporlarExport, "Export", "bi-download"),
+                }),
+            }),
+
+            new("Planlama", "bi-calendar-check", MenuPlanlama, new List<AltMenuYetki>
+            {
+                new("Operasyon Planlama", "bi-calendar-check", new List<YetkiTanim>
+                {
+                    new(PlanlamaOku, "Goruntuleme", "bi-eye"),
+                    new(PlanlamaYaz, "Yazma/Duzenleme", "bi-pencil"),
+                }),
+                new("Planlama Dashboard", "bi-speedometer2", new List<YetkiTanim>
+                {
+                    new(PlanlamaDashboardOku, "Goruntuleme", "bi-eye"),
+                }),
+                new("Sablon Olusturma", "bi-lightning", new List<YetkiTanim>
+                {
+                    new(PlanlamaSablonOlustur, "Sablon Olustur", "bi-plus"),
+                }),
+                new("Cakisma Kontrol", "bi-shield-check", new List<YetkiTanim>
+                {
+                    new(PlanlamaCakismaKontrol, "Kontrol Et", "bi-search"),
+                }),
+                new("Toplu Kaydet", "bi-save", new List<YetkiTanim>
+                {
+                    new(PlanlamaTopluKaydet, "Toplu Kaydet", "bi-download"),
                 }),
             }),
 

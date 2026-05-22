@@ -383,17 +383,20 @@
                                                 <i class="bi bi-calendar3-range me-2 text-primary"></i> Kurum Puantaj
                                             </NavLink>
                                         </div>
-                                        <div class="nav-item px-3">
-                                            <NavLink class="nav-link" href="planlama">
-                                                <i class="bi bi-calendar-check me-2 text-success"></i> <strong>Planlama</strong>
-                                                <span class="badge bg-success ms-1 small">Yeni</span>
-                                            </NavLink>
-                                        </div>
-                                        <div class="nav-item px-3">
-                                            <NavLink class="nav-link" href="planlama/dashboard">
-                                                <i class="bi bi-speedometer2 me-2 text-info"></i> Planlama Dashboard
-                                            </NavLink>
-                                        </div>
+                                        @if (HasMenuYetki(Yetkiler.MenuPlanlama))
+                                        {
+                                            <div class="nav-item px-3">
+                                                <NavLink class="nav-link" href="planlama">
+                                                    <i class="bi bi-calendar-check me-2 text-success"></i> <strong>Planlama</strong>
+                                                    <span class="badge bg-success ms-1 small">Yeni</span>
+                                                </NavLink>
+                                            </div>
+                                            <div class="nav-item px-3">
+                                                <NavLink class="nav-link" href="planlama/dashboard">
+                                                    <i class="bi bi-speedometer2 me-2 text-info"></i> Planlama Dashboard
+                                                </NavLink>
+                                            </div>
+                                        }
                                         <div class="nav-item px-3">
                                             <NavLink class="nav-link" href="filo-operasyon">
                                                 <i class="bi bi-gear-wide-connected me-2 text-info"></i> <strong>Filo Operasyon</strong>
@@ -1538,6 +1541,7 @@
         ["menu.bankakasa"] = new() { "banka", "bankahesap", "bankahareket" },
         ["menu.butce"] = new() { "butce", "odemeyonetim", "tekrarlayanodem" },
         ["menu.holding"] = new() { "holding" },
+        ["menu.planlama"] = new() { "planlama" },
         ["menu.checklist"] = new() { "checklist", "checklistmali" },
         ["menu.raporlar"] = new() { "rapor", "raporlar", "raporozmal", "raporkirala", "raporkomisyon", "raporservis", "raporfatura", "rapormasraf", "raporekstre" },
         ["menu.satis"] = new() { "satis", "piyasa", "ilan" },
@@ -1551,6 +1555,7 @@
         ["menu.filoservis"] = new() { "raporlar.oku", "serviscalisma.oku", "tedarikciservis.oku", "tedarikciarac.oku", "tedarikcipersonel.oku", "tedarikciaracevrak.oku" },
         ["menu.satis"] = new() { "satis.oku", "piyasa.oku", "raporlar.oku" },
         ["menu.holding"] = new() { "holding.dashboard.oku", "holding.karsilastirma.oku", "holding.butce.oku", "holding.odemeler.oku", "holding.aracmaliyet.oku", "holding.personelgider.oku", "holding.hakedis.oku" },
+        ["menu.planlama"] = new() { "planlama.oku", "planlama.dashboard.oku", "planlama.yaz", "planlama.sablon", "planlama.cakisma", "planlama.kaydet" },
     };
 
     private void ToggleSection(NavSection section)

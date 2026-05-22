@@ -1,5 +1,5 @@
 @page "/planlama/dashboard"
-@attribute [Authorize]
+@attribute [Authorize(Roles = "Admin,Operasyon,Muhasebeci,HoldingYoneticisi")]
 @rendermode InteractiveServer
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
