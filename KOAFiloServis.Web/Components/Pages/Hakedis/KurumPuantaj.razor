@@ -136,6 +136,13 @@
     }
     else
     {
+        <div class="row g-2 mb-2">
+            <div class="col-auto"><span class="badge bg-secondary">@kayitlar.Count(k => k.OnayDurum == PuantajOnayDurum.Taslak) Taslak</span></div>
+            <div class="col-auto"><span class="badge bg-warning text-dark">@kayitlar.Count(k => k.OnayDurum == PuantajOnayDurum.OnayBekliyor) Onay Bekliyor</span></div>
+            <div class="col-auto"><span class="badge bg-success">@kayitlar.Count(k => k.OnayDurum == PuantajOnayDurum.Onaylandi) Onaylandi</span></div>
+            <div class="col-auto"><span class="badge bg-primary">@kayitlar.Sum(k => (decimal)k.SeferGunuToplami) Toplam Gun</span></div>
+        </div>
+
         <!-- Toplu seçim araç çubuğu -->
         <div class="d-flex gap-2 mb-2 flex-wrap">
             <button class="btn btn-sm btn-outline-secondary" @onclick="TumGunleriAc">
