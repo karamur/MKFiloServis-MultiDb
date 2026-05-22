@@ -353,6 +353,18 @@
         filtrelenmisAraclar = seferAracIds.Any()
             ? AracListesi.Where(a => seferAracIds.Contains(a.Id)).ToList()
             : AracListesi;
+
+        // Yeni kayit ise (Id=0), bu guzergah icin kullanilmayan ilk slotu oner
+        if (Kayit.Id == 0)
+        {
+            var kullanilanSlotlar = MevcutKayitlar
+                .Where(k => k.GuzergahId == Kayit.GuzergahId.Value)
+                .Select(k => k.Slot).ToHashSet();
+            foreach (SeferSlot s in Enum.GetValues<SeferSlot>())
+            {
+                if (!kullanilanSlotlar.Contains(s)) { Kayit.Slot = s; break; }
+            }
+        }
     }
 
     private static string SlotDisplayName(SeferSlot slot) => slot switch
