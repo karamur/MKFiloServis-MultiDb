@@ -3,6 +3,8 @@
 @using KOAFiloServis.Web.Services
 @using Microsoft.AspNetCore.Authorization
 @inject IKurumPuantajService KurumPuantajService
+@inject IGuzergahService GuzergahService
+@inject IAracService AracService
 @inject IToastService ToastService
 @inject NavigationManager Navigation
 @attribute [Authorize(Roles = "Admin,Operasyon,Muhasebeci,HoldingYoneticisi")]
@@ -311,9 +313,31 @@
                 <div class="modal-body">
                     <div class="row g-3 mb-3">
                         <div class="col-md-4">
+                            <label class="form-label small">Güzergah</label>
+                            <select class="form-select form-select-sm" @bind="duzenleKayit.GuzergahId" @bind:after="() => duzenleKayit.GuzergahAdi = guzergahListesi.FirstOrDefault(g => g.Id == duzenleKayit.GuzergahId)?.GuzergahAdi">
+                                <option value="">-- Seçiniz --</option>
+                                @foreach (var g in guzergahListesi)
+                                { <option value="@g.Id">@g.GuzergahAdi</option> }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Araç</label>
+                            <select class="form-select form-select-sm" @bind="duzenleKayit.AracId" @bind:after="() => duzenleKayit.Plaka = aracListesi.FirstOrDefault(a => a.Id == duzenleKayit.AracId)?.AktifPlaka">
+                                <option value="">-- Seçiniz --</option>
+                                @foreach (var a in aracListesi)
+                                { <option value="@a.Id">@a.AktifPlaka</option> }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
                             <label class="form-label small">Şoför</label>
                             <input class="form-control form-control-sm" @bind="duzenleKayit.SoforAdi" placeholder="Şoför adı" />
                         </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Sefer/Gün</label>
+                            <input type="number" class="form-control form-control-sm" @bind="duzenleKayit.SeferSayisi" min="0" max="4" />
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
                         <div class="col-md-3">
                             <label class="form-label small">Yön</label>
                             <select class="form-select form-select-sm" @bind="duzenleKayit.Yon">
@@ -321,10 +345,6 @@
                                 <option value="@PuantajYon.Aksam">Akşam</option>
                                 <option value="@PuantajYon.SabahAksam">Sabah + Akşam</option>
                             </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label small">Sefer/Gün</label>
-                            <input type="number" class="form-control form-control-sm" @bind="duzenleKayit.SeferSayisi" min="0" max="4" />
                         </div>
                         <div class="col-md-3 d-flex align-items-end gap-2">
                             <button class="btn btn-sm btn-outline-success" @onclick="() => DuzenleTumGunleriDoldur(1)">
@@ -394,6 +414,8 @@
     bool gorunumDetayli = true;
 
     PuantajKayit? duzenleKayit = null;
+    List<Guzergah> guzergahListesi = [];
+    List<Arac> aracListesi = [];
 
     bool degisiklikVar => degisikSatirlar.Count > 0;
 
@@ -401,6 +423,8 @@
     protected override async Task OnInitializedAsync()
     {
         kurumlar = await KurumPuantajService.GetAktifKurumlarAsync();
+        guzergahListesi = await GuzergahService.GetActiveAsync();
+        aracListesi = await AracService.GetActiveAsync();
     }
 
     // ── Filtre olayları ───────────────────────────────────────────────────────
