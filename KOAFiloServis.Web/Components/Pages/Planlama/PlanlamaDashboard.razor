@@ -179,6 +179,29 @@ else
             </div>
         </div>
 
+        @if (enKarliGuzergahlar.Any())
+        {
+            <div class="card mt-3 border-success">
+                <div class="card-header bg-success text-white"><i class="bi bi-star me-2"></i>En Karli 5 Guzergah</div>
+                <div class="card-body">
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>Guzergah</th><th class="text-end">Gelir</th><th class="text-end">Gider</th><th class="text-end">Kar</th></tr></thead>
+                        <tbody>
+                            @foreach (var g in enKarliGuzergahlar)
+                            {
+                                <tr>
+                                    <td>@g.GuzergahAdi</td>
+                                    <td class="text-end text-success">@g.Gelir.ToString("N2")</td>
+                                    <td class="text-end text-danger">@g.Gider.ToString("N2")</td>
+                                    <td class="text-end @(g.Kar >= 0 ? "text-primary" : "text-danger") fw-bold">@g.Kar.ToString("N2")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
         @if (cakisanDetay.Any())
         {
             <div class="card mt-3 border-danger">
@@ -218,6 +241,7 @@ else
     private Dictionary<string, int> finansDagilimi = new();
     private Dictionary<string, int> kaynakDagilimi = new();
     private List<ConflictItem> cakisanDetay = new();
+    private List<(string GuzergahAdi, decimal Gelir, decimal Gider, decimal Kar)> enKarliGuzergahlar = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -231,7 +255,7 @@ else
         {
             // Reset
             slotDagilimi.Clear(); finansDagilimi.Clear(); kaynakDagilimi.Clear();
-            cakisanDetay.Clear();
+            cakisanDetay.Clear(); enKarliGuzergahlar.Clear();
             toplamSefer = cakisanSayisi = faturaBekleyen = tedarikciSayisi = 0;
             oncekiToplamSefer = oncekiCakisanSayisi = 0;
             toplamGelir = toplamGider = toplamGunSayisi = 0;
@@ -263,6 +287,17 @@ else
                 var conflicts = await PuantajService.CheckConflictsAsync(kayitlar);
                 cakisanSayisi = conflicts.Conflicts.Count;
                 cakisanDetay = conflicts.Conflicts.Take(50).ToList();
+
+                enKarliGuzergahlar = kayitlar
+                    .GroupBy(k => k.Guzergah?.GuzergahAdi ?? k.GuzergahAdi ?? "?")
+                    .Select(g => (
+                        GuzergahAdi: g.Key,
+                        Gelir: g.Sum(k => k.BirimGelir * k.Gun),
+                        Gider: g.Sum(k => k.BirimGider * k.Gun),
+                        Kar: g.Sum(k => (k.BirimGelir - k.BirimGider) * k.Gun)
+                    ))
+                    .OrderByDescending(x => x.Kar)
+                    .Take(5).ToList();
             }
         }
         catch (Exception ex) { Logger.LogWarning(ex, "Dashboard verisi yuklenemedi"); }
