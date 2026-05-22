@@ -5,6 +5,44 @@
 
 ---
 
+## 📅 22.05.2026 — Gün Sonu Özeti
+
+### ✅ Bugün Tamamlanan
+
+| # | İş | Dosyalar | Açıklama |
+|---|-----|----------|----------|
+| **Item 1** | Güzergah listesi temizliği | `GuzergahList.razor` | VarsayılanAraç, Şoför, Sefer Durumu sütunları + inline sefer paneli + ~480 satır code-behind kaldırıldı |
+| **Item 2** | Güzergah form sefer persist | `GuzergahForm.razor` | Sefer alt tablosu `IGuzergahSeferService` ile persist ediliyor, edit'te geri yükleniyor |
+| **Item 3** | Puantaj-GuzergahSefer entegrasyonu | `KurumPuantajService.cs` | `SablonOlusturAsync` öncelikle GuzergahSefer'den araç/şoför atıyor, `SeferTipindenSlotlara` helper eklendi |
+| **Item 4** | Dashboard aktif firma gösterimi | `Home.razor` | Dashboard'da firma adı, kodu, dönem bilgisi gösteren kart eklendi |
+| **Item 5** | Kapasite çakışma kuralı | `KurumPuantajService.cs` | `CheckConflictsAsync`'e 5. kural: Kapasite (Blocking) — slot başına araç sayısı ≤ PersonelSayisi |
+| **Item 6** | PlanlamaEditModal dropdown | `PlanlamaEditModal.razor` | Boş dropdown'lar dolduruldu (Firma, Güzergah, Araç, Şoför), GuzergahSefer'den araç filtresi |
+| **Yedek** | Tüm firma DB'leri yedekleme | `BackupService.cs` | PostgreSQL'de Master + Holding + tüm tenant DB'ler pg_dump ile ayrı ayrı yedekleniyor |
+
+### 📊 Toplam: 7 dosya, +287 / -484 satır (net -197)
+
+### 🧪 Smoke Test
+
+| Test | Sonuç |
+|------|:-----:|
+| `dotnet build` | ✅ **0 hata, 0 uyarı** |
+| `dotnet test` | ✅ 291/291 başarılı |
+| `/guzergahlar` | ✅ 10 sütun, sefer paneli yok |
+| `/swagger` | ✅ HTTP 200 |
+| `/planlama` | ✅ 401 (Authorize) |
+| Runtime hata/exception | ✅ **0 hata** |
+
+### 🏗️ Alınan Kararlar
+
+| Karar | Gerekçe |
+|-------|---------|
+| Sefer yönetimi GuzergahList'ten GuzergahForm'a taşındı | Tek sorumluluk: listeleme ve düzenleme ayrıldı, inline panel karmaşası giderildi |
+| GuzergahSefer puantaja öncelikli kaynak oldu | Kullanıcı güzergah altında tanımladığı araç/şoför atamalarının puantaja otomatik yansıması için |
+| Kapasite kuralı Blocking seviyesinde | Güzergah kapasite aşımı operasyonel risk taşır, uyarı değil engel olmalı |
+| Tüm tenant DB'ler yedekleniyor | Firma bazlı fiziksel izolasyonda her DB'nin ayrı yedeği alınmalı; Master ve Holding DB'ler de dahil |
+
+---
+
 ## 📅 21.05.2026 — Gün Sonu Özeti (Final)
 
 ### ✅ Bugün Tamamlanan

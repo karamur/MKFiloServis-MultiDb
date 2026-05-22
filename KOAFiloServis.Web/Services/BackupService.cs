@@ -136,6 +136,12 @@ public class BackupService : IBackupService
 
             if (result.Success)
             {
+                // PostgreSQL: tüm tenant firma DB'lerini ve Master/Holding DB'leri de yedekle
+                if (dbProvider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase))
+                {
+                    await CreateTenantDatabaseBackupsAsync(backupFolder, timestamp);
+                }
+
                 settings.LastBackupTime = DateTime.Now;
                 await SaveSettingsAsync(settings);
                 await CleanupOldBackupsAsync(settings.KeepBackupCount);
@@ -149,6 +155,149 @@ public class BackupService : IBackupService
 
         return result;
     }
+    private async Task CreateTenantDatabaseBackupsAsync(string backupFolder, string timestamp)
+    {
+        try
+        {
+            // Master DB'den tüm aktif firmaları ve DatabaseName'lerini oku
+            var tenantDbs = new List<(string DbName, string Label)>();
+            var masterConnStr = _configuration.GetConnectionString("MasterConnection")
+                ?? _configuration.GetConnectionString("DefaultConnection");
+
+            if (!string.IsNullOrWhiteSpace(masterConnStr))
+            {
+                var masterParts = ParseConnectionString(masterConnStr);
+                var masterDbName = masterParts.GetValueOrDefault("Database", "");
+
+                // Holding DB bağlantısını al
+                var holdingConnStr = _configuration.GetConnectionString("HoldingConnection");
+                var holdingDbName = !string.IsNullOrWhiteSpace(holdingConnStr)
+                    ? ParseConnectionString(holdingConnStr).GetValueOrDefault("Database", "")
+                    : "";
+
+                // Tüm tenant DB'leri bul
+                using var scope = _serviceProvider.CreateScope();
+                var masterFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<MasterDbContext>>();
+                await using var masterCtx = await masterFactory.CreateDbContextAsync();
+
+                var firmalar = await masterCtx.Firmalar
+                    .Where(f => f.Aktif && !f.IsDeleted && f.DatabaseName != null)
+                    .Select(f => new { f.DatabaseName, f.FirmaAdi, f.FirmaKodu })
+                    .ToListAsync();
+
+                foreach (var f in firmalar)
+                {
+                    if (!string.IsNullOrWhiteSpace(f.DatabaseName))
+                        tenantDbs.Add((f.DatabaseName, $"{f.FirmaKodu}_{f.FirmaAdi}"));
+                }
+
+                // Master DB'yi de yedekle
+                if (!string.IsNullOrWhiteSpace(masterDbName) && !tenantDbs.Any(t => t.DbName == masterDbName))
+                {
+                    var masterBackupPath = Path.Combine(backupFolder, $"KOAFiloServis_Master_{timestamp}.backup");
+                    await RunPgDumpForDatabaseAsync(masterConnStr, masterBackupPath, "Master");
+                }
+
+                // Holding DB'yi de yedekle
+                if (!string.IsNullOrWhiteSpace(holdingDbName) && !string.IsNullOrWhiteSpace(holdingConnStr)
+                    && holdingDbName != masterDbName && !tenantDbs.Any(t => t.DbName == holdingDbName))
+                {
+                    var holdingBackupPath = Path.Combine(backupFolder, $"KOAFiloServis_Holding_{timestamp}.backup");
+                    await RunPgDumpForDatabaseAsync(holdingConnStr, holdingBackupPath, "Holding");
+                }
+            }
+
+            // Her tenant DB için pg_dump çalıştır
+            foreach (var (dbName, label) in tenantDbs)
+            {
+                var safeLabel = SanitizeFileName(label);
+                var tenantBackupPath = Path.Combine(backupFolder, $"KOAFiloServis_Tenant_{safeLabel}_{timestamp}.backup");
+
+                // Tenant DB için connection string oluştur
+                var connStr = ResolveConnectionString("PostgreSQL");
+                if (!string.IsNullOrWhiteSpace(connStr))
+                {
+                    var parts = ParseConnectionString(connStr);
+                    var tenantConnStr = BuildPgConnectionString(
+                        parts.GetValueOrDefault("Host", "localhost"),
+                        parts.GetValueOrDefault("Port", "5432"),
+                        dbName,
+                        parts.GetValueOrDefault("Username", "postgres"),
+                        parts.GetValueOrDefault("Password", ""));
+                    await RunPgDumpForDatabaseAsync(tenantConnStr, tenantBackupPath, label);
+                }
+            }
+
+            _logger.LogInformation("Tenant DB yedekleme tamamlandi: {Count} tenant + Master + Holding", tenantDbs.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Tenant DB yedekleme hatasi (ana yedek alindi, tenant yedekler atlandi)");
+        }
+    }
+
+    private async Task RunPgDumpForDatabaseAsync(string connectionString, string backupPath, string label)
+    {
+        try
+        {
+            var pgDumpPath = FindPgDump();
+            if (string.IsNullOrWhiteSpace(pgDumpPath))
+            {
+                _logger.LogWarning("pg_dump bulunamadi, {Label} DB yedeklenemedi", label);
+                return;
+            }
+
+            var connParts = ParseConnectionString(connectionString);
+            var host = connParts.GetValueOrDefault("Host", "localhost");
+            var port = connParts.GetValueOrDefault("Port", "5432");
+            var username = connParts.GetValueOrDefault("Username", "postgres");
+            var database = connParts.GetValueOrDefault("Database", "");
+
+            var processInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = pgDumpPath,
+                Arguments = $"-h {host} -p {port} -U {username} -d {database} --format=custom --compress=9 --blobs --no-owner --no-privileges --encoding=UTF8 -f \"{backupPath}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            processInfo.Environment["PGPASSWORD"] = connParts.GetValueOrDefault("Password", "");
+
+            using var process = System.Diagnostics.Process.Start(processInfo);
+            if (process != null)
+            {
+                await process.WaitForExitAsync();
+                if (process.ExitCode == 0)
+                    _logger.LogInformation("{Label} DB yedeklendi: {Path}", label, Path.GetFileName(backupPath));
+                else
+                {
+                    var error = await process.StandardError.ReadToEndAsync();
+                    _logger.LogWarning("{Label} DB yedekleme hatasi: {Error}", label, error.Trim());
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "{Label} DB yedekleme sirasinda hata", label);
+        }
+    }
+
+    private static string BuildPgConnectionString(string host, string port, string database, string username, string password)
+    {
+        return $"Host={host};Port={port};Database={database};Username={username};Password={password};";
+    }
+
+    private static string SanitizeFileName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var sanitized = new StringBuilder(name.Length);
+        foreach (var c in name)
+            sanitized.Append(invalid.Contains(c) ? '_' : c);
+        return sanitized.ToString();
+    }
+
     private async Task<BackupResult> CreateSqliteBackupAsync(string backupFilePath)
     {
         var result = new BackupResult();
