@@ -234,6 +234,10 @@
                                 }
                             </InputSelect>
                             <small class="text-muted">Sefer çarpanı: <strong>@GetSeferTipiCarpani(guzergah.SeferTipi).ToString("N2")</strong></small>
+                            @if (seferTipiDegistiUyarisi)
+                            {
+                                <small class="text-warning d-block"><i class="bi bi-exclamation-triangle me-1"></i>Sefer tipi değişti - gelir/gider fiyatları otomatik güncellendi.</small>
+                            }
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -477,6 +481,7 @@
     private string? secilenAracTedarikciTelefon;
     private string? secilenAracPlakaBilgi;
     private decimal oncekiSeferTipiCarpani = 1m;
+    private bool seferTipiDegistiUyarisi;
     private int secilenKurumId;
     private List<SeferKalem> seferKalemleri = new();
     private bool secilenKurumCariYok;
@@ -1056,8 +1061,12 @@
         }
 
         var oran = yeniCarpan / oncekiSeferTipiCarpani;
-        guzergah.GelirFiyat = Math.Round(guzergah.GelirFiyat * oran, 2, MidpointRounding.AwayFromZero);
-        guzergah.GiderFiyat = Math.Round(guzergah.GiderFiyat * oran, 2, MidpointRounding.AwayFromZero);
+        if (oran != 1m)
+        {
+            guzergah.GelirFiyat = Math.Round(guzergah.GelirFiyat * oran, 2, MidpointRounding.AwayFromZero);
+            guzergah.GiderFiyat = Math.Round(guzergah.GiderFiyat * oran, 2, MidpointRounding.AwayFromZero);
+            seferTipiDegistiUyarisi = true;
+        }
         oncekiSeferTipiCarpani = yeniCarpan;
         return Task.CompletedTask;
     }
