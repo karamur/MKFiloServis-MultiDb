@@ -37,7 +37,8 @@ else
                     <i class="bi bi-copy me-1"></i> Onceki Aydan Kopyala
                 </button>
                 <button class="btn btn-outline-danger me-2" @onclick="DonemTemizle">
-                    <i class="bi bi-eraser me-1"></i> Donem Temizle
+                    <i class="bi @(donemTemizleOnay ? "bi-exclamation-triangle" : "bi-eraser") me-1"></i>
+                    @(donemTemizleOnay ? "Emin misiniz?" : "Donem Temizle")
                 </button>
                 <button class="btn btn-primary" @onclick="YeniKayitAc">
                     <i class="bi bi-plus-lg me-1"></i> Yeni Sefer
@@ -670,9 +671,18 @@ else
 
     private void OncekiAydanKopyala() => kopyalamaModaliAcik = true;
 
+    private bool donemTemizleOnay;
+
     private async Task DonemTemizle()
     {
         if (kayitlar.Count == 0) return;
+        if (!donemTemizleOnay)
+        {
+            donemTemizleOnay = true;
+            ToastService.ShowWarning($"{kayitlar.Count} kayit silinecek. Emin misiniz? Tekrar basin.");
+            return;
+        }
+        donemTemizleOnay = false;
         var silinenSayi = kayitlar.Count;
         yukleniyor = true;
         try
