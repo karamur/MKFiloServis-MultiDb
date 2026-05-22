@@ -116,6 +116,16 @@ else
         }
         else
         {
+            var onayTaslak = kayitlar.Count(k => k.OnayDurum == PuantajOnayDurum.Taslak);
+            var onayBekleyen = kayitlar.Count(k => k.OnayDurum == PuantajOnayDurum.OnayBekliyor);
+            var onaylandi = kayitlar.Count(k => k.OnayDurum == PuantajOnayDurum.Onaylandi);
+            var reddedildi = kayitlar.Count(k => k.OnayDurum == PuantajOnayDurum.Reddedildi);
+            <div class="row g-2 mb-3">
+                <div class="col-auto"><span class="badge bg-secondary fs-6">@onayTaslak Taslak</span></div>
+                <div class="col-auto"><span class="badge bg-warning text-dark fs-6">@onayBekleyen Onay Bekliyor</span></div>
+                <div class="col-auto"><span class="badge bg-success fs-6">@onaylandi Onaylandi</span></div>
+                @if (reddedildi > 0) { <div class="col-auto"><span class="badge bg-danger fs-6">@reddedildi Reddedildi</span></div> }
+            </div>
             var slotGruplari = kayitlar.GroupBy(k => k.Slot).OrderBy(g => g.Key);
             @foreach (var slotGrubu in slotGruplari)
             {
