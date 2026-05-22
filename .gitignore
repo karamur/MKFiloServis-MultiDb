@@ -1,4 +1,4 @@
-# Visual Studio
+﻿# Visual Studio
 .vs/
 *.user
 *.userosscache
@@ -48,6 +48,12 @@ Desktop.ini
 *.db
 *.db-shm
 *.db-wal
+
+# Database backups / local sensitive exports
+datayedek/
+*.sql
+*.bak
+*.dump
 
 # User-specific files
 *.rsuser
