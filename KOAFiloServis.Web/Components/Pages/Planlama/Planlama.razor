@@ -113,21 +113,29 @@ else
                     <table class="table table-sm table-striped table-hover align-middle">
                         <thead class="table-dark">
                             <tr>
-                                <th>Guzergah</th>
-                                <th>Arac</th>
+                                <th style="cursor:pointer" @onclick='() => SiralamaYap("Guzergah")'>
+                                    Guzergah @SiralamaIkonu("Guzergah")
+                                </th>
+                                <th style="cursor:pointer" @onclick='() => SiralamaYap("Arac")'>
+                                    Arac @SiralamaIkonu("Arac")
+                                </th>
                                 <th>Sofor</th>
                                 <th>Kaynak</th>
                                 <th>Finans</th>
                                 <th>Yon</th>
                                 <th class="text-center">Sefer</th>
                                 <th class="text-center" style="min-width:200px">Gun / Gunluk Dagilim</th>
-                                <th class="text-end">Birim Gelir</th>
-                                <th class="text-end">Birim Gider</th>
+                                <th class="text-end" style="cursor:pointer" @onclick='() => SiralamaYap("BirimGelir")'>
+                                    Birim Gelir @SiralamaIkonu("BirimGelir")
+                                </th>
+                                <th class="text-end" style="cursor:pointer" @onclick='() => SiralamaYap("BirimGider")'>
+                                    Birim Gider @SiralamaIkonu("BirimGider")
+                                </th>
                                 <th style="width:120px">Islem</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var k in slotGrubu.OrderBy(k => k.Guzergah?.GuzergahAdi).ThenBy(k => k.Plaka))
+                            @foreach (var k in SiralanmisKayitlar(slotGrubu))
                             {
                                 var catisanGunler = catismaHaritasi.GetValueOrDefault(k, new());
                                 var rowClass = degisenSatirlar.Contains(k) ? "table-warning" : "";
@@ -443,6 +451,33 @@ else
             ToastService.ShowError($"Kayit hatasi: {ex.Message}");
         }
         finally { kaydediliyor = false; }
+    }
+
+    private string siralamaAlani = "Guzergah";
+    private bool siralamaArtan = true;
+
+    private void SiralamaYap(string alan)
+    {
+        if (siralamaAlani == alan)
+            siralamaArtan = !siralamaArtan;
+        else { siralamaAlani = alan; siralamaArtan = true; }
+    }
+
+    private string SiralamaIkonu(string alan) =>
+        siralamaAlani == alan ? (siralamaArtan ? "▲" : "▼") : "";
+
+    private IOrderedEnumerable<PuantajKayit> SiralanmisKayitlar(IGrouping<SeferSlot, PuantajKayit> slotGrubu)
+    {
+        IOrderedEnumerable<PuantajKayit> q;
+        q = siralamaAlani switch
+        {
+            "Guzergah" => siralamaArtan ? slotGrubu.OrderBy(k => k.Guzergah?.GuzergahAdi) : slotGrubu.OrderByDescending(k => k.Guzergah?.GuzergahAdi),
+            "Arac" => siralamaArtan ? slotGrubu.OrderBy(k => k.Arac?.AktifPlaka ?? k.Plaka) : slotGrubu.OrderByDescending(k => k.Arac?.AktifPlaka ?? k.Plaka),
+            "BirimGelir" => siralamaArtan ? slotGrubu.OrderBy(k => k.BirimGelir) : slotGrubu.OrderByDescending(k => k.BirimGelir),
+            "BirimGider" => siralamaArtan ? slotGrubu.OrderBy(k => k.BirimGider) : slotGrubu.OrderByDescending(k => k.BirimGider),
+            _ => slotGrubu.OrderBy(k => k.Guzergah?.GuzergahAdi)
+        };
+        return siralamaAlani is "Guzergah" or "Arac" ? q : (siralamaArtan ? q.ThenBy(k => k.Guzergah?.GuzergahAdi) : q.ThenByDescending(k => k.Guzergah?.GuzergahAdi));
     }
 
     private void GunInlineToggle(PuantajKayit kayit, int gun)

@@ -165,19 +165,25 @@ public sealed class KurumPuantajService : IKurumPuantajService
 
     public async Task TopluSavePuantajAsync(IEnumerable<PuantajKayit> kayitlar)
     {
+        var kayitList = kayitlar.ToList();
+        if (!kayitList.Any()) return;
+
         await using var db = await _dbFactory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync();
 
-        foreach (var kayit in kayitlar)
+        // Ayni donemdeki tum mevcut kayitlari TEK sorguda yukle
+        var yil = kayitList[0].Yil;
+        var ay = kayitList[0].Ay;
+        var mevcutKayitlar = await db.PuantajKayitlar
+            .Where(p => !p.IsDeleted && p.Yil == yil && p.Ay == ay)
+            .ToListAsync();
+
+        foreach (var kayit in kayitList)
         {
-            var mevcut = await db.PuantajKayitlar
-                .FirstOrDefaultAsync(p =>
-                    !p.IsDeleted &&
-                    p.GuzergahId == kayit.GuzergahId &&
-                    p.AracId     == kayit.AracId &&
-                    p.Yil        == kayit.Yil &&
-                    p.Ay         == kayit.Ay &&
-                    p.Slot       == kayit.Slot);
+            var mevcut = mevcutKayitlar.FirstOrDefault(m =>
+                m.GuzergahId == kayit.GuzergahId &&
+                m.AracId     == kayit.AracId &&
+                m.Slot       == kayit.Slot);
 
             if (mevcut == null)
             {

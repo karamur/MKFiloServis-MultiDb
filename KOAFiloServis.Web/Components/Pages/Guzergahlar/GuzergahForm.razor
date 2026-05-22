@@ -13,6 +13,7 @@
 @inject ISoforService SoforService
 @inject IKapasiteService KapasiteService
 @inject IDbContextFactory<ApplicationDbContext> DbContextFactory
+@inject IAktifFirmaProvider AktifFirmaProvider
 @inject NavigationManager Navigation
 @rendermode InteractiveServer
 
@@ -562,7 +563,10 @@
         }
         else
         {
-            guzergah.GuzergahKodu = await GuzergahService.GenerateNextKodAsync();
+            var firmaId = AktifFirmaProvider.Mevcut.FirmaId;
+            guzergah.GuzergahKodu = firmaId > 0
+                ? await GuzergahService.GenerateGuzergahKoduAsync(firmaId)
+                : await GuzergahService.GenerateNextKodAsync();
             guzergah.Aktif = true;
             guzergah.RotaRengi = "#3388ff";
         }
@@ -895,6 +899,28 @@
         if (guzergah.GelirFiyat < 0 || guzergah.GiderFiyat < 0)
         {
             kayitHataMesaji = "Gelir/Gider fiyatı negatif olamaz.";
+            return;
+        }
+
+        // Koordinat validasyonu (enlem: -90..90, boylam: -180..180)
+        if (guzergah.BaslangicLatitude.HasValue && (guzergah.BaslangicLatitude < -90 || guzergah.BaslangicLatitude > 90))
+        {
+            kayitHataMesaji = "Başlangıç enlemi -90 ile 90 arasında olmalıdır.";
+            return;
+        }
+        if (guzergah.BaslangicLongitude.HasValue && (guzergah.BaslangicLongitude < -180 || guzergah.BaslangicLongitude > 180))
+        {
+            kayitHataMesaji = "Başlangıç boylamı -180 ile 180 arasında olmalıdır.";
+            return;
+        }
+        if (guzergah.BitisLatitude.HasValue && (guzergah.BitisLatitude < -90 || guzergah.BitisLatitude > 90))
+        {
+            kayitHataMesaji = "Bitiş enlemi -90 ile 90 arasında olmalıdır.";
+            return;
+        }
+        if (guzergah.BitisLongitude.HasValue && (guzergah.BitisLongitude < -180 || guzergah.BitisLongitude > 180))
+        {
+            kayitHataMesaji = "Bitiş boylamı -180 ile 180 arasında olmalıdır.";
             return;
         }
 
