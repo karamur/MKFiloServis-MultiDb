@@ -346,6 +346,10 @@ else
                                 disabled="@kaydediliyor" title="Degisen kayitlari Onaylandi olarak isaretler">
                             <i class="bi bi-check-all me-1"></i> Toplu Onayla
                         </button>
+                        <button class="btn btn-outline-secondary me-2" @onclick="TopluTaslakYap"
+                                disabled="@kaydediliyor" title="Degisen kayitlarin onayini kaldir">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i> Onay Kaldir
+                        </button>
                         <button class="btn btn-outline-warning me-2" @onclick="CakismaKontrolEt"
                                 disabled="@kontrolEdiliyor">
                             <i class="bi bi-shield-check me-1"></i>
@@ -545,6 +549,19 @@ else
             degisenSatirlar.Add(k);
         }
         ToastService.ShowSuccess($"{hedef.Count()} kayit onaylandi. Kaydetmek icin Tumunu Kaydet'e basin.");
+    }
+
+    private void TopluTaslakYap()
+    {
+        var hedef = (degisenSatirlar.Any() ? degisenSatirlar.AsEnumerable() : kayitlar).ToList();
+        foreach (var k in hedef)
+        {
+            k.OnayDurum = PuantajOnayDurum.Taslak;
+            k.OnaylayanKullanici = null;
+            k.OnayTarihi = null;
+            degisenSatirlar.Add(k);
+        }
+        ToastService.ShowSuccess($"{hedef.Count} kaydin onayi kaldirildi. Kaydetmek icin Tumunu Kaydet'e basin.");
     }
 
     private void CakismalariTemizle()

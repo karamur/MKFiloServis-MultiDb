@@ -187,6 +187,12 @@
                                         <button class="btn btn-outline-success btn-sm" @onclick="() => SadeceHaftaIci(2)" title="Sadece hafta ici S+A">
                                             <i class="bi bi-briefcase-fill me-1"></i>HI S+A
                                         </button>
+                                        <button class="btn btn-outline-warning btn-sm" @onclick="() => SadeceHaftaSonu(1)" title="Sadece hafta sonu tek sefer">
+                                            <i class="bi bi-calendar-week me-1"></i>Hafta Sonu
+                                        </button>
+                                        <button class="btn btn-outline-warning btn-sm" @onclick="() => SadeceHaftaSonu(2)" title="Sadece hafta sonu S+A">
+                                            <i class="bi bi-calendar-week-fill me-1"></i>HS S+A
+                                        </button>
                                         <button class="btn btn-outline-danger btn-sm" @onclick="Temizle" title="Tum gunleri sifirla">
                                             <i class="bi bi-eraser me-1"></i>Temizle
                                         </button>
@@ -278,6 +284,19 @@
         {
             var tarih = new DateTime(ilkGun.Year, ilkGun.Month, g);
             Kayit.SetGunDeger(g, tarih.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday) ? deger : 0);
+        }
+        for (int g = DateTime.DaysInMonth(ilkGun.Year, ilkGun.Month) + 1; g <= 31; g++)
+            Kayit.SetGunDeger(g, 0);
+        Kayit.HesaplaPuantajToplam();
+    }
+
+    private void SadeceHaftaSonu(int deger)
+    {
+        var ilkGun = new DateTime(Kayit.Yil > 0 ? Kayit.Yil : DateTime.Now.Year, Kayit.Ay > 0 ? Kayit.Ay : 1, 1);
+        for (int g = 1; g <= DateTime.DaysInMonth(ilkGun.Year, ilkGun.Month); g++)
+        {
+            var tarih = new DateTime(ilkGun.Year, ilkGun.Month, g);
+            Kayit.SetGunDeger(g, tarih.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday ? deger : 0);
         }
         for (int g = DateTime.DaysInMonth(ilkGun.Year, ilkGun.Month) + 1; g <= 31; g++)
             Kayit.SetGunDeger(g, 0);
