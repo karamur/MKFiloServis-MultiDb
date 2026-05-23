@@ -473,7 +473,7 @@
         {
             AvansTarihi = DateTime.Today,
             OdemeSekli = AvansOdemeSekli.Nakit,
-            FirmaId = aktifFirma.TumFirmalar ? null : aktifFirma.FirmaId,
+            FirmaId = (aktifFirma.TumFirmalar || aktifFirma.FirmaId <= 0) ? null : aktifFirma.FirmaId,
             PersonelId = secilenPersonelId > 0 ? secilenPersonelId : 0
         };
         showAvansModal = true;

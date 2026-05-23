@@ -310,7 +310,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        aktifFirmaId = FirmaService.GetAktifFirma().FirmaId;
+        var af = FirmaService.GetAktifFirma();
+        aktifFirmaId = af.TumFirmalar || af.FirmaId <= 0 ? 0 : af.FirmaId;
         aktifKullanici = await KullaniciService.GetAktifKullaniciAsync();
         await LoadLookups();
         await ListeYenile();

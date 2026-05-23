@@ -1399,7 +1399,7 @@ else
                     var aktifFirma = FirmaService.GetAktifFirma();
                     gecmisOdenmemisBorclar = await budgetSvc.GetDevirBekleyenOdemelerAsync(
                         new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1),
-                        aktifFirma.TumFirmalar ? null : aktifFirma.FirmaId);
+                        (aktifFirma.TumFirmalar || aktifFirma.FirmaId <= 0) ? null : aktifFirma.FirmaId);
                 }, "Finans verileri"));
 
                 tasks.Add(TryLoadDashboardSectionAsync(async sp =>
