@@ -214,6 +214,7 @@
                                 </td>
                                 <td class="text-end">
                                     <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-dark" title="Hesap Pusulası" @onclick="() => HesapPusulasiGoster(item)"><i class="bi bi-journal-text"></i></button>
                                         <a href="/araclar/plaka-takip/@item.Id/duzenle" class="btn btn-outline-primary" title="Düzenle"><i class="bi bi-pencil"></i></a>
                                         <button class="btn btn-outline-danger" title="Sil" @onclick="() => Sil(item)"><i class="bi bi-trash"></i></button>
                                     </div>
@@ -462,6 +463,140 @@
     </div>
 }
 
+@if (showHesapPusulasiModal && seciliHesapItem != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.6);" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title"><i class="bi bi-journal-text me-2"></i>Hesap Pusulası - @seciliHesapItem.Plaka</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="HesapPusulasiKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Genel Bilgiler -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="card border-primary">
+                                <div class="card-header py-2 bg-primary text-white"><strong><i class="bi bi-person me-1"></i>@seciliHesapItem.IsimSoyisim</strong></div>
+                                <div class="card-body py-2 small">
+                                    <table class="table table-sm table-borderless mb-0">
+                                        <tr><td class="text-muted" width="80">Plaka</td><td><strong>@seciliHesapItem.Plaka</strong></td></tr>
+                                        <tr><td class="text-muted">Başlama</td><td>@seciliHesapItem.BaslamaTarihi.ToString("dd.MM.yyyy")</td></tr>
+                                        <tr><td class="text-muted">Bitiş</td><td>@seciliHesapItem.BitisTarihi.ToString("dd.MM.yyyy")</td></tr>
+                                        <tr><td class="text-muted">Durum</td><td><span class="badge @GetDurumClass(seciliHesapItem.Durum)">@seciliHesapItem.Durum</span></td></tr>
+                                        <tr><td class="text-muted">Periyot</td><td>@seciliHesapItem.Periyot</td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <div class="card bg-info text-white text-center py-2">
+                                        <small>Toplam Borç</small>
+                                        <h5 class="mb-0">@seciliHesapItem.ToplamOdeme.ToString("N2")</h5>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="card bg-success text-white text-center py-2">
+                                        <small>Ödenen</small>
+                                        <h5 class="mb-0">@seciliHesapItem.OdenenTutar.ToString("N2")</h5>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="card @(seciliHesapItem.KalanOdeme > 0 ? "bg-danger" : "bg-success") text-white text-center py-2">
+                                        <small>Kalan Ödeme</small>
+                                        <h5 class="mb-0">@seciliHesapItem.KalanOdeme.ToString("N2")</h5>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="card @(seciliHesapItem.KalanFaturaTutar > 0 ? "bg-warning" : "bg-success") text-dark text-center py-2">
+                                        <small>Kalan Fatura</small>
+                                        <h5 class="mb-0">@seciliHesapItem.KalanFaturaTutar.ToString("N2")</h5>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fatura Bilgileri -->
+                    @if (!string.IsNullOrWhiteSpace(seciliHesapItem.KesilenFaturaNo) || seciliHesapItem.KesilenFaturaTutar > 0)
+                    {
+                        <div class="card mb-3">
+                            <div class="card-header py-2 bg-light"><strong><i class="bi bi-receipt me-1"></i>Fatura Bilgileri</strong></div>
+                            <div class="card-body py-2">
+                                <table class="table table-sm table-borderless mb-0">
+                                    <tr><td class="text-muted" width="120">Kesilen Fatura No</td><td><strong>@(seciliHesapItem.KesilenFaturaNo ?? "-")</strong></td></tr>
+                                    <tr><td class="text-muted">Fatura Tarihi</td><td>@(seciliHesapItem.KesilenFaturaTarih?.ToString("dd.MM.yyyy") ?? "-")</td></tr>
+                                    <tr><td class="text-muted">Fatura Tutarı</td><td><strong>@seciliHesapItem.KesilenFaturaTutar.ToString("N2")</strong></td></tr>
+                                    <tr><td class="text-muted">Kalan Fatura</td><td><strong class="text-danger">@seciliHesapItem.KalanFaturaTutar.ToString("N2")</strong></td></tr>
+                                </table>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Aylık Vade Takvimi -->
+                    @{
+                        var vadeAylari = HesapPlaniHesapla(seciliHesapItem);
+                    }
+                    @if (vadeAylari.Any())
+                    {
+                        <div class="card">
+                            <div class="card-header py-2 bg-light d-flex justify-content-between align-items-center">
+                                <strong><i class="bi bi-calendar-month me-1"></i>Vade / Ödeme Takvimi</strong>
+                                <small class="text-muted">@vadeAylari.Count ay</small>
+                            </div>
+                            <div class="card-body p-0" style="max-height: 300px; overflow-y: auto;">
+                                <table class="table table-sm table-striped mb-0">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th width="40">#</th>
+                                            <th>Ay</th>
+                                            <th class="text-end">Tutar</th>
+                                            <th class="text-end">Durum</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var ay in vadeAylari)
+                                        {
+                                            <tr>
+                                                <td>@ay.Sira</td>
+                                                <td>@ay.AyAdi @ay.Yil</td>
+                                                <td class="text-end">@ay.OdemeTutari.ToString("N2")</td>
+                                                <td class="text-end">
+                                                    @if (ay.BugundenOnce && seciliHesapItem.OdenenTutar <= 0)
+                                                    { <span class="badge bg-danger">Ödenmedi</span> }
+                                                    else if (ay.BugundenOnce)
+                                                    { <span class="badge bg-warning text-dark">Geçmiş</span> }
+                                                    else
+                                                    { <span class="badge bg-info text-dark">Gelecek</span> }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                    <tfoot class="table-light">
+                                        <tr>
+                                            <th colspan="2">Toplam</th>
+                                            <th class="text-end">@vadeAylari.Sum(a => a.OdemeTutari).ToString("N2")</th>
+                                            <th></th>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <a href="/araclar/plaka-takip/@seciliHesapItem.Id/duzenle" class="btn btn-outline-primary">
+                        <i class="bi bi-pencil me-1"></i>Düzenle
+                    </a>
+                    <button type="button" class="btn btn-secondary" @onclick="HesapPusulasiKapat">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @if (showAracDetayModal && seciliArac != null)
 {
     <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.6);" tabindex="-1">
@@ -571,6 +706,8 @@
     private bool showAracDetayModal;
     private Arac? seciliArac;
     private List<GuzergahBilgisi> seciliGuzergahBilgisi = new();
+    private bool showHesapPusulasiModal;
+    private KiralikPlakaTakip? seciliHesapItem;
     private IBrowserFile? importFile;
     private KiralikPlakaImportResult? importResult;
 
@@ -712,6 +849,57 @@
         showAracDetayModal = false;
         seciliArac = null;
         seciliGuzergahBilgisi.Clear();
+    }
+
+    private void HesapPusulasiGoster(KiralikPlakaTakip item)
+    {
+        seciliHesapItem = item;
+        showHesapPusulasiModal = true;
+    }
+
+    private void HesapPusulasiKapat()
+    {
+        showHesapPusulasiModal = false;
+        seciliHesapItem = null;
+    }
+
+    private static List<OdemePlanSatiri> HesapPlaniHesapla(KiralikPlakaTakip item)
+    {
+        var liste = new List<OdemePlanSatiri>();
+        if (item.Periyot != "AYLIK") return liste;
+
+        var baslangic = item.BaslamaTarihi;
+        var bitis = item.BitisTarihi;
+        var bugun = DateTime.Today;
+
+        var tarih = new DateTime(baslangic.Year, baslangic.Month, 1);
+        var bitisAy = new DateTime(bitis.Year, bitis.Month, 1);
+        int sira = 0;
+
+        while (tarih <= bitisAy)
+        {
+            sira++;
+            liste.Add(new OdemePlanSatiri
+            {
+                Sira = sira,
+                Yil = tarih.Year,
+                AyAdi = new DateTime(2024, tarih.Month, 1).ToString("MMMM"),
+                OdemeTutari = item.AylikVeyaYillikTutar,
+                BugundenOnce = tarih < bugun
+            });
+            tarih = tarih.AddMonths(1);
+        }
+
+        return liste;
+    }
+
+    private class OdemePlanSatiri
+    {
+        public int Sira { get; set; }
+        public int Yil { get; set; }
+        public string AyAdi { get; set; } = "";
+        public decimal OdemeTutari { get; set; }
+        public bool BugundenOnce { get; set; }
     }
 
     private static string GetDurumClass(string? durum)
