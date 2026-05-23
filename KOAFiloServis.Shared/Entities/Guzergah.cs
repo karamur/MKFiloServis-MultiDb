@@ -91,5 +91,6 @@ public enum SeferTipi
     Sabah = 1,
     Aksam = 2,
     SabahAksam = 3,
-    Saatlik = 4
+    Saatlik = 4,
+    Mesai = 5
 }

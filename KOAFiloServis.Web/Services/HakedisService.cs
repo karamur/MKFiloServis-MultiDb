@@ -1163,6 +1163,7 @@ public class HakedisService : IHakedisService
                 SeferTipi.Sabah => "S",
                 SeferTipi.Aksam => "A",
                 SeferTipi.SabahAksam => "S/A",
+                SeferTipi.Mesai => "M",
                 _ => "S/A"
             };
             if (guz.VarsayilanArac != null)
