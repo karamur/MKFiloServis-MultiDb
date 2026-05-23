@@ -126,6 +126,9 @@ public sealed class KurumPuantajService : IKurumPuantajService
         kayit.HesaplaGelir();
         kayit.HesaplaGider();
 
+        // FK hatasi olmasin diye 0 degerleri null yap
+        if (kayit.IsverenFirmaId <= 0) kayit.IsverenFirmaId = null;
+
         await using var db = await _dbFactory.CreateDbContextAsync();
 
         // Upsert: Güzergah + Araç + Yıl + Ay + Slot kombinasyonu unique
@@ -198,6 +201,9 @@ public sealed class KurumPuantajService : IKurumPuantajService
             kayit.HesaplaPuantajToplam();
             kayit.HesaplaGelir();
             kayit.HesaplaGider();
+
+            // FK hatasi olmasin diye 0 degerleri null yap
+            if (kayit.IsverenFirmaId <= 0) kayit.IsverenFirmaId = null;
 
             var mevcut = mevcutKayitlar.FirstOrDefault(m =>
                 m.GuzergahId == kayit.GuzergahId &&

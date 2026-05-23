@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using KOAFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -225,6 +225,80 @@ public sealed class TenantDatabaseService : ITenantDatabaseService
             "SELECT 1 FROM pg_database WHERE datname = @name", conn);
         cmd.Parameters.AddWithValue("@name", databaseName);
         return await cmd.ExecuteScalarAsync() != null;
+    }
+
+    /// <inheritdoc />
+    public async Task<int> ApplyPendingMigrationsAsync(int firmaId)
+    {
+        await using var masterCtx = await _masterFactory.CreateDbContextAsync();
+        var firma = await masterCtx.Firmalar.FindAsync(firmaId);
+        if (firma == null)
+            throw new InvalidOperationException($"Firma bulunamadi: {firmaId}");
+
+        if (string.IsNullOrWhiteSpace(firma.DatabaseName))
+        {
+            _logger.LogWarning("Firma {FirmaId} icin DatabaseName tanimli degil, migration uygulanamadi.", firmaId);
+            return 0;
+        }
+
+        var tenantConnStr = _connProvider.GetConnectionStringForFirma(firmaId, firma.DatabaseName);
+        if (string.IsNullOrWhiteSpace(tenantConnStr))
+            throw new InvalidOperationException($"Tenant connection string alinamadi: FirmaId={firmaId}");
+
+        var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
+        optionsBuilder.UseNpgsql(tenantConnStr);
+        await using var ctx = new ApplicationDbContext(optionsBuilder.Options);
+
+        var pending = (await ctx.Database.GetPendingMigrationsAsync()).ToList();
+        if (pending.Count == 0)
+        {
+            _logger.LogInformation("Firma {FirmaId} ({DbName}): bekleyen migration yok.", firmaId, firma.DatabaseName);
+            return 0;
+        }
+
+        _logger.LogInformation("Firma {FirmaId} ({DbName}): {Count} bekleyen migration uygulanıyor: {Migrations}",
+            firmaId, firma.DatabaseName, pending.Count, string.Join(", ", pending));
+
+        await ctx.Database.MigrateAsync();
+
+        _logger.LogInformation("Firma {FirmaId} ({DbName}): {Count} migration basariyla uygulandi.",
+            firmaId, firma.DatabaseName, pending.Count);
+
+        return pending.Count;
+    }
+
+    /// <inheritdoc />
+    public async Task<(int Total, int Updated, int Errors)> ApplyPendingMigrationsToAllTenantsAsync()
+    {
+        await using var masterCtx = await _masterFactory.CreateDbContextAsync();
+        var firmalar = await masterCtx.Firmalar
+            .Where(f => !string.IsNullOrEmpty(f.DatabaseName))
+            .ToListAsync();
+
+        int total = firmalar.Count;
+        int updated = 0;
+        int errors = 0;
+
+        _logger.LogInformation("Tum tenant migration: {Total} firma isleniyor...", total);
+
+        foreach (var firma in firmalar)
+        {
+            try
+            {
+                var count = await ApplyPendingMigrationsAsync(firma.Id);
+                if (count > 0) updated++;
+            }
+            catch (Exception ex)
+            {
+                errors++;
+                _logger.LogError(ex, "Firma {FirmaId} ({DbName}) migration hatasi.", firma.Id, firma.DatabaseName);
+            }
+        }
+
+        _logger.LogInformation("Tum tenant migration tamamlandi: {Total} toplam, {Updated} guncellendi, {Errors} hata.",
+            total, updated, errors);
+
+        return (total, updated, errors);
     }
 
     private async Task<int> CopyTableDataAsync(

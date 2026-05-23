@@ -13,9 +13,19 @@
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h3><i class="bi bi-building me-2"></i>Firma Yonetimi</h3>
-        <button class="btn btn-primary" @onclick="YeniFirmaAc">
-            <i class="bi bi-plus-lg me-1"></i>Yeni Firma
-        </button>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary" disabled="@tumMigrationYukleniyor" @onclick="TumTenantMigrationUygula"
+                    title="DatabaseName atanmis tum tenant DB'lere bekleyen migration'lari uygular">
+                @if (tumMigrationYukleniyor)
+                { <span class="spinner-border spinner-border-sm me-1"></span> }
+                else
+                { <i class="bi bi-database-gear me-1"></i> }
+                Tum Tenant Migration
+            </button>
+            <button class="btn btn-primary" @onclick="YeniFirmaAc">
+                <i class="bi bi-plus-lg me-1"></i>Yeni Firma
+            </button>
+        </div>
     </div>
 
     @{
@@ -208,6 +218,19 @@
                                         Tenant DB Olustur
                                     </button>
                                 }
+                                else
+                                {
+                                    <button class="btn btn-outline-secondary btn-sm w-100"
+                                            disabled="@(migrationYukleniyor == firma.Id)"
+                                            title="Bu tenant DB'ye bekleyen EF migration'larini uygular"
+                                            @onclick="() => TenantMigrationUygula(firma)">
+                                        @if (migrationYukleniyor == firma.Id)
+                                        { <span class="spinner-border spinner-border-sm me-1"></span> }
+                                        else
+                                        { <i class="bi bi-arrow-repeat me-1"></i> }
+                                        Migration Uygula
+                                    </button>
+                                }
                             </div>
                         </div>
                     </div>
@@ -373,6 +396,8 @@
     private int? atamaYukleniyorFirmaId;
     private bool topluAtaYukleniyor = false;
     private int? tenantDbYukleniyor;
+    private int? migrationYukleniyor;
+    private bool tumMigrationYukleniyor;
     private string aramaMetni = string.Empty;
     private string durumFiltre = string.Empty;
     private string cariFiltre = string.Empty;
@@ -664,7 +689,8 @@
         try
         {
             await TenantDbService.CreateTenantDatabaseAsync(firma.Id, migrateData: true);
-            ToastService.ShowSuccess($"Tenant DB olusturuldu: kofa_firma_{firma.Id:D3}. Veri gocu tamamlandi.");
+            var dbAdi = firma.DatabaseName ?? $"Koa_{firma.FirmaKodu}_{firma.Id:D3}";
+            ToastService.ShowSuccess($"Tenant DB olusturuldu: {dbAdi}. Veri gocu tamamlandi.");
             await YenileAsync();
         }
         catch (Exception ex)
@@ -674,6 +700,48 @@
         finally
         {
             tenantDbYukleniyor = null;
+        }
+    }
+
+    private async Task TenantMigrationUygula(Firma firma)
+    {
+        migrationYukleniyor = firma.Id;
+        try
+        {
+            var count = await TenantDbService.ApplyPendingMigrationsAsync(firma.Id);
+            if (count > 0)
+                ToastService.ShowSuccess($"{firma.FirmaAdi}: {count} migration uygulandı.");
+            else
+                ToastService.ShowInfo($"{firma.FirmaAdi}: Bekleyen migration yok, DB güncel.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"{firma.FirmaAdi} migration hatasi: " + ex.Message);
+        }
+        finally
+        {
+            migrationYukleniyor = null;
+        }
+    }
+
+    private async Task TumTenantMigrationUygula()
+    {
+        tumMigrationYukleniyor = true;
+        try
+        {
+            var (total, updated, errors) = await TenantDbService.ApplyPendingMigrationsToAllTenantsAsync();
+            if (errors == 0)
+                ToastService.ShowSuccess($"Migration tamamlandi: {total} firma incelendi, {updated} guncellendi.");
+            else
+                ToastService.ShowWarning($"Migration: {updated} guncellendi, {errors} hata olustu. Loglara bakiniz.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Toplu migration hatasi: " + ex.Message);
+        }
+        finally
+        {
+            tumMigrationYukleniyor = false;
         }
     }
 
