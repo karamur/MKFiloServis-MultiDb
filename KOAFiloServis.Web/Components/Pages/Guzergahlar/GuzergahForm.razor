@@ -997,7 +997,7 @@
                 var seferEntities = seferKalemleri.Select(k => new GuzergahSefer
                 {
                     GuzergahId = guzergah.Id,
-                    FirmaId = guzergah.FirmaId,
+                    FirmaId = guzergah.FirmaId > 0 ? guzergah.FirmaId : null,
                     SeferTipi = k.SeferTipi,
                     Slot = k.Slot,
                     KapasiteAdi = k.KapasiteAdi,
