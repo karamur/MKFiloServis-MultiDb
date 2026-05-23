@@ -614,6 +614,16 @@
             guzergah.RotaRengi = "#3388ff";
         }
 
+        // Edit/kopyalama modunda secili degerlerin listede oldugundan emin ol
+        if (guzergah.VarsayilanAracId.HasValue && !araclar.Any(a => a.Id == guzergah.VarsayilanAracId.Value))
+        {
+            if (guzergah.VarsayilanArac != null) araclar.Add(guzergah.VarsayilanArac);
+        }
+        if (guzergah.VarsayilanSoforId.HasValue && !soforler.Any(s => s.Id == guzergah.VarsayilanSoforId.Value))
+        {
+            if (guzergah.VarsayilanSofor != null) soforler.Add(guzergah.VarsayilanSofor);
+        }
+
         oncekiSeferTipiCarpani = GetSeferTipiCarpani(guzergah.SeferTipi);
         await AracSecimiDegistiAsync();
         await SoforDegistiAsync();

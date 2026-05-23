@@ -1026,3 +1026,69 @@ Yeni repo açma ve Faz 1'e başlama kararı alınırsa:
 | `KOAFiloServis.Shared/Entities/IFirmaTenant.cs` | Mevcut tenant interface |
 | `KOAFiloServis.Web/Data/TenantAwareDbContextFactory.cs` | Mevcut factory |
 | `KOAFiloServis.Web/Services/IAktifFirmaProvider.cs` | Aktif firma state servisi |
+
+---
+
+## 📅 23.05.2026 — Kiralık C Plaka Takibi Geliştirme Planı
+
+> **Talep:** Kiralık C Plaka Takibi modülünde eşleştirme, fatura, ödeme takibi ve raporlama özellikleri.
+
+### 🔴 ACİL BUG — Güzergah Düzenle
+
+| Sorun | Açıklama |
+|-------|----------|
+| Kapasite, araç, şoför bilgileri gelmiyor | `GuzergahForm` edit modunda `AracService.GetActiveAsync()`, `SoforService.GetActiveAsync()` tenant DB'den veri çekiyor olabilir. Multi-tenant izolasyonunda araç/şoför listesi boş geliyor. |
+
+**Çözüm:** `GuzergahForm.OnInitializedAsync` içinde servis çağrılarının doğru DB'ye yönlendiğinden emin olunacak.
+
+---
+
+### 📋 FAZ PLANI — Kiralık C Plaka Takibi
+
+#### Faz 1: Eşleştirme Derinliği (1-2 gün)
+| # | İş | Açıklama |
+|---|-----|----------|
+| 1.1 | 1. Eşleştirme - Araç detay | `KiralikPlakaList` tablosunda eşleşen aracın detay bilgileri gösterilecek: Marka, Model, Yıl, Şasi No, Yakıt Tipi, Plaka |
+| 1.2 | 2. Eşleştirme - Tam bilgi | Eşleşen araca tıklandığında modal/panel ile aracın TÜM bilgileri: Sigorta, Muayene, Koltuk Sigortası, Ruhsat, Evraklar, Bağlı olduğu güzergah, Atandığı şoför |
+| 1.3 | Güzergah Düzenle BUG FIX | Kapasite, araç, şoför dropdown'larının tenant DB'de düzgün yüklenmesi |
+
+#### Faz 2: Fatura Entegrasyonu (2-3 gün)
+| # | İş | Açıklama |
+|---|-----|----------|
+| 2.1 | Fatura sütunu | `KiralikPlakaList` tablosuna "Kesilen Fatura" sütunu: fatura no, tarih, tutar |
+| 2.2 | Kesilecek fatura takibi | `KiralikPlakaTakip` entity'sine fatura alanları: `KesilenFaturaId`, `KesilenFaturaTutar`, `KalanFaturaTutar` |
+| 2.3 | Fatura listesi/raporu | Plaka bazlı fatura dökümü: PDF/Excel export, hesap pusulası görünümü |
+| 2.4 | Fatura eşleştirme | Gelen faturalar (Alış Faturası) ile plaka takip kaydı eşleştirme: `KiralikPlakaTakip.GelenFaturaId` |
+
+#### Faz 3: Ödeme Takibi (2-3 gün)
+| # | İş | Açıklama |
+|---|-----|----------|
+| 3.1 | Ödeme planı | `KiralikPlakaTakip` entity'sine ödeme alanları: `ToplamOdeme`, `OdenenTutar`, `KalanOdeme`, `SonOdemeTarihi` |
+| 3.2 | Aylık/kısmi ödeme | Periyot="AYLIK" ise aylık ödeme takvimi otomatik oluşturma. Kısmi ödeme girişi |
+| 3.3 | Ödeme listesi/önizleme | Plaka bazlı ödeme takvimi: bu ay, gelecek aylar, geçmiş ödemeler |
+| 3.4 | Ödeme dökümü | Ödeme geçmişi PDF/Excel export |
+
+#### Faz 4: Raporlama ve Hesap Pusulası (1-2 gün)
+| # | İş | Açıklama |
+|---|-----|----------|
+| 4.1 | Hesap Pusulası | Plaka bazlı: Toplam borç, ödenen, kalan, vade takvimi — tek sayfa özet |
+| 4.2 | Fatura + Ödeme özet raporu | Tüm plakalar için konsolide fatura/ödeme durumu |
+| 4.3 | Aylık önizleme | Aylık kesilecek fatura ve yapılacak ödemelerin toplu önizlemesi + Excel export |
+
+### 🏗️ Mimari Kararlar
+
+| Karar | Gerekçe |
+|-------|---------|
+| `KiralikPlakaTakip` entity'si genişletilecek | Yeni alanlar: fatura ve ödeme takibi için FK'lar eklenecek |
+| Fatura eşleştirme çift yönlü | Hem kesilen hem gelen fatura ile eşleştirme |
+| Ödeme takvimi otomatik | Periyot="AYLIK" ise başlangıç/bitiş tarihleri arası aylık ödeme satırları otomatik oluşturulur |
+
+### 📊 Tahmini Süre
+
+| Faz | İçerik | Süre |
+|:---:|--------|:---:|
+| Faz 1 | Eşleştirme Derinliği + Bug Fix | 1-2 gün |
+| Faz 2 | Fatura Entegrasyonu | 2-3 gün |
+| Faz 3 | Ödeme Takibi | 2-3 gün |
+| Faz 4 | Raporlama ve Hesap Pusulası | 1-2 gün |
+| **Toplam** | | **6-10 gün** |
