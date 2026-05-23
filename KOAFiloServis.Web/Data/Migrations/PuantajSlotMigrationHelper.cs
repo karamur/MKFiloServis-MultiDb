@@ -62,6 +62,13 @@ public static class PuantajSlotMigrationHelper
             logger?.LogInformation("PuantajSlotMigration: TransferDurum kolonu eklendi.");
         }
 
+        if (!cols.Contains("SlotAdi"))
+        {
+            await context.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE \"PuantajKayitlar\" ADD COLUMN \"SlotAdi\" varchar(50) NULL");
+            logger?.LogInformation("PuantajSlotMigration: SlotAdi kolonu eklendi.");
+        }
+
         logger?.LogInformation("PuantajSlotMigration: Tum kolonlar mevcut.");
     }
 

@@ -1092,3 +1092,49 @@ Yeni repo açma ve Faz 1'e başlama kararı alınırsa:
 | Faz 3 | Ödeme Takibi | 2-3 gün |
 | Faz 4 | Raporlama ve Hesap Pusulası | 1-2 gün |
 | **Toplam** | | **6-10 gün** |
+
+---
+
+## 📅 23.05.2026 — BUG RAPORU: Güzergah ve Puantaj Kırılma Sorunları
+
+### 🔴 Tespit Edilen Hatalar
+
+#### 1. EKSİK DB KOLONLARI (KRİTİK)
+
+| Tablo | Eksik Kolon | Etki |
+|-------|-------------|------|
+| `PuantajKayitlar` | `SlotAdi` | Puantaj kaydı okuma/yazma hatası |
+| `GuzergahSeferleri` | `Slot` | Güzergah sefer okuma/yazma hatası |
+
+**Neden:** Yeni entity alanları eklendi ancak DB migration helper'ları güncellenmedi.
+**Çözüm:** `PuantajSlotMigrationHelper` ve `GuzergahKoordinatMigrationHelper` güncellendi.
+
+#### 2. KONTROL EDİLMESİ GEREKENLER
+
+| # | Risk | Açıklama |
+|---|------|----------|
+| 2a | Planlama Slot/Güzergah toggle | Yeni gruplandırma kodunda null reference riski |
+| 2b | Planlama OnayDurum filtresi | Filtre + VeriYukle metodunda slot filtresi çakışması |
+| 2c | KurumPuantaj Slot dropdown | Edit modal'da Slot enum değişikliği |
+| 2d | CopyPreviousMonthModal | Yeni eklenen alanların kopyalama sırasında hata verme riski |
+| 2e | GuzergahSefer.Slot kolonu | DB'de kolon yoksa SablonOlusturAsync patlar |
+| 2f | PuantajKayit.SlotAdi kolonu | DB'de kolon yoksa kaydetme işlemleri patlar |
+
+#### 3. ACİL YAPILACAKLAR (Yarın)
+
+| # | İş |
+|---|-----|
+| 3a | Uygulama başlatılıp `/guzergahlar` ve `/planlama` sayfaları test edilecek |
+| 3b | Yeni güzergah oluşturma + düzenleme testi (kapasite/araç/şoför dropdown) |
+| 3c | Planlama - Slot/Güzergah toggle + yeni sefer ekleme testi |
+| 3d | Planlama - OnayDurum filtresi + hızlı onay toggle testi |
+| 3e | KurumPuantaj - Slot dropdown + SlotAdi testi |
+| 3f | Runtime exception log'ları kontrol edilecek |
+
+### 🛠️ Yapılan Fix'ler
+
+| Fix | Dosya |
+|-----|-------|
+| `PuantajKayitlar.SlotAdi` kolonu eklendi | `PuantajSlotMigrationHelper.cs` |
+| `GuzergahSeferleri.Slot` kolonu eklendi | `GuzergahKoordinatMigrationHelper.cs` |
+| Güzergah Düzenle - seçili araç/şoför listede yoksa ekleme | `GuzergahForm.razor` |

@@ -100,5 +100,18 @@ public static class GuzergahKoordinatMigrationHelper
 
         await context.Database.ExecuteSqlRawAsync(sql);
         Console.WriteLine("PostgreSQL: Guzergahlar tablosuna koordinat kolonları eklendi.");
+
+        // GuzergahSeferleri tablosuna Slot kolonu ekle
+        var slotSql = @"
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                               WHERE table_name = 'GuzergahSeferleri' AND column_name = 'Slot') THEN
+                    ALTER TABLE ""GuzergahSeferleri"" ADD COLUMN ""Slot"" integer NOT NULL DEFAULT 1;
+                END IF;
+            END $$;
+        ";
+        await context.Database.ExecuteSqlRawAsync(slotSql);
+        Console.WriteLine("PostgreSQL: GuzergahSeferleri tablosuna Slot kolonu eklendi.");
     }
 }
