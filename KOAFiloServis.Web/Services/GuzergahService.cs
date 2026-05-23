@@ -121,11 +121,7 @@ public class GuzergahService : IGuzergahService
         existing.KapasiteAdi = guzergah.KapasiteAdi;
         existing.CariId = guzergah.CariId;
         existing.KurumId = guzergah.KurumId;
-        if (guzergah.FirmaId > 0)
-        {
-            var firmaVar = await context.Firmalar.AnyAsync(f => f.Id == guzergah.FirmaId.Value);
-            existing.FirmaId = firmaVar ? guzergah.FirmaId : existing.FirmaId;
-        }
+        existing.FirmaId = guzergah.FirmaId > 0 ? guzergah.FirmaId : null;
         existing.VarsayilanAracId = guzergah.VarsayilanAracId;
         existing.VarsayilanSoforId = guzergah.VarsayilanSoforId;
         existing.Notlar = guzergah.Notlar;
