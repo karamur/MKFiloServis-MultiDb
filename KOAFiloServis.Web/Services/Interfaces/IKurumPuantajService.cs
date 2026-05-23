@@ -53,6 +53,14 @@ public interface IKurumPuantajService
     // ── Excel Import ──────────────────────────────────────────────────────────
     /// <summary>Excel'den okunan puantaj satırlarını toplu olarak kaydeder.</summary>
     Task<List<PuantajImportSonuc>> TopluImportAsync(List<PuantajImportSatiri> satirlar);
+
+    // ── Puantaj Güncelleme ──────────────────────────────────────────────────
+    /// <summary>
+    /// Güzergah/sefer değişikliklerini mevcut puantaj kayıtlarına yansıtır.
+    /// Sadece değişen araç/şoför bilgilerini günceller, dokunulmayanlara karışmaz.
+    /// Yeni eklenen seferler için puantaj satırı ekler.
+    /// </summary>
+    Task<PuantajGuncellemeSonuc> GuncellePuantajAsync(int kurumId, int yil, int ay);
 }
 
 /// <summary>
@@ -86,6 +94,17 @@ public sealed class PuantajImportSonuc
     public bool Basarili { get; init; }
     public bool Atlandi { get; init; }
     public string? HataMesaji { get; init; }
+}
+
+/// <summary>
+/// Puantaj güncelleme sonucu
+/// </summary>
+public sealed class PuantajGuncellemeSonuc
+{
+    public int Guncellenen { get; init; }
+    public int Eklenen { get; init; }
+    public int Degismeyen { get; init; }
+    public int Toplam => Guncellenen + Eklenen + Degismeyen;
 }
 
 /// <summary>

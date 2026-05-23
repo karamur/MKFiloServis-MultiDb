@@ -107,6 +107,14 @@ else
                             <i class="bi bi-lightning me-1"></i> Sablon Olustur
                         </button>
                     </div>
+                    @if (seciliKurumId.HasValue && seciliKurumId.Value > 0 && kayitlar.Any())
+                    {
+                        <div class="col-auto">
+                            <button class="btn btn-outline-warning btn-sm" @onclick="PuantajGuncelle" disabled="@kaydediliyor">
+                                <i class="bi bi-arrow-repeat me-1"></i> Puantajı Güncelle
+                            </button>
+                        </div>
+                    }
                     @if (kayitlar.Any())
                     {
                         var hepsiDaraltildi = daraltilanSlotlar.Count >= kayitlar.Select(k => k.Slot).Distinct().Count();
@@ -833,6 +841,30 @@ else
         {
             kayitlar = await KurumPuantajService.SablonOlusturAsync(seciliKurumId.Value, seciliYil, seciliAy);
             ToastService.ShowSuccess("Sablon olusturuldu.");
+        }
+        finally { yukleniyor = false; }
+    }
+
+    private async Task PuantajGuncelle()
+    {
+        if (!seciliKurumId.HasValue || seciliKurumId.Value == 0) return;
+        yukleniyor = true;
+        try
+        {
+            var sonuc = await KurumPuantajService.GuncellePuantajAsync(seciliKurumId.Value, seciliYil, seciliAy);
+            if (sonuc.Guncellenen > 0 || sonuc.Eklenen > 0)
+            {
+                await VeriYukle();
+                ToastService.ShowSuccess($"Puantaj güncellendi: {sonuc.Guncellenen} güncellendi, {sonuc.Eklenen} eklendi, {sonuc.Degismeyen} değişmedi.");
+            }
+            else
+            {
+                ToastService.ShowInfo($"Tüm kayıtlar güncel ({sonuc.Degismeyen} kayıt değişmedi).");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Güncelleme hatası: {ex.Message}");
         }
         finally { yukleniyor = false; }
     }

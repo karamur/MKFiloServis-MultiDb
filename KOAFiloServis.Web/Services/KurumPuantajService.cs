@@ -625,4 +625,150 @@ public sealed class KurumPuantajService : IKurumPuantajService
             Gun         = 0
         });
     }
+
+    // ── Puantaj Güncelleme ──────────────────────────────────────────────────
+
+    public async Task<PuantajGuncellemeSonuc> GuncellePuantajAsync(int kurumId, int yil, int ay)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        var guzergahlar = await db.Guzergahlar
+            .Include(g => g.VarsayilanArac)
+            .Include(g => g.VarsayilanSofor)
+            .Where(g => !g.IsDeleted && g.Aktif && g.KurumId == kurumId)
+            .ToListAsync();
+
+        var guzergahIds = guzergahlar.Select(g => g.Id).ToList();
+
+        // Mevcut puantaj kayitlari
+        var mevcutlar = await db.PuantajKayitlar
+            .Where(p => !p.IsDeleted && p.Yil == yil && p.Ay == ay
+                        && p.GuzergahId != null && guzergahIds.Contains(p.GuzergahId!.Value))
+            .ToListAsync();
+
+        // GuzergahSefer satirlari
+        var seferler = await db.GuzergahSeferleri
+            .Include(s => s.Arac)
+            .Where(s => guzergahIds.Contains(s.GuzergahId) && s.AracId.HasValue)
+            .OrderBy(s => s.GuzergahId).ThenBy(s => s.Sira)
+            .ToListAsync();
+        var seferMap = seferler.GroupBy(s => s.GuzergahId).ToDictionary(g => g.Key, g => g.ToList());
+
+        int guncellenen = 0, eklenen = 0, degismeyen = 0;
+
+        foreach (var guzergah in guzergahlar)
+        {
+            if (seferMap.TryGetValue(guzergah.Id, out var gSeferler) && gSeferler.Any())
+            {
+                foreach (var sefer in gSeferler)
+                {
+                    var slotlar = sefer.Slot != SeferSlot.Sabah || sefer.SeferTipi == SeferTipi.Sabah
+                        ? new[] { sefer.Slot }
+                        : SeferTipindenSlotlara(sefer.SeferTipi);
+
+                    foreach (var slot in slotlar)
+                    {
+                        var mevcut = mevcutlar.FirstOrDefault(p =>
+                            p.GuzergahId == guzergah.Id && p.Slot == slot);
+
+                        if (mevcut == null)
+                        {
+                            // Yeni puantaj satiri ekle
+                            var yeni = new PuantajKayit
+                            {
+                                GuzergahId = guzergah.Id,
+                                GuzergahAdi = guzergah.GuzergahAdi,
+                                AracId = sefer.AracId!.Value,
+                                Plaka = sefer.Arac?.AktifPlaka ?? sefer.Arac?.Plaka,
+                                SoforAdi = sefer.SoforAd,
+                                KurumId = kurumId,
+                                Slot = slot,
+                                Yil = yil,
+                                Ay = ay,
+                                SeferSayisi = 1,
+                                Gun = 0,
+                                Yon = PuantajYon.SabahAksam,
+                                KaynakTipi = PlanlamaKaynakTipi.Kendi,
+                                FinansYonu = PlanlamaFinansYonu.Giden,
+                                SoforOdemeTipi = SoforOdemeTipi.Ozmal,
+                                CreatedAt = DateTime.UtcNow
+                            };
+                            db.PuantajKayitlar.Add(yeni);
+                            eklenen++;
+                        }
+                        else
+                        {
+                            // Mevcut kaydi guncelle (arac/sofor degisti mi?)
+                            var aracDegisti = mevcut.AracId != sefer.AracId;
+                            var soforDegisti = (mevcut.SoforAdi ?? "") != (sefer.SoforAd ?? "");
+
+                            if (aracDegisti || soforDegisti)
+                            {
+                                mevcut.AracId = sefer.AracId;
+                                mevcut.Plaka = sefer.Arac?.AktifPlaka ?? sefer.Arac?.Plaka;
+                                mevcut.SoforAdi = sefer.SoforAd;
+                                mevcut.UpdatedAt = DateTime.UtcNow;
+                                guncellenen++;
+                            }
+                            else
+                            {
+                                degismeyen++;
+                            }
+                        }
+                    }
+                }
+            }
+            else if (guzergah.VarsayilanArac != null)
+            {
+                // GuzergahSefer yoksa varsayilan arac/slot ile ekle
+                foreach (var slot in SeferTipindenSlotlara(guzergah.SeferTipi))
+                {
+                    var mevcut = mevcutlar.FirstOrDefault(p =>
+                        p.GuzergahId == guzergah.Id && p.Slot == slot);
+
+                    if (mevcut == null)
+                    {
+                        var yeni = new PuantajKayit
+                        {
+                            GuzergahId = guzergah.Id,
+                            GuzergahAdi = guzergah.GuzergahAdi,
+                            AracId = guzergah.VarsayilanArac.Id,
+                            Plaka = guzergah.VarsayilanArac.AktifPlaka ?? guzergah.VarsayilanArac.Plaka,
+                            SoforAdi = guzergah.VarsayilanSofor != null
+                                ? $"{guzergah.VarsayilanSofor.Ad} {guzergah.VarsayilanSofor.Soyad}"
+                                : null,
+                            KurumId = kurumId,
+                            Slot = slot,
+                            Yil = yil,
+                            Ay = ay,
+                            SeferSayisi = 1,
+                            Gun = 0,
+                            Yon = PuantajYon.SabahAksam,
+                            KaynakTipi = PlanlamaKaynakTipi.Kendi,
+                            FinansYonu = PlanlamaFinansYonu.Giden,
+                            SoforOdemeTipi = SoforOdemeTipi.Ozmal,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        db.PuantajKayitlar.Add(yeni);
+                        eklenen++;
+                    }
+                    else
+                    {
+                        var aracDegisti = mevcut.AracId != guzergah.VarsayilanAracId;
+                        if (aracDegisti)
+                        {
+                            mevcut.AracId = guzergah.VarsayilanAracId;
+                            mevcut.Plaka = guzergah.VarsayilanArac.AktifPlaka ?? guzergah.VarsayilanArac.Plaka;
+                            mevcut.UpdatedAt = DateTime.UtcNow;
+                            guncellenen++;
+                        }
+                        else degismeyen++;
+                    }
+                }
+            }
+        }
+
+        await db.SaveChangesAsync();
+        return new PuantajGuncellemeSonuc { Guncellenen = guncellenen, Eklenen = eklenen, Degismeyen = degismeyen };
+    }
 }
