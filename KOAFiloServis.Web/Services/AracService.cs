@@ -183,6 +183,9 @@ public class AracService : IAracService
         if (await PlakaMevcutMu(plaka))
             throw new InvalidOperationException($"Bu plaka ({plaka}) başka bir araçta aktif olarak kullanılıyor.");
 
+        // FirmaId=0 FK hatasina yol acmasin diye null'a cevir
+        if (arac.FirmaId <= 0) arac.FirmaId = null;
+
         try
         {
             // ExecutionStrategy ile transaction sarmalama (NpgsqlRetryingExecutionStrategy uyumluluğu)
@@ -288,10 +291,11 @@ public class AracService : IAracService
             existing.SatisaAcik = arac.SatisaAcik;
             existing.SatisFiyati = arac.SatisFiyati;
             existing.SatisAciklamasi = arac.SatisAciklamasi;
-            // Tenant (Firma) güncellemesi: sadece açıkça seçilmişse değiştir
+            // Tenant (Firma) güncellemesi: sadece açıkça seçilmiş ve mevcut DB'de var ise değiştir
             if (arac.FirmaId.HasValue && arac.FirmaId.Value > 0)
             {
-                existing.FirmaId = arac.FirmaId;
+                var firmaVar = await context.Firmalar.AnyAsync(f => f.Id == arac.FirmaId.Value);
+                existing.FirmaId = firmaVar ? arac.FirmaId : existing.FirmaId;
             }
             existing.UpdatedAt = DateTime.UtcNow;
             

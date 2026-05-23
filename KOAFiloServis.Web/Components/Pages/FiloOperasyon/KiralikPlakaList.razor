@@ -7,9 +7,12 @@
 @using QuestPDF.Fluent
 @using QuestPDF.Helpers
 @using QuestPDF.Infrastructure
+@using KOAFiloServis.Web.Data
+@using Microsoft.EntityFrameworkCore
 @inject IKiralikPlakaTakipService TakipService
 @inject IToastService ToastService
 @inject IJSRuntime JS
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 
 <PageTitle>Kiralık C Plaka Takibi | KOA Filo Servis</PageTitle>
 
@@ -166,8 +169,12 @@
                                 <td>
                                     @if (!eslesmedi)
                                     {
-                                        <a href="/araclar/@item.Arac!.Id/evraklar" class="text-decoration-none" title="Araç belge dosyalarına git">
-                                            @($"{item.Arac.AktifPlaka} - {item.Arac.Marka} {item.Arac.Model}")
+                                        <a href="javascript:void(0)" class="text-decoration-none" @onclick="() => AracDetayGoster(item.Arac!)" title="Araç detayları için tıkla">
+                                            <strong>@item.Arac!.AktifPlaka</strong>
+                                            @if (!string.IsNullOrWhiteSpace(item.Arac.Marka))
+                                            {
+                                                <br/><small class="text-muted">@item.Arac.Marka @item.Arac.Model @item.Arac.ModelYili</small>
+                                            }
                                         </a>
                                     }
                                     else
@@ -428,6 +435,104 @@
     </div>
 }
 
+@if (showAracDetayModal && seciliArac != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.6);" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title"><i class="bi bi-truck me-2"></i>Araç Detay - @seciliArac.AktifPlaka</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="AracDetayKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header py-2 bg-light"><strong><i class="bi bi-info-circle me-1"></i>Temel Bilgiler</strong></div>
+                                <div class="card-body py-2">
+                                    <table class="table table-sm table-borderless mb-0">
+                                        <tr><td class="text-muted" width="100">Marka</td><td><strong>@(seciliArac.Marka ?? "-")</strong></td></tr>
+                                        <tr><td class="text-muted">Model</td><td><strong>@(seciliArac.Model ?? "-")</strong></td></tr>
+                                        <tr><td class="text-muted">Model Yılı</td><td><strong>@(seciliArac.ModelYili?.ToString() ?? "-")</strong></td></tr>
+                                        <tr><td class="text-muted">Şasi No</td><td><code>@(seciliArac.SaseNo ?? "-")</code></td></tr>
+                                        <tr><td class="text-muted">Motor No</td><td>@(seciliArac.MotorNo ?? "-")</td></tr>
+                                        <tr><td class="text-muted">Renk</td><td>@(seciliArac.Renk ?? "-")</td></tr>
+                                        <tr><td class="text-muted">Km</td><td>@(seciliArac.KmDurumu?.ToString("N0") ?? "-")</td></tr>
+                                        <tr><td class="text-muted">Koltuk</td><td>@seciliArac.KoltukSayisi</td></tr>
+                                        <tr><td class="text-muted">Durum</td><td>
+                                            @if (seciliArac.Aktif)
+                                            { <span class="badge bg-success">Aktif</span> }
+                                            else
+                                            { <span class="badge bg-secondary">Pasif</span> }
+                                            <span class="badge bg-info ms-1">@seciliArac.Durumu</span>
+                                        </td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header py-2 bg-light"><strong><i class="bi bi-shield-check me-1"></i>Sigorta / Muayene</strong></div>
+                                <div class="card-body py-2">
+                                    <table class="table table-sm table-borderless mb-0">
+                                        @{
+                                            var bugun = DateTime.Today;
+                                            string SigortaBadge(DateTime? bitis)
+                                            {
+                                                if (!bitis.HasValue) return "<span class=\"badge bg-secondary\">-</span>";
+                                                var gun = (bitis.Value - bugun).Days;
+                                                return gun < 0 ? $"<span class=\"badge bg-danger\">{bitis:dd.MM.yyyy} (geçti)</span>"
+                                                    : gun <= 30 ? $"<span class=\"badge bg-warning text-dark\">{bitis:dd.MM.yyyy} ({gun}g)</span>"
+                                                    : $"<span class=\"badge bg-success\">{bitis:dd.MM.yyyy} ({gun}g)</span>";
+                                            }
+                                        }
+                                        <tr><td class="text-muted">Trafik Sigortası</td><td>@((MarkupString)SigortaBadge(seciliArac.TrafikSigortaBitisTarihi))</td></tr>
+                                        <tr><td class="text-muted">Kasko</td><td>@((MarkupString)SigortaBadge(seciliArac.KaskoBitisTarihi))</td></tr>
+                                        <tr><td class="text-muted">Muayene</td><td>@((MarkupString)SigortaBadge(seciliArac.MuayeneBitisTarihi))</td></tr>
+                                        <tr><td class="text-muted">Koltuk Sigortası</td><td>@((MarkupString)SigortaBadge(seciliArac.KoltukSigortasiBitisTarihi))</td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        @if (seciliGuzergahBilgisi.Any())
+                        {
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header py-2 bg-light"><strong><i class="bi bi-signpost me-1"></i>Bağlı Olduğu Güzergah(lar)</strong></div>
+                                    <div class="card-body py-2">
+                                        @foreach (var gb in seciliGuzergahBilgisi)
+                                        {
+                                            <div class="d-flex justify-content-between align-items-center border-bottom py-1">
+                                                <div>
+                                                    <a href="/guzergahlar/@gb.GuzergahId/duzenle" target="_blank" class="fw-semibold">@gb.GuzergahAdi</a>
+                                                    @if (!string.IsNullOrWhiteSpace(gb.SoforAdi))
+                                                    {
+                                                        <span class="text-muted ms-2"><i class="bi bi-person me-1"></i>@gb.SoforAdi</span>
+                                                    }
+                                                </div>
+                                                <small class="text-muted">@gb.SlotAdi</small>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <a href="/araclar/@seciliArac.Id/evraklar" class="btn btn-outline-primary" target="_blank">
+                        <i class="bi bi-folder2-open me-1"></i>Evraklar
+                    </a>
+                    <a href="/araclar/@seciliArac.Id/duzenle" class="btn btn-outline-secondary" target="_blank">
+                        <i class="bi bi-pencil me-1"></i>Düzenle
+                    </a>
+                    <button type="button" class="btn btn-secondary" @onclick="AracDetayKapat">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private bool _loading = true;
     private List<KiralikPlakaTakip> _liste = new();
@@ -436,6 +541,9 @@
     private bool isImporting;
     private bool _eslestirmeCalisiyor;
     private bool showOnizlemeModal;
+    private bool showAracDetayModal;
+    private Arac? seciliArac;
+    private List<GuzergahBilgisi> seciliGuzergahBilgisi = new();
     private IBrowserFile? importFile;
     private KiralikPlakaImportResult? importResult;
 
@@ -504,6 +612,80 @@
     private void OnizlemeAc() => showOnizlemeModal = true;
 
     protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task AracDetayGoster(Arac arac)
+    {
+        seciliArac = arac;
+        seciliGuzergahBilgisi.Clear();
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            // GuzergahSefer'den araca bağlı güzergahları bul
+            var seferler = await db.GuzergahSeferleri
+                .Include(s => s.Guzergah)
+                .Where(s => s.AracId == arac.Id && s.Guzergah != null && !s.Guzergah.IsDeleted)
+                .OrderBy(s => s.Guzergah!.GuzergahAdi).ThenBy(s => s.Sira)
+                .ToListAsync();
+
+            foreach (var s in seferler)
+            {
+                var slotAdi = s.Slot switch
+                {
+                    SeferSlot.Sabah => "Sabah",
+                    SeferSlot.Aksam => "Akşam",
+                    SeferSlot.Mesai => "Mesai",
+                    SeferSlot.Diger1 => "Diğer 1",
+                    SeferSlot.Diger2 => "Diğer 2",
+                    SeferSlot.Diger3 => "Diğer 3",
+                    SeferSlot.Diger4 => "Diğer 4",
+                    SeferSlot.Diger5 => "Diğer 5",
+                    _ => s.Slot.ToString()
+                };
+                seciliGuzergahBilgisi.Add(new GuzergahBilgisi
+                {
+                    GuzergahId = s.GuzergahId,
+                    GuzergahAdi = s.Guzergah?.GuzergahAdi ?? "?",
+                    SoforAdi = s.SoforAd,
+                    SlotAdi = $"Slot: {slotAdi} (Sefer {s.Sira})"
+                });
+            }
+
+            // Ayrıca varsayılan araç olarak atandığı güzergahları da bul
+            var guzergahlar = await db.Guzergahlar
+                .Include(g => g.VarsayilanSofor)
+                .Where(g => g.VarsayilanAracId == arac.Id && g.Aktif && !g.IsDeleted)
+                .ToListAsync();
+
+            foreach (var g in guzergahlar)
+            {
+                if (!seciliGuzergahBilgisi.Any(x => x.GuzergahId == g.Id))
+                {
+                    var soforAdi = g.VarsayilanSofor != null
+                        ? $"{g.VarsayilanSofor.Ad} {g.VarsayilanSofor.Soyad}"
+                        : null;
+                    seciliGuzergahBilgisi.Add(new GuzergahBilgisi
+                    {
+                        GuzergahId = g.Id,
+                        GuzergahAdi = g.GuzergahAdi ?? "?",
+                        SoforAdi = soforAdi,
+                        SlotAdi = "Varsayılan Araç"
+                    });
+                }
+            }
+        }
+        catch { /* güzergah bilgisi yüklenemezse modal yine de açılsın */ }
+
+        showAracDetayModal = true;
+    }
+
+    private void AracDetayKapat()
+    {
+        showAracDetayModal = false;
+        seciliArac = null;
+        seciliGuzergahBilgisi.Clear();
+    }
 
     private static string GetDurumClass(string? durum)
     {
@@ -1195,6 +1377,14 @@
         if (d.Contains("bekle") || d.Contains("askı") || d.Contains("aski") || d.Contains("onay"))
             return Colors.Yellow.Lighten3;
         return Colors.Cyan.Lighten3;
+    }
+
+    private class GuzergahBilgisi
+    {
+        public int GuzergahId { get; set; }
+        public string GuzergahAdi { get; set; } = "";
+        public string? SoforAdi { get; set; }
+        public string SlotAdi { get; set; } = "";
     }
 
     private static string GetKasaQpdfBg(string? kasa)

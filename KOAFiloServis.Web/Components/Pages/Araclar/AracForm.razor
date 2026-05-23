@@ -310,15 +310,23 @@
                     <div class="col-md-6">
                         <div class="mb-3">
                             <label class="form-label">Aracın Bağlı Olduğu Firma *</label>
-                            <InputSelect @bind-Value="arac.FirmaId" class="form-select">
+                            <InputSelect @bind-Value="arac.FirmaId" class="form-select" disabled="@isTenantMode">
                                 <option value="">-- Firma Seçiniz --</option>
-                                @foreach (var f in firmalar)
+                                @foreach (var f in filtrelenmisFirmalar)
                                 {
                                     <option value="@f.Id">@f.FirmaAdi @(f.VarsayilanFirma ? "⭐" : "")</option>
                                 }
                             </InputSelect>
                             <small class="text-muted">
-                                <i class="bi bi-info-circle"></i> Yeni araçlarda aktif firma otomatik atanır; gerekirse buradan değiştirebilirsiniz.
+                                <i class="bi bi-info-circle"></i>
+                                @if (isTenantMode)
+                                {
+                                    <span>Firma, tenant veritabanı modunda otomatik belirlenir.</span>
+                                }
+                                else
+                                {
+                                    <span>Yeni araçlarda aktif firma otomatik atanır; gerekirse buradan değiştirebilirsiniz.</span>
+                                }
                             </small>
                         </div>
                     </div>
@@ -742,6 +750,9 @@
 
     // Firma listesi (tenant seçimi için)
     private List<KOAFiloServis.Shared.Entities.Firma> firmalar = new();
+    private bool isTenantMode => !string.IsNullOrEmpty(AktifFirmaProvider.Mevcut.DatabaseName);
+    private IEnumerable<KOAFiloServis.Shared.Entities.Firma> filtrelenmisFirmalar =>
+        isTenantMode ? firmalar.Where(f => f.Id == AktifFirmaProvider.AktifFirmaId) : firmalar;
 
     // Evrak yönetimi
     private List<AracEvrak> aracEvraklari = new();
