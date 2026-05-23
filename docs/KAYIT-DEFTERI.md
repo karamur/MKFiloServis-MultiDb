@@ -1134,11 +1134,39 @@ Yeni repo açma ve Faz 1'e başlama kararı alınırsa:
 
 | # | İş | Modül |
 |---|-----|-------|
-| 1 | Layout - menü ve bilgi konumlandırması (sol üst) | Layout |
-| 2 | Kiralık C Plaka Faz 2 - Fatura Entegrasyonu | FiloOperasyon |
-| 3 | Kiralık C Plaka Faz 3 - Ödeme Takibi | FiloOperasyon |
-| 4 | Kiralık C Plaka Faz 4 - Raporlama ve Hesap Pusulası | FiloOperasyon |
-| 5 | Manuel testler (login gerek) | Genel |
+| 1 | Manuel testler (login gerek) | Genel |
+| 2 | Kiralık C Plaka Excel/PDF export güncelleme | FiloOperasyon |
+| 3 | Kiralık C Plaka Faz 5 - UAT ve Canlıya Geçiş | FiloOperasyon |
+
+---
+
+## 📅 23.05.2026 — Üçüncü Oturum (4 commit)
+
+### ✅ Tamamlanan
+
+| # | İş | Dosyalar | Açıklama |
+|---|-----|----------|----------|
+| **Faz 2** | Fatura Entegrasyonu | `KiralikPlakaTakip.cs`, `KiralikPlakaForm.razor`, `KiralikPlakaList.razor` | 8 yeni alan: fatura/ödeme takibi, form/liste güncelleme |
+| **Faz 3** | Ödeme Planı | `KiralikPlakaForm.razor` | Periyot=AYLIK → aylık ödeme takvimi tablosu |
+| **Faz 4** | Hesap Pusulası | `KiralikPlakaList.razor` | Plaka bazlı özet modal: borç/ödenen/kalan/vade |
+| **Layout** | Sidebar düzenleme | `NavMenu.razor` | Firma/kullanıcı bilgisi sidebar'a kart olarak taşındı |
+| **Mig** | Fatura kolonları | `KiralikPlakaFaturaMigrationHelper.cs` | PostgreSQL kolon ekleme helper'ı |
+
+### 🧪 Smoke Test
+
+| Test | Sonuç |
+|------|:-----:|
+| `dotnet build` | ✅ **0 hata, 0 uyarı** |
+| `dotnet test` | ✅ 291/291 başarılı |
+
+### 📋 Commit Geçmişi
+
+```
+cfa6ab0 feat(kiralikplaka): Faz 4 - Hesap Pusulasi modali
+59e2ae2 fix(layout): NavMenu - Firma/kullanici bilgisi sidebar'a tasindi
+f697192 feat(kiralikplaka): Faz 3 - Aylik odeme plani tablosu
+c004a3d feat(kiralikplaka): Faz 2 - Fatura ve odeme takip alanlari
+```
 
 ---
 
