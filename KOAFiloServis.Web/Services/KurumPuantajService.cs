@@ -458,7 +458,7 @@ public sealed class KurumPuantajService : IKurumPuantajService
                     foreach (var slot in slotlar)
                     {
                         EkleEksikSatir(sonuc, mevcutlar, guzergah, sefer.AracId!.Value,
-                            sefer.Arac?.AktifPlaka ?? sefer.Arac?.Plaka, null, sefer.SoforAd, yil, ay, slot);
+                            sefer.Arac?.AktifPlaka ?? sefer.Arac?.Plaka, null, sefer.SoforAd, yil, ay, slot, sefer.SeferTipi);
                     }
                 }
                 continue;
@@ -605,7 +605,8 @@ public sealed class KurumPuantajService : IKurumPuantajService
         int aracId, string? plaka,
         int? soforId, string? soforAdi,
         int yil, int ay,
-        SeferSlot slot = SeferSlot.Sabah)
+        SeferSlot slot = SeferSlot.Sabah,
+        SeferTipi seferTipi = SeferTipi.SabahAksam)
     {
         var varMi = mevcutlar.Any(p => p.GuzergahId == guzergah.Id && p.AracId == aracId && p.Slot == slot);
         if (varMi) return;
@@ -621,11 +622,12 @@ public sealed class KurumPuantajService : IKurumPuantajService
             Yil         = yil,
             Ay          = ay,
             Slot        = slot,
-            Yon         = guzergah.SeferTipi switch
+            Yon         = seferTipi switch
             {
                 SeferTipi.Sabah      => PuantajYon.Sabah,
                 SeferTipi.Aksam      => PuantajYon.Aksam,
                 SeferTipi.SabahAksam => PuantajYon.SabahAksam,
+                SeferTipi.Mesai      => PuantajYon.SabahAksam,
                 _                    => PuantajYon.SabahAksam
             },
             SeferSayisi = 1,
@@ -694,7 +696,13 @@ public sealed class KurumPuantajService : IKurumPuantajService
                                 Ay = ay,
                                 SeferSayisi = 1,
                                 Gun = 0,
-                                Yon = PuantajYon.SabahAksam,
+                                Yon = sefer.SeferTipi switch
+                                {
+                                    SeferTipi.Sabah => PuantajYon.Sabah,
+                                    SeferTipi.Aksam => PuantajYon.Aksam,
+                                    SeferTipi.SabahAksam => PuantajYon.SabahAksam,
+                                    _ => PuantajYon.SabahAksam
+                                },
                                 KaynakTipi = PlanlamaKaynakTipi.Kendi,
                                 FinansYonu = PlanlamaFinansYonu.Giden,
                                 SoforOdemeTipi = SoforOdemeTipi.Ozmal,
@@ -750,7 +758,13 @@ public sealed class KurumPuantajService : IKurumPuantajService
                             Ay = ay,
                             SeferSayisi = 1,
                             Gun = 0,
-                            Yon = PuantajYon.SabahAksam,
+                            Yon = guzergah.SeferTipi switch
+                            {
+                                SeferTipi.Sabah => PuantajYon.Sabah,
+                                SeferTipi.Aksam => PuantajYon.Aksam,
+                                SeferTipi.SabahAksam => PuantajYon.SabahAksam,
+                                _ => PuantajYon.SabahAksam
+                            },
                             KaynakTipi = PlanlamaKaynakTipi.Kendi,
                             FinansYonu = PlanlamaFinansYonu.Giden,
                             SoforOdemeTipi = SoforOdemeTipi.Ozmal,
