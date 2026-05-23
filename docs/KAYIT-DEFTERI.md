@@ -107,6 +107,115 @@ ad89039 feat(planlama): Planlama modulu rol bazli yetkilendirme
 
 ---
 
+## 📅 23.05.2026 — Ana Oturum (52 commit, ~79 iyileştirme)
+
+### ✅ Tamamlanan
+
+| # | İş | Modül | Açıklama |
+|---|-----|-------|----------|
+| 1 | SeferSlot genişletme | Puantaj | Enum: Diger1-5 eklendi (toplam 8 slot) |
+| 2 | SlotAdi alanı | Puantaj | `PuantajKayit.SlotAdi` — özel isim ("Gece Vardiyası" vb) |
+| 3 | GuzergahSefer.Slot | Güzergah | Güzergah sefer tanımında Slot alanı |
+| 4 | Slot otomatik önerme | Planlama | Yeni seferde ilk boş slot otomatik seçilir |
+| 5 | Kullanılan slot göstergesi | Planlama | Güzergah seçince dolu slotlar badge ile gösterilir |
+| 6 | Hızlı sefer ekleme | Planlama | `+` butonu ile aynı güzergaha yeni slot ekleme |
+| 7 | Slot/Güzergah toggle | Planlama | Gruplandırma modu: Slot bazlı / Güzergah bazlı |
+| 8 | Daraltılabilir gruplar | Planlama | Slot ve Güzergah grupları tıklanarak daraltılabilir |
+| 9 | Finans özet satırı | Planlama | Her slot grubu altında Gelir/Gider/Net tfoot |
+| 10 | Genel toplam kartı | Planlama | Tüm slotların toplam Sefer/Gün/Gelir/Gider/Kar |
+| 11 | FinansYonu renk kodlaması | Planlama | Satır sol border: Gelen=yeşil, Giden=kırmızı, İçDağıtım=mavi |
+| 12 | OnayDurum sütunu+filtresi | Planlama | Tabloda OnayDurum badge + filtre dropdown |
+| 13 | Toplu Onayla / Onay Kaldır | Planlama | Tüm değişen/seçili kayıtları toplu onayla |
+| 14 | Hızlı onay toggle | Planlama | OnayDurum badge'ine tıklayarak Onaylandi/Taslak geçişi |
+| 15 | Birim fiyat yayma | Planlama | Birim fiyatı aynı güzergahın diğer slotlarına uygulama |
+| 16 | Satır kopyala | Planlama | Her satırda Kopyala butonu |
+| 17 | Hafta sonu butonu | Planlama | Edit modal'da "Sadece Hafta Sonu" hızlı doldurma |
+| 18 | Bugün vurgusu | Planlama | Gün grid'de bugünün tarihi kırmızı border ile |
+| 19 | Hafta sonu çubukları | Planlama | Mini gün çubuklarında hafta sonu farklı ton |
+| 20 | Kurum gösterme | Planlama | "Tüm Kurumlar" filtresinde güzergah altında Kurum adı |
+| 21 | Tablo sıralama | Planlama | Sütun başlıkları tıklanabilir (Güzergah, Araç, Gelir, Gider) |
+| 22 | Dönem Temizle onay | Planlama | Çift tıklama ile onay dialog'u |
+| 23 | Slot dropdown | KurumPuantaj | Edit modal'a Slot enum dropdown eklendi |
+| 24 | Güzergah/Araç dropdown | KurumPuantaj | Edit modal'a Güzergah ve Araç seçimi eklendi |
+| 25 | SlotAdi + OnayDurum | KurumPuantaj | Tabloda SlotAdi gösterimi + OnayDurum badge + istatistik kartları |
+| 26 | Dashboard yıl/ay seçici | Dashboard | Dönem değiştirilebilir, veriler yeniden yüklenir |
+| 27 | Önceki ay trend okları | Dashboard | Toplam Sefer ve Çakışma için önceki aya göre ▲/▼ |
+| 28 | Gelir/Gider/Kar KPI | Dashboard | Toplam Gelir, Gider, Net Kar kartları |
+| 29 | En Karlı 5 Güzergah | Dashboard | Kâr sıralaması ile ilk 5 güzergah tablosu |
+| 30 | Toplam Sefer Günü KPI | Dashboard | Toplam iş günü sayısı kartı |
+| 31 | Sayfalama + Excel | Güzergah | 25 kayıt sayfalama + CSV/Excel export |
+| 32 | Sütun sıralama | Güzergah | GüzergahList tablosunda sıralanabilir sütunlar |
+| 33 | Güzergah kopyalama | Güzergah | GüzergahList'te Kopyala butonu + form desteği |
+| 34 | Harita rota çizgileri | Güzergah | Harita görünümünde tüm güzergahlar rotalarıyla |
+| 35 | İstatistik kartları | Güzergah | Toplam/Aktif/Pasif sayıları |
+| 36 | Koordinat validasyonu | Güzergah | Enlem -90..90, Boylam -180..180 kontrolü |
+| 37 | FirmaId kod üretimi | Güzergah | Güzergah kodu firma bazlı üretiliyor |
+| 38 | SeferTipi fiyat uyarısı | Güzergah | SeferTipi değişince fiyat güncellemesi uyarısı |
+| 39 | GiderFiyat uyarısı | Güzergah | Gider > Gelir ise görsel uyarı |
+| 40 | Modüller arası geçiş | Genel | Planlama→GüzergahForm + GüzergahForm→Planlama linkleri |
+
+### 🔧 Bug Fix (Önceki oturumdan kalan)
+
+| # | İş | Açıklama |
+|---|-----|----------|
+| F1 | Tum Kurumlar filtresi | `GetPuantajlarAsync` parametresi `int?` yapıldı, null=tümü |
+| F2 | Gereksiz slot üretimi | `SablonOlusturAsync` → `SeferTipindenSlotlara` kullanılıyor |
+| F3 | N+1 sorgu fix | `TopluSavePuantajAsync` tek sorguda tüm kayıtları yüklüyor |
+| F4 | Finansal auto-hesapla | `SavePuantajAsync` + `TopluSavePuantajAsync` → `HesaplaPuantajToplam/Gelir/Gider` |
+| F5 | Benzersizlik DB sorgusu | `BenzersizGuzergahMiAsync` → client-side yerine DB `AnyAsync` |
+| F6 | Dashboard kurumId=0 fix | PlanlamaDashboard `GetPuantajlarAsync` null ile çağrılıyor |
+| F7 | CopyPreviousMonth eksik alanlar | KDV, kesinti, finans, transfer alanları kopyalanıyor |
+| F8 | Setup.iss Boolean fix | `Boolean()` → `Boolean` |
+
+### 🔐 Yetkilendirme
+
+| # | Modül | Açıklama |
+|---|-------|----------|
+| A1 | Holding | `HoldingYoneticisi` rolü + 8 yetki + menü kontrolü + `[Authorize(Roles)]` |
+| A2 | Planlama | 6 Planlama yetkisi + menü kontrolü + `[Authorize(Roles)]` |
+| A3 | KurumPuantaj | `[Authorize(Roles)]` eklendi |
+
+### 🏗️ Altyapı
+
+| # | İş | Açıklama |
+|---|-----|----------|
+| I1 | Tenant DB migration baseline | Yeni DB'lerde `__EFMigrationsHistory` baseline kaydı |
+| I2 | Holding ilk veri toplama | `EnsureHoldingInitialData` startup görevi |
+| I3 | Planlama veri cache | Modal'a veriler parent'tan parametre ile geçiliyor |
+
+### 🧪 Smoke Test
+
+| Test | Sonuç |
+|------|:-----:|
+| `dotnet build` | ✅ **0 hata, 0 uyarı** |
+| `dotnet test` | ✅ 291/291 başarılı |
+
+### 🏗️ Alınan Kararlar
+
+| Karar | Gerekçe |
+|-------|---------|
+| Dinamik slot (Diger1-5 + SlotAdi) | Enum genişletme + serbest metin ile esnek slot tanımı |
+| GüzergahSefer.Slot öncelikli | Şablon oluşturmada SeferTipi yerine spesifik Slot kullanılır |
+| OnayDurum her yerde | Planlama, KurumPuantaj, Dashboard — tutarlı onay akışı |
+| Modüller arası link | Güzergah ↔ Planlama hızlı geçiş ile operasyonel akıcılık |
+
+### 📋 Commit Geçmişi (son 10)
+
+```
+1867f42 feat(planlama): Dashboard Toplam Sefer Gunu KPI karti eklendi
+373dc80 feat(guzergah-planlama): Moduller arasi hizli gecis
+573597a feat(planlama): OnayDurum badge tiklayarak hizli onay/taslak toggle
+ee7f6e5 feat(planlama): Birim fiyati ayni guzergahin diger slotlarina da uygulama
+9e3be61 feat(puantaj): Hizli sefer eklemede guzergah varsayilan arac/sofor otomatik doldurma
+ba114cc feat(guzergah): Harita gorunumunde tum guzergahlar rota cizgileriyle
+70fd670 feat(planlama): Dashboard En Karli 5 Guzergah listesi
+0069167 feat(planlama): Guzergah gruplari da daraltilabilir yapildi
+c2d115a feat(planlama): Slot/Guzergah gruplandirma toggle eklendi
+782de84 feat(guzergah-puantaj): GuzergahSefer Slot alani + SablonOlustur Slot destegi
+```
+
+---
+
 ## 📅 23.05.2026 — Yapılacak İşler
 
 ### 🔴 Manuel Test (Login Gerek)
@@ -118,6 +227,8 @@ ad89039 feat(planlama): Planlama modulu rol bazli yetkilendirme
 | 3 | Planlama Şablon Oluştur testi | Kurum seç → Şablon Oluştur → GuzergahSefer'deki araç/şoför/plaka puantajda görünmeli | 🔴 |
 | 4 | Kapasite çakışma testi | PersonelSayisi=1 olan güzergaha aynı slotta 2 araç → Kapasite çakışması çıkmalı | 🔴 |
 | 5 | Dashboard firma kartı testi | Login → Dashboard → aktif firma adı/kodu/dönemi görünmeli | 🔴 |
+| 6 | Dinamik slot (Diger1-5) testi | Planlama → Yeni Sefer → Diger slot seç → SlotAdi yaz → kaydet | 🔴 |
+| 7 | Role atama testi | Admin → Rol Yonetimi → Kullanıcıya HoldingYoneticisi ata → login ol | 🔴 |
 
 ### 🟡 Geliştirme
 
@@ -135,6 +246,19 @@ ad89039 feat(planlama): Planlama modulu rol bazli yetkilendirme
 | 10 | Planlama sayfası gün grid UI (Gun01-Gun31 checkbox/matrix) | ✅ |
 | 11 | Holding girişi — Holding Yöneticisi rolü + auth | ✅ |
 | 12 | Firma geçiş testi (tenant DB izolasyonu) | 🔴 |
+| 13 | Puantaj Excel import sayfası | 🔵 Yeni |
+
+### 🆕 23.05.2026 Ana Oturumda Eklenenler (özet)
+
+| Kategori | Sayı |
+|---|---|
+| Yeni özellik | 40+ |
+| Bug fix | 8 |
+| Yetkilendirme | 3 modül |
+| Altyapı | 3 |
+| **Toplam commit** | **52** |
+| **Build** | 0 hata, 0 uyarı |
+| **Test** | 291/291 |
 
 ---
 
