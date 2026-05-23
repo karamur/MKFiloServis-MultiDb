@@ -93,7 +93,7 @@
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Arac</label>
-                        <select class="form-select" @bind="Kayit.AracId">
+                        <select class="form-select" @bind="Kayit.AracId" @bind:after="AracDegisti">
                             <option value="">Seciniz...</option>
                             @foreach (var a in filtrelenmisAraclar)
                             {
@@ -376,6 +376,30 @@
             foreach (SeferSlot s in Enum.GetValues<SeferSlot>())
             {
                 if (!kullanilanSlotlar.Contains(s)) { Kayit.Slot = s; break; }
+            }
+        }
+    }
+
+    private async Task AracDegisti()
+    {
+        if (!Kayit.AracId.HasValue || !Kayit.GuzergahId.HasValue) return;
+
+        // Guzergah'in seferlerinden bu aracin soforunu bul
+        var seferler = await GuzergahSeferService.GetByGuzergahIdAsync(Kayit.GuzergahId.Value);
+        var sefer = seferler.FirstOrDefault(s => s.AracId == Kayit.AracId.Value && !string.IsNullOrWhiteSpace(s.SoforAd));
+
+        if (sefer != null)
+        {
+            // Sofor adi varsa eslestir
+            var sofor = SoforListesi.FirstOrDefault(s =>
+                string.Equals($"{s.Ad} {s.Soyad}", sefer.SoforAd, StringComparison.OrdinalIgnoreCase));
+            if (sofor != null)
+            {
+                Kayit.SoforId = sofor.Id;
+            }
+            else
+            {
+                Kayit.SoforAdi = sefer.SoforAd;
             }
         }
     }
