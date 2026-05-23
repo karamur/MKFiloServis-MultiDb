@@ -1095,6 +1095,53 @@ Yeni repo açma ve Faz 1'e başlama kararı alınırsa:
 
 ---
 
+## 📅 23.05.2026 — İkinci Oturum (6 commit, ~12 iyileştirme)
+
+### ✅ Tamamlanan
+
+| # | İş | Dosyalar | Açıklama |
+|---|-----|----------|----------|
+| **Fix 1** | Bütçe FK hatası | `BudgetAnaliz.razor`, `BudgetService.cs` | `FirmaId=0` → FK constraint violation. 3 yerde `(TumFirmalar \|\| FirmaId <= 0) ? null` koruması |
+| **Fix 2** | Layout firma/kullanıcı bilgisi | `NavMenu.razor` | Top bar'a aktif firma adı/kodu, dönem, kullanıcı adı eklendi |
+| **Fix 3** | Araç FK hatası | `AracForm.razor`, `AracService.cs` | Tenant modunda firma dropdown filtrelendi, CreateAsync/UpdateAsync'te FirmaId validasyonu |
+| **Feat 1** | Kiralık C Plaka Faz 1.1 | `KiralikPlakaList.razor` | Tabloda eşleşen araç detay: Marka, Model, Yıl |
+| **Feat 2** | Kiralık C Plaka Faz 1.2 | `KiralikPlakaList.razor` | Araç detay modalı: sigorta, muayene, koltuk sigortası, bağlı güzergah, şoför |
+| **Feat 3** | Kiralık C Plaka güzergah linki | `KiralikPlakaList.razor` | Modalda güzergah adı tıklanabilir → GüzergahForm'a link |
+
+### 🧪 Smoke Test
+
+| Test | Sonuç |
+|------|:-----:|
+| `dotnet build` | ✅ **0 hata, 0 uyarı** |
+| `dotnet test` | ✅ 291/291 başarılı |
+
+### 📋 Commit Geçmişi
+
+```
+2a2bb68 fix(arac, kiralikplaka): Arac FK hatasi + Faz 1.1/1.2 KiralikPlaka eslestirme derinligi
+51b7fac fix(budget): FirmaId=0 FK constraint hatasi + Layout'a aktif firma/donem/kullanici bilgisi
+```
+
+### 🏗️ Alınan Kararlar
+
+| Karar | Gerekçe |
+|-------|---------|
+| FirmaId=0 her yerde null'a çevrildi | `AktifFirmaBilgisi.FirmaId` tipi `int` (null değil). `TumFirmalar=false` iken `FirmaId=0` → FK violation |
+| Tenant modunda firma dropdown'ı filtrelendi | Tenant DB'de sadece tek firma var, dropdown'dan başka firma seçilince FK hatası |
+| Kiralık C Plaka'da güzergah bilgisi DB'den direkt sorgulanıyor | `Guzergah` entity'sinde `GuzergahSeferleri` navigation'ı yok, `GuzergahSefer` entity'si ayrı |
+
+### 🔴 Yapılacaklar (Sonraki Oturum)
+
+| # | İş | Modül |
+|---|-----|-------|
+| 1 | Layout - menü ve bilgi konumlandırması (sol üst) | Layout |
+| 2 | Kiralık C Plaka Faz 2 - Fatura Entegrasyonu | FiloOperasyon |
+| 3 | Kiralık C Plaka Faz 3 - Ödeme Takibi | FiloOperasyon |
+| 4 | Kiralık C Plaka Faz 4 - Raporlama ve Hesap Pusulası | FiloOperasyon |
+| 5 | Manuel testler (login gerek) | Genel |
+
+---
+
 ## 📅 23.05.2026 — BUG RAPORU: Güzergah ve Puantaj Kırılma Sorunları
 
 ### 🔴 Tespit Edilen Hatalar
