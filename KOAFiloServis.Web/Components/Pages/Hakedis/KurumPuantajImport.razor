@@ -1,0 +1,408 @@
+@page "/hakedis/kurum-puantaj/import"
+@using KOAFiloServis.Shared.Entities
+@using KOAFiloServis.Web.Services
+@using KOAFiloServis.Web.Services.Interfaces
+@using Microsoft.AspNetCore.Components.Forms
+@using ClosedXML.Excel
+@inject IKurumPuantajService PuantajService
+@inject IKurumService KurumService
+@inject IGuzergahService GuzergahService
+@inject IAracService AracService
+@inject IToastService ToastService
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Excel'den Puantaj Aktar | KOA Filo Servis</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item"><a href="/hakedis/kurum-puantaj">Kurum Puantaj</a></li>
+                    <li class="breadcrumb-item active">Excel Aktar</li>
+                </ol>
+            </nav>
+            <h3 class="mb-0"><i class="bi bi-file-earmark-excel me-2"></i>Excel'den Puantaj Aktar</h3>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-info" @onclick="SablonIndir">
+                <i class="bi bi-download me-1"></i>Şablon İndir
+            </button>
+            <a href="/hakedis/kurum-puantaj" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>Geri
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-5">
+            <div class="card">
+                <div class="card-header"><strong><i class="bi bi-upload me-1"></i>1. Excel Dosyası Yükle</strong></div>
+                <div class="card-body">
+                    <div class="alert alert-info py-2 small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Önce şablonu indirip doldurun, sonra yükleyin.
+                        <strong>Plaka</strong>, <strong>Güzergah</strong> ve <strong>Kurum</strong> alanları zorunludur.
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Dönem</label>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <select class="form-select" @bind="seciliYil">
+                                    @for (int y = DateTime.Today.Year + 1; y >= DateTime.Today.Year - 3; y--)
+                                    { <option value="@y">@y</option> }
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <select class="form-select" @bind="seciliAy">
+                                    @for (int m = 1; m <= 12; m++)
+                                    { <option value="@m">@(new DateTime(2024, m, 1).ToString("MMMM"))</option> }
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Kurum (varsayılan)</label>
+                        <select class="form-select" @bind="seciliKurumId">
+                            <option value="">Tümü (Excel'den al)</option>
+                            @if (kurumlar != null)
+                            {
+                                @foreach (var k in kurumlar)
+                                { <option value="@k.Id">@k.KurumAdi</option> }
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Excel Dosyası *</label>
+                        <InputFile class="form-control" OnChange="DosyaSecildi" accept=".xlsx,.xls" />
+                    </div>
+
+                    <button class="btn btn-success w-100" @onclick="VeriOnizle" disabled="@(importFile == null || isliyor)">
+                        @if (isliyor) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        <i class="bi bi-search me-1"></i>Veriyi Önizle
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-7">
+            @if (onizlemeSatirlar.Any())
+            {
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong><i class="bi bi-table me-1"></i>2. Önizleme (@onizlemeSatirlar.Count kayıt)</strong>
+                        <button class="btn btn-sm btn-primary" @onclick="TopluKaydet" disabled="@(isliyor || !onizlemeSatirlar.Any(s => !s.HataVar))">
+                            <i class="bi bi-save me-1"></i>
+                            @(isliyor ? "Kaydediliyor..." : $"Kaydet ({onizlemeSatirlar.Count(s => !s.HataVar)} geçerli)")
+                        </button>
+                    </div>
+                    <div class="card-body p-0" style="max-height: 500px; overflow-y: auto;">
+                        <table class="table table-sm table-striped mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Plaka</th>
+                                    <th>Güzergah</th>
+                                    <th>Kurum</th>
+                                    <th>Şoför</th>
+                                    <th>Slot</th>
+                                    <th>Yön</th>
+                                    <th class="text-end">Gün</th>
+                                    <th class="text-end">Sefer</th>
+                                    <th>Durum</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (int i = 0; i < onizlemeSatirlar.Count; i++)
+                                {
+                                    var s = onizlemeSatirlar[i];
+                                    <tr class="@(s.HataVar ? "table-danger" : "")">
+                                        <td>@(i + 1)</td>
+                                        <td><strong>@s.Plaka</strong></td>
+                                        <td>@s.GuzergahAdi</td>
+                                        <td>@s.KurumAdi</td>
+                                        <td>@s.SoforAdi</td>
+                                        <td>@s.SlotAdi</td>
+                                        <td>@s.YonAdi</td>
+                                        <td class="text-end">@s.Gun</td>
+                                        <td class="text-end">@s.SeferSayisi</td>
+                                        <td>
+                                            @if (s.HataVar)
+                                            { <span class="badge bg-danger" title="@s.HataMesaji">Hata</span> }
+                                            else
+                                            { <span class="badge bg-success">Geçerli</span> }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+            else if (importFile != null)
+            {
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-arrow-left-circle" style="font-size: 2rem;"></i>
+                    <p class="mt-2">Dosya yüklendi. Önizlemek için "Veriyi Önizle" butonuna tıklayın.</p>
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-file-earmark-excel" style="font-size: 3rem;"></i>
+                    <p class="mt-2">Excel dosyası yükleyin ve önizleyin.</p>
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (sonuc != null)
+    {
+        <div class="mt-4">
+            <div class="card">
+                <div class="card-header"><strong><i class="bi bi-check-circle me-1"></i>3. Sonuç</strong></div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        <div class="col-md-3 col-6">
+                            <div class="card bg-success text-white text-center py-2">
+                                <h4 class="mb-0">@sonuc.Basarili</h4><small>Başarılı</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="card bg-warning text-dark text-center py-2">
+                                <h4 class="mb-0">@sonuc.Atlandi</h4><small>Atlandı (zaten var)</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="card bg-danger text-white text-center py-2">
+                                <h4 class="mb-0">@sonuc.Hata</h4><small>Hata</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="card bg-info text-white text-center py-2">
+                                <h4 class="mb-0">@sonuc.Toplam</h4><small>Toplam</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (sonuc.HataMesajlari.Any())
+                    {
+                        <div class="alert alert-danger mt-3 py-2" style="max-height: 200px; overflow-y: auto;">
+                            @foreach (var h in sonuc.HataMesajlari.Take(20))
+                            { <div><small>@h</small></div> }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool isliyor;
+    private int seciliYil = DateTime.Today.Year;
+    private int seciliAy = DateTime.Today.Month;
+    private int? seciliKurumId;
+    private List<Kurum>? kurumlar;
+    private IBrowserFile? importFile;
+    private List<ImportOnizlemeSatiri> onizlemeSatirlar = new();
+    private ImportSonuc? sonuc;
+
+    private class ImportOnizlemeSatiri
+    {
+        public string Plaka { get; set; } = "";
+        public string GuzergahAdi { get; set; } = "";
+        public string KurumAdi { get; set; } = "";
+        public string SoforAdi { get; set; } = "";
+        public string SlotAdi { get; set; } = "Sabah";
+        public string YonAdi { get; set; } = "S+A";
+        public decimal Gun { get; set; }
+        public int SeferSayisi { get; set; } = 1;
+        public bool HataVar { get; set; }
+        public string? HataMesaji { get; set; }
+
+        // Internal
+        public PuantajYon Yon { get; set; } = PuantajYon.SabahAksam;
+        public SeferSlot Slot { get; set; } = SeferSlot.Sabah;
+        public decimal BirimGelir { get; set; }
+        public decimal BirimGider { get; set; }
+        public string? FaturaKesiciAdi { get; set; }
+        public string? Notlar { get; set; }
+    }
+
+    private class ImportSonuc
+    {
+        public int Toplam { get; set; }
+        public int Basarili { get; set; }
+        public int Atlandi { get; set; }
+        public int Hata { get; set; }
+        public List<string> HataMesajlari { get; set; } = new();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { kurumlar = await KurumService.GetAllAsync(); }
+        catch { kurumlar = new(); }
+    }
+
+    private async Task SablonIndir()
+    {
+        try
+        {
+            using var wb = new XLWorkbook();
+            var ws = wb.Worksheets.Add("Puantaj");
+
+            var headers = new[] { "Plaka*", "Güzergah*", "Kurum*", "Şoför", "Slot", "Yön", "Gün", "SeferSayisi", "BirimGelir", "BirimGider", "FaturaKesici", "Notlar" };
+            var headerRow = ws.Row(1);
+            for (int i = 0; i < headers.Length; i++)
+            {
+                var cell = ws.Cell(1, i + 1);
+                cell.Value = headers[i];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = XLColor.DarkBlue;
+                cell.Style.Font.FontColor = XLColor.White;
+            }
+
+            // Örnek satır
+            var ornek = new[] { "34ABC123", "Bakırköy-Mecidiyeköy", "ABC Kurum", "Ahmet Yılmaz", "Sabah", "S+A", "22", "1", "1500", "0", "ABC Fatura Ltd", "" };
+            for (int i = 0; i < ornek.Length; i++)
+                ws.Cell(2, i + 1).Value = ornek[i];
+
+            ws.Columns().AdjustToContents();
+
+            using var ms = new MemoryStream();
+            wb.SaveAs(ms);
+            var base64 = Convert.ToBase64String(ms.ToArray());
+            await JS.InvokeVoidAsync("downloadFileFromBytes",
+                $"puantaj-sablon-{DateTime.Now:yyyyMMdd}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", base64);
+            ToastService.ShowSuccess("Şablon indirildi.");
+        }
+        catch (Exception ex) { ToastService.ShowError($"Şablon hatası: {ex.Message}"); }
+    }
+
+    private void DosyaSecildi(InputFileChangeEventArgs e)
+    {
+        importFile = e.File;
+        onizlemeSatirlar.Clear();
+        sonuc = null;
+    }
+
+    private async Task VeriOnizle()
+    {
+        if (importFile == null) return;
+        isliyor = true; onizlemeSatirlar.Clear(); sonuc = null;
+
+        try
+        {
+            await using var stream = importFile.OpenReadStream(10 * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            using var wb = new XLWorkbook(ms);
+            var ws = wb.Worksheet(1);
+            var lastRow = ws.LastRowUsed()?.RowNumber() ?? 1;
+
+            for (int row = 2; row <= lastRow; row++)
+            {
+                var satir = new ImportOnizlemeSatiri
+                {
+                    Plaka = ws.Cell(row, 1).GetString().Trim(),
+                    GuzergahAdi = ws.Cell(row, 2).GetString().Trim(),
+                    KurumAdi = ws.Cell(row, 3).GetString().Trim(),
+                    SoforAdi = ws.Cell(row, 4).GetString().Trim(),
+                    SlotAdi = ws.Cell(row, 5).GetString().Trim(),
+                    YonAdi = ws.Cell(row, 6).GetString().Trim(),
+                    Gun = ws.Cell(row, 7).TryGetValue<decimal>(out var g) ? g : 0,
+                    SeferSayisi = ws.Cell(row, 8).TryGetValue<int>(out var s) ? s : 1,
+                    BirimGelir = ws.Cell(row, 9).TryGetValue<decimal>(out var bg) ? bg : 0,
+                    BirimGider = ws.Cell(row, 10).TryGetValue<decimal>(out var bd) ? bd : 0,
+                    FaturaKesiciAdi = ws.Cell(row, 11).GetString().Trim(),
+                    Notlar = ws.Cell(row, 12).GetString().Trim()
+                };
+
+                // Validasyon
+                var hatalar = new List<string>();
+                if (string.IsNullOrWhiteSpace(satir.Plaka)) hatalar.Add("Plaka zorunlu");
+                if (string.IsNullOrWhiteSpace(satir.GuzergahAdi)) hatalar.Add("Güzergah zorunlu");
+                if (string.IsNullOrWhiteSpace(satir.KurumAdi)) hatalar.Add("Kurum zorunlu");
+
+                // Varsayılan slot
+                if (string.IsNullOrWhiteSpace(satir.SlotAdi)) satir.SlotAdi = "Sabah";
+                satir.Slot = satir.SlotAdi switch
+                {
+                    "Sabah" => SeferSlot.Sabah, "Akşam" or "Aksam" => SeferSlot.Aksam,
+                    "Mesai" => SeferSlot.Mesai, "Diğer 1" or "Diger1" => SeferSlot.Diger1,
+                    "Diğer 2" or "Diger2" => SeferSlot.Diger2, "Diğer 3" or "Diger3" => SeferSlot.Diger3,
+                    "Diğer 4" or "Diger4" => SeferSlot.Diger4, "Diğer 5" or "Diger5" => SeferSlot.Diger5,
+                    _ => SeferSlot.Sabah
+                };
+
+                // Varsayılan yön
+                if (string.IsNullOrWhiteSpace(satir.YonAdi)) satir.YonAdi = "S+A";
+                satir.Yon = satir.YonAdi switch
+                {
+                    "S" or "Sabah" => PuantajYon.Sabah,
+                    "A" or "Akşam" or "Aksam" => PuantajYon.Aksam,
+                    "S+A" or "S/A" or "Sabah+Akşam" or "Sabah-Aksam" => PuantajYon.SabahAksam,
+                    _ => PuantajYon.SabahAksam
+                };
+
+                if (satir.Gun < 0) hatalar.Add("Gün negatif olamaz");
+
+                if (hatalar.Any())
+                {
+                    satir.HataVar = true;
+                    satir.HataMesaji = string.Join("; ", hatalar);
+                }
+
+                onizlemeSatirlar.Add(satir);
+            }
+
+            ToastService.ShowInfo($"{onizlemeSatirlar.Count} satır okundu.");
+        }
+        catch (Exception ex) { ToastService.ShowError($"Okuma hatası: {ex.Message}"); }
+        finally { isliyor = false; }
+    }
+
+    private async Task TopluKaydet()
+    {
+        var gecerli = onizlemeSatirlar.Where(s => !s.HataVar).ToList();
+        if (!gecerli.Any()) { ToastService.ShowWarning("Kaydedilecek geçerli kayıt yok."); return; }
+
+        isliyor = true;
+        try
+        {
+            int basarili = 0, atlandi = 0, hata = 0;
+            var hataMsj = new List<string>();
+
+            var satirlar = gecerli.Select(s => new PuantajImportSatiri
+            {
+                Plaka = s.Plaka, GuzergahAdi = s.GuzergahAdi, KurumAdi = s.KurumAdi,
+                SoforAdi = s.SoforAdi, Slot = s.Slot, SlotAdi = s.SlotAdi, Yon = s.Yon,
+                Gun = s.Gun, SeferSayisi = s.SeferSayisi, BirimGelir = s.BirimGelir,
+                BirimGider = s.BirimGider, FaturaKesiciAdi = s.FaturaKesiciAdi,
+                Notlar = s.Notlar, Yil = seciliYil, Ay = seciliAy, KurumId = seciliKurumId
+            }).ToList();
+
+            var results = await PuantajService.TopluImportAsync(satirlar);
+            foreach (var result in results)
+            {
+                if (result.Basarili) basarili++;
+                else if (result.Atlandi) atlandi++;
+                else { hata++; if (result.HataMesaji != null) hataMsj.Add(result.HataMesaji); }
+            }
+
+            sonuc = new ImportSonuc { Toplam = gecerli.Count, Basarili = basarili, Atlandi = atlandi, Hata = hata, HataMesajlari = hataMsj };
+
+            if (basarili > 0) ToastService.ShowSuccess($"{basarili} kayıt başarıyla aktarıldı.");
+            if (hata > 0) ToastService.ShowWarning($"{hata} kayıtta hata oluştu.");
+        }
+        catch (Exception ex) { ToastService.ShowError($"Kaydetme hatası: {ex.Message}"); }
+        finally { isliyor = false; }
+    }
+}

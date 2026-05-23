@@ -495,6 +495,93 @@ public sealed class KurumPuantajService : IKurumPuantajService
         return sonuc.OrderBy(p => p.GuzergahId).ThenBy(p => p.Plaka).ThenBy(p => p.Slot).ToList();
     }
 
+    // ── Excel Import ──────────────────────────────────────────────────────────
+
+    public async Task<List<PuantajImportSonuc>> TopluImportAsync(List<PuantajImportSatiri> satirlar)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var sonuclar = new List<PuantajImportSonuc>();
+
+        // Lookup verileri tek seferde yukle
+        var guzergahlar = await db.Guzergahlar.Where(g => g.Aktif && !g.IsDeleted).ToListAsync();
+        var kurumlar = await db.Kurumlar.Where(k => k.Aktif).ToListAsync();
+        var araclar = await db.Araclar.Where(a => a.Aktif && !a.IsDeleted).ToListAsync();
+
+        var donemYil = satirlar.FirstOrDefault()?.Yil ?? DateTime.Today.Year;
+        var donemAy = satirlar.FirstOrDefault()?.Ay ?? DateTime.Today.Month;
+        var mevcutKayitlar = await db.PuantajKayitlar
+            .Where(p => !p.IsDeleted && p.Yil == donemYil && p.Ay == donemAy)
+            .ToListAsync();
+
+        foreach (var s in satirlar)
+        {
+            try
+            {
+                // Plaka → Araç eşleştirme
+                var plaka = s.Plaka.Trim().ToUpperInvariant();
+                var arac = araclar.FirstOrDefault(a =>
+                    (a.AktifPlaka ?? "").Equals(plaka, StringComparison.OrdinalIgnoreCase));
+
+                // Güzergah eşleştirme
+                var guzergah = guzergahlar.FirstOrDefault(g =>
+                    (g.GuzergahAdi ?? "").Equals(s.GuzergahAdi, StringComparison.OrdinalIgnoreCase));
+
+                if (guzergah == null)
+                {
+                    sonuclar.Add(new PuantajImportSonuc { Basarili = false, HataMesaji = $"Güzergah bulunamadı: {s.GuzergahAdi}" });
+                    continue;
+                }
+
+                // Kurum eşleştirme
+                int? kurumId = s.KurumId;
+                if (!kurumId.HasValue && !string.IsNullOrWhiteSpace(s.KurumAdi))
+                {
+                    var kurum = kurumlar.FirstOrDefault(k =>
+                        (k.KurumAdi ?? "").Equals(s.KurumAdi, StringComparison.OrdinalIgnoreCase));
+                    kurumId = kurum?.Id;
+                }
+
+                // Zaten var mı kontrol et (aynı güzergah+araç+slot)
+                var zatenVar = mevcutKayitlar.Any(m =>
+                    m.GuzergahId == guzergah.Id && m.AracId == arac?.Id && m.Slot == s.Slot);
+                if (zatenVar)
+                {
+                    sonuclar.Add(new PuantajImportSonuc { Atlandi = true });
+                    continue;
+                }
+
+                var kayit = new PuantajKayit
+                {
+                    Yil = s.Yil, Ay = s.Ay,
+                    Plaka = s.Plaka, GuzergahId = guzergah.Id,
+                    GuzergahAdi = guzergah.GuzergahAdi,
+                    AracId = arac?.Id, SoforAdi = s.SoforAdi,
+                    KurumAdi = s.KurumAdi, KurumId = kurumId ?? guzergah.KurumId,
+                    Slot = s.Slot, SlotAdi = s.SlotAdi,
+                    Yon = s.Yon, Gun = s.Gun, SeferSayisi = s.SeferSayisi,
+                    BirimGelir = s.BirimGelir, BirimGider = s.BirimGider,
+                    FaturaKesiciAdi = s.FaturaKesiciAdi, Notlar = s.Notlar,
+                    SoforOdemeTipi = SoforOdemeTipi.Ozmal,
+                    KaynakTipi = PlanlamaKaynakTipi.Kendi,
+                    FinansYonu = PlanlamaFinansYonu.Giden,
+                    CreatedAt = DateTime.UtcNow
+                };
+                kayit.HesaplaPuantajToplam();
+
+                db.PuantajKayitlar.Add(kayit);
+                mevcutKayitlar.Add(kayit); // sonraki satırlar duplicate kontrolü için
+                sonuclar.Add(new PuantajImportSonuc { Basarili = true });
+            }
+            catch (Exception ex)
+            {
+                sonuclar.Add(new PuantajImportSonuc { Basarili = false, HataMesaji = ex.Message });
+            }
+        }
+
+        await db.SaveChangesAsync();
+        return sonuclar;
+    }
+
     private static SeferSlot[] SeferTipindenSlotlara(SeferTipi tip) => tip switch
     {
         SeferTipi.Sabah => new[] { SeferSlot.Sabah },
