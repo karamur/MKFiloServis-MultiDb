@@ -61,6 +61,10 @@ public interface IKurumPuantajService
     /// Yeni eklenen seferler için puantaj satırı ekler.
     /// </summary>
     Task<PuantajGuncellemeSonuc> GuncellePuantajAsync(int kurumId, int yil, int ay);
+
+    // ── Puantaj Temizleme ────────────────────────────────────────────────────
+    /// <summary>Belirtilen kurum + dönem için tüm puantaj kayıtlarını soft-delete yapar.</summary>
+    Task<int> PuantajKaldirAsync(int kurumId, int yil, int ay);
 }
 
 /// <summary>

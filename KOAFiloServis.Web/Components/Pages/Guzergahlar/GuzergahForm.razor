@@ -244,10 +244,9 @@
                                     <option value="@tip">@tip</option>
                                 }
                             </InputSelect>
-                            <small class="text-muted">Sefer çarpanı: <strong>@GetSeferTipiCarpani(guzergah.SeferTipi).ToString("N2")</strong></small>
                             @if (seferTipiDegistiUyarisi)
                             {
-                                <small class="text-warning d-block"><i class="bi bi-exclamation-triangle me-1"></i>Sefer tipi değişti - gelir/gider fiyatları otomatik güncellendi.</small>
+                                <small class="text-info d-block"><i class="bi bi-info-circle me-1"></i>Sefer tipi değişti. Birim fiyatları manuel güncellemelisiniz.</small>
                             }
                         </div>
                     </div>
@@ -578,7 +577,6 @@
     private string? secilenAracTedarikci;
     private string? secilenAracTedarikciTelefon;
     private string? secilenAracPlakaBilgi;
-    private decimal oncekiSeferTipiCarpani = 1m;
     private bool seferTipiDegistiUyarisi;
     private int secilenKurumId;
     private List<SeferKalem> seferKalemleri = new();
@@ -706,7 +704,6 @@
             if (guzergah.VarsayilanSofor != null) soforler.Add(guzergah.VarsayilanSofor);
         }
 
-        oncekiSeferTipiCarpani = GetSeferTipiCarpani(guzergah.SeferTipi);
         await AracSecimiDegistiAsync();
         await SoforDegistiAsync();
 
@@ -1273,33 +1270,9 @@
 
     private Task SeferTipiDegistiAsync()
     {
-        var yeniCarpan = GetSeferTipiCarpani(guzergah.SeferTipi);
-        if (oncekiSeferTipiCarpani <= 0)
-        {
-            oncekiSeferTipiCarpani = 1m;
-        }
-
-        var oran = yeniCarpan / oncekiSeferTipiCarpani;
-        if (oran != 1m)
-        {
-            guzergah.GelirFiyat = Math.Round(guzergah.GelirFiyat * oran, 2, MidpointRounding.AwayFromZero);
-            guzergah.GiderFiyat = Math.Round(guzergah.GiderFiyat * oran, 2, MidpointRounding.AwayFromZero);
-            seferTipiDegistiUyarisi = true;
-        }
-        oncekiSeferTipiCarpani = yeniCarpan;
+        // SeferTipi bilgi mesaji (fiyat otomatik guncellenmez, kullanici manuel girer)
+        seferTipiDegistiUyarisi = true;
         return Task.CompletedTask;
-    }
-
-    private static decimal GetSeferTipiCarpani(SeferTipi seferTipi)
-    {
-        return seferTipi switch
-        {
-            SeferTipi.Sabah => 1m,
-            SeferTipi.Aksam => 1m,
-            SeferTipi.SabahAksam => 2m,
-            SeferTipi.Saatlik => 1.25m,
-            _ => 1m
-        };
     }
 
     private sealed record PersonelAracInfo(int SoforId, string AdSoyad, string? Telefon, string? FirmaAdi);

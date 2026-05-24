@@ -24,6 +24,11 @@ else
                 <p class="text-muted small mb-0">Operasyon KPI Ozeti</p>
             </div>
             <div class="d-flex gap-2 align-items-center">
+                <select class="form-select form-select-sm" style="width:180px" @bind="seciliKurumId" @bind:after="DonemDegisti">
+                    <option value="0">-- Tüm Kurumlar --</option>
+                    @foreach (var k in kurumlar)
+                    { <option value="@k.Id">@k.KurumAdi</option> }
+                </select>
                 <select class="form-select form-select-sm" style="width:80px" @bind="seciliYil" @bind:after="DonemDegisti">
                     @for (int y = DateTime.Now.Year; y >= DateTime.Now.Year - 2; y--)
                     { <option value="@y">@y</option> }
@@ -234,6 +239,8 @@ else
     private bool yukleniyor = true;
     private int seciliYil = DateTime.Now.Year;
     private int seciliAy = DateTime.Now.Month;
+    private int seciliKurumId = 0;
+    private List<Kurum> kurumlar = [];
     private string seciliAyAdi => new DateTime(2024, seciliAy, 1).ToString("MMMM");
 
     private int toplamSefer;
@@ -253,6 +260,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        kurumlar = await PuantajService.GetAktifKurumlarAsync();
         await VeriYukleAsync();
     }
 
@@ -268,13 +276,14 @@ else
             oncekiToplamSefer = oncekiCakisanSayisi = 0;
             toplamGelir = toplamGider = toplamGunSayisi = 0;
 
-            var kayitlar = await PuantajService.GetPuantajlarAsync(seciliYil, seciliAy);
+            var kurumId = seciliKurumId > 0 ? (int?)seciliKurumId : null;
+            var kayitlar = await PuantajService.GetPuantajlarAsync(seciliYil, seciliAy, kurumId);
             toplamSefer = kayitlar.Count;
 
             // Onceki ay verisi (trend oklari icin)
             var oncekiAy = seciliAy == 1 ? 12 : seciliAy - 1;
             var oncekiYil = seciliAy == 1 ? seciliYil - 1 : seciliYil;
-            var oncekiKayitlar = await PuantajService.GetPuantajlarAsync(oncekiYil, oncekiAy);
+            var oncekiKayitlar = await PuantajService.GetPuantajlarAsync(oncekiYil, oncekiAy, kurumId);
             oncekiToplamSefer = oncekiKayitlar.Count;
             if (oncekiKayitlar.Any())
             {

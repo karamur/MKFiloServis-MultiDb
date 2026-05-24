@@ -244,6 +244,24 @@ public sealed class KurumPuantajService : IKurumPuantajService
             }
         }
 
+        // Merge edilmiş SabahAksam satırları için eski Aksam slot'lu yetimleri temizle
+        var mergedKeys = kayitList
+            .Where(k => k.Yon == PuantajYon.SabahAksam && k.Slot == SeferSlot.Sabah)
+            .Select(k => (GuzergahId: k.GuzergahId, AracId: k.AracId))
+            .ToHashSet();
+
+        foreach (var mevcut in mevcutKayitlar)
+        {
+            if (mevcut.Slot == SeferSlot.Aksam
+                && mevcut.Yon != PuantajYon.SabahAksam
+                && mergedKeys.Contains((mevcut.GuzergahId, mevcut.AracId))
+                && !kayitList.Any(k => k.Id == mevcut.Id))
+            {
+                mevcut.IsDeleted = true;
+                mevcut.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
         await db.SaveChangesAsync();
     }
 
@@ -489,7 +507,56 @@ public sealed class KurumPuantajService : IKurumPuantajService
             }
         }
 
+        sonuc = ApplyMergeAndPricing(sonuc, guzergahlar);
         return sonuc.OrderBy(p => p.GuzergahId).ThenBy(p => p.Plaka).ThenBy(p => p.Slot).ToList();
+    }
+
+    private static List<PuantajKayit> ApplyMergeAndPricing(
+        List<PuantajKayit> rows,
+        List<Guzergah> guzergahlar)
+    {
+        var guzergahMap = guzergahlar.ToDictionary(g => g.Id);
+        var toRemove = new List<PuantajKayit>();
+
+        foreach (var group in rows.GroupBy(r => r.GuzergahId))
+        {
+            var guzergahId = group.Key ?? 0;
+            if (!guzergahMap.TryGetValue(guzergahId, out var guzergah)) continue;
+            if (guzergah.SeferTipi != SeferTipi.SabahAksam) continue;
+
+            var sabahRows = group.Where(r => r.Slot == SeferSlot.Sabah).ToList();
+            var aksamRows = group.Where(r => r.Slot == SeferSlot.Aksam).ToList();
+
+            foreach (var sabah in sabahRows)
+            {
+                var matching = aksamRows.FirstOrDefault(a =>
+                    a.AracId == sabah.AracId
+                    && string.Equals(a.SoforAdi ?? string.Empty, sabah.SoforAdi ?? string.Empty, StringComparison.OrdinalIgnoreCase));
+
+                if (matching != null)
+                {
+                    // Merge: Sabah satırını SabahAksam'a yükselt, Aksam'ı sil
+                    sabah.Yon = PuantajYon.SabahAksam;
+                    sabah.BirimGelir = guzergah.GelirFiyat * 2;
+                    sabah.BirimGider = guzergah.GiderFiyat * 2;
+                    toRemove.Add(matching);
+                }
+                else
+                {
+                    // Farklı araç/şoför: Yon düzelt (merge olmadı)
+                    sabah.Yon = PuantajYon.Sabah;
+                }
+            }
+
+            // Merge olmamış Aksam satırlarının Yon'unu düzelt
+            foreach (var aksam in aksamRows.Where(r => !toRemove.Contains(r)))
+            {
+                aksam.Yon = PuantajYon.Aksam;
+            }
+        }
+
+        rows.RemoveAll(r => toRemove.Contains(r));
+        return rows;
     }
 
     // ── Excel Import ──────────────────────────────────────────────────────────
@@ -585,6 +652,7 @@ public sealed class KurumPuantajService : IKurumPuantajService
         SeferTipi.Aksam => new[] { SeferSlot.Aksam },
         SeferTipi.SabahAksam => new[] { SeferSlot.Sabah, SeferSlot.Aksam },
         SeferTipi.Mesai => new[] { SeferSlot.Mesai },
+        SeferTipi.Vardiya => new[] { SeferSlot.Mesai },
         SeferTipi.Saatlik => new[] { SeferSlot.Sabah, SeferSlot.Aksam, SeferSlot.Mesai, SeferSlot.Diger1, SeferSlot.Diger2, SeferSlot.Diger3 },
         _ => new[] { SeferSlot.Sabah }
     };
@@ -619,10 +687,11 @@ public sealed class KurumPuantajService : IKurumPuantajService
                 SeferTipi.Aksam      => PuantajYon.Aksam,
                 SeferTipi.SabahAksam => PuantajYon.SabahAksam,
                 SeferTipi.Mesai      => PuantajYon.SabahAksam,
+                SeferTipi.Vardiya    => PuantajYon.SabahAksam,
                 _                    => PuantajYon.SabahAksam
             },
-            BirimGelir  = seferTipi == SeferTipi.SabahAksam ? guzergah.GelirFiyat * 2 : guzergah.GelirFiyat,
-            BirimGider  = seferTipi == SeferTipi.SabahAksam ? guzergah.GiderFiyat * 2 : guzergah.GiderFiyat,
+            BirimGelir  = guzergah.GelirFiyat,
+            BirimGider  = guzergah.GiderFiyat,
             SeferSayisi = 1,
             Gun         = 0
         });
@@ -690,6 +759,8 @@ public sealed class KurumPuantajService : IKurumPuantajService
                                     SeferTipi.Sabah => PuantajYon.Sabah,
                                     SeferTipi.Aksam => PuantajYon.Aksam,
                                     SeferTipi.SabahAksam => PuantajYon.SabahAksam,
+                                    SeferTipi.Mesai => PuantajYon.SabahAksam,
+                                    SeferTipi.Vardiya => PuantajYon.SabahAksam,
                                     _ => PuantajYon.SabahAksam
                                 },
                                 KaynakTipi = PlanlamaKaynakTipi.Kendi,
@@ -752,6 +823,8 @@ public sealed class KurumPuantajService : IKurumPuantajService
                                 SeferTipi.Sabah => PuantajYon.Sabah,
                                 SeferTipi.Aksam => PuantajYon.Aksam,
                                 SeferTipi.SabahAksam => PuantajYon.SabahAksam,
+                                SeferTipi.Mesai => PuantajYon.SabahAksam,
+                                SeferTipi.Vardiya => PuantajYon.SabahAksam,
                                 _ => PuantajYon.SabahAksam
                             },
                             KaynakTipi = PlanlamaKaynakTipi.Kendi,
@@ -778,7 +851,39 @@ public sealed class KurumPuantajService : IKurumPuantajService
             }
         }
 
+        // Merge post-processing: Sabah+Aksam aynı araç/şoför ise birleştir
+        var tumKayitlar = await db.PuantajKayitlar
+            .Where(p => !p.IsDeleted && p.Yil == yil && p.Ay == ay
+                        && p.GuzergahId != null && guzergahIds.Contains(p.GuzergahId!.Value))
+            .ToListAsync();
+        ApplyMergeAndPricing(tumKayitlar, guzergahlar);
+
         await db.SaveChangesAsync();
         return new PuantajGuncellemeSonuc { Guncellenen = guncellenen, Eklenen = eklenen, Degismeyen = degismeyen };
+    }
+
+    public async Task<int> PuantajKaldirAsync(int kurumId, int yil, int ay)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        var guzergahIds = await db.Guzergahlar
+            .Where(g => !g.IsDeleted && g.KurumId == kurumId)
+            .Select(g => g.Id)
+            .ToListAsync();
+
+        var kayitlar = await db.PuantajKayitlar
+            .Where(p => !p.IsDeleted && p.Yil == yil && p.Ay == ay
+                        && p.GuzergahId != null && guzergahIds.Contains(p.GuzergahId!.Value))
+            .ToListAsync();
+
+        int count = kayitlar.Count;
+        foreach (var k in kayitlar)
+        {
+            k.IsDeleted = true;
+            k.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await db.SaveChangesAsync();
+        return count;
     }
 }

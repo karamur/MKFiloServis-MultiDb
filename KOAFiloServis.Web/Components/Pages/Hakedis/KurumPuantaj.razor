@@ -9,6 +9,7 @@
 @inject GuzergahDegisiklikUyariService DegisiklikUyari
 @inject IToastService ToastService
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 @attribute [Authorize(Roles = "Admin,Operasyon,Muhasebeci,HoldingYoneticisi")]
 @rendermode InteractiveServer
 
@@ -57,6 +58,9 @@
             {
                 <button class="btn btn-outline-warning" @onclick="PuantajGuncelle" disabled="@yukleniyor">
                     <i class="bi bi-arrow-repeat me-1"></i> Puantajı Güncelle
+                </button>
+                <button class="btn btn-outline-danger" @onclick="PuantajKaldir" disabled="@yukleniyor">
+                    <i class="bi bi-x-circle me-1"></i> Puantajı Kaldır
                 </button>
             }
             @if (seciliKurumId > 0)
@@ -661,6 +665,26 @@
             }
         }
         catch (Exception ex) { ToastService.ShowError($"Güncelleme hatası: {ex.Message}"); }
+        finally { yukleniyor = false; }
+    }
+
+    async Task PuantajKaldir()
+    {
+        if (seciliKurumId == 0) return;
+        var onay = await JS.InvokeAsync<bool>("confirm",
+            $"Bu kurumun {AyAdi(seciliAy)} {seciliYil} dönemine ait TÜM puantaj kayıtları silinecek. Devam etmek istiyor musunuz?");
+        if (!onay) return;
+
+        yukleniyor = true;
+        try
+        {
+            var silinen = await KurumPuantajService.PuantajKaldirAsync(seciliKurumId, seciliYil, seciliAy);
+            kayitlar.Clear();
+            degisikSatirlar.Clear();
+            cakismaSonucu = null;
+            ToastService.ShowSuccess($"{silinen} puantaj kaydı silindi.");
+        }
+        catch (Exception ex) { ToastService.ShowError($"Hata: {ex.InnerException?.Message ?? ex.Message}"); }
         finally { yukleniyor = false; }
     }
 
