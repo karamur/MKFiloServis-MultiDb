@@ -125,6 +125,9 @@
         <button class="btn btn-primary btn-sm" @onclick="YeniKayitFormAc" disabled="@yukleniyor">
             <i class="bi bi-plus-lg me-1"></i> Yeni Operasyon Ekle
         </button>
+        <button class="btn btn-outline-secondary btn-sm" @onclick="OncekiGunKopyala" disabled="@yukleniyor">
+            <i class="bi bi-clipboard me-1"></i> Önceki Gün Kopyala
+        </button>
         <small class="text-muted">
             @if (degisikSatirlar.Count > 0)
             {

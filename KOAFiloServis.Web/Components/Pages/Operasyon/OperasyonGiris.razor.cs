@@ -406,4 +406,55 @@ public partial class OperasyonGiris : ComponentBase
         OperasyonDurumu.Iptal_KurumTarafindan => "İptal",
         _ => d.ToString()
     };
+
+    // ── Önceki Gün Kopyala ────────────────────────────────────────────
+
+    private async Task OncekiGunKopyala()
+    {
+        yukleniyor = true;
+        try
+        {
+            var oncekiTarih = seciliTarih.AddDays(-1);
+            var oncekiler = await OperasyonService.GetByDateRangeAsync(oncekiTarih, seciliTarih);
+
+            foreach (var o in oncekiler.Where(o => o.Tarih.Date == oncekiTarih.Date))
+            {
+                // Aynı gün + güzergah + araç + slot zaten var mı?
+                var zatenVar = operasyonlar.Any(x =>
+                    x.Tarih.Date == seciliTarih.Date && x.GuzergahId == o.GuzergahId
+                    && x.AracId == o.AracId && x.Slot == o.Slot);
+
+                if (zatenVar) continue;
+
+                var yeni = new OperasyonKaydi
+                {
+                    Tarih = seciliTarih,
+                    GuzergahId = o.GuzergahId,
+                    AracId = o.AracId,
+                    SoforId = o.SoforId,
+                    Slot = o.Slot,
+                    Yon = o.Yon,
+                    KurumId = o.KurumId,
+                    SeferSayisi = o.SeferSayisi,
+                    PuantajCarpani = o.PuantajCarpani,
+                    OperasyonDurumu = o.OperasyonDurumu,
+                    KaynakTipi = o.KaynakTipi,
+                    FinansYonu = o.FinansYonu,
+                    SoforOdemeTipi = o.SoforOdemeTipi,
+                    Kaynak = PuantajKaynak.Manuel,
+                    CreatedAt = DateTime.UtcNow
+                };
+                operasyonlar.Add(yeni);
+                degisikSatirlar.Add(yeni);
+            }
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = ex.Message;
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
 }

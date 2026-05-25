@@ -45,4 +45,35 @@ public interface IOperasyonKaydiService
     /// Gun01-Gun31 değerlerini günlük kayıtlara açar.
     /// </summary>
     Task<int> ImportFromPuantajKayitAsync(int yil, int ay, int? kurumId = null);
+
+    // ── Excel Import (Sprint 7) ────────────────────────────────────────────
+
+    /// <summary>Excel dosyasından OperasyonKaydi import eder. dryRun=true ise kaydetmez.</summary>
+    Task<List<OperasyonImportSonuc>> ImportFromExcelAsync(Stream excelStream, int? kurumId = null, bool dryRun = false);
+
+    /// <summary>Excel şablonunu byte dizisi olarak üretir.</summary>
+    byte[] ExcelSablonUret();
+}
+
+public sealed class OperasyonImportSatiri
+{
+    public int SatirNo { get; init; }
+    public string Tarih { get; init; } = "";
+    public string Plaka { get; init; } = "";
+    public string GuzergahAdi { get; init; } = "";
+    public string? SoforAdi { get; init; }
+    public string Slot { get; init; } = "Sabah";
+    public string SeferSayisi { get; init; } = "1";
+    public string Durum { get; init; } = "Gitti";
+    public string? KurumAdi { get; init; }
+}
+
+public sealed class OperasyonImportSonuc
+{
+    public int SatirNo { get; init; }
+    public bool Basarili { get; init; }
+    public bool Atlandi { get; init; }
+    public string? HataMesaji { get; init; }
+    public string Plaka { get; init; } = "";
+    public string GuzergahAdi { get; init; } = "";
 }

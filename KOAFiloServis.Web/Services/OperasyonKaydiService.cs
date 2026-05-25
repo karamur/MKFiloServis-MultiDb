@@ -414,4 +414,212 @@ public sealed class OperasyonKaydiService : IOperasyonKaydiService
         mevcut.UpdatedAt = DateTime.UtcNow;
         mevcut.UpdatedBy = kayit.UpdatedBy;
     }
+
+    // ── Excel Import (Sprint 7) ──────────────────────────────────────────
+
+    public async Task<List<OperasyonImportSonuc>> ImportFromExcelAsync(Stream excelStream, int? kurumId = null, bool dryRun = false)
+    {
+        var sonuclar = new List<OperasyonImportSonuc>();
+
+        // 1. Excel parse
+        List<OperasyonImportSatiri> satirlar;
+        try
+        {
+            using var ms = new MemoryStream();
+            await excelStream.CopyToAsync(ms);
+            using var wb = new ClosedXML.Excel.XLWorkbook(ms);
+            var ws = wb.Worksheet(1);
+            satirlar = ParseExcelRows(ws);
+        }
+        catch (Exception ex)
+        {
+            return new List<OperasyonImportSonuc>
+            {
+                new() { SatirNo = 0, Basarili = false, HataMesaji = $"Excel okuma hatası: {ex.Message}" }
+            };
+        }
+
+        if (!satirlar.Any())
+            return sonuclar;
+
+        // 2. Lookup verilerini tek seferde yükle
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var araclar = await db.Araclar.Where(a => a.Aktif && !a.IsDeleted).AsNoTracking().ToListAsync();
+        var guzergahlar = await db.Guzergahlar.Where(g => g.Aktif && !g.IsDeleted).AsNoTracking().ToListAsync();
+        var soforler = await db.Soforler.Where(s => !s.IsDeleted).AsNoTracking().ToListAsync();
+        var kurumlar = await db.Kurumlar.Where(k => k.Aktif).AsNoTracking().ToListAsync();
+
+        // 3. Validation + mapping
+        var gecerliler = new List<OperasyonKaydi>();
+        var tarihAraligi = satirlar.Select(s => ParseTarih(s.Tarih)).Where(d => d != null).Select(d => d!.Value).ToList();
+        var minTarih = tarihAraligi.Any() ? tarihAraligi.Min() : DateTime.Today;
+        var maxTarih = tarihAraligi.Any() ? tarihAraligi.Max() : DateTime.Today;
+
+        var mevcutOps = await db.OperasyonKayitlari
+            .Where(o => !o.IsDeleted && o.Tarih >= minTarih && o.Tarih <= maxTarih)
+            .AsNoTracking().ToListAsync();
+
+        foreach (var s in satirlar)
+        {
+            try
+            {
+                var tarih = ParseTarih(s.Tarih);
+                if (tarih == null)
+                {
+                    sonuclar.Add(new OperasyonImportSonuc { SatirNo = s.SatirNo, Basarili = false, HataMesaji = "Geçersiz tarih formatı", Plaka = s.Plaka });
+                    continue;
+                }
+
+                var plaka = s.Plaka.Trim().ToUpperInvariant();
+                var arac = araclar.FirstOrDefault(a => (a.AktifPlaka ?? "").Equals(plaka, StringComparison.OrdinalIgnoreCase));
+                if (arac == null)
+                {
+                    sonuclar.Add(new OperasyonImportSonuc { SatirNo = s.SatirNo, Basarili = false, HataMesaji = $"Plaka bulunamadı: {plaka}", Plaka = s.Plaka, GuzergahAdi = s.GuzergahAdi });
+                    continue;
+                }
+
+                var guzergah = guzergahlar.FirstOrDefault(g => (g.GuzergahAdi ?? "").Equals(s.GuzergahAdi, StringComparison.OrdinalIgnoreCase));
+                if (guzergah == null)
+                {
+                    sonuclar.Add(new OperasyonImportSonuc { SatirNo = s.SatirNo, Basarili = false, HataMesaji = $"Güzergah bulunamadı: {s.GuzergahAdi}", Plaka = s.Plaka, GuzergahAdi = s.GuzergahAdi });
+                    continue;
+                }
+
+                Enum.TryParse<SeferSlot>(s.Slot, out var slot);
+                Enum.TryParse<OperasyonDurumu>(s.Durum, out var durum);
+                int.TryParse(s.SeferSayisi, out var sefer); if (sefer <= 0) sefer = 1;
+
+                int? soforId = null;
+                if (!string.IsNullOrWhiteSpace(s.SoforAdi))
+                {
+                    var sofor = soforler.FirstOrDefault(so =>
+                        $"{so.Ad} {so.Soyad}".Contains(s.SoforAdi, StringComparison.OrdinalIgnoreCase));
+                    soforId = sofor?.Id;
+                }
+
+                int? kId = kurumId;
+                if (!kId.HasValue && !string.IsNullOrWhiteSpace(s.KurumAdi))
+                {
+                    var k = kurumlar.FirstOrDefault(x => (x.KurumAdi ?? "").Equals(s.KurumAdi, StringComparison.OrdinalIgnoreCase));
+                    kId = k?.Id;
+                }
+
+                // Duplicate check
+                var zatenVar = mevcutOps.Any(o =>
+                    o.Tarih == tarih.Value && o.GuzergahId == guzergah.Id && o.AracId == arac.Id && o.Slot == slot);
+                if (zatenVar)
+                {
+                    sonuclar.Add(new OperasyonImportSonuc { SatirNo = s.SatirNo, Atlandi = true, Plaka = s.Plaka, GuzergahAdi = s.GuzergahAdi });
+                    continue;
+                }
+
+                var kayit = new OperasyonKaydi
+                {
+                    Tarih = tarih.Value,
+                    GuzergahId = guzergah.Id,
+                    AracId = arac.Id,
+                    SoforId = soforId,
+                    Slot = slot,
+                    Yon = slot == SeferSlot.Sabah ? PuantajYon.Sabah : slot == SeferSlot.Aksam ? PuantajYon.Aksam : PuantajYon.SabahAksam,
+                    KurumId = kId ?? guzergah.KurumId,
+                    SeferSayisi = sefer,
+                    PuantajCarpani = 1.0m,
+                    OperasyonDurumu = durum,
+                    KaynakTipi = PlanlamaKaynakTipi.Kendi,
+                    FinansYonu = PlanlamaFinansYonu.Giden,
+                    SoforOdemeTipi = SoforOdemeTipi.Ozmal,
+                    Kaynak = PuantajKaynak.ExcelImport,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                // Validation
+                var validationErrors = OperasyonKaydiValidator.Validate(kayit);
+                if (validationErrors.Any())
+                {
+                    sonuclar.Add(new OperasyonImportSonuc { SatirNo = s.SatirNo, Basarili = false, HataMesaji = string.Join("; ", validationErrors), Plaka = s.Plaka, GuzergahAdi = s.GuzergahAdi });
+                    continue;
+                }
+
+                gecerliler.Add(kayit);
+                mevcutOps.Add(new OperasyonKaydi { Tarih = tarih.Value, GuzergahId = guzergah.Id, AracId = arac.Id, Slot = slot });
+                sonuclar.Add(new OperasyonImportSonuc { SatirNo = s.SatirNo, Basarili = true, Plaka = s.Plaka, GuzergahAdi = s.GuzergahAdi });
+            }
+            catch (Exception ex)
+            {
+                sonuclar.Add(new OperasyonImportSonuc { SatirNo = s.SatirNo, Basarili = false, HataMesaji = ex.Message, Plaka = s.Plaka });
+            }
+        }
+
+        // 4. Toplu kaydet (sadece dryRun=false ise)
+        if (!dryRun && gecerliler.Any())
+        {
+            await TopluSaveAsync(gecerliler);
+        }
+
+        return sonuclar;
+    }
+
+    public byte[] ExcelSablonUret()
+    {
+        using var wb = new ClosedXML.Excel.XLWorkbook();
+        var ws = wb.Worksheets.Add("Operasyon");
+        var headers = new[] { "Tarih", "Plaka", "Güzergah", "Şoför", "Slot", "SeferSayisi", "Durum", "Kurum" };
+        for (int i = 0; i < headers.Length; i++)
+        {
+            var cell = ws.Cell(1, i + 1);
+            cell.Value = headers[i];
+            cell.Style.Font.Bold = true;
+            cell.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.FromArgb(0, 120, 215);
+            cell.Style.Font.FontColor = ClosedXML.Excel.XLColor.White;
+        }
+        // Örnek veri satırı
+        ws.Cell(2, 1).Value = DateTime.Today;
+        ws.Cell(2, 2).Value = "34ABC123";
+        ws.Cell(2, 3).Value = "Örnek Güzergah";
+        ws.Cell(2, 4).Value = "Ad Soyad";
+        ws.Cell(2, 5).Value = "Sabah";
+        ws.Cell(2, 6).Value = 1;
+        ws.Cell(2, 7).Value = "Gitti";
+        ws.Cell(2, 8).Value = "Örnek Kurum";
+
+        ws.Columns().AdjustToContents();
+        using var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        return ms.ToArray();
+    }
+
+    private static List<OperasyonImportSatiri> ParseExcelRows(ClosedXML.Excel.IXLWorksheet ws)
+    {
+        var satirlar = new List<OperasyonImportSatiri>();
+        var lastRow = ws.LastRowUsed()?.RowNumber() ?? 1;
+        for (int r = 2; r <= lastRow; r++)
+        {
+            var plaka = ws.Cell(r, 2).GetString().Trim();
+            if (string.IsNullOrWhiteSpace(plaka)) continue;
+
+            satirlar.Add(new OperasyonImportSatiri
+            {
+                SatirNo = r,
+                Tarih = ws.Cell(r, 1).GetString().Trim(),
+                Plaka = plaka,
+                GuzergahAdi = ws.Cell(r, 3).GetString().Trim(),
+                SoforAdi = ws.Cell(r, 4).GetString().Trim().NullIfEmpty(),
+                Slot = ws.Cell(r, 5).GetString().Trim().NullIfEmpty() ?? "Sabah",
+                SeferSayisi = ws.Cell(r, 6).GetString().Trim().NullIfEmpty() ?? "1",
+                Durum = ws.Cell(r, 7).GetString().Trim().NullIfEmpty() ?? "Gitti",
+                KurumAdi = ws.Cell(r, 8).GetString().Trim().NullIfEmpty()
+            });
+        }
+        return satirlar;
+    }
+
+    private static DateTime? ParseTarih(string deger)
+    {
+        if (DateTime.TryParse(deger, out var t)) return t;
+        if (double.TryParse(deger, out var oa) && oa > 1)
+        {
+            try { return DateTime.FromOADate(oa); } catch { }
+        }
+        return null;
+    }
 }
