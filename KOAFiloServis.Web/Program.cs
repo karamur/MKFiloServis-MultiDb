@@ -350,8 +350,13 @@ builder.Services.AddScoped<KOAFiloServis.Web.Services.Interfaces.IPuantajWorkflo
 builder.Services.AddScoped<KOAFiloServis.Web.Services.Interfaces.IPuantajFinansService, PuantajFinansService>();
 builder.Services.AddScoped(typeof(KOAFiloServis.Web.Services.Interfaces.IFiloKomisyonService), typeof(FiloKomisyonService));
 builder.Services.AddScoped<KOAFiloServis.Web.Services.Interfaces.IPuantajEslestirmeService, PuantajEslestirmeService>();
-builder.Services.AddScoped<IPuantajJobService, PuantajJobService>(); // Sprint 8: Quartz job servisi
-builder.Services.AddScoped<IPuantajMutexService, PuantajMutexService>(); // Sprint 8: Table-based mutex
+// Sprint 8: Puantaj engine automation
+builder.Services.Configure<PuantajJobOptions>(
+    builder.Configuration.GetSection(PuantajJobOptions.Section));
+builder.Services.AddSingleton<IPuantajRetryPolicy, PuantajRetryPolicy>();
+builder.Services.AddScoped<IPuantajJobService, PuantajJobService>();
+builder.Services.AddScoped<IPuantajMutexService, PuantajMutexService>();
+builder.Services.AddScoped<IPuantajReconciliationService, PuantajReconciliationService>();
 builder.Services.AddScoped<IPiyasaKaynakService, PiyasaKaynakService>(); // Piyasa Kaynak Yonetimi (once kaydet)
 builder.Services.AddScoped<IHttpScraperService, HttpScraperService>(); // HTTP Scraper (en hizli)
 builder.Services.AddScoped<IPlaywrightScraperService, PlaywrightScraperService>(); // Playwright Web Scraper (yedek)
@@ -520,6 +525,13 @@ builder.Services.AddQuartz(q =>
             .WithSchedule(CronScheduleBuilder.CronSchedule("0 30 0 1 * ?")
                 .WithMisfireHandlingInstructionDoNothing()));
     }
+
+    // Puantaj Reconciliation — her gün 04:00'da tutarsızlıkları tamir eder
+    q.AddJob<PuantajReconciliationJob>(opts => opts.WithIdentity("puantaj-reconciliation-job"));
+    q.AddTrigger(opts => opts
+        .ForJob("puantaj-reconciliation-job")
+        .WithIdentity("puantaj-reconciliation-trigger")
+        .WithSchedule(CronScheduleBuilder.DailyAtHourAndMinute(4, 0)));
 });
 builder.Services.AddQuartzHostedService(options => options.WaitForJobsToComplete = true);
 

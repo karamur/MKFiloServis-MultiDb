@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Threading;
 using KOAFiloServis.Shared.Entities;
+using KOAFiloServis.Shared.Exceptions;
 using KOAFiloServis.Web.Data;
 using KOAFiloServis.Web.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -39,8 +40,7 @@ public sealed class PuantajEngineService : IPuantajEngineService
 
             // Kilit kontrolü: Kilitli dönem varsa revizyon yapılamaz
             if (oncekiAktif?.OnayDurum == PuantajDonemOnayDurum.Kilitli)
-                throw new InvalidOperationException(
-                    $"Bu dönem kilitli (V{oncekiAktif.Versiyon}). Revizyon için önce kilit açılmalıdır.");
+                throw new PuantajDonemKilitliException(oncekiAktif.Id, oncekiAktif.Versiyon);
 
             int yeniVersiyon = (oncekiAktif?.Versiyon ?? 0) + 1;
 

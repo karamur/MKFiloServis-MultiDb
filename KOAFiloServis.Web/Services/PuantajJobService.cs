@@ -1,4 +1,5 @@
 using KOAFiloServis.Shared.Entities;
+using KOAFiloServis.Shared.Exceptions;
 using KOAFiloServis.Web.Data;
 using KOAFiloServis.Web.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,9 @@ public sealed class PuantajJobService : IPuantajJobService
     private readonly ILogger<PuantajJobService> _logger;
 
     // Polly retry pipeline — transient DB/network hatalarında 3 deneme
+    // Polly retry pipeline — SADECE transient infrastructure hatalarında 3 deneme
+    // Business exception'lar (PuantajBusinessException) retry EDİLMEZ
+    // Fatal exception'lar (PuantajFatalException) direkt propagate edilir
     private static readonly ResiliencePipeline RetryPipeline = new ResiliencePipelineBuilder()
         .AddRetry(new RetryStrategyOptions
         {
@@ -24,10 +28,26 @@ public sealed class PuantajJobService : IPuantajJobService
             Delay = TimeSpan.FromSeconds(1),
             BackoffType = DelayBackoffType.Exponential,
             UseJitter = true,
-            ShouldHandle = new PredicateBuilder()
-                .Handle<NpgsqlException>()
-                .Handle<TimeoutException>()
-                .Handle<PostgresException>(ex => ex.IsTransient)
+            ShouldHandle = args => args.Outcome.Exception switch
+            {
+                // ── Business rules → NO RETRY ──
+                PuantajBusinessException => PredicateResult.False(),
+                PuantajFatalException => PredicateResult.False(),
+                OperationCanceledException => PredicateResult.False(),
+
+                // ── Infrastructure (transient check) ──
+                PuantajInfrastructureException pie => pie.IsTransientFailure
+                    ? PredicateResult.True()
+                    : PredicateResult.False(),
+
+                // ── DB/network transient → RETRY ──
+                PostgresException pe when pe.IsTransient => PredicateResult.True(),
+                NpgsqlException => PredicateResult.True(),
+                TimeoutException => PredicateResult.True(),
+
+                // ── Unknown → NO (conservative — explicit is safer) ──
+                _ => PredicateResult.False()
+            }
         })
         .AddTimeout(TimeSpan.FromMinutes(5))
         .Build();
@@ -238,13 +258,39 @@ public sealed class PuantajJobService : IPuantajJobService
         }
         catch (OperationCanceledException)
         {
+            // ── Cancellation — propagate ──
+            _logger.LogWarning("İptal edildi — Firma {FirmaId}", firmaId);
             await mutex.UpdateToFailedAsync(record, "İptal edildi", ct);
             throw;
         }
-        catch (Exception ex) when (ex is not InvalidOperationException)
+        catch (PuantajBusinessException ex)
         {
-            // Unexpected error after mutex acquired
-            _logger.LogError(ex, "Beklenmeyen hata — Failed");
+            // ── Business rule — NO retry, Skipped ──
+            _logger.LogWarning(ex, "İş kuralı: {ExceptionType} — Skipped", ex.GetType().Name);
+            await mutex.UpdateToSkippedAsync(record, ex.Message, ct: ct);
+            return TenantProcessResult.Skipped(ex.Message, record);
+        }
+        catch (PuantajInfrastructureException ex)
+        {
+            // ── Infrastructure — retry exhausted, Failed ──
+            _logger.LogError(ex, "Altyapı hatası (retry tükendi): {ExceptionType} — Failed",
+                ex.GetType().Name);
+            await mutex.UpdateToFailedAsync(record, ex.Message, ct);
+            return TenantProcessResult.Failed(firmaId, ex.Message, record);
+        }
+        catch (PuantajFatalException ex)
+        {
+            // ── Fatal — STOP entire job ──
+            _logger.LogCritical(ex, "FATAL: {ExceptionType} — tüm job durduruluyor",
+                ex.GetType().Name);
+            await mutex.UpdateToFailedAsync(record, $"FATAL: {ex.Message}", ct);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // ── Unknown — Failed (defensive, alert-worthy) ──
+            _logger.LogError(ex, "Beklenmeyen hata: {ExceptionType} — Failed",
+                ex.GetType().Name);
             await mutex.UpdateToFailedAsync(record, $"{ex.GetType().Name}: {ex.Message}", ct);
             return TenantProcessResult.Failed(firmaId, ex.Message, record);
         }
