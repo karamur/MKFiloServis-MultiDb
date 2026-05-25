@@ -1296,3 +1296,126 @@ b24eef4 feat(planlama): Puantaji Guncelle butonu + GuncellePuantajAsync
 | **B2** | `KurumPuantaj.razor:843` | `FinansYonu = PlanlamaFinansYonu.Giden` olarak düzeltildi (entity default'u ile tutarlı) |
 | **B3** | `KurumPuantaj.razor:827` | `OnayDurum = kayit.OnayDurum` deep copy'e eklendi |
 | **B4** | `KurumPuantaj.razor:904` | `degisikSatirlar.Remove(kayit)` eklendi |
+
+---
+
+## 📅 25.05.2026 — Oturum (5 commit)
+
+### ✅ Tamamlanan
+
+| # | İş | Açıklama |
+|---|-----|----------|
+| **1** | SeferTipi.Vardiya eklendi | `Guzergah.cs`: `Vardiya = 6` |
+| **2** | Sabah+Aksam merge | `ApplyMergeAndPricing`: aynı araç/şoför Sabah+Aksam → tek satır (Yon=SabahAksam, BirimFiyat×2). Farklı araç → ayrı satır |
+| **3** | EkleEksikSatir fiyat düzeltme | `*2` çarpanı kaldırıldı, baz fiyat kullanılıyor, merge sonrası uygulanıyor |
+| **4** | PuantajKaldirAsync | Kurum+dönem için tüm puantaj kayıtlarını soft-delete |
+| **5** | TopluSavePuantajAsync yetim temizliği | Merge sonrası eski Aksam slot'lu satırlar soft-delete |
+| **6** | KurumPuantaj "Puantajı Kaldır" butonu | JS confirm + servis çağrısı |
+| **7** | Dashboard kurum filtresi | PlanlamaDashboard'a Kurum dropdown'ı, GetPuantajlarAsync'e kurumId parametresi |
+| **8** | GüzergahForm otomatik çarpan iptali | `GetSeferTipiCarpani` + `SeferTipiDegistiAsync` fiyat güncelleme kodu kaldırıldı, manuel fiyat bilgi mesajı |
+| **9** | Planlama modülü SİLİNDİ | 4 dosya (Planlama.razor, PlanlamaDashboard.razor, PlanlamaEditModal.razor, CopyPreviousMonthModal.razor) + NavMenu linkleri + KullaniciVeLisans Planlama yetkileri temizlendi |
+
+### 📋 Commit Geçmişi
+
+```
+6e4fc03 feat(puantaj): Sabah+Aksam merge, Vardiya enum, Puantaj Kaldir, Dashboard kurum filtresi
+0b1e13d refactor(puantaj): Planlama modulu kaldirildi, tek puantaj = Kurum Puantaj
+```
+
+### 🧪 Smoke Test
+
+| Test | Sonuç |
+|------|:-----:|
+| `dotnet build` | ✅ **0 hata, 0 uyarı** |
+
+### 🔴 YARIN DEVAM EDİLECEK — OperasyonKaydi Entity
+
+Kullanıcının son görevi: Operasyon çekirdeğini oluşturacak **OperasyonKaydi** entity'si.
+
+**İstenenler:**
+- Entity: `OperasyonKaydi` (Id, Tarih, KurumId, GuzergahId, SeferTipi, AracId, SoforId, FirmaId, KurumFiyati, TedarikciFiyati, Durum, Aciklama)
+- `SeferTipi` enum (zaten mevcut)
+- FluentValidation / DataAnnotations
+- EntityTypeConfiguration
+- Service interface + implementation
+- Migration
+- Clean architecture uyumlu
+
+**Kurallar:**
+- Sabah ve akşam farklı araç olabilir
+- Sabah ve akşam farklı şoför olabilir
+- Kuruma kesilecek fiyat tutulmalı
+- Tedarikçiye ödenecek fiyat tutulmalı
+- İptal edilen sefer puantaja dahil edilmemeli
+- Aynı araç aynı saat aralığında ikinci sefere atanamamalı
+
+**Açık sorular (yarın sorulacak):**
+1. OperasyonKaydi vs mevcut PuantajKayit ilişkisi (yerine mi geçecek, birlikte mi çalışacak?)
+2. Validation yaklaşımı (DataAnnotations mi, FluentValidation mi?)
+3. Generic repository isteniyor mu?
+4. Günlük kayıt mı (Tarih bazlı) yoksa aylık mı (Gun01..Gun31)?
+
+---
+
+## 📅 25.05.2026 — Sprint 1: OperasyonKaydi Entity Mimarisi
+
+### ✅ Sprint 1 — Tamamlanan
+
+| # | İş | Dosyalar | Açıklama |
+|---|-----|----------|----------|
+| **S1.1** | OperasyonKaydi entity | `Shared/Entities/OperasyonKaydi.cs` (YENİ) | Günlük ham operasyon kaydı. `IFirmaTenant` destekli, audit (CreatedBy/UpdatedBy), soft delete (DeletedAt/DeletedBy), 30+ alan |
+| **S1.2** | PuantajKayit güncelleme | `Shared/Entities/PuantajKayit.cs` | `OperasyonKayitlari` koleksiyonu eklendi |
+| **S1.3** | DbContext güncelleme | `Data/ApplicationDbContext.cs` | `DbSet<OperasyonKaydi>`, fluent config: 8 FK (tümü Restrict), 13 index, string limits, decimal precision |
+| **S1.4** | OperasyonKaydiService | `Services/Interfaces/IOperasyonKaydiService.cs`, `Services/OperasyonKaydiService.cs` (YENİ) | CRUD + şablon + PuantajKayit→OperasyonKaydi migrasyon |
+| **S1.5** | PuantajEngineService | `Services/Interfaces/IPuantajEngineService.cs`, `Services/PuantajEngineService.cs` (YENİ) | OperasyonKaydi→PuantajKayit dönüşüm motoru |
+| **S1.6** | Validator + BusinessRules | `Services/OperasyonKaydiValidator.cs`, `Services/OperasyonKaydiBusinessRules.cs` (YENİ) | Input validasyon + domain kuralları + çakışma kontrolü |
+| **S1.7** | Migration | `Data/Migrations/*_AddOperasyonKaydi.cs` (YENİ) | OperasyonKayitlari tablosu |
+| **S1.8** | DI kayıtları | `Program.cs` | `IOperasyonKaydiService`, `IPuantajEngineService`, `OperasyonKaydiBusinessRules` |
+| **S1.9** | Duplicate check SQL | `docs/sql/migration-duplicate-check.sql` (YENİ) | Migration öncesi unique constraint kontrolü |
+
+### 🏗️ Mimari Kararlar
+
+| Karar | Gerekçe |
+|-------|---------|
+| OperasyonKaydi günlük (normalize) kayıt | Her satır = bir gün × bir araç × bir güzergah × bir slot. PuantajEngine gruplayıp aylık PuantajKayit üretir |
+| Tüm FK'lar Restrict | Kurum/Araç/Şoför silinince operasyon silinmez, FK hatası alınır |
+| OperasyonKaydiService 3 katmanlı | Validator (statik) → BusinessRules (DI) → Service (data access) |
+| PuantajKayit korundu | Mevcut yapı bozulmadı, OperasyonKaydi yeni merkez entity olarak eklendi |
+
+### 📊 Toplam: 10 yeni dosya, 3 değişiklik
+
+### 🧪 Smoke Test
+
+| Test | Sonuç |
+|------|:-----:|
+| `dotnet build` | ✅ **0 hata, 0 uyarı** |
+| `dotnet test` | ✅ 305/305 başarılı |
+| `dotnet ef migrations add AddOperasyonKaydi` | ✅ Başarılı |
+
+---
+
+## 📅 25.05.2026 — Sprint 2: Operasyon Giriş Ekranı
+
+### ✅ Sprint 2 — Tamamlanan
+
+| # | İş | Dosyalar | Açıklama |
+|---|-----|----------|----------|
+| **S2.1** | OperasyonGiris sayfası | `Components/Pages/Operasyon/OperasyonGiris.razor` (YENİ) | Pure Bootstrap 5, Excel benzeri grid, inline edit |
+| **S2.2** | Code-behind | `Components/Pages/Operasyon/OperasyonGiris.razor.cs` (YENİ) | Tarih/kurum/güzergah filtresi, autocomplete, dirty tracking, toplu kaydet |
+
+### 🎯 Özellikler
+
+- **Filtre barı**: Tarih (bugün/ileri/geri), Kurum (autocomplete), Güzergah (cascade dropdown)
+- **Grid**: Günlük operasyon listesi, slot/sefer sayısı/durum inline edit
+- **Yeni kayıt**: Inline form — araç/şoför autocomplete, slot toggle (Sabah/Akşam/Mesai)
+- **Toplu kaydet**: Çakışma kontrolü + `TopluSaveAsync`
+- **Dirty tracking**: Değişen satırlar yeşil vurgulu, "Tümünü Kaydet" butonu
+
+### 📊 Toplam: 2 yeni dosya
+
+### 🧪 Smoke Test
+
+| Test | Sonuç |
+|------|:-----:|
+| `dotnet build` | ✅ **0 hata** |
+| Route: `/operasyon-giris` | ✅ Sayfa hazır |

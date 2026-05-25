@@ -252,6 +252,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<PuantajKayit> PuantajKayitlar { get; set; }
     public DbSet<PuantajExcelImport> PuantajExcelImportlar { get; set; }
     public DbSet<PuantajEslestirmeOneri> PuantajEslestirmeOnerileri { get; set; }
+    public DbSet<OperasyonKaydi> OperasyonKayitlari { get; set; }
 
     // Proforma Fatura Modülü
     public DbSet<ProformaFatura> ProformaFaturalar { get; set; }
@@ -1514,6 +1515,73 @@ public class ApplicationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.ExcelImportId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasQueryFilter(e => !e.IsDeleted);
+        });
+
+        // OperasyonKaydi - Günlük ham operasyon kaydı
+        modelBuilder.Entity<OperasyonKaydi>(entity =>
+        {
+            // ── Unique constraint ──────────────────────────────────────────
+            entity.HasIndex(e => new { e.Tarih, e.GuzergahId, e.AracId, e.Slot }).IsUnique();
+
+            // ── Performans indexleri ───────────────────────────────────────
+            entity.HasIndex(e => e.Tarih);
+            entity.HasIndex(e => e.OperasyonDurumu);
+            entity.HasIndex(e => e.Slot);
+            entity.HasIndex(e => e.Islendi);
+
+            // Composite indexler
+            entity.HasIndex(e => new { e.FirmaId, e.Tarih });
+            entity.HasIndex(e => new { e.Tarih, e.KurumId });
+            entity.HasIndex(e => new { e.Tarih, e.AracId });
+
+            // FK referans
+            entity.HasIndex(e => e.PuantajKayitId);
+
+            // ── String max length ──────────────────────────────────────────
+            entity.Property(e => e.SlotAdi).HasMaxLength(50);
+            entity.Property(e => e.BelgeNo).HasMaxLength(50);
+            entity.Property(e => e.TransferDurum).HasMaxLength(50);
+            entity.Property(e => e.Notlar).HasMaxLength(1000);
+            entity.Property(e => e.CreatedBy).HasMaxLength(100);
+            entity.Property(e => e.UpdatedBy).HasMaxLength(100);
+            entity.Property(e => e.DeletedBy).HasMaxLength(100);
+            entity.Property(e => e.PuantajCarpani).HasPrecision(10, 2);
+
+            // ── FK İlişkileri (tümü Restrict — cascade delete yok) ────────
+            entity.HasOne(e => e.Guzergah)
+                .WithMany()
+                .HasForeignKey(e => e.GuzergahId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Arac)
+                .WithMany()
+                .HasForeignKey(e => e.AracId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Sofor)
+                .WithMany()
+                .HasForeignKey(e => e.SoforId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Kurum)
+                .WithMany()
+                .HasForeignKey(e => e.KurumId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.IsverenFirma)
+                .WithMany()
+                .HasForeignKey(e => e.IsverenFirmaId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.OdemeYapilacakCari)
+                .WithMany()
+                .HasForeignKey(e => e.OdemeYapilacakCariId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.FaturaKesiciCari)
+                .WithMany()
+                .HasForeignKey(e => e.FaturaKesiciCariId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.PuantajKayit)
+                .WithMany(p => p.OperasyonKayitlari)
+                .HasForeignKey(e => e.PuantajKayitId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             entity.HasQueryFilter(e => !e.IsDeleted);
         });
 

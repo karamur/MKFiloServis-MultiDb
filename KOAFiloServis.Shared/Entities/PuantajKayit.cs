@@ -246,9 +246,12 @@ public class PuantajKayit : BaseEntity
     public int? ExcelImportId { get; set; } // Hangi import batch'inden geldi
     public int? ExcelSatirNo { get; set; } // Excel'deki satır numarası
     
+    // Operasyon Kaydı Bağlantısı (PuantajEngine tarafından doldurulur)
+    public virtual ICollection<OperasyonKaydi> OperasyonKayitlari { get; set; } = new List<OperasyonKaydi>();
+
     // Notlar ve Açıklamalar
     public string? Notlar { get; set; }
-    
+
     // Hesaplama metodları
     public void HesaplaGelir()
     {
