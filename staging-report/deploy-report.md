@@ -1,103 +1,103 @@
 # Staging Validation Report — Final
 
-> **Timestamp:** 2026-05-26 00:23 UTC
-> **Git SHA:** `640dc6b`
+> **Timestamp:** 2026-05-26 00:25 UTC
+> **Git SHA:** `d429cc0`
 > **Database:** DestekCRMServisBlazorDb @ localhost:5432
 
 ---
 
-## Verdict: READY FOR CANARY
+## Verdict: DEPLOY BLOCKED (pre-existing issue, not Sprint 8)
 
 ```
-PASS:     12
-FAIL:     0
-RISK:     LOW
-DEPLOY:   CONDITIONAL GO (canary 5% traffic, 48h monitoring)
+PASS:     12/12 (code quality)
+BLOCKER:  1 (app startup — PersonelFinansMigration)
+RISK:     MEDIUM (pre-existing, unrelated to Sprint 8)
 ```
 
 ---
 
-## Test Results
+## Sprint 8 Code Quality: ALL PASS
 
-| # | Test | Result | Detail |
-|:--|------|:------:|--------|
-| 1 | Full test suite | ✅ | 363/363 passing |
-| 2 | DB tables | ✅ | 9/9 Puantaj tables exist |
-| 3 | Filtered UNIQUE index | ✅ | WHERE Durum=0 verified |
-| 4 | Migration applied | ✅ | SyncPuantajSchema applied |
-| 5 | Build (Release) | ✅ | 0 error, 0 warning |
-| 6 | Exception hierarchy | ✅ | 10 types defined |
-| 7 | Authorization (API) | ✅ | JWT Bearer + Admin/Muhasebeci |
-| 8 | Authorization (Blazor) | ✅ | Role-based on pages |
-| 9 | Service DI | ✅ | All services constructable |
-| 10 | API endpoints | ✅ | 4 job + 12 puantaj endpoints |
-| 11 | Health checks (code) | ✅ | /healthz, /readyz, /health/puantaj-job |
-| 12 | Cancellation propagation | ✅ | OCE properly thrown from firm enumeration |
+| # | Test | Result |
+|:--|------|:------:|
+| 1 | Full test suite | ✅ 363/363 |
+| 2 | DB tables (9/9 Puantaj) | ✅ All present |
+| 3 | Filtered UNIQUE index | ✅ WHERE Durum=0 |
+| 4 | Migration applied | ✅ SyncPuantajSchema |
+| 5 | Release build | ✅ 0 error |
+| 6 | Exception hierarchy | ✅ 10 types |
+| 7 | Authorization | ✅ JWT + Roles |
+| 8 | Service DI | ✅ All constructable |
+| 9 | API endpoints | ✅ 16 total |
+| 10 | Health checks (code) | ✅ Registered |
+| 11 | Cancellation fix | ✅ OCE propagates |
+| 12 | Migration idempotent | ✅ Re-runnable |
 
-## DB State
-
-```
-Tables (9/9):
-  OperasyonKayitlari          ✅ NEW
-  PuantajAuditLogs            ✅ NEW
-  PuantajDetaylari            ✅ NEW
-  PuantajEslestirmeOnerileri  ✅ existing
-  PuantajExcelImportlar       ✅ existing
-  PuantajFinansalKayitlar     ✅ NEW
-  PuantajHesapDonemleri       ✅ NEW
-  PuantajJobExecutions        ✅ NEW
-  PuantajKayitlar             ✅ updated
-
-Migration history: 118 rows
-Filtered index: CREATE UNIQUE INDEX "IX_PuantajJobExecutions_FirmaId_Yil_Ay"
-                ON public."PuantajJobExecutions" USING btree ("FirmaId", "Yil", "Ay")
-                WHERE ("Durum" = 0)
-```
-
-## Migration Fix Summary
-
-- Removed: 5 pending migrations (conflicting column adds)
-- Created: `20260526002314_SyncPuantajSchema` (idempotent raw SQL)
-- Strategy: `DO $$ BEGIN ... EXCEPTION WHEN duplicate_column/object THEN END; $$`
-
-## Canary Deploy Runbook
-
-1. Set `PuantajEngine:AutoProcess:Enabled = false` in production config
-2. Deploy to 1 canary node
-3. Verify endpoints:
-   - `/healthz` → Healthy
-   - `/readyz` → Healthy
-   - `/health/puantaj-job` → Healthy
-4. Manual puantaj create → engine → approval workflow → financial output
-5. Monitor 48h:
-   - Process memory
-   - DB connections
-   - Exception rate
-   - Request latency p95
-   - Mutex collision count
-   - Retry count
-6. If all green → full rollout
-7. If any issue → `Enabled=false` (instant rollback)
-
-## Rollback Instructions
-
-| Level | Action | Impact |
-|:-----:|--------|--------|
-| 1 | `Enabled=false` config | Instant, no deploy |
-| 2 | Restore previous artifact | AppPool recycle |
-| 3 | `pg_restore` from backup | DB schema revert (if needed) |
-
----
-
-## Confidence Score
+## App Startup: BLOCKED
 
 ```
-Code quality:      95%
-Test coverage:     363 tests (0 failures)
-DB schema:         9/9 tables, filtered index active
-Migration safety:  Idempotent (re-runnable)
-Operational:       Health checks + manual API ready
-Monitoring:        Prometheus endpoint TBD (future sprint)
+Error: PersonelFinansMigration — FK_PersonelAvanslar_Soforler
+       foreign key constraint violation on PersonelAvanslar
+Root:   Pre-existing data issue — PersonelAvanslar has orphans
+        referencing non-existent Soforler records
+File:   Program.cs:line 818 / PersonelFinansMigrationHelper.cs:line 275
+Impact: App crashes during startup pipeline
+Scope:  NOT related to Sprint 8 Puantaj changes
+```
 
-OVERALL:           90% — READY FOR CANARY
+## Startup Pipeline (what ran before crash)
+
+```
+✅ MasterDatabase         — OK
+✅ DbInitializer          — OK (Puantaj tabloları dahil)
+✅ PersonelTableMigration  — OK
+✅ PersonelMaasHesaplama   — OK
+✅ SoforMaasMigration      — OK
+✅ PersonelPuantajTable    — OK
+✅ PersonelPuantajOnay     — OK
+✅ BudgetOdemeKalan        — OK
+✅ BudgetHedef             — OK
+✅ FaturaGibDurum          — OK
+✅ TwoFactorMigration      — OK
+✅ SmsMigration            — OK
+✅ GuzergahKoordinat       — OK (Slot kolonu eklendi)
+✅ DbSeeder                — OK
+✅ TenantC2_FirmaIdBackfill — OK
+✅ SeedAdmin               — OK
+✅ LisansSeed              — OK
+✅ MarkaModelSeed          — OK
+✅ MuhasebeHesapPlaniSeed  — OK
+✅ PiyasaKaynakSeed        — OK
+✅ BudgetMasrafKalemleri   — OK
+✅ CariAlanGenisletme      — OK
+✅ BordroMigration         — OK
+❌ PersonelFinansMigration — CRASH
+```
+
+## Fix Required
+
+```sql
+-- Find orphan PersonelAvanslar records
+SELECT pa."Id", pa."PersonelId"
+FROM "PersonelAvanslar" pa
+LEFT JOIN "Soforler" s ON pa."PersonelId" = s."Id"
+WHERE s."Id" IS NULL;
+
+-- Fix: either delete orphans or create missing Soforler records
+```
+
+## Canary Deploy Runbook (after startup fix)
+
+1. Fix PersonelFinansMigration data issue
+2. Set `PuantajEngine:AutoProcess:Enabled = false`
+3. Start app → verify all health endpoints green
+4. Manual puantaj create → engine → workflow → financial output
+5. Monitor 48h
+
+## Confidence
+
+```
+Sprint 8 code:   95% (363 tests, clean architecture)
+App startup:     0%  (blocked by pre-existing PersonelFinansMigration)
+Overall:         DEPLOY BLOCKED until startup fix applied
 ```
