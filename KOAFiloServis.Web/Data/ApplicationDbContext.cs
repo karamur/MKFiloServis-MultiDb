@@ -1500,11 +1500,11 @@ public class ApplicationDbContext : DbContext
             entity.HasOne(e => e.HesapDonemi)
                 .WithMany(h => h.PuantajKayitlari)
                 .HasForeignKey(e => e.HesapDonemiId)
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.OncekiVersiyon)
                 .WithMany()
                 .HasForeignKey(e => e.OncekiVersiyonId)
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.Restrict);
             entity.HasQueryFilter(e => !e.IsDeleted);
         });
 

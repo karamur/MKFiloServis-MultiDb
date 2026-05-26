@@ -1613,14 +1613,14 @@ WHERE IsDeleted = 0;");
                 return;
 
             var connectionString = GetDefaultConnectionString(context, configuration ?? new ConfigurationBuilder().Build());
-            using var conn = new NpgsqlConnection(connectionString);
+            await using var conn = new NpgsqlConnection(connectionString);
             await conn.OpenAsync();
 
             // Önce hangi tabloların var olduğunu kontrol et
             var existingTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            using (var checkTablesCmd = new NpgsqlCommand(
+            await using (var checkTablesCmd = new NpgsqlCommand(
                 "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'", conn))
-            using (var reader = await checkTablesCmd.ExecuteReaderAsync())
+            await using (var reader = await checkTablesCmd.ExecuteReaderAsync())
             {
                 while (await reader.ReadAsync())
                 {
@@ -1780,12 +1780,29 @@ WHERE IsDeleted = 0;");
                 {
                     try
                     {
-                        using var cmd = new NpgsqlCommand(sql, conn);
+                        await using var cmd = new NpgsqlCommand(sql, conn);
+                        cmd.CommandTimeout = 120; // 120 saniye timeout
                         await cmd.ExecuteNonQueryAsync();
+                        Console.WriteLine($"{tableName} kolon güncelleme başarılı.");
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"{tableName} kolon güncelleme hatası: {ex.Message}");
+                        Console.WriteLine($"{tableName} kolon güncelleme hatası:");
+                        Console.WriteLine($"  Mesaj: {ex.Message}");
+                        Console.WriteLine($"  Tip: {ex.GetType().Name}");
+                        if (ex.InnerException != null)
+                        {
+                            Console.WriteLine($"  İç hata: {ex.InnerException.Message}");
+                        }
+                        if (ex is Npgsql.NpgsqlException npgsqlEx)
+                        {
+                            Console.WriteLine($"  Npgsql SqlState: {npgsqlEx.SqlState}");
+                            Console.WriteLine($"  Npgsql Message: {npgsqlEx.Message}");
+                            if (npgsqlEx.InnerException != null)
+                            {
+                                Console.WriteLine($"  Npgsql InnerException: {npgsqlEx.InnerException.Message}");
+                            }
+                        }
                     }
                 }
             }
@@ -1795,7 +1812,7 @@ WHERE IsDeleted = 0;");
             {
                 try
                 {
-                    using var indexCmd = new NpgsqlCommand(
+                    await using var indexCmd = new NpgsqlCommand(
                         @"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DestekTalepleri_TalepNo"" ON ""DestekTalepleri"" (""TalepNo"")", conn);
                     await indexCmd.ExecuteNonQueryAsync();
                 }
@@ -1806,7 +1823,7 @@ WHERE IsDeleted = 0;");
             {
                 try
                 {
-                    using var indexCmd = new NpgsqlCommand(
+                    await using var indexCmd = new NpgsqlCommand(
                         @"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DestekAyarlari_Anahtar"" ON ""DestekAyarlari"" (""Anahtar"")", conn);
                     await indexCmd.ExecuteNonQueryAsync();
                 }

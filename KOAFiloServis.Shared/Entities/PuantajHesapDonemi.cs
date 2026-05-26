@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace KOAFiloServis.Shared.Entities;
@@ -52,6 +52,7 @@ public class PuantajHesapDonemi : BaseEntity, IFirmaTenant
 
     // Navigation
     public virtual ICollection<PuantajDetay> Detaylar { get; set; } = new List<PuantajDetay>();
+
     public virtual ICollection<PuantajKayit> PuantajKayitlari { get; set; } = new List<PuantajKayit>();
 }
 
