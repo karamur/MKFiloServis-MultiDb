@@ -69,7 +69,62 @@ public static class PuantajSlotMigrationHelper
             logger?.LogInformation("PuantajSlotMigration: SlotAdi kolonu eklendi.");
         }
 
+        // ── Sprint S1b (commit 6b29328 restore): HesapDonemi + Revizyon kolonları ──
+        // Bu kolonlar [NotMapped] idi, EF mapping restore sonrası tenant DB'lerde eksik.
+        // SyncPuantajSchema migration'ı shared DB'ye uygulandı fakat tenant DB'lere uygulanmadı.
+        // Root cause: KurumPuantaj SELECT sırasında PostgreSQL 42703 (column does not exist).
+
+        if (!cols.Contains("HesapDonemiId"))
+        {
+            await context.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE \"PuantajKayitlar\" ADD COLUMN \"HesapDonemiId\" integer NULL");
+            logger?.LogInformation("PuantajSlotMigration: HesapDonemiId kolonu eklendi.");
+        }
+
+        if (!cols.Contains("OncekiVersiyonId"))
+        {
+            await context.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE \"PuantajKayitlar\" ADD COLUMN \"OncekiVersiyonId\" integer NULL");
+            logger?.LogInformation("PuantajSlotMigration: OncekiVersiyonId kolonu eklendi.");
+        }
+
+        if (!cols.Contains("Versiyon"))
+        {
+            // NOT NULL + DEFAULT 1: mevcut satırlar otomatik 1 alır, backfill gerekmez.
+            await context.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE \"PuantajKayitlar\" ADD COLUMN \"Versiyon\" integer NOT NULL DEFAULT 1");
+            logger?.LogInformation("PuantajSlotMigration: Versiyon kolonu eklendi (DEFAULT 1).");
+        }
+
         logger?.LogInformation("PuantajSlotMigration: Tum kolonlar mevcut.");
+
+        // ── Eksik olabilecek index'leri idempotent ekle ──
+        await CreateIndexIfNotExists(context,
+            "IX_PuantajKayitlar_HesapDonemiId", "PuantajKayitlar", "HesapDonemiId", logger);
+        await CreateIndexIfNotExists(context,
+            "IX_PuantajKayitlar_OncekiVersiyonId", "PuantajKayitlar", "OncekiVersiyonId", logger);
+        await CreateIndexIfNotExists(context,
+            "IX_PuantajKayitlar_IsverenFirmaId", "PuantajKayitlar", "IsverenFirmaId", logger);
+        await CreateIndexIfNotExists(context,
+            "IX_PuantajKayitlar_KurumId", "PuantajKayitlar", "KurumId", logger);
+
+        // ── Eksik olabilecek FK'ları idempotent ekle (DO block ile) ──
+        await CreateFkIfNotExists(context,
+            "FK_PuantajKayitlar_PuantajHesapDonemleri_HesapDonemiId",
+            "PuantajKayitlar", "HesapDonemiId",
+            "PuantajHesapDonemleri", "Id", "SET NULL", logger);
+        await CreateFkIfNotExists(context,
+            "FK_PuantajKayitlar_PuantajKayitlar_OncekiVersiyonId",
+            "PuantajKayitlar", "OncekiVersiyonId",
+            "PuantajKayitlar", "Id", "SET NULL", logger);
+        await CreateFkIfNotExists(context,
+            "FK_PuantajKayitlar_Firmalar_IsverenFirmaId",
+            "PuantajKayitlar", "IsverenFirmaId",
+            "Firmalar", "Id", "SET NULL", logger);
+        await CreateFkIfNotExists(context,
+            "FK_PuantajKayitlar_Kurumlar_KurumId",
+            "PuantajKayitlar", "KurumId",
+            "Kurumlar", "Id", "SET NULL", logger);
     }
 
     private static async Task<HashSet<string>> GetColumnNamesAsync(ApplicationDbContext context)
@@ -87,5 +142,77 @@ public static class PuantajSlotMigrationHelper
         while (await reader.ReadAsync())
             cols.Add(reader.GetString(0));
         return cols;
+    }
+
+    private static async Task CreateIndexIfNotExists(
+        ApplicationDbContext context,
+        string indexName, string tableName, string columnName,
+        ILogger? logger)
+    {
+        try
+        {
+            await context.Database.ExecuteSqlRawAsync(
+                $"CREATE INDEX IF NOT EXISTS \"{indexName}\" ON \"{tableName}\" (\"{columnName}\")");
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex,
+                "PuantajSlotMigration: {Index} indeksi olusturulamadi (kritik degil)", indexName);
+        }
+    }
+
+    private static async Task CreateFkIfNotExists(
+        ApplicationDbContext context,
+        string constraintName, string tableName, string columnName,
+        string refTable, string refColumn, string onDeleteAction,
+        ILogger? logger)
+    {
+        try
+        {
+            // Önce hedef tablo var mı kontrol et
+            var refTableExists = await TableExistsAsync(context, refTable);
+            if (!refTableExists)
+            {
+                logger?.LogInformation(
+                    "PuantajSlotMigration: {Constraint} atlandı — {RefTable} tablosu yok.",
+                    constraintName, refTable);
+                return;
+            }
+
+            var sql = $"""
+                DO $$ BEGIN
+                    ALTER TABLE "{tableName}" ADD CONSTRAINT "{constraintName}"
+                        FOREIGN KEY ("{columnName}") REFERENCES "{refTable}"("{refColumn}")
+                        ON DELETE {onDeleteAction};
+                EXCEPTION WHEN duplicate_object THEN END; $$;
+                """;
+            await context.Database.ExecuteSqlRawAsync(sql);
+        }
+        catch (Exception ex)
+        {
+            // FK başarısız olabilir (tenant DB'de eski veri varsa, vb.)
+            // Kritik değil — sadece log'la, devam et.
+            logger?.LogWarning(ex,
+                "PuantajSlotMigration: {Constraint} FK'si olusturulamadi (kritik degil)", constraintName);
+        }
+    }
+
+    private static async Task<bool> TableExistsAsync(ApplicationDbContext context, string tableName)
+    {
+        var conn = context.Database.GetDbConnection();
+        if (conn.State != System.Data.ConnectionState.Open)
+            await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = @tableName
+            )
+            """;
+        var p = cmd.CreateParameter();
+        p.ParameterName = "tableName";
+        p.Value = tableName;
+        cmd.Parameters.Add(p);
+        return (bool)(await cmd.ExecuteScalarAsync())!;
     }
 }

@@ -251,6 +251,7 @@ public partial class OperasyonGiris : ComponentBase
         yeniAracOnerileri = new();
         yeniSoforArama = "";
         yeniSoforOnerileri = new();
+        _soforAutoFilled = false;
         yeniKayitFormAcik = true;
     }
 
@@ -274,11 +275,27 @@ public partial class OperasyonGiris : ComponentBase
             .ToList();
     }
 
+    private bool _soforAutoFilled;
+
     private void YeniAracSec(Arac arac)
     {
         yeniKayit.AracId = arac.Id;
         yeniAracArama = arac.AktifPlaka ?? arac.Plaka;
         yeniAracOnerileri = new();
+
+        // Auto-fill sofor from active PersonelAracAtama (only if not manually selected)
+        if ((yeniKayit.SoforId == null || yeniKayit.SoforId == 0 || _soforAutoFilled)
+            && tumSoforler is { Count: > 0 })
+        {
+            var atananSofor = tumSoforler.FirstOrDefault(s =>
+                s.AracAtamalari.Any(a => a.AracId == arac.Id && a.Aktif));
+            if (atananSofor != null)
+            {
+                yeniKayit.SoforId = atananSofor.Id;
+                yeniSoforArama = $"{atananSofor.Ad} {atananSofor.Soyad}";
+                _soforAutoFilled = true;
+            }
+        }
     }
 
     private void YeniSoforAramaGuncelle(ChangeEventArgs e)
@@ -300,6 +317,7 @@ public partial class OperasyonGiris : ComponentBase
         yeniKayit.SoforId = sofor.Id;
         yeniSoforArama = $"{sofor.Ad} {sofor.Soyad}";
         yeniSoforOnerileri = new();
+        _soforAutoFilled = false; // manual selection overrides auto-fill
     }
 
     private void YeniSlotSec(SeferSlot slot)

@@ -1025,4 +1025,71 @@ public class RaporService : IRaporService
         workbook.SaveAs(stream);
         return stream.ToArray();
     }
+
+    // ── Operasyon Kar Raporu ────────────────────────────────────────────
+
+    public async Task<List<OperasyonKarRaporuSatir>> GetOperasyonKarRaporuAsync(
+        DateTime baslangic, DateTime bitis,
+        AracSahiplikTipi? sahiplikTipi = null,
+        int? aracId = null,
+        int? guzergahId = null)
+    {
+        await using var ctx = await _contextFactory.CreateDbContextAsync();
+
+        var query = ctx.OperasyonKayitlari
+            .Include(o => o.Arac)
+            .Include(o => o.Sofor)
+            .Include(o => o.Guzergah)
+            .Where(o => !o.IsDeleted
+                        && o.Tarih >= baslangic && o.Tarih <= bitis
+                        && o.OperasyonDurumu == OperasyonDurumu.Gitti);
+
+        if (sahiplikTipi.HasValue)
+            query = query.Where(o => o.Arac!.SahiplikTipi == sahiplikTipi.Value);
+        if (aracId.HasValue)
+            query = query.Where(o => o.AracId == aracId.Value);
+        if (guzergahId.HasValue)
+            query = query.Where(o => o.GuzergahId == guzergahId.Value);
+
+        var data = await query.ToListAsync();
+
+        return data
+            .GroupBy(o => new
+            {
+                SahiplikTipi = o.Arac?.SahiplikTipi ?? AracSahiplikTipi.Ozmal,
+                o.AracId,
+                o.GuzergahId,
+                o.Slot
+            })
+            .Select(g =>
+            {
+                var ilk = g.First();
+                var toplamSefer = g.Sum(o => o.SeferSayisi);
+                var birimFiyat = ilk.Guzergah?.BirimFiyat ?? 0;
+                return new OperasyonKarRaporuSatir
+                {
+                    SahiplikTipi = g.Key.SahiplikTipi,
+                    FirmaTipi = SahiplikHelper.GetMetin(g.Key.SahiplikTipi),
+                    AracId = g.Key.AracId,
+                    Plaka = ilk.Arac?.AktifPlaka ?? ilk.Arac?.Plaka ?? "-",
+                    SoforAdi = ilk.Sofor != null ? $"{ilk.Sofor.Ad} {ilk.Sofor.Soyad}" : "-",
+                    GuzergahId = g.Key.GuzergahId,
+                    GuzergahAdi = ilk.Guzergah?.GuzergahAdi ?? "-",
+                    Slot = g.Key.Slot switch
+                    {
+                        SeferSlot.Sabah => "Sabah",
+                        SeferSlot.Aksam => "Akşam",
+                        SeferSlot.Mesai => "Mesai",
+                        _ => g.Key.Slot.ToString()
+                    },
+                    SeferSayisi = toplamSefer,
+                    BirimFiyat = birimFiyat,
+                    ToplamGelir = toplamSefer * birimFiyat
+                };
+            })
+            .OrderBy(x => x.SahiplikTipi)
+            .ThenBy(x => x.Plaka)
+            .ThenBy(x => x.GuzergahAdi)
+            .ToList();
+    }
 }

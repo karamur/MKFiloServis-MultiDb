@@ -105,7 +105,8 @@ namespace KOAFiloServis.Web.Migrations
                 CREATE INDEX IF NOT EXISTS ""IX_PuantajKayitlar_KurumId"" ON ""PuantajKayitlar"" (""KurumId"");
                 CREATE INDEX IF NOT EXISTS ""IX_PuantajKayitlar_OncekiVersiyonId"" ON ""PuantajKayitlar"" (""OncekiVersiyonId"");
                 CREATE UNIQUE INDEX IF NOT EXISTS ""IX_PuantajKayitlar_Yil_Ay_GuzergahId_AracId_Slot""
-                    ON ""PuantajKayitlar"" (""Yil"", ""Ay"", ""GuzergahId"", ""AracId"", ""Slot"");
+                    ON ""PuantajKayitlar"" (""Yil"", ""Ay"", ""GuzergahId"", ""AracId"", ""Slot"")
+                    WHERE ""IsDeleted"" = false;
             ");
 
             // ── NEW TABLES ─────────────────────────────────────────────

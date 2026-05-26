@@ -65,9 +65,9 @@
             }
             @if (seciliKurumId > 0)
             {
-                <button class="btn btn-outline-primary" @onclick="YeniKayitEkle">
-                    <i class="bi bi-plus-circle me-1"></i> Yeni Kayıt Ekle
-                </button>
+                <a href="/operasyon-giris" class="btn btn-outline-primary">
+                    <i class="bi bi-plus-circle me-1"></i> Operasyon Girişi
+                </a>
             }
             <a href="/puantaj/import" class="btn btn-outline-success">
                 <i class="bi bi-file-earmark-excel me-1"></i> Excel Aktar
@@ -285,6 +285,7 @@
                             <th class="sticky-col col-guzergah">Güzergah</th>
                             <th class="sticky-col2 col-arac">Araç</th>
                             <th class="col-sofor">Şoför</th>
+                            <th style="width:60px">Slot</th>
                             <th class="col-yon">Yön</th>
                             @for (int g = 1; g <= AydakiGunSayisi(); g++)
                             {
@@ -306,7 +307,7 @@
                         {
                             <!-- Güzergah grup başlığı -->
                             <tr class="guzergah-grup">
-                                <td colspan="@(4 + AydakiGunSayisi() + 2)" class="py-1 px-2">
+                                <td colspan="@(5 + AydakiGunSayisi() + 2)" class="py-1 px-2">
                                     <i class="bi bi-signpost-split me-1 text-primary"></i>
                                     <strong>@grup.Key</strong>
                                     <span class="badge bg-primary-subtle text-primary ms-2">@grup.Value.Count araç</span>
@@ -317,11 +318,12 @@
                             @foreach (var kayit in grup.Value)
                             {
                                 <tr class="@(degisikSatirlar.Contains(kayit) ? "satir-degisik" : "")">
-                                    <td class="sticky-col col-guzergah text-truncate" style="max-width:200px" title="@kayit.Guzergah?.GuzergahAdi">
-                                        @kayit.Guzergah?.GuzergahAdi
+                                    <td class="sticky-col col-guzergah text-truncate" style="max-width:200px" title="@(kayit.Guzergah?.GuzergahAdi ?? kayit.GuzergahAdi)">
+                                        @(kayit.Guzergah?.GuzergahAdi ?? kayit.GuzergahAdi)
                                     </td>
                                     <td class="sticky-col2 col-arac fw-semibold">@kayit.Plaka</td>
                                     <td class="col-sofor text-truncate" style="max-width:130px" title="@kayit.SoforAdi">@kayit.SoforAdi</td>
+                                    <td><span class="badge @SlotBadgeClass(kayit.Slot)">@SlotAd(kayit.Slot)</span></td>
                                     <td class="col-yon">
                                         <select class="form-select form-select-sm py-0" style="font-size:.76rem"
                                                 value="@kayit.Yon"
@@ -385,7 +387,7 @@
                         {
                             <tr class="@(degisikSatirlar.Contains(kayit) ? "satir-degisik" : "")">
                                 <td>
-                                @kayit.Guzergah?.GuzergahAdi
+                                @(kayit.Guzergah?.GuzergahAdi ?? kayit.GuzergahAdi)
                                 @if (!string.IsNullOrWhiteSpace(kayit.SlotAdi))
                                 { <br /><small class="text-muted">@kayit.SlotAdi</small> }
                                 else if (kayit.Slot >= SeferSlot.Diger1)
@@ -448,19 +450,11 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
-                        @if (yeniKayitMi)
-                        {
-                            <i class="bi bi-plus-circle me-2 text-success"></i>
-                            <span>Yeni Puantaj Kaydı</span>
-                        }
-                        else
-                        {
-                            <i class="bi bi-pencil-square me-2"></i>
-                            @duzenleKayit.Guzergah?.GuzergahAdi <text>—</text> @duzenleKayit.Plaka
-                        }
+                        <i class="bi bi-pencil-square me-2"></i>
+                        @(duzenleKayit.Guzergah?.GuzergahAdi ?? duzenleKayit.GuzergahAdi) <text>—</text> @duzenleKayit.Plaka
                         <small class="text-muted ms-2">(@AyAdi(seciliAy) @seciliYil)</small>
                     </h5>
-                    <button class="btn-close" @onclick="() => { duzenleKayit = null; yeniKayitMi = false; }"></button>
+                    <button class="btn-close" @onclick="() => duzenleKayit = null"></button>
                 </div>
                 <div class="modal-body">
                     <div class="row g-3 mb-3">
@@ -561,7 +555,7 @@
                     </table>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-secondary" @onclick="() => { duzenleKayit = null; yeniKayitMi = false; }">İptal</button>
+                    <button class="btn btn-secondary" @onclick="() => duzenleKayit = null">İptal</button>
                     <button class="btn btn-primary" @onclick="TekKayitKaydet" disabled="@kaydediliyor">
                         @if (kaydediliyor) { <span class="spinner-border spinner-border-sm me-1"></span> }
                         <i class="bi bi-floppy me-1"></i> Kaydet
@@ -586,7 +580,6 @@
     bool gorunumDetayli = true;
 
     PuantajKayit? duzenleKayit = null;
-    bool yeniKayitMi = false;
     List<Guzergah> guzergahListesi = [];
     List<Arac> aracListesi = [];
     List<Sofor> soforListesi = [];
@@ -831,7 +824,6 @@
     // ── Tek kayıt düzenle ─────────────────────────────────────────────────────
     void TekKayitDuzenle(PuantajKayit kayit)
     {
-        yeniKayitMi = false;
         // Derin kopya (modal iptal edilirse orijinal bozulmasın)
         duzenleKayit = new PuantajKayit
         {
@@ -860,32 +852,6 @@
         for (int g = 1; g <= 31; g++) duzenleKayit.SetGunDeger(g, kayit.GetGunDeger(g));
     }
 
-    void YeniKayitEkle()
-    {
-        yeniKayitMi = true;
-        duzenleKayit = new PuantajKayit
-        {
-            Yil        = seciliYil,
-            Ay         = seciliAy,
-            KurumId    = seciliKurumId,
-            Slot       = SeferSlot.Sabah,
-            Yon        = PuantajYon.SabahAksam,
-            SeferSayisi = 1,
-            KaynakTipi = PlanlamaKaynakTipi.Kendi,
-            FinansYonu = PlanlamaFinansYonu.Giden
-        };
-        // Varsayılan güzergahı ata (kurumun ilk güzergahı)
-        var kurumGuzergahlari = guzergahListesi.Where(g => g.KurumId == seciliKurumId).ToList();
-        if (kurumGuzergahlari.Any())
-        {
-            var ilk = kurumGuzergahlari.First();
-            duzenleKayit.GuzergahId = ilk.Id;
-            duzenleKayit.Guzergah = ilk;
-            duzenleKayit.GuzergahAdi = ilk.GuzergahAdi;
-            duzenleKayit.BirimGelir = ilk.BirimFiyat;
-        }
-    }
-
     void DuzenleGunDegisti(int gun, ChangeEventArgs e)
     {
         if (duzenleKayit == null) return;
@@ -906,22 +872,14 @@
         try
         {
             var kaydedilen = await KurumPuantajService.SavePuantajAsync(duzenleKayit);
-            // Listedeki satırı güncelle veya ekle
-            var idx = kayitlar.FindIndex(k => k.Id == kaydedilen.Id || (k.Id == 0 && k.GuzergahId == kaydedilen.GuzergahId && k.AracId == kaydedilen.AracId && k.Slot == kaydedilen.Slot));
+            // Listedeki satırı güncelle
+            var idx = kayitlar.FindIndex(k => k.Id == kaydedilen.Id);
             if (idx >= 0)
             {
-                var eski = kayitlar[idx];
                 kayitlar[idx] = kaydedilen;
-                degisikSatirlar.Remove(eski);
             }
-            else
-            {
-                kayitlar.Add(kaydedilen);
-            }
-            var eklendi = yeniKayitMi;
             duzenleKayit = null;
-            yeniKayitMi = false;
-            ToastService.ShowSuccess(eklendi ? "Yeni kayıt eklendi." : "Kayıt güncellendi.");
+            ToastService.ShowSuccess("Kayıt güncellendi.");
         }
         catch (Exception ex)
         {
@@ -947,7 +905,7 @@
     // ── Yardımcı ─────────────────────────────────────────────────────────────
     Dictionary<string, List<PuantajKayit>> GrupluKayitlar()
         => kayitlar
-            .GroupBy(k => k.Guzergah?.GuzergahAdi ?? "—")
+            .GroupBy(k => k.Guzergah?.GuzergahAdi ?? k.GuzergahAdi ?? "—")
             .OrderBy(g => g.Key)
             .ToDictionary(g => g.Key, g => g.ToList());
 
@@ -984,6 +942,22 @@
             degisikSatirlar.Add(k);
         }
     }
+
+    static string SlotAd(SeferSlot slot) => slot switch
+    {
+        SeferSlot.Sabah => "Sabah",
+        SeferSlot.Aksam => "Akşam",
+        SeferSlot.Mesai => "Mesai",
+        _ => slot >= SeferSlot.Diger1 ? $"Diğer{(int)slot - (int)SeferSlot.Diger1 + 1}" : slot.ToString()
+    };
+
+    static string SlotBadgeClass(SeferSlot slot) => slot switch
+    {
+        SeferSlot.Sabah => "bg-primary",
+        SeferSlot.Aksam => "bg-warning text-dark",
+        SeferSlot.Mesai => "bg-info text-dark",
+        _ => "bg-secondary"
+    };
 
     static string AyAdi(int ay) => ay switch
     {

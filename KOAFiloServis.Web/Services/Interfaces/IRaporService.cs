@@ -76,4 +76,12 @@ public interface IRaporService
         DateTime bitisTarihi,
         IseGirisCikisFiltreTipi filtreTipi = IseGirisCikisFiltreTipi.Tumu,
         KOAFiloServis.Shared.Entities.PersonelGorev? gorev = null);
+
+    // Operasyon Kar Raporu
+    Task<List<OperasyonKarRaporuSatir>> GetOperasyonKarRaporuAsync(
+        DateTime baslangic,
+        DateTime bitis,
+        AracSahiplikTipi? sahiplikTipi = null,
+        int? aracId = null,
+        int? guzergahId = null);
 }

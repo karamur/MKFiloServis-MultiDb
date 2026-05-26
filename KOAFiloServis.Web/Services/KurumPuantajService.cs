@@ -95,7 +95,7 @@ public sealed class KurumPuantajService : IKurumPuantajService
             guzergahQuery = guzergahQuery.Where(g => g.KurumId == kurumId.Value);
         var guzergahIds = await guzergahQuery.Select(g => g.Id).ToListAsync();
 
-        return await db.PuantajKayitlar
+        var kayitlar = await db.PuantajKayitlar
             .Include(p => p.Guzergah)
             .Include(p => p.Arac)
             .Include(p => p.Sofor)
@@ -107,6 +107,35 @@ public sealed class KurumPuantajService : IKurumPuantajService
             .OrderBy(p => p.Guzergah!.GuzergahAdi)
             .ThenBy(p => p.Plaka)
             .ToListAsync();
+
+        // Gap-fill: sadece SeferSayisi == 0 olan kayıtlar için OperasyonKaydi aggregate
+        // Engine-set veya manuel değerler korunur (overwrite yok).
+        var sifirOlanlar = kayitlar.Where(k => k.SeferSayisi == 0 && k.GuzergahId != null).ToList();
+        if (sifirOlanlar.Count > 0)
+        {
+            var ayBaslangic = new DateTime(yil, ay, 1);
+            var ayBitis = ayBaslangic.AddMonths(1);
+            var opAgg = await db.OperasyonKayitlari
+                .Where(o => !o.IsDeleted
+                            && o.Tarih >= ayBaslangic && o.Tarih < ayBitis
+                            && o.OperasyonDurumu == OperasyonDurumu.Gitti
+                            && guzergahIds.Contains(o.GuzergahId))
+                .GroupBy(o => new { o.GuzergahId, o.AracId, o.Slot })
+                .Select(g => new { g.Key.GuzergahId, g.Key.AracId, g.Key.Slot, Toplam = (int)g.Sum(o => o.SeferSayisi * o.PuantajCarpani) })
+                .ToListAsync();
+
+            var aggMap = opAgg.ToDictionary(
+                x => (GuzergahId: x.GuzergahId, AracId: x.AracId, Slot: x.Slot),
+                x => x.Toplam);
+
+            foreach (var k in sifirOlanlar)
+            {
+                if (aggMap.TryGetValue((k.GuzergahId!.Value, k.AracId ?? 0, k.Slot), out var t) && t > 0)
+                    k.SeferSayisi = t;
+            }
+        }
+
+        return kayitlar;
     }
 
     public async Task<PuantajKayit?> GetPuantajByIdAsync(int id)
@@ -143,6 +172,18 @@ public sealed class KurumPuantajService : IKurumPuantajService
 
         if (mevcut == null)
         {
+            // Savunma: detached navigation'lar Add() ile tüm graph'ı Added yapmasın.
+            // FK alanları (GuzergahId, AracId, SoforId, ...) zaten set edilmiş durumda.
+            kayit.Guzergah = null;
+            kayit.Arac = null;
+            kayit.Sofor = null;
+            kayit.KurumCari = null;
+            kayit.OdemeYapilacakCari = null;
+            kayit.FaturaKesiciCari = null;
+            kayit.Kurum = null;
+            kayit.IsverenFirma = null;
+            kayit.HesapDonemi = null;
+
             db.PuantajKayitlar.Add(kayit);
         }
         else
@@ -211,6 +252,17 @@ public sealed class KurumPuantajService : IKurumPuantajService
 
             if (mevcut == null)
             {
+                // Savunma: detached navigation'lar Add() ile tüm graph'ı Added yapmasın.
+                kayit.Guzergah = null;
+                kayit.Arac = null;
+                kayit.Sofor = null;
+                kayit.KurumCari = null;
+                kayit.OdemeYapilacakCari = null;
+                kayit.FaturaKesiciCari = null;
+                kayit.Kurum = null;
+                kayit.IsverenFirma = null;
+                kayit.HesapDonemi = null;
+
                 db.PuantajKayitlar.Add(kayit);
             }
             else

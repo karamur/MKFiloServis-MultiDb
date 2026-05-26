@@ -1,4 +1,4 @@
-using KOAFiloServis.Web.Components;
+﻿using KOAFiloServis.Web.Components;
 using KOAFiloServis.Web.Data;
 using KOAFiloServis.Web.Helpers;
 using KOAFiloServis.Web.Jobs;
@@ -958,6 +958,40 @@ await RunScopedSafeAsync(app, "ApplyMigrationsToTenantDatabases", async services
             await KOAFiloServis.Web.Data.Migrations.KiralikPlakaFaturaMigrationHelper.ApplyAsync(tenantCtx, logger);
             await KOAFiloServis.Web.Data.Migrations.GuzergahSeferFirmaIdConstraintHelper.ApplyAsync(tenantCtx, logger);
 
+            // SyncPuantajSchema: idempotent CREATE IF NOT EXISTS for tables that
+            // may be missing on tenant DBs created before this migration existed.
+            // Uses raw SQL (CREATE TABLE IF NOT EXISTS / ADD COLUMN IF NOT EXISTS).
+            // Race-condition safe: multiple instances can run this concurrently.
+            await KOAFiloServis.Web.Data.Migrations.SyncPuantajSchemaMigrationHelper.ApplyAsync(tenantCtx, logger);
+
+            // NOT: EF Core MigrateAsync() burada çağrılmaz.
+            // Sebep: multi-instance deployment'da race condition riski —
+            // iki instance aynı anda __EFMigrationsHistory exclusive lock için yarışır.
+            // Bunun yerine schema değişiklikleri idempotent helper pattern ile uygulanır.
+            // Yeni EF migration eklenirse: ilgili helper'ı buraya ekle, MigrateAsync kullanma.
+
+            // Tenant DB sequence reset
+            var tenantTables = new[]
+            {
+                "Cariler", "Firmalar", "Personeller", "Araclar", "Kurumlar", "Guzergahlar",
+                "Roller", "Kullanicilar", "MuhasebeHesaplari", "BankaHesaplari",
+                "PuantajKayitlar", "PuantajHesapDonemleri", "FiloGuzergahEslestirmeleri",
+                "GuzergahSeferleri", "AracMasraflar", "Faturalar", "CariHareketler",
+                "OperasyonKayitlari", "PuantajJobExecutions", "PuantajDetaylari",
+                "PuantajFinansalKayitlar", "PuantajAuditLogs"
+            };
+            foreach (var tbl in tenantTables)
+            {
+                try
+                {
+                    await tenantCtx.Database.ExecuteSqlRawAsync($"""
+                        SELECT setval(pg_get_serial_sequence('"{tbl}"', 'Id'),
+                            COALESCE((SELECT MAX("Id") FROM "{tbl}"), 0) + 1, false);
+                        """);
+                }
+                catch { }
+            }
+
             logger.LogInformation("Migration helper'lar uygulandi: {Firma} ({DbName})", firma.FirmaAdi, firma.DatabaseName);
         }
         catch (Exception ex)
@@ -991,6 +1025,46 @@ await RunScopedSafeAsync(app, "EnsureHoldingInitialData", async services =>
         logger.LogInformation("Ilk holding veri toplama tamamlandi");
     }
 });
+
+// PostgreSQL sequence desync düzeltmesi: raw SQL veya explicit Id ile eklenen kayıtlardan sonra
+// sequence'lar MAX(Id)'nin gerisinde kalabilir. Tüm SERIAL kolonları MAX(Id)'ye resetle.
+if (dbProvider == "PostgreSQL")
+{
+    await RunScopedSafeAsync(app, "FixPostgresSequences", async services =>
+    {
+        var context = services.GetRequiredService<ApplicationDbContext>();
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        var tables = new[]
+        {
+            "Cariler", "Firmalar", "Personeller", "Araclar", "Kurumlar", "Guzergahlar",
+            "Roller", "Kullanicilar", "MuhasebeHesaplari", "BankaHesaplari",
+            "PuantajKayitlar", "PuantajHesapDonemleri", "FiloGuzergahEslestirmeleri",
+            "GuzergahSeferleri", "AracMasraflar", "Faturalar", "CariHareketler"
+        };
+
+        int fixed_ = 0;
+        foreach (var table in tables)
+        {
+            try
+            {
+                var sql = $"""
+                    SELECT setval(
+                        pg_get_serial_sequence('"{table}"', 'Id'),
+                        COALESCE((SELECT MAX("Id") FROM "{table}"), 0) + 1,
+                        false
+                    );
+                    """;
+                await context.Database.ExecuteSqlRawAsync(sql);
+                fixed_++;
+            }
+            catch
+            {
+                // Tablo yoksa veya serial sequence yoksa sessizce geç
+            }
+        }
+        logger.LogInformation("PostgreSQL sequence reset tamamlandi: {Count} tablo.", fixed_);
+    });
+}
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

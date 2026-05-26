@@ -207,6 +207,10 @@ public sealed class TenantDatabaseService : ITenantDatabaseService
         await using var enableFkCmd = new NpgsqlCommand("SET session_replication_role = 'origin';", tenantConn);
         await enableFkCmd.ExecuteNonQueryAsync();
 
+        // Sequence reset: veri gocu sirasinda row'lar orijinal Id degerleriyle kopyalanir.
+        // PostgreSQL sequence'leri hala 1'den baslar → yeni INSERT'ler PK ihlali (23505) uretir.
+        await ResetAllSequencesAsync(tenantConn);
+
         _logger.LogInformation("Veri gocu tamamlandi: {LookupTotal} lookup + {TenantTotal} tenant = {Total} satir",
             lookupTotal, tenantTotal, lookupTotal + tenantTotal);
     }
@@ -390,6 +394,47 @@ public sealed class TenantDatabaseService : ITenantDatabaseService
         {
             _logger.LogDebug("[VeriGocu] {Table} hedefte yok (legacy), atlaniyor", table);
             return 0;
+        }
+    }
+
+    /// <summary>
+    /// Veri gocu sirasinda row'lar orijinal Id degerleriyle INSERT edilir.
+    /// PostgreSQL sequence'leri guncellenmedigi icin yeni kayitlarda PK ihlali (23505) olusur.
+    /// Tum SERIAL/IDENTITY kolonlarinin sequence'lerini max(Id) degerine resetler.
+    /// </summary>
+    private static async Task ResetAllSequencesAsync(NpgsqlConnection conn)
+    {
+        try
+        {
+            var sql = """
+                DO $$
+                DECLARE
+                    r RECORD;
+                    max_id BIGINT;
+                BEGIN
+                    FOR r IN
+                        SELECT table_name
+                        FROM information_schema.columns
+                        WHERE table_schema = 'public'
+                          AND column_name = 'Id'
+                          AND column_default LIKE 'nextval%'
+                    LOOP
+                        EXECUTE format('SELECT COALESCE(MAX("Id"), 0) FROM %I', r.table_name) INTO max_id;
+                        IF max_id > 0 THEN
+                            EXECUTE format('SELECT setval(pg_get_serial_sequence(''%I'', ''Id''), %s, true)',
+                                           r.table_name, max_id);
+                        END IF;
+                    END LOOP;
+                END $$;
+                """;
+            await using var cmd = new NpgsqlCommand(sql, conn);
+            await cmd.ExecuteNonQueryAsync();
+        }
+        catch (Exception ex)
+        {
+            // Kritik degil: sequence reset basarisiz olsa bile goc tamamlanmis sayilir.
+            // Bu durumda ilk yeni kayitta duplicate key alinirsa manuel mudahele gerekir.
+            System.Console.WriteLine($"[TenantDb] Sequence reset basarisiz: {ex.Message}");
         }
     }
 

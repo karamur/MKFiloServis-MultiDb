@@ -247,6 +247,18 @@ public class HakedisService : IHakedisService
         using var context = await _contextFactory.CreateDbContextAsync();
         hakedis.HesaplaGelir();
         hakedis.HesaplaGider();
+
+        // Savunma: caller-provided entity detached navigation taşıyabilir
+        hakedis.Guzergah = null;
+        hakedis.Arac = null;
+        hakedis.Sofor = null;
+        hakedis.KurumCari = null;
+        hakedis.OdemeYapilacakCari = null;
+        hakedis.FaturaKesiciCari = null;
+        hakedis.Kurum = null;
+        hakedis.IsverenFirma = null;
+        hakedis.HesapDonemi = null;
+
         context.PuantajKayitlar.Add(hakedis);
         await context.SaveChangesAsync();
         return hakedis;

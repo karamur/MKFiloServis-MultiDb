@@ -81,6 +81,7 @@ public sealed class PuantajEngineService : IPuantajEngineService
                 hesapDonemi.Durum = PuantajHesapDurum.Iptal;
                 hesapDonemi.Notlar = (hesapDonemi.Notlar ?? "") + " | İşlenecek operasyon bulunamadı.";
                 await db.SaveChangesAsync();
+                await tx.CommitAsync(); // Iptal donem de olsa persist et — yoksa rollback olur, caller stub ID görür
                 return new PuantajEngineSonucV1 { HesapDonemiId = hesapDonemi.Id, Versiyon = yeniVersiyon };
             }
 
@@ -90,7 +91,27 @@ public sealed class PuantajEngineService : IPuantajEngineService
             var eslestirmeler = await db.FiloGuzergahEslestirmeleri
                 .Where(e => guzergahIds2.Contains(e.GuzergahId) && e.IsActive).ToListAsync(ct);
 
-            // 5. GuzergahId + AracId + Slot bazında grupla
+            // 5. Önceki dönemin PuantajKayit'larını soft-delete ET (yeni insert'lerden ÖNCE).
+            // Sebep: partial UNIQUE index WHERE "IsDeleted"=false —
+            // eski kayıtlar IsDeleted=false iken yeni insert'ler 23505 alır.
+            // Bu işlem yeni insert'lerden ÖNCE yapılmalıdır.
+            int superseded = 0;
+            if (oncekiAktif != null)
+            {
+                var oncekiKayitlar = await db.PuantajKayitlar
+                    .Where(p => p.HesapDonemiId == oncekiAktif.Id && !p.IsDeleted)
+                    .ToListAsync(ct);
+                foreach (var pk in oncekiKayitlar)
+                {
+                    pk.IsDeleted = true;
+                    pk.OnayDurum = PuantajOnayDurum.Taslak;
+                    pk.UpdatedAt = DateTime.UtcNow;
+                    superseded++;
+                }
+                await db.SaveChangesAsync(); // soft-delete'leri persist et (unique index için)
+            }
+
+            // 6. GuzergahId + AracId + Slot bazında grupla
             var gruplar = operasyonlar.GroupBy(o => new { o.GuzergahId, o.AracId, o.Slot }).ToList();
 
             int uretilen = 0, detaySayisi = 0;
@@ -175,7 +196,7 @@ public sealed class PuantajEngineService : IPuantajEngineService
 
             await db.SaveChangesAsync(); // PuantajKayit Id'leri için
 
-            // 6. PuantajDetay'ları oluştur
+            // 7. PuantajDetay'ları oluştur
             foreach (var (pk, ops) in yeniPuantajKayitlar)
             {
                 foreach (var o in ops)
@@ -197,25 +218,24 @@ public sealed class PuantajEngineService : IPuantajEngineService
                 }
             }
 
-            // 7. Önceki Aktif hesabı Superseded yap
-            int superseded = 0;
+            // 8. Önceki Aktif hesabı Superseded yap + PuantajDetay soft-delete
+            // PuantajKayit soft-delete'i step 5'te (insert'lerden ÖNCE) yapıldı.
             if (oncekiAktif != null)
             {
                 oncekiAktif.Durum = PuantajHesapDurum.Superseded;
                 oncekiAktif.UpdatedAt = DateTime.UtcNow;
 
-                var oncekiKayitlar = await db.PuantajKayitlar
-                    .Where(p => p.HesapDonemiId == oncekiAktif.Id && !p.IsDeleted)
+                // PuantajDetay kayıtlarını soft-delete et
+                var oncekiDetaylar = await db.PuantajDetaylari
+                    .Where(d => d.HesapDonemiId == oncekiAktif.Id && !d.IsDeleted)
                     .ToListAsync(ct);
-                foreach (var pk in oncekiKayitlar)
+                foreach (var d in oncekiDetaylar)
                 {
-                    pk.OnayDurum = PuantajOnayDurum.Taslak;
-                    pk.UpdatedAt = DateTime.UtcNow;
-                    superseded++;
+                    d.IsDeleted = true;
                 }
             }
 
-            // 8. HesapDonemi'ni Aktif yap
+            // 9. HesapDonemi'ni Aktif yap
             hesapDonemi.Durum = PuantajHesapDurum.Aktif;
             hesapDonemi.UpdatedAt = DateTime.UtcNow;
 
