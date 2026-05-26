@@ -9,11 +9,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace KOAFiloServis.Web.Data.Migrations
+namespace KOAFiloServis.Web.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260525142807_AddPuantajFinansalKayit")]
-    partial class AddPuantajFinansalKayit
+    [Migration("20260526002314_SyncPuantajSchema")]
+    partial class SyncPuantajSchema
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -10586,6 +10586,80 @@ namespace KOAFiloServis.Web.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("PuantajHesapDonemleri");
+                });
+
+            modelBuilder.Entity("KOAFiloServis.Shared.Entities.PuantajJobExecution", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Ay")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("Baslangic")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("Bitis")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("Durum")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FirmaId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("HataMesaji")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int?>("HesapDonemiId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Hesaplayan")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("IslenenOperasyon")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("KurumId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Tetikleyen")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("UretilenPuantaj")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Versiyon")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Yil")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Durum");
+
+                    b.HasIndex("FirmaId", "Yil", "Ay")
+                        .IsUnique()
+                        .HasFilter("\"Durum\" = 0");
+
+                    b.ToTable("PuantajJobExecutions");
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PuantajKayit", b =>
