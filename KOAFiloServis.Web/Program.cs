@@ -347,6 +347,8 @@ builder.Services.AddScoped<IPuantajService, PuantajService>();
 builder.Services.AddScoped<IKurumPuantajService, KurumPuantajService>();
 builder.Services.AddScoped<OperasyonKaydiBusinessRules>();
 builder.Services.AddScoped<KOAFiloServis.Web.Services.Interfaces.IOperasyonKaydiService, OperasyonKaydiService>();
+builder.Services.AddScoped<KOAFiloServis.Web.Services.Interfaces.IPuantajSyncService, PuantajSyncService>();
+builder.Services.AddScoped<KOAFiloServis.Web.Services.Interfaces.IDuplicateDetectionService, DuplicateDetectionService>();
 builder.Services.AddScoped<KOAFiloServis.Web.Services.Interfaces.IPreviewEngineService, PreviewEngineService>();
 builder.Services.AddScoped<KOAFiloServis.Web.Services.Interfaces.IPuantajEngineService, PuantajEngineService>();
 builder.Services.AddScoped<KOAFiloServis.Web.Services.Interfaces.IPuantajWorkflowService, PuantajWorkflowService>();
@@ -971,6 +973,7 @@ await RunScopedSafeAsync(app, "ApplyMigrationsToTenantDatabases", async services
             // Yeni EF migration eklenirse: ilgili helper'ı buraya ekle, MigrateAsync kullanma.
 
             await KOAFiloServis.Web.Data.Migrations.PuantajCarpaniMigrationHelper.ApplyAsync(tenantCtx, logger);
+            await KOAFiloServis.Web.Data.Migrations.PuantajSyncMigrationHelper.ApplyAsync(tenantCtx, logger);
 
             // Tenant DB sequence reset
             var tenantTables = new[]

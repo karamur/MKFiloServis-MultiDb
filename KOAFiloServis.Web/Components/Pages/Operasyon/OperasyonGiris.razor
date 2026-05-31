@@ -277,6 +277,8 @@
                         <th style="width:60px">Sefer</th>
                         <th style="width:65px">Çarpan</th>
                         <th style="width:90px">Durum</th>
+                        <th style="width:45px">Kaynak</th>
+                        <th style="width:50px"></th>
                         <th style="width:50px"></th>
                     </tr>
                 </thead>
@@ -341,6 +343,39 @@
                                         <option value="@d" selected="@(o.OperasyonDurumu == d)">@DurumAd(d)</option>
                                     }
                                 </select>
+                            </td>
+
+                            @* Kaynak *@
+                            <td class="text-center">
+                                @if (o.Kaynak == PuantajKaynak.Puantaj)
+                                { <span class="badge bg-info" title="Puantajdan oluşturuldu">P</span> }
+                                else if (o.Kaynak == PuantajKaynak.ExcelImport)
+                                { <span class="badge bg-success" title="Excel import">E</span> }
+                                else
+                                { <span class="badge bg-secondary" title="Manuel">M</span> }
+                                @if (o.KullaniciKilitliMi)
+                                { <i class="bi bi-lock-fill text-warning small ms-1" title="Kullanıcı tarafından kilitlendi"></i> }
+                            </td>
+
+                            @* Kilit *@
+                            <td class="text-center">
+                                @if (o.Kaynak == PuantajKaynak.Puantaj)
+                                {
+                                    @if (o.KullaniciKilitliMi)
+                                    {
+                                        <button class="btn btn-outline-warning btn-sm py-0 px-1" title="Kilit Aç"
+                                                @onclick="() => KilitToggle(o)">
+                                            <i class="bi bi-unlock-fill"></i>
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-outline-secondary btn-sm py-0 px-1" title="Kilitle"
+                                                @onclick="() => KilitToggle(o)">
+                                            <i class="bi bi-lock"></i>
+                                        </button>
+                                    }
+                                }
                             </td>
 
                             @* Sil *@

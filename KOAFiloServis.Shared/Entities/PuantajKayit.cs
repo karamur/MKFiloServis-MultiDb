@@ -356,7 +356,9 @@ public enum SeferSlot
     Diger2 = 5,
     Diger3 = 6,
     Diger4 = 7,
-    Diger5 = 8
+    Diger5 = 8,
+    /// <summary>Hem Sabah hem Akşam seferini tek kayıtta temsil eder (2 sefer sayılır).</summary>
+    SabahAksam = 9
 }
 
 /// <summary>
@@ -409,7 +411,8 @@ public enum PuantajKaynak
 {
     Manuel = 0,
     ExcelImport = 1,
-    ServisCalismaOtomatik = 2
+    ServisCalismaOtomatik = 2,
+    Puantaj = 3
 }
 
 /// <summary>

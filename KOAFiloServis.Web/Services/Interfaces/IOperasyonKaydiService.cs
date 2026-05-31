@@ -30,6 +30,10 @@ public interface IOperasyonKaydiService
 
     Task DeleteAsync(int id, string? deletedBy = null);
 
+    // ── Kullanıcı Kilitleme ──────────────────────────────────────────────────
+    Task KilitleAsync(int id);
+    Task KilitAcAsync(int id);
+
     // ── Şablon ──────────────────────────────────────────────────────────────
 
     /// <summary>

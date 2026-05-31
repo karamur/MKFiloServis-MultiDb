@@ -13,12 +13,15 @@ public sealed class OperasyonKaydiService : IOperasyonKaydiService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
     private readonly OperasyonKaydiBusinessRules _rules;
+    private readonly ICurrentUserAccessor _currentUser;
 
     public OperasyonKaydiService(IDbContextFactory<ApplicationDbContext> dbFactory,
-                                 OperasyonKaydiBusinessRules rules)
+                                 OperasyonKaydiBusinessRules rules,
+                                 ICurrentUserAccessor currentUser)
     {
         _dbFactory = dbFactory;
         _rules = rules;
+        _currentUser = currentUser;
     }
 
     // ── Sorgulama ──────────────────────────────────────────────────────────
@@ -183,6 +186,32 @@ public sealed class OperasyonKaydiService : IOperasyonKaydiService
         kayit.IsDeleted = true;
         kayit.DeletedAt = DateTime.UtcNow;
         kayit.DeletedBy = deletedBy;
+        kayit.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+    }
+
+    // ── Kullanıcı Kilitleme ──────────────────────────────────────────────────
+
+    public async Task KilitleAsync(int id)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var kayit = await db.OperasyonKayitlari.FindAsync(id);
+        if (kayit == null) return;
+        kayit.KullaniciKilitliMi = true;
+        kayit.KilitTarihi = DateTime.UtcNow;
+        kayit.KilitleyenKullaniciId = null; // CurrentUser id resolution in future
+        kayit.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+    }
+
+    public async Task KilitAcAsync(int id)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var kayit = await db.OperasyonKayitlari.FindAsync(id);
+        if (kayit == null) return;
+        kayit.KullaniciKilitliMi = false;
+        kayit.KilitTarihi = null;
+        kayit.KilitleyenKullaniciId = null;
         kayit.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
     }
@@ -373,7 +402,8 @@ public sealed class OperasyonKaydiService : IOperasyonKaydiService
                         FaturaKesiciCariId = pk.FaturaKesiciCariId,
                         BelgeNo = pk.BelgeNo,
                         TransferDurum = pk.TransferDurum,
-                        Kaynak = pk.Kaynak,
+                        Kaynak = PuantajKaynak.Puantaj,
+                        KaynakPuantajId = pk.Id,
                         ExcelImportId = pk.ExcelImportId,
                         ExcelSatirNo = pk.ExcelSatirNo,
                         Notlar = pk.Notlar,

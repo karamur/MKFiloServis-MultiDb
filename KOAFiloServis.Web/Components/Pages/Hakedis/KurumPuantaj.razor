@@ -2,6 +2,7 @@
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
 @using Microsoft.AspNetCore.Authorization
+@using KOAFiloServis.Web.Services.Interfaces
 @inject IKurumPuantajService KurumPuantajService
 @inject IGuzergahService GuzergahService
 @inject IAracService AracService
@@ -10,6 +11,9 @@
 @inject IToastService ToastService
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject IPuantajSyncService PuantajSyncService
+@inject IDuplicateDetectionService DuplicateDetectionService
+@inject AuthenticationStateProvider AuthStateProvider
 @attribute [Authorize(Roles = "Admin,Operasyon,Muhasebeci,HoldingYoneticisi")]
 @rendermode InteractiveServer
 
@@ -72,6 +76,21 @@
             <a href="/puantaj/import" class="btn btn-outline-success">
                 <i class="bi bi-file-earmark-excel me-1"></i> Excel Aktar
             </a>
+            <button class="btn btn-outline-info" @onclick="SenkronizeEt" disabled="@yukleniyor">
+                <i class="bi bi-sync me-1"></i> Senkronize Et
+            </button>
+            <button class="btn btn-outline-secondary" @onclick="DuplicateRaporuGoster" disabled="@yukleniyor">
+                <i class="bi bi-exclamation-triangle me-1"></i> Duplicate Raporu
+            </button>
+            @if (kullaniciYetkili)
+            {
+                <button class="btn btn-outline-warning" @onclick="BackfillCalistir" disabled="@yukleniyor">
+                    <i class="bi bi-database-add me-1"></i> Eksik Operasyon Kayıtlarını Oluştur
+                </button>
+                <button class="btn btn-outline-danger" @onclick="PuantajdanYenidenOlustur" disabled="@yukleniyor">
+                    <i class="bi bi-arrow-repeat me-1"></i> Puantajdan Yeniden Oluştur
+                </button>
+            }
         </div>
     </div>
 
@@ -368,83 +387,188 @@
         }
         else
         {
-            <!-- ─── ÖZET TABLO ──────────────────────────────────────── -->
-            <div class="table-responsive">
-                <table class="table table-bordered table-sm puantaj-table align-middle">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Güzergah</th>
-                            <th>Araç</th>
-                            <th>Şoför</th>
-                            <th>Yön</th>
-                            <th class="text-center">Sefer Sayısı</th>
-                            <th class="text-center">Toplam Gün</th>
-                            <th style="width:60px">İşlem</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var kayit in kayitlar)
+            var ozetKayitlar = FiltreliKayitlar();
+            <!-- ─── ÖZET TABLO + FİLTRE PANELİ ────────────────────────── -->
+            <div class="row">
+                <div class="col-md-9">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm puantaj-table align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Güzergah</th>
+                                    <th>Araç</th>
+                                    <th>Şoför</th>
+                                    <th>Yön</th>
+                                    <th class="text-center">Sefer Sayısı</th>
+                                    <th class="text-center">Toplam Gün</th>
+                                    <th class="text-center" style="width:50px">OpK</th>
+                                    <th style="width:60px">İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var kayit in ozetKayitlar)
+                                {
+                                    <tr class="@(degisikSatirlar.Contains(kayit) ? "satir-degisik" : "")">
+                                        <td>
+                                        @(kayit.Guzergah?.GuzergahAdi ?? kayit.GuzergahAdi)
+                                        @if (!string.IsNullOrWhiteSpace(kayit.SlotAdi))
+                                        { <br /><small class="text-muted">@kayit.SlotAdi</small> }
+                                        else if (kayit.Slot >= SeferSlot.Diger1)
+                                        { <br /><small class="text-muted">@kayit.Slot</small> }
+                                    </td>
+                                        <td class="fw-semibold">@kayit.Plaka</td>
+                                        <td>@kayit.SoforAdi</td>
+                                        <td>
+                                            <select class="form-select form-select-sm py-0" style="width:90px;font-size:.76rem"
+                                                    value="@kayit.Yon"
+                                                    @onchange="e => YonDegisti(kayit, e)">
+                                                <option value="@PuantajYon.Sabah">Sabah</option>
+                                                <option value="@PuantajYon.Aksam">Akşam</option>
+                                                <option value="@PuantajYon.SabahAksam">S+A</option>
+                                            </select>
+                                        </td>
+                                        <td class="text-center">
+                                            <input type="number" min="0" max="31" style="width:55px;text-align:center"
+                                                   class="form-control form-control-sm d-inline-block"
+                                                   value="@kayit.SeferSayisi"
+                                                   @onchange="e => SeferSayisiDegisti(kayit, e)" />
+                                        </td>
+                                        <td class="col-toplam">@kayit.SeferGunuToplami</td>
+                                        <td class="text-center">
+                                            @if (operasyonKaydiVarMiLookup.ContainsKey(kayit.Id))
+                                            { <span class="badge bg-success" title="Operasyon kaydı mevcut">OK</span> }
+                                            else
+                                            { <span class="badge bg-secondary" title="Operasyon kaydı yok">--</span> }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (kayit.OnayDurum == PuantajOnayDurum.Onaylandi)
+                                            { <span class="badge bg-success small" style="cursor:pointer" title="Onayı kaldır" @onclick="() => OnayToggle(kayit)">Onayli</span> }
+                                            else if (kayit.OnayDurum == PuantajOnayDurum.OnayBekliyor)
+                                            { <span class="badge bg-warning text-dark small" style="cursor:pointer" title="Onayla" @onclick="() => OnayToggle(kayit)">Bekliyor</span> }
+                                            else if (kayit.OnayDurum == PuantajOnayDurum.Reddedildi)
+                                            { <span class="badge bg-danger small" style="cursor:pointer" title="Taslağa çevir" @onclick="() => OnayToggle(kayit)">Red</span> }
+                                            else
+                                            { <span class="badge bg-secondary small" style="cursor:pointer" title="Onayla" @onclick="() => OnayToggle(kayit)">Taslak</span> }
+                                        </td>
+                                        <td>
+                                            <div class="d-flex gap-1">
+                                                <button class="btn btn-xs btn-outline-primary p-1" title="Günlük Düzenle"
+                                                        @onclick="() => TekKayitDuzenle(kayit)">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                                <button class="btn btn-xs btn-outline-danger p-1" title="Sil"
+                                                        @onclick="() => KayitSil(kayit)">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot class="table-secondary fw-bold" style="font-size:.80rem">
+                                <tr>
+                                    <td colspan="5" class="text-end">
+                                        Toplam @if (FiltreAktif) { <text>(filtreli)</text> }:
+                                    </td>
+                                    <td class="text-center">@ozetKayitlar.Sum(k => k.SeferSayisi)</td>
+                                    <td class="text-center">@ozetKayitlar.Sum(k => k.SeferGunuToplami)</td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ─── FİLTRE PANELİ ──────────────────────────────────────── -->
+                <div class="col-md-3">
+                    <div class="card border-secondary">
+                        <div class="card-header py-2 d-flex justify-content-between align-items-center"
+                             style="cursor:pointer" @onclick="() => filtrePanelGorunur = !filtrePanelGorunur">
+                            <span class="fw-semibold small">
+                                <i class="bi bi-funnel me-1"></i> Filtreler
+                                @if (FiltreAktif)
+                                { <span class="badge bg-primary ms-1">@(seciliFirmalar.Count + seciliPlakalar.Count)</span> }
+                            </span>
+                            <i class="bi @(filtrePanelGorunur ? "bi-chevron-up" : "bi-chevron-down") small"></i>
+                        </div>
+                        @if (filtrePanelGorunur)
                         {
-                            <tr class="@(degisikSatirlar.Contains(kayit) ? "satir-degisik" : "")">
-                                <td>
-                                @(kayit.Guzergah?.GuzergahAdi ?? kayit.GuzergahAdi)
-                                @if (!string.IsNullOrWhiteSpace(kayit.SlotAdi))
-                                { <br /><small class="text-muted">@kayit.SlotAdi</small> }
-                                else if (kayit.Slot >= SeferSlot.Diger1)
-                                { <br /><small class="text-muted">@kayit.Slot</small> }
-                            </td>
-                                <td class="fw-semibold">@kayit.Plaka</td>
-                                <td>@kayit.SoforAdi</td>
-                                <td>
-                                    <select class="form-select form-select-sm py-0" style="width:90px;font-size:.76rem"
-                                            value="@kayit.Yon"
-                                            @onchange="e => YonDegisti(kayit, e)">
-                                        <option value="@PuantajYon.Sabah">Sabah</option>
-                                        <option value="@PuantajYon.Aksam">Akşam</option>
-                                        <option value="@PuantajYon.SabahAksam">S+A</option>
-                                    </select>
-                                </td>
-                                <td class="text-center">
-                                    <input type="number" min="0" max="31" style="width:55px;text-align:center"
-                                           class="form-control form-control-sm d-inline-block"
-                                           value="@kayit.SeferSayisi"
-                                           @onchange="e => SeferSayisiDegisti(kayit, e)" />
-                                </td>
-                                <td class="col-toplam">@kayit.SeferGunuToplami</td>
-                                <td class="text-center">
-                                    @if (kayit.OnayDurum == PuantajOnayDurum.Onaylandi)
-                                    { <span class="badge bg-success small" style="cursor:pointer" title="Onayı kaldır" @onclick="() => OnayToggle(kayit)">Onayli</span> }
-                                    else if (kayit.OnayDurum == PuantajOnayDurum.OnayBekliyor)
-                                    { <span class="badge bg-warning text-dark small" style="cursor:pointer" title="Onayla" @onclick="() => OnayToggle(kayit)">Bekliyor</span> }
-                                    else if (kayit.OnayDurum == PuantajOnayDurum.Reddedildi)
-                                    { <span class="badge bg-danger small" style="cursor:pointer" title="Taslağa çevir" @onclick="() => OnayToggle(kayit)">Red</span> }
-                                    else
-                                    { <span class="badge bg-secondary small" style="cursor:pointer" title="Onayla" @onclick="() => OnayToggle(kayit)">Taslak</span> }
-                                </td>
-                                <td>
-                                    <div class="d-flex gap-1">
-                                        <button class="btn btn-xs btn-outline-primary p-1" title="Günlük Düzenle"
-                                                @onclick="() => TekKayitDuzenle(kayit)">
-                                            <i class="bi bi-pencil"></i>
-                                        </button>
-                                        <button class="btn btn-xs btn-outline-danger p-1" title="Sil"
-                                                @onclick="() => KayitSil(kayit)">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
+                            <div class="card-body py-2" style="font-size:.78rem; max-height:70vh; overflow-y:auto">
+                                @if (FiltreAktif)
+                                {
+                                    <button class="btn btn-sm btn-outline-secondary w-100 mb-2"
+                                            @onclick="FiltreleriTemizle">
+                                        <i class="bi bi-x-circle me-1"></i> Filtreleri Temizle
+                                    </button>
+                                }
+
+                                <!-- Sahibi Firma -->
+                                <div class="fw-semibold mb-1 small text-secondary">Sahibi Firma</div>
+                                @{
+                                    var firmaSecenekleri = FirmaSecenekleri();
+                                }
+                                @if (firmaSecenekleri.Any())
+                                {
+                                    <div class="mb-3">
+                                        @for (int fi = 0; fi < firmaSecenekleri.Count; fi++)
+                                        {
+                                            var firma = firmaSecenekleri[fi];
+                                            <div class="form-check mb-0">
+                                                <input class="form-check-input" type="checkbox"
+                                                       checked="@seciliFirmalar.Contains(firma)"
+                                                       @onchange="() => FirmaFiltreToggle(firma)"
+                                                       id="@($"frm_{fi}")" />
+                                                <label class="form-check-label" for="@($"frm_{fi}")">
+                                                    @firma
+                                                </label>
+                                            </div>
+                                        }
                                     </div>
-                                </td>
-                            </tr>
+                                }
+                                else
+                                {
+                                    <p class="text-muted small mb-3">Firma bilgisi yok</p>
+                                }
+
+                                <!-- Araç -->
+                                <div class="fw-semibold mb-1 small text-secondary">Araç</div>
+                                @{
+                                    var plakaSecenekleri = PlakaSecenekleri();
+                                }
+                                @if (plakaSecenekleri.Any())
+                                {
+                                    <div class="mb-2">
+                                        @for (int pi = 0; pi < plakaSecenekleri.Count; pi++)
+                                        {
+                                            var plaka = plakaSecenekleri[pi];
+                                            <div class="form-check mb-0">
+                                                <input class="form-check-input" type="checkbox"
+                                                       checked="@seciliPlakalar.Contains(plaka)"
+                                                       @onchange="() => PlakaFiltreToggle(plaka)"
+                                                       id="@($"plk_{pi}")" />
+                                                <label class="form-check-label" for="@($"plk_{pi}")">
+                                                    @plaka
+                                                </label>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <p class="text-muted small">Plaka bilgisi yok</p>
+                                }
+
+                                @if (FiltreAktif)
+                                {
+                                    <hr class="my-2" />
+                                    <small class="text-muted">
+                                        <strong>@ozetKayitlar.Count</strong> / @kayitlar.Count satır
+                                    </small>
+                                }
+                            </div>
                         }
-                    </tbody>
-                    <tfoot class="table-secondary fw-bold" style="font-size:.80rem">
-                        <tr>
-                            <td colspan="4" class="text-end">Toplam:</td>
-                            <td class="text-center">@kayitlar.Sum(k => k.SeferSayisi)</td>
-                            <td class="text-center">@kayitlar.Sum(k => k.SeferGunuToplami)</td>
-                            <td></td>
-                        </tr>
-                    </tfoot>
-                </table>
+                    </div>
+                </div>
             </div>
         }
     }
@@ -596,9 +720,84 @@
 
     bool degisiklikVar => degisikSatirlar.Count > 0;
 
+    // ── Filtre State ──────────────────────────────────────────────────────────
+    HashSet<string> seciliFirmalar = [];
+    HashSet<string> seciliPlakalar = [];
+    bool filtrePanelGorunur = true;
+
+    // ── Sync State ─────────────────────────────────────────────────────────
+    Dictionary<int, bool> operasyonKaydiVarMiLookup = [];
+    bool kullaniciYetkili = false;
+
+    // Filtrelenmiş kayıt listesi
+    List<PuantajKayit> FiltreliKayitlar()
+    {
+        var sonuc = kayitlar.AsEnumerable();
+        if (seciliFirmalar.Count > 0)
+            sonuc = sonuc.Where(k => seciliFirmalar.Contains(SahibiFirma(k)));
+        if (seciliPlakalar.Count > 0)
+            sonuc = sonuc.Where(k => seciliPlakalar.Contains(k.Plaka ?? ""));
+        return sonuc.ToList();
+    }
+
+    // Filtre seçenekleri: benzersiz plakalar
+    List<string> PlakaSecenekleri() =>
+        kayitlar.Select(k => k.Plaka ?? "")
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(p => p).ToList();
+
+    // Filtre seçenekleri: benzersiz sahibi firmalar
+    List<string> FirmaSecenekleri() =>
+        kayitlar.Select(k => SahibiFirma(k))
+                .Where(f => !string.IsNullOrWhiteSpace(f))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(f => f).ToList();
+
+    // Bir PuantajKayit'ın sahibi firmasını belirle
+    string SahibiFirma(PuantajKayit k)
+    {
+        if (!string.IsNullOrWhiteSpace(k.AitFirmaAdi))
+            return k.AitFirmaAdi;
+
+        if (k.AracId.HasValue && k.AracId > 0)
+        {
+            var arac = aracListesi.FirstOrDefault(a => a.Id == k.AracId.Value);
+            if (arac?.Firma != null && !string.IsNullOrWhiteSpace(arac.Firma.FirmaAdi))
+                return arac.Firma.FirmaAdi;
+        }
+        return "";
+    }
+
+    void FirmaFiltreToggle(string firma)
+    {
+        if (!seciliFirmalar.Remove(firma))
+            seciliFirmalar.Add(firma);
+    }
+
+    void PlakaFiltreToggle(string plaka)
+    {
+        if (!seciliPlakalar.Remove(plaka))
+            seciliPlakalar.Add(plaka);
+    }
+
+    void FiltreleriTemizle()
+    {
+        seciliFirmalar.Clear();
+        seciliPlakalar.Clear();
+    }
+
+    bool FiltreAktif => seciliFirmalar.Count > 0 || seciliPlakalar.Count > 0;
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var roller = authState.User.Claims
+            .Where(c => c.Type == System.Security.Claims.ClaimTypes.Role)
+            .Select(c => c.Value).ToList();
+        kullaniciYetkili = roller.Any(r => r is "Admin" or "HoldingYoneticisi");
+
         kurumlar = await KurumPuantajService.GetAktifKurumlarAsync();
         guzergahListesi = await GuzergahService.GetActiveAsync();
         aracListesi = await AracService.GetActiveAsync();
@@ -616,12 +815,14 @@
 
     async Task LoadData()
     {
-        if (seciliKurumId == 0) { kayitlar = []; return; }
+        if (seciliKurumId == 0) { kayitlar = []; operasyonKaydiVarMiLookup = []; return; }
         yukleniyor = true;
         StateHasChanged();
         try
         {
             kayitlar = await KurumPuantajService.GetPuantajlarAsync(seciliYil, seciliAy, seciliKurumId);
+            var ids = kayitlar.Where(k => k.Id > 0).Select(k => k.Id).ToList();
+            operasyonKaydiVarMiLookup = await KurumPuantajService.GetOperasyonKaydiVarligiAsync(ids);
         }
         finally
         {
@@ -972,5 +1173,77 @@
         1=>"Ocak",2=>"Şubat",3=>"Mart",4=>"Nisan",5=>"Mayıs",6=>"Haziran",
         7=>"Temmuz",8=>"Ağustos",9=>"Eylül",10=>"Ekim",11=>"Kasım",12=>"Aralık",_=>"?"
     };
+
+    // ── Sync Metodları ───────────────────────────────────────────────────
+
+    async Task SenkronizeEt()
+    {
+        if (seciliKurumId == 0) return;
+        yukleniyor = true;
+        try
+        {
+            var rapor = await PuantajSyncService.SyncFromPuantajTopluAsync(
+                seciliYil, seciliAy, null, PuantajSyncMode.CreateUpdate);
+            await LoadData();
+            ToastService.ShowSuccess($"Senkronizasyon tamamlandı. Batch={rapor.BatchId}");
+        }
+        catch (Exception ex) { ToastService.ShowError($"Senkronizasyon hatası: {ex.Message}"); }
+        finally { yukleniyor = false; }
+    }
+
+    async Task DuplicateRaporuGoster()
+    {
+        if (seciliKurumId == 0) return;
+        yukleniyor = true;
+        try
+        {
+            var rapor = await DuplicateDetectionService.TespitRaporuAsync(seciliYil, seciliAy, seciliKurumId);
+            if (!rapor.Any())
+                ToastService.ShowSuccess("Duplicate kayıt bulunamadı.");
+            else
+            {
+                foreach (var d in rapor)
+                    ToastService.ShowWarning(
+                        $"{d.GuzergahAdi} - {d.Plaka}: {d.Satirlar.Count} kayıt. {d.MergeOnerisi}");
+            }
+        }
+        catch (Exception ex) { ToastService.ShowError($"Duplicate tespit hatası: {ex.Message}"); }
+        finally { yukleniyor = false; }
+    }
+
+    async Task BackfillCalistir()
+    {
+        if (seciliKurumId == 0) return;
+        var onay = await JS.InvokeAsync<bool>("confirm",
+            $"{AyAdi(seciliAy)} {seciliYil} dönemi için eksik Operasyon kayıtları puantajdan oluşturulacak. Devam edilsin mi?");
+        if (!onay) return;
+        yukleniyor = true;
+        try
+        {
+            var rapor = await PuantajSyncService.BackfillAsync(seciliYil, seciliAy, seciliKurumId);
+            await LoadData();
+            ToastService.ShowSuccess($"Backfill tamamlandı: {rapor.Ozet}");
+        }
+        catch (Exception ex) { ToastService.ShowError($"Backfill hatası: {ex.Message}"); }
+        finally { yukleniyor = false; }
+    }
+
+    async Task PuantajdanYenidenOlustur()
+    {
+        if (seciliKurumId == 0) return;
+        var onay = await JS.InvokeAsync<bool>("confirm",
+            $"Bu işlem SADECE Puantaj kaynaklı Operasyon kayıtlarını yeniden oluşturacak. " +
+            $"Manuel ve ExcelImport kayıtlar KORUNACAK. Kilitli kayıtlar atlanacak. Devam edilsin mi?");
+        if (!onay) return;
+        yukleniyor = true;
+        try
+        {
+            var rapor = await PuantajSyncService.ForceSyncForDonemAsync(seciliKurumId, seciliYil, seciliAy);
+            await LoadData();
+            ToastService.ShowSuccess($"Yeniden oluşturma tamamlandı: {rapor.Ozet}");
+        }
+        catch (Exception ex) { ToastService.ShowError($"Force sync hatası: {ex.Message}"); }
+        finally { yukleniyor = false; }
+    }
 }
 

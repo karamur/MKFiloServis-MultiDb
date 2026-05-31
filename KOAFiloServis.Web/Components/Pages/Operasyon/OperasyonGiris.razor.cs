@@ -254,6 +254,34 @@ public partial class OperasyonGiris : ComponentBase, IDisposable
         StateHasChanged();
     }
 
+    // ── Kullanıcı Kilitleme ────────────────────────────────────────────────
+
+    private async Task KilitToggle(OperasyonKaydi kayit)
+    {
+        if (kayit.Kaynak != PuantajKaynak.Puantaj) return;
+        if (kayit.Id <= 0) return;
+        try
+        {
+            if (kayit.KullaniciKilitliMi)
+            {
+                await OperasyonService.KilitAcAsync(kayit.Id);
+                kayit.KullaniciKilitliMi = false;
+                ToastService.ShowInfo("Kilit kaldırıldı. Sonraki sync bu kaydı güncelleyebilir.");
+            }
+            else
+            {
+                await OperasyonService.KilitleAsync(kayit.Id);
+                kayit.KullaniciKilitliMi = true;
+                ToastService.ShowSuccess("Kayıt kilitlendi. Sync bu kaydı değiştiremez.");
+            }
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Kilit işlemi başarısız: {ex.Message}");
+        }
+    }
+
     // ── Yeni Kayıt ────────────────────────────────────────────────────────
 
     private void YeniKayitFormAc()

@@ -65,6 +65,13 @@ public interface IKurumPuantajService
     // ── Puantaj Temizleme ────────────────────────────────────────────────────
     /// <summary>Belirtilen kurum + dönem için tüm puantaj kayıtlarını soft-delete yapar.</summary>
     Task<int> PuantajKaldirAsync(int kurumId, int yil, int ay);
+
+    // ── OperasyonKaydi Varlık ──────────────────────────────────────────────
+    /// <summary>
+    /// Verilen PuantajKayit Id'leri için hangilerinin OperasyonKaydi karşılığı
+    /// olduğunu döner (N+1 önlemli tek bulk sorgu).
+    /// </summary>
+    Task<Dictionary<int, bool>> GetOperasyonKaydiVarligiAsync(List<int> puantajIds);
 }
 
 /// <summary>

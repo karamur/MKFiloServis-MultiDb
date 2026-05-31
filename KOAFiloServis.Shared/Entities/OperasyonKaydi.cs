@@ -69,6 +69,12 @@ public class OperasyonKaydi : BaseEntity, IFirmaTenant
     public int? ExcelImportId { get; set; }
     public int? ExcelSatirNo { get; set; }
 
+    // ── Puantaj Sync ───────────────────────────────────────────────────────
+    public int? KaynakPuantajId { get; set; }
+    public bool KullaniciKilitliMi { get; set; }
+    public DateTime? KilitTarihi { get; set; }
+    public int? KilitleyenKullaniciId { get; set; }
+
     // Yardımcı property'ler (Tarih'ten türetilir)
     public int Yil => Tarih.Year;
     public int Ay => Tarih.Month;

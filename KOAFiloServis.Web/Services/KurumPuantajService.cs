@@ -1,15 +1,26 @@
 ﻿using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
+using KOAFiloServis.Web.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace KOAFiloServis.Web.Services;
 
 public sealed class KurumPuantajService : IKurumPuantajService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
+    private readonly IPuantajSyncService _syncService;
+    private readonly ILogger<KurumPuantajService> _logger;
 
-    public KurumPuantajService(IDbContextFactory<ApplicationDbContext> dbFactory)
-        => _dbFactory = dbFactory;
+    public KurumPuantajService(
+        IDbContextFactory<ApplicationDbContext> dbFactory,
+        IPuantajSyncService syncService,
+        ILogger<KurumPuantajService> logger)
+    {
+        _dbFactory = dbFactory;
+        _syncService = syncService;
+        _logger = logger;
+    }
 
     // ── Kurum / Güzergah / Araç ───────────────────────────────────────────────
 
@@ -108,9 +119,12 @@ public sealed class KurumPuantajService : IKurumPuantajService
             .ThenBy(p => p.Plaka)
             .ToListAsync();
 
-        // Her sayfa yüklemede OperasyonKayitlari'dan SeferSayisi'ni yeniden hesapla.
-        // Böylece Guzergah.PuantajCarpani değişiklikleri engine tekrar çalıştırmaya gerek kalmadan
-        // Özet ekranına anında yansır. Formül: SUM(SeferSayisi * PuantajCarpani)
+        // ── SeferSayisi hesaplama ─────────────────────────────────────────────
+        // Öncelik 1: OperasyonKayitlari'ndan gerçek sefer sayısını hesapla.
+        // Formül: SUM((Yon == SabahAksam ? 2 : 1) * PuantajCarpani)
+        //   Sabah=1, Akşam=1, SabahAksam=2
+        // Gruplama Slot içermez — merge edilmiş SabahAksam satırları hem Sabah hem
+        // Akşam OperasyonKaydi'larını tek PuantajKayit altında toplar.
         var ayBaslangic = new DateTime(yil, ay, 1);
         var ayBitis = ayBaslangic.AddMonths(1);
         var opAgg = await db.OperasyonKayitlari
@@ -118,20 +132,68 @@ public sealed class KurumPuantajService : IKurumPuantajService
                         && o.Tarih >= ayBaslangic && o.Tarih < ayBitis
                         && o.OperasyonDurumu == OperasyonDurumu.Gitti
                         && guzergahIds.Contains(o.GuzergahId))
-            .GroupBy(o => new { o.GuzergahId, o.AracId, o.Slot })
-            .Select(g => new { g.Key.GuzergahId, g.Key.AracId, g.Key.Slot, Toplam = (int)g.Sum(o => o.SeferSayisi * o.PuantajCarpani) })
+            .GroupBy(o => new { o.GuzergahId, o.AracId })
+            .Select(g => new { g.Key.GuzergahId, g.Key.AracId,
+                Toplam = (int)g.Sum(o => (o.Yon == PuantajYon.SabahAksam ? 2 : 1) * o.PuantajCarpani) })
             .ToListAsync();
 
         var aggMap = opAgg.ToDictionary(
-            x => (GuzergahId: x.GuzergahId, AracId: x.AracId, Slot: x.Slot),
+            x => (GuzergahId: x.GuzergahId, AracId: x.AracId),
             x => x.Toplam);
 
-        foreach (var k in kayitlar.Where(k => k.GuzergahId != null))
+        foreach (var k in kayitlar)
         {
-            if (aggMap.TryGetValue((k.GuzergahId!.Value, k.AracId ?? 0, k.Slot), out var t))
-                k.SeferSayisi = t;
+            if (k.GuzergahId == null) continue;
+
+            // AracId null veya 0 ise OperasyonKaydi eşleşmesi yapılamaz
+            var aracId = k.AracId.GetValueOrDefault();
+            if (aracId > 0 && aggMap.TryGetValue((k.GuzergahId.Value, aracId), out var opToplam))
+            {
+                k.SeferSayisi = opToplam;
+            }
             else
-                k.SeferSayisi = 0;
+            {
+                // Öncelik 2: Gun01-Gun31 toplamından hesapla (OperasyonKaydi yoksa)
+                if (k.SeferGunuToplami > 0)
+                    k.SeferSayisi = k.SeferGunuToplami;
+                // else: mevcut DB değeri korunur
+            }
+        }
+
+        // ── Mükerrer satır temizliği ─────────────────────────────────────────
+        // Aynı {GuzergahId, AracId} için birden fazla satır varsa
+        // (merge sonrası yetim kalmış Aksam slot'ları), sadece en yüksek
+        // öncelikli Yon'a sahip olanı tut, diğerlerini listeden çıkar.
+        // Öncelik: SabahAksam > Sabah > Aksam > Diğer
+        static int YonOncelik(PuantajYon y) => y switch
+        {
+            PuantajYon.SabahAksam => 3,
+            PuantajYon.Sabah => 2,
+            PuantajYon.Aksam => 1,
+            _ => 0
+        };
+
+        var dupGroups = kayitlar
+            .Where(k => k.GuzergahId != null && k.AracId.HasValue && k.AracId > 0)
+            .GroupBy(k => (GuzergahId: k.GuzergahId!.Value, AracId: k.AracId!.Value))
+            .Where(g => g.Count() > 1)
+            .ToList();
+
+        if (dupGroups.Any())
+        {
+            var toRemove = new List<PuantajKayit>();
+            foreach (var g in dupGroups)
+            {
+                // En yüksek öncelikli Yon'u tut, diğerlerini çıkar
+                var best = g.OrderByDescending(k => YonOncelik(k.Yon))
+                            .ThenByDescending(k => k.SeferSayisi)
+                            .First();
+                foreach (var k in g)
+                    if (k != best)
+                        toRemove.Add(k);
+            }
+            foreach (var r in toRemove)
+                kayitlar.Remove(r);
         }
 
         return kayitlar;
@@ -217,6 +279,18 @@ public sealed class KurumPuantajService : IKurumPuantajService
         }
 
         await db.SaveChangesAsync();
+
+        // ── OperasyonKaydi sync ──────────────────────────────────────────
+        try
+        {
+            var saved = mevcut ?? kayit;
+            await _syncService.SyncFromPuantajAsync(saved, PuantajSyncMode.CreateUpdate);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Puantaj->Operasyon sync hatasi: PuantajKayitId={Id}", kayit.Id);
+        }
+
         return mevcut ?? kayit;
     }
 
@@ -314,6 +388,16 @@ public sealed class KurumPuantajService : IKurumPuantajService
         }
 
         await db.SaveChangesAsync();
+
+        // ── Toplu OperasyonKaydi sync ────────────────────────────────────
+        try
+        {
+            await _syncService.SyncFromPuantajTopluAsync(yil, ay, kayitList, PuantajSyncMode.CreateUpdate);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Toplu Puantaj->Operasyon sync hatasi: {Count} kayit", kayitList.Count);
+        }
     }
 
     // ── Çakışma Kontrolü ─────────────────────────────────────────────────────
@@ -478,6 +562,10 @@ public sealed class KurumPuantajService : IKurumPuantajService
         kayit.IsDeleted  = true;
         kayit.UpdatedAt  = DateTime.UtcNow;
         await db.SaveChangesAsync();
+
+        // ── Linked OperasyonKaydi soft-delete ────────────────────────────
+        try { await _syncService.DeleteLinkedOpsAsync(id); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Delete sync hatasi: PuantajKayitId={Id}", id); }
     }
 
     // ── Şablon oluşturma ─────────────────────────────────────────────────────
@@ -694,6 +782,23 @@ public sealed class KurumPuantajService : IKurumPuantajService
         }
 
         await db.SaveChangesAsync();
+
+        // ── Import edilen kayitlar icin sync ─────────────────────────────
+        try
+        {
+            var basariliPuantajIds = sonuclar
+                .Where(s => s.Basarili && !s.Atlandi)
+                .Select(_ => 0).ToList(); // Id'leri takip edemiyoruz
+            if (basariliPuantajIds.Any() || sonuclar.Any(s => s.Basarili))
+            {
+                await _syncService.SyncFromPuantajTopluAsync(donemYil, donemAy, null, PuantajSyncMode.CreateUpdate);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Import sync hatasi");
+        }
+
         return sonuclar;
     }
 
@@ -935,6 +1040,40 @@ public sealed class KurumPuantajService : IKurumPuantajService
         }
 
         await db.SaveChangesAsync();
+
+        // ── Tüm linked OperasyonKayitlari soft-delete ────────────────────
+        try
+        {
+            foreach (var k in kayitlar)
+                await _syncService.DeleteLinkedOpsAsync(k.Id);
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "PuantajKaldir sync hatasi: {Count} kayit", count); }
+
         return count;
+    }
+
+    /// <summary>
+    /// Slot/Yon bazlı gerçek sefer sayısı: Sabah=1, Akşam=1, SabahAksam=2.
+    /// LINQ sorgusunda inline ternary olarak uygulanır; bu metod referans/sunucu-tarafi kullanim icindir.
+    /// </summary>
+    private static int GercekSefer(OperasyonKaydi o) => o.Yon switch
+    {
+        PuantajYon.SabahAksam => 2,
+        _ => 1
+    };
+
+    // ── OperasyonKaydi Varlık Sorgusu (N+1 önlemli) ─────────────────────
+
+    public async Task<Dictionary<int, bool>> GetOperasyonKaydiVarligiAsync(List<int> puantajIds)
+    {
+        if (!puantajIds.Any()) return [];
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var set = await db.OperasyonKayitlari
+            .Where(o => !o.IsDeleted && o.KaynakPuantajId != null
+                        && puantajIds.Contains(o.KaynakPuantajId.Value))
+            .Select(o => o.KaynakPuantajId!.Value)
+            .Distinct()
+            .ToListAsync();
+        return set.ToDictionary(id => id, _ => true);
     }
 }
