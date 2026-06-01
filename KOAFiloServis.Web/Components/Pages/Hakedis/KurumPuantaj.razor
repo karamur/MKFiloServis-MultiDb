@@ -3,6 +3,8 @@
 @using KOAFiloServis.Web.Services
 @using Microsoft.AspNetCore.Authorization
 @using KOAFiloServis.Web.Services.Interfaces
+@using KOAFiloServis.Web.Data
+@using Microsoft.EntityFrameworkCore
 @inject IKurumPuantajService KurumPuantajService
 @inject IGuzergahService GuzergahService
 @inject IAracService AracService
@@ -14,6 +16,7 @@
 @inject IPuantajSyncService PuantajSyncService
 @inject IDuplicateDetectionService DuplicateDetectionService
 @inject AuthenticationStateProvider AuthStateProvider
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 @attribute [Authorize(Roles = "Admin,Operasyon,Muhasebeci,HoldingYoneticisi")]
 @rendermode InteractiveServer
 
@@ -600,7 +603,7 @@
                         </div>
                         <div class="col-md-3">
                             <label class="form-label small">Araç</label>
-                            <select class="form-select form-select-sm" @bind="duzenleKayit.AracId" @bind:after="() => duzenleKayit.Plaka = aracListesi.FirstOrDefault(a => a.Id == duzenleKayit.AracId)?.AktifPlaka">
+                            <select class="form-select form-select-sm" @bind="duzenleKayit.AracId" @bind:after="AracDegistigindeSoforYukle">
                                 <option value="">-- Seçiniz --</option>
                                 @foreach (var a in aracListesi)
                                 { <option value="@a.Id">@a.AktifPlaka</option> }
@@ -753,6 +756,31 @@
                 .Where(f => !string.IsNullOrWhiteSpace(f))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(f => f).ToList();
+
+    // Araç değiştiğinde aktif şoförü otomatik yükle (PersonelAracAtamalari)
+    private async Task AracDegistigindeSoforYukle()
+    {
+        duzenleKayit!.Plaka = aracListesi.FirstOrDefault(a => a.Id == duzenleKayit.AracId)?.AktifPlaka;
+
+        if (duzenleKayit.AracId is <= 0) return;
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var atama = await db.PersonelAracAtamalari
+                .Include(a => a.Sofor)
+                .Where(a => a.AracId == duzenleKayit.AracId && a.Aktif)
+                .OrderByDescending(a => a.BaslangicTarihi)
+                .FirstOrDefaultAsync();
+
+            if (atama?.Sofor != null)
+            {
+                duzenleKayit.SoforId = atama.Sofor.Id;
+                duzenleKayit.SoforAdi = atama.Sofor.TamAd;
+            }
+        }
+        catch { /* sessizce devam et */ }
+    }
 
     // Bir PuantajKayit'ın sahibi firmasını belirle
     string SahibiFirma(PuantajKayit k)

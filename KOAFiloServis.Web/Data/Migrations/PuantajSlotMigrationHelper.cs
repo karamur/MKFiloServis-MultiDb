@@ -98,6 +98,40 @@ public static class PuantajSlotMigrationHelper
 
         logger?.LogInformation("PuantajSlotMigration: Tum kolonlar mevcut.");
 
+        // ── PuantajHesapDonemleri: idempotent column adds ────────────────
+
+        var hesapDonemCols = await GetColumnNamesAsync(context, "PuantajHesapDonemleri");
+        var hesapDonemMissingCols = new Dictionary<string, string>
+        {
+            ["OnayDurum"] = "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN \"OnayDurum\" integer NOT NULL DEFAULT 0",
+            ["HesaplayanKullanici"] = "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN \"HesaplayanKullanici\" character varying(100) NULL",
+            ["HesaplamaTarihi"] = "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN \"HesaplamaTarihi\" timestamp without time zone NOT NULL DEFAULT now()",
+            ["Notlar"] = "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN \"Notlar\" character varying(500) NULL",
+            ["FinansOnaylayan"] = "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN \"FinansOnaylayan\" character varying(100) NULL",
+            ["FinansOnayTarihi"] = "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN \"FinansOnayTarihi\" timestamp without time zone NULL",
+            ["MuhasebeOnaylayan"] = "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN \"MuhasebeOnaylayan\" character varying(100) NULL",
+            ["MuhasebeOnayTarihi"] = "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN \"MuhasebeOnayTarihi\" timestamp without time zone NULL",
+            ["KilitTarihi"] = "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN \"KilitTarihi\" timestamp without time zone NULL",
+            ["KilitAciklama"] = "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN \"KilitAciklama\" character varying(100) NULL",
+            ["CreatedBy"] = "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN \"CreatedBy\" character varying(100) NULL",
+            ["UpdatedBy"] = "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN \"UpdatedBy\" character varying(100) NULL",
+            ["DeletedAt"] = "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN \"DeletedAt\" timestamp without time zone NULL",
+            ["DeletedBy"] = "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN \"DeletedBy\" character varying(100) NULL",
+        };
+
+        foreach (var (colName, sql) in hesapDonemMissingCols)
+        {
+            if (!hesapDonemCols.Contains(colName))
+            {
+                try
+                {
+                    await context.Database.ExecuteSqlRawAsync(sql);
+                    logger?.LogInformation("PuantajSlotMigration: PuantajHesapDonemleri.{Col} kolonu eklendi.", colName);
+                }
+                catch { /* sütun zaten varsa hata yut */ }
+            }
+        }
+
         // ── Eksik olabilecek index'leri idempotent ekle ──
         await CreateIndexIfNotExists(context,
             "IX_PuantajKayitlar_HesapDonemiId", "PuantajKayitlar", "HesapDonemiId", logger);
@@ -128,12 +162,15 @@ public static class PuantajSlotMigrationHelper
     }
 
     private static async Task<HashSet<string>> GetColumnNamesAsync(ApplicationDbContext context)
+        => await GetColumnNamesAsync(context, "PuantajKayitlar");
+
+    private static async Task<HashSet<string>> GetColumnNamesAsync(ApplicationDbContext context, string tableName)
     {
         var conn = context.Database.GetDbConnection();
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
+        cmd.CommandText = $"""
             SELECT column_name FROM information_schema.columns
-            WHERE table_name = 'PuantajKayitlar'
+            WHERE table_name = '{tableName}'
             """;
         if (conn.State != System.Data.ConnectionState.Open)
             await conn.OpenAsync();
@@ -151,8 +188,11 @@ public static class PuantajSlotMigrationHelper
     {
         try
         {
+            // EF1002: DDL ile sistem tarafindan uretilen tablo/kolon adi kullaniliyor, kullanici girdisi yok
+#pragma warning disable EF1002
             await context.Database.ExecuteSqlRawAsync(
                 $"CREATE INDEX IF NOT EXISTS \"{indexName}\" ON \"{tableName}\" (\"{columnName}\")");
+#pragma warning restore EF1002
         }
         catch (Exception ex)
         {

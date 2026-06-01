@@ -26,7 +26,8 @@
     <div class="login-card">
         <div class="login-header">
             <div class="logo-container">
-                <i class="bi bi-truck"></i>
+                <img src="images/logo.png" alt="Logo" class="logo-img" />
+                <img src="images/YaziLogo.png" alt="Koa Filo Servis" class="logo-text-img" />
             </div>
             @if (selectedProject is not null)
             {
@@ -330,20 +331,26 @@
     }
 
     .logo-container {
-        width: 80px;
-        height: 80px;
-        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-        border-radius: 20px;
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
+        gap: 12px;
         margin: 0 auto 20px;
-        box-shadow: 0 10px 30px -5px rgba(30, 60, 114, 0.4);
     }
 
-    .logo-container i {
-        font-size: 2.5rem;
-        color: white;
+    .logo-img {
+        width: 80px;
+        height: 80px;
+        object-fit: contain;
+        filter: drop-shadow(0 8px 20px rgba(30, 60, 114, 0.3));
+    }
+
+    .logo-text-img {
+        max-width: 240px;
+        height: auto;
+        object-fit: contain;
+        opacity: 0.9;
     }
 
     .login-header h1 {
@@ -472,13 +479,13 @@
             margin: 10px;
         }
 
-        .logo-container {
+        .logo-img {
             width: 60px;
             height: 60px;
         }
 
-        .logo-container i {
-            font-size: 1.8rem;
+        .logo-text-img {
+            max-width: 180px;
         }
 
         .login-header h1 {

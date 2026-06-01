@@ -23,14 +23,28 @@
 }
 
 .navbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-size: 1.05rem;
     font-weight: 700;
     color: #ffffff !important;
     letter-spacing: 0.3px;
+    padding: 4px 0;
 }
 
-.navbar-brand i {
-    color: #38bdf8;
+.nav-logo-img {
+    width: 34px;
+    height: 34px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.nav-logo-text {
+    height: 22px;
+    width: auto;
+    object-fit: contain;
+    opacity: 0.95;
 }
 
 .nav-section {

@@ -571,6 +571,29 @@
         catch { /* sessizce devam et */ }
     }
 
+    // Araç seçildiğinde aktif şoförü otomatik yükle (PersonelAracAtamalari)
+    private async Task AracinSoforunuYukle(int aracId)
+    {
+        try
+        {
+            await using var ctx = await DbContextFactory.CreateDbContextAsync();
+            var atama = await ctx.PersonelAracAtamalari
+                .Include(a => a.Sofor)
+                .Where(a => a.AracId == aracId && a.Aktif)
+                .OrderByDescending(a => a.BaslangicTarihi)
+                .FirstOrDefaultAsync();
+
+            if (atama?.Sofor != null)
+            {
+                secilenSoforId = atama.Sofor.Id;
+                secilenSoforAd = atama.Sofor.TamAd;
+                personelArama = atama.Sofor.TamAd;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch { /* sessizce devam et */ }
+    }
+
     // Araç arama
     private void AracAramaGuncelle(ChangeEventArgs e)
     {
@@ -597,6 +620,7 @@
         secilenAracPlaka = arac.AktifPlaka ?? "";
         aracArama = secilenAracPlaka;
         filtreliAraclar = new();
+        _ = AracinSoforunuYukle(arac.Id);
     }
 
     private void AracTemizle()

@@ -989,10 +989,13 @@ await RunScopedSafeAsync(app, "ApplyMigrationsToTenantDatabases", async services
             {
                 try
                 {
+                    // EF1002: DDL ile sistem tarafindan uretilen tablo adi kullaniliyor, kullanici girdisi yok
+#pragma warning disable EF1002
                     await tenantCtx.Database.ExecuteSqlRawAsync($"""
                         SELECT setval(pg_get_serial_sequence('"{tbl}"', 'Id'),
                             COALESCE((SELECT MAX("Id") FROM "{tbl}"), 0) + 1, false);
                         """);
+#pragma warning restore EF1002
                 }
                 catch { }
             }

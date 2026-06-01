@@ -209,6 +209,32 @@ public static class SyncPuantajSchemaMigrationHelper
             catch { /* column may already exist with different default; ignore */ }
         }
 
+        // ── PuantajHesapDonemleri: idempotent column adds ───────────────
+
+        var hesapDonemColumns = new[]
+        {
+            "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN IF NOT EXISTS \"HesaplayanKullanici\" character varying(100) NULL",
+            "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN IF NOT EXISTS \"HesaplamaTarihi\" timestamp without time zone NOT NULL DEFAULT now()",
+            "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN IF NOT EXISTS \"Notlar\" character varying(500) NULL",
+            "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN IF NOT EXISTS \"OnayDurum\" integer NOT NULL DEFAULT 0",
+            "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN IF NOT EXISTS \"FinansOnaylayan\" character varying(100) NULL",
+            "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN IF NOT EXISTS \"FinansOnayTarihi\" timestamp without time zone NULL",
+            "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN IF NOT EXISTS \"MuhasebeOnaylayan\" character varying(100) NULL",
+            "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN IF NOT EXISTS \"MuhasebeOnayTarihi\" timestamp without time zone NULL",
+            "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN IF NOT EXISTS \"KilitTarihi\" timestamp without time zone NULL",
+            "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN IF NOT EXISTS \"KilitAciklama\" character varying(100) NULL",
+            "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN IF NOT EXISTS \"CreatedBy\" character varying(100) NULL",
+            "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN IF NOT EXISTS \"UpdatedBy\" character varying(100) NULL",
+            "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN IF NOT EXISTS \"DeletedAt\" timestamp without time zone NULL",
+            "ALTER TABLE \"PuantajHesapDonemleri\" ADD COLUMN IF NOT EXISTS \"DeletedBy\" character varying(100) NULL",
+        };
+
+        foreach (var col in hesapDonemColumns)
+        {
+            try { await ctx.Database.ExecuteSqlRawAsync(col); }
+            catch { /* column may already exist; ignore */ }
+        }
+
         // ── Sequence reset for new tables ──────────────────────────────
 
         var newTables = new[] { "OperasyonKayitlari", "PuantajJobExecutions", "PuantajHesapDonemleri",
@@ -217,10 +243,13 @@ public static class SyncPuantajSchemaMigrationHelper
         {
             try
             {
+                // EF1002: DDL ile sistem tarafindan uretilen tablo adi kullaniliyor, kullanici girdisi yok
+#pragma warning disable EF1002
                 await ctx.Database.ExecuteSqlRawAsync($"""
                     SELECT setval(pg_get_serial_sequence('"{tbl}"', 'Id'),
                         COALESCE((SELECT MAX("Id") FROM "{tbl}"), 0) + 1, false);
                     """);
+#pragma warning restore EF1002
             }
             catch { }
         }
