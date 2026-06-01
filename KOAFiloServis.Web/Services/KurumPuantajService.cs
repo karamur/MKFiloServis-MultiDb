@@ -245,6 +245,9 @@ public sealed class KurumPuantajService : IKurumPuantajService
             kayit.IsverenFirma = null;
             kayit.HesapDonemi = null;
 
+            // Clone'dan taşınan mevcut Id ile PK çakışmasını önle (insert'te DB identity üretsin)
+            kayit.Id = 0;
+
             db.PuantajKayitlar.Add(kayit);
         }
         else
