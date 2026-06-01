@@ -51,6 +51,8 @@ public class FiloGuzergahEslestirme : BaseEntity
     // Navigation Properties
     [ForeignKey(nameof(KurumFirmaId))]
     public virtual Firma? KurumFirma { get; set; }
+    [ForeignKey(nameof(FirmaId))]
+    public virtual Firma? Firma { get; set; }
     public virtual Guzergah? Guzergah { get; set; }
     public virtual Arac? Arac { get; set; }
     public virtual Sofor? Sofor { get; set; }
@@ -152,6 +154,8 @@ public class FiloGunlukPuantaj : BaseEntity
     // Navigation
     [ForeignKey(nameof(KurumFirmaId))]
     public virtual Firma? KurumFirma { get; set; }
+    [ForeignKey(nameof(FirmaId))]
+    public virtual Firma? Firma { get; set; }
     public virtual Guzergah? Guzergah { get; set; }
     public virtual Arac? Arac { get; set; }
     public virtual Sofor? Sofor { get; set; }

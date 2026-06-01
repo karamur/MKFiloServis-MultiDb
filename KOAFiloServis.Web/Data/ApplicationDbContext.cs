@@ -410,10 +410,9 @@ public class ApplicationDbContext : DbContext
             // Sirket iliskisi (Multi-tenant) - LEGACY drop edildi (Teknik Borç #5)
 
             // Cari -> Firma (FirmaId) ilişkisini EXPLICIT tanımla.
-            // Aksi halde Firma.CariId tarafındaki HasOne<Cari>().WithMany() Cari.Firma navigation'ını
-            // o ilişkiye bağlayıp shadow "FirmaId1" sütunu üretebiliyor.
+            // Firma.Cariler inverse navigation'ı ile eşlenerek shadow FK üretimi engellenir.
             entity.HasOne(e => e.Firma)
-                .WithMany()
+                .WithMany(f => f.Cariler)
                 .HasForeignKey(e => e.FirmaId)
                 .OnDelete(DeleteBehavior.SetNull);
 
@@ -1819,7 +1818,7 @@ public class ApplicationDbContext : DbContext
                 .WithMany(c => c.Hatirlaticilar)
                 .HasForeignKey(e => e.CariId)
                 .OnDelete(DeleteBehavior.SetNull);
-            entity.HasQueryFilter(e => !e.IsDeleted);
+            entity.HasQueryFilter(e => !e.IsDeleted && !e.Kullanici.IsDeleted);
         });
 
         // WhatsApp Modelleri
@@ -2059,7 +2058,12 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(e => e.KullaniciId)
                 .OnDelete(DeleteBehavior.SetNull);
 
-            entity.HasQueryFilter(e => !e.IsDeleted && (e.Arac == null || !e.Arac.IsDeleted));
+            entity.HasOne(e => e.Firma)
+                .WithMany()
+                .HasForeignKey(e => e.FirmaId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(e => !e.IsDeleted && (e.Arac == null || !e.Arac.IsDeleted) && (e.KurumFirma == null || !e.KurumFirma.IsDeleted));
         });
 
         // FirmaAracSoforEslestirme - Kurum+Araç+Şoför kalıcı eşleştirme
@@ -2158,7 +2162,7 @@ public class ApplicationDbContext : DbContext
             .HasQueryFilter(e => !e.IsDeleted && (e.Firma == null || !e.Firma.IsDeleted));
 
         modelBuilder.Entity<KullaniciCari>()
-            .HasQueryFilter(e => !e.IsDeleted && !e.Cari.IsDeleted);
+            .HasQueryFilter(e => !e.IsDeleted && !e.Cari.IsDeleted && !e.Kullanici.IsDeleted);
 
         modelBuilder.Entity<CariIletisimNot>(entity =>
         {

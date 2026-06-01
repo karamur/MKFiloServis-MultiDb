@@ -56,6 +56,11 @@ public class Firma : BaseEntity
     /// </summary>
     public int? CariId { get; set; }
 
+    /// <summary>
+    /// Bu firmaya bağlı cari kartlar (Cari.FirmaId).
+    /// </summary>
+    public virtual ICollection<Cari> Cariler { get; set; } = new List<Cari>();
+
     // Muhasebe Donem Bilgisi
     public int AktifDonemYil { get; set; } = DateTime.Today.Year;
     public int AktifDonemAy { get; set; } = DateTime.Today.Month;
