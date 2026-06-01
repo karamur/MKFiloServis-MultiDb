@@ -14,7 +14,7 @@
 @inject IJSRuntime JSRuntime
 @inject ILogger<Login> Logger
 
-<PageTitle>Giris - @(selectedProject?.Name ?? "Koa Filo Servis")</PageTitle>
+<PageTitle>Giris - @(selectedProject?.Name ?? "ÜSTÜN GRUP FİLO")</PageTitle>
 
 <div class="login-container">
     <div class="login-background">
@@ -27,7 +27,7 @@
         <div class="login-header">
             <div class="logo-container">
                 <img src="images/logo.png" alt="Logo" class="logo-img" />
-                <img src="images/YaziLogo.png" alt="Koa Filo Servis" class="logo-text-img" />
+                <img src="images/YaziLogo.png" alt="USTUN GRUP FILO" class="logo-text-img" />
             </div>
             @if (selectedProject is not null)
             {
@@ -236,14 +236,6 @@
                     </span>
                 </div>
             }
-            <div class="github-links mb-2">
-                <a href="https://github.com/karamur/KOAFiloServis" target="_blank" class="text-light me-3">
-                    <i class="bi bi-github"></i> Koa Filo Servis
-                </a>
-                <a href="https://github.com/karamur/AYDAAnaliz" target="_blank" class="text-light">
-                    <i class="bi bi-github"></i> AYDAAnaliz
-                </a>
-            </div>
             <p class="version mb-1">v1.0.0 © @DateTime.Now.Year Allbatros Global Teknoloji</p>
             <p class="version small">Tum Haklari Saklidir</p>
         </div>
@@ -834,7 +826,7 @@
     {
         if (selectedProject is null)
         {
-            return "Koa Filo Servis";
+            return "Ustun Grup Filo";
         }
 
         return selectedProject.BrandHighlight is { Length: > 0 }
