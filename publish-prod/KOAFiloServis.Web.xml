@@ -5051,6 +5051,11 @@
             HesapDonemi + PuantajDetay + revizyon zinciri + finansal audit.
             </summary>
         </member>
+        <member name="M:KOAFiloServis.Web.Services.PuantajSyncService.SyncFromPuantajWithContextAsync(KOAFiloServis.Web.Data.ApplicationDbContext,KOAFiloServis.Shared.Entities.PuantajKayit,KOAFiloServis.Web.Services.Interfaces.PuantajSyncMode,System.Nullable{System.Guid})">
+            <summary>
+            Var olan DbContext ile sync. Transaction bütünlüğü için kullanılır.
+            </summary>
+        </member>
         <member name="T:KOAFiloServis.Web.Services.PuantajWorkflowService">
             <summary>
             Puantaj onay workflow: Finans → Muhasebe → Kilit.

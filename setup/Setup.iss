@@ -1,4 +1,4 @@
-#define MyAppName "KOAFiloServis"
+﻿#define MyAppName "KOAFiloServis"
 #define MyAppPublisher "KOA Yazilim"
 #define MyAppURL "https://github.com/karamur/KOAFiloServis-MultiDb"
 #define MyAppExeName "KOAFiloServis.Web.exe"
@@ -8,7 +8,7 @@
 #define MyDataSyncExe "KOAFiloServis.DataSync.exe"
 
 #ifndef MyAppVersion
-#define MyAppVersion "1.0.22"
+#define MyAppVersion "1.0.24"
 #endif
 
 [Setup]
@@ -58,7 +58,7 @@ Name: "datasync"; Description: "Veri Aktarim Araci (PostgreSQL - SQLite)"; Types
 [Tasks]
 Name: "iisfeatures"; Description: "IIS rolu / .NET Hosting Bundle eksikse otomatik kur (Internet gerekir)"; GroupDescription: "On Hazirlik:"; Flags: unchecked
 Name: "iisconfigure"; Description: "IIS Site ve AppPool'u otomatik yapilandir"; GroupDescription: "IIS:"; Flags: checkedonce
-Name: "firewall"; Description: "Windows Guvenlik Duvarinda port ac (HTTP 5200)"; GroupDescription: "Firewall:"; Flags: checkedonce
+Name: "firewall"; Description: "Windows Guvenlik Duvarinda port ac (HTTP 5190)"; GroupDescription: "Firewall:"; Flags: checkedonce
 Name: "browser"; Description: "Kurulum sonrasi tarayicida ac"; GroupDescription: "Son adim:"; Flags: unchecked
 
 [Files]
@@ -89,12 +89,12 @@ Name: "{app}\database"; Permissions: users-modify
 Name: "{app}\Backups"; Permissions: users-modify
 
 [Icons]
-Name: "{group}\{#MyAppName} Web'i Ac"; Filename: "http://localhost:5200"; IconFilename: "{app}\{#MyAppExeName}"
+Name: "{group}\{#MyAppName} Web'i Ac"; Filename: "http://localhost:5190"; IconFilename: "{app}\{#MyAppExeName}"
 Name: "{group}\Lisans Yonetimi"; Filename: "{app}\Lisans\{#MyLisansExe}"; WorkingDir: "{app}\Lisans"; Components: lisans
 Name: "{group}\Veri Aktarim (PG - SQLite)"; Filename: "{app}\DataSync\{#MyDataSyncExe}"; WorkingDir: "{app}\DataSync"; Components: datasync
 Name: "{group}\Kurulum Klasorunu Ac"; Filename: "{app}"
 Name: "{group}\Kaldir"; Filename: "{uninstallexe}"
-Name: "{commondesktop}\{#MyAppName} Web"; Filename: "http://localhost:5200"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: ; Flags: createonlyiffileexists
+Name: "{commondesktop}\{#MyAppName} Web"; Filename: "http://localhost:5190"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: ; Flags: createonlyiffileexists
 
 [Run]
 ; IIS rolu / Hosting Bundle otomatik kurulum (secildiyse)
@@ -106,20 +106,20 @@ Filename: "powershell.exe"; \
 
 ; IIS yapilandirma
 Filename: "powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\iis-configure.ps1"" -InstallPath ""{app}"" -SiteName ""KOAFiloServis"" -Port 5200"; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\iis-configure.ps1"" -InstallPath ""{app}"" -SiteName ""KOAFiloServis"" -Port 5190"; \
     StatusMsg: "IIS yapilandiriliyor..."; \
     Flags: runhidden waituntilterminated; \
     Tasks: iisconfigure
 
 ; Firewall kurali
 Filename: "netsh.exe"; \
-    Parameters: "advfirewall firewall add rule name=""KOAFiloServis HTTP"" dir=in action=allow protocol=TCP localport=5200"; \
+    Parameters: "advfirewall firewall add rule name=""KOAFiloServis HTTP"" dir=in action=allow protocol=TCP localport=5190"; \
     StatusMsg: "Firewall kurali ekleniyor..."; \
     Flags: runhidden waituntilterminated; \
     Tasks: firewall
 
 ; Tarayicida ac
-Filename: "http://localhost:5200"; \
+Filename: "http://localhost:5190"; \
     Flags: shellexec nowait postinstall; \
     Tasks: browser; \
     Description: "Uygulamayi tarayicida ac"

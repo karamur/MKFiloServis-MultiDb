@@ -324,6 +324,9 @@ builder.Services.AddHttpClient<IOpenRouterService, OpenRouterService>();
 builder.Services.AddHttpClient("Ollama");
 builder.Services.AddScoped<IOllamaService, OllamaService>();
 
+// DeepSeek AI Integration (DeepSeek V3)
+builder.Services.AddHttpClient<IDeepSeekService, DeepSeekService>();
+
 // Guvenlik: Master key (DPAPI) + AES-GCM dosya koruyucu
 builder.Services.AddSingleton<IMasterKeyProvider>(sp =>
 {

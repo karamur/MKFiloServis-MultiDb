@@ -147,14 +147,28 @@ main[b-9k8vu85oho] {
 }
 
 .navbar-brand[b-bhem98b8mw] {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-size: 1.05rem;
     font-weight: 700;
     color: #ffffff !important;
     letter-spacing: 0.3px;
+    padding: 4px 0;
 }
 
-.navbar-brand i[b-bhem98b8mw] {
-    color: #38bdf8;
+.nav-logo-img[b-bhem98b8mw] {
+    width: 34px;
+    height: 34px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.nav-logo-text[b-bhem98b8mw] {
+    height: 22px;
+    width: auto;
+    object-fit: contain;
+    opacity: 0.95;
 }
 
 .nav-section[b-bhem98b8mw] {

@@ -2442,8 +2442,9 @@
             ToastService.ShowSuccess("Kaydedildi.");
             ModalKapat();
             
-            // Kayıt yapılan ödemenin ayına göre takvim ayını güncelle
+            // Kayıt yapılan ödemenin ayına göre takvim ayını ve dropdown'u güncelle
             aktifTakvimAy = editOdeme.OdemeTarihi.Month;
+            secilenAy = editOdeme.OdemeTarihi.Month;
             
             // Tüm veriyi yenile
             await YenileDataAsync();
