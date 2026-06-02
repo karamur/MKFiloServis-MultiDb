@@ -17,15 +17,18 @@ public class AracTakipController : ControllerBase
     private readonly IAracTakipService _aracTakipService;
     private readonly IAracTakipBildirimService _bildirimService;
     private readonly ILogger<AracTakipController> _logger;
+    private readonly string? _gpsApiKey;
 
     public AracTakipController(
         IAracTakipService aracTakipService,
         IAracTakipBildirimService bildirimService,
-        ILogger<AracTakipController> logger)
+        ILogger<AracTakipController> logger,
+        IConfiguration configuration)
     {
         _aracTakipService = aracTakipService;
         _bildirimService = bildirimService;
         _logger = logger;
+        _gpsApiKey = configuration["GpsApi:ApiKey"];
     }
 
     #region Konum Endpoint'leri (GPS Cihazları İçin)
@@ -41,7 +44,14 @@ public class AracTakipController : ControllerBase
     {
         try
         {
-            // API Key veya CihazId doğrulaması
+            // API Key doğrulaması
+            if (!string.IsNullOrEmpty(_gpsApiKey) && !string.Equals(apiKey, _gpsApiKey, StringComparison.Ordinal))
+            {
+                _logger.LogWarning("Geçersiz API Key ile konum gönderme denemesi");
+                return Unauthorized(new { Error = "Geçersiz API Key" });
+            }
+
+            // CihazId doğrulaması
             if (string.IsNullOrEmpty(request.CihazId))
             {
                 return BadRequest(new { Error = "CihazId zorunludur" });
@@ -121,6 +131,13 @@ public class AracTakipController : ControllerBase
     {
         try
         {
+            // API Key doğrulaması
+            if (!string.IsNullOrEmpty(_gpsApiKey) && !string.Equals(apiKey, _gpsApiKey, StringComparison.Ordinal))
+            {
+                _logger.LogWarning("Geçersiz API Key ile toplu konum gönderme denemesi");
+                return Unauthorized(new { Error = "Geçersiz API Key" });
+            }
+
             if (string.IsNullOrEmpty(request.CihazId))
             {
                 return BadRequest(new { Error = "CihazId zorunludur" });

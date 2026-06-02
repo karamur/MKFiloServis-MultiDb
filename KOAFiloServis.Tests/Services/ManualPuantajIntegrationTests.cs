@@ -7,6 +7,7 @@ using KOAFiloServis.Web.Services;
 using KOAFiloServis.Web.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Moq;
 
 namespace KOAFiloServis.Tests.Services;
@@ -248,7 +249,9 @@ public class ManualPuantajIntegrationTests
     public void Test10a_Smoke_KurumPuantajService_Constructs()
     {
         var dbFactoryMock = new Mock<IDbContextFactory<ApplicationDbContext>>();
-        var service = new KurumPuantajService(dbFactoryMock.Object);
+        var syncServiceMock = new Mock<IPuantajSyncService>();
+        var loggerMock = new Mock<ILogger<KurumPuantajService>>();
+        var service = new KurumPuantajService(dbFactoryMock.Object, syncServiceMock.Object, loggerMock.Object);
         service.Should().NotBeNull();
         service.Should().BeAssignableTo<IKurumPuantajService>();
     }

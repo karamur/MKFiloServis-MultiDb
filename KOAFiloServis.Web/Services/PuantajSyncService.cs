@@ -33,11 +33,19 @@ public sealed class PuantajSyncService : IPuantajSyncService
 
     public async Task SyncFromPuantajAsync(PuantajKayit puantaj, PuantajSyncMode mode, Guid? batchId = null)
     {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        await SyncFromPuantajWithContextAsync(db, puantaj, mode, batchId);
+    }
+
+    /// <summary>
+    /// Var olan DbContext ile sync. Transaction bütünlüğü için kullanılır.
+    /// </summary>
+    internal async Task SyncFromPuantajWithContextAsync(ApplicationDbContext db, PuantajKayit puantaj, PuantajSyncMode mode, Guid? batchId = null)
+    {
         if (puantaj.GuzergahId == null || puantaj.AracId.GetValueOrDefault() <= 0)
             return;
 
         var batch = batchId ?? Guid.NewGuid();
-        await using var db = await _dbFactory.CreateDbContextAsync();
 
         var guzergahId = puantaj.GuzergahId.Value;
         var aracId = puantaj.AracId!.Value;

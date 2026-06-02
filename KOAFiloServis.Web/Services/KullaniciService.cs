@@ -684,17 +684,23 @@ public class KullaniciService : IKullaniciService
             }
             else
             {
-                // Admin varsa sifresinin dogru oldugundan emin ol
-                // ve kilitli/pasif ise duzelt
-                if (!await _userManager.CheckPasswordAsync(adminUser, "admin123") || !adminUser.Aktif || adminUser.Kilitli)
+                // Admin zaten varsa sadece kilitli/pasif durumunu duzelt.
+                // ŞIFREYE DOKUNMA — admin kendi belirledigi sifreyi kullanmaya devam etsin.
+                var adminGuncelle = false;
+                if (!adminUser.Aktif)
                 {
-                    adminUser.SifreHash = HashPassword(adminUser, "admin123");
                     adminUser.Aktif = true;
+                    adminGuncelle = true;
+                }
+                if (adminUser.Kilitli)
+                {
                     adminUser.Kilitli = false;
                     adminUser.BasarisizGirisSayisi = 0;
-                    adminUser.RolId = adminRol.Id;
+                    adminGuncelle = true;
+                }
+                if (adminGuncelle)
+                {
                     adminUser.UpdatedAt = DateTime.UtcNow;
-                    context.Kullanicilar.Update(adminUser);
                     await context.SaveChangesAsync();
                 }
             }
@@ -720,15 +726,23 @@ public class KullaniciService : IKullaniciService
             }
             else
             {
-                // Test kullanici sifresi/durumu duzelt
-                if (!await _userManager.CheckPasswordAsync(testUser, "test123") || !testUser.Aktif || testUser.Kilitli)
+                // Test kullanici zaten varsa sadece kilitli/pasif durumunu duzelt.
+                // ŞIFREYE DOKUNMA.
+                var testGuncelle = false;
+                if (!testUser.Aktif)
                 {
-                    testUser.SifreHash = HashPassword(testUser, "test123");
                     testUser.Aktif = true;
+                    testGuncelle = true;
+                }
+                if (testUser.Kilitli)
+                {
                     testUser.Kilitli = false;
                     testUser.BasarisizGirisSayisi = 0;
+                    testGuncelle = true;
+                }
+                if (testGuncelle)
+                {
                     testUser.UpdatedAt = DateTime.UtcNow;
-                    context.Kullanicilar.Update(testUser);
                     await context.SaveChangesAsync();
                 }
             }

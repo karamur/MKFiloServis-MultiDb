@@ -11,12 +11,14 @@ public class BordroService : IBordroService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly IMuhasebeService _muhasebeService;
+    private readonly IAktifFirmaProvider _firmaProvider;
     private static readonly CultureInfo TrCulture = new("tr-TR");
 
-    public BordroService(IDbContextFactory<ApplicationDbContext> contextFactory, IMuhasebeService muhasebeService)
+    public BordroService(IDbContextFactory<ApplicationDbContext> contextFactory, IMuhasebeService muhasebeService, IAktifFirmaProvider firmaProvider)
     {
         _contextFactory = contextFactory;
         _muhasebeService = muhasebeService;
+        _firmaProvider = firmaProvider;
     }
 
     #region Bordro Listeleme
@@ -24,18 +26,20 @@ public class BordroService : IBordroService
     public async Task<List<Bordro>> GetBordrolarAsync(int? firmaId = null, int? yil = null, BordroTipi? tip = null)
     {
         using var context = await _contextFactory.CreateDbContextAsync();
-        
+
+        var aktifFirmaId = firmaId ?? _firmaProvider.AktifFirmaId;
+
         var query = context.Bordrolar
             .Include(b => b.Firma)
             .Include(b => b.BordroDetaylar)
             .AsQueryable();
 
-        if (firmaId.HasValue)
-            query = query.Where(b => b.FirmaId == firmaId);
-        
+        if (aktifFirmaId.HasValue)
+            query = query.Where(b => b.FirmaId == aktifFirmaId);
+
         if (yil.HasValue)
             query = query.Where(b => b.Yil == yil);
-        
+
         if (tip.HasValue)
             query = query.Where(b => b.BordroTipi == tip);
 
@@ -45,14 +49,16 @@ public class BordroService : IBordroService
     public async Task<Bordro?> GetBordroByIdAsync(int id)
     {
         using var context = await _contextFactory.CreateDbContextAsync();
-        
+
+        var aktifFirmaId = _firmaProvider.AktifFirmaId;
+
         return await context.Bordrolar
             .Include(b => b.Firma)
             .Include(b => b.BordroDetaylar)
                 .ThenInclude(d => d.Personel)
             .Include(b => b.BordroDetaylar)
                 .ThenInclude(d => d.Firma)
-            .FirstOrDefaultAsync(b => b.Id == id);
+            .FirstOrDefaultAsync(b => b.Id == id && b.FirmaId == aktifFirmaId);
     }
 
     public async Task<Bordro?> GetBordroByDönemAsync(int yil, int ay, int? firmaId, BordroTipi tip)
@@ -65,10 +71,9 @@ public class BordroService : IBordroService
                 .ThenInclude(d => d.Personel)
             .Where(b => b.Yil == yil && b.Ay == ay && b.BordroTipi == tip);
 
-        if (firmaId.HasValue)
-            query = query.Where(b => b.FirmaId == firmaId);
-        else
-            query = query.Where(b => b.FirmaId == null);
+        var aktifFirmaId = firmaId ?? _firmaProvider.AktifFirmaId;
+        if (aktifFirmaId.HasValue)
+            query = query.Where(b => b.FirmaId == aktifFirmaId);
 
         return await query.FirstOrDefaultAsync();
     }

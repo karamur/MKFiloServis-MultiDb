@@ -24,10 +24,12 @@ public interface IFirmalarArasiTransferService
 public sealed class FirmalarArasiTransferService : IFirmalarArasiTransferService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+    private readonly IAktifFirmaProvider _firmaProvider;
 
-    public FirmalarArasiTransferService(IDbContextFactory<ApplicationDbContext> contextFactory)
+    public FirmalarArasiTransferService(IDbContextFactory<ApplicationDbContext> contextFactory, IAktifFirmaProvider firmaProvider)
     {
         _contextFactory = contextFactory;
+        _firmaProvider = firmaProvider;
     }
 
     public async Task<List<FirmalarArasiTransfer>> ListeleAsync(int? firmaId = null)

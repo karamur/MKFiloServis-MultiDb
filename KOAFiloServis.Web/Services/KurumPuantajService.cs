@@ -220,6 +220,7 @@ public sealed class KurumPuantajService : IKurumPuantajService
         if (kayit.IsverenFirmaId <= 0) kayit.IsverenFirmaId = null;
 
         await using var db = await _dbFactory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync();
 
         // Upsert: Güzergah + Araç + Yıl + Ay + Slot kombinasyonu unique
         var mevcut = await db.PuantajKayitlar
@@ -283,18 +284,12 @@ public sealed class KurumPuantajService : IKurumPuantajService
 
         await db.SaveChangesAsync();
 
-        // ── OperasyonKaydi sync ──────────────────────────────────────────
-        try
-        {
-            var saved = mevcut ?? kayit;
-            await _syncService.SyncFromPuantajAsync(saved, PuantajSyncMode.CreateUpdate);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Puantaj->Operasyon sync hatasi: PuantajKayitId={Id}", kayit.Id);
-        }
+        // ── OperasyonKaydi sync (aynı transaction içinde) ────────────────
+        var saved = mevcut ?? kayit;
+        await ((PuantajSyncService)_syncService).SyncFromPuantajWithContextAsync(db, saved, PuantajSyncMode.CreateUpdate);
 
-        return mevcut ?? kayit;
+        await tx.CommitAsync();
+        return saved;
     }
 
     public async Task TopluSavePuantajAsync(IEnumerable<PuantajKayit> kayitlar)
@@ -772,7 +767,11 @@ public sealed class KurumPuantajService : IKurumPuantajService
                     FinansYonu = PlanlamaFinansYonu.Giden,
                     CreatedAt = DateTime.UtcNow
                 };
-                kayit.HesaplaPuantajToplam();
+                // Import: Gun değeri Excel'den gelir, bireysel gün (Gun01..Gun31) set edilmez.
+                // HesaplaPuantajToplam() SeferGunuToplami (bireysel günler toplamı = 0) ile
+                // Gun'u ezeceği için burada çağrılmaz; finansal alanlar manuel hesaplanır.
+                kayit.ToplamGider = kayit.BirimGider * kayit.Gun;
+                kayit.Odenecek = kayit.ToplamGider + kayit.GiderKdv20Tutari + kayit.GiderKdv10Tutari - kayit.GiderKesinti;
 
                 db.PuantajKayitlar.Add(kayit);
                 mevcutKayitlar.Add(kayit); // sonraki satırlar duplicate kontrolü için

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using KOAFiloServis.Shared.Entities;
 
@@ -6,6 +7,7 @@ namespace KOAFiloServis.Web.Hubs;
 /// <summary>
 /// Araç takip için SignalR Hub'ı - Gerçek zamanlı konum güncellemeleri
 /// </summary>
+[Authorize]
 public class AracTakipHub : Hub
 {
     private readonly ILogger<AracTakipHub> _logger;

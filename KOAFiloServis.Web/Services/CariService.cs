@@ -8,8 +8,13 @@ namespace KOAFiloServis.Web.Services;
 public class CariService : ICariService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+    private readonly IAktifFirmaProvider _firmaProvider;
 
-    public CariService(IDbContextFactory<ApplicationDbContext> contextFactory){_contextFactory = contextFactory;}
+    public CariService(IDbContextFactory<ApplicationDbContext> contextFactory, IAktifFirmaProvider firmaProvider)
+    {
+        _contextFactory = contextFactory;
+        _firmaProvider = firmaProvider;
+    }
 
     public async Task<List<Cari>> GetAllAsync()
     {
@@ -357,7 +362,7 @@ public class CariService : ICariService
         await using var context = await _contextFactory.CreateDbContextAsync();
         var existing = await context.Cariler
             .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(c => c.Id == cari.Id && !c.IsDeleted);
+            .FirstOrDefaultAsync(c => c.Id == cari.Id && !c.IsDeleted && c.FirmaId == _firmaProvider.AktifFirmaId);
             
         if (existing == null) throw new Exception("Cari bulunamadi");
 
@@ -452,7 +457,7 @@ public class CariService : ICariService
         await using var context = await _contextFactory.CreateDbContextAsync();
         var cari = await context.Cariler
             .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(c => c.Id == cariId && !c.IsDeleted);
+            .FirstOrDefaultAsync(c => c.Id == cariId && !c.IsDeleted && c.FirmaId == _firmaProvider.AktifFirmaId);
 
         if (cari == null)
         {
@@ -482,7 +487,7 @@ public class CariService : ICariService
         await using var context = await _contextFactory.CreateDbContextAsync();
         var cari = await context.Cariler
             .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(c => c.Id == cariId && !c.IsDeleted);
+            .FirstOrDefaultAsync(c => c.Id == cariId && !c.IsDeleted && c.FirmaId == _firmaProvider.AktifFirmaId);
 
         if (cari == null)
         {
@@ -525,11 +530,11 @@ public class CariService : ICariService
     public async Task<bool> DeleteAsync(int id)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        // IgnoreQueryFilters ile bul
+        // IgnoreQueryFilters ile bul, FirmaId kontrolü ile cross-tenant koruması
         var cari = await context.Cariler
             .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(c => c.Id == id);
-            
+            .FirstOrDefaultAsync(c => c.Id == id && c.FirmaId == _firmaProvider.AktifFirmaId);
+
         if (cari != null && !cari.IsDeleted)
         {
             cari.IsDeleted = true;
