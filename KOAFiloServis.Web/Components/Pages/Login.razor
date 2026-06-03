@@ -33,7 +33,6 @@
             {
                 <div class="selected-project-badge">@selectedProject.Category</div>
             }
-            <h1>@GetProjectDisplayName()</h1>
             <p>@(selectedProject?.Subtitle ?? "Filo Yonetim ve Muhasebe Platformu")</p>
             <a href="/" class="project-switch-link">
                 <i class="bi bi-grid me-1"></i>Projeleri Gor
@@ -820,18 +819,6 @@
         {
             Logger.LogDebug(ex, "Login hatirlama tercihi kaydedilirken hata olustu");
         }
-    }
-
-    private string GetProjectDisplayName()
-    {
-        if (selectedProject is null)
-        {
-            return "Ustun Grup Filo";
-        }
-
-        return selectedProject.BrandHighlight is { Length: > 0 }
-            ? selectedProject.BrandHighlight
-            : selectedProject.Name;
     }
 
     private string GetSafeReturnUrl()
