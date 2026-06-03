@@ -1926,6 +1926,17 @@
             // Firma filtresine göre odemeler
             odemeler = await BudgetService.GetOdemelerAsync(secilenYil, secilenAy > 0 ? secilenAy : null, secilenFirmaId > 0 ? secilenFirmaId : null);
 
+            // ─── DİAG-KAYIP ID=552 ───
+            var kayip552 = odemeler.FirstOrDefault(x => x.Id == 552);
+            if (kayip552 == null)
+            {
+                Console.WriteLine($"[DİAG-KAYIP-552] GetOdemelerAsync dönüşünde ID=552 YOK. secilenYil={secilenYil}, secilenAy={secilenAy}, secilenFirmaId={secilenFirmaId}");
+            }
+            else
+            {
+                Console.WriteLine($"[DİAG-KAYIP-552] GetOdemelerAsync dönüşünde ID=552 VAR: OdemeAy={kayip552.OdemeAy}, OdemeYil={kayip552.OdemeYil}, Durum={kayip552.Durum}, FirmaId={kayip552.FirmaId}, OdemeTarihi={kayip552.OdemeTarihi:yyyy-MM-dd}");
+            }
+
             // ─── DİAGNOSTİK LOG 4: GetOdemelerAsync dönüşü ───
             Console.WriteLine($"[DİAG-4] GetOdemelerAsync dönüş: odemeler.Count={odemeler.Count}");
             if (_diagnostikSonOdemeId > 0)
@@ -1962,6 +1973,17 @@
                 .Where(o => (o.Durum == OdemeDurum.Bekliyor || o.Durum == OdemeDurum.KismiOdendi) && o.OdemeAy == aktifTakvimAy)
                 .OrderBy(o => o.OdemeTarihi)
                 .ToList();
+
+            // ─── DİAG-KAYIP ID=552 bekleyen filtresi ───
+            var kayip552Full = odemeler.FirstOrDefault(x => x.Id == 552);
+            if (kayip552Full != null)
+            {
+                var durumUygun = kayip552Full.Durum == OdemeDurum.Bekliyor || kayip552Full.Durum == OdemeDurum.KismiOdendi;
+                var ayUygun = kayip552Full.OdemeAy == aktifTakvimAy;
+                Console.WriteLine($"[DİAG-KAYIP-552] bekleyen filtresi: Durum uygun mu? {durumUygun} (Durum={kayip552Full.Durum}), Ay uygun mu? {ayUygun} (OdemeAy={kayip552Full.OdemeAy}, aktifTakvimAy={aktifTakvimAy})");
+                if (!durumUygun) Console.WriteLine($"[DİAG-KAYIP-552] ⚠ DURUM FİLTRESİNDE ELENDİ. Kaydın Durum={kayip552Full.Durum}, beklenen: Bekliyor(1) veya KismiOdendi(5)");
+                if (!ayUygun) Console.WriteLine($"[DİAG-KAYIP-552] ⚠ AY FİLTRESİNDE ELENDİ. Kaydın OdemeAy={kayip552Full.OdemeAy}, aktifTakvimAy={aktifTakvimAy}");
+            }
 
             // ─── DİAGNOSTİK LOG 5: bekleyenOdemeler filtresi sonrası ───
             Console.WriteLine($"[DİAG-5] bekleyenOdemeler oluşturuldu: Count={bekleyenOdemeler.Count}, aktifTakvimAy={aktifTakvimAy}");
@@ -2466,6 +2488,10 @@
 
     private async Task OdemeKaydet()
     {
+        Console.Error.WriteLine("================================");
+        Console.Error.WriteLine($"[KAYDET-GIRIS] OdemeKaydet cagrildi. editOdeme.Id={editOdeme.Id}, MasrafKalemi={editOdeme.MasrafKalemi}, Miktar={editOdeme.Miktar}, OdemeTarihi={editOdeme.OdemeTarihi:yyyy-MM-dd}, FirmaId={editOdeme.FirmaId?.ToString() ?? "null"}, OdemeYapildigiHesapId={editOdeme.OdemeYapildigiHesapId?.ToString() ?? "null"}");
+        Console.Error.WriteLine("================================");
+
         if (string.IsNullOrWhiteSpace(editOdeme.MasrafKalemi) || editOdeme.Miktar <= 0)
         {
             ToastService.ShowWarning("Masraf kalemi ve tutar zorunlu!");
@@ -2474,6 +2500,8 @@
 
         try
         {
+            Console.Error.WriteLine($"[KAYDET-YOL] {(editOdeme.Id > 0 ? "UPDATE" : "CREATE")} yoluna giriyor...");
+
             if (editOdeme.Id > 0)
                 await BudgetService.UpdateOdemeAsync(editOdeme);
             else
@@ -2503,6 +2531,20 @@
         }
         catch (Exception ex)
         {
+            Console.WriteLine("================================");
+            Console.WriteLine("[ODEME-KAYDET-HATA] EXCEPTION");
+            Console.WriteLine(ex.ToString());
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine("----------- INNER -----------");
+                Console.WriteLine(ex.InnerException.ToString());
+            }
+            if (ex.InnerException?.InnerException != null)
+            {
+                Console.WriteLine("------ INNER INNER ----------");
+                Console.WriteLine(ex.InnerException.InnerException.ToString());
+            }
+            Console.WriteLine("================================");
             ToastService.ShowError("Hata: " + ex.Message);
         }
     }

@@ -150,7 +150,34 @@ public sealed class TenantDatabaseService : ITenantDatabaseService
         await using var disableFkCmd = new NpgsqlCommand("SET session_replication_role = 'replica';", tenantConn);
         await disableFkCmd.ExecuteNonQueryAsync();
 
-        // Master DB'ye ait tablolar (tenant DB'de olmali ama veri kopyalanmayacak)
+        // ADIM 0: Tenant DB'ye kendi Firma kaydini ekle.
+        // 44 FK constraint Firmalar tablosuna referans verir. Tenant mimaride Firmalar
+        // Master DB'de yonetilir, ancak tenant DB'de referans butunlugu icin
+        // bu firmaya ait tek bir kayit bulunmalidir. ON CONFLICT ile tekrarli calistirmada guvenli.
+        _logger.LogInformation("Veri gocu Adim 0: Firma kaydi ekleniyor (FirmaId={FirmaId})...", firmaId);
+        await using var firmaInsertCmd = new NpgsqlCommand(
+            @"INSERT INTO ""Firmalar"" (""Id"", ""FirmaKodu"", ""FirmaAdi"", ""Aktif"", ""VarsayilanFirma"", ""SiraNo"", ""AktifDonemYil"", ""AktifDonemAy"", ""CreatedAt"", ""IsDeleted"", ""DatabaseName"")
+              VALUES (@id, @kod, @adi, true, @varsayilan, @sirano, @donemYil, @donemAy, @createdAt, false, @db)
+              ON CONFLICT (""Id"") DO UPDATE SET
+                ""FirmaKodu"" = EXCLUDED.""FirmaKodu"",
+                ""FirmaAdi"" = EXCLUDED.""FirmaAdi"",
+                ""DatabaseName"" = EXCLUDED.""DatabaseName"",
+                ""AktifDonemYil"" = EXCLUDED.""AktifDonemYil"",
+                ""AktifDonemAy"" = EXCLUDED.""AktifDonemAy""",
+            tenantConn);
+        firmaInsertCmd.Parameters.AddWithValue("@id", firma.Id);
+        firmaInsertCmd.Parameters.AddWithValue("@kod", firma.FirmaKodu ?? "FIRMA");
+        firmaInsertCmd.Parameters.AddWithValue("@adi", firma.FirmaAdi);
+        firmaInsertCmd.Parameters.AddWithValue("@varsayilan", firma.VarsayilanFirma);
+        firmaInsertCmd.Parameters.AddWithValue("@sirano", firma.SiraNo);
+        firmaInsertCmd.Parameters.AddWithValue("@donemYil", firma.AktifDonemYil);
+        firmaInsertCmd.Parameters.AddWithValue("@donemAy", firma.AktifDonemAy);
+        firmaInsertCmd.Parameters.AddWithValue("@createdAt", firma.CreatedAt);
+        firmaInsertCmd.Parameters.AddWithValue("@db", firma.DatabaseName ?? (object)DBNull.Value);
+        await firmaInsertCmd.ExecuteNonQueryAsync();
+        _logger.LogInformation("Veri gocu Adim 0 tamam: Firma kaydi eklendi/guncellendi.");
+
+        // Master DB'ye ait diger tablolar (tenant DB'de sema olarak olmali ama veri kopyalanmayacak)
         var masterTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             { "Firmalar", "Kullanicilar", "Lisanslar", "Roller", "RolYetkileri", "AppAyarlari" };
 
@@ -353,10 +380,8 @@ public sealed class TenantDatabaseService : ITenantDatabaseService
                 return 0;
             }
 
-            // Hedefte zaten veri var mi?
-            await using var countCmd = new NpgsqlCommand($"SELECT COUNT(*) FROM \"{table}\"", targetConn);
-            var existingCount = (long)(await countCmd.ExecuteScalarAsync())!;
-            if (existingCount > 0 && !firmaId.HasValue) return 0;
+            // Delta sync: ON CONFLICT DO NOTHING zaten duplicate'leri handle eder.
+            // Hedefte veri olsa bile yeni kayitlari eklemeye devam et.
 
             var inserted = 0;
             var skipped = 0;
