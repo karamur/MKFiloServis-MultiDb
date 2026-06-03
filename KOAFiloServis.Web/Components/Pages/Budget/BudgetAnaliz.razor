@@ -375,6 +375,14 @@
                                         </tr>
                                     </thead>
                                     <tbody>
+                                        @{
+                                            // ─── DİAG-RENDER: foreach öncesi render kontrolü ───
+                                            if (_diagnostikSonOdemeId > 0)
+                                            {
+                                                var renderKaydi = bekleyenOdemeler.FirstOrDefault(x => x.Id == _diagnostikSonOdemeId);
+                                                Console.WriteLine($"[DİAG-RENDER] Render anı: bekleyenOdemeler.Count={bekleyenOdemeler.Count}, Id={_diagnostikSonOdemeId} render koleksiyonunda mı? {renderKaydi != null}");
+                                            }
+                                        }
                                         @foreach (var odeme in bekleyenOdemeler)
                                         {
                                             var vadeRenk = GetOdemeVadeRenk(odeme);
@@ -1780,6 +1788,8 @@
 </style>
 
 @code {
+    // DİAGNOSTİK: Son oluşturulan/güncellenen ödeme Id'si (sadece log için)
+    private int _diagnostikSonOdemeId;
     private int secilenYil;
     private int secilenAy;
     private int aktifTakvimAy;
@@ -1889,6 +1899,10 @@
     {
         isLoading = true;
         var oncekiSecilenGun = secilenGun; // Onceki secimi sakla
+
+        // ─── DİAGNOSTİK LOG 3: YenileDataAsync GİRİŞ ───
+        Console.WriteLine($"[DİAG-3] YenileDataAsync GİRİŞ: secilenYil={secilenYil}, secilenAy={secilenAy}, aktifTakvimAy={aktifTakvimAy}, secilenFirmaId={secilenFirmaId}");
+
         StateHasChanged();
 
         try
@@ -1911,6 +1925,11 @@
 
             // Firma filtresine göre odemeler
             odemeler = await BudgetService.GetOdemelerAsync(secilenYil, secilenAy > 0 ? secilenAy : null, secilenFirmaId > 0 ? secilenFirmaId : null);
+
+            // ─── DİAGNOSTİK LOG 4: GetOdemelerAsync dönüşü ───
+            Console.WriteLine($"[DİAG-4] GetOdemelerAsync dönüş: odemeler.Count={odemeler.Count}");
+            if (_diagnostikSonOdemeId > 0)
+                Console.WriteLine($"[DİAG-4] odemeler içinde Id={_diagnostikSonOdemeId} var mı? {odemeler.Any(x => x.Id == _diagnostikSonOdemeId)}");
 
             if (secilenAy > 0)
             {
@@ -1944,6 +1963,24 @@
                 .OrderBy(o => o.OdemeTarihi)
                 .ToList();
 
+            // ─── DİAGNOSTİK LOG 5: bekleyenOdemeler filtresi sonrası ───
+            Console.WriteLine($"[DİAG-5] bekleyenOdemeler oluşturuldu: Count={bekleyenOdemeler.Count}, aktifTakvimAy={aktifTakvimAy}");
+            if (_diagnostikSonOdemeId > 0)
+            {
+                var kayitVarMi = bekleyenOdemeler.Any(x => x.Id == _diagnostikSonOdemeId);
+                Console.WriteLine($"[DİAG-5] bekleyenOdemeler içinde Id={_diagnostikSonOdemeId} var mı? {kayitVarMi}");
+                if (!kayitVarMi)
+                {
+                    // Kayıt neden yok? Detaylı kontrol
+                    var odemeKaydi = odemeler.FirstOrDefault(x => x.Id == _diagnostikSonOdemeId);
+                    if (odemeKaydi == null)
+                        Console.WriteLine($"[DİAG-5] ⚠ KAYIP: Id={_diagnostikSonOdemeId} odemeler listesinde hiç yok! GetOdemelerAsync filtresinde elendi.");
+                    else
+                        Console.WriteLine($"[DİAG-5] ⚠ KAYIP: Id={_diagnostikSonOdemeId} odemeler'de VAR ama bekleyenOdemeler filtresinde elendi. Kaydın Durum={odemeKaydi.Durum}, OdemeAy={odemeKaydi.OdemeAy}, aktifTakvimAy={aktifTakvimAy}");
+                }
+            }
+            Console.WriteLine("═══════════════════════════════════════════");
+
             var krediOdemeler = odemeler.Where(o => o.TaksitliMi && (o.Durum == OdemeDurum.Bekliyor || o.Durum == OdemeDurum.KismiOdendi)).ToList();
             krediTaksitToplam = krediOdemeler.Sum(o => o.Miktar);
             krediTaksitAdet = krediOdemeler.Count;
@@ -1952,8 +1989,11 @@
             if (oncekiSecilenGun.HasValue)
             {
                 secilenGun = oncekiSecilenGun;
-                secilenGunTarih = new DateTime(secilenYil, aktifTakvimAy, oncekiSecilenGun.Value);
-                var gunData = takvimData?.FirstOrDefault(t => t.Gun == oncekiSecilenGun.Value);
+                var maxGun = DateTime.DaysInMonth(secilenYil, aktifTakvimAy);
+                var gecerliGun = Math.Min(oncekiSecilenGun.Value, maxGun);
+                secilenGun = gecerliGun;
+                secilenGunTarih = new DateTime(secilenYil, aktifTakvimAy, gecerliGun);
+                var gunData = takvimData?.FirstOrDefault(t => t.Gun == gecerliGun);
                 secilenGunOdemeleri = gunData?.Odemeler?.Where(o => o.Durum == OdemeDurum.Bekliyor).ToList() ?? new List<BudgetOdeme>();
             }
             else
@@ -2439,13 +2479,25 @@
             else
                 await BudgetService.CreateOdemeAsync(editOdeme);
 
+            // ─── DİAGNOSTİK LOG 1: INSERT/UPDATE sonrası ───
+            _diagnostikSonOdemeId = editOdeme.Id;
+            Console.WriteLine("═══════════════════════════════════════════");
+            Console.WriteLine($"[DİAG-1] OdemeKaydet - INSERT/UPDATE sonrası:");
+            Console.WriteLine($"  editOdeme.Id          = {editOdeme.Id}");
+            Console.WriteLine($"  editOdeme.OdemeTarihi = {editOdeme.OdemeTarihi:yyyy-MM-dd}");
+            Console.WriteLine($"  editOdeme.OdemeAy     = {editOdeme.OdemeAy}");
+            Console.WriteLine($"  editOdeme.OdemeYil    = {editOdeme.OdemeYil}");
+            Console.WriteLine($"  editOdeme.FirmaId     = {editOdeme.FirmaId}");
+            Console.WriteLine($"  editOdeme.Durum       = {editOdeme.Durum}");
+            Console.WriteLine($"  secilenAy (önce)      = {secilenAy}");
+            Console.WriteLine($"  aktifTakvimAy (önce)  = {aktifTakvimAy}");
+            // ─── DİAG-FIRMA: FirmaId karşılaştırması ───
+            Console.WriteLine($"[DİAG-FIRMA] secilenFirmaId={secilenFirmaId}, editOdeme.FirmaId={editOdeme.FirmaId}, EŞİT Mİ? {((secilenFirmaId > 0 ? secilenFirmaId : (int?)null) == editOdeme.FirmaId)} (null-safe: secilenFirmaId filtresi={(secilenFirmaId > 0 ? secilenFirmaId.ToString() : "null (tum firmalar)")})");
+            Console.WriteLine("═══════════════════════════════════════════");
+
             ToastService.ShowSuccess("Kaydedildi.");
             ModalKapat();
-            
-            // Kayıt yapılan ödemenin ayına göre takvim ayını ve dropdown'u güncelle
-            aktifTakvimAy = editOdeme.OdemeTarihi.Month;
-            secilenAy = editOdeme.OdemeTarihi.Month;
-            
+
             // Tüm veriyi yenile
             await YenileDataAsync();
         }
