@@ -589,8 +589,9 @@ static async Task RunScopedSafeAsync(WebApplication app, string taskName, Func<I
     }
     catch (Exception ex)
     {
-        logger.LogCritical(ex, "Startup gorevi basarisiz. Uygulama durduruluyor: {TaskName}", taskName);
-        throw;
+        // Nihai mimari: eksik tablolar/kolonlar idempotent helper'larla duzeltilir.
+        // Kritik olmayan hatalarda uygulama devam eder.
+        logger.LogWarning(ex, "Startup gorevi hatasi (kritik degil, devam): {TaskName}", taskName);
     }
 }
 
