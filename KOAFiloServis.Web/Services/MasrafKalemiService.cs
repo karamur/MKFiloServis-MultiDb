@@ -9,11 +9,13 @@ public class MasrafKalemiService : IMasrafKalemiService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly ICacheService _cache;
+    private readonly NumaraSerisiService _numaraSerisi;
 
-    public MasrafKalemiService(IDbContextFactory<ApplicationDbContext> contextFactory, ICacheService cache)
+    public MasrafKalemiService(IDbContextFactory<ApplicationDbContext> contextFactory, ICacheService cache, NumaraSerisiService numaraSerisi)
     {
         _contextFactory = contextFactory;
         _cache = cache;
+        _numaraSerisi = numaraSerisi;
     }
 
     public Task<List<MasrafKalemi>> GetAllAsync() =>
@@ -130,13 +132,7 @@ public class MasrafKalemiService : IMasrafKalemiService
 
     public async Task<string> GenerateNextKodAsync()
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var last = await context.MasrafKalemleri
-            .IgnoreQueryFilters()
-            .OrderByDescending(m => m.Id)
-            .FirstOrDefaultAsync();
-
-        var nextNumber = (last?.Id ?? 0) + 1;
+        var nextNumber = await _numaraSerisi.GenerateNextAsync("MSR", 0, "GLOBAL");
         return $"MSR-{nextNumber:D4}";
     }
 }

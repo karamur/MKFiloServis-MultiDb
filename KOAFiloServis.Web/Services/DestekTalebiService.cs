@@ -14,17 +14,20 @@ public class DestekTalebiService : IDestekTalebiService
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly ILogger<DestekTalebiService> _logger;
     private readonly IEmailService _emailService;
+    private readonly NumaraSerisiService _numaraSerisi;
     private readonly string _uploadPath;
 
     public DestekTalebiService(
-        IDbContextFactory<ApplicationDbContext> contextFactory, 
+        IDbContextFactory<ApplicationDbContext> contextFactory,
         ILogger<DestekTalebiService> logger,
         IWebHostEnvironment env,
-        IEmailService emailService)
+        IEmailService emailService,
+        NumaraSerisiService numaraSerisi)
     {
         _contextFactory = contextFactory;
         _logger = logger;
         _emailService = emailService;
+        _numaraSerisi = numaraSerisi;
         _uploadPath = Path.Combine(env.WebRootPath, "uploads", "destek");
         
         // Upload klasörünü oluştur
@@ -236,25 +239,8 @@ public class DestekTalebiService : IDestekTalebiService
 
     public async Task<string> GenerateNextTalepNoAsync()
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var yil = DateTime.Now.Year;
-        var prefix = $"TKT-{yil}-";
-        
-        var sonTalep = await context.DestekTalepleri
-            .AsNoTracking()
-            .Where(x => x.TalepNo.StartsWith(prefix))
-            .OrderByDescending(x => x.TalepNo)
-            .FirstOrDefaultAsync();
-
-        int sonNo = 0;
-        if (sonTalep != null)
-        {
-            var noStr = sonTalep.TalepNo.Replace(prefix, "");
-            int.TryParse(noStr, out sonNo);
-        }
-        
-        return $"{prefix}{(sonNo + 1):D6}";
+        // Kural 15: Atomik numara üretimi
+        return await _numaraSerisi.GenerateFormattedAsync("TKT", 0, 6);
     }
 
     #endregion
