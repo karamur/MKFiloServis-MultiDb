@@ -32,11 +32,23 @@ namespace KOAFiloServis.Web.Data.Migrations
                     ON ""Organizasyonlar"" (""Kod"") WHERE ""IsDeleted"" = false;
             ");
 
-            // 2. Varsayilan Organizasyon kaydi (Ustun Holding)
+            // 2. Varsayilan Organizasyon kayitlari
             migrationBuilder.Sql(@"
                 INSERT INTO ""Organizasyonlar"" (""Adi"", ""Kod"", ""IsDeleted"", ""CreatedAt"")
                 SELECT 'Ustun Holding', 'USTUNHOLDING', false, now()
                 WHERE NOT EXISTS (SELECT 1 FROM ""Organizasyonlar"" WHERE ""Kod"" = 'USTUNHOLDING');
+
+                INSERT INTO ""Organizasyonlar"" (""Adi"", ""Kod"", ""IsDeleted"", ""CreatedAt"")
+                SELECT 'Ustun Grup', 'USTUNGRUP', false, now()
+                WHERE NOT EXISTS (SELECT 1 FROM ""Organizasyonlar"" WHERE ""Kod"" = 'USTUNGRUP');
+
+                INSERT INTO ""Organizasyonlar"" (""Adi"", ""Kod"", ""IsDeleted"", ""CreatedAt"")
+                SELECT 'Ustun Filo', 'USTUNFILO', false, now()
+                WHERE NOT EXISTS (SELECT 1 FROM ""Organizasyonlar"" WHERE ""Kod"" = 'USTUNFILO');
+
+                INSERT INTO ""Organizasyonlar"" (""Adi"", ""Kod"", ""IsDeleted"", ""CreatedAt"")
+                SELECT 'Recep Ustun', 'RECEPUSTUN', false, now()
+                WHERE NOT EXISTS (SELECT 1 FROM ""Organizasyonlar"" WHERE ""Kod"" = 'RECEPUSTUN');
             ");
 
             // 3. Subeler tablosu
