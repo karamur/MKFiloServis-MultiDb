@@ -25,7 +25,7 @@ public interface IMuhasebeService
     Task<MuhasebeFis> CreateFisAsync(MuhasebeFis fis);
     Task<MuhasebeFis> UpdateFisAsync(MuhasebeFis fis);
     Task DeleteFisAsync(int id);
-    Task<string> GenerateNextFisNoAsync(FisTipi tip);
+    Task<string> GenerateNextFisNoAsync(FisTipi tip, int firmaId = 0);
     /// <summary>Kilitli olarak FisNo üretir ve fişi kaydeder. Duplicate key hatasını önler.</summary>
     Task<MuhasebeFis> CreateFisAtomicAsync(MuhasebeFis fis);
     Task OnayliFisAsync(int fisId);

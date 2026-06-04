@@ -445,13 +445,13 @@ public class MuhasebeService : IMuhasebeService
         await context.SaveChangesAsync();
     }
 
-    public async Task<string> GenerateNextFisNoAsync(FisTipi tip)
+    public async Task<string> GenerateNextFisNoAsync(FisTipi tip, int firmaId = 0)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        return await GenerateNextFisNoInContextAsync(context, tip);
+        return await GenerateNextFisNoInContextAsync(context, tip, firmaId);
     }
 
-    private static async Task<string> GenerateNextFisNoInContextAsync(ApplicationDbContext context, FisTipi tip)
+    private static async Task<string> GenerateNextFisNoInContextAsync(ApplicationDbContext context, FisTipi tip, int firmaId = 0)
     {
         var prefix = tip switch
         {
@@ -464,7 +464,8 @@ public class MuhasebeService : IMuhasebeService
             _ => "MH"
         };
         var yilAy = $"{DateTime.Now.Year}{DateTime.Now.Month:D2}";
-        var sonNo = await NextFisNoCounterAsync(context, prefix, yilAy);
+        // Kural 15: FirmaId bazlı atomik numara
+        var sonNo = await NextFisNoCounterAsync(context, prefix, yilAy, firmaId);
         return $"{prefix}-{yilAy}-{sonNo:D4}";
     }
 
