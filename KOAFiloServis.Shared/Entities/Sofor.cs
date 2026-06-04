@@ -5,7 +5,7 @@ namespace KOAFiloServis.Shared.Entities;
 /// <summary>
 /// Personel bilgileri (Şoför, Ofis Çalışanı, Yönetici vb.)
 /// </summary>
-[TenantNullableFirmaId]
+/// Kural 4: FirmaId NOT NULL. TenantNullableFirmaId kaldırıldı.
 public class Sofor : BaseEntity, IKopyalanabilirTenant, IFirmaTenant
 {
     /// <summary>Firma kopyalama (K8) audit: kaynak firma Id'si.</summary>
@@ -55,7 +55,7 @@ public class Sofor : BaseEntity, IKopyalanabilirTenant, IFirmaTenant
     public decimal DigerMaas { get; set; }
     public decimal NetMaas { get; set; }
 
-    // Firma Bilgisi (çalıştığı firma)
+    // Firma Bilgisi (çalıştığı firma) — Kural 4: NOT NULL (DB seviyesinde)
     public int? FirmaId { get; set; }
     public virtual Firma? Firma { get; set; }
 

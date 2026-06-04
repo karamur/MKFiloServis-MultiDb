@@ -5,7 +5,7 @@ namespace KOAFiloServis.Shared.Entities;
 /// <summary>
 /// Güzergah bilgileri (Firma bazlı)
 /// </summary>
-[TenantNullableFirmaId]
+/// Kural 4: FirmaId NOT NULL (TenantNullableFirmaId kaldırıldı, DB seviyesinde NOT NULL).
 public class Guzergah : BaseEntity, IKopyalanabilirTenant, IFirmaTenant
 {
     /// <summary>Firma kopyalama (K8) audit: kaynak firma Id'si.</summary>

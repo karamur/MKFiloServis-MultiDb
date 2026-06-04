@@ -3,7 +3,7 @@
 /// <summary>
 /// Banka hesapları
 /// </summary>
-[TenantNullableFirmaId]
+/// Kural 4: FirmaId NOT NULL (TenantNullableFirmaId kaldırıldı, DB seviyesinde NOT NULL).
 public class BankaHesap : BaseEntity, IFirmaTenant
 {
     /// <summary>

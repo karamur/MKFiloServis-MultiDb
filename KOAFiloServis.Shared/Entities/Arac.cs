@@ -5,7 +5,7 @@ namespace KOAFiloServis.Shared.Entities;
 /// <summary>
 /// Araç bilgileri - Şase numarasına göre tekil
 /// </summary>
-[TenantNullableFirmaId]
+/// Kural 4: FirmaId NOT NULL (TenantNullableFirmaId kaldırıldı, DB seviyesinde NOT NULL).
 public class Arac : BaseEntity, IKopyalanabilirTenant, IFirmaTenant
 {
     /// <summary>Firma kopyalama (K8) audit: kaynak firma Id'si.</summary>
@@ -14,8 +14,7 @@ public class Arac : BaseEntity, IKopyalanabilirTenant, IFirmaTenant
     public int? KaynakKayitId { get; set; }
 
     /// <summary>
-    /// Tenant: Bu aracın ait olduğu firma. (K3+K4) Sahiplik tipi ne olursa olsun (Özmal/Kiralık/Tedarikçi)
-    /// kaydın yönetici firması bu alanla belirlenir.
+    /// Tenant: Bu aracın ait olduğu firma. (K3+K4)
     /// </summary>
     public int? FirmaId { get; set; }
     public virtual Firma? Firma { get; set; }

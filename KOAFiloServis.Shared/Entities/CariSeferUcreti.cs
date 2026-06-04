@@ -5,7 +5,7 @@
 /// Bir cariye birden fazla sefer ücreti tanımlanabilir (farklı güzergah,
 /// farklı dönem, farklı araç tipi vb.).
 /// </summary>
-[TenantNullableFirmaId]
+/// Kural 4: FirmaId NOT NULL (TenantNullableFirmaId kaldırıldı, DB seviyesinde NOT NULL).
 public class CariSeferUcreti : BaseEntity, IFirmaTenant
 {
     /// <summary>Tenant: Bu sefer ücretinin ait olduğu firma. (K3+K4)</summary>

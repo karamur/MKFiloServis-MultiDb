@@ -5,7 +5,7 @@ namespace KOAFiloServis.Shared.Entities;
 /// <summary>
 /// Banka/Kasa hareketleri
 /// </summary>
-[TenantNullableFirmaId]
+/// Kural 4: FirmaId NOT NULL (TenantNullableFirmaId kaldırıldı, DB seviyesinde NOT NULL).
 public class BankaKasaHareket : BaseEntity, IFirmaTenant
 {
     /// <summary>

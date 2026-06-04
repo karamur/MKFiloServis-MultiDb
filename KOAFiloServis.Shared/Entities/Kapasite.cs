@@ -5,7 +5,7 @@ namespace KOAFiloServis.Shared.Entities;
 /// <summary>
 /// Operasyonel kapasite tanımı.
 /// </summary>
-[TenantNullableFirmaId]
+/// Kural 4: FirmaId NOT NULL (TenantNullableFirmaId kaldırıldı, DB seviyesinde NOT NULL).
 public class Kapasite : BaseEntity, IFirmaTenant
 {
     /// <summary>
