@@ -8,15 +8,18 @@ public class ProformaFaturaService : IProformaFaturaService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly IFaturaService _faturaService;
+    private readonly NumaraSerisiService _numaraSerisi;
     private readonly ILogger<ProformaFaturaService> _logger;
 
     public ProformaFaturaService(
         IDbContextFactory<ApplicationDbContext> contextFactory,
         IFaturaService faturaService,
+        NumaraSerisiService numaraSerisi,
         ILogger<ProformaFaturaService> logger)
     {
         _contextFactory = contextFactory;
         _faturaService = faturaService;
+        _numaraSerisi = numaraSerisi;
         _logger = logger;
     }
 
@@ -172,30 +175,10 @@ public class ProformaFaturaService : IProformaFaturaService
 
     #region Numara Üretimi
 
-    public async Task<string> GenerateNextProformaNoAsync()
+    public async Task<string> GenerateNextProformaNoAsync(int firmaId = 0)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var yil = DateTime.Now.Year;
-        var prefix = $"PRF-{yil}-";
-
-        var lastNo = await context.ProformaFaturalar
-            .IgnoreQueryFilters()
-            .Where(p => p.ProformaNo.StartsWith(prefix))
-            .OrderByDescending(p => p.ProformaNo)
-            .Select(p => p.ProformaNo)
-            .FirstOrDefaultAsync();
-
-        int nextNumber = 1;
-        if (!string.IsNullOrEmpty(lastNo))
-        {
-            var parts = lastNo.Split('-');
-            if (parts.Length == 3 && int.TryParse(parts[2], out int lastNumber))
-            {
-                nextNumber = lastNumber + 1;
-            }
-        }
-
-        return $"{prefix}{nextNumber:D5}";
+        // Kural 15: FirmaId bazlı atomik numara üretimi
+        return await _numaraSerisi.GenerateFormattedAsync("PRF", firmaId, 5);
     }
 
     #endregion

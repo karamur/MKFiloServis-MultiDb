@@ -16,7 +16,7 @@ public interface IProformaFaturaService
     Task DeleteAsync(int id);
     
     // Numara Üretimi
-    Task<string> GenerateNextProformaNoAsync();
+    Task<string> GenerateNextProformaNoAsync(int firmaId = 0);
     
     // Kalem İşlemleri
     Task<ProformaFaturaKalem> AddKalemAsync(ProformaFaturaKalem kalem);
