@@ -5,10 +5,14 @@ namespace KOAFiloServis.Shared.Entities;
 /// <summary>
 /// Fatura kalemleri
 /// </summary>
-public class FaturaKalem : BaseEntity
+public class FaturaKalem : BaseEntity, IFirmaTenant
 {
+    // Kural 4: FirmaId dogrudan entity'de (Fatura uzerinden join gerekmez)
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     public int SiraNo { get; set; }
-    public string? UrunKodu { get; set; } // Ürün/Hizmet kodu
+    public string? UrunKodu { get; set; } // Urun/Hizmet kodu
     public string Aciklama { get; set; } = string.Empty;
     public decimal Miktar { get; set; } = 1;
     public string Birim { get; set; } = "Adet";
@@ -19,25 +23,24 @@ public class FaturaKalem : BaseEntity
     public decimal KdvTutar { get; set; }
     public decimal ToplamTutar { get; set; }
 
-    // Kalem Tipi - Hizmet, Mal, Demirbaş vb.
+    // Kalem Tipi - Hizmet, Mal, Demirbas vb.
     public FaturaKalemTipi KalemTipi { get; set; } = FaturaKalemTipi.Hizmet;
     public FaturaKalemAltTipi? AltTipi { get; set; }
 
-    // Tevkifat (kalem bazında)
+    // Tevkifat (kalem bazinda)
     public decimal TevkifatOrani { get; set; } = 0;
     public decimal TevkifatTutar { get; set; } = 0;
 
-    // Muhasebe Hesap Eşleştirme (Gelir/Gider hesabı)
+    // Muhasebe Hesap Eslestirme (Gelir/Gider hesabi)
     public int? MuhasebeHesapId { get; set; }
     public virtual MuhasebeHesap? MuhasebeHesap { get; set; }
 
-    // Araç İlişkisi (Araç satış/ alış veya servis için)
+    // Arac Iliskisi (Arac satis/alis veya servis icin)
     public int? AracId { get; set; }
     public virtual Arac? Arac { get; set; }
 
-    // Demirbaş İlişkisi
+    // Demirbas Iliskisi
     public int? DemirbasId { get; set; }
-    // public virtual Demirbas? Demirbas { get; set; } // İleride eklenebilir
 
     // Foreign Key
     public int FaturaId { get; set; }

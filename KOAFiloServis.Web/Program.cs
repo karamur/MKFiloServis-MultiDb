@@ -911,6 +911,16 @@ await RunScopedSafeAsync(app, "ApplyMigrations", async services =>
         SET ""FirmaId"" = s.""FirmaId""
         FROM ""Personeller"" s
         WHERE pih.""SoforId"" = s.""Id"" AND pih.""FirmaId"" IS NULL AND s.""FirmaId"" IS NOT NULL;
+
+        -- Kural 4: FaturaKalem FirmaId (idempotent DDL + backfill)
+        ALTER TABLE ""FaturaKalemleri"" ADD COLUMN IF NOT EXISTS ""FirmaId"" integer NULL;
+        CREATE INDEX IF NOT EXISTS ""IX_FaturaKalemleri_FirmaId"" ON ""FaturaKalemleri"" (""FirmaId"");
+
+        -- Backfill: FaturaKalem.FirmaId ← Fatura.FirmaId
+        UPDATE ""FaturaKalemleri"" fk
+        SET ""FirmaId"" = f.""FirmaId""
+        FROM ""Faturalar"" f
+        WHERE fk.""FaturaId"" = f.""Id"" AND fk.""FirmaId"" IS NULL AND f.""FirmaId"" IS NOT NULL;
     ");
 
     // Kural 15: FisNoCounters'a FirmaId + composite PK (idempotent)
