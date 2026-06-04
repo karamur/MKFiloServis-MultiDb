@@ -78,36 +78,31 @@ Firma → Global Query Filter (HasQueryFilter(x => x.FirmaId == CurrentFirmaId))
 | 🗂️ **EBYS** | Gelen/giden/özlük/araç evrak, AI destekli arama, şifreli depolama |
 | 🔔 **Uyarı Sistemi** | Evrak/plaka/sözleşme süre takibi, merkezi uyarı paneli |
 | 🤖 **AI / Otomasyon** | Araç değerleme, belge sınıflandırma, semantik arama (Ollama / OpenAI) |
-| 🛡️ **Kurumsal** | Multi-tenant izolasyon, rol & yetki, JWT API, aktivite logları |
+| 🛡️ **Kurumsal** | FirmId bazlı veri izolasyonu, rol & yetki, JWT API, audit log |
 
 ---
 
-## 🏢 Database-Per-Firma Mimarisi
+## 🏢 Tek Veritabanı + FirmId İzolasyonu
 
 ```
-PostgreSQL Server
-├── KOAFiloServis_Master     → Firmalar, Kullanicilar, Lisans, Roller (global)
-├── Koa_USTUN_GRUP_001       → Firma A (tam izolasyon)
-├── Koa_RECEP_USTUN_003      → Firma B (tam izolasyon)
-└── Koa_USTUN_FILO_005       → Firma C (tam izolasyon)
+PostgreSQL: KOAFiloServis (tek veritabanı)
+        ↓
+Organizasyon → Firma → Şube hiyerarşisi
+        ↓
+Global Query Filter: HasQueryFilter(x => x.FirmaId == CurrentFirmaId)
+        ↓
+Tüm CRUD işlemleri FirmaId filtreli
 ```
-
-### Hybrid Geçiş Modeli
-
-- `Firma.DatabaseName == null` → Shared DB modu (`IFirmaTenant` query filter ile)
-- `Firma.DatabaseName != null` → Dedicated tenant DB (fiziksel izolasyon)
-- Startup'ta otomatik tenant DB oluşturma ve veri göçü
 
 ### Temel Bileşenler
 
 | Bileşen | Görev |
 |---------|-------|
-| `MasterDbContext` | Global tablolar (Firmalar, Kullanicilar, Lisans, Roller) |
-| `ApplicationDbContext` | Tenant verileri + global query filter |
-| `HoldingDbContext` | Çapraz firma konsolidasyon |
-| `TenantDbContextFactory` | Aktif firmaya göre dinamik DB bağlantısı |
-| `ITenantConnectionStringProvider` | Connection string çözümleyici |
-| `IAktifFirmaProvider` | Per-circuit tenant context (Scoped) |
+| `ApplicationDbContext` | Tek operasyonel DbContext (tüm entity'ler) |
+| `IAktifFirmaProvider` | Per-circuit firma context (Scoped) |
+| `NumaraSerisiService` | Atomik, FirmaId bazlı belge numaraları |
+| `FirmaBaseEntity` | Tüm iş tabloları için ortak temel sınıf |
+| `Organizasyon` / `Firma` / `Sube` | Organizasyon hiyerarşisi entity'leri |
 
 ---
 
@@ -119,7 +114,8 @@ PostgreSQL Server
 │  ┌─────────────────┐  ┌──────────────┐  ┌────────────────┐   │
 │  │ Blazor Server    │  │ REST API     │  │ Quartz Jobs    │   │
 │  │ Components/Pages │  │ Controllers  │  │ Backup, Engine │   │
-│  │ SignalR Hubs     │  │ JWT + Swagger│  │ GunlukOzet     │   │
+│  │ SignalR
+ Hubs     │  │ JWT + Swagger│  │ GunlukOzet     │   │
 │  └────────┬─────────┘  └──────┬───────┘  └───────┬────────┘   │
 │           └───────────────────┼──────────────────┘            │
 │                               ▼                               │
@@ -131,8 +127,8 @@ PostgreSQL Server
 │                               ▼                               │
 │  ┌──────────────────────────────────────────────────────────┐ │
 │  │ EF Core 10                                               │ │
-│  │ ApplicationDbContext + MasterDbContext + HoldingDbContext │ │
-│  │ Global Query Filter (IFirmaTenant) · Soft-Delete         │ │
+│  │ ApplicationDbContext (Tek DbContext)                      │ │
+│  │ Global Query Filter (FirmaId + IsDeleted)                 │ │
 │  └──────────────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────┘
                                 ▼
@@ -182,9 +178,7 @@ Uygulama **`https://localhost:5001`** adresinde başlar.
 {
   "DatabaseProvider": "PostgreSQL",
   "ConnectionStrings": {
-    "DefaultConnection": "Host=localhost;Database=KOAFiloServis_Main;Username=postgres;Password=***",
-    "MasterConnection": "Host=localhost;Database=KOAFiloServis_Master;Username=postgres;Password=***",
-    "HoldingConnection": "Host=localhost;Database=KOAFiloServis_Holding;Username=postgres;Password=***"
+    "DefaultConnection": "Host=localhost;Database=KOAFiloServis;Username=postgres;Password=***"
   },
   "Jwt": {
     "Secret": "<min-32-char-secret>",
@@ -260,8 +254,8 @@ dotnet publish KOAFiloServis.Web -c Release -o ./publish-prod
 ## 🗄️ Veritabanı & Migration
 
 - **EF Core migration'ları** → Shared DB şema evrimi
-- **MigrationHelper sınıfları** → Idempotent raw SQL (tenant DB'ler için)
-- **Startup pipeline** → Master → Shared → Tenant sırasıyla
+- **MigrationHelper sınıfları** → Idempotent raw SQL (tek veritabanı)
+- **Startup pipeline** → MasterDatabase → DbInitializer → ApplyMigrations
 
 ### Yedekleme
 
