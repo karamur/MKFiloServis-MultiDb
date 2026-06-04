@@ -3185,12 +3185,21 @@ public class ApplicationDbContext : DbContext
             // Skip logging for system/identity entities if needed, e.g.
             if (entityType.Name.Contains("AktiviteLog") || entityType.Name.Contains("Log")) continue;
 
+            // Kural 14: FirmaId'yi entity'den veya aktif firmadan al
+            int? firmaId = null;
+            if (entry.Entity is IFirmaTenant tenantEntity)
+                firmaId = tenantEntity.FirmaId;
+            if (firmaId == null || firmaId == 0)
+                firmaId = ResolveAktifFirmaProvider()?.AktifFirmaId;
+
             var log = new AktiviteLog
             {
                 IslemZamani = DateTime.UtcNow,
                 IslemTipi = entry.State.ToString(),
                 EntityTipi = entityType.Name,
-                Modul = "Genel" // Default, could be mapped based on type
+                Modul = "Genel", // Default, could be mapped based on type
+                FirmaId = firmaId,
+                KullaniciId = null // UI katmanindan set edilebilir
             };
 
             try

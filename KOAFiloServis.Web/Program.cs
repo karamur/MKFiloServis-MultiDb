@@ -844,6 +844,15 @@ await RunScopedSafeAsync(app, "ApplyMigrations", async services =>
     await KOAFiloServis.Web.Data.Migrations.BudgetOdemeKalanMigrationHelper.EnsureBudgetOdemeKalanColumnAsync(ctx);
     await KOAFiloServis.Web.Data.Migrations.BudgetHedefMigrationHelper.EnsureBudgetHedefTableAsync(ctx);
 
+    // Kural 14: AktiviteLog'a FirmaId + KullaniciId (idempotent)
+    await ctx.Database.ExecuteSqlRawAsync(@"
+        DO $$ BEGIN
+            ALTER TABLE ""AktiviteLoglar"" ADD COLUMN IF NOT EXISTS ""FirmaId"" integer NULL;
+            ALTER TABLE ""AktiviteLoglar"" ADD COLUMN IF NOT EXISTS ""KullaniciId"" integer NULL;
+            CREATE INDEX IF NOT EXISTS ""IX_AktiviteLoglar_FirmaId"" ON ""AktiviteLoglar"" (""FirmaId"");
+        EXCEPTION WHEN duplicate_column THEN END; $$;
+    ");
+
     logger.LogInformation("Migration helper'lar tek veritabaninda uygulandi.");
 });
 
