@@ -245,6 +245,7 @@ builder.Services.AddScoped<IToastService, ToastService>();
 builder.Services.AddScoped<AppIssueStateService>();
 builder.Services.AddScoped<IPdfService, PdfService>();
 builder.Services.AddScoped<IBudgetService, BudgetService>();
+builder.Services.AddScoped<NumaraSerisiService>(); // Kural 15: Firma bazlı numara serisi
 
 // OpenRouter AI Integration
 builder.Services.AddHttpClient<IOpenRouterService, OpenRouterService>();
@@ -851,6 +852,19 @@ await RunScopedSafeAsync(app, "ApplyMigrations", async services =>
             ALTER TABLE ""AktiviteLoglar"" ADD COLUMN IF NOT EXISTS ""KullaniciId"" integer NULL;
             CREATE INDEX IF NOT EXISTS ""IX_AktiviteLoglar_FirmaId"" ON ""AktiviteLoglar"" (""FirmaId"");
         EXCEPTION WHEN duplicate_column THEN END; $$;
+    ");
+
+    // Kural 15: FisNoCounters'a FirmaId + composite PK (idempotent)
+    await ctx.Database.ExecuteSqlRawAsync(@"
+        DO $$ BEGIN
+            ALTER TABLE ""FisNoCounters"" ADD COLUMN IF NOT EXISTS ""FirmaId"" integer NOT NULL DEFAULT 0;
+        EXCEPTION WHEN duplicate_column THEN END; $$;
+        DO $$ BEGIN
+            ALTER TABLE ""FisNoCounters"" DROP CONSTRAINT IF EXISTS ""PK_FisNoCounters"";
+        EXCEPTION WHEN undefined_object THEN END; $$;
+        DO $$ BEGIN
+            ALTER TABLE ""FisNoCounters"" ADD PRIMARY KEY (""Prefix"", ""FirmaId"", ""YilAy"");
+        EXCEPTION WHEN duplicate_table THEN END; $$;
     ");
 
     logger.LogInformation("Migration helper'lar tek veritabaninda uygulandi.");
