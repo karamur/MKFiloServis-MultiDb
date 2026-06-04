@@ -136,8 +136,11 @@ public class PersonelPuantaj : BaseEntity, IFirmaTenant
 /// <summary>
 /// Günlük puantaj detayı
 /// </summary>
-public class GunlukPuantaj : BaseEntity
+public class GunlukPuantaj : BaseEntity, IFirmaTenant
 {
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     [Required]
     public int PersonelPuantajId { get; set; }
 

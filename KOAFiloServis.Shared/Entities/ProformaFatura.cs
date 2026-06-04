@@ -57,8 +57,11 @@ public class ProformaFatura : BaseEntity, IFirmaTenant
 /// <summary>
 /// Proforma Fatura Kalemi
 /// </summary>
-public class ProformaFaturaKalem : BaseEntity
+public class ProformaFaturaKalem : BaseEntity, IFirmaTenant
 {
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     public int ProformaFaturaId { get; set; }
     public virtual ProformaFatura ProformaFatura { get; set; } = null!;
     

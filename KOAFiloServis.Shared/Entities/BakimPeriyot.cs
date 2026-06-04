@@ -59,8 +59,11 @@ public class BakimPeriyot : BaseEntity
 /// <summary>
 /// Bakım uyarı bildirimi log'u — mükerrer gönderimleri önler
 /// </summary>
-public class AracBakimUyari : BaseEntity
+public class AracBakimUyari : BaseEntity, IFirmaTenant
 {
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     public int BakimPeriyotId { get; set; }
     public virtual BakimPeriyot BakimPeriyot { get; set; } = null!;
 

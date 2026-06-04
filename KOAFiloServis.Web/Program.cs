@@ -921,6 +921,26 @@ await RunScopedSafeAsync(app, "ApplyMigrations", async services =>
         SET ""FirmaId"" = f.""FirmaId""
         FROM ""Faturalar"" f
         WHERE fk.""FaturaId"" = f.""Id"" AND fk.""FirmaId"" IS NULL AND f.""FirmaId"" IS NOT NULL;
+
+        -- Kural 4: ProformaFaturaKalem + AracBakimUyari + GunlukPuantaj FirmaId
+        ALTER TABLE ""ProformaFaturaKalemler"" ADD COLUMN IF NOT EXISTS ""FirmaId"" integer NULL;
+        ALTER TABLE ""AracBakimUyarilari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" integer NULL;
+        ALTER TABLE ""GunlukPuantajlar"" ADD COLUMN IF NOT EXISTS ""FirmaId"" integer NULL;
+        CREATE INDEX IF NOT EXISTS ""IX_ProformaFaturaKalemler_FirmaId"" ON ""ProformaFaturaKalemler"" (""FirmaId"");
+        CREATE INDEX IF NOT EXISTS ""IX_AracBakimUyarilari_FirmaId"" ON ""AracBakimUyarilari"" (""FirmaId"");
+        CREATE INDEX IF NOT EXISTS ""IX_GunlukPuantajlar_FirmaId"" ON ""GunlukPuantajlar"" (""FirmaId"");
+
+        -- Backfill: ProformaFaturaKalem ← ProformaFatura.FirmaId
+        UPDATE ""ProformaFaturaKalemler"" pfk SET ""FirmaId"" = pf.""FirmaId""
+        FROM ""ProformaFaturalar"" pf WHERE pfk.""ProformaFaturaId"" = pf.""Id"" AND pfk.""FirmaId"" IS NULL AND pf.""FirmaId"" IS NOT NULL;
+
+        -- Backfill: AracBakimUyari ← Arac.FirmaId
+        UPDATE ""AracBakimUyarilari"" abu SET ""FirmaId"" = a.""FirmaId""
+        FROM ""Araclar"" a WHERE abu.""AracId"" = a.""Id"" AND abu.""FirmaId"" IS NULL AND a.""FirmaId"" IS NOT NULL;
+
+        -- Backfill: GunlukPuantaj ← PersonelPuantaj.FirmaId
+        UPDATE ""GunlukPuantajlar"" gp SET ""FirmaId"" = pp.""FirmaId""
+        FROM ""PersonelPuantajlar"" pp WHERE gp.""PersonelPuantajId"" = pp.""Id"" AND gp.""FirmaId"" IS NULL AND pp.""FirmaId"" IS NOT NULL;
     ");
 
     // Kural 15: FisNoCounters'a FirmaId + composite PK (idempotent)
