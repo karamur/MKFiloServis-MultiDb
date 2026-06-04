@@ -953,6 +953,22 @@ await RunScopedSafeAsync(app, "ApplyMigrations", async services =>
         UPDATE ""AracIslemler"" SET ""FirmaId"" = a.""FirmaId"" FROM ""Araclar"" a WHERE ""AracIslemler"".""AracId"" = a.""Id"" AND ""AracIslemler"".""FirmaId"" IS NULL AND a.""FirmaId"" IS NOT NULL;
         UPDATE ""ServisKayitlari"" SET ""FirmaId"" = a.""FirmaId"" FROM ""Araclar"" a WHERE ""ServisKayitlari"".""AracId"" = a.""Id"" AND ""ServisKayitlari"".""FirmaId"" IS NULL AND a.""FirmaId"" IS NOT NULL;
         UPDATE ""ServisParcalar"" sp SET ""FirmaId"" = sk.""FirmaId"" FROM ""ServisKayitlari"" sk WHERE sp.""ServisKaydiId"" = sk.""Id"" AND sp.""FirmaId"" IS NULL AND sk.""FirmaId"" IS NOT NULL;
+
+        -- Kural 4: AylikChecklist + ChecklistKalem FirmaId
+        ALTER TABLE ""AylikChecklistler"" ADD COLUMN IF NOT EXISTS ""FirmaId"" integer NULL;
+        ALTER TABLE ""ChecklistKalemleri"" ADD COLUMN IF NOT EXISTS ""FirmaId"" integer NULL;
+        CREATE INDEX IF NOT EXISTS ""IX_AylikChecklistler_FirmaId"" ON ""AylikChecklistler"" (""FirmaId"");
+        CREATE INDEX IF NOT EXISTS ""IX_ChecklistKalemleri_FirmaId"" ON ""ChecklistKalemleri"" (""FirmaId"");
+
+        UPDATE ""AylikChecklistler"" ac SET ""FirmaId"" = COALESCE(a.""FirmaId"", s.""FirmaId"", g.""FirmaId"")
+        FROM ""AylikChecklistler"" ac2
+        LEFT JOIN ""Araclar"" a ON ac2.""AracId"" = a.""Id""
+        LEFT JOIN ""Personeller"" s ON ac2.""SoforId"" = s.""Id""
+        LEFT JOIN ""Guzergahlar"" g ON ac2.""GuzergahId"" = g.""Id""
+        WHERE ac.""Id"" = ac2.""Id"" AND ac.""FirmaId"" IS NULL;
+
+        UPDATE ""ChecklistKalemleri"" ck SET ""FirmaId"" = ac.""FirmaId""
+        FROM ""AylikChecklistler"" ac WHERE ck.""AylikChecklistId"" = ac.""Id"" AND ck.""FirmaId"" IS NULL AND ac.""FirmaId"" IS NOT NULL;
     ");
 
     // Kural 15: FisNoCounters'a FirmaId + composite PK (idempotent)

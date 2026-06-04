@@ -1,15 +1,17 @@
 namespace KOAFiloServis.Shared.Entities;
 
 /// <summary>
-/// Ayl�k Checklist - �of�r, Ara�, G�zergah i�in ayl�k kontrol listesi
+/// Aylik Checklist - Sofor, Arac, Guzergah icin aylik kontrol listesi
 /// </summary>
-public class AylikChecklist : BaseEntity
+public class AylikChecklist : BaseEntity, IFirmaTenant
 {
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     public int Yil { get; set; }
     public int Ay { get; set; }
     public ChecklistTipi ChecklistTipi { get; set; }
 
-    // �lgili kay�t (�of�r, Ara� veya G�zergah)
     public int? SoforId { get; set; }
     public int? AracId { get; set; }
     public int? GuzergahId { get; set; }
@@ -19,7 +21,6 @@ public class AylikChecklist : BaseEntity
     public ChecklistDurum GenelDurum { get; set; } = ChecklistDurum.Bekliyor;
     public string? Notlar { get; set; }
 
-    // Navigation Properties
     public virtual Sofor? Sofor { get; set; }
     public virtual Arac? Arac { get; set; }
     public virtual Guzergah? Guzergah { get; set; }
@@ -29,8 +30,11 @@ public class AylikChecklist : BaseEntity
 /// <summary>
 /// Checklist Kalemi - Her bir kontrol maddesi
 /// </summary>
-public class ChecklistKalem : BaseEntity
+public class ChecklistKalem : BaseEntity, IFirmaTenant
 {
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     public int AylikChecklistId { get; set; }
     public string KalemAdi { get; set; } = string.Empty;
     public ChecklistDurum Durum { get; set; } = ChecklistDurum.Bekliyor;
@@ -39,7 +43,6 @@ public class ChecklistKalem : BaseEntity
     public string? Aciklama { get; set; }
     public int SiraNo { get; set; }
 
-    // Navigation
     public virtual AylikChecklist AylikChecklist { get; set; } = null!;
 }
 
@@ -53,7 +56,7 @@ public enum ChecklistTipi
 public enum ChecklistDurum
 {
     Bekliyor = 0,
-    Tamam = 1,
-    Uyari = 2,
-    Kritik = 3
+    Gecti = 1,
+    Kaldi = 2,
+    Muaf = 3
 }
