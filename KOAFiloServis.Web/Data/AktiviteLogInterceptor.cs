@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Text.Json;
 using KOAFiloServis.Shared.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -170,6 +170,11 @@ public sealed class AktiviteLogInterceptor : SaveChangesInterceptor
                 return;
             }
             await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+
+            if (context.Database.CurrentTransaction == null && string.Equals(GetCurrentUserNameFromAllSources(scope.ServiceProvider.GetService<IHttpContextAccessor>()?.HttpContext?.User), "Sistem", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
 
             var httpContextAccessor = scope.ServiceProvider.GetService<IHttpContextAccessor>();
             var httpContext = httpContextAccessor?.HttpContext;

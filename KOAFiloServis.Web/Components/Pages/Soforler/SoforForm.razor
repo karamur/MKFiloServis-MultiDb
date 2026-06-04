@@ -16,6 +16,7 @@
 @inject IAktiviteLogService AktiviteLog
 @inject IAracService AracService
 @inject ITasimaTedarikciService TasimaTedarikciService
+@inject IFirmaService FirmaService
 @inject IDbContextFactory<KOAFiloServis.Web.Data.ApplicationDbContext> DbContextFactory
 @rendermode InteractiveServer
 
@@ -1030,8 +1031,9 @@
     private bool duzenleModalDropAcik = false;
     private List<Arac> duzenleModalFiltreliAraclar = new();
 
-    // Firma listesi
+    // Firma listesi (tenant DB izolasyonu: sadece aktif firma gösterilir)
     private List<Firma> firmalar = new();
+    private AktifFirmaBilgisi aktifFirmaBilgisi = new();
 
     // Taşıma Tedarikçileri
     private List<TasimaTedarikci> tasimaTedarikciler = new();
@@ -1069,7 +1071,8 @@
             {
                 Aktif = true,
                 Gorev = PersonelGorev.Sofor,
-                TasimaTedarikciId = TedarikciIdQuery
+                TasimaTedarikciId = TedarikciIdQuery,
+                FirmaId = aktifFirmaBilgisi.FirmaId > 0 ? aktifFirmaBilgisi.FirmaId : null
             };
             _srcBelgesiVarMi = false;
             sofor.SoforKodu = await SoforService.GenerateNextKodAsync(sofor.Gorev);
@@ -1100,11 +1103,25 @@
     {
         try
         {
-            await using var ctx = await DbContextFactory.CreateDbContextAsync();
-            firmalar = await ctx.Firmalar
-                .Where(f => !f.IsDeleted && f.Aktif)
-                .OrderBy(f => f.SiraNo).ThenBy(f => f.FirmaAdi)
-                .ToListAsync();
+            // Tenant DB izolasyonu: sadece aktif firma gösterilir.
+            // Tüm firmaları seçmek FK ihlaline yol açar (INSERT aktif firmanın
+            // tenant DB'sine gider, ama seçilen FirmaId başka firmaya ait olabilir).
+            aktifFirmaBilgisi = FirmaService.GetAktifFirma();
+            if (aktifFirmaBilgisi.FirmaId > 0)
+            {
+                firmalar = await FirmaService.GetAktifFirmalarAsync();
+                // Sadece aktif firmayı göster
+                firmalar = firmalar.Where(f => f.Id == aktifFirmaBilgisi.FirmaId).ToList();
+                // Yeni kayıtta tek firma varsa otomatik seç
+                if (!IsEdit && firmalar.Count == 1)
+                {
+                    sofor.FirmaId = firmalar[0].Id;
+                }
+            }
+            else
+            {
+                firmalar = new();
+            }
         }
         catch (Exception ex)
         {
