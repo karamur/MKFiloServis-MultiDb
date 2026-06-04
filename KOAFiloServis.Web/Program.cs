@@ -855,7 +855,7 @@ await RunScopedSafeAsync(app, "ApplyMigrations", async services =>
         EXCEPTION WHEN duplicate_column THEN END; $$;
     ");
 
-    // Kural 4: AracMasraf + PersonelMaas FirmaId (idempotent)
+    // Kural 4: AracMasraf + PersonelMaas FirmaId (idempotent DDL + backfill)
     await ctx.Database.ExecuteSqlRawAsync(@"
         DO $$ BEGIN
             ALTER TABLE ""AracMasraflari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" integer NULL;
@@ -863,6 +863,18 @@ await RunScopedSafeAsync(app, "ApplyMigrations", async services =>
             CREATE INDEX IF NOT EXISTS ""IX_AracMasraflari_FirmaId"" ON ""AracMasraflari"" (""FirmaId"");
             CREATE INDEX IF NOT EXISTS ""IX_PersonelMaaslari_FirmaId"" ON ""PersonelMaaslari"" (""FirmaId"");
         EXCEPTION WHEN duplicate_column THEN END; $$;
+
+        -- Backfill: AracMasraf.FirmaId ← Arac.FirmaId
+        UPDATE ""AracMasraflari"" am
+        SET ""FirmaId"" = a.""FirmaId""
+        FROM ""Araclar"" a
+        WHERE am.""AracId"" = a.""Id"" AND am.""FirmaId"" IS NULL AND a.""FirmaId"" IS NOT NULL;
+
+        -- Backfill: PersonelMaas.FirmaId ← Sofor.FirmaId
+        UPDATE ""PersonelMaaslari"" pm
+        SET ""FirmaId"" = s.""FirmaId""
+        FROM ""Personeller"" s
+        WHERE pm.""SoforId"" = s.""Id"" AND pm.""FirmaId"" IS NULL AND s.""FirmaId"" IS NOT NULL;
     ");
 
     // Kural 15: FisNoCounters'a FirmaId + composite PK (idempotent)
