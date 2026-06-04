@@ -919,16 +919,4 @@ public class BankaKasaHareketService : IBankaKasaHareketService
         });
     }
 
-    private static int? TryParseIslemNoSequence(string? islemNo)
-    {
-        if (string.IsNullOrWhiteSpace(islemNo))
-            return null;
-
-        var normalized = islemNo.Trim().ToUpperInvariant();
-        var parts = normalized.Split('-', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 3 || parts[0] != IslemNoPrefix.TrimEnd('-'))
-            return null;
-
-        return int.TryParse(parts[2], out var sequence) ? sequence : null;
-    }
 }

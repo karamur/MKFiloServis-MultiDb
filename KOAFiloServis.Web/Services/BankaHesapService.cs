@@ -260,16 +260,4 @@ public class BankaHesapService : IBankaHesapService
         return new string(iban.Where(ch => !char.IsWhiteSpace(ch)).ToArray()).ToUpperInvariant();
     }
 
-    private static int? TryParseGeneratedKodNumber(string? hesapKodu)
-    {
-        if (string.IsNullOrWhiteSpace(hesapKodu))
-            return null;
-
-        var normalizedKod = hesapKodu.Trim().ToUpperInvariant();
-        if (!normalizedKod.StartsWith(HesapKodPrefix, StringComparison.Ordinal))
-            return null;
-
-        var numberPart = normalizedKod[HesapKodPrefix.Length..];
-        return int.TryParse(numberPart, out var number) ? number : null;
-    }
 }

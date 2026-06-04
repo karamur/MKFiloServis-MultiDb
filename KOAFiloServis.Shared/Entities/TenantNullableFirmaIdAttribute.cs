@@ -12,6 +12,7 @@
 /// boyunca migration'ın erken NOT NULL üretmesini engeller.
 /// </para>
 /// </summary>
+[Obsolete("Nihai mimari: Tum FirmaId'ler NOT NULL. Bu attribute kullanilmiyor.")]
 [AttributeUsage(AttributeTargets.Class, Inherited = false)]
 public sealed class TenantNullableFirmaIdAttribute : Attribute
 {

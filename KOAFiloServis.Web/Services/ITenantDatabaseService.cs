@@ -1,5 +1,6 @@
 ﻿namespace KOAFiloServis.Web.Services;
 
+[System.Obsolete("Nihai mimari: Tenant DB yaklasimi terk edildi. Tek KOAFiloServis DB kullaniliyor.")]
 public interface ITenantDatabaseService
 {
     Task CreateTenantDatabaseAsync(int firmaId, bool migrateData = true);
