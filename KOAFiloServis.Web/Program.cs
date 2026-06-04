@@ -854,6 +854,16 @@ await RunScopedSafeAsync(app, "ApplyMigrations", async services =>
         EXCEPTION WHEN duplicate_column THEN END; $$;
     ");
 
+    // Kural 4: AracMasraf + PersonelMaas FirmaId (idempotent)
+    await ctx.Database.ExecuteSqlRawAsync(@"
+        DO $$ BEGIN
+            ALTER TABLE ""AracMasraflari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" integer NULL;
+            ALTER TABLE ""PersonelMaaslari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" integer NULL;
+            CREATE INDEX IF NOT EXISTS ""IX_AracMasraflari_FirmaId"" ON ""AracMasraflari"" (""FirmaId"");
+            CREATE INDEX IF NOT EXISTS ""IX_PersonelMaaslari_FirmaId"" ON ""PersonelMaaslari"" (""FirmaId"");
+        EXCEPTION WHEN duplicate_column THEN END; $$;
+    ");
+
     // Kural 15: FisNoCounters'a FirmaId + composite PK (idempotent)
     await ctx.Database.ExecuteSqlRawAsync(@"
         DO $$ BEGIN

@@ -80,15 +80,14 @@ public sealed class HoldingService : IHoldingService
                         && f.FaturaTarihi >= start && f.FaturaTarihi < end)
                     .SumAsync(f => f.GenelToplam);
 
-                // AracMasraf'ta FirmaId yok — Arac.FirmaId üzerinden filtrele
+                // Kural 4: AracMasraf ve PersonelMaas artik dogrudan FirmaId'ye sahip
                 var aracMaliyet = await firmaCtx.AracMasraflari
-                    .Where(m => !m.IsDeleted && m.Arac.FirmaId == firmaId
+                    .Where(m => !m.IsDeleted && m.FirmaId == firmaId
                         && m.CreatedAt >= start && m.CreatedAt < end)
                     .SumAsync(m => m.Tutar);
 
-                // PersonelMaas'ta FirmaId yok — Sofor.FirmaId üzerinden filtrele
                 var personelMaliyet = await firmaCtx.PersonelMaaslari
-                    .Where(p => !p.IsDeleted && p.Sofor.FirmaId == firmaId
+                    .Where(p => !p.IsDeleted && p.FirmaId == firmaId
                         && p.CreatedAt >= start && p.CreatedAt < end)
                     .SumAsync(p => p.NetMaas);
 

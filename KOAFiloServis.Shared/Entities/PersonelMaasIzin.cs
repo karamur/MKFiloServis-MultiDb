@@ -5,13 +5,17 @@ namespace KOAFiloServis.Shared.Entities;
 /// <summary>
 /// Personel maa� bilgileri
 /// </summary>
-public class PersonelMaas : BaseEntity
+public class PersonelMaas : BaseEntity, IFirmaTenant
 {
+    // Kural 4: FirmaId dogrudan entity'de (Sofor uzerinden join gerekmez)
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     public int SoforId { get; set; }
     public int Yil { get; set; }
     public int Ay { get; set; }
 
-    // Maa� Bilgileri
+    // Maas Bilgileri
     public decimal BrutMaas { get; set; }
     public decimal NetMaas { get; set; }
     public decimal SGKIsciPayi { get; set; }
@@ -20,7 +24,7 @@ public class PersonelMaas : BaseEntity
     public decimal DamgaVergisi { get; set; }
     public decimal IssizlikPrimi { get; set; }
 
-    // Ek �demeler
+    // Ek Odemeler
     public decimal Prim { get; set; }
     public decimal Ikramiye { get; set; }
     public decimal Yemek { get; set; }
@@ -41,12 +45,12 @@ public class PersonelMaas : BaseEntity
     [NotMapped]
     public decimal OdenecekTutar => NetMaas + ToplamEklemeler - Avans - IcraTakibi - DigerKesintiler;
 
-    // �deme Bilgileri
+    // Odeme Bilgileri
     public DateTime? OdemeTarihi { get; set; }
     public MaasOdemeDurum OdemeDurum { get; set; } = MaasOdemeDurum.Bekliyor;
     public string? OdemeAciklama { get; set; }
 
-    // �al��ma Bilgileri
+    // Calisma Bilgileri
     public int CalismaGunu { get; set; } = 26;
     public int IzinliGun { get; set; }
     public int RaporluGun { get; set; }

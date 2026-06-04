@@ -5,37 +5,41 @@ namespace KOAFiloServis.Shared.Entities;
 /// <summary>
 /// Araç masraf girişleri
 /// </summary>
-public class AracMasraf : BaseEntity
+public class AracMasraf : BaseEntity, IFirmaTenant
 {
+    // Kural 4: FirmaId dogrudan entity'de (Arac uzerinden join gerekmez)
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     public DateTime MasrafTarihi { get; set; }
     public decimal Tutar { get; set; }
     public string? Aciklama { get; set; }
-    public string? BelgeNo { get; set; } // Fatura/Fiş numarası
-    public bool ArizaKaynaklimi { get; set; } = false; // Arıza nedeniyle mi?
+    public string? BelgeNo { get; set; } // Fatura/Fis numarasi
+    public bool ArizaKaynaklimi { get; set; } = false; // Ariza nedeniyle mi?
 
     /// <summary>
-    /// Ödeme kaynağı (Kasa, Banka, Personel Cebinden)
+    /// Odeme kaynagi (Kasa, Banka, Personel Cebinden)
     /// </summary>
     public MasrafOdemeKaynak OdemeKaynak { get; set; } = MasrafOdemeKaynak.Kasa;
 
     /// <summary>
-    /// Personel cebinden ödendiyse hangi personel
+    /// Personel cebinden odendiyse hangi personel
     /// </summary>
     public int? PersonelCebindenId { get; set; }
     public virtual Sofor? PersonelCebinden { get; set; }
 
     /// <summary>
-    /// Personele geri ödeme yapıldı mı?
+    /// Personele geri odeme yapildi mi?
     /// </summary>
     public bool PersoneleOdendi { get; set; } = false;
 
     /// <summary>
-    /// Geri ödeme tarihi
+    /// Geri odeme tarihi
     /// </summary>
     public DateTime? PersonelOdemeTarihi { get; set; }
 
     /// <summary>
-    /// Ödeme yapılan banka/kasa hesabı
+    /// Odeme yapilan banka/kasa hesabi
     /// </summary>
     public int? BankaHesapId { get; set; }
     public virtual BankaHesap? BankaHesap { get; set; }
@@ -43,8 +47,8 @@ public class AracMasraf : BaseEntity
     // Foreign Keys
     public int AracId { get; set; }
     public int MasrafKalemiId { get; set; }
-    public int? GuzergahId { get; set; } // Arıza kaynaklı personel ulaşım masrafları için
-    public int? ServisCalismaId { get; set; } // İlgili servis çalışması
+    public int? GuzergahId { get; set; } // Ariza kaynakli personel ulasim masraflari icin
+    public int? ServisCalismaId { get; set; } // Ilgili servis calismasi
     public int? SoforId { get; set; }
     public int? CariId { get; set; }
     public int? MuhasebeFisId { get; set; }
