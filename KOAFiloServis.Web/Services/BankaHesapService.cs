@@ -8,10 +8,12 @@ public class BankaHesapService : IBankaHesapService
 {
     private const string HesapKodPrefix = "HSP-";
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+    private readonly NumaraSerisiService _numaraSerisi;
 
-    public BankaHesapService(IDbContextFactory<ApplicationDbContext> contextFactory)
+    public BankaHesapService(IDbContextFactory<ApplicationDbContext> contextFactory, NumaraSerisiService numaraSerisi)
     {
         _contextFactory = contextFactory;
+        _numaraSerisi = numaraSerisi;
     }
 
     public async Task<List<BankaHesap>> GetAllAsync()
@@ -109,21 +111,8 @@ public class BankaHesapService : IBankaHesapService
 
     public async Task<string> GenerateNextKodAsync()
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var hesapKodlari = await context.BankaHesaplari
-            .IgnoreQueryFilters()
-            .AsNoTracking()
-            .Select(b => b.HesapKodu)
-            .ToListAsync();
-
-        var nextNumber = hesapKodlari
-            .Select(TryParseGeneratedKodNumber)
-            .Where(number => number.HasValue)
-            .Select(number => number!.Value)
-            .DefaultIfEmpty(0)
-            .Max() + 1;
-
-        return $"{HesapKodPrefix}{nextNumber:D4}";
+        var nextNumber = await _numaraSerisi.GenerateNextAsync("HSP", 0, "GLOBAL");
+        return $"HSP-{nextNumber:D4}";
     }
 
     public async Task<decimal> GetBakiyeAsync(int hesapId)
