@@ -53,6 +53,18 @@ Firma → Global Query Filter (HasQueryFilter(x => x.FirmaId == CurrentFirmaId))
 - ✅ `NumaraSerisiService` — atomik, FirmaId bazlı belge numaraları
 - ✅ Global Query Filter: `FirmaId` + `IsDeleted`
 
+### Dönüşüm Özeti (Haziran 2026)
+
+| Eski | Yeni |
+|------|------|
+| Master DB + Tenant DB + Holding DB | Tek `KOAFiloServis` |
+| `MasterDbContext` | `ApplicationDbContext` (birleşik) |
+| `TenantDbContextFactory` | `IDbContextFactory<ApplicationDbContext>` |
+| `ITenantConnectionStringProvider` | Tek connection string |
+| FirmId opsiyonel (`int?`) | FirmId zorunlu (`NOT NULL`) — 18 entity |
+| MAX() tabanlı numara | `NumaraSerisiService` (atomik) — 11 metod |
+| Tenant bazlı audit | FirmaId'li `AktiviteLog` |
+
 ## 📌 Genel Bakış
 
 **KOAFiloServis**, personel taşımacılığı firmaları için tasarlanmış kurumsal bir **Blazor Interactive Server** uygulamasıdır. Araç, şoför, güzergâh ve müşteri verilerinden başlayan operasyonel zinciri **puantaj → hakediş → fatura → muhasebe** akışıyla tek platformda yönetir.
