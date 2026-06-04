@@ -65,8 +65,12 @@ public class PersonelMaas : BaseEntity, IFirmaTenant
 /// <summary>
 /// Personel izin kay�tlar�
 /// </summary>
-public class PersonelIzin : BaseEntity
+public class PersonelIzin : BaseEntity, IFirmaTenant
 {
+    // Kural 4: FirmaId dogrudan entity'de
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     public int SoforId { get; set; }
     public IzinTipi IzinTipi { get; set; }
     public DateTime BaslangicTarihi { get; set; }
@@ -89,8 +93,12 @@ public class PersonelIzin : BaseEntity
 /// <summary>
 /// Personel y�ll�k izin haklar�
 /// </summary>
-public class PersonelIzinHakki : BaseEntity
+public class PersonelIzinHakki : BaseEntity, IFirmaTenant
 {
+    // Kural 4: FirmaId dogrudan entity'de
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     public int SoforId { get; set; }
     public int Yil { get; set; }
 
