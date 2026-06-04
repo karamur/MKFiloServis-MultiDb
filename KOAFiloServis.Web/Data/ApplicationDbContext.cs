@@ -3110,6 +3110,10 @@ public class ApplicationDbContext : DbContext
             // e => FirmaTenantDisabled || EF.Property<int?>(e, "FirmaId") == FirmaTenantId
             var parameter = System.Linq.Expressions.Expression.Parameter(entityType.ClrType, "e");
             var firmaIdProp = System.Linq.Expressions.Expression.Property(parameter, "FirmaId");
+            // Entities with non-nullable int FirmaId need conversion for comparison with int? (Kural 4)
+            System.Linq.Expressions.Expression firmaIdPropAsNullable = firmaIdProp.Type == typeof(int)
+                ? System.Linq.Expressions.Expression.Convert(firmaIdProp, typeof(int?))
+                : firmaIdProp;
             var contextConst = System.Linq.Expressions.Expression.Constant(this);
             var disabledProp = System.Linq.Expressions.Expression.Property(
                 contextConst,
@@ -3117,7 +3121,7 @@ public class ApplicationDbContext : DbContext
             var tenantIdProp = System.Linq.Expressions.Expression.Property(
                 contextConst,
                 typeof(ApplicationDbContext).GetProperty("FirmaTenantId", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!);
-            var equal = System.Linq.Expressions.Expression.Equal(firmaIdProp, tenantIdProp);
+            var equal = System.Linq.Expressions.Expression.Equal(firmaIdPropAsNullable, tenantIdProp);
             var body = System.Linq.Expressions.Expression.OrElse(disabledProp, equal);
             var lambda = System.Linq.Expressions.Expression.Lambda(body, parameter);
 
