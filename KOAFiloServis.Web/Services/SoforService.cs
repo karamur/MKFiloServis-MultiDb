@@ -11,12 +11,14 @@ public class SoforService : ISoforService
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly IMuhasebeService _muhasebeService;
     private readonly ICacheService _cache;
+    private readonly NumaraSerisiService _numaraSerisi;
 
-    public SoforService(IDbContextFactory<ApplicationDbContext> contextFactory, IMuhasebeService muhasebeService, ICacheService cache)
+    public SoforService(IDbContextFactory<ApplicationDbContext> contextFactory, IMuhasebeService muhasebeService, ICacheService cache, NumaraSerisiService numaraSerisi)
     {
         _contextFactory = contextFactory;
         _muhasebeService = muhasebeService;
         _cache = cache;
+        _numaraSerisi = numaraSerisi;
     }
 
     public Task<List<Sofor>> GetAllAsync() =>
@@ -147,30 +149,14 @@ public class SoforService : ISoforService
 
     public async Task<string> GenerateNextKodAsync()
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
         return await GenerateNextKodAsync(PersonelGorev.Sofor);
     }
 
     public async Task<string> GenerateNextKodAsync(PersonelGorev gorev)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
+        // Kural 15: Atomik numara üretimi (global — personel kodları firmalar arası benzersiz)
         var prefix = GetKodPrefix(gorev);
-        var lastKod = await context.Soforler
-            .IgnoreQueryFilters()
-            .AsNoTracking()
-            .Where(s => s.SoforKodu.StartsWith(prefix + "-"))
-            .OrderByDescending(s => s.SoforKodu)
-            .Select(s => s.SoforKodu)
-            .FirstOrDefaultAsync();
-
-        var nextNumber = 1;
-        if (lastKod != null)
-        {
-            var parts = lastKod.Split('-');
-            if (parts.Length == 2 && int.TryParse(parts[1], out var num))
-                nextNumber = num + 1;
-        }
-
+        var nextNumber = await _numaraSerisi.GenerateNextAsync(prefix, 0, "GLOBAL");
         return $"{prefix}-{nextNumber:D4}";
     }
 

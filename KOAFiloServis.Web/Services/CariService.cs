@@ -9,11 +9,13 @@ public class CariService : ICariService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly IAktifFirmaProvider _firmaProvider;
+    private readonly NumaraSerisiService _numaraSerisi;
 
-    public CariService(IDbContextFactory<ApplicationDbContext> contextFactory, IAktifFirmaProvider firmaProvider)
+    public CariService(IDbContextFactory<ApplicationDbContext> contextFactory, IAktifFirmaProvider firmaProvider, NumaraSerisiService numaraSerisi)
     {
         _contextFactory = contextFactory;
         _firmaProvider = firmaProvider;
+        _numaraSerisi = numaraSerisi;
     }
 
     public async Task<List<Cari>> GetAllAsync()
@@ -549,40 +551,8 @@ public class CariService : ICariService
 
     public async Task<string> GenerateNextKodAsync()
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        // EF tarafında Substring/Convert kombinasyonu PostgreSQL'e güvenli çevrilemediği için
-        // kodları belleğe alıp sayısal kısmı burada parse ediyoruz.
-        var cariKodlari = await context.Cariler
-            .IgnoreQueryFilters()
-            .Where(c => c.CariKodu != null && c.CariKodu.StartsWith("CRI-"))
-            .Select(c => c.CariKodu!)
-            .ToListAsync();
-
-        var maxNumber = 0;
-        foreach (var cariKodu in cariKodlari)
-        {
-            if (string.IsNullOrWhiteSpace(cariKodu) || cariKodu.Length <= 4)
-            {
-                continue;
-            }
-
-            var numericPart = cariKodu[4..];
-            if (numericPart.Length == 5 && int.TryParse(numericPart, out var parsed) && parsed > maxNumber)
-            {
-                maxNumber = parsed;
-            }
-        }
-
-        // Timestamp ile ek benzersizlik garantisi
-        var timestamp = DateTime.UtcNow.Ticks % 1000;
-        var nextNumber = maxNumber + 1 + (int)timestamp;
-
-        // Eğer bu kod mevcutsa, daha yüksek bir sayı bul
-        while (await context.Cariler.IgnoreQueryFilters().AnyAsync(c => c.CariKodu == $"CRI-{nextNumber:D5}"))
-        {
-            nextNumber++;
-        }
-
+        // Kural 15: Atomik numara üretimi (global — cari kodları firmalar arası benzersiz)
+        var nextNumber = await _numaraSerisi.GenerateNextAsync("CRI", 0, "GLOBAL");
         return $"CRI-{nextNumber:D5}";
     }
 
