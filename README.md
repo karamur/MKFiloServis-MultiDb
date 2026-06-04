@@ -1,8 +1,8 @@
-# 🚍 KOAFiloServis — MultiDb
+# 🚍 KOAFiloServis
 
 <div align="center">
 
-**Database-Per-Firma Mimarisi ile Kurumsal Filo Yönetim Platformu**
+**Tek PostgreSQL + FirmId İzolasyonu ile Kurumsal Filo Yönetim Platformu**
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?style=flat-square&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com)
 [![Blazor](https://img.shields.io/badge/Blazor-Interactive%20Server-512BD4?style=flat-square&logo=blazor&logoColor=white)](https://learn.microsoft.com/aspnet/core/blazor/)
@@ -10,19 +10,54 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14%2B-336791?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org)
 [![Quartz.NET](https://img.shields.io/badge/Quartz.NET-3.x-FB7A24?style=flat-square)](https://www.quartz-scheduler.net)
 [![Build](https://img.shields.io/badge/Build-Passing-success?style=flat-square)]()
-[![Tests](https://img.shields.io/badge/Tests-363%20Passing-success?style=flat-square)]()
-[![Version](https://img.shields.io/badge/Version-1.0.24-blue?style=flat-square)](https://github.com/karamur/KOAFiloServis-MultiDb/releases)
-[![License](https://img.shields.io/badge/License-Proprietary-red?style=flat-square)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-2.0.0-blue?style=flat-square)]()
 
 </div>
 
 ---
 
+## ⚡ Nihai Mimari (Haziran 2026)
+
+**KOAFiloServis artık Tenant Database (Database-per-Tenant) mimarisi kullanmamaktadır.**
+
+> 🔄 **30 commit'lik dönüşüm** ile tek PostgreSQL veritabanı + FirmId bazlı satır seviyesi izolasyona geçilmiştir.
+
+### Mimari
+
+```
+Tek PostgreSQL: KOAFiloServis
+        ↓
+Organizasyon (Üstün Holding)
+    ├── Üstün Grup
+    ├── Üstün Filo
+    └── Recep Üstün
+        ↓
+Firma → Global Query Filter (HasQueryFilter(x => x.FirmaId == CurrentFirmaId))
+        ↓
+Şube (opsiyonel, SubeId INT NULL)
+```
+
+### Kaldırılan Yapılar
+
+- ❌ TenantConnectionStringProvider
+- ❌ TenantDbContextFactory
+- ❌ MasterDbContext
+- ❌ HoldingDbContext
+- ❌ Firma bazlı ayrı PostgreSQL veritabanları
+
+### Yeni Yapılar
+
+- ✅ Tek `ApplicationDbContext`
+- ✅ `FirmaBaseEntity` — tüm iş tabloları için ortak temel sınıf
+- ✅ `Organizasyon` → `Firma` → `Şube` hiyerarşisi
+- ✅ `NumaraSerisiService` — atomik, FirmaId bazlı belge numaraları
+- ✅ Global Query Filter: `FirmaId` + `IsDeleted`
+
 ## 📌 Genel Bakış
 
 **KOAFiloServis**, personel taşımacılığı firmaları için tasarlanmış kurumsal bir **Blazor Interactive Server** uygulamasıdır. Araç, şoför, güzergâh ve müşteri verilerinden başlayan operasyonel zinciri **puantaj → hakediş → fatura → muhasebe** akışıyla tek platformda yönetir.
 
-> 🏢 Çok-firmalı (multi-tenant) altyapı, per-firma veritabanı izolasyonu, rol bazlı yetkilendirme ve AI destekli servislerle kurumsal ölçeğe hazırdır.
+> 🏢 Çok-firmalı altyapı, FirmId bazlı veri izolasyonu, rol bazlı yetkilendirme ve AI destekli servislerle kurumsal ölçeğe hazırdır.
 
 ### 🎯 Hedef Kullanıcılar
 
