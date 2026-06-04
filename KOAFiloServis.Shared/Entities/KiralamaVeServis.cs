@@ -5,10 +5,11 @@ namespace KOAFiloServis.Shared.Entities;
 /// <summary>
 /// Kiralanm�� ara� kay�tlar� (d��ar�dan kiralanan ara�lar)
 /// </summary>
-public class KiralamaArac : BaseEntity
+public class KiralamaArac : BaseEntity, IFirmaTenant
 {
     [Required]
     public int FirmaId { get; set; }
+    int? IFirmaTenant.FirmaId { get => FirmaId; set => FirmaId = value ?? 0; }
 
     /// <summary>
     /// Kiralayan cari (ara� sahibi)
@@ -84,10 +85,11 @@ public class KiralamaArac : BaseEntity
 /// Kiralanm�� ara�lar�n servis �al��malar�
 /// (Hem kendi ara�lar� hem kiral�k ara�lar i�in ortak kay�t)
 /// </summary>
-public class ServisCalismaKiralama : BaseEntity
+public class ServisCalismaKiralama : BaseEntity, IFirmaTenant
 {
     [Required]
     public int FirmaId { get; set; }
+    int? IFirmaTenant.FirmaId { get => FirmaId; set => FirmaId = value ?? 0; }
 
     [Required]
     public DateTime CalismaTarihi { get; set; }

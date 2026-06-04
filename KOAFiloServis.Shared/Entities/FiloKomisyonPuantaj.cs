@@ -7,10 +7,11 @@ namespace KOAFiloServis.Shared.Entities;
 /// Araç, Şoför ve Güzergah eşleştirme şablonu.
 /// Özmal araçlar veya Şahsi/Taşeron araçlar bu havuzda tanımlanır ve Toplu Çalışma/Puantaj girişi oluşturmak için baz alınır.
 /// </summary>
-public class FiloGuzergahEslestirme : BaseEntity
+public class FiloGuzergahEslestirme : BaseEntity, IFirmaTenant
 {
     [Required]
     public int FirmaId { get; set; }
+    int? IFirmaTenant.FirmaId { get => FirmaId; set => FirmaId = value ?? 0; }
 
     /// <summary>
     /// İşi aldığımız asıl Kurum / Firma
@@ -64,10 +65,11 @@ public class FiloGuzergahEslestirme : BaseEntity
 /// Günlük operasyon ve puantaj verisi.
 /// Eşleştirmeden yola çıkarak her güne bir kayıt açılır, fiili durum yazılır.
 /// </summary>
-public class FiloGunlukPuantaj : BaseEntity
+public class FiloGunlukPuantaj : BaseEntity, IFirmaTenant
 {
     [Required]
     public int FirmaId { get; set; }
+    int? IFirmaTenant.FirmaId { get => FirmaId; set => FirmaId = value ?? 0; }
 
     [Required]
     public DateTime Tarih { get; set; }

@@ -4,82 +4,104 @@ using Microsoft.EntityFrameworkCore;
 
 namespace KOAFiloServis.Web.Services;
 
+/// <summary>
+/// Holding konsolide veri servisi (Nihai Mimari Kural 13).
+/// </summary>
+/// <remarks>
+/// <para><b>Nihai mimari değişikliği:</b></para>
+/// <list type="bullet">
+///   <item>Eski: Her firma için ayrı tenant DB'ye paralel bağlantı (fan-out).</item>
+///   <item>Yeni: Tek KOAFiloServis veritabanında FirmaId bazlı filtreleme.</item>
+/// </list>
+/// <para>
+/// Veriler <see cref="HoldingVeri"/> tablosunda snapshot olarak saklanır;
+/// <see cref="ToplaVeKaydetAsync"/> metodu periyodik olarak (Quartz job veya manuel)
+/// çağrılarak güncel verileri toplar.
+/// </para>
+/// </remarks>
 public sealed class HoldingService : IHoldingService
 {
-    private readonly IDbContextFactory<MasterDbContext> _masterFactory;
-    private readonly IDbContextFactory<HoldingDbContext> _holdingFactory;
-    private readonly ITenantConnectionStringProvider _connProvider;
+    private readonly IDbContextFactory<ApplicationDbContext> _appFactory;
     private readonly ILogger<HoldingService> _logger;
 
     public HoldingService(
-        IDbContextFactory<MasterDbContext> masterFactory,
-        IDbContextFactory<HoldingDbContext> holdingFactory,
-        ITenantConnectionStringProvider connProvider,
+        IDbContextFactory<ApplicationDbContext> appFactory,
         ILogger<HoldingService> logger)
     {
-        _masterFactory = masterFactory;
-        _holdingFactory = holdingFactory;
-        _connProvider = connProvider;
+        _appFactory = appFactory;
         _logger = logger;
     }
 
+    /// <summary>
+    /// Tüm aktif firmalar için belirtilen döneme ait konsolide verileri toplar
+    /// ve <see cref="HoldingVeri"/> tablosuna upsert eder.
+    /// </summary>
+    /// <remarks>
+    /// Nihai mimari: Tek veritabanında FirmaId bazlı sorgu.
+    /// Eski tenant DB fan-out yaklaşımı terk edilmiştir.
+    /// </remarks>
     public async Task ToplaVeKaydetAsync(int yil, int ay)
     {
-        using var masterCtx = await _masterFactory.CreateDbContextAsync();
-        var firmalar = await masterCtx.Firmalar
-            .Where(f => f.Aktif && !f.IsDeleted && f.DatabaseName != null)
+        using var ctx = await _appFactory.CreateDbContextAsync();
+
+        var firmalar = await ctx.Firmalar
+            .Where(f => f.Aktif && !f.IsDeleted)
             .ToListAsync();
 
         if (firmalar.Count == 0)
         {
-            _logger.LogInformation("ToplaVeKaydet: Tenant DB'si olan aktif firma bulunamadi.");
+            _logger.LogInformation("ToplaVeKaydet: Aktif firma bulunamadi.");
             return;
         }
 
-        _logger.LogInformation("ToplaVeKaydet: {Count} firma icin {Yil}-{Ay} verisi toplaniyor...",
+        _logger.LogInformation("ToplaVeKaydet: {Count} firma icin {Yil}-{Ay} verisi toplaniyor (tek veritabani)...",
             firmalar.Count, yil, ay);
 
+        var start = new DateTime(yil, ay, 1, 0, 0, 0, DateTimeKind.Utc);
+        var end = start.AddMonths(1);
+
+        // Her firma için kendi DbContext'i ile paralel sorgu (DbContext thread-safe değil)
         var tasks = firmalar.Select(async firma =>
         {
             try
             {
-                var connStr = _connProvider.GetConnectionStringForFirma(firma.Id, firma.DatabaseName);
-                if (connStr == null) return null;
+                using var firmaCtx = await _appFactory.CreateDbContextAsync();
+                var firmaId = firma.Id;
 
-                var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-                    .UseNpgsql(connStr).Options;
-                using var tenantCtx = new ApplicationDbContext(options);
-
-                var start = new DateTime(yil, ay, 1, 0, 0, 0, DateTimeKind.Utc);
-                var end = start.AddMonths(1);
-
-                var gelir = await tenantCtx.Faturalar
-                    .Where(f => !f.IsDeleted && f.FaturaTipi == FaturaTipi.SatisFaturasi
+                var gelir = await firmaCtx.Faturalar
+                    .Where(f => !f.IsDeleted && f.FirmaId == firmaId
+                        && f.FaturaTipi == FaturaTipi.SatisFaturasi
                         && f.FaturaTarihi >= start && f.FaturaTarihi < end)
                     .SumAsync(f => f.GenelToplam);
 
-                var gider = await tenantCtx.Faturalar
-                    .Where(f => !f.IsDeleted && f.FaturaTipi == FaturaTipi.AlisFaturasi
+                var gider = await firmaCtx.Faturalar
+                    .Where(f => !f.IsDeleted && f.FirmaId == firmaId
+                        && f.FaturaTipi == FaturaTipi.AlisFaturasi
                         && f.FaturaTarihi >= start && f.FaturaTarihi < end)
                     .SumAsync(f => f.GenelToplam);
 
-                var aracMaliyet = await tenantCtx.AracMasraflari
-                    .Where(m => !m.IsDeleted && m.CreatedAt >= start && m.CreatedAt < end)
+                // AracMasraf'ta FirmaId yok — Arac.FirmaId üzerinden filtrele
+                var aracMaliyet = await firmaCtx.AracMasraflari
+                    .Where(m => !m.IsDeleted && m.Arac.FirmaId == firmaId
+                        && m.CreatedAt >= start && m.CreatedAt < end)
                     .SumAsync(m => m.Tutar);
 
-                var personelMaliyet = await tenantCtx.PersonelMaaslari
-                    .Where(p => !p.IsDeleted && p.CreatedAt >= start && p.CreatedAt < end)
+                // PersonelMaas'ta FirmaId yok — Sofor.FirmaId üzerinden filtrele
+                var personelMaliyet = await firmaCtx.PersonelMaaslari
+                    .Where(p => !p.IsDeleted && p.Sofor.FirmaId == firmaId
+                        && p.CreatedAt >= start && p.CreatedAt < end)
                     .SumAsync(p => p.NetMaas);
 
-                var hakedisToplam = await tenantCtx.Hakedisler
-                    .Where(h => !h.IsDeleted && h.CreatedAt >= start && h.CreatedAt < end)
+                var hakedisToplam = await firmaCtx.Hakedisler
+                    .Where(h => !h.IsDeleted && h.FirmaId == firmaId
+                        && h.CreatedAt >= start && h.CreatedAt < end)
                     .SumAsync(h => h.GenelToplam);
 
-                var aktifAracSayisi = await tenantCtx.Araclar
-                    .CountAsync(a => !a.IsDeleted && a.Aktif);
+                var aktifAracSayisi = await firmaCtx.Araclar
+                    .CountAsync(a => !a.IsDeleted && a.Aktif && a.FirmaId == firmaId);
 
-                var personelSayisi = await tenantCtx.Soforler
-                    .CountAsync(s => !s.IsDeleted && s.Aktif);
+                var personelSayisi = await firmaCtx.Soforler
+                    .CountAsync(s => !s.IsDeleted && s.Aktif && s.FirmaId == firmaId);
 
                 return new HoldingVeri
                 {
@@ -109,10 +131,11 @@ public sealed class HoldingService : IHoldingService
 
         var results = await Task.WhenAll(tasks);
 
-        using var holdingCtx = await _holdingFactory.CreateDbContextAsync();
+        // Upsert — ayrı bir context ile toplu yazma
+        using var writeCtx = await _appFactory.CreateDbContextAsync();
         foreach (var veri in results.Where(v => v != null).Cast<HoldingVeri>())
         {
-            var existing = await holdingCtx.HoldingVeriler
+            var existing = await writeCtx.HoldingVeriler
                 .FirstOrDefaultAsync(v => v.FirmaId == veri.FirmaId
                     && v.Yil == veri.Yil && v.Ay == veri.Ay
                     && v.Kategori == veri.Kategori);
@@ -131,10 +154,10 @@ public sealed class HoldingService : IHoldingService
             }
             else
             {
-                holdingCtx.HoldingVeriler.Add(veri);
+                writeCtx.HoldingVeriler.Add(veri);
             }
         }
-        await holdingCtx.SaveChangesAsync();
+        await writeCtx.SaveChangesAsync();
 
         _logger.LogInformation("ToplaVeKaydet: {Count} firma verisi kaydedildi.",
             results.Count(v => v != null));
@@ -142,7 +165,7 @@ public sealed class HoldingService : IHoldingService
 
     public async Task<List<HoldingVeri>> GetFirmaKarsilastirmaAsync(int yil, int? ay = null)
     {
-        using var ctx = await _holdingFactory.CreateDbContextAsync();
+        using var ctx = await _appFactory.CreateDbContextAsync();
         var query = ctx.HoldingVeriler.Where(v => v.Yil == yil && v.Kategori == "KARZARAR");
         if (ay.HasValue)
             query = query.Where(v => v.Ay == ay.Value);
@@ -151,7 +174,7 @@ public sealed class HoldingService : IHoldingService
 
     public async Task<List<HoldingVeri>> GetButceKonsolidasyonAsync(int yil)
     {
-        using var ctx = await _holdingFactory.CreateDbContextAsync();
+        using var ctx = await _appFactory.CreateDbContextAsync();
         return await ctx.HoldingVeriler
             .Where(v => v.Yil == yil && v.Kategori == "BUTCE")
             .OrderBy(v => v.FirmaId).ThenBy(v => v.Ay)
@@ -160,7 +183,7 @@ public sealed class HoldingService : IHoldingService
 
     public async Task<List<HoldingVeri>> GetAracMaliyetOzetiAsync(int yil, int? ay = null)
     {
-        using var ctx = await _holdingFactory.CreateDbContextAsync();
+        using var ctx = await _appFactory.CreateDbContextAsync();
         var query = ctx.HoldingVeriler.Where(v => v.Yil == yil && v.Kategori == "KARZARAR");
         if (ay.HasValue)
             query = query.Where(v => v.Ay == ay.Value);
@@ -169,7 +192,7 @@ public sealed class HoldingService : IHoldingService
 
     public async Task<List<HoldingVeri>> GetPersonelGiderOzetiAsync(int yil, int? ay = null)
     {
-        using var ctx = await _holdingFactory.CreateDbContextAsync();
+        using var ctx = await _appFactory.CreateDbContextAsync();
         var query = ctx.HoldingVeriler.Where(v => v.Yil == yil && v.Kategori == "KARZARAR");
         if (ay.HasValue)
             query = query.Where(v => v.Ay == ay.Value);
@@ -178,7 +201,7 @@ public sealed class HoldingService : IHoldingService
 
     public async Task<List<HoldingVeri>> GetHakedisOzetiAsync(int yil, int? ay = null)
     {
-        using var ctx = await _holdingFactory.CreateDbContextAsync();
+        using var ctx = await _appFactory.CreateDbContextAsync();
         var query = ctx.HoldingVeriler.Where(v => v.Yil == yil && v.Kategori == "KARZARAR");
         if (ay.HasValue)
             query = query.Where(v => v.Ay == ay.Value);
@@ -187,7 +210,7 @@ public sealed class HoldingService : IHoldingService
 
     public async Task<List<HoldingRapor>> GetKayitliRaporlarAsync()
     {
-        using var ctx = await _holdingFactory.CreateDbContextAsync();
+        using var ctx = await _appFactory.CreateDbContextAsync();
         return await ctx.HoldingRaporlar
             .OrderByDescending(r => r.OlusturmaTarihi)
             .Take(50)
@@ -196,7 +219,7 @@ public sealed class HoldingService : IHoldingService
 
     public async Task<HoldingRapor> RaporKaydetAsync(HoldingRapor rapor)
     {
-        using var ctx = await _holdingFactory.CreateDbContextAsync();
+        using var ctx = await _appFactory.CreateDbContextAsync();
         if (rapor.Id == 0)
             ctx.HoldingRaporlar.Add(rapor);
         else

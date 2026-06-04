@@ -3,7 +3,7 @@
 /// <summary>
 /// Aylık bordro kayıtları
 /// </summary>
-public class Bordro : BaseEntity
+public class Bordro : BaseEntity, IFirmaTenant
 {
     public int Yil { get; set; }
     public int Ay { get; set; }
@@ -34,7 +34,7 @@ public class Bordro : BaseEntity
 /// <summary>
 /// Bordro detay satırları (personel bazında)
 /// </summary>
-public class BordroDetay : BaseEntity
+public class BordroDetay : BaseEntity, IFirmaTenant
 {
     public int BordroId { get; set; }
     public int PersonelId { get; set; }
@@ -129,7 +129,7 @@ public class BordroOdeme : BaseEntity
 /// <summary>
 /// Bordro ayarları
 /// </summary>
-public class BordroAyar : BaseEntity
+public class BordroAyar : BaseEntity, IFirmaTenant
 {
     public int? FirmaId { get; set; }
     

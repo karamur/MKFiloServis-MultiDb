@@ -32,12 +32,12 @@ public sealed class ReconciliationReport
 public sealed class PuantajReconciliationService : IPuantajReconciliationService
 {
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IDbContextFactory<MasterDbContext> _masterDbFactory;
+    private readonly IDbContextFactory<ApplicationDbContext> _masterDbFactory;
     private readonly ILogger<PuantajReconciliationService> _logger;
 
     public PuantajReconciliationService(
         IServiceScopeFactory scopeFactory,
-        IDbContextFactory<MasterDbContext> masterDbFactory,
+        IDbContextFactory<ApplicationDbContext> masterDbFactory,
         ILogger<PuantajReconciliationService> logger)
     {
         _scopeFactory = scopeFactory;

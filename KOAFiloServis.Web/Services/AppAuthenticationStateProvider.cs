@@ -20,7 +20,7 @@ public class AppAuthenticationStateProvider : AuthenticationStateProvider
     private readonly ILogger<AppAuthenticationStateProvider> _logger;
     private readonly ICurrentUserAccessor _currentUserAccessor;
     private readonly ProtectedSessionStorage _sessionStorage;
-    private readonly IDbContextFactory<MasterDbContext> _dbContextFactory;
+    private readonly IDbContextFactory<ApplicationDbContext> _dbContextFactory;
 
     private ClaimsPrincipal _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
     private Kullanici? _aktifKullanici;
@@ -31,7 +31,7 @@ public class AppAuthenticationStateProvider : AuthenticationStateProvider
         ILogger<AppAuthenticationStateProvider> logger,
         ICurrentUserAccessor currentUserAccessor,
         ProtectedSessionStorage sessionStorage,
-        IDbContextFactory<MasterDbContext> dbContextFactory)
+        IDbContextFactory<ApplicationDbContext> dbContextFactory)
     {
         _logger = logger;
         _currentUserAccessor = currentUserAccessor;

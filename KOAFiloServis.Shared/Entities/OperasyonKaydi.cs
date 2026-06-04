@@ -11,6 +11,7 @@ public class OperasyonKaydi : BaseEntity, IFirmaTenant
 {
     // Tenant
     public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
 
     // Tarih
     public DateTime Tarih { get; set; }
@@ -87,7 +88,7 @@ public class OperasyonKaydi : BaseEntity, IFirmaTenant
     public string? UpdatedBy { get; set; }
 
     // ── Soft Delete ────────────────────────────────────────────────────────
-    public DateTime? DeletedAt { get; set; }
+    // DeletedAt artık BaseEntity'den miras alınır (Kural 16)
     [StringLength(100)]
     public string? DeletedBy { get; set; }
 

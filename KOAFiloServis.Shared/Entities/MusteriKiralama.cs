@@ -7,10 +7,12 @@ namespace KOAFiloServis.Shared.Entities;
 /// M��teriye ara� kiralama kayd�
 /// �irketin kendi ara�lar�n� m��terilere kiralamas�
 /// </summary>
-public class MusteriKiralama : BaseEntity
+public class MusteriKiralama : BaseEntity, IFirmaTenant
 {
     [Required]
     public int FirmaId { get; set; }
+    int? IFirmaTenant.FirmaId { get => FirmaId; set => FirmaId = value ?? 0; }
+    public virtual Firma? Firma { get; set; }
 
     /// <summary>
     /// Kiralayan m��teri

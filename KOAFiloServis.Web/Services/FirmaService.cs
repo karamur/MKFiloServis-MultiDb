@@ -16,11 +16,11 @@ namespace KOAFiloServis.Web.Services;
 /// </summary>
 public class FirmaService : IFirmaService
 {
-    private readonly IDbContextFactory<MasterDbContext> _contextFactory;
+    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly IAktifFirmaProvider _aktifFirmaProvider;
 
     public FirmaService(
-        IDbContextFactory<MasterDbContext> contextFactory,
+        IDbContextFactory<ApplicationDbContext> contextFactory,
         IAktifFirmaProvider aktifFirmaProvider)
     {
         _contextFactory = contextFactory;

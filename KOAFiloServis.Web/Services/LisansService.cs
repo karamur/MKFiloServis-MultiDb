@@ -8,10 +8,10 @@ namespace KOAFiloServis.Web.Services;
 
 public class LisansService : ILisansService
 {
-    private readonly IDbContextFactory<MasterDbContext> _contextFactory;
+    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private static Lisans? _cachedLisans;
 
-    public LisansService(IDbContextFactory<MasterDbContext> contextFactory)
+    public LisansService(IDbContextFactory<ApplicationDbContext> contextFactory)
     {
         _contextFactory = contextFactory;
     }

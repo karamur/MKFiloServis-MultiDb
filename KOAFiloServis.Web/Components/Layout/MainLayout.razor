@@ -322,6 +322,22 @@
                 catch (Exception ex) { Logger.LogWarning(ex, "MainLayout firmalar yuklenirken hata olustu (firma restore)"); }
             }
 
+            // Kural 11: Aktif firma zorunludur. Firma seçilmemişse /firma-sec'e yönlendir.
+            if (!AktifFirmaProvider.HasAktifFirma)
+            {
+                var currentRelative = Navigation.ToBaseRelativePath(Navigation.Uri);
+                if (!currentRelative.StartsWith("firma-sec", StringComparison.OrdinalIgnoreCase) &&
+                    !currentRelative.StartsWith("login", StringComparison.OrdinalIgnoreCase) &&
+                    !currentRelative.StartsWith("ayarlar/lisans", StringComparison.OrdinalIgnoreCase))
+                {
+                    var returnUrl = string.IsNullOrWhiteSpace(currentRelative)
+                        ? "/dashboard"
+                        : "/" + currentRelative;
+                    Navigation.NavigateTo($"/firma-sec?returnUrl={Uri.EscapeDataString(returnUrl)}", forceLoad: false);
+                    return;
+                }
+            }
+
             _authChecked = true;
             StateHasChanged();
         }
@@ -339,7 +355,7 @@
         try
         {
             var currentUri = Navigation.Uri;
-            if (currentUri.Contains("/login") || currentUri.Contains("/ayarlar/lisans"))
+            if (currentUri.Contains("/login") || currentUri.Contains("/ayarlar/lisans") || currentUri.Contains("/firma-sec"))
             {
                 isInitialized = true;
                 return;

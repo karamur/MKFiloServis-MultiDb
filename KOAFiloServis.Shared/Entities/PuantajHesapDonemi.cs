@@ -11,6 +11,7 @@ namespace KOAFiloServis.Shared.Entities;
 public class PuantajHesapDonemi : BaseEntity, IFirmaTenant
 {
     public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
 
     public int Yil { get; set; }
     public int Ay { get; set; }
@@ -47,7 +48,7 @@ public class PuantajHesapDonemi : BaseEntity, IFirmaTenant
     // Audit
     [StringLength(100)] public string? CreatedBy { get; set; }
     [StringLength(100)] public string? UpdatedBy { get; set; }
-    public DateTime? DeletedAt { get; set; }
+    // DeletedAt artık BaseEntity'den miras alınır (Kural 16)
     [StringLength(100)] public string? DeletedBy { get; set; }
 
     // Navigation

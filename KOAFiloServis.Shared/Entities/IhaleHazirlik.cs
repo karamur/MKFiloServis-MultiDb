@@ -6,7 +6,7 @@ namespace KOAFiloServis.Shared.Entities;
 /// <summary>
 /// İhale Hazırlık Projesi - Proje bazlı maliyet analizi
 /// </summary>
-public class IhaleProje : BaseEntity
+public class IhaleProje : BaseEntity, IFirmaTenant
 {
     [Required]
     [StringLength(50)]

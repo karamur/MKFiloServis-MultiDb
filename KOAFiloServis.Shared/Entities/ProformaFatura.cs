@@ -3,7 +3,7 @@ namespace KOAFiloServis.Shared.Entities;
 /// <summary>
 /// Proforma Fatura - Kesilmeden önce müşteriye gönderilen ön fatura
 /// </summary>
-public class ProformaFatura : BaseEntity
+public class ProformaFatura : BaseEntity, IFirmaTenant
 {
     public string ProformaNo { get; set; } = string.Empty;
     public DateTime ProformaTarihi { get; set; } = DateTime.Now;

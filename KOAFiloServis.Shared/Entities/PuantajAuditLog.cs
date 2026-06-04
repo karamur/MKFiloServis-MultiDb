@@ -6,9 +6,10 @@ namespace KOAFiloServis.Shared.Entities;
 /// Puantaj onay/hesap aksiyonlarının audit log kaydı.
 /// Her durum geçişinde otomatik oluşturulur.
 /// </summary>
-public class PuantajAuditLog : BaseEntity
+public class PuantajAuditLog : BaseEntity, IFirmaTenant
 {
     public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
     public int? HesapDonemiId { get; set; }
 
     public PuantajAuditAksiyon Aksiyon { get; set; }

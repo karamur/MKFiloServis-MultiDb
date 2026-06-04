@@ -6,9 +6,10 @@ namespace KOAFiloServis.Shared.Entities;
 /// <summary>
 /// Fatura şablon ayarları - Özelleştirilebilir fatura görünümü
 /// </summary>
-public class FaturaSablon : BaseEntity
+public class FaturaSablon : BaseEntity, IFirmaTenant
 {
     public int FirmaId { get; set; }
+    int? IFirmaTenant.FirmaId { get => FirmaId; set => FirmaId = value ?? 0; }
     public virtual Firma? Firma { get; set; }
 
     [Required]

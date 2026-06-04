@@ -49,6 +49,25 @@ public class Firma : BaseEntity
 
     public int SiraNo { get; set; } = 0;
 
+    // ----------------------------------------------------------------
+    // Organizasyon ve Şube (Nihai Mimari Kural 2, Kural 3, Kural 5)
+    // ----------------------------------------------------------------
+
+    /// <summary>
+    /// Firmanın bağlı olduğu organizasyon Id'si (Kural 3: Her firma bir organizasyona bağlıdır).
+    /// </summary>
+    public int OrganizasyonId { get; set; } = 1; // Varsayılan: Üstün Holding
+
+    /// <summary>
+    /// Firmanın bağlı olduğu organizasyon.
+    /// </summary>
+    public virtual Organizasyon? Organizasyon { get; set; }
+
+    /// <summary>
+    /// Bu firmaya bağlı şubeler (Kural 5).
+    /// </summary>
+    public virtual ICollection<Sube> Subeler { get; set; } = new List<Sube>();
+
     /// <summary>
     /// Bu firma "kurum" rolünde de görünüyorsa (yani başka bir firmamız ona fatura kesiyorsa),
     /// muhasebe tarafında temsil ettiği Cari kaydı. Kurum↔Firma↔Cari eşleştirme için halen aktif.
@@ -66,9 +85,10 @@ public class Firma : BaseEntity
     public int AktifDonemAy { get; set; } = DateTime.Today.Month;
 
     /// <summary>
-    /// Per-firma dedicated database adı (örn: "kofa_firma_001").
-    /// NULL = firma halen shared (legacy) veritabanında.
-    /// Dolu = firmanın kendi isolated veritabanı var.
+    /// [LEGACY] Per-firma dedicated database adı.
+    /// Nihai mimari kararı (2026) ile kullanımdan kaldırılmıştır.
+    /// Tüm firmalar artık tek KOAFiloServis veritabanında çalışır.
+    /// Geriye dönük uyumluluk için NULL olarak bırakılır.
     /// </summary>
     [StringLength(100)]
     public string? DatabaseName { get; set; }

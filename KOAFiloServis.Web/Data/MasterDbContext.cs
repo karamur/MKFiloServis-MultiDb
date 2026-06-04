@@ -3,6 +3,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace KOAFiloServis.Web.Data;
 
+/// <summary>
+/// [OBSOLETE] Nihai mimari (2026) ile kullanımdan kaldırılmıştır.
+/// Tüm entity'ler artık tek <see cref="ApplicationDbContext"/> içinde yönetilir.
+/// Bu sınıf yalnızca geriye dönük referanslar için korunmaktadır.
+/// </summary>
+[Obsolete("Nihai mimari: MasterDbContext yerine ApplicationDbContext kullanın (tek PostgreSQL).")]
 public class MasterDbContext : DbContext
 {
     public MasterDbContext(DbContextOptions<MasterDbContext> options) : base(options) { }

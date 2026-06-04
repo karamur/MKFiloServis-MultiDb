@@ -7,9 +7,9 @@ namespace KOAFiloServis.Web.Services;
 
 public class KullaniciUserStore : IUserPasswordStore<Kullanici>
 {
-    private readonly IDbContextFactory<MasterDbContext> _contextFactory;
+    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
 
-    public KullaniciUserStore(IDbContextFactory<MasterDbContext> contextFactory)
+    public KullaniciUserStore(IDbContextFactory<ApplicationDbContext> contextFactory)
     {
         _contextFactory = contextFactory;
     }

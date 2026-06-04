@@ -107,7 +107,7 @@ builder.Services.AddRazorComponents()
 builder.Services.AddSingleton<AktiviteLogInterceptor>();
 builder.Services.AddSingleton<ICurrentUserAccessor, CurrentUserAccessor>();
 
-// Database - Pooled DbContextFactory kullan (thread-safe)
+// Database - Tek PostgreSQL veritabanı (Nihai Mimari 2026)
 builder.Services.AddPooledDbContextFactory<ApplicationDbContext>((sp, options) =>
 {
     var enableSensitiveDataLogging = builder.Environment.IsDevelopment() &&
@@ -135,97 +135,26 @@ builder.Services.AddPooledDbContextFactory<ApplicationDbContext>((sp, options) =
         options.EnableSensitiveDataLogging();
     }
 
-    // Pending migration uyarisini devre disi birak
-    options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
+    // Pending migration ve model validation query-filter etkileşim uyarılarını devre dışı bırak
+    options.ConfigureWarnings(w =>
+    {
+        w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning);
+        w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning);
+    });
     options.AddInterceptors(sp.GetRequiredService<AktiviteLogInterceptor>());
 });
 
-// Tenant-aware factory: pooled factory'yi sarmala, her context'e scoped IServiceProvider enjekte et.
-// Bu, IAktifFirmaProvider'ın resolve edilebilmesini ve global query filter'ların (firma izolasyonu)
-// servisler (AracService, KapasiteService, vb.) içinden de devreye girmesini sağlar.
-// Yeni TenantDbContextFactory ITenantConnectionStringProvider ile dinamik connection string çözümler.
-{
-    var pooledDescriptor = builder.Services.Single(d =>
-        d.ServiceType == typeof(IDbContextFactory<ApplicationDbContext>));
-    builder.Services.Remove(pooledDescriptor);
-}
-
-// ITenantConnectionStringProvider - firma bazlı dinamik connection string çözümleyici
-builder.Services.AddScoped<ITenantConnectionStringProvider, TenantConnectionStringProvider>();
-
-// TenantDatabaseService - tenant DB olusturma ve migration yonetimi
-builder.Services.AddScoped<ITenantDatabaseService, TenantDatabaseService>();
-
-// TenantDbContextFactory: aktif firmanın DatabaseName'ine göre doğru DB'ye bağlanır
-builder.Services.AddScoped<IDbContextFactory<ApplicationDbContext>, TenantDbContextFactory>();
-
-// Scoped ApplicationDbContext - TenantDbContextFactory üzerinden dinamik bağlantı ile
+// Scoped ApplicationDbContext — her Blazor circuit için bir context,
+// IAktifFirmaProvider üzerinden firma izolasyonu sağlanır (Kural 6, Kural 7).
 builder.Services.AddScoped<ApplicationDbContext>(sp =>
 {
     var factory = sp.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
-    return factory.CreateDbContext();
+    var ctx = factory.CreateDbContext();
+    ctx.SetServiceProvider(sp); // Scoped provider → IAktifFirmaProvider + Global Query Filter
+    return ctx;
 });
 
-// MasterDbContext - global tablolar (Firmalar, Kullanicilar, Lisans, Roller, RolYetkileri)
-builder.Services.AddPooledDbContextFactory<MasterDbContext>((sp, options) =>
-{
-    var masterConnStr = builder.Configuration.GetConnectionString("MasterConnection")
-        ?? defaultConnectionString;
-
-    if (dbProvider == "PostgreSQL")
-    {
-        options.UseNpgsql(masterConnStr, npgsqlOptions =>
-        {
-            npgsqlOptions.EnableRetryOnFailure(
-                maxRetryCount: 3,
-                maxRetryDelay: TimeSpan.FromSeconds(5),
-                errorCodesToAdd: null);
-            npgsqlOptions.CommandTimeout(30);
-            npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "public");
-        });
-    }
-    else
-    {
-        options.UseSqlite(masterConnStr);
-    }
-    options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
-});
-
-builder.Services.AddScoped<MasterDbContext>(sp =>
-{
-    var factory = sp.GetRequiredService<IDbContextFactory<MasterDbContext>>();
-    return factory.CreateDbContext();
-});
-
-// HoldingDbContext - konsolidasyon verileri (holding-level özet snapshot)
-builder.Services.AddPooledDbContextFactory<HoldingDbContext>((sp, options) =>
-{
-    var holdingConnStr = builder.Configuration.GetConnectionString("HoldingConnection")
-        ?? builder.Configuration.GetConnectionString("MasterConnection");
-
-    if (dbProvider == "PostgreSQL")
-    {
-        options.UseNpgsql(holdingConnStr, npgsqlOptions =>
-        {
-            npgsqlOptions.EnableRetryOnFailure(
-                maxRetryCount: 3,
-                maxRetryDelay: TimeSpan.FromSeconds(5),
-                errorCodesToAdd: null);
-            npgsqlOptions.CommandTimeout(30);
-        });
-    }
-    else
-    {
-        options.UseSqlite(holdingConnStr);
-    }
-    options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
-});
-
-builder.Services.AddScoped<HoldingDbContext>(sp =>
-{
-    var factory = sp.GetRequiredService<IDbContextFactory<HoldingDbContext>>();
-    return factory.CreateDbContext();
-});
+// Nihai Mimari: HoldingDbContext kaldırıldı — HoldingVeri ve HoldingRapor ApplicationDbContext'te
 
 // Authentication - Her circuit (tarayici baglantisi) icin bagimsiz oturum yonetimi
 // Scoped: Her Blazor circuit kendi oturumunu yonetir - farkli PC/tarayicilar birbirini etkilemez
@@ -895,141 +824,41 @@ await RunScopedSafeAsync(app, "SeedDefaultEvrakTanimlari", async services =>
     await ozlukService.SeedDefaultEvrakTanimlariAsync();
 });
 
-// Tum aktif firmalar icin otomatik tenant DB olustur (varsa gecer)
-await RunScopedSafeAsync(app, "AutoCreateTenantDatabases", async services =>
+// Nihai Mimari: Tenant DB oluşturma ve migration blokları kaldırıldı.
+// Tüm firmalar tek KOAFiloServis veritabanında çalışır.
+// Migration helper'lar tek veritabanında ApplyMigrations ile uygulanır (aşağıya bakın).
+
+// Migration helper'ları tek veritabanında uygula (idempotent, race-condition safe)
+await RunScopedSafeAsync(app, "ApplyMigrations", async services =>
 {
-    var masterFactory = services.GetRequiredService<IDbContextFactory<MasterDbContext>>();
-    var tenantDbService = services.GetRequiredService<ITenantDatabaseService>();
+    var ctx = services.GetRequiredService<ApplicationDbContext>();
     var logger = services.GetRequiredService<ILogger<Program>>();
 
-    using var masterCtx = await masterFactory.CreateDbContextAsync();
-    var firmasWithoutDb = await masterCtx.Firmalar
-        .Where(f => f.Aktif && !f.IsDeleted && f.DatabaseName == null)
-        .ToListAsync();
+    await KOAFiloServis.Web.Data.Migrations.GuzergahKoordinatMigrationHelper.ApplyGuzergahKoordinatMigrationPostgresAsync(ctx);
+    await KOAFiloServis.Web.Data.Migrations.PuantajSlotMigrationHelper.ApplyAsync(ctx, logger);
+    await KOAFiloServis.Web.Data.Migrations.KiralikPlakaFaturaMigrationHelper.ApplyAsync(ctx, logger);
+    await KOAFiloServis.Web.Data.Migrations.GuzergahSeferFirmaIdConstraintHelper.ApplyAsync(ctx, logger);
+    await KOAFiloServis.Web.Data.Migrations.SyncPuantajSchemaMigrationHelper.ApplyAsync(ctx, logger);
+    await KOAFiloServis.Web.Data.Migrations.PuantajCarpaniMigrationHelper.ApplyAsync(ctx, logger);
+    await KOAFiloServis.Web.Data.Migrations.PuantajSyncMigrationHelper.ApplyAsync(ctx, logger);
+    await KOAFiloServis.Web.Data.Migrations.BudgetOdemeKalanMigrationHelper.EnsureBudgetOdemeKalanColumnAsync(ctx);
+    await KOAFiloServis.Web.Data.Migrations.BudgetHedefMigrationHelper.EnsureBudgetHedefTableAsync(ctx);
 
-    if (firmasWithoutDb.Count == 0)
-    {
-        logger.LogInformation("Tum firmalarin tenant DB'si mevcut.");
-        return;
-    }
-
-    logger.LogInformation("{Count} firma icin tenant DB olusturulacak...", firmasWithoutDb.Count);
-    foreach (var firma in firmasWithoutDb)
-    {
-        try
-        {
-            await tenantDbService.CreateTenantDatabaseAsync(firma.Id, migrateData: true);
-            logger.LogInformation("Firma {FirmaId} ({FirmaAdi}) tenant DB olusturuldu.", firma.Id, firma.FirmaAdi);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Firma {FirmaId} ({FirmaAdi}) tenant DB olusturulamadi.", firma.Id, firma.FirmaAdi);
-        }
-    }
+    logger.LogInformation("Migration helper'lar tek veritabaninda uygulandi.");
 });
 
-// Tenant DB'lerde migration helper'lari uygula (yeni kolonlar icin)
-await RunScopedSafeAsync(app, "ApplyMigrationsToTenantDatabases", async services =>
-{
-    var masterFactory = services.GetRequiredService<IDbContextFactory<MasterDbContext>>();
-    var connProvider = services.GetRequiredService<ITenantConnectionStringProvider>();
-    var logger = services.GetRequiredService<ILogger<Program>>();
-
-    using var masterCtx = await masterFactory.CreateDbContextAsync();
-    var tenantFirms = await masterCtx.Firmalar
-        .Where(f => f.Aktif && !f.IsDeleted && f.DatabaseName != null)
-        .ToListAsync();
-
-    if (tenantFirms.Count == 0)
-    {
-        logger.LogInformation("Tum firmalar shared DB kullaniyor, tenant DB yok.");
-        return;
-    }
-
-    foreach (var firma in tenantFirms)
-    {
-        try
-        {
-            var connStr = connProvider.GetConnectionStringForFirma(firma.Id, firma.DatabaseName);
-            if (string.IsNullOrWhiteSpace(connStr)) continue;
-
-            var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
-            optionsBuilder.UseNpgsql(connStr);
-            await using var tenantCtx = new ApplicationDbContext(optionsBuilder.Options);
-            await tenantCtx.Database.OpenConnectionAsync();
-
-            await KOAFiloServis.Web.Data.Migrations.GuzergahKoordinatMigrationHelper.ApplyGuzergahKoordinatMigrationPostgresAsync(tenantCtx);
-            await KOAFiloServis.Web.Data.Migrations.PuantajSlotMigrationHelper.ApplyAsync(tenantCtx, logger);
-            await KOAFiloServis.Web.Data.Migrations.KiralikPlakaFaturaMigrationHelper.ApplyAsync(tenantCtx, logger);
-            await KOAFiloServis.Web.Data.Migrations.GuzergahSeferFirmaIdConstraintHelper.ApplyAsync(tenantCtx, logger);
-
-            // SyncPuantajSchema: idempotent CREATE IF NOT EXISTS for tables that
-            // may be missing on tenant DBs created before this migration existed.
-            // Uses raw SQL (CREATE TABLE IF NOT EXISTS / ADD COLUMN IF NOT EXISTS).
-            // Race-condition safe: multiple instances can run this concurrently.
-            await KOAFiloServis.Web.Data.Migrations.SyncPuantajSchemaMigrationHelper.ApplyAsync(tenantCtx, logger);
-
-            // NOT: EF Core MigrateAsync() burada çağrılmaz.
-            // Sebep: multi-instance deployment'da race condition riski —
-            // iki instance aynı anda __EFMigrationsHistory exclusive lock için yarışır.
-            // Bunun yerine schema değişiklikleri idempotent helper pattern ile uygulanır.
-            // Yeni EF migration eklenirse: ilgili helper'ı buraya ekle, MigrateAsync kullanma.
-
-            await KOAFiloServis.Web.Data.Migrations.PuantajCarpaniMigrationHelper.ApplyAsync(tenantCtx, logger);
-            await KOAFiloServis.Web.Data.Migrations.PuantajSyncMigrationHelper.ApplyAsync(tenantCtx, logger);
-
-            // Tenant DB sequence reset
-            var tenantTables = new[]
-            {
-                "Cariler", "Firmalar", "Personeller", "Araclar", "Kurumlar", "Guzergahlar",
-                "Roller", "Kullanicilar", "MuhasebeHesaplari", "BankaHesaplari",
-                "PuantajKayitlar", "PuantajHesapDonemleri", "FiloGuzergahEslestirmeleri",
-                "GuzergahSeferleri", "AracMasraflar", "Faturalar", "CariHareketler",
-                "OperasyonKayitlari", "PuantajJobExecutions", "PuantajDetaylari",
-                "PuantajFinansalKayitlar", "PuantajAuditLogs"
-            };
-            foreach (var tbl in tenantTables)
-            {
-                try
-                {
-                    // EF1002: DDL ile sistem tarafindan uretilen tablo adi kullaniliyor, kullanici girdisi yok
-#pragma warning disable EF1002
-                    await tenantCtx.Database.ExecuteSqlRawAsync($"""
-                        SELECT setval(pg_get_serial_sequence('"{tbl}"', 'Id'),
-                            COALESCE((SELECT MAX("Id") FROM "{tbl}"), 0) + 1, false);
-                        """);
-#pragma warning restore EF1002
-                }
-                catch { }
-            }
-
-            logger.LogInformation("Migration helper'lar uygulandi: {Firma} ({DbName})", firma.FirmaAdi, firma.DatabaseName);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Migration helper hatasi: {Firma} ({DbName})", firma.FirmaAdi, firma.DatabaseName);
-        }
-    }
-});
-
-// Holding DB: olustur ve tablolari hazirla
-await RunScopedSafeAsync(app, "EnsureHoldingDatabase", async services =>
-{
-    var holdingFactory = services.GetRequiredService<IDbContextFactory<HoldingDbContext>>();
-    using var ctx = await holdingFactory.CreateDbContextAsync();
-    await ctx.Database.EnsureCreatedAsync();
-});
-
+// Nihai Mimari: HoldingVeri ve HoldingRapor ApplicationDbContext'te (Kural 13).
+// Ayrı HoldingDbContext kaldırıldı — EnsureCreated gerekmez (ana DB zaten var).
 // Holding verisi: ilk kez calisiyorsa (bos tablo) otomatik doldur
 await RunScopedSafeAsync(app, "EnsureHoldingInitialData", async services =>
 {
-    var holdingFactory = services.GetRequiredService<IDbContextFactory<HoldingDbContext>>();
-    using var ctx = await holdingFactory.CreateDbContextAsync();
+    var appFactory = services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+    using var ctx = await appFactory.CreateDbContextAsync();
     var hasData = await ctx.HoldingVeriler.AnyAsync();
     if (!hasData)
     {
         var holdingService = services.GetRequiredService<IHoldingService>();
-        var logger = services.GetRequiredService<ILogger<HoldingService>>();
+        var logger = services.GetRequiredService<ILogger<IHoldingService>>();
         var now = DateTime.UtcNow;
         logger.LogInformation("Holding verisi bos, ilk veri toplama baslatiliyor: {Yil}-{Ay}", now.Year, now.Month);
         await holdingService.ToplaVeKaydetAsync(now.Year, now.Month);

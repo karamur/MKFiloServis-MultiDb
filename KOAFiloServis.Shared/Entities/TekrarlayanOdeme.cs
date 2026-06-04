@@ -6,7 +6,7 @@ namespace KOAFiloServis.Shared.Entities;
 /// Tekrarlayan odeme tanimlari (Kira, Elektrik, Su, Dogalgaz, Internet vb.)
 /// Bu kayitlar belirtilen periyotlarda otomatik olarak BudgetOdeme kayitlari olusturur.
 /// </summary>
-public class TekrarlayanOdeme : BaseEntity
+public class TekrarlayanOdeme : BaseEntity, IFirmaTenant
 {
     [Required]
     [StringLength(200)]

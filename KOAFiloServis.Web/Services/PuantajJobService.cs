@@ -11,13 +11,13 @@ namespace KOAFiloServis.Web.Services;
 public sealed class PuantajJobService : IPuantajJobService
 {
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IDbContextFactory<MasterDbContext> _masterDbFactory;
+    private readonly IDbContextFactory<ApplicationDbContext> _masterDbFactory;
     private readonly IPuantajRetryPolicy _retryPolicy;
     private readonly ILogger<PuantajJobService> _logger;
 
     public PuantajJobService(
         IServiceScopeFactory scopeFactory,
-        IDbContextFactory<MasterDbContext> masterDbFactory,
+        IDbContextFactory<ApplicationDbContext> masterDbFactory,
         IPuantajRetryPolicy retryPolicy,
         ILogger<PuantajJobService> logger)
     {

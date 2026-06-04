@@ -5,6 +5,7 @@ namespace KOAFiloServis.Shared.Entities;
 public class PuantajJobExecution : BaseEntity, IFirmaTenant
 {
     public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
 
     public int Yil { get; set; }
     public int Ay { get; set; }

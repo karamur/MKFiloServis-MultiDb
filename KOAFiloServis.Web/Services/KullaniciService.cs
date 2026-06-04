@@ -8,7 +8,7 @@ namespace KOAFiloServis.Web.Services;
 
 public class KullaniciService : IKullaniciService
 {
-    private readonly IDbContextFactory<MasterDbContext> _contextFactory;
+    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly AppAuthenticationStateProvider _authProvider;
     private readonly ILogger<KullaniciService> _logger;
     private readonly IEmailService _emailService;
@@ -16,7 +16,7 @@ public class KullaniciService : IKullaniciService
     private readonly UserManager<Kullanici> _userManager;
 
     public KullaniciService(
-        IDbContextFactory<MasterDbContext> contextFactory,
+        IDbContextFactory<ApplicationDbContext> contextFactory,
         AppAuthenticationStateProvider authProvider,
         ILogger<KullaniciService> logger,
         IEmailService emailService,
@@ -771,7 +771,7 @@ public class KullaniciService : IKullaniciService
         return new string(passwordChars);
     }
 
-    private static async Task EnsureRolePermissionAsync(MasterDbContext context, string roleName, string yetkiKodu)
+    private static async Task EnsureRolePermissionAsync(ApplicationDbContext context, string roleName, string yetkiKodu)
     {
         var rol = await context.Roller
             .AsNoTracking()

@@ -9,14 +9,14 @@ namespace KOAFiloServis.Web.Services;
 public sealed class TenantDatabaseService : ITenantDatabaseService
 {
     private readonly ITenantConnectionStringProvider _connProvider;
-    private readonly IDbContextFactory<MasterDbContext> _masterFactory;
+    private readonly IDbContextFactory<ApplicationDbContext> _masterFactory;
     private readonly IDbContextFactory<ApplicationDbContext> _tenantFactory;
     private readonly IConfiguration _configuration;
     private readonly ILogger<TenantDatabaseService> _logger;
 
     public TenantDatabaseService(
         ITenantConnectionStringProvider connProvider,
-        IDbContextFactory<MasterDbContext> masterFactory,
+        IDbContextFactory<ApplicationDbContext> masterFactory,
         IDbContextFactory<ApplicationDbContext> tenantFactory,
         IConfiguration configuration,
         ILogger<TenantDatabaseService> logger)

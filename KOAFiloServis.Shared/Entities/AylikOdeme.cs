@@ -5,10 +5,11 @@ namespace KOAFiloServis.Shared.Entities;
 /// <summary>
 /// Ayl�k sabit �deme planlar� (Kira, kredi taksiti vb.)
 /// </summary>
-public class AylikOdemePlani : BaseEntity
+public class AylikOdemePlani : BaseEntity, IFirmaTenant
 {
     [Required]
     public int FirmaId { get; set; }
+    int? IFirmaTenant.FirmaId { get => FirmaId; set => FirmaId = value ?? 0; }
 
     [Required]
     [StringLength(200)]
@@ -72,13 +73,14 @@ public class AylikOdemePlani : BaseEntity
 /// <summary>
 /// Ger�ekle�en ayl�k �demeler
 /// </summary>
-public class AylikOdemeGerceklesen : BaseEntity
+public class AylikOdemeGerceklesen : BaseEntity, IFirmaTenant
 {
     [Required]
     public int AylikOdemePlaniId { get; set; }
 
     [Required]
     public int FirmaId { get; set; }
+    int? IFirmaTenant.FirmaId { get => FirmaId; set => FirmaId = value ?? 0; }
 
     /// <summary>
     /// Hangi ay/y�l i�in

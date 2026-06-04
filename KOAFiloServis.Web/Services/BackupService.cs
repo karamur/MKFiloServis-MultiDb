@@ -177,7 +177,7 @@ public class BackupService : IBackupService
 
                 // Tüm tenant DB'leri bul
                 using var scope = _serviceProvider.CreateScope();
-                var masterFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<MasterDbContext>>();
+                var masterFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
                 await using var masterCtx = await masterFactory.CreateDbContextAsync();
 
                 var firmalar = await masterCtx.Firmalar

@@ -52,7 +52,7 @@ public class CariHatirlatmaSettings
 /// <summary>
 /// Cari hatırlatma kaydı - geçmiş hatırlatmaları saklar
 /// </summary>
-public class CariHatirlatma : BaseEntity
+public class CariHatirlatma : BaseEntity, IFirmaTenant
 {
     public int CariId { get; set; }
     public virtual Cari Cari { get; set; } = null!;

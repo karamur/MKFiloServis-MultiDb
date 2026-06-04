@@ -11,6 +11,7 @@ namespace KOAFiloServis.Shared.Entities;
 public class PuantajFinansalKayit : BaseEntity, IFirmaTenant
 {
     public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
 
     public int PuantajKayitId { get; set; }
     public virtual PuantajKayit? PuantajKayit { get; set; }

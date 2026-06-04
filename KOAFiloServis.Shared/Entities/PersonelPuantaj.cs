@@ -5,10 +5,11 @@ namespace KOAFiloServis.Shared.Entities;
 /// <summary>
 /// Personel puantaj kaydı
 /// </summary>
-public class PersonelPuantaj : BaseEntity
+public class PersonelPuantaj : BaseEntity, IFirmaTenant
 {
     [Required]
     public int FirmaId { get; set; }
+    int? IFirmaTenant.FirmaId { get => FirmaId; set => FirmaId = value ?? 0; }
 
     [Required]
     public int PersonelId { get; set; } // Sofor veya diger personel

@@ -10,6 +10,7 @@ namespace KOAFiloServis.Shared.Entities;
 public class PuantajDetay : BaseEntity, IFirmaTenant
 {
     public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
 
     // FK'lar
     public int OperasyonKaydiId { get; set; }

@@ -7,13 +7,15 @@ namespace KOAFiloServis.Shared.Entities;
 /// Kurum (Firma) + Güzergah kalıcı eşleştirmesi.
 /// Bir kurum birden fazla güzergaha, bir güzergah birden fazla kuruma bağlanabilir (N-N).
 /// </summary>
-public class FirmaGuzergahEslestirme : BaseEntity
+public class FirmaGuzergahEslestirme : BaseEntity, IFirmaTenant
 {
     /// <summary>
     /// İşi alan / faturayı kesecek olan kendi firmamız (multi-tenant)
     /// </summary>
     [Required]
     public int FirmaId { get; set; }
+    int? IFirmaTenant.FirmaId { get => FirmaId; set => FirmaId = value ?? 0; }
+    public virtual Firma? Firma { get; set; }
 
     /// <summary>
     /// İşin sahibi olan müşteri kurumu (Cari)

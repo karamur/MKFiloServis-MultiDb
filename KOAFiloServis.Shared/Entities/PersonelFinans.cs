@@ -5,7 +5,7 @@ namespace KOAFiloServis.Shared.Entities;
 /// <summary>
 /// Personel Avans İşlemleri
 /// </summary>
-public class PersonelAvans : BaseEntity
+public class PersonelAvans : BaseEntity, IFirmaTenant
 {
     public int PersonelId { get; set; }
     public virtual Sofor Personel { get; set; } = null!;
@@ -46,7 +46,7 @@ public class PersonelAvans : BaseEntity
 /// <summary>
 /// Personele Borçlar İşlemleri
 /// </summary>
-public class PersonelBorc : BaseEntity
+public class PersonelBorc : BaseEntity, IFirmaTenant
 {
     public int PersonelId { get; set; }
     public virtual Sofor Personel { get; set; } = null!;
@@ -135,7 +135,7 @@ public class PersonelBorcOdeme : BaseEntity
 /// <summary>
 /// Personel Finans Ayarları (Muhasebe Hesap Kodları Eşleştirme)
 /// </summary>
-public class PersonelFinansAyar : BaseEntity
+public class PersonelFinansAyar : BaseEntity, IFirmaTenant
 {
     public int? FirmaId { get; set; }
     public virtual Firma? Firma { get; set; }

@@ -8,13 +8,15 @@ namespace KOAFiloServis.Shared.Entities;
 /// Bir defa yapılır, puantajlarda otomatik kullanılır. Çoka-çok ilişki desteklenir
 /// (aynı araç-şoför birden fazla kuruma, aynı kurum birden fazla araç-şoföre bağlanabilir).
 /// </summary>
-public class FirmaAracSoforEslestirme : BaseEntity
+public class FirmaAracSoforEslestirme : BaseEntity, IFirmaTenant
 {
     /// <summary>
     /// İşi alan / faturayı kesecek olan kendi firmamız (multi-tenant)
     /// </summary>
     [Required]
     public int FirmaId { get; set; }
+    int? IFirmaTenant.FirmaId { get => FirmaId; set => FirmaId = value ?? 0; }
+    public virtual Firma? Firma { get; set; }
 
     /// <summary>
     /// İşin sahibi olan müşteri kurumu (Cari)

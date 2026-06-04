@@ -3,6 +3,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace KOAFiloServis.Web.Data;
 
+/// <summary>
+/// [OBSOLETE] Nihai mimari (2026) ile kullanımdan kaldırılmıştır.
+/// HoldingVeri ve HoldingRapor entity'leri artık <see cref="ApplicationDbContext"/> içinde yönetilir.
+/// </summary>
+[Obsolete("Nihai mimari: HoldingDbContext kaldırıldı. ApplicationDbContext kullanın.")]
 public class HoldingDbContext : DbContext
 {
     public HoldingDbContext(DbContextOptions<HoldingDbContext> options) : base(options) { }

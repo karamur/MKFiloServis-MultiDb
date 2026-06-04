@@ -19,9 +19,16 @@ namespace KOAFiloServis.Web.Services;
 public interface IAktifFirmaProvider
 {
     /// <summary>
-    /// Aktif firmanın Id'si. 0 veya null ise henüz firma seçilmemiştir.
+    /// Aktif firmanın Id'si. null ise henüz firma seçilmemiştir.
+    /// Kural 11: Firma seçilmeden ERP modüllerine erişilemez.
     /// </summary>
     int? AktifFirmaId { get; }
+
+    /// <summary>
+    /// Kullanıcı geçerli bir firma seçmiş mi? (Kural 11 guard için)
+    /// FirmaId &gt; 0 veya TumFirmalar modu aktifse true döner.
+    /// </summary>
+    bool HasAktifFirma { get; }
 
     /// <summary>
     /// "Tüm firmalar" modu (SuperAdmin / yönetici için cross-tenant rapor).
@@ -88,6 +95,12 @@ public sealed class AktifFirmaProvider : IAktifFirmaProvider
     }
 
     public int? AktifFirmaId => _mevcut.FirmaId > 0 ? _mevcut.FirmaId : null;
+
+    /// <summary>
+    /// Kural 11: Kullanıcı firma seçmeden ERP modüllerine erişemez.
+    /// Guard olarak kullanılır — UI katmanı /firma-sec'e yönlendirir.
+    /// </summary>
+    public bool HasAktifFirma => _mevcut.FirmaId > 0 || _mevcut.TumFirmalar;
 
     public bool TumFirmalar => _mevcut.TumFirmalar;
 

@@ -29,8 +29,7 @@ public class ApplicationDbContext : DbContext
             if (p == null) return true;
             if (p.TumFirmalar) return true;
             if (p.AktifFirmaId is null or 0) return true;
-            // Tenant DB'de tum veriler zaten o firmaya ait, filter gereksiz
-            if (!string.IsNullOrEmpty(p.Mevcut.DatabaseName)) return true;
+            // Nihai mimari: tek veritabanı, tenant DB yok — filter her zaman aktif (Kural 6)
             return false;
         }
     }
@@ -66,7 +65,9 @@ public class ApplicationDbContext : DbContext
         return _aktifFirmaProvider;
     }
 
-    // Firma Modulu
+    // Organizasyon ve Firma (Nihai Mimari Kural 2-3)
+    public DbSet<Organizasyon> Organizasyonlar { get; set; }
+    public DbSet<Sube> Subeler { get; set; }
     public DbSet<Firma> Firmalar { get; set; }
 
     // Cari Modulu
@@ -343,13 +344,17 @@ public class ApplicationDbContext : DbContext
     public DbSet<ServisOdeme> ServisOdemeler { get; set; }
     public DbSet<ServisTahsilat> ServisTahsilatlar { get; set; }
 
+    // Holding Modulu (Kural 13) — nihai mimari: tek veritabanında konsolide snapshot'lar
+    public DbSet<HoldingVeri> HoldingVeriler { get; set; }
+    public DbSet<HoldingRapor> HoldingRaporlar { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
         
         var isSqlite = Database.IsSqlite();
 
-        // Firma
+        // Firma (Nihai Mimari Kural 2-3: Organizasyon → Firma → Şube)
         modelBuilder.Entity<Firma>(entity =>
         {
             entity.HasIndex(e => e.FirmaKodu).IsUnique();
@@ -358,12 +363,43 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.VergiNo).HasMaxLength(11);
             entity.HasIndex(e => e.CariId);
             // Firma.CariId -> Cari (kurum rolündeki firmanın muhasebe Cari kaydı)
-            // Cari uzerinde navigation yok - Cari.FirmaId ile cakismamasi icin
             entity.HasOne<Cari>()
                 .WithMany((string?)null)
                 .HasForeignKey(e => e.CariId)
                 .OnDelete(DeleteBehavior.SetNull)
                 .IsRequired(false);
+            // Organizasyon → Firma (Kural 3: Her firma bir organizasyona bağlıdır)
+            entity.HasOne(e => e.Organizasyon)
+                .WithMany(o => o.Firmalar)
+                .HasForeignKey(e => e.OrganizasyonId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // Subeler (Kural 5) — Firma tarafında navigation yok, Sube tarafında tanımlı
+            entity.HasQueryFilter(e => !e.IsDeleted);
+        });
+
+        // Organizasyon (Nihai Mimari Kural 2)
+        modelBuilder.Entity<Organizasyon>(entity =>
+        {
+            entity.HasIndex(e => e.Kod).IsUnique().HasFilter("\"IsDeleted\" = false");
+            entity.Property(e => e.Adi).HasMaxLength(250);
+            entity.Property(e => e.Kod).HasMaxLength(20);
+            entity.Property(e => e.Aciklama).HasMaxLength(500);
+            entity.HasQueryFilter(e => !e.IsDeleted);
+        });
+
+        // Şube (Nihai Mimari Kural 2, Kural 5)
+        modelBuilder.Entity<Sube>(entity =>
+        {
+            entity.HasIndex(e => new { e.FirmaId, e.SubeKodu }).IsUnique().HasFilter("\"IsDeleted\" = false");
+            entity.Property(e => e.SubeAdi).HasMaxLength(250);
+            entity.Property(e => e.SubeKodu).HasMaxLength(20);
+            entity.Property(e => e.Adres).HasMaxLength(500);
+            entity.Property(e => e.Telefon).HasMaxLength(20);
+            // Sube → Firma
+            entity.HasOne(e => e.Firma)
+                .WithMany(f => f.Subeler)
+                .HasForeignKey(e => e.FirmaId)
+                .OnDelete(DeleteBehavior.Restrict);
             entity.HasQueryFilter(e => !e.IsDeleted);
         });
 
@@ -1818,7 +1854,10 @@ public class ApplicationDbContext : DbContext
                 .WithMany(c => c.Hatirlaticilar)
                 .HasForeignKey(e => e.CariId)
                 .OnDelete(DeleteBehavior.SetNull);
-            entity.HasQueryFilter(e => !e.IsDeleted && !e.Kullanici.IsDeleted);
+            entity.HasQueryFilter(e => !e.IsDeleted
+                && e.Kullanici != null
+                && !e.Kullanici.IsDeleted
+                && (e.Cari == null || !e.Cari.IsDeleted));
         });
 
         // WhatsApp Modelleri
@@ -2048,7 +2087,20 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(e => e.KullaniciId)
                 .OnDelete(DeleteBehavior.SetNull);
 
-            entity.HasQueryFilter(e => !e.IsDeleted && (e.Arac == null || !e.Arac.IsDeleted));
+            entity.HasOne(e => e.Firma)
+                .WithMany()
+                .HasForeignKey(e => e.FirmaId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.KurumFirma)
+                .WithMany()
+                .HasForeignKey(e => e.KurumFirmaId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(e => !e.IsDeleted
+                && (e.Arac == null || !e.Arac.IsDeleted)
+                && (e.Firma == null || !e.Firma.IsDeleted)
+                && (e.KurumFirma == null || !e.KurumFirma.IsDeleted));
         });
 
         modelBuilder.Entity<FiloGunlukPuantaj>(entity =>
@@ -2161,8 +2213,24 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<KiralamaArac>()
             .HasQueryFilter(e => !e.IsDeleted && (e.Firma == null || !e.Firma.IsDeleted));
 
-        modelBuilder.Entity<KullaniciCari>()
-            .HasQueryFilter(e => !e.IsDeleted && !e.Cari.IsDeleted && !e.Kullanici.IsDeleted);
+        modelBuilder.Entity<KullaniciCari>(entity =>
+        {
+            entity.HasOne(e => e.Kullanici)
+                .WithMany(k => k.BagliCariler)
+                .HasForeignKey(e => e.KullaniciId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Cari)
+                .WithMany(c => c.KullaniciEslestirmeleri)
+                .HasForeignKey(e => e.CariId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasQueryFilter(e => !e.IsDeleted
+                && e.Cari != null
+                && !e.Cari.IsDeleted
+                && e.Kullanici != null
+                && !e.Kullanici.IsDeleted);
+        });
 
         modelBuilder.Entity<CariIletisimNot>(entity =>
         {
@@ -2971,6 +3039,26 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasQueryFilter(e => !e.IsDeleted);
+        });
+
+        // ── HoldingVeri (Kural 13: Konsolide snapshot)
+        modelBuilder.Entity<HoldingVeri>(entity =>
+        {
+            entity.HasIndex(e => new { e.FirmaId, e.Yil, e.Ay, e.Kategori }).IsUnique();
+            entity.Property(e => e.FirmaKodu).HasMaxLength(50);
+            entity.Property(e => e.FirmaAdi).HasMaxLength(250);
+            entity.Property(e => e.Kategori).HasMaxLength(50);
+            entity.Property(e => e.JsonDetay).HasColumnType("text");
+        });
+
+        // ── HoldingRapor (Kural 13: Kayıtlı raporlar)
+        modelBuilder.Entity<HoldingRapor>(entity =>
+        {
+            entity.Property(e => e.Ad).HasMaxLength(250);
+            entity.Property(e => e.Tip).HasMaxLength(50);
+            entity.Property(e => e.OlusturanKullanici).HasMaxLength(100);
+            entity.Property(e => e.JsonFiltreler).HasColumnType("text");
+            entity.Property(e => e.JsonSonuc).HasColumnType("text");
         });
 
         // ----------------------------------------------------------------
