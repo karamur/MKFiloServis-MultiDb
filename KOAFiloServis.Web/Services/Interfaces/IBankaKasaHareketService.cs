@@ -30,7 +30,7 @@ public interface IBankaKasaHareketService
     Task<BankaKasaHareket> CreateAsync(BankaKasaHareket hareket);
     Task<BankaKasaHareket> UpdateAsync(BankaKasaHareket hareket);
     Task DeleteAsync(int id);
-    Task<string> GenerateNextIslemNoAsync();
+    Task<string> GenerateNextIslemNoAsync(int firmaId = 0);
 
     // BankaHesap (Kasa/Banka) işlemleri
     Task<List<BankaHesap>> GetHesaplarAsync();

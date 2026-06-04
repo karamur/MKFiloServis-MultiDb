@@ -7,16 +7,18 @@ namespace KOAFiloServis.Web.Services;
 
 public class BankaKasaHareketService : IBankaKasaHareketService
 {
-    private const string IslemNoPrefix = "HRK-";
+    private const string IslemNoPrefix = "HRK";
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly IMuhasebeService _muhasebeService;
     private readonly IBankaHesapService _bankaHesapService;
+    private readonly NumaraSerisiService _numaraSerisi;
 
-    public BankaKasaHareketService(IDbContextFactory<ApplicationDbContext> contextFactory, IMuhasebeService muhasebeService, IBankaHesapService bankaHesapService)
+    public BankaKasaHareketService(IDbContextFactory<ApplicationDbContext> contextFactory, IMuhasebeService muhasebeService, IBankaHesapService bankaHesapService, NumaraSerisiService numaraSerisi)
     {
         _contextFactory = contextFactory;
         _muhasebeService = muhasebeService;
         _bankaHesapService = bankaHesapService;
+        _numaraSerisi = numaraSerisi;
     }
 
     public async Task<List<BankaKasaHareket>> GetAllAsync()
@@ -367,27 +369,10 @@ public class BankaKasaHareketService : IBankaKasaHareketService
         });
     }
 
-    public async Task<string> GenerateNextIslemNoAsync()
+    public async Task<string> GenerateNextIslemNoAsync(int firmaId = 0)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var today = DateTime.Today;
-        var prefix = $"{IslemNoPrefix}{today:yyyyMMdd}";
-
-        var islemNolari = await context.BankaKasaHareketleri
-            .IgnoreQueryFilters()
-            .AsNoTracking()
-            .Where(h => h.IslemNo.StartsWith(prefix))
-            .Select(h => h.IslemNo)
-            .ToListAsync();
-
-        var nextNumber = islemNolari
-            .Select(TryParseIslemNoSequence)
-            .Where(number => number.HasValue)
-            .Select(number => number!.Value)
-            .DefaultIfEmpty(0)
-            .Max() + 1;
-
-        return $"{prefix}-{nextNumber:D4}";
+        // Kural 15: FirmaId bazlı atomik numara üretimi
+        return await _numaraSerisi.GenerateFormattedAsync(IslemNoPrefix, firmaId, 4);
     }
 
     // BankaHesap (Kasa/Banka) işlemleri
