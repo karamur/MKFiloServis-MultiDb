@@ -3,8 +3,12 @@
 /// <summary>
 /// Arac Evrak/Belge Yonetimi - Ruhsat, Sigorta, Muayene vb.
 /// </summary>
-public class AracEvrak : BaseEntity
+public class AracEvrak : BaseEntity, IFirmaTenant
 {
+    // Kural 4: FirmaId dogrudan entity'de (Arac uzerinden join gerekmez)
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     public int AracId { get; set; }
     public string EvrakKategorisi { get; set; } = string.Empty; // Ruhsat, Sigorta, Muayene, Kasko, SRC Belgesi vb.
     public string? EvrakAdi { get; set; }
@@ -33,8 +37,12 @@ public class AracEvrak : BaseEntity
 /// <summary>
 /// Arac Evrak Dosyalari - Birden fazla dosya eklenebilir
 /// </summary>
-public class AracEvrakDosya : BaseEntity
+public class AracEvrakDosya : BaseEntity, IFirmaTenant
 {
+    // Kural 4: FirmaId dogrudan entity'de
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     public int AracEvrakId { get; set; }
     public string DosyaAdi { get; set; } = string.Empty;
     public string DosyaYolu { get; set; } = string.Empty;
@@ -43,12 +51,12 @@ public class AracEvrakDosya : BaseEntity
     public string? Aciklama { get; set; }
 
     /// <summary>
-    /// Mevcut versiyon numarası (1'den başlar)
+    /// Mevcut versiyon numarasi (1'den baslar)
     /// </summary>
     public int VersiyonNo { get; set; } = 1;
 
     /// <summary>
-    /// Son değişiklik notu
+    /// Son degisiklik notu
     /// </summary>
     public string? SonDegisiklikNotu { get; set; }
 

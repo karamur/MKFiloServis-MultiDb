@@ -875,6 +875,24 @@ await RunScopedSafeAsync(app, "ApplyMigrations", async services =>
         SET ""FirmaId"" = s.""FirmaId""
         FROM ""Personeller"" s
         WHERE pm.""SoforId"" = s.""Id"" AND pm.""FirmaId"" IS NULL AND s.""FirmaId"" IS NOT NULL;
+
+        -- Kural 4: AracEvrak + AracEvrakDosya FirmaId (idempotent DDL + backfill)
+        ALTER TABLE ""AracEvraklari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" integer NULL;
+        ALTER TABLE ""AracEvrakDosyalari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" integer NULL;
+        CREATE INDEX IF NOT EXISTS ""IX_AracEvraklari_FirmaId"" ON ""AracEvraklari"" (""FirmaId"");
+        CREATE INDEX IF NOT EXISTS ""IX_AracEvrakDosyalari_FirmaId"" ON ""AracEvrakDosyalari"" (""FirmaId"");
+
+        -- Backfill: AracEvrak.FirmaId ← Arac.FirmaId
+        UPDATE ""AracEvraklari"" ae
+        SET ""FirmaId"" = a.""FirmaId""
+        FROM ""Araclar"" a
+        WHERE ae.""AracId"" = a.""Id"" AND ae.""FirmaId"" IS NULL AND a.""FirmaId"" IS NOT NULL;
+
+        -- Backfill: AracEvrakDosya.FirmaId ← AracEvrak.FirmaId
+        UPDATE ""AracEvrakDosyalari"" aed
+        SET ""FirmaId"" = ae.""FirmaId""
+        FROM ""AracEvraklari"" ae
+        WHERE aed.""AracEvrakId"" = ae.""Id"" AND aed.""FirmaId"" IS NULL AND ae.""FirmaId"" IS NOT NULL;
     ");
 
     // Kural 15: FisNoCounters'a FirmaId + composite PK (idempotent)
