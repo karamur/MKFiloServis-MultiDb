@@ -469,22 +469,22 @@ public class MuhasebeService : IMuhasebeService
     }
 
     /// <summary>
-    /// INSERT ... ON CONFLICT DO UPDATE ... RETURNING ile atomik sayac artirimi.
-    /// Kilit gerektirmez; PostgreSQL duzeyinde %100 benzersiz deger garantisi.
+    /// Firma bazlı sıradaki fiş numarasını üretir (Kural 15).
     /// </summary>
-    internal static async Task<int> NextFisNoCounterAsync(ApplicationDbContext context, string prefix, string yilAy)
+    internal static async Task<int> NextFisNoCounterAsync(ApplicationDbContext context, string prefix, string yilAy, int firmaId = 0)
     {
         var connectionString = context.Database.GetConnectionString()!;
         await using var conn = new NpgsqlConnection(connectionString);
         await conn.OpenAsync();
         await using var cmd = new NpgsqlCommand(
-            @"INSERT INTO ""FisNoCounters"" (""Prefix"", ""YilAy"", ""SonNo"")
-              VALUES (@p, @y, 1)
-              ON CONFLICT (""Prefix"", ""YilAy"")
+            @"INSERT INTO ""FisNoCounters"" (""Prefix"", ""FirmaId"", ""YilAy"", ""SonNo"")
+              VALUES (@p, @f, @y, 1)
+              ON CONFLICT (""Prefix"", ""FirmaId"", ""YilAy"")
               DO UPDATE SET ""SonNo"" = ""FisNoCounters"".""SonNo"" + 1
               RETURNING ""SonNo""",
             conn);
         cmd.Parameters.AddWithValue("p", prefix);
+        cmd.Parameters.AddWithValue("f", firmaId);
         cmd.Parameters.AddWithValue("y", yilAy);
         var result = await cmd.ExecuteScalarAsync();
         return Convert.ToInt32(result);
