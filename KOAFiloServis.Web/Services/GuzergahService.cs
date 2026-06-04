@@ -9,11 +9,13 @@ public class GuzergahService : IGuzergahService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly ICacheService _cache;
+    private readonly NumaraSerisiService _numaraSerisi;
 
-    public GuzergahService(IDbContextFactory<ApplicationDbContext> contextFactory, ICacheService cache)
+    public GuzergahService(IDbContextFactory<ApplicationDbContext> contextFactory, ICacheService cache, NumaraSerisiService numaraSerisi)
     {
         _contextFactory = contextFactory;
         _cache = cache;
+        _numaraSerisi = numaraSerisi;
     }
 
     public Task<List<Guzergah>> GetAllAsync() =>
@@ -150,13 +152,8 @@ public class GuzergahService : IGuzergahService
 
     public async Task<string> GenerateNextKodAsync()
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var lastGuzergah = await context.Guzergahlar
-            .IgnoreQueryFilters()
-            .OrderByDescending(g => g.Id)
-            .FirstOrDefaultAsync();
-
-        var nextNumber = (lastGuzergah?.Id ?? 0) + 1;
+        // Kural 15: Atomik numara üretimi (global)
+        var nextNumber = await _numaraSerisi.GenerateNextAsync("GZR", 0, "GLOBAL");
         return $"GZR-{nextNumber:D4}";
     }
 
@@ -166,33 +163,12 @@ public class GuzergahService : IGuzergahService
         var firma = await context.Firmalar
             .AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == firmaId);
-        var firmaKisaltma = firma?.FirmaAdi?.Length >= 3 
-            ? firma.FirmaAdi.Substring(0, 3).ToUpperInvariant() 
+        var firmaKisaltma = firma?.FirmaAdi?.Length >= 3
+            ? firma.FirmaAdi.Substring(0, 3).ToUpperInvariant()
             : "GZR";
 
-        var sonGuzergah = await context.Guzergahlar
-            .IgnoreQueryFilters()
-            .Where(g => g.FirmaId == firmaId)
-            .OrderByDescending(g => g.Id)
-            .FirstOrDefaultAsync();
-
-        var sayi = 1;
-        if (sonGuzergah != null)
-        {
-            // Mevcut koddan sayıyı çıkar
-            var parts = sonGuzergah.GuzergahKodu.Split('-');
-            if (parts.Length >= 2 && int.TryParse(parts[^1], out var mevcutSayi))
-            {
-                sayi = mevcutSayi + 1;
-            }
-            else
-            {
-                sayi = await context.Guzergahlar
-                    .AsNoTracking()
-                    .CountAsync(g => g.FirmaId == firmaId) + 1;
-            }
-        }
-
+        // Kural 15: FirmaId bazlı atomik numara
+        var sayi = await _numaraSerisi.GenerateNextAsync(firmaKisaltma, firmaId, "GLOBAL");
         return $"{firmaKisaltma}-{sayi:D3}";
     }
 
