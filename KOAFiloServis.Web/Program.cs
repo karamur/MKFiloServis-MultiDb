@@ -941,6 +941,18 @@ await RunScopedSafeAsync(app, "ApplyMigrations", async services =>
         -- Backfill: GunlukPuantaj ← PersonelPuantaj.FirmaId
         UPDATE ""GunlukPuantajlar"" gp SET ""FirmaId"" = pp.""FirmaId""
         FROM ""PersonelPuantajlar"" pp WHERE gp.""PersonelPuantajId"" = pp.""Id"" AND gp.""FirmaId"" IS NULL AND pp.""FirmaId"" IS NOT NULL;
+
+        -- Kural 4: AracIslem + ServisKaydi + ServisParca FirmaId
+        ALTER TABLE ""AracIslemler"" ADD COLUMN IF NOT EXISTS ""FirmaId"" integer NULL;
+        ALTER TABLE ""ServisKayitlari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" integer NULL;
+        ALTER TABLE ""ServisParcalar"" ADD COLUMN IF NOT EXISTS ""FirmaId"" integer NULL;
+        CREATE INDEX IF NOT EXISTS ""IX_AracIslemler_FirmaId"" ON ""AracIslemler"" (""FirmaId"");
+        CREATE INDEX IF NOT EXISTS ""IX_ServisKayitlari_FirmaId"" ON ""ServisKayitlari"" (""FirmaId"");
+        CREATE INDEX IF NOT EXISTS ""IX_ServisParcalar_FirmaId"" ON ""ServisParcalar"" (""FirmaId"");
+
+        UPDATE ""AracIslemler"" SET ""FirmaId"" = a.""FirmaId"" FROM ""Araclar"" a WHERE ""AracIslemler"".""AracId"" = a.""Id"" AND ""AracIslemler"".""FirmaId"" IS NULL AND a.""FirmaId"" IS NOT NULL;
+        UPDATE ""ServisKayitlari"" SET ""FirmaId"" = a.""FirmaId"" FROM ""Araclar"" a WHERE ""ServisKayitlari"".""AracId"" = a.""Id"" AND ""ServisKayitlari"".""FirmaId"" IS NULL AND a.""FirmaId"" IS NOT NULL;
+        UPDATE ""ServisParcalar"" sp SET ""FirmaId"" = sk.""FirmaId"" FROM ""ServisKayitlari"" sk WHERE sp.""ServisKaydiId"" = sk.""Id"" AND sp.""FirmaId"" IS NULL AND sk.""FirmaId"" IS NOT NULL;
     ");
 
     // Kural 15: FisNoCounters'a FirmaId + composite PK (idempotent)

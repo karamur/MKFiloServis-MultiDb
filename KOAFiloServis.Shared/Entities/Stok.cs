@@ -155,8 +155,11 @@ public class StokHareket : BaseEntity, IFirmaTenant
 /// <summary>
 /// Arac Alim/Satim Kaydi
 /// </summary>
-public class AracIslem : BaseEntity
+public class AracIslem : BaseEntity, IFirmaTenant
 {
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     public int AracId { get; set; }
     public virtual Arac Arac { get; set; } = null!;
 
@@ -196,8 +199,11 @@ public class AracIslem : BaseEntity
 /// <summary>
 /// Servis Kaydi - Alinan servis hizmetleri
 /// </summary>
-public class ServisKaydi : BaseEntity
+public class ServisKaydi : BaseEntity, IFirmaTenant
 {
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     public int AracId { get; set; }
     public virtual Arac Arac { get; set; } = null!;
 
@@ -256,8 +262,11 @@ public class ServisKaydi : BaseEntity
 /// <summary>
 /// Servis Parcasi - Serviste kullanilan parcalar / iscilik kalemleri
 /// </summary>
-public class ServisParca : BaseEntity
+public class ServisParca : BaseEntity, IFirmaTenant
 {
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     public int ServisKaydiId { get; set; }
     public virtual ServisKaydi ServisKaydi { get; set; } = null!;
 
