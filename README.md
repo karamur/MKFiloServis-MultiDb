@@ -20,7 +20,7 @@
 
 **KOAFiloServis artık Tenant Database (Database-per-Tenant) mimarisi kullanmamaktadır.**
 
-> 🔄 **30 commit'lik dönüşüm** ile tek PostgreSQL veritabanı + FirmId bazlı satır seviyesi izolasyona geçilmiştir.
+> 🔄 **32 commit'lik dönüşüm** ile tek PostgreSQL veritabanı + FirmId bazlı satır seviyesi izolasyona geçilmiştir.
 
 ### Mimari
 
@@ -134,6 +134,7 @@ Tüm CRUD işlemleri FirmaId filtreli
                                 ▼
 ┌──────────────────────────────────────────────────────────────┐
 │ PostgreSQL 14+ (varsayılan) · SQLite · SQL Server · MySQL    │
+
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -203,7 +204,7 @@ Uygulama **`https://localhost:5001`** adresinde başlar.
   "Provider": 2,
   "Host": "localhost",
   "Port": 5432,
-  "DatabaseName": "DestekCRMServisBlazorDb",
+  "DatabaseName": "KOAFiloServis",
   "Username": "postgres",
   "Password": "***"
 }
