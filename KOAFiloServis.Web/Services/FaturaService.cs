@@ -11,13 +11,15 @@ public class FaturaService : IFaturaService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly IMuhasebeService _muhasebeService;
+    private readonly NumaraSerisiService _numaraSerisi;
     private readonly IWebHostEnvironment _env;
     private readonly ISecureFileService _secureFileService;
 
-    public FaturaService(IDbContextFactory<ApplicationDbContext> contextFactory, IMuhasebeService muhasebeService, IWebHostEnvironment env, ISecureFileService secureFileService)
+    public FaturaService(IDbContextFactory<ApplicationDbContext> contextFactory, IMuhasebeService muhasebeService, NumaraSerisiService numaraSerisi, IWebHostEnvironment env, ISecureFileService secureFileService)
     {
         _contextFactory = contextFactory;
         _muhasebeService = muhasebeService;
+        _numaraSerisi = numaraSerisi;
         _env = env;
         _secureFileService = secureFileService;
     }
@@ -322,7 +324,6 @@ public class FaturaService : IFaturaService
 
     public async Task<string> GenerateNextFaturaNoAsync(FaturaTipi tip, FaturaYonu? yon = null, int? firmaId = null)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
         var prefix = tip switch
         {
             FaturaTipi.SatisFaturasi => "SF",
@@ -332,32 +333,12 @@ public class FaturaService : IFaturaService
             _ => "FTR"
         };
 
-        var year = DateTime.Now.Year;
-        var query = context.Faturalar
-            .IgnoreQueryFilters()
-            .Where(f => !f.IsDeleted && f.FaturaNo.StartsWith($"{prefix}-{year}"));
-
+        // FaturaYonu prefix'e eklenir (unique constraint: FirmaId + FaturaYonu + FaturaNo)
         if (yon.HasValue)
-            query = query.Where(f => f.FaturaYonu == yon.Value);
+            prefix += yon.Value == FaturaYonu.Giden ? "_GIDEN" : "_GELEN";
 
-        if (firmaId.HasValue)
-            query = query.Where(f => f.FirmaId == firmaId.Value);
-
-        var lastFatura = await query
-            .OrderByDescending(f => f.FaturaNo)
-            .FirstOrDefaultAsync();
-
-        var nextNumber = 1;
-        if (lastFatura != null)
-        {
-            var parts = lastFatura.FaturaNo.Split('-');
-            if (parts.Length >= 3 && int.TryParse(parts[2], out int lastNumber))
-            {
-                nextNumber = lastNumber + 1;
-            }
-        }
-
-        return $"{prefix}-{year}-{nextNumber:D6}";
+        // Kural 15: FirmaId bazlı atomik numara üretimi
+        return await _numaraSerisi.GenerateFormattedAsync(prefix, firmaId ?? 0, 6);
     }
 
     public async Task UpdateOdenenTutarAsync(int faturaId)
