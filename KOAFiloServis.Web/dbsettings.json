@@ -3,7 +3,7 @@
   "Provider": 2,
   "Host": "localhost",
   "Port": 5432,
-  "DatabaseName": "DestekCRMServisBlazorDb",
+  "DatabaseName": "KOAFiloServis",
   "Username": "postgres",
   "Password": "Fast123",
   "UseIntegratedSecurity": false,
