@@ -486,7 +486,14 @@ builder.Services.AddControllers()
     });
 
 // JWT Authentication - API için
-var jwtSecret = builder.Configuration["Jwt:Secret"] ?? "KOAFiloServis-Super-Secret-Key-2025-Minimum-32-Chars";
+var jwtSecret = builder.Configuration["Jwt:Secret"];
+if (string.IsNullOrEmpty(jwtSecret) || jwtSecret.StartsWith("REPLACE_") || jwtSecret.Length < 32)
+{
+    throw new InvalidOperationException(
+        "JWT Secret yapılandırılmamış veya geçersiz. " +
+        "appsettings.Production.json → Jwt:Secret alanına en az 32 karakterli güçlü bir değer girin. " +
+        "Örnek: openssl rand -base64 48");
+}
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "KOAFiloServis";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "KOAFiloServis-API";
 builder.Services.AddAuthentication(options =>

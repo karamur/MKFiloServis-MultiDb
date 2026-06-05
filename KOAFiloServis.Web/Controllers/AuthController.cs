@@ -117,7 +117,13 @@ public class AuthController : ControllerBase
 
     private string GenerateJwtToken(Kullanici kullanici)
     {
-        var jwtSecret = _configuration["Jwt:Secret"] ?? "KOAFiloServis-Super-Secret-Key-2025-Minimum-32-Chars";
+        var jwtSecret = _configuration["Jwt:Secret"];
+        if (string.IsNullOrEmpty(jwtSecret) || jwtSecret.StartsWith("REPLACE_") || jwtSecret.Length < 32)
+        {
+            throw new InvalidOperationException(
+                "JWT Secret yapılandırılmamış veya geçersiz. " +
+                "appsettings.Production.json → Jwt:Secret alanına en az 32 karakterli güçlü bir değer girin.");
+        }
         var jwtIssuer = _configuration["Jwt:Issuer"] ?? "KOAFiloServis";
         var jwtAudience = _configuration["Jwt:Audience"] ?? "KOAFiloServis-API";
 
