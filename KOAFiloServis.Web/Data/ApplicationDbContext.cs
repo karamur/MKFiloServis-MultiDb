@@ -19,17 +19,21 @@ public class ApplicationDbContext : DbContext
 
     /// <summary>
     /// True ise IFirmaTenant entity'leri üzerindeki firma filter'ı devre dışı bırakılır
-    /// (SuperAdmin / TumFirmalar modu / provider yok / tenant DB).
+    /// (SuperAdmin / TumFirmalar modu).
+    /// Provider yoksa veya AktifFirmaId gecerli degilse filter AKTIF kalir — veri sizintisi onlenir (R9 fix).
     /// </summary>
     private bool FirmaTenantDisabled
     {
         get
         {
             var p = ResolveAktifFirmaProvider();
-            if (p == null) return true;
+            // R9 fix: provider yoksa filter KAPANMAZ — safe default, veri gorunmez
+            if (p == null) return false;
+            // Sadece explicit TumFirmalar (admin) filter'i kapatabilir
             if (p.TumFirmalar) return true;
-            if (p.AktifFirmaId is null or 0) return true;
-            // Nihai mimari: tek veritabanı, tenant DB yok — filter her zaman aktif (Kural 6)
+            // Gecerli firma secili degilse filter KAPANMAZ — safe default
+            if (p.AktifFirmaId is null or 0) return false;
+            // Normal mod: filter AKTIF (Kural 6)
             return false;
         }
     }
