@@ -366,7 +366,7 @@ KOAFiloServis-MultiDb/
 - [ ] AI puantaj anomali tespiti
 - [ ] Çoklu dil desteği (i18n)
 - [x] Faz 4 — IFirmaTenant temizliği ✅ (Haziran 2026: 10/10 kritik risk kapatıldı)
-- [ ] Faz 5 — Holding konsolidasyon
+- [x] Faz 5 — Holding konsolidasyon ✅ (BUTCE + FK + Quartz job)
 
 ---
 
