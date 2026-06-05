@@ -365,7 +365,7 @@ KOAFiloServis-MultiDb/
 - [ ] e-Fatura / e-Arşiv entegrasyonu
 - [ ] AI puantaj anomali tespiti
 - [ ] Çoklu dil desteği (i18n)
-- [ ] Faz 4 — IFirmaTenant temizliği
+- [x] Faz 4 — IFirmaTenant temizliği ✅ (Haziran 2026: 10/10 kritik risk kapatıldı)
 - [ ] Faz 5 — Holding konsolidasyon
 
 ---
