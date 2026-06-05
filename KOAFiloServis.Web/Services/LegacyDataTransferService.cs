@@ -493,42 +493,42 @@ public class LegacyDataTransferService
 
             if (sourceCols.Count == 0) return result;
 
-            // Hedef kolonlar
-            var targetCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // Hedef kolonlar (case-insensitive lookup + gerçek adıyla map)
+            var targetColsLower = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             using (var tc = new NpgsqlCommand(
                 $@"SELECT column_name FROM information_schema.columns
                    WHERE table_schema='public' AND table_name='{tableName}'", target))
             using (var r = await tc.ExecuteReaderAsync())
-                while (await r.ReadAsync()) targetCols.Add(r.GetString(0));
+                while (await r.ReadAsync()) { var n = r.GetString(0); targetColsLower[n] = n; }
 
-            if (targetCols.Count == 0)
+            if (targetColsLower.Count == 0)
             {
                 _logger.LogWarning("{Table}: hedef tablo yok, atlandi", tableName);
                 return result;
             }
 
-            // SADECE ortak kolonlar (ikisinde de olan)
-            var commonCols = sourceCols.Where(c => targetCols.Contains(c)).ToList();
-            var skippedCols = sourceCols.Where(c => !targetCols.Contains(c)).ToList();
-
-            if (skippedCols.Count > 0)
-                _logger.LogDebug("{Table}: {Count} kolon hedefte yok, atlandi: {Cols}",
-                    tableName, skippedCols.Count, string.Join(", ", skippedCols.Take(5)));
-
-            // Hedefte FirmaId varsa ve kaynakta yoksa ekle
-            var hasFirmaIdInTarget = targetCols.Contains("FirmaId");
-            var hasFirmaIdInSource = sourceCols.Contains("FirmaId");
-            var addFirmaId = hasFirmaIdInTarget && !hasFirmaIdInSource;
-
-            var sourceColList = string.Join(", ", commonCols.Select(c => $"\"{c}\""));
-            var targetColList = string.Join(", ", commonCols.Select(c => $"\"{c}\""));
-            if (addFirmaId) targetColList += ", \"FirmaId\"";
+            // Ortak kolonlar — HEDEFin gerçek adıyla (PostgreSQL case-sensitive)
+            var commonCols = new List<(string sourceName, string targetName)>();
+            foreach (var sc in sourceCols)
+            {
+                if (targetColsLower.TryGetValue(sc, out var tn))
+                    commonCols.Add((sc, tn));
+            }
 
             if (commonCols.Count == 0)
             {
                 _logger.LogWarning("{Table}: ortak kolon yok, atlandi", tableName);
                 return result;
             }
+
+            // Hedefte FirmaId varsa ve kaynakta yoksa ekle
+            var hasFirmaIdInTarget = targetColsLower.ContainsKey("FirmaId");
+            var hasFirmaIdInSource = sourceCols.Contains("FirmaId", StringComparer.OrdinalIgnoreCase);
+            var addFirmaId = hasFirmaIdInTarget && !hasFirmaIdInSource;
+
+            var sourceColList = string.Join(", ", commonCols.Select(c => $"\"{c.sourceName}\""));
+            var targetColList = string.Join(", ", commonCols.Select(c => $"\"{c.targetName}\""));
+            if (addFirmaId) targetColList += ", \"FirmaId\"";
 
             using var cmd = new NpgsqlCommand($"SELECT {sourceColList} FROM \"{tableName}\"", source);
             using var reader = await cmd.ExecuteReaderAsync();
@@ -546,8 +546,7 @@ public class LegacyDataTransferService
                 if (addFirmaId)
                 {
                     values.Add("@fid");
-                    parms.Add(new NpgsqlParameter("@fid",
-                        hasFirmaIdInSource ? (object)firmaId : firmaId));
+                    parms.Add(new NpgsqlParameter("@fid", firmaId));
                 }
 
                 try
