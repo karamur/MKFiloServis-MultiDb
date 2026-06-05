@@ -359,6 +359,7 @@ builder.Services.AddScoped<IBakimPeriyotService, BakimPeriyotService>();
 builder.Services.AddScoped<ILastikService, LastikService>();
 builder.Services.AddScoped<ZamanliRaporService>(); // Zamanlanmış e-posta rapor servisi
 builder.Services.AddScoped<IHoldingService, HoldingService>(); // Holding konsolidasyon servisi
+builder.Services.AddScoped<IPuantajAnomaliService, PuantajAnomaliService>(); // AI Puantaj Anomali Tespiti
 
 // Object Storage (Local veya S3-uyumlu)
 var storageProvider = builder.Configuration.GetValue<string>("Storage:Provider") ?? "Local";
@@ -459,6 +460,13 @@ builder.Services.AddQuartz(q =>
         .ForJob("luca-portal-senkron-job")
         .WithIdentity("luca-portal-senkron-trigger")
         .WithSchedule(CronScheduleBuilder.DailyAtHourAndMinute(3, 0)));
+
+    // Puantaj Anomali Tarama - her Pazartesi sabah 06:00
+    q.AddJob<PuantajAnomaliJob>(opts => opts.WithIdentity("puantaj-anomali-job"));
+    q.AddTrigger(opts => opts
+        .ForJob("puantaj-anomali-job")
+        .WithIdentity("puantaj-anomali-trigger")
+        .WithSchedule(CronScheduleBuilder.WeeklyOnDayAndHourAndMinute(DayOfWeek.Monday, 6, 0)));
 
     // Puantaj Engine - her ayın 1'inde saat 00:30'da geçen ayı otomatik hesaplar
     var puantajAutoEnabled = builder.Configuration.GetValue("PuantajEngine:AutoProcess:Enabled", true);

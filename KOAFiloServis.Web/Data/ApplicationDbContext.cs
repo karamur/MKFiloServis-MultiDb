@@ -353,6 +353,9 @@ public class ApplicationDbContext : DbContext
 
     // E-Fatura / E-Arsiv Entegrasyonu
     public DbSet<LucaPortalSettings> LucaPortalAyarlari { get; set; }
+
+    // AI Puantaj Anomali Tespiti
+    public DbSet<PuantajAnomali> PuantajAnomaliler { get; set; }
     public DbSet<HoldingRapor> HoldingRaporlar { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
