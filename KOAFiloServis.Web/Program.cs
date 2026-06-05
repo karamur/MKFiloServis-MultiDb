@@ -360,6 +360,7 @@ builder.Services.AddScoped<IBakimPeriyotService, BakimPeriyotService>();
 builder.Services.AddScoped<ILastikService, LastikService>();
 builder.Services.AddScoped<ZamanliRaporService>(); // Zamanlanmış e-posta rapor servisi
 builder.Services.AddScoped<IHoldingService, HoldingService>(); // Holding konsolidasyon servisi
+builder.Services.AddScoped<LegacyDataTransferService>(); // Legacy DB veri aktarım servisi
 builder.Services.AddScoped<IPuantajAnomaliService, PuantajAnomaliService>(); // AI Puantaj Anomali Tespiti
 builder.Services.AddScoped<SharedLocalizer>(); // Çoklu dil desteği (i18n)
 
@@ -666,6 +667,16 @@ await RunScopedSafeAsync(app, "DeletedAtColumnMigration", async services =>
 {
     var context = services.GetRequiredService<ApplicationDbContext>();
     await KOAFiloServis.Web.Data.Migrations.DeletedAtColumnMigrationHelper.EnsureDeletedAtColumnAsync(context);
+});
+
+// Legacy veri aktarımı (Talimat Bölüm 16-23): DestekCRMServisBlazorDb → KOAFiloServis
+await RunScopedSafeAsync(app, "LegacyDataTransfer", async services =>
+{
+    var transferService = services.GetRequiredService<LegacyDataTransferService>();
+    await transferService.EnsureSchemaAsync();
+    var result = await transferService.TransferAllAsync();
+    var logger = services.GetRequiredService<ILogger<Program>>();
+    logger.LogInformation("Veri aktarimi tamamlandi: {Count} kayit aktarildi", result.TotalTransferred);
 });
 
 // Seed Database
