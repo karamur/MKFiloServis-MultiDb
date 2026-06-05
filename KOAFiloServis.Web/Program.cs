@@ -662,11 +662,12 @@ await RunScopedSafeAsync(app, "MasterDatabase", async services =>
     await DbInitializer.EnsureMasterDatabaseAsync(configuration);
 });
 
-// DeletedAt kolonlarını ekle — DbInitializer seed kodundan ÖNCE çalışmalı
+// DeletedAt + eksik kolonlar — DbInitializer seed kodundan ÖNCE çalışmalı
 await RunScopedSafeAsync(app, "DeletedAtColumnMigration", async services =>
 {
     var context = services.GetRequiredService<ApplicationDbContext>();
     await KOAFiloServis.Web.Data.Migrations.DeletedAtColumnMigrationHelper.EnsureDeletedAtColumnAsync(context);
+    await KOAFiloServis.Web.Data.Migrations.DeletedAtColumnMigrationHelper.EnsureMissingColumnsAsync(context);
 });
 
 // Legacy veri aktarımı (Talimat Bölüm 16-23): DestekCRMServisBlazorDb → KOAFiloServis
