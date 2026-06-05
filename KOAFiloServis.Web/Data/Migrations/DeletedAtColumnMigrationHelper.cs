@@ -77,37 +77,57 @@ END; $$;";
             @"ALTER TABLE ""AracMasraflari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
         };
 
-        // Eksik tabloları oluştur (kaynak DB'den kopyala)
+        // Eksik tabloları oluştur (EF entity modeli ile uyumlu)
         var createTables = new[]
         {
-            // PersonelAracAtamalari — sofor dashboard
+            // PersonelAracAtamalari — sofor dashboard (Sofor.cs: PersonelAracAtama entity)
             @"CREATE TABLE IF NOT EXISTS ""PersonelAracAtamalari"" (
-                ""Id"" INTEGER NOT NULL, ""PersonelId"" INTEGER, ""AracId"" INTEGER, ""Plaka"" VARCHAR(20),
-                ""AtamaTarihi"" TIMESTAMP, ""BitisTarihi"" TIMESTAMP, ""Aktif"" BOOLEAN DEFAULT true,
+                ""Id"" INTEGER NOT NULL, ""SoforId"" INTEGER NOT NULL, ""AracId"" INTEGER NOT NULL,
+                ""BaslangicTarihi"" TIMESTAMP NOT NULL DEFAULT NOW(), ""BitisTarihi"" TIMESTAMP,
+                ""Aktif"" BOOLEAN DEFAULT true, ""Notlar"" TEXT,
                 ""IsDeleted"" BOOLEAN DEFAULT false, ""CreatedAt"" TIMESTAMP DEFAULT NOW(), ""UpdatedAt"" TIMESTAMP,
+                ""DeletedAt"" TIMESTAMP, ""FirmaId"" INTEGER,
                 PRIMARY KEY (""Id""))",
-            // ServisCalismalari — dashboard servis + grafik
+            // ServisCalismalari — dashboard servis + grafik (ServisCalisma.cs entity)
             @"CREATE TABLE IF NOT EXISTS ""ServisCalismalari"" (
-                ""Id"" INTEGER NOT NULL, ""AracId"" INTEGER, ""SoforId"" INTEGER, ""GuzergahId"" INTEGER,
-                ""BaslangicTarihi"" TIMESTAMP, ""BitisTarihi"" TIMESTAMP, ""CalismaTipi"" INTEGER,
-                ""GunlukUcret"" DECIMAL(18,2), ""ToplamTutar"" DECIMAL(18,2),
+                ""Id"" INTEGER NOT NULL, ""CalismaTarihi"" TIMESTAMP NOT NULL,
+                ""ServisTuru"" INTEGER NOT NULL, ""Fiyat"" DECIMAL(18,2),
+                ""KmBaslangic"" INTEGER, ""KmBitis"" INTEGER,
+                ""BaslangicSaati"" INTERVAL, ""BitisSaati"" INTERVAL,
+                ""ArizaOlduMu"" BOOLEAN DEFAULT false, ""ArizaAciklamasi"" TEXT,
+                ""Durum"" INTEGER NOT NULL DEFAULT 0, ""Notlar"" TEXT,
+                ""AracId"" INTEGER NOT NULL, ""SoforId"" INTEGER NOT NULL, ""GuzergahId"" INTEGER NOT NULL,
                 ""IsDeleted"" BOOLEAN DEFAULT false, ""CreatedAt"" TIMESTAMP DEFAULT NOW(), ""UpdatedAt"" TIMESTAMP,
+                ""DeletedAt"" TIMESTAMP, ""FirmaId"" INTEGER NOT NULL DEFAULT 1,
                 PRIMARY KEY (""Id""))",
         };
 
+        // LastikStoklar — EF entity (Lastik.cs: LastikStok) ile uyumlu eksik kolonlar
+        var lastikFixes = new[]
+        {
+            @"ALTER TABLE ""LastikStoklar"" ADD COLUMN IF NOT EXISTS ""Aktif"" BOOLEAN DEFAULT true",
+            @"ALTER TABLE ""LastikStoklar"" ADD COLUMN IF NOT EXISTS ""AracId"" INTEGER",
+            @"ALTER TABLE ""LastikStoklar"" ADD COLUMN IF NOT EXISTS ""YedekMi"" BOOLEAN DEFAULT false",
+            @"ALTER TABLE ""LastikStoklar"" ADD COLUMN IF NOT EXISTS ""KaynakAracId"" INTEGER",
+            @"ALTER TABLE ""LastikStoklar"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER DEFAULT 1",
+        };
+
+        // 1) Önce eksik tabloları oluştur (ALTER TABLE altta çalışsın diye)
         foreach (var sql in createTables)
         {
             try { await context.Database.ExecuteSqlRawAsync(sql); }
             catch { /* tablo zaten var — sessiz geç */ }
         }
 
+        // 2) Eksik kolonları ekle (mevcut tablolara)
         foreach (var sql in fixes)
         {
             try { await context.Database.ExecuteSqlRawAsync(sql); }
             catch { /* kolon zaten var veya tablo yok — sessiz geç */ }
         }
 
-        foreach (var sql in fixes)
+        // 3) LastikStoklar özel kolonları
+        foreach (var sql in lastikFixes)
         {
             try { await context.Database.ExecuteSqlRawAsync(sql); }
             catch { /* kolon zaten var veya tablo yok — sessiz geç */ }
