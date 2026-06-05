@@ -3045,7 +3045,7 @@ public class ApplicationDbContext : DbContext
             entity.HasQueryFilter(e => !e.IsDeleted);
         });
 
-        // ── HoldingVeri (Kural 13: Konsolide snapshot)
+        // ── HoldingVeri (Kural 13: Konsolide snapshot, Faz 5.3: FK eklendi)
         modelBuilder.Entity<HoldingVeri>(entity =>
         {
             entity.HasIndex(e => new { e.FirmaId, e.Yil, e.Ay, e.Kategori }).IsUnique();
@@ -3053,6 +3053,11 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.FirmaAdi).HasMaxLength(250);
             entity.Property(e => e.Kategori).HasMaxLength(50);
             entity.Property(e => e.JsonDetay).HasColumnType("text");
+
+            entity.HasOne<Firma>()
+                .WithMany()
+                .HasForeignKey(e => e.FirmaId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         // ── HoldingRapor (Kural 13: Kayıtlı raporlar)

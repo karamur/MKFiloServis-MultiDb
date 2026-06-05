@@ -158,8 +158,95 @@ public sealed class HoldingService : IHoldingService
         }
         await writeCtx.SaveChangesAsync();
 
-        _logger.LogInformation("ToplaVeKaydet: {Count} firma verisi kaydedildi.",
+        _logger.LogInformation("ToplaVeKaydet: {Count} firma KARZARAR verisi kaydedildi.",
             results.Count(v => v != null));
+
+        // ── BUTCE Konsolidasyonu (Faz 5.2) ──────────────────────────────
+        await ToplaButceVeKaydetAsync(firmalar, yil, ay);
+    }
+
+    /// <summary>
+    /// Tüm aktif firmalar için bütçe hedef ve gerçekleşen verilerini toplar
+    /// ve <see cref="HoldingVeri"/> tablosuna Kategori="BUTCE" olarak upsert eder.
+    /// </summary>
+    private async Task ToplaButceVeKaydetAsync(List<Firma> firmalar, int yil, int ay)
+    {
+        _logger.LogInformation("ToplaButce: {Count} firma icin {Yil}-{Ay} BUTCE verisi toplaniyor...",
+            firmalar.Count, yil, ay);
+
+        var butceTasks = firmalar.Select(async firma =>
+        {
+            try
+            {
+                using var firmaCtx = await _appFactory.CreateDbContextAsync();
+                var firmaId = firma.Id;
+
+                // BudgetHedef: Bu firma için yılın tüm aylarındaki hedef toplamı
+                var butceHedef = await firmaCtx.BudgetHedefler
+                    .Where(h => !h.IsDeleted && h.FirmaId == firmaId && h.Yil == yil)
+                    .SumAsync(h => h.HedefTutar);
+
+                // BudgetOdeme: Bu firma için ilgili aydaki gerçekleşen ödemeler
+                var butceGerceklesen = await firmaCtx.BudgetOdemeler
+                    .Where(o => !o.IsDeleted && o.FirmaId == firmaId
+                        && o.OdemeYil == yil && o.OdemeAy == ay
+                        && o.Durum == OdemeDurum.Odendi)
+                    .SumAsync(o => o.Miktar);
+
+                // Yıllık kümülatif gerçekleşen (Ocak'tan bu aya kadar)
+                var yillikGerceklesen = await firmaCtx.BudgetOdemeler
+                    .Where(o => !o.IsDeleted && o.FirmaId == firmaId
+                        && o.OdemeYil == yil && o.OdemeAy <= ay
+                        && o.Durum == OdemeDurum.Odendi)
+                    .SumAsync(o => o.Miktar);
+
+                return new HoldingVeri
+                {
+                    FirmaId = firma.Id,
+                    FirmaKodu = firma.FirmaKodu,
+                    FirmaAdi = firma.FirmaAdi,
+                    Yil = yil,
+                    Ay = ay,
+                    Kategori = "BUTCE",
+                    ButceHedef = butceHedef,
+                    ButceGerceklesen = butceGerceklesen,
+                    ToplamGelir = yillikGerceklesen, // Yıllık kümülatif (UI'da kullanılıyor)
+                    OlusturmaTarihi = DateTime.UtcNow,
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Firma {FirmaId} ({FirmaAdi}) BUTCE veri toplama hatasi.", firma.Id, firma.FirmaAdi);
+                return null;
+            }
+        });
+
+        var butceResults = await Task.WhenAll(butceTasks);
+
+        using var writeCtx = await _appFactory.CreateDbContextAsync();
+        foreach (var veri in butceResults.Where(v => v != null).Cast<HoldingVeri>())
+        {
+            var existing = await writeCtx.HoldingVeriler
+                .FirstOrDefaultAsync(v => v.FirmaId == veri.FirmaId
+                    && v.Yil == veri.Yil && v.Ay == veri.Ay
+                    && v.Kategori == veri.Kategori);
+
+            if (existing != null)
+            {
+                existing.ButceHedef = veri.ButceHedef;
+                existing.ButceGerceklesen = veri.ButceGerceklesen;
+                existing.ToplamGelir = veri.ToplamGelir;
+                existing.OlusturmaTarihi = DateTime.UtcNow;
+            }
+            else
+            {
+                writeCtx.HoldingVeriler.Add(veri);
+            }
+        }
+        await writeCtx.SaveChangesAsync();
+
+        _logger.LogInformation("ToplaButce: {Count} firma BUTCE verisi kaydedildi.",
+            butceResults.Count(v => v != null));
     }
 
     public async Task<List<HoldingVeri>> GetFirmaKarsilastirmaAsync(int yil, int? ay = null)
