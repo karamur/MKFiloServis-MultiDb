@@ -361,7 +361,7 @@ KOAFiloServis-MultiDb/
 
 ## 🗺️ Yol Haritası
 
-- [ ] MAUI şoför uygulaması
+- [x] MAUI şoför uygulaması ✅ (Android+iOS+Windows, JWT auth, Login/Dashboard/Güzergah)
 - [x] e-Fatura / e-Arşiv entegrasyonu ✅ (UBL-TR 1.2 XML + Luca Portal + auto-sync)
 - [x] AI puantaj anomali tespiti ✅ (10 tip + kural-tabanlı + Ollama AI + haftalık job)
 - [x] Çoklu dil desteği (i18n) ✅ (TR/EN .resx + CultureSelector + SharedLocalizer)
