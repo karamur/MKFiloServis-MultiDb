@@ -91,6 +91,28 @@ public class LegacyDataTransferService
         // 10. PuantajKayitlar
         result.Add(await SafeTransferAsync(() => TransferPuantajKayitlarAsync(firmaIdVarsayilan), "PuantajKayitlar"));
 
+        // 11. Bütçe
+        result.Add(await SafeTransferAsync(() => TransferBudgetOdemelerAsync(firmaIdVarsayilan), "BudgetOdemeler"));
+        result.Add(await SafeTransferAsync(() => TransferBudgetHedeflerAsync(firmaIdVarsayilan), "BudgetHedefler"));
+        result.Add(await SafeTransferAsync(() => TransferBudgetMasrafKalemleriAsync(firmaIdVarsayilan), "BudgetMasrafKalemleri"));
+
+        // 12. Banka/Kasa
+        result.Add(await SafeTransferAsync(() => TransferBankaHesaplariAsync(firmaIdVarsayilan), "BankaHesaplari"));
+        result.Add(await SafeTransferAsync(() => TransferBankaKasaHareketleriAsync(firmaIdVarsayilan), "BankaKasaHareketleri"));
+
+        // 13. Stok
+        result.Add(await SafeTransferAsync(() => TransferStokKartlariAsync(firmaIdVarsayilan), "StokKartlari"));
+
+        // 14. Hakedis
+        result.Add(await SafeTransferAsync(() => TransferHakedislerAsync(firmaIdVarsayilan), "Hakedisler"));
+
+        // 15. Diğer
+        result.Add(await SafeTransferAsync(() => TransferBordrolarAsync(firmaIdVarsayilan), "Bordrolar"));
+        result.Add(await SafeTransferAsync(() => TransferAracMasraflariAsync(firmaIdVarsayilan), "AracMasraflari"));
+        result.Add(await SafeTransferAsync(() => TransferPersonelMaaslariAsync(firmaIdVarsayilan), "PersonelMaaslari"));
+        result.Add(await SafeTransferAsync(() => TransferPersonelIzinleriAsync(firmaIdVarsayilan), "PersonelIzinleri"));
+        result.Add(await SafeTransferAsync(() => TransferOperasyonKayitlariAsync(firmaIdVarsayilan), "OperasyonKayitlari"));
+
         _logger.LogInformation("=== Veri aktarimi tamamlandi: {Total} kayit ===", result.TotalTransferred);
         return result;
     }
@@ -420,6 +442,114 @@ public class LegacyDataTransferService
                 new("@fid", firmaId), new("@isdel", SafeGetBool(reader, 14)),
                 new("@ca", SafeGetDateTime(reader, 15, DateTime.UtcNow)), new("@ua", (object?)DBNull.Value)
             });
+    }
+
+    // ── Ek tablo transferleri (TransferSimpleAsync pattern) ──────────
+
+    private async Task<TransferResult> TransferBudgetOdemelerAsync(int firmaId)
+        => await TransferSimpleWithFirmaIdAsync("BudgetOdemeler", firmaId);
+
+    private async Task<TransferResult> TransferBudgetHedeflerAsync(int firmaId)
+        => await TransferSimpleWithFirmaIdAsync("BudgetHedefler", firmaId);
+
+    private async Task<TransferResult> TransferBudgetMasrafKalemleriAsync(int firmaId)
+        => await TransferSimpleWithFirmaIdAsync("BudgetMasrafKalemleri", firmaId);
+
+    private async Task<TransferResult> TransferBankaHesaplariAsync(int firmaId)
+        => await TransferSimpleWithFirmaIdAsync("BankaHesaplari", firmaId);
+
+    private async Task<TransferResult> TransferBankaKasaHareketleriAsync(int firmaId)
+        => await TransferSimpleWithFirmaIdAsync("BankaKasaHareketleri", firmaId);
+
+    private async Task<TransferResult> TransferStokKartlariAsync(int firmaId)
+        => await TransferSimpleWithFirmaIdAsync("StokKartlari", firmaId);
+
+    private async Task<TransferResult> TransferHakedislerAsync(int firmaId)
+        => await TransferSimpleWithFirmaIdAsync("Hakedisler", firmaId);
+
+    private async Task<TransferResult> TransferBordrolarAsync(int firmaId)
+        => await TransferSimpleWithFirmaIdAsync("Bordrolar", firmaId);
+
+    private async Task<TransferResult> TransferAracMasraflariAsync(int firmaId)
+        => await TransferSimpleWithFirmaIdAsync("AracMasraflari", firmaId);
+
+    private async Task<TransferResult> TransferPersonelMaaslariAsync(int firmaId)
+        => await TransferSimpleWithFirmaIdAsync("PersonelMaaslari", firmaId);
+
+    private async Task<TransferResult> TransferPersonelIzinleriAsync(int firmaId)
+        => await TransferSimpleWithFirmaIdAsync("PersonelIzinleri", firmaId);
+
+    private async Task<TransferResult> TransferOperasyonKayitlariAsync(int firmaId)
+        => await TransferSimpleWithFirmaIdAsync("OperasyonKayitlari", firmaId);
+
+    /// <summary>
+    /// Kaynak ve hedef tablo aynı isimde, sadece FirmaId eklenerek transfer.
+    /// Kaynaktaki TÜM kolonları okur, FirmaId ekler, hedefe yazar.
+    /// </summary>
+    private async Task<TransferResult> TransferSimpleWithFirmaIdAsync(string tableName, int firmaId)
+    {
+        var result = new TransferResult();
+        using var source = await OpenSourceAsync();
+        using var target = await OpenTargetAsync();
+
+        try
+        {
+            // Kaynak kolonları keşfet
+            using var schemaCmd = new NpgsqlCommand(
+                $@"SELECT column_name FROM information_schema.columns
+                   WHERE table_schema='public' AND table_name='{tableName}'
+                   ORDER BY ordinal_position", source);
+            var sourceCols = new List<string>();
+            using (var r = await schemaCmd.ExecuteReaderAsync())
+                while (await r.ReadAsync()) sourceCols.Add(r.GetString(0));
+
+            if (sourceCols.Count == 0)
+            {
+                _logger.LogWarning("{Table}: kaynak tablo bos veya yok", tableName);
+                return result;
+            }
+
+            // ID kolonunu başa al
+            var cols = sourceCols.Where(c => c != "FirmaId").ToList();
+            var sourceColList = string.Join(", ", cols.Select(c => $"\"{c}\""));
+            var targetColList = string.Join(", ", cols.Select(c => $"\"{c}\"")) + ", \"FirmaId\"";
+
+            using var cmd = new NpgsqlCommand($"SELECT {sourceColList} FROM \"{tableName}\"", source);
+            using var reader = await cmd.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                var parms = new List<NpgsqlParameter>();
+                var values = new List<string>();
+                for (int i = 0; i < cols.Count; i++)
+                {
+                    var name = $"@p{i}";
+                    values.Add(name);
+                    parms.Add(new NpgsqlParameter(name, reader.IsDBNull(i) ? DBNull.Value : reader.GetValue(i)));
+                }
+                values.Add("@fid");
+                parms.Add(new NpgsqlParameter("@fid", firmaId));
+
+                try
+                {
+                    await InsertIfNotExistsAsync(target,
+                        $"INSERT INTO \"{tableName}\" ({targetColList}) VALUES ({string.Join(",", values)}) ON CONFLICT (\"Id\") DO NOTHING",
+                        parms.ToArray());
+                    result.Transferred++;
+                }
+                catch (PostgresException ex) when (ex.SqlState == "23505" || ex.SqlState == "42703")
+                {
+                    // duplicate key veya kolon uyuşmazlığı — sessiz geç
+                }
+            }
+        }
+        catch (PostgresException ex) when (ex.SqlState == "42P01")
+        {
+            _logger.LogWarning("{Table}: kaynak tablo yok", tableName);
+        }
+
+        _logger.LogInformation("{Table}: {Count} kayit", tableName, result.Transferred);
+        return result;
     }
 
     // ── Yardımcılar ──────────────────────────────────────────────────
