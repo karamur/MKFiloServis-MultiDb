@@ -1,0 +1,76 @@
+@using System.Globalization
+@using Microsoft.AspNetCore.Localization
+@using Microsoft.Extensions.Options
+@inject IOptions<RequestLocalizationOptions> LocOptions
+@inject NavigationManager Navigation
+
+@if (showAsDropdown)
+{
+    <div class="dropdown">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="bi bi-globe2 me-1"></i>
+            @(CultureInfo.CurrentUICulture.Name == "en" ? "EN" : "TR")
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            @foreach (var culture in cultures)
+            {
+                <li>
+                    <button class="dropdown-item @(CultureInfo.CurrentUICulture.Name == culture.Value ? "active" : "")"
+                            @onclick="() => SetCulture(culture.Value)">
+                        <span class="fi fi-@(culture.Value == "en" ? "gb" : "tr") me-2"></span>
+                        @culture.Key
+                    </button>
+                </li>
+            }
+        </ul>
+    </div>
+}
+else
+{
+    <div class="btn-group btn-group-sm" role="group">
+        @foreach (var culture in cultures)
+        {
+            <button class="btn btn-sm @(CultureInfo.CurrentUICulture.Name == culture.Value ? "btn-primary" : "btn-outline-secondary")"
+                    @onclick="() => SetCulture(culture.Value)">
+                @culture.Key
+            </button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public bool showAsDropdown { get; set; } = true;
+
+    private Dictionary<string, string> cultures = new()
+    {
+        { "TR", "tr" },
+        { "EN", "en" }
+    };
+
+    protected override void OnInitialized()
+    {
+        // Culture cookie'sini okuyup UI'ı senkronla
+        var cookieValue = LocOptions.Value.RequestCultureProviders
+            .OfType<CookieRequestCultureProvider>()
+            .FirstOrDefault()?.Options ?? LocOptions.Value;
+    }
+
+    private void SetCulture(string cultureCode)
+    {
+        if (CultureInfo.CurrentUICulture.Name == cultureCode)
+            return;
+
+        // Cookie ile culture'ı ayarla
+        var cookieValue = CookieRequestCultureProvider.MakeCookieValue(
+            new RequestCulture(cultureCode, cultureCode));
+
+        // JS interop olmadan cookie set edemeyiz.
+        // NavigationManager ile culture parametresi ekleyip sayfayı yenile.
+        var uri = new Uri(Navigation.Uri);
+        var cultureParam = System.Net.WebUtility.UrlEncode(cultureCode);
+        Navigation.NavigateTo(
+            $"{uri.GetLeftPart(UriPartial.Path)}?culture={cultureParam}&redirect={System.Net.WebUtility.UrlEncode(uri.PathAndQuery)}",
+            forceLoad: true);
+    }
+}

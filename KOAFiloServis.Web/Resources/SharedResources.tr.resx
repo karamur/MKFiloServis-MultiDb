@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+
+  <!-- Ana Menü -->
+  <data name="Menu.Dashboard" xml:space="preserve"><value>Gösterge Paneli</value></data>
+  <data name="Menu.Filo" xml:space="preserve"><value>Filo</value></data>
+  <data name="Menu.Personel" xml:space="preserve"><value>Personel</value></data>
+  <data name="Menu.Puantaj" xml:space="preserve"><value>Puantaj</value></data>
+  <data name="Menu.Hakedis" xml:space="preserve"><value>Hakediş</value></data>
+  <data name="Menu.Fatura" xml:space="preserve"><value>Fatura</value></data>
+  <data name="Menu.Muhasebe" xml:space="preserve"><value>Muhasebe</value></data>
+  <data name="Menu.Raporlar" xml:space="preserve"><value>Raporlar</value></data>
+  <data name="Menu.Ayarlar" xml:space="preserve"><value>Ayarlar</value></data>
+  <data name="Menu.Holding" xml:space="preserve"><value>Holding</value></data>
+  <data name="Menu.EBYS" xml:space="preserve"><value>EBYS</value></data>
+
+  <!-- Ortak Butonlar -->
+  <data name="Button.Save" xml:space="preserve"><value>Kaydet</value></data>
+  <data name="Button.Cancel" xml:space="preserve"><value>İptal</value></data>
+  <data name="Button.Delete" xml:space="preserve"><value>Sil</value></data>
+  <data name="Button.Edit" xml:space="preserve"><value>Düzenle</value></data>
+  <data name="Button.New" xml:space="preserve"><value>Yeni</value></data>
+  <data name="Button.Search" xml:space="preserve"><value>Ara</value></data>
+  <data name="Button.Export" xml:space="preserve"><value>Dışa Aktar</value></data>
+  <data name="Button.Import" xml:space="preserve"><value>İçe Aktar</value></data>
+  <data name="Button.Approve" xml:space="preserve"><value>Onayla</value></data>
+  <data name="Button.Reject" xml:space="preserve"><value>Reddet</value></data>
+  <data name="Button.Refresh" xml:space="preserve"><value>Yenile</value></data>
+  <data name="Button.Close" xml:space="preserve"><value>Kapat</value></data>
+  <data name="Button.Back" xml:space="preserve"><value>Geri</value></data>
+  <data name="Button.Next" xml:space="preserve"><value>İleri</value></data>
+
+  <!-- Durum / Mesaj -->
+  <data name="Status.Active" xml:space="preserve"><value>Aktif</value></data>
+  <data name="Status.Passive" xml:space="preserve"><value>Pasif</value></data>
+  <data name="Status.Deleted" xml:space="preserve"><value>Silinmiş</value></data>
+  <data name="Status.Pending" xml:space="preserve"><value>Bekliyor</value></data>
+  <data name="Status.Approved" xml:space="preserve"><value>Onaylandı</value></data>
+  <data name="Status.Rejected" xml:space="preserve"><value>Reddedildi</value></data>
+  <data name="Status.Completed" xml:space="preserve"><value>Tamamlandı</value></data>
+  <data name="Message.NoData" xml:space="preserve"><value>Görüntülenecek veri bulunamadı.</value></data>
+  <data name="Message.ConfirmDelete" xml:space="preserve"><value>Silmek istediğinize emin misiniz?</value></data>
+  <data name="Message.SaveSuccess" xml:space="preserve"><value>Başarıyla kaydedildi.</value></data>
+  <data name="Message.SaveError" xml:space="preserve"><value>Kaydetme sırasında hata oluştu.</value></data>
+  <data name="Message.Loading" xml:space="preserve"><value>Yükleniyor...</value></data>
+
+  <!-- Firma / Organizasyon -->
+  <data name="Firm.Select" xml:space="preserve"><value>Firma Seçiniz</value></data>
+  <data name="Firm.AllFirms" xml:space="preserve"><value>Tüm Firmalar</value></data>
+  <data name="Firm.Name" xml:space="preserve"><value>Firma Adı</value></data>
+  <data name="Firm.Code" xml:space="preserve"><value>Firma Kodu</value></data>
+  <data name="Firm.TaxNo" xml:space="preserve"><value>Vergi No</value></data>
+
+  <!-- Puantaj -->
+  <data name="Puantaaj.Year" xml:space="preserve"><value>Yıl</value></data>
+  <data name="Puantaaj.Month" xml:space="preserve"><value>Ay</value></data>
+  <data name="Puantaaj.Route" xml:space="preserve"><value>Güzergah</value></data>
+  <data name="Puantaaj.Driver" xml:space="preserve"><value>Şoför</value></data>
+  <data name="Puantaaj.Plate" xml:space="preserve"><value>Plaka</value></data>
+  <data name="Puantaaj.UnitRevenue" xml:space="preserve"><value>Birim Gelir</value></data>
+  <data name="Puantaaj.UnitCost" xml:space="preserve"><value>Birim Gider</value></data>
+  <data name="Puantaaj.TotalRevenue" xml:space="preserve"><value>Toplam Gelir</value></data>
+  <data name="Puantaaj.TotalCost" xml:space="preserve"><value>Toplam Gider</value></data>
+  <data name="Puantaaj.Days" xml:space="preserve"><value>Gün</value></data>
+  <data name="Puantaaj.Trips" xml:space="preserve"><value>Sefer</value></data>
+
+  <!-- Anomali -->
+  <data name="Anomaly.Title" xml:space="preserve"><value>Anomali Tespiti</value></data>
+  <data name="Anomaly.Detected" xml:space="preserve"><value>Anomali Tespit Edildi</value></data>
+  <data name="Anomaly.Severity" xml:space="preserve"><value>Önem Seviyesi</value></data>
+  <data name="Anomaly.Resolved" xml:space="preserve"><value>Çözüldü</value></data>
+  <data name="Anomaly.FalsePositive" xml:space="preserve"><value>Yanlış Pozitif</value></data>
+  <data name="Anomaly.ScanNow" xml:space="preserve"><value>Şimdi Tara</value></data>
+
+  <!-- Kültür / Dil -->
+  <data name="Language.Turkish" xml:space="preserve"><value>Türkçe</value></data>
+  <data name="Language.English" xml:space="preserve"><value>English</value></data>
+  <data name="Language.Select" xml:space="preserve"><value>Dil Seçimi</value></data>
+</root>

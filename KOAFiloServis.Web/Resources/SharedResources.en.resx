@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+
+  <!-- Main Menu -->
+  <data name="Menu.Dashboard" xml:space="preserve"><value>Dashboard</value></data>
+  <data name="Menu.Filo" xml:space="preserve"><value>Fleet</value></data>
+  <data name="Menu.Personel" xml:space="preserve"><value>Personnel</value></data>
+  <data name="Menu.Puantaj" xml:space="preserve"><value>Attendance</value></data>
+  <data name="Menu.Hakedis" xml:space="preserve"><value>Progress Payment</value></data>
+  <data name="Menu.Fatura" xml:space="preserve"><value>Invoice</value></data>
+  <data name="Menu.Muhasebe" xml:space="preserve"><value>Accounting</value></data>
+  <data name="Menu.Raporlar" xml:space="preserve"><value>Reports</value></data>
+  <data name="Menu.Ayarlar" xml:space="preserve"><value>Settings</value></data>
+  <data name="Menu.Holding" xml:space="preserve"><value>Holding</value></data>
+  <data name="Menu.EBYS" xml:space="preserve"><value>EDMS</value></data>
+
+  <!-- Common Buttons -->
+  <data name="Button.Save" xml:space="preserve"><value>Save</value></data>
+  <data name="Button.Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Button.Delete" xml:space="preserve"><value>Delete</value></data>
+  <data name="Button.Edit" xml:space="preserve"><value>Edit</value></data>
+  <data name="Button.New" xml:space="preserve"><value>New</value></data>
+  <data name="Button.Search" xml:space="preserve"><value>Search</value></data>
+  <data name="Button.Export" xml:space="preserve"><value>Export</value></data>
+  <data name="Button.Import" xml:space="preserve"><value>Import</value></data>
+  <data name="Button.Approve" xml:space="preserve"><value>Approve</value></data>
+  <data name="Button.Reject" xml:space="preserve"><value>Reject</value></data>
+  <data name="Button.Refresh" xml:space="preserve"><value>Refresh</value></data>
+  <data name="Button.Close" xml:space="preserve"><value>Close</value></data>
+  <data name="Button.Back" xml:space="preserve"><value>Back</value></data>
+  <data name="Button.Next" xml:space="preserve"><value>Next</value></data>
+
+  <!-- Status / Messages -->
+  <data name="Status.Active" xml:space="preserve"><value>Active</value></data>
+  <data name="Status.Passive" xml:space="preserve"><value>Inactive</value></data>
+  <data name="Status.Deleted" xml:space="preserve"><value>Deleted</value></data>
+  <data name="Status.Pending" xml:space="preserve"><value>Pending</value></data>
+  <data name="Status.Approved" xml:space="preserve"><value>Approved</value></data>
+  <data name="Status.Rejected" xml:space="preserve"><value>Rejected</value></data>
+  <data name="Status.Completed" xml:space="preserve"><value>Completed</value></data>
+  <data name="Message.NoData" xml:space="preserve"><value>No data to display.</value></data>
+  <data name="Message.ConfirmDelete" xml:space="preserve"><value>Are you sure you want to delete?</value></data>
+  <data name="Message.SaveSuccess" xml:space="preserve"><value>Saved successfully.</value></data>
+  <data name="Message.SaveError" xml:space="preserve"><value>An error occurred while saving.</value></data>
+  <data name="Message.Loading" xml:space="preserve"><value>Loading...</value></data>
+
+  <!-- Firm / Organization -->
+  <data name="Firm.Select" xml:space="preserve"><value>Select Firm</value></data>
+  <data name="Firm.AllFirms" xml:space="preserve"><value>All Firms</value></data>
+  <data name="Firm.Name" xml:space="preserve"><value>Firm Name</value></data>
+  <data name="Firm.Code" xml:space="preserve"><value>Firm Code</value></data>
+  <data name="Firm.TaxNo" xml:space="preserve"><value>Tax ID</value></data>
+
+  <!-- Attendance -->
+  <data name="Puantaaj.Year" xml:space="preserve"><value>Year</value></data>
+  <data name="Puantaaj.Month" xml:space="preserve"><value>Month</value></data>
+  <data name="Puantaaj.Route" xml:space="preserve"><value>Route</value></data>
+  <data name="Puantaaj.Driver" xml:space="preserve"><value>Driver</value></data>
+  <data name="Puantaaj.Plate" xml:space="preserve"><value>License Plate</value></data>
+  <data name="Puantaaj.UnitRevenue" xml:space="preserve"><value>Unit Revenue</value></data>
+  <data name="Puantaaj.UnitCost" xml:space="preserve"><value>Unit Cost</value></data>
+  <data name="Puantaaj.TotalRevenue" xml:space="preserve"><value>Total Revenue</value></data>
+  <data name="Puantaaj.TotalCost" xml:space="preserve"><value>Total Cost</value></data>
+  <data name="Puantaaj.Days" xml:space="preserve"><value>Days</value></data>
+  <data name="Puantaaj.Trips" xml:space="preserve"><value>Trip Count</value></data>
+
+  <!-- Anomaly -->
+  <data name="Anomaly.Title" xml:space="preserve"><value>Anomaly Detection</value></data>
+  <data name="Anomaly.Detected" xml:space="preserve"><value>Anomaly Detected</value></data>
+  <data name="Anomaly.Severity" xml:space="preserve"><value>Severity</value></data>
+  <data name="Anomaly.Resolved" xml:space="preserve"><value>Resolved</value></data>
+  <data name="Anomaly.FalsePositive" xml:space="preserve"><value>False Positive</value></data>
+  <data name="Anomaly.ScanNow" xml:space="preserve"><value>Scan Now</value></data>
+
+  <!-- Language -->
+  <data name="Language.Turkish" xml:space="preserve"><value>Türkçe</value></data>
+  <data name="Language.English" xml:space="preserve"><value>English</value></data>
+  <data name="Language.Select" xml:space="preserve"><value>Language</value></data>
+</root>

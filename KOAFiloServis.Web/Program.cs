@@ -24,6 +24,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Localization;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using KOAFiloServis.Web.HealthChecks;
 
@@ -360,6 +361,7 @@ builder.Services.AddScoped<ILastikService, LastikService>();
 builder.Services.AddScoped<ZamanliRaporService>(); // Zamanlanmış e-posta rapor servisi
 builder.Services.AddScoped<IHoldingService, HoldingService>(); // Holding konsolidasyon servisi
 builder.Services.AddScoped<IPuantajAnomaliService, PuantajAnomaliService>(); // AI Puantaj Anomali Tespiti
+builder.Services.AddScoped<SharedLocalizer>(); // Çoklu dil desteği (i18n)
 
 // Object Storage (Local veya S3-uyumlu)
 var storageProvider = builder.Configuration.GetValue<string>("Storage:Provider") ?? "Local";
@@ -597,7 +599,41 @@ builder.Services.AddSwaggerGen(options =>
     }
 });
 
+// ── Çoklu Dil Desteği (i18n) ──────────────────────────────────────
+builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
+builder.Services.AddControllersWithViews()
+    .AddViewLocalization()
+    .AddDataAnnotationsLocalization();
+
 var app = builder.Build();
+
+var supportedCultures = new[] { "tr", "en" };
+var localizationOptions = new RequestLocalizationOptions()
+    .SetDefaultCulture(supportedCultures[0])
+    .AddSupportedCultures(supportedCultures)
+    .AddSupportedUICultures(supportedCultures);
+localizationOptions.RequestCultureProviders.Insert(0,
+    new Microsoft.AspNetCore.Localization.CookieRequestCultureProvider
+    {
+        CookieName = ".KOA.Culture",
+        Options = localizationOptions
+    });
+app.UseRequestLocalization(localizationOptions);
+
+// Culture query-string handler: ?culture=tr|en → cookie set → redirect
+app.Use(async (context, next) =>
+{
+    var cultureQuery = context.Request.Query["culture"].FirstOrDefault();
+    if (!string.IsNullOrEmpty(cultureQuery) &&
+        supportedCultures.Contains(cultureQuery, StringComparer.OrdinalIgnoreCase))
+    {
+        context.Response.Cookies.Append(
+            ".KOA.Culture",
+            CookieRequestCultureProvider.MakeCookieValue(new RequestCulture(cultureQuery)),
+            new CookieOptions { Expires = DateTimeOffset.UtcNow.AddYears(1), HttpOnly = false });
+    }
+    await next();
+});
 
 static async Task RunScopedSafeAsync(WebApplication app, string taskName, Func<IServiceProvider, Task> action)
 {
