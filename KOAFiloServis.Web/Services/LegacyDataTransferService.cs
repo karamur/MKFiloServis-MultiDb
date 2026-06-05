@@ -59,9 +59,9 @@ public class LegacyDataTransferService
             { _logger.LogWarning(ex, "{Name}: aktarim hatasi", name); return new(); }
         }
 
-        // ── Öncelikli kritik tablolar (FK bağımlılık sırası) ──────────
-        result.Add(await SafeTransferAsync(TransferOrganizasyonlarAsync, "Organizasyonlar"));
-        result.Add(await SafeTransferAsync(TransferFirmalarAsync, "Firmalar"));
+        // ── Öncelikli kritik tablolar (FK bağımlılık sırası, generic) ──
+        result.Add(await SafeTransferAsync(() => TransferSimpleWithFirmaIdAsync("Organizasyonlar", firmaIdVarsayilan), "Organizasyonlar"));
+        result.Add(await SafeTransferAsync(() => TransferSimpleWithFirmaIdAsync("Firmalar", firmaIdVarsayilan), "Firmalar"));
         result.Add(await SafeTransferAsync(TransferRollerAsync, "Roller"));
         result.Add(await SafeTransferAsync(TransferKullanicilarAsync, "Kullanicilar"));
         result.Add(await SafeTransferAsync(TransferRolYetkileriAsync, "RolYetkileri"));
