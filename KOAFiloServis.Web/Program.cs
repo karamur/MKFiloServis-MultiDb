@@ -135,10 +135,11 @@ builder.Services.AddPooledDbContextFactory<ApplicationDbContext>((sp, options) =
         options.EnableSensitiveDataLogging();
     }
 
-    // Pending migration ve model validation query-filter etkileşim uyarılarını devre dışı bırak
+    // Query-filter etkileşim uyarısı: EF Core'un global query filter + required navigation
+    // etkileşiminde verdiği false-positive uyarı. Model doğru, uyarı bastırılıyor.
+    // PendingModelChangesWarning ISE bastırılmaz → production'da model-DB uyumsuzluğu log'a düşer.
     options.ConfigureWarnings(w =>
     {
-        w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning);
         w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning);
     });
     options.AddInterceptors(sp.GetRequiredService<AktiviteLogInterceptor>());

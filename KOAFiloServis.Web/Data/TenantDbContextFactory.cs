@@ -66,7 +66,8 @@ public sealed class TenantDbContextFactory : IDbContextFactory<ApplicationDbCont
         });
         builder.ConfigureWarnings(w =>
         {
-            w.Ignore(RelationalEventId.PendingModelChangesWarning);
+            // Sadece query-filter false-positive uyarısı bastırılıyor.
+            // PendingModelChangesWarning bastırılmaz → production'da model-DB uyumsuzluğu log'a düşer.
             w.Ignore(CoreEventId.PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning);
         });
         builder.AddInterceptors(_interceptor);
