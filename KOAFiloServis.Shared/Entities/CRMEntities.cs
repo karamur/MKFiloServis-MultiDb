@@ -238,7 +238,7 @@ public class WhatsAppAyar : BaseEntity
 /// <summary>
 /// SMS ayarları - provider bazlı (NetGSM, İletimerkezi, Twilio vb.)
 /// </summary>
-public class SmsAyar : BaseEntity
+public class SmsAyar : BaseEntity, IFirmaTenant
 {
     public int? FirmaId { get; set; }
     public virtual Firma? Firma { get; set; }
@@ -353,7 +353,7 @@ public enum SmsTipi
 /// <summary>
 /// SMS şablonları
 /// </summary>
-public class SmsSablon : BaseEntity
+public class SmsSablon : BaseEntity, IFirmaTenant
 {
     public int? FirmaId { get; set; }
     public virtual Firma? Firma { get; set; }

@@ -6,7 +6,7 @@ namespace KOAFiloServis.Shared.Entities;
 /// <summary>
 /// Sistem genelinde tüm CRUD işlemlerini loglayan audit entity
 /// </summary>
-public class AuditLog
+public class AuditLog : IFirmaTenant
 {
     [Key]
     public int Id { get; set; }

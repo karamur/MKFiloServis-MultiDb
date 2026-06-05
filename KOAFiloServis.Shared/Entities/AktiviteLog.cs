@@ -5,7 +5,7 @@ namespace KOAFiloServis.Shared.Entities;
 /// <summary>
 /// Sistem aktivite logu — tum onemli islemlerin kaydi (Kural 14).
 /// </summary>
-public class AktiviteLog : BaseEntity
+public class AktiviteLog : BaseEntity, IFirmaTenant
 {
     [Required]
     public DateTime IslemZamani { get; set; } = DateTime.Now;

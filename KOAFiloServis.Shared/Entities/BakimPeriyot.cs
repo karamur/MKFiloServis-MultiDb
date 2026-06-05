@@ -3,8 +3,11 @@
 /// <summary>
 /// Araç bakım periyot tanımı — her araç için km veya gün bazlı bakım kuralları
 /// </summary>
-public class BakimPeriyot : BaseEntity
+public class BakimPeriyot : BaseEntity, IFirmaTenant
 {
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
     public int AracId { get; set; }
     public virtual Arac Arac { get; set; } = null!;
 
