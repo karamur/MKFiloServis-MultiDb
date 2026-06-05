@@ -3,6 +3,7 @@ using KOAFiloServis.Web.Services;
 using KOAFiloServis.Web.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 
 namespace KOAFiloServis.Web.Data;
 
@@ -3158,7 +3159,7 @@ public class ApplicationDbContext : DbContext
         ConvertDatesToUtc();
         UpdateTimestamps();
         AssignFirmaTenantId();
-        GenerateAuditLogs();
+        SafeGenerateAuditLogs();
         return base.SaveChanges();
     }
 
@@ -3167,7 +3168,7 @@ public class ApplicationDbContext : DbContext
         ConvertDatesToUtc();
         UpdateTimestamps();
         AssignFirmaTenantId();
-        GenerateAuditLogs();
+        SafeGenerateAuditLogs();
         return base.SaveChangesAsync(cancellationToken);
     }
 
@@ -3193,6 +3194,32 @@ public class ApplicationDbContext : DbContext
 
             entry.Entity.FirmaId = firmaId;
         }
+    }
+
+    private bool? _auditLogTableExists;
+
+    /// <summary>
+    /// AktiviteLoglar tablosu henüz oluşmamışsa (pending migration) audit log kaydını sessizce atlar.
+    /// Startup seed sırasında tablo yoksa uygulama çökmeye devam eder.
+    /// </summary>
+    private void SafeGenerateAuditLogs()
+    {
+        if (_auditLogTableExists == null)
+        {
+            try
+            {
+                // Tablo var mı kontrol et (lightweight: LIMIT 0)
+                Database.ExecuteSqlRaw("SELECT 1 FROM \"AktiviteLoglar\" LIMIT 0");
+                _auditLogTableExists = true;
+            }
+            catch (PostgresException)
+            {
+                _auditLogTableExists = false;
+            }
+        }
+
+        if (_auditLogTableExists == true)
+            GenerateAuditLogs();
     }
 
     private void GenerateAuditLogs()
