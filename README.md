@@ -362,7 +362,7 @@ KOAFiloServis-MultiDb/
 ## 🗺️ Yol Haritası
 
 - [ ] MAUI şoför uygulaması
-- [ ] e-Fatura / e-Arşiv entegrasyonu
+- [x] e-Fatura / e-Arşiv entegrasyonu ✅ (UBL-TR 1.2 XML + Luca Portal + auto-sync)
 - [ ] AI puantaj anomali tespiti
 - [ ] Çoklu dil desteği (i18n)
 - [x] Faz 4 — IFirmaTenant temizliği ✅ (Haziran 2026: 10/10 kritik risk kapatıldı)
