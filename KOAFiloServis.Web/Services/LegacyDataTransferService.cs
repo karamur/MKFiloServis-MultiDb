@@ -41,6 +41,7 @@ public class LegacyDataTransferService
 
     /// <summary>
     /// Tüm verileri sırayla aktarır (Talimat Bölüm 21).
+    /// Önce kritik bağımlı tablolar, sonra kaynak DB'deki TÜM diğer tablolar otomatik aktarılır.
     /// </summary>
     public async Task<TransferResult> TransferAllAsync()
     {
@@ -49,72 +50,59 @@ public class LegacyDataTransferService
 
         _logger.LogInformation("=== Veri aktarimi basladi ===");
 
-        // Her adım bağımsız — birindeki hata diğerini etkilemez
         async Task<TransferResult> SafeTransferAsync(Func<Task<TransferResult>> transfer, string name)
         {
             try { return await transfer(); }
             catch (PostgresException ex) when (ex.SqlState == "42P01")
-            { _logger.LogWarning("{Name}: kaynak tablo yok, atlandi ({Msg})", name, ex.MessageText); return new(); }
+            { _logger.LogWarning("{Name}: kaynak tablo yok, atlandi", name); return new(); }
             catch (Exception ex)
             { _logger.LogWarning(ex, "{Name}: aktarim hatasi", name); return new(); }
         }
 
-        // 1. Organizasyonlar
+        // ── Öncelikli kritik tablolar (FK bağımlılık sırası) ──────────
         result.Add(await SafeTransferAsync(TransferOrganizasyonlarAsync, "Organizasyonlar"));
-
-        // 2. Firmalar
         result.Add(await SafeTransferAsync(TransferFirmalarAsync, "Firmalar"));
-
-        // 3. Kullanicilar ve Roller (bağımlılık: Rol önce)
         result.Add(await SafeTransferAsync(TransferRollerAsync, "Roller"));
         result.Add(await SafeTransferAsync(TransferKullanicilarAsync, "Kullanicilar"));
         result.Add(await SafeTransferAsync(TransferRolYetkileriAsync, "RolYetkileri"));
+        // Cariler — generic transfer (ortak kolonlar otomatik keşfedilir)
+        result.Add(await SafeTransferAsync(() => TransferSimpleWithFirmaIdAsync("Cariler", firmaIdVarsayilan), "Cariler"));
 
-        // 4. Cariler
-        result.Add(await SafeTransferAsync(() => TransferCarilerAsync(firmaIdVarsayilan), "Cariler"));
+        // ── Kaynak DB'deki TÜM diğer tablolar (otomatik keşif) ────────
+        var allSourceTables = await DiscoverSourceTablesAsync();
+        var skipTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "__EFMigrationsHistory", "Organizasyonlar", "Firmalar", "Roller",
+            "Kullanicilar", "RolYetkileri", "Cariler", "Sirketler",
+            "SirketTransferLoglari", "PlanlamaKayitlar", "Randevular",
+            "KullaniciBildirimleri", "KullaniciMesajlari", "KullaniciOturumlari",
+            "MesajKonusmalari", "MailGonderimleri", "ModulYetkileri",
+            "FisNoCounters", // sistem tablosu, seed ile oluşacak
+        };
 
-        // 5. Araclar
-        result.Add(await SafeTransferAsync(() => TransferAraclarAsync(firmaIdVarsayilan), "Araclar"));
+        foreach (var tableName in allSourceTables.Where(t => !skipTables.Contains(t)))
+        {
+            result.Add(await SafeTransferAsync(
+                () => TransferSimpleWithFirmaIdAsync(tableName, firmaIdVarsayilan), tableName));
+        }
 
-        // 6. Soforler (Personel)
-        result.Add(await SafeTransferAsync(() => TransferSoforlerAsync(firmaIdVarsayilan), "Soforler"));
-
-        // 7. Kurumlar
-        result.Add(await SafeTransferAsync(() => TransferKurumlarAsync(firmaIdVarsayilan), "Kurumlar"));
-
-        // 8. Guzergahlar
-        result.Add(await SafeTransferAsync(() => TransferGuzergahlarAsync(firmaIdVarsayilan), "Guzergahlar"));
-
-        // 9. Faturalar
-        result.Add(await SafeTransferAsync(() => TransferFaturalarAsync(firmaIdVarsayilan), "Faturalar"));
-
-        // 10. PuantajKayitlar
-        result.Add(await SafeTransferAsync(() => TransferPuantajKayitlarAsync(firmaIdVarsayilan), "PuantajKayitlar"));
-
-        // 11. Bütçe
-        result.Add(await SafeTransferAsync(() => TransferBudgetOdemelerAsync(firmaIdVarsayilan), "BudgetOdemeler"));
-        result.Add(await SafeTransferAsync(() => TransferBudgetHedeflerAsync(firmaIdVarsayilan), "BudgetHedefler"));
-        result.Add(await SafeTransferAsync(() => TransferBudgetMasrafKalemleriAsync(firmaIdVarsayilan), "BudgetMasrafKalemleri"));
-
-        // 12. Banka/Kasa
-        result.Add(await SafeTransferAsync(() => TransferBankaHesaplariAsync(firmaIdVarsayilan), "BankaHesaplari"));
-        result.Add(await SafeTransferAsync(() => TransferBankaKasaHareketleriAsync(firmaIdVarsayilan), "BankaKasaHareketleri"));
-
-        // 13. Stok
-        result.Add(await SafeTransferAsync(() => TransferStokKartlariAsync(firmaIdVarsayilan), "StokKartlari"));
-
-        // 14. Hakedis
-        result.Add(await SafeTransferAsync(() => TransferHakedislerAsync(firmaIdVarsayilan), "Hakedisler"));
-
-        // 15. Diğer
-        result.Add(await SafeTransferAsync(() => TransferBordrolarAsync(firmaIdVarsayilan), "Bordrolar"));
-        result.Add(await SafeTransferAsync(() => TransferAracMasraflariAsync(firmaIdVarsayilan), "AracMasraflari"));
-        result.Add(await SafeTransferAsync(() => TransferPersonelMaaslariAsync(firmaIdVarsayilan), "PersonelMaaslari"));
-        result.Add(await SafeTransferAsync(() => TransferPersonelIzinleriAsync(firmaIdVarsayilan), "PersonelIzinleri"));
-        result.Add(await SafeTransferAsync(() => TransferOperasyonKayitlariAsync(firmaIdVarsayilan), "OperasyonKayitlari"));
-
-        _logger.LogInformation("=== Veri aktarimi tamamlandi: {Total} kayit ===", result.TotalTransferred);
+        _logger.LogInformation("=== Veri aktarimi tamamlandi: {Total} kayit, {Tables} tablo ===",
+            result.TotalTransferred, result.TableCount);
         return result;
+    }
+
+    private async Task<List<string>> DiscoverSourceTablesAsync()
+    {
+        using var source = await OpenSourceAsync();
+        using var cmd = new NpgsqlCommand(
+            @"SELECT table_name FROM information_schema.tables
+              WHERE table_schema='public' AND table_type='BASE TABLE'
+              ORDER BY table_name", source);
+        var tables = new List<string>();
+        using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            tables.Add(reader.GetString(0));
+        return tables;
     }
 
     // ── Tablo bazlı transfer metodları ───────────────────────────────
@@ -483,8 +471,9 @@ public class LegacyDataTransferService
         => await TransferSimpleWithFirmaIdAsync("OperasyonKayitlari", firmaId);
 
     /// <summary>
-    /// Kaynak ve hedef tablo aynı isimde, sadece FirmaId eklenerek transfer.
-    /// Kaynaktaki TÜM kolonları okur, FirmaId ekler, hedefe yazar.
+    /// Kaynak ve hedef tablodaki ORTAK kolonları keşfeder, sadece onları transfer eder.
+    /// Hedefte FirmaId varsa ekler, yoksa eklemez.
+    /// Kolon uyuşmazlıklarında hata vermez — sadece ortak kolonları aktarır.
     /// </summary>
     private async Task<TransferResult> TransferSimpleWithFirmaIdAsync(string tableName, int firmaId)
     {
@@ -494,25 +483,52 @@ public class LegacyDataTransferService
 
         try
         {
-            // Kaynak kolonları keşfet
-            using var schemaCmd = new NpgsqlCommand(
-                $@"SELECT column_name FROM information_schema.columns
-                   WHERE table_schema='public' AND table_name='{tableName}'
-                   ORDER BY ordinal_position", source);
+            // Kaynak kolonlar
             var sourceCols = new List<string>();
-            using (var r = await schemaCmd.ExecuteReaderAsync())
+            using (var sc = new NpgsqlCommand(
+                $@"SELECT column_name FROM information_schema.columns
+                   WHERE table_schema='public' AND table_name='{tableName}' ORDER BY ordinal_position", source))
+            using (var r = await sc.ExecuteReaderAsync())
                 while (await r.ReadAsync()) sourceCols.Add(r.GetString(0));
 
-            if (sourceCols.Count == 0)
+            if (sourceCols.Count == 0) return result;
+
+            // Hedef kolonlar
+            var targetCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using (var tc = new NpgsqlCommand(
+                $@"SELECT column_name FROM information_schema.columns
+                   WHERE table_schema='public' AND table_name='{tableName}'", target))
+            using (var r = await tc.ExecuteReaderAsync())
+                while (await r.ReadAsync()) targetCols.Add(r.GetString(0));
+
+            if (targetCols.Count == 0)
             {
-                _logger.LogWarning("{Table}: kaynak tablo bos veya yok", tableName);
+                _logger.LogWarning("{Table}: hedef tablo yok, atlandi", tableName);
                 return result;
             }
 
-            // ID kolonunu başa al
-            var cols = sourceCols.Where(c => c != "FirmaId").ToList();
-            var sourceColList = string.Join(", ", cols.Select(c => $"\"{c}\""));
-            var targetColList = string.Join(", ", cols.Select(c => $"\"{c}\"")) + ", \"FirmaId\"";
+            // SADECE ortak kolonlar (ikisinde de olan)
+            var commonCols = sourceCols.Where(c => targetCols.Contains(c)).ToList();
+            var skippedCols = sourceCols.Where(c => !targetCols.Contains(c)).ToList();
+
+            if (skippedCols.Count > 0)
+                _logger.LogDebug("{Table}: {Count} kolon hedefte yok, atlandi: {Cols}",
+                    tableName, skippedCols.Count, string.Join(", ", skippedCols.Take(5)));
+
+            // Hedefte FirmaId varsa ve kaynakta yoksa ekle
+            var hasFirmaIdInTarget = targetCols.Contains("FirmaId");
+            var hasFirmaIdInSource = sourceCols.Contains("FirmaId");
+            var addFirmaId = hasFirmaIdInTarget && !hasFirmaIdInSource;
+
+            var sourceColList = string.Join(", ", commonCols.Select(c => $"\"{c}\""));
+            var targetColList = string.Join(", ", commonCols.Select(c => $"\"{c}\""));
+            if (addFirmaId) targetColList += ", \"FirmaId\"";
+
+            if (commonCols.Count == 0)
+            {
+                _logger.LogWarning("{Table}: ortak kolon yok, atlandi", tableName);
+                return result;
+            }
 
             using var cmd = new NpgsqlCommand($"SELECT {sourceColList} FROM \"{tableName}\"", source);
             using var reader = await cmd.ExecuteReaderAsync();
@@ -521,14 +537,18 @@ public class LegacyDataTransferService
             {
                 var parms = new List<NpgsqlParameter>();
                 var values = new List<string>();
-                for (int i = 0; i < cols.Count; i++)
+                for (int i = 0; i < commonCols.Count; i++)
                 {
                     var name = $"@p{i}";
                     values.Add(name);
                     parms.Add(new NpgsqlParameter(name, reader.IsDBNull(i) ? DBNull.Value : reader.GetValue(i)));
                 }
-                values.Add("@fid");
-                parms.Add(new NpgsqlParameter("@fid", firmaId));
+                if (addFirmaId)
+                {
+                    values.Add("@fid");
+                    parms.Add(new NpgsqlParameter("@fid",
+                        hasFirmaIdInSource ? (object)firmaId : firmaId));
+                }
 
                 try
                 {
@@ -537,9 +557,11 @@ public class LegacyDataTransferService
                         parms.ToArray());
                     result.Transferred++;
                 }
-                catch (PostgresException ex) when (ex.SqlState == "23505" || ex.SqlState == "42703")
+                catch (PostgresException ex) when (ex.SqlState == "23505") { /* duplicate */ }
+                catch (PostgresException ex) when (ex.SqlState == "42703")
                 {
-                    // duplicate key veya kolon uyuşmazlığı — sessiz geç
+                    _logger.LogWarning("{Table}: kolon uyusmazligi — {Msg}, ilk hatada durduruldu", tableName, ex.MessageText);
+                    break; // Kolon hatası tekrar edecek, döngüyü kır
                 }
             }
         }
@@ -647,12 +669,14 @@ public class TransferResult
 {
     public int Transferred { get; set; }
     public int TotalTransferred { get; set; }
+    public int TableCount { get; set; }
     public List<string> Errors { get; set; } = new();
 
     public void Add(TransferResult other)
     {
         Transferred += other.Transferred;
         TotalTransferred += other.Transferred;
+        if (other.Transferred > 0) TableCount++;
         Errors.AddRange(other.Errors);
     }
 }
