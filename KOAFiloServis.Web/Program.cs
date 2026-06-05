@@ -725,6 +725,13 @@ await RunScopedSafeAsync(app, "TwoFactorMigration", async services =>
     await KOAFiloServis.Web.Data.Migrations.TwoFactorMigrationHelper.ApplyTwoFactorColumnsAsync(context);
 });
 
+// BaseEntity.DeletedAt kolonunu eksik tablolara ekle (Kural 16)
+await RunScopedSafeAsync(app, "DeletedAtColumnMigration", async services =>
+{
+    var context = services.GetRequiredService<ApplicationDbContext>();
+    await KOAFiloServis.Web.Data.Migrations.DeletedAtColumnMigrationHelper.EnsureDeletedAtColumnAsync(context);
+});
+
 await RunScopedSafeAsync(app, "SmsMigration", async services =>
 {
     var context = services.GetRequiredService<ApplicationDbContext>();
