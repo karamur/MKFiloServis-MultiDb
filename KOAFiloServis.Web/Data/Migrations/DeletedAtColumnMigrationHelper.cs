@@ -40,28 +40,33 @@ END; $$;";
     {
         var fixes = new[]
         {
-            // Firmalar - OrganizasyonId (Kural 5)
+            // Firmalar
             @"ALTER TABLE ""Firmalar"" ADD COLUMN IF NOT EXISTS ""OrganizasyonId"" INTEGER DEFAULT 1",
             @"ALTER TABLE ""Firmalar"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
             @"ALTER TABLE ""Firmalar"" ADD COLUMN IF NOT EXISTS ""CariId"" INTEGER",
             @"ALTER TABLE ""Firmalar"" ADD COLUMN IF NOT EXISTS ""FirmaKodu"" VARCHAR(50)",
-            // Araclar - eksik olabilecek kolonlar
+            // Araclar
             @"ALTER TABLE ""Araclar"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
             @"ALTER TABLE ""Araclar"" ADD COLUMN IF NOT EXISTS ""OrganizasyonId"" INTEGER",
+            @"ALTER TABLE ""Araclar"" ADD COLUMN IF NOT EXISTS ""Aktif"" BOOLEAN DEFAULT true",
             // Guzergahlar
             @"ALTER TABLE ""Guzergahlar"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
-            // BankaHesaplari
+            // BankaHesaplari — dashboard finans verileri
             @"ALTER TABLE ""BankaHesaplari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
             @"ALTER TABLE ""BankaHesaplari"" ADD COLUMN IF NOT EXISTS ""IBAN"" VARCHAR(50)",
-            // StokKartlari
+            @"ALTER TABLE ""BankaHesaplari"" ADD COLUMN IF NOT EXISTS ""AcilisBakiye"" DECIMAL(18,2) DEFAULT 0",
+            @"ALTER TABLE ""BankaHesaplari"" ADD COLUMN IF NOT EXISTS ""Bakiye"" DECIMAL(18,2) DEFAULT 0",
+            // Personel — dashboard sofor + belge uyarilari
+            @"ALTER TABLE ""Personeller"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
+            @"ALTER TABLE ""Personeller"" ADD COLUMN IF NOT EXISTS ""KaynakFirmaId"" INTEGER",
+            @"ALTER TABLE ""Personeller"" ADD COLUMN IF NOT EXISTS ""Aktif"" BOOLEAN DEFAULT true",
+            @"ALTER TABLE ""PersonelMaaslari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
+            @"ALTER TABLE ""PersonelIzinleri"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
+            // Stok
             @"ALTER TABLE ""StokKartlari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
             // Muhasebe
             @"ALTER TABLE ""MuhasebeFisleri"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
             @"ALTER TABLE ""MuhasebeHesaplari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
-            // Personel
-            @"ALTER TABLE ""Personeller"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
-            @"ALTER TABLE ""PersonelMaaslari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
-            @"ALTER TABLE ""PersonelIzinleri"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
             // Cariler
             @"ALTER TABLE ""Cariler"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
             // Hakedisler
@@ -71,6 +76,36 @@ END; $$;";
             // AracMasraflari
             @"ALTER TABLE ""AracMasraflari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
         };
+
+        // Eksik tabloları oluştur (kaynak DB'den kopyala)
+        var createTables = new[]
+        {
+            // PersonelAracAtamalari — sofor dashboard
+            @"CREATE TABLE IF NOT EXISTS ""PersonelAracAtamalari"" (
+                ""Id"" INTEGER NOT NULL, ""PersonelId"" INTEGER, ""AracId"" INTEGER, ""Plaka"" VARCHAR(20),
+                ""AtamaTarihi"" TIMESTAMP, ""BitisTarihi"" TIMESTAMP, ""Aktif"" BOOLEAN DEFAULT true,
+                ""IsDeleted"" BOOLEAN DEFAULT false, ""CreatedAt"" TIMESTAMP DEFAULT NOW(), ""UpdatedAt"" TIMESTAMP,
+                PRIMARY KEY (""Id""))",
+            // ServisCalismalari — dashboard servis + grafik
+            @"CREATE TABLE IF NOT EXISTS ""ServisCalismalari"" (
+                ""Id"" INTEGER NOT NULL, ""AracId"" INTEGER, ""SoforId"" INTEGER, ""GuzergahId"" INTEGER,
+                ""BaslangicTarihi"" TIMESTAMP, ""BitisTarihi"" TIMESTAMP, ""CalismaTipi"" INTEGER,
+                ""GunlukUcret"" DECIMAL(18,2), ""ToplamTutar"" DECIMAL(18,2),
+                ""IsDeleted"" BOOLEAN DEFAULT false, ""CreatedAt"" TIMESTAMP DEFAULT NOW(), ""UpdatedAt"" TIMESTAMP,
+                PRIMARY KEY (""Id""))",
+        };
+
+        foreach (var sql in createTables)
+        {
+            try { await context.Database.ExecuteSqlRawAsync(sql); }
+            catch { /* tablo zaten var — sessiz geç */ }
+        }
+
+        foreach (var sql in fixes)
+        {
+            try { await context.Database.ExecuteSqlRawAsync(sql); }
+            catch { /* kolon zaten var veya tablo yok — sessiz geç */ }
+        }
 
         foreach (var sql in fixes)
         {
