@@ -350,6 +350,9 @@ public class ApplicationDbContext : DbContext
 
     // Holding Modulu (Kural 13) — nihai mimari: tek veritabanında konsolide snapshot'lar
     public DbSet<HoldingVeri> HoldingVeriler { get; set; }
+
+    // E-Fatura / E-Arsiv Entegrasyonu
+    public DbSet<LucaPortalSettings> LucaPortalAyarlari { get; set; }
     public DbSet<HoldingRapor> HoldingRaporlar { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -3068,6 +3071,22 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.OlusturanKullanici).HasMaxLength(100);
             entity.Property(e => e.JsonFiltreler).HasColumnType("text");
             entity.Property(e => e.JsonSonuc).HasColumnType("text");
+        });
+
+        // ── LucaPortalSettings (e-Fatura / e-Arsiv entegrasyon ayarlari) ──
+        modelBuilder.Entity<LucaPortalSettings>(entity =>
+        {
+            entity.Property(e => e.KullaniciAdi).HasMaxLength(100);
+            entity.Property(e => e.Sifre).HasMaxLength(100);
+            entity.Property(e => e.PortalUrl).HasMaxLength(500);
+            entity.Property(e => e.AccessToken).HasMaxLength(500);
+            entity.Property(e => e.RefreshToken).HasMaxLength(500);
+            entity.Property(e => e.LucaFirmaKodu).HasMaxLength(50);
+            entity.HasIndex(e => e.FirmaId).IsUnique();
+            entity.HasOne<Firma>()
+                .WithMany()
+                .HasForeignKey(e => e.FirmaId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // ----------------------------------------------------------------

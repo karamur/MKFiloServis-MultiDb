@@ -453,6 +453,13 @@ builder.Services.AddQuartz(q =>
         .WithIdentity("holding-veri-toplama-trigger")
         .WithSchedule(CronScheduleBuilder.MonthlyOnDayAndHourAndMinute(1, 2, 7)));
 
+    // Luca Portal e-Fatura/e-Arsiv otomatik senkronizasyon - her gece 03:00
+    q.AddJob<LucaPortalSenkronJob>(opts => opts.WithIdentity("luca-portal-senkron-job"));
+    q.AddTrigger(opts => opts
+        .ForJob("luca-portal-senkron-job")
+        .WithIdentity("luca-portal-senkron-trigger")
+        .WithSchedule(CronScheduleBuilder.DailyAtHourAndMinute(3, 0)));
+
     // Puantaj Engine - her ayın 1'inde saat 00:30'da geçen ayı otomatik hesaplar
     var puantajAutoEnabled = builder.Configuration.GetValue("PuantajEngine:AutoProcess:Enabled", true);
     if (puantajAutoEnabled)
