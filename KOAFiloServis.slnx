@@ -1,6 +1,7 @@
 <Solution>
   <Project Path="KOAFiloServis.DataSync/KOAFiloServis.DataSync.csproj" />
   <Project Path="KOAFiloServis.LisansDesktop/KOAFiloServis.LisansDesktop.csproj" />
+  <Project Path="KOAFiloServis.Maui/KOAFiloServis.Maui.csproj" />
   <Project Path="KOAFiloServis.Shared/KOAFiloServis.Shared.csproj" />
   <Project Path="KOAFiloServis.Tests/KOAFiloServis.Tests.csproj" />
   <Project Path="KOAFiloServis.Web/KOAFiloServis.Web.csproj" />
