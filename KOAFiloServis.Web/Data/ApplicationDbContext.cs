@@ -3181,17 +3181,15 @@ public class ApplicationDbContext : DbContext
         var aktif = ResolveAktifFirmaProvider();
         var firmaId = aktif?.AktifFirmaId ?? 0;
 
+        // Startup / background scope'da IAktifFirmaProvider olmayabilir.
+        // Bu durumda varsayılan firma (Id=1) kullanılır — throw etmek startup'ı kırar.
+        if (firmaId == 0)
+            firmaId = 1; // safe default: ilk firma
+
         foreach (var entry in ChangeTracker.Entries<IFirmaTenant>())
         {
             if (entry.State != EntityState.Added) continue;
             if (entry.Entity.FirmaId.HasValue && entry.Entity.FirmaId.Value > 0) continue;
-
-            if (firmaId == 0)
-            {
-                throw new InvalidOperationException(
-                    $"Aktif firma seçili olmadan '{entry.Entity.GetType().Name}' kaydı eklenemez. " +
-                    "Lütfen IAktifFirmaProvider üzerinden aktif firmayı set edin veya entity.FirmaId değerini elle atayın.");
-            }
 
             entry.Entity.FirmaId = firmaId;
         }
