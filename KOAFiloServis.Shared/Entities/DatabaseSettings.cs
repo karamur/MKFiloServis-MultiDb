@@ -6,7 +6,7 @@ public class DatabaseSettings
     public DatabaseProvider Provider { get; set; } = DatabaseProvider.PostgreSQL;
     public string Host { get; set; } = "localhost";
     public int Port { get; set; } = 5432;
-    public string DatabaseName { get; set; } = "DestekCRMServisBlazorDb";
+    public string DatabaseName { get; set; } = "KOAFiloServis";
     public string Username { get; set; } = "postgres";
     public string Password { get; set; } = "Fast123";
     public bool UseIntegratedSecurity { get; set; } = false;
