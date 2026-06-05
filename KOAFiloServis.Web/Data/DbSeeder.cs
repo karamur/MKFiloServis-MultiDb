@@ -1,4 +1,4 @@
-using KOAFiloServis.Shared.Entities;
+﻿using KOAFiloServis.Shared.Entities;
 using Microsoft.EntityFrameworkCore;
 using System.Data;
 
@@ -277,21 +277,50 @@ public static class DbSeeder
     /// </summary>
     public static async Task UpdateGelenFaturalarToEFaturaAsync(ApplicationDbContext context)
     {
-        var gelenFaturalar = await context.Faturalar
-            .IgnoreQueryFilters()
-            .Where(f => !f.IsDeleted && f.FaturaYonu == FaturaYonu.Gelen && f.EFaturaTipi != EFaturaTipi.EFatura)
-            .ToListAsync();
-
-        if (gelenFaturalar.Any())
+        try
         {
-            foreach (var fatura in gelenFaturalar)
+            if (context.Database.IsNpgsql())
             {
-                fatura.EFaturaTipi = EFaturaTipi.EFatura;
-                fatura.UpdatedAt = DateTime.Now;
+                var affected = await context.Database.ExecuteSqlRawAsync(@"
+                    UPDATE ""Faturalar""
+                    SET ""EFaturaTipi"" = @p0,
+                        ""UpdatedAt"" = @p1
+                    WHERE ""IsDeleted"" = false
+                      AND ""FaturaYonu"" = @p2
+                      AND ""EFaturaTipi"" <> @p3;",
+                    (int)EFaturaTipi.EFatura,
+                    DateTime.UtcNow,
+                    (int)FaturaYonu.Gelen,
+                    (int)EFaturaTipi.EFatura);
+
+                if (affected > 0)
+                {
+                    Console.WriteLine($"? {affected} adet gelen fatura E-Fatura olarak güncellendi!");
+                }
+
+                return;
             }
 
-            await context.SaveChangesAsync();
-            Console.WriteLine($"? {gelenFaturalar.Count} adet gelen fatura E-Fatura olarak güncellendi!");
+            var gelenFaturalar = await context.Faturalar
+                .IgnoreQueryFilters()
+                .Where(f => !f.IsDeleted && f.FaturaYonu == FaturaYonu.Gelen && f.EFaturaTipi != EFaturaTipi.EFatura)
+                .ToListAsync();
+
+            if (gelenFaturalar.Any())
+            {
+                foreach (var fatura in gelenFaturalar)
+                {
+                    fatura.EFaturaTipi = EFaturaTipi.EFatura;
+                    fatura.UpdatedAt = DateTime.Now;
+                }
+
+                await context.SaveChangesAsync();
+                Console.WriteLine($"? {gelenFaturalar.Count} adet gelen fatura E-Fatura olarak güncellendi!");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"UpdateGelenFaturalarToEFatura atlandi: {ex.Message}");
         }
     }
 

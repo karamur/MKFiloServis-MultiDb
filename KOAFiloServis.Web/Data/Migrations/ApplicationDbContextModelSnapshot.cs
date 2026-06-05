@@ -105,7 +105,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("Modul", "IslemTipi");
 
-                    b.ToTable("AktiviteLoglar");
+                    b.ToTable("AktiviteLoglar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AppAyarlari", b =>
@@ -136,7 +136,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppAyarlari");
+                    b.ToTable("AppAyarlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Arac", b =>
@@ -300,7 +300,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("TasimaTedarikciId");
 
-                    b.ToTable("Araclar");
+                    b.ToTable("Araclar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracAlimSatim", b =>
@@ -433,7 +433,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("AracId", "IslemTarihi");
 
-                    b.ToTable("AracAlimSatimlar");
+                    b.ToTable("AracAlimSatimlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracBakimUyari", b =>
@@ -497,7 +497,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("FirmaId");
 
-                    b.ToTable("AracBakimUyarilari");
+                    b.ToTable("AracBakimUyarilari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracBolge", b =>
@@ -556,7 +556,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AracBolgeler");
+                    b.ToTable("AracBolgeler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracBolgeAtama", b =>
@@ -591,7 +591,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("AracId");
 
-                    b.ToTable("AracBolgeAtamalar");
+                    b.ToTable("AracBolgeAtamalar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracEvrak", b =>
@@ -669,7 +669,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("AracId", "EvrakKategorisi");
 
-                    b.ToTable("AracEvraklari");
+                    b.ToTable("AracEvraklari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracEvrakDosya", b =>
@@ -731,7 +731,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("FirmaId");
 
-                    b.ToTable("AracEvrakDosyalari");
+                    b.ToTable("AracEvrakDosyalari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracEvrakDosyaVersiyon", b =>
@@ -792,7 +792,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("OlusturanKullaniciId");
 
-                    b.ToTable("AracEvrakDosyaVersiyonlar");
+                    b.ToTable("AracEvrakDosyaVersiyonlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracIlan", b =>
@@ -942,7 +942,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("SatisPersoneliId");
 
-                    b.ToTable("AracIlanlari");
+                    b.ToTable("AracIlanlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracIlanIcerik", b =>
@@ -1006,7 +1006,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("AracId", "PlatformId");
 
-                    b.ToTable("AracIlanIcerikleri");
+                    b.ToTable("AracIlanIcerikleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracIlanYayin", b =>
@@ -1105,7 +1105,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
 
-                    b.ToTable("AracIlanYayinlar");
+                    b.ToTable("AracIlanYayinlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracIslem", b =>
@@ -1193,7 +1193,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("AracId", "IslemTarihi");
 
-                    b.ToTable("AracIslemler");
+                    b.ToTable("AracIslemler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracKonum", b =>
@@ -1265,7 +1265,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("AracTakipCihazId");
 
-                    b.ToTable("AracKonumlar");
+                    b.ToTable("AracKonumlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracMaliyetSnapshot", b =>
@@ -1345,7 +1345,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_AracMaliyetSnapshot_Arac_Donem");
 
-                    b.ToTable("AracMaliyetSnapshotlari");
+                    b.ToTable("AracMaliyetSnapshotlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracMarka", b =>
@@ -1387,7 +1387,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("MarkaAdi")
                         .IsUnique();
 
-                    b.ToTable("AracMarkalari");
+                    b.ToTable("AracMarkalari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracMarkaModel", b =>
@@ -1446,7 +1446,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AracMarkaModeller");
+                    b.ToTable("AracMarkaModeller", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracMasraf", b =>
@@ -1546,7 +1546,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("PersonelCebindenId", "PersoneleOdendi");
 
-                    b.ToTable("AracMasraflari");
+                    b.ToTable("AracMasraflari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracModelTanim", b =>
@@ -1593,7 +1593,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("MarkaId");
 
-                    b.ToTable("AracModelleri");
+                    b.ToTable("AracModelleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracOperasyonDurum", b =>
@@ -1686,7 +1686,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("AracId", "Yil", "Ay")
                         .IsUnique();
 
-                    b.ToTable("AracOperasyonDurumlari");
+                    b.ToTable("AracOperasyonDurumlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracPiyasaArastirma", b =>
@@ -1779,7 +1779,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("PiyasaArastirmalar");
+                    b.ToTable("PiyasaArastirmalar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracPlaka", b =>
@@ -1839,7 +1839,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("Plaka", "CikisTarihi")
                         .HasFilter("\"CikisTarihi\" IS NULL AND \"IsDeleted\" = false");
 
-                    b.ToTable("AracPlakalar");
+                    b.ToTable("AracPlakalar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracSatis", b =>
@@ -1896,7 +1896,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("SatisPersoneliId");
 
-                    b.ToTable("AracSatislari");
+                    b.ToTable("AracSatislari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracTakipAlarm", b =>
@@ -1953,7 +1953,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("AracTakipCihazId");
 
-                    b.ToTable("AracTakipAlarmlar");
+                    b.ToTable("AracTakipAlarmlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AracTakipCihaz", b =>
@@ -2014,7 +2014,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("AracId");
 
-                    b.ToTable("AracTakipCihazlar");
+                    b.ToTable("AracTakipCihazlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AuditLog", b =>
@@ -2103,7 +2103,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("KullaniciId");
 
-                    b.ToTable("AuditLoglar");
+                    b.ToTable("AuditLoglar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AylikChecklist", b =>
@@ -2172,7 +2172,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("Yil", "Ay", "ChecklistTipi", "SoforId", "AracId", "GuzergahId");
 
-                    b.ToTable("AylikChecklistler");
+                    b.ToTable("AylikChecklistler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AylikOdemeGerceklesen", b =>
@@ -2233,7 +2233,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("FirmaId");
 
-                    b.ToTable("AylikOdemeGerceklesenler");
+                    b.ToTable("AylikOdemeGerceklesenler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AylikOdemePlani", b =>
@@ -2307,7 +2307,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("MasrafKalemiId");
 
-                    b.ToTable("AylikOdemePlanlari");
+                    b.ToTable("AylikOdemePlanlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.BakimPeriyot", b =>
@@ -2370,7 +2370,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("FirmaId");
 
-                    b.ToTable("BakimPeriyotlar");
+                    b.ToTable("BakimPeriyotlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.BankaHesap", b =>
@@ -2455,7 +2455,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("HesapKodu")
                         .IsUnique();
 
-                    b.ToTable("BankaHesaplari");
+                    b.ToTable("BankaHesaplari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.BankaKasaHareket", b =>
@@ -2577,7 +2577,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("PersonelCebindenId", "PersoneleOdendi");
 
-                    b.ToTable("BankaKasaHareketleri");
+                    b.ToTable("BankaKasaHareketleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Bildirim", b =>
@@ -2645,7 +2645,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("KullaniciId", "Okundu");
 
-                    b.ToTable("Bildirimler");
+                    b.ToTable("Bildirimler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.BildirimAyar", b =>
@@ -2730,7 +2730,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("KullaniciId");
 
-                    b.ToTable("BildirimAyarlari");
+                    b.ToTable("BildirimAyarlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Bordro", b =>
@@ -2799,7 +2799,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("FirmaId");
 
-                    b.ToTable("Bordrolar");
+                    b.ToTable("Bordrolar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.BordroAyar", b =>
@@ -2916,7 +2916,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("FirmaId");
 
-                    b.ToTable("BordroAyarlar");
+                    b.ToTable("BordroAyarlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.BordroDetay", b =>
@@ -3049,7 +3049,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("PersonelId");
 
-                    b.ToTable("BordroDetaylar");
+                    b.ToTable("BordroDetaylar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.BordroOdeme", b =>
@@ -3107,7 +3107,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("MuhasebeFisId");
 
-                    b.ToTable("BordroOdemeler");
+                    b.ToTable("BordroOdemeler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.BudgetHedef", b =>
@@ -3153,7 +3153,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("FirmaId");
 
-                    b.ToTable("BudgetHedefler");
+                    b.ToTable("BudgetHedefler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.BudgetMasrafKalemi", b =>
@@ -3203,7 +3203,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("KalemAdi");
 
-                    b.ToTable("BudgetMasrafKalemleri");
+                    b.ToTable("BudgetMasrafKalemleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.BudgetOdeme", b =>
@@ -3343,7 +3343,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("OdemeYil", "OdemeAy", "MasrafKalemi");
 
-                    b.ToTable("BudgetOdemeler");
+                    b.ToTable("BudgetOdemeler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Cari", b =>
@@ -3475,7 +3475,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("SoforId");
 
-                    b.ToTable("Cariler");
+                    b.ToTable("Cariler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.CariHatirlatma", b =>
@@ -3552,7 +3552,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("CariId", "Tip", "CreatedAt");
 
-                    b.ToTable("CariHatirlatmalar");
+                    b.ToTable("CariHatirlatmalar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.CariIletisimNot", b =>
@@ -3620,7 +3620,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("KullaniciId");
 
-                    b.ToTable("CariIletisimNotlar");
+                    b.ToTable("CariIletisimNotlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.CariSeferUcreti", b =>
@@ -3682,7 +3682,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("CariId", "GuzergahId", "GecerlilikBaslangic");
 
-                    b.ToTable("CariSeferUcretleri");
+                    b.ToTable("CariSeferUcretleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.ChecklistKalem", b =>
@@ -3738,7 +3738,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("FirmaId");
 
-                    b.ToTable("ChecklistKalemleri");
+                    b.ToTable("ChecklistKalemleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.DashboardWidget", b =>
@@ -3791,7 +3791,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("KullaniciId");
 
-                    b.ToTable("DashboardWidgetlar");
+                    b.ToTable("DashboardWidgetlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.DestekAyar", b =>
@@ -3836,7 +3836,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("Anahtar")
                         .IsUnique();
 
-                    b.ToTable("DestekAyarlari");
+                    b.ToTable("DestekAyarlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.DestekBilgiBankasi", b =>
@@ -3918,7 +3918,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("YazarKullaniciId");
 
-                    b.ToTable("DestekBilgiBankasiMakaleleri");
+                    b.ToTable("DestekBilgiBankasiMakaleleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.DestekDepartman", b =>
@@ -3974,7 +3974,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("UstDepartmanId");
 
-                    b.ToTable("DestekDepartmanlari");
+                    b.ToTable("DestekDepartmanlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.DestekDepartmanUye", b =>
@@ -4016,7 +4016,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("DepartmanId", "KullaniciId")
                         .IsUnique();
 
-                    b.ToTable("DestekDepartmanUyeleri");
+                    b.ToTable("DestekDepartmanUyeleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.DestekHazirYanit", b =>
@@ -4076,7 +4076,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("KategoriId");
 
-                    b.ToTable("DestekHazirYanitlari");
+                    b.ToTable("DestekHazirYanitlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.DestekKategori", b =>
@@ -4135,7 +4135,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("UstKategoriId");
 
-                    b.ToTable("DestekKategorileri");
+                    b.ToTable("DestekKategorileri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.DestekSla", b =>
@@ -4188,7 +4188,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("Oncelik");
 
-                    b.ToTable("DestekSlaListesi");
+                    b.ToTable("DestekSlaListesi", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.DestekTalebi", b =>
@@ -4314,7 +4314,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("DepartmanId", "Durum");
 
-                    b.ToTable("DestekTalepleri");
+                    b.ToTable("DestekTalepleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.DestekTalebiAktivite", b =>
@@ -4365,7 +4365,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("DestekTalebiId", "CreatedAt");
 
-                    b.ToTable("DestekTalebiAktiviteleri");
+                    b.ToTable("DestekTalebiAktiviteleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.DestekTalebiEk", b =>
@@ -4428,7 +4428,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("YukleyenKullaniciId");
 
-                    b.ToTable("DestekTalebiEkleri");
+                    b.ToTable("DestekTalebiEkleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.DestekTalebiIliski", b =>
@@ -4467,7 +4467,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("AnaTalepId", "IliskiliTalepId")
                         .IsUnique();
 
-                    b.ToTable("DestekTalebiIliskileri");
+                    b.ToTable("DestekTalebiIliskileri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.DestekTalebiYanit", b =>
@@ -4522,7 +4522,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("DestekTalebiId", "CreatedAt");
 
-                    b.ToTable("DestekTalebiYanitlari");
+                    b.ToTable("DestekTalebiYanitlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.EbysAramaGecmisi", b =>
@@ -4567,7 +4567,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("KullaniciId");
 
-                    b.ToTable("EbysAramaGecmisleri");
+                    b.ToTable("EbysAramaGecmisleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.EbysBelgeEmbedding", b =>
@@ -4627,7 +4627,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("EbysBelgeEmbeddingler");
+                    b.ToTable("EbysBelgeEmbeddingler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.EbysEvrak", b =>
@@ -4750,7 +4750,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("Yon", "Durum");
 
-                    b.ToTable("EbysEvraklar");
+                    b.ToTable("EbysEvraklar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.EbysEvrakAtama", b =>
@@ -4810,7 +4810,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("EvrakId", "Durum");
 
-                    b.ToTable("EbysEvrakAtamalar");
+                    b.ToTable("EbysEvrakAtamalar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.EbysEvrakDosya", b =>
@@ -4870,7 +4870,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("EvrakId");
 
-                    b.ToTable("EbysEvrakDosyalar");
+                    b.ToTable("EbysEvrakDosyalar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.EbysEvrakDosyaVersiyon", b =>
@@ -4931,7 +4931,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("OlusturanKullaniciId");
 
-                    b.ToTable("EbysEvrakDosyaVersiyonlar");
+                    b.ToTable("EbysEvrakDosyaVersiyonlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.EbysEvrakHareket", b =>
@@ -4985,7 +4985,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("EvrakId", "IslemTarihi");
 
-                    b.ToTable("EbysEvrakHareketler");
+                    b.ToTable("EbysEvrakHareketler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.EbysEvrakKategori", b =>
@@ -5035,7 +5035,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("KategoriAdi");
 
-                    b.ToTable("EbysEvrakKategoriler");
+                    b.ToTable("EbysEvrakKategoriler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.EbysKayitliArama", b =>
@@ -5085,7 +5085,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("KullaniciId");
 
-                    b.ToTable("EbysKayitliAramalar");
+                    b.ToTable("EbysKayitliAramalar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.EmailAyar", b =>
@@ -5160,7 +5160,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("KullaniciId");
 
-                    b.ToTable("EmailAyarlari");
+                    b.ToTable("EmailAyarlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.EpostaBildirimLog", b =>
@@ -5208,7 +5208,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("KullaniciId");
 
-                    b.ToTable("EpostaBildirimLoglari");
+                    b.ToTable("EpostaBildirimLoglari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Fatura", b =>
@@ -5384,7 +5384,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
 
-                    b.ToTable("Faturalar");
+                    b.ToTable("Faturalar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.FaturaKalem", b =>
@@ -5490,7 +5490,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("MuhasebeHesapId");
 
-                    b.ToTable("FaturaKalemleri");
+                    b.ToTable("FaturaKalemleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.FaturaSablon", b =>
@@ -5714,7 +5714,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("FirmaId");
 
-                    b.ToTable("FaturaSablonlari");
+                    b.ToTable("FaturaSablonlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.FiloGunlukPuantaj", b =>
@@ -5834,7 +5834,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("SoforId");
 
-                    b.ToTable("FiloGunlukPuantajlar");
+                    b.ToTable("FiloGunlukPuantajlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.FiloGuzergahEslestirme", b =>
@@ -5901,7 +5901,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("SoforId");
 
-                    b.ToTable("FiloGuzergahEslestirmeleri");
+                    b.ToTable("FiloGuzergahEslestirmeleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Firma", b =>
@@ -6007,7 +6007,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("OrganizasyonId");
 
-                    b.ToTable("Firmalar");
+                    b.ToTable("Firmalar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.FirmaAracSoforEslestirme", b =>
@@ -6067,7 +6067,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("FirmaId", "KurumCariId", "AracId", "SoforId");
 
-                    b.ToTable("FirmaAracSoforEslestirmeleri");
+                    b.ToTable("FirmaAracSoforEslestirmeleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.FirmaGuzergahEslestirme", b =>
@@ -6125,7 +6125,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("FirmaId", "KurumCariId", "GuzergahId");
 
-                    b.ToTable("FirmaGuzergahEslestirmeleri");
+                    b.ToTable("FirmaGuzergahEslestirmeleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.FirmalarArasiTransfer", b =>
@@ -6196,7 +6196,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("TransferTarihi");
 
-                    b.ToTable("FirmalarArasiTransferler");
+                    b.ToTable("FirmalarArasiTransferler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.GunlukPuantaj", b =>
@@ -6263,7 +6263,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("ServisCalismaId");
 
-                    b.ToTable("GunlukPuantajlar");
+                    b.ToTable("GunlukPuantajlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Guzergah", b =>
@@ -6392,7 +6392,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("VarsayilanSoforId");
 
-                    b.ToTable("Guzergahlar");
+                    b.ToTable("Guzergahlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.GuzergahSefer", b =>
@@ -6454,7 +6454,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("GuzergahId");
 
-                    b.ToTable("GuzergahSeferleri");
+                    b.ToTable("GuzergahSeferleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Hakedis", b =>
@@ -6537,7 +6537,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("Tip", "ReferansId", "Yil", "Ay")
                         .HasDatabaseName("IX_Hakedis_Tip_Ref_Donem");
 
-                    b.ToTable("Hakedisler");
+                    b.ToTable("Hakedisler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.HakedisDetay", b =>
@@ -6610,7 +6610,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("SoforId");
 
-                    b.ToTable("HakedisDetaylari");
+                    b.ToTable("HakedisDetaylari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Hatirlatici", b =>
@@ -6698,7 +6698,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("KullaniciId", "BaslangicTarihi");
 
-                    b.ToTable("Hatirlaticilar");
+                    b.ToTable("Hatirlaticilar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.HoldingRapor", b =>
@@ -6740,7 +6740,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("HoldingRaporlar");
+                    b.ToTable("HoldingRaporlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.HoldingVeri", b =>
@@ -6819,7 +6819,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("FirmaId", "Yil", "Ay", "Kategori")
                         .IsUnique();
 
-                    b.ToTable("HoldingVeriler");
+                    b.ToTable("HoldingVeriler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.IhaleGuzergahKalem", b =>
@@ -7001,7 +7001,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("SoforId");
 
-                    b.ToTable("IhaleGuzergahKalemleri");
+                    b.ToTable("IhaleGuzergahKalemleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.IhaleProje", b =>
@@ -7082,7 +7082,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("FirmaId");
 
-                    b.ToTable("IhaleProjeleri");
+                    b.ToTable("IhaleProjeleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.IhaleRakipBenchmark", b =>
@@ -7146,7 +7146,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("IhaleProjeId");
 
-                    b.ToTable("IhaleRakipBenchmarklar");
+                    b.ToTable("IhaleRakipBenchmarklar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.IhaleSozlesmeRevizyon", b =>
@@ -7211,7 +7211,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
 
-                    b.ToTable("IhaleSozlesmeRevizyonlari");
+                    b.ToTable("IhaleSozlesmeRevizyonlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.IhaleTeklifKararLog", b =>
@@ -7262,7 +7262,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("IhaleTeklifVersiyonId", "IslemTarihi");
 
-                    b.ToTable("IhaleTeklifKararLoglari");
+                    b.ToTable("IhaleTeklifKararLoglari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.IhaleTeklifVersiyon", b =>
@@ -7353,7 +7353,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
 
-                    b.ToTable("IhaleTeklifVersiyonlari");
+                    b.ToTable("IhaleTeklifVersiyonlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.IlanPlatformu", b =>
@@ -7434,7 +7434,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("PlatformAdi")
                         .IsUnique();
 
-                    b.ToTable("IlanPlatformlari");
+                    b.ToTable("IlanPlatformlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Kapasite", b =>
@@ -7480,7 +7480,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("FirmaId", "KapasiteAdi");
 
-                    b.ToTable("Kapasiteler");
+                    b.ToTable("Kapasiteler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.KdvHesapEslestirme", b =>
@@ -7527,7 +7527,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("MuhasebeAyarId");
 
-                    b.ToTable("KdvHesapEslestirmeleri");
+                    b.ToTable("KdvHesapEslestirmeleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.KiralamaArac", b =>
@@ -7614,7 +7614,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("KiralayiciCariId");
 
-                    b.ToTable("KiralamaAraclar");
+                    b.ToTable("KiralamaAraclar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.KiralikCPlakaTakip", b =>
@@ -7670,7 +7670,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("KiralikCPlakaTakipler");
+                    b.ToTable("KiralikCPlakaTakipler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.KiralikPlakaTakip", b =>
@@ -7767,7 +7767,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("AracId");
 
-                    b.ToTable("KiralikPlakaTakipler");
+                    b.ToTable("KiralikPlakaTakipler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.KostMerkezi", b =>
@@ -7813,7 +7813,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("UstKostMerkeziId");
 
-                    b.ToTable("KostMerkezleri");
+                    b.ToTable("KostMerkezleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Kullanici", b =>
@@ -7902,7 +7902,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("SoforId");
 
-                    b.ToTable("Kullanicilar");
+                    b.ToTable("Kullanicilar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.KullaniciCari", b =>
@@ -7955,7 +7955,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("KullaniciId");
 
-                    b.ToTable("KullaniciCariler");
+                    b.ToTable("KullaniciCariler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.KullaniciSonIslem", b =>
@@ -8004,7 +8004,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("KullaniciId", "SayfaYolu");
 
-                    b.ToTable("KullaniciSonIslemler");
+                    b.ToTable("KullaniciSonIslemler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.KullaniciTercihi", b =>
@@ -8074,7 +8074,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("KullaniciId")
                         .IsUnique();
 
-                    b.ToTable("KullaniciTercihleri");
+                    b.ToTable("KullaniciTercihleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Kurum", b =>
@@ -8184,7 +8184,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("FirmaId");
 
-                    b.ToTable("Kurumlar");
+                    b.ToTable("Kurumlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.LastikDegisim", b =>
@@ -8262,7 +8262,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("TakilanStokId");
 
-                    b.ToTable("LastikDegisimler");
+                    b.ToTable("LastikDegisimler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.LastikDepo", b =>
@@ -8309,7 +8309,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("LastikDepolar");
+                    b.ToTable("LastikDepolar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.LastikSezonAyar", b =>
@@ -8362,7 +8362,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("LastikSezonAyarlari");
+                    b.ToTable("LastikSezonAyarlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.LastikStok", b =>
@@ -8430,7 +8430,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("KaynakAracId");
 
-                    b.ToTable("LastikStoklar");
+                    b.ToTable("LastikStoklar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Lisans", b =>
@@ -8511,7 +8511,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("LisansAnahtari")
                         .IsUnique();
 
-                    b.ToTable("Lisanslar");
+                    b.ToTable("Lisanslar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.LucaPortalSettings", b =>
@@ -8575,7 +8575,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("FirmaId")
                         .IsUnique();
 
-                    b.ToTable("LucaPortalAyarlari");
+                    b.ToTable("LucaPortalAyarlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.MasrafKalemi", b =>
@@ -8627,7 +8627,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("MasrafKodu")
                         .IsUnique();
 
-                    b.ToTable("MasrafKalemleri");
+                    b.ToTable("MasrafKalemleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Mesaj", b =>
@@ -8696,7 +8696,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("AliciId", "Okundu");
 
-                    b.ToTable("Mesajlar");
+                    b.ToTable("Mesajlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.MuhasebeAyar", b =>
@@ -8801,7 +8801,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("MuhasebeAyarlari");
+                    b.ToTable("MuhasebeAyarlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.MuhasebeDonem", b =>
@@ -8847,7 +8847,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("Yil", "Ay")
                         .IsUnique();
 
-                    b.ToTable("MuhasebeDonemleri");
+                    b.ToTable("MuhasebeDonemleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.MuhasebeFis", b =>
@@ -8914,7 +8914,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("FisNo")
                         .IsUnique();
 
-                    b.ToTable("MuhasebeFisleri");
+                    b.ToTable("MuhasebeFisleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.MuhasebeFisKalem", b =>
@@ -8971,7 +8971,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("HesapId");
 
-                    b.ToTable("MuhasebeFisKalemleri");
+                    b.ToTable("MuhasebeFisKalemleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.MuhasebeHesap", b =>
@@ -9032,7 +9032,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("UstHesapId");
 
-                    b.ToTable("MuhasebeHesaplari");
+                    b.ToTable("MuhasebeHesaplari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.MuhasebeProje", b =>
@@ -9092,7 +9092,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("FirmaId");
 
-                    b.ToTable("MuhasebeProjeler");
+                    b.ToTable("MuhasebeProjeler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.MusteriKiralama", b =>
@@ -9172,7 +9172,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("FirmaId");
 
-                    b.ToTable("MusteriKiralamalar");
+                    b.ToTable("MusteriKiralamalar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.OdemeEslestirme", b =>
@@ -9217,7 +9217,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("FaturaId");
 
-                    b.ToTable("OdemeEslestirmeleri");
+                    b.ToTable("OdemeEslestirmeleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.OperasyonKaydi", b =>
@@ -9372,7 +9372,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("Tarih", "GuzergahId", "AracId", "Slot")
                         .IsUnique();
 
-                    b.ToTable("OperasyonKayitlari");
+                    b.ToTable("OperasyonKayitlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Organizasyon", b =>
@@ -9414,7 +9414,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
 
-                    b.ToTable("Organizasyonlar");
+                    b.ToTable("Organizasyonlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.OzlukEvrakTanim", b =>
@@ -9461,7 +9461,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("OzlukEvrakTanimlari");
+                    b.ToTable("OzlukEvrakTanimlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PersonelAracAtama", b =>
@@ -9578,7 +9578,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("PersonelId");
 
-                    b.ToTable("PersonelAvanslar");
+                    b.ToTable("PersonelAvanslar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PersonelAvansMahsup", b =>
@@ -9630,7 +9630,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("MaasId");
 
-                    b.ToTable("PersonelAvansMahsuplar");
+                    b.ToTable("PersonelAvansMahsuplar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PersonelBorc", b =>
@@ -9706,7 +9706,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("PersonelId");
 
-                    b.ToTable("PersonelBorclar");
+                    b.ToTable("PersonelBorclar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PersonelBorcOdeme", b =>
@@ -9758,7 +9758,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("MuhasebeFisId");
 
-                    b.ToTable("PersonelBorcOdemeler");
+                    b.ToTable("PersonelBorcOdemeler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PersonelFinansAyar", b =>
@@ -9840,7 +9840,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("PersoneleBorclarHesapId");
 
-                    b.ToTable("PersonelFinansAyarlar");
+                    b.ToTable("PersonelFinansAyarlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PersonelIzin", b =>
@@ -9902,7 +9902,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("SoforId");
 
-                    b.ToTable("PersonelIzinleri");
+                    b.ToTable("PersonelIzinleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PersonelIzinHakki", b =>
@@ -9953,7 +9953,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("SoforId", "Yil")
                         .IsUnique();
 
-                    b.ToTable("PersonelIzinHaklari");
+                    b.ToTable("PersonelIzinHaklari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PersonelMaas", b =>
@@ -10083,7 +10083,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("SoforId", "Yil", "Ay")
                         .IsUnique();
 
-                    b.ToTable("PersonelMaaslari");
+                    b.ToTable("PersonelMaaslari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PersonelOzlukEvrak", b =>
@@ -10148,7 +10148,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("SoforId");
 
-                    b.ToTable("PersonelOzlukEvraklar");
+                    b.ToTable("PersonelOzlukEvraklar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PersonelOzlukEvrakVersiyon", b =>
@@ -10207,7 +10207,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("PersonelOzlukEvrakId");
 
-                    b.ToTable("PersonelOzlukEvrakVersiyonlar");
+                    b.ToTable("PersonelOzlukEvrakVersiyonlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PersonelPuantaj", b =>
@@ -10314,7 +10314,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("PersonelId");
 
-                    b.ToTable("PersonelPuantajlar");
+                    b.ToTable("PersonelPuantajlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PiyasaArastirmaIlan", b =>
@@ -10447,7 +10447,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("ArastirmaId");
 
-                    b.ToTable("PiyasaArastirmaIlanlar");
+                    b.ToTable("PiyasaArastirmaIlanlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PiyasaIlan", b =>
@@ -10526,7 +10526,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("AracIlanId");
 
-                    b.ToTable("PiyasaIlanlari");
+                    b.ToTable("PiyasaIlanlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PiyasaKaynak", b =>
@@ -10590,7 +10590,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("PiyasaKaynaklar");
+                    b.ToTable("PiyasaKaynaklar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PlakaDonusum", b =>
@@ -10685,7 +10685,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("AracId", "EskiPlaka");
 
-                    b.ToTable("PlakaDonusumler");
+                    b.ToTable("PlakaDonusumler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.ProformaFatura", b =>
@@ -10804,7 +10804,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("ProformaNo")
                         .IsUnique();
 
-                    b.ToTable("ProformaFaturalar");
+                    b.ToTable("ProformaFaturalar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.ProformaFaturaKalem", b =>
@@ -10900,7 +10900,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("StokKartiId");
 
-                    b.ToTable("ProformaFaturaKalemler");
+                    b.ToTable("ProformaFaturaKalemler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PuantajAnomali", b =>
@@ -10986,7 +10986,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("PuantajKayitId");
 
-                    b.ToTable("PuantajAnomaliler");
+                    b.ToTable("PuantajAnomaliler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PuantajAuditLog", b =>
@@ -11043,7 +11043,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("HesapDonemiId", "AksiyonTarihi");
 
-                    b.ToTable("PuantajAuditLogs");
+                    b.ToTable("PuantajAuditLogs", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PuantajDetay", b =>
@@ -11104,7 +11104,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("OperasyonKaydiId", "HesapDonemiId")
                         .IsUnique();
 
-                    b.ToTable("PuantajDetaylari");
+                    b.ToTable("PuantajDetaylari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PuantajEslestirmeOneri", b =>
@@ -11158,7 +11158,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("ExcelImportId", "Tip", "ExcelDeger");
 
-                    b.ToTable("PuantajEslestirmeOnerileri");
+                    b.ToTable("PuantajEslestirmeOnerileri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PuantajExcelImport", b =>
@@ -11228,7 +11228,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("Yil", "Ay");
 
-                    b.ToTable("PuantajExcelImportlar");
+                    b.ToTable("PuantajExcelImportlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PuantajFinansalKayit", b =>
@@ -11324,7 +11324,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("PuantajKayitId", "HesapDonemiId")
                         .IsUnique();
 
-                    b.ToTable("PuantajFinansalKayitlar");
+                    b.ToTable("PuantajFinansalKayitlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PuantajHesapDonemi", b =>
@@ -11426,7 +11426,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("FirmaId", "Yil", "Ay", "KurumId", "Versiyon")
                         .IsUnique();
 
-                    b.ToTable("PuantajHesapDonemleri");
+                    b.ToTable("PuantajHesapDonemleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PuantajJobExecution", b =>
@@ -11503,7 +11503,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                         .IsUnique()
                         .HasFilter("\"Durum\" = 0");
 
-                    b.ToTable("PuantajJobExecutions");
+                    b.ToTable("PuantajJobExecutions", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.PuantajKayit", b =>
@@ -11900,7 +11900,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
 
-                    b.ToTable("PuantajKayitlar");
+                    b.ToTable("PuantajKayitlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Rol", b =>
@@ -11942,7 +11942,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("RolAdi")
                         .IsUnique();
 
-                    b.ToTable("Roller");
+                    b.ToTable("Roller", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.RolYetki", b =>
@@ -11981,7 +11981,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("RolId", "YetkiKodu")
                         .IsUnique();
 
-                    b.ToTable("RolYetkileri");
+                    b.ToTable("RolYetkileri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.SatisPersoneli", b =>
@@ -12045,7 +12045,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("PersonelKodu")
                         .IsUnique();
 
-                    b.ToTable("SatisPersonelleri");
+                    b.ToTable("SatisPersonelleri", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.ServisCalisma", b =>
@@ -12126,7 +12126,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("SoforId", "CalismaTarihi");
 
-                    b.ToTable("ServisCalismalari");
+                    b.ToTable("ServisCalismalari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.ServisCalismaKiralama", b =>
@@ -12229,7 +12229,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("SoforId");
 
-                    b.ToTable("ServisCalismaKiralamalar");
+                    b.ToTable("ServisCalismaKiralamalar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.ServisKaydi", b =>
@@ -12336,7 +12336,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("AracId", "ServisTarihi");
 
-                    b.ToTable("ServisKayitlari");
+                    b.ToTable("ServisKayitlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.ServisKontrat", b =>
@@ -12433,7 +12433,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("TasimaTedarikciIsId");
 
-                    b.ToTable("ServisKontratlar");
+                    b.ToTable("ServisKontratlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.ServisOdeme", b =>
@@ -12484,7 +12484,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("ServisPuantajId");
 
-                    b.ToTable("ServisOdemeler");
+                    b.ToTable("ServisOdemeler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.ServisParca", b =>
@@ -12554,7 +12554,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("StokKartiId");
 
-                    b.ToTable("ServisParcalar");
+                    b.ToTable("ServisParcalar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.ServisPuantaj", b =>
@@ -12625,7 +12625,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("ServisKontratId", "Yil", "Ay")
                         .IsUnique();
 
-                    b.ToTable("ServisPuantajlar");
+                    b.ToTable("ServisPuantajlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.ServisTahsilat", b =>
@@ -12676,7 +12676,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("ServisPuantajId");
 
-                    b.ToTable("ServisTahsilatlar");
+                    b.ToTable("ServisTahsilatlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.SmsAyar", b =>
@@ -12743,7 +12743,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("FirmaId");
 
-                    b.ToTable("SmsAyarlari");
+                    b.ToTable("SmsAyarlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.SmsLog", b =>
@@ -12815,7 +12815,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("SmsAyarId");
 
-                    b.ToTable("SmsLoglari");
+                    b.ToTable("SmsLoglari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.SmsSablon", b =>
@@ -12868,7 +12868,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("FirmaId");
 
-                    b.ToTable("SmsSablonlari");
+                    b.ToTable("SmsSablonlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Sofor", b =>
@@ -13173,7 +13173,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("StokKartiId", "IslemTarihi");
 
-                    b.ToTable("StokHareketler");
+                    b.ToTable("StokHareketler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.StokKarti", b =>
@@ -13285,7 +13285,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("VarsayilanTedarikciId");
 
-                    b.ToTable("StokKartlari");
+                    b.ToTable("StokKartlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.StokKategori", b =>
@@ -13342,7 +13342,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("UstKategoriId");
 
-                    b.ToTable("StokKategoriler");
+                    b.ToTable("StokKategoriler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Sube", b =>
@@ -13394,7 +13394,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
 
-                    b.ToTable("Subeler");
+                    b.ToTable("Subeler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.TasimaTedarikci", b =>
@@ -13490,7 +13490,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("TedarikciKodu")
                         .IsUnique();
 
-                    b.ToTable("TasimaTedarikciler");
+                    b.ToTable("TasimaTedarikciler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.TasimaTedarikciIs", b =>
@@ -13556,7 +13556,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("TasimaTedarikciId", "GuzergahId", "BaslangicTarihi");
 
-                    b.ToTable("TasimaTedarikciIsler");
+                    b.ToTable("TasimaTedarikciIsler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.TedarikciEvrak", b =>
@@ -13628,7 +13628,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("TasimaTedarikciId", "EvrakKategorisi");
 
-                    b.ToTable("TedarikciEvraklari");
+                    b.ToTable("TedarikciEvraklari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.TedarikciEvrakDosya", b =>
@@ -13684,7 +13684,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("TedarikciEvrakId");
 
-                    b.ToTable("TedarikciEvrakDosyalari");
+                    b.ToTable("TedarikciEvrakDosyalari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.TekrarlayanOdeme", b =>
@@ -13764,7 +13764,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("MasrafKalemi");
 
-                    b.ToTable("TekrarlayanOdemeler");
+                    b.ToTable("TekrarlayanOdemeler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.WebhookEndpoint", b =>
@@ -13841,7 +13841,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("WebhookEndpointler");
+                    b.ToTable("WebhookEndpointler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.WebhookLog", b =>
@@ -13909,7 +13909,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("WebhookEndpointId");
 
-                    b.ToTable("WebhookLoglar");
+                    b.ToTable("WebhookLoglar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.WhatsAppAyar", b =>
@@ -13958,7 +13958,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("KullaniciId");
 
-                    b.ToTable("WhatsAppAyarlari");
+                    b.ToTable("WhatsAppAyarlari", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.WhatsAppGrup", b =>
@@ -13991,7 +13991,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("WhatsAppGruplar");
+                    b.ToTable("WhatsAppGruplar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.WhatsAppGrupUye", b =>
@@ -14028,7 +14028,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
 
-                    b.ToTable("WhatsAppGrupUyeler");
+                    b.ToTable("WhatsAppGrupUyeler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.WhatsAppKisi", b =>
@@ -14075,7 +14075,7 @@ namespace KOAFiloServis.Web.Data.Migrations
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
 
-                    b.ToTable("WhatsAppKisiler");
+                    b.ToTable("WhatsAppKisiler", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.WhatsAppMesaj", b =>
@@ -14131,7 +14131,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("KisiId");
 
-                    b.ToTable("WhatsAppMesajlar");
+                    b.ToTable("WhatsAppMesajlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.WhatsAppSablon", b =>
@@ -14168,7 +14168,7 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("WhatsAppSablonlar");
+                    b.ToTable("WhatsAppSablonlar", (string)null);
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.AktiviteLog", b =>

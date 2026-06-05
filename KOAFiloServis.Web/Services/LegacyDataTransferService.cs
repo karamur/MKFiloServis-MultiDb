@@ -1,4 +1,4 @@
-using KOAFiloServis.Shared.Entities;
+﻿using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -217,7 +217,12 @@ public class LegacyDataTransferService
             await InsertIfNotExistsAsync(target,
                 @"INSERT INTO ""Roller"" (""Id"", ""RolAdi"", ""Aciklama"", ""Renk"", ""SistemRolu"", ""IsDeleted"", ""CreatedAt"", ""UpdatedAt"")
                   VALUES (@id,@ad,@aciklama,@renk,@sistem,@isdel,@ca,@ua)
-                  ON CONFLICT (""Id"") DO NOTHING",
+                  ON CONFLICT (""RolAdi"") DO UPDATE SET
+                    ""Aciklama"" = EXCLUDED.""Aciklama"",
+                    ""Renk"" = EXCLUDED.""Renk"",
+                    ""SistemRolu"" = EXCLUDED.""SistemRolu"",
+                    ""IsDeleted"" = EXCLUDED.""IsDeleted"",
+                    ""UpdatedAt"" = EXCLUDED.""UpdatedAt""",
                 new NpgsqlParameter("@id", reader.GetInt32(0)),
                 new NpgsqlParameter("@ad", reader.GetString(1)),
                 new NpgsqlParameter("@aciklama", reader.IsDBNull(2) ? DBNull.Value : reader.GetString(2)),

@@ -1,5 +1,6 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.Data;
 
 namespace KOAFiloServis.Web.Data.Migrations;
 
@@ -156,12 +157,19 @@ public static class SyncPuantajSchemaMigrationHelper
         // Soft-deleted rows are excluded — engine re-runs create new versions
         // without old soft-deleted rows blocking the unique key space.
         // This is the canonical PostgreSQL soft-delete uniqueness pattern.
-        await ctx.Database.ExecuteSqlRawAsync(@"
-            DROP INDEX IF EXISTS ""IX_PuantajKayitlar_Yil_Ay_GuzergahId_AracId_Slot"";
-            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_PuantajKayitlar_Yil_Ay_GuzergahId_AracId_Slot""
-                ON ""PuantajKayitlar"" (""Yil"", ""Ay"", ""GuzergahId"", ""AracId"", ""Slot"")
-                WHERE ""IsDeleted"" = false;
-        ");
+        if (await HasColumnsAsync(ctx, "PuantajKayitlar", "Yil", "Ay", "GuzergahId", "AracId", "Slot", "IsDeleted"))
+        {
+            await ctx.Database.ExecuteSqlRawAsync(@"
+                DROP INDEX IF EXISTS ""IX_PuantajKayitlar_Yil_Ay_GuzergahId_AracId_Slot"";
+                CREATE UNIQUE INDEX IF NOT EXISTS ""IX_PuantajKayitlar_Yil_Ay_GuzergahId_AracId_Slot""
+                    ON ""PuantajKayitlar"" (""Yil"", ""Ay"", ""GuzergahId"", ""AracId"", ""Slot"")
+                    WHERE ""IsDeleted"" = false;
+            ");
+        }
+        else
+        {
+            logger?.LogWarning("SyncPuantajSchemaMigrationHelper: PuantajKayitlar unique index adimi atlandi (gerekli kolonlar eksik).");
+        }
 
         await ctx.Database.ExecuteSqlRawAsync(@"
             CREATE UNIQUE INDEX IF NOT EXISTS ""IX_OperasyonKayitlari_Tarih_GuzergahId_AracId_Slot""
@@ -255,5 +263,50 @@ public static class SyncPuantajSchemaMigrationHelper
         }
 
         logger?.LogInformation("SyncPuantajSchemaMigrationHelper: completed.");
+    }
+
+    private static async Task<bool> HasColumnsAsync(ApplicationDbContext ctx, string tableName, params string[] requiredColumns)
+    {
+        var connection = ctx.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = @"
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = @tableName;";
+
+            var tableParameter = command.CreateParameter();
+            tableParameter.ParameterName = "@tableName";
+            tableParameter.Value = tableName;
+            command.Parameters.Add(tableParameter);
+
+            var existingColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                existingColumns.Add(reader.GetString(0));
+            }
+
+            return requiredColumns.All(existingColumns.Contains);
+        }
+        catch
+        {
+            return false;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
     }
 }

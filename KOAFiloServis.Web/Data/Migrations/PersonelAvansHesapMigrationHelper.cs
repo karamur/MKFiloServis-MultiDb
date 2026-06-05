@@ -16,8 +16,48 @@ public static class PersonelAvansHesapMigrationHelper
         {
             if (!context.Database.IsNpgsql()) return;
 
-            var ayar = await context.MuhasebeAyarlari.OrderBy(a => a.Id).FirstOrDefaultAsync() ?? new MuhasebeAyar();
-            var avansPrefix = string.IsNullOrWhiteSpace(ayar.PersonelAvansPrefix) ? "195.01" : ayar.PersonelAvansPrefix;
+            var avansPrefix = "195.01";
+            try
+            {
+                var conn = context.Database.GetDbConnection();
+                var shouldClose = conn.State != System.Data.ConnectionState.Open;
+                if (shouldClose)
+                {
+                    await conn.OpenAsync();
+                }
+
+                try
+                {
+                    await using var cmd = conn.CreateCommand();
+                    cmd.CommandText = @"
+                        SELECT ""PersonelAvansPrefix""
+                        FROM ""MuhasebeAyarlari""
+                        ORDER BY ""Id""
+                        LIMIT 1;";
+
+                    var value = await cmd.ExecuteScalarAsync();
+                    if (value != null)
+                    {
+                        var prefix = value.ToString();
+                        if (!string.IsNullOrWhiteSpace(prefix))
+                        {
+                            avansPrefix = prefix;
+                        }
+                    }
+                }
+                finally
+                {
+                    if (shouldClose)
+                    {
+                        await conn.CloseAsync();
+                    }
+                }
+            }
+            catch
+            {
+                // MuhasebeAyarlari tablosu/kolonu eski tenant şemasında eksik olabilir.
+                // Varsayılan prefix ile devam edilir.
+            }
 
             // 195 ana hesabını kontrol et/oluştur
             var kod195 = avansPrefix.Split('.')[0];

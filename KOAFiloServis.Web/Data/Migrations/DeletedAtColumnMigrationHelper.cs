@@ -75,6 +75,14 @@ END; $$;";
             @"ALTER TABLE ""OperasyonKayitlari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
             // AracMasraflari
             @"ALTER TABLE ""AracMasraflari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
+            // Kural 5: IFirmaTenant implementasyonu olan ancak FirmaId kolonu eksik kritik tablolar
+            @"ALTER TABLE ""AktiviteLoglar"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
+            @"ALTER TABLE ""Kullanicilar"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER DEFAULT 1",
+            @"ALTER TABLE ""Roller"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER DEFAULT 1",
+            @"ALTER TABLE ""RolYetkileri"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER DEFAULT 1",
+            @"ALTER TABLE ""Lisanslar"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER DEFAULT 1",
+            @"ALTER TABLE ""AppAyarlari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER DEFAULT 1",
+            @"ALTER TABLE ""Organizasyonlar"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER DEFAULT 1",
         };
 
         // Eksik tabloları oluştur (EF entity modeli ile uyumlu)
