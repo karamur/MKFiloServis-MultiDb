@@ -363,7 +363,7 @@ KOAFiloServis-MultiDb/
 
 - [ ] MAUI şoför uygulaması
 - [x] e-Fatura / e-Arşiv entegrasyonu ✅ (UBL-TR 1.2 XML + Luca Portal + auto-sync)
-- [ ] AI puantaj anomali tespiti
+- [x] AI puantaj anomali tespiti ✅ (10 tip + kural-tabanlı + Ollama AI + haftalık job)
 - [ ] Çoklu dil desteği (i18n)
 - [x] Faz 4 — IFirmaTenant temizliği ✅ (Haziran 2026: 10/10 kritik risk kapatıldı)
 - [x] Faz 5 — Holding konsolidasyon ✅ (BUTCE + FK + Quartz job)
