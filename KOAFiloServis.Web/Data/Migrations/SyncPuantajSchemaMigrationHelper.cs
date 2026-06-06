@@ -168,7 +168,7 @@ public static class SyncPuantajSchemaMigrationHelper
         }
         else
         {
-            logger?.LogWarning("SyncPuantajSchemaMigrationHelper: PuantajKayitlar unique index adimi atlandi (gerekli kolonlar eksik).");
+            logger?.LogInformation("SyncPuantajSchemaMigrationHelper: PuantajKayitlar unique index adimi atlandi (gerekli kolonlar eksik). Bu tenant için bilgi amaçlıdır.");
         }
 
         await ctx.Database.ExecuteSqlRawAsync(@"
