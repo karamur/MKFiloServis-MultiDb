@@ -214,24 +214,31 @@ public class LegacyDataTransferService
 
         while (await reader.ReadAsync())
         {
-            await InsertIfNotExistsAsync(target,
-                @"INSERT INTO ""Roller"" (""Id"", ""RolAdi"", ""Aciklama"", ""Renk"", ""SistemRolu"", ""IsDeleted"", ""CreatedAt"", ""UpdatedAt"")
-                  VALUES (@id,@ad,@aciklama,@renk,@sistem,@isdel,@ca,@ua)
-                  ON CONFLICT (""RolAdi"") DO UPDATE SET
-                    ""Aciklama"" = EXCLUDED.""Aciklama"",
-                    ""Renk"" = EXCLUDED.""Renk"",
-                    ""SistemRolu"" = EXCLUDED.""SistemRolu"",
-                    ""IsDeleted"" = EXCLUDED.""IsDeleted"",
-                    ""UpdatedAt"" = EXCLUDED.""UpdatedAt""",
-                new NpgsqlParameter("@id", reader.GetInt32(0)),
-                new NpgsqlParameter("@ad", reader.GetString(1)),
-                new NpgsqlParameter("@aciklama", reader.IsDBNull(2) ? DBNull.Value : reader.GetString(2)),
-                new NpgsqlParameter("@renk", reader.IsDBNull(3) ? DBNull.Value : reader.GetString(3)),
-                new NpgsqlParameter("@sistem", reader.GetBoolean(4)),
-                new NpgsqlParameter("@isdel", reader.GetBoolean(5)),
-                new NpgsqlParameter("@ca", reader.GetDateTime(6)),
-                new NpgsqlParameter("@ua", reader.IsDBNull(7) ? DBNull.Value : reader.GetDateTime(7)));
-            result.Transferred++;
+            try
+            {
+                await InsertIfNotExistsAsync(target,
+                    @"INSERT INTO ""Roller"" (""Id"", ""RolAdi"", ""Aciklama"", ""Renk"", ""SistemRolu"", ""IsDeleted"", ""CreatedAt"", ""UpdatedAt"")
+                      VALUES (@id,@ad,@aciklama,@renk,@sistem,@isdel,@ca,@ua)
+                      ON CONFLICT (""RolAdi"") DO UPDATE SET
+                        ""Aciklama"" = EXCLUDED.""Aciklama"",
+                        ""Renk"" = EXCLUDED.""Renk"",
+                        ""SistemRolu"" = EXCLUDED.""SistemRolu"",
+                        ""IsDeleted"" = EXCLUDED.""IsDeleted"",
+                        ""UpdatedAt"" = EXCLUDED.""UpdatedAt""",
+                    new NpgsqlParameter("@id", reader.GetInt32(0)),
+                    new NpgsqlParameter("@ad", reader.GetString(1)),
+                    new NpgsqlParameter("@aciklama", reader.IsDBNull(2) ? DBNull.Value : reader.GetString(2)),
+                    new NpgsqlParameter("@renk", reader.IsDBNull(3) ? DBNull.Value : reader.GetString(3)),
+                    new NpgsqlParameter("@sistem", reader.GetBoolean(4)),
+                    new NpgsqlParameter("@isdel", reader.GetBoolean(5)),
+                    new NpgsqlParameter("@ca", reader.GetDateTime(6)),
+                    new NpgsqlParameter("@ua", reader.IsDBNull(7) ? DBNull.Value : reader.GetDateTime(7)));
+                result.Transferred++;
+            }
+            catch (PostgresException ex) when (ex.SqlState == "23505")
+            {
+                // Farklı unique constraint (ör. Roller_pkey) çakışmalarında kayıt zaten mevcut kabul edilir.
+            }
         }
         _logger.LogInformation("Roller: {Count} kayit", result.Transferred);
         return result;

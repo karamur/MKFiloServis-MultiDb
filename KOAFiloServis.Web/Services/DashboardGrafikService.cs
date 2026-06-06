@@ -1,8 +1,9 @@
-using KOAFiloServis.Shared.Entities;
+﻿using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
 using KOAFiloServis.Web.Models;
 using KOAFiloServis.Web.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using System.Globalization;
 
 namespace KOAFiloServis.Web.Services;
@@ -201,29 +202,51 @@ public class DashboardGrafikService : IDashboardGrafikService
     public async Task<List<CariTipDagilimi>> GetCariTipDagilimiAsync()
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var cariler = await context.Cariler
-            .AsNoTracking()
-            .Where(c => !c.IsDeleted)
-            .Select(c => new
-            {
-                c.CariTipi,
-                c.Borc,
-                c.Alacak
-            })
-            .ToListAsync();
 
-        var gruplar = cariler
-            .GroupBy(c => c.CariTipi)
-            .Select(g => new CariTipDagilimi
-            {
-                TipAdi = GetCariTipAdi(g.Key),
-                Adet = g.Count(),
-                ToplamBakiye = g.Sum(x => x.Alacak - x.Borc)
-            })
-            .OrderByDescending(x => x.Adet)
-            .ToList();
+        try
+        {
+            var cariler = await context.Cariler
+                .AsNoTracking()
+                .Where(c => !c.IsDeleted)
+                .Select(c => new
+                {
+                    c.CariTipi,
+                    c.Borc,
+                    c.Alacak
+                })
+                .ToListAsync();
 
-        return gruplar;
+            return cariler
+                .GroupBy(c => c.CariTipi)
+                .Select(g => new CariTipDagilimi
+                {
+                    TipAdi = GetCariTipAdi(g.Key),
+                    Adet = g.Count(),
+                    ToplamBakiye = g.Sum(x => x.Alacak - x.Borc)
+                })
+                .OrderByDescending(x => x.Adet)
+                .ToList();
+        }
+        catch (PostgresException ex) when (ex.SqlState == "42703")
+        {
+            // Eski tenant şemasında Borc/Alacak kolonu yoksa yalnızca adet dağılımını döndür.
+            var cariler = await context.Cariler
+                .AsNoTracking()
+                .Where(c => !c.IsDeleted)
+                .Select(c => c.CariTipi)
+                .ToListAsync();
+
+            return cariler
+                .GroupBy(c => c)
+                .Select(g => new CariTipDagilimi
+                {
+                    TipAdi = GetCariTipAdi(g.Key),
+                    Adet = g.Count(),
+                    ToplamBakiye = 0
+                })
+                .OrderByDescending(x => x.Adet)
+                .ToList();
+        }
     }
 
     public async Task<List<AylikButceVeri>> GetAylikButceAsync(int aySayisi = 6)

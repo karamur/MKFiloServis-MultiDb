@@ -1,4 +1,4 @@
-using KOAFiloServis.Shared.Entities;
+﻿using KOAFiloServis.Shared.Entities;
 
 namespace KOAFiloServis.Web.Services;
 
@@ -19,6 +19,7 @@ public interface ISoforService
     Task<List<Sofor>> GetByGorevAsync(PersonelGorev gorev);
     Task<List<Sofor>> GetActiveSoforlerAsync(); // Sadece aktif şoförler
     Task<List<Sofor>> GetActiveByGorevAsync(PersonelGorev gorev);
+    Task<int> GetActiveByGorevCountAsync(PersonelGorev gorev);
 
     // Muhasebe Hesap Entegrasyonu
     Task<int> TopluMuhasebeHesabiOlusturAsync();

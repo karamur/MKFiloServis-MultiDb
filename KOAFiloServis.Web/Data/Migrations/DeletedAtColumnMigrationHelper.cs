@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 
 namespace KOAFiloServis.Web.Data.Migrations;
 
@@ -56,9 +56,12 @@ END; $$;";
             @"ALTER TABLE ""BankaHesaplari"" ADD COLUMN IF NOT EXISTS ""IBAN"" VARCHAR(50)",
             @"ALTER TABLE ""BankaHesaplari"" ADD COLUMN IF NOT EXISTS ""AcilisBakiye"" DECIMAL(18,2) DEFAULT 0",
             @"ALTER TABLE ""BankaHesaplari"" ADD COLUMN IF NOT EXISTS ""Bakiye"" DECIMAL(18,2) DEFAULT 0",
+            // BankaKasaHareketleri — dashboard finans hareket listesi
+            @"ALTER TABLE ""BankaKasaHareketleri"" ADD COLUMN IF NOT EXISTS ""AracId"" INTEGER",
             // Personel — dashboard sofor + belge uyarilari
             @"ALTER TABLE ""Personeller"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
             @"ALTER TABLE ""Personeller"" ADD COLUMN IF NOT EXISTS ""KaynakFirmaId"" INTEGER",
+            @"ALTER TABLE ""Personeller"" ADD COLUMN IF NOT EXISTS ""KaynakKayitId"" INTEGER",
             @"ALTER TABLE ""Personeller"" ADD COLUMN IF NOT EXISTS ""Aktif"" BOOLEAN DEFAULT true",
             @"ALTER TABLE ""PersonelMaaslari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
             @"ALTER TABLE ""PersonelIzinleri"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
@@ -69,6 +72,12 @@ END; $$;";
             @"ALTER TABLE ""MuhasebeHesaplari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
             // Cariler
             @"ALTER TABLE ""Cariler"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
+            @"ALTER TABLE ""Cariler"" ADD COLUMN IF NOT EXISTS ""KaynakFirmaId"" INTEGER",
+            @"ALTER TABLE ""Cariler"" ADD COLUMN IF NOT EXISTS ""KaynakKayitId"" INTEGER",
+            @"ALTER TABLE ""Cariler"" ADD COLUMN IF NOT EXISTS ""Borc"" DECIMAL(18,2) DEFAULT 0",
+            @"ALTER TABLE ""Cariler"" ADD COLUMN IF NOT EXISTS ""Alacak"" DECIMAL(18,2) DEFAULT 0",
+            // Faturalar
+            @"ALTER TABLE ""Faturalar"" ADD COLUMN IF NOT EXISTS ""HakedisId"" INTEGER",
             // Hakedisler
             @"ALTER TABLE ""Hakedisler"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
             // Operasyon

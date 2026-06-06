@@ -210,6 +210,15 @@ public class SoforService : ISoforService
         return personeller;
     }
 
+    public async Task<int> GetActiveByGorevCountAsync(PersonelGorev gorev)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.Soforler
+            .AsNoTracking()
+            .Where(s => !s.IsDeleted && s.Aktif && s.Gorev == gorev)
+            .CountAsync();
+    }
+
     private static IQueryable<Sofor> QuerySoforler(ApplicationDbContext context, bool asNoTracking = true)
     {
         var query = context.Soforler

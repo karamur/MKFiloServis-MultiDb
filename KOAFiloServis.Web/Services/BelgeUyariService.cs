@@ -2,6 +2,7 @@
 using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace KOAFiloServis.Web.Services;
 
@@ -25,13 +26,16 @@ public class BelgeUyariService : IBelgeUyariService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var ozet = new BelgeUyariOzet();
-        var bugun = DateTime.Today;
-        var limitTarih = bugun.AddDays(yaklasanGunSayisi);
 
-        // Aktif tüm personeli al
-        var soforler = await context.Soforler
-            .Where(s => s.Aktif && !s.IsDeleted)
-            .ToListAsync();
+        try
+        {
+            var bugun = DateTime.Today;
+            var limitTarih = bugun.AddDays(yaklasanGunSayisi);
+
+            // Aktif tüm personeli al
+            var soforler = await context.Soforler
+                .Where(s => s.Aktif && !s.IsDeleted)
+                .ToListAsync();
 
         // Tüm personel özlük evraklarını tek sorguda al (GecerlilikBitisTarihi olan ve yaklaşan/geçmiş)
         var tumOzlukEvraklar = await context.PersonelOzlukEvraklar
@@ -223,12 +227,18 @@ public class BelgeUyariService : IBelgeUyariService
                 }
             }
         }
-        // Özet sayıları hesapla
-        ozet.ToplamKritikUyari = ozet.TumUyarilar.Count(u => u.Seviye == BelgeUyariSeviye.Kritik || u.Seviye == BelgeUyariSeviye.Acil);
-        ozet.ToplamUyari = ozet.TumUyarilar.Count;
+                // Özet sayıları hesapla
+                ozet.ToplamKritikUyari = ozet.TumUyarilar.Count(u => u.Seviye == BelgeUyariSeviye.Kritik || u.Seviye == BelgeUyariSeviye.Acil);
+                ozet.ToplamUyari = ozet.TumUyarilar.Count;
 
-        return ozet;
-    }
+                return ozet;
+            }
+            catch (PostgresException ex) when (ex.SqlState == "42703")
+            {
+                // Eski tenant şemasında eksik kolon/tablo varyasyonlarında dashboard'ı kırma.
+                return new BelgeUyariOzet();
+            }
+        }
 
     public async Task<List<PersonelBelgeTabloKalemi>> GetPersonelBelgeTablosuAsync()
     {

@@ -1,6 +1,7 @@
-using KOAFiloServis.Shared.Entities;
+﻿using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace KOAFiloServis.Web.Services;
 
@@ -43,10 +44,24 @@ public class ServisCalismaService : IServisCalismaService
     public async Task<List<ServisCalisma>> GetRecentAsync(int count = 5)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        return await CreateReadQuery(context)
-            .OrderByDescending(s => s.CalismaTarihi)
-            .Take(count)
-            .ToListAsync();
+
+        try
+        {
+            return await CreateReadQuery(context)
+                .OrderByDescending(s => s.CalismaTarihi)
+                .Take(count)
+                .ToListAsync();
+        }
+        catch (PostgresException ex) when (ex.SqlState == "42703")
+        {
+            // Eski tenant şemasında include zincirindeki bazı kolonlar eksik olabilir.
+            return await context.ServisCalismalari
+                .AsNoTracking()
+                .Where(s => !s.IsDeleted)
+                .OrderByDescending(s => s.CalismaTarihi)
+                .Take(count)
+                .ToListAsync();
+        }
     }
 
     public async Task<List<ServisCalisma>> GetByDateRangeAsync(DateTime startDate, DateTime endDate)

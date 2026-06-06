@@ -2,6 +2,7 @@
 using KOAFiloServis.Web.Data;
 using KOAFiloServis.Web.Models;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace KOAFiloServis.Web.Services;
 
@@ -415,34 +416,41 @@ public class BankaKasaHareketService : IBankaKasaHareketService
     public async Task<DashboardBankaStats> GetDashboardStatsAsync()
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        // Calculate balances using a single optimized query
-        var hesapBakiyeleri = await context.BankaHesaplari
-            .AsNoTracking()
-            .Where(h => !h.IsDeleted)
-            .Select(h => new
-            {
-                h.HesapTipi,
-                h.AcilisBakiye,
-                Girisler = QueryHareketler(context)
-                    .Where(hr => hr.BankaHesapId == h.Id && hr.HareketTipi == HareketTipi.Giris)
-                    .Sum(hr => (decimal?)hr.Tutar) ?? 0,
-                Cikislar = QueryHareketler(context)
-                    .Where(hr => hr.BankaHesapId == h.Id && hr.HareketTipi == HareketTipi.Cikis)
-                    .Sum(hr => (decimal?)hr.Tutar) ?? 0
-            })
-            .ToListAsync();
 
-        var stats = new DashboardBankaStats
+        try
         {
-            ToplamKasa = hesapBakiyeleri
-                .Where(h => h.HesapTipi == HesapTipi.Kasa)
-                .Sum(h => h.AcilisBakiye + h.Girisler - h.Cikislar),
-            ToplamBanka = hesapBakiyeleri
-                .Where(h => h.HesapTipi != HesapTipi.Kasa)
-                .Sum(h => h.AcilisBakiye + h.Girisler - h.Cikislar)
-        };
+            // Calculate balances using a single optimized query
+            var hesapBakiyeleri = await context.BankaHesaplari
+                .AsNoTracking()
+                .Where(h => !h.IsDeleted)
+                .Select(h => new
+                {
+                    h.HesapTipi,
+                    h.AcilisBakiye,
+                    Girisler = QueryHareketler(context)
+                        .Where(hr => hr.BankaHesapId == h.Id && hr.HareketTipi == HareketTipi.Giris)
+                        .Sum(hr => (decimal?)hr.Tutar) ?? 0,
+                    Cikislar = QueryHareketler(context)
+                        .Where(hr => hr.BankaHesapId == h.Id && hr.HareketTipi == HareketTipi.Cikis)
+                        .Sum(hr => (decimal?)hr.Tutar) ?? 0
+                })
+                .ToListAsync();
 
-        return stats;
+            return new DashboardBankaStats
+            {
+                ToplamKasa = hesapBakiyeleri
+                    .Where(h => h.HesapTipi == HesapTipi.Kasa)
+                    .Sum(h => h.AcilisBakiye + h.Girisler - h.Cikislar),
+                ToplamBanka = hesapBakiyeleri
+                    .Where(h => h.HesapTipi != HesapTipi.Kasa)
+                    .Sum(h => h.AcilisBakiye + h.Girisler - h.Cikislar)
+            };
+        }
+        catch (PostgresException ex) when (ex.SqlState == "42703")
+        {
+            // Eski tenant şemasında bazı kolonlar eksikse dashboard finans kartı sıfır değerle devam eder.
+            return new DashboardBankaStats();
+        }
     }
 
     // Mahsup İşlemleri

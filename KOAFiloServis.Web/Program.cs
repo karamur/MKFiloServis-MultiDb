@@ -1051,15 +1051,22 @@ await RunScopedSafeAsync(app, "ApplyMigrations", async services =>
 
     // Kural 15: FisNoCounters'a FirmaId + composite PK (idempotent)
     await ctx.Database.ExecuteSqlRawAsync(@"
-        DO $$ BEGIN
+        DO $$ DECLARE pk_count int;
+        BEGIN
             ALTER TABLE ""FisNoCounters"" ADD COLUMN IF NOT EXISTS ""FirmaId"" integer NOT NULL DEFAULT 0;
-        EXCEPTION WHEN duplicate_column THEN END; $$;
-        DO $$ BEGIN
-            ALTER TABLE ""FisNoCounters"" DROP CONSTRAINT IF EXISTS ""PK_FisNoCounters"";
-        EXCEPTION WHEN undefined_object THEN END; $$;
-        DO $$ BEGIN
-            ALTER TABLE ""FisNoCounters"" ADD PRIMARY KEY (""Prefix"", ""FirmaId"", ""YilAy"");
-        EXCEPTION WHEN duplicate_table THEN END; $$;
+
+            SELECT COUNT(*) INTO pk_count
+            FROM pg_constraint c
+            JOIN pg_class t ON t.oid = c.conrelid
+            JOIN pg_namespace n ON n.oid = t.relnamespace
+            WHERE c.contype = 'p'
+              AND n.nspname = 'public'
+              AND t.relname = 'FisNoCounters';
+
+            IF pk_count = 0 THEN
+                ALTER TABLE ""FisNoCounters"" ADD PRIMARY KEY (""Prefix"", ""FirmaId"", ""YilAy"");
+            END IF;
+        END $$;
     ");
 
     logger.LogInformation("Migration helper'lar tek veritabaninda uygulandi.");
@@ -1106,11 +1113,22 @@ if (dbProvider == "PostgreSQL")
             try
             {
                 var sql = $"""
-                    SELECT setval(
-                        pg_get_serial_sequence('"{table}"', 'Id'),
-                        COALESCE((SELECT MAX("Id") FROM "{table}"), 0) + 1,
-                        false
-                    );
+                    DO $$
+                    DECLARE seq_name text;
+                    BEGIN
+                        IF to_regclass('"{table}"') IS NOT NULL THEN
+                            SELECT pg_get_serial_sequence('"{table}"', 'Id') INTO seq_name;
+                            IF seq_name IS NOT NULL THEN
+                                EXECUTE format(
+                                    'SELECT setval(%L, COALESCE((SELECT MAX("Id") FROM "{table}"), 0) + 1, false)',
+                                    seq_name
+                                );
+                            END IF;
+                        END IF;
+                    EXCEPTION
+                        WHEN undefined_table OR undefined_column THEN
+                            NULL;
+                    END $$;
                     """;
                 await context.Database.ExecuteSqlRawAsync(sql);
                 fixed_++;

@@ -1,6 +1,7 @@
 ﻿using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace KOAFiloServis.Web.Data.Migrations;
 
@@ -103,11 +104,20 @@ public static class PersonelAvansHesapMigrationHelper
                 await context.SaveChangesAsync();
             }
 
-            // PersonelAvansHesapId eksik olan personel carilerini getir
-            var personelCariler = await context.Cariler
-                .IgnoreQueryFilters()
-                .Where(c => c.CariTipi == CariTipi.Personel && !c.IsDeleted && !c.PersonelAvansHesapId.HasValue)
-                .ToListAsync();
+            // PersonelAvansHesapId eksik olan personel carilerini getir (eski şemalarda Cariler'de Borc/Alacak olmayabilir)
+            List<Cari> personelCariler;
+            try
+            {
+                personelCariler = await context.Cariler
+                    .IgnoreQueryFilters()
+                    .Where(c => c.CariTipi == CariTipi.Personel && !c.IsDeleted && !c.PersonelAvansHesapId.HasValue)
+                    .ToListAsync();
+            }
+            catch (PostgresException ex) when (ex.SqlState == "42703")
+            {
+                Console.WriteLine($"PersonelAvansHesap: Cariler kolon uyumsuzluğu nedeniyle atlandı ({ex.MessageText}).");
+                return;
+            }
 
             int olusturulan = 0;
             foreach (var cari in personelCariler)
