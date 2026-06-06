@@ -85,6 +85,9 @@ END; $$;";
             @"ALTER TABLE ""OperasyonKayitlari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
             // AracMasraflari
             @"ALTER TABLE ""AracMasraflari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
+            // BankaKasaHareketleri + BudgetMasrafKalemleri — butce dashboard
+            @"ALTER TABLE ""BankaKasaHareketleri"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER DEFAULT 1",
+            @"ALTER TABLE ""BudgetMasrafKalemleri"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER DEFAULT 1",
             // Kural 5: IFirmaTenant implementasyonu olan ancak FirmaId kolonu eksik kritik tablolar
             @"ALTER TABLE ""AktiviteLoglar"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
             @"ALTER TABLE ""Kullanicilar"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER DEFAULT 1",
