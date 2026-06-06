@@ -62,6 +62,8 @@ END; $$;";
             @"ALTER TABLE ""Personeller"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
             @"ALTER TABLE ""Personeller"" ADD COLUMN IF NOT EXISTS ""KaynakFirmaId"" INTEGER",
             @"ALTER TABLE ""Personeller"" ADD COLUMN IF NOT EXISTS ""KaynakKayitId"" INTEGER",
+            @"ALTER TABLE ""Personeller"" ADD COLUMN IF NOT EXISTS ""TasimaTedarikciId"" INTEGER",
+            @"ALTER TABLE ""Personeller"" ADD COLUMN IF NOT EXISTS ""MuhasebeHesapId"" INTEGER",
             @"ALTER TABLE ""Personeller"" ADD COLUMN IF NOT EXISTS ""Aktif"" BOOLEAN DEFAULT true",
             @"ALTER TABLE ""PersonelMaaslari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
             @"ALTER TABLE ""PersonelIzinleri"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
@@ -94,6 +96,10 @@ END; $$;";
             // BankaKasaHareketleri + BudgetMasrafKalemleri — butce dashboard
             @"ALTER TABLE ""BankaKasaHareketleri"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER DEFAULT 1",
             @"ALTER TABLE ""BudgetMasrafKalemleri"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER DEFAULT 1",
+            @"ALTER TABLE ""BudgetMasrafKalemleri"" ADD COLUMN IF NOT EXISTS ""Icon"" VARCHAR(100)",
+            @"ALTER TABLE ""BudgetMasrafKalemleri"" ADD COLUMN IF NOT EXISTS ""Renk"" VARCHAR(20)",
+            @"ALTER TABLE ""BudgetMasrafKalemleri"" ADD COLUMN IF NOT EXISTS ""SiraNo"" INTEGER DEFAULT 0",
+            @"ALTER TABLE ""BudgetMasrafKalemleri"" ADD COLUMN IF NOT EXISTS ""Kategori"" VARCHAR(100)",
             // Kural 5: IFirmaTenant implementasyonu olan ancak FirmaId kolonu eksik kritik tablolar
             @"ALTER TABLE ""AktiviteLoglar"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
             @"ALTER TABLE ""Kullanicilar"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER DEFAULT 1",

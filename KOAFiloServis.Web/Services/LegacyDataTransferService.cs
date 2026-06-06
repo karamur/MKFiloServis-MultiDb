@@ -54,7 +54,7 @@ public class LegacyDataTransferService
         {
             try { return await transfer(); }
             catch (PostgresException ex) when (ex.SqlState == "42P01")
-            { _logger.LogWarning("{Name}: kaynak tablo yok, atlandi", name); return new(); }
+            { _logger.LogInformation("{Name}: kaynak tablo yok, atlandi", name); return new(); }
             catch (Exception ex)
             { _logger.LogWarning(ex, "{Name}: aktarim hatasi", name); return new(); }
         }
@@ -515,7 +515,8 @@ public class LegacyDataTransferService
 
             if (targetColsLower.Count == 0)
             {
-                _logger.LogWarning("{Table}: hedef tablo yok, atlandi", tableName);
+                // Kaynak DB'deki bu tablo hedef şemada bulunmuyor; beklenen bir durum.
+                _logger.LogInformation("{Table}: hedef tablo yok, atlandi", tableName);
                 return result;
             }
 
@@ -578,7 +579,7 @@ public class LegacyDataTransferService
         }
         catch (PostgresException ex) when (ex.SqlState == "42P01")
         {
-            _logger.LogWarning("{Table}: kaynak tablo yok", tableName);
+            _logger.LogInformation("{Table}: kaynak tablo yok", tableName);
         }
 
         _logger.LogInformation("{Table}: {Count} kayit", tableName, result.Transferred);
@@ -637,7 +638,7 @@ public class LegacyDataTransferService
         }
         catch (PostgresException ex) when (ex.SqlState == "42P01")
         {
-            _logger.LogWarning("{Table}: kaynak tablo yok, atlandi", sourceTable);
+            _logger.LogInformation("{Table}: kaynak tablo yok, atlandi", sourceTable);
         }
 
         _logger.LogInformation("{Table}: {Count} kayit", sourceTable, result.Transferred);

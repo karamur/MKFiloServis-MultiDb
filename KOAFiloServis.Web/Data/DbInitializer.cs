@@ -15,6 +15,7 @@ public static class DbInitializer
     private const string LastikStokBireyselTakipMigrationId = "20260421133935_LastikStokBireyselTakip";
     private const string AddLastikSezonAyarMigrationId = "20260507144644_AddLastikSezonAyar";
     private const string AddHakedisVeAracMaliyetSnapshotMigrationId = "20260512072224_AddHakedisVeAracMaliyetSnapshot";
+    private const string AddResimUrlToPiyasaIlanMigrationId = "20260325200834_AddResimUrlToPiyasaIlan";
 
     public static async Task EnsureMasterDatabaseAsync(IConfiguration configuration)
     {
@@ -278,8 +279,24 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
             if (pendingMigrations.Any())
             {
                 Console.WriteLine($"Bekleyen migration sayisi: {pendingMigrations.Count()}");
-                await context.Database.MigrateAsync();
-                Console.WriteLine("Migration'lar basariyla uygulandi.");
+
+                // AylikOdemeGerceklesenler tablosu olmayan eski tenant DB'lerinde
+                // bu migration DropForeignKey ile baslar ve 42P01 hatasina neden olur.
+                // Tablo fiziksel olarak yoksa migration'i gecmise kaydet, EF Core'un hata loglamasini onle.
+                if (context.Database.IsNpgsql()
+                    && pendingMigrations.Contains(AddResimUrlToPiyasaIlanMigrationId)
+                    && !await PostgreSqlTableExistsAsync(context, configuration, "AylikOdemeGerceklesenler"))
+                {
+                    await EnsurePostgreSqlMigrationHistoryEntryAsync(context, configuration, AddResimUrlToPiyasaIlanMigrationId);
+                    Console.WriteLine($"AylikOdemeGerceklesenler tablosu yok; migration atlandi: {AddResimUrlToPiyasaIlanMigrationId}");
+                    pendingMigrations = (await context.Database.GetPendingMigrationsAsync()).ToList();
+                }
+
+                if (pendingMigrations.Any())
+                {
+                    await context.Database.MigrateAsync();
+                    Console.WriteLine("Migration'lar basariyla uygulandi.");
+                }
             }
         }
         catch (Exception ex)

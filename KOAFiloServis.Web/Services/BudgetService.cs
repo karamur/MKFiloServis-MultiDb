@@ -28,28 +28,6 @@ public class BudgetService : IBudgetService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
 
-        // ─── DİAG-KAYIP ID=552: DB ham sorgu ───
-        var cs = context.Database.GetConnectionString() ?? "(null)";
-        Console.WriteLine($"[DİAG-KAYIP-552-DB] Bağlantı: {cs}");
-
-        var ham552 = await context.BudgetOdemeler.AsNoTracking().FirstOrDefaultAsync(o => o.Id == 552);
-        var ham552IgnoreFilter = await context.BudgetOdemeler.IgnoreQueryFilters().AsNoTracking().FirstOrDefaultAsync(o => o.Id == 552);
-        var toplamKayit = await context.BudgetOdemeler.CountAsync();
-
-        Console.WriteLine($"[DİAG-KAYIP-552-DB] AsNoTracking → {(ham552 != null ? "VAR" : "null")} | IgnoreQueryFilters → {(ham552IgnoreFilter != null ? "VAR" : "null")} | Toplam kayıt: {toplamKayit}");
-
-        if (ham552IgnoreFilter != null)
-        {
-            Console.WriteLine($"[DİAG-KAYIP-552-DB] KAYIT MEVCUT: OdemeYil={ham552IgnoreFilter.OdemeYil}, OdemeAy={ham552IgnoreFilter.OdemeAy}, Durum={ham552IgnoreFilter.Durum}, FirmaId={ham552IgnoreFilter.FirmaId?.ToString() ?? "null"}, OdemeTarihi={ham552IgnoreFilter.OdemeTarihi:yyyy-MM-dd}, IsDeleted={ham552IgnoreFilter.IsDeleted}, CreatedAt={ham552IgnoreFilter.CreatedAt}");
-        }
-
-        if (ham552IgnoreFilter != null && ham552 == null)
-        {
-            Console.WriteLine("[DİAG-KAYIP-552-DB] ⚠ SOFT-DELETE FILTRESI ID=552'yi gizliyor! IsDeleted=true olabilir.");
-        }
-
-        Console.WriteLine($"[DİAG-KAYIP-552-DB] GetOdemelerAsync parametreleri: yil={yil}, ay={ay?.ToString() ?? "null"}, firmaId={firmaId?.ToString() ?? "null"}");
-
         var query = context.BudgetOdemeler
             .Include(o => o.OdemeYapildigiHesap)
             .Include(o => o.Firma)
@@ -65,10 +43,6 @@ public class BudgetService : IBudgetService
             .OrderBy(o => o.OdemeAy)
             .ThenBy(o => o.OdemeTarihi)
             .ToListAsync();
-
-        // ─── DİAG-KAYIP ID=552: filtre sonrası ───
-        var kayip552 = odemeler.FirstOrDefault(o => o.Id == 552);
-        Console.WriteLine($"[DİAG-KAYIP-552-DB] Filtre sonrası sorguda ID=552 {(kayip552 != null ? "VAR" : "YOK")}");
 
         await DoldurOdemeHareketIzleriAsync(context, odemeler);
         return odemeler;
@@ -202,93 +176,8 @@ public class BudgetService : IBudgetService
 
         odeme.CreatedAt = DateTime.UtcNow;
 
-        // ─── DİAG-E: SaveChangesAsync öncesi entity dump ───
-        Console.WriteLine("================================");
-        Console.WriteLine($"[DİAG-E] CreateOdemeAsync - SaveChangesAsync ÖNCESİ:");
-        Console.WriteLine($"  Id                   = {odeme.Id}");
-        Console.WriteLine($"  FirmaId              = {odeme.FirmaId?.ToString() ?? "null"}");
-        Console.WriteLine($"  OdemeTarihi          = {odeme.OdemeTarihi:yyyy-MM-dd HH:mm:ss} (Kind={odeme.OdemeTarihi.Kind})");
-        Console.WriteLine($"  OdemeAy              = {odeme.OdemeAy}");
-        Console.WriteLine($"  OdemeYil             = {odeme.OdemeYil}");
-        Console.WriteLine($"  MasrafKalemi         = {odeme.MasrafKalemi}");
-        Console.WriteLine($"  Aciklama             = {odeme.Aciklama}");
-        Console.WriteLine($"  Miktar               = {odeme.Miktar}");
-        Console.WriteLine($"  Durum                = {odeme.Durum}");
-        Console.WriteLine($"  TaksitliMi           = {odeme.TaksitliMi}");
-        Console.WriteLine($"  CreatedAt            = {odeme.CreatedAt:yyyy-MM-dd HH:mm:ss}");
-        Console.WriteLine($"  UpdatedAt            = {odeme.UpdatedAt:yyyy-MM-dd HH:mm:ss}");
-        Console.WriteLine("================================");
-
         context.BudgetOdemeler.Add(odeme);
-        try
-        {
-            await context.SaveChangesAsync();
-            Console.WriteLine("[EF-SAVE] CreateOdemeAsync - Başarılı");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("================================");
-            Console.WriteLine("[EF-HATA] CreateOdemeAsync - EXCEPTION");
-            Console.WriteLine($"  Type: {ex.GetType().FullName}");
-            Console.WriteLine($"  Message: {ex.Message}");
-            Console.WriteLine(ex.ToString());
-
-            // PostgreSQL ozel hata detaylari
-            if (ex is Npgsql.PostgresException pgEx)
-            {
-                Console.WriteLine("----------- PG DETAIL -----------");
-                Console.WriteLine($"  SqlState:     {pgEx.SqlState}");
-                Console.WriteLine($"  Constraint:   {pgEx.ConstraintName}");
-                Console.WriteLine($"  Table:        {pgEx.TableName}");
-                Console.WriteLine($"  Column:       {pgEx.ColumnName}");
-                Console.WriteLine($"  Detail:       {pgEx.Detail}");
-                Console.WriteLine($"  Hint:         {pgEx.Hint}");
-                Console.WriteLine("----------------------------------");
-            }
-
-            if (ex.InnerException != null)
-            {
-                Console.WriteLine("----------- INNER -----------");
-                Console.WriteLine($"  Type: {ex.InnerException.GetType().FullName}");
-                Console.WriteLine($"  Message: {ex.InnerException.Message}");
-                Console.WriteLine(ex.InnerException.ToString());
-
-                if (ex.InnerException is Npgsql.PostgresException innerPg)
-                {
-                    Console.WriteLine("------- INNER PG DETAIL ------");
-                    Console.WriteLine($"  SqlState:     {innerPg.SqlState}");
-                    Console.WriteLine($"  Constraint:   {innerPg.ConstraintName}");
-                    Console.WriteLine($"  Table:        {innerPg.TableName}");
-                    Console.WriteLine($"  Column:       {innerPg.ColumnName}");
-                    Console.WriteLine($"  Detail:       {innerPg.Detail}");
-                    Console.WriteLine($"  Hint:         {innerPg.Hint}");
-                    Console.WriteLine("--------------------------------");
-                }
-            }
-
-            if (ex.InnerException?.InnerException != null)
-            {
-                Console.WriteLine("------ INNER INNER ----------");
-                Console.WriteLine($"  Type: {ex.InnerException.InnerException.GetType().FullName}");
-                Console.WriteLine($"  Message: {ex.InnerException.InnerException.Message}");
-                Console.WriteLine(ex.InnerException.InnerException.ToString());
-
-                if (ex.InnerException.InnerException is Npgsql.PostgresException innerInnerPg)
-                {
-                    Console.WriteLine("---- INNER INNER PG DETAIL ---");
-                    Console.WriteLine($"  SqlState:     {innerInnerPg.SqlState}");
-                    Console.WriteLine($"  Constraint:   {innerInnerPg.ConstraintName}");
-                    Console.WriteLine($"  Table:        {innerInnerPg.TableName}");
-                    Console.WriteLine($"  Column:       {innerInnerPg.ColumnName}");
-                    Console.WriteLine($"  Detail:       {innerInnerPg.Detail}");
-                    Console.WriteLine($"  Hint:         {innerInnerPg.Hint}");
-                    Console.WriteLine("--------------------------------");
-                }
-            }
-
-            Console.WriteLine("================================");
-            throw;
-        }
+        await context.SaveChangesAsync();
         return odeme;
     }
 
