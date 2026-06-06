@@ -16,6 +16,7 @@ public static class DbInitializer
     private const string AddLastikSezonAyarMigrationId = "20260507144644_AddLastikSezonAyar";
     private const string AddHakedisVeAracMaliyetSnapshotMigrationId = "20260512072224_AddHakedisVeAracMaliyetSnapshot";
     private const string AddResimUrlToPiyasaIlanMigrationId = "20260325200834_AddResimUrlToPiyasaIlan";
+    private const string TekrarlayanOdemeMigrationId = "20260326090740_TekrarlayanOdeme";
 
     public static async Task EnsureMasterDatabaseAsync(IConfiguration configuration)
     {
@@ -395,6 +396,12 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
                         && await PostgreSqlTableExistsAsync(context, configuration, "AracMaliyetSnapshotlari"))
                     {
                         recoverableMigrations.Add(AddHakedisVeAracMaliyetSnapshotMigrationId);
+                    }
+
+                    if (pendingMigrations.Contains(TekrarlayanOdemeMigrationId)
+                        && await PostgreSqlTableExistsAsync(context, configuration, "TekrarlayanOdemeler"))
+                    {
+                        recoverableMigrations.Add(TekrarlayanOdemeMigrationId);
                     }
 
                     if (recoverableMigrations.Any())
