@@ -78,6 +78,11 @@ END; $$;";
             @"ALTER TABLE ""Cariler"" ADD COLUMN IF NOT EXISTS ""PersonelAvansHesapId"" INTEGER",
             @"ALTER TABLE ""Cariler"" ADD COLUMN IF NOT EXISTS ""Borc"" DECIMAL(18,2) DEFAULT 0",
             @"ALTER TABLE ""Cariler"" ADD COLUMN IF NOT EXISTS ""Alacak"" DECIMAL(18,2) DEFAULT 0",
+            @"ALTER TABLE ""Cariler"" ADD COLUMN IF NOT EXISTS ""SoforId"" INTEGER",
+            @"ALTER TABLE ""Cariler"" ADD COLUMN IF NOT EXISTS ""SozlesmeBaslangicTarihi"" TIMESTAMP",
+            @"ALTER TABLE ""Cariler"" ADD COLUMN IF NOT EXISTS ""SozlesmeBitisTarihi"" TIMESTAMP",
+            @"ALTER TABLE ""Cariler"" ADD COLUMN IF NOT EXISTS ""SozlesmeNo"" VARCHAR(100)",
+            @"ALTER TABLE ""Cariler"" ADD COLUMN IF NOT EXISTS ""YetkiliKisi"" VARCHAR(200)",
             // Faturalar
             @"ALTER TABLE ""Faturalar"" ADD COLUMN IF NOT EXISTS ""HakedisId"" INTEGER",
             // Hakedisler
