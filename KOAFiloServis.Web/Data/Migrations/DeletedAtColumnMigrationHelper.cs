@@ -75,6 +75,7 @@ END; $$;";
             @"ALTER TABLE ""Cariler"" ADD COLUMN IF NOT EXISTS ""KaynakFirmaId"" INTEGER",
             @"ALTER TABLE ""Cariler"" ADD COLUMN IF NOT EXISTS ""KaynakKayitId"" INTEGER",
             @"ALTER TABLE ""Cariler"" ADD COLUMN IF NOT EXISTS ""MuhasebeHesapId"" INTEGER",
+            @"ALTER TABLE ""Cariler"" ADD COLUMN IF NOT EXISTS ""PersonelAvansHesapId"" INTEGER",
             @"ALTER TABLE ""Cariler"" ADD COLUMN IF NOT EXISTS ""Borc"" DECIMAL(18,2) DEFAULT 0",
             @"ALTER TABLE ""Cariler"" ADD COLUMN IF NOT EXISTS ""Alacak"" DECIMAL(18,2) DEFAULT 0",
             // Faturalar
