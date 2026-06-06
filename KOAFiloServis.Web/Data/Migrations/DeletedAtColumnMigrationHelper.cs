@@ -53,6 +53,8 @@ END; $$;";
             @"ALTER TABLE ""Guzergahlar"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
             // BankaHesaplari — dashboard finans verileri
             @"ALTER TABLE ""BankaHesaplari"" ADD COLUMN IF NOT EXISTS ""FirmaId"" INTEGER",
+            @"ALTER TABLE ""BankaHesaplari"" ADD COLUMN IF NOT EXISTS ""HesapKodu"" VARCHAR(50)",
+            @"ALTER TABLE ""BankaHesaplari"" ADD COLUMN IF NOT EXISTS ""HesapAdi"" VARCHAR(200)",
             @"ALTER TABLE ""BankaHesaplari"" ADD COLUMN IF NOT EXISTS ""IBAN"" VARCHAR(50)",
             @"ALTER TABLE ""BankaHesaplari"" ADD COLUMN IF NOT EXISTS ""AcilisBakiye"" DECIMAL(18,2) DEFAULT 0",
             @"ALTER TABLE ""BankaHesaplari"" ADD COLUMN IF NOT EXISTS ""Bakiye"" DECIMAL(18,2) DEFAULT 0",
