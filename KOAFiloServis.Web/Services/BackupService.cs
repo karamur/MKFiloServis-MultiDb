@@ -136,10 +136,10 @@ public class BackupService : IBackupService
 
             if (result.Success)
             {
-                // PostgreSQL: tüm tenant firma DB'lerini ve Master/Holding DB'leri de yedekle
+                // PostgreSQL: firma bazlı veri yedekleme (tek DB içinde)
                 if (dbProvider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase))
                 {
-                    await CreateTenantDatabaseBackupsAsync(backupFolder, timestamp);
+                    await CreateFirmaBazliYedeklemeAsync(backupFolder, timestamp);
                 }
 
                 settings.LastBackupTime = DateTime.Now;
@@ -155,84 +155,34 @@ public class BackupService : IBackupService
 
         return result;
     }
-    private async Task CreateTenantDatabaseBackupsAsync(string backupFolder, string timestamp)
+    /// <summary>
+    /// Tek PostgreSQL mimarisinde firma bazlı veri yedekleme.
+    /// Tüm firmalar aynı DB'de olduğu için tek pg_dump yeterlidir.
+    /// </summary>
+    private async Task CreateFirmaBazliYedeklemeAsync(string backupFolder, string timestamp)
     {
         try
         {
-            // Master DB'den tüm aktif firmaları ve DatabaseName'lerini oku
-            var tenantDbs = new List<(string DbName, string Label)>();
-            var masterConnStr = _configuration.GetConnectionString("MasterConnection")
-                ?? _configuration.GetConnectionString("DefaultConnection");
+            var connStr = _configuration.GetConnectionString("DefaultConnection");
+            if (string.IsNullOrWhiteSpace(connStr)) return;
 
-            if (!string.IsNullOrWhiteSpace(masterConnStr))
-            {
-                var masterParts = ParseConnectionString(masterConnStr);
-                var masterDbName = masterParts.GetValueOrDefault("Database", "");
+            var parts = ParseConnectionString(connStr);
+            var dbName = parts.GetValueOrDefault("Database", "KOAFiloServis");
+            var safeDbName = SanitizeFileName(dbName);
+            var backupPath = Path.Combine(backupFolder, $"KOAFiloServis_{safeDbName}_{timestamp}.backup");
 
-                // Holding DB bağlantısını al
-                var holdingConnStr = _configuration.GetConnectionString("HoldingConnection");
-                var holdingDbName = !string.IsNullOrWhiteSpace(holdingConnStr)
-                    ? ParseConnectionString(holdingConnStr).GetValueOrDefault("Database", "")
-                    : "";
+            await RunPgDumpForDatabaseAsync(connStr, backupPath, dbName);
 
-                // Tüm tenant DB'leri bul
-                using var scope = _serviceProvider.CreateScope();
-                var masterFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
-                await using var masterCtx = await masterFactory.CreateDbContextAsync();
-
-                var firmalar = await masterCtx.Firmalar
-                    .Where(f => f.Aktif && !f.IsDeleted && f.DatabaseName != null)
-                    .Select(f => new { f.DatabaseName, f.FirmaAdi, f.FirmaKodu })
-                    .ToListAsync();
-
-                foreach (var f in firmalar)
-                {
-                    if (!string.IsNullOrWhiteSpace(f.DatabaseName))
-                        tenantDbs.Add((f.DatabaseName, $"{f.FirmaKodu}_{f.FirmaAdi}"));
-                }
-
-                // Master DB'yi de yedekle
-                if (!string.IsNullOrWhiteSpace(masterDbName) && !tenantDbs.Any(t => t.DbName == masterDbName))
-                {
-                    var masterBackupPath = Path.Combine(backupFolder, $"KOAFiloServis_Master_{timestamp}.backup");
-                    await RunPgDumpForDatabaseAsync(masterConnStr, masterBackupPath, "Master");
-                }
-
-                // Holding DB'yi de yedekle
-                if (!string.IsNullOrWhiteSpace(holdingDbName) && !string.IsNullOrWhiteSpace(holdingConnStr)
-                    && holdingDbName != masterDbName && !tenantDbs.Any(t => t.DbName == holdingDbName))
-                {
-                    var holdingBackupPath = Path.Combine(backupFolder, $"KOAFiloServis_Holding_{timestamp}.backup");
-                    await RunPgDumpForDatabaseAsync(holdingConnStr, holdingBackupPath, "Holding");
-                }
-            }
-
-            // Her tenant DB için pg_dump çalıştır
-            foreach (var (dbName, label) in tenantDbs)
-            {
-                var safeLabel = SanitizeFileName(label);
-                var tenantBackupPath = Path.Combine(backupFolder, $"KOAFiloServis_Tenant_{safeLabel}_{timestamp}.backup");
-
-                // Tenant DB için connection string oluştur
-                var connStr = ResolveConnectionString("PostgreSQL");
-                if (!string.IsNullOrWhiteSpace(connStr))
-                {
-                    var parts = ParseConnectionString(connStr);
-                    var tenantConnStr = BuildPgConnectionString(
-                        parts.GetValueOrDefault("Host", "localhost"),
-                        parts.GetValueOrDefault("Port", "5432"),
-                        dbName,
-                        parts.GetValueOrDefault("Username", "postgres"),
-                        parts.GetValueOrDefault("Password", ""));
-                    await RunPgDumpForDatabaseAsync(tenantConnStr, tenantBackupPath, label);
-                }
-            }
-
-            _logger.LogInformation("Tenant DB yedekleme tamamlandi: {Count} tenant + Master + Holding", tenantDbs.Count);
+            // Firma listesini logla (tek DB içinde)
+            using var scope = _serviceProvider.CreateScope();
+            var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            await using var ctx = await factory.CreateDbContextAsync();
+            var firmaCount = await ctx.Firmalar.CountAsync(f => f.Aktif && !f.IsDeleted);
+            _logger.LogInformation("Tek DB yedeklendi: {DbName}, {FirmaCount} aktif firma", dbName, firmaCount);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Tenant DB yedekleme hatasi (ana yedek alindi, tenant yedekler atlandi)");
+            _logger.LogWarning(ex, "Firma bazli yedekleme hatasi (ana yedek alindi, ek yedekleme atlandi)");
         }
     }
 

@@ -104,6 +104,12 @@ if (!hasExplicitUrls && !isIisHosted && builder.Environment.IsDevelopment())
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// SignalR hub options (Production hardening)
+builder.Services.Configure<Microsoft.AspNetCore.SignalR.HubOptions>(options =>
+{
+    options.MaximumReceiveMessageSize = 128 * 1024; // 128KB
+});
+
 builder.Services.AddSingleton<AktiviteLogInterceptor>();
 builder.Services.AddSingleton<ICurrentUserAccessor, CurrentUserAccessor>();
 
@@ -112,6 +118,10 @@ builder.Services.AddPooledDbContextFactory<ApplicationDbContext>((sp, options) =
 {
     var enableSensitiveDataLogging = builder.Environment.IsDevelopment() &&
         builder.Configuration.GetValue<bool>("EntityFramework:EnableSensitiveDataLogging");
+
+    // Production: varsayılan NoTracking — salt-okunur sorgularda change tracker overhead'ini kaldırır.
+    // CRUD işlemleri .AsTracking() ile explicit tracking kullanır.
+    options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
 
     if (dbProvider == "PostgreSQL")
     {
