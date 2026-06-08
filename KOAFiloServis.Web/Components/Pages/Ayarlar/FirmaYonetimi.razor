@@ -4,8 +4,9 @@
 @using Microsoft.AspNetCore.Components.Forms
 @inject IFirmaService FirmaService
 @inject ICariService CariService
-@inject ITenantDatabaseService TenantDbService
+
 @inject IToastService ToastService
+@* No functional change. *@
 @rendermode InteractiveServer
 
 <PageTitle>Firma Yonetimi</PageTitle>
@@ -14,14 +15,6 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h3><i class="bi bi-building me-2"></i>Firma Yonetimi</h3>
         <div class="d-flex gap-2">
-            <button class="btn btn-outline-secondary" disabled="@tumMigrationYukleniyor" @onclick="TumTenantMigrationUygula"
-                    title="DatabaseName atanmis tum tenant DB'lere bekleyen migration'lari uygular">
-                @if (tumMigrationYukleniyor)
-                { <span class="spinner-border spinner-border-sm me-1"></span> }
-                else
-                { <i class="bi bi-database-gear me-1"></i> }
-                Tum Tenant Migration
-            </button>
             <button class="btn btn-primary" @onclick="YeniFirmaAc">
                 <i class="bi bi-plus-lg me-1"></i>Yeni Firma
             </button>
@@ -206,31 +199,7 @@
                                         <i class="bi bi-trash"></i>
                                     </button>
                                 </div>
-                                @if (string.IsNullOrEmpty(firma.DatabaseName))
-                                {
-                                    <button class="btn btn-outline-info btn-sm w-100"
-                                            disabled="@(tenantDbYukleniyor == firma.Id)"
-                                            @onclick="() => TenantDbOlustur(firma)">
-                                        @if (tenantDbYukleniyor == firma.Id)
-                                        { <span class="spinner-border spinner-border-sm me-1"></span> }
-                                        else
-                                        { <i class="bi bi-database-add me-1"></i> }
-                                        Tenant DB Olustur
-                                    </button>
-                                }
-                                else
-                                {
-                                    <button class="btn btn-outline-secondary btn-sm w-100"
-                                            disabled="@(migrationYukleniyor == firma.Id)"
-                                            title="Bu tenant DB'ye bekleyen EF migration'larini uygular"
-                                            @onclick="() => TenantMigrationUygula(firma)">
-                                        @if (migrationYukleniyor == firma.Id)
-                                        { <span class="spinner-border spinner-border-sm me-1"></span> }
-                                        else
-                                        { <i class="bi bi-arrow-repeat me-1"></i> }
-                                        Migration Uygula
-                                    </button>
-                                }
+                                @* Tenant DB yaklaşımı terk edildi (Kural 2). Tek PostgreSQL + FirmaId izolasyonu. *@
                             </div>
                         </div>
                     </div>
@@ -395,9 +364,6 @@
     private string? logoHata;
     private int? atamaYukleniyorFirmaId;
     private bool topluAtaYukleniyor = false;
-    private int? tenantDbYukleniyor;
-    private int? migrationYukleniyor;
-    private bool tumMigrationYukleniyor;
     private string aramaMetni = string.Empty;
     private string durumFiltre = string.Empty;
     private string cariFiltre = string.Empty;
@@ -680,68 +646,6 @@
         catch (Exception ex)
         {
             ToastService.ShowError("Hata: " + ex.Message);
-        }
-    }
-
-    private async Task TenantDbOlustur(Firma firma)
-    {
-        tenantDbYukleniyor = firma.Id;
-        try
-        {
-            await TenantDbService.CreateTenantDatabaseAsync(firma.Id, migrateData: true);
-            var dbAdi = firma.DatabaseName ?? $"Koa_{firma.FirmaKodu}_{firma.Id:D3}";
-            ToastService.ShowSuccess($"Tenant DB olusturuldu: {dbAdi}. Veri gocu tamamlandi.");
-            await YenileAsync();
-        }
-        catch (Exception ex)
-        {
-            ToastService.ShowError("Tenant DB olusturulamadi: " + ex.Message);
-        }
-        finally
-        {
-            tenantDbYukleniyor = null;
-        }
-    }
-
-    private async Task TenantMigrationUygula(Firma firma)
-    {
-        migrationYukleniyor = firma.Id;
-        try
-        {
-            var count = await TenantDbService.ApplyPendingMigrationsAsync(firma.Id);
-            if (count > 0)
-                ToastService.ShowSuccess($"{firma.FirmaAdi}: {count} migration uygulandı.");
-            else
-                ToastService.ShowInfo($"{firma.FirmaAdi}: Bekleyen migration yok, DB güncel.");
-        }
-        catch (Exception ex)
-        {
-            ToastService.ShowError($"{firma.FirmaAdi} migration hatasi: " + ex.Message);
-        }
-        finally
-        {
-            migrationYukleniyor = null;
-        }
-    }
-
-    private async Task TumTenantMigrationUygula()
-    {
-        tumMigrationYukleniyor = true;
-        try
-        {
-            var (total, updated, errors) = await TenantDbService.ApplyPendingMigrationsToAllTenantsAsync();
-            if (errors == 0)
-                ToastService.ShowSuccess($"Migration tamamlandi: {total} firma incelendi, {updated} guncellendi.");
-            else
-                ToastService.ShowWarning($"Migration: {updated} guncellendi, {errors} hata olustu. Loglara bakiniz.");
-        }
-        catch (Exception ex)
-        {
-            ToastService.ShowError("Toplu migration hatasi: " + ex.Message);
-        }
-        finally
-        {
-            tumMigrationYukleniyor = false;
         }
     }
 

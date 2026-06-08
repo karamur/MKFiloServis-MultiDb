@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Shared.Exceptions;
 using KOAFiloServis.Web.Data;
@@ -21,7 +21,9 @@ public class PuantajProductionSimulationTests
     private readonly Mock<IPuantajEngineService> _engineMock = new();
     private readonly Mock<IAktifFirmaProvider> _firmaMock = new();
     private readonly Mock<IPuantajRetryPolicy> _retryPolicyMock = new();
+#pragma warning disable CS0618
     private readonly Mock<IDbContextFactory<MasterDbContext>> _masterDbFactoryMock = new();
+#pragma warning restore CS0618
     private readonly Mock<IDbContextFactory<ApplicationDbContext>> _appDbFactoryMock = new();
     private readonly Mock<ILogger<PuantajJobService>> _loggerMock = new();
 
@@ -106,8 +108,10 @@ public class PuantajProductionSimulationTests
     public async Task Test4_FatalException_NoRetry()
     {
         // FatalException test with ProcessAllTenants (firm enumeration error → Failed)
+#pragma warning disable CS0618
         _masterDbFactoryMock.Setup(x => x.CreateDbContextAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync((MasterDbContext)null!);
+#pragma warning restore CS0618
 
         var sut = BuildSut();
         var result = await sut.ProcessAllTenantsAsync(2026, 5, "Manuel");
@@ -158,7 +162,9 @@ public class PuantajProductionSimulationTests
     {
         var svc = new ServiceCollection();
         svc.AddSingleton(new Mock<IServiceScopeFactory>().Object);
+#pragma warning disable CS0618
         svc.AddSingleton(new Mock<IDbContextFactory<MasterDbContext>>().Object);
+#pragma warning restore CS0618
         svc.AddSingleton(new Mock<ILogger<PuantajReconciliationService>>().Object);
         svc.AddScoped<IPuantajReconciliationService, PuantajReconciliationService>();
 

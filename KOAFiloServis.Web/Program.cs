@@ -13,7 +13,6 @@ using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -252,9 +251,9 @@ builder.Services.AddScoped<NumaraSerisiService>(); // Kural 15: Firma bazlı num
 // OpenRouter AI Integration
 builder.Services.AddHttpClient<IOpenRouterService, OpenRouterService>();
 
-// Ollama AI Integration (yerel LLM / embedding)
-builder.Services.AddHttpClient("Ollama");
+// Ollama AI — kaldırıldı, stub implementasyon kayıtlı
 builder.Services.AddScoped<IOllamaService, OllamaService>();
+builder.Services.AddScoped<IOllamaAIChatService, OllamaAIChatService>();
 
 // DeepSeek AI Integration (DeepSeek V3)
 builder.Services.AddHttpClient<IDeepSeekService, DeepSeekService>();
@@ -662,12 +661,17 @@ await RunScopedSafeAsync(app, "MasterDatabase", async services =>
     await DbInitializer.EnsureMasterDatabaseAsync(configuration);
 });
 
-// DeletedAt + eksik kolonlar — DbInitializer seed kodundan ÖNCE çalışmalı
-await RunScopedSafeAsync(app, "DeletedAtColumnMigration", async services =>
+// Otomatik schema sync: EF modelindeki TÜM eksik kolonları tespit edip ekler
+// Not: DeletedAtColumnMigrationHelper kaldırıldı — SchemaSyncHelper tüm kolon + DeletedAt işlemlerini kapsar
+await RunScopedSafeAsync(app, "SchemaSync", async services =>
 {
     var context = services.GetRequiredService<ApplicationDbContext>();
-    await KOAFiloServis.Web.Data.Migrations.DeletedAtColumnMigrationHelper.EnsureDeletedAtColumnAsync(context);
-    await KOAFiloServis.Web.Data.Migrations.DeletedAtColumnMigrationHelper.EnsureMissingColumnsAsync(context);
+    // 1) Model bazlı eksik kolon taraması
+    await KOAFiloServis.Web.Data.Migrations.SchemaSyncHelper.EnsureAllColumnsExistAsync(context);
+    // 2) FisNoCounters: eski 2-kolon PK → 3-kolon unique index geçişi (42P10 hatasını önler)
+    await KOAFiloServis.Web.Data.Migrations.SchemaSyncHelper.EnsureFisNoCountersSchemaAsync(context);
+    // 3) Schema uyumlu hale geldi — bekleyen migration'ları "uygulandı" olarak işaretle
+    await KOAFiloServis.Web.Data.Migrations.SchemaSyncHelper.MarkAllPendingMigrationsAsAppliedAsync(context);
 });
 
 // Legacy veri aktarımı (Talimat Bölüm 16-23): DestekCRMServisBlazorDb → KOAFiloServis
@@ -1049,25 +1053,7 @@ await RunScopedSafeAsync(app, "ApplyMigrations", async services =>
         FROM ""AylikChecklistler"" ac WHERE ck.""AylikChecklistId"" = ac.""Id"" AND ck.""FirmaId"" IS NULL AND ac.""FirmaId"" IS NOT NULL;
     ");
 
-    // Kural 15: FisNoCounters'a FirmaId + composite PK (idempotent)
-    await ctx.Database.ExecuteSqlRawAsync(@"
-        DO $$ DECLARE pk_count int;
-        BEGIN
-            ALTER TABLE ""FisNoCounters"" ADD COLUMN IF NOT EXISTS ""FirmaId"" integer NOT NULL DEFAULT 0;
-
-            SELECT COUNT(*) INTO pk_count
-            FROM pg_constraint c
-            JOIN pg_class t ON t.oid = c.conrelid
-            JOIN pg_namespace n ON n.oid = t.relnamespace
-            WHERE c.contype = 'p'
-              AND n.nspname = 'public'
-              AND t.relname = 'FisNoCounters';
-
-            IF pk_count = 0 THEN
-                ALTER TABLE ""FisNoCounters"" ADD PRIMARY KEY (""Prefix"", ""FirmaId"", ""YilAy"");
-            END IF;
-        END $$;
-    ");
+    // Kural 15: FisNoCounters schema sync → SchemaSyncHelper.EnsureFisNoCountersSchemaAsync (yukarıda çağrıldı)
 
     logger.LogInformation("Migration helper'lar tek veritabaninda uygulandi.");
 });
@@ -1206,14 +1192,13 @@ app.UseMiddleware<KOAFiloServis.Web.Middleware.IpGuvenlikMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Uploads klasörünü oluştur (SecureFileService kullanır)
 var externalUploadsPath = AppStoragePaths.GetUploadsRoot(app.Environment.ContentRootPath);
 Directory.CreateDirectory(externalUploadsPath);
 
-app.UseStaticFiles(new StaticFileOptions
-{
-    FileProvider = new PhysicalFileProvider(externalUploadsPath),
-    RequestPath = "/uploads"
-});
+// NOT: /uploads static files middleware KALDIRILDI — dosyalar sadece
+// SecureFileService üzerinden Blazor auth devresinde erişilebilir.
+// Doğrudan URL erişimi yasak (Kural 16: Dosya Güvenliği).
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()

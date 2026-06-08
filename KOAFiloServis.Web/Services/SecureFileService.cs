@@ -11,15 +11,18 @@ public sealed class SecureFileService : ISecureFileService
     // Eski IDataProtector ile sifrelenmis dosyalar icin fallback (gecis donemi)
     private readonly IDataProtector _legacyProtector;
     private readonly string _storageRoot;
+    private readonly ILogger<SecureFileService> _logger;
 
     public SecureFileService(
         IFileProtector fileProtector,
         IDataProtectionProvider dataProtectionProvider,
-        IWebHostEnvironment environment)
+        IWebHostEnvironment environment,
+        ILogger<SecureFileService> logger)
     {
         _fileProtector = fileProtector;
         _legacyProtector = dataProtectionProvider.CreateProtector("KOAFiloServis.SecureFileStorage.v1");
         _storageRoot = AppStoragePaths.GetUploadsRoot(environment.ContentRootPath);
+        _logger = logger;
         Directory.CreateDirectory(_storageRoot);
     }
 
@@ -42,6 +45,7 @@ public sealed class SecureFileService : ISecureFileService
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         await File.WriteAllBytesAsync(fullPath, encrypted, cancellationToken);
 
+        _logger.LogInformation("Dosya kaydedildi: {RelativePath} ({Size} bytes)", relativePath, content.Length);
         return relativePath;
     }
 
@@ -63,10 +67,13 @@ public sealed class SecureFileService : ISecureFileService
         {
             try
             {
-                return _fileProtector.Unprotect(rawContent);
+                var result = _fileProtector.Unprotect(rawContent);
+                _logger.LogDebug("Dosya okundu (AES-256-GCM): {RelativePath}", relativePath);
+                return result;
             }
             catch (CryptographicException)
             {
+                _logger.LogWarning("Dosya cozulemedi (AES-256-GCM): {RelativePath}", relativePath);
                 return null;
             }
         }
@@ -74,11 +81,14 @@ public sealed class SecureFileService : ISecureFileService
         // 2) Eski format: IDataProtector ile sifreli (geriye uyumluluk)
         try
         {
-            return _legacyProtector.Unprotect(rawContent);
+            var result = _legacyProtector.Unprotect(rawContent);
+            _logger.LogDebug("Dosya okundu (Legacy DPAPI): {RelativePath}", relativePath);
+            return result;
         }
         catch (CryptographicException)
         {
             // 3) Ham dosya (test/migration)
+            _logger.LogDebug("Dosya okundu (Ham/Plain): {RelativePath}", relativePath);
             return rawContent;
         }
     }
@@ -90,7 +100,10 @@ public sealed class SecureFileService : ISecureFileService
 
         var fullPath = ResolveFullPath(NormalizeRelativePath(relativePath));
         if (File.Exists(fullPath))
+        {
             File.Delete(fullPath);
+            _logger.LogInformation("Dosya silindi: {RelativePath}", relativePath);
+        }
 
         return Task.CompletedTask;
     }

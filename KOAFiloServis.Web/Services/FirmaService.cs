@@ -93,7 +93,7 @@ public class FirmaService : IFirmaService
         existing.Aktif = firma.Aktif;
         existing.CariId = firma.CariId;
         existing.UpdatedAt = DateTime.UtcNow;
-        // DatabaseName KORUNUR — UI uzerinden degistirilemez (TenantDatabaseService yonetir)
+        // DatabaseName LEGACY — Tenant DB terk edildi, kolon geriye dönük uyumluluk için korunur
 
         await context.SaveChangesAsync();
         return existing;

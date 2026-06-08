@@ -48,8 +48,8 @@ public class PuantajHesapDonemi : BaseEntity, IFirmaTenant
     // Audit
     [StringLength(100)] public string? CreatedBy { get; set; }
     [StringLength(100)] public string? UpdatedBy { get; set; }
-    // DeletedAt artık BaseEntity'den miras alınır (Kural 16)
-    [StringLength(100)] public string? DeletedBy { get; set; }
+    // DeletedAt + DeletedBy artık BaseEntity'den miras alınır (Kural 16)
+    [StringLength(100)] public new string? DeletedBy { get; set; }
 
     // Navigation
     public virtual ICollection<PuantajDetay> Detaylar { get; set; } = new List<PuantajDetay>();

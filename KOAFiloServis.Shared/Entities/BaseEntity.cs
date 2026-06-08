@@ -12,4 +12,9 @@ public abstract class BaseEntity
     /// Fiziksel silme yapılmaz; bu alan silme anını kaydeder.
     /// </summary>
     public DateTime? DeletedAt { get; set; }
+
+    /// <summary>
+    /// Soft delete işlemini yapan kullanıcı Id'si (audit).
+    /// </summary>
+    public int? DeletedBy { get; set; }
 }

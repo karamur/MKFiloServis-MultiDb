@@ -77,6 +77,8 @@ public class Firma : BaseEntity
 
     /// <summary>
     /// Bu firmaya bağlı cari kartlar (Cari.FirmaId).
+    /// DİKKAT: Navigation döngüsü (Firma → Cariler → Cari → Firma) —
+    /// Dashboard/JSON serializasyonunda Include edilmemeli.
     /// </summary>
     public virtual ICollection<Cari> Cariler { get; set; } = new List<Cari>();
 

@@ -28,15 +28,15 @@
     @if (ozet != null)
     {
         <div class="row mb-4">
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <div class="card border-warning">
                     <div class="card-body text-center">
                         <div class="fs-2 fw-bold text-warning">@ozet.EbysAnaCount</div>
-                        <div class="text-muted small">EBYS Ana Dosya</div>
+                        <div class="text-muted small">EBYS Dosya</div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <div class="card border-warning">
                     <div class="card-body text-center">
                         <div class="fs-2 fw-bold text-warning">@ozet.EbysVersiyonCount</div>
@@ -44,7 +44,23 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
+                <div class="card border-info">
+                    <div class="card-body text-center">
+                        <div class="fs-2 fw-bold text-info">@ozet.AracEvrakCount</div>
+                        <div class="text-muted small">Araç Dosya</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card border-info">
+                    <div class="card-body text-center">
+                        <div class="fs-2 fw-bold text-info">@ozet.AracVersiyonCount</div>
+                        <div class="text-muted small">Araç Versiyon</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
                 <div class="card border-primary">
                     <div class="card-body text-center">
                         <div class="fs-2 fw-bold text-primary">@ozet.Toplam</div>
@@ -52,7 +68,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-3 d-flex align-items-center">
+            <div class="col-md-2 d-flex align-items-center">
                 @if (ozet.Toplam == 0)
                 {
                     <div class="alert alert-success mb-0 w-100">

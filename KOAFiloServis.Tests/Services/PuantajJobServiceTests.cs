@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
 using KOAFiloServis.Web.Services;
@@ -17,7 +17,9 @@ public class PuantajJobServiceTests
     private readonly Mock<IPuantajEngineService> _engineMock = new();
     private readonly Mock<IAktifFirmaProvider> _firmaMock = new();
     private readonly Mock<IPuantajRetryPolicy> _retryPolicyMock = new();
+#pragma warning disable CS0618
     private readonly Mock<IDbContextFactory<MasterDbContext>> _masterDbFactoryMock = new();
+#pragma warning restore CS0618
     private readonly Mock<IDbContextFactory<ApplicationDbContext>> _appDbFactoryMock = new();
     private readonly Mock<ILogger<PuantajJobService>> _loggerMock = new();
 

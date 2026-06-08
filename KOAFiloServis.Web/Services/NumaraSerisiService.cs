@@ -77,38 +77,4 @@ public class NumaraSerisiService
         return $"{prefix}-{yil}-{sonNo.ToString(format)}";
     }
 
-    /// <summary>
-    /// FisNoCounters tablosunun FirmaId kolonunu idempotent olarak ekler.
-    /// Uygulama başlangıcında çağrılmalıdır.
-    /// </summary>
-    public async Task EnsureSchemaAsync()
-    {
-        await using var ctx = await _dbFactory.CreateDbContextAsync();
-        var conn = ctx.Database.GetDbConnection();
-        await conn.OpenAsync();
-
-        // FirmaId kolonunu ekle (geriye dönük uyumlu)
-        await using var cmd1 = conn.CreateCommand();
-        cmd1.CommandText = @"
-            DO $$ BEGIN
-                ALTER TABLE ""FisNoCounters"" ADD COLUMN IF NOT EXISTS ""FirmaId"" integer NOT NULL DEFAULT 0;
-            EXCEPTION WHEN duplicate_column THEN END; $$;";
-        await cmd1.ExecuteNonQueryAsync();
-
-        // Eski unique constraint'i kaldır (Prefix + YilAy)
-        await using var cmd2 = conn.CreateCommand();
-        cmd2.CommandText = @"
-            DO $$ BEGIN
-                ALTER TABLE ""FisNoCounters"" DROP CONSTRAINT IF EXISTS ""PK_FisNoCounters"";
-            EXCEPTION WHEN undefined_object THEN END; $$;";
-        await cmd2.ExecuteNonQueryAsync();
-
-        // Yeni composite PK ekle (Prefix + FirmaId + YilAy)
-        await using var cmd3 = conn.CreateCommand();
-        cmd3.CommandText = @"
-            DO $$ BEGIN
-                ALTER TABLE ""FisNoCounters"" ADD PRIMARY KEY (""Prefix"", ""FirmaId"", ""YilAy"");
-            EXCEPTION WHEN duplicate_table THEN END; $$;";
-        await cmd3.ExecuteNonQueryAsync();
-    }
 }

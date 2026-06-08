@@ -43,8 +43,12 @@ public class LocalObjectStorageService : IObjectStorageService
     public Task<bool> ExistsAsync(string key, CancellationToken ct = default)
         => Task.FromResult(File.Exists(GetFullPath(key)));
 
+    /// <summary>
+    /// Lokal depolamada presigned URL desteklenmez — dosyalar sadece SecureFileService üzerinden erişilebilir.
+    /// Dış tüketiciler dosyayı DownloadAsync ile indirmeli veya kendi güvenli endpoint'lerini kullanmalıdır.
+    /// </summary>
     public Task<string> GetPresignedUrlAsync(string key, int expiresInMinutes = 60)
-        => Task.FromResult($"/uploads/{key.Replace('\\', '/')}");
+        => Task.FromResult(string.Empty);
 
     public string GetStorageProvider() => "Local";
 

@@ -10,8 +10,9 @@ public interface ISoforService
     Task<int> GetActiveCountAsync();
     Task<Sofor?> GetByIdAsync(int id);
     Task<Sofor> CreateAsync(Sofor sofor);
-    Task<Sofor> UpdateAsync(Sofor sofor);
-    Task DeleteAsync(int id);
+    Task<Sofor> UpdateAsync(Sofor sofor, DateTime? expectedUpdatedAt = null);
+    Task DeleteAsync(int id, int? deletedBy = null);
+    Task<Sofor> RestoreAsync(int id);
     Task<string> GenerateNextKodAsync();
     Task<string> GenerateNextKodAsync(PersonelGorev gorev);
 

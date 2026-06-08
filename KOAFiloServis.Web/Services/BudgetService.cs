@@ -24,13 +24,16 @@ public class BudgetService : IBudgetService
 
     #region Odeme Islemleri
 
+    /// <summary>
+    /// Dashboard ve BudgetAnaliz için ödeme listesi. AsNoTracking — salt okunur,
+    /// navigation property yüklemez (UI entity'leri DTO gibi kullanır).
+    /// </summary>
     public async Task<List<BudgetOdeme>> GetOdemelerAsync(int yil, int? ay = null, int? firmaId = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
 
         var query = context.BudgetOdemeler
-            .Include(o => o.OdemeYapildigiHesap)
-            .Include(o => o.Firma)
+            .AsNoTracking()
             .Where(o => o.OdemeYil == yil);
 
         if (ay.HasValue)
@@ -81,7 +84,7 @@ public class BudgetService : IBudgetService
             query = query.Where(o => o.FirmaId == firmaId.Value);
 
         return await query
-            .Include(o => o.Firma)
+            .AsNoTracking()
             .OrderBy(o => o.OdemeTarihi)
             .ThenBy(o => o.MasrafKalemi)
             .ToListAsync();
@@ -126,7 +129,7 @@ public class BudgetService : IBudgetService
 
         var hareketler = await context.BankaKasaHareketleri
             .AsNoTracking()
-            .Include(h => h.Cari)
+            .Include(h => h.Cari) // Cari?.Unvan için gerekli
             .Where(h => hareketIds.Contains(h.Id))
             .ToDictionaryAsync(h => h.Id);
 

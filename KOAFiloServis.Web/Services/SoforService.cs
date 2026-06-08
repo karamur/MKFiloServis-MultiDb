@@ -82,7 +82,7 @@ public class SoforService : ISoforService
         return sofor;
     }
 
-    public async Task<Sofor> UpdateAsync(Sofor sofor)
+    public async Task<Sofor> UpdateAsync(Sofor sofor, DateTime? expectedUpdatedAt = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         NormalizeSofor(sofor);
@@ -102,7 +102,16 @@ public class SoforService : ISoforService
             .FirstOrDefaultAsync(s => s.Id == sofor.Id);
 
         if (existing == null)
-            throw new InvalidOperationException($"Şoför bulunamadı. Id: {sofor.Id}");
+            throw new InvalidOperationException($"Personel bulunamadı. Id: {sofor.Id}");
+
+        // Optimistic concurrency: expectedUpdatedAt verildiyse çakışma kontrolü yap
+        if (expectedUpdatedAt.HasValue && existing.UpdatedAt.HasValue
+            && !existing.UpdatedAt.Value.Equals(expectedUpdatedAt.Value))
+        {
+            throw new InvalidOperationException(
+                $"Personel kaydı başka bir kullanıcı tarafından güncellenmiş. " +
+                $"Lütfen sayfayı yenileyip tekrar deneyin. (Id: {sofor.Id})");
+        }
 
         var existingTcKimlikNo = NormalizeTcKimlikNo(existing.TcKimlikNo);
         var existingSoforKodu = NormalizeSoforKodu(existing.SoforKodu);
@@ -132,19 +141,44 @@ public class SoforService : ISoforService
         return existing;
     }
 
-    public async Task DeleteAsync(int id)
+    public async Task DeleteAsync(int id, int? deletedBy = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var sofor = await QuerySoforler(context, asNoTracking: false).FirstOrDefaultAsync(s => s.Id == id);
-        if (sofor != null)
-        {
-            sofor.Aktif = false;
-            sofor.IsDeleted = true;
-            sofor.UpdatedAt = DateTime.UtcNow;
-            context.Soforler.Update(sofor);
-            await context.SaveChangesAsync();
-            await _cache.RemoveByPrefixAsync(CacheKeys.SoforPrefix);
-        }
+        var sofor = await QuerySoforler(context, asNoTracking: false)
+            .FirstOrDefaultAsync(s => s.Id == id);
+
+        if (sofor == null)
+            throw new InvalidOperationException($"Personel bulunamadı. Id: {id}");
+
+        var now = DateTime.UtcNow;
+        sofor.Aktif = false;
+        sofor.IsDeleted = true;
+        sofor.DeletedAt = now;
+        sofor.DeletedBy = deletedBy;
+        sofor.UpdatedAt = now;
+        await context.SaveChangesAsync();
+        await _cache.RemoveByPrefixAsync(CacheKeys.SoforPrefix);
+    }
+
+    public async Task<Sofor> RestoreAsync(int id)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        // Soft delete filter'ı atlayarak silinmiş kaydı bul
+        var sofor = await context.Soforler
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(s => s.Id == id && s.IsDeleted);
+
+        if (sofor == null)
+            throw new InvalidOperationException($"Silinmiş personel kaydı bulunamadı. Id: {id}");
+
+        sofor.IsDeleted = false;
+        sofor.DeletedAt = null;
+        sofor.DeletedBy = null;
+        sofor.Aktif = true;
+        sofor.UpdatedAt = DateTime.UtcNow;
+        await context.SaveChangesAsync();
+        await _cache.RemoveByPrefixAsync(CacheKeys.SoforPrefix);
+        return sofor;
     }
 
     public async Task<string> GenerateNextKodAsync()
@@ -256,11 +290,14 @@ public class SoforService : ISoforService
 
             var tcKimlikDegisti = existing == null || !string.Equals(existingTcKimlikNo, normalizedTcKimlikNo, StringComparison.Ordinal);
 
+            // Kural 6 (FirmaId izolasyonu): TcKimlikNo firmaya özel unique olmalı
             var tcKimlikCakisanKayit = tcKimlikDegisti
                 ? await context.Soforler
                     .IgnoreQueryFilters()
                     .AsNoTracking()
-                    .FirstOrDefaultAsync(s => s.Id != currentId && s.TcKimlikNo == normalizedTcKimlikNo)
+                    .FirstOrDefaultAsync(s => s.Id != currentId
+                        && s.TcKimlikNo == normalizedTcKimlikNo
+                        && s.FirmaId == sofor.FirmaId)
                 : null;
 
             if (tcKimlikCakisanKayit != null)

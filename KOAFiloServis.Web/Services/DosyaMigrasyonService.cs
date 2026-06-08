@@ -39,24 +39,37 @@ public class DosyaMigrasyonService
     {
         await using var ctx = await _contextFactory.CreateDbContextAsync(ct);
 
+        // EBYS
         var ebysCount = await ctx.EbysEvrakDosyalar
-            .Where(d => !d.IsDeleted && d.DosyaYolu != null && d.DosyaYolu.StartsWith("/uploads/ebys"))
+            .Where(d => !d.IsDeleted && d.DosyaYolu != null && d.DosyaYolu.StartsWith("/uploads/"))
             .CountAsync(ct);
 
         var versiyonCount = await ctx.EbysEvrakDosyaVersiyonlar
-            .Where(v => v.DosyaYolu != null && v.DosyaYolu.StartsWith("/uploads/ebys"))
+            .Where(v => v.DosyaYolu != null && v.DosyaYolu.StartsWith("/uploads/"))
+            .CountAsync(ct);
+
+        // Araç Evrak
+        var aracEvrakCount = await ctx.AracEvrakDosyalari
+            .Where(d => !d.IsDeleted && d.DosyaYolu != null && d.DosyaYolu.StartsWith("/uploads/"))
+            .CountAsync(ct);
+
+        var aracVersiyonCount = await ctx.AracEvrakDosyaVersiyonlar
+            .Where(v => v.DosyaYolu != null && v.DosyaYolu.StartsWith("/uploads/"))
             .CountAsync(ct);
 
         return new DosyaMigrasyonOzet
         {
             EbysAnaCount = ebysCount,
             EbysVersiyonCount = versiyonCount,
+            AracEvrakCount = aracEvrakCount,
+            AracVersiyonCount = aracVersiyonCount,
         };
     }
 
     /// <summary>
     /// Migration çalıştırır. Her dosyayı okur, şifreli storage'a yazar,
     /// DB path'ini günceller, eski plain dosyayı siler.
+    /// Her dosyadan sonra SaveChanges yapılır — yarıda kesilse bile ilerleme kaybolmaz.
     /// </summary>
     public async IAsyncEnumerable<DosyaMigrasyonAdim> MigrateAsync(
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
@@ -65,44 +78,68 @@ public class DosyaMigrasyonService
 
         // 1) EbysEvrakDosya
         var ebysDosyalar = await ctx.EbysEvrakDosyalar
-            .Where(d => !d.IsDeleted && d.DosyaYolu != null && d.DosyaYolu.StartsWith("/uploads/ebys"))
+            .Where(d => !d.IsDeleted && d.DosyaYolu != null && d.DosyaYolu.StartsWith("/uploads/"))
             .ToListAsync(ct);
 
         foreach (var dosya in ebysDosyalar)
         {
             if (ct.IsCancellationRequested) yield break;
-
-            var adim = await MigreDosyaAsync(ctx, dosya.DosyaYolu!, dosya.DosyaAdi,
-                $"ebys/{dosya.EvrakId}", newPath =>
-                {
-                    dosya.DosyaYolu = newPath;
-                });
+            var adim = await MigreDosyaAsync(dosya.DosyaYolu!, dosya.DosyaAdi,
+                $"ebys/{dosya.EvrakId}", newPath => dosya.DosyaYolu = newPath);
             yield return adim;
+            if (adim.Durum == MigrasyonDurum.Basarili)
+                await ctx.SaveChangesAsync(ct); // Her dosyadan sonra kaydet
         }
 
         // 2) EbysEvrakDosyaVersiyon
         var versiyonlar = await ctx.EbysEvrakDosyaVersiyonlar
-            .Where(v => v.DosyaYolu != null && v.DosyaYolu.StartsWith("/uploads/ebys"))
+            .Where(v => v.DosyaYolu != null && v.DosyaYolu.StartsWith("/uploads/"))
             .ToListAsync(ct);
 
         foreach (var v in versiyonlar)
         {
             if (ct.IsCancellationRequested) yield break;
-
             var dosyaAdi = Path.GetFileName(v.DosyaYolu)!;
-            var adim = await MigreDosyaAsync(ctx, v.DosyaYolu!, dosyaAdi,
-                "ebys/versiyonlar", newPath =>
-                {
-                    v.DosyaYolu = newPath;
-                });
+            var adim = await MigreDosyaAsync(v.DosyaYolu!, dosyaAdi,
+                "ebys/versiyonlar", newPath => v.DosyaYolu = newPath);
             yield return adim;
+            if (adim.Durum == MigrasyonDurum.Basarili)
+                await ctx.SaveChangesAsync(ct);
         }
 
-        await ctx.SaveChangesAsync(ct);
+        // 3) AracEvrakDosyalari
+        var aracDosyalar = await ctx.AracEvrakDosyalari
+            .Where(d => !d.IsDeleted && d.DosyaYolu != null && d.DosyaYolu.StartsWith("/uploads/"))
+            .ToListAsync(ct);
+
+        foreach (var dosya in aracDosyalar)
+        {
+            if (ct.IsCancellationRequested) yield break;
+            var adim = await MigreDosyaAsync(dosya.DosyaYolu, dosya.DosyaAdi,
+                $"araclar/{dosya.AracEvrakId}/evrak", newPath => dosya.DosyaYolu = newPath);
+            yield return adim;
+            if (adim.Durum == MigrasyonDurum.Basarili)
+                await ctx.SaveChangesAsync(ct);
+        }
+
+        // 4) AracEvrakDosyaVersiyonlar
+        var aracVersiyonlar = await ctx.AracEvrakDosyaVersiyonlar
+            .Where(v => v.DosyaYolu != null && v.DosyaYolu.StartsWith("/uploads/"))
+            .ToListAsync(ct);
+
+        foreach (var v in aracVersiyonlar)
+        {
+            if (ct.IsCancellationRequested) yield break;
+            var dosyaAdi = Path.GetFileName(v.DosyaYolu)!;
+            var adim = await MigreDosyaAsync(v.DosyaYolu!, dosyaAdi,
+                "araclar/versiyonlar", newPath => v.DosyaYolu = newPath);
+            yield return adim;
+            if (adim.Durum == MigrasyonDurum.Basarili)
+                await ctx.SaveChangesAsync(ct);
+        }
     }
 
     private async Task<DosyaMigrasyonAdim> MigreDosyaAsync(
-        ApplicationDbContext ctx,
         string eskiRelativePath,
         string dosyaAdi,
         string hedefKlasor,
@@ -163,7 +200,9 @@ public class DosyaMigrasyonOzet
 {
     public int EbysAnaCount { get; set; }
     public int EbysVersiyonCount { get; set; }
-    public int Toplam => EbysAnaCount + EbysVersiyonCount;
+    public int AracEvrakCount { get; set; }
+    public int AracVersiyonCount { get; set; }
+    public int Toplam => EbysAnaCount + EbysVersiyonCount + AracEvrakCount + AracVersiyonCount;
 }
 
 public class DosyaMigrasyonAdim

@@ -4145,37 +4145,29 @@ WHERE IsDeleted = 0;");
 
         Console.WriteLine("Kritik tablolar kontrol edildi.");
 
-        // FisNoCounters tablosu — atomik FisNo üretimi için
+        // FisNoCounters counter senkronizasyonu (şema SchemaSyncHelper tarafından zaten hazırlandı)
         try
         {
-            using var cmd = new NpgsqlCommand(@"
-                CREATE TABLE IF NOT EXISTS ""FisNoCounters"" (
-                    ""Prefix"" TEXT NOT NULL,
-                    ""YilAy""  TEXT NOT NULL,
-                    ""SonNo""  INTEGER NOT NULL DEFAULT 0,
-                    PRIMARY KEY (""Prefix"", ""YilAy"")
-                )", connection);
-            await cmd.ExecuteNonQueryAsync();
-
             // Mevcut MuhasebeFisleri kayıtlarından counter'ı senkronize et
             // Format: {PREFIX}-{YYYYMM}-{NNNN}  örn: MH-202604-0001
             using var syncCmd = new NpgsqlCommand(@"
-                INSERT INTO ""FisNoCounters"" (""Prefix"", ""YilAy"", ""SonNo"")
+                INSERT INTO ""FisNoCounters"" (""Prefix"", ""FirmaId"", ""YilAy"", ""SonNo"")
                 SELECT
                     SPLIT_PART(""FisNo"", '-', 1),
+                    0,
                     SPLIT_PART(""FisNo"", '-', 2),
                     MAX(CAST(SPLIT_PART(""FisNo"", '-', 3) AS INTEGER))
                 FROM ""MuhasebeFisleri""
                 WHERE ""FisNo"" ~ '^[A-Z]+-[0-9]{6}-[0-9]{4}$'
                 GROUP BY SPLIT_PART(""FisNo"", '-', 1), SPLIT_PART(""FisNo"", '-', 2)
-                ON CONFLICT (""Prefix"", ""YilAy"")
+                ON CONFLICT (""Prefix"", ""FirmaId"", ""YilAy"")
                 DO UPDATE SET ""SonNo"" = GREATEST(""FisNoCounters"".""SonNo"", EXCLUDED.""SonNo"")", connection);
             await syncCmd.ExecuteNonQueryAsync();
-            Console.WriteLine("FisNoCounters tablosu senkronize edildi.");
+            Console.WriteLine("FisNoCounters counter senkronizasyonu tamamlandi.");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"FisNoCounters tablosu oluşturulurken hata: {ex.Message}");
+            Console.WriteLine($"FisNoCounters counter senkronizasyonu hatasi: {ex.Message}");
         }
     }
 }

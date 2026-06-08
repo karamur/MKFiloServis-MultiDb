@@ -88,9 +88,9 @@ public class OperasyonKaydi : BaseEntity, IFirmaTenant
     public string? UpdatedBy { get; set; }
 
     // ── Soft Delete ────────────────────────────────────────────────────────
-    // DeletedAt artık BaseEntity'den miras alınır (Kural 16)
+    // DeletedAt + DeletedBy artık BaseEntity'den miras alınır (Kural 16)
     [StringLength(100)]
-    public string? DeletedBy { get; set; }
+    public new string? DeletedBy { get; set; }
 
     // Diğer
     [StringLength(1000)]
