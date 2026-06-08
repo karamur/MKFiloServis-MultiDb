@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
+@using KOAFiloServis.Web.Helpers
 @inject IDestekTalebiService DestekService
 @inject IKullaniciService KullaniciService
 @inject NavigationManager Navigation
@@ -118,7 +119,7 @@ else
                     </div>
                     <div class="card-body">
                         <div class="mb-3">
-                            @((MarkupString)talep.Aciklama.Replace("\n", "<br/>"))
+                            @((MarkupString)HtmlSanitizerHelper.Sanitize(talep.Aciklama?.Replace("\n", "<br/>") ?? ""))
                         </div>
                         @if (!string.IsNullOrEmpty(talep.Etiketler))
                         {
@@ -210,7 +211,7 @@ else
                                             </div>
                                         </div>
                                         <div class="mt-2">
-                                            @((MarkupString)yanit.Icerik)
+                                            @((MarkupString)HtmlSanitizerHelper.Sanitize(yanit.Icerik ?? ""))
                                         </div>
                                         @if (yanit.Ekler?.Any() == true)
                                         {
@@ -436,7 +437,7 @@ else
                             <i class="bi bi-lock me-2"></i>Dahili Notlar
                         </div>
                         <div class="card-body">
-                            <small>@((MarkupString)talep.DahiliNotlar.Replace("\n", "<br/>"))</small>
+                            <small>@((MarkupString)HtmlSanitizerHelper.Sanitize(talep.DahiliNotlar?.Replace("\n", "<br/>") ?? ""))</small>
                         </div>
                     </div>
                 }
@@ -603,7 +604,7 @@ else
 
 @code {
     [Parameter] public int TalepId { get; set; }
-    
+
     private DestekTalebi? talep;
     private List<DestekHazirYanit> hazirYanitlar = new();
     private List<DestekDepartman> departmanlar = new();

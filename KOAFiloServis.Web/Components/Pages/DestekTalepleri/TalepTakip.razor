@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
+@using KOAFiloServis.Web.Helpers
 @inject IDestekTalebiService DestekService
 @inject IKullaniciService KullaniciService
 @inject AppAuthenticationStateProvider AuthProvider
@@ -87,7 +88,7 @@ else
                         <div class="mb-3">
                             <small class="text-muted d-block mb-1">Açıklama</small>
                             <div class="p-3 bg-light rounded">
-                                @((MarkupString)talep.Aciklama.Replace("\n", "<br/>"))
+                                @((MarkupString)HtmlSanitizerHelper.Sanitize(talep.Aciklama?.Replace("\n", "<br/>") ?? ""))
                             </div>
                         </div>
                     </div>
@@ -172,7 +173,7 @@ else
                                             <small class="text-muted">@yanit.CreatedAt.ToString("dd.MM.yyyy HH:mm")</small>
                                         </div>
                                         <div class="mt-2">
-                                            @((MarkupString)yanit.Icerik.Replace("\n", "<br/>"))
+                                            @((MarkupString)HtmlSanitizerHelper.Sanitize(yanit.Icerik?.Replace("\n", "<br/>") ?? ""))
                                         </div>
                                     </div>
                                 }

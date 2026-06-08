@@ -1,5 +1,6 @@
 @page "/crm/mesajlar"
 @using KOAFiloServis.Web.Services
+@using KOAFiloServis.Web.Helpers
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Data
 @using Microsoft.EntityFrameworkCore
@@ -176,7 +177,7 @@
                     </div>
                     <div class="card-body">
                         <div class="border rounded p-3 bg-light">
-                            @((MarkupString)seciliMesaj.Icerik.Replace("\n", "<br/>"))
+                            @((MarkupString)HtmlSanitizerHelper.Sanitize(seciliMesaj.Icerik?.Replace("\n", "<br/>") ?? ""))
                         </div>
                     </div>
                 </div>
