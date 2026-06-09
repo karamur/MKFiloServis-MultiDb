@@ -160,15 +160,16 @@ public class AracService : IAracService
     public async Task<bool> PlakaMevcutMu(string plaka, int? haricAracPlakaId = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
+        var bugun = DateTime.UtcNow.Date;
+
         // Aktif plaka kontrolü (CikisTarihi null veya gelecek tarihli)
         return await context.AracPlakalar
-            .Include(ap => ap.Arac)
-            .AnyAsync(ap => ap.Plaka == plaka && 
+            .AnyAsync(ap => ap.Plaka == plaka &&
                            !ap.IsDeleted &&
-                           ap.Arac != null &&
-                           !ap.Arac.IsDeleted &&
-                           (ap.CikisTarihi == null || ap.CikisTarihi > DateTime.Today) && 
-                           (!haricAracPlakaId.HasValue || ap.Id != haricAracPlakaId.Value));
+                           ap.AracId > 0 &&
+                           (ap.CikisTarihi == null || ap.CikisTarihi > bugun) &&
+                           (!haricAracPlakaId.HasValue || ap.Id != haricAracPlakaId.Value) &&
+                           context.Araclar.Any(a => a.Id == ap.AracId && !a.IsDeleted));
     }
 
     public async Task<Arac> CreateAsync(Arac arac, string plaka, PlakaIslemTipi islemTipi = PlakaIslemTipi.Alis, 
@@ -687,11 +688,19 @@ public class AracService : IAracService
             .Select(e => new { e.EvrakKategorisi, e.BitisTarihi })
             .ToListAsync();
 
-        DateTime? EnYakin(string kategori) => aktifEvraklar
+        static DateTime? NormalizeUtc(DateTime? value)
+        {
+            if (!value.HasValue) return null;
+            return value.Value.Kind == DateTimeKind.Utc
+                ? value
+                : DateTime.SpecifyKind(value.Value, DateTimeKind.Utc);
+        }
+
+        DateTime? EnYakin(string kategori) => NormalizeUtc(aktifEvraklar
             .Where(x => x.EvrakKategorisi == kategori)
             .OrderByDescending(x => x.BitisTarihi)
             .Select(x => x.BitisTarihi)
-            .FirstOrDefault();
+            .FirstOrDefault());
 
         var yeniMuayene = EnYakin(EvrakKategorileri.Muayene);
         var yeniTrafik = EnYakin(EvrakKategorileri.TrafikSigortasi);

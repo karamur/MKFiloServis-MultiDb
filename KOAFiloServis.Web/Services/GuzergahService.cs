@@ -10,12 +10,18 @@ public class GuzergahService : IGuzergahService
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly ICacheService _cache;
     private readonly NumaraSerisiService _numaraSerisi;
+    private readonly IAktifFirmaProvider _aktifFirmaProvider;
 
-    public GuzergahService(IDbContextFactory<ApplicationDbContext> contextFactory, ICacheService cache, NumaraSerisiService numaraSerisi)
+    public GuzergahService(
+        IDbContextFactory<ApplicationDbContext> contextFactory,
+        ICacheService cache,
+        NumaraSerisiService numaraSerisi,
+        IAktifFirmaProvider aktifFirmaProvider)
     {
         _contextFactory = contextFactory;
         _cache = cache;
         _numaraSerisi = numaraSerisi;
+        _aktifFirmaProvider = aktifFirmaProvider;
     }
 
     public Task<List<Guzergah>> GetAllAsync() =>
@@ -86,8 +92,28 @@ public class GuzergahService : IGuzergahService
     public async Task<Guzergah> CreateAsync(Guzergah guzergah)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
+
+        // Tenant/firma görünürlüğü için create anında FirmaId'yi netleştir.
+        if (!guzergah.FirmaId.HasValue || guzergah.FirmaId.Value <= 0)
+        {
+            var aktifFirmaId = _aktifFirmaProvider.AktifFirmaId ?? _aktifFirmaProvider.Mevcut.FirmaId;
+            if (aktifFirmaId > 0)
+            {
+                guzergah.FirmaId = aktifFirmaId;
+            }
+        }
+
         context.Guzergahlar.Add(guzergah);
         await context.SaveChangesAsync();
+
+        // Yazım doğrulaması: kayıt gerçekten DB'ye geçti mi?
+        var persisted = await context.Guzergahlar
+            .AsNoTracking()
+            .AnyAsync(g => g.Id == guzergah.Id);
+
+        if (!persisted)
+            throw new InvalidOperationException("Güzergah kaydı doğrulanamadı. Kayıt veritabanına yansımadı.");
+
         await _cache.RemoveByPrefixAsync(CacheKeys.GuzergahPrefix);
         return guzergah;
     }

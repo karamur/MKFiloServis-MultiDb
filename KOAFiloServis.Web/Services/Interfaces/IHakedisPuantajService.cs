@@ -1,4 +1,4 @@
-using KOAFiloServis.Shared.Entities;
+﻿using KOAFiloServis.Shared.Entities;
 
 namespace KOAFiloServis.Web.Services;
 
@@ -13,7 +13,7 @@ public interface IHakedisPuantajService
 
     // Detay
     Task<List<HakedisPuantajDetay>> GetDetaylarAsync(int hakedisId);
-    Task GunlukSeferGuncelleAsync(int hakedisId, int gun, int seferSayisi, bool ekSeferMi, string? aciklama = null);
+    Task GunlukSeferGuncelleAsync(int hakedisId, int gun, int seferSayisi, int? seferTuruId, decimal fiyatCarpani, bool mesaiMi, bool ekSeferMi, string? aciklama = null);
 
     // Kesinti
     Task<List<HakedisKesinti>> GetKesintilerAsync(int hakedisId);

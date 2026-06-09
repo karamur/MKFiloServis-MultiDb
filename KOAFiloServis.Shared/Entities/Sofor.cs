@@ -97,6 +97,10 @@ public class Sofor : BaseEntity, IKopyalanabilirTenant, IFirmaTenant
     public int? MuhasebeHesapId { get; set; }
     public virtual MuhasebeHesap? MuhasebeHesap { get; set; }
 
+    // Personel Avans Hesabı (195)
+    public int? PersonelAvansHesapId { get; set; }
+    public virtual MuhasebeHesap? PersonelAvansHesap { get; set; }
+
     [NotMapped]
     public string TamAd => $"{Ad} {Soyad}";
 

@@ -1054,6 +1054,22 @@
             return;
         }
 
+        // Firma görünürlüğü için kayıt öncesi kesin firma ataması
+        if (!guzergah.FirmaId.HasValue || guzergah.FirmaId.Value <= 0)
+        {
+            var aktifFirmaId = AktifFirmaProvider.AktifFirmaId ?? AktifFirmaProvider.Mevcut.FirmaId;
+            if (aktifFirmaId > 0)
+            {
+                guzergah.FirmaId = aktifFirmaId;
+            }
+        }
+
+        if (!guzergah.FirmaId.HasValue || guzergah.FirmaId.Value <= 0)
+        {
+            kayitHataMesaji = "Aktif firma bulunamadı. Lütfen önce firma seçimi yapıp tekrar deneyin.";
+            return;
+        }
+
         // Koordinat validasyonu (enlem: -90..90, boylam: -180..180)
         if (guzergah.BaslangicLatitude.HasValue && (guzergah.BaslangicLatitude < -90 || guzergah.BaslangicLatitude > 90))
         {

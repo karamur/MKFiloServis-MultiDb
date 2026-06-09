@@ -23,7 +23,7 @@ public interface ISoforService
     Task<int> GetActiveByGorevCountAsync(PersonelGorev gorev);
 
     // Muhasebe Hesap Entegrasyonu
-    Task<int> TopluMuhasebeHesabiOlusturAsync();
+    Task<PersonelMuhasebeOnarimSonucu> TopluMuhasebeHesabiOlusturAsync();
     Task<List<MuhasebeHesap>> GetPersonelMuhasebeHesaplariAsync();
     Task<List<MuhasebeHesap>> GetPersonelAvansHesaplariAsync();
     Task<MuhasebeHesap?> GetPersonelAvansHesabiAsync(int soforId);
@@ -58,4 +58,15 @@ public class PersonelImportHata
     public string Kolon { get; set; } = string.Empty;
     public string Mesaj { get; set; } = string.Empty;
     public bool Kritik { get; set; }
+}
+
+public class PersonelMuhasebeOnarimSonucu
+{
+    public int ToplamPersonel { get; set; }
+    public int Baglanan335Personel { get; set; }
+    public int Baglanan195Cari { get; set; }
+    public int Olusturulan335Hesap { get; set; }
+    public int Olusturulan195Hesap { get; set; }
+    public int NullKalanPersonelMuhasebeHesapId { get; set; }
+    public int NullKalanCariPersonelAvansHesapId { get; set; }
 }

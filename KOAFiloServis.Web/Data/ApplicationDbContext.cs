@@ -549,6 +549,12 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(e => e.MuhasebeHesapId)
                 .OnDelete(DeleteBehavior.SetNull);
 
+            // Personel Avans Hesap ilişkisi (195)
+            entity.HasOne(e => e.PersonelAvansHesap)
+                .WithMany()
+                .HasForeignKey(e => e.PersonelAvansHesapId)
+                .OnDelete(DeleteBehavior.SetNull);
+
             // Sirket iliskisi (Multi-tenant) - LEGACY drop edildi (Faz C-extend, Teknik Borç #5)
 
             // Firma ilişkisi (çalıştığı firma)

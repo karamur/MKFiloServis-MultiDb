@@ -444,11 +444,11 @@
                             <small class="text-muted">
                                 @if (!IsEdit || !sofor.MuhasebeHesapId.HasValue)
                                 {
-                                    <text>Boş bırakılırsa ayarlardaki önek + otomatik sayaç ile oluşturulur (örn: 335.01.0001).</text>
+                                    <text>Boş bırakılırsa PersonelId bazlı deterministik kodla oluşturulur (format: 335.01.{PersonelId:D4}).</text>
                                 }
                                 else
                                 {
-                                    <text>Personele borç (maaş, avans vb.) muhasebe işlemlerinde kullanılır.</text>
+                                    <text>Seçili değer doğrudan Personeller.MuhasebeHesapId alanından okunur.</text>
                                 }
                             </small>
                         </div>
@@ -498,11 +498,11 @@
                                 }
                                 else if (seciliAvansHesapId == 0)
                                 {
-                                    <text>Ayarlardaki önek + otomatik sayaç ile oluşturulur (örn: 195.01.0001).</text>
+                                    <text>Otomatik seçimde PersonelId bazlı deterministik kod kullanılır (format: 195.01.{PersonelId:D4}).</text>
                                 }
                                 else
                                 {
-                                    <text>Hesap planından seçin veya otomatik oluşturmayı seçin.</text>
+                                    <text>Seçili değer doğrudan Personeller.PersonelAvansHesapId alanından okunur.</text>
                                 }
                             </small>
                         </div>
@@ -1063,7 +1063,7 @@
                 // Gerçek maaşı hesapla (ResmiNetMaas + DigerMaas)
                 gercekMaas = sofor.ResmiNetMaas + sofor.DigerMaas;
                 personelAvansHesap = await SoforService.GetPersonelAvansHesabiAsync(Id!.Value);
-                seciliAvansHesapId = personelAvansHesap?.Id ?? 0;
+                seciliAvansHesapId = sofor.PersonelAvansHesapId ?? personelAvansHesap?.Id ?? 0;
                 await EvrakDurumuYukle();
                 await AracAtamalariniYukle();
             }
@@ -1133,7 +1133,7 @@
         if (IsEdit)
         {
             personelAvansHesap = await SoforService.GetPersonelAvansHesabiAsync(Id!.Value);
-            seciliAvansHesapId = personelAvansHesap?.Id ?? 0;
+            seciliAvansHesapId = sofor.PersonelAvansHesapId ?? personelAvansHesap?.Id ?? 0;
         }
         ToastService.ShowInfo("Muhasebe hesapları yenilendi.");
     }
@@ -1183,13 +1183,11 @@
             if (IsEdit)
             {
                 sofor.Id = Id!.Value;
-                // UpdateAsync içinde EnsurePersonelBorcHesabiAsync + EnsurePersonelAvansHesabiAsync çalışır
+                // 195 alanı Personeller.PersonelAvansHesapId üzerinden tutulur
+                sofor.PersonelAvansHesapId = seciliAvansHesapId > 0 ? seciliAvansHesapId : null;
+
+                // UpdateAsync içinde personel 335/195 FK bağlantıları garanti edilir
                 await SoforService.UpdateAsync(sofor);
-                // Kullanıcı manuel avans hesabı seçtiyse ata (>0), otomatik (0) zaten UpdateAsync içinde halledildi
-                if (seciliAvansHesapId > 0)
-                {
-                    await SoforService.AvansHesabiAtaAsync(sofor.Id, seciliAvansHesapId);
-                }
                 // Şoför belge tarihlerini özlük evraklarıyla senkronize et
                 if (sofor.Gorev == PersonelGorev.Sofor)
                 {
@@ -1204,13 +1202,11 @@
             }
             else
             {
-                // CreateAsync içinde EnsurePersonelBorcHesabiAsync + EnsurePersonelAvansHesabiAsync çalışır
+                // 195 alanı Personeller.PersonelAvansHesapId üzerinden tutulur
+                sofor.PersonelAvansHesapId = seciliAvansHesapId > 0 ? seciliAvansHesapId : null;
+
+                // CreateAsync içinde personel 335/195 FK bağlantıları garanti edilir
                 await SoforService.CreateAsync(sofor);
-                // Kullanıcı manuel avans hesabı seçtiyse ata (>0)
-                if (seciliAvansHesapId > 0)
-                {
-                    await SoforService.AvansHesabiAtaAsync(sofor.Id, seciliAvansHesapId);
-                }
                 ToastService.ShowSuccess($"{sofor.TamAd} başarıyla eklendi.");
             }
             Navigation.NavigateTo("/personel");

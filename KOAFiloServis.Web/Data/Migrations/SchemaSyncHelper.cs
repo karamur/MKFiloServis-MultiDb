@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Npgsql;
 using System.Data;
@@ -144,8 +144,12 @@ public static class SchemaSyncHelper
     /// </summary>
     public static async Task EnsureFisNoCountersSchemaAsync(ApplicationDbContext context)
     {
+        var previousTimeout = context.Database.GetCommandTimeout();
         try
         {
+            // Bu migration bazı ortamlarda lock beklemesi nedeniyle 30sn varsayılan timeout'u aşabiliyor.
+            context.Database.SetCommandTimeout(180);
+
             await context.Database.ExecuteSqlRawAsync(@"
                 -- Tablo yoksa doğru şemayla oluştur
                 CREATE TABLE IF NOT EXISTS ""FisNoCounters"" (
@@ -208,6 +212,10 @@ public static class SchemaSyncHelper
         catch (Exception ex)
         {
             Console.WriteLine($"[SchemaSync] FisNoCounters migration hatasi (startup devam eder): {ex.Message}");
+        }
+        finally
+        {
+            context.Database.SetCommandTimeout(previousTimeout);
         }
     }
 

@@ -72,8 +72,8 @@
                     <i class="bi bi-file-earmark-excel me-1"></i>Excel Export
                 </button>
             </div>
-            <button class="btn btn-outline-info" @onclick="TopluMuhasebeHesabiOlustur" title="Muhasebe hesabı olmayan personellere toplu hesap oluştur">
-                <i class="bi bi-calculator me-1"></i>Toplu Muhasebe Hesabı
+            <button class="btn btn-outline-info" @onclick="PersonelHesapBaglantilariniOnar" title="Personel 335/195 hesap bağlantılarını deterministik kurala göre onar">
+                <i class="bi bi-calculator me-1"></i>Personel Hesap Bağlantılarını Onar
             </button>
             <button class="btn btn-outline-secondary" @onclick="BosPersonelDosyasiIndir">
                 <i class="bi bi-file-earmark-text me-1"></i>Boş Personel Dosyası
@@ -702,20 +702,25 @@
 
     #region Muhasebe Hesap İşlemleri
 
-    private async Task TopluMuhasebeHesabiOlustur()
+    private async Task PersonelHesapBaglantilariniOnar()
     {
+        var onay = await JS.InvokeAsync<bool>("confirm", "Tüm aktif personeller için 335/195 hesap bağlantıları PersonelId bazlı deterministik kurala göre onarılsın mı?");
+        if (!onay) return;
+
         try
         {
-            var olusturulanSayisi = await SoforService.TopluMuhasebeHesabiOlusturAsync();
-            if (olusturulanSayisi > 0)
+            var onarimSonucu = await SoforService.TopluMuhasebeHesabiOlusturAsync();
+
+            if (onarimSonucu.NullKalanPersonelMuhasebeHesapId > 0 || onarimSonucu.NullKalanCariPersonelAvansHesapId > 0)
             {
-                ToastService.ShowSuccess($"{olusturulanSayisi} personel için muhasebe hesabı oluşturuldu.");
-                await LoadData();
+                ToastService.ShowWarning($"Onarım tamamlandı fakat eksik FK kaldı. 335 boş: {onarimSonucu.NullKalanPersonelMuhasebeHesapId}, 195 boş: {onarimSonucu.NullKalanCariPersonelAvansHesapId}");
             }
             else
             {
-                ToastService.ShowInfo("Tüm personellerin zaten muhasebe hesabı bulunmaktadır.");
+                ToastService.ShowSuccess($"Onarım tamamlandı. Toplam: {onarimSonucu.ToplamPersonel}, 335 bağlı: {onarimSonucu.Baglanan335Personel}, 195 bağlı: {onarimSonucu.Baglanan195Cari}, yeni 335: {onarimSonucu.Olusturulan335Hesap}, yeni 195: {onarimSonucu.Olusturulan195Hesap}");
             }
+
+            await LoadData();
         }
         catch (Exception ex)
         {

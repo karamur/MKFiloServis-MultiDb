@@ -1,16 +1,24 @@
-using KOAFiloServis.Shared.Entities;
+﻿using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace KOAFiloServis.Web.Services;
 
 public class HakedisPuantajService : IHakedisPuantajService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+    private readonly IAktifFirmaProvider _aktifFirmaProvider;
+    private readonly ILogger<HakedisPuantajService> _logger;
 
-    public HakedisPuantajService(IDbContextFactory<ApplicationDbContext> contextFactory)
+    public HakedisPuantajService(
+        IDbContextFactory<ApplicationDbContext> contextFactory,
+        IAktifFirmaProvider aktifFirmaProvider,
+        ILogger<HakedisPuantajService> logger)
     {
         _contextFactory = contextFactory;
+        _aktifFirmaProvider = aktifFirmaProvider;
+        _logger = logger;
     }
 
     #region Hakediş Puantaj CRUD
@@ -47,71 +55,104 @@ public class HakedisPuantajService : IHakedisPuantajService
 
     public async Task<HakedisPuantaj> CreateAsync(HakedisPuantaj hakedis)
     {
-        // ── VALIDATION ──
-        if (hakedis.Yil < 2020 || hakedis.Yil > 2100)
-            throw new InvalidOperationException("Geçersiz yıl.");
-        if (hakedis.Ay < 1 || hakedis.Ay > 12)
-            throw new InvalidOperationException("Geçersiz ay.");
-        if (hakedis.GuzergahId <= 0)
-            throw new InvalidOperationException("Güzergah seçimi zorunludur.");
-        if (hakedis.AracId <= 0)
-            throw new InvalidOperationException("Araç seçimi zorunludur.");
-        if (hakedis.SoforId <= 0)
-            throw new InvalidOperationException("Şoför seçimi zorunludur.");
-        if (hakedis.CariId <= 0)
-            throw new InvalidOperationException("Tedarikçi seçimi zorunludur.");
-        if (hakedis.GelirBirimFiyat < 0 || hakedis.GiderBirimFiyat < 0)
-            throw new InvalidOperationException("Birim fiyat negatif olamaz.");
-
-        await using var context = await _contextFactory.CreateDbContextAsync();
-
-        // Güzergah varsayılanlarından al
-        var guzergah = await context.Guzergahlar.FindAsync(hakedis.GuzergahId);
-        if (guzergah != null)
+        try
         {
-            // Fiyat yoksa güzergah fiyatını kullan
-            if (hakedis.BirimFiyat == 0 && guzergah.BirimFiyat > 0)
-                hakedis.BirimFiyat = guzergah.BirimFiyat;
+            // ── VALIDATION ──
+            if (hakedis.Yil < 2020 || hakedis.Yil > 2100)
+                throw new InvalidOperationException("Geçersiz yıl.");
+            if (hakedis.Ay < 1 || hakedis.Ay > 12)
+                throw new InvalidOperationException("Geçersiz ay.");
+            if (hakedis.GuzergahId <= 0)
+                throw new InvalidOperationException("Güzergah seçimi zorunludur.");
+            if (hakedis.AracId <= 0)
+                throw new InvalidOperationException("Araç seçimi zorunludur.");
+            if (hakedis.SoforId <= 0)
+                throw new InvalidOperationException("Şoför seçimi zorunludur.");
+            if (hakedis.CariId <= 0)
+                throw new InvalidOperationException("Tedarikçi seçimi zorunludur.");
+            if (hakedis.GelirBirimFiyat < 0 || hakedis.GiderBirimFiyat < 0)
+                throw new InvalidOperationException("Birim fiyat negatif olamaz.");
 
-            // Yön tipi güzergahtan al
-            hakedis.YonTipi = guzergah.SeferTipi switch
-            {
-                SeferTipi.Sabah => YonTipi.Sabah,
-                SeferTipi.Aksam => YonTipi.Aksam,
-                SeferTipi.SabahAksam => YonTipi.SabahAksam,
-                _ => YonTipi.SabahAksam
-            };
+            await using var context = await _contextFactory.CreateDbContextAsync();
 
-            // Günlük sefer sayısı yön tipine göre
-            hakedis.GunlukSeferSayisi = hakedis.YonTipi switch
+            var aktifFirmaId = _aktifFirmaProvider.AktifFirmaId;
+            if (!aktifFirmaId.HasValue || aktifFirmaId.Value <= 0)
+                throw new InvalidOperationException("Aktif firma seçilmeden hakediş oluşturulamaz.");
+
+            hakedis.FirmaId = aktifFirmaId.Value;
+
+            _logger.LogInformation("Hakediş Create başladı. FirmaId={FirmaId}, Yil={Yil}, Ay={Ay}, GuzergahId={GuzergahId}, AracId={AracId}, SoforId={SoforId}, CariId={CariId}",
+                hakedis.FirmaId, hakedis.Yil, hakedis.Ay, hakedis.GuzergahId, hakedis.AracId, hakedis.SoforId, hakedis.CariId);
+
+            // Güzergah varsayılanlarından al
+            var guzergah = await context.Guzergahlar.FindAsync(hakedis.GuzergahId);
+            if (guzergah != null)
             {
-                YonTipi.Sabah => 1,
-                YonTipi.Aksam => 1,
-                YonTipi.SabahAksam => 2,
-                _ => 2
-            };
+                // Fiyat yoksa güzergah fiyatını kullan
+                if (hakedis.BirimFiyat == 0 && guzergah.BirimFiyat > 0)
+                    hakedis.BirimFiyat = guzergah.BirimFiyat;
+
+                // Yön tipi güzergahtan al
+                hakedis.YonTipi = guzergah.SeferTipi switch
+                {
+                    SeferTipi.Sabah => YonTipi.Sabah,
+                    SeferTipi.Aksam => YonTipi.Aksam,
+                    SeferTipi.SabahAksam => YonTipi.SabahAksam,
+                    _ => YonTipi.SabahAksam
+                };
+
+                // Günlük sefer sayısı yön tipine göre
+                hakedis.GunlukSeferSayisi = hakedis.YonTipi switch
+                {
+                    YonTipi.Sabah => 1,
+                    YonTipi.Aksam => 1,
+                    YonTipi.SabahAksam => 2,
+                    _ => 2
+                };
+            }
+
+            // Aynı dönemde aynı (Güzergah+Araç+Şoför) için mükerrer kontrol
+            var mevcut = await context.HakedisPuantajlar
+                .AnyAsync(h => h.Yil == hakedis.Yil && h.Ay == hakedis.Ay
+                    && h.GuzergahId == hakedis.GuzergahId
+                    && h.AracId == hakedis.AracId
+                    && h.SoforId == hakedis.SoforId
+                    && h.FirmaId == hakedis.FirmaId
+                    && !h.IsDeleted);
+            if (mevcut)
+                throw new InvalidOperationException("Bu dönem için aynı güzergah/araç/şoför kombinasyonunda hakediş zaten var!");
+
+            hakedis.Durum = HakedisDurumu.Taslak;
+            hakedis.CreatedAt = DateTime.UtcNow;
+            hakedis.IsDeleted = false;
+
+            context.HakedisPuantajlar.Add(hakedis);
+            _logger.LogInformation("Hakediş Add edildi. State={State}", context.Entry(hakedis).State);
+
+            var affected = await context.SaveChangesAsync();
+            _logger.LogInformation("Hakediş SaveChanges tamamlandı. Affected={Affected}, Id={Id}", affected, hakedis.Id);
+
+            if (affected <= 0 || hakedis.Id <= 0)
+                throw new InvalidOperationException("Hakediş ana kaydı database'e yazılamadı.");
+
+            // Günlük detayları otomatik oluştur (ayın tüm günleri için 0 sefer)
+            await GunlukDetayOlusturAsync(context, hakedis);
+
+            var kayitDbdeVarMi = await context.HakedisPuantajlar
+                .AsNoTracking()
+                .AnyAsync(h => h.Id == hakedis.Id && !h.IsDeleted);
+
+            if (!kayitDbdeVarMi)
+                throw new InvalidOperationException("Hakediş kaydı SaveChanges sonrası DB'de bulunamadı.");
+
+            return hakedis;
         }
-
-        // Aynı dönemde aynı (Güzergah+Araç+Şoför) için mükerrer kontrol
-        var mevcut = await context.HakedisPuantajlar
-            .AnyAsync(h => h.Yil == hakedis.Yil && h.Ay == hakedis.Ay
-                && h.GuzergahId == hakedis.GuzergahId
-                && h.AracId == hakedis.AracId
-                && h.SoforId == hakedis.SoforId
-                && !h.IsDeleted);
-        if (mevcut)
-            throw new InvalidOperationException("Bu dönem için aynı güzergah/araç/şoför kombinasyonunda hakediş zaten var!");
-
-        hakedis.Durum = HakedisDurumu.Taslak;
-        hakedis.CreatedAt = DateTime.UtcNow;
-
-        context.HakedisPuantajlar.Add(hakedis);
-        await context.SaveChangesAsync();
-
-        // Günlük detayları otomatik oluştur (ayın tüm günleri için 0 sefer)
-        await GunlukDetayOlusturAsync(context, hakedis);
-
-        return hakedis;
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Hakediş puantaj create hatası. GuzergahId={GuzergahId}, AracId={AracId}, SoforId={SoforId}, CariId={CariId}",
+                hakedis.GuzergahId, hakedis.AracId, hakedis.SoforId, hakedis.CariId);
+            throw;
+        }
     }
 
     public async Task<HakedisPuantaj> UpdateAsync(HakedisPuantaj hakedis)
@@ -165,15 +206,19 @@ public class HakedisPuantajService : IHakedisPuantajService
             .ToListAsync();
     }
 
-    public async Task GunlukSeferGuncelleAsync(int hakedisId, int gun, int seferSayisi, bool ekSeferMi, string? aciklama = null)
+    public async Task GunlukSeferGuncelleAsync(int hakedisId, int gun, int seferSayisi, int? seferTuruId, decimal fiyatCarpani, bool mesaiMi, bool ekSeferMi, string? aciklama = null)
     {
         if (gun < 1 || gun > 31) throw new InvalidOperationException("Geçersiz gün.");
         if (seferSayisi < 0) throw new InvalidOperationException("Sefer sayısı negatif olamaz.");
+        if (fiyatCarpani <= 0) throw new InvalidOperationException("Fiyat çarpanı sıfır veya negatif olamaz.");
 
         await using var context = await _contextFactory.CreateDbContextAsync();
         var hakedis = await context.HakedisPuantajlar.FindAsync(hakedisId);
         if (hakedis == null) throw new InvalidOperationException("Hakediş bulunamadı.");
         if (hakedis.Durum >= HakedisDurumu.Onaylandi) throw new InvalidOperationException("Onaylanmış hakediş güncellenemez.");
+
+        _logger.LogInformation("Detay kaydediliyor. HakedisId={HakedisId}, Gun={Gun}, SeferTuruId={SeferTuruId}, SeferSayisi={SeferSayisi}",
+            hakedisId, gun, seferTuruId, seferSayisi);
 
         var detay = await context.HakedisPuantajDetaylar
             .FirstOrDefaultAsync(d => d.HakedisPuantajId == hakedisId && d.Gun == gun && !d.IsDeleted);
@@ -185,21 +230,38 @@ public class HakedisPuantajService : IHakedisPuantajService
                 HakedisPuantajId = hakedisId,
                 Gun = gun,
                 SeferSayisi = seferSayisi,
+                SeferTuruId = seferTuruId,
+                FiyatCarpani = fiyatCarpani,
+                MesaiMi = mesaiMi,
                 EkSeferMi = ekSeferMi,
                 Aciklama = aciklama,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                IsDeleted = false
             };
             context.HakedisPuantajDetaylar.Add(detay);
         }
         else
         {
             detay.SeferSayisi = seferSayisi;
+            detay.SeferTuruId = seferTuruId;
+            detay.FiyatCarpani = fiyatCarpani;
+            detay.MesaiMi = mesaiMi;
             detay.EkSeferMi = ekSeferMi;
             detay.Aciklama = aciklama;
             detay.UpdatedAt = DateTime.UtcNow;
         }
 
-        await context.SaveChangesAsync();
+        var affected = await context.SaveChangesAsync();
+        if (affected <= 0)
+            throw new InvalidOperationException("Günlük sefer detayı database'e yazılamadı.");
+
+        var detayDb = await context.HakedisPuantajDetaylar
+            .AsNoTracking()
+            .FirstOrDefaultAsync(d => d.HakedisPuantajId == hakedisId && d.Gun == gun && !d.IsDeleted);
+
+        if (detayDb == null)
+            throw new InvalidOperationException("Günlük sefer detayı SaveChanges sonrası DB'de bulunamadı.");
+
         await HakedisHesaplaAsync(context, hakedis);
     }
 
@@ -288,10 +350,7 @@ public class HakedisPuantajService : IHakedisPuantajService
 
     private async Task<HakedisPuantaj> HakedisHesaplaAsync(ApplicationDbContext context, HakedisPuantaj hakedis)
     {
-        // Sefer başı birim fiyat
-        var seferBirimFiyat = hakedis.GunlukSeferSayisi > 0
-            ? hakedis.BirimFiyat / hakedis.GunlukSeferSayisi
-            : 0;
+        _logger.LogInformation("Hakediş hesaplama başladı. HakedisId={HakedisId}", hakedis.Id);
 
         // Toplamları yeniden hesapla
         var detaylar = await context.HakedisPuantajDetaylar
@@ -313,35 +372,88 @@ public class HakedisPuantajService : IHakedisPuantajService
         hakedis.TahsilEdilecekTutar = hakedis.GelirToplam + hakedis.GelirKdvTutari;
         hakedis.UpdatedAt = DateTime.UtcNow;
 
-        await context.SaveChangesAsync();
+        var affected = await context.SaveChangesAsync();
+        if (affected <= 0)
+            throw new InvalidOperationException($"Hakediş hesaplama sonuçları DB'ye yazılamadı. HakedisId={hakedis.Id}");
+
+        var kontrol = await context.HakedisPuantajlar
+            .AsNoTracking()
+            .FirstOrDefaultAsync(h => h.Id == hakedis.Id && !h.IsDeleted);
+
+        if (kontrol == null)
+            throw new InvalidOperationException($"Hakediş hesaplama sonrası kayıt DB'de bulunamadı. HakedisId={hakedis.Id}");
+
+        _logger.LogInformation("Hakediş hesaplama tamamlandı. HakedisId={HakedisId}, ToplamSefer={ToplamSefer}, GiderToplam={GiderToplam}",
+            hakedis.Id, kontrol.ToplamSefer, kontrol.GiderToplam);
+
         return hakedis;
     }
 
     public async Task<HakedisPuantaj> OnayaGonderAsync(int id)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var hakedis = await context.HakedisPuantajlar.FindAsync(id);
-        if (hakedis == null) throw new InvalidOperationException("Hakediş bulunamadı.");
-        if (hakedis.Durum != HakedisDurumu.Taslak) throw new InvalidOperationException("Sadece taslak hakediş onaya gönderilebilir.");
+        try
+        {
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            var hakedis = await context.HakedisPuantajlar.FindAsync(id);
+            if (hakedis == null) throw new InvalidOperationException("Hakediş bulunamadı.");
+            if (hakedis.Durum != HakedisDurumu.Taslak) throw new InvalidOperationException("Sadece taslak hakediş onaya gönderilebilir.");
 
-        await HakedisHesaplaAsync(context, hakedis);
-        hakedis.Durum = HakedisDurumu.OnayBekliyor;
-        hakedis.UpdatedAt = DateTime.UtcNow;
-        await context.SaveChangesAsync();
-        return hakedis;
+            await HakedisHesaplaAsync(context, hakedis);
+            hakedis.Durum = HakedisDurumu.OnayBekliyor;
+            hakedis.UpdatedAt = DateTime.UtcNow;
+
+            var affected = await context.SaveChangesAsync();
+            if (affected <= 0)
+                throw new InvalidOperationException($"Hakediş onaya gönderme DB'ye yazılamadı. HakedisId={id}");
+
+            var kontrol = await context.HakedisPuantajlar
+                .AsNoTracking()
+                .FirstOrDefaultAsync(h => h.Id == id && !h.IsDeleted);
+
+            if (kontrol?.Durum != HakedisDurumu.OnayBekliyor)
+                throw new InvalidOperationException($"Hakediş durumu OnayBekliyor olarak doğrulanamadı. HakedisId={id}");
+
+            _logger.LogInformation("Hakediş onaya gönderildi. HakedisId={HakedisId}", id);
+            return hakedis;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Hakediş onaya gönderme hatası. HakedisId={HakedisId}", id);
+            throw;
+        }
     }
 
     public async Task<HakedisPuantaj> OnaylaAsync(int id)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var hakedis = await context.HakedisPuantajlar.FindAsync(id);
-        if (hakedis == null) throw new InvalidOperationException("Hakediş bulunamadı.");
-        if (hakedis.Durum != HakedisDurumu.OnayBekliyor) throw new InvalidOperationException("Sadece onay bekleyen hakediş onaylanabilir.");
+        try
+        {
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            var hakedis = await context.HakedisPuantajlar.FindAsync(id);
+            if (hakedis == null) throw new InvalidOperationException("Hakediş bulunamadı.");
+            if (hakedis.Durum != HakedisDurumu.OnayBekliyor) throw new InvalidOperationException("Sadece onay bekleyen hakediş onaylanabilir.");
 
-        hakedis.Durum = HakedisDurumu.Onaylandi;
-        hakedis.UpdatedAt = DateTime.UtcNow;
-        await context.SaveChangesAsync();
-        return hakedis;
+            hakedis.Durum = HakedisDurumu.Onaylandi;
+            hakedis.UpdatedAt = DateTime.UtcNow;
+
+            var affected = await context.SaveChangesAsync();
+            if (affected <= 0)
+                throw new InvalidOperationException($"Hakediş onaylama DB'ye yazılamadı. HakedisId={id}");
+
+            var kontrol = await context.HakedisPuantajlar
+                .AsNoTracking()
+                .FirstOrDefaultAsync(h => h.Id == id && !h.IsDeleted);
+
+            if (kontrol?.Durum != HakedisDurumu.Onaylandi)
+                throw new InvalidOperationException($"Hakediş durumu Onaylandi olarak doğrulanamadı. HakedisId={id}");
+
+            _logger.LogInformation("Hakediş onaylandı. HakedisId={HakedisId}", id);
+            return hakedis;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Hakediş onaylama hatası. HakedisId={HakedisId}", id);
+            throw;
+        }
     }
 
     #endregion

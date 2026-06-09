@@ -1,6 +1,7 @@
-using KOAFiloServis.Shared.Entities;
+﻿using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace KOAFiloServis.Web.Services;
 
@@ -14,11 +15,13 @@ public class HakedisMuhasebeService : IHakedisMuhasebeService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _cf;
     private readonly IMuhasebeService _ms;
+    private readonly ILogger<HakedisMuhasebeService> _logger;
 
-    public HakedisMuhasebeService(IDbContextFactory<ApplicationDbContext> cf, IMuhasebeService ms)
+    public HakedisMuhasebeService(IDbContextFactory<ApplicationDbContext> cf, IMuhasebeService ms, ILogger<HakedisMuhasebeService> logger)
     {
         _cf = cf;
         _ms = ms;
+        _logger = logger;
     }
 
     public async Task MuhasebeyeAktarAsync(int hakedisId)
@@ -35,6 +38,8 @@ public class HakedisMuhasebeService : IHakedisMuhasebeService
             throw new InvalidOperationException("Sadece onaylanmış hakediş muhasebeye aktarılabilir.");
         if (hakedis.MuhasebeyeAktarildiMi)
             throw new InvalidOperationException("Bu hakediş zaten muhasebeye aktarılmış.");
+
+        _logger.LogInformation("Hakediş muhasebe aktarım başladı. HakedisId={HakedisId}", hakedisId);
 
         // ── Ayarları DB'den al ──
         var ayar = await context.MuhasebeAyarlari.FirstOrDefaultAsync();
@@ -56,7 +61,7 @@ public class HakedisMuhasebeService : IHakedisMuhasebeService
         var fisTarihi = new DateTime(hakedis.Yil, hakedis.Ay, DateTime.DaysInMonth(hakedis.Yil, hakedis.Ay));
         var donemAdi = $"{hakedis.Ay}/{hakedis.Yil}";
 
-        using var tx = await context.Database.BeginTransactionAsync();
+        await using var tx = await context.Database.BeginTransactionAsync();
 
         try
         {
@@ -111,13 +116,27 @@ public class HakedisMuhasebeService : IHakedisMuhasebeService
             hakedis.GiderFisId = gf2.Id;
             hakedis.MuhasebeyeAktarildiMi = true;
             hakedis.UpdatedAt = DateTime.UtcNow;
-            await context.SaveChangesAsync();
+            var affected = await context.SaveChangesAsync();
+
+            if (affected <= 0)
+                throw new InvalidOperationException($"Hakediş muhasebe aktarım sonucu DB'ye yazılamadı. HakedisId={hakedisId}");
 
             await tx.CommitAsync();
+
+            var kontrol = await context.HakedisPuantajlar
+                .AsNoTracking()
+                .FirstOrDefaultAsync(h => h.Id == hakedisId && !h.IsDeleted);
+
+            if (kontrol == null || !kontrol.MuhasebeyeAktarildiMi || !kontrol.GelirFisId.HasValue || !kontrol.GiderFisId.HasValue)
+                throw new InvalidOperationException($"Muhasebe aktarım sonrası hakediş doğrulanamadı. HakedisId={hakedisId}");
+
+            _logger.LogInformation("Hakediş muhasebe aktarım tamamlandı. HakedisId={HakedisId}, GelirFisId={GelirFisId}, GiderFisId={GiderFisId}",
+                hakedisId, kontrol.GelirFisId, kontrol.GiderFisId);
         }
-        catch
+        catch (Exception ex)
         {
             await tx.RollbackAsync();
+            _logger.LogError(ex, "Hakediş muhasebe aktarım hatası. HakedisId={HakedisId}", hakedisId);
             throw;
         }
     }

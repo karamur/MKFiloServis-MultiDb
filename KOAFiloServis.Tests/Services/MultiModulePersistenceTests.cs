@@ -62,7 +62,12 @@ public class MultiModulePersistenceTests
     {
         await using var ctx = f.CreateDbContext();
         var q = ctx.Set<T>().AsNoTracking();
-        if (ignoreFilters) q = q.IgnoreQueryFilters();
+        if (ignoreFilters)
+        {
+            q = q.IgnoreQueryFilters();
+            return await q.FirstOrDefaultAsync(x => x.Id == id);
+        }
+
         return await q.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
     }
 
