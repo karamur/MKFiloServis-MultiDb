@@ -86,6 +86,13 @@ CRMFiloServis-Release.zip
 KOAFiloServis.Installer/Payload/koafiloservis-package.zip
 KOAFiloServisKurulum.exe
 
+# KOAFiloServis backups
+KOAFiloServis.Web/Backups/**
+!KOAFiloServis.Web/Backups/.gitkeep
+
+# Claude Code
+.codex/
+
 # Inno Setup build artifacts
 setup/payload/
 setup/output/
