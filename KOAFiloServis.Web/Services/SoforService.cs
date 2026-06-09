@@ -900,6 +900,7 @@ public class SoforService : ISoforService
 
     /// <summary>
     /// Belirli bir personelin avans hesabını getirir (Cari.PersonelAvansHesap üzerinden)
+    /// Önce Cari.PersonelAvansHesapId'ye bakar, yoksa deterministik kodla (195.01.{soforId:D4}) arar.
     /// </summary>
     public async Task<MuhasebeHesap?> GetPersonelAvansHesabiAsync(int soforId)
     {
@@ -912,18 +913,28 @@ public class SoforService : ISoforService
 
         if (cari.PersonelAvansHesap != null) return cari.PersonelAvansHesap;
 
-        // PersonelAvansHesapId null ise, personel adıyla 195.01.xxx hesabını bul
+        // PersonelAvansHesapId null ise, deterministik kodla ara
         var ayar = await context.MuhasebeAyarlari.AsNoTracking().FirstOrDefaultAsync();
         var avansPrefix = ayar?.PersonelAvansPrefix?.Trim();
+        var prefix = string.IsNullOrWhiteSpace(avansPrefix) ? "195.01" : avansPrefix;
+        var deterministikKod = $"{prefix}.{soforId:D4}";
 
-        var avansHesap = string.IsNullOrWhiteSpace(avansPrefix)
-            ? await context.MuhasebeHesaplari
-                .FirstOrDefaultAsync(h => h.HesapAdi == cari.Unvan && !h.IsDeleted)
-            : await context.MuhasebeHesaplari
-                .FirstOrDefaultAsync(h => h.HesapKodu.StartsWith(avansPrefix + ".") && h.HesapAdi == cari.Unvan && !h.IsDeleted);
+        var avansHesap = await context.MuhasebeHesaplari
+            .FirstOrDefaultAsync(h => h.HesapKodu == deterministikKod && !h.IsDeleted);
+
+        // Deterministik kodda yoksa isme göre ara (eski sequential hesaplar)
+        if (avansHesap == null)
+        {
+            avansHesap = string.IsNullOrWhiteSpace(avansPrefix)
+                ? await context.MuhasebeHesaplari
+                    .FirstOrDefaultAsync(h => h.HesapAdi == cari.Unvan && !h.IsDeleted)
+                : await context.MuhasebeHesaplari
+                    .FirstOrDefaultAsync(h => h.HesapKodu.StartsWith(avansPrefix + ".") && h.HesapAdi == cari.Unvan && !h.IsDeleted);
+        }
 
         if (avansHesap != null)
         {
+            // ── Cari tablosuna yaz (195 hesap Id) ──
             cari.PersonelAvansHesapId = avansHesap.Id;
             context.Cariler.Update(cari);
             await context.SaveChangesAsync();
@@ -934,7 +945,7 @@ public class SoforService : ISoforService
 
     /// <summary>
     /// Belirli bir personelin borç hesabını getirir (Cari.MuhasebeHesap - 335.xx.xxx)
-    /// MuhasebeHesapId null ise hesap adıyla arayıp bulursa Cari kaydını günceller.
+    /// Önce Cari.MuhasebeHesapId'ye bakar, yoksa deterministik kodla (335.01.{soforId:D4}) arar.
     /// </summary>
     public async Task<MuhasebeHesap?> GetPersonelBorcHesabiAsync(int soforId)
     {
@@ -948,15 +959,24 @@ public class SoforService : ISoforService
         // Hesap zaten atanmışsa direkt dön
         if (cari.MuhasebeHesap != null) return cari.MuhasebeHesap;
 
-        // MuhasebeHesapId null ise, personel adıyla 335.xx.xxx hesabını bul
+        // MuhasebeHesapId null ise, deterministik kodla ara
         var ayar = await context.MuhasebeAyarlari.AsNoTracking().FirstOrDefaultAsync();
         var personelPrefix = ayar?.PersonelPrefix?.Trim();
+        var prefix = string.IsNullOrWhiteSpace(personelPrefix) ? "335.01" : personelPrefix;
+        var deterministikKod = $"{prefix}.{soforId:D4}";
 
-        var borcHesap = string.IsNullOrWhiteSpace(personelPrefix)
-            ? await context.MuhasebeHesaplari
-                .FirstOrDefaultAsync(h => h.HesapAdi == cari.Unvan && !h.IsDeleted)
-            : await context.MuhasebeHesaplari
-                .FirstOrDefaultAsync(h => h.HesapKodu.StartsWith(personelPrefix + ".") && h.HesapAdi == cari.Unvan && !h.IsDeleted);
+        var borcHesap = await context.MuhasebeHesaplari
+            .FirstOrDefaultAsync(h => h.HesapKodu == deterministikKod && !h.IsDeleted);
+
+        // Deterministik kodda yoksa isme göre ara (eski sequential hesaplar)
+        if (borcHesap == null)
+        {
+            borcHesap = string.IsNullOrWhiteSpace(personelPrefix)
+                ? await context.MuhasebeHesaplari
+                    .FirstOrDefaultAsync(h => h.HesapAdi == cari.Unvan && !h.IsDeleted)
+                : await context.MuhasebeHesaplari
+                    .FirstOrDefaultAsync(h => h.HesapKodu.StartsWith(personelPrefix + ".") && h.HesapAdi == cari.Unvan && !h.IsDeleted);
+        }
 
         if (borcHesap != null)
         {
@@ -1046,6 +1066,10 @@ public class SoforService : ISoforService
         var configuredPrefix = ayar?.PersonelPrefix?.Trim();
         var prefix = string.IsNullOrWhiteSpace(configuredPrefix) ? "335.01" : configuredPrefix;
 
+        // Deterministik hesap kodu: prefix.personelId (örn: 335.01.0005)
+        var suffix = dbSofor.Id.ToString("D4");
+        var deterministikKod = $"{prefix}.{suffix}";
+
         MuhasebeHesap? hedefHesap = null;
 
         if (dbSofor.MuhasebeHesapId.HasValue)
@@ -1062,13 +1086,10 @@ public class SoforService : ISoforService
 
         if (hedefHesap == null)
         {
-            hedefHesap = string.IsNullOrWhiteSpace(configuredPrefix)
-                ? await context.MuhasebeHesaplari
-                    .IgnoreQueryFilters()
-                    .FirstOrDefaultAsync(h => h.HesapAdi == tamAd)
-                : await context.MuhasebeHesaplari
-                    .IgnoreQueryFilters()
-                    .FirstOrDefaultAsync(h => h.HesapKodu.StartsWith(prefix + ".") && h.HesapAdi == tamAd);
+            // 1) Önce deterministik koda göre ara
+            hedefHesap = await context.MuhasebeHesaplari
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(h => h.HesapKodu == deterministikKod);
 
             if (hedefHesap != null && hedefHesap.IsDeleted)
             {
@@ -1076,14 +1097,33 @@ public class SoforService : ISoforService
                 hedefHesap.DeletedAt = null;
                 hedefHesap.UpdatedAt = DateTime.UtcNow;
             }
+
+            // 2) Deterministik kodda yoksa isme göre ara (eski sequential hesaplar için)
+            if (hedefHesap == null)
+            {
+                hedefHesap = string.IsNullOrWhiteSpace(configuredPrefix)
+                    ? await context.MuhasebeHesaplari
+                        .IgnoreQueryFilters()
+                        .FirstOrDefaultAsync(h => h.HesapAdi == tamAd)
+                    : await context.MuhasebeHesaplari
+                        .IgnoreQueryFilters()
+                        .FirstOrDefaultAsync(h => h.HesapKodu.StartsWith(prefix + ".") && h.HesapAdi == tamAd);
+
+                if (hedefHesap != null && hedefHesap.IsDeleted)
+                {
+                    hedefHesap.IsDeleted = false;
+                    hedefHesap.DeletedAt = null;
+                    hedefHesap.UpdatedAt = DateTime.UtcNow;
+                }
+            }
         }
 
+        // 3) Hiçbiri yoksa deterministik kodla yeni hesap oluştur
         if (hedefHesap == null)
         {
-            var hesapKodu = await GenerateNextHesapKoduAsync(context, prefix);
             hedefHesap = new MuhasebeHesap
             {
-                HesapKodu = hesapKodu,
+                HesapKodu = deterministikKod,
                 HesapAdi = tamAd,
                 HesapGrubu = HesapGrubu.KisaVadeliYabanciKaynaklar,
                 HesapTuru = HesapTuru.Pasif,
@@ -1097,12 +1137,14 @@ public class SoforService : ISoforService
             await context.SaveChangesAsync();
         }
 
+        // ── Personel tablosuna yaz (335 hesap Id) ──
         if (dbSofor.MuhasebeHesapId != hedefHesap.Id)
         {
             dbSofor.MuhasebeHesapId = hedefHesap.Id;
             dbSofor.UpdatedAt = DateTime.UtcNow;
         }
 
+        // ── Cari tablosuna da yaz (335 hesap Id) ──
         await EnsurePersonelCariKaydiAsync(context, dbSofor);
         var cari = await context.Cariler
             .FirstOrDefaultAsync(c => c.SoforId == dbSofor.Id && !c.IsDeleted);
@@ -1150,8 +1192,33 @@ public class SoforService : ISoforService
         var configuredPrefix = ayar?.PersonelAvansPrefix?.Trim();
         var prefix = string.IsNullOrWhiteSpace(configuredPrefix) ? "195.01" : configuredPrefix;
 
-        // 1) İsme göre mevcut hesap ara — bulunursa onu seç, çift kayıt önle
-        var mevcutIsim = string.IsNullOrWhiteSpace(configuredPrefix)
+        // Deterministik hesap kodu: prefix.personelId (örn: 195.01.0005)
+        var suffix = sofor.Id.ToString("D4");
+        var deterministikKod = $"{prefix}.{suffix}";
+
+        // 1) Önce deterministik koda göre ara
+        var mevcutIsim = await context.MuhasebeHesaplari
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(h => h.HesapKodu == deterministikKod);
+
+        if (mevcutIsim != null)
+        {
+            if (mevcutIsim.IsDeleted)
+            {
+                mevcutIsim.IsDeleted = false;
+                mevcutIsim.DeletedAt = null;
+                mevcutIsim.UpdatedAt = DateTime.UtcNow;
+                await context.SaveChangesAsync();
+            }
+            // ── Cari tablosuna yaz (195 hesap Id) ──
+            cari.PersonelAvansHesapId = mevcutIsim.Id;
+            context.Cariler.Update(cari);
+            await context.SaveChangesAsync();
+            return;
+        }
+
+        // 2) Deterministik kodda yoksa isme göre ara (eski sequential hesaplar için)
+        mevcutIsim = string.IsNullOrWhiteSpace(configuredPrefix)
             ? await context.MuhasebeHesaplari
                 .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(h => h.HesapAdi == tamAd)
@@ -1167,17 +1234,17 @@ public class SoforService : ISoforService
                 mevcutIsim.UpdatedAt = DateTime.UtcNow;
                 await context.SaveChangesAsync();
             }
+            // ── Cari tablosuna yaz (195 hesap Id) ──
             cari.PersonelAvansHesapId = mevcutIsim.Id;
             context.Cariler.Update(cari);
             await context.SaveChangesAsync();
             return;
         }
 
-        // 2) Bulunamadı → yeni hesap oluştur
-        var hesapKodu = await GenerateNextHesapKoduAsync(context, prefix);
+        // 3) Hiçbiri yoksa deterministik kodla yeni hesap oluştur
         var yeniHesap = new MuhasebeHesap
         {
-            HesapKodu = hesapKodu,
+            HesapKodu = deterministikKod,
             HesapAdi = tamAd,
             HesapGrubu = HesapGrubu.DonenVarliklar,
             HesapTuru = HesapTuru.Aktif,
@@ -1190,6 +1257,7 @@ public class SoforService : ISoforService
         context.MuhasebeHesaplari.Add(yeniHesap);
         await context.SaveChangesAsync();
 
+        // ── Cari tablosuna yaz (195 hesap Id) ──
         cari.PersonelAvansHesapId = yeniHesap.Id;
         context.Cariler.Update(cari);
         await context.SaveChangesAsync();
