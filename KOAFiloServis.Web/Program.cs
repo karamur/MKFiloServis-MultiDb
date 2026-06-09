@@ -290,6 +290,7 @@ builder.Services.AddScoped<IKurumService, KurumService>();
 builder.Services.AddScoped<IPuantajService, PuantajService>();
 builder.Services.AddScoped<IKurumPuantajService, KurumPuantajService>();
 builder.Services.AddScoped<IHakedisPuantajService, HakedisPuantajService>(); // Operasyonel Hakediş Puantajı
+builder.Services.AddScoped<IHakedisRaporService, HakedisRaporService>(); // Hakediş Raporlama
 builder.Services.AddScoped<OperasyonKaydiBusinessRules>();
 builder.Services.AddScoped<KOAFiloServis.Web.Services.Interfaces.IOperasyonKaydiService, OperasyonKaydiService>();
 builder.Services.AddScoped<KOAFiloServis.Web.Services.Interfaces.IPuantajSyncService, PuantajSyncService>();
