@@ -1,17 +1,16 @@
-@page "/operasyonlar/hakedis-puantaj"
+﻿@page "/operasyonlar/hakedis-puantaj"
+@page "/operasyon/hakedis-puantaj"
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
-@using KOAFiloServis.Web.Data
-@using Microsoft.EntityFrameworkCore
 @inject IHakedisPuantajService HakedisService
 @inject IFirmaService FirmaService
 @inject ISoforService SoforService
 @inject IGuzergahService GuzergahService
 @inject IAracService AracService
 @inject ICariService CariService
+@inject IHakedisMuhasebeService HakedisMuhasebeService
 @inject IToastService ToastService
 @inject NavigationManager Navigation
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
 @rendermode InteractiveServer
 
 <PageTitle>Hakedis Puantajlari</PageTitle>
@@ -32,6 +31,21 @@
         <div class="col-md-2"><button class="btn btn-sm btn-primary" @onclick="LoadData"><i class="bi bi-search me-1"></i>Filtrele</button></div>
     </div></div></div>
 
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle me-1"></i>@successMessage
+            <button type="button" class="btn-close" @onclick="() => successMessage = null"></button>
+        </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle me-1"></i>@errorMessage
+            <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+        </div>
+    }
+
     @if (hakedisler != null)
     {
         <div class="card"><div class="card-body p-0" style="overflow-x: auto;">
@@ -40,7 +54,7 @@
             <th>S.No</th><th style="min-width:140px;">Guzergah</th><th>Gelir</th><th>Gider</th><th>Yon</th>
             <th>Plaka</th><th>Sofor</th><th>Tedarikci</th>
             @for (int g = 1; g <= gunSayisi; g++) { <th style="width:34px;text-align:center;">@g</th> }
-            <th>Gun</th><th>Toplam</th><th>KDV%</th><th>Kesinti</th><th>Odenecek</th><th></th>
+            <th>Gun</th><th>Toplam</th><th>KDV%</th><th>Kesinti</th><th>Odenecek</th><th>Durum</th><th>Islemler</th>
         </tr></thead>
         <tbody>
         @{ int sira = 0; }
@@ -69,7 +83,48 @@
                 <td class="text-center">%@h.KdvOrani</td>
                 <td class="text-end text-danger">@h.ToplamKesinti.ToString("N0")</td>
                 <td class="text-end fw-bold text-success">@h.OdenecekTutar.ToString("N0")</td>
-                <td><button class="btn btn-sm btn-outline-danger" @onclick="() => Sil(h)"><i class="bi bi-trash"></i></button></td>
+                <td class="text-center">
+                    @switch (h.Durum)
+                    {
+                        case HakedisDurumu.Taslak:
+                            <span class="badge bg-secondary">Taslak</span>
+                            break;
+                        case HakedisDurumu.OnayBekliyor:
+                            <span class="badge bg-warning text-dark">Onay Bekliyor</span>
+                            break;
+                        case HakedisDurumu.Onaylandi:
+                            <span class="badge bg-success">Onaylandı</span>
+                            break;
+                        default:
+                            <span class="badge bg-info">@h.Durum</span>
+                            break;
+                    }
+                </td>
+                <td>
+                    <div class="btn-group btn-group-sm">
+                        @if (h.Durum == HakedisDurumu.Taslak)
+                        {
+                            <button class="btn btn-outline-warning" @onclick="() => OnayaGonder(h)" title="Onaya Gönder">
+                                <i class="bi bi-send"></i>
+                            </button>
+                        }
+                        @if (h.Durum == HakedisDurumu.OnayBekliyor)
+                        {
+                            <button class="btn btn-outline-success" @onclick="() => Onayla(h)" title="Onayla">
+                                <i class="bi bi-check2-circle"></i>
+                            </button>
+                        }
+                        @if (h.Durum == HakedisDurumu.Onaylandi && !h.MuhasebeyeAktarildiMi)
+                        {
+                            <button class="btn btn-outline-primary" @onclick="() => MuhasebeyeAktar(h)" title="Muhasebeye Aktar">
+                                <i class="bi bi-journal-arrow-up"></i>
+                            </button>
+                        }
+                        <button class="btn btn-outline-danger" @onclick="() => Sil(h)" title="Sil">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </td>
             </tr>
         }
         </tbody></table></div></div>
@@ -81,9 +136,23 @@
     <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
     <div class="modal-dialog modal-lg"><div class="modal-content">
     <div class="modal-header bg-success text-white"><h5 class="modal-title">Yeni Hakedis</h5><button type="button" class="btn-close btn-close-white" @onclick="ModalKapat"></button></div>
-    <div class="modal-body"><div class="row g-2">
-        <div class="col-md-3"><label class="form-label">Yil</label><InputNumber @bind-Value="model.Yil" class="form-control form-control-sm" /></div>
-        <div class="col-md-3"><label class="form-label">Ay</label><InputNumber @bind-Value="model.Ay" class="form-control form-control-sm" min="1" max="12" /></div>
+    <div class="modal-body">
+        @* Modal içinde errorMessage göster *@
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger py-2 mb-3">
+                <i class="bi bi-exclamation-triangle me-1"></i>@errorMessage
+            </div>
+        }
+        <div class="row g-2">
+        <div class="col-md-3">
+            <label class="form-label">Yil <span class="text-danger">*</span></label>
+            <InputNumber @bind-Value="model.Yil" class="@YilInputClass" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Ay <span class="text-danger">*</span></label>
+            <InputNumber @bind-Value="model.Ay" class="@AyInputClass" min="1" max="12" />
+        </div>
         <div class="col-md-3"><label class="form-label">KDV %</label><InputNumber @bind-Value="model.KdvOrani" class="form-control form-control-sm" /></div>
         <div class="col-md-3"><label class="form-label">Yon</label>
             <select class="form-select form-select-sm" value="@((int)model.YonTipi)" @onchange="YonDegisti">
@@ -92,23 +161,44 @@
                 <option value="@((int)YonTipi.SabahAksam)">Sabah+Aksam (2 sefer)</option>
             </select></div>
     </div><div class="row g-2 mt-2">
-        <div class="col-md-4"><label class="form-label">Guzergah</label>
-            <select class="form-select form-select-sm" value="@model.GuzergahId" @onchange="GuzergahSecildi"><option value="0">-- Secin --</option>
-                @foreach (var g in guzergahlar) { <option value="@g.Id">@g.GuzergahAdi</option> }</select></div>
-        <div class="col-md-2"><label class="form-label">Gelir Fiyat</label><InputNumber @bind-Value="model.GelirBirimFiyat" class="form-control form-control-sm" /></div>
-        <div class="col-md-2"><label class="form-label">Gider Fiyat</label><InputNumber @bind-Value="model.GiderBirimFiyat" class="form-control form-control-sm" /></div>
-        <div class="col-md-4"><label class="form-label">Tedarikci</label>
-            <select class="form-select form-select-sm" @bind="model.CariId"><option value="0">-- Secin --</option>
-                @foreach (var c in cariler) { <option value="@c.Id">@c.Unvan</option> }</select></div>
+        <div class="col-md-4">
+            <label class="form-label">Guzergah <span class="text-danger">*</span></label>
+            <select class="form-select form-select-sm @(triedSubmit && model.GuzergahId <= 0 ? "border-danger" : "")" value="@model.GuzergahId" @onchange="GuzergahSecildi"><option value="0">-- Secin --</option>
+                @foreach (var g in guzergahlar) { <option value="@g.Id">@g.GuzergahAdi</option> }</select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Gelir Fiyat <span class="text-danger">*</span></label>
+            <InputNumber @bind-Value="model.GelirBirimFiyat" class="@GelirInputClass" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Gider Fiyat <span class="text-danger">*</span></label>
+            <InputNumber @bind-Value="model.GiderBirimFiyat" class="@GiderInputClass" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Tedarikci <span class="text-danger">*</span></label>
+            <select class="form-select form-select-sm @(triedSubmit && model.CariId <= 0 ? "border-danger" : "")" @bind="model.CariId"><option value="0">-- Secin --</option>
+                @foreach (var c in cariler) { <option value="@c.Id">@c.Unvan</option> }</select>
+        </div>
     </div><div class="row g-2 mt-2">
-        <div class="col-md-3"><label class="form-label">Arac</label><select class="form-select form-select-sm" @bind="model.AracId"><option value="0">-- Secin --</option>
-            @foreach (var a in araclar) { <option value="@a.Id">@a.Plaka</option> }</select></div>
-        <div class="col-md-3"><label class="form-label">Sofor</label><select class="form-select form-select-sm" @bind="model.SoforId"><option value="0">-- Secin --</option>
-            @foreach (var s in soforler) { <option value="@s.Id">@s.TamAd</option> }</select></div>
+        <div class="col-md-3">
+            <label class="form-label">Arac <span class="text-danger">*</span></label>
+            <select class="form-select form-select-sm @(triedSubmit && model.AracId <= 0 ? "border-danger" : "")" @bind="model.AracId"><option value="0">-- Secin --</option>
+            @foreach (var a in araclar) { <option value="@a.Id">@a.Plaka</option> }</select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Sofor <span class="text-danger">*</span></label>
+            <select class="form-select form-select-sm @(triedSubmit && model.SoforId <= 0 ? "border-danger" : "")" @bind="model.SoforId"><option value="0">-- Secin --</option>
+            @foreach (var s in soforler) { <option value="@s.Id">@s.TamAd</option> }</select>
+        </div>
         <div class="col-md-6"><label class="form-label">Aciklama</label><input class="form-control form-control-sm" @bind="model.Aciklama" /></div>
     </div></div>
-    <div class="modal-footer"><button class="btn btn-primary" @onclick="Kaydet"><i class="bi bi-check-lg me-1"></i>Olustur</button>
-    <button class="btn btn-danger" @onclick="ModalKapat">Iptal</button></div>
+    <div class="modal-footer">
+        <button class="btn btn-primary" @onclick="Kaydet" disabled="@kaydediyor">
+            @if (kaydediyor) { <span class="spinner-border spinner-border-sm me-1"></span> }
+            <i class="bi bi-check-lg me-1"></i>Olustur
+        </button>
+        <button class="btn btn-danger" @onclick="ModalKapat" disabled="@kaydediyor">Iptal</button>
+    </div>
     </div></div></div>
 }
 
@@ -140,24 +230,106 @@
     private int seciliGun, gunSeferSayisi, gunSeferTuruId;
     private string? gunAciklama;
     private int filtreYil, filtreAy;
+    private string? errorMessage;
+    private string? successMessage;
+    private bool kaydediyor;
+    // Client-side validation tracking
+    private bool triedSubmit;
     private int gunSayisi => model != null ? DateTime.DaysInMonth(model.Yil, model.Ay) : 30;
 
-    protected override async Task OnInitializedAsync() { filtreYil = DateTime.Now.Year; filtreAy = DateTime.Now.Month; await LoadData(); }
+    // InputNumber helper CSS classes (component attributes can't use inline @(ternary) expressions)
+    private string YilInputClass => triedSubmit && (model != null && (model.Yil < 2020 || model.Yil > 2100))
+        ? "form-control form-control-sm border-danger"
+        : "form-control form-control-sm";
+    private string AyInputClass => triedSubmit && (model != null && (model.Ay < 1 || model.Ay > 12))
+        ? "form-control form-control-sm border-danger"
+        : "form-control form-control-sm";
+    private string GelirInputClass => triedSubmit && (model != null && model.GelirBirimFiyat < 0)
+        ? "form-control form-control-sm border-danger"
+        : "form-control form-control-sm";
+    private string GiderInputClass => triedSubmit && (model != null && model.GiderBirimFiyat < 0)
+        ? "form-control form-control-sm border-danger"
+        : "form-control form-control-sm";
+
+    protected override async Task OnInitializedAsync()
+    {
+        filtreYil = DateTime.Now.Year;
+        filtreAy = DateTime.Now.Month;
+        await LoadData();
+    }
 
     private async Task LoadData()
     {
-        hakedisler = await HakedisService.GetAllAsync(yil: filtreYil == 0 ? null : filtreYil, ay: filtreAy == 0 ? null : filtreAy);
-        guzergahlar = await GuzergahService.GetAllAsync();
-        araclar = (await AracService.GetAllAsync()).Where(a => a.Aktif).ToList();
-        soforler = await SoforService.GetActiveAsync();
-        cariler = await CariService.GetAllAsync();
-        await using var ctx = await DbFactory.CreateDbContextAsync();
-        seferTurleri = await ctx.HakedisSeferTurleri.Where(s => s.Aktif && !s.IsDeleted).OrderBy(s => s.Kod).ToListAsync();
+        try
+        {
+            errorMessage = null;
+            hakedisler = await HakedisService.GetAllAsync(yil: filtreYil == 0 ? null : filtreYil, ay: filtreAy == 0 ? null : filtreAy);
+            guzergahlar = await GuzergahService.GetAllAsync();
+            araclar = (await AracService.GetAllAsync()).Where(a => a.Aktif).ToList();
+            soforler = await SoforService.GetActiveAsync();
+            cariler = await CariService.GetAllAsync();
+            seferTurleri = hakedisler?
+                .SelectMany(h => h.Detaylar ?? new List<HakedisPuantajDetay>())
+                .Where(d => d.SeferTuru != null)
+                .Select(d => d.SeferTuru!)
+                .DistinctBy(s => s.Id)
+                .OrderBy(s => s.Kod)
+                .ToList() ?? new();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            Console.WriteLine(ex);
+            ToastService.ShowError(ex.Message);
+        }
     }
 
-    private void YeniHakedis() { model = new KOAFiloServis.Shared.Entities.HakedisPuantaj { Yil = filtreYil, Ay = filtreAy, YonTipi = YonTipi.SabahAksam, GunlukSeferSayisi = 2 }; showModal = true; }
-    private void ModalKapat() { showModal = false; model = null; }
-    private void YonDegisti(ChangeEventArgs e) { if (model != null) model.GunlukSeferSayisi = model.YonTipi switch { YonTipi.Sabah => 1, YonTipi.Aksam => 1, _ => 2 }; }
+    /// <summary>
+    /// Aktif firma kontrolü yaparak yeni hakediş formunu açar.
+    /// </summary>
+    private void YeniHakedis()
+    {
+        errorMessage = null;
+        successMessage = null;
+        triedSubmit = false;
+
+        var aktifFirma = FirmaService.GetAktifFirma();
+        if (aktifFirma.FirmaId <= 0)
+        {
+            errorMessage = "Önce aktif firma seçmelisiniz. Lütfen üst menüden çalışacağınız firmayı seçin.";
+            ToastService.ShowWarning("Aktif firma seçilmeden hakediş oluşturulamaz.");
+            return;
+        }
+
+        model = new KOAFiloServis.Shared.Entities.HakedisPuantaj
+        {
+            Yil = filtreYil,
+            Ay = filtreAy,
+            YonTipi = YonTipi.SabahAksam,
+            GunlukSeferSayisi = 2,
+            KdvOrani = 20
+        };
+        Console.WriteLine($"[HakedisUI] Yeni hakediş formu açıldı. AktifFirmaId={aktifFirma.FirmaId}, Yil={filtreYil}, Ay={filtreAy}");
+        showModal = true;
+    }
+
+    private void ModalKapat()
+    {
+        showModal = false;
+        model = null;
+        triedSubmit = false;
+        errorMessage = null;
+    }
+
+    private void YonDegisti(ChangeEventArgs e)
+    {
+        if (model == null) return;
+
+        if (int.TryParse(e.Value?.ToString(), out var yonInt) && Enum.IsDefined(typeof(YonTipi), yonInt))
+            model.YonTipi = (YonTipi)yonInt;
+
+        model.GunlukSeferSayisi = model.YonTipi switch { YonTipi.Sabah => 1, YonTipi.Aksam => 1, _ => 2 };
+    }
 
     private async Task GuzergahSecildi(ChangeEventArgs e) {
         if (model == null) return;
@@ -174,21 +346,209 @@
         }
     }
 
-    private async Task Kaydet() { if (model == null) return; try { await HakedisService.CreateAsync(model); showModal = false; await LoadData(); ToastService.ShowSuccess("Olusturuldu."); } catch (Exception ex) { ToastService.ShowError(ex.Message); } }
-    private async Task Sil(KOAFiloServis.Shared.Entities.HakedisPuantaj h) { try { await HakedisService.DeleteAsync(h.Id); await LoadData(); } catch (Exception ex) { ToastService.ShowError(ex.Message); } }
-    private void GunTikla(KOAFiloServis.Shared.Entities.HakedisPuantaj h, int gun) { model = h; seciliGun = gun; showGunModal = true; var d = h.Detaylar?.FirstOrDefault(x => x.Gun == gun); gunSeferSayisi = d?.SeferSayisi ?? 0; gunSeferTuruId = d?.SeferTuruId ?? 0; gunAciklama = d?.Aciklama; }
-    private void SeferTuruDegisti(ChangeEventArgs e) { if (gunSeferTuruId > 0) { var s = seferTurleri.FirstOrDefault(x => x.Id == gunSeferTuruId); if (s != null) gunSeferSayisi = (int)s.VarsayilanSeferSayisi; } }
-    private async Task GunKaydet() {
+    /// <summary>
+    /// İstemci tarafı zorunlu alan kontrolü. Service'e gitmeden önce kullanıcıya net mesaj verir.
+    /// </summary>
+    private string? ValidateModel()
+    {
+        if (model == null) return "Form verisi bulunamadı.";
+
+        if (model.GuzergahId <= 0)
+            return "Güzergah seçimi zorunludur. Lütfen bir güzergah seçin.";
+        if (model.AracId <= 0)
+            return "Araç seçimi zorunludur. Lütfen bir araç seçin.";
+        if (model.SoforId <= 0)
+            return "Şoför seçimi zorunludur. Lütfen bir şoför seçin.";
+        if (model.CariId <= 0)
+            return "Tedarikçi seçimi zorunludur. Lütfen bir tedarikçi (cari) seçin.";
+        if (model.Yil < 2020 || model.Yil > 2100)
+            return "Geçersiz yıl. Lütfen 2020-2100 arası bir yıl girin.";
+        if (model.Ay < 1 || model.Ay > 12)
+            return "Geçersiz ay. Lütfen 1-12 arası bir ay girin.";
+        if (model.GelirBirimFiyat < 0)
+            return "Gelir birim fiyat negatif olamaz.";
+        if (model.GiderBirimFiyat < 0)
+            return "Gider birim fiyat negatif olamaz.";
+        if (model.KdvOrani < 0 || model.KdvOrani > 100)
+            return "KDV oranı 0-100 arası olmalıdır.";
+
+        return null; // Geçerli
+    }
+
+    private async Task Kaydet()
+    {
         if (model == null) return;
-        decimal carpan = 1; bool mesai = false, ek = false;
-        if (gunSeferTuruId > 0) { var s = seferTurleri.FirstOrDefault(x => x.Id == gunSeferTuruId); if (s != null) { carpan = s.FiyatCarpani; mesai = s.MesaiMi; ek = s.EkSeferMi; } }
-        try {
-            await HakedisService.GunlukSeferGuncelleAsync(model.Id, seciliGun, gunSeferSayisi, ek, gunAciklama);
-            await using var ctx = await DbFactory.CreateDbContextAsync();
-            var detay = await ctx.HakedisPuantajDetaylar.FirstOrDefaultAsync(d => d.HakedisPuantajId == model.Id && d.Gun == seciliGun && !d.IsDeleted);
-            if (detay != null) { detay.SeferTuruId = gunSeferTuruId > 0 ? gunSeferTuruId : null; detay.FiyatCarpani = carpan; detay.MesaiMi = mesai; await ctx.SaveChangesAsync(); }
-            showGunModal = false; await HakedisService.HakedisHesaplaAsync(model.Id); await LoadData();
-            ToastService.ShowSuccess($"Gun {seciliGun} guncellendi.");
-        } catch (Exception ex) { ToastService.ShowError(ex.Message); }
+        triedSubmit = true;
+
+        // ADIM 1: İstemci validasyonu
+        var validationError = ValidateModel();
+        if (validationError != null)
+        {
+            errorMessage = validationError;
+            ToastService.ShowWarning(validationError);
+            Console.WriteLine($"[HakedisUI] İstemci validasyon hatası: {validationError}");
+            return;
+        }
+
+        // ADIM 2: Kaydet
+        kaydediyor = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var aktifFirma = FirmaService.GetAktifFirma();
+            Console.WriteLine($"[HakedisUI] Kaydet başladı. FirmaId={aktifFirma.FirmaId}, Yil={model.Yil}, Ay={model.Ay}, GuzergahId={model.GuzergahId}, AracId={model.AracId}, SoforId={model.SoforId}, CariId={model.CariId}");
+
+            var sonuc = await HakedisService.CreateAsync(model);
+
+            Console.WriteLine($"[HakedisUI] Kaydedildi. Id={sonuc.Id}");
+            successMessage = $"Hakediş başarıyla kaydedildi. Kayıt No: {sonuc.Id}";
+            ToastService.ShowSuccess(successMessage);
+
+            showModal = false;
+            model = null;
+            triedSubmit = false;
+            kaydediyor = false;
+
+            await LoadData();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            kaydediyor = false;
+            errorMessage = ex.Message;
+            Console.WriteLine($"[HakedisUI] Kaydet HATA: {ex.Message}");
+            Console.WriteLine(ex);
+            ToastService.ShowError(ex.Message);
+        }
+    }
+
+    private async Task Sil(KOAFiloServis.Shared.Entities.HakedisPuantaj h)
+    {
+        try
+        {
+            errorMessage = null;
+            await HakedisService.DeleteAsync(h.Id);
+            await LoadData();
+            ToastService.ShowSuccess($"Hakediş silindi (ID: {h.Id}).");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            Console.WriteLine(ex);
+            ToastService.ShowError(ex.Message);
+        }
+    }
+
+    private void GunTikla(KOAFiloServis.Shared.Entities.HakedisPuantaj h, int gun)
+    {
+        errorMessage = null;
+        model = h;
+        seciliGun = gun;
+        showGunModal = true;
+        var d = h.Detaylar?.FirstOrDefault(x => x.Gun == gun);
+        gunSeferSayisi = d?.SeferSayisi ?? 0;
+        gunSeferTuruId = d?.SeferTuruId ?? 0;
+        gunAciklama = d?.Aciklama;
+    }
+
+    private void SeferTuruDegisti(ChangeEventArgs e)
+    {
+        if (gunSeferTuruId > 0)
+        {
+            var s = seferTurleri.FirstOrDefault(x => x.Id == gunSeferTuruId);
+            if (s != null)
+                gunSeferSayisi = (int)s.VarsayilanSeferSayisi;
+        }
+    }
+
+    private async Task GunKaydet()
+    {
+        if (model == null) return;
+
+        decimal carpan = 1;
+        bool mesai = false;
+        bool ek = false;
+
+        if (gunSeferTuruId > 0)
+        {
+            var s = seferTurleri.FirstOrDefault(x => x.Id == gunSeferTuruId);
+            if (s != null)
+            {
+                carpan = s.FiyatCarpani;
+                mesai = s.MesaiMi;
+                ek = s.EkSeferMi;
+            }
+        }
+
+        try
+        {
+            errorMessage = null;
+            Console.WriteLine($"[HakedisUI] GunKaydet: HakedisId={model.Id}, Gun={seciliGun}, SeferSayisi={gunSeferSayisi}, SeferTuruId={gunSeferTuruId}");
+            await HakedisService.GunlukSeferGuncelleAsync(model.Id, seciliGun, gunSeferSayisi, gunSeferTuruId > 0 ? gunSeferTuruId : null, carpan, mesai, ek, gunAciklama);
+            Console.WriteLine($"[HakedisUI] GunKaydet başarılı: HakedisId={model.Id}, Gun={seciliGun}");
+            showGunModal = false;
+            await LoadData();
+            ToastService.ShowSuccess($"Gün {seciliGun} güncellendi. Sefer sayısı: {gunSeferSayisi}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            Console.WriteLine($"[HakedisUI] GunKaydet HATA: {ex.Message}");
+            Console.WriteLine(ex);
+            ToastService.ShowError(ex.Message);
+        }
+    }
+
+    private async Task OnayaGonder(HakedisPuantaj h)
+    {
+        try
+        {
+            errorMessage = null;
+            await HakedisService.OnayaGonderAsync(h.Id);
+            await LoadData();
+            ToastService.ShowSuccess($"Hakediş onaya gönderildi (ID: {h.Id}).");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            Console.WriteLine(ex);
+            ToastService.ShowError(ex.Message);
+        }
+    }
+
+    private async Task Onayla(HakedisPuantaj h)
+    {
+        try
+        {
+            errorMessage = null;
+            await HakedisService.OnaylaAsync(h.Id);
+            await LoadData();
+            ToastService.ShowSuccess($"Hakediş onaylandı (ID: {h.Id}).");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            Console.WriteLine(ex);
+            ToastService.ShowError(ex.Message);
+        }
+    }
+
+    private async Task MuhasebeyeAktar(HakedisPuantaj h)
+    {
+        try
+        {
+            errorMessage = null;
+            await HakedisMuhasebeService.MuhasebeyeAktarAsync(h.Id);
+            await LoadData();
+            ToastService.ShowSuccess($"Hakediş muhasebeye aktarıldı (ID: {h.Id}).");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            Console.WriteLine(ex);
+            ToastService.ShowError(ex.Message);
+        }
     }
 }
