@@ -94,6 +94,13 @@ public class HakedisPuantaj : BaseEntity, IFirmaTenant
     // Durum
     public HakedisDurumu Durum { get; set; } = HakedisDurumu.Taslak;
 
+    // Muhasebe Entegrasyonu
+    public int? GelirFisId { get; set; }           // Gelir muhasebe fişi
+    public virtual MuhasebeFis? GelirFis { get; set; }
+    public int? GiderFisId { get; set; }           // Gider muhasebe fişi
+    public virtual MuhasebeFis? GiderFis { get; set; }
+    public bool MuhasebeyeAktarildiMi { get; set; }
+
     // Fatura
     public int? FaturaId { get; set; }
     public virtual Fatura? Fatura { get; set; }
