@@ -47,6 +47,22 @@ public class HakedisPuantajService : IHakedisPuantajService
 
     public async Task<HakedisPuantaj> CreateAsync(HakedisPuantaj hakedis)
     {
+        // ── VALIDATION ──
+        if (hakedis.Yil < 2020 || hakedis.Yil > 2100)
+            throw new InvalidOperationException("Geçersiz yıl.");
+        if (hakedis.Ay < 1 || hakedis.Ay > 12)
+            throw new InvalidOperationException("Geçersiz ay.");
+        if (hakedis.GuzergahId <= 0)
+            throw new InvalidOperationException("Güzergah seçimi zorunludur.");
+        if (hakedis.AracId <= 0)
+            throw new InvalidOperationException("Araç seçimi zorunludur.");
+        if (hakedis.SoforId <= 0)
+            throw new InvalidOperationException("Şoför seçimi zorunludur.");
+        if (hakedis.CariId <= 0)
+            throw new InvalidOperationException("Tedarikçi seçimi zorunludur.");
+        if (hakedis.GelirBirimFiyat < 0 || hakedis.GiderBirimFiyat < 0)
+            throw new InvalidOperationException("Birim fiyat negatif olamaz.");
+
         await using var context = await _contextFactory.CreateDbContextAsync();
 
         // Güzergah varsayılanlarından al
@@ -151,6 +167,9 @@ public class HakedisPuantajService : IHakedisPuantajService
 
     public async Task GunlukSeferGuncelleAsync(int hakedisId, int gun, int seferSayisi, bool ekSeferMi, string? aciklama = null)
     {
+        if (gun < 1 || gun > 31) throw new InvalidOperationException("Geçersiz gün.");
+        if (seferSayisi < 0) throw new InvalidOperationException("Sefer sayısı negatif olamaz.");
+
         await using var context = await _contextFactory.CreateDbContextAsync();
         var hakedis = await context.HakedisPuantajlar.FindAsync(hakedisId);
         if (hakedis == null) throw new InvalidOperationException("Hakediş bulunamadı.");
