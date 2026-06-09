@@ -192,9 +192,25 @@ public class HakedisRaporService : IHakedisRaporService
             .Where(d => !d.IsDeleted && data.Select(h => h.Id).Contains(d.HakedisPuantajId))
             .ToListAsync();
 
+        // Günlük gelir/gider hesabı için hakedisleri tekrar çek (sefer birim fiyat lazım)
+        var hakedisMap = data.ToDictionary(h => h.Id);
+
         var gunlukTrend = detaylar
             .GroupBy(d => d.Gun)
-            .Select(g => new GunlukTrend { Gun = g.Key, SeferSayisi = g.Sum(d => d.SeferSayisi) })
+            .Select(g =>
+            {
+                var sefer = g.Sum(d => d.SeferSayisi);
+                decimal gelir = 0, gider = 0;
+                foreach (var d in g)
+                {
+                    if (hakedisMap.TryGetValue(d.HakedisPuantajId, out var h))
+                    {
+                        gelir += d.SeferSayisi * h.GelirSeferBirimFiyat * d.FiyatCarpani;
+                        gider += d.SeferSayisi * h.GiderSeferBirimFiyat * d.FiyatCarpani;
+                    }
+                }
+                return new GunlukTrend { Gun = g.Key, Sefer = sefer, Gelir = gelir, Gider = gider };
+            })
             .OrderBy(t => t.Gun)
             .ToList();
 
@@ -267,7 +283,10 @@ public class HakedisDashboardKpi
 public class GunlukTrend
 {
     public int Gun { get; set; }
-    public int SeferSayisi { get; set; }
+    public int Sefer { get; set; }
+    public decimal Gelir { get; set; }
+    public decimal Gider { get; set; }
+    public decimal Kar => Gelir - Gider;
 }
 
 #endregion
