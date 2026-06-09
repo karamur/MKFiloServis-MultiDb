@@ -65,38 +65,60 @@
         }
     }
 
-    function downloadFileFromBase64(filename, base64Content) {
-        const byteCharacters = atob(base64Content);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
+    function getMimeTypeFromFilename(filename) {
+        var ext = (filename || '').split('.').pop().toLowerCase();
+        var mimeMap = {
+            'pdf': 'application/pdf',
+            'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+            'png': 'image/png', 'gif': 'image/gif', 'bmp': 'image/bmp', 'webp': 'image/webp',
+            'doc': 'application/msword',
+            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'xls': 'application/vnd.ms-excel',
+            'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'ppt': 'application/vnd.ms-powerpoint',
+            'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'txt': 'text/plain', 'csv': 'text/csv',
+            'zip': 'application/zip', 'rar': 'application/x-rar-compressed'
+        };
+        return mimeMap[ext] || 'application/octet-stream';
     }
 
-    function downloadFileFromStream(filename, base64Content) {
-        const byteCharacters = atob(base64Content);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
+    function downloadFileFromBase64(filename, base64Content, contentType) {
+        try {
+            var byteArray = base64ToUint8Array(base64Content);
+            var mimeType = contentType || getMimeTypeFromFilename(filename);
+            var blob = new Blob([byteArray], { type: mimeType });
+            var url = URL.createObjectURL(blob);
+            var link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+        } catch (e) {
+            console.error('downloadFileFromBase64 hatası:', e);
+            throw e;
         }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
+    }
+
+    function downloadFileFromStream(filename, base64Content, contentType) {
+        try {
+            var byteArray = base64ToUint8Array(base64Content);
+            var mimeType = contentType || getMimeTypeFromFilename(filename);
+            var blob = new Blob([byteArray], { type: mimeType });
+            var url = URL.createObjectURL(blob);
+            var link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+        } catch (e) {
+            console.error('downloadFileFromStream hatası:', e);
+            throw e;
+        }
     }
 
     function printContent(htmlContent) {

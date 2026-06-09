@@ -522,13 +522,37 @@
         try
         {
             var bytes = await AracService.GetEvrakDosyaAsync(dosya.Id);
+            var mimeType = GetMimeType(dosya.DosyaTipi);
             await AktiviteLog.LogGoruntulemeAsync("Araçlar", "AracEvrakDosya", dosya.Id, dosya.DosyaAdi, $"Araç evrak indirildi: {dosya.DosyaAdi}");
-            await JS.InvokeVoidAsync("downloadFileFromBase64", dosya.DosyaAdi, Convert.ToBase64String(bytes));
+            await JS.InvokeVoidAsync("downloadFileFromBase64", dosya.DosyaAdi, Convert.ToBase64String(bytes), mimeType);
         }
         catch (Exception ex)
         {
             ToastService.ShowError("Indirme hatasi: " + ex.Message);
         }
+    }
+
+    private static string GetMimeType(string extension)
+    {
+        return extension?.ToLower() switch
+        {
+            "pdf" => "application/pdf",
+            "jpg" or "jpeg" => "image/jpeg",
+            "png" => "image/png",
+            "gif" => "image/gif",
+            "bmp" => "image/bmp",
+            "webp" => "image/webp",
+            "doc" => "application/msword",
+            "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "xls" => "application/vnd.ms-excel",
+            "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "ppt" => "application/vnd.ms-powerpoint",
+            "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "txt" => "text/plain",
+            "csv" => "text/csv",
+            "zip" => "application/zip",
+            _ => "application/octet-stream"
+        };
     }
 
     private async Task DosyaSil(AracEvrakDosya dosya)
