@@ -131,6 +131,7 @@ public class GuzergahService : IGuzergahService
         if (existing == null)
             throw new InvalidOperationException($"Güzergah bulunamadı. Id: {guzergah.Id}");
 
+        // Normal alanları güncelle (CariId/KurumId hariç — onlar ExecuteUpdate ile garantilenecek)
         existing.GuzergahKodu = guzergah.GuzergahKodu;
         existing.GuzergahAdi = guzergah.GuzergahAdi;
         existing.BaslangicNoktasi = guzergah.BaslangicNoktasi;
@@ -147,8 +148,6 @@ public class GuzergahService : IGuzergahService
         existing.SeferTipi = guzergah.SeferTipi;
         existing.PersonelSayisi = guzergah.PersonelSayisi;
         existing.KapasiteAdi = guzergah.KapasiteAdi;
-        existing.CariId = guzergah.CariId;
-        existing.KurumId = guzergah.KurumId;
         existing.FirmaId = guzergah.FirmaId > 0 ? guzergah.FirmaId : null;
         existing.VarsayilanAracId = guzergah.VarsayilanAracId;
         existing.VarsayilanSoforId = guzergah.VarsayilanSoforId;
@@ -159,8 +158,44 @@ public class GuzergahService : IGuzergahService
         existing.UpdatedAt = DateTime.UtcNow;
 
         await context.SaveChangesAsync();
+
+        // ── CariId / KurumId garantili direkt DB yazma ──
+        // UI modelinden 0/null gelme ihtimaline karşı tracking bypass edilir.
+        int? hedefCariId = guzergah.CariId > 0 ? guzergah.CariId : null;
+        int? hedefKurumId = guzergah.KurumId > 0 ? guzergah.KurumId : null;
+
+        var updated = await context.Guzergahlar
+            .IgnoreQueryFilters()
+            .Where(x => x.Id == guzergah.Id)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.CariId, hedefCariId ?? existing.CariId)
+                .SetProperty(x => x.KurumId, hedefKurumId ?? existing.KurumId)
+                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow));
+
+        if (updated != 1)
+            throw new InvalidOperationException(
+                $"Güzergah Cari/Kurum FK update başarısız. GuzergahId={guzergah.Id}, UpdatedRows={updated}");
+
+        // DB'den doğrula
+        var kontrol = await context.Guzergahlar
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == guzergah.Id);
+
+        if (kontrol == null)
+            throw new InvalidOperationException($"Güzergah doğrulama kaydı bulunamadı. Id={guzergah.Id}");
+
+        var beklenenCari = hedefCariId ?? existing.CariId;
+        if (kontrol.CariId != beklenenCari)
+            throw new InvalidOperationException(
+                $"Güzergah CariId DB'ye yazılamadı. GuzergahId={guzergah.Id}, Beklenen={beklenenCari}, DB={kontrol.CariId}");
+
+        if (kontrol.KurumId != (hedefKurumId ?? existing.KurumId))
+            throw new InvalidOperationException(
+                $"Güzergah KurumId DB'ye yazılamadı. GuzergahId={guzergah.Id}, Beklenen={hedefKurumId}, DB={kontrol.KurumId}");
+
         await _cache.RemoveByPrefixAsync(CacheKeys.GuzergahPrefix);
-        return existing;
+        return kontrol;
     }
 
     public async Task DeleteAsync(int id)
