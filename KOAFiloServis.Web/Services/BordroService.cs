@@ -430,26 +430,246 @@ public class BordroService : IBordroService
         bordro.OnaylayanKullanici = onaylayanKullanici;
 
         // Muhasebe fişi oluştur
-        // TODO: Muhasebe fişi entegrasyonu yapılacak
-        // await CreateBordroMuhasebeFisiAsync(bordro);
+        await CreateBordroMuhasebeFisiAsync(bordro);
 
         await context.SaveChangesAsync();
 
         return true;
     }
 
-    // TODO: Muhasebe fişi entegrasyonu yapılacak
-    /*
+    /// <summary>
+    /// Bordro onayında otomatik muhasebe mahsup fişi oluşturur.
+    ///
+    /// Fiş yapısı:
+    ///   BORÇ:  770.xx — Personel Giderleri (Brüt + İşveren SGK + İşveren İşsizlik)
+    ///   ALACAK: 335.xx.xxxx — Personellere Borçlar (her personel için ayrı satır, Net Ücret)
+    ///   ALACAK: 360.xx — Ödenecek Vergi ve Fonlar (Gelir Vergisi + Damga Vergisi)
+    ///   ALACAK: 361.xx — Ödenecek SGK Kesintileri (İşçi SGK + İşçi İşsizlik)
+    ///   ALACAK: 368.xx — Ödenecek İşveren SGK (İşveren SGK + İşveren İşsizlik)
+    /// </summary>
     private async Task CreateBordroMuhasebeFisiAsync(Bordro bordro)
     {
-        var ayarlar = await GetBordroAyarAsync(bordro.FirmaId);
-        var tarih = new DateTime(bordro.Yil, bordro.Ay, DateTime.DaysInMonth(bordro.Yil, bordro.Ay));
+        await using var context = await _contextFactory.CreateDbContextAsync();
 
-        var fisAciklama = $"{bordro.DonemeAdi} {bordro.BordroTipi} Bordro";
-        // Muhasebe fiş oluşturma kodu buraya gelecek
-        await Task.CompletedTask;
+        // Mükerrer kontrol: aynı bordro için zaten fiş var mı?
+        var mevcutFisVar = await context.MuhasebeFisleri
+            .AnyAsync(f => f.BordroId == bordro.Id && !f.IsDeleted);
+        if (mevcutFisVar)
+            return;
+
+        var detaylar = bordro.BordroDetaylar.ToList();
+        if (!detaylar.Any())
+            throw new InvalidOperationException("Detaysız bordro için muhasebe fişi oluşturulamaz!");
+
+        // Muhasebe ayarlarını al
+        var muhasebeAyar = await context.MuhasebeAyarlari.FirstOrDefaultAsync();
+        var giderHesapKodu = muhasebeAyar?.PersonelGiderHesabi ?? "770.01";
+        var vergiHesapKodu = muhasebeAyar?.VergiHesabi ?? "360.01";
+        var sgkHesapKodu = muhasebeAyar?.SGKHesabi ?? "361.01";
+        var isverenSGKHesapKodu = muhasebeAyar?.IsverenSGKHesabi ?? "368.01";
+
+        // Hesapları bul (bulunamazsa hata ver)
+        var giderHesap = await context.MuhasebeHesaplari
+            .FirstOrDefaultAsync(h => h.HesapKodu.StartsWith(giderHesapKodu) && !h.IsDeleted)
+            ?? await context.MuhasebeHesaplari
+                .FirstOrDefaultAsync(h => h.HesapKodu == giderHesapKodu && !h.IsDeleted);
+        if (giderHesap == null)
+            throw new InvalidOperationException($"Personel gider hesabı bulunamadı: {giderHesapKodu}. Lütfen Muhasebe Ayarları'ndan PersonelGiderHesabi'ni kontrol edin.");
+
+        var vergiHesap = await context.MuhasebeHesaplari
+            .FirstOrDefaultAsync(h => h.HesapKodu.StartsWith(vergiHesapKodu) && !h.IsDeleted)
+            ?? await context.MuhasebeHesaplari
+                .FirstOrDefaultAsync(h => h.HesapKodu == vergiHesapKodu && !h.IsDeleted);
+        if (vergiHesap == null)
+            throw new InvalidOperationException($"Vergi hesabı bulunamadı: {vergiHesapKodu}. Lütfen Muhasebe Ayarları'ndan VergiHesabi'ni kontrol edin.");
+
+        var sgkHesap = await context.MuhasebeHesaplari
+            .FirstOrDefaultAsync(h => h.HesapKodu.StartsWith(sgkHesapKodu) && !h.IsDeleted)
+            ?? await context.MuhasebeHesaplari
+                .FirstOrDefaultAsync(h => h.HesapKodu == sgkHesapKodu && !h.IsDeleted);
+        if (sgkHesap == null)
+            throw new InvalidOperationException($"SGK hesabı bulunamadı: {sgkHesapKodu}. Lütfen Muhasebe Ayarları'ndan SGKHesabi'ni kontrol edin.");
+
+        var isverenSGKHesap = await context.MuhasebeHesaplari
+            .FirstOrDefaultAsync(h => h.HesapKodu.StartsWith(isverenSGKHesapKodu) && !h.IsDeleted)
+            ?? await context.MuhasebeHesaplari
+                .FirstOrDefaultAsync(h => h.HesapKodu == isverenSGKHesapKodu && !h.IsDeleted);
+        if (isverenSGKHesap == null)
+            throw new InvalidOperationException($"İşveren SGK hesabı bulunamadı: {isverenSGKHesapKodu}. Lütfen Muhasebe Ayarları'ndan IsverenSGKHesabi'ni kontrol edin.");
+
+        // Personel ID'lerini topla ve personelleri yükle (335 hesapları için)
+        var personelIds = detaylar.Select(d => d.PersonelId).Distinct().ToList();
+        var personeller = await context.Soforler
+            .Where(s => personelIds.Contains(s.Id) && !s.IsDeleted)
+            .ToListAsync();
+
+        // Her personel için 335 hesabını bul
+        var personelHesapMap = new Dictionary<int, MuhasebeHesap>();
+        foreach (var p in personeller)
+        {
+            MuhasebeHesap? personelHesap = null;
+            if (p.MuhasebeHesapId.HasValue)
+            {
+                personelHesap = await context.MuhasebeHesaplari
+                    .FirstOrDefaultAsync(h => h.Id == p.MuhasebeHesapId.Value && !h.IsDeleted);
+            }
+
+            if (personelHesap == null)
+            {
+                // Otomatik hesap ara: prefix + personel adı
+                var personelPrefix = muhasebeAyar?.PersonelPrefix ?? "335.01";
+                var tamAd = $"{p.Ad} {p.Soyad}";
+                personelHesap = await context.MuhasebeHesaplari
+                    .FirstOrDefaultAsync(h => h.HesapKodu.StartsWith(personelPrefix + ".") && h.HesapAdi == tamAd && !h.IsDeleted);
+            }
+
+            if (personelHesap == null)
+                throw new InvalidOperationException(
+                    $"Personel muhasebe hesabı bulunamadı: {p.Ad} {p.Soyad} ({p.SoforKodu}). " +
+                    $"Lütfen personel kartından MuhasebeHesapId'yi atayın veya kaydedip otomatik oluşturun.");
+
+            personelHesapMap[p.Id] = personelHesap;
+        }
+
+        // Toplamları hesapla
+        var donemSonGun = DateTime.DaysInMonth(bordro.Yil, bordro.Ay);
+        var fisTarihi = new DateTime(bordro.Yil, bordro.Ay, Math.Min(donemSonGun, 1));
+        // Ayın son gününü kullan (maaş tahakkuk tarihi)
+        fisTarihi = new DateTime(bordro.Yil, bordro.Ay, donemSonGun);
+
+        var toplamBrut = detaylar.Sum(d => d.BrutMaas);
+        var toplamIsverenSGK = detaylar.Sum(d => d.SgkIsverenPrim);
+        var toplamIsverenIssizlik = detaylar.Sum(d => d.IssizlikIsverenPrim);
+        var toplamIsciSGK = detaylar.Sum(d => d.SgkIsciPrim);
+        var toplamIsciIssizlik = detaylar.Sum(d => d.IssizlikIsciPrim);
+        var toplamGelirVergisi = detaylar.Sum(d => d.GelirVergisi);
+        var toplamDamgaVergisi = detaylar.Sum(d => d.DamgaVergisi);
+        var toplamNet = detaylar.Sum(d => d.NetMaas);
+
+        // 770 BORÇ = Brüt + İşveren SGK + İşveren İşsizlik
+        var borc770 = toplamBrut + toplamIsverenSGK + toplamIsverenIssizlik;
+        // ALACAK toplamı = Net + (GV+DV) + (İşçi SGK+İşsizlik) + (İşveren SGK+İşsizlik)
+        var alacak335 = toplamNet; // 335 satırları
+        var alacak360 = toplamGelirVergisi + toplamDamgaVergisi;
+        var alacak361 = toplamIsciSGK + toplamIsciIssizlik;
+        var alacak368 = toplamIsverenSGK + toplamIsverenIssizlik;
+
+        // Fiş numarası üret
+        var fisNo = await _muhasebeService.GenerateNextFisNoAsync(FisTipi.Mahsup, bordro.FirmaId ?? 0);
+
+        // Fiş oluştur
+        var fis = new MuhasebeFis
+        {
+            FisNo = fisNo,
+            FisTarihi = fisTarihi,
+            FisTipi = FisTipi.Mahsup,
+            Aciklama = $"{bordro.Ay}/{bordro.Yil} Bordro Tahakkuku ({bordro.ToplamPersonelSayisi} personel)",
+            ToplamBorc = borc770,
+            ToplamAlacak = alacak335 + alacak360 + alacak361 + alacak368,
+            Durum = FisDurum.Onaylandi,
+            Kaynak = FisKaynak.Otomatik,
+            KaynakId = bordro.Id,
+            KaynakTip = "Bordro",
+            BordroId = bordro.Id,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        context.MuhasebeFisleri.Add(fis);
+        await context.SaveChangesAsync(); // FisId oluşsun
+
+        int sira = 0;
+
+        // 1) 770 BORÇ — Personel Giderleri
+        sira++;
+        context.MuhasebeFisKalemleri.Add(new MuhasebeFisKalem
+        {
+            FisId = fis.Id,
+            HesapId = giderHesap.Id,
+            SiraNo = sira,
+            Borc = borc770,
+            Alacak = 0,
+            Tarih = fisTarihi,
+            Aciklama = $"Brüt Ücret + İşveren SGK/İşsizlik",
+            CreatedAt = DateTime.UtcNow
+        });
+
+        // 2) 335 ALACAK — Her personel için ayrı satır
+        foreach (var detay in detaylar)
+        {
+            if (!personelHesapMap.TryGetValue(detay.PersonelId, out var personelHesap))
+                continue;
+
+            sira++;
+            var personel = personeller.FirstOrDefault(p => p.Id == detay.PersonelId);
+            context.MuhasebeFisKalemleri.Add(new MuhasebeFisKalem
+            {
+                FisId = fis.Id,
+                HesapId = personelHesap.Id,
+                SiraNo = sira,
+                Borc = 0,
+                Alacak = detay.NetMaas,
+                Tarih = fisTarihi,
+                Aciklama = $"Net Ücret — {personel?.TamAd ?? detay.PersonelId.ToString()}",
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        // 3) 360 ALACAK — Ödenecek Vergi ve Fonlar (Gelir Vergisi + Damga Vergisi)
+        if (alacak360 > 0)
+        {
+            sira++;
+            context.MuhasebeFisKalemleri.Add(new MuhasebeFisKalem
+            {
+                FisId = fis.Id,
+                HesapId = vergiHesap.Id,
+                SiraNo = sira,
+                Borc = 0,
+                Alacak = alacak360,
+                Tarih = fisTarihi,
+                Aciklama = $"Gelir Vergisi + Damga Vergisi",
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        // 4) 361 ALACAK — Ödenecek SGK (İşçi SGK + İşçi İşsizlik)
+        if (alacak361 > 0)
+        {
+            sira++;
+            context.MuhasebeFisKalemleri.Add(new MuhasebeFisKalem
+            {
+                FisId = fis.Id,
+                HesapId = sgkHesap.Id,
+                SiraNo = sira,
+                Borc = 0,
+                Alacak = alacak361,
+                Tarih = fisTarihi,
+                Aciklama = $"İşçi SGK Primi + İşsizlik İşçi Payı",
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        // 5) 368 ALACAK — Ödenecek İşveren SGK
+        if (alacak368 > 0)
+        {
+            sira++;
+            context.MuhasebeFisKalemleri.Add(new MuhasebeFisKalem
+            {
+                FisId = fis.Id,
+                HesapId = isverenSGKHesap.Id,
+                SiraNo = sira,
+                Borc = 0,
+                Alacak = alacak368,
+                Tarih = fisTarihi,
+                Aciklama = $"İşveren SGK Primi + İşsizlik İşveren Payı",
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        // Fiş toplamlarını güncelle (kalem toplamlarıyla eşleşsin)
+        fis.ToplamBorc = fis.Kalemler.Sum(k => k.Borc);
+        fis.ToplamAlacak = fis.Kalemler.Sum(k => k.Alacak);
+        await context.SaveChangesAsync();
     }
-    */
 
     public async Task<bool> OnayIptalEtAsync(int bordroId)
     {

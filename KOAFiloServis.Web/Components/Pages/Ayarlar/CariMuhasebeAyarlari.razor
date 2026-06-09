@@ -69,12 +69,22 @@
                                 </div>
 
                                 <div class="mb-3">
-                                    <label class="form-label">Personel Hesap Kodu Öneki</label>
+                                    <label class="form-label">Personel Hesap Kodu Öneki (335 - Borç)</label>
                                     <input type="text" class="form-control" list="hesap-list" @bind="ayar.PersonelPrefix" placeholder="335.01" />
                                     <div class="form-text">
                                         Ör: 335.01 → 335.01.001
                                         @if (!string.IsNullOrWhiteSpace(ayar.PersonelPrefix) && GetHesapAdi(ayar.PersonelPrefix) != null)
                                         { <span class="text-success ms-2"><i class="bi bi-check-circle me-1"></i>@GetHesapAdi(ayar.PersonelPrefix)</span> }
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Personel Avans Hesap Kodu Öneki (195 - Avans)</label>
+                                    <input type="text" class="form-control" list="hesap-list" @bind="ayar.PersonelAvansPrefix" placeholder="195.01" />
+                                    <div class="form-text">
+                                        Ör: 195.01 → 195.01.001
+                                        @if (!string.IsNullOrWhiteSpace(ayar.PersonelAvansPrefix) && GetHesapAdi(ayar.PersonelAvansPrefix) != null)
+                                        { <span class="text-success ms-2"><i class="bi bi-check-circle me-1"></i>@GetHesapAdi(ayar.PersonelAvansPrefix)</span> }
                                     </div>
                                 </div>
                             }
@@ -625,6 +635,7 @@
                 dbAyar.MusteriPrefix = ayar.MusteriPrefix;
                 dbAyar.TedarikciPrefix = ayar.TedarikciPrefix;
                 dbAyar.PersonelPrefix = ayar.PersonelPrefix;
+                dbAyar.PersonelAvansPrefix = ayar.PersonelAvansPrefix;
                 dbAyar.OtomatikHesapDuzenlensin = ayar.OtomatikHesapDuzenlensin;
                 dbAyar.FaturaOtomatikMuhasebeFisi = ayar.FaturaOtomatikMuhasebeFisi;
                 dbAyar.SatisGelirHesabi = ayar.SatisGelirHesabi;

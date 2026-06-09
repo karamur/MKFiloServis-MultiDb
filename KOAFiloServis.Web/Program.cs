@@ -107,7 +107,7 @@ builder.Services.AddRazorComponents()
 // SignalR hub options (Production hardening)
 builder.Services.Configure<Microsoft.AspNetCore.SignalR.HubOptions>(options =>
 {
-    options.MaximumReceiveMessageSize = 128 * 1024; // 128KB
+    options.MaximumReceiveMessageSize = 32 * 1024 * 1024; // 32MB — InputFile dosya yükleme için gerekli (10MB + şifreleme overhead)
 });
 
 builder.Services.AddSingleton<AktiviteLogInterceptor>();
@@ -155,15 +155,15 @@ builder.Services.AddPooledDbContextFactory<ApplicationDbContext>((sp, options) =
     options.AddInterceptors(sp.GetRequiredService<AktiviteLogInterceptor>());
 });
 
-// Scoped ApplicationDbContext — her Blazor circuit için bir context,
-// IAktifFirmaProvider üzerinden firma izolasyonu sağlanır (Kural 6, Kural 7).
-builder.Services.AddScoped<ApplicationDbContext>(sp =>
+// Scoped IDbContextFactory: her context oluşturulduğunda SetServiceProvider çağrılır.
+// Pooled factory'yi sarar → IAktifFirmaProvider + Global Query Filter (Kural 6, Kural 7).
+// Singleton tüketiciler (LisansService) IServiceScopeFactory üzerinden ApplicationDbContext alır.
+builder.Services.AddScoped<IDbContextFactory<ApplicationDbContext>>(sp =>
 {
-    var factory = sp.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
-    var ctx = factory.CreateDbContext();
-    ctx.SetServiceProvider(sp); // Scoped provider → IAktifFirmaProvider + Global Query Filter
-    return ctx;
+    var options = sp.GetRequiredService<DbContextOptions<ApplicationDbContext>>();
+    return new KOAFiloServis.Web.Data.ScopedDbContextFactory(options, sp);
 });
+builder.Services.AddScoped(sp => sp.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext());
 
 // Nihai Mimari: HoldingDbContext kaldırıldı — HoldingVeri ve HoldingRapor ApplicationDbContext'te
 

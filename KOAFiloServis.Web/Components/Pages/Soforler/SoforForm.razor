@@ -444,7 +444,7 @@
                             <small class="text-muted">
                                 @if (!IsEdit || !sofor.MuhasebeHesapId.HasValue)
                                 {
-                                    <text>Boş bırakılırsa "335.@(sofor.SoforKodu)" kodu ile otomatik oluşturulur.</text>
+                                    <text>Boş bırakılırsa ayarlardaki önek + otomatik sayaç ile oluşturulur (örn: 335.01.0001).</text>
                                 }
                                 else
                                 {
@@ -478,28 +478,33 @@
                     <div class="col-md-4">
                         <div class="mb-3">
                             <label class="form-label"><span class="badge bg-secondary me-1">195</span>Personel Avans Hesabı</label>
-                            @if (personelAvansHesap != null)
-                            {
-                                <div class="alert alert-success py-2 mb-0">
-                                    <small>
-                                        <i class="bi bi-check-circle me-1"></i>
-                                        <strong>@personelAvansHesap.HesapKodu</strong> - @personelAvansHesap.HesapAdi
-                                    </small>
-                                </div>
-                                <small class="text-muted">Personele verilen avansların takibinde kullanılır.</small>
-                            }
-                            else if (IsEdit)
-                            {
-                                <div class="alert alert-warning py-2 mb-0">
-                                    <small><i class="bi bi-exclamation-triangle me-1"></i>195.01.XXX avans hesabı henüz atanmamış. Personeli kaydedin veya hesap planını kontrol edin.</small>
-                                </div>
-                            }
-                            else
-                            {
-                                <div class="alert alert-info py-2 mb-0">
-                                    <small><i class="bi bi-info-circle me-1"></i>Kayıt sonrası "195.01.@(sofor.SoforKodu)" kodu ile otomatik oluşturulacak.</small>
-                                </div>
-                            }
+                            <div class="input-group">
+                                <InputSelect @bind-Value="seciliAvansHesapId" class="form-select">
+                                    <option value="0">-- Otomatik Oluşturulsun --</option>
+                                    <option value="-1">-- Hesap Planından Seç --</option>
+                                    @foreach (var hesap in avansHesaplari)
+                                    {
+                                        <option value="@hesap.Id">@hesap.HesapKodu - @hesap.HesapAdi</option>
+                                    }
+                                </InputSelect>
+                                <button type="button" class="btn btn-outline-secondary" @onclick="HesaplariYenile" title="Hesapları Yenile">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                </button>
+                            </div>
+                            <small class="text-muted">
+                                @if (personelAvansHesap != null)
+                                {
+                                    <text>Mevcut: <strong>@personelAvansHesap.HesapKodu</strong> - @personelAvansHesap.HesapAdi</text>
+                                }
+                                else if (seciliAvansHesapId == 0)
+                                {
+                                    <text>Ayarlardaki önek + otomatik sayaç ile oluşturulur (örn: 195.01.0001).</text>
+                                }
+                                else
+                                {
+                                    <text>Hesap planından seçin veya otomatik oluşturmayı seçin.</text>
+                                }
+                            </small>
                         </div>
                     </div>
                     @if (avansHesaplari.Any())
@@ -999,6 +1004,7 @@
     private List<MuhasebeHesap> muhasebeHesaplari = new();
     private List<MuhasebeHesap> avansHesaplari = new();
     private MuhasebeHesap? personelAvansHesap;
+    private int seciliAvansHesapId; // 0=otomatik, -1=seçim yok, >0=seçili hesap
 
     // Gerçek maaş için ayrı değişken (manuel giriş)
     private decimal gercekMaas;
@@ -1057,6 +1063,7 @@
                 // Gerçek maaşı hesapla (ResmiNetMaas + DigerMaas)
                 gercekMaas = sofor.ResmiNetMaas + sofor.DigerMaas;
                 personelAvansHesap = await SoforService.GetPersonelAvansHesabiAsync(Id!.Value);
+                seciliAvansHesapId = personelAvansHesap?.Id ?? 0;
                 await EvrakDurumuYukle();
                 await AracAtamalariniYukle();
             }
@@ -1103,24 +1110,15 @@
     {
         try
         {
-            // Tenant DB izolasyonu: sadece aktif firma gösterilir.
-            // Tüm firmaları seçmek FK ihlaline yol açar (INSERT aktif firmanın
-            // tenant DB'sine gider, ama seçilen FirmaId başka firmaya ait olabilir).
+            // Nihai mimari (Tek DB): tüm aktif firmalar gösterilir.
+            // Personel firmalar arası transfer edilebilir (FirmaId güncellemesi).
             aktifFirmaBilgisi = FirmaService.GetAktifFirma();
-            if (aktifFirmaBilgisi.FirmaId > 0)
+            firmalar = await FirmaService.GetAktifFirmalarAsync();
+
+            // Yeni kayıtta aktif firma otomatik seçilir
+            if (!IsEdit && aktifFirmaBilgisi.FirmaId > 0)
             {
-                firmalar = await FirmaService.GetAktifFirmalarAsync();
-                // Sadece aktif firmayı göster
-                firmalar = firmalar.Where(f => f.Id == aktifFirmaBilgisi.FirmaId).ToList();
-                // Yeni kayıtta tek firma varsa otomatik seç
-                if (!IsEdit && firmalar.Count == 1)
-                {
-                    sofor.FirmaId = firmalar[0].Id;
-                }
-            }
-            else
-            {
-                firmalar = new();
+                sofor.FirmaId = aktifFirmaBilgisi.FirmaId;
             }
         }
         catch (Exception ex)
@@ -1133,7 +1131,10 @@
     {
         await HesaplariYukle();
         if (IsEdit)
+        {
             personelAvansHesap = await SoforService.GetPersonelAvansHesabiAsync(Id!.Value);
+            seciliAvansHesapId = personelAvansHesap?.Id ?? 0;
+        }
         ToastService.ShowInfo("Muhasebe hesapları yenilendi.");
     }
 
@@ -1181,10 +1182,14 @@
         {
             if (IsEdit)
             {
-                // Düzenleme senaryosunda route'tan gelen Id mutlaka korunmalı.
-                // Aksi halde validasyon yeni kayıt gibi davranıp TC kimlik no çakışması üretebilir.
                 sofor.Id = Id!.Value;
+                // UpdateAsync içinde EnsurePersonelBorcHesabiAsync + EnsurePersonelAvansHesabiAsync çalışır
                 await SoforService.UpdateAsync(sofor);
+                // Kullanıcı manuel avans hesabı seçtiyse ata (>0), otomatik (0) zaten UpdateAsync içinde halledildi
+                if (seciliAvansHesapId > 0)
+                {
+                    await SoforService.AvansHesabiAtaAsync(sofor.Id, seciliAvansHesapId);
+                }
                 // Şoför belge tarihlerini özlük evraklarıyla senkronize et
                 if (sofor.Gorev == PersonelGorev.Sofor)
                 {
@@ -1199,7 +1204,13 @@
             }
             else
             {
+                // CreateAsync içinde EnsurePersonelBorcHesabiAsync + EnsurePersonelAvansHesabiAsync çalışır
                 await SoforService.CreateAsync(sofor);
+                // Kullanıcı manuel avans hesabı seçtiyse ata (>0)
+                if (seciliAvansHesapId > 0)
+                {
+                    await SoforService.AvansHesabiAtaAsync(sofor.Id, seciliAvansHesapId);
+                }
                 ToastService.ShowSuccess($"{sofor.TamAd} başarıyla eklendi.");
             }
             Navigation.NavigateTo("/personel");

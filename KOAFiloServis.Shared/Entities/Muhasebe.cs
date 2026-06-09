@@ -252,6 +252,16 @@ public class MuhasebeAyar : BaseEntity
     public bool XmlImportOtomatikCariOlustur { get; set; } = true;
     public bool XmlImportOtomatikHesapKoduOlustur { get; set; } = true;
 
+    // Bordro Muhasebe Entegrasyonu Hesapları
+    [StringLength(50)]
+    public string PersonelGiderHesabi { get; set; } = "770.01"; // 770 Genel Yonetim Giderleri (BORC)
+    [StringLength(50)]
+    public string VergiHesabi { get; set; } = "360.01"; // 360 Odenecek Vergi ve Fonlar (ALACAK)
+    [StringLength(50)]
+    public string SGKHesabi { get; set; } = "361.01"; // 361 Odenecek SGK Kesintileri (ALACAK)
+    [StringLength(50)]
+    public string IsverenSGKHesabi { get; set; } = "368.01"; // 368 Odenecek Isveren SGK (ALACAK)
+
     // KDV Oran → Hesap Kodu Eşleştirmeleri
     public List<KdvHesapEslestirme> KdvHesapEslestirmeleri { get; set; } = new();
 }

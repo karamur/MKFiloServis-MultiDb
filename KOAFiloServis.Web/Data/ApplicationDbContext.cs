@@ -13,6 +13,13 @@ public class ApplicationDbContext : DbContext
     private IAktifFirmaProvider? _aktifFirmaProvider;
 
     /// <summary>
+    /// AsyncLocal IServiceProvider — Blazor circuit scope'unda SetServiceProvider
+    /// çağrılmasa bile IAktifFirmaProvider'a erişim sağlar.
+    /// PooledDbContextFactory ile oluşturulan context'ler için fallback.
+    /// </summary>
+    internal static readonly System.Threading.AsyncLocal<IServiceProvider?> AmbientServiceProvider = new();
+
+    /// <summary>
     /// Aktif firma (yeni tenant kavramı). Global query filter ve SaveChanges'te kullanılır.
     /// 0 dönerse "filter pasif" anlamına gelir (henüz firma seçilmemiş / SuperAdmin / TumFirmalar).
     /// </summary>
@@ -28,13 +35,9 @@ public class ApplicationDbContext : DbContext
         get
         {
             var p = ResolveAktifFirmaProvider();
-            // R9 fix: provider yoksa filter KAPANMAZ — safe default, veri gorunmez
             if (p == null) return false;
-            // Sadece explicit TumFirmalar (admin) filter'i kapatabilir
             if (p.TumFirmalar) return true;
-            // Gecerli firma secili degilse filter KAPANMAZ — safe default
             if (p.AktifFirmaId is null or 0) return false;
-            // Normal mod: filter AKTIF (Kural 6)
             return false;
         }
     }
@@ -50,11 +53,14 @@ public class ApplicationDbContext : DbContext
     public void SetServiceProvider(IServiceProvider serviceProvider)
     {
         _serviceProvider = serviceProvider;
-        _aktifFirmaProvider = null; // Yeni scope, yeni aktif firma provider
+        _aktifFirmaProvider = null;
+        // AsyncLocal fallback: factory context'leri için ambient provider
+        AmbientServiceProvider.Value = serviceProvider;
     }
 
     private IAktifFirmaProvider? ResolveAktifFirmaProvider()
     {
+        // 1) SetServiceProvider ile ayarlanmış provider
         if (_aktifFirmaProvider == null && _serviceProvider != null)
         {
             try
@@ -64,7 +70,19 @@ public class ApplicationDbContext : DbContext
             catch (ObjectDisposedException)
             {
                 _serviceProvider = null;
-                return null;
+            }
+        }
+        // 2) AsyncLocal fallback — pooled factory context'leri için
+        if (_aktifFirmaProvider == null)
+        {
+            var ambientSp = AmbientServiceProvider.Value;
+            if (ambientSp != null && ambientSp != _serviceProvider)
+            {
+                try
+                {
+                    _aktifFirmaProvider = ambientSp.GetService<IAktifFirmaProvider>();
+                }
+                catch (ObjectDisposedException) { }
             }
         }
         return _aktifFirmaProvider;

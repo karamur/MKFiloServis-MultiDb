@@ -28,6 +28,10 @@ public interface ISoforService
     Task<List<MuhasebeHesap>> GetPersonelAvansHesaplariAsync();
     Task<MuhasebeHesap?> GetPersonelAvansHesabiAsync(int soforId);
     Task<MuhasebeHesap?> GetPersonelBorcHesabiAsync(int soforId);
+    Task EnsurePersonelBorcHesabiAsync(Sofor sofor);
+    Task EnsurePersonelAvansHesabiAsync(Sofor sofor);
+    Task EnsurePersonelCariKaydiAsync(Sofor sofor);
+    Task AvansHesabiAtaAsync(int soforId, int avansHesapId);
 
     // Excel Import/Export
     Task<byte[]> GetImportSablonAsync();

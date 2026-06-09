@@ -3,17 +3,18 @@ using System.Text;
 using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace KOAFiloServis.Web.Services;
 
 public class LisansService : ILisansService
 {
-    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+    private readonly IServiceScopeFactory _scopeFactory;
     private static Lisans? _cachedLisans;
 
-    public LisansService(IDbContextFactory<ApplicationDbContext> contextFactory)
+    public LisansService(IServiceScopeFactory scopeFactory)
     {
-        _contextFactory = contextFactory;
+        _scopeFactory = scopeFactory;
     }
 
     public async Task<Lisans?> GetAktifLisansAsync()
@@ -21,7 +22,8 @@ public class LisansService : ILisansService
         if (_cachedLisans != null && _cachedLisans.Gecerli)
             return _cachedLisans;
 
-        using var context = await _contextFactory.CreateDbContextAsync();
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        await using var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var lisans = await context.Lisanslar
             .OrderByDescending(l => l.CreatedAt)
             .FirstOrDefaultAsync();
@@ -43,7 +45,8 @@ public class LisansService : ILisansService
 
     public async Task<Lisans> AktiveLisansAsync(string lisansAnahtari)
     {
-        using var context = await _contextFactory.CreateDbContextAsync();
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        await using var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         // Boşlukları ve satır sonlarını temizle
         lisansAnahtari = lisansAnahtari.Trim().Replace("\r", "").Replace("\n", "").Replace(" ", "");
@@ -120,7 +123,8 @@ public class LisansService : ILisansService
 
     public async Task<Lisans> OlusturTrialLisansAsync()
     {
-        using var context = await _contextFactory.CreateDbContextAsync();
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        await using var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         var trialLisans = new Lisans
         {
@@ -151,7 +155,8 @@ public class LisansService : ILisansService
         var lisans = await GetAktifLisansAsync();
         if (lisans == null) return false;
 
-        using var context = await _contextFactory.CreateDbContextAsync();
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        await using var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var kullaniciSayisi = await context.Kullanicilar.CountAsync(k => k.Aktif);
 
         return kullaniciSayisi < lisans.MaxKullaniciSayisi;

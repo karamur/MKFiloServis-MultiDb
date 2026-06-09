@@ -74,11 +74,15 @@ public class SoforService : ISoforService
         SyncBordroFlags(sofor);
         await ValidateSoforAsync(context, sofor);
 
-        // Muhasebe hesabı oluştur veya eşleştir
-        await OtomatikMuhasebeHesabiOlusturAsync(context, sofor);
-
         context.Soforler.Add(sofor);
         await context.SaveChangesAsync();
+
+        // Personel için Cari kaydı ve hesap bağlantılarını oluştur
+        await EnsurePersonelCariKaydiAsync(context, sofor);
+        // Tek mekanizma: isme göre arar, bulursa bağlar, bulamazsa oluşturur
+        await EnsurePersonelBorcHesabiAsync(context, sofor);
+        await EnsurePersonelAvansHesabiAsync(context, sofor);
+
         return sofor;
     }
 
@@ -129,14 +133,34 @@ public class SoforService : ISoforService
         await ValidateSoforAsync(context, sofor, existing);
 
         var createdAt = existing.CreatedAt;
+        var firmaDegisti = sofor.FirmaId.HasValue && sofor.FirmaId.Value > 0 && sofor.FirmaId != existing.FirmaId;
 
         context.Entry(existing).CurrentValues.SetValues(sofor);
 
         existing.CreatedAt = createdAt;
         existing.UpdatedAt = DateTime.UtcNow;
 
-        // existing zaten tracked durumda, SaveChanges değişiklikleri otomatik kaydeder
         await context.SaveChangesAsync();
+
+        // FK değişikliklerini direkt SQL ile garantile (EF SetValues FK'ları atlayabiliyor)
+        if (firmaDegisti)
+        {
+            await context.Database.ExecuteSqlAsync(
+                $"UPDATE \"Personeller\" SET \"FirmaId\" = {sofor.FirmaId!.Value}, \"UpdatedAt\" = {DateTime.UtcNow} WHERE \"Id\" = {sofor.Id}");
+        }
+
+        // MuhasebeHesapId manuel değiştiyse direkt SQL ile garantile
+        if (sofor.MuhasebeHesapId.HasValue && sofor.MuhasebeHesapId != existing.MuhasebeHesapId)
+        {
+            await context.Database.ExecuteSqlAsync(
+                $"UPDATE \"Personeller\" SET \"MuhasebeHesapId\" = {sofor.MuhasebeHesapId.Value}, \"UpdatedAt\" = {DateTime.UtcNow} WHERE \"Id\" = {sofor.Id}");
+            existing.MuhasebeHesapId = sofor.MuhasebeHesapId;
+        }
+
+        // Personel borç/avans hesaplarını garanti et (isme göre arar, bulursa bağlar, bulamazsa oluşturur)
+        await EnsurePersonelBorcHesabiAsync(context, existing);
+        await EnsurePersonelAvansHesabiAsync(context, existing);
+
         await _cache.RemoveByPrefixAsync(CacheKeys.SoforPrefix);
         return existing;
     }
@@ -808,80 +832,40 @@ public class SoforService : ISoforService
     #region Muhasebe Hesap Otomasyonu
 
     /// <summary>
-    /// Personel için otomatik muhasebe hesabı oluşturur veya mevcut hesabı eşleştirir.
-    /// Hesap kodu formatı: 335.XXX (Personele Borçlar alt hesabı)
-    /// </summary>
-    private async Task OtomatikMuhasebeHesabiOlusturAsync(ApplicationDbContext context, Sofor sofor)
-    {
-        // Kullanıcı zaten bir hesap seçtiyse, oluşturma
-        if (sofor.MuhasebeHesapId.HasValue)
-            return;
-
-        // Personel kodu ile eşleşen hesap var mı kontrol et
-        var hesapKodu = $"335.{sofor.SoforKodu}";
-        var mevcutHesap = await _muhasebeService.GetHesapByKodAsync(hesapKodu);
-
-        if (mevcutHesap != null)
-        {
-            // Mevcut hesabı eşleştir
-            sofor.MuhasebeHesapId = mevcutHesap.Id;
-            return;
-        }
-
-        // Ana hesap 335 var mı kontrol et
-        var anaHesap = await _muhasebeService.GetHesapByKodAsync("335");
-        int? ustHesapId = anaHesap?.Id;
-
-        // Yeni hesap oluştur
-        var yeniHesap = new MuhasebeHesap
-        {
-            HesapKodu = hesapKodu,
-            HesapAdi = $"{sofor.TamAd} - Personele Borçlar",
-            HesapTuru = HesapTuru.Pasif,
-            HesapGrubu = HesapGrubu.KisaVadeliYabanciKaynaklar,
-            UstHesapId = ustHesapId,
-            AltHesapVar = false,
-            Aktif = true,
-            SistemHesabi = false,
-            Aciklama = $"Personel: {sofor.SoforKodu} - {sofor.TamAd} için otomatik oluşturuldu"
-        };
-
-        var olusturulanHesap = await _muhasebeService.CreateHesapAsync(yeniHesap);
-        sofor.MuhasebeHesapId = olusturulanHesap.Id;
-
-        // Ana hesabın AltHesapVar flag'ini güncelle
-        if (anaHesap != null && !anaHesap.AltHesapVar)
-        {
-            anaHesap.AltHesapVar = true;
-            await _muhasebeService.UpdateHesapAsync(anaHesap);
-        }
-    }
-
-    /// <summary>
     /// Muhasebe hesabı olmayan tüm mevcut personellere toplu hesap oluşturur.
     /// </summary>
     public async Task<int> TopluMuhasebeHesabiOlusturAsync()
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var hesapsizPersoneller = await context.Soforler
-            .Where(s => !s.IsDeleted && s.MuhasebeHesapId == null)
+        var personeller = await context.Soforler
+            .Where(s => !s.IsDeleted)
             .ToListAsync();
 
-        var olusturulanSayisi = 0;
-        foreach (var personel in hesapsizPersoneller)
+        var guncellenenPersonelSayisi = 0;
+
+        foreach (var personel in personeller)
         {
-            await OtomatikMuhasebeHesabiOlusturAsync(context, personel);
-            if (personel.MuhasebeHesapId.HasValue)
-            {
-                context.Entry(personel).State = EntityState.Modified;
-                olusturulanSayisi++;
-            }
+            var onceBorcHesapId = personel.MuhasebeHesapId;
+            var onceCari = await context.Cariler
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.SoforId == personel.Id && !c.IsDeleted);
+            var onceAvansHesapId = onceCari?.PersonelAvansHesapId;
+
+            await EnsurePersonelBorcHesabiAsync(context, personel);
+            await EnsurePersonelAvansHesabiAsync(context, personel);
+
+            var sonraCari = await context.Cariler
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.SoforId == personel.Id && !c.IsDeleted);
+
+            var borcOlustu = !onceBorcHesapId.HasValue && personel.MuhasebeHesapId.HasValue;
+            var avansOlustu = !onceAvansHesapId.HasValue && sonraCari?.PersonelAvansHesapId.HasValue == true;
+
+            if (borcOlustu || avansOlustu)
+                guncellenenPersonelSayisi++;
         }
 
-        if (olusturulanSayisi > 0)
-            await context.SaveChangesAsync();
-
-        return olusturulanSayisi;
+        return guncellenenPersonelSayisi;
     }
 
     /// <summary>
@@ -890,8 +874,11 @@ public class SoforService : ISoforService
     public async Task<List<MuhasebeHesap>> GetPersonelMuhasebeHesaplariAsync()
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
+        var ayar = await context.MuhasebeAyarlari.AsNoTracking().FirstOrDefaultAsync();
+        var prefix = string.IsNullOrWhiteSpace(ayar?.PersonelPrefix) ? "335.01" : ayar!.PersonelPrefix.Trim();
+
         return await context.MuhasebeHesaplari
-            .Where(h => h.HesapKodu.StartsWith("335.") && !h.IsDeleted && h.Aktif)
+            .Where(h => h.HesapKodu.StartsWith(prefix + ".") && !h.IsDeleted && h.Aktif)
             .OrderBy(h => h.HesapKodu)
             .ToListAsync();
     }
@@ -902,8 +889,11 @@ public class SoforService : ISoforService
     public async Task<List<MuhasebeHesap>> GetPersonelAvansHesaplariAsync()
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
+        var ayar = await context.MuhasebeAyarlari.AsNoTracking().FirstOrDefaultAsync();
+        var prefix = string.IsNullOrWhiteSpace(ayar?.PersonelAvansPrefix) ? "195.01" : ayar!.PersonelAvansPrefix.Trim();
+
         return await context.MuhasebeHesaplari
-            .Where(h => h.HesapKodu.StartsWith("195.01.") && !h.IsDeleted && h.Aktif)
+            .Where(h => h.HesapKodu.StartsWith(prefix + ".") && !h.IsDeleted && h.Aktif)
             .OrderBy(h => h.HesapKodu)
             .ToListAsync();
     }
@@ -924,10 +914,13 @@ public class SoforService : ISoforService
 
         // PersonelAvansHesapId null ise, personel adıyla 195.01.xxx hesabını bul
         var ayar = await context.MuhasebeAyarlari.AsNoTracking().FirstOrDefaultAsync();
-        var avansPrefix = string.IsNullOrWhiteSpace(ayar?.PersonelAvansPrefix) ? "195.01" : ayar.PersonelAvansPrefix;
+        var avansPrefix = ayar?.PersonelAvansPrefix?.Trim();
 
-        var avansHesap = await context.MuhasebeHesaplari
-            .FirstOrDefaultAsync(h => h.HesapKodu.StartsWith(avansPrefix + ".") && h.HesapAdi == cari.Unvan && !h.IsDeleted);
+        var avansHesap = string.IsNullOrWhiteSpace(avansPrefix)
+            ? await context.MuhasebeHesaplari
+                .FirstOrDefaultAsync(h => h.HesapAdi == cari.Unvan && !h.IsDeleted)
+            : await context.MuhasebeHesaplari
+                .FirstOrDefaultAsync(h => h.HesapKodu.StartsWith(avansPrefix + ".") && h.HesapAdi == cari.Unvan && !h.IsDeleted);
 
         if (avansHesap != null)
         {
@@ -957,10 +950,13 @@ public class SoforService : ISoforService
 
         // MuhasebeHesapId null ise, personel adıyla 335.xx.xxx hesabını bul
         var ayar = await context.MuhasebeAyarlari.AsNoTracking().FirstOrDefaultAsync();
-        var personelPrefix = ayar?.PersonelPrefix ?? "335.01";
+        var personelPrefix = ayar?.PersonelPrefix?.Trim();
 
-        var borcHesap = await context.MuhasebeHesaplari
-            .FirstOrDefaultAsync(h => h.HesapKodu.StartsWith(personelPrefix + ".") && h.HesapAdi == cari.Unvan && !h.IsDeleted);
+        var borcHesap = string.IsNullOrWhiteSpace(personelPrefix)
+            ? await context.MuhasebeHesaplari
+                .FirstOrDefaultAsync(h => h.HesapAdi == cari.Unvan && !h.IsDeleted)
+            : await context.MuhasebeHesaplari
+                .FirstOrDefaultAsync(h => h.HesapKodu.StartsWith(personelPrefix + ".") && h.HesapAdi == cari.Unvan && !h.IsDeleted);
 
         if (borcHesap != null)
         {
@@ -971,6 +967,272 @@ public class SoforService : ISoforService
         }
 
         return borcHesap;
+    }
+
+    /// <summary>
+    /// Personel için Cari kaydı yoksa oluşturur. Avans hesabı ve muhasebe entegrasyonu için gereklidir.
+    /// </summary>
+    public async Task EnsurePersonelCariKaydiAsync(Sofor sofor)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        await EnsurePersonelCariKaydiAsync(context, sofor);
+    }
+
+    private async Task EnsurePersonelCariKaydiAsync(ApplicationDbContext context, Sofor sofor)
+    {
+        // Zaten var mı kontrol et
+        var mevcutCari = await context.Cariler
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(c => c.SoforId == sofor.Id);
+
+        if (mevcutCari != null)
+        {
+            // Silinmişse geri getir
+            if (mevcutCari.IsDeleted)
+            {
+                mevcutCari.IsDeleted = false;
+                mevcutCari.DeletedAt = null;
+                mevcutCari.UpdatedAt = DateTime.UtcNow;
+                await context.SaveChangesAsync();
+            }
+            return;
+        }
+
+        // Cari kodu üret (SFR-0001 gibi personel kodundan)
+        var cariKodu = $"PRS-{sofor.SoforKodu}";
+        // Aynı kodda Cari var mı?
+        var kodVar = await context.Cariler.IgnoreQueryFilters()
+            .AnyAsync(c => c.CariKodu == cariKodu);
+        if (kodVar)
+            cariKodu = $"{cariKodu}-{sofor.Id}";
+
+        var yeniCari = new Cari
+        {
+            CariKodu = cariKodu,
+            Unvan = sofor.TamAd,
+            Telefon = sofor.Telefon,
+            Email = sofor.Email,
+            Adres = sofor.Adres,
+            SoforId = sofor.Id,
+            FirmaId = sofor.FirmaId,
+            Aktif = true,
+            CreatedAt = DateTime.UtcNow
+        };
+        context.Cariler.Add(yeniCari);
+        await context.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Personel için otomatik borç hesabı oluşturur (335 prefix).
+    /// Prefix ayarlardan, suffix otomatik artan sayaçtan alınır.
+    /// Mevcut MuhasebeHesapId varsa ve adı personelle eşleşiyorsa dokunmaz,
+    /// eşleşmiyorsa yeni hesap açar.
+    /// </summary>
+    public async Task EnsurePersonelBorcHesabiAsync(Sofor sofor)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        await EnsurePersonelBorcHesabiAsync(context, sofor);
+    }
+
+    private async Task EnsurePersonelBorcHesabiAsync(ApplicationDbContext context, Sofor sofor)
+    {
+        var dbSofor = await context.Soforler
+            .FirstOrDefaultAsync(s => s.Id == sofor.Id && !s.IsDeleted);
+        if (dbSofor == null)
+            return;
+
+        var tamAd = $"{dbSofor.Ad} {dbSofor.Soyad}";
+        var ayar = await context.MuhasebeAyarlari.AsNoTracking().FirstOrDefaultAsync();
+        var configuredPrefix = ayar?.PersonelPrefix?.Trim();
+        var prefix = string.IsNullOrWhiteSpace(configuredPrefix) ? "335.01" : configuredPrefix;
+
+        MuhasebeHesap? hedefHesap = null;
+
+        if (dbSofor.MuhasebeHesapId.HasValue)
+        {
+            var mevcutAtanan = await context.MuhasebeHesaplari
+                .FirstOrDefaultAsync(h => h.Id == dbSofor.MuhasebeHesapId.Value && !h.IsDeleted);
+
+            if (mevcutAtanan != null)
+            {
+                // Kullanıcı manuel seçmiş veya önceki kayıtta otomatik atanmış → koru
+                hedefHesap = mevcutAtanan;
+            }
+        }
+
+        if (hedefHesap == null)
+        {
+            hedefHesap = string.IsNullOrWhiteSpace(configuredPrefix)
+                ? await context.MuhasebeHesaplari
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(h => h.HesapAdi == tamAd)
+                : await context.MuhasebeHesaplari
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(h => h.HesapKodu.StartsWith(prefix + ".") && h.HesapAdi == tamAd);
+
+            if (hedefHesap != null && hedefHesap.IsDeleted)
+            {
+                hedefHesap.IsDeleted = false;
+                hedefHesap.DeletedAt = null;
+                hedefHesap.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
+        if (hedefHesap == null)
+        {
+            var hesapKodu = await GenerateNextHesapKoduAsync(context, prefix);
+            hedefHesap = new MuhasebeHesap
+            {
+                HesapKodu = hesapKodu,
+                HesapAdi = tamAd,
+                HesapGrubu = HesapGrubu.KisaVadeliYabanciKaynaklar,
+                HesapTuru = HesapTuru.Pasif,
+                AltHesapVar = false,
+                SistemHesabi = false,
+                Aktif = true,
+                IsDeleted = false,
+                CreatedAt = DateTime.UtcNow
+            };
+            context.MuhasebeHesaplari.Add(hedefHesap);
+            await context.SaveChangesAsync();
+        }
+
+        if (dbSofor.MuhasebeHesapId != hedefHesap.Id)
+        {
+            dbSofor.MuhasebeHesapId = hedefHesap.Id;
+            dbSofor.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await EnsurePersonelCariKaydiAsync(context, dbSofor);
+        var cari = await context.Cariler
+            .FirstOrDefaultAsync(c => c.SoforId == dbSofor.Id && !c.IsDeleted);
+        if (cari != null && cari.MuhasebeHesapId != hedefHesap.Id)
+        {
+            cari.MuhasebeHesapId = hedefHesap.Id;
+            cari.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await context.SaveChangesAsync();
+        sofor.MuhasebeHesapId = hedefHesap.Id;
+    }
+
+    /// <summary>
+    /// Personel için otomatik avans hesabı oluşturur (195 prefix).
+    /// Prefix ayarlardan, suffix otomatik artan sayaçtan alınır.
+    /// Önce isme göre arar, bulursa seçer, bulamazsa yeni oluşturur.
+    /// </summary>
+    public async Task EnsurePersonelAvansHesabiAsync(Sofor sofor)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        await EnsurePersonelAvansHesabiAsync(context, sofor);
+    }
+
+    private async Task EnsurePersonelAvansHesabiAsync(ApplicationDbContext context, Sofor sofor)
+    {
+        var tamAd = $"{sofor.Ad} {sofor.Soyad}";
+
+        await EnsurePersonelCariKaydiAsync(context, sofor);
+
+        var cari = await context.Cariler
+            .FirstOrDefaultAsync(c => c.SoforId == sofor.Id && !c.IsDeleted);
+        if (cari == null) return;
+
+        // Mevcut atanmış avans hesabı varsa koru (manuel seçim veya önceki otomatik atama)
+        if (cari.PersonelAvansHesapId.HasValue)
+        {
+            var mevcutHesap = await context.MuhasebeHesaplari
+                .FirstOrDefaultAsync(h => h.Id == cari.PersonelAvansHesapId.Value && !h.IsDeleted);
+            if (mevcutHesap != null)
+                return;
+        }
+
+        var ayar = await context.MuhasebeAyarlari.AsNoTracking().FirstOrDefaultAsync();
+        var configuredPrefix = ayar?.PersonelAvansPrefix?.Trim();
+        var prefix = string.IsNullOrWhiteSpace(configuredPrefix) ? "195.01" : configuredPrefix;
+
+        // 1) İsme göre mevcut hesap ara — bulunursa onu seç, çift kayıt önle
+        var mevcutIsim = string.IsNullOrWhiteSpace(configuredPrefix)
+            ? await context.MuhasebeHesaplari
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(h => h.HesapAdi == tamAd)
+            : await context.MuhasebeHesaplari
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(h => h.HesapKodu.StartsWith(prefix + ".") && h.HesapAdi == tamAd);
+        if (mevcutIsim != null)
+        {
+            if (mevcutIsim.IsDeleted)
+            {
+                mevcutIsim.IsDeleted = false;
+                mevcutIsim.DeletedAt = null;
+                mevcutIsim.UpdatedAt = DateTime.UtcNow;
+                await context.SaveChangesAsync();
+            }
+            cari.PersonelAvansHesapId = mevcutIsim.Id;
+            context.Cariler.Update(cari);
+            await context.SaveChangesAsync();
+            return;
+        }
+
+        // 2) Bulunamadı → yeni hesap oluştur
+        var hesapKodu = await GenerateNextHesapKoduAsync(context, prefix);
+        var yeniHesap = new MuhasebeHesap
+        {
+            HesapKodu = hesapKodu,
+            HesapAdi = tamAd,
+            HesapGrubu = HesapGrubu.DonenVarliklar,
+            HesapTuru = HesapTuru.Aktif,
+            AltHesapVar = false,
+            SistemHesabi = false,
+            Aktif = true,
+            IsDeleted = false,
+            CreatedAt = DateTime.UtcNow
+        };
+        context.MuhasebeHesaplari.Add(yeniHesap);
+        await context.SaveChangesAsync();
+
+        cari.PersonelAvansHesapId = yeniHesap.Id;
+        context.Cariler.Update(cari);
+        await context.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Personelin Cari kaydına manuel olarak seçilen avans hesabını atar.
+    /// </summary>
+    public async Task AvansHesabiAtaAsync(int soforId, int avansHesapId)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var cari = await context.Cariler
+            .FirstOrDefaultAsync(c => c.SoforId == soforId && !c.IsDeleted);
+
+        if (cari == null) return;
+
+        cari.PersonelAvansHesapId = avansHesapId;
+        context.Cariler.Update(cari);
+        await context.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Belirtilen prefix altındaki en büyük hesap kodunu bulup 1 artırarak yeni kod üretir.
+    /// Örnek: prefix=195.01, mevcut max=195.01.0027 → 195.01.0028
+    /// </summary>
+    private static async Task<string> GenerateNextHesapKoduAsync(ApplicationDbContext context, string prefix)
+    {
+        var sonKod = await context.MuhasebeHesaplari
+            .IgnoreQueryFilters()
+            .Where(h => h.HesapKodu.StartsWith(prefix + "."))
+            .OrderByDescending(h => h.HesapKodu)
+            .Select(h => h.HesapKodu)
+            .FirstOrDefaultAsync();
+
+        int sonNo = 0;
+        if (!string.IsNullOrWhiteSpace(sonKod))
+        {
+            var parcalar = sonKod.Split('.');
+            if (parcalar.Length >= 3 && int.TryParse(parcalar[^1], out var no))
+                sonNo = no;
+        }
+
+        return $"{prefix}.{(sonNo + 1):D4}";
     }
 
     #endregion
