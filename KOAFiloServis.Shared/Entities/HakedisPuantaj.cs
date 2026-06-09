@@ -74,7 +74,10 @@ public class HakedisPuantaj : BaseEntity, IFirmaTenant
     public decimal GiderToplam { get; set; }  // Ödenecek (KDV hariç)
 
     [Column(TypeName = "decimal(18,2)")]
-    public decimal KdvTutari { get; set; }    // GiderToplam × KdvOrani / 100
+    public decimal KdvTutari { get; set; }    // GiderToplam × KdvOrani / 100 (Gider KDV)
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal GelirKdvTutari { get; set; } // GelirToplam × KdvOrani / 100 (Gelir KDV)
 
     [Column(TypeName = "decimal(18,2)")]
     public decimal ToplamKesinti { get; set; }
@@ -83,7 +86,7 @@ public class HakedisPuantaj : BaseEntity, IFirmaTenant
     public decimal OdenecekTutar { get; set; } // GiderToplam + KdvTutari - ToplamKesinti
 
     [Column(TypeName = "decimal(18,2)")]
-    public decimal TahsilEdilecekTutar { get; set; } // = GelirToplam
+    public decimal TahsilEdilecekTutar { get; set; } // GelirToplam + GelirKdvTutari
 
     [NotMapped]
     public decimal KarTutar => TahsilEdilecekTutar - OdenecekTutar;
@@ -120,9 +123,10 @@ public class HakedisPuantaj : BaseEntity, IFirmaTenant
         }
 
         KdvTutari = GiderToplam * KdvOrani / 100;
+        GelirKdvTutari = GelirToplam * KdvOrani / 100;
         ToplamKesinti = Kesintiler.Where(k => !k.IsDeleted).Sum(k => k.Tutar);
         OdenecekTutar = GiderToplam + KdvTutari - ToplamKesinti;
-        TahsilEdilecekTutar = GelirToplam;
+        TahsilEdilecekTutar = GelirToplam + GelirKdvTutari;
     }
 }
 

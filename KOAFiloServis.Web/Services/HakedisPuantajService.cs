@@ -283,6 +283,7 @@ public class HakedisPuantajService : IHakedisPuantajService
         hakedis.GelirToplam = detaylar.Sum(d => d.SeferSayisi * hakedis.GelirSeferBirimFiyat * d.FiyatCarpani);
         hakedis.GiderToplam = detaylar.Sum(d => d.SeferSayisi * hakedis.GiderSeferBirimFiyat * d.FiyatCarpani);
         hakedis.KdvTutari = hakedis.GiderToplam * hakedis.KdvOrani / 100;
+        hakedis.GelirKdvTutari = hakedis.GelirToplam * hakedis.KdvOrani / 100;
 
         var kesintiler = await context.HakedisKesintiler
             .Where(k => k.HakedisPuantajId == hakedis.Id && !k.IsDeleted)
@@ -290,7 +291,7 @@ public class HakedisPuantajService : IHakedisPuantajService
         hakedis.ToplamKesinti = kesintiler.Sum(k => k.Tutar);
 
         hakedis.OdenecekTutar = hakedis.GiderToplam + hakedis.KdvTutari - hakedis.ToplamKesinti;
-        hakedis.TahsilEdilecekTutar = hakedis.GelirToplam;
+        hakedis.TahsilEdilecekTutar = hakedis.GelirToplam + hakedis.GelirKdvTutari;
         hakedis.UpdatedAt = DateTime.UtcNow;
 
         await context.SaveChangesAsync();
