@@ -287,6 +287,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<HakedisPuantaj> HakedisPuantajlar { get; set; }
     public DbSet<HakedisPuantajDetay> HakedisPuantajDetaylar { get; set; }
     public DbSet<HakedisKesinti> HakedisKesintiler { get; set; }
+    public DbSet<HakedisSeferTuru> HakedisSeferTurleri { get; set; }
 
     // Proforma Fatura Modülü
     public DbSet<ProformaFatura> ProformaFaturalar { get; set; }

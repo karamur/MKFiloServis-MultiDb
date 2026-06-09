@@ -280,16 +280,17 @@ public class HakedisPuantajService : IHakedisPuantajService
             .ToListAsync();
 
         hakedis.ToplamSefer = detaylar.Sum(d => d.SeferSayisi);
-        hakedis.ToplamEkSefer = detaylar.Count(d => d.EkSeferMi);
-        hakedis.HakedisTutari = hakedis.ToplamSefer * seferBirimFiyat;
-        hakedis.KdvTutari = hakedis.HakedisTutari * hakedis.KdvOrani / 100;
+        hakedis.GelirToplam = detaylar.Sum(d => d.SeferSayisi * hakedis.GelirSeferBirimFiyat * d.FiyatCarpani);
+        hakedis.GiderToplam = detaylar.Sum(d => d.SeferSayisi * hakedis.GiderSeferBirimFiyat * d.FiyatCarpani);
+        hakedis.KdvTutari = hakedis.GiderToplam * hakedis.KdvOrani / 100;
 
         var kesintiler = await context.HakedisKesintiler
             .Where(k => k.HakedisPuantajId == hakedis.Id && !k.IsDeleted)
             .ToListAsync();
         hakedis.ToplamKesinti = kesintiler.Sum(k => k.Tutar);
 
-        hakedis.OdenecekTutar = hakedis.HakedisTutari + hakedis.KdvTutari - hakedis.ToplamKesinti;
+        hakedis.OdenecekTutar = hakedis.GiderToplam + hakedis.KdvTutari - hakedis.ToplamKesinti;
+        hakedis.TahsilEdilecekTutar = hakedis.GelirToplam;
         hakedis.UpdatedAt = DateTime.UtcNow;
 
         await context.SaveChangesAsync();
@@ -339,7 +340,7 @@ public class HakedisPuantajService : IHakedisPuantajService
 
         return new HakedisDashboard
         {
-            ToplamHakedis = hakedisler.Sum(h => h.HakedisTutari),
+            ToplamHakedis = hakedisler.Sum(h => h.GiderToplam),
             ToplamSefer = hakedisler.Sum(h => h.ToplamSefer),
             ToplamGuzergah = hakedisler.Select(h => h.GuzergahId).Distinct().Count(),
             ToplamArac = hakedisler.Select(h => h.AracId).Distinct().Count(),

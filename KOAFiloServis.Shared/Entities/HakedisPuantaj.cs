@@ -41,7 +41,14 @@ public class HakedisPuantaj : BaseEntity, IFirmaTenant
 
     // Fiyatlandırma
     [Column(TypeName = "decimal(18,4)")]
-    public decimal BirimFiyat { get; set; } // Günlük toplam fiyat (Sabah+Aksam ise 2 seferlik)
+    public decimal GelirBirimFiyat { get; set; } // Müşteriye kesilecek günlük toplam fiyat
+
+    [Column(TypeName = "decimal(18,4)")]
+    public decimal GiderBirimFiyat { get; set; } // Tedarikçiye ödenecek günlük toplam fiyat
+
+    // Backward compat
+    [NotMapped]
+    public decimal BirimFiyat { get => GelirBirimFiyat; set => GelirBirimFiyat = value; }
 
     public int KdvOrani { get; set; } = 20; // 20, 10, 1, 0
 
@@ -49,25 +56,37 @@ public class HakedisPuantaj : BaseEntity, IFirmaTenant
     [Column(TypeName = "decimal(18,2)")]
     public decimal GunlukSeferSayisi { get; set; } = 2; // Sabah+Aksam=2, Sabah=1, Aksam=1
 
-    /// <summary>Sefer başı birim fiyat. Sabah+Aksam ise BirimFiyat / 2.</summary>
+    /// <summary>Sefer başı gelir birim fiyat. Sabah+Aksam ise /2.</summary>
     [NotMapped]
-    public decimal SeferBirimFiyat => GunlukSeferSayisi > 0 ? BirimFiyat / GunlukSeferSayisi : 0;
+    public decimal GelirSeferBirimFiyat => GunlukSeferSayisi > 0 ? GelirBirimFiyat / GunlukSeferSayisi : 0;
+
+    /// <summary>Sefer başı gider birim fiyat. Sabah+Aksam ise /2.</summary>
+    [NotMapped]
+    public decimal GiderSeferBirimFiyat => GunlukSeferSayisi > 0 ? GiderBirimFiyat / GunlukSeferSayisi : 0;
 
     // Toplamlar
-    public int ToplamSefer { get; set; }       // Tüm günlerin toplam sefer sayısı
-    public int ToplamEkSefer { get; set; }     // Ek sefer toplamı
+    public int ToplamSefer { get; set; }
 
     [Column(TypeName = "decimal(18,2)")]
-    public decimal HakedisTutari { get; set; } // ToplamSefer × SeferBirimFiyat
+    public decimal GelirToplam { get; set; }  // Tahsil edilecek
 
     [Column(TypeName = "decimal(18,2)")]
-    public decimal KdvTutari { get; set; }     // HakedisTutari × KdvOrani / 100
+    public decimal GiderToplam { get; set; }  // Ödenecek (KDV hariç)
 
     [Column(TypeName = "decimal(18,2)")]
-    public decimal ToplamKesinti { get; set; } // Tüm kesintilerin toplamı
+    public decimal KdvTutari { get; set; }    // GiderToplam × KdvOrani / 100
 
     [Column(TypeName = "decimal(18,2)")]
-    public decimal OdenecekTutar { get; set; } // HakedisTutari + KdvTutari - ToplamKesinti
+    public decimal ToplamKesinti { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal OdenecekTutar { get; set; } // GiderToplam + KdvTutari - ToplamKesinti
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal TahsilEdilecekTutar { get; set; } // = GelirToplam
+
+    [NotMapped]
+    public decimal KarTutar => TahsilEdilecekTutar - OdenecekTutar;
 
     // Durum
     public HakedisDurumu Durum { get; set; } = HakedisDurumu.Taslak;
@@ -91,14 +110,19 @@ public class HakedisPuantaj : BaseEntity, IFirmaTenant
     {
         if (Detaylar.Any())
         {
-            ToplamSefer = Detaylar.Sum(d => (int)d.SeferSayisi);
-            ToplamEkSefer = Detaylar.Count(d => d.EkSeferMi);
+            // Her detay için GelirTutar = SeferSayisi × GelirSeferBirimFiyat × FiyatCarpani
+            GelirToplam = Detaylar.Sum(d => d.SeferSayisi * GelirSeferBirimFiyat * d.FiyatCarpani);
+
+            // Her detay için GiderTutar = SeferSayisi × GiderSeferBirimFiyat × FiyatCarpani
+            GiderToplam = Detaylar.Sum(d => d.SeferSayisi * GiderSeferBirimFiyat * d.FiyatCarpani);
+
+            ToplamSefer = Detaylar.Sum(d => d.SeferSayisi);
         }
 
-        HakedisTutari = ToplamSefer * SeferBirimFiyat;
-        KdvTutari = HakedisTutari * KdvOrani / 100;
+        KdvTutari = GiderToplam * KdvOrani / 100;
         ToplamKesinti = Kesintiler.Where(k => !k.IsDeleted).Sum(k => k.Tutar);
-        OdenecekTutar = HakedisTutari + KdvTutari - ToplamKesinti;
+        OdenecekTutar = GiderToplam + KdvTutari - ToplamKesinti;
+        TahsilEdilecekTutar = GelirToplam;
     }
 }
 
@@ -117,8 +141,54 @@ public class HakedisPuantajDetay : BaseEntity
     /// <summary>Günlük sefer sayısı. 0=çalışmadı, 1=tek sefer, 2=S+A, 3=S+A+ek...</summary>
     public int SeferSayisi { get; set; }
 
+    /// <summary>Sefer türü (null=standart güzergah seferi)</summary>
+    public int? SeferTuruId { get; set; }
+    public virtual HakedisSeferTuru? SeferTuru { get; set; }
+
+    /// <summary>Fiyat çarpanı (1=normal, 1.5=mesai, 2=resmi tatil)</summary>
+    [Column(TypeName = "decimal(18,4)")]
+    public decimal FiyatCarpani { get; set; } = 1;
+
+    /// <summary>Mesai seferi mi?</summary>
+    public bool MesaiMi { get; set; }
+
     /// <summary>Ek sefer (ana seferlere ek olarak)</summary>
     public bool EkSeferMi { get; set; }
+
+    [StringLength(200)]
+    public string? Aciklama { get; set; }
+}
+
+/// <summary>
+/// Kullanıcı tanımlı sefer türü.
+/// Her firma kendi sefer türlerini oluşturabilir.
+/// </summary>
+public class HakedisSeferTuru : BaseEntity, IFirmaTenant
+{
+    public int? FirmaId { get; set; }
+    public virtual Firma? Firma { get; set; }
+
+    [Required, StringLength(20)]
+    public string Kod { get; set; } = string.Empty;
+
+    [Required, StringLength(100)]
+    public string Ad { get; set; } = string.Empty;
+
+    /// <summary>Varsayılan sefer sayısı (Sabah=1, Sabah+Aksam=2)</summary>
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal VarsayilanSeferSayisi { get; set; } = 1;
+
+    /// <summary>Fiyat çarpanı (1=normal, 1.5=mesai, 2=tatil)</summary>
+    [Column(TypeName = "decimal(18,4)")]
+    public decimal FiyatCarpani { get; set; } = 1;
+
+    public bool MesaiMi { get; set; }
+    public bool EkSeferMi { get; set; }
+
+    /// <summary>Sistem tanımlı mı? (seed ile gelenler)</summary>
+    public bool SistemTanimliMi { get; set; }
+
+    public bool Aktif { get; set; } = true;
 
     [StringLength(200)]
     public string? Aciklama { get; set; }
