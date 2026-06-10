@@ -223,76 +223,82 @@ public sealed class KurumPuantajService : IKurumPuantajService
         EnsurePuantajDefaults(kayit);
 
         await using var db = await _dbFactory.CreateDbContextAsync();
-        await using var tx = await db.Database.BeginTransactionAsync();
+        var strategy = db.Database.CreateExecutionStrategy();
 
-        // Upsert: Güzergah + Araç + Yıl + Ay + Slot kombinasyonu unique
-        var mevcut = await db.PuantajKayitlar
-            .FirstOrDefaultAsync(p =>
-                !p.IsDeleted &&
-                p.GuzergahId == kayit.GuzergahId &&
-                p.AracId     == kayit.AracId &&
-                p.Yil        == kayit.Yil &&
-                p.Ay         == kayit.Ay &&
-                p.Slot       == kayit.Slot);
-
-        if (mevcut == null)
+        return await strategy.ExecuteAsync(async () =>
         {
-            // Savunma: detached navigation'lar Add() ile tüm graph'ı Added yapmasın.
-            // FK alanları (GuzergahId, AracId, SoforId, ...) zaten set edilmiş durumda.
-            kayit.Guzergah = null;
-            kayit.Arac = null;
-            kayit.Sofor = null;
-            kayit.KurumCari = null;
-            kayit.OdemeYapilacakCari = null;
-            kayit.FaturaKesiciCari = null;
-            kayit.Kurum = null;
-            kayit.IsverenFirma = null;
-            kayit.HesapDonemi = null;
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            await using var tx = await db.Database.BeginTransactionAsync();
 
-            // Clone'dan taşınan mevcut Id ile PK çakışmasını önle (insert'te DB identity üretsin)
-            kayit.Id = 0;
+            // Upsert: Güzergah + Araç + Yıl + Ay + Slot kombinasyonu unique
+            var mevcut = await db.PuantajKayitlar
+                .FirstOrDefaultAsync(p =>
+                    !p.IsDeleted &&
+                    p.GuzergahId == kayit.GuzergahId &&
+                    p.AracId     == kayit.AracId &&
+                    p.Yil        == kayit.Yil &&
+                    p.Ay         == kayit.Ay &&
+                    p.Slot       == kayit.Slot);
 
-            db.PuantajKayitlar.Add(kayit);
-        }
-        else
-        {
-            // Gün değerlerini kopyala
-            for (int g = 1; g <= 31; g++)
-                mevcut.SetGunDeger(g, kayit.GetGunDeger(g));
+            if (mevcut == null)
+            {
+                // Savunma: detached navigation'lar Add() ile tüm graph'ı Added yapmasın.
+                // FK alanları (GuzergahId, AracId, SoforId, ...) zaten set edilmiş durumda.
+                kayit.Guzergah = null;
+                kayit.Arac = null;
+                kayit.Sofor = null;
+                kayit.KurumCari = null;
+                kayit.OdemeYapilacakCari = null;
+                kayit.FaturaKesiciCari = null;
+                kayit.Kurum = null;
+                kayit.IsverenFirma = null;
+                kayit.HesapDonemi = null;
 
-            mevcut.SoforId      = kayit.SoforId;
-            mevcut.SoforAdi     = kayit.SoforAdi;
-            mevcut.Plaka        = kayit.Plaka;
-            mevcut.Slot         = kayit.Slot;
-            mevcut.SlotAdi      = kayit.SlotAdi;
-            mevcut.Yon          = kayit.Yon;
-            mevcut.Gun          = kayit.Gun;
-            mevcut.SeferSayisi  = kayit.SeferSayisi;
-            mevcut.BirimGelir   = kayit.BirimGelir;
-            mevcut.BirimGider   = kayit.BirimGider;
-            mevcut.ToplamGelir  = kayit.ToplamGelir;
-            mevcut.ToplamGider  = kayit.ToplamGider;
-            mevcut.Alinacak     = kayit.Alinacak;
-            mevcut.Odenecek     = kayit.Odenecek;
-            mevcut.GelirKdvTutari = kayit.GelirKdvTutari;
-            mevcut.GelirToplam  = kayit.GelirToplam;
-            mevcut.KaynakTipi   = kayit.KaynakTipi;
-            mevcut.FinansYonu   = kayit.FinansYonu;
-            mevcut.KurumId      = kayit.KurumId;
-            mevcut.IsverenFirmaId = kayit.IsverenFirmaId;
-            mevcut.BelgeNo      = kayit.BelgeNo;
-            mevcut.TransferDurum = kayit.TransferDurum;
-            mevcut.UpdatedAt    = DateTime.UtcNow;
-        }
+                // Clone'dan taşınan mevcut Id ile PK çakışmasını önle (insert'te DB identity üretsin)
+                kayit.Id = 0;
 
-        await db.SaveChangesAsync();
+                db.PuantajKayitlar.Add(kayit);
+            }
+            else
+            {
+                // Gün değerlerini kopyala
+                for (int g = 1; g <= 31; g++)
+                    mevcut.SetGunDeger(g, kayit.GetGunDeger(g));
 
-        // ── OperasyonKaydi sync (aynı transaction içinde) ────────────────
-        var saved = mevcut ?? kayit;
-        await ((PuantajSyncService)_syncService).SyncFromPuantajWithContextAsync(db, saved, PuantajSyncMode.CreateUpdate);
+                mevcut.SoforId      = kayit.SoforId;
+                mevcut.SoforAdi     = kayit.SoforAdi;
+                mevcut.Plaka        = kayit.Plaka;
+                mevcut.Slot         = kayit.Slot;
+                mevcut.SlotAdi      = kayit.SlotAdi;
+                mevcut.Yon          = kayit.Yon;
+                mevcut.Gun          = kayit.Gun;
+                mevcut.SeferSayisi  = kayit.SeferSayisi;
+                mevcut.BirimGelir   = kayit.BirimGelir;
+                mevcut.BirimGider   = kayit.BirimGider;
+                mevcut.ToplamGelir  = kayit.ToplamGelir;
+                mevcut.ToplamGider  = kayit.ToplamGider;
+                mevcut.Alinacak     = kayit.Alinacak;
+                mevcut.Odenecek     = kayit.Odenecek;
+                mevcut.GelirKdvTutari = kayit.GelirKdvTutari;
+                mevcut.GelirToplam  = kayit.GelirToplam;
+                mevcut.KaynakTipi   = kayit.KaynakTipi;
+                mevcut.FinansYonu   = kayit.FinansYonu;
+                mevcut.KurumId      = kayit.KurumId;
+                mevcut.IsverenFirmaId = kayit.IsverenFirmaId;
+                mevcut.BelgeNo      = kayit.BelgeNo;
+                mevcut.TransferDurum = kayit.TransferDurum;
+                mevcut.UpdatedAt    = DateTime.UtcNow;
+            }
 
-        await tx.CommitAsync();
-        return saved;
+            await db.SaveChangesAsync();
+
+            // ── OperasyonKaydi sync (aynı transaction içinde) ────────────────
+            var saved = mevcut ?? kayit;
+            await ((PuantajSyncService)_syncService).SyncFromPuantajWithContextAsync(db, saved, PuantajSyncMode.CreateUpdate);
+
+            await tx.CommitAsync();
+            return saved;
+        });
     }
 
     public async Task TopluSavePuantajAsync(IEnumerable<PuantajKayit> kayitlar)
@@ -316,106 +322,112 @@ public sealed class KurumPuantajService : IKurumPuantajService
             EnsurePuantajDefaults(kayit);
 
         await using var db = await _dbFactory.CreateDbContextAsync();
-        await using var tx = await db.Database.BeginTransactionAsync();
+        var strategy = db.Database.CreateExecutionStrategy();
 
-        try
+        await strategy.ExecuteAsync(async () =>
         {
-            // Ayni donemdeki tum mevcut kayitlari TEK sorguda yukle
-            var mevcutKayitlar = await db.PuantajKayitlar
-                .Where(p => !p.IsDeleted && p.Yil == yil && p.Ay == ay)
-                .ToListAsync();
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            await using var tx = await db.Database.BeginTransactionAsync();
 
-            foreach (var kayit in kayitList)
+            try
             {
-                // Finansal alanlari gun bazli puantajdan hesapla
-                kayit.HesaplaPuantajToplam();
-                kayit.HesaplaGelir();
-                kayit.HesaplaGider();
+                // Ayni donemdeki tum mevcut kayitlari TEK sorguda yukle
+                var mevcutKayitlar = await db.PuantajKayitlar
+                    .Where(p => !p.IsDeleted && p.Yil == yil && p.Ay == ay)
+                    .ToListAsync();
 
-                // FK hatasi olmasin diye 0 degerleri null yap
-                if (kayit.IsverenFirmaId <= 0) kayit.IsverenFirmaId = null;
-
-                var mevcut = mevcutKayitlar.FirstOrDefault(m =>
-                    m.GuzergahId == kayit.GuzergahId &&
-                    m.AracId     == kayit.AracId &&
-                    m.Slot       == kayit.Slot);
-
-                if (mevcut == null)
+                foreach (var kayit in kayitList)
                 {
-                    // Savunma: detached navigation'lar Add() ile tüm graph'ı Added yapmasın.
-                    kayit.Guzergah = null;
-                    kayit.Arac = null;
-                    kayit.Sofor = null;
-                    kayit.KurumCari = null;
-                    kayit.OdemeYapilacakCari = null;
-                    kayit.FaturaKesiciCari = null;
-                    kayit.Kurum = null;
-                    kayit.IsverenFirma = null;
-                    kayit.HesapDonemi = null;
+                    // Finansal alanlari gun bazli puantajdan hesapla
+                    kayit.HesaplaPuantajToplam();
+                    kayit.HesaplaGelir();
+                    kayit.HesaplaGider();
 
-                    // Clone'dan taşınan mevcut Id ile PK çakışmasını önle (insert'te DB identity üretsin)
-                    kayit.Id = 0;
+                    // FK hatasi olmasin diye 0 degerleri null yap
+                    if (kayit.IsverenFirmaId <= 0) kayit.IsverenFirmaId = null;
 
-                    db.PuantajKayitlar.Add(kayit);
+                    var mevcut = mevcutKayitlar.FirstOrDefault(m =>
+                        m.GuzergahId == kayit.GuzergahId &&
+                        m.AracId     == kayit.AracId &&
+                        m.Slot       == kayit.Slot);
+
+                    if (mevcut == null)
+                    {
+                        // Savunma: detached navigation'lar Add() ile tüm graph'ı Added yapmasın.
+                        kayit.Guzergah = null;
+                        kayit.Arac = null;
+                        kayit.Sofor = null;
+                        kayit.KurumCari = null;
+                        kayit.OdemeYapilacakCari = null;
+                        kayit.FaturaKesiciCari = null;
+                        kayit.Kurum = null;
+                        kayit.IsverenFirma = null;
+                        kayit.HesapDonemi = null;
+
+                        // Clone'dan taşınan mevcut Id ile PK çakışmasını önle (insert'te DB identity üretsin)
+                        kayit.Id = 0;
+
+                        db.PuantajKayitlar.Add(kayit);
+                    }
+                    else
+                    {
+                        for (int g = 1; g <= 31; g++)
+                            mevcut.SetGunDeger(g, kayit.GetGunDeger(g));
+
+                        mevcut.SoforId      = kayit.SoforId;
+                        mevcut.SoforAdi     = kayit.SoforAdi;
+                        mevcut.Plaka        = kayit.Plaka;
+                        mevcut.Slot         = kayit.Slot;
+                        mevcut.SlotAdi      = kayit.SlotAdi;
+                        mevcut.Yon          = kayit.Yon;
+                        mevcut.Gun          = kayit.Gun;
+                        mevcut.SeferSayisi  = kayit.SeferSayisi;
+                        mevcut.BirimGelir   = kayit.BirimGelir;
+                        mevcut.BirimGider   = kayit.BirimGider;
+                        mevcut.ToplamGelir  = kayit.ToplamGelir;
+                        mevcut.ToplamGider  = kayit.ToplamGider;
+                        mevcut.Alinacak     = kayit.Alinacak;
+                        mevcut.Odenecek     = kayit.Odenecek;
+                        mevcut.GelirKdvTutari = kayit.GelirKdvTutari;
+                        mevcut.GelirToplam  = kayit.GelirToplam;
+                        mevcut.KaynakTipi   = kayit.KaynakTipi;
+                        mevcut.FinansYonu   = kayit.FinansYonu;
+                        mevcut.KurumId      = kayit.KurumId;
+                        mevcut.IsverenFirmaId = kayit.IsverenFirmaId;
+                        mevcut.BelgeNo      = kayit.BelgeNo;
+                        mevcut.TransferDurum = kayit.TransferDurum;
+                        mevcut.UpdatedAt    = DateTime.UtcNow;
+                    }
                 }
-                else
+
+                // Merge edilmiş SabahAksam satırları için eski Aksam slot'lu yetimleri temizle
+                var mergedKeys = kayitList
+                    .Where(k => k.Yon == PuantajYon.SabahAksam && k.Slot == SeferSlot.Sabah)
+                    .Select(k => (GuzergahId: k.GuzergahId, AracId: k.AracId))
+                    .ToHashSet();
+
+                foreach (var mevcut in mevcutKayitlar)
                 {
-                    for (int g = 1; g <= 31; g++)
-                        mevcut.SetGunDeger(g, kayit.GetGunDeger(g));
-
-                    mevcut.SoforId      = kayit.SoforId;
-                    mevcut.SoforAdi     = kayit.SoforAdi;
-                    mevcut.Plaka        = kayit.Plaka;
-                    mevcut.Slot         = kayit.Slot;
-                    mevcut.SlotAdi      = kayit.SlotAdi;
-                    mevcut.Yon          = kayit.Yon;
-                    mevcut.Gun          = kayit.Gun;
-                    mevcut.SeferSayisi  = kayit.SeferSayisi;
-                    mevcut.BirimGelir   = kayit.BirimGelir;
-                    mevcut.BirimGider   = kayit.BirimGider;
-                    mevcut.ToplamGelir  = kayit.ToplamGelir;
-                    mevcut.ToplamGider  = kayit.ToplamGider;
-                    mevcut.Alinacak     = kayit.Alinacak;
-                    mevcut.Odenecek     = kayit.Odenecek;
-                    mevcut.GelirKdvTutari = kayit.GelirKdvTutari;
-                    mevcut.GelirToplam  = kayit.GelirToplam;
-                    mevcut.KaynakTipi   = kayit.KaynakTipi;
-                    mevcut.FinansYonu   = kayit.FinansYonu;
-                    mevcut.KurumId      = kayit.KurumId;
-                    mevcut.IsverenFirmaId = kayit.IsverenFirmaId;
-                    mevcut.BelgeNo      = kayit.BelgeNo;
-                    mevcut.TransferDurum = kayit.TransferDurum;
-                    mevcut.UpdatedAt    = DateTime.UtcNow;
+                    if (mevcut.Slot == SeferSlot.Aksam
+                        && mevcut.Yon != PuantajYon.SabahAksam
+                        && mergedKeys.Contains((mevcut.GuzergahId, mevcut.AracId))
+                        && !kayitList.Any(k => k.Id == mevcut.Id))
+                    {
+                        mevcut.IsDeleted = true;
+                        mevcut.UpdatedAt = DateTime.UtcNow;
+                    }
                 }
+
+                await db.SaveChangesAsync();
+
+                await tx.CommitAsync();
             }
-
-            // Merge edilmiş SabahAksam satırları için eski Aksam slot'lu yetimleri temizle
-            var mergedKeys = kayitList
-                .Where(k => k.Yon == PuantajYon.SabahAksam && k.Slot == SeferSlot.Sabah)
-                .Select(k => (GuzergahId: k.GuzergahId, AracId: k.AracId))
-                .ToHashSet();
-
-            foreach (var mevcut in mevcutKayitlar)
+            catch
             {
-                if (mevcut.Slot == SeferSlot.Aksam
-                    && mevcut.Yon != PuantajYon.SabahAksam
-                    && mergedKeys.Contains((mevcut.GuzergahId, mevcut.AracId))
-                    && !kayitList.Any(k => k.Id == mevcut.Id))
-                {
-                    mevcut.IsDeleted = true;
-                    mevcut.UpdatedAt = DateTime.UtcNow;
-                }
+                await tx.RollbackAsync();
+                throw;
             }
-
-            await db.SaveChangesAsync();
-
-            await tx.CommitAsync();
-        }
-        catch
-        {
-            await tx.RollbackAsync();
-            throw;
-        }
+        });
 
         // ── Toplu OperasyonKaydi sync (transaction dışında, hata durumunda save'i geri almaz) ──
         try

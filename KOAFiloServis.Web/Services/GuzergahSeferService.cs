@@ -49,86 +49,92 @@ public class GuzergahSeferService : IGuzergahSeferService
     {
         seferler ??= [];
 
-        await using var context = await _contextFactory.CreateDbContextAsync();
+        await using var tempContext = await _contextFactory.CreateDbContextAsync();
+        var strategy = tempContext.Database.CreateExecutionStrategy();
 
-        // Parent Guzergah doğrulaması
-        var guzergah = await VerifyGuzergahAccessAsync(context, guzergahId);
-        var parentFirmaId = guzergah.FirmaId;
-
-        await using var tx = await context.Database.BeginTransactionAsync();
-
-        try
+        await strategy.ExecuteAsync(async () =>
         {
-            var mevcut = await context.GuzergahSeferleri
-                .IgnoreQueryFilters()
-                .Where(s => s.GuzergahId == guzergahId)
-                .ToListAsync();
+            await using var context = await _contextFactory.CreateDbContextAsync();
 
-            // Gelen Id'leri topla
-            var gelenIdler = seferler
-                .Where(s => s.Id > 0)
-                .Select(s => s.Id)
-                .ToHashSet();
+            // Parent Guzergah doğrulaması
+            var guzergah = await VerifyGuzergahAccessAsync(context, guzergahId);
+            var parentFirmaId = guzergah.FirmaId;
 
-            // Silinen seferleri soft delete yap
-            foreach (var m in mevcut.Where(x => !gelenIdler.Contains(x.Id)))
+            await using var tx = await context.Database.BeginTransactionAsync();
+
+            try
             {
-                m.IsDeleted = true;
-                m.UpdatedAt = DateTime.UtcNow;
-            }
+                var mevcut = await context.GuzergahSeferleri
+                    .IgnoreQueryFilters()
+                    .Where(s => s.GuzergahId == guzergahId)
+                    .ToListAsync();
 
-            int sira = 1;
-            foreach (var s in seferler)
-            {
-                if (s.Id > 0)
+                // Gelen Id'leri topla
+                var gelenIdler = seferler
+                    .Where(s => s.Id > 0)
+                    .Select(s => s.Id)
+                    .ToHashSet();
+
+                // Silinen seferleri soft delete yap
+                foreach (var m in mevcut.Where(x => !gelenIdler.Contains(x.Id)))
                 {
-                    var mevcutKayit = mevcut.FirstOrDefault(x => x.Id == s.Id);
-                    if (mevcutKayit == null) continue;
-
-                    mevcutKayit.FirmaId = parentFirmaId;
-                    mevcutKayit.Sira = sira++;
-                    mevcutKayit.Slot = s.Slot;
-                    mevcutKayit.SeferTipi = s.SeferTipi;
-                    mevcutKayit.KapasiteAdi = s.KapasiteAdi;
-                    mevcutKayit.AracId = s.AracId;
-                    mevcutKayit.SoforAd = s.SoforAd;
-                    mevcutKayit.SoforTelefon = s.SoforTelefon;
-                    mevcutKayit.FirmaAdiSerbest = s.FirmaAdiSerbest;
-                    mevcutKayit.IsDeleted = false;
-                    mevcutKayit.UpdatedAt = DateTime.UtcNow;
+                    m.IsDeleted = true;
+                    m.UpdatedAt = DateTime.UtcNow;
                 }
-                else
+
+                int sira = 1;
+                foreach (var s in seferler)
                 {
-                    context.GuzergahSeferleri.Add(new GuzergahSefer
+                    if (s.Id > 0)
                     {
-                        GuzergahId = guzergahId,
-                        FirmaId = parentFirmaId,
-                        Sira = sira++,
-                        Slot = s.Slot,
-                        SeferTipi = s.SeferTipi,
-                        KapasiteAdi = s.KapasiteAdi,
-                        AracId = s.AracId,
-                        SoforAd = s.SoforAd,
-                        SoforTelefon = s.SoforTelefon,
-                        FirmaAdiSerbest = s.FirmaAdiSerbest,
-                        CreatedAt = DateTime.UtcNow,
-                        UpdatedAt = DateTime.UtcNow
-                    });
+                        var mevcutKayit = mevcut.FirstOrDefault(x => x.Id == s.Id);
+                        if (mevcutKayit == null) continue;
+
+                        mevcutKayit.FirmaId = parentFirmaId;
+                        mevcutKayit.Sira = sira++;
+                        mevcutKayit.Slot = s.Slot;
+                        mevcutKayit.SeferTipi = s.SeferTipi;
+                        mevcutKayit.KapasiteAdi = s.KapasiteAdi;
+                        mevcutKayit.AracId = s.AracId;
+                        mevcutKayit.SoforAd = s.SoforAd;
+                        mevcutKayit.SoforTelefon = s.SoforTelefon;
+                        mevcutKayit.FirmaAdiSerbest = s.FirmaAdiSerbest;
+                        mevcutKayit.IsDeleted = false;
+                        mevcutKayit.UpdatedAt = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        context.GuzergahSeferleri.Add(new GuzergahSefer
+                        {
+                            GuzergahId = guzergahId,
+                            FirmaId = parentFirmaId,
+                            Sira = sira++,
+                            Slot = s.Slot,
+                            SeferTipi = s.SeferTipi,
+                            KapasiteAdi = s.KapasiteAdi,
+                            AracId = s.AracId,
+                            SoforAd = s.SoforAd,
+                            SoforTelefon = s.SoforTelefon,
+                            FirmaAdiSerbest = s.FirmaAdiSerbest,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        });
+                    }
                 }
+
+                await context.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                _logger.LogInformation(
+                    "Guzergah seferleri kaydedildi. GuzergahId={GuzergahId}, SeferSayisi={SeferSayisi}, FirmaId={FirmaId}",
+                    guzergahId, seferler.Count, parentFirmaId);
             }
-
-            await context.SaveChangesAsync();
-            await tx.CommitAsync();
-
-            _logger.LogInformation(
-                "Guzergah seferleri kaydedildi. GuzergahId={GuzergahId}, SeferSayisi={SeferSayisi}, FirmaId={FirmaId}",
-                guzergahId, seferler.Count, parentFirmaId);
-        }
-        catch
-        {
-            await tx.RollbackAsync();
-            throw;
-        }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        });
     }
 
     private async Task<Guzergah> VerifyGuzergahAccessAsync(ApplicationDbContext context, int guzergahId)

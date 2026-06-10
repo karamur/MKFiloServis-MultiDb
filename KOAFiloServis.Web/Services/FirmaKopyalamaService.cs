@@ -61,22 +61,28 @@ public sealed class FirmaKopyalamaService : IFirmaKopyalamaService
             return new FirmaKopyalamaSonucu();
 
         using var ctx = await _contextFactory.CreateDbContextAsync();
-        await using var tx = await ctx.Database.BeginTransactionAsync();
+        var strategy = ctx.Database.CreateExecutionStrategy();
 
-        var sonuc = modul switch
+        return await strategy.ExecuteAsync(async () =>
         {
-            FirmaKopyalamaModulu.Cari => await KopyalaCariAsync(ctx, kaynakFirmaId, hedefFirmaId, ids),
-            FirmaKopyalamaModulu.Kurum => await KopyalaKurumAsync(ctx, kaynakFirmaId, hedefFirmaId, ids),
-            FirmaKopyalamaModulu.Guzergah => await KopyalaGuzergahAsync(ctx, kaynakFirmaId, hedefFirmaId, ids),
-            FirmaKopyalamaModulu.Arac => await KopyalaAracAsync(ctx, kaynakFirmaId, hedefFirmaId, ids),
-            FirmaKopyalamaModulu.Sofor => await KopyalaSoforAsync(ctx, kaynakFirmaId, hedefFirmaId, ids),
-            FirmaKopyalamaModulu.MasrafKalemi => throw new NotSupportedException(
-                "MasrafKalemi global tanım kümesidir; firma bazlı kopyalama gerekmez."),
-            _ => throw new NotSupportedException($"Modül desteklenmiyor: {modul}")
-        };
+            using var ctx = await _contextFactory.CreateDbContextAsync();
+            await using var tx = await ctx.Database.BeginTransactionAsync();
 
-        await tx.CommitAsync();
-        return sonuc;
+            var sonuc = modul switch
+            {
+                FirmaKopyalamaModulu.Cari => await KopyalaCariAsync(ctx, kaynakFirmaId, hedefFirmaId, ids),
+                FirmaKopyalamaModulu.Kurum => await KopyalaKurumAsync(ctx, kaynakFirmaId, hedefFirmaId, ids),
+                FirmaKopyalamaModulu.Guzergah => await KopyalaGuzergahAsync(ctx, kaynakFirmaId, hedefFirmaId, ids),
+                FirmaKopyalamaModulu.Arac => await KopyalaAracAsync(ctx, kaynakFirmaId, hedefFirmaId, ids),
+                FirmaKopyalamaModulu.Sofor => await KopyalaSoforAsync(ctx, kaynakFirmaId, hedefFirmaId, ids),
+                FirmaKopyalamaModulu.MasrafKalemi => throw new NotSupportedException(
+                    "MasrafKalemi global tanım kümesidir; firma bazlı kopyalama gerekmez."),
+                _ => throw new NotSupportedException($"Modül desteklenmiyor: {modul}")
+            };
+
+            await tx.CommitAsync();
+            return sonuc;
+        });
     }
 
     // ---------------- CARI ----------------
