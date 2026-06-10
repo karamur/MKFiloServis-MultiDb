@@ -28,9 +28,10 @@
         <div class="d-flex gap-2">
             @if (IsEdit)
             {
-                <a href="/planlama" target="_blank" class="btn btn-outline-success btn-sm">
+                <button type="button" class="btn btn-outline-success btn-sm"
+                        @onclick="PlanlamadaGor">
                     <i class="bi bi-calendar-check me-1"></i>Planlamada Gor
-                </a>
+                </button>
             }
             <button class="btn btn-secondary" @onclick="Geri">
                 <i class="bi bi-arrow-left me-1"></i>Geri
@@ -1223,6 +1224,12 @@
             kayitHataMesaji = $"Kayit sirasinda hata: {ex.InnerException?.Message ?? ex.Message}";
         }
         finally { kaydediliyor = false; }
+    }
+
+    private void PlanlamadaGor()
+    {
+        if (!IsEdit || Id == null || Id <= 0) return;
+        Navigation.NavigateTo($"/filo-gunluk-puantaj");
     }
 
     private void Geri()
