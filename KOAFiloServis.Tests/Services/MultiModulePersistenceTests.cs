@@ -6,6 +6,7 @@ using KOAFiloServis.Web.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Npgsql;
 using Moq;
 
 namespace KOAFiloServis.Tests.Services;
@@ -91,8 +92,19 @@ public class MultiModulePersistenceTests
             var list = await c.Araclar.Where(a => a.SaseNo == saseNo).ToListAsync();
             foreach (var a in list) { a.IsDeleted = true; a.DeletedAt = DateTime.UtcNow; }
             if (list.Any()) await c.SaveChangesAsync();
+            await EnsureAracPlakaSequenceSyncAsync();
         }
         catch { }
+    }
+
+    private static async Task EnsureAracPlakaSequenceSyncAsync()
+    {
+        await using var conn = new NpgsqlConnection(ConnectionString);
+        await conn.OpenAsync();
+
+        const string sql = "SELECT setval(pg_get_serial_sequence('\"AracPlakalar\"','Id'), COALESCE((SELECT MAX(\"Id\") FROM \"AracPlakalar\"), 1), true);";
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        await cmd.ExecuteNonQueryAsync();
     }
 
     /// <summary>Finds one existing CariId for the test firm.</summary>

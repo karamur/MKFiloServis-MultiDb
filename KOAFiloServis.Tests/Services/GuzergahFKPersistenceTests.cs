@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
 using KOAFiloServis.Web.Services;
@@ -22,7 +22,9 @@ public class GuzergahFKPersistenceTests
         public bool HasAktifFirma => AktifFirmaId.HasValue;
         public bool TumFirmalar => false;
         public AktifFirmaBilgisi Mevcut { get; private set; }
+#pragma warning disable CS0067 // Event is never used
         public event Action? AktifFirmaDegisti;
+#pragma warning restore CS0067
         public void Set(AktifFirmaBilgisi f) { Mevcut = f; }
         public void SetTumFirmalar(bool t) { }
         public void SetDonem(int y, int m) { }
@@ -104,6 +106,6 @@ public class GuzergahFKPersistenceTests
 
     private async Task Cleanup(IDbContextFactory<ApplicationDbContext> f, string table, int id)
     {
-        try { await using var c = f.CreateDbContext(); await c.Database.ExecuteSqlRawAsync($"UPDATE \"{table}\" SET \"IsDeleted\"=true,\"DeletedAt\"=NOW() WHERE \"Id\"={id}"); } catch { }
+        try { await using var c = f.CreateDbContext(); await c.Database.ExecuteSqlAsync($"UPDATE \"{table}\" SET \"IsDeleted\"=true,\"DeletedAt\"=NOW() WHERE \"Id\"={id}"); } catch { }
     }
 }

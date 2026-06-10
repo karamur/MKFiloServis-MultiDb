@@ -16,13 +16,24 @@ public sealed class DpapiMasterKeyProvider : IMasterKeyProvider
 
     private readonly string _keyFilePath;
     private readonly ILogger<DpapiMasterKeyProvider> _logger;
+    private readonly bool _throwOnMissing;
     private readonly Lock _lock = new();
     private byte[]? _cachedKey;
 
-    public DpapiMasterKeyProvider(string keyFilePath, ILogger<DpapiMasterKeyProvider> logger)
+    /// <summary>
+    /// DpapiMasterKeyProvider oluşturur.
+    /// </summary>
+    /// <param name="keyFilePath">Master key dosyasının tam yolu.</param>
+    /// <param name="logger">Log kaydı için logger.</param>
+    /// <param name="throwOnMissing">
+    /// true (Production): Key yoksa veya çözülemiyorsa yeni key üretmez, kritik exception fırlatır.
+    /// false (Development): Eksik/bozuk key durumunda otomatik yeni key üretir.
+    /// </param>
+    public DpapiMasterKeyProvider(string keyFilePath, ILogger<DpapiMasterKeyProvider> logger, bool throwOnMissing = false)
     {
         _keyFilePath = keyFilePath ?? throw new ArgumentNullException(nameof(keyFilePath));
         _logger = logger;
+        _throwOnMissing = throwOnMissing;
     }
 
     public ReadOnlyMemory<byte> GetMasterKey()
@@ -60,32 +71,82 @@ public sealed class DpapiMasterKeyProvider : IMasterKeyProvider
 
         if (File.Exists(_keyFilePath))
         {
+            var protectedBytes = File.ReadAllBytes(_keyFilePath);
+            byte[]? plain = null;
+            CryptographicException? localMachineEx = null;
+            CryptographicException? currentUserEx = null;
+
             try
             {
-                var protectedBytes = File.ReadAllBytes(_keyFilePath);
-                var plain = System.Security.Cryptography.ProtectedData.Unprotect(
+                plain = System.Security.Cryptography.ProtectedData.Unprotect(
                     protectedBytes, Entropy, DataProtectionScope.LocalMachine);
+            }
+            catch (CryptographicException ex)
+            {
+                localMachineEx = ex;
+            }
 
+            if (plain == null)
+            {
+                try
+                {
+                    plain = System.Security.Cryptography.ProtectedData.Unprotect(
+                        protectedBytes, Entropy, DataProtectionScope.CurrentUser);
+                    _logger.LogWarning("Master key CurrentUser scope ile yuklendi: {Path}", _keyFilePath);
+                }
+                catch (CryptographicException ex)
+                {
+                    currentUserEx = ex;
+                }
+            }
+
+            if (plain != null)
+            {
                 if (plain.Length == KeyLength)
                 {
                     _logger.LogInformation("Master key yuklendi: {Path}", _keyFilePath);
                     return plain;
                 }
 
-                _logger.LogWarning("Master key beklenmeyen uzunlukta ({Len} byte), yenisi uretiliyor.", plain.Length);
+                _logger.LogWarning("Master key beklenmeyen uzunlukta ({Len} byte)", plain.Length);
+                if (_throwOnMissing)
+                    throw new InvalidOperationException(
+                        $"KRİTİK: master.key beklenmeyen uzunlukta ({plain.Length} byte). " +
+                        $"Evraklar açılamaz. Path={_keyFilePath}. " +
+                        $"Orijinal key yedeğini geri yükleyin.");
             }
-            catch (CryptographicException ex)
+            else
             {
-                _logger.LogError(ex,
-                    "Master key cozulemedi (baska bir kullanici/makine ile sifrelenmis olabilir): {Path}. Yenisi uretiliyor.",
+                var errors = new List<Exception>();
+                if (localMachineEx != null) errors.Add(localMachineEx);
+                if (currentUserEx != null) errors.Add(currentUserEx);
+                var combined = new AggregateException(
+                    "DPAPI LocalMachine ve CurrentUser scope denemeleri basarisiz.",
+                    errors);
+
+                if (_throwOnMissing)
+                    throw new InvalidOperationException(
+                        $"KRİTİK: master.key DPAPI ile çözülemedi (LocalMachine/CurrentUser). " +
+                        $"Evraklar açılamaz, yeni key otomatik üretilemez. Path={_keyFilePath}. " +
+                        $"Orijinal key yedeğini geri yükleyin.", combined);
+
+                _logger.LogError(combined,
+                    "Master key cozulemedi (LocalMachine/CurrentUser): {Path}. Yenisi uretiliyor.",
                     _keyFilePath);
                 // Bozuk dosyayi yedekle
                 var backup = _keyFilePath + ".corrupt." + DateTime.UtcNow.ToString("yyyyMMddHHmmss");
                 try { File.Move(_keyFilePath, backup); } catch { /* yoksay */ }
             }
         }
+        else if (_throwOnMissing)
+        {
+            throw new InvalidOperationException(
+                $"KRİTİK: master.key bulunamadı. " +
+                $"Evraklar açılamaz, yeni key otomatik üretilemez. Path={_keyFilePath}. " +
+                $"Orijinal key yedeğini geri yükleyin.");
+        }
 
-        // Yeni anahtar uret
+        // Yeni anahtar uret (sadece Development / key yoksa)
         var fresh = RandomNumberGenerator.GetBytes(KeyLength);
         var protectedFresh = System.Security.Cryptography.ProtectedData.Protect(
             fresh, Entropy, DataProtectionScope.LocalMachine);

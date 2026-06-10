@@ -1,4 +1,4 @@
-namespace KOAFiloServis.Web.Services;
+﻿namespace KOAFiloServis.Web.Services;
 
 /// <summary>
 /// Mevcut evrak kayıtlarını yeni arşiv yapısına taşıyan backfill servisi.
@@ -15,6 +15,7 @@ public interface IEvrakArsivBackfillService
     /// </summary>
     /// <param name="updateDatabase">true ise DB DosyaYolu güncellenir.</param>
     /// <param name="overwriteExisting">true ise hedef dosya varsa üzerine yazar.</param>
+    /// <param name="cancellationToken">İşlemi iptal etmek için kullanılan token.</param>
     Task<EvrakArsivBackfillRaporu> ExecuteAsync(
         bool updateDatabase,
         bool overwriteExisting,

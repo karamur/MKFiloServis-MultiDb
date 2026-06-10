@@ -49,30 +49,83 @@ public sealed class AesGcmFileProtector : IFileProtector
 
     public byte[] Unprotect(ReadOnlySpan<byte> cipher)
     {
-        if (cipher.Length < HeaderSize)
-        {
+        const int MinPayload = 4 + NonceSize + TagSize + 1;
+
+        if (cipher.Length < MinPayload)
             throw new CryptographicException("Sifreli veri cok kucuk (header eksik).");
-        }
 
         if (!cipher[..4].SequenceEqual(Magic))
-        {
             throw new CryptographicException("Gecersiz dosya formati (magic number uyusmuyor).");
-        }
-
-        if (cipher[4] != Version)
-        {
-            throw new CryptographicException($"Desteklenmeyen surum: 0x{cipher[4]:X2}");
-        }
-
-        var nonce = cipher.Slice(5, NonceSize);
-        var tag = cipher.Slice(5 + NonceSize, TagSize);
-        var body = cipher[HeaderSize..];
-        var plain = new byte[body.Length];
 
         var key = _keyProvider.GetMasterKey().Span;
-        using var aes = new AesGcm(key, TagSize);
-        aes.Decrypt(nonce, body, tag, plain);
-        return plain;
+
+        static byte[] DecryptOrThrow(ReadOnlySpan<byte> key, ReadOnlySpan<byte> nonce, ReadOnlySpan<byte> body, ReadOnlySpan<byte> tag)
+        {
+            var plain = new byte[body.Length];
+            using var aes = new AesGcm(key, TagSize);
+            aes.Decrypt(nonce, body, tag, plain);
+            return plain;
+        }
+
+        // 1) Yeni format (v1): KOA1 | VER | NONCE | TAG | CIPHER
+        if (cipher.Length >= HeaderSize && cipher[4] == Version)
+        {
+            try
+            {
+                var nonce = cipher.Slice(5, NonceSize);
+                var tag = cipher.Slice(5 + NonceSize, TagSize);
+                var body = cipher[HeaderSize..];
+                return DecryptOrThrow(key, nonce, body, tag);
+            }
+            catch (CryptographicException)
+            {
+                // Legacy format denemelerine devam
+            }
+        }
+
+        // 2) Legacy KOA1 (versiyonsuz): KOA1 | NONCE | TAG | CIPHER
+        try
+        {
+            var nonce = cipher.Slice(4, NonceSize);
+            var tag = cipher.Slice(4 + NonceSize, TagSize);
+            var body = cipher[(4 + NonceSize + TagSize)..];
+            return DecryptOrThrow(key, nonce, body, tag);
+        }
+        catch (CryptographicException)
+        {
+            // Sonraki legacy düzeni dene
+        }
+
+        // 3) Legacy KOA1 (versiyonsuz): KOA1 | NONCE | CIPHER | TAG
+        try
+        {
+            var nonce = cipher.Slice(4, NonceSize);
+            var tag = cipher[^TagSize..];
+            var body = cipher.Slice(4 + NonceSize, cipher.Length - (4 + NonceSize + TagSize));
+            return DecryptOrThrow(key, nonce, body, tag);
+        }
+        catch (CryptographicException)
+        {
+            // Sonraki legacy düzeni dene
+        }
+
+        // 4) KOA1+VER varyantı: KOA1 | VER | NONCE | CIPHER | TAG
+        if (cipher.Length >= HeaderSize && cipher[4] == Version)
+        {
+            try
+            {
+                var nonce = cipher.Slice(5, NonceSize);
+                var tag = cipher[^TagSize..];
+                var body = cipher.Slice(5 + NonceSize, cipher.Length - (5 + NonceSize + TagSize));
+                return DecryptOrThrow(key, nonce, body, tag);
+            }
+            catch (CryptographicException)
+            {
+                // tum formatlar basarisiz
+            }
+        }
+
+        throw new CryptographicException("Dosya decrypt edilemedi: desteklenen KOA1 formatları veya anahtar eşleşmiyor.");
     }
 
     public void ProtectFile(string plainPath, string cipherPath)
