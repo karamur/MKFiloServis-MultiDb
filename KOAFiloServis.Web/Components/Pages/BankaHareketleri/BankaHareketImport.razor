@@ -38,7 +38,7 @@
                         {
                             @foreach (var h in hesaplar)
                             {
-                                <option value="@h.Id">@h.HesapAdi (@h.HesapKodu)</option>
+                                <option value="@h.Id">@h.HesapAdi (@(h.HesapKodu ?? "—"))</option>
                             }
                         }
                     </select>

@@ -12,7 +12,7 @@ public class BankaHesap : BaseEntity, IFirmaTenant
     public int? FirmaId { get; set; }
     public virtual Firma? Firma { get; set; }
 
-    public string HesapKodu { get; set; } = string.Empty;
+    public string? HesapKodu { get; set; }
     public string HesapAdi { get; set; } = string.Empty;
     public HesapTipi HesapTipi { get; set; }
     public string? BankaAdi { get; set; }

@@ -144,7 +144,7 @@
                 return new MutabakatSatir
                 {
                     HesapId = h.Id,
-                    HesapKodu = h.HesapKodu,
+                    HesapKodu = h.HesapKodu ?? "",
                     HesapAdi = h.HesapAdi,
                     HesapTipi = h.HesapTipi,
                     Acilis = h.AcilisBakiye,

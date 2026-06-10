@@ -232,7 +232,7 @@ public class BankaHesapService : IBankaHesapService
 
     private static void NormalizeBankaHesap(BankaHesap bankaHesap)
     {
-        bankaHesap.HesapKodu = bankaHesap.HesapKodu.Trim().ToUpperInvariant();
+        bankaHesap.HesapKodu = bankaHesap.HesapKodu?.Trim().ToUpperInvariant();
         bankaHesap.HesapAdi = bankaHesap.HesapAdi.Trim();
         bankaHesap.BankaAdi = NormalizeNullableText(bankaHesap.BankaAdi);
         bankaHesap.SubeAdi = NormalizeNullableText(bankaHesap.SubeAdi);

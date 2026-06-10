@@ -46,7 +46,7 @@
                             </span>
                         </div>
                         <div class="card-body">
-                            <p class="mb-1"><small class="text-muted">Hesap Kodu:</small> <strong>@hesap.HesapKodu</strong></p>
+                            <p class="mb-1"><small class="text-muted">Hesap Kodu:</small> <strong>@(hesap.HesapKodu ?? "—")</strong></p>
                             <p class="mb-1"><small class="text-muted">Tip:</small> @GetTipText(hesap.HesapTipi)</p>
                             @if (!string.IsNullOrEmpty(hesap.BankaAdi))
                             {
@@ -702,7 +702,7 @@
         // Excel'i indir
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
-        var fileName = $"HesapEkstresi_{ekstreHesap.HesapKodu}_{ekstreBaslangic:yyyyMMdd}_{ekstreBitis:yyyyMMdd}.xlsx";
+        var fileName = $"HesapEkstresi_{ekstreHesap.HesapKodu ?? "KODSUZ"}_{ekstreBaslangic:yyyyMMdd}_{ekstreBitis:yyyyMMdd}.xlsx";
         var content = stream.ToArray();
         await JS.InvokeVoidAsync("downloadFileFromStream", fileName, Convert.ToBase64String(content));
     }

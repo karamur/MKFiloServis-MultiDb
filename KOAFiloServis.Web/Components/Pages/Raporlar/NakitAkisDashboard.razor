@@ -260,7 +260,7 @@
                 hesapBakiyeleri = hesaplar.Select(h => new HesapBakiyeItem
                 {
                     Id = h.Id,
-                    Ad = string.IsNullOrEmpty(h.HesapAdi) ? h.HesapKodu : h.HesapAdi,
+                    Ad = string.IsNullOrEmpty(h.HesapAdi) ? (h.HesapKodu ?? "") : h.HesapAdi,
                     Tip = h.HesapTipi,
                     Bakiye = bakiyeler.TryGetValue(h.Id, out var b) ? b : 0m
                 }).ToList();
