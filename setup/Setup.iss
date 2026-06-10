@@ -63,7 +63,7 @@ Name: "browser"; Description: "Kurulum sonrasi tarayicida ac"; GroupDescription:
 
 [Files]
 ; Web uygulamasi
-Source: "payload\Web\*"; DestDir: "{app}"; Excludes: "dbsettings.json,appsettings.Production.json,*.db,logs\*,uploads\*"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: web
+Source: "payload\Web\*"; DestDir: "{app}"; Excludes: "dbsettings.json,appsettings.Production.json,*.db,logs\*,uploads\*,keys\*"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: web
 
 ; Ilk kurulumda dbsettings.json ornegi (guncellemede DOKUNULMAZ)
 Source: "payload\Web\dbsettings.json"; DestDir: "{app}"; DestName: "dbsettings.json"; Flags: onlyifdoesntexist; Components: web

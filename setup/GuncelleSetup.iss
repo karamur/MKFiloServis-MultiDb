@@ -58,7 +58,7 @@ Name: "webonly"; Description: "Sadece Web Uygulamasi"
 [Files]
 Source: "payload\Web\*"; \
     DestDir: "{app}"; \
-    Excludes: "dbsettings.json,appsettings.Production.json,appsettings.json,portalsettings.json,backup_settings.json,*.db,*.db-shm,*.db-wal,logs\*,uploads\*,Backups\*"; \
+    Excludes: "dbsettings.json,appsettings.Production.json,appsettings.json,portalsettings.json,backup_settings.json,*.db,*.db-shm,*.db-wal,logs\*,uploads\*,Backups\*,keys\*"; \
     Flags: ignoreversion recursesubdirs createallsubdirs; \
     Components: web
 

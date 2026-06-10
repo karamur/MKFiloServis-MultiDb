@@ -136,7 +136,7 @@ try {
     Ensure-AppPool -Name $SiteName
     Ensure-Site -Name $SiteName -Path $InstallPath -Port $gerçekPort -AppPool $SiteName
 
-    foreach ($sub in @($InstallPath, "$InstallPath\data", "$InstallPath\uploads", "$InstallPath\logs", "$InstallPath\Backups")) {
+    foreach ($sub in @($InstallPath, "$InstallPath\data", "$InstallPath\uploads", "$InstallPath\logs", "$InstallPath\Backups", "$InstallPath\keys")) {
         if (Test-Path $sub) { Grant-Acl -Path $sub -AppPool $SiteName }
     }
 
