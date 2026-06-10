@@ -1,8 +1,9 @@
-@page "/araclar/{AracId:int}/evraklar"
+﻿@page "/araclar/{AracId:int}/evraklar"
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
 @using Microsoft.AspNetCore.Components.Forms
 @inject IAracService AracService
+@inject ISecureFileService SecureFileService
 @inject IToastService ToastService
 @inject IJSRuntime JS
 @inject IAktiviteLogService AktiviteLog
@@ -235,7 +236,7 @@
                                     <div class="list-group-item d-flex justify-content-between align-items-center py-2">
                                         <div>
                                             <i class="bi @GetDosyaIcon(dosya.DosyaTipi) me-2"></i>
-                                            @dosya.DosyaAdi
+                                            @EncExtensionTemizle(dosya.DosyaAdi)
                                             <small class="text-muted ms-2">(@FormatDosyaBoyutu(dosya.DosyaBoyutu))</small>
                                         </div>
                                         <div>
@@ -333,7 +334,7 @@
                                 <div class="list-group-item d-flex justify-content-between align-items-center py-2">
                                     <div>
                                         <i class="bi @GetDosyaIcon(dosya.DosyaTipi) me-2"></i>
-                                        @dosya.DosyaAdi
+                                        @EncExtensionTemizle(dosya.DosyaAdi)
                                         <small class="text-muted ms-2">(@FormatDosyaBoyutu(dosya.DosyaBoyutu))</small>
                                     </div>
                                     <button class="btn btn-sm btn-outline-primary" @onclick="() => DosyaIndir(dosya)">
@@ -521,10 +522,17 @@
     {
         try
         {
-            var bytes = await AracService.GetEvrakDosyaAsync(dosya.Id);
+            var bytes = await SecureFileService.ReadDecryptedAsync(dosya.DosyaYolu);
+            if (bytes == null || bytes.Length == 0)
+            {
+                ToastService.ShowWarning("Dosya bulunamadı veya boş.");
+                return;
+            }
+
+            var downloadFileName = EncExtensionTemizle(dosya.DosyaAdi);
             var mimeType = GetMimeType(dosya.DosyaTipi);
-            await AktiviteLog.LogGoruntulemeAsync("Araçlar", "AracEvrakDosya", dosya.Id, dosya.DosyaAdi, $"Araç evrak indirildi: {dosya.DosyaAdi}");
-            await JS.InvokeVoidAsync("downloadFileFromBase64", dosya.DosyaAdi, Convert.ToBase64String(bytes), mimeType);
+            await AktiviteLog.LogGoruntulemeAsync("Araçlar", "AracEvrakDosya", dosya.Id, downloadFileName, $"Araç evrak indirildi: {downloadFileName}");
+            await JS.InvokeVoidAsync("downloadFileFromBase64", downloadFileName, Convert.ToBase64String(bytes), mimeType);
         }
         catch (Exception ex)
         {
@@ -532,9 +540,9 @@
         }
     }
 
-    private static string GetMimeType(string extension)
+    private static string GetMimeType(string? extension)
     {
-        return extension?.ToLower() switch
+        return extension?.ToLowerInvariant() switch
         {
             "pdf" => "application/pdf",
             "jpg" or "jpeg" => "image/jpeg",
@@ -553,6 +561,13 @@
             "zip" => "application/zip",
             _ => "application/octet-stream"
         };
+    }
+
+    private static string EncExtensionTemizle(string dosyaAdi)
+    {
+        while (dosyaAdi.EndsWith(".enc", StringComparison.OrdinalIgnoreCase))
+            dosyaAdi = dosyaAdi[..^4];
+        return dosyaAdi;
     }
 
     private async Task DosyaSil(AracEvrakDosya dosya)
