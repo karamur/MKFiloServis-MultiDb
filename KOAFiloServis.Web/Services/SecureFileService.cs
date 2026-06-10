@@ -1,4 +1,4 @@
-using KOAFiloServis.Web.Helpers;
+﻿using KOAFiloServis.Web.Helpers;
 using KOAFiloServis.Web.Services.Security;
 using Microsoft.AspNetCore.DataProtection;
 using System.Security.Cryptography;
@@ -10,7 +10,8 @@ public sealed class SecureFileService : ISecureFileService
     private readonly IFileProtector _fileProtector;
     // Eski IDataProtector ile sifrelenmis dosyalar icin fallback (gecis donemi)
     private readonly IDataProtector _legacyProtector;
-    private readonly string _storageRoot;
+    private readonly string _storageRoot;        // C:\KOAFiloServis_yedekleme\uploads
+    private readonly string _baseStorageRoot;    // C:\KOAFiloServis_yedekleme (uploads üst dizini)
     private readonly ILogger<SecureFileService> _logger;
 
     public SecureFileService(
@@ -22,6 +23,7 @@ public sealed class SecureFileService : ISecureFileService
         _fileProtector = fileProtector;
         _legacyProtector = dataProtectionProvider.CreateProtector("KOAFiloServis.SecureFileStorage.v1");
         _storageRoot = AppStoragePaths.GetUploadsRoot(environment.ContentRootPath);
+        _baseStorageRoot = AppStoragePaths.GetStorageRoot(environment.ContentRootPath);
         _logger = logger;
         Directory.CreateDirectory(_storageRoot);
     }
@@ -60,10 +62,12 @@ public sealed class SecureFileService : ISecureFileService
         if (rawContent == null)
             return null;
 
+        var koa1Format = rawContent.Length >= 5 &&
+                         rawContent[0] == (byte)'K' && rawContent[1] == (byte)'O' &&
+                         rawContent[2] == (byte)'A' && rawContent[3] == (byte)'1';
+
         // 1) Yeni format: KOA1 magic ile sifreli (AES-256-GCM)
-        if (rawContent.Length >= 5 &&
-            rawContent[0] == (byte)'K' && rawContent[1] == (byte)'O' &&
-            rawContent[2] == (byte)'A' && rawContent[3] == (byte)'1')
+        if (koa1Format)
         {
             try
             {
@@ -71,10 +75,9 @@ public sealed class SecureFileService : ISecureFileService
                 _logger.LogDebug("Dosya okundu (AES-256-GCM): {RelativePath}", relativePath);
                 return result;
             }
-            catch (CryptographicException)
+            catch (CryptographicException ex)
             {
-                _logger.LogWarning("Dosya cozulemedi (AES-256-GCM): {RelativePath}", relativePath);
-                return null;
+                _logger.LogWarning(ex, "Yeni format decrypt başarısız, legacy format deneniyor. Path={Path}", relativePath);
             }
         }
 
@@ -82,14 +85,13 @@ public sealed class SecureFileService : ISecureFileService
         try
         {
             var result = _legacyProtector.Unprotect(rawContent);
-            _logger.LogDebug("Dosya okundu (Legacy DPAPI): {RelativePath}", relativePath);
+            _logger.LogInformation("Dosya legacy formatla çözüldü. Path={Path}", relativePath);
             return result;
         }
-        catch (CryptographicException)
+        catch (CryptographicException ex)
         {
-            // 3) Ham dosya (test/migration)
-            _logger.LogDebug("Dosya okundu (Ham/Plain): {RelativePath}", relativePath);
-            return rawContent;
+            _logger.LogError(ex, "Dosya decrypt başarısız (AES + Legacy). Path={Path}", relativePath);
+            return null;
         }
     }
 
@@ -119,14 +121,32 @@ public sealed class SecureFileService : ISecureFileService
 
     private string ResolveFullPath(string relativePath)
     {
-        var normalized = NormalizeRelativePath(relativePath)
-            .Replace('/', Path.DirectorySeparatorChar);
+        var normalized = relativePath.Replace('\\', '/').TrimStart('/');
 
-        var fullPath = Path.GetFullPath(Path.Combine(_storageRoot, normalized));
-        var rootPath = Path.GetFullPath(_storageRoot);
+        string rootToUse;
 
-        if (!fullPath.StartsWith(rootPath, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Gecersiz dosya yolu.");
+        // Yeni arşiv path: Arsiv ile başlıyorsa base storage root altında (uploads değil)
+        if (normalized.StartsWith("Arsiv/", StringComparison.OrdinalIgnoreCase))
+        {
+            rootToUse = _baseStorageRoot;
+        }
+        else
+        {
+            // Eski path: uploads/ ön ekini temizle, uploads root altına yerleştir
+            if (normalized.StartsWith("uploads/", StringComparison.OrdinalIgnoreCase))
+                normalized = normalized.Substring("uploads/".Length);
+
+            rootToUse = _storageRoot;
+        }
+
+        var fullPath = Path.GetFullPath(Path.Combine(rootToUse, normalized.Replace('/', Path.DirectorySeparatorChar)));
+        var uploadsRootPath = Path.GetFullPath(_storageRoot);
+        var baseRootPath = Path.GetFullPath(_baseStorageRoot);
+
+        // Her iki root altında olmasına izin ver
+        if (!fullPath.StartsWith(uploadsRootPath, StringComparison.OrdinalIgnoreCase) &&
+            !fullPath.StartsWith(baseRootPath, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Geçersiz dosya yolu: {relativePath}");
 
         return fullPath;
     }
