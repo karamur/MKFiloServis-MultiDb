@@ -1544,14 +1544,15 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.GiderOdenenTutar).HasPrecision(18, 2);
 
             // Enum → string dönüşümleri (DB'de text olarak saklanan enum kolonları)
-            // NOT: HasDefaultValue() EF Core migration oluşturmaz, sadece runtime default değer sağlar.
-            // DB tarafında NOT NULL ise C# tarafında default atanmalıdır.
-            entity.Property(e => e.Yon).HasConversion<string>().HasMaxLength(20).HasDefaultValue(PuantajYon.SabahAksam);
-            entity.Property(e => e.OnayDurum).HasConversion<string>().HasMaxLength(20).HasDefaultValue(PuantajOnayDurum.Taslak);
-            entity.Property(e => e.SoforOdemeTipi).HasConversion<string>().HasMaxLength(20).HasDefaultValue(SoforOdemeTipi.Ozmal);
-            entity.Property(e => e.Kaynak).HasConversion<string>().HasMaxLength(20).HasDefaultValue(PuantajKaynak.Manuel);
-            entity.Property(e => e.GelirOdemeDurumu).HasConversion<string>().HasMaxLength(20).HasDefaultValue(PuantajOdemeDurum.Odenmedi);
-            entity.Property(e => e.GiderOdemeDurumu).HasConversion<string>().HasMaxLength(20).HasDefaultValue(PuantajOdemeDurum.Odenmedi);
+            // NOT: HasDefaultValue KULLANILMAZ — enum default=0 olduğu için EF Core sentinel
+            // uyarısı verir ve her zaman DB default'u kullanır. Değer garantisi servis katmanında
+            // EnsurePuantajDefaults() ile sağlanır.
+            entity.Property(e => e.Yon).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.OnayDurum).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.SoforOdemeTipi).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.Kaynak).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.GelirOdemeDurumu).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.GiderOdemeDurumu).HasConversion<string>().HasMaxLength(20);
 
             // İlişkiler
             entity.HasOne(e => e.KurumCari)
