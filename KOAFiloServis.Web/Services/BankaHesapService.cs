@@ -162,7 +162,7 @@ public class BankaHesapService : IBankaHesapService
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.BankaHesaplari
             .IgnoreQueryFilters()
-            .Where(b => !b.IsDeleted && b.FirmaId == null && b.HesapKodu != null && b.HesapAdi != null)
+            .Where(b => !b.IsDeleted && b.FirmaId == null)
             .AsNoTracking()
             .OrderBy(b => b.HesapAdi)
             .ToListAsync();
@@ -182,7 +182,7 @@ public class BankaHesapService : IBankaHesapService
 
         var hesap = await context.BankaHesaplari
             .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(b => b.Id == hesapId && !b.IsDeleted && b.HesapKodu != null && b.HesapAdi != null);
+            .FirstOrDefaultAsync(b => b.Id == hesapId && !b.IsDeleted);
 
         if (hesap == null)
             throw new InvalidOperationException("Banka/Kasa hesabı bulunamadı.");
@@ -203,7 +203,7 @@ public class BankaHesapService : IBankaHesapService
     private IQueryable<BankaHesap> QueryBankaHesaplari(ApplicationDbContext context, bool asNoTracking = true)
     {
         var query = context.BankaHesaplari
-            .Where(b => !b.IsDeleted && b.HesapKodu != null && b.HesapAdi != null);
+            .Where(b => !b.IsDeleted);
 
         return asNoTracking ? query.AsNoTracking() : query;
     }
