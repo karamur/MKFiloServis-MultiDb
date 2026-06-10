@@ -1114,6 +1114,9 @@
             // Sefer verisini kaydet
             try
             {
+                // Kaydetmeden önce slotları son kez garantile
+                SeferSlotlariGuncelle();
+
                 var firmaId = guzergah.FirmaId > 0 ? guzergah.FirmaId : AktifFirmaProvider.AktifFirmaId;
                 var seferEntities = seferKalemleri.Select(k => new GuzergahSefer
                 {
@@ -1303,6 +1306,8 @@
     {
         // SeferTipi bilgi mesaji (fiyat otomatik guncellenmez, kullanici manuel girer)
         seferTipiDegistiUyarisi = true;
+        // SeferTipi değişince slot dağılımını yeniden hesapla
+        SeferSlotlariGuncelle();
         return Task.CompletedTask;
     }
 
@@ -1311,27 +1316,55 @@
     // ── Sefer yonetimi ────────────────────────────────────────────
     private void SeferleriniVarsayilanOlustur()
     {
-        seferKalemleri = new List<SeferKalem> { YeniSeferKalem(), YeniSeferKalem() };
+        seferKalemleri = new List<SeferKalem>
+        {
+            YeniSeferKalem(0),
+            YeniSeferKalem(1)
+        };
     }
 
-    private SeferKalem YeniSeferKalem() => new()
+    private SeferKalem YeniSeferKalem(int siraIndeks)
     {
-        SeferTipi = guzergah.SeferTipi,
-        Slot = SeferSlot.Sabah,
-        KapasiteAdi = kapasiteSecenekleri.FirstOrDefault(k => k.Value == guzergah.PersonelSayisi).Label,
-        AracId = guzergah.VarsayilanAracId,
-        SoforAd = guzergah.VarsayilanSofor?.TamAd,
-        SoforTelefon = guzergah.VarsayilanSofor?.Telefon
-    };
+        var siraNo = siraIndeks + 1;
+        return new SeferKalem
+        {
+            SeferTipi = guzergah.SeferTipi,
+            Slot = HesaplaSlot(guzergah.SeferTipi, siraNo),
+            KapasiteAdi = kapasiteSecenekleri.FirstOrDefault(k => k.Value == guzergah.PersonelSayisi).Label,
+            AracId = guzergah.VarsayilanAracId,
+            SoforAd = guzergah.VarsayilanSofor?.TamAd,
+            SoforTelefon = guzergah.VarsayilanSofor?.Telefon
+        };
+    }
+
+    private static SeferSlot HesaplaSlot(SeferTipi seferTipi, int siraNo)
+    {
+        return seferTipi switch
+        {
+            SeferTipi.Sabah => SeferSlot.Sabah,
+            SeferTipi.Aksam => SeferSlot.Aksam,
+            SeferTipi.SabahAksam => siraNo % 2 == 1 ? SeferSlot.Sabah : SeferSlot.Aksam,
+            _ => siraNo % 2 == 1 ? SeferSlot.Sabah : SeferSlot.Aksam
+        };
+    }
+
+    private void SeferSlotlariGuncelle()
+    {
+        for (int i = 0; i < seferKalemleri.Count; i++)
+        {
+            seferKalemleri[i].Slot = HesaplaSlot(guzergah.SeferTipi, i + 1);
+        }
+    }
 
     private void SeferSayisiDegistir(int yeniSayi)
     {
         if (yeniSayi < 1) yeniSayi = 1;
         if (yeniSayi > 50) yeniSayi = 50;
         while (seferKalemleri.Count < yeniSayi)
-            seferKalemleri.Add(YeniSeferKalem());
+            seferKalemleri.Add(YeniSeferKalem(seferKalemleri.Count));
         while (seferKalemleri.Count > yeniSayi)
             seferKalemleri.RemoveAt(seferKalemleri.Count - 1);
+        SeferSlotlariGuncelle();
     }
 
     private void TumSeferlereUygula()
@@ -1350,6 +1383,8 @@
                 Firma = ilk.Firma
             };
         }
+        // Slot'ları SeferTipi'ne göre yeniden hesapla — kopyalanmamalı!
+        SeferSlotlariGuncelle();
     }
 
     private async Task SeferAracDegisti(SeferKalem kalem, int? aracId)
