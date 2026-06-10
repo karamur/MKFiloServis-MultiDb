@@ -12,6 +12,13 @@ public interface IBackupService
     Task SaveSettingsAsync(BackupSettings settings);
     Task<bool> ApplyMigrationsAsync();
     Task<bool> ConvertAndRestoreAsync(string backupFileName, string sourceProvider, string targetProvider);
+
+    // ── Dosya / Veri Yedeği ─────────────────────────────────────────
+    Task<BackupResult> CreateFileBackupAsync(CancellationToken cancellationToken = default);
+    Task<BackupResult> CreateFullBackupAsync(CancellationToken cancellationToken = default);
+    Task<List<BackupInfo>> GetFileBackupListAsync();
+    Task<bool> DeleteFileBackupAsync(string backupFileName);
+    Task CleanupOldFileBackupsAsync(int keepCount = 10);
 }
 
 public class BackupResult

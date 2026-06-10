@@ -1719,6 +1719,206 @@ public class BackupService : IBackupService
     private static string EscapeSqliteIdentifier(string identifier)
         => $"\"{identifier.Replace("\"", "\"\"")}\"";
 
+    // ─────────────────────────────────────────────────────────────────
+    // Dosya / Veri Yedeği (ZIP)
+    // ─────────────────────────────────────────────────────────────────
+
+    public async Task<BackupResult> CreateFileBackupAsync(CancellationToken cancellationToken = default)
+    {
+        var result = new BackupResult();
+        try
+        {
+            var storageRoot = AppStoragePaths.GetStorageRoot(_environment.ContentRootPath);
+            var filesBackupDir = Path.Combine(storageRoot, "Backups", "Files");
+            Directory.CreateDirectory(filesBackupDir);
+
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var zipFileName = $"files_{timestamp}.zip";
+            var zipFilePath = Path.Combine(filesBackupDir, zipFileName);
+
+            // Master key kontrolü
+            var masterKeyPath = Path.Combine(storageRoot, "keys", "master.key");
+            if (!File.Exists(masterKeyPath))
+            {
+                result.ErrorMessage = "KRİTİK: master.key bulunamadı. Evrak şifreleri bu dosya olmadan açılamaz. Dosya yedeği alınmadı.";
+                _logger.LogError(result.ErrorMessage);
+                return result;
+            }
+
+            // Yedeklenecek kaynak klasörler
+            var kaynakKlasorler = new Dictionary<string, string>
+            {
+                ["uploads"] = Path.Combine(storageRoot, "uploads"),
+                ["Arsiv"] = Path.Combine(storageRoot, "Arsiv"),
+                ["keys"] = Path.Combine(storageRoot, "keys"),
+                ["logs"] = Path.Combine(storageRoot, "logs"),
+                ["data"] = Path.Combine(storageRoot, "data")
+            };
+
+            using var zipStream = new FileStream(zipFilePath, FileMode.Create, FileAccess.Write);
+            using var archive = new System.IO.Compression.ZipArchive(zipStream, System.IO.Compression.ZipArchiveMode.Create);
+
+            foreach (var (klasorAdi, kaynakYol) in kaynakKlasorler)
+            {
+                if (!Directory.Exists(kaynakYol))
+                {
+                    _logger.LogWarning("Yedeklenecek klasör bulunamadı, atlandı: {Path}", kaynakYol);
+                    continue;
+                }
+
+                await ZipKlasorEkleAsync(archive, kaynakYol, klasorAdi, storageRoot, cancellationToken);
+            }
+
+            // Master key doğrulaması
+            var masterKeyEntry = archive.GetEntry("keys/master.key");
+            if (masterKeyEntry == null)
+            {
+                result.ErrorMessage = "ZIP içinde keys/master.key bulunamadı.";
+                _logger.LogError(result.ErrorMessage);
+                return result;
+            }
+
+            result = CreateSuccessResult(zipFilePath);
+            _logger.LogInformation("Dosya yedeği alındı: {Path} ({Size} bytes)", zipFilePath, result.FileSizeBytes);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Dosya yedeği hatası");
+            result.ErrorMessage = ex.Message;
+        }
+
+        return result;
+    }
+
+    private static async Task ZipKlasorEkleAsync(
+        System.IO.Compression.ZipArchive archive,
+        string kaynakYol,
+        string zipIciKlasorAdi,
+        string storageRoot,
+        CancellationToken ct)
+    {
+        foreach (var dosya in Directory.GetFiles(kaynakYol, "*", SearchOption.AllDirectories))
+        {
+            ct.ThrowIfCancellationRequested();
+
+            // Backups klasörünü dahil etme
+            var normalizedPath = dosya.Replace('\\', '/');
+            if (normalizedPath.Contains("/Backups/"))
+                continue;
+
+            var relativePath = normalizedPath.Replace(kaynakYol.Replace('\\', '/'), "").TrimStart('/');
+            var entryName = $"{zipIciKlasorAdi}/{relativePath}";
+
+            var entry = archive.CreateEntry(entryName, System.IO.Compression.CompressionLevel.Optimal);
+            await using var entryStream = entry.Open();
+            await using var fileStream = File.OpenRead(dosya);
+            await fileStream.CopyToAsync(entryStream, ct);
+        }
+    }
+
+    public async Task<BackupResult> CreateFullBackupAsync(CancellationToken cancellationToken = default)
+    {
+        var dbResult = await CreateBackupAsync();
+        var fileResult = await CreateFileBackupAsync(cancellationToken);
+
+        return new BackupResult
+        {
+            Success = dbResult.Success && fileResult.Success,
+            FileName = dbResult.Success
+                ? $"database={Path.GetFileName(dbResult.FilePath ?? "")} + files={Path.GetFileName(fileResult.FilePath ?? "")}"
+                : "Tam yedek başarısız",
+            FilePath = dbResult.FilePath,
+            FileSizeBytes = dbResult.FileSizeBytes + fileResult.FileSizeBytes,
+            ErrorMessage = !dbResult.Success ? $"DB: {dbResult.ErrorMessage}" :
+                           !fileResult.Success ? $"Dosya: {fileResult.ErrorMessage}" : null,
+            CreatedAt = DateTime.Now
+        };
+    }
+
+    public Task<List<BackupInfo>> GetFileBackupListAsync()
+    {
+        var backups = new List<BackupInfo>();
+        try
+        {
+            var storageRoot = AppStoragePaths.GetStorageRoot(_environment.ContentRootPath);
+            var filesBackupDir = Path.Combine(storageRoot, "Backups", "Files");
+
+            if (Directory.Exists(filesBackupDir))
+            {
+                foreach (var file in Directory.GetFiles(filesBackupDir, "files_*.zip", SearchOption.TopDirectoryOnly)
+                    .OrderByDescending(f => new FileInfo(f).CreationTime))
+                {
+                    var fi = new FileInfo(file);
+                    backups.Add(new BackupInfo
+                    {
+                        FileName = fi.Name,
+                        FilePath = file,
+                        FileSizeBytes = fi.Length,
+                        CreatedAt = fi.CreationTime
+                    });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Dosya yedek listesi alınamadı");
+        }
+
+        return Task.FromResult(backups);
+    }
+
+    public Task<bool> DeleteFileBackupAsync(string backupFileName)
+    {
+        try
+        {
+            var storageRoot = AppStoragePaths.GetStorageRoot(_environment.ContentRootPath);
+            var filesBackupDir = Path.Combine(storageRoot, "Backups", "Files");
+            var filePath = Path.Combine(filesBackupDir, backupFileName);
+
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+                _logger.LogInformation("Dosya yedeği silindi: {FileName}", backupFileName);
+                return Task.FromResult(true);
+            }
+
+            return Task.FromResult(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Dosya yedeği silme hatası");
+            return Task.FromResult(false);
+        }
+    }
+
+    public async Task CleanupOldFileBackupsAsync(int keepCount = 10)
+    {
+        try
+        {
+            var storageRoot = AppStoragePaths.GetStorageRoot(_environment.ContentRootPath);
+            var filesBackupDir = Path.Combine(storageRoot, "Backups", "Files");
+
+            if (!Directory.Exists(filesBackupDir))
+                return;
+
+            var files = Directory.GetFiles(filesBackupDir, "files_*.zip")
+                .OrderByDescending(f => new FileInfo(f).CreationTime)
+                .Skip(keepCount);
+
+            foreach (var file in files)
+            {
+                File.Delete(file);
+                _logger.LogInformation("Eski dosya yedeği silindi: {FileName}", Path.GetFileName(file));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Eski dosya yedeklerini temizleme hatası");
+        }
+
+        await Task.CompletedTask;
+    }
+
     private sealed class PostgreSqlCopyBlock(string tableName, List<string> columns)
     {
         public string TableName { get; } = tableName;

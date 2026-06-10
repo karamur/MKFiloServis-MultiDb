@@ -21,17 +21,41 @@
             <button class="btn btn-outline-warning" @onclick="() => showYukleModal = true" disabled="@IsAnyOperationInProgress">
                 <i class="bi bi-upload me-1"></i>Yedek Yukle
             </button>
-            <button class="btn btn-success" @onclick="YedekAl" disabled="@IsAnyOperationInProgress">
-                @if (isBackingUp)
-                {
-                    <span class="spinner-border spinner-border-sm me-1"></span>
-                }
-                else
-                {
-                    <i class="bi bi-download me-1"></i>
-                }
-                Yedek Al
-            </button>
+            <div class="btn-group">
+                <button class="btn btn-success" @onclick="YedekAl" disabled="@IsAnyOperationInProgress">
+                    @if (isBackingUp)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-database-down me-1"></i>
+                    }
+                    DB Yedek
+                </button>
+                <button class="btn btn-outline-success" @onclick="DosyaYedekAl" disabled="@IsAnyOperationInProgress">
+                    @if (isFileBackup)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-file-zip me-1"></i>
+                    }
+                    Dosya Yedek
+                </button>
+                <button class="btn btn-outline-info" @onclick="TamYedekAl" disabled="@IsAnyOperationInProgress">
+                    @if (isFullBackup)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-shield-check me-1"></i>
+                    }
+                    Tam Yedek
+                </button>
+            </div>
         </div>
     </div>
 
@@ -453,6 +477,8 @@
     private string dbProvider = "SQLite";
     private bool isLoading = true;
     private bool isBackingUp = false;
+    private bool isFileBackup = false;
+    private bool isFullBackup = false;
     private bool isRestoring = false;
     private bool isUploading = false;
     private bool isMigrating = false;
@@ -484,7 +510,9 @@
 
         try
         {
-            backups = await BackupService.GetBackupListAsync();
+            var dbBackups = await BackupService.GetBackupListAsync();
+            var fileBackups = await BackupService.GetFileBackupListAsync();
+            backups = dbBackups.Concat(fileBackups).OrderByDescending(b => b.CreatedAt).ToList();
         }
         finally
         {
@@ -521,6 +549,48 @@
             isBackingUp = false;
             StateHasChanged();
         }
+    }
+
+    private async Task DosyaYedekAl()
+    {
+        isFileBackup = true;
+        StateHasChanged();
+        try
+        {
+            var result = await BackupService.CreateFileBackupAsync();
+            if (result.Success)
+            {
+                ToastService.ShowSuccess($"Dosya yedeği alındı: {result.FileName} ({FormatSize(result.FileSizeBytes)})");
+                await YedekleriYenile();
+            }
+            else
+            {
+                ToastService.ShowError($"Dosya yedekleme hatası: {result.ErrorMessage}");
+            }
+        }
+        catch (Exception ex) { ToastService.ShowError($"Hata: {ex.Message}"); }
+        finally { isFileBackup = false; StateHasChanged(); }
+    }
+
+    private async Task TamYedekAl()
+    {
+        isFullBackup = true;
+        StateHasChanged();
+        try
+        {
+            var result = await BackupService.CreateFullBackupAsync();
+            if (result.Success)
+            {
+                ToastService.ShowSuccess($"Tam yedek alındı ({FormatSize(result.FileSizeBytes)})");
+                await YedekleriYenile();
+            }
+            else
+            {
+                ToastService.ShowError($"Tam yedek hatası: {result.ErrorMessage}");
+            }
+        }
+        catch (Exception ex) { ToastService.ShowError($"Hata: {ex.Message}"); }
+        finally { isFullBackup = false; StateHasChanged(); }
     }
 
     private async Task AyarlariKaydet()
@@ -573,7 +643,10 @@
 
         try
         {
-            var sonuc = await BackupService.DeleteBackupAsync(silinecekYedek.FileName);
+            var isFileBackup = silinecekYedek.FileName.EndsWith(".zip");
+            var sonuc = isFileBackup
+                ? await BackupService.DeleteFileBackupAsync(silinecekYedek.FileName)
+                : await BackupService.DeleteBackupAsync(silinecekYedek.FileName);
             if (sonuc)
             {
                 ToastService.ShowSuccess("Yedek silindi.");
@@ -635,6 +708,7 @@
 
     private string GetFileIcon(string fileName)
     {
+        if (fileName.EndsWith(".zip")) return "bi-file-zip text-warning";
         if (fileName.EndsWith(".db")) return "bi-database-fill text-success";
         if (fileName.EndsWith(".sql")) return "bi-filetype-sql text-primary";
         if (fileName.EndsWith(".bak")) return "bi-file-earmark-zip text-danger";
@@ -645,6 +719,7 @@
 
     private string GetTypeBadge(string fileName)
     {
+        if (fileName.EndsWith(".zip")) return "bg-warning text-dark";
         if (fileName.EndsWith(".db")) return "bg-success";
         if (fileName.EndsWith(".sql")) return "bg-primary";
         if (fileName.EndsWith(".bak")) return "bg-danger";
@@ -655,6 +730,7 @@
 
     private string GetFileType(string fileName)
     {
+        if (fileName.EndsWith(".zip")) return "Dosya";
         if (fileName.EndsWith(".db")) return "SQLite";
         if (fileName.EndsWith(".sql") && fileName.Contains("PostgreSQL")) return "PostgreSQL";
         if (fileName.EndsWith(".sql") && fileName.Contains("MySQL")) return "MySQL";
@@ -806,7 +882,7 @@
         }
     }
 
-    private bool IsAnyOperationInProgress => isBackingUp || isRestoring || isUploading || isMigrating || isDonusuyor;
+    private bool IsAnyOperationInProgress => isBackingUp || isFileBackup || isFullBackup || isRestoring || isUploading || isMigrating || isDonusuyor;
 
     private static bool CanRestore(string fileName)
     {
