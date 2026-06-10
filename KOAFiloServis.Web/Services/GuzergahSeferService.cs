@@ -17,6 +17,7 @@ public class GuzergahSeferService : IGuzergahSeferService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.GuzergahSeferleri
+            .IgnoreQueryFilters()
             .AsNoTracking()
             .Where(s => s.GuzergahId == guzergahId)
             .OrderBy(s => s.Sira)
@@ -37,6 +38,7 @@ public class GuzergahSeferService : IGuzergahSeferService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var mevcut = await context.GuzergahSeferleri
+            .IgnoreQueryFilters()
             .Where(s => s.GuzergahId == guzergahId)
             .ToListAsync();
         if (mevcut.Count > 0)
