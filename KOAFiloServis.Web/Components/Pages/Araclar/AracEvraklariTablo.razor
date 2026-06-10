@@ -662,7 +662,7 @@
             var uzanti = GercekUzantiAl(dosya.DosyaYolu);
             var contentType = MimeTipiAl(uzanti);
             var ad = !string.IsNullOrWhiteSpace(dosya.DosyaAdi)
-                ? dosya.DosyaAdi!
+                ? EncExtensionTemizle(dosya.DosyaAdi!)
                 : $"{(string.IsNullOrWhiteSpace(dosya.EvrakAdi) ? dosya.EvrakKategorisi : dosya.EvrakAdi)}{uzanti}";
             await JS.InvokeVoidAsync("downloadFile", ad, Convert.ToBase64String(bytes), contentType);
         }
@@ -804,6 +804,13 @@
         if (ad.EndsWith(".enc", StringComparison.OrdinalIgnoreCase))
             ad = ad.Substring(0, ad.Length - 4);
         return Path.GetExtension(ad).ToLowerInvariant();
+    }
+
+    private static string EncExtensionTemizle(string dosyaAdi)
+    {
+        while (dosyaAdi.EndsWith(".enc", StringComparison.OrdinalIgnoreCase))
+            dosyaAdi = dosyaAdi[..^4];
+        return dosyaAdi;
     }
 
     private static string MimeTipiAl(string uzanti) => uzanti.ToLowerInvariant() switch

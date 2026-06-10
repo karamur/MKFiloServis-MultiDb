@@ -1704,12 +1704,12 @@
                 return;
             }
 
-            var fileName = Path.GetFileName(evrak.DosyaYolu);
-            var extension = Path.GetExtension(fileName).TrimStart('.').ToLower();
+            var downloadFileName = EncExtensionTemizle(Path.GetFileName(evrak.DosyaYolu));
+            var extension = Path.GetExtension(downloadFileName).TrimStart('.').ToLower();
             var mimeType = GetMimeType(extension);
 
-            await AktiviteLog.LogGoruntulemeAsync("Şoforler", "OzlukEvrak", 0, fileName, $"Özlük evrak indirildi: {fileName} (Şoför #{Id})");
-            await JS.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(content), mimeType);
+            await AktiviteLog.LogGoruntulemeAsync("Şoforler", "OzlukEvrak", 0, downloadFileName, $"Özlük evrak indirildi: {downloadFileName} (Şoför #{Id})");
+            await JS.InvokeVoidAsync("downloadFile", downloadFileName, Convert.ToBase64String(content), mimeType);
         }
         catch (Exception ex)
         {
@@ -1753,6 +1753,13 @@
         "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         _ => "application/octet-stream"
     };
+
+    private static string EncExtensionTemizle(string dosyaAdi)
+    {
+        while (dosyaAdi.EndsWith(".enc", StringComparison.OrdinalIgnoreCase))
+            dosyaAdi = dosyaAdi[..^4];
+        return dosyaAdi;
+    }
 
     #endregion
 }
