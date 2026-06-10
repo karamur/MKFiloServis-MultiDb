@@ -1543,6 +1543,14 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.GelirOdenenTutar).HasPrecision(18, 2);
             entity.Property(e => e.GiderOdenenTutar).HasPrecision(18, 2);
 
+            // Enum → string dönüşümleri (DB'de text olarak saklanan enum kolonları)
+            entity.Property(e => e.Yon).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.OnayDurum).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.SoforOdemeTipi).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.Kaynak).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.GelirOdemeDurumu).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.GiderOdemeDurumu).HasConversion<string>().HasMaxLength(20);
+
             // İlişkiler
             entity.HasOne(e => e.KurumCari)
                 .WithMany()
