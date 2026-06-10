@@ -10,6 +10,7 @@
 @inject IMuhasebeService MuhasebeService
 @inject IPersonelOzlukService OzlukService
 @inject ISecureFileService SecureFileService
+@inject IEvrakArsivService EvrakArsivService
 @inject IToastService ToastService
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
@@ -1656,10 +1657,23 @@
             using var memoryStream = new MemoryStream();
             await stream.CopyToAsync(memoryStream);
 
+            var icerik = memoryStream.ToArray();
             var relativePath = await SecureFileService.SaveEncryptedAsync(
                 $"ozluk/{Id}",
                 secilenEvrakDosya.Name,
-                memoryStream.ToArray());
+                icerik);
+
+            // Arşiv kopyaları (şifreli + şifresiz)
+            var adSoyad = sofor?.TamAd ?? Id?.ToString() ?? "PERSONEL";
+            var uzanti = Path.GetExtension(secilenEvrakDosya.Name);
+            try
+            {
+                await EvrakArsivService.ArsivlePersonelEvrakAsync(adSoyad, seciliEvrakDetay.EvrakAdi, icerik, uzanti);
+            }
+            catch
+            {
+                // Arşiv hatası ana upload'ı engellememeli (EvrakArsivService içinde loglanır)
+            }
 
             await OzlukService.EvrakDosyaYukle(Id!.Value, seciliEvrakDetay.EvrakTanimId, relativePath);
 

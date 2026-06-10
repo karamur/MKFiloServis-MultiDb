@@ -5,6 +5,7 @@
 @inject IPersonelOzlukService OzlukService
 @inject ISoforService SoforService
 @inject ISecureFileService SecureFileService
+@inject IEvrakArsivService EvrakArsivService
 @inject IToastService ToastService
 @inject IJSRuntime JS
 @inject ILogger<OzlukEvrakChecklist> Logger
@@ -708,10 +709,23 @@
                 await SecureFileService.DeleteAsync(evrak.DosyaYolu);
             }
 
+            var icerik = memoryStream.ToArray();
             var relativePath = await SecureFileService.SaveEncryptedAsync(
                 $"personel-ozluk/{soforId}",
                 file.Name,
-                memoryStream.ToArray());
+                icerik);
+
+            // Arşiv kopyaları (şifreli + şifresiz)
+            var adSoyad = seciliDurum?.PersonelAdi ?? soforId.ToString();
+            var uzanti = Path.GetExtension(file.Name);
+            try
+            {
+                await EvrakArsivService.ArsivlePersonelEvrakAsync(adSoyad, evrak.EvrakAdi, icerik, uzanti);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Personel evrak arşivleme başarısız oldu. PersonelId={PersonelId}, Evrak={Evrak}", soforId, evrak.EvrakAdi);
+            }
 
             await OzlukService.EvrakDosyaYukle(soforId, evrak.EvrakTanimId, relativePath);
             await PersonelBelgeTarihiniGuncelleAsync(soforId, evrak);

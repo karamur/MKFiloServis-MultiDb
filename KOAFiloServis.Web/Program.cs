@@ -269,15 +269,18 @@ builder.Services.AddScoped<IOllamaAIChatService, OllamaAIChatService>();
 builder.Services.AddHttpClient<IDeepSeekService, DeepSeekService>();
 
 // Guvenlik: Master key (DPAPI) + AES-GCM dosya koruyucu
+// Production'da key eksik/bozuk ise sessizce yeniden uretmez, kritik hata verir.
 builder.Services.AddSingleton<IMasterKeyProvider>(sp =>
 {
     var env = sp.GetRequiredService<IWebHostEnvironment>();
     var storageRoot = KOAFiloServis.Web.Helpers.AppStoragePaths.GetDataProtectionKeysRoot(env.ContentRootPath);
     var keyPath = Path.Combine(storageRoot, "master.key");
     var logger = sp.GetRequiredService<ILogger<DpapiMasterKeyProvider>>();
-    return new DpapiMasterKeyProvider(keyPath, logger);
+    var isProduction = env.IsProduction();
+    return new DpapiMasterKeyProvider(keyPath, logger, throwOnMissing: isProduction);
 });
 builder.Services.AddSingleton<IFileProtector, AesGcmFileProtector>();
+builder.Services.AddScoped<IEvrakArsivService, EvrakArsivService>();
 builder.Services.AddScoped<ITekrarlayanOdemeService, TekrarlayanOdemeService>(); // Kredi/Taksit Ynetimi
 builder.Services.AddScoped<IBackupService, BackupService>();
 builder.Services.AddScoped<IAktiviteLogService, AktiviteLogService>();

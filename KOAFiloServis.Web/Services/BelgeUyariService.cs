@@ -11,15 +11,18 @@ public class BelgeUyariService : IBelgeUyariService
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly IPersonelOzlukService _ozlukService;
     private readonly ISecureFileService _secureFileService;
+    private readonly IEvrakArsivService _evrakArsivService;
 
     public BelgeUyariService(
         IDbContextFactory<ApplicationDbContext> contextFactory,
         IPersonelOzlukService ozlukService,
-        ISecureFileService secureFileService)
+        ISecureFileService secureFileService,
+        IEvrakArsivService evrakArsivService)
     {
         _contextFactory = contextFactory;
         _ozlukService = ozlukService;
         _secureFileService = secureFileService;
+        _evrakArsivService = evrakArsivService;
     }
 
     public async Task<BelgeUyariOzet> GetBelgeUyarilarAsync(int yaklasanGunSayisi = 30)
@@ -698,6 +701,19 @@ public class BelgeUyariService : IBelgeUyariService
             $"arac-evrak/{arac.Id}",
             dosyaAdi,
             icerik);
+
+        // Arşiv kopyaları (şifreli + şifresiz)
+        var uzanti = Path.GetExtension(dosyaAdi);
+        var plaka = arac.AktifPlaka ?? arac.SaseNo ?? aracId.ToString();
+        var sasiNo = arac.SaseNo ?? aracId.ToString();
+        try
+        {
+            await _evrakArsivService.ArsivleAracEvrakAsync(plaka, sasiNo, belgeAlani, icerik, uzanti);
+        }
+        catch
+        {
+            // Arşiv hatası ana upload'ı engellememeli (EvrakArsivService içinde loglanır)
+        }
 
         var evrakDosya = new AracEvrakDosya
         {
