@@ -921,22 +921,40 @@
     // ── Toplu kaydet ──────────────────────────────────────────────────────────
     async Task TopluKaydet()
     {
-        // Önce çakışma kontrolü
-        var degisenListe = degisikSatirlar.ToList();
-        var catisma = await KurumPuantajService.CheckConflictsAsync(degisenListe);
-        var blockings = catisma.Conflicts.Where(c => c.Severity == ConflictSeverity.Blocking).ToList();
-        if (blockings.Any())
+        if (!degisikSatirlar.Any())
         {
-            cakismaSonucu = catisma;
-            CakismaDetayGoster = true;
-            ToastService.ShowError($"{blockings.Count} engelleyici çakışma var, kaydetme iptal edildi.");
+            ToastService.ShowInfo("Kaydedilecek değişiklik yok.");
             return;
         }
 
         kaydediliyor = true;
+        StateHasChanged();
         try
         {
-            await KurumPuantajService.TopluSavePuantajAsync(degisikSatirlar);
+            // Hızlı validasyon: eksik zorunlu alan kontrolü
+            var degisenListe = degisikSatirlar.ToList();
+            var hatali = degisenListe.FirstOrDefault(k =>
+                k.GuzergahId == null || k.GuzergahId <= 0 ||
+                k.AracId == null || k.AracId <= 0);
+            if (hatali != null)
+            {
+                var info = hatali.GuzergahId == null ? "GüzergahId" : "AraçId";
+                ToastService.ShowError($"Kayıt yapılamadı: {hatali.Plaka} için {info} boş.");
+                return;
+            }
+
+            // Çakışma kontrolü
+            var catisma = await KurumPuantajService.CheckConflictsAsync(degisenListe);
+            var blockings = catisma.Conflicts.Where(c => c.Severity == ConflictSeverity.Blocking).ToList();
+            if (blockings.Any())
+            {
+                cakismaSonucu = catisma;
+                CakismaDetayGoster = true;
+                ToastService.ShowError($"{blockings.Count} engelleyici çakışma var, kaydetme iptal edildi.");
+                return;
+            }
+
+            await KurumPuantajService.TopluSavePuantajAsync(degisenListe);
             degisikSatirlar.Clear();
             cakismaSonucu = null;
             await LoadData();
@@ -947,7 +965,11 @@
             var msg = ex.InnerException?.Message ?? ex.Message;
             ToastService.ShowError($"Kayıt hatası: {msg}");
         }
-        finally { kaydediliyor = false; }
+        finally
+        {
+            kaydediliyor = false;
+            StateHasChanged();
+        }
     }
 
     async Task CakismaKontrolEt()
