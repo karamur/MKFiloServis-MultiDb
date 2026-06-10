@@ -281,6 +281,7 @@ builder.Services.AddSingleton<IMasterKeyProvider>(sp =>
 });
 builder.Services.AddSingleton<IFileProtector, AesGcmFileProtector>();
 builder.Services.AddScoped<IEvrakArsivService, EvrakArsivService>();
+builder.Services.AddScoped<IEvrakArsivBackfillService, EvrakArsivBackfillService>();
 builder.Services.AddScoped<ITekrarlayanOdemeService, TekrarlayanOdemeService>(); // Kredi/Taksit Ynetimi
 builder.Services.AddScoped<IBackupService, BackupService>();
 builder.Services.AddScoped<IAktiviteLogService, AktiviteLogService>();
@@ -1221,6 +1222,28 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 app.MapControllers(); // API Controller'larini haritalandir
 app.MapHub<AracTakipHub>("/hubs/aractakip"); // SignalR Araç Takip Hub'ı
+
+// Admin: Evrak arşiv backfill endpoint'i (sadece Development'da aktif)
+if (app.Environment.IsDevelopment())
+{
+    app.MapGet("/admin/evrak-arsiv-backfill/dry-run", async (
+        IEvrakArsivBackfillService backfillService,
+        CancellationToken ct) =>
+    {
+        var rapor = await backfillService.DryRunAsync(ct);
+        return Results.Ok(rapor);
+    }).WithTags("Admin");
+
+    app.MapPost("/admin/evrak-arsiv-backfill/execute", async (
+        IEvrakArsivBackfillService backfillService,
+        bool updateDatabase,
+        bool overwriteExisting,
+        CancellationToken ct) =>
+    {
+        var rapor = await backfillService.ExecuteAsync(updateDatabase, overwriteExisting, ct);
+        return Results.Ok(rapor);
+    }).WithTags("Admin");
+}
 
 app.Run();
 
