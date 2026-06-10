@@ -166,6 +166,36 @@
         }
     }
 
+    // PDF/resim için genel yazdırma (base64 + content type)
+    function printBase64File(base64Data, contentType) {
+        try {
+            const byteCharacters = atob(base64Data);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: contentType });
+            const blobUrl = URL.createObjectURL(blob);
+            const printWindow = window.open(blobUrl, '_blank');
+            if (!printWindow) {
+                alert('Yazdırma penceresi açılamadı. Tarayıcı pop-up engelleyicisini kontrol edin.');
+                URL.revokeObjectURL(blobUrl);
+                return;
+            }
+            printWindow.onload = function () {
+                printWindow.focus();
+                printWindow.print();
+            };
+            setTimeout(function () {
+                URL.revokeObjectURL(blobUrl);
+            }, 60000);
+        } catch (e) {
+            console.error('printBase64File error:', e);
+            alert('Dosya yazdırılamadı.');
+        }
+    }
+
     // Birden fazla dosyanın içeriğini tek bir yazdırma penceresinde göster
     // items: [{ name, base64, mime }]
     function printDocumentFiles(items) {
@@ -260,6 +290,7 @@
     window.setLocalStorageItem = setLocalStorageItem;
     window.getLocalStorageItem = getLocalStorageItem;
     window.printBase64Pdf = printBase64Pdf;
+    window.printBase64File = printBase64File;
     window.printDocumentFiles = printDocumentFiles;
     window.scrollToElementById = scrollToElementById;
 })();

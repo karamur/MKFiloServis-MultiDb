@@ -358,9 +358,19 @@
                                                          @if (!string.IsNullOrWhiteSpace(evrak.DosyaYolu))
                                                          {
                                                              <button type="button" class="btn btn-sm btn-outline-primary"
+                                                                     title="Önizle"
+                                                                     @onclick="() => EvrakOnizle(evrak)">
+                                                                 <i class="bi bi-eye"></i>
+                                                             </button>
+                                                             <button type="button" class="btn btn-sm btn-outline-secondary"
                                                                      title="Dosyayı indir"
                                                                      @onclick="() => EvrakDosyasiIndir(evrak)">
                                                                  <i class="bi bi-download"></i>
+                                                             </button>
+                                                             <button type="button" class="btn btn-sm btn-outline-dark"
+                                                                     title="Yazdır"
+                                                                     @onclick="() => EvrakYazdir(evrak)">
+                                                                 <i class="bi bi-printer"></i>
                                                              </button>
                                                          }
                                                          <InputFile class="form-control form-control-sm"
@@ -381,6 +391,55 @@
                         <i class="bi bi-file-pdf me-1"></i>PDF İndir
                     </button>
                     <button type="button" class="btn btn-secondary" @onclick="DetayKapat">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Önizleme Modal -->
+@if (onizlemeModalAcik)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,.5);">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@onizlemeBaslik</h5>
+                    <button type="button" class="btn-close" @onclick="OnizlemeKapat"></button>
+                </div>
+
+                <div class="modal-body" style="min-height: 75vh;">
+                    @if (!onizlemeDestekleniyor)
+                    {
+                        <div class="alert alert-warning">
+                            Bu dosya türü için önizleme desteklenmiyor. Dosyayı indirerek açabilirsiniz.
+                        </div>
+                    }
+                    else if (onizlemeContentType == "application/pdf")
+                    {
+                        <iframe src="@onizlemeDataUrl"
+                                style="width:100%; height:75vh; border:0;">
+                        </iframe>
+                    }
+                    else if (onizlemeContentType?.StartsWith("image/") == true)
+                    {
+                        <img src="@onizlemeDataUrl"
+                             style="max-width:100%; height:auto;"
+                             alt="@onizlemeBaslik" />
+                    }
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="OnizlemeKapat">Kapat</button>
+                    <button class="btn btn-outline-primary"
+                            @onclick="OnizlenenDosyayiIndir">
+                        <i class="bi bi-download me-1"></i>İndir
+                    </button>
+                    <button class="btn btn-primary"
+                            @onclick="OnizlenenDosyayiYazdir"
+                            disabled="@(!onizlemeDestekleniyor)">
+                        <i class="bi bi-printer me-1"></i>Yazdır
+                    </button>
                 </div>
             </div>
         </div>
@@ -611,6 +670,15 @@
     private bool showTanimModal;
     private bool showTanimDuzenleModal;
     private bool showEksikListeModal;
+
+    // Önizleme state
+    private bool onizlemeModalAcik;
+    private string? onizlemeBaslik;
+    private string? onizlemeContentType;
+    private string? onizlemeBase64;
+    private string? onizlemeDataUrl;
+    private string? onizlemeDosyaAdi;
+    private bool onizlemeDestekleniyor;
 
     private string filtreGorev = "";
     private string filtreDurum = "";
@@ -1124,6 +1192,114 @@
         };
     }
 
+    // ── Önizleme / Yazdırma ────────────────────────────────────────────────
+
+    private static string EncExtensionTemizle(string? fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+            return "evrak.pdf";
+
+        while (fileName.EndsWith(".enc", StringComparison.OrdinalIgnoreCase))
+            fileName = fileName[..^4];
+
+        return fileName;
+    }
+
+    private async Task EvrakOnizle(OzlukEvrakDetay evrak)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(evrak.DosyaYolu))
+            {
+                ToastService.ShowWarning("Evrak dosya yolu bulunamadı.");
+                return;
+            }
+
+            var bytes = await SecureFileService.ReadDecryptedAsync(evrak.DosyaYolu);
+            if (bytes == null || bytes.Length == 0)
+            {
+                ToastService.ShowWarning("Dosya bulunamadı veya boş.");
+                return;
+            }
+
+            var dosyaAdi = EncExtensionTemizle(
+                BuildEvrakDosyaAdi(evrak.EvrakAdi, evrak.DosyaYolu));
+
+            var contentType = GetMimeType(dosyaAdi);
+
+            onizlemeBaslik = dosyaAdi;
+            onizlemeDosyaAdi = dosyaAdi;
+            onizlemeContentType = contentType;
+            onizlemeBase64 = Convert.ToBase64String(bytes);
+            onizlemeDataUrl = $"data:{contentType};base64,{onizlemeBase64}";
+
+            onizlemeDestekleniyor =
+                contentType == "application/pdf" ||
+                contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+
+            onizlemeModalAcik = true;
+
+            Logger.LogInformation(
+                "Personel evrak önizleniyor. EvrakAdi={EvrakAdi}, DosyaAdi={DosyaAdi}, ContentType={ContentType}",
+                evrak.EvrakAdi, dosyaAdi, contentType);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Personel evrak önizleme hatası. Evrak={EvrakAdi}, DosyaYolu={DosyaYolu}",
+                evrak.EvrakAdi, evrak.DosyaYolu);
+            ToastService.ShowError("Evrak önizlenemedi. Dosya şifresi çözülemedi veya dosya bulunamadı.");
+        }
+    }
+
+    private async Task EvrakYazdir(OzlukEvrakDetay evrak)
+    {
+        // Önce önizle (state'i doldur), sonra modalda kullanıcı yazdırsın
+        await EvrakOnizle(evrak);
+    }
+
+    private async Task OnizlenenDosyayiIndir()
+    {
+        if (string.IsNullOrWhiteSpace(onizlemeBase64) ||
+            string.IsNullOrWhiteSpace(onizlemeDosyaAdi) ||
+            string.IsNullOrWhiteSpace(onizlemeContentType))
+            return;
+
+        await JS.InvokeVoidAsync(
+            "downloadFileFromBase64",
+            onizlemeDosyaAdi,
+            onizlemeBase64,
+            onizlemeContentType);
+    }
+
+    private async Task OnizlenenDosyayiYazdir()
+    {
+        if (string.IsNullOrWhiteSpace(onizlemeBase64) ||
+            string.IsNullOrWhiteSpace(onizlemeContentType))
+            return;
+
+        if (!onizlemeDestekleniyor)
+        {
+            ToastService.ShowWarning("Bu dosya türü yazdırma için desteklenmiyor.");
+            return;
+        }
+
+        await JS.InvokeVoidAsync(
+            "printBase64File",
+            onizlemeBase64,
+            onizlemeContentType);
+    }
+
+    private void OnizlemeKapat()
+    {
+        onizlemeModalAcik = false;
+        onizlemeBaslik = null;
+        onizlemeContentType = null;
+        onizlemeBase64 = null;
+        onizlemeDataUrl = null;
+        onizlemeDosyaAdi = null;
+        onizlemeDestekleniyor = false;
+    }
+
     private static string GetMimeType(string fileName)
     {
         return Path.GetExtension(fileName).ToLowerInvariant() switch
@@ -1131,6 +1307,8 @@
             ".pdf" => "application/pdf",
             ".jpg" or ".jpeg" => "image/jpeg",
             ".png" => "image/png",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
             ".doc" => "application/msword",
             ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             ".xls" => "application/vnd.ms-excel",
