@@ -219,6 +219,9 @@ public sealed class KurumPuantajService : IKurumPuantajService
         // FK hatasi olmasin diye 0 degerleri null yap
         if (kayit.IsverenFirmaId <= 0) kayit.IsverenFirmaId = null;
 
+        // DB NOT NULL enum/text kolonları için varsayılan değerleri garantile
+        EnsurePuantajDefaults(kayit);
+
         await using var db = await _dbFactory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync();
 
@@ -307,6 +310,10 @@ public sealed class KurumPuantajService : IKurumPuantajService
 
         var yil = kayitList[0].Yil;
         var ay = kayitList[0].Ay;
+
+        // DB NOT NULL kolonları için default değerleri garantile
+        foreach (var kayit in kayitList)
+            EnsurePuantajDefaults(kayit);
 
         await using var db = await _dbFactory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync();
@@ -1081,6 +1088,25 @@ public sealed class KurumPuantajService : IKurumPuantajService
     /// Slot/Yon bazlı gerçek sefer sayısı: Sabah=1, Akşam=1, SabahAksam=2.
     /// LINQ sorgusunda inline ternary olarak uygulanır; bu metod referans/sunucu-tarafi kullanim icindir.
     /// </summary>
+    /// <summary>
+    /// DB NOT NULL enum/text kolonları için varsayılan değerleri garantiler.
+    /// </summary>
+    private static void EnsurePuantajDefaults(PuantajKayit kayit)
+    {
+        if (kayit.OnayDurum == default)
+            kayit.OnayDurum = PuantajOnayDurum.Taslak;
+        if (kayit.GelirOdemeDurumu == default)
+            kayit.GelirOdemeDurumu = PuantajOdemeDurum.Odenmedi;
+        if (kayit.GiderOdemeDurumu == default)
+            kayit.GiderOdemeDurumu = PuantajOdemeDurum.Odenmedi;
+        if (kayit.SoforOdemeTipi == default)
+            kayit.SoforOdemeTipi = SoforOdemeTipi.Ozmal;
+        if (kayit.Kaynak == default)
+            kayit.Kaynak = PuantajKaynak.Manuel;
+        if (kayit.Yon == default)
+            kayit.Yon = PuantajYon.SabahAksam;
+    }
+
     private static int GercekSefer(OperasyonKaydi o) => o.Yon switch
     {
         PuantajYon.SabahAksam => 2,
