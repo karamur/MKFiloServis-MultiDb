@@ -1275,6 +1275,7 @@
         {
             await using var ctx = await DbContextFactory.CreateDbContextAsync();
             ciktiFirmaListesi = await ctx.Firmalar
+                .IgnoreQueryFilters()
                 .Where(f => f.Aktif && !f.IsDeleted)
                 .OrderBy(f => f.FirmaAdi)
                 .AsNoTracking()
