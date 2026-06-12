@@ -1,14 +1,19 @@
 ﻿@page "/personel/maas"
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
-@using KOAFiloServis.Web.Services.Interfaces@using ClosedXML.Excel
+@using KOAFiloServis.Web.Services.Interfaces
+@using KOAFiloServis.Web.Data
+@using Microsoft.EntityFrameworkCore
+@using ClosedXML.Excel
 @inject IPersonelMaasIzinService PersonelService
 @inject IPersonelFinansService PersonelFinansService
 @inject ISoforService SoforService
 @inject IBordroService BordroService
 @inject IKullaniciService KullaniciService
 @inject IBankaHesapService BankaHesapService
+@inject IAktifFirmaProvider AktifFirmaProvider
 @inject IJSRuntime JS
+@inject IDbContextFactory<KOAFiloServis.Web.Data.ApplicationDbContext> DbContextFactory
 @implements IDisposable
 @rendermode InteractiveServer
 
@@ -39,6 +44,15 @@
                     <option value="@m">@(new DateTime(2024, m, 1).ToString("MMMM"))</option>
                 }
             </select>
+            <select class="form-select form-select-sm" style="width: 200px;" @bind="ciktiFirmaSecim">
+                <option value="0">Aktif Firma</option>
+                <option value="1">Seçili Firmalar</option>
+                <option value="2">Tüm Firmalar</option>
+            </select>
+            <div class="form-check form-check-inline small">
+                <input class="form-check-input" type="checkbox" id="altFirmalarDahil" @bind="ciktiAltFirmalarDahil" />
+                <label class="form-check-label" for="altFirmalarDahil">Alt Firmalar Dahil</label>
+            </div>
             <button class="btn btn-outline-success btn-sm" @onclick="DurumExcelAktar" disabled="@(!DurFiltreliSatirlar.Any())">
                 <i class="bi bi-file-earmark-excel me-1"></i>Excel
             </button>
@@ -1241,6 +1255,11 @@
     private BordroDetay? durBordroDetay;
     private List<PersonelCebindenHarcamaItem> durCebHarcamalar = new();
     private bool CanBorcKaydiKaliciSil => kullaniciYetkileri.Contains("*") || kullaniciYetkileri.Contains(Yetkiler.PersonelBorcSil);
+    // Firma seçimi (Excel/Yazdır için)
+    private int ciktiFirmaSecim = 0; // 0=Aktif, 1=Seçili, 2=Tümü
+    private List<int> ciktiSeciliFirmaIds = new();
+    private bool ciktiAltFirmalarDahil = false;
+    private List<Firma> ciktiFirmaListesi = new();
     private List<Sofor> OlusturulabilirMaasPersoneller => soforler
         .Where(s => s.Aktif && !s.IsDeleted)
         .Where(s => s.IstenAyrilmaTarihi == null || s.IstenAyrilmaTarihi >= new DateTime(maasYil, maasAy, 1))
@@ -1257,11 +1276,39 @@
                 || s.GorevEnum.ToString() == durSecilenGorev));
 
     // ===== LIFECYCLE =====
+    private async Task CiktiFirmaListesiniYukle()
+    {
+        try
+        {
+            await using var ctx = await DbContextFactory.CreateDbContextAsync();
+            ciktiFirmaListesi = await ctx.Firmalar
+                .Where(f => f.Aktif && !f.IsDeleted)
+                .OrderBy(f => f.FirmaAdi)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+        catch { ciktiFirmaListesi = new(); }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         kullaniciYetkileri = await KullaniciService.GetCurrentUserYetkilerAsync();
         bankaHesapListesi = await BankaHesapService.GetActiveAsync();
+        AktifFirmaProvider.AktifFirmaDegisti += HandleAktifFirmaDegisti;
+        await CiktiFirmaListesiniYukle();
         await YenileDurumData();
+    }
+
+    private async void HandleAktifFirmaDegisti()
+    {
+        await InvokeAsync(async () =>
+        {
+            ciktiFirmaSecim = 0;
+            ciktiSeciliFirmaIds = new();
+            await CiktiFirmaListesiniYukle();
+            await YenileDurumData();
+            StateHasChanged();
+        });
     }
 
     // ===== MAAŞ YÖNETİMİ METHODS =====
@@ -1912,6 +1959,17 @@
         }
     }
 
+    private List<int> GetCiktiFirmaIds()
+    {
+        var aktifId = AktifFirmaProvider.AktifFirmaId ?? 0;
+        return ciktiFirmaSecim switch
+        {
+            1 => ciktiSeciliFirmaIds.Any() ? ciktiSeciliFirmaIds : new List<int> { aktifId },
+            2 => ciktiFirmaListesi.Select(f => f.Id).ToList(),
+            _ => new List<int> { aktifId }
+        };
+    }
+
     private async Task DurumExcelAktar()
     {
         try
@@ -2036,10 +2094,22 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
         try
         {
             var donemBaslangic = new DateTime(durYil, durAy, 1);
-            durTumPersoneller = await SoforService.GetAllAsync();
+
+            // Doğrudan DB sorgusu: aktif firma değişiminde cache bayatlamasın.
+            // SoforService.GetAllAsync() cache kullandığı için eski firma verisi dönebilir.
+            await using var ctx = await DbContextFactory.CreateDbContextAsync();
+            var aktifFirmaId = AktifFirmaProvider.AktifFirmaId ?? 0;
+            durTumPersoneller = await ctx.Soforler
+                .Include(s => s.Firma)
+                .Include(s => s.AracAtamalari.Where(a => a.Aktif)).ThenInclude(a => a.Arac)
+                .Where(s => !s.IsDeleted && s.Aktif)
+                .Where(s => s.IstenAyrilmaTarihi == null || s.IstenAyrilmaTarihi >= donemBaslangic)
+                .OrderBy(s => s.SiralamaNo == 0 ? int.MaxValue : s.SiralamaNo)
+                .ThenBy(s => s.Ad)
+                .AsNoTracking()
+                .ToListAsync();
+
             var aktifler = durTumPersoneller
-                .Where(p => !p.IsDeleted && p.Aktif)
-                .Where(p => p.IstenAyrilmaTarihi == null || p.IstenAyrilmaTarihi >= donemBaslangic)
                 .OrderBy(p => p.SiralamaNo == 0 ? int.MaxValue : p.SiralamaNo)
                 .ThenBy(p => p.Ad)
                 .ToList();
@@ -2052,7 +2122,16 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
             durSatirlar = new List<PersonelDurumSatir>();
             foreach (var p in aktifler)
             {
-                var finansOzet = await PersonelFinansService.GetPersonelFinansOzetAsync(p.Id);
+                PersonelFinansOzet? finansOzet = null;
+                try
+                {
+                    finansOzet = await PersonelFinansService.GetPersonelFinansOzetAsync(p.Id);
+                }
+                catch (InvalidOperationException)
+                {
+                    // Personel farklı firmaya aitse veya tenant filter dışındaysa
+                    // finans özeti alınamaz — atla, maaş satırı oluşturmaya devam et.
+                }
                 donemMaasMap.TryGetValue(p.Id, out var donemMaas);
 
                 var bankayaYatan = p.ResmiNetMaas;
@@ -2303,6 +2382,7 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
 
     public void Dispose()
     {
+        AktifFirmaProvider.AktifFirmaDegisti -= HandleAktifFirmaDegisti;
         bildirimTimer?.Dispose();
     }
 
