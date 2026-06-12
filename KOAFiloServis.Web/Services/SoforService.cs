@@ -195,6 +195,37 @@ public class SoforService : ISoforService
         await _cache.RemoveByPrefixAsync(CacheKeys.SoforPrefix);
     }
 
+    /// <summary>
+    /// Sadece seçili personelin SiralamaNo alanını günceller.
+    /// Diğer alanlara (PersonelKodu, MuhasebeHesapId, PersonelAvansHesapId, araç eşleştirme, özlük evrak vb.) dokunmaz.
+    /// </summary>
+    public async Task<bool> UpdateSiraNoAsync(int personelId, int siraNo, CancellationToken cancellationToken = default)
+    {
+        if (personelId <= 0)
+            throw new ArgumentException("Geçersiz personel Id.", nameof(personelId));
+
+        if (siraNo < 0)
+            throw new ArgumentException("Sıra No negatif olamaz.", nameof(siraNo));
+
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var affected = await context.Soforler
+            .Where(x => x.Id == personelId && !x.IsDeleted)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.SiralamaNo, siraNo)
+                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow),
+                cancellationToken);
+
+        if (affected != 1)
+        {
+            throw new InvalidOperationException(
+                $"Sıra No güncellenemedi. PersonelId={personelId}, Affected={affected}. " +
+                "Kayıt bulunamadı veya soft-delete edilmiş olabilir.");
+        }
+
+        await _cache.RemoveByPrefixAsync(CacheKeys.SoforPrefix);
+        return true;
+    }
+
     public async Task<Sofor> RestoreAsync(int id)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
@@ -234,7 +265,11 @@ public class SoforService : ISoforService
         return gorev switch
         {
             PersonelGorev.Sofor => "SFR",
-            PersonelGorev.Muhasebe => "MUH",
+            PersonelGorev.Muhasebe => "MHS",
+            PersonelGorev.Yonetici => "YNT",
+            PersonelGorev.OfisCalisani => "PRS",
+            PersonelGorev.Teknik => "TKN",
+            PersonelGorev.Diger => "DGR",
             _ => "PRS"
         };
     }

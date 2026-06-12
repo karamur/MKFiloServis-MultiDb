@@ -790,11 +790,39 @@
 
     private async Task SiralamaNoGuncelle(Sofor personel, ChangeEventArgs e)
     {
-        if (int.TryParse(e.Value?.ToString(), out var yeniSiraNo))
+        if (!int.TryParse(e.Value?.ToString(), out var yeniSiraNo))
         {
+            ToastService.ShowWarning("Geçerli bir sayı girin.");
+            return;
+        }
+
+        if (yeniSiraNo < 0)
+        {
+            ToastService.ShowWarning("Sıra No negatif olamaz.");
+            return;
+        }
+
+        var eskiSiraNo = personel.SiralamaNo;
+
+        try
+        {
+            // SADECE SiralamaNo + UpdatedAt güncellenir.
+            // PersonelKodu, MuhasebeHesapId, PersonelAvansHesapId, araç eşleştirme, özlük evrak vb. korunur.
+            await SoforService.UpdateSiraNoAsync(personel.Id, yeniSiraNo);
+
             personel.SiralamaNo = yeniSiraNo;
-            await SoforService.UpdateAsync(personel);
-            ToastService.ShowSuccess($"{personel.TamAd} sıralama no: {yeniSiraNo}");
+
+            // Listeyi yeni sıralamayla yeniden yükle
+            await LoadData();
+
+            ToastService.ShowSuccess($"{personel.TamAd} sıra no: {yeniSiraNo}");
+        }
+        catch (Exception ex)
+        {
+            // Değişikliği geri al
+            personel.SiralamaNo = eskiSiraNo;
+            Console.WriteLine($"[SiralamaNoGuncelle HATA] PersonelId={personel.Id}: {ex.Message}");
+            ToastService.ShowError($"Sıra No güncellenirken hata: {ex.Message}");
         }
     }
 }
