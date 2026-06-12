@@ -14,6 +14,7 @@
 @inject IAktifFirmaProvider AktifFirmaProvider
 @inject IJSRuntime JS
 @inject IDbContextFactory<KOAFiloServis.Web.Data.ApplicationDbContext> DbContextFactory
+@inject ILoggerFactory LoggerFactory
 @implements IDisposable
 @rendermode InteractiveServer
 
@@ -44,7 +45,7 @@
                     <option value="@m">@(new DateTime(2024, m, 1).ToString("MMMM"))</option>
                 }
             </select>
-            <select class="form-select form-select-sm" style="width: 160px;" @bind="ciktiFirmaSecim">
+            <select class="form-select form-select-sm" style="width: 160px;" @bind="ciktiFirmaSecim" @bind:after="YenileDurumData">
                 <option value="0">Aktif Firma</option>
                 <option value="1">Tüm Firmalar</option>
             </select>
@@ -1174,6 +1175,7 @@
 
 @code {
     // ===== MAAŞ YÖNETİMİ STATE =====
+    private ILogger? _logger;
     private int maasYil = DateTime.Today.Year;
     private int maasAy = DateTime.Today.Month;
     private MaasRaporOzet? maasRapor;
@@ -1250,9 +1252,8 @@
     private BordroDetay? durBordroDetay;
     private List<PersonelCebindenHarcamaItem> durCebHarcamalar = new();
     private bool CanBorcKaydiKaliciSil => kullaniciYetkileri.Contains("*") || kullaniciYetkileri.Contains(Yetkiler.PersonelBorcSil);
-    // Firma seçimi (Excel/Yazdır için)
+    // Firma seçimi (Ekran/Excel/Yazdır için)
     private int ciktiFirmaSecim = 0; // 0=Aktif, 1=Tüm Firmalar
-    private List<Firma> ciktiFirmaListesi = new();
     private List<Sofor> OlusturulabilirMaasPersoneller => soforler
         .Where(s => s.Aktif && !s.IsDeleted)
         .Where(s => s.IstenAyrilmaTarihi == null || s.IstenAyrilmaTarihi >= new DateTime(maasYil, maasAy, 1))
@@ -1269,27 +1270,12 @@
                 || s.GorevEnum.ToString() == durSecilenGorev));
 
     // ===== LIFECYCLE =====
-    private async Task CiktiFirmaListesiniYukle()
-    {
-        try
-        {
-            await using var ctx = await DbContextFactory.CreateDbContextAsync();
-            ciktiFirmaListesi = await ctx.Firmalar
-                .IgnoreQueryFilters()
-                .Where(f => f.Aktif && !f.IsDeleted)
-                .OrderBy(f => f.FirmaAdi)
-                .AsNoTracking()
-                .ToListAsync();
-        }
-        catch { ciktiFirmaListesi = new(); }
-    }
-
     protected override async Task OnInitializedAsync()
     {
+        _logger = LoggerFactory.CreateLogger("MaasYonetimi");
         kullaniciYetkileri = await KullaniciService.GetCurrentUserYetkilerAsync();
         bankaHesapListesi = await BankaHesapService.GetActiveAsync();
         AktifFirmaProvider.AktifFirmaDegisti += HandleAktifFirmaDegisti;
-        await CiktiFirmaListesiniYukle();
         await YenileDurumData();
     }
 
@@ -1298,10 +1284,83 @@
         await InvokeAsync(async () =>
         {
             ciktiFirmaSecim = 0;
-            await CiktiFirmaListesiniYukle();
             await YenileDurumData();
             StateHasChanged();
         });
+    }
+
+    // ===== FİRMA KAPSAMI =====
+    private async Task<List<int>> GetMaasFirmaIdsAsync()
+    {
+        var aktifFirmaId = AktifFirmaProvider.AktifFirmaId ?? 0;
+
+        if (ciktiFirmaSecim == 0) // Aktif Firma
+        {
+            _logger?.LogInformation(
+                "Maaş Firma Kapsamı Debug | Kapsam=AktifFirma | AktifFirmaId={AktifFirmaId} | FirmaIds={FirmaIds}",
+                aktifFirmaId,
+                aktifFirmaId);
+            return new List<int> { aktifFirmaId };
+        }
+
+        if (ciktiFirmaSecim == 1) // Tüm Firmalar
+        {
+            var orgFirmaIds = await GetOrganizasyonFirmaIdsAsync(aktifFirmaId);
+            _logger?.LogInformation(
+                "Maaş Firma Kapsamı Debug | Kapsam=TumFirmalar | AktifFirmaId={AktifFirmaId} | FirmaIds={FirmaIds}",
+                aktifFirmaId,
+                string.Join(",", orgFirmaIds));
+            return orgFirmaIds;
+        }
+
+        _logger?.LogWarning(
+            "Maaş Firma Kapsamı Debug | Kapsam=Bilinmeyen({Kapsam}) | AktifFirmaId={AktifFirmaId}",
+            ciktiFirmaSecim,
+            aktifFirmaId);
+        return new List<int> { aktifFirmaId };
+    }
+
+    private async Task<List<int>> GetOrganizasyonFirmaIdsAsync(int aktifFirmaId)
+    {
+        if (aktifFirmaId <= 0)
+            return new List<int>();
+
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+
+        var aktifFirma = await db.Firmalar
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(f => f.Id == aktifFirmaId);
+
+        if (aktifFirma == null)
+        {
+            _logger?.LogWarning(
+                "Maaş Firma Kapsamı Debug | Aktif firma bulunamadı. AktifFirmaId={AktifFirmaId}",
+                aktifFirmaId);
+            return new List<int> { aktifFirmaId };
+        }
+
+        var organizasyonId = aktifFirma.OrganizasyonId;
+
+        var ids = await db.Firmalar
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(f => f.OrganizasyonId == organizasyonId)
+            .Where(f => !f.IsDeleted && f.Aktif)
+            .Select(f => f.Id)
+            .Distinct()
+            .ToListAsync();
+
+        if (!ids.Contains(aktifFirmaId))
+            ids.Add(aktifFirmaId);
+
+        _logger?.LogInformation(
+            "Maaş Firma Kapsamı Debug | OrganizasyonId={OrganizasyonId} | OrganizasyonFirmaSayisi={FirmaSayisi} | FirmaIds={FirmaIds}",
+            organizasyonId,
+            ids.Count,
+            string.Join(",", ids));
+
+        return ids;
     }
 
     // ===== MAAŞ YÖNETİMİ METHODS =====
@@ -1952,14 +2011,6 @@
         }
     }
 
-    private List<int> GetCiktiFirmaIds()
-    {
-        if (ciktiFirmaSecim == 1)
-            return ciktiFirmaListesi.Where(f => f.Aktif && !f.IsDeleted).Select(f => f.Id).ToList();
-
-        return new List<int> { AktifFirmaProvider.AktifFirmaId ?? 0 };
-    }
-
     private async Task DurumExcelAktar()
     {
         try
@@ -1989,44 +2040,105 @@
             header.Style.Fill.BackgroundColor = XLColor.Red;
             header.Style.Font.FontColor = XLColor.White;
 
-            var row = 6; var sira = 0; decimal toplamGercek = 0, toplamBankaya = 0, toplamAvans = 0, toplamKesinti = 0, toplamHarcama = 0, toplamFark = 0;
-            foreach (var item in filtreliler)
-            {
-                sira++;
-                var farkOdenecek = item.GercekMaas - item.BankayaYatan - item.Avans - item.Kesinti + item.Harcamasi;
-                toplamGercek += item.GercekMaas;
-                toplamBankaya += item.BankayaYatan;
-                toplamAvans += item.Avans;
-                toplamKesinti += item.Kesinti;
-                toplamHarcama += item.Harcamasi;
-                toplamFark += farkOdenecek;
+            var row = 6; var sira = 0; decimal genelToplamGercek = 0, genelToplamBankaya = 0, genelToplamAvans = 0, genelToplamKesinti = 0, genelToplamHarcama = 0, genelToplamFark = 0;
 
-                ws.Cell(row, 1).Value = item.SiralamaNo > 0 ? item.SiralamaNo : sira;
-                ws.Cell(row, 2).Value = item.Plaka ?? "-";
-                ws.Cell(row, 3).Value = item.AdSoyad;
-                ws.Cell(row, 4).Value = item.Telefon ?? "-";
-                ws.Cell(row, 5).Value = item.Adres ?? "-";
-                ws.Cell(row, 6).Value = item.GercekMaas;
-                ws.Cell(row, 7).Value = item.BankayaYatan;
-                ws.Cell(row, 8).Value = item.Avans;
-                ws.Cell(row, 9).Value = item.Kesinti;
-                ws.Cell(row, 10).Value = item.Harcamasi;
-                ws.Cell(row, 11).Value = farkOdenecek;
-                ws.Cell(row, 12).Value = item.FirmaAdi ?? "-";
-                ws.Cell(row, 13).Value = item.SgkDurum ?? "-";
-                ws.Cell(row, 14).Value = item.IseGirisTarihi?.ToString("dd.MM.yyyy") ?? "-";
-                ws.Cell(row, 15).Value = item.IstenCikisTarihi?.ToString("dd.MM.yyyy") ?? "-";
-                row++;
+            if (ciktiFirmaSecim == 1) // Tüm Firmalar → firmalara göre blokla
+            {
+                var firmaGruplari = filtreliler.GroupBy(i => i.FirmaId ?? 0).ToList();
+                foreach (var grup in firmaGruplari)
+                {
+                    var firmaAdi = grup.First().FirmaAdi ?? "Bilinmeyen Firma";
+                    // Firma alt başlık satırı
+                    ws.Range(row, 1, row, 15).Merge();
+                    ws.Cell(row, 1).Value = firmaAdi;
+                    ws.Cell(row, 1).Style.Font.Bold = true;
+                    ws.Cell(row, 1).Style.Font.FontSize = 11;
+                    ws.Range(row, 1, row, 15).Style.Fill.BackgroundColor = XLColor.LightGray;
+                    row++;
+
+                    var firmaSira = 0; decimal fGercek = 0, fBankaya = 0, fAvans = 0, fKesinti = 0, fHarcama = 0, fFark = 0;
+                    foreach (var item in grup)
+                    {
+                        sira++; firmaSira++;
+                        var farkOdenecek = item.GercekMaas - item.BankayaYatan - item.Avans - item.Kesinti + item.Harcamasi;
+                        fGercek += item.GercekMaas; fBankaya += item.BankayaYatan; fAvans += item.Avans;
+                        fKesinti += item.Kesinti; fHarcama += item.Harcamasi; fFark += farkOdenecek;
+
+                        ws.Cell(row, 1).Value = item.SiralamaNo > 0 ? item.SiralamaNo : firmaSira;
+                        ws.Cell(row, 2).Value = item.Plaka ?? "-";
+                        ws.Cell(row, 3).Value = item.AdSoyad;
+                        ws.Cell(row, 4).Value = item.Telefon ?? "-";
+                        ws.Cell(row, 5).Value = item.Adres ?? "-";
+                        ws.Cell(row, 6).Value = item.GercekMaas;
+                        ws.Cell(row, 7).Value = item.BankayaYatan;
+                        ws.Cell(row, 8).Value = item.Avans;
+                        ws.Cell(row, 9).Value = item.Kesinti;
+                        ws.Cell(row, 10).Value = item.Harcamasi;
+                        ws.Cell(row, 11).Value = farkOdenecek;
+                        ws.Cell(row, 12).Value = item.FirmaAdi ?? "-";
+                        ws.Cell(row, 13).Value = item.SgkDurum ?? "-";
+                        ws.Cell(row, 14).Value = item.IseGirisTarihi?.ToString("dd.MM.yyyy") ?? "-";
+                        ws.Cell(row, 15).Value = item.IstenCikisTarihi?.ToString("dd.MM.yyyy") ?? "-";
+                        row++;
+                    }
+                    // Firma alt toplam
+                    ws.Cell(row, 1).Value = $"{firmaAdi} Toplam ({firmaSira})";
+                    ws.Cell(row, 1).Style.Font.Bold = true;
+                    ws.Cell(row, 6).Value = fGercek;
+                    ws.Cell(row, 7).Value = fBankaya;
+                    ws.Cell(row, 8).Value = fAvans;
+                    ws.Cell(row, 9).Value = fKesinti;
+                    ws.Cell(row, 10).Value = fHarcama;
+                    ws.Cell(row, 11).Value = fFark;
+                    ws.Range(row, 1, row, 15).Style.Fill.BackgroundColor = XLColor.LightYellow;
+                    for (int c = 1; c <= 15; c++) ws.Cell(row, c).Style.Font.Bold = true;
+                    row++;
+
+                    genelToplamGercek += fGercek; genelToplamBankaya += fBankaya; genelToplamAvans += fAvans;
+                    genelToplamKesinti += fKesinti; genelToplamHarcama += fHarcama; genelToplamFark += fFark;
+                }
+            }
+            else // Aktif Firma — tek firma, bloklama yok
+            {
+                foreach (var item in filtreliler)
+                {
+                    sira++;
+                    var farkOdenecek = item.GercekMaas - item.BankayaYatan - item.Avans - item.Kesinti + item.Harcamasi;
+                    genelToplamGercek += item.GercekMaas;
+                    genelToplamBankaya += item.BankayaYatan;
+                    genelToplamAvans += item.Avans;
+                    genelToplamKesinti += item.Kesinti;
+                    genelToplamHarcama += item.Harcamasi;
+                    genelToplamFark += farkOdenecek;
+
+                    ws.Cell(row, 1).Value = item.SiralamaNo > 0 ? item.SiralamaNo : sira;
+                    ws.Cell(row, 2).Value = item.Plaka ?? "-";
+                    ws.Cell(row, 3).Value = item.AdSoyad;
+                    ws.Cell(row, 4).Value = item.Telefon ?? "-";
+                    ws.Cell(row, 5).Value = item.Adres ?? "-";
+                    ws.Cell(row, 6).Value = item.GercekMaas;
+                    ws.Cell(row, 7).Value = item.BankayaYatan;
+                    ws.Cell(row, 8).Value = item.Avans;
+                    ws.Cell(row, 9).Value = item.Kesinti;
+                    ws.Cell(row, 10).Value = item.Harcamasi;
+                    ws.Cell(row, 11).Value = farkOdenecek;
+                    ws.Cell(row, 12).Value = item.FirmaAdi ?? "-";
+                    ws.Cell(row, 13).Value = item.SgkDurum ?? "-";
+                    ws.Cell(row, 14).Value = item.IseGirisTarihi?.ToString("dd.MM.yyyy") ?? "-";
+                    ws.Cell(row, 15).Value = item.IstenCikisTarihi?.ToString("dd.MM.yyyy") ?? "-";
+                    row++;
+                }
             }
 
-            // Toplam satırı
-            ws.Cell(row, 1).Value = "TOPLAM"; ws.Cell(row, 1).Style.Font.Bold = true;
-            ws.Cell(row, 6).Value = toplamGercek;
-            ws.Cell(row, 7).Value = toplamBankaya;
-            ws.Cell(row, 8).Value = toplamAvans;
-            ws.Cell(row, 9).Value = toplamKesinti;
-            ws.Cell(row, 10).Value = toplamHarcama;
-            ws.Cell(row, 11).Value = toplamFark;
+            // Genel Toplam satırı
+            ws.Cell(row, 1).Value = "GENEL TOPLAM"; ws.Cell(row, 1).Style.Font.Bold = true;
+            ws.Cell(row, 6).Value = genelToplamGercek;
+            ws.Cell(row, 7).Value = genelToplamBankaya;
+            ws.Cell(row, 8).Value = genelToplamAvans;
+            ws.Cell(row, 9).Value = genelToplamKesinti;
+            ws.Cell(row, 10).Value = genelToplamHarcama;
+            ws.Cell(row, 11).Value = genelToplamFark;
+            ws.Range(row, 1, row, 15).Style.Fill.BackgroundColor = XLColor.LightGray;
             for (int c = 1; c <= 15; c++) ws.Cell(row, c).Style.Font.Bold = true;
 
             for (int c = 6; c <= 11; c++) ws.Column(c).Style.NumberFormat.Format = "#,##0.00";
@@ -2052,32 +2164,90 @@
         var donemAdi = new DateTime(durYil, durAy, 1).ToString("MMMM yyyy");
         var satirlarHtml = new System.Text.StringBuilder();
         var sira = 0;
-        decimal tGercek = 0, tBankaya = 0, tAvans = 0, tKesinti = 0, tHarcama = 0, tFark = 0;
-        foreach (var item in filtreliler)
-        {
-            sira++;
-            var farkOdenecek = item.GercekMaas - item.BankayaYatan - item.Avans - item.Kesinti + item.Harcamasi;
-            tGercek += item.GercekMaas; tBankaya += item.BankayaYatan; tAvans += item.Avans;
-            tKesinti += item.Kesinti; tHarcama += item.Harcamasi; tFark += farkOdenecek;
+        decimal genelToplamGercek = 0, genelToplamBankaya = 0, genelToplamAvans = 0, genelToplamKesinti = 0, genelToplamHarcama = 0, genelToplamFark = 0;
 
-            satirlarHtml.Append("<tr>");
-            satirlarHtml.Append($"<td>{(item.SiralamaNo > 0 ? item.SiralamaNo : sira)}</td>");
-            satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.Plaka ?? "-")}</td>");
-            satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.AdSoyad)}</td>");
-            satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.Telefon ?? "-")}</td>");
-            satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.Adres ?? "-")}</td>");
-            satirlarHtml.Append($"<td style=\"text-align:right;\">{item.GercekMaas:N2}</td>");
-            satirlarHtml.Append($"<td style=\"text-align:right;\">{item.BankayaYatan:N2}</td>");
-            satirlarHtml.Append($"<td style=\"text-align:right;\">{item.Avans:N2}</td>");
-            satirlarHtml.Append($"<td style=\"text-align:right;\">{item.Kesinti:N2}</td>");
-            satirlarHtml.Append($"<td style=\"text-align:right;\">{item.Harcamasi:N2}</td>");
-            satirlarHtml.Append($"<td style=\"text-align:right; font-weight:bold;\">{farkOdenecek:N2}</td>");
-            satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.FirmaAdi ?? "-")}</td>");
-            satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.SgkDurum ?? "-")}</td>");
-            satirlarHtml.Append($"<td>{item.IseGirisTarihi?.ToString("dd.MM.yyyy") ?? "-"}</td>");
-            satirlarHtml.Append($"<td>{item.IstenCikisTarihi?.ToString("dd.MM.yyyy") ?? "-"}</td>");
-            satirlarHtml.Append("</tr>");
+        if (ciktiFirmaSecim == 1) // Tüm Firmalar → firmalara göre blokla
+        {
+            var firmaGruplari = filtreliler.GroupBy(i => i.FirmaId ?? 0).ToList();
+            foreach (var grup in firmaGruplari)
+            {
+                var firmaAdi = System.Net.WebUtility.HtmlEncode(grup.First().FirmaAdi ?? "Bilinmeyen Firma");
+                satirlarHtml.Append($"<tr style=\"background:#e0e0e0;\"><td colspan=\"15\" style=\"font-weight:bold; font-size:11px; padding:6px 4px;\">{firmaAdi}</td></tr>");
+
+                var firmaSira = 0; decimal fGercek = 0, fBankaya = 0, fAvans = 0, fKesinti = 0, fHarcama = 0, fFark = 0;
+                foreach (var item in grup)
+                {
+                    sira++; firmaSira++;
+                    var farkOdenecek = item.GercekMaas - item.BankayaYatan - item.Avans - item.Kesinti + item.Harcamasi;
+                    fGercek += item.GercekMaas; fBankaya += item.BankayaYatan; fAvans += item.Avans;
+                    fKesinti += item.Kesinti; fHarcama += item.Harcamasi; fFark += farkOdenecek;
+
+                    satirlarHtml.Append("<tr>");
+                    satirlarHtml.Append($"<td>{(item.SiralamaNo > 0 ? item.SiralamaNo : firmaSira)}</td>");
+                    satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.Plaka ?? "-")}</td>");
+                    satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.AdSoyad)}</td>");
+                    satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.Telefon ?? "-")}</td>");
+                    satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.Adres ?? "-")}</td>");
+                    satirlarHtml.Append($"<td style=\"text-align:right;\">{item.GercekMaas:N2}</td>");
+                    satirlarHtml.Append($"<td style=\"text-align:right;\">{item.BankayaYatan:N2}</td>");
+                    satirlarHtml.Append($"<td style=\"text-align:right;\">{item.Avans:N2}</td>");
+                    satirlarHtml.Append($"<td style=\"text-align:right;\">{item.Kesinti:N2}</td>");
+                    satirlarHtml.Append($"<td style=\"text-align:right;\">{item.Harcamasi:N2}</td>");
+                    satirlarHtml.Append($"<td style=\"text-align:right; font-weight:bold;\">{farkOdenecek:N2}</td>");
+                    satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.FirmaAdi ?? "-")}</td>");
+                    satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.SgkDurum ?? "-")}</td>");
+                    satirlarHtml.Append($"<td>{item.IseGirisTarihi?.ToString("dd.MM.yyyy") ?? "-"}</td>");
+                    satirlarHtml.Append($"<td>{item.IstenCikisTarihi?.ToString("dd.MM.yyyy") ?? "-"}</td>");
+                    satirlarHtml.Append("</tr>");
+                }
+                // Firma alt toplam
+                satirlarHtml.Append($"<tr style=\"background:#fffde7; font-weight:bold;\">");
+                satirlarHtml.Append($"<td colspan=\"5\">{firmaAdi} Toplam ({firmaSira})</td>");
+                satirlarHtml.Append($"<td style=\"text-align:right;\">{fGercek:N2}</td>");
+                satirlarHtml.Append($"<td style=\"text-align:right;\">{fBankaya:N2}</td>");
+                satirlarHtml.Append($"<td style=\"text-align:right;\">{fAvans:N2}</td>");
+                satirlarHtml.Append($"<td style=\"text-align:right;\">{fKesinti:N2}</td>");
+                satirlarHtml.Append($"<td style=\"text-align:right;\">{fHarcama:N2}</td>");
+                satirlarHtml.Append($"<td style=\"text-align:right;\">{fFark:N2}</td>");
+                satirlarHtml.Append($"<td colspan=\"4\"></td>");
+                satirlarHtml.Append("</tr>");
+
+                genelToplamGercek += fGercek; genelToplamBankaya += fBankaya; genelToplamAvans += fAvans;
+                genelToplamKesinti += fKesinti; genelToplamHarcama += fHarcama; genelToplamFark += fFark;
+            }
         }
+        else // Aktif Firma
+        {
+            foreach (var item in filtreliler)
+            {
+                sira++;
+                var farkOdenecek = item.GercekMaas - item.BankayaYatan - item.Avans - item.Kesinti + item.Harcamasi;
+                genelToplamGercek += item.GercekMaas; genelToplamBankaya += item.BankayaYatan; genelToplamAvans += item.Avans;
+                genelToplamKesinti += item.Kesinti; genelToplamHarcama += item.Harcamasi; genelToplamFark += farkOdenecek;
+
+                satirlarHtml.Append("<tr>");
+                satirlarHtml.Append($"<td>{(item.SiralamaNo > 0 ? item.SiralamaNo : sira)}</td>");
+                satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.Plaka ?? "-")}</td>");
+                satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.AdSoyad)}</td>");
+                satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.Telefon ?? "-")}</td>");
+                satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.Adres ?? "-")}</td>");
+                satirlarHtml.Append($"<td style=\"text-align:right;\">{item.GercekMaas:N2}</td>");
+                satirlarHtml.Append($"<td style=\"text-align:right;\">{item.BankayaYatan:N2}</td>");
+                satirlarHtml.Append($"<td style=\"text-align:right;\">{item.Avans:N2}</td>");
+                satirlarHtml.Append($"<td style=\"text-align:right;\">{item.Kesinti:N2}</td>");
+                satirlarHtml.Append($"<td style=\"text-align:right;\">{item.Harcamasi:N2}</td>");
+                satirlarHtml.Append($"<td style=\"text-align:right; font-weight:bold;\">{farkOdenecek:N2}</td>");
+                satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.FirmaAdi ?? "-")}</td>");
+                satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.SgkDurum ?? "-")}</td>");
+                satirlarHtml.Append($"<td>{item.IseGirisTarihi?.ToString("dd.MM.yyyy") ?? "-"}</td>");
+                satirlarHtml.Append($"<td>{item.IstenCikisTarihi?.ToString("dd.MM.yyyy") ?? "-"}</td>");
+                satirlarHtml.Append("</tr>");
+            }
+        }
+
+        var printBaslik = ciktiFirmaSecim == 0
+            ? (AktifFirmaProvider.Mevcut?.FirmaAdi ?? "Maaş / Ödeme Yönetimi")
+            : "Tüm Firmalar";
 
         var html = $@"<!DOCTYPE html><html><head><meta charset=""utf-8""><title>Maaş / Ödeme</title>
 <style>
@@ -2089,7 +2259,7 @@ th {{ background: #8b0000; color: white; padding: 6px 4px; font-size: 10px; text
 td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
 @media print {{ body {{ margin: 0; }} }}
 </style></head><body>
-<h2>{(ciktiFirmaSecim == 0 ? (AktifFirmaProvider.Mevcut?.FirmaAdi ?? "Maaş / Ödeme Yönetimi") : "Tüm Firmalar")}</h2>
+<h2>{printBaslik}</h2>
 <h3>Maaş / Ödeme Yönetimi — {donemAdi}</h3>
 <table><thead><tr>
 <th>S.NO</th><th>PLAKA</th><th>AD SOYAD</th><th>TELEFON</th><th>ADRES</th>
@@ -2097,13 +2267,13 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
 <th>FARK / ÖDENECEK</th><th>FİRMA</th><th>SGK</th><th>İŞE GİRİŞ</th><th>İŞTEN ÇIKIŞ</th>
 </tr></thead><tbody>{satirlarHtml}</tbody>
 <tfoot><tr style=""font-weight:bold; background:#f0f0f0;"">
-<td colspan=""5"">TOPLAM ({filtreliler.Count} personel)</td>
-<td style=""text-align:right;"">{tGercek:N2}</td>
-<td style=""text-align:right;"">{tBankaya:N2}</td>
-<td style=""text-align:right;"">{tAvans:N2}</td>
-<td style=""text-align:right;"">{tKesinti:N2}</td>
-<td style=""text-align:right;"">{tHarcama:N2}</td>
-<td style=""text-align:right;"">{tFark:N2}</td>
+<td colspan=""5"">GENEL TOPLAM ({filtreliler.Count} personel)</td>
+<td style=""text-align:right;"">{genelToplamGercek:N2}</td>
+<td style=""text-align:right;"">{genelToplamBankaya:N2}</td>
+<td style=""text-align:right;"">{genelToplamAvans:N2}</td>
+<td style=""text-align:right;"">{genelToplamKesinti:N2}</td>
+<td style=""text-align:right;"">{genelToplamHarcama:N2}</td>
+<td style=""text-align:right;"">{genelToplamFark:N2}</td>
 <td colspan=""4""></td>
 </tr></tfoot></table></body></html>";
 
@@ -2120,7 +2290,13 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
 
             // Firma kapsamı: Aktif Firma → normal tenant filter yeterli.
             // Tüm Firmalar → IgnoreQueryFilters + firmaIds güvenli sınırlama.
-            var firmaIds = GetCiktiFirmaIds();
+            var firmaIds = await GetMaasFirmaIdsAsync();
+            _logger?.LogInformation(
+                "Maaş Firma Kapsamı Debug | Kapsam={Kapsam} | AktifFirmaId={AktifFirmaId} | FirmaIds={FirmaIds}",
+                ciktiFirmaSecim,
+                AktifFirmaProvider.AktifFirmaId,
+                string.Join(",", firmaIds));
+
             await using var ctx = await DbContextFactory.CreateDbContextAsync();
             IQueryable<Sofor> personelQuery = ctx.Soforler;
             if (ciktiFirmaSecim == 1)
@@ -2131,10 +2307,17 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
                 .Include(s => s.AracAtamalari.Where(a => a.Aktif)).ThenInclude(a => a.Arac)
                 .Where(s => !s.IsDeleted && s.Aktif)
                 .Where(s => s.IstenAyrilmaTarihi == null || s.IstenAyrilmaTarihi >= donemBaslangic)
-                .OrderBy(s => s.SiralamaNo == 0 ? int.MaxValue : s.SiralamaNo)
+                .OrderBy(s => s.Firma != null ? s.Firma.FirmaAdi : "")
+                .ThenBy(s => s.SiralamaNo == 0 ? int.MaxValue : s.SiralamaNo)
                 .ThenBy(s => s.Ad)
                 .AsNoTracking()
                 .ToListAsync();
+
+            _logger?.LogInformation(
+                "Maaş Firma Kapsamı Debug | Kapsam={Kapsam} | SatirSayisi={SatirSayisi} | GelenFirmaIds={GelenFirmaIds}",
+                ciktiFirmaSecim,
+                durTumPersoneller.Count,
+                string.Join(",", durTumPersoneller.Select(x => x.FirmaId).Distinct()));
 
             var aktifler = durTumPersoneller
                 .OrderBy(p => p.SiralamaNo == 0 ? int.MaxValue : p.SiralamaNo)
@@ -2184,6 +2367,7 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
                     Telefon = p.Telefon,
                     Adres = p.Adres,
                     AsgariUcret = 0,
+                    FirmaId = p.FirmaId,
                     FirmaAdi = p.Firma?.FirmaAdi,
                     SgkDurum = p.SGKBordroDahilMi ? "SGK'lı" : "SGK'sız",
                     IseGirisTarihi = p.IseBaslamaTarihi,
@@ -2446,6 +2630,7 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
         public string? Adres { get; set; }
         public decimal AsgariUcret { get; set; }
         public decimal Fark { get; set; }
+        public int? FirmaId { get; set; }
         public string? FirmaAdi { get; set; }
         public string? SgkDurum { get; set; }
         public DateTime? IseGirisTarihi { get; set; }
