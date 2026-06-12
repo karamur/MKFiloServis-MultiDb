@@ -525,7 +525,9 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Sofor>(entity =>
         {
             entity.ToTable("Personeller");
-            entity.HasIndex(e => e.SoforKodu).IsUnique();
+            entity.HasIndex(e => e.SoforKodu)
+                .IsUnique()
+                .HasFilter("\"SoforKodu\" IS NOT NULL AND TRIM(\"SoforKodu\") <> ''");
             entity.Property(e => e.SoforKodu).HasMaxLength(50);
             entity.Property(e => e.Ad).HasMaxLength(100);
             entity.Property(e => e.Soyad).HasMaxLength(100);
