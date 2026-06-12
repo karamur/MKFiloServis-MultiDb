@@ -387,7 +387,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var item in personelListesi!.Where(p => p.BankayaYatan > 0))
+                                @foreach (var item in personelListesi!)
                                 {
                                     <tr class="@(string.IsNullOrWhiteSpace(item.Personel.IBAN) ? "table-danger" : "")">
                                         <td>
@@ -480,12 +480,14 @@
         {
             // Aktif personelleri doğrudan DB'den al (cache bypass + AracAtamalari dahil)
             await using var db = await DbContextFactory.CreateDbContextAsync();
+            var donemBaslangic = new DateTime(secilenYil, secilenAy, 1);
             var aktifPersoneller = await db.Soforler
                 .AsNoTracking()
                 .Include(s => s.Firma)
                 .Include(s => s.AracAtamalari.Where(a => a.Aktif))
                     .ThenInclude(a => a.Arac)
                 .Where(s => !s.IsDeleted && s.Aktif)
+                .Where(s => s.IstenAyrilmaTarihi == null || s.IstenAyrilmaTarihi >= donemBaslangic)
                 .OrderBy(s => s.SiralamaNo == 0 ? int.MaxValue : s.SiralamaNo)
                 .ThenBy(s => s.Ad)
                 .ToListAsync();
@@ -731,10 +733,10 @@
         odemeTarihi = DateTime.Today;
         odemeAciklama = $"{new DateTime(secilenYil, secilenAy, 1):MMMM yyyy} maaş ödemesi";
         odemeBelgeNo = $"MAAS-{secilenYil}{secilenAy:00}";
-        // Sadece IBAN'ı olan ve bankaya yatan tutarı 0'dan büyük olanları seç
+        // IBAN'ı olan personelleri otomatik seç (BankayaYatan=0 olsa da SGK'lılar listede)
         foreach (var item in personelListesi!)
         {
-            item.Secili = !string.IsNullOrWhiteSpace(item.Personel.IBAN) && item.BankayaYatan > 0;
+            item.Secili = !string.IsNullOrWhiteSpace(item.Personel.IBAN);
         }
         showOdemeModal = true;
         await Task.CompletedTask;
