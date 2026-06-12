@@ -2087,11 +2087,15 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
         {
             var donemBaslangic = new DateTime(durYil, durAy, 1);
 
-            // Doğrudan DB sorgusu: aktif firma değişiminde cache bayatlamasın.
-            // SoforService.GetAllAsync() cache kullandığı için eski firma verisi dönebilir.
+            // Firma kapsamı: Aktif Firma → normal tenant filter yeterli.
+            // Tüm Firmalar → IgnoreQueryFilters + firmaIds güvenli sınırlama.
+            var firmaIds = GetCiktiFirmaIds();
             await using var ctx = await DbContextFactory.CreateDbContextAsync();
-            var aktifFirmaId = AktifFirmaProvider.AktifFirmaId ?? 0;
-            durTumPersoneller = await ctx.Soforler
+            IQueryable<Sofor> personelQuery = ctx.Soforler;
+            if (ciktiFirmaSecim == 1)
+                personelQuery = personelQuery.IgnoreQueryFilters().Where(s => firmaIds.Contains(s.FirmaId!.Value));
+
+            durTumPersoneller = await personelQuery
                 .Include(s => s.Firma)
                 .Include(s => s.AracAtamalari.Where(a => a.Aktif)).ThenInclude(a => a.Arac)
                 .Where(s => !s.IsDeleted && s.Aktif)
