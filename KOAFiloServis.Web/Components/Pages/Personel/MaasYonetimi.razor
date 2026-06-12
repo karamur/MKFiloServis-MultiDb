@@ -42,6 +42,9 @@
             <button class="btn btn-outline-success btn-sm" @onclick="DurumExcelAktar" disabled="@(!DurFiltreliSatirlar.Any())">
                 <i class="bi bi-file-earmark-excel me-1"></i>Excel
             </button>
+            <button class="btn btn-outline-info btn-sm" @onclick="DurumYazdir" disabled="@(!DurFiltreliSatirlar.Any())">
+                <i class="bi bi-printer me-1"></i>Yazdır
+            </button>
             <button class="btn btn-outline-secondary btn-sm" @onclick="YenileDurumData" disabled="@isLoading" title="Yenile">
                 <i class="bi bi-arrow-clockwise"></i>
             </button>
@@ -1914,68 +1917,116 @@
         try
         {
             var filtreliler = DurFiltreliSatirlar.ToList();
+            if (!filtreliler.Any()) { BildirimGoster("Dışa aktarılacak kayıt bulunamadı.", false); return; }
+
             using var workbook = new XLWorkbook();
-            var worksheet = workbook.Worksheets.Add("Ödeme-Durum");
-            worksheet.Cell("A1").Value = "Personel Ödeme / Durum Listesi";
-            worksheet.Range("A1:K1").Merge().Style.Font.Bold = true;
-            worksheet.Range("A1:K1").Style.Font.FontSize = 14;
-            worksheet.Cell("A2").Value = $"Dönem: {new DateTime(durYil, durAy, 1):MMMM yyyy}  |  Oluşturulma: {DateTime.Now:dd.MM.yyyy HH:mm}";
-            worksheet.Range("A2:K2").Merge().Style.Font.Italic = true;
-            var header = worksheet.Row(4);
-            header.Cell(1).Value = "Sıra";
-            header.Cell(2).Value = "Personel Kodu";
-            header.Cell(3).Value = "Ad Soyad";
-            header.Cell(4).Value = "Görev";
-            header.Cell(5).Value = "Gerçek Maaş";
-            header.Cell(6).Value = "Bankaya Yatan";
-            header.Cell(7).Value = "Avans (-)";
-            header.Cell(8).Value = "Kesinti (-)";
-            header.Cell(9).Value = "Harcaması (+)";
-            header.Cell(10).Value = "Ödenecek";
-            header.Cell(11).Value = "Durum";
+            var ws = workbook.Worksheets.Add("MaasOdeme");
+            ws.Cell("A1").Value = "ÜSTÜN GRUP SEYAHAT";
+            ws.Cell("A2").Value = "Maaş / Ödeme Yönetimi";
+            ws.Cell("A3").Value = $"Dönem: {new DateTime(durYil, durAy, 1):MMMM yyyy}  |  {DateTime.Now:dd.MM.yyyy HH:mm}";
+            ws.Range("A1:L1").Merge().Style.Font.Bold = true;
+            ws.Range("A1:L1").Style.Font.FontSize = 14;
+            ws.Range("A1:L1").Style.Fill.BackgroundColor = XLColor.DarkRed;
+            ws.Range("A1:L1").Style.Font.FontColor = XLColor.White;
+            ws.Range("A2:L3").Merge();
+
+            var header = ws.Row(5);
+            var basliklar = new[] { "S.NO", "PLAKA", "AD SOYAD", "TELEFON", "ADRES", "GERÇEK MAAŞ", "ASGARİ", "FARK", "FİRMA", "SGK", "İŞE GİRİŞ", "İŞTEN ÇIKIŞ" };
+            for (int i = 0; i < basliklar.Length; i++)
+                header.Cell(i + 1).Value = basliklar[i];
             header.Style.Font.Bold = true;
-            header.Style.Fill.BackgroundColor = XLColor.LightGray;
-            var row = 5;
-            var sira = 0;
+            header.Style.Fill.BackgroundColor = XLColor.Red;
+            header.Style.Font.FontColor = XLColor.White;
+
+            var row = 6; var sira = 0;
             foreach (var item in filtreliler)
             {
                 sira++;
-                worksheet.Cell(row, 1).Value = item.SiralamaNo > 0 ? item.SiralamaNo : sira;
-                worksheet.Cell(row, 2).Value = item.SoforKodu;
-                worksheet.Cell(row, 3).Value = item.AdSoyad;
-                worksheet.Cell(row, 4).Value = item.GorevAdi;
-                worksheet.Cell(row, 5).Value = item.GercekMaas;
-                worksheet.Cell(row, 6).Value = item.BankayaYatan;
-                worksheet.Cell(row, 7).Value = item.Avans;
-                worksheet.Cell(row, 8).Value = item.Kesinti;
-                worksheet.Cell(row, 9).Value = item.Harcamasi;
-                worksheet.Cell(row, 10).Value = item.Odenecek;
-                worksheet.Cell(row, 11).Value = item.Odenecek > 0 ? "Elden Ödenecek" : item.BankayaYatan > 0 ? "Banka Ödemesi" : "Ödeme Yok";
-                if (item.Odenecek > 0)
-                    worksheet.Cell(row, 11).Style.Fill.BackgroundColor = XLColor.LightYellow;
+                ws.Cell(row, 1).Value = item.SiralamaNo > 0 ? item.SiralamaNo : sira;
+                ws.Cell(row, 2).Value = item.Plaka ?? "-";
+                ws.Cell(row, 3).Value = item.AdSoyad;
+                ws.Cell(row, 4).Value = item.Telefon ?? "-";
+                ws.Cell(row, 5).Value = item.Adres ?? "-";
+                ws.Cell(row, 6).Value = item.GercekMaas;
+                ws.Cell(row, 7).Value = item.AsgariUcret;
+                ws.Cell(row, 8).Value = item.Fark;
+                ws.Cell(row, 9).Value = item.FirmaAdi ?? "-";
+                ws.Cell(row, 10).Value = item.SgkDurum ?? "-";
+                ws.Cell(row, 11).Value = item.IseGirisTarihi?.ToString("dd.MM.yyyy") ?? "-";
+                ws.Cell(row, 12).Value = item.IstenCikisTarihi?.ToString("dd.MM.yyyy") ?? "-";
                 row++;
             }
-            // Toplam satırı
-            worksheet.Cell(row, 1).Value = "TOPLAM";
-            worksheet.Cell(row, 1).Style.Font.Bold = true;
-            worksheet.Cell(row, 5).Value = filtreliler.Sum(x => x.GercekMaas);
-            worksheet.Cell(row, 6).Value = filtreliler.Sum(x => x.BankayaYatan);
-            worksheet.Cell(row, 7).Value = filtreliler.Sum(x => x.Avans);
-            worksheet.Cell(row, 8).Value = filtreliler.Sum(x => x.Kesinti);
-            worksheet.Cell(row, 9).Value = filtreliler.Sum(x => x.Harcamasi);
-            worksheet.Cell(row, 10).Value = filtreliler.Sum(x => x.Odenecek);
-            for (int c = 1; c <= 10; c++) worksheet.Cell(row, c).Style.Font.Bold = true;
-            worksheet.Range(5, 5, Math.Max(row, 5), 10).Style.NumberFormat.Format = "#,##0.00 ₺";
-            worksheet.Columns().AdjustToContents();
+
+            ws.Column(6).Style.NumberFormat.Format = "#,##0.00";
+            ws.Column(7).Style.NumberFormat.Format = "#,##0.00";
+            ws.Column(8).Style.NumberFormat.Format = "#,##0.00";
+            ws.Columns().AdjustToContents();
+
             using var stream = new MemoryStream();
             workbook.SaveAs(stream);
             var bytes = stream.ToArray();
-            await JS.InvokeVoidAsync("downloadFileFromBase64", $"odeme_durum_{durYil}{durAy:D2}_{DateTime.Now:HHmm}.xlsx", Convert.ToBase64String(bytes));
+            await JS.InvokeVoidAsync("downloadFileFromBase64", $"MaasOdeme_{durYil}_{durAy:D2}.xlsx", Convert.ToBase64String(bytes));
+            BildirimGoster($"Excel dışa aktarıldı: {filtreliler.Count} kayıt.", true);
         }
         catch (Exception ex)
         {
-            BildirimGoster($"Excel oluşturulurken hata: {ex.Message}", false);
+            BildirimGoster($"Excel hatası: {ex.Message}", false);
         }
+    }
+
+    private async Task DurumYazdir()
+    {
+        var filtreliler = DurFiltreliSatirlar.ToList();
+        if (!filtreliler.Any()) { BildirimGoster("Yazdırılacak kayıt bulunamadı.", false); return; }
+
+        var donemAdi = new DateTime(durYil, durAy, 1).ToString("MMMM yyyy");
+        var satirlarHtml = new System.Text.StringBuilder();
+        var sira = 0;
+        foreach (var item in filtreliler)
+        {
+            sira++;
+            satirlarHtml.Append("<tr>");
+            satirlarHtml.Append($"<td>{(item.SiralamaNo > 0 ? item.SiralamaNo : sira)}</td>");
+            satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.Plaka ?? "-")}</td>");
+            satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.AdSoyad)}</td>");
+            satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.Telefon ?? "-")}</td>");
+            satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.Adres ?? "-")}</td>");
+            satirlarHtml.Append($"<td style=\"text-align:right;\">{item.GercekMaas:N2}</td>");
+            satirlarHtml.Append($"<td style=\"text-align:right;\">{item.AsgariUcret:N2}</td>");
+            satirlarHtml.Append($"<td style=\"text-align:right;\">{item.Fark:N2}</td>");
+            satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.FirmaAdi ?? "-")}</td>");
+            satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.SgkDurum ?? "-")}</td>");
+            satirlarHtml.Append($"<td>{item.IseGirisTarihi?.ToString("dd.MM.yyyy") ?? "-"}</td>");
+            satirlarHtml.Append($"<td>{item.IstenCikisTarihi?.ToString("dd.MM.yyyy") ?? "-"}</td>");
+            satirlarHtml.Append("</tr>");
+        }
+
+        var html = $@"<!DOCTYPE html><html><head><meta charset=""utf-8""><title>Maaş / Ödeme</title>
+<style>
+body {{ font-family: Arial, sans-serif; margin: 16px; font-size: 11px; }}
+h2 {{ text-align: center; color: #8b0000; margin-bottom: 2px; }}
+h3 {{ text-align: center; margin-top: 0; }}
+table {{ width: 100%; border-collapse: collapse; margin-top: 12px; }}
+th {{ background: #8b0000; color: white; padding: 6px 4px; font-size: 10px; text-align: left; }}
+td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
+@media print {{ body {{ margin: 0; }} }}
+</style></head><body>
+<h2>ÜSTÜN GRUP SEYAHAT</h2>
+<h3>Maaş / Ödeme Yönetimi — {donemAdi}</h3>
+<table><thead><tr>
+<th>S.NO</th><th>PLAKA</th><th>AD SOYAD</th><th>TELEFON</th><th>ADRES</th>
+<th>GERÇEK MAAŞ</th><th>ASGARİ</th><th>FARK</th><th>FİRMA</th><th>SGK</th>
+<th>İŞE GİRİŞ</th><th>İŞTEN ÇIKIŞ</th>
+</tr></thead><tbody>{satirlarHtml}</tbody>
+<tfoot><tr style=""font-weight:bold; background:#f0f0f0;"">
+<td colspan=""5"">TOPLAM ({filtreliler.Count} personel)</td>
+<td style=""text-align:right;"">{filtreliler.Sum(x => x.GercekMaas):N2}</td>
+<td style=""text-align:right;"">{filtreliler.Sum(x => x.AsgariUcret):N2}</td>
+<td style=""text-align:right;"">{filtreliler.Sum(x => x.Fark):N2}</td>
+<td colspan=""4""></td>
+</tr></tfoot></table></body></html>";
+
+        await JS.InvokeVoidAsync("printContent", html);
     }
 
     // ===== DURUM TABLOSU METHODS =====
@@ -1984,9 +2035,11 @@
         isLoading = true;
         try
         {
+            var donemBaslangic = new DateTime(durYil, durAy, 1);
             durTumPersoneller = await SoforService.GetAllAsync();
             var aktifler = durTumPersoneller
-                .Where(p => !p.IsDeleted)
+                .Where(p => !p.IsDeleted && p.Aktif)
+                .Where(p => p.IstenAyrilmaTarihi == null || p.IstenAyrilmaTarihi >= donemBaslangic)
                 .OrderBy(p => p.SiralamaNo == 0 ? int.MaxValue : p.SiralamaNo)
                 .ThenBy(p => p.Ad)
                 .ToList();
@@ -2019,8 +2072,18 @@
                     BankayaYatan = bankayaYatan,
                     Avans = finansOzet?.KalanAvans ?? 0,
                     Kesinti = 0,
-                    Harcamasi = (finansOzet?.ToplamHarcama ?? 0) + (finansOzet?.KalanBorc > 0 ? finansOzet!.KalanBorc : 0)
+                    Harcamasi = (finansOzet?.ToplamHarcama ?? 0) + (finansOzet?.KalanBorc > 0 ? finansOzet!.KalanBorc : 0),
+                    // Excel / yazdirma ek kolonlar
+                    Plaka = p.AracAtamalari?.FirstOrDefault(a => a.Aktif)?.Arac?.AktifPlaka,
+                    Telefon = p.Telefon,
+                    Adres = p.Adres,
+                    AsgariUcret = 0,
+                    FirmaAdi = p.Firma?.FirmaAdi,
+                    SgkDurum = p.SGKBordroDahilMi ? "SGK'lı" : "SGK'sız",
+                    IseGirisTarihi = p.IseBaslamaTarihi,
+                    IstenCikisTarihi = p.IstenAyrilmaTarihi
                 };
+                satir.Fark = satir.GercekMaas - satir.AsgariUcret;
                 satir.Odenecek = satir.GercekMaas - satir.BankayaYatan - satir.Avans - satir.Kesinti + satir.Harcamasi;
                 durSatirlar.Add(satir);
             }
@@ -2270,6 +2333,16 @@
         public decimal Kesinti { get; set; }
         public decimal Harcamasi { get; set; }
         public decimal Odenecek { get; set; }
+        // Excel / yazdirma ek kolonlar
+        public string? Plaka { get; set; }
+        public string? Telefon { get; set; }
+        public string? Adres { get; set; }
+        public decimal AsgariUcret { get; set; }
+        public decimal Fark { get; set; }
+        public string? FirmaAdi { get; set; }
+        public string? SgkDurum { get; set; }
+        public DateTime? IseGirisTarihi { get; set; }
+        public DateTime? IstenCikisTarihi { get; set; }
     }
 
     private class EkstreHareket
