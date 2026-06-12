@@ -743,7 +743,13 @@
                                                 <div>
                                                     @if (evrak.Tamamlandi && !string.IsNullOrWhiteSpace(evrak.DosyaYolu))
                                                     {
-                                                        <button class="btn btn-sm btn-outline-primary" @onclick="() => EvrakDosyaIndir(evrak)" title="İndir">
+                                                        <button class="btn btn-sm btn-outline-primary" @onclick="() => EvrakOnizle(evrak)" title="Önizle">
+                                                            <i class="bi bi-eye"></i>
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-dark ms-1" @onclick="() => EvrakYazdir(evrak)" title="Yazdır">
+                                                            <i class="bi bi-printer"></i>
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-secondary ms-1" @onclick="() => EvrakDosyaIndir(evrak)" title="İndir">
                                                             <i class="bi bi-download"></i>
                                                         </button>
                                                     }
@@ -810,7 +816,13 @@
                                         <td class="text-end">
                                             @if (evrak.Tamamlandi && !string.IsNullOrWhiteSpace(evrak.DosyaYolu))
                                             {
-                                                <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => EvrakDosyaIndir(evrak)" title="İndir">
+                                                <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => EvrakOnizle(evrak)" title="Önizle">
+                                                    <i class="bi bi-eye"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-dark me-1" @onclick="() => EvrakYazdir(evrak)" title="Yazdır">
+                                                    <i class="bi bi-printer"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => EvrakDosyaIndir(evrak)" title="İndir">
                                                     <i class="bi bi-download"></i>
                                                 </button>
                                             }
@@ -993,6 +1005,55 @@
     </div>
 }
 
+@* Özlük Evrak Önizleme Modal *@
+@if (onizlemeModalAcik)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-eye me-2"></i>@onizlemeBaslik</h5>
+                    <button type="button" class="btn-close" @onclick="OnizlemeKapat"></button>
+                </div>
+                <div class="modal-body text-center" style="min-height:70vh;">
+                    @if (!onizlemeDestekleniyor)
+                    {
+                        <div class="alert alert-warning mt-5">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            Bu dosya türü için önizleme desteklenmiyor. Dosyayı indirerek açabilirsiniz.
+                        </div>
+                    }
+                    else if (onizlemeContentType == "application/pdf")
+                    {
+                        <iframe src="@onizlemeDataUrl"
+                                style="width:100%; height:70vh; border:0;"
+                                title="@onizlemeBaslik">
+                        </iframe>
+                    }
+                    else if (onizlemeContentType?.StartsWith("image/") == true)
+                    {
+                        <img src="@onizlemeDataUrl"
+                             style="max-width:100%; max-height:70vh; height:auto;"
+                             alt="@onizlemeBaslik" />
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="OnizlemeKapat">
+                        <i class="bi bi-x-lg me-1"></i>Kapat
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" @onclick="OnizlenenDosyayiIndir">
+                        <i class="bi bi-download me-1"></i>İndir
+                    </button>
+                    <button type="button" class="btn btn-primary" @onclick="OnizlenenDosyayiYazdir"
+                            disabled="@(!onizlemeDestekleniyor)">
+                        <i class="bi bi-printer me-1"></i>Yazdır
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter]
     public int? Id { get; set; }
@@ -1017,6 +1078,15 @@
     private OzlukEvrakDetay? seciliEvrakDetay;
     private IBrowserFile? secilenEvrakDosya;
     private bool evrakYukleniyor = false;
+
+    // Özlük Evrak Önizleme
+    private bool onizlemeModalAcik;
+    private string? onizlemeBaslik;
+    private string? onizlemeContentType;
+    private string? onizlemeBase64;
+    private string? onizlemeDataUrl;
+    private string? onizlemeDosyaAdi;
+    private bool onizlemeDestekleniyor;
 
     // Araç Eşleştirme
     private List<PersonelAracAtama>? aracAtamalari;
@@ -1778,11 +1848,32 @@
         return $"{bytes / (1024.0 * 1024.0):F1} MB";
     }
 
+    private static string GetContentType(string fileName)
+    {
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        return ext switch
+        {
+            ".pdf" => "application/pdf",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            ".bmp" => "image/bmp",
+            ".doc" => "application/msword",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".xls" => "application/vnd.ms-excel",
+            ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            _ => "application/octet-stream"
+        };
+    }
+
     private string GetMimeType(string extension) => extension.ToLower() switch
     {
         "pdf" => "application/pdf",
         "jpg" or "jpeg" => "image/jpeg",
         "png" => "image/png",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
         "doc" => "application/msword",
         "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         _ => "application/octet-stream"
@@ -1793,6 +1884,135 @@
         while (dosyaAdi.EndsWith(".enc", StringComparison.OrdinalIgnoreCase))
             dosyaAdi = dosyaAdi[..^4];
         return dosyaAdi;
+    }
+
+    private async Task EvrakOnizle(OzlukEvrakDetay evrak)
+    {
+        if (string.IsNullOrWhiteSpace(evrak.DosyaYolu))
+        {
+            ToastService.ShowWarning("Bu evrak için dosya bulunamadı.");
+            return;
+        }
+
+        try
+        {
+            var bytes = await SecureFileService.ReadDecryptedAsync(evrak.DosyaYolu);
+            if (bytes == null || bytes.Length == 0)
+            {
+                ToastService.ShowWarning("Dosya bulunamadı veya şifresi çözülemedi.");
+                return;
+            }
+
+            var dosyaAdi = EncExtensionTemizle(Path.GetFileName(evrak.DosyaYolu));
+            var contentType = GetContentType(dosyaAdi);
+
+            onizlemeBaslik = dosyaAdi;
+            onizlemeDosyaAdi = dosyaAdi;
+            onizlemeContentType = contentType;
+            onizlemeBase64 = Convert.ToBase64String(bytes);
+            onizlemeDataUrl = $"data:{contentType};base64,{onizlemeBase64}";
+
+            onizlemeDestekleniyor =
+                contentType == "application/pdf" ||
+                contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+
+            onizlemeModalAcik = true;
+
+            await AktiviteLog.LogGoruntulemeAsync("Şoforler", "OzlukEvrak", 0, dosyaAdi,
+                $"Özlük evrak önizlendi: {dosyaAdi} (Şoför #{Id})");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[EvrakOnizle HATA] EvrakId={evrak.EvrakTanimId}, Adi={evrak.EvrakAdi}, Yol={evrak.DosyaYolu}: {ex.Message}");
+            ToastService.ShowError("Evrak önizlenemedi. Dosya bulunamadı veya şifresi çözülemedi.");
+        }
+    }
+
+    private async Task EvrakYazdir(OzlukEvrakDetay evrak)
+    {
+        // Önce önizleme state'ini hazırla, sonra yazdırma penceresini aç.
+        if (string.IsNullOrWhiteSpace(evrak.DosyaYolu))
+        {
+            ToastService.ShowWarning("Bu evrak için dosya bulunamadı.");
+            return;
+        }
+
+        try
+        {
+            var bytes = await SecureFileService.ReadDecryptedAsync(evrak.DosyaYolu);
+            if (bytes == null || bytes.Length == 0)
+            {
+                ToastService.ShowWarning("Dosya bulunamadı veya şifresi çözülemedi.");
+                return;
+            }
+
+            var dosyaAdi = EncExtensionTemizle(Path.GetFileName(evrak.DosyaYolu));
+            var contentType = GetContentType(dosyaAdi);
+
+            var destekleniyor =
+                contentType == "application/pdf" ||
+                contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+
+            if (!destekleniyor)
+            {
+                ToastService.ShowWarning("Bu dosya türü yazdırma için desteklenmiyor. Dosyayı indirerek açabilirsiniz.");
+                return;
+            }
+
+            var base64 = Convert.ToBase64String(bytes);
+
+            await AktiviteLog.LogGoruntulemeAsync("Şoforler", "OzlukEvrak", 0, dosyaAdi,
+                $"Özlük evrak yazdırıldı: {dosyaAdi} (Şoför #{Id})");
+            await JS.InvokeVoidAsync("printBase64File", base64, contentType);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[EvrakYazdir HATA] EvrakId={evrak.EvrakTanimId}, Adi={evrak.EvrakAdi}: {ex.Message}");
+            ToastService.ShowError("Evrak yazdırılamadı.");
+        }
+    }
+
+    private async Task OnizlenenDosyayiIndir()
+    {
+        if (string.IsNullOrWhiteSpace(onizlemeBase64) ||
+            string.IsNullOrWhiteSpace(onizlemeDosyaAdi) ||
+            string.IsNullOrWhiteSpace(onizlemeContentType))
+            return;
+
+        await JS.InvokeVoidAsync(
+            "downloadFileFromBase64",
+            onizlemeDosyaAdi,
+            onizlemeBase64,
+            onizlemeContentType);
+    }
+
+    private async Task OnizlenenDosyayiYazdir()
+    {
+        if (string.IsNullOrWhiteSpace(onizlemeBase64) ||
+            string.IsNullOrWhiteSpace(onizlemeContentType))
+            return;
+
+        if (!onizlemeDestekleniyor)
+        {
+            ToastService.ShowWarning("Bu dosya türü yazdırma için desteklenmiyor.");
+            return;
+        }
+
+        await JS.InvokeVoidAsync(
+            "printBase64File",
+            onizlemeBase64,
+            onizlemeContentType);
+    }
+
+    private void OnizlemeKapat()
+    {
+        onizlemeModalAcik = false;
+        onizlemeBaslik = null;
+        onizlemeContentType = null;
+        onizlemeBase64 = null;
+        onizlemeDataUrl = null;
+        onizlemeDosyaAdi = null;
+        onizlemeDestekleniyor = false;
     }
 
     #endregion
