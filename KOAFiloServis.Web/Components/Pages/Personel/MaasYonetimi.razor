@@ -1239,7 +1239,7 @@
     private List<PersonelCebindenHarcamaItem> durCebHarcamalar = new();
     private bool CanBorcKaydiKaliciSil => kullaniciYetkileri.Contains("*") || kullaniciYetkileri.Contains(Yetkiler.PersonelBorcSil);
     private List<Sofor> OlusturulabilirMaasPersoneller => soforler
-        .Where(s => s.Aktif && !s.IsDeleted)
+        .Where(s => s.Aktif && !s.IsDeleted && s.IstenAyrilmaTarihi == null)
         .Where(s => maasRapor == null || maasRapor.Detaylar.All(d => d.SoforId != s.Id))
         .OrderBy(s => s.SiralamaNo == 0 ? int.MaxValue : s.SiralamaNo)
         .ThenBy(s => s.Ad)

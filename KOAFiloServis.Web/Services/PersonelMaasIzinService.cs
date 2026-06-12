@@ -142,7 +142,7 @@ public class PersonelMaasIzinService : IPersonelMaasIzinService
         sonuc.ZatenVarSayisi = mevcutSoforIds.Count;
 
         var olusturulacakSoforler = await context.Soforler
-            .Where(s => s.Aktif && benzersizSoforIds.Contains(s.Id) && !mevcutSoforIds.Contains(s.Id))
+            .Where(s => s.Aktif && s.IstenAyrilmaTarihi == null && benzersizSoforIds.Contains(s.Id) && !mevcutSoforIds.Contains(s.Id))
             .ToListAsync();
 
         foreach (var sofor in olusturulacakSoforler)
@@ -183,7 +183,7 @@ public class PersonelMaasIzinService : IPersonelMaasIzinService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var aktifSoforler = await context.Soforler
-            .Where(s => s.Aktif)
+            .Where(s => s.Aktif && s.IstenAyrilmaTarihi == null)
             .ToListAsync();
 
         foreach (var sofor in aktifSoforler)
@@ -365,7 +365,7 @@ public class PersonelMaasIzinService : IPersonelMaasIzinService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var aktifSoforler = await context.Soforler
-            .Where(s => s.Aktif)
+            .Where(s => s.Aktif && s.IstenAyrilmaTarihi == null)
             .ToListAsync();
 
         foreach (var sofor in aktifSoforler)
@@ -500,7 +500,7 @@ public class PersonelMaasIzinService : IPersonelMaasIzinService
         var buYil = DateTime.Today.Year;
 
         var soforler = await context.Soforler
-            .Where(s => s.Aktif)
+            .Where(s => s.Aktif && s.IstenAyrilmaTarihi == null)
             .ToListAsync();
 
         var izinHaklari = await context.PersonelIzinHaklari
