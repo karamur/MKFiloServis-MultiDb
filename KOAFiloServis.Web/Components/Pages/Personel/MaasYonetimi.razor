@@ -44,15 +44,10 @@
                     <option value="@m">@(new DateTime(2024, m, 1).ToString("MMMM"))</option>
                 }
             </select>
-            <select class="form-select form-select-sm" style="width: 200px;" @bind="ciktiFirmaSecim">
+            <select class="form-select form-select-sm" style="width: 160px;" @bind="ciktiFirmaSecim">
                 <option value="0">Aktif Firma</option>
-                <option value="1">Seçili Firmalar</option>
-                <option value="2">Tüm Firmalar</option>
+                <option value="1">Tüm Firmalar</option>
             </select>
-            <div class="form-check form-check-inline small">
-                <input class="form-check-input" type="checkbox" id="altFirmalarDahil" @bind="ciktiAltFirmalarDahil" />
-                <label class="form-check-label" for="altFirmalarDahil">Alt Firmalar Dahil</label>
-            </div>
             <button class="btn btn-outline-success btn-sm" @onclick="DurumExcelAktar" disabled="@(!DurFiltreliSatirlar.Any())">
                 <i class="bi bi-file-earmark-excel me-1"></i>Excel
             </button>
@@ -1256,9 +1251,7 @@
     private List<PersonelCebindenHarcamaItem> durCebHarcamalar = new();
     private bool CanBorcKaydiKaliciSil => kullaniciYetkileri.Contains("*") || kullaniciYetkileri.Contains(Yetkiler.PersonelBorcSil);
     // Firma seçimi (Excel/Yazdır için)
-    private int ciktiFirmaSecim = 0; // 0=Aktif, 1=Seçili, 2=Tümü
-    private List<int> ciktiSeciliFirmaIds = new();
-    private bool ciktiAltFirmalarDahil = false;
+    private int ciktiFirmaSecim = 0; // 0=Aktif, 1=Tüm Firmalar
     private List<Firma> ciktiFirmaListesi = new();
     private List<Sofor> OlusturulabilirMaasPersoneller => soforler
         .Where(s => s.Aktif && !s.IsDeleted)
@@ -1304,7 +1297,6 @@
         await InvokeAsync(async () =>
         {
             ciktiFirmaSecim = 0;
-            ciktiSeciliFirmaIds = new();
             await CiktiFirmaListesiniYukle();
             await YenileDurumData();
             StateHasChanged();
@@ -1961,13 +1953,10 @@
 
     private List<int> GetCiktiFirmaIds()
     {
-        var aktifId = AktifFirmaProvider.AktifFirmaId ?? 0;
-        return ciktiFirmaSecim switch
-        {
-            1 => ciktiSeciliFirmaIds.Any() ? ciktiSeciliFirmaIds : new List<int> { aktifId },
-            2 => ciktiFirmaListesi.Select(f => f.Id).ToList(),
-            _ => new List<int> { aktifId }
-        };
+        if (ciktiFirmaSecim == 1)
+            return ciktiFirmaListesi.Where(f => f.Aktif && !f.IsDeleted).Select(f => f.Id).ToList();
+
+        return new List<int> { AktifFirmaProvider.AktifFirmaId ?? 0 };
     }
 
     private async Task DurumExcelAktar()
@@ -1979,7 +1968,10 @@
 
             using var workbook = new XLWorkbook();
             var ws = workbook.Worksheets.Add("MaasOdeme");
-            ws.Cell("A1").Value = "ÜSTÜN GRUP SEYAHAT";
+            var excelFirmaAdi = ciktiFirmaSecim == 0
+                ? (AktifFirmaProvider.Mevcut?.FirmaAdi ?? "Maaş / Ödeme Yönetimi")
+                : "Tüm Firmalar";
+            ws.Cell("A1").Value = excelFirmaAdi;
             ws.Cell("A2").Value = "Maaş / Ödeme Yönetimi";
             ws.Cell("A3").Value = $"Dönem: {new DateTime(durYil, durAy, 1):MMMM yyyy}  |  {DateTime.Now:dd.MM.yyyy HH:mm}";
             ws.Range("A1:L1").Merge().Style.Font.Bold = true;
@@ -2069,7 +2061,7 @@ th {{ background: #8b0000; color: white; padding: 6px 4px; font-size: 10px; text
 td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
 @media print {{ body {{ margin: 0; }} }}
 </style></head><body>
-<h2>ÜSTÜN GRUP SEYAHAT</h2>
+<h2>{(ciktiFirmaSecim == 0 ? (AktifFirmaProvider.Mevcut?.FirmaAdi ?? "Maaş / Ödeme Yönetimi") : "Tüm Firmalar")}</h2>
 <h3>Maaş / Ödeme Yönetimi — {donemAdi}</h3>
 <table><thead><tr>
 <th>S.NO</th><th>PLAKA</th><th>AD SOYAD</th><th>TELEFON</th><th>ADRES</th>
