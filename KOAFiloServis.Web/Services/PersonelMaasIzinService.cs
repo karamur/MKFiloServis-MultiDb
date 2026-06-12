@@ -142,7 +142,7 @@ public class PersonelMaasIzinService : IPersonelMaasIzinService
         sonuc.ZatenVarSayisi = mevcutSoforIds.Count;
 
         var olusturulacakSoforler = await context.Soforler
-            .Where(s => s.Aktif && s.IstenAyrilmaTarihi == null && benzersizSoforIds.Contains(s.Id) && !mevcutSoforIds.Contains(s.Id))
+            .Where(s => s.Aktif && (s.IstenAyrilmaTarihi == null || s.IstenAyrilmaTarihi >= new DateTime(yil, ay, 1)) && benzersizSoforIds.Contains(s.Id) && !mevcutSoforIds.Contains(s.Id))
             .ToListAsync();
 
         foreach (var sofor in olusturulacakSoforler)
@@ -182,8 +182,9 @@ public class PersonelMaasIzinService : IPersonelMaasIzinService
     public async Task TopluMaasOlusturAsync(int yil, int ay)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
+        var donemBaslangic = new DateTime(yil, ay, 1);
         var aktifSoforler = await context.Soforler
-            .Where(s => s.Aktif && s.IstenAyrilmaTarihi == null)
+            .Where(s => s.Aktif && (s.IstenAyrilmaTarihi == null || s.IstenAyrilmaTarihi >= donemBaslangic))
             .ToListAsync();
 
         foreach (var sofor in aktifSoforler)
@@ -364,8 +365,9 @@ public class PersonelMaasIzinService : IPersonelMaasIzinService
     public async Task YillikIzinHaklariOlusturAsync(int yil)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
+        var donemBaslangic = new DateTime(yil, 1, 1);
         var aktifSoforler = await context.Soforler
-            .Where(s => s.Aktif && s.IstenAyrilmaTarihi == null)
+            .Where(s => s.Aktif && (s.IstenAyrilmaTarihi == null || s.IstenAyrilmaTarihi >= donemBaslangic))
             .ToListAsync();
 
         foreach (var sofor in aktifSoforler)
@@ -499,8 +501,9 @@ public class PersonelMaasIzinService : IPersonelMaasIzinService
         var buAy = DateTime.Today.Month;
         var buYil = DateTime.Today.Year;
 
+        var donemBaslangic = new DateTime(buYil, buAy, 1);
         var soforler = await context.Soforler
-            .Where(s => s.Aktif && s.IstenAyrilmaTarihi == null)
+            .Where(s => s.Aktif && (s.IstenAyrilmaTarihi == null || s.IstenAyrilmaTarihi >= donemBaslangic))
             .ToListAsync();
 
         var izinHaklari = await context.PersonelIzinHaklari
