@@ -1372,7 +1372,7 @@
             await using var ctx = await DbContextFactory.CreateDbContextAsync();
             aracAtamalari = await ctx.PersonelAracAtamalari
                 .Include(a => a.Arac)
-                .Where(a => a.SoforId == Id!.Value)
+                .Where(a => a.SoforId == Id!.Value && !a.IsDeleted)
                 .OrderByDescending(a => a.Aktif)
                 .ThenByDescending(a => a.BaslangicTarihi)
                 .ToListAsync();
@@ -1475,16 +1475,22 @@
         try
         {
             await using var ctx = await DbContextFactory.CreateDbContextAsync();
-            var atama = await ctx.PersonelAracAtamalari.FindAsync(atamaId);
-            if (atama != null)
+
+            var affected = await ctx.PersonelAracAtamalari
+                .Where(a => a.Id == atamaId)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(a => a.Aktif, false)
+                    .SetProperty(a => a.BitisTarihi, DateTime.Today)
+                    .SetProperty(a => a.UpdatedAt, DateTime.UtcNow));
+
+            if (affected != 1)
             {
-                atama.Aktif = false;
-                atama.BitisTarihi = DateTime.Today;
-                atama.UpdatedAt = DateTime.UtcNow;
-                await ctx.SaveChangesAsync();
-                ToastService.ShowSuccess("Araç eşleştirmesi kapatıldı.");
-                await AracAtamalariniYukle();
+                ToastService.ShowError($"Araç eşleştirme kapatılamadı. Kayıt bulunamadı (Id={atamaId}).");
+                return;
             }
+
+            ToastService.ShowSuccess("Araç eşleştirmesi kapatıldı.");
+            await AracAtamalariniYukle();
         }
         catch (Exception ex)
         {
@@ -1589,15 +1595,43 @@
         try
         {
             await using var ctx = await DbContextFactory.CreateDbContextAsync();
-            var atama = await ctx.PersonelAracAtamalari.FindAsync(atamaId);
-            if (atama != null)
+
+            // Güvenli silme: ExecuteUpdateAsync tracking bypass ile doğrudan DB'ye yazar.
+            // FindAsync + SaveChangesAsync pattern'i query filter / tracking sorunlarında
+            // update'i DB'ye göndermeyebilir. Bu yöntem kesin çalışır.
+            var affected = await ctx.PersonelAracAtamalari
+                .IgnoreQueryFilters()
+                .Where(a => a.Id == atamaId)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(a => a.IsDeleted, true)
+                    .SetProperty(a => a.Aktif, false)
+                    .SetProperty(a => a.BitisTarihi, DateTime.Today)
+                    .SetProperty(a => a.DeletedAt, DateTime.UtcNow)
+                    .SetProperty(a => a.UpdatedAt, DateTime.UtcNow));
+
+            if (affected != 1)
             {
-                atama.IsDeleted = true;
-                atama.UpdatedAt = DateTime.UtcNow;
-                await ctx.SaveChangesAsync();
-                ToastService.ShowSuccess("Araç eşleştirmesi silindi.");
-                await AracAtamalariniYukle();
+                // Hiçbir satır etkilenmediyse kayıt DB'de yok demektir.
+                ToastService.ShowError($"Araç eşleştirme silinemedi. Kayıt bulunamadı (Id={atamaId}).");
+                return;
             }
+
+            // DB doğrulaması: Kayıt gerçekten silindi mi?
+            var silinen = await ctx.PersonelAracAtamalari
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(a => a.Id == atamaId);
+
+            if (silinen == null || !silinen.IsDeleted || silinen.Aktif)
+            {
+                throw new InvalidOperationException(
+                    $"Araç eşleştirme DB doğrulamasından geçemedi. " +
+                    $"EslesmeId={atamaId}, IsDeleted={silinen?.IsDeleted}, Aktif={silinen?.Aktif}");
+            }
+
+            ToastService.ShowSuccess("Araç eşleştirmesi kaldırıldı.");
+            await AracAtamalariniYukle();
+            StateHasChanged();
         }
         catch (Exception ex)
         {
