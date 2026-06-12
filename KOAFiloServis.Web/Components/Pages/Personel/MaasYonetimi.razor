@@ -1974,42 +1974,61 @@
             ws.Cell("A1").Value = excelFirmaAdi;
             ws.Cell("A2").Value = "Maaş / Ödeme Yönetimi";
             ws.Cell("A3").Value = $"Dönem: {new DateTime(durYil, durAy, 1):MMMM yyyy}  |  {DateTime.Now:dd.MM.yyyy HH:mm}";
-            ws.Range("A1:L1").Merge().Style.Font.Bold = true;
-            ws.Range("A1:L1").Style.Font.FontSize = 14;
-            ws.Range("A1:L1").Style.Fill.BackgroundColor = XLColor.DarkRed;
-            ws.Range("A1:L1").Style.Font.FontColor = XLColor.White;
-            ws.Range("A2:L3").Merge();
+            ws.Range("A1:O1").Merge().Style.Font.Bold = true;
+            ws.Range("A1:O1").Style.Font.FontSize = 14;
+            ws.Range("A1:O1").Style.Fill.BackgroundColor = XLColor.DarkRed;
+            ws.Range("A1:O1").Style.Font.FontColor = XLColor.White;
+            ws.Range("A2:O3").Merge();
 
             var header = ws.Row(5);
-            var basliklar = new[] { "S.NO", "PLAKA", "AD SOYAD", "TELEFON", "ADRES", "GERÇEK MAAŞ", "ASGARİ", "FARK", "FİRMA", "SGK", "İŞE GİRİŞ", "İŞTEN ÇIKIŞ" };
+            var basliklar = new[] { "S.NO", "PLAKA", "AD SOYAD", "TELEFON", "ADRES", "GERÇEK MAAŞ", "BANKAYA YATAN", "AVANS (-)", "KESİNTİ (-)", "HARCAMASI (+)", "FARK / ÖDENECEK", "FİRMA", "SGK", "İŞE GİRİŞ", "İŞTEN ÇIKIŞ" };
             for (int i = 0; i < basliklar.Length; i++)
                 header.Cell(i + 1).Value = basliklar[i];
             header.Style.Font.Bold = true;
             header.Style.Fill.BackgroundColor = XLColor.Red;
             header.Style.Font.FontColor = XLColor.White;
 
-            var row = 6; var sira = 0;
+            var row = 6; var sira = 0; decimal toplamGercek = 0, toplamBankaya = 0, toplamAvans = 0, toplamKesinti = 0, toplamHarcama = 0, toplamFark = 0;
             foreach (var item in filtreliler)
             {
                 sira++;
+                var farkOdenecek = item.GercekMaas - item.BankayaYatan - item.Avans - item.Kesinti + item.Harcamasi;
+                toplamGercek += item.GercekMaas;
+                toplamBankaya += item.BankayaYatan;
+                toplamAvans += item.Avans;
+                toplamKesinti += item.Kesinti;
+                toplamHarcama += item.Harcamasi;
+                toplamFark += farkOdenecek;
+
                 ws.Cell(row, 1).Value = item.SiralamaNo > 0 ? item.SiralamaNo : sira;
                 ws.Cell(row, 2).Value = item.Plaka ?? "-";
                 ws.Cell(row, 3).Value = item.AdSoyad;
                 ws.Cell(row, 4).Value = item.Telefon ?? "-";
                 ws.Cell(row, 5).Value = item.Adres ?? "-";
                 ws.Cell(row, 6).Value = item.GercekMaas;
-                ws.Cell(row, 7).Value = item.AsgariUcret;
-                ws.Cell(row, 8).Value = item.Fark;
-                ws.Cell(row, 9).Value = item.FirmaAdi ?? "-";
-                ws.Cell(row, 10).Value = item.SgkDurum ?? "-";
-                ws.Cell(row, 11).Value = item.IseGirisTarihi?.ToString("dd.MM.yyyy") ?? "-";
-                ws.Cell(row, 12).Value = item.IstenCikisTarihi?.ToString("dd.MM.yyyy") ?? "-";
+                ws.Cell(row, 7).Value = item.BankayaYatan;
+                ws.Cell(row, 8).Value = item.Avans;
+                ws.Cell(row, 9).Value = item.Kesinti;
+                ws.Cell(row, 10).Value = item.Harcamasi;
+                ws.Cell(row, 11).Value = farkOdenecek;
+                ws.Cell(row, 12).Value = item.FirmaAdi ?? "-";
+                ws.Cell(row, 13).Value = item.SgkDurum ?? "-";
+                ws.Cell(row, 14).Value = item.IseGirisTarihi?.ToString("dd.MM.yyyy") ?? "-";
+                ws.Cell(row, 15).Value = item.IstenCikisTarihi?.ToString("dd.MM.yyyy") ?? "-";
                 row++;
             }
 
-            ws.Column(6).Style.NumberFormat.Format = "#,##0.00";
-            ws.Column(7).Style.NumberFormat.Format = "#,##0.00";
-            ws.Column(8).Style.NumberFormat.Format = "#,##0.00";
+            // Toplam satırı
+            ws.Cell(row, 1).Value = "TOPLAM"; ws.Cell(row, 1).Style.Font.Bold = true;
+            ws.Cell(row, 6).Value = toplamGercek;
+            ws.Cell(row, 7).Value = toplamBankaya;
+            ws.Cell(row, 8).Value = toplamAvans;
+            ws.Cell(row, 9).Value = toplamKesinti;
+            ws.Cell(row, 10).Value = toplamHarcama;
+            ws.Cell(row, 11).Value = toplamFark;
+            for (int c = 1; c <= 15; c++) ws.Cell(row, c).Style.Font.Bold = true;
+
+            for (int c = 6; c <= 11; c++) ws.Column(c).Style.NumberFormat.Format = "#,##0.00";
             ws.Columns().AdjustToContents();
 
             using var stream = new MemoryStream();
@@ -2032,9 +2051,14 @@
         var donemAdi = new DateTime(durYil, durAy, 1).ToString("MMMM yyyy");
         var satirlarHtml = new System.Text.StringBuilder();
         var sira = 0;
+        decimal tGercek = 0, tBankaya = 0, tAvans = 0, tKesinti = 0, tHarcama = 0, tFark = 0;
         foreach (var item in filtreliler)
         {
             sira++;
+            var farkOdenecek = item.GercekMaas - item.BankayaYatan - item.Avans - item.Kesinti + item.Harcamasi;
+            tGercek += item.GercekMaas; tBankaya += item.BankayaYatan; tAvans += item.Avans;
+            tKesinti += item.Kesinti; tHarcama += item.Harcamasi; tFark += farkOdenecek;
+
             satirlarHtml.Append("<tr>");
             satirlarHtml.Append($"<td>{(item.SiralamaNo > 0 ? item.SiralamaNo : sira)}</td>");
             satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.Plaka ?? "-")}</td>");
@@ -2042,8 +2066,11 @@
             satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.Telefon ?? "-")}</td>");
             satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.Adres ?? "-")}</td>");
             satirlarHtml.Append($"<td style=\"text-align:right;\">{item.GercekMaas:N2}</td>");
-            satirlarHtml.Append($"<td style=\"text-align:right;\">{item.AsgariUcret:N2}</td>");
-            satirlarHtml.Append($"<td style=\"text-align:right;\">{item.Fark:N2}</td>");
+            satirlarHtml.Append($"<td style=\"text-align:right;\">{item.BankayaYatan:N2}</td>");
+            satirlarHtml.Append($"<td style=\"text-align:right;\">{item.Avans:N2}</td>");
+            satirlarHtml.Append($"<td style=\"text-align:right;\">{item.Kesinti:N2}</td>");
+            satirlarHtml.Append($"<td style=\"text-align:right;\">{item.Harcamasi:N2}</td>");
+            satirlarHtml.Append($"<td style=\"text-align:right; font-weight:bold;\">{farkOdenecek:N2}</td>");
             satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.FirmaAdi ?? "-")}</td>");
             satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.SgkDurum ?? "-")}</td>");
             satirlarHtml.Append($"<td>{item.IseGirisTarihi?.ToString("dd.MM.yyyy") ?? "-"}</td>");
@@ -2065,14 +2092,17 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
 <h3>Maaş / Ödeme Yönetimi — {donemAdi}</h3>
 <table><thead><tr>
 <th>S.NO</th><th>PLAKA</th><th>AD SOYAD</th><th>TELEFON</th><th>ADRES</th>
-<th>GERÇEK MAAŞ</th><th>ASGARİ</th><th>FARK</th><th>FİRMA</th><th>SGK</th>
-<th>İŞE GİRİŞ</th><th>İŞTEN ÇIKIŞ</th>
+<th>GERÇEK MAAŞ</th><th>BANKAYA YATAN</th><th>AVANS (-)</th><th>KESİNTİ (-)</th><th>HARCAMASI (+)</th>
+<th>FARK / ÖDENECEK</th><th>FİRMA</th><th>SGK</th><th>İŞE GİRİŞ</th><th>İŞTEN ÇIKIŞ</th>
 </tr></thead><tbody>{satirlarHtml}</tbody>
 <tfoot><tr style=""font-weight:bold; background:#f0f0f0;"">
 <td colspan=""5"">TOPLAM ({filtreliler.Count} personel)</td>
-<td style=""text-align:right;"">{filtreliler.Sum(x => x.GercekMaas):N2}</td>
-<td style=""text-align:right;"">{filtreliler.Sum(x => x.AsgariUcret):N2}</td>
-<td style=""text-align:right;"">{filtreliler.Sum(x => x.Fark):N2}</td>
+<td style=""text-align:right;"">{tGercek:N2}</td>
+<td style=""text-align:right;"">{tBankaya:N2}</td>
+<td style=""text-align:right;"">{tAvans:N2}</td>
+<td style=""text-align:right;"">{tKesinti:N2}</td>
+<td style=""text-align:right;"">{tHarcama:N2}</td>
+<td style=""text-align:right;"">{tFark:N2}</td>
 <td colspan=""4""></td>
 </tr></tfoot></table></body></html>";
 
