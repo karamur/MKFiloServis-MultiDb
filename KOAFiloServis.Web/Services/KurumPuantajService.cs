@@ -640,8 +640,9 @@ public sealed class KurumPuantajService : IKurumPuantajService
             .ToListAsync();
 
         // SoforAd → SoforId eşleme tablosu (isimden ID çözümleme, Türkçe karakter normalize)
+        // NOT: FirmaId filtresi YOK — aynı isimli şoför farklı firmada da olsa eşleşir.
         var soforAdIdMap = await db.Soforler
-            .Where(s => !s.IsDeleted && guzergahIds.Contains(s.FirmaId ?? 0))
+            .Where(s => !s.IsDeleted)
             .Select(s => new { s.Ad, s.Soyad, s.Id, AdSoyad = s.TamAd })
             .ToListAsync();
         var soforLookup = soforAdIdMap
