@@ -331,7 +331,7 @@ public class MultiModulePersistenceTests
         var sp = CreateSp(firmaId);
         var factory = new TestDbContextFactory(sp);
         var numara = new NumaraSerisiService(factory);
-        return new GuzergahService(factory, Mock.Of<ICacheService>(), numara, sp.GetRequiredService<IAktifFirmaProvider>());
+        return new GuzergahService(factory, Mock.Of<ICacheService>(), numara, sp.GetRequiredService<IAktifFirmaProvider>(), null!);
     }
 
     [Fact]

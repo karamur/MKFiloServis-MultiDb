@@ -45,7 +45,7 @@ public class GuzergahFullCycleTests
         var sp = s.BuildServiceProvider();
         var f = new ScopedDbContextFactory(DbOpts, sp);
         var n = new NumaraSerisiService(f);
-        var gs = new GuzergahService(f, Mock.Of<ICacheService>(), n, new TestFirma(1));
+        var gs = new GuzergahService(f, Mock.Of<ICacheService>(), n, new TestFirma(1), null!);
         var ss = new GuzergahSeferService(f, new TestFirma(1), Mock.Of<ILogger<GuzergahSeferService>>());
         return (f, gs, ss);
     }

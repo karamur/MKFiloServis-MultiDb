@@ -11,17 +11,20 @@ public class GuzergahService : IGuzergahService
     private readonly ICacheService _cache;
     private readonly NumaraSerisiService _numaraSerisi;
     private readonly IAktifFirmaProvider _aktifFirmaProvider;
+    private readonly GuzergahSeferService _seferService;
 
     public GuzergahService(
         IDbContextFactory<ApplicationDbContext> contextFactory,
         ICacheService cache,
         NumaraSerisiService numaraSerisi,
-        IAktifFirmaProvider aktifFirmaProvider)
+        IAktifFirmaProvider aktifFirmaProvider,
+        GuzergahSeferService seferService)
     {
         _contextFactory = contextFactory;
         _cache = cache;
         _numaraSerisi = numaraSerisi;
         _aktifFirmaProvider = aktifFirmaProvider;
+        _seferService = seferService;
     }
 
     public Task<List<Guzergah>> GetAllAsync() =>
@@ -196,6 +199,76 @@ public class GuzergahService : IGuzergahService
 
         await _cache.RemoveByPrefixAsync(CacheKeys.GuzergahPrefix);
         return kontrol;
+    }
+
+    /// <summary>
+    /// Güzergah ana kayıt + seferleri TEK transaction içinde günceller.
+    /// Partial save riskini ortadan kaldırır.
+    /// </summary>
+    public async Task UpdateWithSeferlerAsync(Guzergah guzergah, List<GuzergahSefer> seferler)
+    {
+        await using var strategyDb = await _contextFactory.CreateDbContextAsync();
+        var strategy = strategyDb.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            await using var tx = await context.Database.BeginTransactionAsync();
+
+            try
+            {
+                var now = DateTime.UtcNow;
+
+                // 1. Güncelle ana güzergah kaydı
+                var existing = await context.Guzergahlar.FindAsync(guzergah.Id);
+                if (existing == null)
+                    throw new InvalidOperationException($"Güzergah bulunamadı. Id: {guzergah.Id}");
+
+                existing.GuzergahKodu = guzergah.GuzergahKodu;
+                existing.GuzergahAdi = guzergah.GuzergahAdi;
+                existing.BaslangicNoktasi = guzergah.BaslangicNoktasi;
+                existing.BitisNoktasi = guzergah.BitisNoktasi;
+                existing.BaslangicLatitude = guzergah.BaslangicLatitude;
+                existing.BaslangicLongitude = guzergah.BaslangicLongitude;
+                existing.BitisLatitude = guzergah.BitisLatitude;
+                existing.BitisLongitude = guzergah.BitisLongitude;
+                existing.RotaRengi = guzergah.RotaRengi;
+                existing.Mesafe = guzergah.Mesafe;
+                existing.TahminiSure = guzergah.TahminiSure;
+                existing.GelirFiyat = guzergah.GelirFiyat;
+                existing.GiderFiyat = guzergah.GiderFiyat;
+                existing.SeferTipi = guzergah.SeferTipi;
+                existing.PersonelSayisi = guzergah.PersonelSayisi;
+                existing.KapasiteAdi = guzergah.KapasiteAdi;
+                existing.FirmaId = guzergah.FirmaId > 0 ? guzergah.FirmaId : null;
+                existing.VarsayilanAracId = guzergah.VarsayilanAracId;
+                existing.VarsayilanSoforId = guzergah.VarsayilanSoforId;
+                existing.Notlar = guzergah.Notlar;
+                existing.PuantajCarpani = guzergah.PuantajCarpani;
+                existing.Aktif = guzergah.Aktif;
+                existing.IsDeleted = guzergah.IsDeleted;
+                existing.UpdatedAt = now;
+
+                int? hedefCariId = guzergah.CariId > 0 ? guzergah.CariId : null;
+                int? hedefKurumId = guzergah.KurumId > 0 ? guzergah.KurumId : null;
+                existing.CariId = hedefCariId ?? existing.CariId;
+                existing.KurumId = hedefKurumId ?? existing.KurumId;
+
+                await context.SaveChangesAsync();
+
+                // 2. Replace seferler (aynı context + transaction içinde)
+                await _seferService.ReplaceAllInCurrentDbAsync(context, guzergah.Id, seferler, now);
+
+                await tx.CommitAsync();
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        });
+
+        await _cache.RemoveByPrefixAsync(CacheKeys.GuzergahPrefix);
     }
 
     public async Task DeleteAsync(int id)

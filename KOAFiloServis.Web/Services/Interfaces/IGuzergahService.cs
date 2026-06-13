@@ -12,6 +12,7 @@ public interface IGuzergahService
     Task<Guzergah> CreateAsync(Guzergah guzergah);
     Task<Guzergah> AddAsync(Guzergah guzergah);
     Task<Guzergah> UpdateAsync(Guzergah guzergah);
+    Task UpdateWithSeferlerAsync(Guzergah guzergah, List<GuzergahSefer> seferler);
     Task DeleteAsync(int id);
     Task<string> GenerateNextKodAsync();
     Task<string> GenerateGuzergahKoduAsync(int firmaId);

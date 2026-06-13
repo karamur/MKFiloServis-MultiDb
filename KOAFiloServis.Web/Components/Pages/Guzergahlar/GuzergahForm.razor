@@ -1158,50 +1158,30 @@
         try
         {
             kaydediliyor = true;
+            SeferSlotlariGuncelle();
 
-            // ÖNCE seferleri kaydet (böylece hata olursa güzergah ana kaydı etkilenmez)
+            var firmaId = guzergah.FirmaId > 0 ? guzergah.FirmaId : AktifFirmaProvider.AktifFirmaId;
+            var seferEntities = seferKalemleri.Select(k => new GuzergahSefer
+            {
+                GuzergahId = guzergah.Id,
+                FirmaId = firmaId,
+                SeferTipi = k.SeferTipi,
+                Slot = k.Slot,
+                KapasiteAdi = k.KapasiteAdi,
+                AracId = k.AracId,
+                SoforAd = k.SoforAd,
+                SoforTelefon = k.SoforTelefon,
+                FirmaAdiSerbest = k.Firma
+            }).ToList();
+
             if (IsEdit)
             {
-                SeferSlotlariGuncelle();
-                var firmaId = guzergah.FirmaId > 0 ? guzergah.FirmaId : AktifFirmaProvider.AktifFirmaId;
-                var seferEntities = seferKalemleri.Select(k => new GuzergahSefer
-                {
-                    GuzergahId = guzergah.Id,
-                    FirmaId = firmaId,
-                    SeferTipi = k.SeferTipi,
-                    Slot = k.Slot,
-                    KapasiteAdi = k.KapasiteAdi,
-                    AracId = k.AracId,
-                    SoforAd = k.SoforAd,
-                    SoforTelefon = k.SoforTelefon,
-                    FirmaAdiSerbest = k.Firma
-                }).ToList();
-                await GuzergahSeferService.ReplaceAllAsync(guzergah.Id, seferEntities);
-            }
-
-            // SONRA güzergah ana kaydını kaydet
-            if (IsEdit)
-            {
-                await GuzergahService.UpdateAsync(guzergah);
+                // TEK TRANSACTION: ana kayıt + seferler birlikte
+                await GuzergahService.UpdateWithSeferlerAsync(guzergah, seferEntities);
             }
             else
             {
                 await GuzergahService.CreateAsync(guzergah);
-                // Yeni kayıt için seferleri şimdi kaydet
-                SeferSlotlariGuncelle();
-                var firmaId = guzergah.FirmaId > 0 ? guzergah.FirmaId : AktifFirmaProvider.AktifFirmaId;
-                var seferEntities = seferKalemleri.Select(k => new GuzergahSefer
-                {
-                    GuzergahId = guzergah.Id,
-                    FirmaId = firmaId,
-                    SeferTipi = k.SeferTipi,
-                    Slot = k.Slot,
-                    KapasiteAdi = k.KapasiteAdi,
-                    AracId = k.AracId,
-                    SoforAd = k.SoforAd,
-                    SoforTelefon = k.SoforTelefon,
-                    FirmaAdiSerbest = k.Firma
-                }).ToList();
                 await GuzergahSeferService.ReplaceAllAsync(guzergah.Id, seferEntities);
             }
 

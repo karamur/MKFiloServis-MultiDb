@@ -44,7 +44,7 @@ public class GuzergahUpdateAllFieldsTests
         var sp = s.BuildServiceProvider();
         var f = new ScopedDbContextFactory(DbOpts, sp);
         var n = new NumaraSerisiService(f);
-        return (f, new GuzergahService(f, Mock.Of<ICacheService>(), n, new TestFirma(1)));
+        return (f, new GuzergahService(f, Mock.Of<ICacheService>(), n, new TestFirma(1), null!));
     }
 
     [Fact]

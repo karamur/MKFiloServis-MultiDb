@@ -39,7 +39,7 @@ public class GuzergahFKPersistenceTests
         var sp = s.BuildServiceProvider();
         var f = new ScopedDbContextFactory(DbOpts, sp);
         var n = new NumaraSerisiService(f);
-        return (f, new GuzergahService(f, Mock.Of<ICacheService>(), n, fp));
+        return (f, new GuzergahService(f, Mock.Of<ICacheService>(), n, fp, null!));
     }
 
     [Fact]
