@@ -3,6 +3,7 @@
 @page "/personel/yeni"
 @page "/personel/{Id:int}"
 @using KOAFiloServis.Shared.Entities
+@using KOAFiloServis.Web.Helpers
 @using KOAFiloServis.Web.Services
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.EntityFrameworkCore
@@ -1762,14 +1763,27 @@
             await stream.CopyToAsync(memoryStream);
 
             var icerik = memoryStream.ToArray();
+            var uzanti = Path.GetExtension(secilenEvrakDosya.Name);
+
+            // Personel arşiv klasörünü oluştur: {Ad Soyad} - {FirmaAdi}
+            var personelKlasoru = AppStoragePaths.BuildPersonelArsivKlasoru(
+                sofor?.Ad ?? "PERSONEL",
+                sofor?.Soyad ?? Id?.ToString() ?? "PERSONEL",
+                sofor?.Firma?.FirmaAdi);
+
+            // Dosya adı: {PERSONELADSOYAD}{EvrakTipi}_{yyyyMMdd_HHmmss}.uzanti  (boşluksuz, Türkçe karakter normalize)
+            var normAd = AppStoragePaths.NormalizeFolderName(sofor?.Ad ?? "PERSONEL");
+            var normSoyad = AppStoragePaths.NormalizeFolderName(sofor?.Soyad ?? Id?.ToString() ?? "PERSONEL");
+            var normEvrakAdi = AppStoragePaths.NormalizeFolderName(seciliEvrakDetay.EvrakAdi).Replace(" ", "").Replace("-", "");
+            var arsivDosyaAdi = $"{normAd}{normSoyad}{normEvrakAdi}_{DateTime.Now:yyyyMMdd_HHmmss}{uzanti}";
+
             var relativePath = await SecureFileService.SaveEncryptedAsync(
-                $"ozluk/{Id}",
-                secilenEvrakDosya.Name,
+                $"{AppStoragePaths.PersonelEvrakRelativeRoot}/{personelKlasoru}",
+                arsivDosyaAdi,
                 icerik);
 
             // Arşiv kopyaları (şifreli + şifresiz)
             var adSoyad = sofor?.TamAd ?? Id?.ToString() ?? "PERSONEL";
-            var uzanti = Path.GetExtension(secilenEvrakDosya.Name);
             try
             {
                 await EvrakArsivService.ArsivlePersonelEvrakAsync(adSoyad, seciliEvrakDetay.EvrakAdi, icerik, uzanti);

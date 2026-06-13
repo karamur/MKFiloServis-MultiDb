@@ -1,5 +1,6 @@
 ﻿@page "/personel/ozluk-evrak"
 @using KOAFiloServis.Shared.Entities
+@using KOAFiloServis.Web.Helpers
 @using KOAFiloServis.Web.Services
 @using Microsoft.AspNetCore.Components.Forms
 @inject IPersonelOzlukService OzlukService
@@ -778,14 +779,41 @@
             }
 
             var icerik = memoryStream.ToArray();
+            var uzanti = Path.GetExtension(file.Name);
+
+            // Personel arşiv klasörünü oluştur: {Ad Soyad} - {FirmaAdi}
+            string personelKlasoru;
+            string normAd, normSoyad;
+            try
+            {
+                var sofor = await SoforService.GetByIdAsync(soforId);
+                var firmaAdi = sofor?.Firma?.FirmaAdi;
+                normAd = AppStoragePaths.NormalizeFolderName(sofor?.Ad ?? "PERSONEL");
+                normSoyad = AppStoragePaths.NormalizeFolderName(sofor?.Soyad ?? soforId.ToString());
+                personelKlasoru = AppStoragePaths.BuildPersonelArsivKlasoru(
+                    sofor?.Ad ?? "PERSONEL",
+                    sofor?.Soyad ?? soforId.ToString(),
+                    firmaAdi);
+            }
+            catch
+            {
+                var fallbackAdSoyad = seciliDurum?.PersonelAdi ?? soforId.ToString();
+                normAd = AppStoragePaths.NormalizeFolderName(fallbackAdSoyad);
+                normSoyad = "";
+                personelKlasoru = AppStoragePaths.NormalizeFolderName(fallbackAdSoyad);
+            }
+
+            // Dosya adı: {PERSONELADSOYAD}{EvrakTipi}_{yyyyMMdd_HHmmss}.uzanti  (boşluksuz, Türkçe karakter normalize)
+            var normEvrakAdi = AppStoragePaths.NormalizeFolderName(evrak.EvrakAdi).Replace(" ", "").Replace("-", "");
+            var arsivDosyaAdi = $"{normAd}{normSoyad}{normEvrakAdi}_{DateTime.Now:yyyyMMdd_HHmmss}{uzanti}";
+
             var relativePath = await SecureFileService.SaveEncryptedAsync(
-                $"personel-ozluk/{soforId}",
-                file.Name,
+                $"{AppStoragePaths.PersonelEvrakRelativeRoot}/{personelKlasoru}",
+                arsivDosyaAdi,
                 icerik);
 
             // Arşiv kopyaları (şifreli + şifresiz)
             var adSoyad = seciliDurum?.PersonelAdi ?? soforId.ToString();
-            var uzanti = Path.GetExtension(file.Name);
             try
             {
                 await EvrakArsivService.ArsivlePersonelEvrakAsync(adSoyad, evrak.EvrakAdi, icerik, uzanti);
