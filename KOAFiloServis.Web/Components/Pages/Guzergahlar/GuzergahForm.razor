@@ -739,6 +739,31 @@
                     SoforTelefon = s.SoforTelefon,
                     Firma = s.FirmaAdiSerbest
                 }).ToList();
+
+                // Eğer ana form alanları NULL ise, 1. seferden UI önerisi doldur
+                // (DB'deki ana alanı ezmez, sadece boşsa önerir)
+                var ilkSefer = seferKalemleri.First();
+                if (string.IsNullOrWhiteSpace(guzergah.KapasiteAdi) && !string.IsNullOrWhiteSpace(ilkSefer.KapasiteAdi))
+                {
+                    guzergah.KapasiteAdi = ilkSefer.KapasiteAdi;
+                    // PersonelSayisi'yi de kapasiteden türet
+                    var secim = kapasiteSecenekleri.FirstOrDefault(x => x.Label == ilkSefer.KapasiteAdi);
+                    if (secim.Value > 0) guzergah.PersonelSayisi = secim.Value;
+                }
+                if (!guzergah.VarsayilanAracId.HasValue && ilkSefer.AracId.HasValue)
+                {
+                    guzergah.VarsayilanAracId = ilkSefer.AracId.Value;
+                }
+                if (!guzergah.VarsayilanSoforId.HasValue && !string.IsNullOrWhiteSpace(ilkSefer.SoforAd))
+                {
+                    // Şoför adına göre eşleştir
+                    var eslesenSofor = soforler.FirstOrDefault(s =>
+                        string.Equals(s.TamAd, ilkSefer.SoforAd, StringComparison.OrdinalIgnoreCase));
+                    if (eslesenSofor != null)
+                    {
+                        guzergah.VarsayilanSoforId = eslesenSofor.Id;
+                    }
+                }
             }
             else
             {
