@@ -715,7 +715,12 @@
             if (guzergah.VarsayilanSofor != null) soforler.Add(guzergah.VarsayilanSofor);
         }
 
-        await AracSecimiDegistiAsync();
+        // Edit modunda mevcut değerleri KORU, üzerine yazma.
+        // AracSecimiDegistiAsync sadece kullanıcı select değiştirdiğinde çağrılır.
+        if (!IsEdit)
+        {
+            await AracSecimiDegistiAsync();
+        }
         await SoforDegistiAsync();
 
         // Mevcut sefer verisini yükle (edit modunda)
