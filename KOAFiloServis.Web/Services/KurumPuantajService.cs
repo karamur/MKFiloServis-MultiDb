@@ -639,19 +639,24 @@ public sealed class KurumPuantajService : IKurumPuantajService
                         && p.GuzergahId != null && guzergahIds.Contains(p.GuzergahId!.Value))
             .ToListAsync();
 
-        // SoforAd → SoforId eşleme tablosu (isimden ID çözümleme)
+        // SoforAd → SoforId eşleme tablosu (isimden ID çözümleme, Türkçe karakter normalize)
         var soforAdIdMap = await db.Soforler
             .Where(s => !s.IsDeleted && guzergahIds.Contains(s.FirmaId ?? 0))
-            .Select(s => new { s.Ad, s.Soyad, s.Id })
+            .Select(s => new { s.Ad, s.Soyad, s.Id, AdSoyad = s.TamAd })
             .ToListAsync();
         var soforLookup = soforAdIdMap
-            .GroupBy(s => $"{s.Ad} {s.Soyad}", StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+            .Select(s => new { s.Id, Normalized = NormalizeSoforAd(s.AdSoyad) })
+            .GroupBy(s => s.Normalized)
+            .ToDictionary(g => g.Key, g => g.First().Id);
 
         int? ResolveSoforId(string? soforAd)
         {
             if (string.IsNullOrWhiteSpace(soforAd)) return null;
-            return soforLookup.TryGetValue(soforAd.Trim(), out var id) ? id : null;
+            var key = NormalizeSoforAd(soforAd.Trim());
+            if (!soforLookup.TryGetValue(key, out var id)) return null;
+            // Çoklu eşleşme kontrolü: aynı key'de birden fazla ID varsa güvenli değil
+            var matches = soforAdIdMap.Count(s => NormalizeSoforAd(s.AdSoyad) == key);
+            return matches == 1 ? id : null;
         }
 
         var sonuc = new List<PuantajKayit>(mevcutlar);
@@ -1158,6 +1163,21 @@ public sealed class KurumPuantajService : IKurumPuantajService
             kayit.Kaynak = PuantajKaynak.Manuel;
         if (kayit.Yon == default)
             kayit.Yon = PuantajYon.SabahAksam;
+    }
+
+    /// <summary>
+    /// Şoför adı normalize: Türkçe karakter → ASCII, fazla boşluk temizle, uppercase.
+    /// "HALİL KULELİ" ve "HALIL KULELI" aynı key'e dönüşür.
+    /// </summary>
+    private static string NormalizeSoforAd(string? adSoyad)
+    {
+        if (string.IsNullOrWhiteSpace(adSoyad)) return string.Empty;
+        var n = adSoyad.Trim().ToUpperInvariant()
+            .Replace('İ', 'I').Replace('Ü', 'U').Replace('Ö', 'O')
+            .Replace('Ş', 'S').Replace('Ç', 'C').Replace('Ğ', 'G')
+            .Replace('ı', 'I').Replace('ü', 'U').Replace('ö', 'O')
+            .Replace('ş', 'S').Replace('ç', 'C').Replace('ğ', 'G');
+        return string.Join(" ", n.Split(' ', StringSplitOptions.RemoveEmptyEntries));
     }
 
     /// <summary>
