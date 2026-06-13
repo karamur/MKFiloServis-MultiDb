@@ -11,6 +11,12 @@ public static class AppStoragePaths
     /// </summary>
     public const string PersonelEvrakRelativeRoot = "Arsiv/Sifreli/Personeller";
 
+    /// <summary>
+    /// Araç evrakları için arşiv dizin yolu: Arsiv/Sifreli/Araclar
+    /// (SecureFileService tarafından {StorageRoot}/Arsiv/Sifreli/Araclar olarak çözümlenir)
+    /// </summary>
+    public const string AracEvrakRelativeRoot = "Arsiv/Sifreli/Araclar";
+
     public static string GetStorageRoot(string contentRootPath)
     {
         var configured = Environment.GetEnvironmentVariable("CRMFILO_STORAGE_ROOT");
@@ -40,6 +46,17 @@ public static class AppStoragePaths
         var adSoyad = NormalizeFolderName($"{ad} {soyad}");
         var firma = NormalizeFolderName(firmaAdi ?? "FIRMA_YOK");
         return $"{adSoyad} - {firma}";
+    }
+
+    /// <summary>
+    /// Araç arşiv klasör adını üretir: "{Plaka} - {FirmaAdi}"
+    /// Türkçe karakterler ASCII'ye dönüştürülür, Windows için sakıncalı karakterler temizlenir.
+    /// </summary>
+    public static string BuildAracArsivKlasoru(string plaka, string? firmaAdi)
+    {
+        var p = NormalizeFolderName(plaka);
+        var firma = NormalizeFolderName(firmaAdi ?? "FIRMA_YOK");
+        return $"{p} - {firma}";
     }
 
     /// <summary>

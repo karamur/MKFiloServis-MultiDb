@@ -723,7 +723,10 @@ public class AracService : IAracService
     public async Task<AracEvrakDosya> UploadEvrakDosyaAsync(int evrakId, IBrowserFile file)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var evrak = await context.AracEvraklari.FindAsync(evrakId);
+        var evrak = await context.AracEvraklari
+            .Include(e => e.Arac)
+                .ThenInclude(a => a.Firma)
+            .FirstOrDefaultAsync(e => e.Id == evrakId);
         if (evrak == null)
             throw new Exception("Evrak bulunamadi");
 
@@ -731,18 +734,30 @@ public class AracService : IAracService
         using var memoryStream = new MemoryStream();
         await stream.CopyToAsync(memoryStream);
 
+        var icerik = memoryStream.ToArray();
+        var uzanti = Path.GetExtension(file.Name);
+
+        // Araç arşiv klasörü: {Plaka} - {FirmaAdi}
+        var plaka = evrak.Arac?.AktifPlaka ?? evrak.Arac?.SaseNo ?? evrak.AracId.ToString();
+        var aracKlasoru = AppStoragePaths.BuildAracArsivKlasoru(plaka, evrak.Arac?.Firma?.FirmaAdi);
+
+        // Dosya adı: {PLAKA}{EvrakTipi}_{yyyyMMdd_HHmmss}.uzanti (boşluksuz)
+        var normPlaka = AppStoragePaths.NormalizeFolderName(plaka).Replace(" ", "").Replace("-", "");
+        var normEvrak = AppStoragePaths.NormalizeFolderName(evrak.EvrakKategorisi ?? "Evrak").Replace(" ", "").Replace("-", "");
+        var arsivDosyaAdi = $"{normPlaka}{normEvrak}_{DateTime.Now:yyyyMMdd_HHmmss}{uzanti}";
+
         var storedPath = await _secureFileService.SaveEncryptedAsync(
-            $"evraklar/{evrakId}",
-            file.Name,
-            memoryStream.ToArray());
+            $"{AppStoragePaths.AracEvrakRelativeRoot}/{aracKlasoru}",
+            arsivDosyaAdi,
+            icerik);
 
         var evrakDosya = new AracEvrakDosya
         {
             AracEvrakId = evrakId,
-            DosyaAdi = file.Name,
+            DosyaAdi = arsivDosyaAdi,
             DosyaYolu = storedPath,
-            DosyaTipi = Path.GetExtension(file.Name).TrimStart('.').ToLower(),
-            DosyaBoyutu = file.Size,
+            DosyaTipi = uzanti.TrimStart('.').ToLower(),
+            DosyaBoyutu = icerik.LongLength,
             CreatedAt = DateTime.UtcNow
         };
 

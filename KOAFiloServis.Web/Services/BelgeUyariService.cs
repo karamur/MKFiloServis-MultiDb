@@ -1,6 +1,7 @@
 ﻿using System.IO.Compression;
 using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
+using KOAFiloServis.Web.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -672,7 +673,9 @@ public class BelgeUyariService : IBelgeUyariService
     public async Task<bool> AracBelgeDosyaYukleAsync(int aracId, string belgeAlani, string dosyaAdi, byte[] icerik)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var arac = await context.Araclar.FindAsync(aracId);
+        var arac = await context.Araclar
+            .Include(a => a.Firma)
+            .FirstOrDefaultAsync(a => a.Id == aracId);
         if (arac == null) return false;
 
         var kategori = KategoriEslestir(belgeAlani);
@@ -697,14 +700,22 @@ public class BelgeUyariService : IBelgeUyariService
             await context.SaveChangesAsync();
         }
 
+        // Araç arşiv klasörü: {Plaka} - {FirmaAdi}
+        var uzanti = Path.GetExtension(dosyaAdi);
+        var plaka = arac.AktifPlaka ?? arac.SaseNo ?? aracId.ToString();
+        var aracKlasoru = AppStoragePaths.BuildAracArsivKlasoru(plaka, arac.Firma?.FirmaAdi);
+
+        // Dosya adı: {PLAKA}{BelgeTipi}_{yyyyMMdd_HHmmss}.uzanti (boşluksuz)
+        var normPlaka = AppStoragePaths.NormalizeFolderName(plaka).Replace(" ", "").Replace("-", "");
+        var normBelge = AppStoragePaths.NormalizeFolderName(belgeAlani).Replace(" ", "").Replace("-", "");
+        var arsivDosyaAdi = $"{normPlaka}{normBelge}_{DateTime.Now:yyyyMMdd_HHmmss}{uzanti}";
+
         var storedPath = await _secureFileService.SaveEncryptedAsync(
-            $"arac-evrak/{arac.Id}",
-            dosyaAdi,
+            $"{AppStoragePaths.AracEvrakRelativeRoot}/{aracKlasoru}",
+            arsivDosyaAdi,
             icerik);
 
         // Arşiv kopyaları (şifreli + şifresiz)
-        var uzanti = Path.GetExtension(dosyaAdi);
-        var plaka = arac.AktifPlaka ?? arac.SaseNo ?? aracId.ToString();
         var sasiNo = arac.SaseNo ?? aracId.ToString();
         try
         {
@@ -718,9 +729,9 @@ public class BelgeUyariService : IBelgeUyariService
         var evrakDosya = new AracEvrakDosya
         {
             AracEvrakId = evrak.Id,
-            DosyaAdi = dosyaAdi,
+            DosyaAdi = arsivDosyaAdi,
             DosyaYolu = storedPath,
-            DosyaTipi = Path.GetExtension(dosyaAdi).TrimStart('.').ToLowerInvariant(),
+            DosyaTipi = uzanti.TrimStart('.').ToLowerInvariant(),
             DosyaBoyutu = icerik.LongLength,
             CreatedAt = DateTime.UtcNow
         };
