@@ -56,12 +56,17 @@ public class GuzergahSeferService : IGuzergahSeferService
     {
         seferler ??= [];
 
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        await using var tx = await context.Database.BeginTransactionAsync();
+        await using var tempContext = await _contextFactory.CreateDbContextAsync();
+        var strategy = tempContext.Database.CreateExecutionStrategy();
 
-        try
+        await strategy.ExecuteAsync(async () =>
         {
-            var now = DateTime.UtcNow;
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            await using var tx = await context.Database.BeginTransactionAsync();
+
+            try
+            {
+                var now = DateTime.UtcNow;
             var target = seferler.Count;
 
             // Parent Guzergah doğrulaması
@@ -167,11 +172,12 @@ public class GuzergahSeferService : IGuzergahSeferService
                 "Guzergah seferleri kaydedildi. GuzergahId={GuzergahId}, Hedef={Hedef}, DB_Aktif={DbAktif}",
                 guzergahId, target, afterInsertActive);
         }
-        catch
-        {
-            await tx.RollbackAsync();
-            throw;
-        }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        });
     }
 
     private async Task<Guzergah> VerifyGuzergahAccessAsync(ApplicationDbContext context, int guzergahId)

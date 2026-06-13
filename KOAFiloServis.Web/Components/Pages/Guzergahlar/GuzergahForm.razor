@@ -1158,21 +1158,11 @@
         try
         {
             kaydediliyor = true;
+
+            // ÖNCE seferleri kaydet (böylece hata olursa güzergah ana kaydı etkilenmez)
             if (IsEdit)
             {
-                await GuzergahService.UpdateAsync(guzergah);
-            }
-            else
-            {
-                await GuzergahService.CreateAsync(guzergah);
-            }
-
-            // Sefer verisini kaydet
-            try
-            {
-                // Kaydetmeden önce slotları son kez garantile
                 SeferSlotlariGuncelle();
-
                 var firmaId = guzergah.FirmaId > 0 ? guzergah.FirmaId : AktifFirmaProvider.AktifFirmaId;
                 var seferEntities = seferKalemleri.Select(k => new GuzergahSefer
                 {
@@ -1188,10 +1178,31 @@
                 }).ToList();
                 await GuzergahSeferService.ReplaceAllAsync(guzergah.Id, seferEntities);
             }
-            catch (Exception ex)
+
+            // SONRA güzergah ana kaydını kaydet
+            if (IsEdit)
             {
-                kayitHataMesaji = $"Güzergah kaydedildi ancak seferler kaydedilirken hata oluştu: {ex.InnerException?.Message ?? ex.Message}";
-                return;
+                await GuzergahService.UpdateAsync(guzergah);
+            }
+            else
+            {
+                await GuzergahService.CreateAsync(guzergah);
+                // Yeni kayıt için seferleri şimdi kaydet
+                SeferSlotlariGuncelle();
+                var firmaId = guzergah.FirmaId > 0 ? guzergah.FirmaId : AktifFirmaProvider.AktifFirmaId;
+                var seferEntities = seferKalemleri.Select(k => new GuzergahSefer
+                {
+                    GuzergahId = guzergah.Id,
+                    FirmaId = firmaId,
+                    SeferTipi = k.SeferTipi,
+                    Slot = k.Slot,
+                    KapasiteAdi = k.KapasiteAdi,
+                    AracId = k.AracId,
+                    SoforAd = k.SoforAd,
+                    SoforTelefon = k.SoforTelefon,
+                    FirmaAdiSerbest = k.Firma
+                }).ToList();
+                await GuzergahSeferService.ReplaceAllAsync(guzergah.Id, seferEntities);
             }
 
             // Degisiklik uyarisi: Planlama ve Puantaj modullerinde guncelleme hatirlatmasi
