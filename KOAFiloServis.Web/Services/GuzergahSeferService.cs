@@ -69,14 +69,23 @@ public class GuzergahSeferService : IGuzergahSeferService
                     .Where(s => s.GuzergahId == guzergahId)
                     .ToListAsync();
 
+                var aktifBefore = mevcut.Count(s => !s.IsDeleted);
+                var deletedBefore = mevcut.Count(s => s.IsDeleted);
+
                 // Gelen Id'leri topla
                 var gelenIdler = seferler
                     .Where(s => s.Id > 0)
                     .Select(s => s.Id)
                     .ToHashSet();
 
+                var silinecekler = mevcut.Where(x => !gelenIdler.Contains(x.Id)).ToList();
+
+                _logger.LogWarning(
+                    "GUZERGAH_REPLACE GuzergahId={GuzergahId} Hedef={Hedef} MevcutToplam={MevcutToplam} AktifOnce={AktifOnce} SilinmisOnce={SilinmisOnce} Silinecek={Silinecek} GelenIdVar={GelenIdVar}",
+                    guzergahId, seferler.Count, mevcut.Count, aktifBefore, deletedBefore, silinecekler.Count, gelenIdler.Any());
+
                 // Silinen seferleri soft delete yap
-                foreach (var m in mevcut.Where(x => !gelenIdler.Contains(x.Id)))
+                foreach (var m in silinecekler)
                 {
                     m.IsDeleted = true;
                     m.UpdatedAt = DateTime.UtcNow;

@@ -1051,7 +1051,25 @@
         StateHasChanged();
     }
 
+    private bool _kaydetGuard;
+
     private async Task Kaydet()
+    {
+        // Double-submit guard
+        if (_kaydetGuard) return;
+        _kaydetGuard = true;
+
+        try
+        {
+            await KaydetCore();
+        }
+        finally
+        {
+            _kaydetGuard = false;
+        }
+    }
+
+    private async Task KaydetCore()
     {
         kayitHataMesaji = null;
 
