@@ -49,7 +49,22 @@ public class KurumPuantajEndToEndTests
         var tam = sablon.Where(k => k.SoforId != null && k.SoforId != 0).ToList();
         _output.WriteLine($"SoforId DOLU: {tam.Count}, EKSİK: {eksik.Count}");
         foreach (var e in eksik)
-            _output.WriteLine($"  EKSİK: Arac={e.Plaka} SoforAd='{e.SoforAdi}'");
+        {
+            var n = KurumPuantajService.NormalizeSoforAdStatic(e.SoforAdi);
+            _output.WriteLine($"  EKSİK: Arac={e.Plaka} SoforAd='{e.SoforAdi}' Len={e.SoforAdi?.Length} Normalized='{n}' Len={n?.Length}");
+            // Check what's in the soforAdIdMap
+            var mapEntries = await ctx.Soforler.IgnoreQueryFilters().Where(s => !s.IsDeleted)
+                .Select(s => new { s.Id, AdSoyad = (s.Ad ?? "") + " " + (s.Soyad ?? "") }).ToListAsync();
+            var normMap = mapEntries.Select(s => new { s.Id, N = KurumPuantajService.NormalizeSoforAdStatic(s.AdSoyad) }).ToList();
+            var found = normMap.Where(s => s.N == n).ToList();
+            _output.WriteLine($"    Map'te eşleşen: {found.Count} (Id'ler: {string.Join(",", found.Select(f => f.Id.ToString()))})");
+            if (found.Count == 0)
+            {
+                _output.WriteLine($"    Map'teki TÜM değerler (ATANER içeren):");
+                foreach (var m in normMap.Where(s => s.N.Contains("ATANER")))
+                    _output.WriteLine($"      Id={m.Id} N='{m.N}'");
+            }
+        }
 
         // Sadece SoforId dolu olanları kaydet
         if (tam.Any())

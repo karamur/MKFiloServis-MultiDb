@@ -642,22 +642,21 @@ public sealed class KurumPuantajService : IKurumPuantajService
         // SoforAd → SoforId eşleme tablosu (isimden ID çözümleme, Türkçe karakter normalize)
         // NOT: FirmaId filtresi YOK — aynı isimli şoför farklı firmada da olsa eşleşir.
         var soforAdIdMap = await db.Soforler
+            .IgnoreQueryFilters()
             .Where(s => !s.IsDeleted)
-            .Select(s => new { s.Ad, s.Soyad, s.Id, AdSoyad = s.TamAd })
+            .Select(s => new { s.Id, AdSoyad = (s.Ad ?? "") + " " + (s.Soyad ?? "") })
             .ToListAsync();
-        var soforLookup = soforAdIdMap
-            .Select(s => new { s.Id, Normalized = NormalizeSoforAd(s.AdSoyad) })
-            .GroupBy(s => s.Normalized)
-            .ToDictionary(g => g.Key, g => g.First().Id);
 
         int? ResolveSoforId(string? soforAd)
         {
             if (string.IsNullOrWhiteSpace(soforAd)) return null;
             var key = NormalizeSoforAd(soforAd.Trim());
-            if (!soforLookup.TryGetValue(key, out var id)) return null;
-            // Çoklu eşleşme kontrolü: aynı key'de birden fazla ID varsa güvenli değil
-            var matches = soforAdIdMap.Count(s => NormalizeSoforAd(s.AdSoyad) == key);
-            return matches == 1 ? id : null;
+            // En düşük Id'li eşleşeni al (çoklu eşleşmede ilk kayıt)
+            var match = soforAdIdMap
+                .Where(s => NormalizeSoforAd(s.AdSoyad) == key)
+                .OrderBy(s => s.Id)
+                .FirstOrDefault();
+            return match?.Id;
         }
 
         var sonuc = new List<PuantajKayit>(mevcutlar);
@@ -1170,6 +1169,8 @@ public sealed class KurumPuantajService : IKurumPuantajService
     /// Şoför adı normalize: Türkçe karakter → ASCII, fazla boşluk temizle, uppercase.
     /// "HALİL KULELİ" ve "HALIL KULELI" aynı key'e dönüşür.
     /// </summary>
+    public static string NormalizeSoforAdStatic(string? adSoyad) => NormalizeSoforAd(adSoyad);
+
     private static string NormalizeSoforAd(string? adSoyad)
     {
         if (string.IsNullOrWhiteSpace(adSoyad)) return string.Empty;
