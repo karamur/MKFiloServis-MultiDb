@@ -1120,6 +1120,31 @@ public sealed class KurumPuantajService : IKurumPuantajService
             kayit.Yon = PuantajYon.SabahAksam;
     }
 
+    /// <summary>
+    /// Yön dropdown seçenekleri (görünen ad → PuantajYon enum eşlemesi).
+    /// Mesai/Gece/Yasa/Ek Sefer gibi değerler Diger olarak saklanır.
+    /// Tam alt tür bilgisi için ileride ayrı kolon gerekebilir.
+    /// </summary>
+    public static readonly List<(string Display, PuantajYon Value)> YonDropdownSecenekleri = new()
+    {
+        ("Sabah", PuantajYon.Sabah),
+        ("Akşam", PuantajYon.Aksam),
+        ("S+A", PuantajYon.SabahAksam),
+        ("Mesai", PuantajYon.Diger),
+        ("Gece", PuantajYon.Diger),
+        ("Yasa", PuantajYon.Diger),
+        ("Ek Sefer", PuantajYon.Diger),
+        ("Resmi Tatil", PuantajYon.Diger),
+        ("Hafta Sonu", PuantajYon.Diger),
+        ("Özel Sefer", PuantajYon.Diger),
+    };
+
+    public static string GetYonDisplayText(PuantajYon yon) =>
+        YonDropdownSecenekleri.FirstOrDefault(x => x.Value == yon).Display ?? yon.ToString();
+
+    public static PuantajYon ParseYonDisplay(string? display) =>
+        YonDropdownSecenekleri.FirstOrDefault(x => string.Equals(x.Display, display, StringComparison.OrdinalIgnoreCase)).Value;
+
     private static int GercekSefer(OperasyonKaydi o) => o.Yon switch
     {
         PuantajYon.SabahAksam => 2,
