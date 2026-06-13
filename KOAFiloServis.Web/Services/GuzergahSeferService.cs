@@ -45,119 +45,133 @@ public class GuzergahSeferService : IGuzergahSeferService
         return liste.GroupBy(s => s.GuzergahId).ToDictionary(g => g.Key, g => g.ToList());
     }
 
+    // ── Ortak aktif/tüm sefer query helper'ları ──
+    private static IQueryable<GuzergahSefer> AllSeferQuery(ApplicationDbContext db, int guzergahId)
+        => db.GuzergahSeferleri.IgnoreQueryFilters().Where(s => s.GuzergahId == guzergahId);
+
+    private static IQueryable<GuzergahSefer> ActiveSeferQuery(ApplicationDbContext db, int guzergahId)
+        => AllSeferQuery(db, guzergahId).Where(s => s.IsDeleted != true);
+
     public async Task ReplaceAllAsync(int guzergahId, List<GuzergahSefer> seferler)
     {
         seferler ??= [];
 
-        await using var tempContext = await _contextFactory.CreateDbContextAsync();
-        var strategy = tempContext.Database.CreateExecutionStrategy();
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        await using var tx = await context.Database.BeginTransactionAsync();
 
-        await strategy.ExecuteAsync(async () =>
+        try
         {
-            await using var context = await _contextFactory.CreateDbContextAsync();
+            var now = DateTime.UtcNow;
+            var target = seferler.Count;
 
             // Parent Guzergah doğrulaması
             var guzergah = await VerifyGuzergahAccessAsync(context, guzergahId);
             var parentFirmaId = guzergah.FirmaId;
 
-            await using var tx = await context.Database.BeginTransactionAsync();
+            // ── AŞAMA 1: BEFORE ──
+            var beforeTotal = await AllSeferQuery(context, guzergahId).CountAsync();
+            var beforeActive = await ActiveSeferQuery(context, guzergahId).CountAsync();
+            var beforeDeleted = beforeTotal - beforeActive;
 
-            try
+            _logger.LogWarning(
+                "GUZERGAH_REPLACE Before GuzergahId={GuzergahId} Target={Target} Total={Total} Active={Active} Deleted={Deleted}",
+                guzergahId, target, beforeTotal, beforeActive, beforeDeleted);
+
+            // ── AŞAMA 2: SOFT-DELETE TÜM ESKİ KAYITLARI (ExecuteUpdate ile direkt DB) ──
+            var affected = await AllSeferQuery(context, guzergahId)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(x => x.IsDeleted, true)
+                    .SetProperty(x => x.UpdatedAt, now));
+
+            _logger.LogWarning(
+                "GUZERGAH_REPLACE SoftDeleteExecute GuzergahId={GuzergahId} Affected={Affected}",
+                guzergahId, affected);
+
+            var afterSoftDeleteTotal = await AllSeferQuery(context, guzergahId).CountAsync();
+            var afterSoftDeleteActive = await ActiveSeferQuery(context, guzergahId).CountAsync();
+            var afterSoftDeleteDeleted = afterSoftDeleteTotal - afterSoftDeleteActive;
+
+            _logger.LogWarning(
+                "GUZERGAH_REPLACE AfterSoftDelete GuzergahId={GuzergahId} Target={Target} Total={Total} Active={Active} Deleted={Deleted}",
+                guzergahId, target, afterSoftDeleteTotal, afterSoftDeleteActive, afterSoftDeleteDeleted);
+
+            if (afterSoftDeleteActive != 0)
             {
-                var mevcut = await context.GuzergahSeferleri
-                    .IgnoreQueryFilters()
-                    .Where(s => s.GuzergahId == guzergahId)
+                var kalanlar = await ActiveSeferQuery(context, guzergahId)
+                    .Select(x => new { x.Id, x.Sira, x.IsDeleted, x.FirmaId })
                     .ToListAsync();
-
-                var aktifBefore = mevcut.Count(s => !s.IsDeleted);
-                var deletedBefore = mevcut.Count(s => s.IsDeleted);
-
-                // Gelen Id'leri topla
-                var gelenIdler = seferler
-                    .Where(s => s.Id > 0)
-                    .Select(s => s.Id)
-                    .ToHashSet();
-
-                var silinecekler = mevcut.Where(x => !gelenIdler.Contains(x.Id)).ToList();
-
-                _logger.LogWarning(
-                    "GUZERGAH_REPLACE GuzergahId={GuzergahId} Hedef={Hedef} MevcutToplam={MevcutToplam} AktifOnce={AktifOnce} SilinmisOnce={SilinmisOnce} Silinecek={Silinecek} GelenIdVar={GelenIdVar}",
-                    guzergahId, seferler.Count, mevcut.Count, aktifBefore, deletedBefore, silinecekler.Count, gelenIdler.Any());
-
-                // Silinen seferleri soft delete yap
-                foreach (var m in silinecekler)
-                {
-                    m.IsDeleted = true;
-                    m.UpdatedAt = DateTime.UtcNow;
-                }
-
-                int sira = 1;
-                foreach (var s in seferler)
-                {
-                    if (s.Id > 0)
-                    {
-                        var mevcutKayit = mevcut.FirstOrDefault(x => x.Id == s.Id);
-                        if (mevcutKayit == null) continue;
-
-                        mevcutKayit.FirmaId = parentFirmaId;
-                        mevcutKayit.Sira = sira++;
-                        mevcutKayit.Slot = s.Slot;
-                        mevcutKayit.SeferTipi = s.SeferTipi;
-                        mevcutKayit.KapasiteAdi = s.KapasiteAdi;
-                        mevcutKayit.AracId = s.AracId;
-                        mevcutKayit.SoforAd = s.SoforAd;
-                        mevcutKayit.SoforTelefon = s.SoforTelefon;
-                        mevcutKayit.FirmaAdiSerbest = s.FirmaAdiSerbest;
-                        mevcutKayit.IsDeleted = false;
-                        mevcutKayit.UpdatedAt = DateTime.UtcNow;
-                    }
-                    else
-                    {
-                        context.GuzergahSeferleri.Add(new GuzergahSefer
-                        {
-                            GuzergahId = guzergahId,
-                            FirmaId = parentFirmaId,
-                            Sira = sira++,
-                            Slot = s.Slot,
-                            SeferTipi = s.SeferTipi,
-                            KapasiteAdi = s.KapasiteAdi,
-                            AracId = s.AracId,
-                            SoforAd = s.SoforAd,
-                            SoforTelefon = s.SoforTelefon,
-                            FirmaAdiSerbest = s.FirmaAdiSerbest,
-                            CreatedAt = DateTime.UtcNow,
-                            UpdatedAt = DateTime.UtcNow
-                        });
-                    }
-                }
-
-                await context.SaveChangesAsync();
-
-                // ── KESİN DB DOĞRULAMA: aktif sefer sayısı hedefle aynı olmalı ──
-                var dbAktifCount = await context.GuzergahSeferleri
-                    .Where(s => s.GuzergahId == guzergahId && !s.IsDeleted)
-                    .CountAsync();
-
-                if (dbAktifCount != seferler.Count)
-                {
-                    throw new InvalidOperationException(
-                        $"SEFER SAYISI UYUŞMAZLIĞI! GuzergahId={guzergahId}, " +
-                        $"Hedef={seferler.Count}, DB_Aktif={dbAktifCount}. " +
-                        $"Transaction iptal ediliyor.");
-                }
-
-                await tx.CommitAsync();
-
-                _logger.LogInformation(
-                    "Guzergah seferleri kaydedildi. GuzergahId={GuzergahId}, Hedef={Hedef}, DB_Aktif={DbAktif}, FirmaId={FirmaId}",
-                    guzergahId, seferler.Count, dbAktifCount, parentFirmaId);
+                throw new InvalidOperationException(
+                    $"Soft-delete BAŞARISIZ! GuzergahId={guzergahId}, KalanAktif={afterSoftDeleteActive}, " +
+                    $"Kalanlar={string.Join(" | ", kalanlar.Select(x => $"Id={x.Id},Sira={x.Sira},IsDeleted={x.IsDeleted},Firma={x.FirmaId}"))}");
             }
-            catch
+
+            // ── AŞAMA 3: INSERT YENİ KAYITLAR ──
+            int sira = 1;
+            var yeniEntities = seferler.Select(s =>
             {
-                await tx.RollbackAsync();
-                throw;
+                var yeni = new GuzergahSefer
+                {
+                    GuzergahId = guzergahId,
+                    FirmaId = parentFirmaId,
+                    Sira = sira++,
+                    Slot = s.Slot,
+                    SeferTipi = s.SeferTipi,
+                    KapasiteAdi = s.KapasiteAdi,
+                    AracId = s.AracId,
+                    SoforAd = s.SoforAd,
+                    SoforTelefon = s.SoforTelefon,
+                    FirmaAdiSerbest = s.FirmaAdiSerbest,
+                    IsDeleted = false,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                };
+                return yeni;
+            }).ToList();
+
+            if (yeniEntities.Count != target)
+            {
+                throw new InvalidOperationException(
+                    $"Yeni entity count HEDEFLE UYUŞMUYOR! Target={target}, EntityCount={yeniEntities.Count}");
             }
-        });
+
+            _logger.LogWarning(
+                "GUZERGAH_REPLACE InsertPrepare GuzergahId={GuzergahId} Target={Target} EntityCount={EntityCount} SiraNos={SiraNos}",
+                guzergahId, target, yeniEntities.Count, string.Join(",", yeniEntities.Select(x => x.Sira)));
+
+            context.GuzergahSeferleri.AddRange(yeniEntities);
+            await context.SaveChangesAsync();
+            context.ChangeTracker.Clear();
+
+            var afterInsertTotal = await AllSeferQuery(context, guzergahId).CountAsync();
+            var afterInsertActive = await ActiveSeferQuery(context, guzergahId).CountAsync();
+            var afterInsertDeleted = afterInsertTotal - afterInsertActive;
+
+            _logger.LogWarning(
+                "GUZERGAH_REPLACE AfterInsert GuzergahId={GuzergahId} Target={Target} Total={Total} Active={Active} Deleted={Deleted}",
+                guzergahId, target, afterInsertTotal, afterInsertActive, afterInsertDeleted);
+
+            if (afterInsertActive != target)
+            {
+                var aktifler = await ActiveSeferQuery(context, guzergahId)
+                    .Select(x => new { x.Id, x.Sira, x.IsDeleted, x.FirmaId })
+                    .ToListAsync();
+                throw new InvalidOperationException(
+                    $"SEFER SAYISI UYUŞMAZLIĞI! GuzergahId={guzergahId}, Hedef={target}, DB_Aktif={afterInsertActive}. " +
+                    $"Aktifler={string.Join(" | ", aktifler.Select(x => $"Id={x.Id},Sira={x.Sira},IsDeleted={x.IsDeleted},Firma={x.FirmaId}"))}. " +
+                    "Transaction iptal ediliyor.");
+            }
+
+            await tx.CommitAsync();
+
+            _logger.LogInformation(
+                "Guzergah seferleri kaydedildi. GuzergahId={GuzergahId}, Hedef={Hedef}, DB_Aktif={DbAktif}",
+                guzergahId, target, afterInsertActive);
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
     }
 
     private async Task<Guzergah> VerifyGuzergahAccessAsync(ApplicationDbContext context, int guzergahId)
