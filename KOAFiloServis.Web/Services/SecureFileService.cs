@@ -110,6 +110,56 @@ public sealed class SecureFileService : ISecureFileService
         return Task.CompletedTask;
     }
 
+    public async Task<string> CopyEncryptedAsync(
+        string sourceRelativePath,
+        string targetDirectory,
+        string targetFileName,
+        CancellationToken cancellationToken = default)
+    {
+        var sourceFull = ResolveFullPath(NormalizeRelativePath(sourceRelativePath));
+        if (!File.Exists(sourceFull))
+            throw new FileNotFoundException($"Kaynak dosya bulunamadı: {sourceRelativePath}");
+
+        var targetDir = NormalizeRelativePath(targetDirectory);
+        var safeName = string.Concat(Path.GetFileNameWithoutExtension(targetFileName)
+            .Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
+        var extension = Path.GetExtension(targetFileName);
+        var fileName = $"{safeName}{extension}";
+
+        var relativeResult = NormalizeRelativePath(Path.Combine(targetDir, fileName));
+        var targetFull = ResolveFullPath(relativeResult);
+
+        Directory.CreateDirectory(Path.GetDirectoryName(targetFull)!);
+
+        // Çakışma çöz
+        var finalTargetFull = targetFull;
+        var finalRelative = relativeResult;
+        var counter = 1;
+        var nameWithoutExt = Path.GetFileNameWithoutExtension(fileName);
+        var fileExt = Path.GetExtension(fileName);
+        while (File.Exists(finalTargetFull))
+        {
+            var collisionName = $"{nameWithoutExt}_{counter:D3}{fileExt}";
+            finalRelative = NormalizeRelativePath(Path.Combine(targetDir, collisionName));
+            finalTargetFull = ResolveFullPath(finalRelative);
+            counter++;
+        }
+
+        File.Copy(sourceFull, finalTargetFull, overwrite: false);
+
+        _logger.LogInformation("Dosya kopyalandı: {Source} -> {Target}", sourceRelativePath, finalRelative);
+        return finalRelative;
+    }
+
+    public Task<bool> ExistsAsync(string? relativePath, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(relativePath))
+            return Task.FromResult(false);
+
+        var fullPath = ResolveFullPath(NormalizeRelativePath(relativePath));
+        return Task.FromResult(File.Exists(fullPath));
+    }
+
     private async Task<byte[]?> ReadRawAsync(string relativePath, CancellationToken cancellationToken)
     {
         var fullPath = ResolveFullPath(NormalizeRelativePath(relativePath));

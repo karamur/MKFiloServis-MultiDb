@@ -199,6 +199,7 @@ builder.Services.AddSingleton<IConfigureOptions<KeyManagementOptions>>(sp =>
 builder.Services.AddSingleton<IPortalProjectCatalogService, PortalProjectCatalogService>();
 builder.Services.AddSingleton<ISecureFileService, SecureFileService>();
 builder.Services.AddScoped<DosyaMigrasyonService>();
+builder.Services.AddScoped<ArchiveMigrationService>();
 
 // Distributed Cache - Redis veya Memory
 var cacheProvider = builder.Configuration.GetValue<string>("Cache:Provider") ?? "Memory";
