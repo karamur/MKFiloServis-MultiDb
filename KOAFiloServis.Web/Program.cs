@@ -235,6 +235,7 @@ builder.Services.AddScoped<ISoforService, SoforService>();
 builder.Services.AddScoped<IAracService, AracService>();
 builder.Services.AddScoped<IGuzergahService, GuzergahService>();
 builder.Services.AddScoped<IGuzergahSeferService, GuzergahSeferService>();
+builder.Services.AddScoped<GuzergahSeferService>(); // GuzergahService constructor concrete ihtiyacı
 builder.Services.AddScoped<IMasrafKalemiService, MasrafKalemiService>();
 builder.Services.AddScoped<IKapasiteService, KapasiteService>();
 builder.Services.AddScoped<IAracMasrafService, AracMasrafService>();
