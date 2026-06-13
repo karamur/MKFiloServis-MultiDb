@@ -256,6 +256,15 @@ public class GuzergahService : IGuzergahService
 
                 await context.SaveChangesAsync();
 
+                // CariId / KurumId garantili direkt DB yazma (eski UpdateAsync pattern)
+                await context.Guzergahlar
+                    .IgnoreQueryFilters()
+                    .Where(x => x.Id == guzergah.Id)
+                    .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(x => x.CariId, hedefCariId ?? existing.CariId)
+                        .SetProperty(x => x.KurumId, hedefKurumId ?? existing.KurumId)
+                        .SetProperty(x => x.UpdatedAt, now));
+
                 // 2. Replace seferler (aynı context + transaction içinde)
                 await _seferService.ReplaceAllInCurrentDbAsync(context, guzergah.Id, seferler, now);
 
