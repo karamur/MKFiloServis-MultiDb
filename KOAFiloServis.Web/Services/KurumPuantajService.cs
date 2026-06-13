@@ -637,6 +637,21 @@ public sealed class KurumPuantajService : IKurumPuantajService
                         && p.GuzergahId != null && guzergahIds.Contains(p.GuzergahId!.Value))
             .ToListAsync();
 
+        // SoforAd → SoforId eşleme tablosu (isimden ID çözümleme)
+        var soforAdIdMap = await db.Soforler
+            .Where(s => !s.IsDeleted && guzergahIds.Contains(s.FirmaId ?? 0))
+            .Select(s => new { s.Ad, s.Soyad, s.Id })
+            .ToListAsync();
+        var soforLookup = soforAdIdMap
+            .GroupBy(s => $"{s.Ad} {s.Soyad}", StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+
+        int? ResolveSoforId(string? soforAd)
+        {
+            if (string.IsNullOrWhiteSpace(soforAd)) return null;
+            return soforLookup.TryGetValue(soforAd.Trim(), out var id) ? id : null;
+        }
+
         var sonuc = new List<PuantajKayit>(mevcutlar);
 
         foreach (var guzergah in guzergahlar)
@@ -646,9 +661,10 @@ public sealed class KurumPuantajService : IKurumPuantajService
             {
                 foreach (var sefer in gSeferler)
                 {
+                    var resolvedSoforId = ResolveSoforId(sefer.SoforAd);
                     // Her sefer = 1 puantaj satiri, kendi slot'u ile
                     EkleEksikSatir(sonuc, mevcutlar, guzergah, sefer.AracId!.Value,
-                        sefer.Arac?.AktifPlaka ?? sefer.Arac?.Plaka, null, sefer.SoforAd, yil, ay, sefer.Slot, sefer.SeferTipi);
+                        sefer.Arac?.AktifPlaka ?? sefer.Arac?.Plaka, resolvedSoforId, sefer.SoforAd, yil, ay, sefer.Slot, sefer.SeferTipi);
                 }
                 continue;
             }
