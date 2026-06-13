@@ -290,6 +290,7 @@ public sealed class KurumPuantajService : IKurumPuantajService
                 mevcut.UpdatedAt    = DateTime.UtcNow;
             }
 
+            ValidateRequiredFields(db);
             await db.SaveChangesAsync();
 
             // ── OperasyonKaydi sync (aynı transaction içinde) ────────────────
@@ -418,7 +419,8 @@ public sealed class KurumPuantajService : IKurumPuantajService
                     }
                 }
 
-                await db.SaveChangesAsync();
+                ValidateRequiredFields(db);
+            await db.SaveChangesAsync();
 
                 await tx.CommitAsync();
             }
@@ -1120,6 +1122,28 @@ public sealed class KurumPuantajService : IKurumPuantajService
     /// <summary>
     /// DB NOT NULL enum/text kolonları için varsayılan değerleri garantiler.
     /// </summary>
+    /// <summary>
+    /// SaveChangesAsync öncesi guard: SoforId NULL olan Added/Modified entity varsa exception fırlatır.
+    /// PostgreSQL 23502 hatasını önler.
+    /// </summary>
+    private static void ValidateRequiredFields(ApplicationDbContext db)
+    {
+        var eksikler = db.ChangeTracker
+            .Entries<PuantajKayit>()
+            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified)
+            .Where(e => e.Entity.SoforId == null || e.Entity.SoforId == 0)
+            .Select(e => new { e.Entity.GuzergahAdi, e.Entity.SoforAdi, e.Entity.Plaka, e.Entity.Yon, e.Entity.Slot })
+            .ToList();
+
+        if (eksikler.Count == 0) return;
+
+        var detay = string.Join("; ", eksikler.Select(x =>
+            $"{x.GuzergahAdi} / {x.Plaka} / {x.SoforAdi} / {x.Yon} / {x.Slot}"));
+        throw new InvalidOperationException(
+            "Şoför kartı eşleşmesi olmayan puantaj satırları var. Kayıt yapılmadı. " +
+            "Lütfen ilgili güzergah seferinde şoför kartını seçiniz. Detay: " + detay);
+    }
+
     private static void EnsurePuantajDefaults(PuantajKayit kayit)
     {
         if (kayit.OnayDurum == default)
