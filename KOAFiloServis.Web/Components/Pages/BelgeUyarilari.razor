@@ -1493,7 +1493,15 @@
                                                     <td class="text-center">
                                                         @if (dosya.DosyaVar)
                                                         {
-                                                            <button type="button" class="btn btn-xs btn-outline-primary" title="Bu belgeyi indir"
+                                                            <button type="button" class="btn btn-xs btn-outline-primary" title="Önizle"
+                                                                    @onclick="() => OzlukTekDosyaOnizle(dosya)" @onclick:preventDefault="true">
+                                                                <i class="bi bi-eye"></i>
+                                                            </button>
+                                                            <button type="button" class="btn btn-xs btn-outline-dark" title="Yazdır"
+                                                                    @onclick="() => OzlukTekDosyaYazdir(dosya)" @onclick:preventDefault="true">
+                                                                <i class="bi bi-printer"></i>
+                                                            </button>
+                                                            <button type="button" class="btn btn-xs btn-outline-secondary" title="Bu belgeyi indir"
                                                                     @onclick="() => TekDosyaIndir(dosya)" @onclick:preventDefault="true">
                                                                 <i class="bi bi-download"></i>
                                                             </button>
@@ -1958,6 +1966,98 @@
         catch (Exception ex)
         {
             ToastService.ShowError($"İndirme hatası: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Personel belgesini önizleme modalında açar (mevcut belgeOnizlemeModalAcik altyapısı).
+    /// </summary>
+    private async Task OzlukTekDosyaOnizle(OzlukEvrakDosyaBilgisi dosya)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(dosya.DosyaYolu))
+            {
+                ToastService.ShowWarning("Belge dosya yolu bulunamadı.");
+                return;
+            }
+
+            var bytes = await SecureFileService.ReadDecryptedAsync(dosya.DosyaYolu);
+            if (bytes == null || bytes.Length == 0)
+            {
+                ToastService.ShowWarning("Dosya okunamadı veya boş.");
+                return;
+            }
+
+            var uzanti = GercekUzantiAl(dosya.DosyaYolu);
+            var contentType = MimeTipiAl(uzanti);
+            var ad = !string.IsNullOrWhiteSpace(dosya.DosyaAdi)
+                ? EncExtensionTemizle(dosya.DosyaAdi)
+                : $"{dosya.EvrakAdi}{uzanti}";
+
+            belgeOnizlemeBaslik = ad;
+            belgeOnizlemeDosyaAdi = ad;
+            belgeOnizlemeContentType = contentType;
+            belgeOnizlemeBase64 = Convert.ToBase64String(bytes);
+            belgeOnizlemeDataUrl = $"data:{contentType};base64,{belgeOnizlemeBase64}";
+
+            belgeOnizlemeDestekleniyor =
+                contentType == "application/pdf" ||
+                contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+
+            belgeOnizlemeModalAcik = true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex,
+                "Personel belge önizleme hatası. DosyaYolu={DosyaYolu}, Belge={Belge}",
+                dosya.DosyaYolu, dosya.EvrakAdi);
+            ToastService.ShowError("Belge önizlenemedi. Dosya şifresi çözülemedi veya dosya bulunamadı.");
+        }
+    }
+
+    /// <summary>
+    /// Personel belgesini doğrudan yazdırma penceresinde açar.
+    /// </summary>
+    private async Task OzlukTekDosyaYazdir(OzlukEvrakDosyaBilgisi dosya)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(dosya.DosyaYolu))
+            {
+                ToastService.ShowWarning("Belge dosya yolu bulunamadı.");
+                return;
+            }
+
+            var bytes = await SecureFileService.ReadDecryptedAsync(dosya.DosyaYolu);
+            if (bytes == null || bytes.Length == 0)
+            {
+                ToastService.ShowWarning("Dosya okunamadı veya boş.");
+                return;
+            }
+
+            var uzanti = GercekUzantiAl(dosya.DosyaYolu);
+            var contentType = MimeTipiAl(uzanti);
+            var base64 = Convert.ToBase64String(bytes);
+
+            var destekleniyor =
+                contentType == "application/pdf" ||
+                contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+
+            if (!destekleniyor)
+            {
+                ToastService.ShowWarning($"Bu dosya türü ({uzanti}) için yazdırma desteklenmiyor. Dosyayı indirip yazdırabilirsiniz.");
+                return;
+            }
+
+            await JS.InvokeVoidAsync("printBase64File", base64, contentType);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex,
+                "Personel belge yazdırma hatası. DosyaYolu={DosyaYolu}, Belge={Belge}",
+                dosya.DosyaYolu, dosya.EvrakAdi);
+            ToastService.ShowError($"Yazdırma hatası: {ex.Message}");
         }
     }
 
