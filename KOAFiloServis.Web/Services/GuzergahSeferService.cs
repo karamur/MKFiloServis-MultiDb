@@ -123,11 +123,25 @@ public class GuzergahSeferService : IGuzergahSeferService
                 }
 
                 await context.SaveChangesAsync();
+
+                // ── KESİN DB DOĞRULAMA: aktif sefer sayısı hedefle aynı olmalı ──
+                var dbAktifCount = await context.GuzergahSeferleri
+                    .Where(s => s.GuzergahId == guzergahId && !s.IsDeleted)
+                    .CountAsync();
+
+                if (dbAktifCount != seferler.Count)
+                {
+                    throw new InvalidOperationException(
+                        $"SEFER SAYISI UYUŞMAZLIĞI! GuzergahId={guzergahId}, " +
+                        $"Hedef={seferler.Count}, DB_Aktif={dbAktifCount}. " +
+                        $"Transaction iptal ediliyor.");
+                }
+
                 await tx.CommitAsync();
 
                 _logger.LogInformation(
-                    "Guzergah seferleri kaydedildi. GuzergahId={GuzergahId}, SeferSayisi={SeferSayisi}, FirmaId={FirmaId}",
-                    guzergahId, seferler.Count, parentFirmaId);
+                    "Guzergah seferleri kaydedildi. GuzergahId={GuzergahId}, Hedef={Hedef}, DB_Aktif={DbAktif}, FirmaId={FirmaId}",
+                    guzergahId, seferler.Count, dbAktifCount, parentFirmaId);
             }
             catch
             {

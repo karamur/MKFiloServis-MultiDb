@@ -1130,6 +1130,13 @@
             return;
         }
 
+        // ── Pre-save guard: UI sefer sayısı tutarlılığı ──
+        if (seferKalemleri.Count != seferKalemleri.Distinct().Count())
+        {
+            kayitHataMesaji = $"Sefer listesinde duplicate kayıt var! Liste={seferKalemleri.Count}, Unique={seferKalemleri.Distinct().Count()}";
+            return;
+        }
+
         try
         {
             kaydediliyor = true;
