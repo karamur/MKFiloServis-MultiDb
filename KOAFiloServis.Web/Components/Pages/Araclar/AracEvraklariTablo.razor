@@ -672,6 +672,28 @@
         }
     }
 
+    private async Task YazdirAc(AracEvrakDosyaBilgisi dosya)
+    {
+        if (string.IsNullOrEmpty(dosya.DosyaYolu)) return;
+        try
+        {
+            var bytes = await SecureFileService.ReadDecryptedAsync(dosya.DosyaYolu);
+            if (bytes == null || bytes.Length == 0)
+            {
+                ToastService.ShowWarning("Dosya okunamadı veya boş.");
+                return;
+            }
+            var uzanti = GercekUzantiAl(dosya.DosyaYolu);
+            var contentType = MimeTipiAl(uzanti);
+            var base64 = Convert.ToBase64String(bytes);
+            await JS.InvokeVoidAsync("printBase64File", base64, contentType);
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Yazdırma hatası: {ex.Message}");
+        }
+    }
+
     // ── Belge Ön İzleme ──────────────────────────────────────────────
     private async Task OnIzlemeAc(AracEvrakDosyaBilgisi dosya, string belgeAdi)
     {
@@ -984,6 +1006,24 @@
                 builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create(this, () => DosyaIndir(dosyaCopy)));
                 builder.AddMarkupContent(seq++, "<i class='bi bi-download'></i>");
                 builder.CloseElement();
+            }
+
+            // Yazdır
+            if (dosya != null && dosya.DosyaVar)
+            {
+                var uznY = GercekUzantiAl(dosya.DosyaYolu);
+                var yazdirilabilir = uznY == ".pdf" || uznY is ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp";
+                if (yazdirilabilir)
+                {
+                    builder.OpenElement(seq++, "button");
+                    builder.AddAttribute(seq++, "type", "button");
+                    builder.AddAttribute(seq++, "class", "btn btn-xs btn-outline-warning");
+                    builder.AddAttribute(seq++, "title", "Yazdır");
+                    var dosyaYzd = dosya;
+                    builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create(this, () => YazdirAc(dosyaYzd)));
+                    builder.AddMarkupContent(seq++, "<i class='bi bi-printer'></i>");
+                    builder.CloseElement();
+                }
             }
 
             // Yükle (label + gizli InputFile)
