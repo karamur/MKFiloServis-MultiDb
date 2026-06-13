@@ -623,8 +623,9 @@ public sealed class KurumPuantajService : IKurumPuantajService
         var guzergahIds = guzergahlar.Select(g => g.Id).ToList();
 
         // GuzergahSefer satırlarını yükle (öncelikli araç/şoför kaynağı)
+        // SADECE AKTİF seferler — soft-delete edilmiş kayıtlar puantaja GİRMEZ
         var seferler = await db.GuzergahSeferleri
-            .Where(s => guzergahIds.Contains(s.GuzergahId) && s.AracId.HasValue)
+            .Where(s => guzergahIds.Contains(s.GuzergahId) && s.AracId.HasValue && !s.IsDeleted)
             .Include(s => s.Arac)
             .OrderBy(s => s.GuzergahId).ThenBy(s => s.Sira)
             .ToListAsync();
@@ -917,10 +918,10 @@ public sealed class KurumPuantajService : IKurumPuantajService
                         && p.GuzergahId != null && guzergahIds.Contains(p.GuzergahId!.Value))
             .ToListAsync();
 
-        // GuzergahSefer satirlari
+        // GuzergahSefer satirlari — SADECE AKTİF, soft-delete HARİÇ
         var seferler = await db.GuzergahSeferleri
             .Include(s => s.Arac)
-            .Where(s => guzergahIds.Contains(s.GuzergahId) && s.AracId.HasValue)
+            .Where(s => guzergahIds.Contains(s.GuzergahId) && s.AracId.HasValue && !s.IsDeleted)
             .OrderBy(s => s.GuzergahId).ThenBy(s => s.Sira)
             .ToListAsync();
         var seferMap = seferler.GroupBy(s => s.GuzergahId).ToDictionary(g => g.Key, g => g.ToList());
