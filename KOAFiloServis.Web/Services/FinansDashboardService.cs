@@ -55,6 +55,18 @@ public class FinansDashboardService
         var toplamSefer = operasyonlar.Sum(x => x.SeferSayisi);
         var personelSayisi = snapshot.Select(x => x.PersonelId).Distinct().Count();
 
+        // Fatura metrikleri
+        var faturalar = await context.Faturalar
+            .AsNoTracking()
+            .Where(x => x.FaturaTarihi.Year == yil && x.FaturaTarihi.Month == ay
+                     && x.FirmaId == firmaId && !x.IsDeleted)
+            .ToListAsync();
+        var gelenFaturaSayisi = faturalar.Count(x => x.FaturaYonu == FaturaYonu.Gelen);
+        var gidenFaturaSayisi = faturalar.Count(x => x.FaturaYonu == FaturaYonu.Giden);
+        var toplamKDV = faturalar.Sum(x => x.KdvTutar);
+        var toplamFaturaGider = faturalar.Where(x => x.FaturaYonu == FaturaYonu.Gelen).Sum(x => x.GenelToplam);
+        var toplamFaturaGelir = faturalar.Where(x => x.FaturaYonu == FaturaYonu.Giden).Sum(x => x.GenelToplam);
+
         // Muhasebe 770 toplamı
         var muhasebe770Toplam = muhasebeFisler
             .SelectMany(f => f.Kalemler)
@@ -73,6 +85,12 @@ public class FinansDashboardService
             ToplamSefer = toplamSefer,
             PersonelSayisi = personelSayisi,
             Muhasebe770Toplam = muhasebe770Toplam,
+
+            GelenFaturaSayisi = gelenFaturaSayisi,
+            GidenFaturaSayisi = gidenFaturaSayisi,
+            ToplamKDV = toplamKDV,
+            ToplamFaturaGider = toplamFaturaGider,
+            ToplamFaturaGelir = toplamFaturaGelir,
 
             SnapshotVar = snapshot.Any(),
             SnapshotKilitli = snapshot.Any() && snapshot.All(x => x.Kilitli),
@@ -93,6 +111,12 @@ public class FinansDashboardDto
     public int ToplamSefer { get; set; }
     public int PersonelSayisi { get; set; }
     public decimal Muhasebe770Toplam { get; set; }
+
+    public int GelenFaturaSayisi { get; set; }
+    public int GidenFaturaSayisi { get; set; }
+    public decimal ToplamKDV { get; set; }
+    public decimal ToplamFaturaGider { get; set; }
+    public decimal ToplamFaturaGelir { get; set; }
 
     public bool SnapshotVar { get; set; }
     public bool SnapshotKilitli { get; set; }

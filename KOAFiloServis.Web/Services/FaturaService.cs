@@ -1238,6 +1238,21 @@ public class FaturaService : IFaturaService
                     continue;
                 }
 
+                // UUID/EttnNo uniqueness check — mükerrer fatura engelle
+                if (!string.IsNullOrWhiteSpace(ettn))
+                {
+                    var duplicateExists = await context.Faturalar
+                        .IgnoreQueryFilters()
+                        .AsNoTracking()
+                        .AnyAsync(f => f.EttnNo == ettn);
+                    if (duplicateExists)
+                    {
+                        result.Errors.Add($"{file.FileName}: Bu UUID ({ettn}) zaten kayıtlı — atlandı.");
+                        result.SkippedCount++;
+                        continue;
+                    }
+                }
+
                 var fatura = new Fatura
                 {
                     FaturaNo = faturaNo,
