@@ -68,6 +68,7 @@ public class Fatura : BaseEntity, IFirmaTenant
     // Muhasebe Fişi oluşturuldu mu?
     public bool MuhasebeFisiOlusturuldu { get; set; } = false;
     public int? MuhasebeFisId { get; set; }
+    public int? IptalFisId { get; set; }
 
     // Araç Satış/Alış İlişkisi (Ana araç faturası ise)
     public int? AracId { get; set; }
