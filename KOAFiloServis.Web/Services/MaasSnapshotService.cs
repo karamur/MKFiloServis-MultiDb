@@ -71,6 +71,47 @@ public class MaasSnapshotService : IMaasSnapshotService
         return snapshots;
     }
 
+    public async Task<List<MaasOdemeSnapshot>> GuncelleAsync(
+        int yil, int ay, int firmaId,
+        List<(int PersonelId, string AdSoyad, string? PersonelKodu, string? GorevAdi, string? AracPlakasi,
+              decimal GercekMaas, decimal BankayaYatan, decimal Avans, decimal Kesinti, decimal Harcama, decimal Odenecek)> data)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var snapshot = await context.MaasOdemeSnapshotlar
+            .Where(x => x.Yil == yil && x.Ay == ay && x.FirmaId == firmaId && !x.IsDeleted)
+            .ToListAsync();
+
+        if (!snapshot.Any())
+            return snapshot;
+
+        // Kilitli dönem güncellenemez
+        if (snapshot.Any(x => x.Kilitli))
+            throw new InvalidOperationException($"Kilitli dönem güncellenemez. Yil={yil} Ay={ay}");
+
+        var dataMap = data.ToDictionary(x => x.PersonelId);
+
+        foreach (var item in snapshot)
+        {
+            if (!dataMap.TryGetValue(item.PersonelId, out var guncel))
+                continue;
+
+            item.GercekMaas = guncel.GercekMaas;
+            item.BankayaYatan = guncel.BankayaYatan;
+            item.Avans = guncel.Avans;
+            item.Kesinti = guncel.Kesinti;
+            item.Harcama = guncel.Harcama;
+            item.Odenecek = guncel.Odenecek;
+            item.HesaplamaTarihi = DateTime.UtcNow;
+            item.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await context.SaveChangesAsync();
+        Console.WriteLine($"[MaasSnapshot] Güncellendi: Yil={yil} Ay={ay} Firma={firmaId} Adet={snapshot.Count}");
+
+        return snapshot;
+    }
+
     public async Task SilAsync(int yil, int ay, int firmaId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();

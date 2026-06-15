@@ -194,13 +194,23 @@ public class SoforService : ISoforService
         await context.SaveChangesAsync();
         await _cache.RemoveByPrefixAsync(CacheKeys.SoforPrefix);
 
-        // Personel değişince mevcut ayın snapshot'ını geçersiz kıl — yeniden oluşacak
+        // Personel değişince mevcut ayın snapshot'ını GÜNCELLE (silme — veri bütünlüğü)
         var now = DateTime.Now;
         var firmaId = sofor.FirmaId ?? existing.FirmaId;
         if (firmaId.HasValue && firmaId.Value > 0)
         {
-            try { await _snapshotService.SilAsync(now.Year, now.Month, firmaId.Value); }
-            catch (Exception ex) { Console.WriteLine($"[SoforService] Snapshot silme hatası (önemsiz): {ex.Message}"); }
+            try
+            {
+                var singleData = new List<(int, string, string?, string?, string?, decimal, decimal, decimal, decimal, decimal, decimal)>
+                {
+                    (existing.Id, existing.TamAd, existing.SoforKodu, null, null,
+                     sofor.ResmiNetMaas + sofor.DigerMaas, sofor.ResmiNetMaas, 0, 0, 0,
+                     sofor.ResmiNetMaas + sofor.DigerMaas - sofor.ResmiNetMaas)
+                };
+                await _snapshotService.GuncelleAsync(now.Year, now.Month, firmaId.Value, singleData);
+            }
+            catch (InvalidOperationException) { /* Kilitli — güncellenemez, bu normal */ }
+            catch (Exception ex) { Console.WriteLine($"[SoforService] Snapshot güncelleme hatası: {ex.Message}"); }
         }
 
         return existing;
