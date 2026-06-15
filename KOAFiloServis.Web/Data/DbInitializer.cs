@@ -2200,6 +2200,10 @@ WHERE IsDeleted = 0;");
                 ""SgkMaasi"" REAL NOT NULL DEFAULT 0,
                 ""BankaAdi"" TEXT NULL,
                 ""IBAN"" TEXT NULL,
+                ""BankaSube"" TEXT NULL,
+                ""BankaSubeKodu"" TEXT NULL,
+                ""BankaHesapNo"" TEXT NULL,
+                ""MaasOdemeTipi"" INTEGER NOT NULL DEFAULT 0,
                 ""CreatedAt"" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 ""UpdatedAt"" TEXT NULL,
                 ""IsDeleted"" INTEGER NOT NULL DEFAULT 0
@@ -2896,6 +2900,10 @@ WHERE IsDeleted = 0;");
             ("Personeller", "SgkMaasi", "NUMERIC(18,2)", "0"),
             ("Personeller", "BankaAdi", "VARCHAR(100)", null),
             ("Personeller", "IBAN", "VARCHAR(50)", null),
+            ("Personeller", "BankaSube", "VARCHAR(100)", null),
+            ("Personeller", "BankaSubeKodu", "VARCHAR(20)", null),
+            ("Personeller", "BankaHesapNo", "VARCHAR(50)", null),
+            ("Personeller", "MaasOdemeTipi", "INTEGER", "0"),
 
             // Personeller tablosu - Bordro güncelleme alanları
             ("Personeller", "AileYardimi", "NUMERIC", "0"),
@@ -3269,6 +3277,10 @@ WHERE IsDeleted = 0;");
                         ""SgkMaasi"" NUMERIC(18,2) NOT NULL DEFAULT 0,
                         ""BankaAdi"" VARCHAR(100),
                         ""IBAN"" VARCHAR(50),
+                        ""BankaSube"" VARCHAR(100),
+                        ""BankaSubeKodu"" VARCHAR(20),
+                        ""BankaHesapNo"" VARCHAR(50),
+                        ""MaasOdemeTipi"" INTEGER NOT NULL DEFAULT 0,
                         ""CreatedAt"" TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                         ""UpdatedAt"" TIMESTAMP WITHOUT TIME ZONE,
                         ""IsDeleted"" BOOLEAN NOT NULL DEFAULT FALSE

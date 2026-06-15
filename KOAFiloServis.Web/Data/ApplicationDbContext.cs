@@ -543,6 +543,11 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.SgkMaasi).HasPrecision(18, 2);
             entity.Property(e => e.SGKBordroDahilMi).HasDefaultValue(false);
             entity.Property(e => e.BordroTipiPersonel).HasDefaultValue(PersonelBordroTipi.Yok);
+            entity.Property(e => e.BankaSube).HasMaxLength(100);
+            entity.Property(e => e.BankaSubeKodu).HasMaxLength(20);
+            entity.Property(e => e.BankaHesapNo).HasMaxLength(50);
+            entity.Property(e => e.MaasOdemeTipi).HasConversion<int>().HasDefaultValue(MaasOdemeTipi.Banka);
+
             entity.Ignore(e => e.EkOdeme);
 
             // Muhasebe Hesap ilişkisi

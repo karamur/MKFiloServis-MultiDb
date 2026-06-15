@@ -100,8 +100,6 @@ public class SoforService : ISoforService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
 
-        Console.WriteLine($"[UpdateAsync] Id={sofor.Id} Aktif={sofor.Aktif} IstenAyrilma={sofor.IstenAyrilmaTarihi} SgkCikis={sofor.SgkCikisTarihi}");
-
         NormalizeSofor(sofor);
         ApplyMaasHesaplama(sofor);
         SyncBordroFlags(sofor);
@@ -155,10 +153,25 @@ public class SoforService : ISoforService
         existing.SgkCikisTarihi = sofor.SgkCikisTarihi;
         existing.Aktif = sofor.Aktif;
 
+        // Maaş alanları — SetValues sonrası garantile
+        existing.BrutMaas = sofor.BrutMaas;
+        existing.ResmiNetMaas = sofor.ResmiNetMaas;
+        existing.DigerMaas = sofor.DigerMaas;
+        existing.NetMaas = sofor.NetMaas;
+        existing.CalismaMiktari = sofor.CalismaMiktari;
+        existing.BirimUcret = sofor.BirimUcret;
+        existing.BrutMaasHesaplamaTipi = sofor.BrutMaasHesaplamaTipi;
+
+        // Banka alanları — SetValues sonrası garantile
+        existing.BankaAdi = sofor.BankaAdi;
+        existing.IBAN = sofor.IBAN;
+        existing.BankaSube = sofor.BankaSube;
+        existing.BankaSubeKodu = sofor.BankaSubeKodu;
+        existing.BankaHesapNo = sofor.BankaHesapNo;
+        existing.MaasOdemeTipi = sofor.MaasOdemeTipi;
+
         existing.CreatedAt = createdAt;
         existing.UpdatedAt = DateTime.UtcNow;
-
-        Console.WriteLine($"[UpdateAsync] SaveChanges öncesi existing.Aktif={existing.Aktif} IstenAyrilma={existing.IstenAyrilmaTarihi} SgkCikis={existing.SgkCikisTarihi}");
 
         await context.SaveChangesAsync();
 
@@ -417,6 +430,9 @@ public class SoforService : ISoforService
         sofor.EhliyetNo = NormalizeNullableText(sofor.EhliyetNo);
         sofor.BankaAdi = NormalizeNullableText(sofor.BankaAdi);
         sofor.IBAN = NormalizeNullableText(sofor.IBAN)?.Replace(" ", string.Empty).ToUpperInvariant();
+        sofor.BankaSube = NormalizeNullableText(sofor.BankaSube);
+        sofor.BankaSubeKodu = NormalizeNullableText(sofor.BankaSubeKodu);
+        sofor.BankaHesapNo = NormalizeNullableText(sofor.BankaHesapNo);
         sofor.Notlar = NormalizeNullableText(sofor.Notlar);
     }
 

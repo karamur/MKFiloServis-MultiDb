@@ -307,6 +307,37 @@
                     </div>
                     <div class="col-md-3">
                         <div class="mb-3">
+                            <label class="form-label">Banka Şube</label>
+                            <InputText @bind-Value="sofor.BankaSube" class="form-control" placeholder="Şube adı" />
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label class="form-label">Şube Kodu</label>
+                            <InputText @bind-Value="sofor.BankaSubeKodu" class="form-control" placeholder="1234" />
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label class="form-label">Hesap No</label>
+                            <InputText @bind-Value="sofor.BankaHesapNo" class="form-control" placeholder="Hesap numarası" />
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label class="form-label">Maaş Ödeme Tipi</label>
+                            <InputSelect @bind-Value="sofor.MaasOdemeTipi" class="form-select">
+                                <option value="@MaasOdemeTipi.Banka">Banka</option>
+                                <option value="@MaasOdemeTipi.Nakit">Nakit</option>
+                                <option value="@MaasOdemeTipi.Cek">Çek</option>
+                                <option value="@MaasOdemeTipi.Diger">Diğer</option>
+                            </InputSelect>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="mb-3">
                             <div class="form-check form-switch mt-4">
                                 <InputCheckbox @bind-Value="sofor.SGKBordroDahilMi" class="form-check-input" id="sgkBordro" />
                                 <label class="form-check-label" for="sgkBordro">
@@ -1362,9 +1393,10 @@
         }
 
         sofor.ResmiNetMaas = YuvarlaPara(sofor.ResmiNetMaas);
-        // Gerçek maaş değiştiyse farkı hesapla
+        // NetMaas = ResmiNetMaas + DigerMaas (tek kaynak kuralı)
         sofor.DigerMaas = YuvarlaPara(gercekMaas - sofor.ResmiNetMaas);
-        sofor.NetMaas = YuvarlaPara(gercekMaas);
+        if (sofor.DigerMaas < 0) sofor.DigerMaas = 0;
+        sofor.NetMaas = YuvarlaPara(sofor.ResmiNetMaas + sofor.DigerMaas);
 
         return Task.CompletedTask;
     }
@@ -1374,7 +1406,8 @@
         // Bankaya yatan değiştiğinde farkı yeniden hesapla
         sofor.ResmiNetMaas = YuvarlaPara(sofor.ResmiNetMaas);
         sofor.DigerMaas = YuvarlaPara(gercekMaas - sofor.ResmiNetMaas);
-        sofor.NetMaas = YuvarlaPara(gercekMaas);
+        if (sofor.DigerMaas < 0) sofor.DigerMaas = 0;
+        sofor.NetMaas = YuvarlaPara(sofor.ResmiNetMaas + sofor.DigerMaas);
         return Task.CompletedTask;
     }
 
@@ -1383,7 +1416,8 @@
         // Gerçek maaş manuel girildiğinde farkı hesapla
         gercekMaas = YuvarlaPara(gercekMaas);
         sofor.DigerMaas = YuvarlaPara(gercekMaas - sofor.ResmiNetMaas);
-        sofor.NetMaas = YuvarlaPara(gercekMaas);
+        if (sofor.DigerMaas < 0) sofor.DigerMaas = 0;
+        sofor.NetMaas = YuvarlaPara(sofor.ResmiNetMaas + sofor.DigerMaas);
         return Task.CompletedTask;
     }
 
@@ -1398,7 +1432,8 @@
         }
 
         sofor.DigerMaas = YuvarlaPara(gercekMaas - sofor.ResmiNetMaas);
-        sofor.NetMaas = YuvarlaPara(gercekMaas);
+        if (sofor.DigerMaas < 0) sofor.DigerMaas = 0;
+        sofor.NetMaas = YuvarlaPara(sofor.ResmiNetMaas + sofor.DigerMaas);
         return Task.CompletedTask;
     }
 

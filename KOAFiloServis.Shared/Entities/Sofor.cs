@@ -92,6 +92,10 @@ public class Sofor : BaseEntity, IKopyalanabilirTenant, IFirmaTenant
     // Banka Bilgileri
     public string? BankaAdi { get; set; }
     public string? IBAN { get; set; }
+    public string? BankaSube { get; set; }
+    public string? BankaSubeKodu { get; set; }
+    public string? BankaHesapNo { get; set; }
+    public MaasOdemeTipi MaasOdemeTipi { get; set; } = MaasOdemeTipi.Banka;
 
     // Muhasebe Hesap Entegrasyonu
     public int? MuhasebeHesapId { get; set; }
@@ -183,6 +187,17 @@ public enum SgkCalismaTuru
     Engelli = 12,             // Engelli Çalışan (%3 kotası)
     EskiHukumlu = 13,         // Eski Hükümlü (%2 kotası)
     TerörMagduru = 14,        // Terör Mağduru (%1 kotası)
+}
+
+/// <summary>
+/// Personel maaş ödeme tipi (banka, nakit, çek vb.)
+/// </summary>
+public enum MaasOdemeTipi
+{
+    Banka = 0,
+    Nakit = 1,
+    Cek = 2,
+    Diger = 3
 }
 
 
