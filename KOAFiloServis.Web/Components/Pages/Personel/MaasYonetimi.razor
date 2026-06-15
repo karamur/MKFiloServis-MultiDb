@@ -1,6 +1,7 @@
 ﻿@page "/personel/maas"
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
+@using KOAFiloServis.Web.Services.Calculation
 @using KOAFiloServis.Web.Services.Interfaces
 @using KOAFiloServis.Web.Data
 @using Microsoft.EntityFrameworkCore
@@ -2060,7 +2061,8 @@
                     foreach (var item in grup)
                     {
                         sira++; firmaSira++;
-                        var farkOdenecek = item.GercekMaas - item.BankayaYatan - item.Avans - item.Kesinti + item.Harcamasi;
+                        var sonuc = MaasHesaplamaEngine.Hesapla(new MaasInput { GercekMaas = item.GercekMaas, BankayaYatan = item.BankayaYatan, Avans = item.Avans, Kesinti = item.Kesinti, Harcama = item.Harcamasi });
+                    var farkOdenecek = sonuc.Odenecek;
                         fGercek += item.GercekMaas; fBankaya += item.BankayaYatan; fAvans += item.Avans;
                         fKesinti += item.Kesinti; fHarcama += item.Harcamasi; fFark += farkOdenecek;
 
@@ -2103,7 +2105,8 @@
                 foreach (var item in filtreliler)
                 {
                     sira++;
-                    var farkOdenecek = item.GercekMaas - item.BankayaYatan - item.Avans - item.Kesinti + item.Harcamasi;
+                    var sonuc = MaasHesaplamaEngine.Hesapla(new MaasInput { GercekMaas = item.GercekMaas, BankayaYatan = item.BankayaYatan, Avans = item.Avans, Kesinti = item.Kesinti, Harcama = item.Harcamasi });
+                    var farkOdenecek = sonuc.Odenecek;
                     genelToplamGercek += item.GercekMaas;
                     genelToplamBankaya += item.BankayaYatan;
                     genelToplamAvans += item.Avans;
@@ -2178,7 +2181,8 @@
                 foreach (var item in grup)
                 {
                     sira++; firmaSira++;
-                    var farkOdenecek = item.GercekMaas - item.BankayaYatan - item.Avans - item.Kesinti + item.Harcamasi;
+                    var sonuc = MaasHesaplamaEngine.Hesapla(new MaasInput { GercekMaas = item.GercekMaas, BankayaYatan = item.BankayaYatan, Avans = item.Avans, Kesinti = item.Kesinti, Harcama = item.Harcamasi });
+                    var farkOdenecek = sonuc.Odenecek;
                     fGercek += item.GercekMaas; fBankaya += item.BankayaYatan; fAvans += item.Avans;
                     fKesinti += item.Kesinti; fHarcama += item.Harcamasi; fFark += farkOdenecek;
 
@@ -2374,7 +2378,8 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
                     IstenCikisTarihi = p.IstenAyrilmaTarihi
                 };
                 satir.Fark = satir.GercekMaas - satir.AsgariUcret;
-                satir.Odenecek = satir.GercekMaas - satir.BankayaYatan - satir.Avans - satir.Kesinti + satir.Harcamasi;
+                var odenecekSonuc = MaasHesaplamaEngine.Hesapla(new MaasInput { GercekMaas = satir.GercekMaas, BankayaYatan = satir.BankayaYatan, Avans = satir.Avans, Kesinti = satir.Kesinti, Harcama = satir.Harcamasi });
+                satir.Odenecek = odenecekSonuc.Odenecek;
                 durSatirlar.Add(satir);
             }
             if (durSecilenPersonelId > 0)

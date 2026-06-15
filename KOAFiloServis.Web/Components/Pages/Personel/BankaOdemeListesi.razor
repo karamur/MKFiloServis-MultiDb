@@ -2,6 +2,7 @@
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
 @using KOAFiloServis.Web.Services.Interfaces
+@using KOAFiloServis.Web.Services.Calculation
 @using KOAFiloServis.Web.Data
 @using Microsoft.EntityFrameworkCore
 @inject ISoforService SoforService
@@ -540,7 +541,15 @@
                     AracPlakasi = aracPlaka
                 };
 
-                item.EldenOdenecek = item.GercekMaas - item.BankayaYatan - item.Kesinti + item.PersonelHarcamasi - item.Avans;
+                var sonuc = MaasHesaplamaEngine.Hesapla(new MaasInput
+                {
+                    GercekMaas = item.GercekMaas,
+                    BankayaYatan = item.BankayaYatan,
+                    Avans = item.Avans,
+                    Kesinti = item.Kesinti,
+                    Harcama = item.PersonelHarcamasi
+                });
+                item.EldenOdenecek = sonuc.Odenecek;
 
                 personelListesi.Add(item);
             }
@@ -801,7 +810,15 @@
                 // Yeni tahakkuk kaydı oluştur
                 var gercekMaas = item.Personel.ResmiNetMaas + item.Personel.DigerMaas;
                 var bankayaYatan = item.Personel.ResmiNetMaas;
-                var eldenOdenecek = gercekMaas - bankayaYatan;
+                var sonuc = MaasHesaplamaEngine.Hesapla(new MaasInput
+                {
+                    GercekMaas = gercekMaas,
+                    BankayaYatan = bankayaYatan,
+                    Avans = 0,
+                    Kesinti = 0,
+                    Harcama = 0
+                });
+                var eldenOdenecek = sonuc.Odenecek;
 
                 var maasKaydi = new PersonelMaas
                 {
@@ -960,7 +977,15 @@
         }
 
         item.BankayaYatan = val;
-        item.EldenOdenecek = item.GercekMaas - item.BankayaYatan - item.Kesinti + item.PersonelHarcamasi - item.Avans;
+        var sonuc = MaasHesaplamaEngine.Hesapla(new MaasInput
+        {
+            GercekMaas = item.GercekMaas,
+            BankayaYatan = item.BankayaYatan,
+            Avans = item.Avans,
+            Kesinti = item.Kesinti,
+            Harcama = item.PersonelHarcamasi
+        });
+        item.EldenOdenecek = sonuc.Odenecek;
         GorevOzetleriniGuncelle();
 
         // Personel kartına anında kaydet
