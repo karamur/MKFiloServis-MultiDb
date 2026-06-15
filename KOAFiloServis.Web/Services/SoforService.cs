@@ -99,6 +99,9 @@ public class SoforService : ISoforService
     public async Task<Sofor> UpdateAsync(Sofor sofor, DateTime? expectedUpdatedAt = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
+
+        Console.WriteLine($"[UpdateAsync] Id={sofor.Id} Aktif={sofor.Aktif} IstenAyrilma={sofor.IstenAyrilmaTarihi} SgkCikis={sofor.SgkCikisTarihi}");
+
         NormalizeSofor(sofor);
         ApplyMaasHesaplama(sofor);
         SyncBordroFlags(sofor);
@@ -147,8 +150,15 @@ public class SoforService : ISoforService
 
         context.Entry(existing).CurrentValues.SetValues(sofor);
 
+        // SetValues sonrası açık atama — tarih ve durum alanları garantilensin
+        existing.IstenAyrilmaTarihi = sofor.IstenAyrilmaTarihi;
+        existing.SgkCikisTarihi = sofor.SgkCikisTarihi;
+        existing.Aktif = sofor.Aktif;
+
         existing.CreatedAt = createdAt;
         existing.UpdatedAt = DateTime.UtcNow;
+
+        Console.WriteLine($"[UpdateAsync] SaveChanges öncesi existing.Aktif={existing.Aktif} IstenAyrilma={existing.IstenAyrilmaTarihi} SgkCikis={existing.SgkCikisTarihi}");
 
         await context.SaveChangesAsync();
 
@@ -943,7 +953,7 @@ public class SoforService : ISoforService
     public async Task<List<MuhasebeHesap>> GetPersonelMuhasebeHesaplariAsync()
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var ayar = await context.MuhasebeAyarlari.AsNoTracking().FirstOrDefaultAsync();
+        var ayar = await context.MuhasebeAyarlari.AsNoTracking().OrderBy(a => a.Id).FirstOrDefaultAsync();
         var prefix = string.IsNullOrWhiteSpace(ayar?.PersonelPrefix) ? "335.01" : ayar!.PersonelPrefix.Trim();
 
         return await context.MuhasebeHesaplari
@@ -958,7 +968,7 @@ public class SoforService : ISoforService
     public async Task<List<MuhasebeHesap>> GetPersonelAvansHesaplariAsync()
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var ayar = await context.MuhasebeAyarlari.AsNoTracking().FirstOrDefaultAsync();
+        var ayar = await context.MuhasebeAyarlari.AsNoTracking().OrderBy(a => a.Id).FirstOrDefaultAsync();
         var prefix = string.IsNullOrWhiteSpace(ayar?.PersonelAvansPrefix) ? "195.01" : ayar!.PersonelAvansPrefix.Trim();
 
         return await context.MuhasebeHesaplari

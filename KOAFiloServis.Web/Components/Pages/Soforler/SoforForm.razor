@@ -555,9 +555,9 @@
                     <div class="col-md-2">
                         <div class="mb-3">
                             <div class="form-check form-switch mt-4">
-                                <InputCheckbox @bind-Value="sofor.Aktif" class="form-check-input" id="aktif" />
-                                <label class="form-check-label" for="aktif">
-                                    <strong>@(sofor.Aktif ? "Aktif" : "Pasif")</strong>
+                                <InputCheckbox @bind-Value="Pasif" class="form-check-input" id="pasif" />
+                                <label class="form-check-label" for="pasif">
+                                    <strong>@(Pasif ? "Pasif" : "Aktif")</strong>
                                 </label>
                             </div>
                         </div>
@@ -1064,6 +1064,13 @@
     private bool _srcBelgesiVarMi;
     private decimal ToplamNetMaas => sofor.NetMaas;
     private decimal EldenOdenecekOnizleme => YuvarlaPara(Math.Max(0, sofor.NetMaas - sofor.ResmiNetMaas));
+
+    // Pasif/Aktif ters mantık binding: UI'da Pasif switch, DB'de Aktif kolon
+    private bool Pasif
+    {
+        get => !sofor.Aktif;
+        set => sofor.Aktif = !value;
+    }
     private List<MuhasebeHesap> muhasebeHesaplari = new();
     private List<MuhasebeHesap> avansHesaplari = new();
     private MuhasebeHesap? personelAvansHesap;
@@ -1119,8 +1126,17 @@
     [SupplyParameterFromQuery(Name = "tedarikciId")]
     public int? TedarikciIdQuery { get; set; }
 
+    private bool _ilkYuklemeTamam = false;
+    private int? _sonYuklenenId = null; // OnParametersSetAsync tekrar çalıştığında aynı Id için reload'u engeller
+
     protected override async Task OnParametersSetAsync()
     {
+        // Aynı personel Id'si için tekrar tekrar DB'den yükleme yapma.
+        // OnParametersSetAsync her StateHasChanged'de tetiklenir;
+        // her seferinde sofor = existing yapmak kullanıcı değişikliklerini (Aktif, tarih vb.) ezer.
+        if (_ilkYuklemeTamam && IsEdit && _sonYuklenenId == Id)
+            return;
+
         await HesaplariYukle();
         await FirmalariYukle();
         await TasimaTedarikcileriYukle();
@@ -1138,6 +1154,7 @@
                 seciliAvansHesapId = sofor.PersonelAvansHesapId ?? personelAvansHesap?.Id ?? 0;
                 await EvrakDurumuYukle();
                 await AracAtamalariniYukle();
+                _sonYuklenenId = Id;
             }
             else
             {
@@ -1157,6 +1174,8 @@
             sofor.SoforKodu = await SoforService.GenerateNextKodAsync(sofor.Gorev);
             gercekMaas = 0;
         }
+
+        _ilkYuklemeTamam = true;
     }
 
     private async Task TasimaTedarikcileriYukle()
