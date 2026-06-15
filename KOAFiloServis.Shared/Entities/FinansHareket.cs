@@ -38,4 +38,7 @@ public class FinansHareket : BaseEntity, IFirmaTenant
 
     /// <summary>İptal ters fiş ID'si.</summary>
     public int? IptalFisId { get; set; }
+
+    /// <summary>İçe aktarılan dosyanın SHA256 hash'i (mükerrer engelleme).</summary>
+    public string? DosyaHash { get; set; }
 }
