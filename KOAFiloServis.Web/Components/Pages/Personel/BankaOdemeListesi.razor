@@ -8,6 +8,7 @@
 @inject ISoforService SoforService
 @inject IPersonelFinansService FinansService
 @inject IPersonelMaasIzinService PersonelMaasService
+@inject IMaasSnapshotService SnapshotService
 @inject IBankaHesapService BankaHesapService
 @inject IDbContextFactory<ApplicationDbContext> DbContextFactory
 @inject IToastService ToastService
@@ -572,6 +573,37 @@
                 })
                 .OrderBy(g => g.Gorev)
                 .ToList();
+
+            // ── Snapshot kaydet (arka planda, sessiz) ──
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var firmaId = aktifPersoneller.FirstOrDefault()?.FirmaId ?? 0;
+                    if (firmaId > 0 && personelListesi.Any())
+                    {
+                        var varMi = await SnapshotService.VarMiAsync(secilenYil, secilenAy, firmaId);
+                        if (!varMi)
+                        {
+                            var snapshotData = personelListesi.Select(p => (
+                                PersonelId: p.Personel.Id,
+                                AdSoyad: p.Personel.TamAd,
+                                PersonelKodu: (string?)p.Personel.SoforKodu,
+                                GorevAdi: GetGorevAdi(p.Personel.Gorev),
+                                AracPlakasi: (string?)p.AracPlakasi,
+                                GercekMaas: p.GercekMaas,
+                                BankayaYatan: p.BankayaYatan,
+                                Avans: p.Avans,
+                                Kesinti: p.Kesinti,
+                                Harcama: p.PersonelHarcamasi,
+                                Odenecek: p.EldenOdenecek
+                            )).ToList();
+                            await SnapshotService.OlusturAsync(secilenYil, secilenAy, firmaId, snapshotData);
+                        }
+                    }
+                }
+                catch (Exception ex) { Console.WriteLine($"[Snapshot] Banka liste kayıt hatası: {ex.Message}"); }
+            });
         }
         catch (Exception ex)
         {

@@ -42,7 +42,7 @@ public class PersonelMuhasebeHesapPersistenceTests
             .Returns(Task.CompletedTask);
 
         var numaraSerisi = new NumaraSerisiService(factory);
-        return new SoforService(factory, muhasebeMock.Object, cacheMock.Object, numaraSerisi);
+        return new SoforService(factory, muhasebeMock.Object, cacheMock.Object, numaraSerisi, Mock.Of<IMaasSnapshotService>());
     }
 
     [Fact]

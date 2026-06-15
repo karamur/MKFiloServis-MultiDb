@@ -123,7 +123,7 @@ public class MultiModulePersistenceTests
         var sp = CreateSp(firmaId);
         var factory = new TestDbContextFactory(sp);
         var numara = new NumaraSerisiService(factory);
-        return new SoforService(factory, Mock.Of<IMuhasebeService>(), Mock.Of<ICacheService>(), numara);
+        return new SoforService(factory, Mock.Of<IMuhasebeService>(), Mock.Of<ICacheService>(), numara, Mock.Of<IMaasSnapshotService>());
     }
 
     private static DateTime UtcNow => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);

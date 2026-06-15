@@ -55,7 +55,7 @@ public class PersonelMuhasebeBaglantiTests
         var sp = services.BuildServiceProvider();
         var factory = new TestDbContextFactory(sp);
         var numara = new NumaraSerisiService(factory);
-        return new SoforService(factory, Mock.Of<IMuhasebeService>(), Mock.Of<ICacheService>(), numara);
+        return new SoforService(factory, Mock.Of<IMuhasebeService>(), Mock.Of<ICacheService>(), numara, Mock.Of<IMaasSnapshotService>());
     }
 
     [Fact]

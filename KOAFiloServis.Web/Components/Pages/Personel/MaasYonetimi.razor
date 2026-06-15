@@ -12,6 +12,7 @@
 @inject IBordroService BordroService
 @inject IKullaniciService KullaniciService
 @inject IBankaHesapService BankaHesapService
+@inject IMaasSnapshotService SnapshotService
 @inject IAktifFirmaProvider AktifFirmaProvider
 @inject IJSRuntime JS
 @inject IDbContextFactory<KOAFiloServis.Web.Data.ApplicationDbContext> DbContextFactory
@@ -2384,6 +2385,37 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
             }
             if (durSecilenPersonelId > 0)
                 await DurumPersonelDetayYukle();
+
+            // ── Snapshot kaydet (arka planda, sessiz) ──
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var firmaId = AktifFirmaProvider.AktifFirmaId ?? durTumPersoneller.FirstOrDefault()?.FirmaId ?? 0;
+                    if (firmaId > 0 && durSatirlar.Any())
+                    {
+                        var varMi = await SnapshotService.VarMiAsync(durYil, durAy, firmaId);
+                        if (!varMi)
+                        {
+                            var snapshotData = durSatirlar.Select(s => (
+                                PersonelId: s.PersonelId,
+                                AdSoyad: s.AdSoyad,
+                                PersonelKodu: (string?)s.SoforKodu,
+                                GorevAdi: (string?)s.GorevAdi,
+                                AracPlakasi: (string?)s.Plaka,
+                                GercekMaas: s.GercekMaas,
+                                BankayaYatan: s.BankayaYatan,
+                                Avans: s.Avans,
+                                Kesinti: s.Kesinti,
+                                Harcama: s.Harcamasi,
+                                Odenecek: s.Odenecek
+                            )).ToList();
+                            await SnapshotService.OlusturAsync(durYil, durAy, firmaId, snapshotData);
+                        }
+                    }
+                }
+                catch (Exception ex) { Console.WriteLine($"[Snapshot] Durum kayıt hatası: {ex.Message}"); }
+            });
         }
         catch (Exception ex)
         {

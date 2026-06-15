@@ -12,13 +12,15 @@ public class SoforService : ISoforService
     private readonly IMuhasebeService _muhasebeService;
     private readonly ICacheService _cache;
     private readonly NumaraSerisiService _numaraSerisi;
+    private readonly IMaasSnapshotService _snapshotService;
 
-    public SoforService(IDbContextFactory<ApplicationDbContext> contextFactory, IMuhasebeService muhasebeService, ICacheService cache, NumaraSerisiService numaraSerisi)
+    public SoforService(IDbContextFactory<ApplicationDbContext> contextFactory, IMuhasebeService muhasebeService, ICacheService cache, NumaraSerisiService numaraSerisi, IMaasSnapshotService snapshotService)
     {
         _contextFactory = contextFactory;
         _muhasebeService = muhasebeService;
         _cache = cache;
         _numaraSerisi = numaraSerisi;
+        _snapshotService = snapshotService;
     }
 
     public Task<List<Sofor>> GetAllAsync() =>
@@ -191,6 +193,15 @@ public class SoforService : ISoforService
 
         await context.SaveChangesAsync();
         await _cache.RemoveByPrefixAsync(CacheKeys.SoforPrefix);
+
+        // Personel değişince mevcut ayın snapshot'ını geçersiz kıl — yeniden oluşacak
+        var now = DateTime.Now;
+        var firmaId = sofor.FirmaId ?? existing.FirmaId;
+        if (firmaId.HasValue && firmaId.Value > 0)
+        {
+            try { await _snapshotService.SilAsync(now.Year, now.Month, firmaId.Value); }
+            catch (Exception ex) { Console.WriteLine($"[SoforService] Snapshot silme hatası (önemsiz): {ex.Message}"); }
+        }
 
         return existing;
     }
