@@ -119,6 +119,7 @@ public class ApplicationDbContext : DbContext
     // Banka/Kasa Modulu
     public DbSet<BankaHesap> BankaHesaplari { get; set; }
     public DbSet<FinansHareket> FinansHareketler { get; set; }
+    public DbSet<BankaKolonMapping> BankaKolonMappingler { get; set; }
     public DbSet<BankaKasaHareket> BankaKasaHareketleri { get; set; }
     public DbSet<FirmalarArasiTransfer> FirmalarArasiTransferler { get; set; }
     public DbSet<OdemeEslestirme> OdemeEslestirmeleri { get; set; }
