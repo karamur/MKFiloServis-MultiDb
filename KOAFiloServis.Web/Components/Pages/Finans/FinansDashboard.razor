@@ -113,7 +113,22 @@
                                     <td class="text-end fw-bold text-warning">@FormatPara(data.ToplamHakedisGider)</td>
                                 </tr>
                                 <tr>
-                                    <td><i class="bi bi-calculator text-info me-2"></i>Muhasebe 770 Toplam</td>
+                                    <td>
+                                        <i class="bi bi-calculator text-info me-2"></i>
+                                        Muhasebe 770 Toplam
+                                        @if (data.SnapshotKullaniliyorMu)
+                                        {
+                                            <span class="badge bg-success ms-1" title="Snapshot kilitli + fiş kesildi → muhasebe doğrulama verisi">
+                                                <i class="bi bi-check-circle me-1"></i>Doğrulandı
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-warning text-dark ms-1" title="Snapshot yok veya kilitli değil → muhasebe bağımsız veri">
+                                                <i class="bi bi-exclamation-triangle me-1"></i>Bağımsız
+                                            </span>
+                                        }
+                                    </td>
                                     <td class="text-end fw-bold text-info">@FormatPara(data.Muhasebe770Toplam)</td>
                                 </tr>
                                 <tr class="table-light">

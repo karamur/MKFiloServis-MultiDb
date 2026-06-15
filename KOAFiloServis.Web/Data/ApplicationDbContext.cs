@@ -118,6 +118,7 @@ public class ApplicationDbContext : DbContext
 
     // Banka/Kasa Modulu
     public DbSet<BankaHesap> BankaHesaplari { get; set; }
+    public DbSet<FinansHareket> FinansHareketler { get; set; }
     public DbSet<BankaKasaHareket> BankaKasaHareketleri { get; set; }
     public DbSet<FirmalarArasiTransfer> FirmalarArasiTransferler { get; set; }
     public DbSet<OdemeEslestirme> OdemeEslestirmeleri { get; set; }
@@ -884,6 +885,19 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict);
 
             // Global Query Filter: IsDeleted (Tenant izolasyonu IFirmaTenant filter'ı tarafından otomatik ekleniyor)
+            entity.HasQueryFilter(e => !e.IsDeleted);
+        });
+
+        // FinansHareket — Kasa/Banka Excel import + muhasebe entegrasyonu
+        modelBuilder.Entity<FinansHareket>(entity =>
+        {
+            entity.HasIndex(e => new { e.FirmaId, e.Tarih });
+            entity.Property(e => e.Tip).HasMaxLength(20);
+            entity.Property(e => e.Tutar).HasPrecision(18, 2);
+            entity.Property(e => e.Aciklama).HasMaxLength(500);
+            entity.Property(e => e.ReferansNo).HasMaxLength(100);
+            entity.HasOne(e => e.Hesap).WithMany().HasForeignKey(e => e.HesapId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.KarsiHesap).WithMany().HasForeignKey(e => e.KarsiHesapId).OnDelete(DeleteBehavior.Restrict);
             entity.HasQueryFilter(e => !e.IsDeleted);
         });
 

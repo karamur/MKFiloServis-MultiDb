@@ -41,19 +41,32 @@ public class FinansDashboardService
                      && x.Tarih >= donemBaslangic && x.Tarih < donemBitis)
             .ToListAsync();
 
-        // Muhasebe fişleri (770 gider)
+        // Muhasebe fişleri — YIL + AY + FİRMA + ONAYLI (770 gider)
         var muhasebeFisler = await context.MuhasebeFisleri
             .AsNoTracking()
-            .Include(x => x.Kalemler)
+            .Include(x => x.Kalemler).ThenInclude(k => k.Hesap)
             .Where(x => x.FisTarihi.Year == yil && x.FisTarihi.Month == ay
                      && !x.IsDeleted && x.Durum == FisDurum.Onaylandi)
             .ToListAsync();
+
+        // Muhasebe 770 toplamı (yıl + ay + onaylı)
+        var muhasebe770Toplam = muhasebeFisler
+            .SelectMany(f => f.Kalemler)
+            .Where(k => k.Hesap != null && k.Hesap.HesapKodu.StartsWith("770"))
+            .Sum(k => k.Borc);
 
         var toplamMaas = snapshot.Sum(x => x.Odenecek);
         var toplamHakedisGelir = hakedisler.Sum(x => x.TahsilEdilecekTutar);
         var toplamHakedisGider = hakedisler.Sum(x => x.OdenecekTutar);
         var toplamSefer = operasyonlar.Sum(x => x.SeferSayisi);
         var personelSayisi = snapshot.Select(x => x.PersonelId).Distinct().Count();
+
+        // Snapshot güvenilir mi? (kilitli + fiş var)
+        var snapshotKullaniliyor = snapshot.Any() && snapshot.All(x => x.Kilitli) && snapshot.Any(x => x.MuhasebeFisId != null);
+
+        // DOUBLE COUNT engelle: Snapshot kullanılıyorsa 770 Net'e dahil ETME
+        var netKar = toplamHakedisGelir - toplamMaas - toplamHakedisGider;
+        // (muhasebe770Toplam ayrı gösterilir, net'e zorunlu katılmaz)
 
         // Fatura metrikleri
         var faturalar = await context.Faturalar
@@ -67,12 +80,6 @@ public class FinansDashboardService
         var toplamFaturaGider = faturalar.Where(x => x.FaturaYonu == FaturaYonu.Gelen).Sum(x => x.GenelToplam);
         var toplamFaturaGelir = faturalar.Where(x => x.FaturaYonu == FaturaYonu.Giden).Sum(x => x.GenelToplam);
 
-        // Muhasebe 770 toplamı
-        var muhasebe770Toplam = muhasebeFisler
-            .SelectMany(f => f.Kalemler)
-            .Where(k => k.Hesap != null && k.Hesap.HesapKodu.StartsWith("770"))
-            .Sum(k => k.Borc);
-
         return new FinansDashboardDto
         {
             Yil = yil,
@@ -81,7 +88,7 @@ public class FinansDashboardService
             ToplamMaas = toplamMaas,
             ToplamHakedisGelir = toplamHakedisGelir,
             ToplamHakedisGider = toplamHakedisGider,
-            NetKar = toplamHakedisGelir - toplamMaas - toplamHakedisGider,
+            NetKar = netKar,
             ToplamSefer = toplamSefer,
             PersonelSayisi = personelSayisi,
             Muhasebe770Toplam = muhasebe770Toplam,
@@ -94,7 +101,8 @@ public class FinansDashboardService
 
             SnapshotVar = snapshot.Any(),
             SnapshotKilitli = snapshot.Any() && snapshot.All(x => x.Kilitli),
-            FisVar = snapshot.Any(x => x.MuhasebeFisId != null)
+            FisVar = snapshot.Any(x => x.MuhasebeFisId != null),
+            SnapshotKullaniliyorMu = snapshotKullaniliyor
         };
     }
 }
@@ -121,4 +129,5 @@ public class FinansDashboardDto
     public bool SnapshotVar { get; set; }
     public bool SnapshotKilitli { get; set; }
     public bool FisVar { get; set; }
+    public bool SnapshotKullaniliyorMu { get; set; }
 }
