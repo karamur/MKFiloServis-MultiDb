@@ -725,7 +725,7 @@ public class AracService : IAracService
         await using var context = await _contextFactory.CreateDbContextAsync();
         var evrak = await context.AracEvraklari
             .Include(e => e.Arac)
-                .ThenInclude(a => a.Firma)
+                .ThenInclude(a => a!.Firma)
             .FirstOrDefaultAsync(e => e.Id == evrakId);
         if (evrak == null)
             throw new Exception("Evrak bulunamadi");

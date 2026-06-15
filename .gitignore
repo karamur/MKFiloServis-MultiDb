@@ -123,3 +123,4 @@ KURULUM/*.rar
 KURULUM/*.zip
 **/.playwright/
 **/node.exe
+diagnostic-test-output.txt

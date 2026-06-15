@@ -145,11 +145,6 @@ builder.Services.AddPooledDbContextFactory<ApplicationDbContext>((sp, options) =
         options.EnableSensitiveDataLogging();
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // GEÇİCİ DİAGNOSTİK: EF Core SQL logu (UPDATE Personellers izleme)
-    // ═══════════════════════════════════════════════════════════════
-    options.LogTo(Console.WriteLine, Microsoft.Extensions.Logging.LogLevel.Information);
-
     // Query-filter etkileşim uyarısı: EF Core'un global query filter + required navigation
     // etkileşiminde verdiği false-positive uyarı. Model doğru, uyarı bastırılıyor.
     // PendingModelChangesWarning ISE bastırılmaz → production'da model-DB uyumsuzluğu log'a düşer.

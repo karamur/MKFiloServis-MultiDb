@@ -469,13 +469,9 @@
     private async Task LoadData()
     {
         await using var ctx = await DbContextFactory.CreateDbContextAsync();
-        tumPersoneller = await ctx.Soforler
-            .Include(s => s.Firma)
-            .Include(s => s.TasimaTedarikci)
-            .Where(s => !s.IsDeleted)
+        tumPersoneller = await PersonelListeSorgusu(ctx)
             .OrderBy(s => s.Ad)
             .ThenBy(s => s.Soyad)
-            .AsNoTracking()
             .ToListAsync();
         await LoadPersonelAraclarAsync();
         await LoadFirmalarAsync();
@@ -488,13 +484,9 @@
         if (tumPersoneller == null)
         {
             await using var ctx = await DbContextFactory.CreateDbContextAsync();
-            tumPersoneller = await ctx.Soforler
-                .Include(s => s.Firma)
-                .Include(s => s.TasimaTedarikci)
-                .Where(s => !s.IsDeleted)
+            tumPersoneller = await PersonelListeSorgusu(ctx)
                 .OrderBy(s => s.Ad)
                 .ThenBy(s => s.Soyad)
-                .AsNoTracking()
                 .ToListAsync();
         }
         UygulaFiltre();
@@ -504,6 +496,48 @@
     {
         secilenAktifDurum = durum;
         UygulaFiltre();
+    }
+
+    private static IQueryable<Sofor> PersonelListeSorgusu(ApplicationDbContext ctx)
+    {
+        return ctx.Soforler
+            .Where(s => !s.IsDeleted)
+            .AsNoTracking()
+            .Select(s => new Sofor
+            {
+                Id = s.Id,
+                SoforKodu = s.SoforKodu,
+                Ad = s.Ad,
+                Soyad = s.Soyad,
+                Telefon = s.Telefon,
+                Gorev = s.Gorev,
+                FirmaId = s.FirmaId,
+                TasimaTedarikciId = s.TasimaTedarikciId,
+                Aktif = s.Aktif,
+                SiralamaNo = s.SiralamaNo,
+                IseBaslamaTarihi = s.IseBaslamaTarihi,
+                IstenAyrilmaTarihi = s.IstenAyrilmaTarihi,
+                SgkCikisTarihi = s.SgkCikisTarihi,
+                NetMaas = s.NetMaas,
+                EhliyetGecerlilikTarihi = s.EhliyetGecerlilikTarihi,
+                MykBelgesiGecerlilikTarihi = s.MykBelgesiGecerlilikTarihi,
+                YayginEgitimSertifikasiVarMi = s.YayginEgitimSertifikasiVarMi,
+                SrcBelgesiGecerlilikTarihi = s.SrcBelgesiGecerlilikTarihi,
+                Firma = s.Firma == null
+                    ? null
+                    : new Firma
+                    {
+                        Id = s.Firma.Id,
+                        FirmaAdi = s.Firma.FirmaAdi
+                    },
+                TasimaTedarikci = s.TasimaTedarikci == null
+                    ? null
+                    : new TasimaTedarikci
+                    {
+                        Id = s.TasimaTedarikci.Id,
+                        Unvan = s.TasimaTedarikci.Unvan
+                    }
+            });
     }
 
     private void UygulaFiltre()

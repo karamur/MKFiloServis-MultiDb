@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
 using KOAFiloServis.Web.Helpers;
@@ -256,7 +256,7 @@ public class ArchiveMigrationService
         await using var ctx = await _contextFactory.CreateDbContextAsync(ct);
         var evraklar = await ctx.AracEvrakDosyalari
             .IgnoreQueryFilters()
-            .Include(d => d.AracEvrak).ThenInclude(e => e.Arac).ThenInclude(a => a.Firma)
+            .Include(d => d.AracEvrak).ThenInclude(e => e!.Arac).ThenInclude(a => a!.Firma)
             .Where(d => !string.IsNullOrWhiteSpace(d.DosyaYolu))
             .ToListAsync(ct);
 
@@ -296,7 +296,7 @@ public class ArchiveMigrationService
         await using var ctx = await _contextFactory.CreateDbContextAsync(ct);
         var evraklar = await ctx.AracEvrakDosyalari
             .IgnoreQueryFilters()
-            .Include(d => d.AracEvrak).ThenInclude(e => e.Arac).ThenInclude(a => a.Firma)
+            .Include(d => d.AracEvrak).ThenInclude(e => e!.Arac).ThenInclude(a => a!.Firma)
             .Where(d => !string.IsNullOrWhiteSpace(d.DosyaYolu))
             .ToListAsync(ct);
 
