@@ -1,0 +1,85 @@
+using KOAFiloServis.Shared.Entities;
+using KOAFiloServis.Web.Data;
+using KOAFiloServis.Web.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
+
+namespace KOAFiloServis.Web.Services;
+
+public class MaasSnapshotService : IMaasSnapshotService
+{
+    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+
+    public MaasSnapshotService(IDbContextFactory<ApplicationDbContext> contextFactory)
+    {
+        _contextFactory = contextFactory;
+    }
+
+    public async Task<bool> VarMiAsync(int yil, int ay, int firmaId)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.MaasOdemeSnapshotlar
+            .AnyAsync(x => x.Yil == yil && x.Ay == ay && x.FirmaId == firmaId && !x.IsDeleted);
+    }
+
+    public async Task<List<MaasOdemeSnapshot>> GetAsync(int yil, int ay, int firmaId)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.MaasOdemeSnapshotlar
+            .AsNoTracking()
+            .Where(x => x.Yil == yil && x.Ay == ay && x.FirmaId == firmaId && !x.IsDeleted)
+            .OrderBy(x => x.PersonelAdSoyad)
+            .ToListAsync();
+    }
+
+    public async Task<List<MaasOdemeSnapshot>> OlusturAsync(
+        int yil, int ay, int firmaId,
+        List<(int PersonelId, string AdSoyad, string? PersonelKodu, string? GorevAdi, string? AracPlakasi,
+              decimal GercekMaas, decimal BankayaYatan, decimal Avans, decimal Kesinti, decimal Harcama, decimal Odenecek)> data)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        // Zaten varsa tekrar oluşturma
+        var varMi = await VarMiAsync(yil, ay, firmaId);
+        if (varMi)
+            return await GetAsync(yil, ay, firmaId);
+
+        var now = DateTime.UtcNow;
+        var snapshots = data.Select(x => new MaasOdemeSnapshot
+        {
+            FirmaId = firmaId,
+            Yil = yil,
+            Ay = ay,
+            PersonelId = x.PersonelId,
+            PersonelAdSoyad = x.AdSoyad,
+            PersonelKodu = x.PersonelKodu,
+            GorevAdi = x.GorevAdi,
+            AracPlakasi = x.AracPlakasi,
+            GercekMaas = x.GercekMaas,
+            BankayaYatan = x.BankayaYatan,
+            Avans = x.Avans,
+            Kesinti = x.Kesinti,
+            Harcama = x.Harcama,
+            Odenecek = x.Odenecek,
+            HesaplamaTarihi = now,
+            Kilitli = true,
+            CreatedAt = now
+        }).ToList();
+
+        context.MaasOdemeSnapshotlar.AddRange(snapshots);
+        await context.SaveChangesAsync();
+
+        return snapshots;
+    }
+
+    public async Task SilAsync(int yil, int ay, int firmaId)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var affected = await context.MaasOdemeSnapshotlar
+            .Where(x => x.Yil == yil && x.Ay == ay && x.FirmaId == firmaId)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.IsDeleted, true)
+                .SetProperty(x => x.DeletedAt, DateTime.UtcNow));
+
+        Console.WriteLine($"[MaasSnapshot] Silinen: Yil={yil} Ay={ay} Firma={firmaId} Adet={affected}");
+    }
+}

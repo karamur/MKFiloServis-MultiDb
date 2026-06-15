@@ -130,6 +130,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<PersonelMaas> PersonelMaaslari { get; set; }
     public DbSet<PersonelIzin> PersonelIzinleri { get; set; }
     public DbSet<PersonelIzinHakki> PersonelIzinHaklari { get; set; }
+    public DbSet<MaasOdemeSnapshot> MaasOdemeSnapshotlar { get; set; }
     public DbSet<PersonelAracAtama> PersonelAracAtamalari { get; set; }
 
     // Butce Modulu
@@ -1084,6 +1085,19 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(e => e.SoforId)
                 .OnDelete(DeleteBehavior.Restrict);
                 
+            entity.HasQueryFilter(e => !e.IsDeleted);
+        });
+
+        // MaasOdemeSnapshot — aylık maaş/ödeme snapshot
+        modelBuilder.Entity<MaasOdemeSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.FirmaId, e.Yil, e.Ay });
+            entity.Property(e => e.GercekMaas).HasPrecision(18, 2);
+            entity.Property(e => e.BankayaYatan).HasPrecision(18, 2);
+            entity.Property(e => e.Avans).HasPrecision(18, 2);
+            entity.Property(e => e.Kesinti).HasPrecision(18, 2);
+            entity.Property(e => e.Harcama).HasPrecision(18, 2);
+            entity.Property(e => e.Odenecek).HasPrecision(18, 2);
             entity.HasQueryFilter(e => !e.IsDeleted);
         });
 
