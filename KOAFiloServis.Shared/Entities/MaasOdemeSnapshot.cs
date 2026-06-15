@@ -31,4 +31,10 @@ public class MaasOdemeSnapshot : BaseEntity, IFirmaTenant
 
     /// <summary>Kilitli snapshotslar düzenlenemez.</summary>
     public bool Kilitli { get; set; } = true;
+
+    /// <summary>Normal muhasebe fişi ID'si. Null ise fiş oluşturulmamış.</summary>
+    public int? MuhasebeFisId { get; set; }
+
+    /// <summary>İptal/ters fiş ID'si. Null ise iptal edilmemiş.</summary>
+    public int? IptalFisId { get; set; }
 }

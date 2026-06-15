@@ -152,9 +152,98 @@ public class MuhasebeSnapshotService
         context.MuhasebeFisleri.Add(fis);
         await context.SaveChangesAsync();
 
+        // Snapshot'a MuhasebeFisId yaz
+        var snapshotIds = snapshot.Select(s => s.Id).ToList();
+        await context.MaasOdemeSnapshotlar
+            .Where(x => snapshotIds.Contains(x.Id))
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.MuhasebeFisId, fis.Id)
+                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow));
+
         Console.WriteLine($"[MuhasebeSnapshot] Fiş oluşturuldu: {fisNo} Yil={yil} Ay={ay} Tutar={toplamOdenecek:N2} Personel={snapshot.Count}");
 
         return fis;
+    }
+
+    /// <summary>
+    /// Ters fiş oluşturur — maaş tahakkukunu iptal eder.
+    /// Asla kayıt silinmez, sadece ters kayıt yapılır.
+    /// </summary>
+    public async Task<MuhasebeFis?> ReverseSnapshotAsync(int yil, int ay, int firmaId)
+    {
+        await using var context = await _factory.CreateDbContextAsync();
+
+        var snapshot = await context.MaasOdemeSnapshotlar
+            .Where(x => x.Yil == yil && x.Ay == ay && x.FirmaId == firmaId && !x.IsDeleted)
+            .ToListAsync();
+
+        if (!snapshot.Any())
+            throw new InvalidOperationException($"Snapshot bulunamadı. Yil={yil} Ay={ay} Firma={firmaId}");
+
+        if (!snapshot.All(x => x.Kilitli))
+            throw new InvalidOperationException($"Snapshot kilitli değil. Yil={yil} Ay={ay}");
+
+        if (snapshot.All(x => x.MuhasebeFisId == null))
+            throw new InvalidOperationException($"Henüz muhasebe fişi oluşturulmamış. Yil={yil} Ay={ay}");
+
+        if (snapshot.Any(x => x.IptalFisId != null))
+        {
+            Console.WriteLine($"[MuhasebeSnapshot] Zaten iptal edilmiş. Yil={yil} Ay={ay}");
+            return null;
+        }
+
+        var orijinalFisId = snapshot.First().MuhasebeFisId!.Value;
+        var orijinalFis = await context.MuhasebeFisleri
+            .Include(x => x.Kalemler)
+            .FirstAsync(x => x.Id == orijinalFisId);
+
+        var toplamOdenecek = snapshot.Sum(x => x.Odenecek);
+        var fisNo = await GenerateNextMaasFisNoAsync(context, firmaId);
+
+        var reverseFis = new MuhasebeFis
+        {
+            FisNo = fisNo,
+            FisTarihi = DateTime.Today,
+            FisTipi = FisTipi.Mahsup,
+            Aciklama = $"Maaş İptal Fişi — {ay:D2}/{yil} (Ters Kayıt: {orijinalFis.FisNo})",
+            Kaynak = FisKaynak.Otomatik,
+            KaynakTip = "MaasSnapshotReverse",
+            KaynakId = orijinalFisId,
+            Durum = FisDurum.Onaylandi,
+            ToplamBorc = toplamOdenecek,
+            ToplamAlacak = toplamOdenecek,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        // TERS KAYIT: Borç ↔ Alacak yer değiştirir
+        var sira = 1;
+        foreach (var kalem in orijinalFis.Kalemler.OrderBy(k => k.SiraNo))
+        {
+            reverseFis.Kalemler.Add(new MuhasebeFisKalem
+            {
+                HesapId = kalem.HesapId,
+                SiraNo = sira++,
+                Borc = kalem.Alacak,      // TERS
+                Alacak = kalem.Borc,       // TERS
+                Aciklama = $"İptal: {kalem.Aciklama}",
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        context.MuhasebeFisleri.Add(reverseFis);
+        await context.SaveChangesAsync();
+
+        // Snapshot'a IptalFisId yaz
+        var snapshotIds = snapshot.Select(s => s.Id).ToList();
+        await context.MaasOdemeSnapshotlar
+            .Where(x => snapshotIds.Contains(x.Id))
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.IptalFisId, reverseFis.Id)
+                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow));
+
+        Console.WriteLine($"[MuhasebeSnapshot] TERS FİŞ oluşturuldu: {fisNo} ← {orijinalFis.FisNo} Yil={yil} Ay={ay} Tutar={toplamOdenecek:N2}");
+
+        return reverseFis;
     }
 
     private static async Task<string> GenerateNextMaasFisNoAsync(ApplicationDbContext context, int firmaId)
