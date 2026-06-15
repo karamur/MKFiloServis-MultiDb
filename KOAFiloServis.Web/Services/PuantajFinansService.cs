@@ -209,6 +209,106 @@ public sealed class PuantajFinansService : IPuantajFinansService
         return fatura;
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // YENİ: HakedisPuantaj → Tam Finans Zinciri
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// HakedisPuantaj'dan: Gelir + Gider → Fatura → Muhasebe → Snapshot.
+    /// Araç tipine göre gider faturası oluşturur (Özmal: yok, Kiralık/Tedarikçi: var).
+    /// </summary>
+    public async Task<PuantajFinansSonuc> IsleAsync(HakedisPuantaj puantaj)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        var mevcut = await db.HakedisPuantajlar.AsNoTracking()
+            .AnyAsync(x => x.Id == puantaj.Id && (x.GelirFaturaId != null || x.GiderFaturaId != null));
+        if (mevcut)
+            return new PuantajFinansSonuc { Mesaj = "Bu puantaj zaten işlenmiş." };
+
+        var arac = await db.Araclar.AsNoTracking().FirstOrDefaultAsync(a => a.Id == puantaj.AracId);
+        var guzergah = await db.Guzergahlar.AsNoTracking().FirstOrDefaultAsync(g => g.Id == puantaj.GuzergahId);
+        var kurumCari = await db.Cariler.AsNoTracking().FirstOrDefaultAsync(c => c.Id == puantaj.CariId);
+        if (arac == null || guzergah == null) throw new InvalidOperationException("Araç veya Güzergah bulunamadı.");
+
+        var sonuc = new PuantajFinansSonuc();
+        var firmaId = puantaj.FirmaId ?? 0;
+        var kdvOrani = puantaj.KdvOrani > 0 ? puantaj.KdvOrani : 20;
+
+        // ── 1. GELİR → Giden Fatura (Kurum) ──
+        var gelir = puantaj.GelirToplam > 0 ? puantaj.GelirToplam : puantaj.ToplamSefer * guzergah.BirimFiyat;
+        if (kurumCari != null && gelir > 0)
+        {
+            var giden = await FaturaOlusturHizliAsync(kurumCari, gelir, FaturaYonu.Giden, kdvOrani, firmaId,
+                $"Puantaj Gelir: {guzergah.GuzergahAdi} / {puantaj.Yil}-{puantaj.Ay:D2}");
+            await db.HakedisPuantajlar.Where(x => x.Id == puantaj.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.GelirFaturaId, giden.Id));
+            sonuc.GelirFaturaId = giden.Id; sonuc.GelirTutar = gelir;
+        }
+
+        // ── 2. GİDER → Gelen Fatura (Araç tipine göre) ──
+        var sahiplikTipi = arac.SahiplikTipi;
+        decimal gider = 0; int? giderFaturaId = null;
+
+        if (sahiplikTipi == AracSahiplikTipi.Ozmal)
+        {
+            gider = puantaj.GiderToplam > 0 ? puantaj.GiderToplam : puantaj.ToplamSefer * (guzergah.GiderFiyat > 0 ? guzergah.GiderFiyat : guzergah.BirimFiyat);
+        }
+        else if (sahiplikTipi == AracSahiplikTipi.Kiralik)
+        {
+            gider = puantaj.GiderToplam > 0 ? puantaj.GiderToplam : puantaj.ToplamSefer * ((arac.GunlukKiraBedeli ?? 0) > 0 ? (arac.GunlukKiraBedeli ?? 0) : guzergah.GiderFiyat);
+            var kiralikCari = await db.Cariler.AsNoTracking().FirstOrDefaultAsync(c => c.Id == arac.KiralikCariId);
+            if (kiralikCari != null && gider > 0)
+            {
+                var gelen = await FaturaOlusturHizliAsync(kiralikCari, gider, FaturaYonu.Gelen, kdvOrani, firmaId,
+                    $"Puantaj Gider (Kiralık): {arac.AktifPlaka} / {puantaj.Yil}-{puantaj.Ay:D2}");
+                giderFaturaId = gelen.Id;
+            }
+        }
+        else if (sahiplikTipi == AracSahiplikTipi.Tedarikci)
+        {
+            gider = puantaj.GiderToplam > 0 ? puantaj.GiderToplam : puantaj.ToplamSefer * (guzergah.GiderFiyat > 0 ? guzergah.GiderFiyat : guzergah.BirimFiyat);
+            var tedarikciCari = await db.Cariler.AsNoTracking().FirstOrDefaultAsync(c => c.SoforId == puantaj.SoforId);
+            tedarikciCari ??= await db.Cariler.AsNoTracking().FirstOrDefaultAsync(c => c.Unvan != null && c.CariTipi == CariTipi.Tedarikci);
+            if (tedarikciCari != null && gider > 0)
+            {
+                var gelen = await FaturaOlusturHizliAsync(tedarikciCari, gider, FaturaYonu.Gelen, kdvOrani, firmaId,
+                    $"Puantaj Gider (Tedarikçi): {arac.AktifPlaka} / {puantaj.Yil}-{puantaj.Ay:D2}");
+                giderFaturaId = gelen.Id;
+            }
+        }
+
+        if (giderFaturaId.HasValue)
+            await db.HakedisPuantajlar.Where(x => x.Id == puantaj.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.GiderFaturaId, giderFaturaId.Value));
+
+        sonuc.GiderFaturaId = giderFaturaId; sonuc.GiderTutar = gider;
+        sonuc.Kar = gelir - gider; sonuc.Basarili = true;
+
+        Console.WriteLine($"[PuantajFinans] HakedisPuantaj İşlendi: Id={puantaj.Id} Gelir={gelir} Gider={gider} Kar={sonuc.Kar}");
+        return sonuc;
+    }
+
+    private async Task<Fatura> FaturaOlusturHizliAsync(Cari cari, decimal tutar, FaturaYonu yon, int kdvOrani, int firmaId, string aciklama)
+    {
+        var kdvTutar = tutar * kdvOrani / 100;
+        var fatura = new Fatura
+        {
+            FaturaTarihi = DateTime.SpecifyKind(DateTime.Today, DateTimeKind.Utc),
+            FaturaYonu = yon,
+            FaturaTipi = yon == FaturaYonu.Giden ? FaturaTipi.SatisFaturasi : FaturaTipi.AlisFaturasi,
+            CariId = cari.Id, FirmaId = firmaId,
+            AraToplam = tutar, KdvOrani = kdvOrani, KdvTutar = kdvTutar, GenelToplam = tutar + kdvTutar,
+            Aciklama = aciklama, Durum = FaturaDurum.Odendi, ImportKaynak = "Puantaj", CreatedAt = DateTime.UtcNow
+        };
+        fatura.FaturaKalemleri.Add(new FaturaKalem
+        {
+            SiraNo = 1, Aciklama = aciklama, Miktar = 1, Birim = "Adet",
+            BirimFiyat = tutar, KdvOrani = kdvOrani, KdvTutar = kdvTutar, ToplamTutar = tutar + kdvTutar, CreatedAt = DateTime.UtcNow
+        });
+        return await _faturaService.CreateAsync(fatura); // → otomatik muhasebe fişi
+    }
+
     public async Task<int> TopluFaturaUretAsync(int hesapDonemiId, CancellationToken ct = default)
     {
         var kayitlar = await FinansalKayitlariGetirAsync(hesapDonemiId, ct);

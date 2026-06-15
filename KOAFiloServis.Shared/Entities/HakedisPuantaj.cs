@@ -104,6 +104,8 @@ public class HakedisPuantaj : BaseEntity, IFirmaTenant
     // Fatura
     public int? FaturaId { get; set; }
     public virtual Fatura? Fatura { get; set; }
+    public int? GelirFaturaId { get; set; }
+    public int? GiderFaturaId { get; set; }
 
     // Notlar
     [StringLength(500)]
