@@ -125,6 +125,18 @@ public class MaasSnapshotService : IMaasSnapshotService
         return snapshot;
     }
 
+    public async Task KilitleAsync(int yil, int ay, int firmaId)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var affected = await context.MaasOdemeSnapshotlar
+            .Where(x => x.Yil == yil && x.Ay == ay && x.FirmaId == firmaId && !x.IsDeleted)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.Kilitli, true)
+                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow));
+
+        Console.WriteLine($"[MaasSnapshot] Kilitlendi: Yil={yil} Ay={ay} Firma={firmaId} Adet={affected}");
+    }
+
     public async Task SilAsync(int yil, int ay, int firmaId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();

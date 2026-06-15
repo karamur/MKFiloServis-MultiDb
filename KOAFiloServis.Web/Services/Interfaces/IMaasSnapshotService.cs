@@ -16,6 +16,9 @@ public interface IMaasSnapshotService
     /// <summary>Snapshots güncelle — sadece kilitli olmayan dönemler için.</summary>
     Task<List<MaasOdemeSnapshot>> GuncelleAsync(int yil, int ay, int firmaId, List<(int PersonelId, string AdSoyad, string? PersonelKodu, string? GorevAdi, string? AracPlakasi, decimal GercekMaas, decimal BankayaYatan, decimal Avans, decimal Kesinti, decimal Harcama, decimal Odenecek)> data);
 
+    /// <summary>Snapshot'ı kilitle — artık değiştirilemez, muhasebe fişi oluşturulabilir.</summary>
+    Task KilitleAsync(int yil, int ay, int firmaId);
+
     /// <summary>Belirli bir ay için snapshot'ı sil (yeniden oluşturmak için).</summary>
     Task SilAsync(int yil, int ay, int firmaId);
 }

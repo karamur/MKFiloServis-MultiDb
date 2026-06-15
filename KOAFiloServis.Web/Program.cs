@@ -251,6 +251,7 @@ builder.Services.AddScoped<IFaturaHazirlikService, FaturaHazirlikService>();
 builder.Services.AddScoped<IMaliAnalizService, MaliAnalizService>();
 builder.Services.AddScoped<IPersonelMaasIzinService, PersonelMaasIzinService>();
 builder.Services.AddScoped<IMaasSnapshotService, MaasSnapshotService>();
+builder.Services.AddScoped<MuhasebeSnapshotService>();
 builder.Services.AddScoped<IBelgeUyariService, BelgeUyariService>();
 builder.Services.AddScoped<IDashboardGrafikService, DashboardGrafikService>();
 builder.Services.AddScoped<IDataExportService, DataExportService>();
