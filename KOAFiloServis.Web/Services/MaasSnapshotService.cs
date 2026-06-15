@@ -1,5 +1,6 @@
 using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
+using KOAFiloServis.Web.Services.Calculation;
 using KOAFiloServis.Web.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -96,18 +97,30 @@ public class MaasSnapshotService : IMaasSnapshotService
             if (!dataMap.TryGetValue(item.PersonelId, out var guncel))
                 continue;
 
-            item.GercekMaas = guncel.GercekMaas;
-            item.BankayaYatan = guncel.BankayaYatan;
-            item.Avans = guncel.Avans;
-            item.Kesinti = guncel.Kesinti;
-            item.Harcama = guncel.Harcama;
-            item.Odenecek = guncel.Odenecek;
+            // ── ENGINE = TEK HESAP KAYNAĞI ──
+            var hesap = MaasHesaplamaEngine.Hesapla(new MaasInput
+            {
+                GercekMaas = guncel.GercekMaas,
+                BankayaYatan = guncel.BankayaYatan,
+                Avans = guncel.Avans,
+                Kesinti = guncel.Kesinti,
+                Harcama = guncel.Harcama
+            });
+
+            item.GercekMaas = hesap.GercekMaas;
+            item.BankayaYatan = hesap.BankayaYatan;
+            item.Avans = hesap.Avans;
+            item.Kesinti = hesap.Kesinti;
+            item.Harcama = hesap.Harcama;
+            item.Odenecek = hesap.Odenecek;
             item.HesaplamaTarihi = DateTime.UtcNow;
             item.UpdatedAt = DateTime.UtcNow;
+
+            Console.WriteLine($"[MaasSnapshot] Güncellendi: PersonelId={item.PersonelId} Odenecek={item.Odenecek}");
         }
 
         await context.SaveChangesAsync();
-        Console.WriteLine($"[MaasSnapshot] Güncellendi: Yil={yil} Ay={ay} Firma={firmaId} Adet={snapshot.Count}");
+        Console.WriteLine($"[MaasSnapshot] Toplu güncelleme: Yil={yil} Ay={ay} Firma={firmaId} Adet={snapshot.Count}");
 
         return snapshot;
     }
