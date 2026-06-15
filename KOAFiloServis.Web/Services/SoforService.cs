@@ -100,23 +100,82 @@ public class SoforService : ISoforService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
 
+        // Global NoTracking ayarına karşı AS_TRACKING ZORUNLU
         var existing = await context.Soforler
+            .AsTracking()
             .FirstOrDefaultAsync(x => x.Id == sofor.Id);
 
         if (existing == null)
             throw new Exception("Personel bulunamadı");
 
-        // Maaş
+        // ── Normalizasyon ──
+        sofor.BankaAdi = NormalizeNullableText(sofor.BankaAdi);
+        sofor.IBAN = NormalizeNullableText(sofor.IBAN)?.Replace(" ", string.Empty).ToUpperInvariant();
+        sofor.BankaSube = NormalizeNullableText(sofor.BankaSube);
+        sofor.BankaSubeKodu = NormalizeNullableText(sofor.BankaSubeKodu);
+        sofor.BankaHesapNo = NormalizeNullableText(sofor.BankaHesapNo);
+
+        // ── Temel alanlar ──
+        existing.Ad = sofor.Ad;
+        existing.Soyad = sofor.Soyad;
+        existing.TcKimlikNo = sofor.TcKimlikNo;
+        existing.Telefon = sofor.Telefon;
+        existing.Email = sofor.Email;
+        existing.Adres = sofor.Adres;
+        existing.Departman = sofor.Departman;
+        existing.Pozisyon = sofor.Pozisyon;
+        existing.Gorev = sofor.Gorev;
+        existing.FirmaId = sofor.FirmaId;
+        existing.TasimaTedarikciId = sofor.TasimaTedarikciId;
+        existing.IseBaslamaTarihi = sofor.IseBaslamaTarihi;
+        existing.IstenAyrilmaTarihi = sofor.IstenAyrilmaTarihi;
+        existing.SgkCikisTarihi = sofor.SgkCikisTarihi;
+        existing.Aktif = sofor.Aktif;
+        existing.SiralamaNo = sofor.SiralamaNo;
+        existing.Notlar = sofor.Notlar;
+
+        // ── Şoför belgeleri ──
+        existing.EhliyetNo = sofor.EhliyetNo;
+        existing.EhliyetGecerlilikTarihi = sofor.EhliyetGecerlilikTarihi;
+        existing.MykBelgesiGecerlilikTarihi = sofor.MykBelgesiGecerlilikTarihi;
+        existing.PsikoteknikGecerlilikTarihi = sofor.PsikoteknikGecerlilikTarihi;
+        existing.SaglikRaporuGecerlilikTarihi = sofor.SaglikRaporuGecerlilikTarihi;
+        existing.SrcBelgesiGecerlilikTarihi = sofor.SrcBelgesiGecerlilikTarihi;
+        existing.KimlikGecerlilikTarihi = sofor.KimlikGecerlilikTarihi;
+        existing.AdliSicilGecerlilikTarihi = sofor.AdliSicilGecerlilikTarihi;
+        existing.SuruculCezaBarkodluBelgeTarihi = sofor.SuruculCezaBarkodluBelgeTarihi;
+        existing.YayginEgitimSertifikasiVarMi = sofor.YayginEgitimSertifikasiVarMi;
+
+        // ── Maaş ──
+        existing.BrutMaasHesaplamaTipi = sofor.BrutMaasHesaplamaTipi;
         existing.BrutMaas = sofor.BrutMaas;
         existing.ResmiNetMaas = sofor.ResmiNetMaas;
         existing.DigerMaas = sofor.DigerMaas;
         existing.NetMaas = sofor.NetMaas;
-
-        // Çalışma
         existing.CalismaMiktari = sofor.CalismaMiktari;
         existing.BirimUcret = sofor.BirimUcret;
 
-        // Banka
+        // ── SGK / Bordro ──
+        existing.SGKBordroDahilMi = sofor.SGKBordroDahilMi;
+        existing.BordroTipiPersonel = sofor.BordroTipiPersonel;
+        existing.SgkCalismaTuru = sofor.SgkCalismaTuru;
+        existing.TopluMaas = sofor.TopluMaas;
+        existing.SgkMaasi = sofor.SgkMaasi;
+
+        // ── Sosyal yardımlar ──
+        existing.YemekYardimi = sofor.YemekYardimi;
+        existing.YolYardimi = sofor.YolYardimi;
+        existing.AileYardimi = sofor.AileYardimi;
+
+        // ── Kesintiler ──
+        existing.IcraKesintisi = sofor.IcraKesintisi;
+        existing.BESKesintisi = sofor.BESKesintisi;
+        existing.SendikaKesintisi = sofor.SendikaKesintisi;
+        existing.HayatSigortasi = sofor.HayatSigortasi;
+        existing.BireyselEmeklilik = sofor.BireyselEmeklilik;
+        existing.DigerOzelKesinti = sofor.DigerOzelKesinti;
+
+        // ── Banka ──
         existing.BankaAdi = sofor.BankaAdi;
         existing.IBAN = sofor.IBAN;
         existing.BankaSube = sofor.BankaSube;
@@ -124,8 +183,10 @@ public class SoforService : ISoforService
         existing.BankaHesapNo = sofor.BankaHesapNo;
         existing.MaasOdemeTipi = sofor.MaasOdemeTipi;
 
-        // Genel
-        existing.Aktif = sofor.Aktif;
+        // ── Muhasebe FK (UI'dan gelen null değerleri koru, SetValues yok) ──
+        existing.MuhasebeHesapId = sofor.MuhasebeHesapId ?? existing.MuhasebeHesapId;
+        existing.PersonelAvansHesapId = sofor.PersonelAvansHesapId ?? existing.PersonelAvansHesapId;
+
         existing.UpdatedAt = DateTime.UtcNow;
 
         await context.SaveChangesAsync();
