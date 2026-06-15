@@ -586,9 +586,12 @@
                     <div class="col-md-2">
                         <div class="mb-3">
                             <div class="form-check form-switch mt-4">
-                                <InputCheckbox @bind-Value="Pasif" class="form-check-input" id="pasif" />
-                                <label class="form-check-label" for="pasif">
-                                    <strong>@(Pasif ? "Pasif" : "Aktif")</strong>
+                                <input class="form-check-input aktif-switch"
+                                       type="checkbox"
+                                       @bind="sofor.Aktif"
+                                       id="aktifSwitch" />
+                                <label class="form-check-label" for="aktifSwitch">
+                                    <strong>@(sofor.Aktif ? "Aktif" : "Pasif")</strong>
                                 </label>
                             </div>
                         </div>
