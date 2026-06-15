@@ -1297,7 +1297,8 @@
         }
 
         await BrutMaasHesaplaAsync();
-        sofor.NetMaas = YuvarlaPara(sofor.ResmiNetMaas + sofor.DigerMaas);
+        sofor.DigerMaas = Math.Max(0, gercekMaas - sofor.ResmiNetMaas);
+        sofor.NetMaas = sofor.ResmiNetMaas + sofor.DigerMaas;
         sofor.SrcBelgesiGecerlilikTarihi = _srcBelgesiVarMi ? DateTime.Today : null;
 
         try

@@ -10,7 +10,7 @@ public interface ISoforService
     Task<int> GetActiveCountAsync();
     Task<Sofor?> GetByIdAsync(int id);
     Task<Sofor> CreateAsync(Sofor sofor);
-    Task<Sofor> UpdateAsync(Sofor sofor, DateTime? expectedUpdatedAt = null);
+    Task<Sofor> UpdateAsync(Sofor sofor);
     Task<bool> UpdateSiraNoAsync(int personelId, int siraNo, CancellationToken cancellationToken = default);
     Task DeleteAsync(int id, int? deletedBy = null);
     Task<Sofor> RestoreAsync(int id);

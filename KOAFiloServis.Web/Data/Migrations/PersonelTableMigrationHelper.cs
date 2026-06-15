@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace KOAFiloServis.Web.Data.Migrations;
@@ -21,6 +21,7 @@ BEGIN
 END $$;";
 
                 await context.Database.ExecuteSqlRawAsync(sql);
+                await NormalizePersonellerEnumColumnsForPostgresAsync(context);
                 return;
             }
 
@@ -93,5 +94,116 @@ END $$;";
         command.Parameters.Add(parameter);
 
         return await command.ExecuteScalarAsync() is not null;
+    }
+
+    private static async Task NormalizePersonellerEnumColumnsForPostgresAsync(ApplicationDbContext context)
+    {
+        var sql = """
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'Personeller' AND column_name = 'MaasOdemeTipi'
+          AND data_type IN ('text', 'character varying')
+    ) THEN
+        ALTER TABLE "Personeller"
+        ALTER COLUMN "MaasOdemeTipi" TYPE integer
+        USING (
+            CASE
+                WHEN trim(coalesce("MaasOdemeTipi", '')) ~ '^[0-9]+$' THEN trim("MaasOdemeTipi")::integer
+                WHEN lower(trim(coalesce("MaasOdemeTipi", ''))) = 'banka' THEN 0
+                WHEN lower(trim(coalesce("MaasOdemeTipi", ''))) = 'nakit' THEN 1
+                WHEN lower(trim(coalesce("MaasOdemeTipi", ''))) IN ('cek', 'çek') THEN 2
+                WHEN lower(trim(coalesce("MaasOdemeTipi", ''))) = 'diger' THEN 3
+                ELSE 0
+            END
+        );
+
+        ALTER TABLE "Personeller" ALTER COLUMN "MaasOdemeTipi" SET DEFAULT 0;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'Personeller' AND column_name = 'BordroTipiPersonel'
+          AND data_type IN ('text', 'character varying')
+    ) THEN
+        ALTER TABLE "Personeller"
+        ALTER COLUMN "BordroTipiPersonel" TYPE integer
+        USING (
+            CASE
+                WHEN trim(coalesce("BordroTipiPersonel", '')) ~ '^[0-9]+$' THEN trim("BordroTipiPersonel")::integer
+                WHEN lower(trim(coalesce("BordroTipiPersonel", ''))) = 'yok' THEN 0
+                WHEN lower(trim(coalesce("BordroTipiPersonel", ''))) = 'normal' THEN 1
+                WHEN lower(trim(coalesce("BordroTipiPersonel", ''))) IN ('arge', 'ar-ge') THEN 2
+                ELSE 0
+            END
+        );
+
+        ALTER TABLE "Personeller" ALTER COLUMN "BordroTipiPersonel" SET DEFAULT 0;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'Personeller' AND column_name = 'BrutMaasHesaplamaTipi'
+          AND data_type IN ('text', 'character varying')
+    ) THEN
+        ALTER TABLE "Personeller"
+        ALTER COLUMN "BrutMaasHesaplamaTipi" TYPE integer
+        USING (
+            CASE
+                WHEN trim(coalesce("BrutMaasHesaplamaTipi", '')) ~ '^[0-9]+$' THEN trim("BrutMaasHesaplamaTipi")::integer
+                WHEN lower(trim(coalesce("BrutMaasHesaplamaTipi", ''))) = 'manuel' THEN 0
+                WHEN lower(trim(coalesce("BrutMaasHesaplamaTipi", ''))) = 'saatlik' THEN 1
+                WHEN lower(trim(coalesce("BrutMaasHesaplamaTipi", ''))) IN ('aylik', 'aylık') THEN 2
+                WHEN lower(trim(coalesce("BrutMaasHesaplamaTipi", ''))) IN ('gunluk', 'günlük') THEN 3
+                ELSE 0
+            END
+        );
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'Personeller' AND column_name = 'Gorev'
+          AND data_type IN ('text', 'character varying')
+    ) THEN
+        ALTER TABLE "Personeller"
+        ALTER COLUMN "Gorev" TYPE integer
+        USING (
+            CASE
+                WHEN trim(coalesce("Gorev", '')) ~ '^[0-9]+$' THEN trim("Gorev")::integer
+                WHEN lower(trim(coalesce("Gorev", ''))) IN ('sofor', 'şoför') THEN 1
+                WHEN lower(trim(coalesce("Gorev", ''))) IN ('ofiscalisani', 'ofis çalışanı', 'ofis') THEN 2
+                WHEN lower(trim(coalesce("Gorev", ''))) = 'muhasebe' THEN 3
+                WHEN lower(trim(coalesce("Gorev", ''))) IN ('yonetici', 'yönetici') THEN 4
+                WHEN lower(trim(coalesce("Gorev", ''))) = 'teknik' THEN 5
+                WHEN lower(trim(coalesce("Gorev", ''))) = 'diger' THEN 99
+                ELSE 99
+            END
+        );
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'Personeller' AND column_name = 'SgkCalismaTuru'
+          AND data_type IN ('text', 'character varying')
+    ) THEN
+        ALTER TABLE "Personeller"
+        ALTER COLUMN "SgkCalismaTuru" TYPE integer
+        USING (
+            CASE
+                WHEN trim(coalesce("SgkCalismaTuru", '')) = '' THEN NULL
+                WHEN trim(coalesce("SgkCalismaTuru", '')) ~ '^[0-9]+$' THEN trim("SgkCalismaTuru")::integer
+                WHEN lower(trim(coalesce("SgkCalismaTuru", ''))) = 'tamzamanli' THEN 1
+                WHEN lower(trim(coalesce("SgkCalismaTuru", ''))) = 'kismizamanli' THEN 2
+                ELSE NULL
+            END
+        );
+
+        ALTER TABLE "Personeller" ALTER COLUMN "SgkCalismaTuru" SET DEFAULT 1;
+    END IF;
+END $$;
+""";
+
+        await context.Database.ExecuteSqlRawAsync(sql);
     }
 }

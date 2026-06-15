@@ -96,73 +96,27 @@ public class SoforService : ISoforService
         return sofor;
     }
 
-    public async Task<Sofor> UpdateAsync(Sofor sofor, DateTime? expectedUpdatedAt = null)
+    public async Task<Sofor> UpdateAsync(Sofor sofor)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
 
-        NormalizeSofor(sofor);
-        ApplyMaasHesaplama(sofor);
-        SyncBordroFlags(sofor);
-
-        // Önce mevcut tracking'i temizle
-        var trackedEntity = context.ChangeTracker.Entries<Sofor>()
-            .FirstOrDefault(e => e.Entity.Id == sofor.Id);
-        if (trackedEntity != null)
-        {
-            trackedEntity.State = EntityState.Detached;
-        }
-
-        // Mevcut kaydı oku (tracking ile)
-        var existing = await QuerySoforler(context, asNoTracking: false)
-            .FirstOrDefaultAsync(s => s.Id == sofor.Id);
+        var existing = await context.Soforler
+            .FirstOrDefaultAsync(x => x.Id == sofor.Id);
 
         if (existing == null)
-            throw new InvalidOperationException($"Personel bulunamadı. Id: {sofor.Id}");
+            throw new Exception("Personel bulunamadı");
 
-        // Optimistic concurrency: expectedUpdatedAt verildiyse çakışma kontrolü yap
-        if (expectedUpdatedAt.HasValue && existing.UpdatedAt.HasValue
-            && !existing.UpdatedAt.Value.Equals(expectedUpdatedAt.Value))
-        {
-            throw new InvalidOperationException(
-                $"Personel kaydı başka bir kullanıcı tarafından güncellenmiş. " +
-                $"Lütfen sayfayı yenileyip tekrar deneyin. (Id: {sofor.Id})");
-        }
-
-        var existingTcKimlikNo = NormalizeTcKimlikNo(existing.TcKimlikNo);
-        var existingSoforKodu = NormalizeSoforKodu(existing.SoforKodu);
-
-        if (string.Equals(existingTcKimlikNo, sofor.TcKimlikNo, StringComparison.Ordinal))
-        {
-            sofor.TcKimlikNo = existingTcKimlikNo;
-        }
-
-        if (string.Equals(existingSoforKodu, sofor.SoforKodu, StringComparison.Ordinal))
-        {
-            sofor.SoforKodu = existingSoforKodu;
-        }
-
-        await ValidateSoforAsync(context, sofor, existing);
-
-        var createdAt = existing.CreatedAt;
-        var firmaDegisti = sofor.FirmaId.HasValue && sofor.FirmaId.Value > 0 && sofor.FirmaId != existing.FirmaId;
-
-        context.Entry(existing).CurrentValues.SetValues(sofor);
-
-        // SetValues sonrası açık atama — tarih ve durum alanları garantilensin
-        existing.IstenAyrilmaTarihi = sofor.IstenAyrilmaTarihi;
-        existing.SgkCikisTarihi = sofor.SgkCikisTarihi;
-        existing.Aktif = sofor.Aktif;
-
-        // Maaş alanları — SetValues sonrası garantile
+        // Maaş
         existing.BrutMaas = sofor.BrutMaas;
         existing.ResmiNetMaas = sofor.ResmiNetMaas;
         existing.DigerMaas = sofor.DigerMaas;
         existing.NetMaas = sofor.NetMaas;
+
+        // Çalışma
         existing.CalismaMiktari = sofor.CalismaMiktari;
         existing.BirimUcret = sofor.BirimUcret;
-        existing.BrutMaasHesaplamaTipi = sofor.BrutMaasHesaplamaTipi;
 
-        // Banka alanları — SetValues sonrası garantile
+        // Banka
         existing.BankaAdi = sofor.BankaAdi;
         existing.IBAN = sofor.IBAN;
         existing.BankaSube = sofor.BankaSube;
@@ -170,32 +124,13 @@ public class SoforService : ISoforService
         existing.BankaHesapNo = sofor.BankaHesapNo;
         existing.MaasOdemeTipi = sofor.MaasOdemeTipi;
 
-        existing.CreatedAt = createdAt;
+        // Genel
+        existing.Aktif = sofor.Aktif;
         existing.UpdatedAt = DateTime.UtcNow;
 
         await context.SaveChangesAsync();
-
-        // FK değişikliklerini direkt SQL ile garantile (EF SetValues FK'ları atlayabiliyor)
-        if (firmaDegisti)
-        {
-            await context.Database.ExecuteSqlAsync(
-                $"UPDATE \"Personeller\" SET \"FirmaId\" = {sofor.FirmaId!.Value}, \"UpdatedAt\" = {DateTime.UtcNow} WHERE \"Id\" = {sofor.Id}");
-        }
-
-        // Personel borç/avans hesaplarını personel satırında garanti et
-        await EnsurePersonelMuhasebeBaglantilariAsync(context, existing.Id);
-
-        var guncel = await context.Soforler
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Id == existing.Id && !s.IsDeleted);
-
-        if (guncel != null)
-        {
-            existing.MuhasebeHesapId = guncel.MuhasebeHesapId;
-            existing.PersonelAvansHesapId = guncel.PersonelAvansHesapId;
-        }
-
         await _cache.RemoveByPrefixAsync(CacheKeys.SoforPrefix);
+
         return existing;
     }
 
