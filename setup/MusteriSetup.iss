@@ -1,9 +1,13 @@
-﻿#define MyAppName "KOAFiloServis"
-#define MyAppPublisher "KOA Yazilim"
-#define MyAppURL "https://github.com/karamur/KOAFiloServis-MultiDb"
-#define MyAppExeName "KOAFiloServis.Web.exe"
-#define MyInstallDir "C:\KOAFiloServis"
-#define MyDataSyncExe "KOAFiloServis.DataSync.exe"
+; ============================================================
+; KOAFiloServis — Musteri Kurulumu (Web + DataSync, Lisans Yok)
+; ============================================================
+
+#define MyAppName        "KOAFiloServis"
+#define MyAppPublisher   "KOA Yazilim"
+#define MyAppURL         "https://github.com/karamur/KOAFiloServis-MultiDb"
+#define MyAppExeName     "KOAFiloServis.Web.exe"
+#define MyInstallDir     "C:\KOAFiloServis"
+#define MyDataSyncExe    "KOAFiloServis.DataSync.exe"
 
 #ifndef MyAppVersion
 #define MyAppVersion "1.0.26"
@@ -32,11 +36,10 @@ WizardStyle=modern
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-UninstallDisplayIcon={app}\{#MyAppExeName}
+UninstallDisplayIcon={app}\app\{#MyAppExeName}
 UninstallDisplayName={#MyAppName} {#MyAppVersion}
 ShowLanguageDialog=no
 CloseApplications=force
-RestartApplications=no
 DisableProgramGroupPage=yes
 AllowNoIcons=yes
 SetupLogging=yes
@@ -48,60 +51,29 @@ Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
 Name: "full"; Description: "Tam Kurulum"
 
 [Components]
-Name: "web"; Description: "KOAFiloServis Web (IIS)"; Types: full; Flags: fixed
-Name: "datasync"; Description: "Veri Aktarim Araci (PostgreSQL - SQLite)"; Types: full
-
-[Tasks]
-Name: "iisconfigure"; Description: "IIS Site ve AppPool'u otomatik yapilandir"; GroupDescription: "IIS:"; Flags: checkedonce
-Name: "firewall"; Description: "Windows Guvenlik Duvarinda port ac (HTTP 5190)"; GroupDescription: "Firewall:"; Flags: checkedonce
-Name: "browser"; Description: "Kurulum sonrasi tarayicida ac"; GroupDescription: "Son adim:"; Flags: unchecked
+Name: "web"; Description: "KOAFiloServis Web"; Types: full; Flags: fixed
+Name: "datasync"; Description: "Veri Aktarim Araci"; Types: full
 
 [Files]
-Source: "payload\Web\*"; DestDir: "{app}"; Excludes: "dbsettings.json,appsettings.Production.json,*.db,logs\*,uploads\*"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: web
-Source: "payload\Web\dbsettings.json"; DestDir: "{app}"; DestName: "dbsettings.json"; Flags: onlyifdoesntexist; Components: web
-Source: "payload\DataSync\*"; DestDir: "{app}\DataSync"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: datasync
-Source: "scripts\iis-configure.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
-Source: "scripts\iis-remove.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
-Source: "scripts\preinstall-check.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
-Source: "scripts\backup-db.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "payload\Web\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: web
+Source: "payload\DataSync\*"; DestDir: "{app}\tools\datasync"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: datasync
 
 [Dirs]
 Name: "{app}\data"; Permissions: users-modify
 Name: "{app}\uploads"; Permissions: users-modify
 Name: "{app}\logs"; Permissions: users-modify
-Name: "{app}\database"; Permissions: users-modify
 Name: "{app}\Backups"; Permissions: users-modify
+Name: "C:\KOAFiloServis_yedekleme"; Permissions: users-modify
 
 [Icons]
-Name: "{group}\{#MyAppName} Web'i Ac"; Filename: "http://localhost:5190"; IconFilename: "{app}\{#MyAppExeName}"
-Name: "{group}\Veri Aktarim (PG - SQLite)"; Filename: "{app}\DataSync\{#MyDataSyncExe}"; WorkingDir: "{app}\DataSync"; Components: datasync
+Name: "{group}\{#MyAppName}"; Filename: "{app}\app\{#MyAppExeName}"; WorkingDir: "{app}\app"
+Name: "{group}\Veri Aktarim"; Filename: "{app}\tools\datasync\{#MyDataSyncExe}"; WorkingDir: "{app}\tools\datasync"; Components: datasync
 Name: "{group}\Kurulum Klasorunu Ac"; Filename: "{app}"
 Name: "{group}\Kaldir"; Filename: "{uninstallexe}"
-Name: "{commondesktop}\{#MyAppName} Web"; Filename: "http://localhost:5190"; IconFilename: "{app}\{#MyAppExeName}"; Flags: createonlyiffileexists
+Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\app\{#MyAppExeName}"; WorkingDir: "{app}\app"
 
 [Run]
-Filename: "powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\iis-configure.ps1"" -InstallPath ""{app}"" -SiteName ""KOAFiloServis"" -Port 5190"; \
-    StatusMsg: "IIS yapilandiriliyor..."; Flags: runhidden waituntilterminated; Tasks: iisconfigure
-
-Filename: "netsh.exe"; \
-    Parameters: "advfirewall firewall add rule name=""KOAFiloServis HTTP"" dir=in action=allow protocol=TCP localport=5190"; \
-    StatusMsg: "Firewall kurali ekleniyor..."; Flags: runhidden waituntilterminated; Tasks: firewall
-
-Filename: "http://localhost:5190"; Flags: shellexec nowait postinstall; Tasks: browser; Description: "Uygulamayi tarayicida ac"
-
-[UninstallRun]
-Filename: "powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\iis-remove.ps1"" -SiteName ""KOAFiloServis"""; \
-    Flags: runhidden waituntilterminated; RunOnceId: "RemoveIIS"
-
-Filename: "netsh.exe"; \
-    Parameters: "advfirewall firewall delete rule name=""KOAFiloServis HTTP"""; \
-    Flags: runhidden waituntilterminated; RunOnceId: "RemoveFirewall"
-
-[UninstallDelete]
-Type: filesandordirs; Name: "{app}\wwwroot\_framework"
-Type: dirifempty; Name: "{app}\scripts"
+Filename: "{app}\app\{#MyAppExeName}"; Description: "Uygulamayi Baslat"; Flags: nowait postinstall skipifsilent; WorkingDir: "{app}\app"
 
 [Code]
 function GetInstallPath(): String;
@@ -110,44 +82,25 @@ begin
   if RegQueryStringValue(HKLM,'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#SetupSetting("AppId")}_is1','InstallLocation', sPrevPath) then
     Result := sPrevPath else Result := '';
 end;
-function IsUpgrade(): Boolean; begin Result := (GetInstallPath() <> ''); end;
-function GetTimestamp(): String; begin Result := GetDateTimeString('yyyymmdd-hhnnss', #0, #0); end;
 
-procedure BackupDatabase(InstallPath: String);
-var DbFile,ShmFile,WalFile,BackupDir: String; ResultCode: Integer;
-begin
-  DbFile:=InstallPath+'\KOAFiloServis'; ShmFile:=InstallPath+'\KOAFiloServis-shm'; WalFile:=InstallPath+'\KOAFiloServis-wal';
-  if not FileExists(DbFile) then Exit;
-  BackupDir:=InstallPath+'\Backups\db-'+GetTimestamp();
-  Exec('cmd.exe','/c mkdir "'+BackupDir+'"','',SW_HIDE,ewWaitUntilTerminated,ResultCode);
-  Exec('cmd.exe','/c copy /Y "'+DbFile+'" "'+BackupDir+'\KOAFiloServis"','',SW_HIDE,ewWaitUntilTerminated,ResultCode);
-  if FileExists(ShmFile) then Exec('cmd.exe','/c copy /Y "'+ShmFile+'" "'+BackupDir+'\KOAFiloServis-shm"','',SW_HIDE,ewWaitUntilTerminated,ResultCode);
-  if FileExists(WalFile) then Exec('cmd.exe','/c copy /Y "'+WalFile+'" "'+BackupDir+'\KOAFiloServis-wal"','',SW_HIDE,ewWaitUntilTerminated,ResultCode);
-end;
-
-procedure StopIISSite(); var ResultCode: Integer;
-begin Exec('cmd.exe','/c "%windir%\system32\inetsrv\appcmd.exe" stop site /site.name:"KOAFiloServis"','',SW_HIDE,ewWaitUntilTerminated,ResultCode); end;
-
-procedure StartIISSite(); var ResultCode: Integer;
-begin Exec('cmd.exe','/c "%windir%\system32\inetsrv\appcmd.exe" start site /site.name:"KOAFiloServis"','',SW_HIDE,ewWaitUntilTerminated,ResultCode); end;
-
-procedure InitializeWizard();
-begin if IsUpgrade() then WizardForm.Caption:='{#MyAppName} Guncelleme Sihirbazi' else WizardForm.Caption:='{#MyAppName} Kurulum Sihirbazi'; end;
+function IsUpgrade(): Boolean;
+begin Result := (GetInstallPath() <> ''); end;
 
 function InitializeSetup(): Boolean;
-var PrevPath,Msg: String;
+var PrevPath, Msg: String;
 begin
-  Result:=True; PrevPath:=GetInstallPath();
-  if PrevPath<>'' then begin
-    Msg:='{#MyAppName} sistemde kurulu:'+#13#10+PrevPath+#13#10#13#10+'Bu islem mevcut kurulumu GUNCELLER.'+#13#10+'* Veritabani otomatik yedeklenecek.'+#13#10+'* Konfigurasyonlar KORUNUR.'+#13#10#13#10+'Devam etmek istiyor musunuz?';
-    if MsgBox(Msg,mbConfirmation,MB_YESNO)=IDNO then begin Result:=False; Exit; end;
+  Result := True; PrevPath := GetInstallPath();
+  if PrevPath <> '' then
+  begin
+    Msg := '{#MyAppName} sistemde kurulu.' + #13#10 + PrevPath + #13#10#13#10 +
+           'Bu islem mevcut kurulumu GUNCELLER.' + #13#10 +
+           '* Konfigurasyonlar KORUNUR.' + #13#10#13#10 + 'Devam etmek istiyor musunuz?';
+    if MsgBox(Msg, mbConfirmation, MB_YESNO) = IDNO then begin Result := False; Exit; end;
   end;
 end;
 
-procedure CurStepChanged(CurStep: TSetupStep);
-var PrevPath: String;
+procedure InitializeWizard();
 begin
-  PrevPath:=GetInstallPath();
-  if CurStep=ssInstall then begin if PrevPath<>'' then begin BackupDatabase(PrevPath); StopIISSite(); end; end;
-  if CurStep=ssPostInstall then begin if PrevPath<>'' then StartIISSite(); end;
+  if IsUpgrade() then WizardForm.Caption := '{#MyAppName} Guncelleme Sihirbazi'
+  else WizardForm.Caption := '{#MyAppName} Kurulum Sihirbazi';
 end;

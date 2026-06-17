@@ -1,13 +1,12 @@
 ; ============================================================
-; KOAFiloServis-MultiDb — Guncelleme Paketi
-; SADECE uygulama dosyalarini gunceller.
+; KOAFiloServis — Guncelleme Paketi (sadece dosyalar)
 ; Mevcut kurulum ZORUNLUDUR.
 ; ============================================================
 
-#define MyAppName    "KOAFiloServis"
-#define MyAppExeName "KOAFiloServis.Web.exe"
-#define MyInstallDir "C:\KOAFiloServis"
-#define MyLisansExe  "KOAFiloServisLisans.exe"
+#define MyAppName     "KOAFiloServis"
+#define MyAppExeName  "KOAFiloServis.Web.exe"
+#define MyInstallDir  "C:\KOAFiloServis"
+#define MyLisansExe   "KOAFiloServisLisans.exe"
 #define MyDataSyncExe "KOAFiloServis.DataSync.exe"
 
 #ifndef MyAppVersion
@@ -52,22 +51,15 @@ Name: "lisans";   Description: "Lisans Yonetim Aracini da guncelle"; Types: full
 Name: "datasync"; Description: "Veri Aktarim Aracini da guncelle"; Types: full
 
 [Types]
-Name: "full";    Description: "Tam Guncelleme (Web + Lisans + DataSync)"
-Name: "webonly"; Description: "Sadece Web Uygulamasi"
+Name: "full";    Description: "Tam Guncelleme"
+Name: "webonly"; Description: "Sadece Web"
 
 [Files]
-Source: "payload\Web\*"; \
-    DestDir: "{app}"; \
-    Excludes: "dbsettings.json,appsettings.Production.json,appsettings.json,portalsettings.json,backup_settings.json,*.db,*.db-shm,*.db-wal,logs\*,uploads\*,Backups\*,keys\*"; \
-    Flags: ignoreversion recursesubdirs createallsubdirs; \
-    Components: web
-
-Source: "payload\LisansDesktop\*"; DestDir: "{app}\Lisans"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: lisans
-Source: "payload\DataSync\*"; DestDir: "{app}\DataSync"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: datasync
-
-Source: "scripts\backup-db.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
-Source: "scripts\iis-configure.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
-Source: "scripts\preinstall-check.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "payload\Web\*"; DestDir: "{app}\app"; \
+    Excludes: "dbsettings.json,appsettings.json,appsettings.Production.json,portalsettings.json,backup_settings.json,*.db,*.db-shm,*.db-wal,logs\*,uploads\*,Backups\*,keys\*"; \
+    Flags: ignoreversion recursesubdirs createallsubdirs; Components: web
+Source: "payload\LisansDesktop\*"; DestDir: "{app}\tools\lisans"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: lisans
+Source: "payload\DataSync\*"; DestDir: "{app}\tools\datasync"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: datasync
 
 [Code]
 function GetInstallPath(): String;
@@ -78,35 +70,6 @@ begin
         'InstallLocation', sPrevPath) then
     Result := sPrevPath
   else Result := '';
-end;
-
-function GetTimestamp(): String;
-begin Result := GetDateTimeString('yyyymmdd-hhnnss', #0, #0); end;
-
-procedure BackupDatabase(InstallPath: String);
-var DbFile, BackupDir: String; ResultCode: Integer;
-begin
-  DbFile := InstallPath + '\KOAFiloServis';
-  if not FileExists(DbFile) then Exit;
-  BackupDir := InstallPath + '\Backups\db-' + GetTimestamp();
-  Exec('cmd.exe', '/c mkdir "' + BackupDir + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec('cmd.exe', '/c copy /Y "' + DbFile + '" "' + BackupDir + '\KOAFiloServis"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  if FileExists(InstallPath + '\KOAFiloServis-shm') then
-    Exec('cmd.exe', '/c copy /Y "' + InstallPath + '\KOAFiloServis-shm" "' + BackupDir + '\KOAFiloServis-shm"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  if FileExists(InstallPath + '\KOAFiloServis-wal') then
-    Exec('cmd.exe', '/c copy /Y "' + InstallPath + '\KOAFiloServis-wal" "' + BackupDir + '\KOAFiloServis-wal"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-end;
-
-procedure StopIISSite();
-var ResultCode: Integer;
-begin
-  Exec('cmd.exe', '/c "%windir%\system32\inetsrv\appcmd.exe" stop site /site.name:"KOAFiloServis"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-end;
-
-procedure StartIISSite();
-var ResultCode: Integer;
-begin
-  Exec('cmd.exe', '/c "%windir%\system32\inetsrv\appcmd.exe" start site /site.name:"KOAFiloServis"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 
 function InitializeSetup(): Boolean;
@@ -127,31 +90,11 @@ begin
   if AppVer <> '' then Msg := Msg + #13#10 + 'Kurulu versiyon : ' + AppVer;
   Msg := Msg + #13#10 + 'Yeni versiyon   : {#MyAppVersion}' + #13#10#13#10 +
          'Guncelleme yapilacak:' + #13#10 +
-         '  * Veritabani otomatik yedeklenecek' + #13#10 +
          '  * Konfigurasyonlar KORUNACAK' + #13#10 +
-         '  * IIS sitesi yeniden baslatilacak' + #13#10#13#10 +
+         '  * Uygulama yeniden baslatilacak' + #13#10#13#10 +
          'Devam etmek istiyor musunuz?';
   if MsgBox(Msg, mbConfirmation, MB_YESNO) = IDNO then Result := False;
 end;
 
 procedure InitializeWizard();
 begin WizardForm.Caption := '{#MyAppName} {#MyAppVersion} - Guncelleme Sihirbazi'; end;
-
-procedure CurStepChanged(CurStep: TSetupStep);
-var PrevPath: String;
-begin
-  PrevPath := GetInstallPath();
-  if PrevPath = '' then Exit;
-  if CurStep = ssInstall then
-  begin
-    WizardForm.StatusLabel.Caption := 'Veritabani yedekleniyor...';
-    BackupDatabase(PrevPath);
-    WizardForm.StatusLabel.Caption := 'IIS sitesi durduruluyor...';
-    StopIISSite();
-  end;
-  if CurStep = ssPostInstall then
-  begin
-    WizardForm.StatusLabel.Caption := 'IIS sitesi baslatiliyor...';
-    StartIISSite();
-  end;
-end;

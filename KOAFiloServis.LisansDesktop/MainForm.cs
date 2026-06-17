@@ -255,13 +255,14 @@ public class MainForm : Form
             LoadData();
 
             MessageBox.Show(
-                $"✔ Aktivasyon kodu panoya kopyalandı ve DB'ye kaydedildi.\n\n" +
-                $"Firma: {firma}\n" +
+                $"Lisans anahtarı oluşturuldu ve panoya kopyalandı.\n\n" +
+                $"Firma:  {firma}\n" +
                 $"Makine: {machine}\n" +
-                $"Bitiş:  {expire:yyyy-MM-dd}\n" +
-                $"Sürüm:  {allowedVersion}\n\n" +
-                $"Web uygulamasına yapıştırın.",
-                "Başarılı",
+                $"Bitiş:   {expire:yyyy-MM-dd}\n" +
+                $"Sürüm:   {allowedVersion}\n\n" +
+                $"Bu anahtarı müşteriye gönderin.\n" +
+                $"Müşteri bu anahtarı giriş ekranına yapıştırarak sistemi kullanabilir.",
+                "Lisans Anahtarı Hazır",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
         }

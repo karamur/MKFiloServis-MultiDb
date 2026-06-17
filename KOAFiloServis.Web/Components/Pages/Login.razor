@@ -45,7 +45,7 @@
                 <div class="license-expired-icon">
                     <i class="bi bi-clock-history"></i>
                 </div>
-                <h4 class="mb-2" style="color: #e67e22;">Deneme süreniz sona erdi</h4>
+                <h4 class="mb-2" style="color: #e67e22;">🔐 Lisans Aktivasyonu</h4>
                 <p class="text-muted mb-2">
                     Sistemi kullanmaya devam etmek için lisans anahtarı girmeniz yeterlidir.
                 </p>
@@ -74,14 +74,18 @@
                         </div>
                         <div class="d-flex align-items-start gap-2 mb-2">
                             <span class="badge bg-primary rounded-pill mt-1">2</span>
-                            <span>Lisans sağlayıcınıza <strong>iletin</strong></span>
+                            <span>Bu kodu <strong>yetkili kişiye gönderin</strong></span>
                         </div>
                         <div class="d-flex align-items-start gap-2">
                             <span class="badge bg-primary rounded-pill mt-1">3</span>
-                            <span>Gelen lisans anahtarını <strong>yapıştırın</strong></span>
+                            <span>Size verilen lisans anahtarını <strong>aşağıya yapıştırın</strong></span>
                         </div>
                     </div>
                 </div>
+                <p class="text-muted small text-center mb-3">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Lisans anahtarı, yetkili tarafından özel olarak sizin bilgisayarınız için üretilir.
+                </p>
 
                 @* Makine Kodu — tek tuş *@
                 <div class="license-machine-code mb-3">
@@ -108,7 +112,7 @@
                 {
                     <div class="alert alert-warning py-2 small mb-3">
                         <i class="bi bi-info-circle me-1"></i>
-                        Girdiğiniz lisans anahtarı geçersiz görünüyor. Lütfen doğru yapıştırdığınızdan emin olun.
+                        Girilen lisans anahtarı geçersiz görünüyor. Lütfen doğru anahtarı kullandığınızdan emin olun.
                     </div>
                 }
 
@@ -916,7 +920,7 @@
         }
         catch (Exception ex)
         {
-            lisansHataMesaji = "Lisans aktivasyonu basarisiz: " + ex.Message;
+            lisansHataMesaji = "Girilen lisans anahtarı geçersiz görünüyor. Lütfen doğru anahtarı kullandığınızdan emin olun.";
         }
         finally
         {
