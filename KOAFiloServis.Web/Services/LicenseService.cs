@@ -650,6 +650,23 @@ public class LicenseService
     }
 
     // ══════════════════════════════════════════════
+    // LOGGING — uretilen lisanslari kaydet (audit)
+    // ══════════════════════════════════════════════
+
+    /// <summary>
+    /// API veya admin paneli uzerinden uretilen lisanslari log olarak kaydeder.
+    /// IsActive=false — bu lisans otomatik aktif olmaz.
+    /// </summary>
+    public async Task SaveGeneratedLogAsync(LicenseInfo lic)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        db.LicenseInfos.Add(lic);
+        await db.SaveChangesAsync();
+        _logger.LogInformation("Lisans uretildi (log): {FirmaKodu}, {MachineId}, {ExpireDate}",
+            lic.FirmaKodu, lic.MachineId, lic.ExpireDate);
+    }
+
+    // ══════════════════════════════════════════════
     // READ / SAVE
     // ══════════════════════════════════════════════
 
