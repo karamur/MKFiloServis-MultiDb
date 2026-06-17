@@ -26,20 +26,40 @@ public class FinansDashboardService
             .Where(x => x.Yil == yil && x.Ay == ay && x.FirmaId == firmaId && !x.IsDeleted)
             .ToListAsync();
 
-        // Hakediş gelirleri
-        var hakedisler = await context.HakedisPuantajlar
-            .AsNoTracking()
-            .Where(x => x.Yil == yil && x.Ay == ay && x.FirmaId == firmaId && !x.IsDeleted)
-            .ToListAsync();
+        // Snapshot güvenilir mi? (kilitli + fiş var)
+        var snapshotKullaniliyor = snapshot.Any() && snapshot.All(x => x.Kilitli) && snapshot.Any(x => x.MuhasebeFisId != null);
 
-        // Operasyon kayıtları (sefer sayısı)
-        var donemBaslangic = new DateTime(yil, ay, 1);
-        var donemBitis = donemBaslangic.AddMonths(1);
-        var operasyonlar = await context.OperasyonKayitlari
-            .AsNoTracking()
-            .Where(x => x.FirmaId == firmaId && !x.IsDeleted
-                     && x.Tarih >= donemBaslangic && x.Tarih < donemBitis)
-            .ToListAsync();
+        // Hakediş verisi: Snapshot varsa oradan, yoksa canlı HakedisPuantaj'dan
+        decimal toplamHakedisGelir, toplamHakedisGider;
+        int toplamSefer;
+
+        if (snapshotKullaniliyor)
+        {
+            // Faz 5: Dashboard SADECE snapshot'tan okur
+            toplamHakedisGelir = snapshot.Sum(x => x.HakedisGelir);
+            toplamHakedisGider = snapshot.Sum(x => x.HakedisGider);
+            toplamSefer = 0; // Snapshot'ta sefer verisi yok, 0 göster (opsiyonel: ayrı alan eklenebilir)
+        }
+        else
+        {
+            // Fallback: Snapshot yoksa canlı HakedisPuantaj'dan oku (geçiş dönemi)
+            var hakedisler = await context.HakedisPuantajlar
+                .AsNoTracking()
+                .Where(x => x.Yil == yil && x.Ay == ay && x.FirmaId == firmaId && !x.IsDeleted)
+                .ToListAsync();
+            toplamHakedisGelir = hakedisler.Sum(x => x.TahsilEdilecekTutar);
+            toplamHakedisGider = hakedisler.Sum(x => x.OdenecekTutar);
+
+            // Operasyon kayıtları (sefer sayısı — sadece fallback'te)
+            var donemBaslangic = new DateTime(yil, ay, 1);
+            var donemBitis = donemBaslangic.AddMonths(1);
+            var operasyonlar = await context.OperasyonKayitlari
+                .AsNoTracking()
+                .Where(x => x.FirmaId == firmaId && !x.IsDeleted
+                         && x.Tarih >= donemBaslangic && x.Tarih < donemBitis)
+                .ToListAsync();
+            toplamSefer = operasyonlar.Sum(x => x.SeferSayisi);
+        }
 
         // Muhasebe fişleri — YIL + AY + FİRMA + ONAYLI (770 gider)
         var muhasebeFisler = await context.MuhasebeFisleri
@@ -56,17 +76,10 @@ public class FinansDashboardService
             .Sum(k => k.Borc);
 
         var toplamMaas = snapshot.Sum(x => x.Odenecek);
-        var toplamHakedisGelir = hakedisler.Sum(x => x.TahsilEdilecekTutar);
-        var toplamHakedisGider = hakedisler.Sum(x => x.OdenecekTutar);
-        var toplamSefer = operasyonlar.Sum(x => x.SeferSayisi);
         var personelSayisi = snapshot.Select(x => x.PersonelId).Distinct().Count();
 
-        // Snapshot güvenilir mi? (kilitli + fiş var)
-        var snapshotKullaniliyor = snapshot.Any() && snapshot.All(x => x.Kilitli) && snapshot.Any(x => x.MuhasebeFisId != null);
-
-        // DOUBLE COUNT engelle: Snapshot kullanılıyorsa 770 Net'e dahil ETME
+        // Net Kar = Gelir - Maaş - Gider
         var netKar = toplamHakedisGelir - toplamMaas - toplamHakedisGider;
-        // (muhasebe770Toplam ayrı gösterilir, net'e zorunlu katılmaz)
 
         // Fatura metrikleri
         var faturalar = await context.Faturalar

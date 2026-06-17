@@ -457,6 +457,29 @@
                                 <i class="bi bi-graph-up me-2 text-primary"></i> Finans Dashboard
                             </NavLink>
                         </div>
+                        @if (HasMenuYetki("menu.admin"))
+                        {
+                            <div class="nav-item px-3">
+                                <NavLink class="nav-link" href="denetim">
+                                    <i class="bi bi-shield-check me-2 text-info"></i> Finans Denetim
+                                </NavLink>
+                            </div>
+                            <div class="nav-item px-3">
+                                <NavLink class="nav-link" href="admin/recovery">
+                                    <i class="bi bi-tools me-2 text-warning"></i> Recovery
+                                </NavLink>
+                            </div>
+                            <div class="nav-item px-3">
+                                <NavLink class="nav-link" href="admin/errors">
+                                    <i class="bi bi-bug me-2 text-danger"></i> Hata Logları
+                                </NavLink>
+                            </div>
+                            <div class="nav-item px-3">
+                                <NavLink class="nav-link" href="admin/test">
+                                    <i class="bi bi-shield-shaded me-2 text-info"></i> Test Modu
+                                </NavLink>
+                            </div>
+                        }
                     </div>
                 }
             </div>
@@ -595,6 +618,11 @@
                             <div class="nav-item px-3">
                                 <NavLink class="nav-link" href="personel/puantaj">
                                     <i class="bi bi-calendar-range me-2 text-secondary"></i> Çalışma Puantajı
+                                </NavLink>
+                            </div>
+                            <div class="nav-item px-3">
+                                <NavLink class="nav-link" href="personel/puantaj-grid">
+                                    <i class="bi bi-grid-3x3-gap me-2 text-primary"></i> Puantaj Excel Grid
                                 </NavLink>
                             </div>
                         }

@@ -35,7 +35,7 @@ public class MaasSnapshotService : IMaasSnapshotService
     public async Task<List<MaasOdemeSnapshot>> OlusturAsync(
         int yil, int ay, int firmaId,
         List<(int PersonelId, string AdSoyad, string? PersonelKodu, string? GorevAdi, string? AracPlakasi,
-              decimal GercekMaas, decimal BankayaYatan, decimal Avans, decimal Kesinti, decimal Harcama, decimal Odenecek)> data)
+              decimal GercekMaas, decimal BankayaYatan, decimal Avans, decimal Kesinti, decimal Harcama, decimal Odenecek, decimal HakedisGelir, decimal HakedisGider)> data)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
 
@@ -61,6 +61,8 @@ public class MaasSnapshotService : IMaasSnapshotService
             Kesinti = x.Kesinti,
             Harcama = x.Harcama,
             Odenecek = x.Odenecek,
+            HakedisGelir = x.HakedisGelir,
+            HakedisGider = x.HakedisGider,
             HesaplamaTarihi = now,
             Kilitli = true,
             CreatedAt = now
@@ -75,7 +77,7 @@ public class MaasSnapshotService : IMaasSnapshotService
     public async Task<List<MaasOdemeSnapshot>> GuncelleAsync(
         int yil, int ay, int firmaId,
         List<(int PersonelId, string AdSoyad, string? PersonelKodu, string? GorevAdi, string? AracPlakasi,
-              decimal GercekMaas, decimal BankayaYatan, decimal Avans, decimal Kesinti, decimal Harcama, decimal Odenecek)> data)
+              decimal GercekMaas, decimal BankayaYatan, decimal Avans, decimal Kesinti, decimal Harcama, decimal Odenecek, decimal HakedisGelir, decimal HakedisGider)> data)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
 
@@ -113,14 +115,15 @@ public class MaasSnapshotService : IMaasSnapshotService
             item.Kesinti = hesap.Kesinti;
             item.Harcama = hesap.Harcama;
             item.Odenecek = hesap.Odenecek;
+            item.HakedisGelir = guncel.HakedisGelir;
+            item.HakedisGider = guncel.HakedisGider;
             item.HesaplamaTarihi = DateTime.UtcNow;
             item.UpdatedAt = DateTime.UtcNow;
 
-            Console.WriteLine($"[MaasSnapshot] Güncellendi: PersonelId={item.PersonelId} Odenecek={item.Odenecek}");
+            // Güncellendi
         }
 
-        await context.SaveChangesAsync();
-        Console.WriteLine($"[MaasSnapshot] Toplu güncelleme: Yil={yil} Ay={ay} Firma={firmaId} Adet={snapshot.Count}");
+        await context.SaveChangesAsync();        // Toplu güncelleme tamamlandı
 
         return snapshot;
     }
@@ -133,8 +136,7 @@ public class MaasSnapshotService : IMaasSnapshotService
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(x => x.Kilitli, true)
                 .SetProperty(x => x.UpdatedAt, DateTime.UtcNow));
-
-        Console.WriteLine($"[MaasSnapshot] Kilitlendi: Yil={yil} Ay={ay} Firma={firmaId} Adet={affected}");
+        // Kilitlendi
     }
 
     public async Task SilAsync(int yil, int ay, int firmaId)
@@ -145,7 +147,6 @@ public class MaasSnapshotService : IMaasSnapshotService
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(x => x.IsDeleted, true)
                 .SetProperty(x => x.DeletedAt, DateTime.UtcNow));
-
-        Console.WriteLine($"[MaasSnapshot] Silinen: Yil={yil} Ay={ay} Firma={firmaId} Adet={affected}");
+        // Silindi
     }
 }

@@ -6,7 +6,7 @@
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
 @inject IKullaniciService KullaniciService
-@inject ILisansService LisansService
+@inject KOAFiloServis.Web.Services.LicenseService LicenseSvc
 @inject IPortalProjectCatalogService PortalProjectCatalogService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject NavigationManager Navigation
@@ -53,11 +53,11 @@
                     <div class="license-detail-box mb-3">
                         <div class="d-flex justify-content-between mb-1">
                             <span class="text-muted">Lisans Turu:</span>
-                            <span class="fw-semibold">@lisans.Tur</span>
+                            <span class="fw-semibold">@(lisans.IsDemo ? "Demo" : "Aktif")</span>
                         </div>
                         <div class="d-flex justify-content-between mb-1">
                             <span class="text-muted">Bitis Tarihi:</span>
-                            <span class="fw-semibold text-danger">@lisans.BitisTarihi.ToString("dd.MM.yyyy")</span>
+                            <span class="fw-semibold text-danger">@lisans.ExpireDate.ToString("dd.MM.yyyy")</span>
                         </div>
                     </div>
                 }
@@ -229,9 +229,10 @@
         <div class="login-footer">
             @if (lisans != null)
             {
+                var remainingDays = LicenseService.GetRemainingDays(lisans);
                 <div class="license-info">
-                    <span class="badge @(lisans.KalanGun <= 7 ? "bg-danger" : "bg-success")">
-                        @lisans.Tur - @lisans.KalanGun Gun Kaldi
+                    <span class="badge @(remainingDays <= 7 ? "bg-danger" : "bg-success")">
+                        @(lisans.IsDemo ? "Demo" : "Aktif") - @remainingDays Gun Kaldi
                     </span>
                 </div>
             }
@@ -515,7 +516,7 @@
     private string? errorMessage;
     private string? successMessage;
     private string forgotPasswordInput = "";
-    private KOAFiloServis.Shared.Entities.Lisans? lisans;
+    private KOAFiloServis.Shared.Entities.LicenseInfo? lisans;
     private PortalProjectDefinition? selectedProject;
 
     // Lisans kontrol alanlari
@@ -530,13 +531,18 @@
 
     protected override async Task OnInitializedAsync()
     {
-        lisans = await LisansService.GetAktifLisansAsync();
+        lisans = await LicenseSvc.GetCurrentLicenseAsync();
         selectedProject = PortalProjectCatalogService.GetProjectBySlug(Project)
             ?? PortalProjectCatalogService.GetDefaultProject();
 
         // Lisans gecerlilik kontrolu
-        makineKodu = await LisansService.GetMakineKoduAsync();
-        if (lisans == null || !lisans.Gecerli)
+        makineKodu = LicenseService.GetMachineId();
+        if (lisans == null || (lisans.IsDemo && LicenseService.IsDemoExpired(lisans)))
+        {
+            lisansSuresiDoldu = true;
+            return;
+        }
+        if (DateTime.UtcNow > lisans.ExpireDate)
         {
             lisansSuresiDoldu = true;
             return;
@@ -582,8 +588,8 @@
         try
         {
             // Giris oncesi lisans kontrolu
-            lisans = await LisansService.GetAktifLisansAsync();
-            if (lisans == null || !lisans.Gecerli)
+            lisans = await LicenseSvc.GetCurrentLicenseAsync();
+            if (lisans == null || LicenseService.IsDemoExpired(lisans) || DateTime.UtcNow > lisans.ExpireDate)
             {
                 lisansSuresiDoldu = true;
                 isLoading = false;
@@ -863,15 +869,16 @@
 
         try
         {
-            var yeniLisans = await LisansService.AktiveLisansAsync(yeniLisansAnahtari);
+            var yeniLisans = await LicenseSvc.ActivateLicenseKeyAsync(yeniLisansAnahtari);
 
-            if (yeniLisans.Gecerli)
+            if (yeniLisans != null && !LicenseService.IsDemoExpired(yeniLisans) && DateTime.UtcNow <= yeniLisans.ExpireDate)
             {
                 lisans = yeniLisans;
                 lisansSuresiDoldu = false;
                 yeniLisansAnahtari = "";
                 lisansBasariMesaji = null;
-                successMessage = $"Lisans basariyla aktive edildi! {yeniLisans.KalanGun} gun gecerli. Giris yapabilirsiniz.";
+                var kalanGun = LicenseService.GetRemainingDays(yeniLisans);
+                successMessage = $"Lisans basariyla aktive edildi! {kalanGun} gun gecerli. Giris yapabilirsiniz.";
             }
             else
             {

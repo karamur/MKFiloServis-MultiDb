@@ -1,0 +1,87 @@
+@page "/admin/test"
+@using Microsoft.AspNetCore.Authorization
+@inject KOAFiloServis.Web.Services.TestSessionService TestService
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+
+<PageTitle>Guvenli Test Modu</PageTitle>
+
+<div class="container-fluid px-3">
+    <h4 class="mb-3">Guvenli Test Modu</h4>
+
+    <div class="alert @(_testAktif ? "alert-warning" : "alert-info") py-2">
+        @if (_testAktif)
+        {
+            <strong>TEST AKTIF!</strong>
+            <span>Tum islemler test oturumuna kaydediliyor. Test sonunda geri alinacak.</span>
+        }
+        else
+        {
+            <span>Test modu kapali. Canli veri korunuyor.</span>
+        }
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-6">
+            <div class="card border-success">
+                <div class="card-header bg-success bg-opacity-10 py-2">
+                    <strong>Test Baslat</strong>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small">5 kritik tablonun SQL backupini alir ve test moduna gecer.</p>
+                    <div class="mb-2">
+                        <label class="form-label small">Test Etiketi</label>
+                        <input type="text" class="form-control form-control-sm" @bind="_testTag" placeholder="TEST_001" />
+                    </div>
+                    <button class="btn btn-success w-100" @onclick="TestBaslat" disabled="@(_calisiyor || _testAktif)">
+                        @if (_calisiyor) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Backup Al + Test Baslat
+                    </button>
+                    @if (_baslatSonuc != null)
+                    {
+                        <div class="mt-2 small @(_baslatSonuc.Basarili ? "text-success" : "text-danger")">
+                            @_baslatSonuc.Mesaj
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card border-danger">
+                <div class="card-header bg-danger bg-opacity-10 py-2">
+                    <strong>Testi Geri Al</strong>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small">Tum tablolari backuptan geri yukler.</p>
+                    <p class="small text-danger fw-bold">DIKKAT: Test sirasinda yapilan TUM degisiklikler SILINIR.</p>
+                    <button class="btn btn-danger w-100" @onclick="TestGeriAl" disabled="@(_calisiyor || !_testAktif)">
+                        @if (_calisiyor) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        SQL Restore + Testi Kapat
+                    </button>
+                    @if (_rollbackSonuc != null)
+                    {
+                        <div class="mt-2 small @(_rollbackSonuc.Basarili ? "text-success" : "text-danger")">
+                            @_rollbackSonuc.Mesaj
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mt-3">
+        <div class="card-header py-2"><strong>Test Akisi</strong></div>
+        <div class="card-body py-2">
+            <ol class="small mb-0">
+                <li><strong>Test Baslat</strong> - 5 tablo backup alinir</li>
+                <li>Gridde degisiklik yap - Kaydet</li>
+                <li>IsleAsync calistir - Fatura/Muhasebe olussun</li>
+                <li>Dashboard kontrol et</li>
+                <li>Denetim calistir</li>
+                <li>Rebuild test et</li>
+                <li><strong>Testi Geri Al</strong> - SQL restore, sistem eski haline doner</li>
+            </ol>
+        </div>
+    </div>
+</div>

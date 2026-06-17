@@ -4,7 +4,7 @@
 @using Microsoft.AspNetCore.WebUtilities
 @using YetkilerClass = KOAFiloServis.Shared.Entities.Yetkiler
 @inject IKullaniciService KullaniciService
-@inject ILisansService LisansService
+@inject KOAFiloServis.Web.Services.LicenseService LicenseService
 @inject IToastService ToastService
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
@@ -32,7 +32,7 @@
     {
         <div class="alert alert-warning">
             <i class="bi bi-exclamation-triangle me-2"></i>
-            Lisans limitine ulasildi. Maksimum @lisans?.MaxKullaniciSayisi kullanici ekleyebilirsiniz.
+            Lisans limitine ulasildi. Maksimum @(lisans?.IsDemo == true ? "5" : "sınırsız") kullanici ekleyebilirsiniz.
         </div>
     }
 
@@ -449,7 +449,7 @@
     private string aktifSekme = "kullanicilar";
     private List<Kullanici> kullanicilar = new();
     private List<Rol> roller = new();
-    private Lisans? lisans;
+    private LicenseInfo? lisans;
     private bool kullaniciEklenebilir = true;
     private static readonly HashSet<string> GecerliDurumFiltreleri = new(StringComparer.OrdinalIgnoreCase) { "tum", "aktif", "pasif", "kilitli" };
     private bool querydenYukleniyor = false;
@@ -517,8 +517,8 @@
     {
         kullanicilar = await KullaniciService.GetAllAsync();
         roller = await KullaniciService.GetRollerAsync();
-        lisans = await LisansService.GetAktifLisansAsync();
-        kullaniciEklenebilir = await LisansService.KullanicLimitiKontrolAsync();
+        lisans = await LicenseService.GetCurrentLicenseAsync();
+        kullaniciEklenebilir = await LicenseService.CheckUserLimitAsync(kullanicilar.Count);
     }
 
     private bool DurumFiltresineUygun(Kullanici kullanici) => durumFiltresi switch

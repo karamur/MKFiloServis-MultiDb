@@ -11,10 +11,10 @@ public interface IMaasSnapshotService
     Task<List<MaasOdemeSnapshot>> GetAsync(int yil, int ay, int firmaId);
 
     /// <summary>Snapshots oluştur (zaten varsa tekrar oluşturmaz).</summary>
-    Task<List<MaasOdemeSnapshot>> OlusturAsync(int yil, int ay, int firmaId, List<(int PersonelId, string AdSoyad, string? PersonelKodu, string? GorevAdi, string? AracPlakasi, decimal GercekMaas, decimal BankayaYatan, decimal Avans, decimal Kesinti, decimal Harcama, decimal Odenecek)> data);
+    Task<List<MaasOdemeSnapshot>> OlusturAsync(int yil, int ay, int firmaId, List<(int PersonelId, string AdSoyad, string? PersonelKodu, string? GorevAdi, string? AracPlakasi, decimal GercekMaas, decimal BankayaYatan, decimal Avans, decimal Kesinti, decimal Harcama, decimal Odenecek, decimal HakedisGelir, decimal HakedisGider)> data);
 
     /// <summary>Snapshots güncelle — sadece kilitli olmayan dönemler için.</summary>
-    Task<List<MaasOdemeSnapshot>> GuncelleAsync(int yil, int ay, int firmaId, List<(int PersonelId, string AdSoyad, string? PersonelKodu, string? GorevAdi, string? AracPlakasi, decimal GercekMaas, decimal BankayaYatan, decimal Avans, decimal Kesinti, decimal Harcama, decimal Odenecek)> data);
+    Task<List<MaasOdemeSnapshot>> GuncelleAsync(int yil, int ay, int firmaId, List<(int PersonelId, string AdSoyad, string? PersonelKodu, string? GorevAdi, string? AracPlakasi, decimal GercekMaas, decimal BankayaYatan, decimal Avans, decimal Kesinti, decimal Harcama, decimal Odenecek, decimal HakedisGelir, decimal HakedisGider)> data);
 
     /// <summary>Snapshot'ı kilitle — artık değiştirilemez, muhasebe fişi oluşturulabilir.</summary>
     Task KilitleAsync(int yil, int ay, int firmaId);

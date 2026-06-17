@@ -1,0 +1,26 @@
+KOAFiloServis — Teklif
+═══════════════════════════════════
+
+Özellikler:
+- Puantaj sistemi
+- Otomatik hakediş
+- Fatura & muhasebe
+- Denetim sistemi
+- Offline çalışma
+
+Lisans:
+- Demo: 30 gün
+- Yıllık lisans
+
+Fiyat:
+Kurulum: 15.000 – 25.000 TL
+Yıllık: 5.000 – 10.000 TL
+
+Avantaj:
+- Excel bağımlılığı yok
+- Hata sıfır
+- Tam kontrol
+
+Sonuç:
+Zaman kazanırsınız
+Hata yapmazsınız

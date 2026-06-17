@@ -1,0 +1,342 @@
+@page "/admin/update"
+@using KOAFiloServis.Shared.Entities
+@using KOAFiloServis.Web.Services
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin,HoldingYoneticisi")]
+@rendermode InteractiveServer
+@inject UpdateService UpdateService
+@inject LicenseService LicenseService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Güncelleme Yönetimi — KOA Filo Servis</PageTitle>
+
+<div class="container-fluid px-3 py-3">
+    <h4 class="mb-3"><i class="bi bi-cloud-download me-2 text-primary"></i>Güncelleme Yönetimi</h4>
+
+    @* Versiyon Bilgisi *@
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong><i class="bi bi-info-circle me-2"></i>Sistem Bilgisi</strong>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="text-muted small">Mevcut Versiyon</div>
+                    <div class="fs-5 fw-bold">v@_currentVersion</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="text-muted small">Lisans Tipi</div>
+                    <div class="fs-5 fw-bold">
+                        <span class="badge @(_license?.IsDemo == true ? "bg-warning text-dark" : "bg-success")">
+                            @(_license?.IsDemo == true ? "Demo" : "Aktif")
+                        </span>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="text-muted small">İzin Verilen Max Versiyon</div>
+                    <div class="fs-5 fw-bold">
+                        v@(_license?.AllowedVersion ?? "1.0.99")
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="text-muted small">Update Klasörü</div>
+                    <code class="text-break">@_updatesPath</code>
+                    <button class="btn btn-sm btn-outline-secondary ms-2" @onclick="KlasorAc">
+                        <i class="bi bi-folder2-open me-1"></i>Klasörü Aç
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Mesajlar *@
+    @if (!string.IsNullOrEmpty(_statusMessage))
+    {
+        <div class="alert @(_statusIsError ? "alert-danger" : "alert-success") alert-dismissible fade show mb-3">
+            <i class="bi @(_statusIsError ? "bi-exclamation-triangle" : "bi-check-circle") me-2"></i>
+            @_statusMessage
+            <button type="button" class="btn-close" @onclick="() => _statusMessage = null"></button>
+        </div>
+    }
+
+    @* Local Patch Listesi *@
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong><i class="bi bi-box-seam me-2"></i>Bekleyen Güncellemeler</strong>
+            <button class="btn btn-sm btn-outline-primary" @onclick="TaraAsync" disabled="@_isScanning">
+                @if (_isScanning)
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                    <span>Taranıyor...</span>
+                }
+                else
+                {
+                    <i class="bi bi-arrow-repeat me-1"></i>
+                    <span>Yenile</span>
+                }
+            </button>
+        </div>
+        <div class="card-body">
+            @if (!_updates.Any())
+            {
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                    <p class="mt-2 mb-0">Bekleyen güncelleme bulunamadı.</p>
+                    <small>
+                        Patch dosyalarını <code>@_updatesPath</code> klasörüne atın ve "Yenile" butonuna basın.
+                    </small>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Dosya</th>
+                                <th>Versiyon</th>
+                                <th>Boyut</th>
+                                <th>Tarih</th>
+                                <th>İmza</th>
+                                <th>Lisans</th>
+                                <th class="text-end">İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var update in _updates)
+                            {
+                                var canInstall = update.SignatureValid &&
+                                                 update.IsVersionAllowed &&
+                                                 !string.IsNullOrEmpty(update.Version);
+                                var cannotReason = !update.SignatureValid
+                                    ? update.SignatureError
+                                    : !update.IsVersionAllowed
+                                        ? update.AllowedVersionError
+                                        : "";
+
+                                <tr>
+                                    <td>
+                                        <code class="small">@update.FileName</code>
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(update.Version))
+                                        {
+                                            var isNewer = IsNewerVersion(update.Version);
+                                            <span class="badge @(isNewer ? "bg-success" : "bg-secondary")">
+                                                v@update.Version
+                                                @if (isNewer) { <span> ↑ YENİ</span> }
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <small>@FormatSize(update.SizeBytes)</small>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">@update.CreatedAt.ToString("dd.MM.yyyy HH:mm")</small>
+                                    </td>
+                                    <td>
+                                        @if (update.SignatureValid)
+                                        {
+                                            <span class="text-success" title="İmza geçerli"><i class="bi bi-shield-check"></i></span>
+                                        }
+                                        else if (!string.IsNullOrEmpty(update.SignatureError))
+                                        {
+                                            <span class="text-danger" title="@update.SignatureError"><i class="bi bi-shield-x"></i></span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (update.IsVersionAllowed)
+                                        {
+                                            <span class="text-success" title="Lisans izin veriyor"><i class="bi bi-check-lg"></i></span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-danger" title="@update.AllowedVersionError"><i class="bi bi-x-lg"></i></span>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        <button class="btn btn-sm @(canInstall ? "btn-success" : "btn-outline-secondary")"
+                                                disabled="@(!canInstall || _isInstalling)"
+                                                title="@(cannotReason)"
+                                                @onclick="() => YukleAsync(update)">
+                                            @if (_isInstalling && _installingFileName == update.FileName)
+                                            {
+                                                <span class="spinner-border spinner-border-sm me-1"></span>
+                                                <span>Yükleniyor...</span>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-cloud-upload me-1"></i>
+                                                <span>Yükle</span>
+                                            }
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    @* Talimatlar *@
+    <div class="card border-info">
+        <div class="card-header bg-info bg-opacity-10">
+            <strong><i class="bi bi-question-circle me-2"></i>Nasıl Güncelleme Yapılır?</strong>
+        </div>
+        <div class="card-body">
+            <ol class="mb-0 small">
+                <li>Patch dosyasını (örn: <code>patch_v1.0.25.zip</code>) updates klasörüne atın</li>
+                <li>"Yenile" butonuna basarak patch'in görünmesini sağlayın</li>
+                <li>İmza <i class="bi bi-shield-check text-success"></i> ve Lisans <i class="bi bi-check-lg text-success"></i> onaylarını kontrol edin</li>
+                <li>"Yükle" butonuna basın — sistem otomatik yedek alır ve günceller</li>
+                <li>Güncelleme sonrası <strong>uygulamayı yeniden başlatın</strong></li>
+            </ol>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _currentVersion = "";
+    private string _updatesPath = "";
+    private LicenseInfo? _license;
+    private List<LocalUpdateInfo> _updates = new();
+    private bool _isScanning;
+    private bool _isInstalling;
+    private string? _installingFileName;
+    private string? _statusMessage;
+    private bool _statusIsError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _currentVersion = UpdateService.GetCurrentVersion();
+        _updatesPath = UpdateService.GetUpdatesPath();
+        _license = await LicenseService.GetCurrentLicenseAsync();
+        await TaraAsync();
+    }
+
+    private async Task TaraAsync()
+    {
+        _isScanning = true;
+        StateHasChanged();
+
+        try
+        {
+            _updates = await UpdateService.ScanLocalUpdatesAsync(LicenseService);
+        }
+        catch (Exception ex)
+        {
+            SetStatus(true, $"Tarama hatası: {ex.Message}");
+        }
+        finally
+        {
+            _isScanning = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task YukleAsync(LocalUpdateInfo update)
+    {
+        if (string.IsNullOrWhiteSpace(update.Version))
+        {
+            SetStatus(true, "Güncelleme versiyonu algılanamadı.");
+            return;
+        }
+
+        if (!update.SignatureValid)
+        {
+            SetStatus(true, $"Güncelleme yüklenemez: {update.SignatureError}");
+            return;
+        }
+
+        if (!update.IsVersionAllowed)
+        {
+            SetStatus(true, $"Güncelleme yüklenemez: {update.AllowedVersionError}");
+            return;
+        }
+
+        _isInstalling = true;
+        _installingFileName = update.FileName;
+        _statusMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var result = await UpdateService.InstallLocalUpdateAsync(update.FullPath, LicenseService);
+
+            if (result.Success)
+            {
+                SetStatus(false, result.Message);
+                await TaraAsync(); // Listeyi yenile
+            }
+            else
+            {
+                SetStatus(true, result.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            SetStatus(true, $"Yükleme hatası: {ex.Message}");
+        }
+        finally
+        {
+            _isInstalling = false;
+            _installingFileName = null;
+            StateHasChanged();
+        }
+    }
+
+    private bool IsNewerVersion(string versionStr)
+    {
+        try
+        {
+            var updateVer = new Version(versionStr);
+            var currentVer = new Version(_currentVersion);
+            return updateVer > currentVer;
+        }
+        catch { return false; }
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        return bytes switch
+        {
+            < 1024 => $"{bytes} B",
+            < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
+            < 1024 * 1024 * 1024 => $"{bytes / (1024.0 * 1024):F1} MB",
+            _ => $"{bytes / (1024.0 * 1024 * 1024):F2} GB"
+        };
+    }
+
+    private void SetStatus(bool isError, string message)
+    {
+        _statusMessage = message;
+        _statusIsError = isError;
+    }
+
+    private async Task KlasorAc()
+    {
+        try
+        {
+            // Updates klasörünün var olduğundan emin ol
+            if (!Directory.Exists(_updatesPath))
+                Directory.CreateDirectory(_updatesPath);
+
+            // Dosya gezgininde aç
+            await JS.InvokeVoidAsync("window.open", _updatesPath.Replace("\\", "/"), "_blank");
+        }
+        catch { /* tarayıcı engelleyebilir — sessizce geç */ }
+    }
+}

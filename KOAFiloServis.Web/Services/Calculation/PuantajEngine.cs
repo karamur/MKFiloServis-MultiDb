@@ -8,11 +8,11 @@ namespace KOAFiloServis.Web.Services.Calculation;
 public static class PuantajEngine
 {
     /// <summary>S-A veya A-S pattern'ini tespit eder.</summary>
-    public static bool IsGidisDonus(string yon) =>
+    public static bool IsGidisDonus(string? yon) =>
         !string.IsNullOrWhiteSpace(yon) && yon.Trim().ToUpperInvariant() is "S-A" or "A-S" or "S+A" or "GİDİŞ-DÖNÜŞ";
 
     /// <summary>S veya A tek yön tespiti.</summary>
-    public static bool IsTekYon(string yon) =>
+    public static bool IsTekYon(string? yon) =>
         !string.IsNullOrWhiteSpace(yon) && yon.Trim().ToUpperInvariant() is "S" or "A" or "GİDİŞ" or "DÖNÜŞ";
 
     /// <summary>Gün hücresini sefer sayısına çevirir.</summary>
@@ -40,10 +40,7 @@ public static class PuantajEngine
 
         var birimFiyat = input.BirimFiyat;
 
-        // S-A (gidiş-dönüş) ise birim fiyat 2'ye bölünür (her yön için ayrı)
-        if (IsGidisDonus(input.Yon))
-            birimFiyat = birimFiyat / 2;
-
+        // 🔴 Yön hesaplamaya ETKİ ETMEZ — grid hücre değeri tek gerçek
         var toplam = sefer * birimFiyat;
         var net = toplam - input.Kesinti;
 

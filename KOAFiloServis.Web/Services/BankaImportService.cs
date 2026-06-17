@@ -157,7 +157,7 @@ public class BankaImportService
             sonuc.Kaydedilenler = kaydedilecekler;
             sonuc.Basarili = true;
 
-            Console.WriteLine($"[BankaImport] Import tamam: Hash={hash[..12]} Kaydedilen={sonuc.Kaydedilen} Atlanan={sonuc.Atlanan} Hata={sonuc.Hata}");
+            // Import tamam
 
             // ── Snapshot güncelle (varsa) ──
             if (_snapshotService != null)
@@ -169,7 +169,7 @@ public class BankaImportService
                     if (varMi)
                     {
                         await _snapshotService.GuncelleAsync(now.Year, now.Month, firmaId,
-                            new List<(int, string, string?, string?, string?, decimal, decimal, decimal, decimal, decimal, decimal)>());
+                            new List<(int, string, string?, string?, string?, decimal, decimal, decimal, decimal, decimal, decimal, decimal, decimal)>());
                     }
                 }
                 catch (Exception ex) { Console.WriteLine($"[BankaImport] Snapshot güncelleme hatası (önemsiz): {ex.Message}"); }

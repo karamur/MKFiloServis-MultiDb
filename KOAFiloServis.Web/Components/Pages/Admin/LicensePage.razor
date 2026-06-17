@@ -1,0 +1,75 @@
+@page "/admin/license"
+@using Microsoft.AspNetCore.Authorization
+@using KOAFiloServis.Shared.Entities
+@inject KOAFiloServis.Web.Services.LicenseService LicenseService
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+
+<PageTitle>Lisans Yonetimi</PageTitle>
+
+<div class="container-fluid px-3">
+    <h4 class="mb-3">Lisans Yonetimi</h4>
+
+    @if (_yukleniyor)
+    {
+        <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+    }
+    else if (_license == null)
+    {
+        <div class="alert alert-danger py-2">
+            <strong>Lisans bulunamadi!</strong>
+        </div>
+        <div class="card">
+            <div class="card-header"><strong>Lisans Yukle</strong></div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-3">
+                        <label class="form-label small">Firma Kodu</label>
+                        <input type="text" class="form-control form-control-sm" @bind="_firmaKodu" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">Makine ID</label>
+                        <input type="text" class="form-control form-control-sm" @bind="_machineId" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">Bitis Tarihi</label>
+                        <input type="date" class="form-control form-control-sm" @bind="_expireDate" />
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button class="btn btn-primary btn-sm w-100" @onclick="LisansYukle" disabled="@_calisiyor">
+                            Lisans Yukle
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card @(_validationIsValid ? "border-success" : "border-danger")">
+                    <div class="card-header @(_validationIsValid ? "bg-success bg-opacity-10" : "bg-danger bg-opacity-10") py-2">
+                        <strong>@(_validationIsValid ? "Lisans Gecerli" : "Lisans Gecersiz")</strong>
+                    </div>
+                    <div class="card-body py-2">
+                        <table class="table table-sm small mb-0">
+                            <tr><td class="fw-bold">Firma</td><td>@_license.FirmaKodu</td></tr>
+                            <tr><td class="fw-bold">Makine</td><td>@_license.MachineId</td></tr>
+                            <tr><td class="fw-bold">Bitis</td><td class="@(DateTime.UtcNow > _license.ExpireDate ? "text-danger fw-bold" : "text-success")">@_license.ExpireDate.ToString("dd.MM.yyyy")</td></tr>
+                            <tr><td class="fw-bold">Son Kontrol</td><td>@(_license.LastValidatedAt?.ToString("dd.MM HH:mm") ?? "-")</td></tr>
+                            <tr><td class="fw-bold">Durum</td><td>
+                                @if (_validationIsValid) { <span class="badge bg-success">AKTIF</span> }
+                                else { <span class="badge bg-danger">GECERSIZ</span> }
+                            </td></tr>
+                        </table>
+                        @if (!string.IsNullOrEmpty(_validationMessage))
+                        {
+                            <div class="alert alert-danger py-2 mt-2 mb-0 small">@_validationMessage</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>

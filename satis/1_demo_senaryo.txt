@@ -1,0 +1,16 @@
+KOAFiloServis — Demo Senaryosu
+═══════════════════════════════════
+
+1. /personel/puantaj-grid açılır
+2. Haftaiçi = 1 yapılır
+3. Kaydet
+4. Hakediş otomatik oluşur
+5. Fatura otomatik oluşur
+6. Dashboard açılır (gelir/gider/net)
+7. /denetim → skor 100
+
+SONUÇ:
+- Excel yok
+- Manuel işlem yok
+- Hata yok
+- Tüm süreç otomatik

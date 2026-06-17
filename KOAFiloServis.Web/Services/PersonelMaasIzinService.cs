@@ -52,12 +52,17 @@ public class PersonelMaasIzinService : IPersonelMaasIzinService
     public async Task<PersonelMaas> UpdateMaasAsync(PersonelMaas maas)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        context.Attach(maas);
-        context.Entry(maas).State = EntityState.Modified;
-        if (maas.Sofor != null)
-            context.Entry(maas.Sofor).State = EntityState.Unchanged;
+        var existing = await context.PersonelMaaslari.FindAsync(maas.Id);
+        if (existing == null)
+            throw new InvalidOperationException($"PersonelMaas bulunamadı: {maas.Id}");
+
+        // 🔴 Fetch + map + SaveChanges — Attach/Modified KULLANMA
+        context.Entry(existing).CurrentValues.SetValues(maas);
+        existing.UpdatedAt = DateTime.UtcNow;
+        // Navigation property'leri etkileme
+        context.Entry(existing).Reference(x => x.Sofor).IsModified = false;
         await context.SaveChangesAsync();
-        return maas;
+        return existing;
     }
 
     public async Task DeleteMaasAsync(int id)
@@ -274,9 +279,15 @@ public class PersonelMaasIzinService : IPersonelMaasIzinService
     public async Task<PersonelIzin> UpdateIzinAsync(PersonelIzin izin)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        context.PersonelIzinleri.Update(izin);
+        var existing = await context.PersonelIzinleri.FindAsync(izin.Id);
+        if (existing == null)
+            throw new InvalidOperationException($"PersonelIzin bulunamadı: {izin.Id}");
+
+        // 🔴 Fetch + map + SaveChanges — Update() KULLANMA
+        context.Entry(existing).CurrentValues.SetValues(izin);
+        existing.UpdatedAt = DateTime.UtcNow;
         await context.SaveChangesAsync();
-        return izin;
+        return existing;
     }
 
     public async Task DeleteIzinAsync(int id)

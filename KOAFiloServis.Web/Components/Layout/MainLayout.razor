@@ -2,7 +2,7 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.Extensions.Logging
 @inject KOAFiloServis.Web.Services.IKullaniciService KullaniciService
-@inject KOAFiloServis.Web.Services.ILisansService LisansService
+@inject KOAFiloServis.Web.Services.LicenseService LicenseSvc
 @inject KOAFiloServis.Web.Services.IFirmaService FirmaService
 @inject KOAFiloServis.Web.Services.IAktifFirmaProvider AktifFirmaProvider
 @inject KOAFiloServis.Web.Services.AppAuthenticationStateProvider AuthProvider
@@ -388,25 +388,43 @@
     {
         try
         {
-            var lisans = await LisansService.GetAktifLisansAsync();
-            makineKodu = await LisansService.GetMakineKoduAsync();
+            makineKodu = LicenseService.GetMachineId();
+            var lisans = await LicenseSvc.GetCurrentLicenseAsync();
 
             if (lisans == null)
             {
-                lisansGecerli = false;
-                lisansHataMesaji = "Lisans bulunamadi. Lutfen gecerli bir lisans anahtari girin.";
-                return;
+                // Startup'ta demo olusturulmus olmaliydi — tekrar dene
+                var validation = await LicenseSvc.ValidateAsync();
+                if (!validation.IsValid)
+                {
+                    lisansGecerli = false;
+                    lisansHataMesaji = validation.Message;
+                    return;
+                }
+                lisans = validation.License;
             }
 
-            if (DateTime.UtcNow > lisans.BitisTarihi)
+            // Negative time kontrolu
+            if (lisans != null && DateTime.UtcNow < lisans.CreatedAt)
             {
                 lisansGecerli = false;
-                lisansHataMesaji = $"Lisans suresi {lisans.BitisTarihi:dd.MM.yyyy} tarihinde dolmus.";
+                lisansHataMesaji = "Sistem saati hatali. Lutfen saat ayarlarinizi kontrol edin.";
                 return;
             }
 
-            if (!string.IsNullOrEmpty(lisans.MakineKodu) &&
-                KOAFiloServis.Shared.LisansHelper.NormalizeMachineCode(lisans.MakineKodu) != KOAFiloServis.Shared.LisansHelper.NormalizeMachineCode(makineKodu))
+            // Demo suresi kontrolu (CreatedAt + ExpireDate cift validasyon)
+            if (lisans != null && LicenseService.IsDemoExpired(lisans))
+            {
+                lisansGecerli = false;
+                var elapsed = (DateTime.UtcNow - lisans.CreatedAt).TotalDays;
+                lisansHataMesaji = $"Demo suresi {lisans.ExpireDate:dd.MM.yyyy} tarihinde doldu. ({elapsed:F0} gun)";
+                return;
+            }
+
+            // Machine lock
+            if (lisans != null &&
+                !string.IsNullOrEmpty(lisans.MachineId) &&
+                !string.Equals(lisans.MachineId, makineKodu, StringComparison.Ordinal))
             {
                 lisansGecerli = false;
                 lisansHataMesaji = "Bu lisans baska bir bilgisayar icin gecerlidir.";
@@ -414,7 +432,7 @@
             }
 
             lisansGecerli = true;
-            kalanLisansGunu = lisans.KalanGun;
+            kalanLisansGunu = lisans != null ? LicenseService.GetRemainingDays(lisans) : 0;
         }
         catch (Exception ex)
         {

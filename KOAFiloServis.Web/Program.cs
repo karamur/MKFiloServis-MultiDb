@@ -228,7 +228,7 @@ builder.Services.AddScoped<IAktifFirmaProvider, AktifFirmaProvider>();
 builder.Services.AddScoped<IFirmaService, FirmaService>();
 builder.Services.AddScoped<IFirmalarArasiTransferService, FirmalarArasiTransferService>();
 builder.Services.AddScoped<IFirmaKopyalamaService, FirmaKopyalamaService>();
-builder.Services.AddSingleton<ILisansService, LisansService>(); // Singleton - lisans cache
+// Eski ILisansService kaldirildi — yerine LicenseService kullaniliyor (anti-bypass hardened)
 builder.Services.AddScoped<IKullaniciService, KullaniciService>(); // Scoped - her circuit kendi oturumunu yonetir
 builder.Services.AddScoped<ICariService, CariService>();
 builder.Services.AddScoped<ISoforService, SoforService>();
@@ -301,6 +301,16 @@ builder.Services.AddScoped<IKurumService, KurumService>();
 builder.Services.AddScoped<IPuantajService, PuantajService>();
 builder.Services.AddScoped<IKurumPuantajService, KurumPuantajService>();
 builder.Services.AddScoped<IHakedisPuantajService, HakedisPuantajService>(); // Operasyonel Hakediş Puantajı
+builder.Services.AddScoped<IPuantajHakedisSyncService, PuantajHakedisSyncService>(); // Grid → Hakedis köprüsü
+builder.Services.AddScoped<RebuildService>(); // RebuildAll motoru
+builder.Services.AddScoped<DenetimService>(); // Finans denetim motoru
+builder.Services.AddScoped<TestSessionService>(); // Güvenli test modu
+builder.Services.AddScoped<KOAFiloServis.Web.Services.Common.GenericUpdateService>(); // Ortak update pattern'i
+builder.Services.AddHostedService<NightlyDenetimService>(); // Her gece 02:00 otomatik denetim
+builder.Services.AddSingleton<KOAFiloServis.Web.Services.AI.AnomalyDetectionService>(); // ML.NET offline AI
+builder.Services.AddSingleton<KOAFiloServis.Web.Services.AI.DecisionEngine>(); // AI karar motoru
+builder.Services.AddScoped<LicenseService>(); // Lisans sistemi (Scoped — IDbContextFactory kullanır)
+builder.Services.AddSignalR(); // Real-time (EvrakHub)
 builder.Services.AddScoped<IHakedisRaporService, HakedisRaporService>(); // Hakediş Raporlama
 builder.Services.AddScoped<IHakedisMuhasebeService, HakedisMuhasebeService>(); // Hakediş Muhasebe Entegrasyonu
 builder.Services.AddScoped<OperasyonKaydiBusinessRules>();
@@ -812,11 +822,7 @@ await RunScopedSafeAsync(app, "SeedAdmin", async services =>
     await kullaniciService.SeedAdminAsync();
 });
 
-await RunScopedSafeAsync(app, "LisansSeed", async services =>
-{
-    var lisansService = services.GetRequiredService<ILisansService>();
-    await lisansService.GetAktifLisansAsync(); // Trial lisans olusturur
-});
+// LisansSeed kaldirildi — LicenseService.ValidateAsync() ilk cagrildiginda otomatik demo olusturur
 
 await RunScopedSafeAsync(app, "MarkaModelSeed", async services =>
 {
@@ -1212,6 +1218,9 @@ app.UseAntiforgery();
 // IP Güvenlik Middleware (beyaz/kara liste)
 app.UseMiddleware<KOAFiloServis.Web.Middleware.IpGuvenlikMiddleware>();
 
+// Global exception logging — tüm yakalanmayan hataları AppErrorLog'a kaydeder
+app.UseMiddleware<KOAFiloServis.Web.Middleware.ErrorLoggingMiddleware>();
+
 // Authentication & Authorization - API için
 app.UseAuthentication();
 app.UseAuthorization();
@@ -1224,11 +1233,39 @@ Directory.CreateDirectory(externalUploadsPath);
 // SecureFileService üzerinden Blazor auth devresinde erişilebilir.
 // Doğrudan URL erişimi yasak (Kural 16: Dosya Güvenliği).
 
+// ══════════════════════════════════════════════
+// PART 6: STARTUP HARD BLOCK
+// Lisans gecersizse uygulama ACILMAZ. Try/catch yutmak YASAK.
+// Hata mesaji EventLog'a da yazilir.
+// ══════════════════════════════════════════════
+using (var scope = app.Services.CreateScope())
+{
+    var licSvc = scope.ServiceProvider.GetRequiredService<LicenseService>();
+    var val = await licSvc.ValidateAsync();
+    if (!val.IsValid)
+    {
+        var errorMsg = $"LISANS BLOKE: {val.Message} | Makine: {LicenseService.GetMachineId()} | Zaman: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}";
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        logger.LogCritical("🚨 UYGULAMA BASLATMA ENGELLENDI: {Error}", errorMsg);
+
+        // Windows EventLog'a yaz (admin fark edebilsin)
+        try
+        {
+            System.Diagnostics.EventLog.WriteEntry("KOAFiloServis", errorMsg,
+                System.Diagnostics.EventLogEntryType.Error, 1001);
+        }
+        catch { /* EventLog kayit yetkisi olmayabilir */ }
+
+        throw new InvalidOperationException(errorMsg);
+    }
+}
+
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 app.MapControllers(); // API Controller'larini haritalandir
 app.MapHub<AracTakipHub>("/hubs/aractakip"); // SignalR Araç Takip Hub'ı
+app.MapHub<KOAFiloServis.Web.Hubs.EvrakHub>("/hubs/evrak"); // SignalR Evrak Hub'ı
 
 // Admin: Evrak arşiv backfill endpoint'i (sadece Development'da aktif)
 if (app.Environment.IsDevelopment())

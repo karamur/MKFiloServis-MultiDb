@@ -287,6 +287,14 @@ public class ApplicationDbContext : DbContext
     public DbSet<PuantajJobExecution> PuantajJobExecutions { get; set; }
 
     // Hakediş Puantaj Modülü (Operasyonel — Personel maaş puantajından bağımsız)
+    public DbSet<AppErrorLog> AppErrorLogs { get; set; }
+    public DbSet<SnapshotTransaction> SnapshotTransactions { get; set; }
+    public DbSet<SnapshotHistory> SnapshotHistories { get; set; }
+    public DbSet<IncidentLog> IncidentLogs { get; set; }
+    public DbSet<SystemLock> SystemLocks { get; set; }
+    public DbSet<SystemHealth> SystemHealths { get; set; }
+    public DbSet<LicenseInfo> LicenseInfos { get; set; }
+    public DbSet<TestSessionLog> TestSessionLogs { get; set; }
     public DbSet<HakedisPuantaj> HakedisPuantajlar { get; set; }
     public DbSet<HakedisPuantajDetay> HakedisPuantajDetaylar { get; set; }
     public DbSet<HakedisKesinti> HakedisKesintiler { get; set; }

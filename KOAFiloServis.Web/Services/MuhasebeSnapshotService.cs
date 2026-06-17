@@ -47,7 +47,7 @@ public class MuhasebeSnapshotService
 
         if (varMi)
         {
-            Console.WriteLine($"[MuhasebeSnapshot] Fiş zaten var. Yil={yil} Ay={ay} Firma={firmaId}");
+            // Fiş zaten var
             return null;
         }
 
@@ -160,7 +160,7 @@ public class MuhasebeSnapshotService
                 .SetProperty(x => x.MuhasebeFisId, fis.Id)
                 .SetProperty(x => x.UpdatedAt, DateTime.UtcNow));
 
-        Console.WriteLine($"[MuhasebeSnapshot] Fiş oluşturuldu: {fisNo} Yil={yil} Ay={ay} Tutar={toplamOdenecek:N2} Personel={snapshot.Count}");
+        // Fiş oluşturuldu
 
         return fis;
     }
@@ -188,7 +188,7 @@ public class MuhasebeSnapshotService
 
         if (snapshot.Any(x => x.IptalFisId != null))
         {
-            Console.WriteLine($"[MuhasebeSnapshot] Zaten iptal edilmiş. Yil={yil} Ay={ay}");
+            // Zaten iptal edilmiş
             return null;
         }
 
@@ -241,7 +241,7 @@ public class MuhasebeSnapshotService
                 .SetProperty(x => x.IptalFisId, reverseFis.Id)
                 .SetProperty(x => x.UpdatedAt, DateTime.UtcNow));
 
-        Console.WriteLine($"[MuhasebeSnapshot] TERS FİŞ oluşturuldu: {fisNo} ← {orijinalFis.FisNo} Yil={yil} Ay={ay} Tutar={toplamOdenecek:N2}");
+        // Ters fiş oluşturuldu
 
         return reverseFis;
     }

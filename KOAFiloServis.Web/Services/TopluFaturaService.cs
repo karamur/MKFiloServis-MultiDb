@@ -345,6 +345,11 @@ public class TopluFaturaService : ITopluFaturaService
 
         try
         {
+            throw new InvalidOperationException(
+                "TopluFatura devre dışı bırakıldı. " +
+                "Fatura oluşturmak için lütfen PuantajExcelGrid (/personel/puantaj-grid) üzerinden puantaj girin, " +
+                "kaydedin ve HakedisPuantaj → PuantajFinansService.IsleAsync zincirini kullanın.");
+
             // Fatura no oluştur
             var faturaNo = await _faturaService.GenerateNextFaturaNoAsync(onizleme.FaturaTipi);
 
@@ -389,20 +394,8 @@ public class TopluFaturaService : ITopluFaturaService
                 fatura.FaturaKalemleri.Add(kalem);
             }
 
-            // Fatura toplamlarını hesapla
-            fatura.AraToplam = fatura.FaturaKalemleri.Sum(k => k.Miktar * k.BirimFiyat);
-            fatura.KdvTutar = fatura.FaturaKalemleri.Sum(k => k.KdvTutar);
-            
-            if (fatura.TevkifatliMi && fatura.TevkifatOrani > 0)
-            {
-                fatura.TevkifatTutar = fatura.KdvTutar * fatura.TevkifatOrani / 100;
-            }
-            
-            fatura.GenelToplam = fatura.AraToplam + fatura.KdvTutar - fatura.TevkifatTutar;
-
-            // Kaydet
-            context.Faturalar.Add(fatura);
-            await context.SaveChangesAsync();
+            // Faz 3: FaturaService.CreateAsync — otomatik muhasebe fişi + toplam hesaplama
+            fatura = await _faturaService.CreateAsync(fatura);
 
             // Puantaj kayıtlarını güncelle
             var yon = fatura.FaturaYonu;

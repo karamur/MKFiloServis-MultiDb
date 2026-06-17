@@ -142,6 +142,70 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.ToTable("AppAyarlari");
                 });
 
+            modelBuilder.Entity("KOAFiloServis.Shared.Entities.AppErrorLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Cozuldu")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("CozulmeTarihi")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CozumNotu")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int?>("DeletedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FirmaId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Path")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("RequestPayload")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("StackTrace")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AppErrorLogs");
+                });
+
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Arac", b =>
                 {
                     b.Property<int>("Id")
@@ -7111,6 +7175,9 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.Property<decimal>("GelirBirimFiyat")
                         .HasColumnType("decimal(18,4)");
 
+                    b.Property<int?>("GelirFaturaId")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("GelirFisId")
                         .HasColumnType("integer");
 
@@ -7122,6 +7189,9 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.Property<decimal>("GiderBirimFiyat")
                         .HasColumnType("decimal(18,4)");
+
+                    b.Property<int?>("GiderFaturaId")
+                        .HasColumnType("integer");
 
                     b.Property<int?>("GiderFisId")
                         .HasColumnType("integer");
@@ -7149,6 +7219,11 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.Property<decimal>("OdenecekTutar")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea");
 
                     b.Property<int>("SoforId")
                         .HasColumnType("integer");
@@ -7184,7 +7259,11 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.HasIndex("FirmaId");
 
+                    b.HasIndex("GelirFaturaId");
+
                     b.HasIndex("GelirFisId");
+
+                    b.HasIndex("GiderFaturaId");
 
                     b.HasIndex("GiderFisId");
 
@@ -8163,6 +8242,69 @@ namespace KOAFiloServis.Web.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("IlanPlatformlari");
+                });
+
+            modelBuilder.Entity("KOAFiloServis.Shared.Entities.IncidentLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("BeklenenDeger")
+                        .HasColumnType("numeric");
+
+                    b.Property<bool>("Cozuldu")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("CozulmeTarihi")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CozumNotu")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int?>("DeletedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Entity")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int?>("EntityId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FirmaId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("GerceklesenDeger")
+                        .HasColumnType("numeric");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("IncidentLogs");
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Kapasite", b =>
@@ -9206,6 +9348,68 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.ToTable("LastikStoklar");
                 });
 
+            modelBuilder.Entity("KOAFiloServis.Shared.Entities.LicenseInfo", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AllowedVersion")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int?>("DeletedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("ExpireDate")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("FirmaId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("FirmaKodu")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDemo")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastValidatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("MachineId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Signature")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("LicenseInfos");
+                });
+
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Lisans", b =>
                 {
                     b.Property<int>("Id")
@@ -9394,6 +9598,12 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.Property<string>("GorevAdi")
                         .HasColumnType("text");
+
+                    b.Property<decimal>("HakedisGelir")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("HakedisGider")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal>("Harcama")
                         .HasPrecision(18, 2)
@@ -13923,6 +14133,121 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.ToTable("SmsSablonlari");
                 });
 
+            modelBuilder.Entity("KOAFiloServis.Shared.Entities.SnapshotHistory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Ay")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int?>("DeletedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FirmaId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("HakedisGelirEski")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("HakedisGiderEski")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("IslemTipi")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("KayitTarihi")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("SnapshotId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("Yil")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SnapshotHistories");
+                });
+
+            modelBuilder.Entity("KOAFiloServis.Shared.Entities.SnapshotTransaction", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Aciklama")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("Ay")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int?>("DeletedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("FaturaId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FirmaId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("GelirDelta")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("GiderDelta")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("HakedisPuantajId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("IslemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("IslemTipi")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("Yil")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SnapshotTransactions");
+                });
+
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.Sofor", b =>
                 {
                     b.Property<int>("Id")
@@ -14487,6 +14812,107 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.ToTable("Subeler");
                 });
 
+            modelBuilder.Entity("KOAFiloServis.Shared.Entities.SystemHealth", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Ay")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("CriticalCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int?>("DeletedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DenetimSkoru")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FirmaId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("IncidentCount")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsHealthy")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("LastCheck")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("Yil")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SystemHealths");
+                });
+
+            modelBuilder.Entity("KOAFiloServis.Shared.Entities.SystemLock", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int?>("DeletedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsLocked")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("LockedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime?>("UnlockedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SystemLocks");
+                });
+
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.TasimaTedarikci", b =>
                 {
                     b.Property<int>("Id")
@@ -14870,6 +15296,55 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("MasrafKalemi");
 
                     b.ToTable("TekrarlayanOdemeler");
+                });
+
+            modelBuilder.Entity("KOAFiloServis.Shared.Entities.TestSessionLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int?>("DeletedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("EntityAdi")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("EntityId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("IslemTipi")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("SessionId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TestTag")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("TestSessionLogs");
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.WebhookEndpoint", b =>
@@ -17062,9 +17537,17 @@ namespace KOAFiloServis.Web.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("KOAFiloServis.Shared.Entities.Fatura", "GelirFatura")
+                        .WithMany()
+                        .HasForeignKey("GelirFaturaId");
+
                     b.HasOne("KOAFiloServis.Shared.Entities.MuhasebeFis", "GelirFis")
                         .WithMany()
                         .HasForeignKey("GelirFisId");
+
+                    b.HasOne("KOAFiloServis.Shared.Entities.Fatura", "GiderFatura")
+                        .WithMany()
+                        .HasForeignKey("GiderFaturaId");
 
                     b.HasOne("KOAFiloServis.Shared.Entities.MuhasebeFis", "GiderFis")
                         .WithMany()
@@ -17090,7 +17573,11 @@ namespace KOAFiloServis.Web.Data.Migrations
 
                     b.Navigation("Firma");
 
+                    b.Navigation("GelirFatura");
+
                     b.Navigation("GelirFis");
+
+                    b.Navigation("GiderFatura");
 
                     b.Navigation("GiderFis");
 

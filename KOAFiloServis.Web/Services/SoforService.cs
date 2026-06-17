@@ -201,11 +201,11 @@ public class SoforService : ISoforService
         {
             try
             {
-                var singleData = new List<(int, string, string?, string?, string?, decimal, decimal, decimal, decimal, decimal, decimal)>
+                var singleData = new List<(int, string, string?, string?, string?, decimal, decimal, decimal, decimal, decimal, decimal, decimal, decimal)>
                 {
                     (existing.Id, existing.TamAd, existing.SoforKodu, null, null,
                      sofor.ResmiNetMaas + sofor.DigerMaas, sofor.ResmiNetMaas, 0, 0, 0,
-                     sofor.ResmiNetMaas + sofor.DigerMaas - sofor.ResmiNetMaas)
+                     sofor.ResmiNetMaas + sofor.DigerMaas - sofor.ResmiNetMaas, 0m, 0m)
                 };
                 await _snapshotService.GuncelleAsync(now.Year, now.Month, firmaId.Value, singleData);
             }

@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using KOAFiloServis.Shared.Entities;
 
 namespace KOAFiloServis.Shared.Entities;
@@ -37,4 +38,12 @@ public class MaasOdemeSnapshot : BaseEntity, IFirmaTenant
 
     /// <summary>İptal/ters fiş ID'si. Null ise iptal edilmemiş.</summary>
     public int? IptalFisId { get; set; }
+
+    /// <summary>Hakediş toplam geliri (dönem toplamı, tüm personeller için aynı).</summary>
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal HakedisGelir { get; set; }
+
+    /// <summary>Hakediş toplam gideri (dönem toplamı, tüm personeller için aynı).</summary>
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal HakedisGider { get; set; }
 }

@@ -2408,7 +2408,9 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
                                 Avans: s.Avans,
                                 Kesinti: s.Kesinti,
                                 Harcama: s.Harcamasi,
-                                Odenecek: s.Odenecek
+                                Odenecek: s.Odenecek,
+                                HakedisGelir: 0m,
+                                HakedisGider: 0m
                             )).ToList();
                             await SnapshotService.OlusturAsync(durYil, durAy, firmaId, snapshotData);
                         }

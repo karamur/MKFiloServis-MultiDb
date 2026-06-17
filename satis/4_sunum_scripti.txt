@@ -1,0 +1,89 @@
+KOAFiloServis — Müşteri Sunum Scripti (3-5 Dakika)
+══════════════════════════════════════════════════
+
+🟢 1. GİRİŞ (30 saniye)
+─────────────────────
+Merhaba, size KOAFiloServis sistemini kısaca göstereceğim.
+
+Şu an çoğu firma puantaj ve hakediş işlemlerini Excel ile yönetiyor.
+Bu da:
+  - Hata riski
+  - Zaman kaybı
+  - Kontrol eksikliği
+oluşturuyor.
+
+Biz bu süreci tamamen otomatik hale getirdik.
+
+
+🟢 2. CANLI DEMO (2 dakika)
+──────────────────────────
+Şimdi sistemi birlikte görelim:
+
+1. Puantaj ekranını açıyorum
+   → /personel/puantaj-grid
+
+2. Tek tık ile haftaiçi verileri giriyorum
+   → "Haftaiçi = 1"
+
+3. Kaydet diyorum
+
+👉 Buradan sonra sistem otomatik çalışıyor:
+   - Hakediş oluşuyor
+   - Gelir ve gider hesaplanıyor
+   - Faturalar hazırlanıyor
+
+4. Dashboard'a geçiyorum
+   👉 Toplam gelir, gider, net kazanç anlık görünüyor
+
+5. Denetim ekranına geçiyorum
+   👉 Sistem kendi kendini kontrol ediyor
+   👉 Skor: 100 (hatasız)
+
+
+🟢 3. FARK (EN KRİTİK NOKTA)
+─────────────────────────────
+👉 Siz sadece veri giriyorsunuz
+👉 Sistem geri kalan her şeyi yapıyor
+
+Yani:
+  - Hesaplama yok
+  - Excel yok
+  - Manuel kontrol yok
+  - Hata yapma ihtimali yok
+
+
+🟢 4. AVANTAJLAR
+────────────────
+  - %100 otomatik süreç
+  - Finansal hata sıfır
+  - Tüm işlemler kayıt altında
+  - Sistem kendi kendini denetler
+  - İnternetsiz çalışır
+
+
+🟢 5. LİSANS MODELİ
+───────────────────
+  - 30 gün demo kullanım
+  - Sonrasında lisans ile devam
+
+
+🟢 6. KAPANIŞ
+─────────────
+Bu sistemle:
+  ✔ Zamandan tasarruf edersiniz
+  ✔ Hata yapmazsınız
+  ✔ Tüm süreci kontrol edersiniz
+
+İsterseniz size özel kurulum ve kullanım planını da hazırlayabiliriz.
+
+
+🎯 SUNUM SÜRESİ: 3 – 5 dakika
+
+
+🔥 SUNUM İPUÇLARI
+─────────────────
+  - Yavaş konuş
+  - Ekranı göster (anlatma, uygula)
+  - "otomatik" kelimesini vurgula
+  - Soru sormasına fırsat ver (ama demoyu bölme)
+  - Sonunda mutlaka "özel plan" teklif et

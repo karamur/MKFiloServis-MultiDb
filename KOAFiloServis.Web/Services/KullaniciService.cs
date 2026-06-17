@@ -12,7 +12,7 @@ public class KullaniciService : IKullaniciService
     private readonly AppAuthenticationStateProvider _authProvider;
     private readonly ILogger<KullaniciService> _logger;
     private readonly IEmailService _emailService;
-    private readonly ILisansService _lisansService;
+    private readonly LicenseService _licenseService;
     private readonly UserManager<Kullanici> _userManager;
 
     public KullaniciService(
@@ -20,14 +20,14 @@ public class KullaniciService : IKullaniciService
         AppAuthenticationStateProvider authProvider,
         ILogger<KullaniciService> logger,
         IEmailService emailService,
-        ILisansService lisansService,
+        LicenseService licenseService,
         UserManager<Kullanici> userManager)
     {
         _contextFactory = contextFactory;
         _authProvider = authProvider;
         _logger = logger;
         _emailService = emailService;
-        _lisansService = lisansService;
+        _licenseService = licenseService;
         _userManager = userManager;
     }
 
@@ -78,10 +78,10 @@ public class KullaniciService : IKullaniciService
 
     public async Task<Kullanici> KayitOlAsync(Kullanici kullanici, string sifre)
     {
-        if (!await _lisansService.KullanicLimitiKontrolAsync())
-            throw new Exception("Lisans kullanıcı limitine ulaşıldı.");
-
         using var context = await _contextFactory.CreateDbContextAsync();
+
+        if (!await _licenseService.CheckUserLimitAsync(await context.Kullanicilar.CountAsync(k => k.Aktif)))
+            throw new Exception("Lisans kullanıcı limitine ulaşıldı.");
 
         var kullaniciAdi = (kullanici.KullaniciAdi ?? string.Empty).Trim();
         var email = (kullanici.Email ?? string.Empty).Trim();

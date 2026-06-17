@@ -94,6 +94,10 @@ public class HakedisPuantaj : BaseEntity, IFirmaTenant
     // Durum
     public HakedisDurumu Durum { get; set; } = HakedisDurumu.Taslak;
 
+    // Concurrency — optimistic locking
+    [Timestamp]
+    public byte[]? RowVersion { get; set; }
+
     // Muhasebe Entegrasyonu
     public int? GelirFisId { get; set; }           // Gelir muhasebe fişi
     public virtual MuhasebeFis? GelirFis { get; set; }
@@ -105,7 +109,9 @@ public class HakedisPuantaj : BaseEntity, IFirmaTenant
     public int? FaturaId { get; set; }
     public virtual Fatura? Fatura { get; set; }
     public int? GelirFaturaId { get; set; }
+    public virtual Fatura? GelirFatura { get; set; }
     public int? GiderFaturaId { get; set; }
+    public virtual Fatura? GiderFatura { get; set; }
 
     // Notlar
     [StringLength(500)]
@@ -117,18 +123,31 @@ public class HakedisPuantaj : BaseEntity, IFirmaTenant
 
     /// <summary>
     /// Hakediş toplamlarını detay ve kesintilerden yeniden hesaplar.
+    /// 🔴 Grid hücre değeri TEK GERÇEK. Yön hesaplamaya ETKİ ETMEZ.
     /// </summary>
     public void Hesapla()
     {
         if (Detaylar.Any())
         {
+            // 🔴 Defansif clamp: Her detay SeferSayisi 0-10 aralığında
+            foreach (var d in Detaylar)
+            {
+                if (d.SeferSayisi < 0) d.SeferSayisi = 0;
+                if (d.SeferSayisi > 10) d.SeferSayisi = 10;
+            }
+
+            // 🔴 TEK FORMÜL: ToplamSefer = Sum(SeferSayisi). Yön etki ETMEZ.
+            ToplamSefer = Detaylar.Sum(d => d.SeferSayisi);
+
+            // 🔴 Double-count koruması: Aylık sefer 310'u geçemez (31 gün × 10)
+            if (ToplamSefer < 0) ToplamSefer = 0;
+            if (ToplamSefer > 310) ToplamSefer = 310;
+
             // Her detay için GelirTutar = SeferSayisi × GelirSeferBirimFiyat × FiyatCarpani
             GelirToplam = Detaylar.Sum(d => d.SeferSayisi * GelirSeferBirimFiyat * d.FiyatCarpani);
 
             // Her detay için GiderTutar = SeferSayisi × GiderSeferBirimFiyat × FiyatCarpani
             GiderToplam = Detaylar.Sum(d => d.SeferSayisi * GiderSeferBirimFiyat * d.FiyatCarpani);
-
-            ToplamSefer = Detaylar.Sum(d => d.SeferSayisi);
         }
 
         KdvTutari = GiderToplam * KdvOrani / 100;

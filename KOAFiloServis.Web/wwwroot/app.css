@@ -339,3 +339,57 @@ h1:focus {
     width: 50px;
     height: 25px;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Puantaj Excel Grid
+   ═══════════════════════════════════════════════════════════════ */
+.puantaj-grid { font-size: 0.72rem; }
+.puantaj-grid table { border-collapse: collapse; }
+.puantaj-grid th { font-size: 0.65rem; }
+.puantaj-grid td, .puantaj-grid th {
+    min-width: 36px; height: 28px; padding: 0; text-align: center;
+    border: 1px solid #dee2e6; vertical-align: middle;
+}
+
+/* Hücre renkleri */
+.cell-manual { background-color: #fff3cd !important; } /* sarı */
+.cell-auto   { background-color: #f1f1f1 !important; } /* gri */
+.cell-empty  { background-color: #ffffff !important; } /* beyaz */
+.cell-selected { outline: 2px solid #0d6efd !important; outline-offset: -2px; z-index: 2; position: relative; }
+.cell-focused { background-color: #cce5ff !important; }
+
+/* Hücre input */
+.puantaj-grid .cell-input {
+    width: 100%; height: 100%; border: none; text-align: center;
+    font-size: 0.72rem; font-weight: 500; background: transparent;
+    padding: 0; outline: none;
+}
+.puantaj-grid .cell-input:focus { background: #cce5ff; }
+
+/* Satır sticky */
+.puantaj-grid .sticky-start {
+    position: sticky; left: 0; background: white; z-index: 3;
+    min-width: 170px; text-align: left; padding: 2px 6px;
+}
+
+/* Sticky header */
+.puantaj-grid thead.sticky-top { position: sticky; top: 0; z-index: 5; }
+.puantaj-grid .sticky-corner {
+    position: sticky; left: 0; top: 0; z-index: 10;
+    background: #f8f9fa;
+}
+
+/* Weekend shading */
+.puantaj-grid .col-weekend { background-color: rgba(255,0,0,0.04); }
+.puantaj-grid .col-sunday  { background-color: rgba(255,0,0,0.08); }
+
+/* Row hover */
+.puantaj-grid tbody tr:hover td { background-color: #f8f9fa; }
+.puantaj-grid tbody tr:hover td.cell-manual { background-color: #fff3cd !important; }
+.puantaj-grid tbody tr:hover td.cell-auto   { background-color: #ededed !important; }
+
+/* Selection rect highlight */
+.puantaj-grid .cell-in-selection-rect { outline: 1px dashed #0d6efd; outline-offset: -1px; }
+
+/* Row total */
+.puantaj-grid .row-total { font-weight: 700; background: #f8f9fa; }

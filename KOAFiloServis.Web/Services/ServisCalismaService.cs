@@ -157,9 +157,15 @@ public class ServisCalismaService : IServisCalismaService
     public async Task<ServisCalisma> UpdateAsync(ServisCalisma servisCalisma)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        context.ServisCalismalari.Update(servisCalisma);
+        var existing = await context.ServisCalismalari.FindAsync(servisCalisma.Id);
+        if (existing == null)
+            throw new InvalidOperationException($"ServisCalisma bulunamadı: {servisCalisma.Id}");
+
+        // 🔴 Fetch + map + SaveChanges — Update()/Attach() KULLANMA
+        context.Entry(existing).CurrentValues.SetValues(servisCalisma);
+        existing.UpdatedAt = DateTime.UtcNow;
         await context.SaveChangesAsync();
-        return servisCalisma;
+        return existing;
     }
 
     public async Task DeleteAsync(int id)

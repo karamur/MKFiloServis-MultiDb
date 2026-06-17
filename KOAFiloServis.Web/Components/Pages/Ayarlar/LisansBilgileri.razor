@@ -2,7 +2,7 @@
 @layout KOAFiloServis.Web.Components.Layout.EmptyLayout
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
-@inject ILisansService LisansService
+@inject LicenseService LicenseService
 @inject IKullaniciService KullaniciService
 @inject IToastService ToastService
 @inject IJSRuntime JS
@@ -28,15 +28,17 @@
 
                     @if (lisans != null)
                     {
+                        var gecerli = !LicenseService.IsDemoExpired(lisans) && DateTime.UtcNow <= lisans.ExpireDate;
+                        var kalanGun = LicenseService.GetRemainingDays(lisans);
                         <div class="row mb-4">
                             <div class="col-md-6">
                                 <div class="card bg-light">
                                     <div class="card-body text-center">
                                         <h6 class="text-muted">Mevcut Lisans</h6>
-                                        <h5 class="@(lisans.Gecerli ? "text-success" : "text-danger")">
-                                            @(lisans.Gecerli ? "Aktif" : "Geçersiz")
+                                        <h5 class="@(gecerli ? "text-success" : "text-danger")">
+                                            @(gecerli ? "Aktif" : "Geçersiz")
                                         </h5>
-                                        <small>Bitiş: @lisans.BitisTarihi.ToString("dd.MM.yyyy")</small>
+                                        <small>Bitiş: @lisans.ExpireDate.ToString("dd.MM.yyyy")</small>
                                     </div>
                                 </div>
                             </div>
@@ -44,10 +46,10 @@
                                 <div class="card bg-light">
                                     <div class="card-body text-center">
                                         <h6 class="text-muted">Kalan Gün</h6>
-                                        <h5 class="@(lisans.KalanGun > 7 ? "text-success" : "text-danger")">
-                                            @lisans.KalanGun gün
+                                        <h5 class="@(kalanGun > 7 ? "text-success" : "text-danger")">
+                                            @kalanGun gün
                                         </h5>
-                                        <small>Lisans Tipi: @lisans.Tur</small>
+                                        <small>Lisans Tipi: @(lisans.IsDemo ? "Demo" : "Aktif")</small>
                                     </div>
                                 </div>
                             </div>
@@ -69,15 +71,15 @@
 
                     <div class="mb-3">
                         <label class="form-label fw-bold">Yeni Lisans Anahtarı</label>
-                        <textarea class="form-control font-monospace" 
-                                  @bind="lisansAnahtari" 
+                        <textarea class="form-control font-monospace"
+                                  @bind="lisansAnahtari"
                                   rows="4"
                                   placeholder="Lisans anahtarını buraya yapıştırın..."></textarea>
                     </div>
 
                     <div class="d-grid gap-2">
-                        <button type="button" class="btn btn-success btn-lg" 
-                                @onclick="LisansAktiveEt" 
+                        <button type="button" class="btn btn-success btn-lg"
+                                @onclick="LisansAktiveEt"
                                 disabled="@isActivating">
                             @if (isActivating)
                             {
@@ -102,7 +104,7 @@
 </div>
 
 @code {
-    private Lisans? lisans;
+    private LicenseInfo? lisans;
     private string makineKodu = "";
     private string lisansAnahtari = "";
     private bool isActivating = false;
@@ -114,8 +116,8 @@
     {
         try
         {
-            lisans = await LisansService.GetAktifLisansAsync();
-            makineKodu = await LisansService.GetMakineKoduAsync();
+            lisans = await LicenseService.GetCurrentLicenseAsync();
+            makineKodu = LicenseService.GetMachineId();
         }
         catch (Exception ex)
         {
@@ -144,8 +146,8 @@
         try
         {
             var temizLisans = lisansAnahtari.Trim();
-            lisans = await LisansService.AktiveLisansAsync(temizLisans);
-            
+            lisans = await LicenseService.ActivateLicenseKeyAsync(temizLisans);
+
             statusMessage = "Lisans başarıyla aktive edildi! Ana sayfaya yönlendiriliyorsunuz...";
             statusClass = "alert-success";
             statusIcon = "bi-check-circle";

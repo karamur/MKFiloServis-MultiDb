@@ -589,14 +589,16 @@
                                 PersonelId: p.Personel.Id,
                                 AdSoyad: p.Personel.TamAd,
                                 PersonelKodu: (string?)p.Personel.SoforKodu,
-                                GorevAdi: GetGorevAdi(p.Personel.Gorev),
+                                GorevAdi: (string?)GetGorevAdi(p.Personel.Gorev),
                                 AracPlakasi: (string?)p.AracPlakasi,
                                 GercekMaas: p.GercekMaas,
                                 BankayaYatan: p.BankayaYatan,
                                 Avans: p.Avans,
                                 Kesinti: p.Kesinti,
                                 Harcama: p.PersonelHarcamasi,
-                                Odenecek: p.EldenOdenecek
+                                Odenecek: p.EldenOdenecek,
+                                HakedisGelir: 0m,
+                                HakedisGider: 0m
                             )).ToList();
                             await SnapshotService.OlusturAsync(secilenYil, secilenAy, firmaId, snapshotData);
                         }

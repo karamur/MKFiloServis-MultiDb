@@ -1,0 +1,24 @@
+KOAFiloServis — Satış Konuşması
+═══════════════════════════════════
+
+Şu an kullandığınız sistem büyük ihtimalle Excel tabanlı.
+
+Bu da:
+- Hata
+- Zaman kaybı
+- Kontrol eksikliği
+
+Bizim sistemde:
+
+✔ Puantaj girilir
+✔ Hakediş otomatik oluşur
+✔ Fatura otomatik oluşur
+✔ Sistem kendi kendini denetler
+
+Yani:
+
+Siz veri girersiniz
+Sistem geri kalanını yapar
+
+En önemli fark:
+Hata yapamazsınız

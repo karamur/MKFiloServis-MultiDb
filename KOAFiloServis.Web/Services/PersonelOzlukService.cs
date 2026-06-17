@@ -337,7 +337,8 @@ public class PersonelOzlukService : IPersonelOzlukService
         return existing;
     }
 
-    public async Task<PersonelOzlukEvrak> EvrakDosyaYukle(int soforId, int evrakTanimId, string dosyaYolu)
+    public async Task<PersonelOzlukEvrak> EvrakDosyaYukle(int soforId, int evrakTanimId, string dosyaYolu,
+        string? dosyaAdi = null, string? dosyaTipi = null, long? dosyaBoyutu = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var existing = await context.PersonelOzlukEvraklar
@@ -345,10 +346,27 @@ public class PersonelOzlukService : IPersonelOzlukService
 
         if (existing != null)
         {
+            // 🔴 Duplicate upload → update (overwrite YOK, versiyon artar)
+            existing.VersiyonNo++;
+            existing.SonDegisiklikNotu = $"Re-upload: {dosyaAdi}";
             existing.DosyaYolu = dosyaYolu;
+            existing.DosyaAdi = dosyaAdi ?? existing.DosyaAdi;
+            existing.DosyaTipi = dosyaTipi ?? existing.DosyaTipi;
+            existing.DosyaBoyutu = dosyaBoyutu ?? existing.DosyaBoyutu;
             existing.Tamamlandi = true;
             existing.TamamlanmaTarihi = DateTime.UtcNow;
             existing.UpdatedAt = DateTime.UtcNow;
+
+            // Versiyon geçmişi kaydı
+            context.PersonelOzlukEvrakVersiyonlar.Add(new PersonelOzlukEvrakVersiyon
+            {
+                PersonelOzlukEvrakId = existing.Id,
+                VersiyonNo = existing.VersiyonNo,
+                DosyaYolu = dosyaYolu,
+                DosyaAdi = dosyaAdi,
+                DosyaTipi = dosyaTipi,
+                OlusturmaTarihi = DateTime.UtcNow
+            });
         }
         else
         {
@@ -357,8 +375,12 @@ public class PersonelOzlukService : IPersonelOzlukService
                 SoforId = soforId,
                 EvrakTanimId = evrakTanimId,
                 DosyaYolu = dosyaYolu,
+                DosyaAdi = dosyaAdi,
+                DosyaTipi = dosyaTipi,
+                DosyaBoyutu = dosyaBoyutu,
                 Tamamlandi = true,
                 TamamlanmaTarihi = DateTime.UtcNow,
+                VersiyonNo = 1,
                 CreatedAt = DateTime.UtcNow
             };
             context.PersonelOzlukEvraklar.Add(existing);

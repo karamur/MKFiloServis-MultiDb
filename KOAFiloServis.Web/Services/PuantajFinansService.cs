@@ -9,11 +9,13 @@ public sealed class PuantajFinansService : IPuantajFinansService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
     private readonly IFaturaService _faturaService;
+    private readonly ILogger<PuantajFinansService> _logger;
 
-    public PuantajFinansService(IDbContextFactory<ApplicationDbContext> dbFactory, IFaturaService faturaService)
+    public PuantajFinansService(IDbContextFactory<ApplicationDbContext> dbFactory, IFaturaService faturaService, ILogger<PuantajFinansService> logger)
     {
         _dbFactory = dbFactory;
         _faturaService = faturaService;
+        _logger = logger;
     }
 
     public async Task<bool> FinansalKayitOlusturulabilirMiAsync(int hesapDonemiId, CancellationToken ct = default)
@@ -285,8 +287,85 @@ public sealed class PuantajFinansService : IPuantajFinansService
         sonuc.GiderFaturaId = giderFaturaId; sonuc.GiderTutar = gider;
         sonuc.Kar = gelir - gider; sonuc.Basarili = true;
 
-        Console.WriteLine($"[PuantajFinans] HakedisPuantaj İşlendi: Id={puantaj.Id} Gelir={gelir} Gider={gider} Kar={sonuc.Kar}");
+        // Faz 6: IsleAsync → Snapshot HakedisGelir/HakedisGider güncelle
+        try
+        {
+            await SnapshotHakedisGuncelleAsync(puantaj);
+        }
+        catch { /* Non-critical: snapshot update failure doesn't block the finans chain */ }
+
+        // İşlendi
         return sonuc;
+    }
+
+    private async Task SnapshotHakedisGuncelleAsync(HakedisPuantaj puantaj)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var firmaId = puantaj.FirmaId ?? 0;
+
+        // Idempotency: Deterministic IslemId (aynı hakediş için hep aynı)
+        var islemId = DeterministicGuid(puantaj.Id, "HakedisFinans");
+
+        // Zaten işlenmiş mi?
+        var exists = await db.SnapshotTransactions
+            .AnyAsync(t => t.IslemId == islemId && !t.IsDeleted);
+        if (exists) return;
+
+        // Delta = BU hakedişin gelir/gider'i (toplam değil, sadece kendi katkısı)
+        var deltaGelir = puantaj.TahsilEdilecekTutar;
+        var deltaGider = puantaj.OdenecekTutar;
+
+        // SnapshotTransaction kaydı oluştur (idempotency garantisi)
+        db.SnapshotTransactions.Add(new SnapshotTransaction
+        {
+            FirmaId = firmaId,
+            IslemId = islemId,
+            Yil = puantaj.Yil,
+            Ay = puantaj.Ay,
+            IslemTipi = "HakedisFinans",
+            GelirDelta = deltaGelir,
+            GiderDelta = deltaGider,
+            HakedisPuantajId = puantaj.Id,
+            Aciklama = $"HakedisPuantaj #{puantaj.Id} finans işlemi",
+            CreatedAt = DateTime.UtcNow
+        });
+
+        // 🔴 Atomic SQL: += işlemi DB seviyesinde atomik (çakışma olmaz)
+        await db.Database.ExecuteSqlRawAsync(@"
+            UPDATE ""MaasOdemeSnapshotlar""
+            SET ""HakedisGelir"" = ""HakedisGelir"" + {0},
+                ""HakedisGider"" = ""HakedisGider"" + {1},
+                ""UpdatedAt"" = NOW()
+            WHERE ""FirmaId"" = {2} AND ""Yil"" = {3} AND ""Ay"" = {4}
+              AND ""IsDeleted"" = false AND ""Kilitli"" = false",
+            deltaGelir, deltaGider, firmaId, puantaj.Yil, puantaj.Ay);
+
+        // 🔴 Snapshot consistency: Negatif değer olmamalı
+        var negatifVar = await db.MaasOdemeSnapshotlar
+            .AnyAsync(s => s.FirmaId == firmaId && s.Yil == puantaj.Yil && s.Ay == puantaj.Ay
+                && !s.IsDeleted && (s.HakedisGelir < 0 || s.HakedisGider < 0));
+        if (negatifVar)
+        {
+            _logger.LogCritical("Snapshot NEGATİF değer tespit edildi! Firma={FirmaId} Yil={Yil} Ay={Ay}", firmaId, puantaj.Yil, puantaj.Ay);
+            // Auto-düzelt: negatif değerleri 0'la
+            await db.Database.ExecuteSqlRawAsync(@"
+                UPDATE ""MaasOdemeSnapshotlar""
+                SET ""HakedisGelir"" = GREATEST(""HakedisGelir"", 0),
+                    ""HakedisGider"" = GREATEST(""HakedisGider"", 0)
+                WHERE ""FirmaId"" = {0} AND ""Yil"" = {1} AND ""Ay"" = {2} AND ""IsDeleted"" = false",
+                firmaId, puantaj.Yil, puantaj.Ay);
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    private static Guid DeterministicGuid(int seed, string scope)
+    {
+        // Aynı seed + scope → hep aynı Guid (idempotency için)
+        using var md5 = System.Security.Cryptography.MD5.Create();
+        var bytes = System.Text.Encoding.UTF8.GetBytes($"{scope}:{seed}");
+        var hash = md5.ComputeHash(bytes);
+        return new Guid(hash);
     }
 
     private async Task<Fatura> FaturaOlusturHizliAsync(Cari cari, decimal tutar, FaturaYonu yon, int kdvOrani, int firmaId, string aciklama)
