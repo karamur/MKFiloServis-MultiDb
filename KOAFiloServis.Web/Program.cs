@@ -1242,10 +1242,12 @@ using (var scope = app.Services.CreateScope())
 {
     var licSvc = scope.ServiceProvider.GetRequiredService<LicenseService>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+    var overrideKey = config["DevSettings:OverrideKey"];
 
     try
     {
-        var val = await licSvc.ValidateAsync();
+        var val = await licSvc.ValidateAsync(overrideKey);
         if (!val.IsValid)
         {
             KOAFiloServis.Shared.AppMode.EnterDemoMode(val.Message);

@@ -236,11 +236,71 @@ public class LicenseService
     }
 
     // ══════════════════════════════════════════════
-    // CORE: VALIDATE — 10 katman koruma
+    // DEV/PROD MODE — Developer Override
     // ══════════════════════════════════════════════
 
-    public async Task<LicenseValidationResult> ValidateAsync()
+    /// <summary>Gizli developer bypass anahtari. Sadece appsettings.Development.json'da bulunur.</summary>
+    private const string DevOverrideKey = "KOA-DEV-OVERRIDE-2026-X9";
+
+    /// <summary>Visual Studio / Development ortami kontrolu.</summary>
+    private static bool IsDevelopment()
+        => Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development";
+
+    /// <summary>
+    /// SADECE gelistirici bilgisayarinda true doner.
+    /// MachineName + UserName eslesmesi sart.
+    /// Bu method hacklenemez — hard-coded.
+    /// </summary>
+    private static bool IsDeveloperMachine()
     {
+        var machine = Environment.MachineName;
+        var user = Environment.UserName;
+        return machine.Contains("DESKTOP-GJUJ5JR", StringComparison.OrdinalIgnoreCase)
+            && user.Contains("muratk", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Developer override aktif mi?
+    /// SART: (Development ortami VEYA override key) VE developer makinesi.
+    /// </summary>
+    private static bool IsDeveloperOverride(string? overrideKey = null)
+    {
+        // Makine kontrolü OLMADAN override çalışmaz
+        if (!IsDeveloperMachine()) return false;
+
+        // Development ortamında otomatik bypass
+        if (IsDevelopment()) return true;
+
+        // Veya secret key ile bypass
+        if (overrideKey == DevOverrideKey) return true;
+
+        return false;
+    }
+
+    // ══════════════════════════════════════════════
+    // CORE: VALIDATE — 10 katman koruma (PROD only)
+    // ══════════════════════════════════════════════
+
+    public async Task<LicenseValidationResult> ValidateAsync(string? overrideKey = null)
+    {
+        // 🔥 DEVELOPER OVERRIDE — makine + environment/key kontrolu
+        if (IsDeveloperOverride(overrideKey))
+        {
+            KOAFiloServis.Shared.AppMode.ExitDemoMode();
+            _logger.LogWarning("🔧 DEV OVERRIDE AKTIF — Lisans kontrolu BYPASS edildi. Makine: {Machine}", GetMachineId());
+            return LicenseValidationResult.Ok(new LicenseInfo
+            {
+                FirmaKodu = "DEV-OVERRIDE",
+                MachineId = GetMachineId(),
+                ExpireDate = DateTime.UtcNow.AddYears(99),
+                Signature = "DEV-OVERRIDE-BYPASS",
+                IsDemo = false,
+                IsActive = true,
+                AllowedVersion = "99.0.0",
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
         try
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
