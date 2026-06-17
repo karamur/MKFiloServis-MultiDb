@@ -43,6 +43,7 @@ public partial class LicensePage
             await LicenseService.SaveLicenseAsync(lic);
             _license = lic;
             _validationIsValid = true;
+            KOAFiloServis.Shared.AppMode.ExitDemoMode(); // Lisans yüklendi → FULL MODE
         }
         finally { _calisiyor = false; StateHasChanged(); }
     }

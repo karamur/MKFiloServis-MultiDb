@@ -67,7 +67,10 @@ public partial class LicenseBlock
             var validation = await LicenseService.ValidateAsync();
 
             if (validation.IsValid)
+            {
+                KOAFiloServis.Shared.AppMode.ExitDemoMode(); // Lisans yüklendi → FULL MODE
                 Nav.NavigateTo("/", forceLoad: true);
+            }
             else
                 _uploadError = validation.Message;
         }

@@ -1234,29 +1234,33 @@ Directory.CreateDirectory(externalUploadsPath);
 // Doğrudan URL erişimi yasak (Kural 16: Dosya Güvenliği).
 
 // ══════════════════════════════════════════════
-// PART 6: STARTUP HARD BLOCK
-// Lisans gecersizse uygulama ACILMAZ. Try/catch yutmak YASAK.
-// Hata mesaji EventLog'a da yazilir.
+// LISANS KONTROL — DEMO MODE (block YOK)
+// Lisans yoksa uygulama AÇILIR, demo modda çalışır.
+// Kullanıcı içeriden lisans yükleyince FULL MODE'a geçer.
 // ══════════════════════════════════════════════
 using (var scope = app.Services.CreateScope())
 {
     var licSvc = scope.ServiceProvider.GetRequiredService<LicenseService>();
-    var val = await licSvc.ValidateAsync();
-    if (!val.IsValid)
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+    try
     {
-        var errorMsg = $"LISANS BLOKE: {val.Message} | Makine: {LicenseService.GetMachineId()} | Zaman: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}";
-        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogCritical("🚨 UYGULAMA BASLATMA ENGELLENDI: {Error}", errorMsg);
-
-        // Windows EventLog'a yaz (admin fark edebilsin)
-        try
+        var val = await licSvc.ValidateAsync();
+        if (!val.IsValid)
         {
-            System.Diagnostics.EventLog.WriteEntry("KOAFiloServis", errorMsg,
-                System.Diagnostics.EventLogEntryType.Error, 1001);
+            KOAFiloServis.Shared.AppMode.EnterDemoMode(val.Message);
+            logger.LogWarning("🔶 DEMO MODE: {Reason}", val.Message);
         }
-        catch { /* EventLog kayit yetkisi olmayabilir */ }
-
-        throw new InvalidOperationException(errorMsg);
+        else
+        {
+            KOAFiloServis.Shared.AppMode.ExitDemoMode();
+            logger.LogInformation("✅ FULL MODE: Lisans geçerli.");
+        }
+    }
+    catch (Exception ex)
+    {
+        KOAFiloServis.Shared.AppMode.EnterDemoMode($"Lisans kontrol hatası: {ex.Message}");
+        logger.LogWarning(ex, "🔶 DEMO MODE (hata): {Reason}", ex.Message);
     }
 }
 

@@ -877,6 +877,7 @@
                 lisansSuresiDoldu = false;
                 yeniLisansAnahtari = "";
                 lisansBasariMesaji = null;
+                KOAFiloServis.Shared.AppMode.ExitDemoMode(); // Lisans aktive edildi → FULL MODE
                 var kalanGun = LicenseService.GetRemainingDays(yeniLisans);
                 successMessage = $"Lisans basariyla aktive edildi! {kalanGun} gun gecerli. Giris yapabilirsiniz.";
             }
