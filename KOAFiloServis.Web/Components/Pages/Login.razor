@@ -620,16 +620,6 @@
 
         try
         {
-            // Giris oncesi lisans kontrolu
-            lisans = await LicenseSvc.GetCurrentLicenseAsync();
-            if (lisans == null || LicenseService.IsDemoExpired(lisans) || DateTime.UtcNow > lisans.ExpireDate)
-            {
-                lisansSuresiDoldu = true;
-                isLoading = false;
-                StateHasChanged();
-                return;
-            }
-
             var sonuc = await KullaniciService.GirisYapAsync(kullaniciAdi, sifre);
 
             if (sonuc.IkiFaktorGerekli && sonuc.BekleyenKullaniciId.HasValue)

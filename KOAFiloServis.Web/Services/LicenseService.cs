@@ -371,11 +371,11 @@ public class LicenseService
                 return LicenseValidationResult.Fail(
                     $"🛑 Lisans suresi doldu ({lic.ExpireDate:yyyy-MM-dd}).");
 
-            // ── Firma kodu kontrolu ──
-            var firmaKodu = _config["FirmaKodu"] ?? lic.FirmaKodu;
-            if (lic.FirmaKodu != firmaKodu)
+            // ── Firma kodu kontrolu (sadece config'de varsa ve lisans demosu degilse) ──
+            var configFirma = _config["FirmaKodu"];
+            if (!string.IsNullOrWhiteSpace(configFirma) && !lic.IsDemo && lic.FirmaKodu != configFirma)
                 return LicenseValidationResult.Fail(
-                    $"🛑 Firma kodu uyusmazligi: '{lic.FirmaKodu}' != '{firmaKodu}'");
+                    $"🛑 Firma kodu uyusmazligi: '{lic.FirmaKodu}' != '{configFirma}'");
 
             // ── PART 3: Signature dogrulama ──
             if (!VerifySignature(lic))
@@ -672,6 +672,10 @@ public class LicenseService
 
     public async Task<LicenseInfo?> GetCurrentLicenseAsync()
     {
+        // Cache varsa tekrar DB'ye gitme
+        if (_cachedLicense != null)
+            return _cachedLicense;
+
         await using var db = await _dbFactory.CreateDbContextAsync();
         _cachedLicense = await db.LicenseInfos.FirstOrDefaultAsync(l => l.IsActive && !l.IsDeleted);
         return _cachedLicense;
@@ -683,6 +687,10 @@ public class LicenseService
     /// </summary>
     public bool HasValidLicense()
     {
+        // Demo mod kapaliysa zaten gecerli lisans vardir
+        if (!Shared.AppMode.IsDemoMode)
+            return true;
+
         return _cachedLicense != null && _cachedLicense.IsActive && !_cachedLicense.IsDeleted;
     }
 
