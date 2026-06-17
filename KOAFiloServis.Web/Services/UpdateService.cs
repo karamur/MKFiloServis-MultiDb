@@ -63,7 +63,7 @@ public class UpdateResult
 /// Offline güncelleme servisi.
 ///
 /// Çalisma mantigi:
-///   1. Admin patch dosyasini C:\KOAFiloServis_{Firma}\updates\ klasörüne atar
+///   1. Admin patch dosyasini C:\KOAFiloServis\updates\ klasörüne atar
 ///   2. /admin/update sayfasindan "Güncelle" butonuna basar
 ///   3. Sistem patch'i dogrular, yedek alir, kurar
 ///
@@ -87,9 +87,8 @@ public class UpdateService
         _artifactsPath = Path.Combine(Directory.GetParent(_environment.ContentRootPath)?.FullName ?? "", "artifacts");
         _currentVersion = GetCurrentVersion();
 
-        // PART 2: Offline update dizini — C:\KOAFiloServis_{Firma}\updates\
-        var firmaKodu = _config["FirmaKodu"] ?? "DEMO";
-        _updatesPath = Path.Combine($@"C:\KOAFiloServis_{firmaKodu}", "updates");
+        // PART 2: Offline update dizini — C:\KOAFiloServis\updates\
+        _updatesPath = @"C:\KOAFiloServis\updates";
     }
 
     // ══════════════════════════════════════════════

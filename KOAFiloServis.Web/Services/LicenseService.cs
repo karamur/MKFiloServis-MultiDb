@@ -17,7 +17,7 @@ namespace KOAFiloServis.Web.Services;
 ///   2. Machine lock  — Makine kodu: MachineName + UserName + DriveSerial
 ///   3. Signature     — FirmaKodu|MachineId|ExpireDate|IsDemo|AllowedVersion|CreatedAt
 ///   4. Clock attack  — 3 katman: ExpireDate + CreatedAt + NegativeTime
-///   5. File hash     — C:\KOAFiloServis_{Firma}\config\license.hash
+///   5. File hash     — C:\KOAFiloServis\config\license.hash
 ///   6. Hard block    — Startup'ta gecersiz lisans = uygulama acilmaz
 ///   7. Single system — LicenseService + LicenseInfos (eski sistem tamamen kalkti)
 ///   8. Security viol — Registry yok ama DB'de lisans varsa ihlal tespiti
@@ -29,6 +29,7 @@ public class LicenseService
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
     private readonly IConfiguration _config;
     private readonly ILogger<LicenseService> _logger;
+    private LicenseInfo? _cachedLicense;
     private const string SecretKey = "KOAFiloServis-LCNS-2026-SECURE-KEY-X9mK2pL5vR8w";
     private const string RegistryPath = @"SOFTWARE\KOAFiloServis";
     private const string DemoUsedValueName = "DemoUsed";
@@ -134,14 +135,14 @@ public class LicenseService
 
     // ══════════════════════════════════════════════
     // PART 5: LICENSE FILE HASH PROTECTION
-    // C:\KOAFiloServis_{Firma}\config\license.hash
+    // C:\KOAFiloServis\config\license.hash
     // ══════════════════════════════════════════════
 
-    private static string GetLicenseHashDirectory(string firmaKodu)
-        => Path.Combine($"C:\\KOAFiloServis_{firmaKodu}", "config");
+    private static string GetLicenseHashDirectory()
+        => @"C:\KOAFiloServis\config";
 
-    private static string GetLicenseHashPath(string firmaKodu)
-        => Path.Combine(GetLicenseHashDirectory(firmaKodu), "license.hash");
+    private static string GetLicenseHashPath()
+        => Path.Combine(GetLicenseHashDirectory(), "license.hash");
 
     private static string ComputeLicenseHash(LicenseInfo lic)
     {
@@ -154,11 +155,11 @@ public class LicenseService
     {
         try
         {
-            var dir = GetLicenseHashDirectory(lic.FirmaKodu);
+            var dir = GetLicenseHashDirectory();
             Directory.CreateDirectory(dir);
 
             var hash = ComputeLicenseHash(lic);
-            var path = GetLicenseHashPath(lic.FirmaKodu);
+            var path = GetLicenseHashPath();
             File.WriteAllText(path, hash);
 
             _logger.LogInformation("License hash written to disk: {Path}", path);
@@ -173,7 +174,7 @@ public class LicenseService
     {
         try
         {
-            var path = GetLicenseHashPath(lic.FirmaKodu);
+            var path = GetLicenseHashPath();
             if (!File.Exists(path))
             {
                 // Self-heal: hash dosyasi yoksa yeniden olustur
@@ -395,6 +396,8 @@ public class LicenseService
             lic.LastValidatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
+            _cachedLicense = lic; // Scope cache
+
             return LicenseValidationResult.Ok(lic);
         }
         catch (Exception ex) when (ex is not InvalidOperationException)
@@ -556,8 +559,12 @@ public class LicenseService
         db.LicenseInfos.Add(lic);
         await db.SaveChangesAsync();
 
+        // DB cache güncelle — lisans anında okunur
+        await db.Entry(lic).ReloadAsync();
+        _cachedLicense = lic;
+
         WriteLicenseHash(lic);
-        KOAFiloServis.Shared.AppMode.ExitDemoMode();
+        KOAFiloServis.Shared.AppMode.ExitDemoMode(); // 🔥 KRİTİK: Demo moddan çık
 
         _logger.LogInformation("✅ Lisans aktive edildi (key): {FirmaKodu}, Bitis: {ExpireDate}",
             lic.FirmaKodu, lic.ExpireDate);
@@ -649,7 +656,17 @@ public class LicenseService
     public async Task<LicenseInfo?> GetCurrentLicenseAsync()
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
-        return await db.LicenseInfos.FirstOrDefaultAsync(l => l.IsActive && !l.IsDeleted);
+        _cachedLicense = await db.LicenseInfos.FirstOrDefaultAsync(l => l.IsActive && !l.IsDeleted);
+        return _cachedLicense;
+    }
+
+    /// <summary>
+    /// Scope icinde gecerli bir lisans var mi?
+    /// MainLayout demo banner kontrolu icin kullanilir.
+    /// </summary>
+    public bool HasValidLicense()
+    {
+        return _cachedLicense != null && _cachedLicense.IsActive && !_cachedLicense.IsDeleted;
     }
 
     public async Task SaveLicenseAsync(LicenseInfo lic)

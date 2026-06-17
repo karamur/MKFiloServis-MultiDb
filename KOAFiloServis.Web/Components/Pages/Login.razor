@@ -908,7 +908,11 @@
             yeniLisansAnahtari = "";
             lisansBasariMesaji = null;
             var kalanGun = LicenseService.GetRemainingDays(yeniLisans);
-            successMessage = $"✅ Lisans basariyla aktive edildi! {kalanGun} gun gecerli. Giris yapabilirsiniz.";
+            successMessage = $"✅ Lisans basariyla aktive edildi! {kalanGun} gun gecerli. Yonlendiriliyorsunuz...";
+            StateHasChanged();
+
+            // Sayfayi yeniden yukle — lisans kontrolu tekrar calissin, FULL MODE acilsin
+            Navigation.NavigateTo("/", forceLoad: true);
         }
         catch (Exception ex)
         {

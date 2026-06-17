@@ -1,6 +1,7 @@
 ﻿@inherits LayoutComponentBase
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.Extensions.Logging
+@using KOAFiloServis.Shared
 @inject KOAFiloServis.Web.Services.IKullaniciService KullaniciService
 @inject KOAFiloServis.Web.Services.LicenseService LicenseSvc
 @inject KOAFiloServis.Web.Services.IFirmaService FirmaService
@@ -23,7 +24,7 @@
         else
         {
             @* 🔶 DEMO MODE BANNER — Satış odaklı, korkutmaz *@
-            @if (!lisansGecerli)
+            @if (AppMode.IsDemoMode && !LicenseSvc.HasValidLicense())
             {
                 <div style="background: linear-gradient(90deg, #fef3c7, #fde68a); color: #92400e; padding: 10px 16px; text-align: center; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 12px; border-bottom: 2px solid #f59e0b;">
                     <i class="bi bi-info-circle"></i>

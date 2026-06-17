@@ -1,435 +1,273 @@
+using System;
+using System.Data;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using KOAFiloServis.LisansDesktop.Data;
-using KOAFiloServis.LisansDesktop.Models;
+using System.Windows.Forms;
+using Microsoft.Data.Sqlite;
 
-namespace KOAFiloServis.LisansDesktop;
-
-public sealed class MainForm : Form
+/// <summary>
+/// KOAFiloServis Lisans Aktivasyon Key Üretici + Takip Sistemi.
+/// Web'deki LicenseService.ActivateFromKeyAsync() ile %100 uyumlu.
+/// Üretilen key = Base64(JSON) → Web'e yapıştır → Aktive olur.
+/// Tüm lisanslar local SQLite DB'de kayıt altında.
+/// </summary>
+public class MainForm : Form
 {
     // ══════════════════════════════════════════════
-    // CONSTANTS — Web LicenseService ile %100 AYNI
+    // AYNI SECRET — LicenseService.cs ile birebir
     // ══════════════════════════════════════════════
-    private const string SecretKey = "KOAFiloServis-LCNS-2026-SECURE-KEY-X9mK2pL5vR8w";
+    private const string SECRET = "KOAFiloServis-LCNS-2026-SECURE-KEY-X9mK2pL5vR8w";
+    private readonly string _dbPath;
 
-    // ══════════════════════════════════════════════
-    // CONTROLS
-    // ══════════════════════════════════════════════
-    private readonly TextBox _txtFirmaAdi, _txtFirmaKodu, _txtMachineId, _txtVersion;
-    private readonly ComboBox _cmbLisansTipi;
-    private readonly DateTimePicker _dtpExpire;
-    private readonly NumericUpDown _numMaxKullanici;
-    private readonly Button _btnUret, _btnKopyalaMakine, _btnExport, _btnYenile;
-    private readonly TextBox _txtArama;
-    private readonly DataGridView _grid;
-    private readonly Label _lblStatus;
-    private readonly LicenseDb _db;
-    private readonly string _outputRoot;
+    private TextBox txtFirma = new() { PlaceholderText = "Firma Kodu (örn: DEMO)" };
+    private TextBox txtMachine = new() { PlaceholderText = "MachineId (web'den kopyala)" };
+    private Button btnUret = new() { Text = " Lisans Oluştur" };
+    private Label lblInfo = new() { Text = "Web uygulamasından MachineId'yi kopyalayıp yapıştırın.", AutoSize = true };
+    private DataGridView grid = new()
+    {
+        AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+        AllowUserToAddRows = false,
+        AllowUserToDeleteRows = false,
+        ReadOnly = true,
+        SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+        RowHeadersVisible = false
+    };
 
     public MainForm()
     {
-        Text = "KOA Lisans Olusturucu — v1.0.25";
-        Size = new Size(1100, 650);
+        _dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "licenses.db");
+
+        Text = "KOAFiloServis Lisans Aktivasyon & Takip";
+        Width = 820;
+        Height = 570;
+        FormBorderStyle = FormBorderStyle.Sizable;
+        MaximizeBox = true;
         StartPosition = FormStartPosition.CenterScreen;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
 
-        _db = new LicenseDb(Path.Combine(AppContext.BaseDirectory, "licenses.db"));
-        _outputRoot = Path.Combine(AppContext.BaseDirectory, "licenses");
+        // ── Sol panel: Giriş + Buton ──
+        // Firma Kodu
+        txtFirma.Top = 15;
+        txtFirma.Left = 15;
+        txtFirma.Width = 350;
 
-        // ── SOL PANEL ──
-        var leftPanel = new Panel { Location = new Point(12, 12), Size = new Size(380, 520) };
+        // MachineId
+        txtMachine.Top = 50;
+        txtMachine.Left = 15;
+        txtMachine.Width = 350;
 
-        int y = 10;
-        AddLabel(leftPanel, "Firma Adı", y);
-        _txtFirmaAdi = AddTextBox(leftPanel, y += 22);
+        // Buton
+        btnUret.Top = 85;
+        btnUret.Left = 15;
+        btnUret.Width = 350;
+        btnUret.Height = 35;
 
-        AddLabel(leftPanel, "Firma Kodu", y += 52);
-        _txtFirmaKodu = AddTextBox(leftPanel, y += 22);
-        _txtFirmaKodu.TextChanged += (_, _) =>
-        {
-            if (string.IsNullOrWhiteSpace(_txtFirmaKodu.Text) && !string.IsNullOrWhiteSpace(_txtFirmaAdi.Text))
-                _txtFirmaKodu.Text = _txtFirmaAdi.Text.Replace(" ", "").ToUpperInvariant();
-        };
+        // Bilgi label
+        lblInfo.Top = 130;
+        lblInfo.Left = 15;
+        lblInfo.AutoSize = true;
 
-        AddLabel(leftPanel, "Makine ID", y += 52);
-        _txtMachineId = AddTextBox(leftPanel, y += 22);
-        _btnKopyalaMakine = new Button
-        {
-            Text = "Bu PC Kodu",
-            Location = new Point(270, y),
-            Size = new Size(100, 27),
-            FlatStyle = FlatStyle.System
-        };
-        _btnKopyalaMakine.Click += (_, _) => _txtMachineId.Text = GetMachineId();
-        leftPanel.Controls.Add(_btnKopyalaMakine);
+        // ── Sağ panel: Grid ──
+        grid.Top = 15;
+        grid.Left = 400;
+        grid.Width = 390;
+        grid.Height = 490;
+        grid.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
 
-        AddLabel(leftPanel, "Lisans Tipi", y += 52);
-        _cmbLisansTipi = new ComboBox
-        {
-            Location = new Point(10, y + 22),
-            Size = new Size(360, 27),
-            DropDownStyle = ComboBoxStyle.DropDownList
-        };
-        _cmbLisansTipi.Items.AddRange(new object[] { "Demo (30 gün)", "Standard (1 yıl)", "Professional", "Enterprise" });
-        _cmbLisansTipi.SelectedIndex = 1;
-        leftPanel.Controls.Add(_cmbLisansTipi);
+        Controls.Add(txtFirma);
+        Controls.Add(txtMachine);
+        Controls.Add(btnUret);
+        Controls.Add(lblInfo);
+        Controls.Add(grid);
 
-        AddLabel(leftPanel, "Bitiş Tarihi", y += 52);
-        _dtpExpire = new DateTimePicker
-        {
-            Location = new Point(10, y + 22),
-            Size = new Size(360, 27),
-            Value = DateTime.Today.AddYears(1)
-        };
-        leftPanel.Controls.Add(_dtpExpire);
+        btnUret.Click += Uret;
+        grid.CellFormatting += Grid_CellFormatting;
 
-        AddLabel(leftPanel, "Versiyon", y += 52);
-        _txtVersion = AddTextBox(leftPanel, y += 22);
-        _txtVersion.Text = "1.0.99";
-
-        AddLabel(leftPanel, "Max Kullanıcı", y += 52);
-        _numMaxKullanici = new NumericUpDown
-        {
-            Location = new Point(10, y + 22),
-            Size = new Size(100, 27),
-            Minimum = 1,
-            Maximum = 5000,
-            Value = 10
-        };
-        leftPanel.Controls.Add(_numMaxKullanici);
-
-        _btnUret = new Button
-        {
-            Text = "🚀 Lisans Oluştur",
-            Location = new Point(10, y + 70),
-            Size = new Size(360, 44),
-            Font = new Font("Segoe UI", 11f, FontStyle.Bold),
-            BackColor = Color.FromArgb(25, 135, 84),
-            ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat
-        };
-        _btnUret.FlatAppearance.BorderSize = 0;
-        _btnUret.Click += BtnUret_Click;
-        leftPanel.Controls.Add(_btnUret);
-
-        Controls.Add(leftPanel);
-
-        // ── SAĞ PANEL ──
-        var rightPanel = new Panel { Location = new Point(405, 12), Size = new Size(680, 560) };
-
-        var lblGrid = new Label
-        {
-            Text = "Lisans Takibi",
-            Location = new Point(0, 5),
-            Font = new Font("Segoe UI", 10f, FontStyle.Bold),
-            Size = new Size(200, 24)
-        };
-        rightPanel.Controls.Add(lblGrid);
-
-        _txtArama = new TextBox
-        {
-            Location = new Point(200, 5),
-            Size = new Size(200, 27),
-            PlaceholderText = "Firma / Makine ara..."
-        };
-        _txtArama.TextChanged += (_, _) => GridiDoldur();
-        rightPanel.Controls.Add(_txtArama);
-
-        _btnYenile = new Button { Text = "Yenile", Location = new Point(410, 4), Size = new Size(80, 28) };
-        _btnYenile.Click += (_, _) => GridiDoldur();
-        rightPanel.Controls.Add(_btnYenile);
-
-        _btnExport = new Button { Text = "Dışa Aktar", Location = new Point(500, 4), Size = new Size(100, 28) };
-        _btnExport.Click += BtnExport_Click;
-        rightPanel.Controls.Add(_btnExport);
-
-        _grid = new DataGridView
-        {
-            Location = new Point(0, 40),
-            Size = new Size(680, 480),
-            AllowUserToAddRows = false,
-            AllowUserToDeleteRows = false,
-            ReadOnly = true,
-            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-            MultiSelect = false
-        };
-        _grid.CellFormatting += GridCellFormatting;
-        _grid.CellDoubleClick += GridCellDoubleClick;
-        rightPanel.Controls.Add(_grid);
-
-        Controls.Add(rightPanel);
-
-        // ── STATUS BAR ──
-        _lblStatus = new Label
-        {
-            Location = new Point(12, 580),
-            Size = new Size(1070, 24),
-            ForeColor = Color.Gray
-        };
-        Controls.Add(_lblStatus);
-
-        GridiDoldur();
+        // DB başlat + veriyi yükle
+        InitDatabase();
+        LoadData();
     }
 
     // ══════════════════════════════════════════════
-    // SIGNATURE — Web LicenseService ile %100 AYNI
+    // SQLITE VERITABANI
     // ══════════════════════════════════════════════
 
-    private static string GenerateSignature(string firmaKodu, string machineId, DateTime expireDate,
-        bool isDemo, string allowedVersion, DateTime createdAt)
+    private void InitDatabase()
     {
-        var raw = $"{firmaKodu}|{machineId}|{expireDate:yyyy-MM-dd}|{isDemo}|{allowedVersion}|{createdAt:yyyy-MM-dd}|{SecretKey}";
-        return Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(raw)));
+        using var con = new SqliteConnection($"Data Source={_dbPath}");
+        con.Open();
+
+        using var cmd = con.CreateCommand();
+        cmd.CommandText = @"
+            CREATE TABLE IF NOT EXISTS Licenses (
+                Id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                FirmaKodu       TEXT NOT NULL,
+                MachineId       TEXT NOT NULL,
+                ExpireDate      TEXT NOT NULL,
+                CreatedAt       TEXT NOT NULL,
+                AllowedVersion  TEXT NOT NULL DEFAULT '1.0.99'
+            )";
+        cmd.ExecuteNonQuery();
     }
 
-    // ══════════════════════════════════════════════
-    // MACHINE ID — Web ile %100 AYNI
-    // ══════════════════════════════════════════════
+    private void SaveLicense(string firma, string machine, DateTime expire, DateTime created, string allowedVersion)
+    {
+        using var con = new SqliteConnection($"Data Source={_dbPath}");
+        con.Open();
 
-    private static string GetMachineId()
+        using var cmd = con.CreateCommand();
+        cmd.CommandText = @"
+            INSERT INTO Licenses (FirmaKodu, MachineId, ExpireDate, CreatedAt, AllowedVersion)
+            VALUES ($f, $m, $e, $c, $v)";
+        cmd.Parameters.AddWithValue("$f", firma);
+        cmd.Parameters.AddWithValue("$m", machine);
+        cmd.Parameters.AddWithValue("$e", expire.ToString("yyyy-MM-dd"));
+        cmd.Parameters.AddWithValue("$c", created.ToString("yyyy-MM-dd"));
+        cmd.Parameters.AddWithValue("$v", allowedVersion);
+        cmd.ExecuteNonQuery();
+    }
+
+    private void LoadData()
     {
         try
         {
-            var machine = Environment.MachineName;
-            var user = Environment.UserName;
-            var driveSerial = "";
-            try
+            using var con = new SqliteConnection($"Data Source={_dbPath}");
+            con.Open();
+
+            using var cmd = con.CreateCommand();
+            cmd.CommandText = "SELECT Id, FirmaKodu, MachineId, ExpireDate, CreatedAt, AllowedVersion FROM Licenses ORDER BY Id DESC";
+
+            using var reader = cmd.ExecuteReader();
+            var dt = new DataTable();
+            dt.Load(reader);
+
+            grid.DataSource = dt;
+
+            // Kolon başlıklarını Türkçeleştir
+            if (dt.Columns.Count > 0)
             {
-                var drives = DriveInfo.GetDrives();
-                var sys = drives.FirstOrDefault(d => d.IsReady && d.Name.StartsWith("C", StringComparison.OrdinalIgnoreCase))
-                       ?? drives.FirstOrDefault(d => d.IsReady);
-                if (sys != null) driveSerial = sys.VolumeLabel?.GetHashCode().ToString("X8") ?? "";
+                grid.Columns["Id"]!.HeaderText = "No";
+                grid.Columns["Id"]!.FillWeight = 10;
+                grid.Columns["FirmaKodu"]!.HeaderText = "Firma";
+                grid.Columns["FirmaKodu"]!.FillWeight = 20;
+                grid.Columns["MachineId"]!.HeaderText = "Makine";
+                grid.Columns["MachineId"]!.FillWeight = 40;
+                grid.Columns["ExpireDate"]!.HeaderText = "Bitiş";
+                grid.Columns["ExpireDate"]!.FillWeight = 15;
+                grid.Columns["CreatedAt"]!.HeaderText = "Oluşturma";
+                grid.Columns["CreatedAt"]!.FillWeight = 15;
+                grid.Columns["AllowedVersion"]!.HeaderText = "Sürüm";
+                grid.Columns["AllowedVersion"]!.FillWeight = 10;
             }
-            catch { }
-            return $"{machine}_{user}_{driveSerial}";
         }
-        catch
+        catch (Exception ex)
         {
-            return $"{Environment.MachineName}_{Environment.UserName}";
+            // DB yoksa veya bozulmuşsa sessiz kal
+            System.Diagnostics.Trace.WriteLine($"[MainForm] LoadData error: {ex.Message}");
         }
     }
 
     // ══════════════════════════════════════════════
-    // LİSANS OLUŞTUR
+    // RENK KODLAMASI
     // ══════════════════════════════════════════════
 
-    private void BtnUret_Click(object? sender, EventArgs e)
+    private void Grid_CellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(_txtFirmaKodu.Text))
+        if (grid.Columns[e.ColumnIndex].Name != "ExpireDate") return;
+
+        if (DateTime.TryParse(e.Value?.ToString(), out var expire))
         {
-            MessageBox.Show("Firma kodu zorunludur.", "Eksik Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            var row = grid.Rows[e.RowIndex];
+
+            if (expire < DateTime.Now)
+            {
+                row.DefaultCellStyle.BackColor = Color.LightCoral;
+                row.DefaultCellStyle.ForeColor = Color.DarkRed;
+            }
+            else if ((expire - DateTime.Now).TotalDays < 7)
+            {
+                row.DefaultCellStyle.BackColor = Color.Moccasin;
+                row.DefaultCellStyle.ForeColor = Color.DarkOrange;
+            }
+        }
+    }
+
+    // ══════════════════════════════════════════════
+    // LİSANS ÜRETİM
+    // ══════════════════════════════════════════════
+
+    /// <summary>
+    /// Lisans aktivasyon key'i üretir, DB'ye kaydeder, listeyi günceller.
+    /// Format: Base64(JSON{FirmaKodu, MachineId, ExpireDate, IsDemo, AllowedVersion, CreatedAt, Signature})
+    /// Signature = SHA256(FirmaKodu|MachineId|ExpireDate|IsDemo|AllowedVersion|CreatedAt|SECRET)
+    /// </summary>
+    void Uret(object? sender, EventArgs e)
+    {
+        var firma = txtFirma.Text.Trim();
+        var machine = txtMachine.Text.Trim();
+
+        if (string.IsNullOrWhiteSpace(firma))
+        {
+            MessageBox.Show("Firma kodunu giriniz.", "Eksik Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
-        if (string.IsNullOrWhiteSpace(_txtMachineId.Text))
+
+        if (string.IsNullOrWhiteSpace(machine))
         {
-            MessageBox.Show("Makine ID zorunludur.", "Eksik Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show("MachineId'yi web uygulamasından kopyalayıp yapıştırın.", "Eksik Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
         try
         {
-            var firmaKodu = _txtFirmaKodu.Text.Trim().ToUpperInvariant();
-            var firmaAdi = _txtFirmaAdi.Text.Trim();
-            var machineId = _txtMachineId.Text.Trim();
-            var isDemo = _cmbLisansTipi.SelectedIndex == 0;
-            var lisansTipi = _cmbLisansTipi.SelectedItem?.ToString() ?? "Standard";
-            var expireDate = _dtpExpire.Value.Date.AddDays(1).AddSeconds(-1);
-            var allowedVersion = _txtVersion.Text.Trim();
-            var createdAt = DateTime.UtcNow;
-            var maxKullanici = (int)_numMaxKullanici.Value;
+            var expire = DateTime.UtcNow.AddYears(1);
+            var created = DateTime.UtcNow;
+            const string allowedVersion = "1.0.99";
+            const bool isDemo = false;
 
-            if (string.IsNullOrWhiteSpace(allowedVersion))
-                allowedVersion = "1.0.99";
+            // SIGNATURE — LicenseService.GenerateSignature() ile birebir
+            var raw = $"{firma}|{machine}|{expire:yyyy-MM-dd}|{isDemo}|{allowedVersion}|{created:yyyy-MM-dd}|{SECRET}";
+            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
+            var signature = Convert.ToBase64String(hash);
 
-            // Signature
-            var signature = GenerateSignature(firmaKodu, machineId, expireDate, isDemo, allowedVersion, createdAt);
-
-            // DB kayıt
-            var lic = new LicenseRecord
+            // JSON — LicenseInfo entity'si ile uyumlu
+            var json = JsonSerializer.Serialize(new
             {
-                FirmaKodu = firmaKodu,
-                FirmaAdi = firmaAdi,
-                MachineId = machineId,
-                ExpireDate = expireDate,
+                FirmaKodu = firma,
+                MachineId = machine,
+                ExpireDate = expire,
                 AllowedVersion = allowedVersion,
                 IsDemo = isDemo,
-                CreatedAt = createdAt,
-                Signature = signature,
-                LisansTipi = lisansTipi,
-                MaxKullanici = maxKullanici,
-                KayitTarihi = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm")
-            };
-            _db.Insert(lic);
+                CreatedAt = created,
+                Signature = signature
+            });
 
-            // 🔥 AKTİVASYON KEY = Base64(license.json)
-            var licensePayload = new
-            {
-                lic.FirmaKodu,
-                lic.MachineId,
-                lic.ExpireDate,
-                lic.AllowedVersion,
-                lic.IsDemo,
-                lic.CreatedAt,
-                lic.Signature
-            };
-            var json = JsonSerializer.Serialize(licensePayload);
-            var activationKey = Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
+            // Base64(JSON) → Aktivasyon anahtarı
+            var key = Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
 
-            // Clipboard'a kopyala
-            Clipboard.SetText(activationKey);
+            // DB'ye kaydet
+            SaveLicense(firma, machine, expire, created, allowedVersion);
 
-            // JSON yedek (internal tracking)
-            var firmaDir = Path.Combine(_outputRoot, firmaKodu);
-            Directory.CreateDirectory(firmaDir);
-            var jsonBackupPath = Path.Combine(firmaDir, $"license_{createdAt:yyyy-MM-dd_HHmm}.json");
-            File.WriteAllText(jsonBackupPath, JsonSerializer.Serialize(licensePayload, new JsonSerializerOptions { WriteIndented = true }));
+            // Panoya kopyala
+            Clipboard.SetText(key);
 
-            _lblStatus.Text = $"✅ Aktivasyon kodu panoya kopyalandı!  |  Firma: {firmaKodu}  |  Bitiş: {expireDate:yyyy-MM-dd}  |  Yedek: {jsonBackupPath}";
-            _lblStatus.ForeColor = Color.DarkGreen;
+            // Listeyi güncelle
+            LoadData();
 
-            GridiDoldur();
+            MessageBox.Show(
+                $"✔ Aktivasyon kodu panoya kopyalandı ve DB'ye kaydedildi.\n\n" +
+                $"Firma: {firma}\n" +
+                $"Makine: {machine}\n" +
+                $"Bitiş:  {expire:yyyy-MM-dd}\n" +
+                $"Sürüm:  {allowedVersion}\n\n" +
+                $"Web uygulamasına yapıştırın.",
+                "Başarılı",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
             MessageBox.Show($"Hata: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
-    }
-
-    // ══════════════════════════════════════════════
-    // GRID
-    // ══════════════════════════════════════════════
-
-    private void GridiDoldur()
-    {
-        var search = string.IsNullOrWhiteSpace(_txtArama.Text) ? null : _txtArama.Text.Trim();
-        var licenses = _db.GetAll(search);
-
-        _grid.DataSource = null;
-        _grid.DataSource = licenses.OrderByDescending(l => l.Id).Select(l => new
-        {
-            l.Id,
-            l.FirmaKodu,
-            l.FirmaAdi,
-            MakineKodu = l.MachineId,
-            l.LisansTipi,
-            l.ExpireDate,
-            KalanGun = l.KalanGun,
-            l.AllowedVersion,
-            l.KayitTarihi
-        }).ToList();
-
-        // Kolonları gizle/düzenle
-        if (_grid.Columns["Id"] is DataGridViewColumn cId) cId.Visible = false;
-        if (_grid.Columns["MakineKodu"] is DataGridViewColumn cMk) cMk.Width = 80;
-        if (_grid.Columns["ExpireDate"] is DataGridViewColumn cEd) { cEd.Width = 100; cEd.HeaderText = "Bitiş"; }
-        if (_grid.Columns["KalanGun"] is DataGridViewColumn cKg) { cKg.Width = 60; cKg.HeaderText = "Gün"; }
-        if (_grid.Columns["AllowedVersion"] is DataGridViewColumn cAv) { cAv.Width = 60; cAv.HeaderText = "Ver"; }
-        if (_grid.Columns["KayitTarihi"] is DataGridViewColumn cKt) { cKt.Width = 120; cKt.HeaderText = "Kayıt"; }
-
-        _lblStatus.Text = $"{licenses.Count} lisans kaydı";
-        _lblStatus.ForeColor = Color.Gray;
-    }
-
-    private void GridCellFormatting(object? s, DataGridViewCellFormattingEventArgs e)
-    {
-        if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].DataBoundItem == null) return;
-
-        dynamic? row = _grid.Rows[e.RowIndex].DataBoundItem;
-        if (row == null) return;
-
-        int kalanGun = (int)(row.KalanGun ?? 0);
-        DateTime expireDate = (DateTime)(row.ExpireDate ?? DateTime.MinValue);
-
-        if (expireDate < DateTime.UtcNow)
-        {
-            e.CellStyle.BackColor = Color.FromArgb(255, 220, 220);
-            e.CellStyle.ForeColor = Color.DarkRed;
-        }
-        else if (kalanGun <= 7)
-        {
-            e.CellStyle.BackColor = Color.FromArgb(255, 243, 205);
-            e.CellStyle.ForeColor = Color.DarkGoldenrod;
-        }
-    }
-
-    private void GridCellDoubleClick(object? s, DataGridViewCellEventArgs e)
-    {
-        if (e.RowIndex < 0) return;
-        dynamic? row = _grid.Rows[e.RowIndex].DataBoundItem;
-        if (row == null) return;
-
-        int id = (int)(row.Id ?? 0);
-        var lic = _db.GetById(id);
-        if (lic == null) return;
-
-        // Forma yükle
-        _txtFirmaAdi.Text = lic.FirmaAdi;
-        _txtFirmaKodu.Text = lic.FirmaKodu;
-        _txtMachineId.Text = lic.MachineId;
-        _txtVersion.Text = lic.AllowedVersion;
-        _dtpExpire.Value = lic.ExpireDate.Date;
-        _numMaxKullanici.Value = Math.Min(5000, Math.Max(1, lic.MaxKullanici));
-        _cmbLisansTipi.SelectedIndex = lic.IsDemo ? 0 : 1;
-
-        _lblStatus.Text = $"📋 {lic.FirmaKodu} lisansı forma yüklendi — süreyi güncelleyip yeni lisans üretebilirsiniz";
-        _lblStatus.ForeColor = Color.DarkBlue;
-    }
-
-    // ══════════════════════════════════════════════
-    // EXPORT
-    // ══════════════════════════════════════════════
-
-    private void BtnExport_Click(object? sender, EventArgs e)
-    {
-        var all = _db.ExportAll();
-        var exportPath = Path.Combine(AppContext.BaseDirectory, "licenses_export.json");
-        File.WriteAllText(exportPath, JsonSerializer.Serialize(all.Select(l => new
-        {
-            l.FirmaKodu,
-            l.FirmaAdi,
-            l.MachineId,
-            l.ExpireDate,
-            l.AllowedVersion,
-            l.IsDemo,
-            l.CreatedAt,
-            l.Signature,
-            l.LisansTipi,
-            l.MaxKullanici,
-            l.KayitTarihi
-        }), new JsonSerializerOptions { WriteIndented = true }));
-
-        _lblStatus.Text = $"📤 {all.Count} lisans dışa aktarıldı: {exportPath}";
-        _lblStatus.ForeColor = Color.DarkGreen;
-    }
-
-    // ══════════════════════════════════════════════
-    // HELPERS
-    // ══════════════════════════════════════════════
-
-    private static void AddLabel(Panel panel, string text, int y)
-    {
-        panel.Controls.Add(new Label
-        {
-            Text = text,
-            Location = new Point(10, y),
-            Size = new Size(360, 20),
-            Font = new Font("Segoe UI", 8.5f)
-        });
-    }
-
-    private static TextBox AddTextBox(Panel panel, int y)
-    {
-        var tb = new TextBox { Location = new Point(10, y), Size = new Size(360, 27) };
-        panel.Controls.Add(tb);
-        return tb;
-    }
-
-    protected override void OnFormClosed(FormClosedEventArgs e)
-    {
-        _db.Dispose();
-        base.OnFormClosed(e);
     }
 }
