@@ -43,49 +43,76 @@
         {
             <div class="license-expired-card">
                 <div class="license-expired-icon">
-                    <i class="bi bi-shield-lock"></i>
+                    <i class="bi bi-clock-history"></i>
                 </div>
-                <h4 class="text-danger fw-bold mb-2">Lisans Suresi Doldu!</h4>
-                <p class="text-muted mb-3">Sisteme giris yapabilmek icin gecerli bir lisans anahtari girmeniz gerekmektedir.</p>
+                <h4 class="mb-2" style="color: #e67e22;">Deneme süreniz sona erdi</h4>
+                <p class="text-muted mb-2">
+                    Sistemi kullanmaya devam etmek için lisans anahtarı girmeniz yeterlidir.
+                </p>
 
                 @if (lisans != null)
                 {
+                    var remainingDays = LicenseService.GetRemainingDays(lisans);
                     <div class="license-detail-box mb-3">
                         <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">Lisans Turu:</span>
-                            <span class="fw-semibold">@(lisans.IsDemo ? "Demo" : "Aktif")</span>
+                            <span class="text-muted">Lisans Tipi:</span>
+                            <span class="fw-semibold">@(lisans.IsDemo ? "Demo (30 gün)" : "Yıllık")</span>
                         </div>
                         <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">Bitis Tarihi:</span>
+                            <span class="text-muted">Bitiş:</span>
                             <span class="fw-semibold text-danger">@lisans.ExpireDate.ToString("dd.MM.yyyy")</span>
                         </div>
                     </div>
                 }
 
+                @* 3 Adımlı Yönlendirme *@
+                <div class="card bg-light mb-3">
+                    <div class="card-body py-3">
+                        <div class="d-flex align-items-start gap-2 mb-2">
+                            <span class="badge bg-primary rounded-pill mt-1">1</span>
+                            <span>Makine kodunu <strong>kopyalayın</strong></span>
+                        </div>
+                        <div class="d-flex align-items-start gap-2 mb-2">
+                            <span class="badge bg-primary rounded-pill mt-1">2</span>
+                            <span>Lisans sağlayıcınıza <strong>iletin</strong></span>
+                        </div>
+                        <div class="d-flex align-items-start gap-2">
+                            <span class="badge bg-primary rounded-pill mt-1">3</span>
+                            <span>Gelen lisans anahtarını <strong>yapıştırın</strong></span>
+                        </div>
+                    </div>
+                </div>
+
+                @* Makine Kodu — tek tuş *@
                 <div class="license-machine-code mb-3">
                     <label class="form-label text-muted small mb-1">Makine Kodu</label>
                     <div class="input-group">
-                        <input type="text" class="form-control form-control-sm text-center" value="@makineKodu" readonly />
-                        <button class="btn btn-outline-secondary btn-sm" @onclick="MakineKoduKopyala" title="Kopyala">
-                            <i class="bi bi-clipboard"></i>
+                        <input type="text" class="form-control text-center font-monospace" value="@makineKodu" readonly />
+                        <button class="btn btn-primary" @onclick="MakineKoduKopyala" title="Kopyala">
+                            <i class="bi @(_makineKoduKopyalandi ? "bi-check-lg" : "bi-clipboard") me-1"></i>
+                            @(_makineKoduKopyalandi ? "Kopyalandı" : "Kopyala")
                         </button>
                     </div>
-                    <small class="text-muted">Bu kodu lisans saglayiciniza iletin</small>
                 </div>
 
+                @* Lisans girişi *@
                 <div class="license-key-input mb-3">
-                    <label class="form-label text-muted small mb-1">Lisans Anahtari</label>
-                    <textarea class="form-control" rows="3" placeholder="Lisans anahtarinizi buraya yapistirin..."
+                    <label class="form-label text-muted small mb-1">Lisans Anahtarı</label>
+                    <textarea class="form-control font-monospace" rows="4"
+                              placeholder="Ctrl+V ile lisans anahtarını buraya yapıştırın"
                               @bind="yeniLisansAnahtari" @bind:event="oninput"></textarea>
                 </div>
 
+                @* Hata mesajı *@
                 @if (!string.IsNullOrEmpty(lisansHataMesaji))
                 {
-                    <div class="alert alert-danger py-2 small mb-3">
-                        <i class="bi bi-exclamation-triangle me-1"></i>@lisansHataMesaji
+                    <div class="alert alert-warning py-2 small mb-3">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Girdiğiniz lisans anahtarı geçersiz görünüyor. Lütfen doğru yapıştırdığınızdan emin olun.
                     </div>
                 }
 
+                @* Başarı mesajı *@
                 @if (!string.IsNullOrEmpty(lisansBasariMesaji))
                 {
                     <div class="alert alert-success py-2 small mb-3">
@@ -93,24 +120,26 @@
                     </div>
                 }
 
-                <button class="btn btn-success w-100 mb-2" @onclick="LisansAktiveEtAsync"
+                @* Buton *@
+                <button class="btn btn-success btn-lg w-100 mb-3" @onclick="LisansAktiveEtAsync"
                         disabled="@(string.IsNullOrWhiteSpace(yeniLisansAnahtari) || lisansAktivasyonYukleniyor)">
                     @if (lisansAktivasyonYukleniyor)
                     {
                         <span class="spinner-border spinner-border-sm me-2"></span>
-                        <span>Aktive Ediliyor...</span>
+                        <span>Doğrulanıyor...</span>
                     }
                     else
                     {
-                        <i class="bi bi-key me-2"></i>
-                        <span>Lisansi Aktive Et</span>
+                        <i class="bi bi-rocket-takeoff me-2"></i>
+                        <span>Lisansı Aktif Et ve Devam Et</span>
                     }
                 </button>
 
-                <div class="text-center mt-3">
-                    <span class="text-muted">Hesabiniz yok mu?</span>
-                    <a href="@GetRegisterUrl()" class="forgot-password ms-1">Kayit Ol</a>
-                </div>
+                @* Güven ver *@
+                <p class="text-muted small text-center mb-0">
+                    <i class="bi bi-shield-check text-success me-1"></i>
+                    Verileriniz güvende. Sadece lisans doğrulaması yapılır, hiçbir veriniz silinmez.
+                </p>
             </div>
         }
         else
@@ -897,11 +926,18 @@
         }
     }
 
+    private bool _makineKoduKopyalandi;
+
     private async Task MakineKoduKopyala()
     {
         try
         {
             await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", makineKodu);
+            _makineKoduKopyalandi = true;
+            StateHasChanged();
+            await Task.Delay(2000);
+            _makineKoduKopyalandi = false;
+            StateHasChanged();
         }
         catch (Exception ex)
         {

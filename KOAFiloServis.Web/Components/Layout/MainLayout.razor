@@ -22,12 +22,16 @@
         }
         else
         {
-            @* 🔶 DEMO MODE BANNER — Uygulama her zaman açılır *@
+            @* 🔶 DEMO MODE BANNER — Satış odaklı, korkutmaz *@
             @if (!lisansGecerli)
             {
-                <div style="background: linear-gradient(90deg, #ffc107, #ff9800); color: #000; padding: 8px 16px; text-align: center; font-weight: 600; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 12px;">
-                    <span>⚠ DEMO MOD — @(string.IsNullOrEmpty(lisansHataMesaji) ? "Lisans yüklenmemiş" : lisansHataMesaji)</span>
-                    <a href="/admin/license" style="color: #000; text-decoration: underline; font-weight: 700;">
+                <div style="background: linear-gradient(90deg, #fef3c7, #fde68a); color: #92400e; padding: 10px 16px; text-align: center; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 12px; border-bottom: 2px solid #f59e0b;">
+                    <i class="bi bi-info-circle"></i>
+                    <span>
+                        <strong>Demo Mod</strong> — @(string.IsNullOrEmpty(lisansHataMesaji) ? "Deneme süreniz sona erdi." : lisansHataMesaji)
+                        Sistemi kullanmaya devam etmek için lisans yükleyebilirsiniz.
+                    </span>
+                    <a href="/admin/license" class="btn btn-warning btn-sm" style="white-space: nowrap;">
                         <i class="bi bi-key me-1"></i>Lisans Yükle
                     </a>
                 </div>
