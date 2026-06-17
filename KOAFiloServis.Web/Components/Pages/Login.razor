@@ -898,22 +898,17 @@
 
         try
         {
-            var yeniLisans = await LicenseSvc.ActivateLicenseKeyAsync(yeniLisansAnahtari);
+            // Auto-trim
+            yeniLisansAnahtari = yeniLisansAnahtari.Trim().Replace("\r", "").Replace("\n", "").Replace(" ", "");
 
-            if (yeniLisans != null && !LicenseService.IsDemoExpired(yeniLisans) && DateTime.UtcNow <= yeniLisans.ExpireDate)
-            {
-                lisans = yeniLisans;
-                lisansSuresiDoldu = false;
-                yeniLisansAnahtari = "";
-                lisansBasariMesaji = null;
-                KOAFiloServis.Shared.AppMode.ExitDemoMode(); // Lisans aktive edildi → FULL MODE
-                var kalanGun = LicenseService.GetRemainingDays(yeniLisans);
-                successMessage = $"Lisans basariyla aktive edildi! {kalanGun} gun gecerli. Giris yapabilirsiniz.";
-            }
-            else
-            {
-                lisansHataMesaji = "Lisans anahtari gecersiz veya suresi dolmus!";
-            }
+            var yeniLisans = await LicenseSvc.ActivateFromKeyAsync(yeniLisansAnahtari);
+
+            lisans = yeniLisans;
+            lisansSuresiDoldu = false;
+            yeniLisansAnahtari = "";
+            lisansBasariMesaji = null;
+            var kalanGun = LicenseService.GetRemainingDays(yeniLisans);
+            successMessage = $"✅ Lisans basariyla aktive edildi! {kalanGun} gun gecerli. Giris yapabilirsiniz.";
         }
         catch (Exception ex)
         {

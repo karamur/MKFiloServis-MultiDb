@@ -485,6 +485,86 @@ public class LicenseService
         return yeniLisans;
     }
 
+    // ══════════════════════════════════════════════
+    // ACTIVATION FROM KEY (Base64 JSON)
+    // ══════════════════════════════════════════════
+
+    /// <summary>
+    /// Aktivasyon key'inden lisans aktive eder.
+    /// Key = Base64(license.json).
+    /// LisansDesktop'un urettigi formatta calisir.
+    /// </summary>
+    public async Task<LicenseInfo> ActivateFromKeyAsync(string key)
+    {
+        // Trim + temizle
+        key = key.Trim().Replace("\r", "").Replace("\n", "").Replace(" ", "");
+
+        // Base64 decode → JSON
+        string json;
+        try
+        {
+            var bytes = Convert.FromBase64String(key);
+            json = Encoding.UTF8.GetString(bytes);
+        }
+        catch (FormatException)
+        {
+            throw new Exception("Lisans anahtari gecersiz formatta. Lutfen kopyaladiginiz kodu kontrol edin.");
+        }
+
+        // JSON → LicenseInfo
+        LicenseInfo lic;
+        try
+        {
+            lic = JsonSerializer.Deserialize<LicenseInfo>(json)
+                  ?? throw new Exception("Lisans verisi okunamadi.");
+        }
+        catch (JsonException)
+        {
+            throw new Exception("Lisans anahtari gecersiz. Lutfen dogru kodu yapistirdiginizdan emin olun.");
+        }
+
+        if (string.IsNullOrWhiteSpace(lic.FirmaKodu) || string.IsNullOrWhiteSpace(lic.Signature))
+            throw new Exception("Lisans anahtari eksik bilgi iceriyor.");
+
+        // Signature dogrulama
+        var expectedSig = GenerateSignature(lic.FirmaKodu, lic.MachineId, lic.ExpireDate,
+            lic.IsDemo, lic.AllowedVersion, lic.CreatedAt);
+
+        if (lic.Signature != expectedSig)
+            throw new Exception("Lisans imzasi gecersiz. Anahtar degistirilmis olabilir.");
+
+        // Machine lock
+        if (lic.MachineId != GetMachineId())
+            throw new Exception("Bu lisans anahtari bu bilgisayar icin gecerli degil.");
+
+        // ExpireDate kontrolu
+        if (DateTime.UtcNow > lic.ExpireDate)
+            throw new Exception($"Lisans suresi {lic.ExpireDate:yyyy-MM-dd} tarihinde dolmus.");
+
+        // Version kontrolu
+        if (!IsVersionAllowed(lic.AllowedVersion))
+            throw new Exception($"Bu uygulama surumu ({GetAppVersion()}) lisansa dahil degil. Max: {lic.AllowedVersion}");
+
+        // DB'ye kaydet — eski lisanslari pasif yap
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var activeLicenses = await db.LicenseInfos.Where(l => l.IsActive).ToListAsync();
+        foreach (var al in activeLicenses)
+            al.IsActive = false;
+
+        lic.IsActive = true;
+        lic.LastValidatedAt = DateTime.UtcNow;
+        db.LicenseInfos.Add(lic);
+        await db.SaveChangesAsync();
+
+        WriteLicenseHash(lic);
+        KOAFiloServis.Shared.AppMode.ExitDemoMode();
+
+        _logger.LogInformation("✅ Lisans aktive edildi (key): {FirmaKodu}, Bitis: {ExpireDate}",
+            lic.FirmaKodu, lic.ExpireDate);
+
+        return lic;
+    }
+
     private static (string FirmaKodu, string LisansTipi, DateTime BaslangicTarihi, DateTime BitisTarihi)
         ParseLicenseKey(string anahtar)
     {
