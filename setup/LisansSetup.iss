@@ -9,7 +9,7 @@
 #define LisansInstallDir "C:\KOALisans"
 
 #ifndef LisansAppVersion
-#define LisansAppVersion "1.0.22"
+#define LisansAppVersion "1.0.25"
 #endif
 
 [Setup]

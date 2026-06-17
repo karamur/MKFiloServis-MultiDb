@@ -12,7 +12,7 @@
     7) Inno Setup - LisansSetup.iss-> KOALisansArac-<version>.exe
 
 .PARAMETER Version
-    Paket versiyon numarasi. Varsayilan 1.0.22
+    Paket versiyon numarasi. Varsayilan 1.0.25
 
 .PARAMETER SkipPublish
     Publish atlanir, sadece Inno Setup calistirilir.
@@ -26,7 +26,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $Version = '1.0.22',
+    [string] $Version = '1.0.25',
     [switch] $SkipPublish,
     [switch] $LisansOnly
 )
