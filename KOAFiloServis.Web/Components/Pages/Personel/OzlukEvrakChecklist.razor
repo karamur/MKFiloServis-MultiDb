@@ -214,6 +214,22 @@
                     <button type="button" class="btn-close btn-close-white" @onclick="DetayKapat"></button>
                 </div>
                 <div class="modal-body">
+                    @* YENI: Hizli evrak yukleme — EvrakDosya tabanli, DB'ye kalici *@
+                    <div class="card border-success mb-3">
+                        <div class="card-header bg-success bg-opacity-10 py-2 d-flex justify-content-between align-items-center"
+                             @onclick="() => _hizliEvrakAcik = !_hizliEvrakAcik" style="cursor: pointer;">
+                            <strong><i class="bi bi-cloud-upload me-2 text-success"></i>Hızlı Evrak Yükleme (YENİ SİSTEM)</strong>
+                            <i class="bi @(_hizliEvrakAcik ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                        </div>
+                        @if (_hizliEvrakAcik)
+                        {
+                            <div class="card-body">
+                                <KOAFiloServis.Web.Components.Shared.EvrakYonetimi PersonelId="seciliDurum.SoforId"
+                                    EvrakTipleri="_personelEvrakTipleri" />
+                            </div>
+                        }
+                    </div>
+
                     <div class="d-flex flex-wrap gap-2 mb-3">
                         <button type="button" class="btn btn-sm @(detayBelgeFiltre == "" ? "btn-primary" : "btn-outline-primary")"
                                 @onclick='() => detayBelgeFiltre = ""'>Tümü</button>
@@ -671,6 +687,8 @@
     private bool showTanimModal;
     private bool showTanimDuzenleModal;
     private bool showEksikListeModal;
+    private bool _hizliEvrakAcik = true;
+    private static readonly List<string> _personelEvrakTipleri = new() { "Kimlik", "Ehliyet", "Diploma", "Sertifika", "Saglik Raporu", "Is Sozlesmesi", "Diger" };
 
     // Önizleme state
     private bool onizlemeModalAcik;
