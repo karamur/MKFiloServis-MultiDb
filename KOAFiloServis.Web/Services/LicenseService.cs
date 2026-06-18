@@ -29,17 +29,18 @@ public class LicenseService
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
     private readonly IConfiguration _config;
     private readonly ILogger<LicenseService> _logger;
-    private LicenseInfo? _cachedLicense;
+    private readonly LicenseCache _cache; // Singleton cache — request'ler arası yaşar
     private const string SecretKey = "KOAFiloServis-LCNS-2026-SECURE-KEY-X9mK2pL5vR8w";
     private const string RegistryPath = @"SOFTWARE\KOAFiloServis";
     private const string DemoUsedValueName = "DemoUsed";
     private const int DemoMaxDays = 30;
 
-    public LicenseService(IDbContextFactory<ApplicationDbContext> dbFactory, IConfiguration config, ILogger<LicenseService> logger)
+    public LicenseService(IDbContextFactory<ApplicationDbContext> dbFactory, IConfiguration config, ILogger<LicenseService> logger, LicenseCache cache)
     {
         _dbFactory = dbFactory;
         _config = config;
         _logger = logger;
+        _cache = cache;
     }
 
     // ══════════════════════════════════════════════
@@ -300,7 +301,7 @@ public class LicenseService
                 AllowedVersion = "99.0.0",
                 CreatedAt = DateTime.UtcNow
             };
-            _cachedLicense = devLicense; // 🔥 KRİTİK: Singleton cache set
+            _cache.Set(devLicense); // 🔥 KRİTİK: Singleton cache set
             return LicenseValidationResult.Ok(devLicense);
         }
 
@@ -331,7 +332,7 @@ public class LicenseService
                     "🚨 DEMO LISANS OLUSTURULDU | Makine: {MachineId} | Firma: {FirmaKodu} | Bitis: {ExpireDate:yyyy-MM-dd} | Registry: set",
                     lic.MachineId, lic.FirmaKodu, lic.ExpireDate);
 
-                _cachedLicense = lic; // 🔥 KRİTİK: Singleton cache set — demo lisans
+                _cache.Set(lic); // 🔥 KRİTİK: Singleton cache set — demo lisans
                 return LicenseValidationResult.Ok(lic);
             }
 
@@ -399,7 +400,7 @@ public class LicenseService
             lic.LastValidatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
-            _cachedLicense = lic; // Scope cache
+            _cache.Set(lic); // Scope cache
 
             return LicenseValidationResult.Ok(lic);
         }
@@ -486,7 +487,7 @@ public class LicenseService
         WriteLicenseHash(yeniLisans);
 
         // 🔥 KRİTİK: Singleton cache güncelle + Demo moddan çık
-        _cachedLicense = yeniLisans;
+        _cache.Set(yeniLisans);
         KOAFiloServis.Shared.AppMode.ExitDemoMode();
 
         _logger.LogInformation("✅ Lisans anahtari aktive edildi: {FirmaKodu}, Bitis: {ExpireDate}, Makine: {MachineId}",
@@ -568,7 +569,7 @@ public class LicenseService
 
         // DB cache güncelle — lisans anında okunur
         await db.Entry(lic).ReloadAsync();
-        _cachedLicense = lic;
+        _cache.Set(lic);
 
         WriteLicenseHash(lic);
         KOAFiloServis.Shared.AppMode.ExitDemoMode(); // 🔥 KRİTİK: Demo moddan çık
@@ -679,13 +680,16 @@ public class LicenseService
 
     public async Task<LicenseInfo?> GetCurrentLicenseAsync()
     {
-        // Cache varsa tekrar DB'ye gitme
-        if (_cachedLicense != null)
-            return _cachedLicense;
+        // Singleton cache varsa tekrar DB'ye gitme
+        var cached = _cache.Get();
+        if (cached != null)
+            return cached;
 
         await using var db = await _dbFactory.CreateDbContextAsync();
-        _cachedLicense = await db.LicenseInfos.FirstOrDefaultAsync(l => l.IsActive && !l.IsDeleted);
-        return _cachedLicense;
+        var lic = await db.LicenseInfos.FirstOrDefaultAsync(l => l.IsActive && !l.IsDeleted);
+        if (lic != null)
+            _cache.Set(lic);
+        return lic;
     }
 
     /// <summary>
@@ -694,10 +698,8 @@ public class LicenseService
     /// </summary>
     public bool HasValidLicense()
     {
-        // 🔥 KRİTİK: Singleton cache bazlı kontrol — DB sorgusu yapma.
-        // _cachedLicense sadece ValidateAsync / ActivateFromKeyAsync / ActivateLicenseKeyAsync tarafından set edilir.
-        // AppMode.IsDemoMode kontrolüne güvenme — static state yanıltıcı olabilir.
-        return _cachedLicense != null && _cachedLicense.IsActive && !_cachedLicense.IsDeleted;
+        // 🔥 Singleton LicenseCache'e delege et — DB sorgusu yapma.
+        return _cache.HasValidLicense();
     }
 
     public async Task SaveLicenseAsync(LicenseInfo lic)

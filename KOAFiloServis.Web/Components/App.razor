@@ -1,5 +1,5 @@
 ﻿@using KOAFiloServis.Web.Services
-@inject LicenseService LicenseService
+@inject LicenseCache LicenseCache
 <!DOCTYPE html>
 <html lang="tr">
 
@@ -28,7 +28,7 @@
 <body>
     <KOAFiloServis.Web.Components.Shared.AppRouteTracker />
     @* 🔥 PART 5: Router-level license gate — Singleton cache ile root seviyede karar *@
-    @if (LicenseService.HasValidLicense())
+    @if (LicenseCache.HasValidLicense())
     {
         <KOAFiloServis.Web.Components.Shared.AppErrorBoundary>
             <ChildContent>

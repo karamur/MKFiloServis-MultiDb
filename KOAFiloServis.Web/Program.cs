@@ -309,7 +309,8 @@ builder.Services.AddScoped<KOAFiloServis.Web.Services.Common.GenericUpdateServic
 builder.Services.AddHostedService<NightlyDenetimService>(); // Her gece 02:00 otomatik denetim
 builder.Services.AddSingleton<KOAFiloServis.Web.Services.AI.AnomalyDetectionService>(); // ML.NET offline AI
 builder.Services.AddSingleton<KOAFiloServis.Web.Services.AI.DecisionEngine>(); // AI karar motoru
-builder.Services.AddSingleton<LicenseService>(); // Lisans sistemi (SINGLETON — cache tek instance'ta kalır, loop engellenir)
+builder.Services.AddSingleton<LicenseCache>(); // Singleton cache — static SSR (App.razor) dahil her yerden erişilebilir
+builder.Services.AddScoped<LicenseService>(); // Lisans sistemi (Scoped — IDbContextFactory kullanır, cache'i günceller)
 builder.Services.AddSignalR(); // Real-time (EvrakHub)
 builder.Services.AddScoped<IHakedisRaporService, HakedisRaporService>(); // Hakediş Raporlama
 builder.Services.AddScoped<IHakedisMuhasebeService, HakedisMuhasebeService>(); // Hakediş Muhasebe Entegrasyonu
