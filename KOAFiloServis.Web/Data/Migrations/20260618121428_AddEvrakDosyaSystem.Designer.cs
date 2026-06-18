@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace KOAFiloServis.Web.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260618113737_AddGecerlilikTarihiToEvrakDosya")]
-    partial class AddGecerlilikTarihiToEvrakDosya
+    [Migration("20260618121428_AddEvrakDosyaSystem")]
+    partial class AddEvrakDosyaSystem
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

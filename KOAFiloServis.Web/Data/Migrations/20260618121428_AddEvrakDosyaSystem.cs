@@ -7,7 +7,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace KOAFiloServis.Web.Data.Migrations
 {
     /// <inheritdoc />
-    public partial class AddEvrakDosyaTable : Migration
+    public partial class AddEvrakDosyaSystem : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -24,6 +24,8 @@ namespace KOAFiloServis.Web.Data.Migrations
                     DosyaAdi = table.Column<string>(type: "text", nullable: false),
                     DosyaYolu = table.Column<string>(type: "text", nullable: false),
                     YuklenmeTarihi = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
+                    GuncellenmeTarihi = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    GecerlilikTarihi = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
                     IsDeleted = table.Column<bool>(type: "boolean", nullable: false)
                 },
                 constraints: table =>
