@@ -1,13 +1,16 @@
 ﻿@page "/personel/ozluk-evrak"
 @using KOAFiloServis.Shared.Entities
+@using KOAFiloServis.Web.Data
 @using KOAFiloServis.Web.Helpers
 @using KOAFiloServis.Web.Services
 @using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
 @inject IPersonelOzlukService OzlukService
 @inject ISoforService SoforService
 @inject ISecureFileService SecureFileService
 @inject IEvrakArsivService EvrakArsivService
 @inject IToastService ToastService
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject IJSRuntime JS
 @inject ILogger<OzlukEvrakChecklist> Logger
 @rendermode InteractiveServer
@@ -324,11 +327,11 @@
                                     <tbody>
                                         @foreach (var evrak in kategori.OrderBy(e => e.EvrakAdi))
                                         {
-                                            <tr class="@(evrak.Tamamlandi ? "table-success" : "")">
+                                            <tr class="@(GetRowClass(evrak))">
                                                 <td style="width: 40px;">
                                                     <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" 
-                                                               checked="@evrak.Tamamlandi"
+                                                        <input class="form-check-input" type="checkbox"
+                                                               checked="@IsEvrakTamam(evrak)"
                                                                @onchange="e => EvrakDurumDegistir(seciliDurum.SoforId, evrak.EvrakTanimId, (bool)e.Value!)" />
                                                     </div>
                                                 </td>
@@ -338,16 +341,21 @@
                                                     {
                                                         <span class="badge bg-danger ms-1">Zorunlu</span>
                                                     }
+                                                    @{ var ye = GetYeniEvrak(evrak.EvrakAdi); }
+                                                    @if (ye != null)
+                                                    {
+                                                        <br /><small class="text-success"><i class="bi bi-file-check me-1"></i>@ye.DosyaAdi</small>
+                                                    }
                                                     @if (!string.IsNullOrEmpty(evrak.Aciklama))
                                                     {
                                                         <br /><small class="text-muted">@evrak.Aciklama</small>
                                                     }
                                                 </td>
                                                 <td class="text-center" style="width: 100px;">
-                                                    @if (evrak.Tamamlandi)
+                                                    @if (IsEvrakTamam(evrak))
                                                     {
                                                         <span class="badge bg-success">
-                                                            <i class="bi bi-check-circle me-1"></i>Tamam
+                                                            <i class="bi bi-check-circle me-1"></i>@(ye != null && !evrak.Tamamlandi ? "DB'de var" : "Tamam")
                                                         </span>
                                                     }
                                                     else
@@ -691,6 +699,7 @@
     private bool showEksikListeModal;
     private bool _hizliEvrakAcik = true;
     private static readonly List<string> _personelEvrakTipleri = new() { "Kimlik", "Ehliyet", "Diploma", "Sertifika", "Saglik Raporu", "Is Sozlesmesi", "Diger" };
+    private List<EvrakDosya> _yeniEvraklar = new(); // YENI sistem — EvrakDosya tablosu
 
     // Önizleme state
     private bool onizlemeModalAcik;
@@ -753,7 +762,37 @@
     {
         seciliDurum = await OzlukService.GetPersonelEvrakDurumuAsync(soforId);
         await EvrakGecerlilikTarihleriniYukleAsync(soforId);
+
+        // YENI sistem — EvrakDosya tablosundan bu personelin evraklarını yükle
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _yeniEvraklar = await db.EvrakDosyalari
+                .Where(x => x.PersonelId == soforId && !x.IsDeleted)
+                .ToListAsync();
+        }
+        catch { _yeniEvraklar = new(); }
+
         showDetayModal = true;
+    }
+
+    /// <summary>Eski evrak tipine karşılık gelen yeni EvrakDosya kaydını bul.</summary>
+    private EvrakDosya? GetYeniEvrak(string evrakAdi)
+    {
+        return _yeniEvraklar.FirstOrDefault(x =>
+            string.Equals(x.EvrakTipi, evrakAdi, StringComparison.OrdinalIgnoreCase) ||
+            x.EvrakTipi.Contains(evrakAdi, StringComparison.OrdinalIgnoreCase) ||
+            evrakAdi.Contains(x.EvrakTipi, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private bool IsEvrakTamam(OzlukEvrakDetay evrak)
+    {
+        return evrak.Tamamlandi || GetYeniEvrak(evrak.EvrakAdi) != null;
+    }
+
+    private string GetRowClass(OzlukEvrakDetay evrak)
+    {
+        return IsEvrakTamam(evrak) ? "table-success" : "";
     }
 
     private void DetayKapat()
