@@ -1,4 +1,6 @@
-﻿<!DOCTYPE html>
+﻿@using KOAFiloServis.Web.Services
+@inject LicenseService LicenseService
+<!DOCTYPE html>
 <html lang="tr">
 
 <head>
@@ -25,11 +27,19 @@
 
 <body>
     <KOAFiloServis.Web.Components.Shared.AppRouteTracker />
-    <KOAFiloServis.Web.Components.Shared.AppErrorBoundary>
-        <ChildContent>
-            <Routes @rendermode="InteractiveServer" />
-        </ChildContent>
-    </KOAFiloServis.Web.Components.Shared.AppErrorBoundary>
+    @* 🔥 PART 5: Router-level license gate — Singleton cache ile root seviyede karar *@
+    @if (LicenseService.HasValidLicense())
+    {
+        <KOAFiloServis.Web.Components.Shared.AppErrorBoundary>
+            <ChildContent>
+                <Routes @rendermode="InteractiveServer" />
+            </ChildContent>
+        </KOAFiloServis.Web.Components.Shared.AppErrorBoundary>
+    }
+    else
+    {
+        <KOAFiloServis.Web.Components.Pages.LicenseBlock />
+    }
     <ReconnectModal />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="js/dashboard.js"></script>

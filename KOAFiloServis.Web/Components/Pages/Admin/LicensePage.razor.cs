@@ -17,12 +17,10 @@ public partial class LicensePage
     protected override async Task OnInitializedAsync()
     {
         _license = await LicenseService.GetCurrentLicenseAsync();
-        if (_license != null)
-        {
-            var v = await LicenseService.ValidateAsync();
-            _validationIsValid = v.IsValid;
-            _validationMessage = v.Message;
-        }
+        // ValidateAsync SADECE startup'ta (Program.cs) çalışır.
+        // Burada cache'teki lisans bilgisi yeterlidir.
+        _validationIsValid = LicenseService.HasValidLicense();
+        _validationMessage = _validationIsValid ? "Lisans geçerli." : "Lisans bulunamadı veya geçersiz.";
         _yukleniyor = false;
     }
 

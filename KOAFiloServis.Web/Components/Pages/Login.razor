@@ -645,7 +645,7 @@
                 // Dashboard'a yonlendir - forceLoad: false ile ayni circuit icinde
                 // navigation yaparak authentication state'in korunmasini sagliyoruz
                 sifre = string.Empty;
-                Navigation.NavigateTo(GetSafeReturnUrl(), forceLoad: false);
+                Navigation.NavigateTo(GetSafeReturnUrl(), forceLoad: true); // 🔥 forceLoad: true — App.razor lisans gate'i yeniden değerlendirsin
             }
             else
             {
@@ -704,7 +704,7 @@
                 successMessage = "Giriş başarılı! Yönlendiriliyorsunuz...";
                 StateHasChanged();
                 await Task.Delay(150);
-                Navigation.NavigateTo(GetSafeReturnUrl(), forceLoad: false);
+                Navigation.NavigateTo(GetSafeReturnUrl(), forceLoad: true); // 🔥 forceLoad: true — App.razor lisans gate'i yeniden değerlendirsin
             }
             else
             {

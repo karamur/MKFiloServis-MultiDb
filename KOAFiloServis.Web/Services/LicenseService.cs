@@ -289,7 +289,7 @@ public class LicenseService
         {
             KOAFiloServis.Shared.AppMode.ExitDemoMode();
             _logger.LogWarning("🔧 DEV OVERRIDE AKTIF — Lisans kontrolu BYPASS edildi. Makine: {Machine}", GetMachineId());
-            return LicenseValidationResult.Ok(new LicenseInfo
+            var devLicense = new LicenseInfo
             {
                 FirmaKodu = "DEV-OVERRIDE",
                 MachineId = GetMachineId(),
@@ -299,7 +299,9 @@ public class LicenseService
                 IsActive = true,
                 AllowedVersion = "99.0.0",
                 CreatedAt = DateTime.UtcNow
-            });
+            };
+            _cachedLicense = devLicense; // 🔥 KRİTİK: Singleton cache set
+            return LicenseValidationResult.Ok(devLicense);
         }
 
         try
@@ -329,6 +331,7 @@ public class LicenseService
                     "🚨 DEMO LISANS OLUSTURULDU | Makine: {MachineId} | Firma: {FirmaKodu} | Bitis: {ExpireDate:yyyy-MM-dd} | Registry: set",
                     lic.MachineId, lic.FirmaKodu, lic.ExpireDate);
 
+                _cachedLicense = lic; // 🔥 KRİTİK: Singleton cache set — demo lisans
                 return LicenseValidationResult.Ok(lic);
             }
 
@@ -481,6 +484,10 @@ public class LicenseService
 
         // PART 5: Write hash file
         WriteLicenseHash(yeniLisans);
+
+        // 🔥 KRİTİK: Singleton cache güncelle + Demo moddan çık
+        _cachedLicense = yeniLisans;
+        KOAFiloServis.Shared.AppMode.ExitDemoMode();
 
         _logger.LogInformation("✅ Lisans anahtari aktive edildi: {FirmaKodu}, Bitis: {ExpireDate}, Makine: {MachineId}",
             yeniLisans.FirmaKodu, yeniLisans.ExpireDate, machineId);
@@ -687,10 +694,9 @@ public class LicenseService
     /// </summary>
     public bool HasValidLicense()
     {
-        // Demo mod kapaliysa zaten gecerli lisans vardir
-        if (!Shared.AppMode.IsDemoMode)
-            return true;
-
+        // 🔥 KRİTİK: Singleton cache bazlı kontrol — DB sorgusu yapma.
+        // _cachedLicense sadece ValidateAsync / ActivateFromKeyAsync / ActivateLicenseKeyAsync tarafından set edilir.
+        // AppMode.IsDemoMode kontrolüne güvenme — static state yanıltıcı olabilir.
         return _cachedLicense != null && _cachedLicense.IsActive && !_cachedLicense.IsDeleted;
     }
 
