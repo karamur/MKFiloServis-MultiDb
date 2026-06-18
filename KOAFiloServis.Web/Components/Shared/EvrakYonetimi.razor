@@ -112,9 +112,18 @@
     [Parameter] public int? AracId { get; set; }
     [Parameter] public List<string> EvrakTipleri { get; set; } = new() { "Kimlik", "Ehliyet", "Saglik Raporu", "Sozlesme" };
 
+    /// <summary>Parent component'e upload/silme sonrası refresh sinyali gönderir.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
     private List<EvrakDosya> _evraklar = new();
 
     protected override async Task OnInitializedAsync()
+    {
+        await LoadEvraklar();
+    }
+
+    /// <summary>Modal açıldığında veya parametre değiştiğinde DB'den yeniden yükle.</summary>
+    protected override async Task OnParametersSetAsync()
     {
         await LoadEvraklar();
     }
@@ -145,10 +154,8 @@
 
         try
         {
-            // PART 4: Dosyayı diske kaydet
             var diskAdi = await FileService.SaveAsync(file);
 
-            // DB'ye kaydet
             await using var db = await DbFactory.CreateDbContextAsync();
             db.EvrakDosyalari.Add(new EvrakDosya
             {
@@ -160,9 +167,13 @@
             });
             await db.SaveChangesAsync();
 
-            // PART 5: UI refresh — DB'den tekrar oku
+            // DB'den yeniden yükle + kendi UI'ını güncelle
             await LoadEvraklar();
             StateHasChanged();
+
+            // Parent'a bildir — checklist yenilensin
+            if (OnChanged.HasDelegate)
+                await OnChanged.InvokeAsync();
         }
         catch (Exception ex)
         {
@@ -184,8 +195,6 @@
                 ".png" => "image/png",
                 _ => "application/octet-stream"
             };
-
-            // Yeni sekmede aç
             await JS.InvokeVoidAsync("window.open", $"data:{mime};base64,{base64}", "_blank");
         }
         catch (Exception ex)
@@ -200,8 +209,7 @@
         {
             var bytes = await FileService.ReadAsync(evrak.DosyaYolu);
             var base64 = Convert.ToBase64String(bytes);
-            var mime = "application/octet-stream";
-            await JS.InvokeVoidAsync("downloadFile", evrak.DosyaAdi, base64, mime);
+            await JS.InvokeVoidAsync("downloadFile", evrak.DosyaAdi, base64, "application/octet-stream");
         }
         catch (Exception ex)
         {
@@ -213,7 +221,6 @@
     {
         try
         {
-            // PART 6: Diskten sil + DB soft delete
             FileService.Delete(evrak.DosyaYolu);
 
             await using var db = await DbFactory.CreateDbContextAsync();
@@ -226,6 +233,10 @@
 
             await LoadEvraklar();
             StateHasChanged();
+
+            // Parent'a bildir
+            if (OnChanged.HasDelegate)
+                await OnChanged.InvokeAsync();
         }
         catch (Exception ex)
         {

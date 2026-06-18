@@ -224,8 +224,10 @@
                         @if (_hizliEvrakAcik)
                         {
                             <div class="card-body">
-                                <KOAFiloServis.Web.Components.Shared.EvrakYonetimi PersonelId="seciliDurum.SoforId"
-                                    EvrakTipleri="_personelEvrakTipleri" />
+                                <KOAFiloServis.Web.Components.Shared.EvrakYonetimi @key="seciliDurum.SoforId"
+                                    PersonelId="seciliDurum.SoforId"
+                                    EvrakTipleri="_personelEvrakTipleri"
+                                    OnChanged="EvrakGuncellendi" />
                             </div>
                         }
                     </div>
@@ -762,6 +764,15 @@
         detayAramaMetni = "";
         detaySadeceEksik = false;
         evrakGecerlilikTarihleri.Clear();
+    }
+
+    /// <summary>EvrakYonetimi component'inden gelen refresh sinyali — detayı ve ana listeyi DB'den yeniler.</summary>
+    private async Task EvrakGuncellendi()
+    {
+        if (seciliDurum == null) return;
+        await DetayAc(seciliDurum.SoforId);
+        await LoadData();
+        StateHasChanged();
     }
 
     private async Task EvrakDurumDegistir(int soforId, int evrakTanimId, bool tamamlandi)

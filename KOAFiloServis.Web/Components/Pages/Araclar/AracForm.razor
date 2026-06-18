@@ -352,8 +352,10 @@
                 <h5 class="mb-0"><i class="bi bi-cloud-upload me-2 text-success"></i>Hızlı Evrak Yükleme (YENİ SİSTEM)</h5>
             </div>
             <div class="card-body">
-                <KOAFiloServis.Web.Components.Shared.EvrakYonetimi PersonelId="null" AracId="Id"
-                    EvrakTipleri="_aracEvrakTipleri" />
+                <KOAFiloServis.Web.Components.Shared.EvrakYonetimi @key="Id"
+                    PersonelId="null" AracId="Id"
+                    EvrakTipleri="_aracEvrakTipleri"
+                    OnChanged="EvrakGuncellendi" />
             </div>
         </div>
 
@@ -942,6 +944,13 @@
         {
             evraklarYukleniyor = false;
         }
+    }
+
+    /// <summary>EvrakYonetimi component'inden gelen refresh sinyali.</summary>
+    private async Task EvrakGuncellendi()
+    {
+        await EvraklariYukle();
+        StateHasChanged();
     }
 
     private List<TransferableItem>? transferItems;

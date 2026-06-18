@@ -8,6 +8,7 @@
 # Build results
 [Dd]ebug/
 [Rr]elease/
+objbuildtest/
 x64/
 x86/
 bld/
