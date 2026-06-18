@@ -1,3 +1,5 @@
+using System.Drawing;
+using ClosedXML.Excel;
 using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
 using KOAFiloServis.Web.Models;
@@ -403,5 +405,181 @@ public class PuantajFaturaRaporService : IPuantajFaturaRaporService
                     ToplamKesinti = tumSatirlar.Sum(s => s.KesintiTutar),
                 };
             }).ToList();
+    }
+
+    // ══════════════════════════════════════════════
+    // EXCEL EXPORT
+    // ══════════════════════════════════════════════
+
+    public async Task<byte[]> ExportExcelAsync(PuantajFaturaRaporRequest request, CancellationToken ct = default)
+    {
+        request.Page = 1;
+        request.PageSize = MaxPageSize;
+        var satirlar = await GetSatirlarAsync(request, ct);
+        var ozet = await GetOzetAsync(request, ct);
+
+        using var wb = new XLWorkbook();
+
+        // ── Sayfa 1: Fatura Hazırlık Listesi ──
+        var ws1 = wb.Worksheets.Add("Fatura Hazırlık Listesi");
+        var headerStyle = wb.Style;
+        WriteSheet1(ws1, satirlar, ozet);
+
+        // ── Sayfa 2: Kurum Bazlı Özet ──
+        var ws2 = wb.Worksheets.Add("Kurum Bazlı Özet");
+        WriteGroupedSheet(ws2, satirlar, s => s.KurumAdi ?? "-", "Kurum");
+
+        // ── Sayfa 3: Araç Bazlı Özet ──
+        var ws3 = wb.Worksheets.Add("Araç Bazlı Özet");
+        WriteGroupedSheet(ws3, satirlar, s => s.Plaka ?? "-", "Araç");
+
+        // ── Sayfa 4: Güzergah Bazlı Özet ──
+        var ws4 = wb.Worksheets.Add("Güzergah Bazlı Özet");
+        WriteGroupedSheet(ws4, satirlar, s => s.GuzergahAdi ?? "-", "Güzergah");
+
+        // ── Sayfa 5: Tedarikçi Bazlı Ödenecek ──
+        var ws5 = wb.Worksheets.Add("Tedarikçi Bazlı Ödenecek");
+        var tedarikciSatirlar = satirlar.Where(s => !string.IsNullOrEmpty(s.TedarikciUnvan) || s.Odenecek > 0).ToList();
+        WriteGroupedSheet(ws5, tedarikciSatirlar, s => s.TedarikciUnvan ?? s.CariUnvan ?? "-", "Tedarikçi");
+
+        // ── Sayfa 6: Özet ──
+        var ws6 = wb.Worksheets.Add("Genel Özet");
+        WriteSummarySheet(ws6, ozet);
+
+        // Kolon genişliklerini otomatik ayarla (ilk 5 sayfa)
+        foreach (var ws in new[] { ws1, ws2, ws3, ws4, ws5 })
+            ws.Columns().AdjustToContents(1, Math.Min(ws.LastColumnUsed()?.ColumnNumber() ?? 30, 30));
+
+        using var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        return ms.ToArray();
+    }
+
+    private static void WriteSheet1(IXLWorksheet ws, List<PuantajFaturaSatirDto> satirlar, PuantajFaturaOzetDto ozet)
+    {
+        int row = 1;
+        // Başlık
+        ws.Cell(row, 1).Value = "Fatura Hazırlık Listesi";
+        ws.Range(row, 1, row, 17).Merge().Style.Font.Bold = true;
+        row += 2;
+
+        // Özet satırı
+        ws.Cell(row, 1).Value = $"Toplam Kayıt: {ozet.ToplamKayit} | Sefer: {ozet.ToplamSefer} | Gelir: {ozet.ToplamGelir:N2} | Gider: {ozet.ToplamGider:N2} | KDV: {ozet.ToplamKdv:N2} | Kesinti: {ozet.ToplamKesinti:N2} | Net: {ozet.NetGelir:N2}";
+        ws.Range(row, 1, row, 12).Merge();
+        row += 2;
+
+        // Kolon başlıkları
+        var headers = new[] { "S.NO", "GÜZERGAH", "GELİR", "GİDER", "YÖN", "PLAKA", "ŞOFÖR", "CARİ", "TELEFON",
+            "TOPLAM SEFER", "KDV", "KESİNTİ", "ÖDENECEK/TAHSİL", "KAYNAK", "FATURA NO" };
+        for (int c = 0; c < headers.Length; c++)
+        {
+            ws.Cell(row, c + 1).Value = headers[c];
+            ws.Cell(row, c + 1).Style.Font.Bold = true;
+            ws.Cell(row, c + 1).Style.Fill.BackgroundColor = XLColor.LightGray;
+        }
+        row++;
+
+        // Satırlar
+        int sira = 1;
+        foreach (var s in satirlar)
+        {
+            ws.Cell(row, 1).Value = sira++;
+            ws.Cell(row, 2).Value = s.GuzergahAdi;
+            ws.Cell(row, 3).Value = (double)s.ToplamGelir;
+            ws.Cell(row, 4).Value = (double)s.ToplamGider;
+            ws.Cell(row, 5).Value = s.YonTipi;
+            ws.Cell(row, 6).Value = s.Plaka;
+            ws.Cell(row, 7).Value = s.SoforAdi;
+            ws.Cell(row, 8).Value = s.CariUnvan;
+            ws.Cell(row, 9).Value = s.Telefon;
+            ws.Cell(row, 10).Value = s.ToplamSefer;
+            ws.Cell(row, 11).Value = (double)s.KdvTutar;
+            ws.Cell(row, 12).Value = (double)s.KesintiTutar;
+            ws.Cell(row, 13).Value = (double)(s.TahsilEdilecek > 0 ? s.TahsilEdilecek : s.Odenecek);
+            ws.Cell(row, 14).Value = s.Kaynak;
+            ws.Cell(row, 15).Value = s.FaturaNo;
+
+            if (s.FaturaKesildi)
+                ws.Row(row).Style.Fill.BackgroundColor = XLColor.LightGreen;
+            row++;
+        }
+
+        // Sayı formatları
+        ws.Column(3).Style.NumberFormat.Format = "#,##0.00";
+        ws.Column(4).Style.NumberFormat.Format = "#,##0.00";
+        ws.Column(11).Style.NumberFormat.Format = "#,##0.00";
+        ws.Column(12).Style.NumberFormat.Format = "#,##0.00";
+        ws.Column(13).Style.NumberFormat.Format = "#,##0.00";
+    }
+
+    private static void WriteGroupedSheet(IXLWorksheet ws, List<PuantajFaturaSatirDto> satirlar,
+        Func<PuantajFaturaSatirDto, string> keySelector, string groupName)
+    {
+        int row = 1;
+        ws.Cell(row, 1).Value = $"{groupName} Bazlı Özet";
+        ws.Range(row, 1, row, 8).Merge().Style.Font.Bold = true;
+        row += 2;
+
+        var headers = new[] { groupName, "TOPLAM SEFER", "GELİR", "GİDER", "KDV", "KESİNTİ", "NET", "KAYIT SAYISI" };
+        for (int c = 0; c < headers.Length; c++)
+        {
+            ws.Cell(row, c + 1).Value = headers[c];
+            ws.Cell(row, c + 1).Style.Font.Bold = true;
+            ws.Cell(row, c + 1).Style.Fill.BackgroundColor = XLColor.LightGray;
+        }
+        row++;
+
+        foreach (var g in satirlar.GroupBy(keySelector).OrderByDescending(g => g.Sum(s => s.ToplamGelir)))
+        {
+            var list = g.ToList();
+            ws.Cell(row, 1).Value = g.Key;
+            ws.Cell(row, 2).Value = list.Sum(s => s.ToplamSefer);
+            ws.Cell(row, 3).Value = (double)list.Sum(s => s.ToplamGelir);
+            ws.Cell(row, 4).Value = (double)list.Sum(s => s.ToplamGider);
+            ws.Cell(row, 5).Value = (double)list.Sum(s => s.KdvTutar);
+            ws.Cell(row, 6).Value = (double)list.Sum(s => s.KesintiTutar);
+            ws.Cell(row, 7).Value = (double)list.Sum(s => s.TahsilEdilecek > 0 ? s.TahsilEdilecek : s.Odenecek);
+            ws.Cell(row, 8).Value = list.Count;
+            row++;
+        }
+
+        ws.Column(3).Style.NumberFormat.Format = "#,##0.00";
+        ws.Column(4).Style.NumberFormat.Format = "#,##0.00";
+        ws.Column(5).Style.NumberFormat.Format = "#,##0.00";
+        ws.Column(6).Style.NumberFormat.Format = "#,##0.00";
+        ws.Column(7).Style.NumberFormat.Format = "#,##0.00";
+    }
+
+    private static void WriteSummarySheet(IXLWorksheet ws, PuantajFaturaOzetDto ozet)
+    {
+        int row = 1;
+        ws.Cell(row, 1).Value = "Genel Özet";
+        ws.Range(row, 1, row, 2).Merge().Style.Font.Bold = true;
+        row += 2;
+
+        var rows = new Dictionary<string, object>
+        {
+            ["Toplam Kayıt"] = ozet.ToplamKayit,
+            ["Fatura Kesilen"] = ozet.FaturaKesilen,
+            ["Fatura Kesilmeyen"] = ozet.FaturaKesilmeyen,
+            ["Toplam Sefer"] = ozet.ToplamSefer,
+            ["Toplam Gelir"] = ozet.ToplamGelir.ToString("N2"),
+            ["Toplam Gider"] = ozet.ToplamGider.ToString("N2"),
+            ["Toplam KDV"] = ozet.ToplamKdv.ToString("N2"),
+            ["Toplam Kesinti"] = ozet.ToplamKesinti.ToString("N2"),
+            ["Net Gelir"] = ozet.NetGelir.ToString("N2"),
+            ["Net Gider"] = ozet.NetGider.ToString("N2"),
+            ["Kar / Zarar"] = ozet.KarZarar.ToString("N2"),
+        };
+
+        foreach (var kv in rows)
+        {
+            ws.Cell(row, 1).Value = kv.Key;
+            ws.Cell(row, 1).Style.Font.Bold = true;
+            ws.Cell(row, 2).Value = kv.Value.ToString();
+            if (kv.Key == "Kar / Zarar" && ozet.KarZarar < 0)
+                ws.Cell(row, 2).Style.Font.FontColor = XLColor.Red;
+            row++;
+        }
     }
 }

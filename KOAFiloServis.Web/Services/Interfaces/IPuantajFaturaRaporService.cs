@@ -19,4 +19,7 @@ public interface IPuantajFaturaRaporService
 
     /// <summary>Toplam kayıt sayısı (sayfalama için).</summary>
     Task<int> GetCountAsync(PuantajFaturaRaporRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Excel export — çok sayfalı fatura hazırlık raporu.</summary>
+    Task<byte[]> ExportExcelAsync(PuantajFaturaRaporRequest request, CancellationToken cancellationToken = default);
 }

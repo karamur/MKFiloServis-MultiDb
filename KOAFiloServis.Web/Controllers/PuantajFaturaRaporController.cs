@@ -89,4 +89,26 @@ public class PuantajFaturaRaporController : ControllerBase
         var agacSonuc = await _raporService.GetAgacAsync(request);
         return Ok(agacSonuc);
     }
+
+    /// <summary>GET /api/puantaj-fatura-rapor/excel?yil=2026&ay=6 — Excel dosyası indirir</summary>
+    [HttpGet("excel")]
+    public async Task<IActionResult> ExportExcel(
+        [FromQuery] int yil,
+        [FromQuery] int ay,
+        [FromQuery] PuantajFaturaYonu yon = PuantajFaturaYonu.Gelir,
+        [FromQuery] int? kurumId = null,
+        [FromQuery] int? cariId = null,
+        [FromQuery] int? aracId = null,
+        [FromQuery] int? guzergahId = null)
+    {
+        var request = new PuantajFaturaRaporRequest
+        {
+            Yil = yil, Ay = ay, Yon = yon,
+            KurumId = kurumId, CariId = cariId,
+            AracId = aracId, GuzergahId = guzergahId
+        };
+        var bytes = await _raporService.ExportExcelAsync(request);
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"PuantajFaturaRapor_{yil}_{ay:00}.xlsx");
+    }
 }
