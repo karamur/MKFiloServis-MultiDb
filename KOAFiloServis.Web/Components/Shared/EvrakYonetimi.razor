@@ -313,6 +313,11 @@
             };
             await JS.InvokeVoidAsync("window.open", $"data:{mime};base64,{base64}", "_blank");
         }
+        catch (FileNotFoundException)
+        {
+            _errorMessage = $"Dosya diskte bulunamadı: {evrak.DosyaAdi}. Dosya silinmiş veya taşınmış olabilir. Yeniden yükleyin.";
+            Logger.LogWarning("EvrakYonetimi View: dosya diskte yok Id={Id} Yol={Yol}", evrak.Id, evrak.DosyaYolu);
+        }
         catch (Exception ex)
         {
             _errorMessage = $"Görüntüleme hatası: {ex.Message}";
@@ -328,6 +333,11 @@
             var base64 = Convert.ToBase64String(bytes);
             await JS.InvokeVoidAsync("downloadFile", evrak.DosyaAdi, base64, "application/octet-stream");
             Logger.LogInformation("Evrak indirildi: Id={Id} Dosya={D}", evrak.Id, evrak.DosyaAdi);
+        }
+        catch (FileNotFoundException)
+        {
+            _errorMessage = $"Dosya diskte bulunamadı: {evrak.DosyaAdi}. Dosya silinmiş veya taşınmış olabilir. Yeniden yükleyin.";
+            Logger.LogWarning("EvrakYonetimi Download: dosya diskte yok Id={Id} Yol={Yol}", evrak.Id, evrak.DosyaYolu);
         }
         catch (Exception ex)
         {
