@@ -23,5 +23,5 @@ public class TestSessionLog : BaseEntity
     [StringLength(20)]
     public string IslemTipi { get; set; } = "Insert";
 
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public new DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

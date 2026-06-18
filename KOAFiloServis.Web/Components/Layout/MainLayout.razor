@@ -233,7 +233,6 @@
 
     private KOAFiloServis.Shared.Entities.Kullanici? aktifKullanici;
     private bool isInitialized = false;
-    private bool lisansGecerli = false;
     private string lisansHataMesaji = "";
     private string makineKodu = "";
     private int kalanLisansGunu = 0;
@@ -380,7 +379,6 @@
             {
                 // Startup'ta ValidateAsync zaten çalıştı ve cache set edildi (Singleton).
                 // Cache boşsa gerçekten lisans yok demektir.
-                lisansGecerli = false;
                 lisansHataMesaji = "Lisans bulunamadi. Lutfen lisans anahtarinizi girin.";
                 return;
             }
@@ -388,7 +386,6 @@
             // Negative time kontrolu
             if (lisans != null && DateTime.UtcNow < lisans.CreatedAt)
             {
-                lisansGecerli = false;
                 lisansHataMesaji = "Sistem saati hatali. Lutfen saat ayarlarinizi kontrol edin.";
                 return;
             }
@@ -396,7 +393,6 @@
             // Demo suresi kontrolu (CreatedAt + ExpireDate cift validasyon)
             if (lisans != null && LicenseService.IsDemoExpired(lisans))
             {
-                lisansGecerli = false;
                 var elapsed = (DateTime.UtcNow - lisans.CreatedAt).TotalDays;
                 lisansHataMesaji = $"Demo suresi {lisans.ExpireDate:dd.MM.yyyy} tarihinde doldu. ({elapsed:F0} gun)";
                 return;
@@ -407,18 +403,15 @@
                 !string.IsNullOrEmpty(lisans.MachineId) &&
                 !string.Equals(lisans.MachineId, makineKodu, StringComparison.Ordinal))
             {
-                lisansGecerli = false;
                 lisansHataMesaji = "Bu lisans baska bir bilgisayar icin gecerlidir.";
                 return;
             }
 
-            lisansGecerli = true;
             kalanLisansGunu = lisans != null ? LicenseService.GetRemainingDays(lisans) : 0;
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "MainLayout lisans kontrolu sirasinda hata olustu");
-            lisansGecerli = false;
             lisansHataMesaji = $"Lisans kontrolu sirasinda hata: {ex.Message}";
         }
     }
