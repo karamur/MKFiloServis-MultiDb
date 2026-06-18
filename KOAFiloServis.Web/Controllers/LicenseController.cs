@@ -42,13 +42,14 @@ public class LicenseController : ControllerBase
         try
         {
             var expire = request.ExpireDate ?? DateTime.UtcNow.AddYears(1);
-            var created = DateTime.UtcNow;
+            var created = DateTime.UtcNow; // 🔥 CRITICAL: UTC
             const string allowedVersion = "1.0.99";
 
-            // AYNI SIGNATURE — LicenseService.GenerateSignature() ile birebir
+            // AYNI SIGNATURE — LicenseService.GenerateSignature() + Desktop MainForm.Uret() ile birebir
             var signature = LicenseService.GenerateSignature(
                 request.FirmaKodu, request.MachineId, expire,
-                isDemo: false, allowedVersion, created);
+                isDemo: false, allowedVersion, created,
+                request.DurationDays, request.ContactPhone);
 
             // JSON → Base64 (LicenseInfo entity deserialize edilebilir)
             var json = JsonSerializer.Serialize(new
@@ -56,9 +57,11 @@ public class LicenseController : ControllerBase
                 FirmaKodu = request.FirmaKodu,
                 MachineId = request.MachineId,
                 ExpireDate = expire,
+                DurationDays = request.DurationDays,
                 AllowedVersion = allowedVersion,
                 IsDemo = false,
                 CreatedAt = created,
+                ContactPhone = request.ContactPhone,
                 Signature = signature
             });
 
@@ -70,17 +73,19 @@ public class LicenseController : ControllerBase
                 FirmaKodu = request.FirmaKodu,
                 MachineId = request.MachineId,
                 ExpireDate = expire,
+                DurationDays = request.DurationDays,
                 AllowedVersion = allowedVersion,
                 IsDemo = false,
                 CreatedAt = created,
+                ContactPhone = request.ContactPhone,
                 Signature = signature,
                 IsActive = false // API ile uretilen lisanslar default AKTIF DEGIL
             };
             await _licenseService.SaveGeneratedLogAsync(lic);
 
             _logger.LogInformation(
-                "Lisans uretildi (API): Firma={Firma}, Makine={Machine}, Bitis={Expire}",
-                request.FirmaKodu, request.MachineId, expire.ToString("yyyy-MM-dd"));
+                "Lisans uretildi (API): Firma={Firma}, Makine={Machine}, Bitis={Expire}, Gun={Days}",
+                request.FirmaKodu, request.MachineId, expire.ToString("yyyy-MM-dd"), request.DurationDays);
 
             return Ok(new LicenseGenerateResponse
             {
@@ -88,7 +93,9 @@ public class LicenseController : ControllerBase
                 FirmaKodu = request.FirmaKodu,
                 MachineId = request.MachineId,
                 ExpireDate = expire,
-                AllowedVersion = allowedVersion
+                DurationDays = request.DurationDays,
+                AllowedVersion = allowedVersion,
+                ContactPhone = request.ContactPhone
             });
         }
         catch (Exception ex)
@@ -108,6 +115,8 @@ public class LicenseGenerateRequest
     public string FirmaKodu { get; set; } = string.Empty;
     public string MachineId { get; set; } = string.Empty;
     public DateTime? ExpireDate { get; set; }
+    public int DurationDays { get; set; } = 365;
+    public string ContactPhone { get; set; } = string.Empty;
 }
 
 public class LicenseGenerateResponse
@@ -116,5 +125,7 @@ public class LicenseGenerateResponse
     public string FirmaKodu { get; set; } = string.Empty;
     public string MachineId { get; set; } = string.Empty;
     public DateTime ExpireDate { get; set; }
+    public int DurationDays { get; set; }
     public string AllowedVersion { get; set; } = string.Empty;
+    public string ContactPhone { get; set; } = string.Empty;
 }

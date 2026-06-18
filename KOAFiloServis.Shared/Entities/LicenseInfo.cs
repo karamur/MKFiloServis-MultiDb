@@ -15,10 +15,15 @@ public class LicenseInfo : BaseEntity, IFirmaTenant
 
     public DateTime ExpireDate { get; set; }
 
+    public int DurationDays { get; set; } // Lisans süresi (gün) — Desktop'ta NumericUpDown ile belirlenir
+
     public bool IsDemo { get; set; } // Demo lisansı mı?
 
     [StringLength(20)]
     public string AllowedVersion { get; set; } = "1.0.99"; // Max izin verilen versiyon
+
+    [StringLength(20)]
+    public string ContactPhone { get; set; } = string.Empty; // Süre uzatma için iletişim telefonu
 
     [Required]
     public string Signature { get; set; } = string.Empty; // SHA256 + secret

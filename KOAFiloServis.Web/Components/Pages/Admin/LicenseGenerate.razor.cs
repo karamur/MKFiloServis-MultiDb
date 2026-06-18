@@ -62,23 +62,25 @@ public partial class LicenseGenerate : ComponentBase
 
         try
         {
-            var created = DateTime.UtcNow;
+            var created = DateTime.UtcNow; // 🔥 CRITICAL: UTC
             const string allowedVersion = "1.0.99";
 
-            // AYNI SIGNATURE — LicenseService.GenerateSignature() ile birebir
+            // AYNI SIGNATURE — LicenseService.GenerateSignature() + Desktop MainForm.Uret() ile birebir
             var signature = LicenseService.GenerateSignature(
                 firmaKodu, machineId, expireDate,
                 isDemo: false, allowedVersion, created);
 
-            // JSON → Base64
+            // JSON → Base64 (LicenseInfo entity deserialize edilebilir)
             var json = JsonSerializer.Serialize(new
             {
                 FirmaKodu = firmaKodu,
                 MachineId = machineId,
                 ExpireDate = expireDate,
+                DurationDays = 365,
                 AllowedVersion = allowedVersion,
                 IsDemo = false,
                 CreatedAt = created,
+                ContactPhone = "",
                 Signature = signature
             });
 
@@ -91,9 +93,11 @@ public partial class LicenseGenerate : ComponentBase
                 FirmaKodu = firmaKodu,
                 MachineId = machineId,
                 ExpireDate = expireDate,
+                DurationDays = 365,
                 AllowedVersion = allowedVersion,
                 IsDemo = false,
                 CreatedAt = created,
+                ContactPhone = "",
                 Signature = signature,
                 IsActive = false // Admin panelinden uretilen lisanslar log olarak kalir
             };

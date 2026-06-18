@@ -6,6 +6,7 @@ public partial class LicenseBlock
 {
     private bool _isDemoExpired;
     private string? _message;
+    private string? _contactPhone;
     private string? _licenseKey;
     private string? _uploadError;
     private bool _isActivating;
@@ -19,6 +20,7 @@ public partial class LicenseBlock
             _message = _isDemoExpired
                 ? $"Demo suresi {lic.ExpireDate:dd.MM.yyyy} tarihinde doldu."
                 : $"Lisans {lic.ExpireDate:dd.MM.yyyy} tarihinde sona erdi.";
+            _contactPhone = lic.ContactPhone;
         }
         else
         {

@@ -56,6 +56,15 @@
             </div>
         }
 
+        @* 🔥 PART 8: Telefon gosterimi *@
+        @if (!string.IsNullOrEmpty(_contactPhone))
+        {
+            <div class="alert alert-warning py-2 small mb-3">
+                <i class="bi bi-telephone me-1"></i>
+                Sure doldugunda arayin: <strong>@_contactPhone</strong>
+            </div>
+        }
+
         @* Lisans anahtarı girişi *@
         <div class="card">
             <div class="card-body">

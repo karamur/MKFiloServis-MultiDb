@@ -118,10 +118,12 @@ public class LicenseService
     // ══════════════════════════════════════════════
 
     public static string GenerateSignature(string firmaKodu, string machineId, DateTime expireDate,
-        bool isDemo = false, string allowedVersion = "1.0.99", DateTime? createdAt = null)
+        bool isDemo = false, string allowedVersion = "1.0.99", DateTime? createdAt = null,
+        int durationDays = 365, string contactPhone = "")
     {
         var created = createdAt ?? DateTime.UtcNow;
-        var raw = $"{firmaKodu}|{machineId}|{expireDate:yyyy-MM-dd}|{isDemo}|{allowedVersion}|{created:yyyy-MM-dd}|{SecretKey}";
+        // 🔥 KRİTİK: Desktop MainForm.cs Uret() ile BİREBİR AYNI format
+        var raw = $"{firmaKodu}|{machineId}|{expireDate:yyyy-MM-dd}|{durationDays}|{isDemo}|{allowedVersion}|{created:yyyy-MM-dd}|{contactPhone}|{SecretKey}";
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
         return Convert.ToBase64String(hash);
     }
@@ -130,7 +132,8 @@ public class LicenseService
     {
         var expected = GenerateSignature(
             lic.FirmaKodu, lic.MachineId, lic.ExpireDate,
-            lic.IsDemo, lic.AllowedVersion, lic.CreatedAt);
+            lic.IsDemo, lic.AllowedVersion, lic.CreatedAt,
+            lic.DurationDays, lic.ContactPhone);
         return lic.Signature == expected;
     }
 
@@ -537,9 +540,10 @@ public class LicenseService
         if (string.IsNullOrWhiteSpace(lic.FirmaKodu) || string.IsNullOrWhiteSpace(lic.Signature))
             throw new Exception("Lisans anahtari eksik bilgi iceriyor.");
 
-        // Signature dogrulama
+        // Signature dogrulama — DurationDays + ContactPhone dahil
         var expectedSig = GenerateSignature(lic.FirmaKodu, lic.MachineId, lic.ExpireDate,
-            lic.IsDemo, lic.AllowedVersion, lic.CreatedAt);
+            lic.IsDemo, lic.AllowedVersion, lic.CreatedAt,
+            lic.DurationDays, lic.ContactPhone);
 
         if (lic.Signature != expectedSig)
             throw new Exception("Lisans imzasi gecersiz. Anahtar degistirilmis olabilir.");
@@ -555,6 +559,14 @@ public class LicenseService
         // Version kontrolu
         if (!IsVersionAllowed(lic.AllowedVersion))
             throw new Exception($"Bu uygulama surumu ({GetAppVersion()}) lisansa dahil degil. Max: {lic.AllowedVersion}");
+
+        // 🔥 PART 9: DurationDays tutarlilik kontrolu — tolerans ±2 gun
+        if (lic.DurationDays > 0)
+        {
+            var expectedDays = (lic.ExpireDate.Date - lic.CreatedAt.Date).Days;
+            if (Math.Abs(expectedDays - lic.DurationDays) > 2)
+                throw new Exception($"Lisans suresi hatali: {lic.DurationDays} gun belirtilmis ama tarihler arasi {expectedDays} gun.");
+        }
 
         // DB'ye kaydet — eski lisanslari pasif yap
         await using var db = await _dbFactory.CreateDbContextAsync();
@@ -711,7 +723,8 @@ public class LicenseService
             al.IsActive = false;
 
         var expectedSig = GenerateSignature(lic.FirmaKodu, lic.MachineId, lic.ExpireDate,
-            lic.IsDemo, lic.AllowedVersion, lic.CreatedAt);
+            lic.IsDemo, lic.AllowedVersion, lic.CreatedAt,
+            lic.DurationDays, lic.ContactPhone);
 
         if (lic.Signature != expectedSig)
         {
@@ -725,6 +738,9 @@ public class LicenseService
         db.LicenseInfos.Add(lic);
         await db.SaveChangesAsync();
 
+        // 🔥 KRİTİK: Singleton cache'i güncelle — PART 6 loop koruma
+        _cache.Set(lic);
+
         // PART 5: Hash dosyasini guncelle
         WriteLicenseHash(lic);
     }
@@ -735,9 +751,9 @@ public class LicenseService
 
     public static int GetRemainingDays(LicenseInfo lic)
     {
+        // 🔥 PART 7: Demo/gercek ayrimi yok — her ikisi de ExpireDate'ten hesaplanir.
+        // Onceki bug: demo icin CreatedAt bazli hesaplama 36159 gun gosteriyordu.
         if (lic == null) return 0;
-        if (lic.IsDemo)
-            return Math.Max(0, DemoMaxDays - (int)(DateTime.UtcNow - lic.CreatedAt).TotalDays);
         return Math.Max(0, (lic.ExpireDate.Date - DateTime.UtcNow.Date).Days);
     }
 
