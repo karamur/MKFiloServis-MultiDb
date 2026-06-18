@@ -27,5 +27,8 @@ public class EvrakDosya
     /// <summary>Son güncelleme tarihi (aynı evrak tekrar yüklenince).</summary>
     public DateTime? GuncellenmeTarihi { get; set; }
 
+    /// <summary>Evrak geçerlilik bitiş tarihi. Boşsa süresiz.</summary>
+    public DateTime? GecerlilikTarihi { get; set; }
+
     public bool IsDeleted { get; set; } = false;
 }

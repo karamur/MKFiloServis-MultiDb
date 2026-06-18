@@ -9,20 +9,40 @@
 @inject IJSRuntime JS
 @inject ILogger<EvrakYonetimi> Logger
 
-@* EVRAK YONETIMI — TEK GERÇEK KAYNAK: EvrakDosya tablosu *@
-
 <div class="evrak-yonetimi">
     <h6 class="mb-3"><i class="bi bi-paperclip me-2"></i>Evrak Yönetimi</h6>
+
+    @* Opsiyonel geçerlilik tarihi *@
+    <div class="mb-3 d-flex align-items-center gap-2">
+        <label class="form-label mb-0 small text-muted text-nowrap"><i class="bi bi-calendar-check me-1"></i>Yüklenecek evrak için geçerlilik tarihi:</label>
+        <InputDate class="form-control form-control-sm" style="width:180px" @bind-Value="_seciliTarih" />
+        @if (_seciliTarih.HasValue)
+        {
+            <button class="btn btn-sm btn-outline-secondary" @onclick="() => _seciliTarih = null" title="Tarihi kaldır">
+                <i class="bi bi-x"></i>
+            </button>
+        }
+    </div>
 
     @* Evrak Tipleri Checklist — SADECE DB'den okunur *@
     <div class="row mb-3">
         @foreach (var tip in EvrakTipleri)
         {
-            var varMi = _evraklar.Any(x => x.EvrakTipi == tip);
+            var varMi = _evraklar.Any(x => x.EvrakTipi == tip && !x.IsDeleted);
+            EvrakDosya? evrak = varMi ? _evraklar.First(x => x.EvrakTipi == tip && !x.IsDeleted) : null;
+            var status = GetStatus(evrak);
+            var bgClass = varMi switch
+            {
+                true when status == "EXPIRED" => "bg-danger bg-opacity-10",
+                true when status == "WARNING" => "bg-warning bg-opacity-10",
+                true => "bg-success bg-opacity-10",
+                false => "bg-warning bg-opacity-10"
+            };
+
             <div class="col-md-6 mb-2">
-                <div class="d-flex align-items-center justify-content-between p-2 border rounded @(varMi ? "bg-success bg-opacity-10" : "bg-warning bg-opacity-10")">
+                <div class="d-flex align-items-center justify-content-between p-2 border rounded @bgClass">
                     <div>
-                        <i class="bi @(varMi ? "bi-check-circle-fill text-success" : "bi-exclamation-circle-fill text-warning") me-2"></i>
+                        <i class="bi @(varMi && status == "OK" ? "bi-check-circle-fill text-success" : status == "EXPIRED" ? "bi-x-circle-fill text-danger" : status == "WARNING" ? "bi-exclamation-triangle-fill text-warning" : "bi-exclamation-circle-fill text-warning") me-2"></i>
                         <span class="fw-semibold">@tip</span>
                         @if (!varMi)
                         {
@@ -30,26 +50,33 @@
                         }
                         else
                         {
-                            var evrak = _evraklar.First(x => x.EvrakTipi == tip);
-                            <small class="text-muted ms-2">@evrak.DosyaAdi</small>
+                            <small class="text-muted ms-2">@evrak!.DosyaAdi</small>
+                            @if (status == "EXPIRED")
+                            {
+                                <span class="badge bg-danger ms-1">Süresi Doldu!</span>
+                            }
+                            else if (status == "WARNING")
+                            {
+                                var kalan = (evrak!.GecerlilikTarihi!.Value - DateTime.UtcNow).Days;
+                                <span class="badge bg-warning text-dark ms-1">@kalan gün kaldı</span>
+                            }
                         }
                     </div>
                     <div class="btn-group btn-group-sm">
                         @if (!varMi)
                         {
                             <label class="btn btn-outline-primary btn-sm" title="Dosya Yukle">
-                                <i class="bi bi-upload me-1"></i>Yukle
+                                <i class="bi bi-upload me-1"></i>Yükle
                                 <InputFile class="d-none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                                            OnChange="e => UploadEvrak(e, tip)" />
                             </label>
                         }
                         else
                         {
-                            var evrak = _evraklar.First(x => x.EvrakTipi == tip);
-                            <button class="btn btn-outline-info btn-sm" @onclick="() => EvrakGor(evrak)" title="Goruntule">
+                            <button class="btn btn-outline-info btn-sm" @onclick="() => EvrakGor(evrak!)" title="Goruntule">
                                 <i class="bi bi-eye"></i>
                             </button>
-                            <button class="btn btn-outline-success btn-sm" @onclick="() => EvrakIndir(evrak)" title="Indir">
+                            <button class="btn btn-outline-success btn-sm" @onclick="() => EvrakIndir(evrak!)" title="Indir">
                                 <i class="bi bi-download"></i>
                             </button>
                             <label class="btn btn-outline-warning btn-sm" title="Guncelle (tekrar yukle)">
@@ -57,7 +84,7 @@
                                 <InputFile class="d-none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                                            OnChange="e => UploadEvrak(e, tip)" />
                             </label>
-                            <button class="btn btn-outline-danger btn-sm" @onclick="() => EvrakSil(evrak)" title="Sil">
+                            <button class="btn btn-outline-danger btn-sm" @onclick="() => EvrakSil(evrak!)" title="Sil">
                                 <i class="bi bi-trash"></i>
                             </button>
                         }
@@ -78,21 +105,23 @@
     {
         <div class="card mt-3">
             <div class="card-header py-2">
-                <strong><i class="bi bi-files me-2"></i>Yuklenen Dosyalar (@_evraklar.Count)</strong>
+                <strong><i class="bi bi-files me-2"></i>Yüklenen Dosyalar (@_evraklar.Count)</strong>
             </div>
             <div class="card-body p-0">
                 <table class="table table-sm table-hover mb-0">
                     <thead class="table-light">
                         <tr>
                             <th>Evrak Tipi</th>
-                            <th>Dosya Adi</th>
-                            <th>Tarih</th>
-                            <th class="text-center">Islem</th>
+                            <th>Dosya Adı</th>
+                            <th>Geçerlilik</th>
+                            <th>Durum</th>
+                            <th class="text-center">İşlem</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach (var evrak in _evraklar.OrderByDescending(x => x.YuklenmeTarihi))
                         {
+                            var st = GetStatus(evrak);
                             <tr>
                                 <td><span class="badge bg-primary">@evrak.EvrakTipi</span></td>
                                 <td>
@@ -102,13 +131,37 @@
                                         <small class="text-muted d-block">Güncellendi: @evrak.GuncellenmeTarihi.Value.ToString("dd.MM.yyyy HH:mm")</small>
                                     }
                                 </td>
-                                <td>@evrak.YuklenmeTarihi.ToString("dd.MM.yyyy HH:mm")</td>
+                                <td>
+                                    @if (evrak.GecerlilikTarihi.HasValue)
+                                    {
+                                        <span>@evrak.GecerlilikTarihi.Value.ToString("dd.MM.yyyy")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Süresiz</span>
+                                    }
+                                </td>
+                                <td>
+                                    @switch (st)
+                                    {
+                                        case "EXPIRED":
+                                            <span class="badge bg-danger">Süresi Doldu</span>
+                                            break;
+                                        case "WARNING":
+                                            var k = (evrak.GecerlilikTarihi!.Value - DateTime.UtcNow).Days;
+                                            <span class="badge bg-warning text-dark">@k gün kaldı</span>
+                                            break;
+                                        default:
+                                            <span class="badge bg-success">Geçerli</span>
+                                            break;
+                                    }
+                                </td>
                                 <td class="text-center">
                                     <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-info" @onclick="() => EvrakGor(evrak)" title="Goruntule">
+                                        <button class="btn btn-outline-info" @onclick="() => EvrakGor(evrak)" title="Görüntüle">
                                             <i class="bi bi-eye"></i>
                                         </button>
-                                        <button class="btn btn-outline-success" @onclick="() => EvrakIndir(evrak)" title="Indir">
+                                        <button class="btn btn-outline-success" @onclick="() => EvrakIndir(evrak)" title="İndir">
                                             <i class="bi bi-download"></i>
                                         </button>
                                         <button class="btn btn-outline-danger" @onclick="() => EvrakSil(evrak)" title="Sil">
@@ -133,6 +186,7 @@
 
     private List<EvrakDosya> _evraklar = new();
     private string? _errorMessage;
+    private DateTime? _seciliTarih;
 
     protected override async Task OnInitializedAsync()
     {
@@ -141,7 +195,6 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        // PART 9: PersonelId ve AracId aynı anda set edilemez
         if (PersonelId.HasValue && AracId.HasValue)
         {
             _errorMessage = "HATA: Aynı anda hem PersonelId hem AracId set edilemez.";
@@ -152,7 +205,6 @@
         await LoadEvraklar();
     }
 
-    // PART 8: Tüm checklist SADECE EvrakDosya DB'den
     private async Task LoadEvraklar()
     {
         try
@@ -172,7 +224,19 @@
         }
     }
 
-    // PART 2: Aynı evrak tipi varsa UPDATE, yoksa INSERT
+    // PART 3: Status hesaplama
+    private static string GetStatus(EvrakDosya? e)
+    {
+        if (e == null || e.GecerlilikTarihi == null)
+            return "OK";
+
+        var days = (e.GecerlilikTarihi.Value.Date - DateTime.UtcNow.Date).Days;
+
+        if (days < 0) return "EXPIRED";
+        if (days <= 7) return "WARNING";
+        return "OK";
+    }
+
     private async Task UploadEvrak(InputFileChangeEventArgs e, string evrakTipi)
     {
         var file = e.File;
@@ -186,7 +250,6 @@
 
             await using var db = await DbFactory.CreateDbContextAsync();
 
-            // PART 2 (KRİTİK): Aynı evrak tipi varsa güncelle
             var existing = await db.EvrakDosyalari.FirstOrDefaultAsync(x =>
                 x.PersonelId == PersonelId &&
                 x.AracId == AracId &&
@@ -195,36 +258,32 @@
 
             if (existing != null)
             {
-                // Eski dosyayı diskten sil
                 FileService.Delete(existing.DosyaYolu);
-
-                // Mevcut kaydı güncelle
                 existing.DosyaAdi = file.Name;
                 existing.DosyaYolu = diskAdi;
                 existing.GuncellenmeTarihi = DateTime.UtcNow;
+                existing.GecerlilikTarihi = _seciliTarih; // PART 2: tarih güncelle
 
-                Logger.LogInformation("Evrak güncellendi: {Tip} PersonelId={P} AracId={A} Dosya={D}",
-                    evrakTipi, PersonelId, AracId, diskAdi);
+                Logger.LogInformation("Evrak güncellendi: {Tip} PersonelId={P} AracId={A} Gecerlilik={G}",
+                    evrakTipi, PersonelId, AracId, _seciliTarih);
             }
             else
             {
-                // Yeni kayıt
                 db.EvrakDosyalari.Add(new EvrakDosya
                 {
                     PersonelId = PersonelId,
                     AracId = AracId,
                     EvrakTipi = evrakTipi,
                     DosyaAdi = file.Name,
-                    DosyaYolu = diskAdi
+                    DosyaYolu = diskAdi,
+                    GecerlilikTarihi = _seciliTarih // PART 2: tarih ekle
                 });
 
-                Logger.LogInformation("Evrak kaydedildi: {Tip} PersonelId={P} AracId={A} Dosya={D}",
-                    evrakTipi, PersonelId, AracId, diskAdi);
+                Logger.LogInformation("Evrak kaydedildi: {Tip} PersonelId={P} AracId={A} Gecerlilik={G}",
+                    evrakTipi, PersonelId, AracId, _seciliTarih);
             }
 
             await db.SaveChangesAsync();
-
-            // PART 6: UI refresh — DB'den yeniden oku + parent'a bildir
             await LoadEvraklar();
             StateHasChanged();
 
@@ -277,7 +336,6 @@
         }
     }
 
-    // PART 5: DB (soft delete) + disk silme
     private async Task EvrakSil(EvrakDosya evrak)
     {
         _errorMessage = null;
