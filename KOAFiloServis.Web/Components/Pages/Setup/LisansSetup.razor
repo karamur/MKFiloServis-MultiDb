@@ -227,7 +227,7 @@
         islemDevamEdiyor = true;
         try
         {
-            var lisans = await LicenseService.ActivateLicenseKeyAsync(lisansAnahtari.Trim());
+            var lisans = await LicenseService.ActivateFromKeyAsync(lisansAnahtari.Trim()); // Yeni format: Base64 JSON (LisansDesktop uyumlu)
             mevcutLisans = lisans;
             lisansAktif = true;
             lisansAnahtari = string.Empty;

@@ -146,7 +146,7 @@
         try
         {
             var temizLisans = lisansAnahtari.Trim();
-            lisans = await LicenseService.ActivateLicenseKeyAsync(temizLisans);
+            lisans = await LicenseService.ActivateFromKeyAsync(temizLisans); // Yeni format: Base64 JSON (LisansDesktop uyumlu)
 
             statusMessage = "Lisans başarıyla aktive edildi! Ana sayfaya yönlendiriliyorsunuz...";
             statusClass = "alert-success";
