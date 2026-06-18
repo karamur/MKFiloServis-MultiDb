@@ -645,7 +645,9 @@
                 // Dashboard'a yonlendir - forceLoad: false ile ayni circuit icinde
                 // navigation yaparak authentication state'in korunmasini sagliyoruz
                 sifre = string.Empty;
-                Navigation.NavigateTo(GetSafeReturnUrl(), forceLoad: true); // 🔥 forceLoad: true — App.razor lisans gate'i yeniden değerlendirsin
+                // forceLoad: false — aynı circuit içinde kal, CancellationTokenSource disposal hatasını engelle
+                // LicenseCache zaten Singleton, App.razor lisans gate'i yeniden değerlendirme gerektirmez
+                Navigation.NavigateTo(GetSafeReturnUrl(), forceLoad: false);
             }
             else
             {
@@ -704,7 +706,8 @@
                 successMessage = "Giriş başarılı! Yönlendiriliyorsunuz...";
                 StateHasChanged();
                 await Task.Delay(150);
-                Navigation.NavigateTo(GetSafeReturnUrl(), forceLoad: true); // 🔥 forceLoad: true — App.razor lisans gate'i yeniden değerlendirsin
+                // forceLoad: false — aynı circuit içinde kal, CancellationTokenSource disposal hatasını engelle
+                Navigation.NavigateTo(GetSafeReturnUrl(), forceLoad: false);
             }
             else
             {
