@@ -339,19 +339,31 @@
     private async Task EvrakSil(EvrakDosya evrak)
     {
         _errorMessage = null;
+
+        // Onay al
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"\"{evrak.DosyaAdi}\" dosyasını silmek istediğinize emin misiniz?");
+        if (!confirmed) return;
+
         try
         {
+            // Diskteki dosyayı sil
             FileService.Delete(evrak.DosyaYolu);
 
+            // DB'den soft delete — FirstOrDefaultAsync FindAsync'ten daha güvenilir
             await using var db = await DbFactory.CreateDbContextAsync();
-            var entity = await db.EvrakDosyalari.FindAsync(evrak.Id);
+            var entity = await db.EvrakDosyalari
+                .FirstOrDefaultAsync(x => x.Id == evrak.Id && !x.IsDeleted);
+
             if (entity != null)
             {
                 entity.IsDeleted = true;
                 await db.SaveChangesAsync();
+                Logger.LogInformation("Evrak silindi: Id={Id} Tip={Tip} Dosya={D}", evrak.Id, evrak.EvrakTipi, evrak.DosyaAdi);
             }
-
-            Logger.LogInformation("Evrak silindi: Id={Id} Tip={Tip} Dosya={D}", evrak.Id, evrak.EvrakTipi, evrak.DosyaAdi);
+            else
+            {
+                Logger.LogWarning("Evrak silme: kayit bulunamadi Id={Id}", evrak.Id);
+            }
 
             await LoadEvraklar();
             StateHasChanged();
