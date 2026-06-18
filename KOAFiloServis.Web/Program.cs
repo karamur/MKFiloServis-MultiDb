@@ -107,7 +107,7 @@ builder.Services.AddRazorComponents()
 // SignalR hub options (Production hardening)
 builder.Services.Configure<Microsoft.AspNetCore.SignalR.HubOptions>(options =>
 {
-    options.MaximumReceiveMessageSize = 32 * 1024 * 1024; // 32MB — InputFile dosya yükleme için gerekli (10MB + şifreleme overhead)
+    options.MaximumReceiveMessageSize = 50 * 1024 * 1024; // 50MB — InputFile + evrak yükleme için (10MB dosya + overhead)
 });
 
 builder.Services.AddSingleton<AktiviteLogInterceptor>();

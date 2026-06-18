@@ -7,13 +7,14 @@
 @inject FileService FileService
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject IJSRuntime JS
+@inject ILogger<EvrakYonetimi> Logger
 
-@* EVRAK YONETIMI — Basit, DB'ye kaydedilen evrak sistemi *@
+@* EVRAK YONETIMI — TEK GERÇEK KAYNAK: EvrakDosya tablosu *@
 
 <div class="evrak-yonetimi">
     <h6 class="mb-3"><i class="bi bi-paperclip me-2"></i>Evrak Yönetimi</h6>
 
-    @* Evrak Tipleri Checklist *@
+    @* Evrak Tipleri Checklist — SADECE DB'den okunur *@
     <div class="row mb-3">
         @foreach (var tip in EvrakTipleri)
         {
@@ -51,6 +52,11 @@
                             <button class="btn btn-outline-success btn-sm" @onclick="() => EvrakIndir(evrak)" title="Indir">
                                 <i class="bi bi-download"></i>
                             </button>
+                            <label class="btn btn-outline-warning btn-sm" title="Guncelle (tekrar yukle)">
+                                <i class="bi bi-arrow-repeat"></i>
+                                <InputFile class="d-none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                           OnChange="e => UploadEvrak(e, tip)" />
+                            </label>
                             <button class="btn btn-outline-danger btn-sm" @onclick="() => EvrakSil(evrak)" title="Sil">
                                 <i class="bi bi-trash"></i>
                             </button>
@@ -60,6 +66,12 @@
             </div>
         }
     </div>
+
+    @* Hata mesaji *@
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-danger py-1 small mb-3">@_errorMessage</div>
+    }
 
     @* Dosya Listesi *@
     @if (_evraklar.Any())
@@ -83,7 +95,13 @@
                         {
                             <tr>
                                 <td><span class="badge bg-primary">@evrak.EvrakTipi</span></td>
-                                <td>@evrak.DosyaAdi</td>
+                                <td>
+                                    @evrak.DosyaAdi
+                                    @if (evrak.GuncellenmeTarihi.HasValue)
+                                    {
+                                        <small class="text-muted d-block">Güncellendi: @evrak.GuncellenmeTarihi.Value.ToString("dd.MM.yyyy HH:mm")</small>
+                                    }
+                                </td>
                                 <td>@evrak.YuklenmeTarihi.ToString("dd.MM.yyyy HH:mm")</td>
                                 <td class="text-center">
                                     <div class="btn-group btn-group-sm">
@@ -111,23 +129,30 @@
     [Parameter] public int? PersonelId { get; set; }
     [Parameter] public int? AracId { get; set; }
     [Parameter] public List<string> EvrakTipleri { get; set; } = new() { "Kimlik", "Ehliyet", "Saglik Raporu", "Sozlesme" };
-
-    /// <summary>Parent component'e upload/silme sonrası refresh sinyali gönderir.</summary>
     [Parameter] public EventCallback OnChanged { get; set; }
 
     private List<EvrakDosya> _evraklar = new();
+    private string? _errorMessage;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadEvraklar();
     }
 
-    /// <summary>Modal açıldığında veya parametre değiştiğinde DB'den yeniden yükle.</summary>
     protected override async Task OnParametersSetAsync()
     {
+        // PART 9: PersonelId ve AracId aynı anda set edilemez
+        if (PersonelId.HasValue && AracId.HasValue)
+        {
+            _errorMessage = "HATA: Aynı anda hem PersonelId hem AracId set edilemez.";
+            Logger.LogError("EvrakYonetimi: PersonelId={P} ve AracId={A} aynı anda set edildi!", PersonelId, AracId);
+            return;
+        }
+        _errorMessage = null;
         await LoadEvraklar();
     }
 
+    // PART 8: Tüm checklist SADECE EvrakDosya DB'den
     private async Task LoadEvraklar()
     {
         try
@@ -143,41 +168,73 @@
         catch (Exception ex)
         {
             _evraklar = new();
-            System.Diagnostics.Trace.WriteLine($"[EvrakYonetimi] Load error: {ex.Message}");
+            Logger.LogError(ex, "EvrakYonetimi Load hatasi PersonelId={P} AracId={A}", PersonelId, AracId);
         }
     }
 
+    // PART 2: Aynı evrak tipi varsa UPDATE, yoksa INSERT
     private async Task UploadEvrak(InputFileChangeEventArgs e, string evrakTipi)
     {
         var file = e.File;
         if (file == null) return;
+
+        _errorMessage = null;
 
         try
         {
             var diskAdi = await FileService.SaveAsync(file);
 
             await using var db = await DbFactory.CreateDbContextAsync();
-            db.EvrakDosyalari.Add(new EvrakDosya
+
+            // PART 2 (KRİTİK): Aynı evrak tipi varsa güncelle
+            var existing = await db.EvrakDosyalari.FirstOrDefaultAsync(x =>
+                x.PersonelId == PersonelId &&
+                x.AracId == AracId &&
+                x.EvrakTipi == evrakTipi &&
+                !x.IsDeleted);
+
+            if (existing != null)
             {
-                PersonelId = PersonelId,
-                AracId = AracId,
-                EvrakTipi = evrakTipi,
-                DosyaAdi = file.Name,
-                DosyaYolu = diskAdi
-            });
+                // Eski dosyayı diskten sil
+                FileService.Delete(existing.DosyaYolu);
+
+                // Mevcut kaydı güncelle
+                existing.DosyaAdi = file.Name;
+                existing.DosyaYolu = diskAdi;
+                existing.GuncellenmeTarihi = DateTime.UtcNow;
+
+                Logger.LogInformation("Evrak güncellendi: {Tip} PersonelId={P} AracId={A} Dosya={D}",
+                    evrakTipi, PersonelId, AracId, diskAdi);
+            }
+            else
+            {
+                // Yeni kayıt
+                db.EvrakDosyalari.Add(new EvrakDosya
+                {
+                    PersonelId = PersonelId,
+                    AracId = AracId,
+                    EvrakTipi = evrakTipi,
+                    DosyaAdi = file.Name,
+                    DosyaYolu = diskAdi
+                });
+
+                Logger.LogInformation("Evrak kaydedildi: {Tip} PersonelId={P} AracId={A} Dosya={D}",
+                    evrakTipi, PersonelId, AracId, diskAdi);
+            }
+
             await db.SaveChangesAsync();
 
-            // DB'den yeniden yükle + kendi UI'ını güncelle
+            // PART 6: UI refresh — DB'den yeniden oku + parent'a bildir
             await LoadEvraklar();
             StateHasChanged();
 
-            // Parent'a bildir — checklist yenilensin
             if (OnChanged.HasDelegate)
                 await OnChanged.InvokeAsync();
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Trace.WriteLine($"[EvrakYonetimi] Upload error: {ex.Message}");
+            _errorMessage = $"Yükleme hatası: {ex.Message}";
+            Logger.LogError(ex, "EvrakYonetimi Upload hatasi PersonelId={P} AracId={A} Tip={T}", PersonelId, AracId, evrakTipi);
         }
     }
 
@@ -199,7 +256,8 @@
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Trace.WriteLine($"[EvrakYonetimi] View error: {ex.Message}");
+            _errorMessage = $"Görüntüleme hatası: {ex.Message}";
+            Logger.LogError(ex, "EvrakYonetimi View hatasi Id={Id}", evrak.Id);
         }
     }
 
@@ -210,15 +268,19 @@
             var bytes = await FileService.ReadAsync(evrak.DosyaYolu);
             var base64 = Convert.ToBase64String(bytes);
             await JS.InvokeVoidAsync("downloadFile", evrak.DosyaAdi, base64, "application/octet-stream");
+            Logger.LogInformation("Evrak indirildi: Id={Id} Dosya={D}", evrak.Id, evrak.DosyaAdi);
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Trace.WriteLine($"[EvrakYonetimi] Download error: {ex.Message}");
+            _errorMessage = $"İndirme hatası: {ex.Message}";
+            Logger.LogError(ex, "EvrakYonetimi Download hatasi Id={Id}", evrak.Id);
         }
     }
 
+    // PART 5: DB (soft delete) + disk silme
     private async Task EvrakSil(EvrakDosya evrak)
     {
+        _errorMessage = null;
         try
         {
             FileService.Delete(evrak.DosyaYolu);
@@ -231,16 +293,18 @@
                 await db.SaveChangesAsync();
             }
 
+            Logger.LogInformation("Evrak silindi: Id={Id} Tip={Tip} Dosya={D}", evrak.Id, evrak.EvrakTipi, evrak.DosyaAdi);
+
             await LoadEvraklar();
             StateHasChanged();
 
-            // Parent'a bildir
             if (OnChanged.HasDelegate)
                 await OnChanged.InvokeAsync();
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Trace.WriteLine($"[EvrakYonetimi] Delete error: {ex.Message}");
+            _errorMessage = $"Silme hatası: {ex.Message}";
+            Logger.LogError(ex, "EvrakYonetimi Delete hatasi Id={Id}", evrak.Id);
         }
     }
 }

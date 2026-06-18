@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components.Forms;
+using Microsoft.Extensions.Logging;
 
 namespace KOAFiloServis.Web.Services;
 
@@ -9,18 +10,38 @@ namespace KOAFiloServis.Web.Services;
 public class FileService
 {
     private const string UploadRoot = @"C:\KOAFiloServis\uploads";
+    private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+        { ".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx" };
+    private const long MaxFileSize = 10 * 1024 * 1024; // 10 MB
+    private readonly ILogger<FileService> _logger;
+
+    public FileService(ILogger<FileService> logger)
+    {
+        _logger = logger;
+    }
 
     /// <summary>IBrowserFile'ı diske kaydeder, GUID'li dosya adını döner.</summary>
     public async Task<string> SaveAsync(IBrowserFile file)
     {
-        Directory.CreateDirectory(UploadRoot);
+        // PART 10: Dosya tipi validasyonu
+        var ext = Path.GetExtension(file.Name);
+        if (!AllowedExtensions.Contains(ext))
+            throw new InvalidOperationException($"Desteklenmeyen dosya tipi: {ext}. İzin verilenler: {string.Join(", ", AllowedExtensions)}");
 
-        var fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.Name)}";
+        // PART 10: Boyut validasyonu
+        if (file.Size > MaxFileSize)
+            throw new InvalidOperationException($"Dosya boyutu çok büyük: {file.Size / 1024 / 1024}MB. Max: {MaxFileSize / 1024 / 1024}MB");
+
+        // PART 3: Unique dosya adı
+        Directory.CreateDirectory(UploadRoot);
+        var fileName = $"{Guid.NewGuid()}{ext}";
         var fullPath = Path.Combine(UploadRoot, fileName);
 
+        // PART 4: Güvenli dosya yazımı
         await using var stream = new FileStream(fullPath, FileMode.Create);
-        await file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024).CopyToAsync(stream);
+        await file.OpenReadStream(maxAllowedSize: MaxFileSize).CopyToAsync(stream);
 
+        _logger.LogInformation("Dosya diske yazildi: {FileName} ({Size} bytes) → {DiskName}", file.Name, file.Size, fileName);
         return fileName;
     }
 
@@ -40,11 +61,14 @@ public class FileService
         return await File.ReadAllBytesAsync(path);
     }
 
-    /// <summary>Diskteki dosyayı siler.</summary>
+    /// <summary>Diskteki dosyayı siler (varsa).</summary>
     public void Delete(string fileName)
     {
         var path = Path.Combine(UploadRoot, fileName);
         if (File.Exists(path))
+        {
             File.Delete(path);
+            _logger.LogInformation("Dosya diskten silindi: {FileName}", fileName);
+        }
     }
 }

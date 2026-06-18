@@ -1,9 +1,9 @@
 namespace KOAFiloServis.Shared.Entities;
 
 /// <summary>
-/// Personel ve Araç evrakları için ORTAK dosya tablosu.
-/// Her evrak bir dosyadır. Diske yazılır, DB'ye kaydedilir.
-/// Eski karmaşık sistemin yerine: tek tablo, basit mantık.
+/// TEK GERÇEK KAYNAK — Personel ve Araç evrakları için ORTAK dosya tablosu.
+/// Tüm checklist, UI ve kontroller SADECE bu tablodan okunur.
+/// Eski sistemler (PersonelOzlukEvrak, AracEvrak vb.) KULLANILMAZ.
 /// </summary>
 public class EvrakDosya
 {
@@ -21,7 +21,11 @@ public class EvrakDosya
     /// <summary>Diskteki GUID'li dosya adı.</summary>
     public string DosyaYolu { get; set; } = string.Empty;
 
+    /// <summary>İlk yükleme tarihi.</summary>
     public DateTime YuklenmeTarihi { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Son güncelleme tarihi (aynı evrak tekrar yüklenince).</summary>
+    public DateTime? GuncellenmeTarihi { get; set; }
 
     public bool IsDeleted { get; set; } = false;
 }
