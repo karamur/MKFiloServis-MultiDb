@@ -10,9 +10,6 @@ namespace KOAFiloServis.Web.Services;
 public class FileService
 {
     private const string UploadRoot = @"C:\KOAFiloServis\uploads";
-    private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
-        { ".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx" };
-    private const long MaxFileSize = 10 * 1024 * 1024; // 10 MB
     private readonly ILogger<FileService> _logger;
 
     public FileService(ILogger<FileService> logger)
@@ -23,23 +20,16 @@ public class FileService
     /// <summary>IBrowserFile'ı diske kaydeder, GUID'li dosya adını döner.</summary>
     public async Task<string> SaveAsync(IBrowserFile file)
     {
-        // PART 10: Dosya tipi validasyonu
         var ext = Path.GetExtension(file.Name);
-        if (!AllowedExtensions.Contains(ext))
-            throw new InvalidOperationException($"Desteklenmeyen dosya tipi: {ext}. İzin verilenler: {string.Join(", ", AllowedExtensions)}");
-
-        // PART 10: Boyut validasyonu
-        if (file.Size > MaxFileSize)
-            throw new InvalidOperationException($"Dosya boyutu çok büyük: {file.Size / 1024 / 1024}MB. Max: {MaxFileSize / 1024 / 1024}MB");
 
         // PART 3: Unique dosya adı
         Directory.CreateDirectory(UploadRoot);
         var fileName = $"{Guid.NewGuid()}{ext}";
         var fullPath = Path.Combine(UploadRoot, fileName);
 
-        // PART 4: Güvenli dosya yazımı
+        // PART 4: Güvenli dosya yazımı — limitsiz
         await using var stream = new FileStream(fullPath, FileMode.Create);
-        await file.OpenReadStream(maxAllowedSize: MaxFileSize).CopyToAsync(stream);
+        await file.OpenReadStream(maxAllowedSize: long.MaxValue).CopyToAsync(stream);
 
         _logger.LogInformation("Dosya diske yazildi: {FileName} ({Size} bytes) → {DiskName}", file.Name, file.Size, fileName);
         return fileName;

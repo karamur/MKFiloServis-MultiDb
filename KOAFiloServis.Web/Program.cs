@@ -104,12 +104,6 @@ if (!hasExplicitUrls && !isIisHosted && builder.Environment.IsDevelopment())
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// SignalR hub options (Production hardening)
-builder.Services.Configure<Microsoft.AspNetCore.SignalR.HubOptions>(options =>
-{
-    options.MaximumReceiveMessageSize = 50 * 1024 * 1024; // 50MB — InputFile + evrak yükleme için (10MB dosya + overhead)
-});
-
 builder.Services.AddSingleton<AktiviteLogInterceptor>();
 builder.Services.AddSingleton<ICurrentUserAccessor, CurrentUserAccessor>();
 
