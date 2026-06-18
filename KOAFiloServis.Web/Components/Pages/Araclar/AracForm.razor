@@ -346,6 +346,17 @@
     @* Belgeler Bölümü - Sadece Düzenleme Modunda *@
     @if (IsEdit)
     {
+        @* YENI: Basit evrak yonetimi — EvrakDosya tabanli, DB'ye kalici *@
+        <div class="card mt-4 border-success">
+            <div class="card-header bg-success bg-opacity-10 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-cloud-upload me-2 text-success"></i>Hızlı Evrak Yükleme (YENİ SİSTEM)</h5>
+            </div>
+            <div class="card-body">
+                <KOAFiloServis.Web.Components.Shared.EvrakYonetimi PersonelId="null" AracId="Id"
+                    EvrakTipleri="_aracEvrakTipleri" />
+            </div>
+        </div>
+
         <div class="card mt-4">
             <div class="card-header bg-white d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Araç Belgeleri</h5>
@@ -809,6 +820,7 @@
 
     // Evrak yönetimi
     private List<AracEvrak> aracEvraklari = new();
+    private static readonly List<string> _aracEvrakTipleri = new() { "Ruhsat", "Sigorta", "Muayene", "Kasko", "Uygunluk Belgesi", "Diger" };
     private bool evraklarYukleniyor = false;
     private bool showYeniEvrakModal = false;
     private bool showEvrakDetayModal = false;

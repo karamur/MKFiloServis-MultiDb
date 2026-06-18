@@ -111,6 +111,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<ServisCalisma> ServisCalismalari { get; set; }
     public DbSet<AracEvrak> AracEvraklari { get; set; }
     public DbSet<AracEvrakDosya> AracEvrakDosyalari { get; set; }
+    public DbSet<EvrakDosya> EvrakDosyalari { get; set; } // YENI: Basit ortak evrak sistemi (Personel + Arac)
 
     // Fatura Modulu
     public DbSet<Fatura> Faturalar { get; set; }
