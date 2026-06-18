@@ -122,10 +122,17 @@
                         @foreach (var evrak in _evraklar.OrderByDescending(x => x.YuklenmeTarihi))
                         {
                             var st = GetStatus(evrak);
-                            <tr>
+                            var dosyaVar = File.Exists(FileService.GetFullPath(evrak.DosyaYolu));
+                            <tr class="@(!dosyaVar ? "table-warning" : "")">
                                 <td><span class="badge bg-primary">@evrak.EvrakTipi</span></td>
                                 <td>
                                     @evrak.DosyaAdi
+                                    @if (!dosyaVar)
+                                    {
+                                        <span class="badge bg-warning text-dark ms-1" title="Dosya diskte bulunamadı!">
+                                            <i class="bi bi-exclamation-triangle"></i> Kayıp
+                                        </span>
+                                    }
                                     @if (evrak.GuncellenmeTarihi.HasValue)
                                     {
                                         <small class="text-muted d-block">Güncellendi: @evrak.GuncellenmeTarihi.Value.ToString("dd.MM.yyyy HH:mm")</small>
