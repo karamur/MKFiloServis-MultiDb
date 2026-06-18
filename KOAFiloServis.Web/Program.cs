@@ -298,6 +298,7 @@ builder.Services.AddScoped<IPuantajService, PuantajService>();
 builder.Services.AddScoped<IKurumPuantajService, KurumPuantajService>();
 builder.Services.AddScoped<IHakedisPuantajService, HakedisPuantajService>(); // Operasyonel Hakediş Puantajı
 builder.Services.AddScoped<IPuantajHakedisSyncService, PuantajHakedisSyncService>(); // Grid → Hakedis köprüsü
+builder.Services.AddScoped<IPuantajFaturaRaporService, PuantajFaturaRaporService>(); // YENI: Readonly fatura hazırlık raporu
 builder.Services.AddScoped<RebuildService>(); // RebuildAll motoru
 builder.Services.AddScoped<DenetimService>(); // Finans denetim motoru
 builder.Services.AddScoped<TestSessionService>(); // Güvenli test modu
