@@ -1,3 +1,0 @@
-ERROR:  relation "PuantajHesapDonemleri" does not exist
-LINE 4: SELECT 'PuantajHesapDonemleri', count(*) FROM "PuantajHesapD...
-                                                      ^
