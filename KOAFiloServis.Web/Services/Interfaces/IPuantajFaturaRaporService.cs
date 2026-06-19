@@ -4,7 +4,7 @@ namespace KOAFiloServis.Web.Services.Interfaces;
 
 /// <summary>
 /// Puantaj sonrası fatura hazırlık için READONLY rapor servisi.
-/// PuantajKayit ve HakedisPuantaj tablolarından okur, hiçbir kayıt oluşturmaz/güncellemez/silmez.
+/// Sadece PuantajKayit (B1) tablosundan okur, hiçbir kayıt oluşturmaz/güncellemez/silmez.
 /// </summary>
 public interface IPuantajFaturaRaporService
 {

@@ -64,7 +64,7 @@ public class PuantajFaturaRaporService : IPuantajFaturaRaporService
     }
 
     // ══════════════════════════════════════════════
-    // SATIRLAR (Sayfalamalı, iki kaynak merge)
+    // SATIRLAR (Sayfalamalı, tek kaynak — PuantajKayit)
     // ══════════════════════════════════════════════
 
     public async Task<List<PuantajFaturaSatirDto>> GetSatirlarAsync(PuantajFaturaRaporRequest request, CancellationToken ct = default)
@@ -89,7 +89,7 @@ public class PuantajFaturaRaporService : IPuantajFaturaRaporService
     }
 
     // ══════════════════════════════════════════════
-    // AĞAÇ (Hiyerarşik gruplu, iki kaynak merge)
+    // AĞAÇ (Hiyerarşik gruplu, tek kaynak — PuantajKayit)
     // ══════════════════════════════════════════════
 
     public async Task<List<PuantajFaturaAgacNodeDto>> GetAgacAsync(PuantajFaturaRaporRequest request, CancellationToken ct = default)
@@ -131,7 +131,7 @@ public class PuantajFaturaRaporService : IPuantajFaturaRaporService
     }
 
     // ══════════════════════════════════════════════
-    // COUNT (iki kaynak)
+    // COUNT (tek kaynak — PuantajKayit)
     // ══════════════════════════════════════════════
 
     public async Task<int> GetCountAsync(PuantajFaturaRaporRequest request, CancellationToken ct = default)
