@@ -1,4 +1,3 @@
-using System.Drawing;
 using ClosedXML.Excel;
 using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
@@ -10,9 +9,9 @@ namespace KOAFiloServis.Web.Services;
 
 /// <summary>
 /// Puantaj sonrası fatura hazırlık için READONLY rapor servisi.
-/// PRIMARY kaynak: PuantajKayit (KurumId, FaturaKesiciCariId, Gun01-31 direkt)
-/// SECONDARY kaynak: HakedisPuantaj (Guzergah uzerinden KurumId, GunlukSeferSayisi)
-/// İki kaynak merge edilir. Hiçbir kayıt oluşturmaz, güncellemez, silmez.
+/// TEK kaynak: PuantajKayit (OperasyonKaydi → PuantajEngineService → PuantajKayit)
+/// Tüm alanlar B1'den karşılanır — KDV %10+%20 ayrımı, KurumId, FaturaKesiciCariId, Gun01-31.
+/// Hiçbir kayıt oluşturmaz, güncellemez, silmez.
 /// </summary>
 public class PuantajFaturaRaporService : IPuantajFaturaRaporService
 {
@@ -32,25 +31,29 @@ public class PuantajFaturaRaporService : IPuantajFaturaRaporService
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
-        var pkOzet = await BuildPuantajKayitQuery(db, request)
+        var ozetData = await BuildPuantajKayitQuery(db, request)
             .GroupBy(_ => 1)
-            .Select(g => new { Count = g.Count(), Gelir = g.Sum(x => x.ToplamGelir), Gider = g.Sum(x => x.ToplamGider), Kdv = g.Sum(x => x.GelirKdvTutari + x.GiderKdv20Tutari + x.GiderKdv10Tutari), Kesinti = g.Sum(x => x.GelirKesinti + x.GiderKesinti), Sefer = (int)g.Sum(x => x.Gun), FaturaKesilen = g.Count(x => x.GelirFaturaKesildi || x.GiderFaturaAlindi) })
-            .FirstOrDefaultAsync(ct);
-
-        var hpOzet = await BuildHakedisPuantajQuery(db, request)
-            .GroupBy(_ => 1)
-            .Select(g => new { Count = g.Count(), Gelir = g.Sum(x => x.GelirToplam), Gider = g.Sum(x => x.GiderToplam), Kdv = g.Sum(x => x.GelirKdvTutari + x.KdvTutari), Kesinti = g.Sum(x => x.ToplamKesinti), Sefer = g.Sum(x => x.ToplamSefer), FaturaKesilen = g.Count(x => x.Durum == HakedisDurumu.Faturalasti || x.Durum == HakedisDurumu.Odendi) })
+            .Select(g => new
+            {
+                Count = g.Count(),
+                Gelir = g.Sum(x => x.ToplamGelir),
+                Gider = g.Sum(x => x.ToplamGider),
+                Kdv = g.Sum(x => x.GelirKdvTutari + x.GiderKdv20Tutari + x.GiderKdv10Tutari),
+                Kesinti = g.Sum(x => x.GelirKesinti + x.GiderKesinti),
+                Sefer = (int)g.Sum(x => x.Gun),
+                FaturaKesilen = g.Count(x => x.GelirFaturaKesildi || x.GiderFaturaAlindi)
+            })
             .FirstOrDefaultAsync(ct);
 
         var ozet = new PuantajFaturaOzetDto
         {
-            ToplamKayit = (pkOzet?.Count ?? 0) + (hpOzet?.Count ?? 0),
-            FaturaKesilen = (pkOzet?.FaturaKesilen ?? 0) + (hpOzet?.FaturaKesilen ?? 0),
-            ToplamSefer = (pkOzet?.Sefer ?? 0) + (hpOzet?.Sefer ?? 0),
-            ToplamGelir = (pkOzet?.Gelir ?? 0) + (hpOzet?.Gelir ?? 0),
-            ToplamGider = (pkOzet?.Gider ?? 0) + (hpOzet?.Gider ?? 0),
-            ToplamKdv = (pkOzet?.Kdv ?? 0) + (hpOzet?.Kdv ?? 0),
-            ToplamKesinti = (pkOzet?.Kesinti ?? 0) + (hpOzet?.Kesinti ?? 0),
+            ToplamKayit = ozetData?.Count ?? 0,
+            FaturaKesilen = ozetData?.FaturaKesilen ?? 0,
+            ToplamSefer = ozetData?.Sefer ?? 0,
+            ToplamGelir = ozetData?.Gelir ?? 0,
+            ToplamGider = ozetData?.Gider ?? 0,
+            ToplamKdv = ozetData?.Kdv ?? 0,
+            ToplamKesinti = ozetData?.Kesinti ?? 0,
         };
         ozet.FaturaKesilmeyen = ozet.ToplamKayit - ozet.FaturaKesilen;
         ozet.NetGelir = ozet.ToplamGelir - ozet.ToplamKdv - ozet.ToplamKesinti;
@@ -68,49 +71,21 @@ public class PuantajFaturaRaporService : IPuantajFaturaRaporService
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
-        // PuantajKayit kaynaklı satırlar
-        var pkQuery = BuildPuantajKayitQuery(db, request);
-        pkQuery = ApplyYonFilter(pkQuery, request);
-        pkQuery = ApplyAramaFilter(pkQuery, request);
-
-        // HakedisPuantaj kaynaklı satırlar
-        var hpQuery = BuildHakedisPuantajQuery(db, request);
-        hpQuery = ApplyYonFilterHp(hpQuery, request);
-        // HakedisPuantaj'da arama: GuzergahAdi veya Plaka uzerinden
-        if (!string.IsNullOrWhiteSpace(request.Arama))
-        {
-            var arama = request.Arama.Trim().ToUpperInvariant();
-            hpQuery = hpQuery.Where(x =>
-                (x.Arac != null && x.Arac.AktifPlaka != null && x.Arac.AktifPlaka.ToUpper().Contains(arama)) ||
-                (x.Sofor != null && (x.Sofor.Ad + " " + x.Sofor.Soyad).ToUpper().Contains(arama)) ||
-                (x.Guzergah != null && x.Guzergah.GuzergahAdi.ToUpper().Contains(arama)));
-        }
+        var query = BuildPuantajKayitQuery(db, request);
+        query = ApplyYonFilter(query, request);
+        query = ApplyAramaFilter(query, request);
 
         var pageSize = Math.Min(request.PageSize, MaxPageSize);
         var skip = (Math.Max(1, request.Page) - 1) * pageSize;
 
-        // İki kaynaktan veri çek
-        var pkKayitlar = await pkQuery
+        var kayitlar = await query
             .Include(x => x.Kurum).Include(x => x.Guzergah).Include(x => x.Arac)
             .Include(x => x.Sofor).Include(x => x.FaturaKesiciCari).Include(x => x.OdemeYapilacakCari)
             .AsNoTracking().OrderBy(x => x.SiraNo).ThenBy(x => x.Id)
-            .ToListAsync(ct);
-
-        var hpKayitlar = await hpQuery
-            .Include(x => x.Guzergah).ThenInclude(g => g!.Kurum)
-            .Include(x => x.Arac).Include(x => x.Sofor).Include(x => x.Cari)
-            .Include(x => x.Detaylar)
-            .AsNoTracking().OrderBy(x => x.Id)
-            .ToListAsync(ct);
-
-        // Merge + sayfalama
-        var merged = pkKayitlar.Select(MapPuantajKayitToDto)
-            .Concat(hpKayitlar.Select(MapHakedisPuantajToDto))
-            .OrderBy(x => x.KurumAdi).ThenBy(x => x.Plaka).ThenBy(x => x.GuzergahAdi)
             .Skip(skip).Take(pageSize)
-            .ToList();
+            .ToListAsync(ct);
 
-        return merged;
+        return kayitlar.Select(MapPuantajKayitToDto).ToList();
     }
 
     // ══════════════════════════════════════════════
@@ -121,27 +96,15 @@ public class PuantajFaturaRaporService : IPuantajFaturaRaporService
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
-        // PuantajKayit
-        var pkQuery = BuildPuantajKayitQuery(db, request);
-        pkQuery = ApplyYonFilter(pkQuery, request);
-        var pkKayitlar = await pkQuery
+        var query = BuildPuantajKayitQuery(db, request);
+        query = ApplyYonFilter(query, request);
+        var kayitlar = await query
             .Include(x => x.Kurum).Include(x => x.FaturaKesiciCari).Include(x => x.OdemeYapilacakCari)
             .Include(x => x.Guzergah).Include(x => x.Arac).Include(x => x.Sofor)
             .AsNoTracking().OrderBy(x => x.SiraNo)
             .ToListAsync(ct);
 
-        // HakedisPuantaj
-        var hpQuery = BuildHakedisPuantajQuery(db, request);
-        hpQuery = ApplyYonFilterHp(hpQuery, request);
-        var hpKayitlar = await hpQuery
-            .Include(x => x.Guzergah).ThenInclude(g => g!.Kurum)
-            .Include(x => x.Arac).Include(x => x.Sofor).Include(x => x.Cari)
-            .AsNoTracking().OrderBy(x => x.Id)
-            .ToListAsync(ct);
-
-        var satirlar = pkKayitlar.Select(MapPuantajKayitToDto)
-            .Concat(hpKayitlar.Select(MapHakedisPuantajToDto))
-            .ToList();
+        var satirlar = kayitlar.Select(MapPuantajKayitToDto).ToList();
 
         return request.Agac switch
         {
@@ -174,9 +137,7 @@ public class PuantajFaturaRaporService : IPuantajFaturaRaporService
     public async Task<int> GetCountAsync(PuantajFaturaRaporRequest request, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var pkCount = await BuildPuantajKayitQuery(db, request).CountAsync(ct);
-        var hpCount = await BuildHakedisPuantajQuery(db, request).CountAsync(ct);
-        return pkCount + hpCount;
+        return await BuildPuantajKayitQuery(db, request).CountAsync(ct);
     }
 
     // ══════════════════════════════════════════════
@@ -201,24 +162,6 @@ public class PuantajFaturaRaporService : IPuantajFaturaRaporService
         return query;
     }
 
-    private static IQueryable<HakedisPuantaj> BuildHakedisPuantajQuery(ApplicationDbContext db, PuantajFaturaRaporRequest request)
-    {
-        var query = db.HakedisPuantajlar
-            .Where(x => x.Yil == request.Yil && x.Ay == request.Ay && !x.IsDeleted)
-            .Where(x => x.Durum == HakedisDurumu.Onaylandi || x.Durum == HakedisDurumu.Faturalasti || x.Durum == HakedisDurumu.Odendi);
-
-        if (request.KurumId.HasValue)
-            query = query.Where(x => x.Guzergah != null && x.Guzergah.KurumId == request.KurumId.Value);
-        if (request.CariId.HasValue)
-            query = query.Where(x => x.CariId == request.CariId.Value);
-        if (request.AracId.HasValue)
-            query = query.Where(x => x.AracId == request.AracId.Value);
-        if (request.GuzergahId.HasValue)
-            query = query.Where(x => x.GuzergahId == request.GuzergahId.Value);
-
-        return query;
-    }
-
     // ══════════════════════════════════════════════
     // YÖN / ARAMA FİLTRELERİ
     // ══════════════════════════════════════════════
@@ -229,16 +172,6 @@ public class PuantajFaturaRaporService : IPuantajFaturaRaporService
         {
             PuantajFaturaYonu.Gelir => query.Where(x => x.ToplamGelir > 0 || x.BirimGelir > 0),
             PuantajFaturaYonu.Gider => query.Where(x => x.ToplamGider > 0 || x.BirimGider > 0),
-            _ => query
-        };
-    }
-
-    private static IQueryable<HakedisPuantaj> ApplyYonFilterHp(IQueryable<HakedisPuantaj> query, PuantajFaturaRaporRequest request)
-    {
-        return request.Yon switch
-        {
-            PuantajFaturaYonu.Gelir => query.Where(x => x.GelirToplam > 0 || x.GelirBirimFiyat > 0),
-            PuantajFaturaYonu.Gider => query.Where(x => x.GiderToplam > 0 || x.GiderBirimFiyat > 0),
             _ => query
         };
     }
@@ -294,67 +227,6 @@ public class PuantajFaturaRaporService : IPuantajFaturaRaporService
             FaturaKesildi = k.GelirFaturaKesildi || k.GiderFaturaAlindi,
             FaturaNo = k.GelirFaturaNo ?? k.GiderFaturaNo,
             FaturaTarihi = k.GelirFaturaTarihi ?? k.GiderFaturaTarihi,
-        };
-    }
-
-    // ══════════════════════════════════════════════
-    // MAPPER: HakedisPuantaj → DTO
-    // ══════════════════════════════════════════════
-
-    private static PuantajFaturaSatirDto MapHakedisPuantajToDto(HakedisPuantaj h)
-    {
-        // Günlük değerleri Detaylar'dan al
-        var gunDegerleri = new int[31];
-        if (h.Detaylar != null)
-        {
-            foreach (var detay in h.Detaylar)
-            {
-                if (detay.Gun >= 1 && detay.Gun <= 31)
-                    gunDegerleri[detay.Gun - 1] = detay.SeferSayisi;
-            }
-        }
-
-        var kdvTutar = h.GelirKdvTutari + h.KdvTutari;
-        var faturaKesildi = h.Durum == HakedisDurumu.Faturalasti || h.Durum == HakedisDurumu.Odendi;
-
-        return new PuantajFaturaSatirDto
-        {
-            KayitId = h.Id, Kaynak = "HakedisPuantaj",
-            KurumId = h.Guzergah?.KurumId,
-            KurumAdi = h.Guzergah?.Kurum?.KurumAdi,
-            CariId = h.CariId,
-            CariUnvan = h.Cari?.Unvan,
-            Telefon = h.Cari?.Telefon,
-            // HakedisPuantaj'da KaynakTipi yok — CariTipi'ne bakılır
-            TedarikciId = h.Cari?.CariTipi == CariTipi.Tedarikci || h.Cari?.CariTipi == CariTipi.MusteriTedarikci ? h.CariId : null,
-            TedarikciUnvan = h.Cari?.CariTipi == CariTipi.Tedarikci || h.Cari?.CariTipi == CariTipi.MusteriTedarikci ? h.Cari?.Unvan : null,
-            AracId = h.AracId, Plaka = h.Arac?.AktifPlaka,
-            SoforId = h.SoforId,
-            SoforAdi = h.Sofor != null ? $"{h.Sofor.Ad} {h.Sofor.Soyad}" : null,
-            GuzergahId = h.GuzergahId, GuzergahAdi = h.Guzergah?.GuzergahAdi,
-            YonTipi = h.YonTipi.ToString(),
-            BirimGelir = h.GelirBirimFiyat, ToplamGelir = h.GelirToplam,
-            BirimGider = h.GiderBirimFiyat, ToplamGider = h.GiderToplam,
-            KdvTutar = kdvTutar,
-            // HakedisPuantaj'da KDV/10 ve KDV/20 ayrımı yok — tek KdvOrani
-            Kdv10Tutar = h.KdvOrani == 10 ? kdvTutar : 0,
-            Kdv20Tutar = h.KdvOrani == 20 ? kdvTutar : 0,
-            KesintiTutar = h.ToplamKesinti,
-            TahsilEdilecek = h.TahsilEdilecekTutar, Odenecek = h.OdenecekTutar,
-            ToplamSefer = h.ToplamSefer, Gun = h.ToplamSefer,
-            Gun01 = gunDegerleri[0], Gun02 = gunDegerleri[1], Gun03 = gunDegerleri[2],
-            Gun04 = gunDegerleri[3], Gun05 = gunDegerleri[4], Gun06 = gunDegerleri[5],
-            Gun07 = gunDegerleri[6], Gun08 = gunDegerleri[7], Gun09 = gunDegerleri[8],
-            Gun10 = gunDegerleri[9], Gun11 = gunDegerleri[10], Gun12 = gunDegerleri[11],
-            Gun13 = gunDegerleri[12], Gun14 = gunDegerleri[13], Gun15 = gunDegerleri[14],
-            Gun16 = gunDegerleri[15], Gun17 = gunDegerleri[16], Gun18 = gunDegerleri[17],
-            Gun19 = gunDegerleri[18], Gun20 = gunDegerleri[19], Gun21 = gunDegerleri[20],
-            Gun22 = gunDegerleri[21], Gun23 = gunDegerleri[22], Gun24 = gunDegerleri[23],
-            Gun25 = gunDegerleri[24], Gun26 = gunDegerleri[25], Gun27 = gunDegerleri[26],
-            Gun28 = gunDegerleri[27], Gun29 = gunDegerleri[28], Gun30 = gunDegerleri[29],
-            Gun31 = gunDegerleri[30],
-            FaturaKesildi = faturaKesildi,
-            FaturaNo = h.GelirFatura?.FaturaNo ?? h.GiderFatura?.FaturaNo ?? h.Fatura?.FaturaNo,
         };
     }
 
