@@ -105,6 +105,12 @@ public class PuantajFaturaSatirDto
     public bool FaturaKesildi { get; set; }
     public string? FaturaNo { get; set; }
     public DateTime? FaturaTarihi { get; set; }
+
+    // İstisna özeti (Faz 6)
+    public int IstisnaSayisi { get; set; }
+    public decimal CezaTutar { get; set; }
+    public decimal MasrafTutar { get; set; }
+    public string? IstisnaOzeti { get; set; }
 }
 
 // ══════════════════════════════════════════════
@@ -128,6 +134,11 @@ public class PuantajFaturaAgacNodeDto
     public decimal ToplamKdv { get; set; }
     public decimal ToplamKesinti { get; set; }
     public decimal NetTutar { get; set; }
+
+    // İstisna özeti (Faz 6)
+    public int IstisnaSayisi { get; set; }
+    public decimal ToplamCeza { get; set; }
+    public decimal ToplamMasraf { get; set; }
 }
 
 // ══════════════════════════════════════════════

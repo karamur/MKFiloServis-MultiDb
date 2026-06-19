@@ -85,7 +85,9 @@ public class PuantajFaturaRaporService : IPuantajFaturaRaporService
             .Skip(skip).Take(pageSize)
             .ToListAsync(ct);
 
-        return kayitlar.Select(MapPuantajKayitToDto).ToList();
+        var satirlar = kayitlar.Select(MapPuantajKayitToDto).ToList();
+        await FillIstisnaAsync(db, satirlar, ct);
+        return satirlar;
     }
 
     // ══════════════════════════════════════════════
@@ -105,6 +107,7 @@ public class PuantajFaturaRaporService : IPuantajFaturaRaporService
             .ToListAsync(ct);
 
         var satirlar = kayitlar.Select(MapPuantajKayitToDto).ToList();
+        await FillIstisnaAsync(db, satirlar, ct);
 
         return request.Agac switch
         {
@@ -227,6 +230,7 @@ public class PuantajFaturaRaporService : IPuantajFaturaRaporService
             FaturaKesildi = k.GelirFaturaKesildi || k.GiderFaturaAlindi,
             FaturaNo = k.GelirFaturaNo ?? k.GiderFaturaNo,
             FaturaTarihi = k.GelirFaturaTarihi ?? k.GiderFaturaTarihi,
+            IstisnaSayisi = 0, CezaTutar = 0, MasrafTutar = 0, IstisnaOzeti = null,
         };
     }
 
@@ -262,6 +266,9 @@ public class PuantajFaturaRaporService : IPuantajFaturaRaporService
                             NetTutar = yon == PuantajFaturaYonu.Gelir
                                 ? satirList.Sum(s => s.TahsilEdilecek)
                                 : satirList.Sum(s => s.Odenecek),
+                            IstisnaSayisi = satirList.Sum(s => s.IstisnaSayisi),
+                            ToplamCeza = satirList.Sum(s => s.CezaTutar),
+                            ToplamMasraf = satirList.Sum(s => s.MasrafTutar),
                         };
                     }).ToList();
 
@@ -275,8 +282,36 @@ public class PuantajFaturaRaporService : IPuantajFaturaRaporService
                     ToplamGider = tumSatirlar.Sum(s => s.ToplamGider),
                     ToplamKdv = tumSatirlar.Sum(s => s.KdvTutar),
                     ToplamKesinti = tumSatirlar.Sum(s => s.KesintiTutar),
+                    IstisnaSayisi = tumSatirlar.Sum(s => s.IstisnaSayisi),
+                    ToplamCeza = tumSatirlar.Sum(s => s.CezaTutar),
+                    ToplamMasraf = tumSatirlar.Sum(s => s.MasrafTutar),
                 };
             }).ToList();
+    }
+
+    // ══════════════════════════════════════════════
+    // İSTİSNA YÜKLEME (Faz 6)
+    // ══════════════════════════════════════════════
+
+    private static async Task FillIstisnaAsync(ApplicationDbContext db, List<PuantajFaturaSatirDto> satirlar, CancellationToken ct)
+    {
+        var kayitIds = satirlar.Where(s => s.KayitId > 0).Select(s => s.KayitId).Distinct().ToList();
+        if (!kayitIds.Any()) return;
+
+        var istisnalar = await db.PuantajIstisnalar
+            .Where(i => kayitIds.Contains(i.PuantajKayitId) && !i.IsDeleted)
+            .AsNoTracking().ToListAsync(ct);
+
+        var lookup = istisnalar.GroupBy(i => i.PuantajKayitId).ToDictionary(g => g.Key, g => g.ToList());
+
+        foreach (var s in satirlar)
+        {
+            if (!lookup.TryGetValue(s.KayitId, out var list)) continue;
+            s.IstisnaSayisi = list.Count;
+            s.CezaTutar = list.Where(i => i.KararTipi == KararTipi.Ceza).Sum(i => i.Tutar);
+            s.MasrafTutar = list.Where(i => i.KararTipi == KararTipi.Masraf).Sum(i => i.Tutar);
+            s.IstisnaOzeti = string.Join("; ", list.Select(i => $"{i.IstisnaTipi}:{i.KararTipi}"));
+        }
     }
 
     // ══════════════════════════════════════════════

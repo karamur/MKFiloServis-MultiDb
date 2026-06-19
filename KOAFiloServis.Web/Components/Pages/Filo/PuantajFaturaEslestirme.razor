@@ -1,0 +1,141 @@
+@page "/filo/puantaj-fatura-eslestirme"
+@using KOAFiloServis.Web.Models
+@using KOAFiloServis.Web.Services
+@using KOAFiloServis.Web.Services.Interfaces
+@using Microsoft.JSInterop
+@rendermode InteractiveServer
+@inject IPuantajFaturaEslestirmeService EslestirmeService
+@inject IFirmaService FirmaService
+@inject IJSRuntime JS
+
+<PageTitle>Puantaj ↔ Fatura Eşleştirme</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4><i class="bi bi-arrow-left-right me-2"></i>Puantaj ↔ Fatura Eşleştirme</h4>
+        <div class="d-flex gap-2">
+            <button class="btn btn-success btn-sm" @onclick="TopluOtoAsync" disabled="@_islemYapiliyor">
+                <i class="bi bi-magic me-1"></i>Toplu Otomatik Eşleştir
+            </button>
+            <button class="btn btn-outline-primary btn-sm" @onclick="ExcelIndirAsync" disabled="@_islemYapiliyor">
+                <i class="bi bi-download me-1"></i>Excel İndir
+            </button>
+        </div>
+    </div>
+
+    @if (_hata != null) { <div class="alert alert-danger">@_hata</div> }
+    @if (_bilgi != null) { <div class="alert alert-success">@_bilgi</div> }
+
+    @if (_yukleniyor) { <div class="text-center py-5"><div class="spinner-border"></div></div> }
+    else if (_rapor != null)
+    {
+        <div class="row g-3 mb-3">
+            <div class="col-md-2"><div class="card text-bg-primary"><div class="card-body text-center"><h5>@_rapor.ToplamPuantajKayit</h5><small>Puantaj Kaydı</small></div></div></div>
+            <div class="col-md-2"><div class="card text-bg-info"><div class="card-body text-center"><h5>@_rapor.ToplamFatura</h5><small>Fatura</small></div></div></div>
+            <div class="col-md-2"><div class="card text-bg-success"><div class="card-body text-center"><h5>@_rapor.TamEslesen</h5><small>Tam Eşleşen</small></div></div></div>
+            <div class="col-md-2"><div class="card text-bg-warning"><div class="card-body text-center"><h5>@_rapor.YakinEslesen</h5><small>Yakın Eşleşen</small></div></div></div>
+            <div class="col-md-2"><div class="card text-bg-danger"><div class="card-body text-center"><h5>@_rapor.EslesmeyenPuantaj</h5><small>Eşleşmeyen Puantaj</small></div></div></div>
+            <div class="col-md-2"><div class="card text-bg-secondary"><div class="card-body text-center"><h5>@_rapor.EslesmeyenFatura</h5><small>Eşleşmeyen Fatura</small></div></div></div>
+        </div>
+
+        @if (_farklar.Any())
+        {
+            <table class="table table-hover table-sm">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Durum</th><th>Açıklama</th><th>Plaka</th><th>Güzergah</th><th>Puantaj Cari</th>
+                        <th class="text-end">Puantaj Tutar</th><th class="text-end">Fatura Tutar</th><th class="text-end">Fark %</th>
+                        <th>İstisna</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var f in _farklar)
+                    {
+                        <tr class="@(f.FarkTipi == PuantajFaturaFarkTipi.TamEslesen ? "table-success" :
+                                     f.FarkTipi == PuantajFaturaFarkTipi.PuantajVarFaturaYok ? "table-warning" :
+                                     f.FarkTipi == PuantajFaturaFarkTipi.FaturaVarPuantajYok ? "table-danger" : "")">
+                            <td>@f.FarkTipi</td>
+                            <td>@f.FarkAciklamasi</td>
+                            <td>@f.PKPlaka</td>
+                            <td>@f.PKGuzergah</td>
+                            <td>@f.PKCari</td>
+                            <td class="text-end">₺@f.PKTutar.ToString("N2")</td>
+                            <td class="text-end">₺@f.FTutar.ToString("N2")</td>
+                            <td class="text-end @(f.FarkYuzde > 5 ? "text-danger fw-bold" : "")">%@f.FarkYuzde.ToString("N1")</td>
+                            <td>
+                                @if (f.IstisnaSayisi > 0)
+                                {
+                                    <span title="@f.IstisnaOzeti">⚠️ @f.IstisnaSayisi | Ceza:₺@f.CezaTutar.ToString("N0")</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+    else
+    {
+        <div class="alert alert-info">Analiz yapmak için "Toplu Otomatik Eşleştir" butonuna tıklayın.</div>
+    }
+</div>
+
+@code {
+    private PuantajFaturaEslesmeRaporu? _rapor;
+    private List<PuantajFaturaFarkDto> _farklar = new();
+    private string? _hata, _bilgi;
+    private bool _yukleniyor, _islemYapiliyor;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _yukleniyor = true;
+        try
+        {
+            var firma = FirmaService.GetAktifFirma();
+            var bugun = DateTime.Today;
+            var yil = firma.AktifDonemYil > 0 ? firma.AktifDonemYil : bugun.Year;
+            var ay = firma.AktifDonemAy > 0 ? firma.AktifDonemAy : bugun.Month;
+            if (ay == 1) { ay = 12; yil--; } else { ay--; }
+            _rapor = await EslestirmeService.EslesmeAnaliziYapAsync(yil, ay);
+            _farklar = _rapor.Farklar;
+        }
+        catch (Exception ex) { _hata = ex.Message; }
+        finally { _yukleniyor = false; }
+    }
+
+    private async Task TopluOtoAsync()
+    {
+        _islemYapiliyor = true; _bilgi = null; _hata = null;
+        try
+        {
+            var firma = FirmaService.GetAktifFirma();
+            var bugun = DateTime.Today;
+            var yil = firma.AktifDonemYil > 0 ? firma.AktifDonemYil : bugun.Year;
+            var ay = firma.AktifDonemAy > 0 ? firma.AktifDonemAy : bugun.Month;
+            if (ay == 1) { ay = 12; yil--; } else { ay--; }
+            _rapor = await EslestirmeService.TopluOtoEslestirAsync(yil, ay);
+            _farklar = _rapor.Farklar;
+            _bilgi = $"Tam eşleşen {_rapor.TamEslesen} kayıt otomatik bağlandı.";
+        }
+        catch (Exception ex) { _hata = ex.Message; }
+        finally { _islemYapiliyor = false; }
+    }
+
+    private async Task ExcelIndirAsync()
+    {
+        _islemYapiliyor = true; _hata = null;
+        try
+        {
+            var firma = FirmaService.GetAktifFirma();
+            var bugun = DateTime.Today;
+            var yil = firma.AktifDonemYil > 0 ? firma.AktifDonemYil : bugun.Year;
+            var ay = firma.AktifDonemAy > 0 ? firma.AktifDonemAy : bugun.Month;
+            if (ay == 1) { ay = 12; yil--; } else { ay--; }
+            var bytes = await EslestirmeService.ExportFarkRaporuExcelAsync(yil, ay);
+            var base64 = Convert.ToBase64String(bytes);
+            await JS.InvokeVoidAsync("downloadFile", $"PuantajFaturaFark_{yil}_{ay:00}.xlsx", base64);
+        }
+        catch (Exception ex) { _hata = ex.Message; }
+        finally { _islemYapiliyor = false; }
+    }
+}

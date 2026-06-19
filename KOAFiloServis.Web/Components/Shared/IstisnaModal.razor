@@ -1,0 +1,195 @@
+@using KOAFiloServis.Shared.Entities
+@using KOAFiloServis.Web.Models
+@using KOAFiloServis.Web.Services.Interfaces
+@inject IPuantajIstisnaService IstisnaService
+
+<div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header @(_istisnalar.Any() ? "bg-warning" : "bg-primary") text-white">
+                <h6 class="modal-title">
+                    @(_duzenleniyor != null ? "İstisna Düzenle" : "İstisna Ekle") —
+                    @Satir.Plaka / @Satir.GuzergahAdi
+                </h6>
+                <button class="btn-close" @onclick="OnKapat"></button>
+            </div>
+            <div class="modal-body">
+                @if (_hata != null)
+                {
+                    <div class="alert alert-danger small">@_hata</div>
+                }
+
+                @if (_yukleniyor)
+                {
+                    <div class="text-center"><div class="spinner-border spinner-border-sm"></div></div>
+                }
+                else
+                {
+                    @if (_istisnalar.Any())
+                    {
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Mevcut İstisnalar</label>
+                            @foreach (var i in _istisnalar)
+                            {
+                                <div class="border rounded p-2 mb-1 d-flex justify-content-between align-items-center @(i.KararTipi == KararTipi.Ceza ? "border-danger" : i.KararTipi == KararTipi.Masraf ? "border-warning" : "")">
+                                    <div class="small">
+                                        <b>@i.IstisnaTipi</b> → @i.KararTipi |
+                                        @if (i.Tutar > 0) { <span>₺@i.Tutar.ToString("N2")</span> }
+                                        @if (!string.IsNullOrEmpty(i.Aciklama)) { <span>— @i.Aciklama</span> }
+                                        @if (!string.IsNullOrEmpty(i.FisNo)) { <span>Fiş: @i.FisNo</span> }
+                                    </div>
+                                    <div class="d-flex gap-1">
+                                        <button class="btn btn-outline-secondary btn-sm" @onclick="() => DuzenlemeyeAl(i)"><i class="bi bi-pencil"></i></button>
+                                        <button class="btn btn-outline-danger btn-sm" @onclick="() => SilAsync(i.Id)"><i class="bi bi-trash"></i></button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <form @onsubmit="KaydetAsync">
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="form-label small">İstisna Tipi</label>
+                                <select class="form-select form-select-sm" @bind="_form.IstisnaTipi">
+                                    @foreach (var tip in Enum.GetValues<IstisnaTipi>())
+                                    {
+                                        <option value="@tip">@tip</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">Karar</label>
+                                <select class="form-select form-select-sm" @bind="_form.KararTipi">
+                                    @foreach (var karar in Enum.GetValues<KararTipi>())
+                                    {
+                                        <option value="@karar">@karar</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">Gün (1-31)</label>
+                                <input type="number" class="form-control form-control-sm" min="1" max="31" @bind="_form.Gun" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">Tutar (₺)</label>
+                                <input type="number" step="0.01" class="form-control form-control-sm" @bind="_form.Tutar" />
+                            </div>
+                        </div>
+
+                        @if (_form.IstisnaTipi == IstisnaTipi.AracDegisimi)
+                        {
+                            <div class="row g-2 mt-2">
+                                <div class="col-6">
+                                    <label class="form-label small">Eski Araç ID</label>
+                                    <input type="number" class="form-control form-control-sm" @bind="_form.EskiAracId" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small">Yeni Araç ID</label>
+                                    <input type="number" class="form-control form-control-sm" @bind="_form.YeniAracId" />
+                                </div>
+                            </div>
+                        }
+
+                        @if (_form.IstisnaTipi == IstisnaTipi.TaksiFisi)
+                        {
+                            <div class="mt-2">
+                                <label class="form-label small">Fiş No</label>
+                                <input type="text" class="form-control form-control-sm" @bind="_form.FisNo" />
+                            </div>
+                        }
+
+                        <div class="mt-2">
+                            <label class="form-label small">Açıklama</label>
+                            <textarea class="form-control form-control-sm" rows="2" @bind="_form.Aciklama"></textarea>
+                        </div>
+
+                        <div class="mt-3 d-flex gap-2">
+                            <button type="submit" class="btn btn-primary btn-sm">
+                                @(_duzenleniyor != null ? "Güncelle" : "Ekle")
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm" @onclick="OnKapat">Kapat</button>
+                        </div>
+                    </form>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public PuantajFaturaSatirDto Satir { get; set; } = null!;
+    [Parameter] public EventCallback OnKaydedildi { get; set; }
+    [Parameter] public EventCallback OnKapat { get; set; }
+
+    private List<PuantajIstisna> _istisnalar = new();
+    private PuantajIstisna? _duzenleniyor;
+    private PuantajIstisna _form = new();
+    private string? _hata;
+    private bool _yukleniyor;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _yukleniyor = true;
+        try { _istisnalar = await IstisnaService.GetByPuantajKayitAsync(Satir.KayitId); }
+        catch (Exception ex) { _hata = ex.Message; }
+        finally { _yukleniyor = false; }
+    }
+
+    private async Task KaydetAsync()
+    {
+        try
+        {
+            if (_duzenleniyor != null)
+            {
+                _duzenleniyor.IstisnaTipi = _form.IstisnaTipi;
+                _duzenleniyor.KararTipi = _form.KararTipi;
+                _duzenleniyor.Gun = _form.Gun;
+                _duzenleniyor.Tutar = _form.Tutar;
+                _duzenleniyor.Aciklama = _form.Aciklama;
+                _duzenleniyor.EskiAracId = _form.EskiAracId;
+                _duzenleniyor.YeniAracId = _form.YeniAracId;
+                _duzenleniyor.FisNo = _form.FisNo;
+                await IstisnaService.UpdateAsync(_duzenleniyor);
+            }
+            else
+            {
+                var yeni = new PuantajIstisna
+                {
+                    PuantajKayitId = Satir.KayitId,
+                    IstisnaTipi = _form.IstisnaTipi,
+                    KararTipi = _form.KararTipi,
+                    Gun = _form.Gun,
+                    Tutar = _form.Tutar,
+                    Aciklama = _form.Aciklama,
+                    EskiAracId = _form.EskiAracId,
+                    YeniAracId = _form.YeniAracId,
+                    FisNo = _form.FisNo,
+                };
+                await IstisnaService.CreateAsync(yeni);
+            }
+            _duzenleniyor = null;
+            _form = new();
+            _istisnalar = await IstisnaService.GetByPuantajKayitAsync(Satir.KayitId);
+            await OnKaydedildi.InvokeAsync();
+        }
+        catch (Exception ex) { _hata = ex.Message; }
+    }
+
+    private void DuzenlemeyeAl(PuantajIstisna i)
+    {
+        _duzenleniyor = i;
+        _form = new PuantajIstisna
+        {
+            IstisnaTipi = i.IstisnaTipi, KararTipi = i.KararTipi,
+            Gun = i.Gun, Tutar = i.Tutar, Aciklama = i.Aciklama,
+            EskiAracId = i.EskiAracId, YeniAracId = i.YeniAracId, FisNo = i.FisNo,
+        };
+    }
+
+    private async Task SilAsync(int id)
+    {
+        try { await IstisnaService.DeleteAsync(id); _istisnalar = await IstisnaService.GetByPuantajKayitAsync(Satir.KayitId); }
+        catch (Exception ex) { _hata = ex.Message; }
+    }
+}
