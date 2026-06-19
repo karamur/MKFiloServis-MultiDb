@@ -302,6 +302,7 @@ builder.Services.AddScoped<IPuantajFaturaRaporService, PuantajFaturaRaporService
 builder.Services.AddScoped<IFaturaGrupSablonuService, FaturaGrupSablonuService>(); // YENI: Agac gruplama şablonu CRUD
 builder.Services.AddScoped<IPuantajFaturaHazirlikService, PuantajFaturaHazirlikService>(); // YENI: Puantaj → fatura hazırlık
 builder.Services.AddScoped<IPuantajFaturaEslestirmeService, PuantajFaturaEslestirmeService>(); // YENI: Puantaj ↔ Fatura eşleştirme
+builder.Services.AddScoped<IPuantajIstisnaService, PuantajIstisnaService>(); // YENI: Puantaj istisna yönetimi
 builder.Services.AddScoped<RebuildService>(); // RebuildAll motoru
 builder.Services.AddScoped<DenetimService>(); // Finans denetim motoru
 builder.Services.AddScoped<TestSessionService>(); // Güvenli test modu

@@ -39,6 +39,13 @@ public class PuantajFaturaEslestirmeService : IPuantajFaturaEslestirmeService
         var pkList = await pkQuery.Include(x => x.Kurum).Include(x => x.FaturaKesiciCari)
             .Include(x => x.OdemeYapilacakCari).AsNoTracking().ToListAsync(ct);
 
+        // ── PuantajIstisna ──
+        var pkIds = pkList.Select(p => p.Id).ToList();
+        var istisnalar = await db.PuantajIstisnalar
+            .Where(i => pkIds.Contains(i.PuantajKayitId) && !i.IsDeleted)
+            .AsNoTracking().ToListAsync(ct);
+        var istisnaLookup = istisnalar.GroupBy(i => i.PuantajKayitId).ToDictionary(g => g.Key, g => g.ToList());
+
         // ── Fatura ──
         var faturaQuery = db.Faturalar
             .Where(x => x.FaturaTarihi >= ilkGun && x.FaturaTarihi <= sonGun && !x.IsDeleted && x.Durum != FaturaDurum.IptalEdildi);
@@ -132,6 +139,18 @@ public class PuantajFaturaEslestirmeService : IPuantajFaturaEslestirmeService
         foreach (var f in faturaList.Where(f => !eslesenFaturaIds.Contains(f.Id)))
         {
             rapor.Farklar.Add(new PuantajFaturaFarkDto { FaturaId = f.Id, FarkTipi = PuantajFaturaFarkTipi.FaturaVarPuantajYok, FarkAciklamasi = "Faturanın puantaj karşılığı bulunamadı", FaturaNo = f.FaturaNo, FaturaTarihi = f.FaturaTarihi, FCari = f.Cari?.Unvan, FTutar = f.GenelToplam, FKdv = f.KdvTutar });
+        }
+
+        // ── İstisna bilgilerini FarkDto'lara ekle ──
+        foreach (var fark in rapor.Farklar)
+        {
+            if (fark.PuantajKayitId.HasValue && istisnaLookup.TryGetValue(fark.PuantajKayitId.Value, out var pkIstisnalar))
+            {
+                fark.IstisnaSayisi = pkIstisnalar.Count;
+                fark.CezaTutar = pkIstisnalar.Where(i => i.KararTipi == KararTipi.Ceza).Sum(i => i.Tutar);
+                fark.MasrafTutar = pkIstisnalar.Where(i => i.KararTipi == KararTipi.Masraf).Sum(i => i.Tutar);
+                fark.IstisnaOzeti = string.Join("; ", pkIstisnalar.Select(i => $"{i.IstisnaTipi}:{i.KararTipi}"));
+            }
         }
 
         return rapor;
@@ -251,11 +270,12 @@ public class PuantajFaturaEslestirmeService : IPuantajFaturaEslestirmeService
 
         // Başlık
         ws.Cell(1, 1).Value = $"Puantaj ↔ Fatura Fark Raporu — {yil}/{ay:00}";
-        ws.Range(1, 1, 1, 11).Merge().Style.Font.Bold = true;
+        ws.Range(1, 1, 1, 15).Merge().Style.Font.Bold = true;
 
         // Kolon başlıkları
         var headers = new[] { "DURUM", "AÇIKLAMA", "PLAKA", "GÜZERGAH", "PUANTAJ CARİ",
-            "PUANTAJ TUTAR", "PUANTAJ KDV", "PUANTAJ SEFER", "FATURA NO", "FATURA TUTAR", "FARK %" };
+            "PUANTAJ TUTAR", "PUANTAJ KDV", "PUANTAJ SEFER", "FATURA NO", "FATURA TUTAR", "FARK %",
+            "İSTİSNA SAYISI", "CEZA TUTAR", "MASRAF TUTAR", "İSTİSNA ÖZETİ" };
         for (int c = 0; c < headers.Length; c++)
         {
             ws.Cell(3, c + 1).Value = headers[c];
@@ -277,6 +297,10 @@ public class PuantajFaturaEslestirmeService : IPuantajFaturaEslestirmeService
             ws.Cell(row, 9).Value = f.FaturaNo;
             ws.Cell(row, 10).Value = (double)f.FTutar;
             ws.Cell(row, 11).Value = (double)f.FarkYuzde;
+            ws.Cell(row, 12).Value = f.IstisnaSayisi;
+            ws.Cell(row, 13).Value = (double)f.CezaTutar;
+            ws.Cell(row, 14).Value = (double)f.MasrafTutar;
+            ws.Cell(row, 15).Value = f.IstisnaOzeti;
 
             if (f.FarkTipi == PuantajFaturaFarkTipi.PuantajVarFaturaYok)
                 ws.Row(row).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightYellow;

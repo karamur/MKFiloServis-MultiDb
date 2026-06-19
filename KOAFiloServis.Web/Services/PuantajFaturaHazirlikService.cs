@@ -76,8 +76,36 @@ public class PuantajFaturaHazirlikService : IPuantajFaturaHazirlikService
         foreach (var pk in pkKayitlar)
         {
             var satir = MapPuantajKayitToSatir(pk, hazirlik.FaturaYonu);
-            satir.HazirlikId = hazirlik.Id; // EF tracking ile atanacak
+            satir.HazirlikId = hazirlik.Id;
             hazirlik.Satirlar.Add(satir);
+        }
+
+        // PuantajIstisna kayıtlarını yükle ve satırlara yansıt
+        var pkIds = pkKayitlar.Select(p => p.Id).ToList();
+        var istisnalar = await db.PuantajIstisnalar
+            .Where(i => pkIds.Contains(i.PuantajKayitId) && !i.IsDeleted)
+            .ToListAsync(ct);
+
+        foreach (var satir in hazirlik.Satirlar)
+        {
+            var satirIstisnalar = istisnalar.Where(i => i.PuantajKayitId == satir.PuantajKayitId).ToList();
+            if (!satirIstisnalar.Any()) continue;
+
+            satir.EkGelir = satirIstisnalar
+                .Where(i => i.IstisnaTipi == IstisnaTipi.EkSefer && i.KararTipi == KararTipi.Masraf && hazirlik.FaturaYonu == PuantajFaturaYonu.Gelir)
+                .Sum(i => i.Tutar);
+            satir.EkGider = satirIstisnalar
+                .Where(i => i.IstisnaTipi == IstisnaTipi.EkSefer && i.KararTipi == KararTipi.Masraf && hazirlik.FaturaYonu == PuantajFaturaYonu.Gider)
+                .Sum(i => i.Tutar);
+            satir.CezaTutar = satirIstisnalar
+                .Where(i => i.KararTipi == KararTipi.Ceza).Sum(i => i.Tutar);
+            satir.MasrafTutar = satirIstisnalar
+                .Where(i => i.KararTipi == KararTipi.Masraf && i.IstisnaTipi != IstisnaTipi.EkSefer)
+                .Sum(i => i.Tutar);
+
+            // Toplamlara yansıt
+            satir.TahsilEdilecek += satir.EkGelir - satir.CezaTutar;
+            satir.Odenecek += satir.EkGider + satir.MasrafTutar;
         }
 
         // Özeti hesapla
@@ -287,10 +315,10 @@ public class PuantajFaturaHazirlikService : IPuantajFaturaHazirlikService
         var satirlar = h.Satirlar.Where(s => !s.IsDeleted).ToList();
         h.SatirSayisi = satirlar.Count;
         h.ToplamSefer = satirlar.Sum(s => s.ToplamSefer);
-        h.ToplamGelir = satirlar.Sum(s => s.ToplamGelir);
-        h.ToplamGider = satirlar.Sum(s => s.ToplamGider);
+        h.ToplamGelir = satirlar.Sum(s => s.ToplamGelir + s.EkGelir);
+        h.ToplamGider = satirlar.Sum(s => s.ToplamGider + s.EkGider + s.MasrafTutar);
         h.ToplamKdv = satirlar.Sum(s => s.Kdv10Tutar + s.Kdv20Tutar);
-        h.ToplamKesinti = satirlar.Sum(s => s.KesintiTutar);
+        h.ToplamKesinti = satirlar.Sum(s => s.KesintiTutar + s.CezaTutar);
 
         if (h.FaturaYonu == PuantajFaturaYonu.Gelir)
             h.NetTutar = h.ToplamGelir - h.ToplamKdv - h.ToplamKesinti;
@@ -338,6 +366,12 @@ public class PuantajFaturaHazirlikService : IPuantajFaturaHazirlikService
             KesintiTutar = k.GelirKesinti + k.GiderKesinti,
             TahsilEdilecek = k.Alinacak,
             Odenecek = k.Odenecek,
+
+            // İstisna özetleri — varsayılan 0, CreateAsync'te istisnalardan doldurulur
+            EkGelir = 0,
+            EkGider = 0,
+            CezaTutar = 0,
+            MasrafTutar = 0,
         };
     }
 }

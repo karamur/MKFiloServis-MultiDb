@@ -212,4 +212,10 @@ public class PuantajFaturaFarkDto
     // Fark
     public decimal FarkTutar { get; set; }
     public decimal FarkYuzde { get; set; }
+
+    // İstisna özeti (Faz 6)
+    public int IstisnaSayisi { get; set; }
+    public decimal CezaTutar { get; set; }
+    public decimal MasrafTutar { get; set; }
+    public string? IstisnaOzeti { get; set; }
 }

@@ -187,6 +187,24 @@ public class PuantajFaturaHazirlikSatir : BaseEntity, IFirmaTenant
     [StringLength(500)]
     public string? DuzeltmeAciklamasi { get; set; }
 
+    // ── İstisna özetleri (PuantajIstisna'dan hesaplanır) ──
+
+    /// <summary>Ek sefer/mesai kaynaklı ek gelir.</summary>
+    [Column(TypeName = "decimal(18,4)")]
+    public decimal EkGelir { get; set; }
+
+    /// <summary>Ek sefer/mesai kaynaklı ek gider.</summary>
+    [Column(TypeName = "decimal(18,4)")]
+    public decimal EkGider { get; set; }
+
+    /// <summary>Ceza kesintileri toplamı.</summary>
+    [Column(TypeName = "decimal(18,4)")]
+    public decimal CezaTutar { get; set; }
+
+    /// <summary>Masraf olarak işlenenler toplamı.</summary>
+    [Column(TypeName = "decimal(18,4)")]
+    public decimal MasrafTutar { get; set; }
+
     // ── Fatura bağlantısı ──
 
     /// <summary>Bu satırdan üretilen fatura.</summary>
