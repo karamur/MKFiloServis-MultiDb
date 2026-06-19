@@ -196,4 +196,100 @@ public class PuantajFaturaEslestirmeService : IPuantajFaturaEslestirmeService
             .ThenByDescending(f => f.FarkTutar)
             .ToList();
     }
+
+    public async Task<PuantajFaturaEslesmeRaporu> TopluOtoEslestirAsync(int yil, int ay, int? kurumId = null, CancellationToken ct = default)
+    {
+        var rapor = await EslesmeAnaliziYapAsync(yil, ay, kurumId, ct);
+
+        // Tam eşleşmeleri otomatik kaydet
+        var tamEslesmeler = rapor.Farklar
+            .Where(f => f.FarkTipi == PuantajFaturaFarkTipi.TamEslesen
+                && f.PuantajKayitId.HasValue && f.FaturaId.HasValue)
+            .ToList();
+
+        if (tamEslesmeler.Any())
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync(ct);
+            foreach (var f in tamEslesmeler)
+            {
+                var pk = await db.PuantajKayitlar
+                    .Where(x => x.Id == f.PuantajKayitId!.Value && !x.IsDeleted)
+                    .FirstOrDefaultAsync(ct);
+                var fatura = await db.Faturalar
+                    .Where(x => x.Id == f.FaturaId!.Value && !x.IsDeleted)
+                    .FirstOrDefaultAsync(ct);
+
+                if (pk == null || fatura == null) continue;
+
+                if (fatura.FaturaYonu == FaturaYonu.Giden)
+                {
+                    pk.GelirFaturaId = fatura.Id;
+                    pk.GelirFaturaKesildi = true;
+                    pk.GelirFaturaNo = fatura.FaturaNo;
+                    pk.GelirFaturaTarihi = fatura.FaturaTarihi;
+                }
+                else
+                {
+                    pk.GiderFaturaId = fatura.Id;
+                    pk.GiderFaturaAlindi = true;
+                    pk.GiderFaturaNo = fatura.FaturaNo;
+                    pk.GiderFaturaTarihi = fatura.FaturaTarihi;
+                }
+            }
+            await db.SaveChangesAsync(ct);
+        }
+
+        return rapor;
+    }
+
+    public async Task<byte[]> ExportFarkRaporuExcelAsync(int yil, int ay, int? kurumId = null, CancellationToken ct = default)
+    {
+        var farklar = await FarkRaporuGetirAsync(yil, ay, kurumId, ct);
+
+        using var wb = new ClosedXML.Excel.XLWorkbook();
+        var ws = wb.Worksheets.Add("Fark Raporu");
+
+        // Başlık
+        ws.Cell(1, 1).Value = $"Puantaj ↔ Fatura Fark Raporu — {yil}/{ay:00}";
+        ws.Range(1, 1, 1, 11).Merge().Style.Font.Bold = true;
+
+        // Kolon başlıkları
+        var headers = new[] { "DURUM", "AÇIKLAMA", "PLAKA", "GÜZERGAH", "PUANTAJ CARİ",
+            "PUANTAJ TUTAR", "PUANTAJ KDV", "PUANTAJ SEFER", "FATURA NO", "FATURA TUTAR", "FARK %" };
+        for (int c = 0; c < headers.Length; c++)
+        {
+            ws.Cell(3, c + 1).Value = headers[c];
+            ws.Cell(3, c + 1).Style.Font.Bold = true;
+            ws.Cell(3, c + 1).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+        }
+
+        int row = 4;
+        foreach (var f in farklar)
+        {
+            ws.Cell(row, 1).Value = f.FarkTipi.ToString();
+            ws.Cell(row, 2).Value = f.FarkAciklamasi;
+            ws.Cell(row, 3).Value = f.PKPlaka;
+            ws.Cell(row, 4).Value = f.PKGuzergah;
+            ws.Cell(row, 5).Value = f.PKCari;
+            ws.Cell(row, 6).Value = (double)f.PKTutar;
+            ws.Cell(row, 7).Value = (double)f.PKKdv;
+            ws.Cell(row, 8).Value = f.PKSefer;
+            ws.Cell(row, 9).Value = f.FaturaNo;
+            ws.Cell(row, 10).Value = (double)f.FTutar;
+            ws.Cell(row, 11).Value = (double)f.FarkYuzde;
+
+            if (f.FarkTipi == PuantajFaturaFarkTipi.PuantajVarFaturaYok)
+                ws.Row(row).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightYellow;
+            else if (f.FarkTipi == PuantajFaturaFarkTipi.FaturaVarPuantajYok)
+                ws.Row(row).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightSalmon;
+
+            row++;
+        }
+
+        ws.Columns().AdjustToContents();
+
+        using var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        return ms.ToArray();
+    }
 }

@@ -18,4 +18,10 @@ public interface IPuantajFaturaEslestirmeService
 
     /// <summary>Sadece eşleşmeyen / farklı olanları getirir.</summary>
     Task<List<PuantajFaturaFarkDto>> FarkRaporuGetirAsync(int yil, int ay, int? kurumId = null, CancellationToken ct = default);
+
+    /// <summary>Analiz yapar + tam eşleşmeleri otomatik kaydeder.</summary>
+    Task<PuantajFaturaEslesmeRaporu> TopluOtoEslestirAsync(int yil, int ay, int? kurumId = null, CancellationToken ct = default);
+
+    /// <summary>Fark raporunu Excel olarak export eder.</summary>
+    Task<byte[]> ExportFarkRaporuExcelAsync(int yil, int ay, int? kurumId = null, CancellationToken ct = default);
 }

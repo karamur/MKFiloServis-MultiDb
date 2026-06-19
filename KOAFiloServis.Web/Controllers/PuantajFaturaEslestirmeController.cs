@@ -53,6 +53,23 @@ public class PuantajFaturaEslestirmeController : ControllerBase
         if (!result) return NotFound();
         return Ok();
     }
+
+    /// <summary>POST /api/puantaj-fatura-eslestirme/toplu-oto — analiz + tam eşleşmeleri kaydet</summary>
+    [HttpPost("toplu-oto")]
+    public async Task<IActionResult> TopluOtoEslestir([FromQuery] int yil, [FromQuery] int ay, [FromQuery] int? kurumId = null)
+    {
+        var rapor = await _eslestirmeService.TopluOtoEslestirAsync(yil, ay, kurumId);
+        return Ok(rapor);
+    }
+
+    /// <summary>GET /api/puantaj-fatura-eslestirme/excel?yil=2026&ay=6 — fark raporu Excel</summary>
+    [HttpGet("excel")]
+    public async Task<IActionResult> ExportFarkRaporuExcel([FromQuery] int yil, [FromQuery] int ay, [FromQuery] int? kurumId = null)
+    {
+        var bytes = await _eslestirmeService.ExportFarkRaporuExcelAsync(yil, ay, kurumId);
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"PuantajFaturaFarkRaporu_{yil}_{ay:00}.xlsx");
+    }
 }
 
 /// <summary>Manuel eşleştirme request.</summary>
