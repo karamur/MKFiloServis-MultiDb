@@ -116,9 +116,19 @@ public class PuantajFaturaEslestirmeService : IPuantajFaturaEslestirmeService
 
             if (farkYuzde <= TamEslesmeEsik)
             {
+                // KDV ve kesinti farkı kontrolü
+                var pkKdv = pk.GelirKdvTutari + pk.GelirKdv20Tutari + pk.GelirKdv10Tutari + pk.GiderKdv20Tutari + pk.GiderKdv10Tutari;
+                var kdvFark = Math.Abs(pkKdv - enYakin.KdvTutar);
+                var kdvFarkYuzde = pkKdv > 0 ? kdvFark / pkKdv : 0;
+                var kesintiFark = Math.Abs((pk.GelirKesinti + pk.GiderKesinti) - 0); // Fatura'da kesinti alanı yok
+
+                var farkTipi = PuantajFaturaFarkTipi.TamEslesen;
+                var farkAciklama = "Tam eşleşme";
+                if (kdvFarkYuzde > YakinEslesmeEsik) { farkTipi = PuantajFaturaFarkTipi.KdvFarki; farkAciklama = $"KDV farkı — PK:{pkKdv:N2} FT:{enYakin.KdvTutar:N2}"; }
+                else if (kesintiFark > 10) { farkTipi = PuantajFaturaFarkTipi.KesintiFarki; farkAciklama = $"Kesinti farkı — PK:{pk.GelirKesinti + pk.GiderKesinti:N2}"; }
+
                 rapor.TamEslesen++;
                 eslesenFaturaIds.Add(enYakin.Id);
-                // Otomatik bağla (opsiyonel — sadece raporlama)
                 rapor.Farklar.Add(new PuantajFaturaFarkDto { PuantajKayitId = pk.Id, FaturaId = enYakin.Id, FarkTipi = PuantajFaturaFarkTipi.TamEslesen, FarkAciklamasi = "Tam eşleşme", PKPlaka = pk.Arac?.AktifPlaka ?? pk.Plaka, PKGuzergah = pk.Guzergah?.GuzergahAdi, PKCari = pk.FaturaKesiciCari?.Unvan, PKTutar = pkTutar, PKKdv = pk.GelirKdvTutari + pk.GelirKdv20Tutari + pk.GelirKdv10Tutari, PKKesinti = pk.GelirKesinti + pk.GiderKesinti, PKSefer = (int)pk.Gun, FaturaNo = enYakin.FaturaNo, FaturaTarihi = enYakin.FaturaTarihi, FCari = enYakin.Cari?.Unvan, FTutar = enYakin.GenelToplam, FKdv = enYakin.KdvTutar, FarkTutar = enYakinFark, FarkYuzde = farkYuzde * 100 });
             }
             else if (farkYuzde <= YakinEslesmeEsik)
