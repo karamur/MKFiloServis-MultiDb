@@ -287,6 +287,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<PuantajFinansalKayit> PuantajFinansalKayitlar { get; set; }
     public DbSet<PuantajJobExecution> PuantajJobExecutions { get; set; }
     public DbSet<FaturaGrupSablonu> FaturaGrupSablonlari { get; set; }
+    public DbSet<PuantajFaturaHazirlik> PuantajFaturaHazirliklar { get; set; }
+    public DbSet<PuantajFaturaHazirlikSatir> PuantajFaturaHazirlikSatirlar { get; set; }
 
     // Hakediş Puantaj Modülü (Operasyonel — Personel maaş puantajından bağımsız)
     public DbSet<AppErrorLog> AppErrorLogs { get; set; }

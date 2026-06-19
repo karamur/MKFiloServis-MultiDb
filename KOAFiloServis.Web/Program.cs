@@ -300,6 +300,7 @@ builder.Services.AddScoped<IHakedisPuantajService, HakedisPuantajService>(); // 
 builder.Services.AddScoped<IPuantajHakedisSyncService, PuantajHakedisSyncService>(); // Grid → Hakedis köprüsü
 builder.Services.AddScoped<IPuantajFaturaRaporService, PuantajFaturaRaporService>(); // YENI: Readonly fatura hazırlık raporu
 builder.Services.AddScoped<IFaturaGrupSablonuService, FaturaGrupSablonuService>(); // YENI: Agac gruplama şablonu CRUD
+builder.Services.AddScoped<IPuantajFaturaHazirlikService, PuantajFaturaHazirlikService>(); // YENI: Puantaj → fatura hazırlık
 builder.Services.AddScoped<RebuildService>(); // RebuildAll motoru
 builder.Services.AddScoped<DenetimService>(); // Finans denetim motoru
 builder.Services.AddScoped<TestSessionService>(); // Güvenli test modu
