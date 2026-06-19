@@ -148,3 +148,68 @@ public class PuantajFaturaOzetDto
     public decimal NetGider { get; set; }
     public decimal KarZarar { get; set; }
 }
+
+// ══════════════════════════════════════════════
+// EŞLEŞTİRME / FARK RAPORU DTO'LARI (Faz 4-5)
+// ══════════════════════════════════════════════
+
+public enum PuantajFaturaEslesmeDurum
+{
+    Eslesmedi = 0,    // Henüz eşleşme yok
+    TamEslesme = 1,   // Otomatik — tutar farkı ≤ %1
+    YakinEslesme = 2, // Otomatik — tutar farkı ≤ %5, manuel onay gerekir
+    ManuelEslesme = 3 // Kullanıcı manuel bağladı
+}
+
+public enum PuantajFaturaFarkTipi
+{
+    TamEslesen = 0,          // Tüm alanlar eşleşiyor
+    PuantajVarFaturaYok = 1, // Puantajda sefer var ama fatura kesilmemiş
+    FaturaVarPuantajYok = 2, // Fatura kesilmiş ama puantajda karşılığı yok
+    TutarFarki = 3,          // Fatura tutarı ≠ Puantaj tutarı
+    KdvFarki = 4,            // KDV oranı/tutarı uyuşmuyor
+    KesintiFarki = 5,        // Kesinti tutarı uyuşmuyor
+    CariFarki = 6            // Cari uyuşmuyor
+}
+
+public class PuantajFaturaEslesmeRaporu
+{
+    public int Yil { get; set; }
+    public int Ay { get; set; }
+    public int ToplamPuantajKayit { get; set; }
+    public int ToplamFatura { get; set; }
+    public int TamEslesen { get; set; }
+    public int YakinEslesen { get; set; }
+    public int ManuelEslesen { get; set; }
+    public int EslesmeyenPuantaj { get; set; }
+    public int EslesmeyenFatura { get; set; }
+    public List<PuantajFaturaFarkDto> Farklar { get; set; } = new();
+}
+
+public class PuantajFaturaFarkDto
+{
+    public int? PuantajKayitId { get; set; }
+    public int? FaturaId { get; set; }
+    public PuantajFaturaFarkTipi FarkTipi { get; set; }
+    public string FarkAciklamasi { get; set; } = string.Empty;
+
+    // Puantaj tarafı
+    public string? PKPlaka { get; set; }
+    public string? PKGuzergah { get; set; }
+    public string? PKCari { get; set; }
+    public decimal PKTutar { get; set; }
+    public decimal PKKdv { get; set; }
+    public decimal PKKesinti { get; set; }
+    public int PKSefer { get; set; }
+
+    // Fatura tarafı
+    public string? FaturaNo { get; set; }
+    public DateTime? FaturaTarihi { get; set; }
+    public string? FCari { get; set; }
+    public decimal FTutar { get; set; }
+    public decimal FKdv { get; set; }
+
+    // Fark
+    public decimal FarkTutar { get; set; }
+    public decimal FarkYuzde { get; set; }
+}
