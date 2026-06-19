@@ -1,5 +1,6 @@
 using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Models;
+using KOAFiloServis.Web.Services;
 using KOAFiloServis.Web.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -111,5 +112,14 @@ public class PuantajFaturaRaporController : ControllerBase
         var bytes = await _raporService.ExportExcelAsync(request);
         return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             $"PuantajFaturaRapor_{yil}_{ay:00}.xlsx");
+    }
+
+    /// <summary>GET /api/puantaj-fatura-rapor/engine-calistir — Puantaj engine'i manuel tetikle</summary>
+    [HttpGet("engine-calistir")]
+    public async Task<IActionResult> EngineCalistir([FromQuery] int yil = 2026, [FromQuery] int ay = 5)
+    {
+        var engine = HttpContext.RequestServices.GetRequiredService<PuantajEngineService>();
+        var sonuc = await engine.ProcessDonemAsync(yil, ay);
+        return Ok(new { sonuc.HesapDonemiId, sonuc.Versiyon, sonuc.IslenenOperasyonSayisi, sonuc.UretilenPuantajKayit, sonuc.SupersededKayit, sonuc.OlusturulanDetay });
     }
 }
