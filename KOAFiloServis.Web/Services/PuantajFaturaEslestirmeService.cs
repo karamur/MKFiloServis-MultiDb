@@ -129,7 +129,7 @@ public class PuantajFaturaEslestirmeService : IPuantajFaturaEslestirmeService
 
                 rapor.TamEslesen++;
                 eslesenFaturaIds.Add(enYakin.Id);
-                rapor.Farklar.Add(new PuantajFaturaFarkDto { PuantajKayitId = pk.Id, FaturaId = enYakin.Id, FarkTipi = PuantajFaturaFarkTipi.TamEslesen, FarkAciklamasi = "Tam eşleşme", PKPlaka = pk.Arac?.AktifPlaka ?? pk.Plaka, PKGuzergah = pk.Guzergah?.GuzergahAdi, PKCari = pk.FaturaKesiciCari?.Unvan, PKTutar = pkTutar, PKKdv = pk.GelirKdvTutari + pk.GelirKdv20Tutari + pk.GelirKdv10Tutari, PKKesinti = pk.GelirKesinti + pk.GiderKesinti, PKSefer = (int)pk.Gun, FaturaNo = enYakin.FaturaNo, FaturaTarihi = enYakin.FaturaTarihi, FCari = enYakin.Cari?.Unvan, FTutar = enYakin.GenelToplam, FKdv = enYakin.KdvTutar, FarkTutar = enYakinFark, FarkYuzde = farkYuzde * 100 });
+                rapor.Farklar.Add(new PuantajFaturaFarkDto { PuantajKayitId = pk.Id, FaturaId = enYakin.Id, FarkTipi = farkTipi, FarkAciklamasi = farkAciklama, PKPlaka = pk.Arac?.AktifPlaka ?? pk.Plaka, PKGuzergah = pk.Guzergah?.GuzergahAdi, PKCari = pk.FaturaKesiciCari?.Unvan, PKTutar = pkTutar, PKKdv = pk.GelirKdvTutari + pk.GelirKdv20Tutari + pk.GelirKdv10Tutari + pk.GiderKdv20Tutari + pk.GiderKdv10Tutari, PKKesinti = pk.GelirKesinti + pk.GiderKesinti, PKSefer = (int)pk.Gun, FaturaNo = enYakin.FaturaNo, FaturaTarihi = enYakin.FaturaTarihi, FCari = enYakin.Cari?.Unvan, FTutar = enYakin.GenelToplam, FKdv = enYakin.KdvTutar, FarkTutar = enYakinFark, FarkYuzde = farkYuzde * 100 });
             }
             else if (farkYuzde <= YakinEslesmeEsik)
             {
