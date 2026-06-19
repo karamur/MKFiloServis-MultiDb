@@ -1,22 +1,10 @@
+using KOAFiloServis.Shared.Entities;
+
 namespace KOAFiloServis.Web.Models;
 
 // ══════════════════════════════════════════════
-// ENUM'LAR
+// ENUM'LAR (Shared.Entities altında tanımlı: PuantajFaturaYonu, PuantajFaturaAgacYapisi)
 // ══════════════════════════════════════════════
-
-public enum PuantajFaturaYonu
-{
-    Gelir = 1,
-    Gider = 2
-}
-
-public enum PuantajFaturaAgacYapisi
-{
-    CariAracGuzergah = 1,
-    KurumAracGuzergah = 2,
-    TedarikciAracGuzergah = 3,
-    KurumGuzergahArac = 4
-}
 
 // ══════════════════════════════════════════════
 // REQUEST

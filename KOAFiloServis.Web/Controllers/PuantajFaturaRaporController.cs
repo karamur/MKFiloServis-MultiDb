@@ -1,3 +1,4 @@
+using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Models;
 using KOAFiloServis.Web.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
