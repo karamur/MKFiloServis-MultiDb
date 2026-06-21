@@ -6,7 +6,6 @@ using System.Data.Common;
 using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
 using KOAFiloServis.Web.Helpers;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -248,69 +247,11 @@ public class BackupService : IBackupService
         return sanitized.ToString();
     }
 
-    private async Task<BackupResult> CreateSqliteBackupAsync(string backupFilePath)
+    /// <summary>SQLite backup devre disi — proje PostgreSQL-only. KOAFiloServis.SqliteTool kullanin.</summary>
+    private Task<BackupResult> CreateSqliteBackupAsync(string backupFilePath)
     {
-        var result = new BackupResult();
-
-        try
-        {
-            var connectionString = ResolveConnectionString("SQLite");
-            if (string.IsNullOrWhiteSpace(connectionString))
-            {
-                result.ErrorMessage = "SQLite connection string bulunamadi.";
-                return result;
-            }
-
-            var sourcePath = connectionString.Replace("Data Source=", string.Empty, StringComparison.OrdinalIgnoreCase).Trim().TrimEnd(';');
-            if (!Path.IsPathRooted(sourcePath))
-                sourcePath = Path.Combine(_environment.ContentRootPath, sourcePath);
-
-            if (!File.Exists(sourcePath))
-            {
-                result.ErrorMessage = $"SQLite veritabani dosyasi bulunamadi: {sourcePath}";
-                return result;
-            }
-
-            var backupDirectory = Path.GetDirectoryName(backupFilePath);
-            if (!string.IsNullOrWhiteSpace(backupDirectory) && !Directory.Exists(backupDirectory))
-            {
-                Directory.CreateDirectory(backupDirectory);
-            }
-
-            if (File.Exists(backupFilePath))
-            {
-                File.Delete(backupFilePath);
-            }
-
-            await using (var sourceConnection = new SqliteConnection($"Data Source={sourcePath}"))
-            await using (var destinationConnection = new SqliteConnection($"Data Source={backupFilePath}"))
-            {
-                await sourceConnection.OpenAsync();
-                await destinationConnection.OpenAsync();
-
-                await using (var checkpointCommand = sourceConnection.CreateCommand())
-                {
-                    checkpointCommand.CommandText = "PRAGMA wal_checkpoint(FULL);";
-                    await checkpointCommand.ExecuteNonQueryAsync();
-                }
-
-                sourceConnection.BackupDatabase(destinationConnection);
-            }
-
-            var fileInfo = new FileInfo(backupFilePath);
-            result.Success = true;
-            result.FileName = Path.GetFileName(backupFilePath);
-            result.FilePath = backupFilePath;
-            result.FileSizeBytes = fileInfo.Length;
-            result.CreatedAt = DateTime.Now;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "SQLite yedekleme hatasi");
-            result.ErrorMessage = ex.Message;
-        }
-
-        return result;
+        _logger.LogWarning("SQLite yedekleme desteklenmiyor: {Path}. Proje PostgreSQL-only.", backupFilePath);
+        return Task.FromResult(new BackupResult { ErrorMessage = "SQLite yedekleme desteklenmiyor. Proje PostgreSQL-only mimariye gecildi." });
     }
 
     private async Task<BackupResult> CreatePostgreSqlBackupAsync(string backupFilePath)
@@ -917,56 +858,11 @@ public class BackupService : IBackupService
         }
     }
 
-    private async Task<bool> RestoreSqliteAsync(string backupFilePath)
+    /// <summary>SQLite restore devre disi — proje PostgreSQL-only. KOAFiloServis.SqliteTool kullanin.</summary>
+    private Task<bool> RestoreSqliteAsync(string backupFilePath)
     {
-        try
-        {
-            var connectionString = ResolveConnectionString("SQLite");
-            var targetPath = connectionString?.Replace("Data Source=", string.Empty, StringComparison.OrdinalIgnoreCase).Trim().TrimEnd(';');
-
-            if (string.IsNullOrWhiteSpace(targetPath))
-            {
-                _logger.LogError("SQLite hedef yolu bulunamadi");
-                return false;
-            }
-
-            if (!Path.IsPathRooted(targetPath))
-                targetPath = Path.Combine(_environment.ContentRootPath, targetPath);
-
-            var targetDirectory = Path.GetDirectoryName(targetPath);
-            if (!string.IsNullOrWhiteSpace(targetDirectory) && !Directory.Exists(targetDirectory))
-            {
-                Directory.CreateDirectory(targetDirectory);
-            }
-
-            if (File.Exists(targetPath))
-            {
-                File.Delete(targetPath);
-            }
-
-            var walPath = targetPath + "-wal";
-            var shmPath = targetPath + "-shm";
-            if (File.Exists(walPath))
-                File.Delete(walPath);
-            if (File.Exists(shmPath))
-                File.Delete(shmPath);
-
-            await using (var sourceConnection = new SqliteConnection($"Data Source={backupFilePath}"))
-            await using (var destinationConnection = new SqliteConnection($"Data Source={targetPath}"))
-            {
-                await sourceConnection.OpenAsync();
-                await destinationConnection.OpenAsync();
-                sourceConnection.BackupDatabase(destinationConnection);
-            }
-
-            _logger.LogInformation("SQLite restore basarili: {Path}", targetPath);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "SQLite restore hatasi");
-            return false;
-        }
+        _logger.LogWarning("SQLite restore desteklenmiyor: {Path}. Proje PostgreSQL-only.", backupFilePath);
+        return Task.FromResult(false);
     }
 
     private async Task<bool> RestorePostgreSqlAsync(string backupFilePath)

@@ -3,8 +3,6 @@ using System.Text.Json;
 using Npgsql;
 using Microsoft.Data.SqlClient;
 using MySqlConnector;
-using Microsoft.Data.Sqlite;
-
 namespace KOAFiloServis.Web.Services;
 
 public interface IDatabaseSettingsService
@@ -85,16 +83,9 @@ public class DatabaseSettingsService : IDatabaseSettingsService
                     }
 
                 case DatabaseProvider.SQLite:
-                    var dbPath = settings.DatabaseName;
-                    if (!dbPath.EndsWith(".db")) dbPath += ".db";
-                    var sqliteConnStr = $"Data Source={dbPath};";
-                    using (var conn = new SqliteConnection(sqliteConnStr))
-                    {
-                        await conn.OpenAsync();
-                        using var cmd = new SqliteCommand("SELECT 1", conn);
-                        await cmd.ExecuteScalarAsync();
-                        return (true, "SQLite baglantisi basarili!");
-                    }
+                    // SQLite destegi kaldirildi — proje PostgreSQL-only.
+                    // SQLite baglanti testi icin KOAFiloServis.SqliteTool kullanin.
+                    return (false, "SQLite desteklenmiyor. Proje PostgreSQL-only mimariye gecildi.");
 
                 default:
                     return (false, "Desteklenmeyen veritabani tipi.");

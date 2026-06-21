@@ -15,13 +15,12 @@
     <PackageReference Include="EPPlus" Version="8.5.0" />
     <PackageReference Include="MailKit" Version="4.16.0" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.0" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.5" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.5">
+    <!-- Microsoft.Data.Sqlite KALDIRILDI — BackupService SqliteConnection stub'landı -->    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.5">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <!-- Microsoft.EntityFrameworkCore.Sqlite KALDIRILDI — proje PostgreSQL-only.
-         SQLite yedekleme/geçiş için sadece Microsoft.Data.Sqlite (ADO.NET) kaldı.
+    <!-- Microsoft.EntityFrameworkCore.Sqlite + Microsoft.Data.Sqlite KALDIRILDI.
+         Proje PostgreSQL-only. SQLite yedekleme/geçiş için ayri KOAFiloServis.SqliteTool.
          IsSqlite() çağrıları Data/SqliteStubExtensions.cs ile stub'landı. -->
     <PackageReference Include="Microsoft.Extensions.AI" Version="9.6.0" />
     <PackageReference Include="Microsoft.Playwright" Version="1.58.0" />
