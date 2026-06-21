@@ -279,6 +279,7 @@ builder.Services.AddSingleton<IFileProtector, AesGcmFileProtector>();
 builder.Services.AddScoped<IEvrakArsivService, EvrakArsivService>();
 builder.Services.AddScoped<IEvrakArsivBackfillService, EvrakArsivBackfillService>();
 builder.Services.AddScoped<FileService>(); // YENI: Basit evrak dosya servisi (C:\KOAFiloServis\uploads)
+builder.Services.AddScoped<IEvrakDosyaMaintenanceService, EvrakDosyaMaintenanceService>(); // Kayip EvrakDosya bakim servisi
 builder.Services.AddScoped<EvrakExpiryService>(); // YENI: EvrakDosya tabanli gecerlilik takibi
 builder.Services.AddScoped<ITekrarlayanOdemeService, TekrarlayanOdemeService>(); // Kredi/Taksit Ynetimi
 builder.Services.AddScoped<IBackupService, BackupService>();
