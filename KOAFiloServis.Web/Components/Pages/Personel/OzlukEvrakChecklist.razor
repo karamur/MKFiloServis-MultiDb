@@ -689,6 +689,54 @@
     </div>
 }
 
+@* Çoklu Aday Seçim Modalı — Sertifika gibi birden fazla OzlukEvrakTanim olan tipler için *@
+@if (showCokluAdayModal && _cokluAdaylar.Count > 1)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-question-circle me-2"></i>Hangi Evrak Tipi?
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CokluAdayIptal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>"@_cokluAdayCanonicalTip" için birden fazla evrak tanımı bulundu. Lütfen yüklemek istediğiniz belgeyi seçin:</p>
+
+                    <div class="list-group">
+                        @foreach (var aday in _cokluAdaylar.OrderBy(a => a.Zorunlu ? 0 : 1).ThenBy(a => a.SiraNo))
+                        {
+                            <label class="list-group-item list-group-item-action @(_cokluAdaySeciliTanimId == aday.Id ? "active" : "")"
+                                   @onclick="() => _cokluAdaySeciliTanimId = aday.Id">
+                                <input type="radio" class="form-check-input me-2"
+                                       checked="@(_cokluAdaySeciliTanimId == aday.Id)"
+                                       @onchange="() => _cokluAdaySeciliTanimId = aday.Id" />
+                                <strong>@aday.EvrakAdi</strong>
+                                @if (aday.Zorunlu)
+                                {
+                                    <span class="badge bg-danger ms-1">Zorunlu</span>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(aday.Aciklama))
+                                {
+                                    <br /><small class="text-muted">@aday.Aciklama</small>
+                                }
+                            </label>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CokluAdayIptal">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="CokluAdayOnayla"
+                            disabled="@(_cokluAdaySeciliTanimId == 0)">
+                        <i class="bi bi-upload me-1"></i>Bu Belgeyi Yükle
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<PersonelOzlukEvrakDurum>? durumlar;
     private List<OzlukEvrakTanim>? evrakTanimlari;
@@ -700,6 +748,7 @@
     private bool showTanimModal;
     private bool showTanimDuzenleModal;
     private bool showEksikListeModal;
+    private bool showCokluAdayModal; // Sertifika gibi çoklu OzlukEvrakTanim adayı için seçim modalı
     private bool _hizliEvrakAcik = true;
     private static readonly List<string> _personelEvrakTipleri = new() { "Kimlik", "Ehliyet", "Diploma", "Sertifika", "Saglik Raporu", "Is Sozlesmesi", "Diger" };
     private List<EvrakDosya> _yeniEvraklar = new(); // YENI sistem — EvrakDosya tablosu
@@ -708,6 +757,13 @@
     /// EvrakYonetimi bileşenine gönderilir, böylece hızlı kartlar eksik göstermez.
     /// </summary>
     private HashSet<string> _mevcutTipler = new();
+
+    // Çoklu aday (Sertifika) seçim state
+    private List<OzlukEvrakTanim> _cokluAdaylar = new();
+    private string _cokluAdayCanonicalTip = string.Empty;
+    private IBrowserFile? _cokluAdayFile;
+    private DateTime? _cokluAdayGecerlilikTarihi;
+    private int _cokluAdaySeciliTanimId;
 
     // Önizleme state
     private bool onizlemeModalAcik;
@@ -956,19 +1012,86 @@
     /// Hızlı Evrak Yükleme kartından gelen upload isteği.
     /// Canonical tipi ("Kimlik") → doğru OzlukEvrakTanim ("Kimlik Fotokopisi") bulur
     /// → ortak UploadOzlukEvrakDosyasiAsync ile kaydeder.
+    /// Çoklu aday (Sertifika → SRC/Psikoteknik/ADR/MYK) varsa seçim modalı gösterir.
     /// </summary>
     private async Task HizliEvrakYukleAsync(IBrowserFile file, string canonicalTip, DateTime? gecerlilikTarihi)
     {
         if (seciliDurum == null) return;
         var soforId = seciliDurum.SoforId;
 
-        var tanim = await FindOzlukEvrakTanimForCanonicalTipAsync(canonicalTip);
-        if (tanim == null)
+        // Tüm eşleşen adayları bul
+        var evrakTanimlari = await OzlukService.GetAktifEvrakTanimlariAsync();
+        var candidates = evrakTanimlari
+            .Where(t => EvrakTipiCanonicalMapper.BelongsToCategory(t.EvrakAdi, canonicalTip))
+            .ToList();
+
+        if (candidates.Count == 0)
+        {
+            // Fallback: GetPrimaryAlias ile dene
+            var primaryAlias = EvrakTipiCanonicalMapper.GetPrimaryAlias(canonicalTip);
+            if (primaryAlias != null)
+            {
+                var exact = evrakTanimlari.FirstOrDefault(t =>
+                    string.Equals(t.EvrakAdi, primaryAlias, StringComparison.OrdinalIgnoreCase));
+                if (exact != null) candidates.Add(exact);
+            }
+        }
+
+        if (candidates.Count == 0)
         {
             ToastService.ShowWarning($"'{canonicalTip}' için eşleşen evrak tanımı bulunamadı.");
             return;
         }
 
+        // Çoklu aday → kullanıcıya seçim modalı göster
+        if (candidates.Count > 1)
+        {
+            _cokluAdaylar = candidates;
+            _cokluAdayCanonicalTip = canonicalTip;
+            _cokluAdayFile = file;
+            _cokluAdayGecerlilikTarihi = gecerlilikTarihi;
+            _cokluAdaySeciliTanimId = candidates.FirstOrDefault(t => t.Zorunlu)?.Id ?? candidates[0].Id;
+            showCokluAdayModal = true;
+            return;
+        }
+
+        // Tek aday → doğrudan yükle
+        await DogrudanYukleAsync(soforId, candidates[0], file, gecerlilikTarihi);
+    }
+
+    /// <summary>Çoklu aday modalında kullanıcı seçim yapıp onaylayınca çağrılır.</summary>
+    private async Task CokluAdayOnayla()
+    {
+        showCokluAdayModal = false;
+        if (seciliDurum == null || _cokluAdayFile == null || _cokluAdaySeciliTanimId == 0) return;
+
+        var secilenTanim = _cokluAdaylar.FirstOrDefault(a => a.Id == _cokluAdaySeciliTanimId);
+        if (secilenTanim == null) return;
+
+        await DogrudanYukleAsync(seciliDurum.SoforId, secilenTanim, _cokluAdayFile, _cokluAdayGecerlilikTarihi);
+        CokluAdayTemizle();
+    }
+
+    /// <summary>Çoklu aday modalında kullanıcı iptal edince çağrılır.</summary>
+    private void CokluAdayIptal()
+    {
+        showCokluAdayModal = false;
+        ToastService.ShowInfo("Yükleme iptal edildi.");
+        CokluAdayTemizle();
+    }
+
+    private void CokluAdayTemizle()
+    {
+        _cokluAdaylar = new();
+        _cokluAdayCanonicalTip = string.Empty;
+        _cokluAdayFile = null;
+        _cokluAdayGecerlilikTarihi = null;
+        _cokluAdaySeciliTanimId = 0;
+    }
+
+    /// <summary>Tek adaylı veya kullanıcı seçimi sonrası ortak yükleme.</summary>
+    private async Task DogrudanYukleAsync(int soforId, OzlukEvrakTanim tanim, IBrowserFile file, DateTime? gecerlilikTarihi)
+    {
         var detay = new OzlukEvrakDetay
         {
             EvrakTanimId = tanim.Id,
