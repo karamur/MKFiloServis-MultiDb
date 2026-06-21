@@ -117,22 +117,17 @@ builder.Services.AddPooledDbContextFactory<ApplicationDbContext>((sp, options) =
     // CRUD işlemleri .AsTracking() ile explicit tracking kullanır.
     options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
 
-    if (dbProvider == "PostgreSQL")
+    // PostgreSQL-only mimari (Nihai 2026). SQLite provider kaldırıldı.
+    // dbProvider ayarı sadece bilgi amaçlı; her durumda Npgsql kullanılır.
+    options.UseNpgsql(defaultConnectionString, npgsqlOptions =>
     {
-        options.UseNpgsql(defaultConnectionString, npgsqlOptions =>
-        {
-            npgsqlOptions.EnableRetryOnFailure(
-                maxRetryCount: 3,
-                maxRetryDelay: TimeSpan.FromSeconds(5),
-                errorCodesToAdd: null);
-            npgsqlOptions.CommandTimeout(30);
-            npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "public");
-        });
-    }
-    else // SQLite
-    {
-        options.UseSqlite(defaultConnectionString);
-    }
+        npgsqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 3,
+            maxRetryDelay: TimeSpan.FromSeconds(5),
+            errorCodesToAdd: null);
+        npgsqlOptions.CommandTimeout(30);
+        npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "public");
+    });
 
     if (enableSensitiveDataLogging)
     {

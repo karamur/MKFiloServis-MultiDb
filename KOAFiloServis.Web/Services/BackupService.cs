@@ -1979,42 +1979,15 @@ public class BackupService : IBackupService
         }
     }
 
-    private async Task<Dictionary<string, object>?> ReadSqliteToJsonAsync(string sqliteFilePath)
+    /// <summary>
+    /// ESKI: SQLite .db backup dosyasindan EF Core ile entity okurdu.
+    /// Proje PostgreSQL-only mimariye gectigi icin Microsoft.EntityFrameworkCore.Sqlite kaldirildi.
+    /// SQLite backup'tan veri okuma icin ayri KOAFiloServis.SqliteTool konsol araci kullanilmalidir.
+    /// </summary>
+    private Task<Dictionary<string, object>?> ReadSqliteToJsonAsync(string sqliteFilePath)
     {
-        try
-        {
-            var connString = $"Data Source={sqliteFilePath}";
-            var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
-            optionsBuilder.UseSqlite(connString);
-
-            using var tempContext = new ApplicationDbContext(optionsBuilder.Options);
-
-            var data = new Dictionary<string, object>
-            {
-                ["Cariler"] = await tempContext.Cariler.IgnoreQueryFilters().AsNoTracking().ToListAsync(),
-                ["Araclar"] = await tempContext.Araclar.IgnoreQueryFilters().AsNoTracking().ToListAsync(),
-                ["Soforler"] = await tempContext.Soforler.IgnoreQueryFilters().AsNoTracking().ToListAsync(),
-                ["Guzergahlar"] = await tempContext.Guzergahlar.IgnoreQueryFilters().AsNoTracking().ToListAsync(),
-                ["Faturalar"] = await tempContext.Faturalar.IgnoreQueryFilters().AsNoTracking().ToListAsync(),
-                ["FaturaKalemleri"] = await tempContext.FaturaKalemleri.IgnoreQueryFilters().AsNoTracking().ToListAsync(),
-                ["BankaHesaplari"] = await tempContext.BankaHesaplari.IgnoreQueryFilters().AsNoTracking().ToListAsync(),
-                ["BankaKasaHareketleri"] = await tempContext.BankaKasaHareketleri.IgnoreQueryFilters().AsNoTracking().ToListAsync(),
-                ["MuhasebeHesaplari"] = await tempContext.MuhasebeHesaplari.IgnoreQueryFilters().AsNoTracking().ToListAsync(),
-                ["MuhasebeFisleri"] = await tempContext.MuhasebeFisleri.IgnoreQueryFilters().AsNoTracking().ToListAsync(),
-                ["MuhasebeFisKalemleri"] = await tempContext.MuhasebeFisKalemleri.IgnoreQueryFilters().AsNoTracking().ToListAsync(),
-                ["Kullanicilar"] = await tempContext.Kullanicilar.IgnoreQueryFilters().AsNoTracking().ToListAsync(),
-                ["Roller"] = await tempContext.Roller.IgnoreQueryFilters().AsNoTracking().ToListAsync(),
-                ["StokKartlari"] = await tempContext.StokKartlari.IgnoreQueryFilters().AsNoTracking().ToListAsync(),
-                ["StokKategoriler"] = await tempContext.StokKategoriler.IgnoreQueryFilters().AsNoTracking().ToListAsync()
-            };
-
-            return data;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "SQLite okuma hatasi");
-            return null;
-        }
+        _logger.LogWarning("SQLite backup okuma desteklenmiyor: {Path}. EF Core SQLite provider kaldirildi.", sqliteFilePath);
+        return Task.FromResult<Dictionary<string, object>?>(null);
     }
 
     private async Task<bool> WriteJsonToTargetDatabaseAsync(Dictionary<string, object> data, string targetProvider)
