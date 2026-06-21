@@ -838,6 +838,7 @@ public sealed class KurumPuantajService : IKurumPuantajService
                 // Gun'u ezeceği için burada çağrılmaz; finansal alanlar manuel hesaplanır.
                 kayit.ToplamGider = kayit.BirimGider * kayit.Gun;
                 kayit.Odenecek = kayit.ToplamGider + kayit.GiderKdv20Tutari + kayit.GiderKdv10Tutari - kayit.GiderKesinti;
+                EnsurePuantajDefaults(kayit);
 
                 db.PuantajKayitlar.Add(kayit);
                 mevcutKayitlar.Add(kayit); // sonraki satırlar duplicate kontrolü için
@@ -919,6 +920,12 @@ public sealed class KurumPuantajService : IKurumPuantajService
             SeferSayisi = 1,
             Gun         = 0
         });
+    }
+
+    private void AddWithDefaults(ICollection<PuantajKayit> collection, PuantajKayit kayit)
+    {
+        EnsurePuantajDefaults(kayit);
+        collection.Add(kayit);
     }
 
     // ── Puantaj Güncelleme ──────────────────────────────────────────────────
@@ -1149,7 +1156,7 @@ public sealed class KurumPuantajService : IKurumPuantajService
             "Lütfen ilgili güzergah seferinde şoför kartını seçiniz. Detay: " + detay);
     }
 
-    private static void EnsurePuantajDefaults(PuantajKayit kayit)
+    internal static void EnsurePuantajDefaults(PuantajKayit kayit)
     {
         if (kayit.OnayDurum == default)
             kayit.OnayDurum = PuantajOnayDurum.Taslak;

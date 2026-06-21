@@ -177,6 +177,7 @@ public sealed class PuantajEngineService : IPuantajEngineService
                     pk.TransferDurum = ilk.TransferDurum;
                     pk.Notlar = ilk.Notlar;
                     pk.UpdatedAt = DateTime.UtcNow;
+                    KurumPuantajService.EnsurePuantajDefaults(pk);
 
                     if (guzergahlar.TryGetValue(guzergahId, out var g))
                     {
