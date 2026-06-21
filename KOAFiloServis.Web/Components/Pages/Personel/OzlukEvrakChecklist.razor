@@ -231,6 +231,7 @@
                                     PersonelId="seciliDurum.SoforId"
                                     EvrakTipleri="_personelEvrakTipleri"
                                     MevcutTipler="_mevcutTipler"
+                                    OnPersonelUploadAsync="HizliEvrakYukleAsync"
                                     OnChanged="EvrakGuncellendi" />
                             </div>
                         }
@@ -861,12 +862,19 @@
         }
     }
 
+    /// <summary>Detay checklist input'undan gelen upload.</summary>
     private async Task EvrakDosyaSecildi(int soforId, OzlukEvrakDetay evrak, InputFileChangeEventArgs e)
     {
-        var file = e.File;
-        if (file == null)
-            return;
+        if (e.File == null) return;
+        await UploadOzlukEvrakDosyasiAsync(soforId, evrak, e.File);
+    }
 
+    /// <summary>
+    /// ORTAK UPLOAD METODU — hem detay checklist hem hızlı kart burayı kullanır.
+    /// SecureFileService + PersonelOzlukEvrak üzerinden kaydeder.
+    /// </summary>
+    private async Task UploadOzlukEvrakDosyasiAsync(int soforId, OzlukEvrakDetay evrak, IBrowserFile file)
+    {
         try
         {
             await using var stream = file.OpenReadStream(10 * 1024 * 1024);
@@ -903,7 +911,7 @@
                 personelKlasoru = AppStoragePaths.NormalizeFolderName(fallbackAdSoyad);
             }
 
-            // Dosya adı: {PERSONELADSOYAD}{EvrakTipi}_{yyyyMMdd_HHmmss}.uzanti  (boşluksuz, Türkçe karakter normalize)
+            // Dosya adı: {PERSONELADSOYAD}{EvrakTipi}_{yyyyMMdd_HHmmss}.uzanti
             var normEvrakAdi = AppStoragePaths.NormalizeFolderName(evrak.EvrakAdi).Replace(" ", "").Replace("-", "");
             var arsivDosyaAdi = $"{normAd}{normSoyad}{normEvrakAdi}_{DateTime.Now:yyyyMMdd_HHmmss}{uzanti}";
 
@@ -912,7 +920,7 @@
                 arsivDosyaAdi,
                 icerik);
 
-            // Arşiv kopyaları (şifreli + şifresiz)
+            // Arşiv kopyaları
             var adSoyad = seciliDurum?.PersonelAdi ?? soforId.ToString();
             try
             {
@@ -936,6 +944,89 @@
                 soforId, evrak.EvrakTanimId, file?.Name);
             ToastService.ShowError($"Dosya yüklenemedi: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Hızlı Evrak Yükleme kartından gelen upload isteği.
+    /// Canonical tipi ("Kimlik") → doğru OzlukEvrakTanim ("Kimlik Fotokopisi") bulur
+    /// → ortak UploadOzlukEvrakDosyasiAsync ile kaydeder.
+    /// </summary>
+    private async Task HizliEvrakYukleAsync(IBrowserFile file, string canonicalTip, DateTime? gecerlilikTarihi)
+    {
+        if (seciliDurum == null) return;
+        var soforId = seciliDurum.SoforId;
+
+        var tanim = await FindOzlukEvrakTanimForCanonicalTipAsync(canonicalTip);
+        if (tanim == null)
+        {
+            ToastService.ShowWarning($"'{canonicalTip}' için eşleşen evrak tanımı bulunamadı.");
+            return;
+        }
+
+        var detay = new OzlukEvrakDetay
+        {
+            EvrakTanimId = tanim.Id,
+            EvrakAdi = tanim.EvrakAdi,
+            Kategori = tanim.Kategori,
+            Zorunlu = tanim.Zorunlu
+        };
+
+        await UploadOzlukEvrakDosyasiAsync(soforId, detay, file);
+
+        // Hızlı karttan gelen geçerlilik tarihini uygula
+        if (gecerlilikTarihi.HasValue)
+        {
+            try
+            {
+                evrakGecerlilikTarihleri[detay.EvrakTanimId] = gecerlilikTarihi.Value.Date;
+                await PersonelBelgeTarihiniGuncelleAsync(soforId, detay);
+                seciliDurum = await OzlukService.GetPersonelEvrakDurumuAsync(soforId);
+                await EvrakGecerlilikTarihleriniYukleAsync(soforId);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Hizli upload: gecerlilik tarihi uygulanamadi. EvrakTanimId={Id}", detay.EvrakTanimId);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Canonical tip ("Kimlik") → aktif OzlukEvrakTanim ("Kimlik Fotokopisi") bulur.
+    /// GetPrimaryAlias ile en olası adı dener, bulamazsa BelongsToCategory ile tarar.
+    /// Birden fazla aday varsa ilkini döner; 0 aday varsa null.
+    /// </summary>
+    private async Task<OzlukEvrakTanim?> FindOzlukEvrakTanimForCanonicalTipAsync(string canonicalTip)
+    {
+        var evrakTanimlari = await OzlukService.GetAktifEvrakTanimlariAsync();
+
+        // 1. Önce GetPrimaryAlias ile en olası adı dene (örn: "Kimlik" → "Kimlik Fotokopisi")
+        var primaryAlias = EvrakTipiCanonicalMapper.GetPrimaryAlias(canonicalTip);
+        if (primaryAlias != null)
+        {
+            var exact = evrakTanimlari.FirstOrDefault(t =>
+                string.Equals(t.EvrakAdi, primaryAlias, StringComparison.OrdinalIgnoreCase));
+            if (exact != null) return exact;
+        }
+
+        // 2. Canonical kategoriye ait tüm tanımları tara
+        var candidates = evrakTanimlari
+            .Where(t => EvrakTipiCanonicalMapper.BelongsToCategory(t.EvrakAdi, canonicalTip))
+            .ToList();
+
+        if (candidates.Count == 1)
+            return candidates[0];
+
+        if (candidates.Count > 1)
+        {
+            // Birden fazla aday → zorunlu olanı tercih et, yoksa ilkini al
+            var zorunlu = candidates.FirstOrDefault(t => t.Zorunlu);
+            Logger.LogInformation("HizliEvrakYukle: '{Tip}' için {Count} aday bulundu, zorunlu={Zorunlu}",
+                canonicalTip, candidates.Count, zorunlu?.EvrakAdi ?? "ilk kayıt");
+            return zorunlu ?? candidates[0];
+        }
+
+        Logger.LogWarning("HizliEvrakYukle: '{Tip}' için eşleşen OzlukEvrakTanim bulunamadı.", canonicalTip);
+        return null;
     }
 
     private async Task EvrakDosyasiIndir(OzlukEvrakDetay evrak)

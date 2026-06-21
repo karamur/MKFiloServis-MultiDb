@@ -206,6 +206,12 @@
     /// Örn: "Kimlik Fotokopisi" yüklüyse → "Kimlik" bu set'te olur.
     /// </summary>
     [Parameter] public HashSet<string> MevcutTipler { get; set; } = new();
+    /// <summary>
+    /// Personel bağlamında upload işlemini parent'a devreder.
+    /// Parent SecureFileService + PersonelOzlukEvrak üzerinden kaydeder (EvrakDosya kullanılmaz).
+    /// Parametreler: (IBrowserFile file, string canonicalTip, DateTime? gecerlilikTarihi)
+    /// </summary>
+    [Parameter] public Func<IBrowserFile, string, DateTime?, Task>? OnPersonelUploadAsync { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
 
     private List<EvrakDosya> _evraklar = new();
@@ -268,6 +274,27 @@
 
         _errorMessage = null;
 
+        // Personel bağlamında → parent'a devret (SecureFileService + PersonelOzlukEvrak)
+        if (PersonelId.HasValue && OnPersonelUploadAsync != null)
+        {
+            try
+            {
+                await OnPersonelUploadAsync(file, evrakTipi, _seciliTarih);
+                _seciliTarih = null;
+                await LoadEvraklar();
+                StateHasChanged();
+                if (OnChanged.HasDelegate)
+                    await OnChanged.InvokeAsync();
+            }
+            catch (Exception ex)
+            {
+                _errorMessage = $"Yükleme hatası: {ex.Message}";
+                Logger.LogError(ex, "EvrakYonetimi Upload(Personel) hatasi PersonelId={P} Tip={T}", PersonelId, evrakTipi);
+            }
+            return;
+        }
+
+        // Araç bağlamı veya callback yok → eski EvrakDosya akışı
         try
         {
             var diskAdi = await FileService.SaveAsync(file);
@@ -286,7 +313,7 @@
                 existing.DosyaAdi = file.Name;
                 existing.DosyaYolu = diskAdi;
                 existing.GuncellenmeTarihi = DateTime.UtcNow;
-                existing.GecerlilikTarihi = _seciliTarih; // PART 2: tarih güncelle
+                existing.GecerlilikTarihi = _seciliTarih;
 
                 Logger.LogInformation("Evrak güncellendi: {Tip} PersonelId={P} AracId={A} Gecerlilik={G}",
                     evrakTipi, PersonelId, AracId, _seciliTarih);
@@ -300,7 +327,7 @@
                     EvrakTipi = evrakTipi,
                     DosyaAdi = file.Name,
                     DosyaYolu = diskAdi,
-                    GecerlilikTarihi = _seciliTarih // PART 2: tarih ekle
+                    GecerlilikTarihi = _seciliTarih
                 });
 
                 Logger.LogInformation("Evrak kaydedildi: {Tip} PersonelId={P} AracId={A} Gecerlilik={G}",
@@ -380,10 +407,21 @@
 
         try
         {
-            // Diskteki dosyayı sil
-            FileService.Delete(evrak.DosyaYolu);
+            // Diskteki dosyayı sil — yoksa hata verme (idempotent)
+            try
+            {
+                FileService.Delete(evrak.DosyaYolu);
+            }
+            catch (FileNotFoundException)
+            {
+                Logger.LogWarning("EvrakYonetimi Delete: dosya zaten diskte yok Id={Id} Yol={Yol}", evrak.Id, evrak.DosyaYolu);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "EvrakYonetimi Delete: fiziksel dosya silinemedi Id={Id}", evrak.Id);
+            }
 
-            // DB'den soft delete — FirstOrDefaultAsync FindAsync'ten daha güvenilir
+            // DB'den soft delete — fiziksel dosya durumundan bağımsız
             await using var db = await DbFactory.CreateDbContextAsync();
             var entity = await db.EvrakDosyalari
                 .FirstOrDefaultAsync(x => x.Id == evrak.Id && !x.IsDeleted);
