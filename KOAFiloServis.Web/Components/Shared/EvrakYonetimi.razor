@@ -29,15 +29,17 @@
     <div class="row mb-3">
         @foreach (var tip in EvrakTipleri)
         {
+            var mevcutTiplerVar = MevcutTipler.Contains(tip);
             var varMi = _evraklar.Any(x => !x.IsDeleted && (
                 x.EvrakTipi == tip ||
                 EvrakTipiCanonicalMapper.AreSameCategory(x.EvrakTipi, tip)))
-                || MevcutTipler.Contains(tip);
+                || mevcutTiplerVar;
             EvrakDosya? evrak = _evraklar.FirstOrDefault(x => !x.IsDeleted && (
                 x.EvrakTipi == tip ||
                 EvrakTipiCanonicalMapper.AreSameCategory(x.EvrakTipi, tip)));
-            // NOT: varMi true iken evrak null olabilir — eski sistem (MevcutTipler) kaynaklı tamamlanmalarda.
-            var yalnizcaEskiSistem = varMi && evrak == null;
+            // PersonelOzlukEvrak (MevcutTipler) authoritative kaynaktır.
+            // EvrakDosya'daki eski/kayıp kayıt yeni doğru dosyayı gölgeleyemez.
+            var yalnizcaEskiSistem = mevcutTiplerVar || (varMi && evrak == null);
             var status = GetStatus(evrak);
             var bgClass = varMi switch
             {
@@ -218,6 +220,10 @@
     /// Parametre: canonicalTip (örn: "Diploma")
     /// </summary>
     [Parameter] public Func<string, Task>? OnPersonelDeleteAsync { get; set; }
+    /// <summary>Parent'a preview delegate eder. Parametre: canonical tip ("Kimlik", "Ruhsat" vb.)</summary>
+    [Parameter] public Func<string, Task>? OnPreviewAsync { get; set; }
+    /// <summary>Parent'a download delegate eder. Parametre: canonical tip</summary>
+    [Parameter] public Func<string, Task>? OnDownloadAsync { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
 
     private List<EvrakDosya> _evraklar = new();
@@ -356,6 +362,23 @@
 
     private async Task EvrakGor(EvrakDosya evrak)
     {
+        // Parent callback varsa delegate et (personel/araç fark etmez)
+        if (OnPreviewAsync != null)
+        {
+            try
+            {
+                await OnPreviewAsync(evrak.EvrakTipi);
+                return;
+            }
+            catch (Exception ex)
+            {
+                _errorMessage = $"Görüntüleme hatası: {ex.Message}";
+                Logger.LogError(ex, "EvrakYonetimi View(Parent) hatasi Tip={Tip}", evrak.EvrakTipi);
+                return;
+            }
+        }
+
+        // Fallback: eski FileService (araç bağlamı, callback yoksa)
         try
         {
             var bytes = await FileService.ReadAsync(evrak.DosyaYolu);
@@ -384,6 +407,23 @@
 
     private async Task EvrakIndir(EvrakDosya evrak)
     {
+        // Parent callback varsa delegate et
+        if (OnDownloadAsync != null)
+        {
+            try
+            {
+                await OnDownloadAsync(evrak.EvrakTipi);
+                return;
+            }
+            catch (Exception ex)
+            {
+                _errorMessage = $"İndirme hatası: {ex.Message}";
+                Logger.LogError(ex, "EvrakYonetimi Download(Parent) hatasi Tip={Tip}", evrak.EvrakTipi);
+                return;
+            }
+        }
+
+        // Fallback: eski FileService
         try
         {
             var bytes = await FileService.ReadAsync(evrak.DosyaYolu);

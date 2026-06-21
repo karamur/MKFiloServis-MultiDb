@@ -233,6 +233,8 @@
                                     MevcutTipler="_mevcutTipler"
                                     OnPersonelUploadAsync="HizliEvrakYukleAsync"
                                     OnPersonelDeleteAsync="HizliEvrakSilAsync"
+                                    OnPreviewAsync="HizliEvrakOnizleAsync"
+                                    OnDownloadAsync="HizliEvrakIndirAsync"
                                     OnChanged="EvrakGuncellendi" />
                             </div>
                         }
@@ -1204,6 +1206,34 @@
         await EvrakGecerlilikTarihleriniYukleAsync(soforId);
         await DetayAc(soforId);
         await LoadData();
+    }
+
+    /// <summary>Hızlı karttan preview: canonical tip → PersonelOzlukEvrak → SecureFileService önizleme.</summary>
+    private async Task HizliEvrakOnizleAsync(string canonicalTip)
+    {
+        if (seciliDurum == null) return;
+        var ozlukDetay = seciliDurum.Evraklar.FirstOrDefault(e =>
+            e.Tamamlandi && EvrakTipiCanonicalMapper.BelongsToCategory(e.EvrakAdi, canonicalTip));
+        if (ozlukDetay == null)
+        {
+            ToastService.ShowWarning($"'{canonicalTip}' için yüklenmiş dosya bulunamadı.");
+            return;
+        }
+        await EvrakOnizle(ozlukDetay);
+    }
+
+    /// <summary>Hızlı karttan download: canonical tip → PersonelOzlukEvrak → SecureFileService indirme.</summary>
+    private async Task HizliEvrakIndirAsync(string canonicalTip)
+    {
+        if (seciliDurum == null) return;
+        var ozlukDetay = seciliDurum.Evraklar.FirstOrDefault(e =>
+            e.Tamamlandi && EvrakTipiCanonicalMapper.BelongsToCategory(e.EvrakAdi, canonicalTip));
+        if (ozlukDetay == null)
+        {
+            ToastService.ShowWarning($"'{canonicalTip}' için yüklenmiş dosya bulunamadı.");
+            return;
+        }
+        await EvrakDosyasiIndir(ozlukDetay);
     }
 
     /// <summary>

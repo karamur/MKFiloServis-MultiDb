@@ -355,6 +355,9 @@
                 <KOAFiloServis.Web.Components.Shared.EvrakYonetimi @key="Id"
                     PersonelId="null" AracId="Id"
                     EvrakTipleri="_aracEvrakTipleri"
+                    MevcutTipler="_aracMevcutTipler"
+                    OnPreviewAsync="AracEvrakOnizleAsync"
+                    OnDownloadAsync="AracEvrakIndirAsync"
                     OnChanged="EvrakGuncellendi" />
             </div>
         </div>
@@ -823,6 +826,8 @@
     // Evrak yönetimi
     private List<AracEvrak> aracEvraklari = new();
     private static readonly List<string> _aracEvrakTipleri = new() { "Ruhsat", "Sigorta", "Muayene", "Kasko", "Uygunluk Belgesi", "Diger" };
+    /// <summary>AracEvrak üzerinden tamamlanmış evrak kategorileri — EvrakYonetimi'ne gönderilir.</summary>
+    private HashSet<string> _aracMevcutTipler = new();
     private bool evraklarYukleniyor = false;
     private bool showYeniEvrakModal = false;
     private bool showEvrakDetayModal = false;
@@ -944,6 +949,10 @@
         {
             evraklarYukleniyor = false;
         }
+
+        // Hızlı kart durumları için tamamlanmış kategorileri hesapla
+        _aracMevcutTipler = new HashSet<string>(
+            aracEvraklari.Select(e => e.EvrakKategorisi).Distinct());
     }
 
     /// <summary>EvrakYonetimi component'inden gelen refresh sinyali.</summary>
@@ -951,6 +960,24 @@
     {
         await EvraklariYukle();
         StateHasChanged();
+    }
+
+    private async Task AracEvrakOnizleAsync(string kategori)
+    {
+        var evrak = aracEvraklari.FirstOrDefault(e => e.EvrakKategorisi == kategori);
+        if (evrak == null) { ToastService.ShowWarning($"'{kategori}' için belge bulunamadı."); return; }
+        var sonDosya = evrak.Dosyalar.OrderByDescending(d => d.Id).FirstOrDefault();
+        if (sonDosya == null) { ToastService.ShowWarning($"'{kategori}' için dosya bulunamadı."); return; }
+        await DosyaIndir(sonDosya); // preview = download in vehicle context
+    }
+
+    private async Task AracEvrakIndirAsync(string kategori)
+    {
+        var evrak = aracEvraklari.FirstOrDefault(e => e.EvrakKategorisi == kategori);
+        if (evrak == null) { ToastService.ShowWarning($"'{kategori}' için belge bulunamadı."); return; }
+        var sonDosya = evrak.Dosyalar.OrderByDescending(d => d.Id).FirstOrDefault();
+        if (sonDosya == null) { ToastService.ShowWarning($"'{kategori}' için dosya bulunamadı."); return; }
+        await DosyaIndir(sonDosya);
     }
 
     private List<TransferableItem>? transferItems;
