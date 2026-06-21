@@ -119,7 +119,7 @@ public class PuantajFaturaRaporController : ControllerBase
 
     /// <summary>GET /api/puantaj-fatura-rapor/engine-calistir — Puantaj engine'i manuel tetikle</summary>
     [HttpGet("engine-calistir")]
-    [AllowAnonymous]
+    [Authorize]
     public async Task<IActionResult> EngineCalistir([FromQuery] int yil = 2026, [FromQuery] int ay = 5)
     {
         var engine = HttpContext.RequestServices.GetRequiredService<IPuantajEngineService>();

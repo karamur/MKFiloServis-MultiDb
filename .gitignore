@@ -3,6 +3,7 @@
 *.user
 *.userosscache
 *.suo
+temp/
 *.cache
 
 # Build results
