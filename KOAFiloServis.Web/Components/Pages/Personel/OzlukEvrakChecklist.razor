@@ -230,6 +230,7 @@
                                 <KOAFiloServis.Web.Components.Shared.EvrakYonetimi @key="seciliDurum.SoforId"
                                     PersonelId="seciliDurum.SoforId"
                                     EvrakTipleri="_personelEvrakTipleri"
+                                    MevcutTipler="_mevcutTipler"
                                     OnChanged="EvrakGuncellendi" />
                             </div>
                         }
@@ -700,6 +701,11 @@
     private bool _hizliEvrakAcik = true;
     private static readonly List<string> _personelEvrakTipleri = new() { "Kimlik", "Ehliyet", "Diploma", "Sertifika", "Saglik Raporu", "Is Sozlesmesi", "Diger" };
     private List<EvrakDosya> _yeniEvraklar = new(); // YENI sistem — EvrakDosya tablosu
+    /// <summary>
+    /// Eski sistemden (PersonelOzlukEvrak) tamamlanmış evrakların canonical kategorileri.
+    /// EvrakYonetimi bileşenine gönderilir, böylece hızlı kartlar eksik göstermez.
+    /// </summary>
+    private HashSet<string> _mevcutTipler = new();
 
     // Önizleme state
     private bool onizlemeModalAcik;
@@ -732,7 +738,7 @@
     private bool TumFiltrelenmislerSecili => FiltrelenmisListe.Any() && FiltrelenmisListe.All(d => seciliSoforIdler.Contains(d.SoforId));
 
     private IEnumerable<OzlukEvrakDetay> FiltrelenmisSeciliEvraklar => (seciliDurum?.Evraklar ?? new List<OzlukEvrakDetay>())
-        .Where(DetayBelgeFiltreUyuyor)
+        .Where(e => DetayBelgeFiltreUyuyor(e, detayBelgeFiltre))
         .Where(e => !detaySadeceEksik || !e.Tamamlandi)
         .Where(e => string.IsNullOrWhiteSpace(detayAramaMetni)
                     || e.EvrakAdi.Contains(detayAramaMetni, StringComparison.OrdinalIgnoreCase)
@@ -773,16 +779,42 @@
         }
         catch { _yeniEvraklar = new(); }
 
+        // Eski sistemden tamamlanmış evrakların canonical kategorilerini hesapla
+        _mevcutTipler = new HashSet<string>();
+        if (seciliDurum != null)
+        {
+            foreach (var evrak in seciliDurum.Evraklar.Where(e => e.Tamamlandi))
+            {
+                var canonical = EvrakTipiCanonicalMapper.GetCanonicalName(evrak.EvrakAdi);
+                if (canonical != null)
+                    _mevcutTipler.Add(canonical);
+            }
+        }
+
         showDetayModal = true;
     }
 
-    /// <summary>Eski evrak tipine karşılık gelen yeni EvrakDosya kaydını bul.</summary>
+    /// <summary>
+    /// Eski evrak tipine (Örn: "Kimlik Fotokopisi") karşılık gelen yeni EvrakDosya kaydını bul.
+    /// Canonical mapper ile aynı kategoriye ait olup olmadığını kontrol eder.
+    /// </summary>
     private EvrakDosya? GetYeniEvrak(string evrakAdi)
     {
+        if (string.IsNullOrWhiteSpace(evrakAdi))
+            return null;
+
+        var canonical = EvrakTipiCanonicalMapper.GetCanonicalName(evrakAdi);
+        if (canonical == null)
+        {
+            // Fallback: eski Contains mantığı
+            return _yeniEvraklar.FirstOrDefault(x =>
+                string.Equals(x.EvrakTipi, evrakAdi, StringComparison.OrdinalIgnoreCase) ||
+                x.EvrakTipi.Contains(evrakAdi, StringComparison.OrdinalIgnoreCase) ||
+                evrakAdi.Contains(x.EvrakTipi, StringComparison.OrdinalIgnoreCase));
+        }
+
         return _yeniEvraklar.FirstOrDefault(x =>
-            string.Equals(x.EvrakTipi, evrakAdi, StringComparison.OrdinalIgnoreCase) ||
-            x.EvrakTipi.Contains(evrakAdi, StringComparison.OrdinalIgnoreCase) ||
-            evrakAdi.Contains(x.EvrakTipi, StringComparison.OrdinalIgnoreCase));
+            EvrakTipiCanonicalMapper.BelongsToCategory(x.EvrakTipi, canonical));
     }
 
     private bool IsEvrakTamam(OzlukEvrakDetay evrak)
@@ -1251,39 +1283,41 @@
     private static string? EvrakTuruBelirle(OzlukEvrakDetay evrak)
     {
         var ad = evrak.EvrakAdi;
+        var canonical = EvrakTipiCanonicalMapper.GetCanonicalName(ad);
 
-        if (ad.Contains("Ehliyet", StringComparison.OrdinalIgnoreCase))
+        // Ehliyet → Sofor.EhliyetGecerlilikTarihi
+        if (canonical == "Ehliyet")
             return "Ehliyet";
 
+        // MYK / Mesleki Yeterlilik → Sofor.MykBelgesiGecerlilikTarihi
         if (ad.Contains("MYK", StringComparison.OrdinalIgnoreCase)
             || ad.Contains("Mesleki Yeterlilik", StringComparison.OrdinalIgnoreCase))
             return "MykBelgesi";
 
-        if (ad.Contains("Psikoteknik", StringComparison.OrdinalIgnoreCase))
+        // Psikoteknik → Sofor.PsikoteknikGecerlilikTarihi
+        if (canonical == "Sertifika" && ad.Contains("Psikoteknik", StringComparison.OrdinalIgnoreCase))
             return "Psikoteknik";
 
-        if (ad.Contains("Sağlık Raporu", StringComparison.OrdinalIgnoreCase)
-            || ad.Contains("Saglik Raporu", StringComparison.OrdinalIgnoreCase))
+        // Sağlık Raporu → Sofor.SaglikRaporuGecerlilikTarihi
+        if (canonical == "Saglik Raporu")
             return "Saglik";
 
-        if (ad.Contains("İş Sözleşmesi", StringComparison.OrdinalIgnoreCase)
-            || ad.Contains("Is Sozlesmesi", StringComparison.OrdinalIgnoreCase))
+        // İş Sözleşmesi → Sofor.IseBaslamaTarihi
+        if (canonical == "Is Sozlesmesi")
             return "Sozlesme";
 
         return null;
     }
 
-    private bool DetayBelgeFiltreUyuyor(OzlukEvrakDetay evrak)
+    private static bool DetayBelgeFiltreUyuyor(OzlukEvrakDetay evrak, string detayBelgeFiltre)
     {
         return detayBelgeFiltre switch
         {
-            "ehliyet" => evrak.EvrakAdi.Contains("Ehliyet", StringComparison.OrdinalIgnoreCase),
-            "diploma" => evrak.EvrakAdi.Contains("Diploma", StringComparison.OrdinalIgnoreCase),
-            "sertifika" => evrak.EvrakAdi.Contains("Sertifika", StringComparison.OrdinalIgnoreCase),
-            "saglik" => evrak.EvrakAdi.Contains("Sağlık Raporu", StringComparison.OrdinalIgnoreCase)
-                        || evrak.EvrakAdi.Contains("Saglik Raporu", StringComparison.OrdinalIgnoreCase),
-            "sozlesme" => evrak.EvrakAdi.Contains("İş Sözleşmesi", StringComparison.OrdinalIgnoreCase)
-                          || evrak.EvrakAdi.Contains("Is Sozlesmesi", StringComparison.OrdinalIgnoreCase),
+            "ehliyet" => EvrakTipiCanonicalMapper.BelongsToCategory(evrak.EvrakAdi, "Ehliyet"),
+            "diploma" => EvrakTipiCanonicalMapper.BelongsToCategory(evrak.EvrakAdi, "Diploma"),
+            "sertifika" => EvrakTipiCanonicalMapper.BelongsToCategory(evrak.EvrakAdi, "Sertifika"),
+            "saglik" => EvrakTipiCanonicalMapper.BelongsToCategory(evrak.EvrakAdi, "Saglik Raporu"),
+            "sozlesme" => EvrakTipiCanonicalMapper.BelongsToCategory(evrak.EvrakAdi, "Is Sozlesmesi"),
             _ => true
         };
     }

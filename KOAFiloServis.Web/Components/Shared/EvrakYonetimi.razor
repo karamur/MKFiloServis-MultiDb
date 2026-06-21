@@ -1,5 +1,6 @@
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Data
+@using KOAFiloServis.Web.Helpers
 @using KOAFiloServis.Web.Services
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.EntityFrameworkCore
@@ -28,7 +29,10 @@
     <div class="row mb-3">
         @foreach (var tip in EvrakTipleri)
         {
-            var varMi = _evraklar.Any(x => x.EvrakTipi == tip && !x.IsDeleted);
+            var varMi = _evraklar.Any(x => !x.IsDeleted && (
+                x.EvrakTipi == tip ||
+                EvrakTipiCanonicalMapper.AreSameCategory(x.EvrakTipi, tip)))
+                || MevcutTipler.Contains(tip);
             EvrakDosya? evrak = varMi ? _evraklar.First(x => x.EvrakTipi == tip && !x.IsDeleted) : null;
             var status = GetStatus(evrak);
             var bgClass = varMi switch
@@ -189,6 +193,11 @@
     [Parameter] public int? PersonelId { get; set; }
     [Parameter] public int? AracId { get; set; }
     [Parameter] public List<string> EvrakTipleri { get; set; } = new() { "Kimlik", "Ehliyet", "Saglik Raporu", "Sozlesme" };
+    /// <summary>
+    /// Eski sistemden (PersonelOzlukEvrak) gelen, hâlihazırda tamamlanmış canonical evrak kategorileri.
+    /// Örn: "Kimlik Fotokopisi" yüklüyse → "Kimlik" bu set'te olur.
+    /// </summary>
+    [Parameter] public HashSet<string> MevcutTipler { get; set; } = new();
     [Parameter] public EventCallback OnChanged { get; set; }
 
     private List<EvrakDosya> _evraklar = new();
