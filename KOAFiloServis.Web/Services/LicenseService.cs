@@ -292,7 +292,7 @@ public class LicenseService
         if (IsDeveloperOverride(overrideKey))
         {
             KOAFiloServis.Shared.AppMode.ExitDemoMode();
-            _logger.LogWarning("🔧 DEV OVERRIDE AKTIF — Lisans kontrolu BYPASS edildi. Makine: {Machine}", GetMachineId());
+            _logger.LogInformation("🔧 DEV OVERRIDE AKTIF — Lisans kontrolu BYPASS edildi. Makine: {Machine}", GetMachineId());
             var devLicense = new LicenseInfo
             {
                 FirmaKodu = "DEV-OVERRIDE",
