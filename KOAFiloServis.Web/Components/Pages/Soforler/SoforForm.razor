@@ -748,63 +748,12 @@
                         </div>
                     </div>
 
-                    @* Şoför Belgeleri (Ehliyet, SRC, Psikoteknik) - Hızlı Erişim *@
-                    @if (sofor.Gorev == PersonelGorev.Sofor)
-                    {
-                        <h6 class="text-primary mb-3"><i class="bi bi-card-checklist me-2"></i>Şoför Belgeleri (Hızlı Erişim)</h6>
-                        <div class="row g-3 mb-4">
-                            @foreach (var evrak in evrakDurumu.Evraklar.Where(e => e.Kategori == OzlukEvrakKategori.SoforBelgeleri))
-                            {
-                                <div class="col-md-4">
-                                    <div class="card h-100 @(evrak.Tamamlandi ? "border-success" : "border-warning")">
-                                        <div class="card-body">
-                                            <div class="d-flex justify-content-between align-items-start">
-                                                <div>
-                                                    <h6 class="card-title mb-1">@evrak.EvrakAdi</h6>
-                                                    @if (evrak.Tamamlandi)
-                                                    {
-                                                        <small class="text-success">
-                                                            <i class="bi bi-check-circle me-1"></i>
-                                                            @(evrak.TamamlanmaTarihi?.ToString("dd.MM.yyyy") ?? "Yüklendi")
-                                                        </small>
-                                                    }
-                                                    else
-                                                    {
-                                                        <small class="text-warning">
-                                                            <i class="bi bi-exclamation-circle me-1"></i>Eksik
-                                                        </small>
-                                                    }
-                                                </div>
-                                                <div>
-                                                    @if (evrak.Tamamlandi && !string.IsNullOrWhiteSpace(evrak.DosyaYolu))
-                                                    {
-                                                        <button class="btn btn-sm btn-outline-primary" @onclick="() => EvrakOnizle(evrak)" title="Önizle">
-                                                            <i class="bi bi-eye"></i>
-                                                        </button>
-                                                        <button class="btn btn-sm btn-outline-dark ms-1" @onclick="() => EvrakYazdir(evrak)" title="Yazdır">
-                                                            <i class="bi bi-printer"></i>
-                                                        </button>
-                                                        <button class="btn btn-sm btn-outline-secondary ms-1" @onclick="() => EvrakDosyaIndir(evrak)" title="İndir">
-                                                            <i class="bi bi-download"></i>
-                                                        </button>
-                                                    }
-                                                    <button class="btn btn-sm btn-outline-success ms-1" @onclick="() => EvrakYukleModalAc(evrak)" title="Yükle">
-                                                        <i class="bi bi-upload"></i>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            }
-                        </div>
-                    }
 
                     @* Özlük Evrak Checklist - Tüm Belgeler *@
                     <h6 class="text-secondary mb-3 d-flex justify-content-between align-items-center">
                         <span>
                             <i class="bi bi-list-check me-2"></i>Özlük Evrak Checklist
-                            <span class="badge bg-light text-dark ms-2">@evrakDurumu.Evraklar.Count(e => e.Kategori != OzlukEvrakKategori.SoforBelgeleri || sofor.Gorev != PersonelGorev.Sofor) belge</span>
+                            <span class="badge bg-light text-dark ms-2">@evrakDurumu.Evraklar.Count() belge</span>
                         </span>
                         <a class="btn btn-sm btn-outline-info" href="/personel/ozluk-evrak?soforId=@Id">
                             <i class="bi bi-folder2-open me-1"></i>Tam Checklist Sayfası
@@ -822,10 +771,7 @@
                             </thead>
                             <tbody>
                                 @{
-                                    // Şoför ise üstteki "Hızlı Erişim" kartlarında zaten gösterilen şoför belgeleri tabloda tekrar etmesin.
-                                    var checklistEvraklar = sofor.Gorev == PersonelGorev.Sofor
-                                        ? evrakDurumu.Evraklar.Where(e => e.Kategori != OzlukEvrakKategori.SoforBelgeleri)
-                                        : evrakDurumu.Evraklar.AsEnumerable();
+                                    var checklistEvraklar = evrakDurumu.Evraklar.AsEnumerable();
                                 }
                                 @foreach (var evrak in checklistEvraklar.OrderBy(e => e.Kategori).ThenBy(e => e.EvrakAdi))
                                 {
