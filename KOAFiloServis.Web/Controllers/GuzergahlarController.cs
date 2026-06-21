@@ -10,7 +10,6 @@ namespace KOAFiloServis.Web.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(AuthenticationSchemes = "Bearer")]
 public class GuzergahlarController : ControllerBase
 {
     private readonly IGuzergahService _guzergahService;
@@ -24,6 +23,7 @@ public class GuzergahlarController : ControllerBase
     /// Tüm güzergahları listeler
     /// </summary>
     [HttpGet]
+    [Authorize(AuthenticationSchemes = "Bearer")]
     public async Task<IActionResult> GetAll([FromQuery] bool? aktif = null)
     {
         var guzergahlar = await _guzergahService.GetAllAsync();
@@ -61,6 +61,7 @@ public class GuzergahlarController : ControllerBase
     /// Belirli bir güzergahı getirir
     /// </summary>
     [HttpGet("{id}")]
+    [Authorize(AuthenticationSchemes = "Bearer")]
     public async Task<IActionResult> GetById(int id)
     {
         var guzergah = await _guzergahService.GetByIdAsync(id);
@@ -93,6 +94,7 @@ public class GuzergahlarController : ControllerBase
     /// Yeni güzergah oluşturur
     /// </summary>
     [HttpPost]
+    [Authorize(AuthenticationSchemes = "Bearer")]
     public async Task<IActionResult> Create([FromBody] GuzergahCreateDto dto)
     {
         if (string.IsNullOrEmpty(dto.GuzergahAdi))
@@ -146,6 +148,7 @@ public class GuzergahlarController : ControllerBase
     /// Güzergah bilgilerini günceller
     /// </summary>
     [HttpPut("{id}")]
+    [Authorize(AuthenticationSchemes = "Bearer")]
     public async Task<IActionResult> Update(int id, [FromBody] GuzergahUpdateDto dto)
     {
         var guzergah = await _guzergahService.GetByIdAsync(id);
@@ -225,9 +228,29 @@ public class GuzergahlarController : ControllerBase
     }
 
     /// <summary>
+    /// Excel'den toplu güzergah import eder
+    /// </summary>
+    [HttpPost("import-excel")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ImportExcel(IFormFile file, [FromQuery] int firmaId = 1)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { Error = "Excel dosyası gereklidir." });
+
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (ext != ".xlsx" && ext != ".xls")
+            return BadRequest(new { Error = "Sadece .xlsx veya .xls dosyaları kabul edilir." });
+
+        using var stream = file.OpenReadStream();
+        var sonuc = await _guzergahService.ImportFromExcelAsync(stream, firmaId);
+        return Ok(sonuc);
+    }
+
+    /// <summary>
     /// Güzergah siler
     /// </summary>
     [HttpDelete("{id}")]
+    [Authorize(AuthenticationSchemes = "Bearer")]
     public async Task<IActionResult> Delete(int id)
     {
         var guzergah = await _guzergahService.GetByIdAsync(id);

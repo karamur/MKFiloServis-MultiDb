@@ -1,4 +1,5 @@
-﻿using KOAFiloServis.Shared.Entities;
+﻿using ClosedXML.Excel;
+using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
 using KOAFiloServis.Web.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -348,6 +349,194 @@ public class GuzergahService : IGuzergahService
             query = query.Where(g => g.Id != haricId.Value);
 
         return !await query.AnyAsync();
+    }
+
+    #endregion
+
+    #region Excel Import
+
+    public async Task<GuzergahImportSonuc> ImportFromExcelAsync(Stream excelStream, int firmaId)
+    {
+        var sonuc = new GuzergahImportSonuc();
+        var satirlar = new List<GuzergahImportSatir>();
+
+        using var workbook = new ClosedXML.Excel.XLWorkbook(excelStream);
+        var ws = workbook.Worksheet(1);
+        var rows = ws.RowsUsed().ToList();
+
+        if (rows.Count < 2)
+        {
+            sonuc.Satirlar.Add(new GuzergahImportSatir { SatirNo = 0, Basarili = false, Mesaj = "Excel dosyası boş veya sadece başlık içeriyor." });
+            return sonuc;
+        }
+
+        // Başlık satırını atla
+        var dataRows = rows.Skip(1).ToList();
+        sonuc = new GuzergahImportSonuc { ToplamSatir = dataRows.Count };
+
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        foreach (var row in dataRows)
+        {
+            var satirNo = row.RowNumber();
+            try
+            {
+                var guzergahAdi = GetCell(row, 2)?.Trim();
+                var cariIdStr = GetCell(row, 3)?.Trim();
+
+                if (string.IsNullOrWhiteSpace(guzergahAdi))
+                {
+                    satirlar.Add(new GuzergahImportSatir { SatirNo = satirNo, Basarili = false, Mesaj = "Güzergah adı zorunlu" });
+                    continue;
+                }
+
+                if (!int.TryParse(cariIdStr, out var cariId) || cariId <= 0)
+                {
+                    satirlar.Add(new GuzergahImportSatir { SatirNo = satirNo, GuzergahAdi = guzergahAdi, Basarili = false, Mesaj = "Geçerli bir CariId gerekli" });
+                    continue;
+                }
+
+                // Cari var mı kontrol et
+                var cariVar = await context.Cariler.AnyAsync(c => c.Id == cariId && !c.IsDeleted);
+                if (!cariVar)
+                {
+                    satirlar.Add(new GuzergahImportSatir { SatirNo = satirNo, GuzergahAdi = guzergahAdi, Basarili = false, Mesaj = $"CariId={cariId} bulunamadı" });
+                    continue;
+                }
+
+                // Aynı kod var mı?
+                var kod = GetCell(row, 1)?.Trim();
+                if (!string.IsNullOrWhiteSpace(kod))
+                {
+                    var kodVar = await context.Guzergahlar.AnyAsync(g => g.GuzergahKodu == kod && g.FirmaId == firmaId && !g.IsDeleted);
+                    if (kodVar)
+                    {
+                        satirlar.Add(new GuzergahImportSatir { SatirNo = satirNo, GuzergahKodu = kod, GuzergahAdi = guzergahAdi, Basarili = false, Mesaj = $"'{kod}' kodlu güzergah zaten mevcut" });
+                        continue;
+                    }
+                }
+
+                // Kod boşsa otomatik üret
+                if (string.IsNullOrWhiteSpace(kod))
+                {
+                    kod = await GenerateGuzergahKoduAsync(firmaId);
+                }
+
+                // BirimFiyat (Gelir)
+                decimal birimFiyat = 0;
+                var birimFiyatStr = GetCell(row, 4)?.Trim();
+                if (!string.IsNullOrWhiteSpace(birimFiyatStr))
+                    decimal.TryParse(birimFiyatStr.Replace(".", ","), out birimFiyat);
+
+                // GiderFiyat
+                decimal giderFiyat = 0;
+                var giderFiyatStr = GetCell(row, 5)?.Trim();
+                if (!string.IsNullOrWhiteSpace(giderFiyatStr))
+                    decimal.TryParse(giderFiyatStr.Replace(".", ","), out giderFiyat);
+
+                // SeferTipi
+                var seferTipi = SeferTipi.SabahAksam;
+                var seferTipiStr = GetCell(row, 6)?.Trim();
+                if (!string.IsNullOrWhiteSpace(seferTipiStr))
+                {
+                    if (int.TryParse(seferTipiStr, out var st) && Enum.IsDefined(typeof(SeferTipi), st))
+                        seferTipi = (SeferTipi)st;
+                    else
+                        seferTipi = seferTipiStr.ToLowerInvariant() switch
+                        {
+                            "sabah" => SeferTipi.Sabah,
+                            "akşam" or "aksam" => SeferTipi.Aksam,
+                            "sabah-akşam" or "sabah aksam" or "sabahaksam" => SeferTipi.SabahAksam,
+                            "saatlik" => SeferTipi.Saatlik,
+                            "mesai" => SeferTipi.Mesai,
+                            "vardiya" => SeferTipi.Vardiya,
+                            _ => SeferTipi.SabahAksam
+                        };
+                }
+
+                // KurumId (opsiyonel)
+                int? kurumId = null;
+                var kurumIdStr = GetCell(row, 7)?.Trim();
+                if (int.TryParse(kurumIdStr, out var kid) && kid > 0)
+                    kurumId = kid;
+
+                // PersonelSayisi
+                int personelSayisi = 0;
+                var psStr = GetCell(row, 10)?.Trim();
+                if (!string.IsNullOrWhiteSpace(psStr))
+                    int.TryParse(psStr, out personelSayisi);
+
+                // Mesafe
+                decimal? mesafe = null;
+                var mesafeStr = GetCell(row, 11)?.Trim();
+                if (!string.IsNullOrWhiteSpace(mesafeStr) && decimal.TryParse(mesafeStr.Replace(".", ","), out var m))
+                    mesafe = m;
+
+                // TahminiSure
+                int? tahminiSure = null;
+                var tsStr = GetCell(row, 12)?.Trim();
+                if (!string.IsNullOrWhiteSpace(tsStr) && int.TryParse(tsStr, out var ts))
+                    tahminiSure = ts;
+
+                // Aktif
+                var aktifStr = GetCell(row, 14)?.Trim()?.ToLowerInvariant();
+                bool aktif = aktifStr != "hayır" && aktifStr != "hayir" && aktifStr != "false" && aktifStr != "0";
+
+                var guzergah = new Guzergah
+                {
+                    GuzergahKodu = kod ?? "",
+                    GuzergahAdi = guzergahAdi,
+                    CariId = cariId,
+                    FirmaId = firmaId,
+                    BirimFiyat = birimFiyat,
+                    GiderFiyat = giderFiyat,
+                    SeferTipi = seferTipi,
+                    KurumId = kurumId,
+                    BaslangicNoktasi = GetCell(row, 8)?.Trim(),
+                    BitisNoktasi = GetCell(row, 9)?.Trim(),
+                    PersonelSayisi = personelSayisi,
+                    Mesafe = mesafe,
+                    TahminiSure = tahminiSure,
+                    Notlar = GetCell(row, 13)?.Trim(),
+                    Aktif = aktif,
+                    PuantajCarpani = 1.0m
+                };
+
+                context.Guzergahlar.Add(guzergah);
+                await context.SaveChangesAsync();
+
+                satirlar.Add(new GuzergahImportSatir
+                {
+                    SatirNo = satirNo,
+                    GuzergahKodu = guzergah.GuzergahKodu,
+                    GuzergahAdi = guzergah.GuzergahAdi,
+                    Basarili = true,
+                    Mesaj = "✅ Eklendi"
+                });
+            }
+            catch (Exception ex)
+            {
+                satirlar.Add(new GuzergahImportSatir { SatirNo = satirNo, Basarili = false, Mesaj = $"Hata: {ex.Message}" });
+            }
+        }
+
+        // Cache temizle
+        await _cache.RemoveByPrefixAsync(CacheKeys.GuzergahPrefix);
+
+        return new GuzergahImportSonuc
+        {
+            ToplamSatir = dataRows.Count,
+            Basarili = satirlar.Count(s => s.Basarili),
+            Atlandi = satirlar.Count(s => !string.IsNullOrEmpty(s.Mesaj) && !s.Basarili && s.Mesaj.Contains("zaten mevcut")),
+            Hatali = satirlar.Count(s => !s.Basarili),
+            Satirlar = satirlar
+        };
+    }
+
+    private static string? GetCell(ClosedXML.Excel.IXLRow row, int col)
+    {
+        try { return row.Cell(col).GetString(); }
+        catch { return null; }
     }
 
     #endregion

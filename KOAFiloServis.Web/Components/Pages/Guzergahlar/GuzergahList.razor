@@ -2,9 +2,11 @@
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
 @using KOAFiloServis.Web.Components.Shared
+@using Microsoft.AspNetCore.Components.Forms
 @inject IGuzergahService GuzergahService
 @inject IKurumService KurumService
 @inject IKapasiteService KapasiteService
+@inject IAktifFirmaProvider AktifFirma
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 @rendermode InteractiveServer
@@ -27,6 +29,9 @@
             </div>
             <button class="btn btn-outline-success" @onclick="ExportCsv">
                 <i class="bi bi-file-earmark-excel me-1"></i>Excel
+            </button>
+            <button class="btn btn-outline-info" @onclick="ImportModalAc">
+                <i class="bi bi-file-earmark-arrow-up me-1"></i>Excel'den İçe Aktar
             </button>
             <button class="btn btn-primary" @onclick="YeniGuzergah">
                 <i class="bi bi-plus-lg me-1"></i>Yeni Güzergah
@@ -313,14 +318,142 @@
     </div>
 }
 
+@* Excel Import Modal *@
+@if (showImportModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title"><i class="bi bi-file-earmark-excel me-2"></i>Excel'den Güzergah İçe Aktar</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="ImportModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!importYapildi)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Excel Dosyası Seçin (.xlsx)</label>
+                            <InputFile OnChange="ImportDosyaSecildi" accept=".xlsx,.xls"
+                                       class="form-control" disabled="@importEdiliyor" />
+                            <div class="form-text">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Kolonlar: <strong>Kod, Güzergah Adı*, CariId*, BirimFiyat, GiderFiyat, SeferTipi, KurumId, Başlangıç, Bitiş, PersonelSayısı, Mesafe, Süre(dk), Notlar, Aktif</strong>
+                                <br><small class="text-muted">* zorunlu alanlar. İlk satır başlık olarak atlanır.</small>
+                            </div>
+                        </div>
+
+                        @if (importDosyaAdi != null)
+                        {
+                            <div class="alert alert-secondary">
+                                <i class="bi bi-file-earmark-check me-1"></i>
+                                <strong>@importDosyaAdi</strong> (@importDosyaBoyutu.ToString("N0") byte)
+                            </div>
+                        }
+
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-info" @onclick="ImportCalistir"
+                                    disabled="@(importDosyaAdi == null || importEdiliyor)">
+                                @if (importEdiliyor)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                    <span>İçe Aktarılıyor...</span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-upload me-1"></i>
+                                    <span>İçe Aktar</span>
+                                }
+                            </button>
+                            <a href="/api/guzergahlar/sablon/guzergah-import-sablonu.xlsx"
+                               class="btn btn-outline-secondary" target="_blank"
+                               @onclick:preventDefault @onclick="SablonIndir">
+                                <i class="bi bi-download me-1"></i>Şablon İndir
+                            </a>
+                        </div>
+                    }
+                    else
+                    {
+                        @* Sonuç gösterimi *@
+                        <div class="row g-2 mb-3">
+                            <div class="col-3">
+                                <div class="card border-primary bg-primary bg-opacity-10 text-center">
+                                    <div class="card-body py-2"><small>Toplam Satır</small><h5>@importSonuc?.ToplamSatir</h5></div>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="card border-success bg-success bg-opacity-10 text-center">
+                                    <div class="card-body py-2"><small>Başarılı</small><h5 class="text-success">@importSonuc?.Basarili</h5></div>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="card border-warning bg-warning bg-opacity-10 text-center">
+                                    <div class="card-body py-2"><small>Atlandı (Tekrar)</small><h5 class="text-warning">@importSonuc?.Atlandi</h5></div>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="card border-danger bg-danger bg-opacity-10 text-center">
+                                    <div class="card-body py-2"><small>Hatalı</small><h5 class="text-danger">@importSonuc?.Hatali</h5></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (importSonuc?.Satirlar.Any() == true)
+                        {
+                            <div class="table-responsive" style="max-height: 300px;">
+                                <table class="table table-sm table-striped small mb-0">
+                                    <thead class="table-dark sticky-top">
+                                        <tr><th>#</th><th>Kod</th><th>Güzergah Adı</th><th>Durum</th><th>Mesaj</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var s in importSonuc.Satirlar)
+                                        {
+                                            <tr class="@(s.Basarili ? "table-success" : "table-danger")">
+                                                <td>@s.SatirNo</td>
+                                                <td>@s.GuzergahKodu</td>
+                                                <td>@s.GuzergahAdi</td>
+                                                <td>@(s.Basarili ? "✅" : "❌")</td>
+                                                <td>@s.Mesaj</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="ImportModalKapat">
+                        @(importYapildi ? "Kapat" : "İptal")
+                    </button>
+                    @if (importYapildi && importSonuc?.Basarili > 0)
+                    {
+                        <button type="button" class="btn btn-primary" @onclick="ImportVeYenile">
+                            <i class="bi bi-arrow-repeat me-1"></i>Kapat ve Listeyi Yenile
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<Guzergah>? guzergahlar;
     private List<Kurum> kurumlar = new();
     private List<Kapasite> tumKapasiteler = new();
     private bool showDeleteModal = false;
+    private bool showImportModal = false;
     private Guzergah? silinecekGuzergah;
     private string gorunumModu = "liste";
     private HaritaGosterici? harita;
+
+    // Excel import state
+    private IBrowserFile? importDosya;
+    private string? importDosyaAdi;
+    private long importDosyaBoyutu;
+    private bool importEdiliyor;
+    private bool importYapildi;
+    private GuzergahImportSonuc? importSonuc;
 
     // Filtreler
     private int filtreKurumId;
@@ -657,6 +790,87 @@
             else i++;
         }
         return varMi ? toplam : -1;
+    }
+
+    // ── Excel Import ──────────────────────────────────────────
+
+    private void ImportModalAc()
+    {
+        importDosya = null;
+        importDosyaAdi = null;
+        importDosyaBoyutu = 0;
+        importEdiliyor = false;
+        importYapildi = false;
+        importSonuc = null;
+        showImportModal = true;
+    }
+
+    private void ImportModalKapat()
+    {
+        showImportModal = false;
+        importDosya = null;
+        importDosyaAdi = null;
+    }
+
+    private async Task ImportVeYenile()
+    {
+        showImportModal = false;
+        importDosya = null;
+        await LoadData();
+        StateHasChanged();
+    }
+
+    private async Task ImportDosyaSecildi(InputFileChangeEventArgs e)
+    {
+        importDosya = e.File;
+        importDosyaAdi = e.File.Name;
+        importDosyaBoyutu = e.File.Size;
+        importYapildi = false;
+        importSonuc = null;
+        await Task.CompletedTask;
+    }
+
+    private async Task ImportCalistir()
+    {
+        if (importDosya == null) return;
+
+        importEdiliyor = true;
+        importYapildi = false;
+        importSonuc = null;
+        StateHasChanged();
+
+        try
+        {
+            var firmaId = AktifFirma.AktifFirmaId ?? 1;
+            await using var stream = importDosya.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            importSonuc = await GuzergahService.ImportFromExcelAsync(stream, firmaId);
+            importYapildi = true;
+        }
+        catch (Exception ex)
+        {
+            importSonuc = new GuzergahImportSonuc
+            {
+                Hatali = 1,
+                Satirlar = { new GuzergahImportSatir { SatirNo = 0, Basarili = false, Mesaj = $"Dosya okuma hatası: {ex.Message}" } }
+            };
+            importYapildi = true;
+        }
+        finally
+        {
+            importEdiliyor = false;
+        }
+    }
+
+    private async Task SablonIndir()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Kod,Güzergah Adı,CariId,BirimFiyat (Gelir),GiderFiyat,SeferTipi,KurumId,Başlangıç Noktası,Bitiş Noktası,Personel Sayısı,Mesafe (km),Süre (dk),Notlar,Aktif");
+        sb.AppendLine("GZR-001,Örnek Güzergah,608,1500.00,800.00,3,,Ankara,İstanbul,16,450,480,Örnek not,Evet");
+        sb.AppendLine(",İkinci Güzergah,610,2000.00,1000.00,SabahAksam,,İzmir,Bursa,27,350,360,,Evet");
+
+        var bytes = System.Text.Encoding.UTF8.GetPreamble().Concat(System.Text.Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
+        var base64 = Convert.ToBase64String(bytes);
+        await JS.InvokeVoidAsync("downloadFile", "guzergah-import-sablonu.csv", "data:text/csv;charset=utf-8;base64," + base64);
     }
 
 }

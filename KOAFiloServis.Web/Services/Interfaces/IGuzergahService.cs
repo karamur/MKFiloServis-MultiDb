@@ -21,4 +21,25 @@ public interface IGuzergahService
     Task<bool> FaturaKalemdenGuzergahVarMiAsync(int faturaKalemId);
     Task<Guzergah?> GetByFaturaKalemIdAsync(int faturaKalemId);
     Task<bool> BenzersizGuzergahMiAsync(int firmaId, string guzergahAdi, int? haricId = null);
+
+    // Excel import
+    Task<GuzergahImportSonuc> ImportFromExcelAsync(Stream excelStream, int firmaId);
+}
+
+public sealed class GuzergahImportSonuc
+{
+    public int ToplamSatir { get; init; }
+    public int Basarili { get; init; }
+    public int Atlandi { get; init; }
+    public int Hatali { get; init; }
+    public List<GuzergahImportSatir> Satirlar { get; init; } = new();
+}
+
+public sealed class GuzergahImportSatir
+{
+    public int SatirNo { get; init; }
+    public string? GuzergahKodu { get; init; }
+    public string? GuzergahAdi { get; init; }
+    public bool Basarili { get; init; }
+    public string? Mesaj { get; init; }
 }
