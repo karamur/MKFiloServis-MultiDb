@@ -12,11 +12,6 @@ public static class EvrakTipiCanonicalMapper
 {
     /// <summary>
     /// Canonical (standart kısa) isim → alias listesi mapping.
-    /// Key: Hızlı kartlarda gösterilen kısa isim
-    /// Value: Bu kategoriye giren tüm evrak adı varyasyonları
-    /// </summary>
-    /// <summary>
-    /// Canonical (standart kısa) isim → alias listesi mapping.
     /// Key: Hızlı kartlarda gösterilen kısa isim.
     /// Value: SADECE bu belgenin varyasyonları. Ayrı zorunlu evraklar eklenmez!
     ///
@@ -39,10 +34,8 @@ public static class EvrakTipiCanonicalMapper
             "Sağlık Raporu", "Saglik Raporu"
         },
         ["Sertifika"] = new[] {
-            "Sertifika"
-            // NOT: SRC, Psikoteknik, ADR, MYK ayrı ayrı zorunlu evraklardır — Sertifika altında toplanmaz.
-            // "İSG Eğitim Sertifikası" ve "Yaygın Eğitim Sertifikası" adında "Sertifika" geçtiği için
-            // Contains eşleşmesiyle otomatik yakalanır; ayrıca listeye eklenmesine gerek yoktur.
+            "Sertifika", "SRC Belgesi", "Psikoteknik Belgesi",
+            "ADR Belgesi", "Mesleki Yeterlilik Belgesi", "MYK"
         },
         ["Is Sozlesmesi"] = new[] {
             "İş Sözleşmesi", "Is Sozlesmesi", "Sözleşme"

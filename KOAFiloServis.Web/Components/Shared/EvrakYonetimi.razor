@@ -33,7 +33,11 @@
                 x.EvrakTipi == tip ||
                 EvrakTipiCanonicalMapper.AreSameCategory(x.EvrakTipi, tip)))
                 || MevcutTipler.Contains(tip);
-            EvrakDosya? evrak = varMi ? _evraklar.First(x => x.EvrakTipi == tip && !x.IsDeleted) : null;
+            EvrakDosya? evrak = _evraklar.FirstOrDefault(x => !x.IsDeleted && (
+                x.EvrakTipi == tip ||
+                EvrakTipiCanonicalMapper.AreSameCategory(x.EvrakTipi, tip)));
+            // NOT: varMi true iken evrak null olabilir — eski sistem (MevcutTipler) kaynaklı tamamlanmalarda.
+            var yalnizcaEskiSistem = varMi && evrak == null;
             var status = GetStatus(evrak);
             var bgClass = varMi switch
             {
@@ -52,6 +56,10 @@
                         {
                             <span class="badge bg-warning text-dark ms-2">Eksik</span>
                         }
+                        else if (yalnizcaEskiSistem)
+                        {
+                            <span class="badge bg-success ms-2">Tamam</span>
+                        }
                         else
                         {
                             <small class="text-muted ms-2">@evrak!.DosyaAdi</small>
@@ -67,7 +75,7 @@
                         }
                     </div>
                     <div class="btn-group btn-group-sm">
-                        @if (!varMi)
+                        @if (!varMi || yalnizcaEskiSistem)
                         {
                             <label class="btn btn-outline-primary btn-sm" title="Dosya Yukle">
                                 <i class="bi bi-upload me-1"></i>Yükle
