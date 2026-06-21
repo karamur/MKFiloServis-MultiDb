@@ -232,6 +232,7 @@
                                     EvrakTipleri="_personelEvrakTipleri"
                                     MevcutTipler="_mevcutTipler"
                                     OnPersonelUploadAsync="HizliEvrakYukleAsync"
+                                    OnPersonelDeleteAsync="HizliEvrakSilAsync"
                                     OnChanged="EvrakGuncellendi" />
                             </div>
                         }
@@ -937,6 +938,11 @@
             await EvrakGecerlilikTarihleriniYukleAsync(soforId);
             await LoadData();
             ToastService.ShowSuccess($"{evrak.EvrakAdi} dosyası yüklendi.");
+
+            // Başarılı upload sonrası: aynı canonical kategorideki eski/kayıp EvrakDosya kayıtlarını temizle.
+            // Bunlar eski bozuk hızlı upload sisteminden kalma, yanlış path'li kayıtlardır.
+            // Yeni kayıt PersonelOzlukEvrak'ta olduğu için EvrakDosya'daki gölge kayda gerek yok.
+            await TemizleStaleEvrakDosyaKayitlariAsync(soforId, evrak.EvrakAdi);
         }
         catch (Exception ex)
         {
@@ -1027,6 +1033,97 @@
 
         Logger.LogWarning("HizliEvrakYukle: '{Tip}' için eşleşen OzlukEvrakTanim bulunamadı.", canonicalTip);
         return null;
+    }
+
+    /// <summary>
+    /// Hızlı Evrak Yükleme kartından gelen silme isteği.
+    /// Canonical tip → OzlukEvrakTanim → PersonelOzlukEvrak.Tamamlandi = false yapar.
+    /// Silme idempotent: kayıt yoksa hata vermez.
+    /// </summary>
+    private async Task HizliEvrakSilAsync(string canonicalTip)
+    {
+        if (seciliDurum == null) return;
+        var soforId = seciliDurum.SoforId;
+
+        var tanim = await FindOzlukEvrakTanimForCanonicalTipAsync(canonicalTip);
+        if (tanim == null)
+        {
+            Logger.LogInformation("HizliEvrakSil: '{Tip}' için eşleşen OzlukEvrakTanim bulunamadı, sadece EvrakDosya temizlendi.", canonicalTip);
+            // _mevcutTipler ve ana listeyi yine de yenile
+            await DetayAc(soforId);
+            await LoadData();
+            return;
+        }
+
+        try
+        {
+            // PersonelOzlukEvrak kaydını bul ve işaretini kaldır
+            var personelEvrak = await OzlukService.EvrakIsaretle(soforId, tanim.Id, false);
+            if (personelEvrak != null)
+            {
+                // Dosya alanlarını da temizle
+                personelEvrak.DosyaYolu = null;
+                personelEvrak.DosyaAdi = null;
+                personelEvrak.DosyaTipi = null;
+                personelEvrak.DosyaBoyutu = null;
+                await OzlukService.UpdatePersonelEvrakAsync(personelEvrak);
+                Logger.LogInformation("HizliEvrakSil: PersonelOzlukEvrak temizlendi. SoforId={SoforId}, EvrakTanimId={Id}, Tip={Tip}",
+                    soforId, tanim.Id, canonicalTip);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "HizliEvrakSil: PersonelOzlukEvrak temizleme hatası. Tip={Tip}", canonicalTip);
+        }
+
+        // UI'ı yenile
+        seciliDurum = await OzlukService.GetPersonelEvrakDurumuAsync(soforId);
+        await EvrakGecerlilikTarihleriniYukleAsync(soforId);
+        await DetayAc(soforId);
+        await LoadData();
+    }
+
+    /// <summary>
+    /// Başarılı upload sonrası, aynı canonical kategorideki eski EvrakDosya kayıtlarını soft-delete yapar.
+    /// Eski bozuk hızlı upload sisteminden kalma, yanlış path'li kayıtların yeni doğru kaydı gölgelemesini engeller.
+    /// </summary>
+    private async Task TemizleStaleEvrakDosyaKayitlariAsync(int soforId, string evrakAdi)
+    {
+        var canonical = EvrakTipiCanonicalMapper.GetCanonicalName(evrakAdi);
+        if (canonical == null) return;
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var tumEvrakDosyalar = await db.EvrakDosyalari
+                .Where(x => x.PersonelId == soforId && !x.IsDeleted)
+                .ToListAsync();
+
+            var silinecekler = tumEvrakDosyalar
+                .Where(x => EvrakTipiCanonicalMapper.BelongsToCategory(x.EvrakTipi, canonical))
+                .ToList();
+
+            if (silinecekler.Count > 0)
+            {
+                foreach (var eski in silinecekler)
+                {
+                    eski.IsDeleted = true;
+                }
+                await db.SaveChangesAsync();
+                Logger.LogInformation("Stale EvrakDosya temizlendi: {Count} kayıt soft-delete. SoforId={SoforId}, Canonical={Canonical}",
+                    silinecekler.Count, soforId, canonical);
+
+                // _yeniEvraklar listesini de güncelle (DetayAc tekrar çağrılmadan önce)
+                foreach (var eski in silinecekler)
+                {
+                    _yeniEvraklar.RemoveAll(x => x.Id == eski.Id);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Stale EvrakDosya temizleme hatası. SoforId={SoforId}, EvrakAdi={EvrakAdi}", soforId, evrakAdi);
+        }
     }
 
     private async Task EvrakDosyasiIndir(OzlukEvrakDetay evrak)

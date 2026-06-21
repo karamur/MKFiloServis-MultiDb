@@ -212,6 +212,12 @@
     /// Parametreler: (IBrowserFile file, string canonicalTip, DateTime? gecerlilikTarihi)
     /// </summary>
     [Parameter] public Func<IBrowserFile, string, DateTime?, Task>? OnPersonelUploadAsync { get; set; }
+    /// <summary>
+    /// Personel bağlamında silme işlemini parent'a devreder.
+    /// Parent ilgili PersonelOzlukEvrak kaydını da temizler (Tamamlandi=false).
+    /// Parametre: canonicalTip (örn: "Diploma")
+    /// </summary>
+    [Parameter] public Func<string, Task>? OnPersonelDeleteAsync { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
 
     private List<EvrakDosya> _evraklar = new();
@@ -435,6 +441,19 @@
             else
             {
                 Logger.LogWarning("Evrak silme: kayit bulunamadi Id={Id}", evrak.Id);
+            }
+
+            // Personel bağlamında → parent'a da bildir (PersonelOzlukEvrak temizlensin)
+            if (PersonelId.HasValue && OnPersonelDeleteAsync != null)
+            {
+                try
+                {
+                    await OnPersonelDeleteAsync(evrak.EvrakTipi);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "EvrakYonetimi Delete: PersonelOzlukEvrak temizleme hatasi Tip={Tip}", evrak.EvrakTipi);
+                }
             }
 
             await LoadEvraklar();
