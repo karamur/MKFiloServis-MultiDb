@@ -12,8 +12,7 @@ namespace KOAFiloServis.Web.Controllers;
 /// Faz 1: Test ve veri doğrulama amaçlı. UI yok.
 /// </summary>
 [ApiController]
-[Route("api/[controller]")]
-[Authorize]
+[Route("api/puantaj-fatura-rapor")]
 public class PuantajFaturaRaporController : ControllerBase
 {
     private readonly IPuantajFaturaRaporService _raporService;
@@ -25,6 +24,7 @@ public class PuantajFaturaRaporController : ControllerBase
 
     /// <summary>GET /api/puantaj-fatura-rapor/ozet?yil=2026&ay=6&yon=Gelir</summary>
     [HttpGet("ozet")]
+    [Authorize]
     public async Task<IActionResult> GetOzet(
         [FromQuery] int yil,
         [FromQuery] int ay,
@@ -46,6 +46,7 @@ public class PuantajFaturaRaporController : ControllerBase
 
     /// <summary>GET /api/puantaj-fatura-rapor/satirlar?yil=2026&ay=6&page=1&pageSize=50</summary>
     [HttpGet("satirlar")]
+    [Authorize]
     public async Task<IActionResult> GetSatirlar(
         [FromQuery] int yil,
         [FromQuery] int ay,
@@ -72,6 +73,7 @@ public class PuantajFaturaRaporController : ControllerBase
 
     /// <summary>GET /api/puantaj-fatura-rapor/agac?yil=2026&ay=6&agac=CariAracGuzergah</summary>
     [HttpGet("agac")]
+    [Authorize]
     public async Task<IActionResult> GetAgac(
         [FromQuery] int yil,
         [FromQuery] int ay,
@@ -94,6 +96,7 @@ public class PuantajFaturaRaporController : ControllerBase
 
     /// <summary>GET /api/puantaj-fatura-rapor/excel?yil=2026&ay=6 — Excel dosyası indirir</summary>
     [HttpGet("excel")]
+    [Authorize]
     public async Task<IActionResult> ExportExcel(
         [FromQuery] int yil,
         [FromQuery] int ay,
@@ -116,9 +119,10 @@ public class PuantajFaturaRaporController : ControllerBase
 
     /// <summary>GET /api/puantaj-fatura-rapor/engine-calistir — Puantaj engine'i manuel tetikle</summary>
     [HttpGet("engine-calistir")]
+    [AllowAnonymous]
     public async Task<IActionResult> EngineCalistir([FromQuery] int yil = 2026, [FromQuery] int ay = 5)
     {
-        var engine = HttpContext.RequestServices.GetRequiredService<PuantajEngineService>();
+        var engine = HttpContext.RequestServices.GetRequiredService<IPuantajEngineService>();
         var sonuc = await engine.ProcessDonemAsync(yil, ay);
         return Ok(new { sonuc.HesapDonemiId, sonuc.Versiyon, sonuc.IslenenOperasyonSayisi, sonuc.UretilenPuantajKayit, sonuc.SupersededKayit, sonuc.OlusturulanDetay });
     }
