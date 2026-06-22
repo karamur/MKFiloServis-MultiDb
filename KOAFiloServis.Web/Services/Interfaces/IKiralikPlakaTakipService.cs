@@ -12,6 +12,7 @@ public interface IKiralikPlakaTakipService
     Task<byte[]> GetExcelSablonAsync();
     Task<KiralikPlakaImportResult> ImportFromExcelAsync(byte[] fileContent);
     Task<int> EslestirmeYapAsync();
+    Task<int> FaturaEslestirmeYapAsync();
 }
 
 public class KiralikPlakaImportResult

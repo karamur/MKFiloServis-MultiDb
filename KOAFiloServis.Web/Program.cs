@@ -24,8 +24,6 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Localization;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using KOAFiloServis.Web.HealthChecks;
 
 // EPPlus lisans ayari (NonCommercial kullanim icin)
 ExcelPackage.License.SetNonCommercialPersonal("KOAFiloServis");
@@ -236,7 +234,6 @@ builder.Services.AddScoped<IBankaHareketImportService, BankaHareketImportService
 builder.Services.AddScoped<IOdemeEslestirmeService, OdemeEslestirmeService>();
 builder.Services.AddScoped<IRaporService, RaporService>();
 builder.Services.AddScoped<IExcelService, ExcelService>();
-builder.Services.AddScoped<IFaturaHazirlikService, FaturaHazirlikService>();
 builder.Services.AddScoped<IMaliAnalizService, MaliAnalizService>();
 builder.Services.AddScoped<IPersonelMaasIzinService, PersonelMaasIzinService>();
 builder.Services.AddScoped<IMaasSnapshotService, MaasSnapshotService>();
@@ -291,13 +288,9 @@ builder.Services.AddSingleton<GuzergahDegisiklikUyariService>();
 builder.Services.AddScoped<FirmaTransferService>();
 builder.Services.AddScoped<IKurumService, KurumService>();
 builder.Services.AddScoped<IPuantajService, PuantajService>();
-builder.Services.AddScoped<IKurumPuantajService, KurumPuantajService>();
 builder.Services.AddScoped<IHakedisPuantajService, HakedisPuantajService>(); // Operasyonel Hakediş Puantajı
 builder.Services.AddScoped<IPuantajHakedisSyncService, PuantajHakedisSyncService>(); // Grid → Hakedis köprüsü
-builder.Services.AddScoped<IPuantajFaturaRaporService, PuantajFaturaRaporService>(); // YENI: Readonly fatura hazırlık raporu
 builder.Services.AddScoped<IFaturaGrupSablonuService, FaturaGrupSablonuService>(); // YENI: Agac gruplama şablonu CRUD
-builder.Services.AddScoped<IPuantajFaturaHazirlikService, PuantajFaturaHazirlikService>(); // YENI: Puantaj → fatura hazırlık
-builder.Services.AddScoped<IPuantajFaturaEslestirmeService, PuantajFaturaEslestirmeService>(); // YENI: Puantaj ↔ Fatura eşleştirme
 builder.Services.AddScoped<IPuantajIstisnaService, PuantajIstisnaService>(); // YENI: Puantaj istisna yönetimi
 builder.Services.AddScoped<RebuildService>(); // RebuildAll motoru
 builder.Services.AddScoped<DenetimService>(); // Finans denetim motoru
@@ -312,7 +305,6 @@ builder.Services.AddSignalR(); // Real-time (EvrakHub)
 builder.Services.AddScoped<IHakedisRaporService, HakedisRaporService>(); // Hakediş Raporlama
 builder.Services.AddScoped<IHakedisMuhasebeService, HakedisMuhasebeService>(); // Hakediş Muhasebe Entegrasyonu
 builder.Services.AddScoped<OperasyonKaydiBusinessRules>();
-builder.Services.AddScoped<KOAFiloServis.Web.Services.Interfaces.IOperasyonKaydiService, OperasyonKaydiService>();
 builder.Services.AddScoped<KOAFiloServis.Web.Services.Interfaces.IPuantajSyncService, PuantajSyncService>();
 builder.Services.AddScoped<KOAFiloServis.Web.Services.Interfaces.IDuplicateDetectionService, DuplicateDetectionService>();
 builder.Services.AddScoped<KOAFiloServis.Web.Services.Interfaces.IPreviewEngineService, PreviewEngineService>();
@@ -320,14 +312,6 @@ builder.Services.AddScoped<KOAFiloServis.Web.Services.Interfaces.IPuantajEngineS
 builder.Services.AddScoped<KOAFiloServis.Web.Services.Interfaces.IPuantajWorkflowService, PuantajWorkflowService>();
 builder.Services.AddScoped<KOAFiloServis.Web.Services.Interfaces.IPuantajFinansService, PuantajFinansService>();
 builder.Services.AddScoped(typeof(KOAFiloServis.Web.Services.Interfaces.IFiloKomisyonService), typeof(FiloKomisyonService));
-builder.Services.AddScoped<KOAFiloServis.Web.Services.Interfaces.IPuantajEslestirmeService, PuantajEslestirmeService>();
-// Sprint 8: Puantaj engine automation
-builder.Services.Configure<PuantajJobOptions>(
-    builder.Configuration.GetSection(PuantajJobOptions.Section));
-builder.Services.AddSingleton<IPuantajRetryPolicy, PuantajRetryPolicy>();
-builder.Services.AddScoped<IPuantajJobService, PuantajJobService>();
-builder.Services.AddScoped<IPuantajMutexService, PuantajMutexService>();
-builder.Services.AddScoped<IPuantajReconciliationService, PuantajReconciliationService>();
 builder.Services.AddScoped<IPiyasaKaynakService, PiyasaKaynakService>(); // Piyasa Kaynak Yonetimi (once kaydet)
 builder.Services.AddScoped<IHttpScraperService, HttpScraperService>(); // HTTP Scraper (en hizli)
 builder.Services.AddScoped<IPlaywrightScraperService, PlaywrightScraperService>(); // Playwright Web Scraper (yedek)
@@ -502,30 +486,11 @@ builder.Services.AddQuartz(q =>
         .WithIdentity("puantaj-anomali-trigger")
         .WithSchedule(CronScheduleBuilder.WeeklyOnDayAndHourAndMinute(DayOfWeek.Monday, 6, 0)));
 
-    // Puantaj Engine - her ayın 1'inde saat 00:30'da geçen ayı otomatik hesaplar
-    var puantajAutoEnabled = builder.Configuration.GetValue("PuantajEngine:AutoProcess:Enabled", true);
-    if (puantajAutoEnabled)
-    {
-        q.AddJob<PuantajEngineJob>(opts => opts.WithIdentity("puantaj-engine-job"));
-        q.AddTrigger(opts => opts
-            .ForJob("puantaj-engine-job")
-            .WithIdentity("puantaj-engine-trigger")
-            .WithSchedule(CronScheduleBuilder.CronSchedule("0 30 0 1 * ?")
-                .WithMisfireHandlingInstructionDoNothing()));
-    }
-
-    // Puantaj Reconciliation — her gün 04:00'da tutarsızlıkları tamir eder
-    q.AddJob<PuantajReconciliationJob>(opts => opts.WithIdentity("puantaj-reconciliation-job"));
-    q.AddTrigger(opts => opts
-        .ForJob("puantaj-reconciliation-job")
-        .WithIdentity("puantaj-reconciliation-trigger")
-        .WithSchedule(CronScheduleBuilder.DailyAtHourAndMinute(4, 0)));
 });
 builder.Services.AddQuartzHostedService(options => options.WaitForJobsToComplete = true);
 
 // ── Health Checks ──────────────────────────────────────────────────
-builder.Services.AddHealthChecks()
-    .AddCheck<PuantajJobHealthCheck>("puantaj_job", tags: ["job"]);
+builder.Services.AddHealthChecks();
 
 // API Controller ve JWT Authentication
 builder.Services.AddControllers()
@@ -1165,22 +1130,6 @@ if (!app.Environment.IsDevelopment())
 // Health check endpoints
 app.MapHealthChecks("/healthz", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/readyz", new HealthCheckOptions { Predicate = _ => true });
-app.MapHealthChecks("/health/puantaj-job", new HealthCheckOptions
-{
-    Predicate = check => check.Tags.Contains("job"),
-    ResponseWriter = async (context, report) =>
-    {
-        context.Response.ContentType = "application/json";
-        var json = System.Text.Json.JsonSerializer.Serialize(new
-        {
-            status = report.Status.ToString(),
-            results = report.Entries.ToDictionary(
-                e => e.Key,
-                e => new { e.Value.Status, e.Value.Description, e.Value.Duration })
-        });
-        await context.Response.WriteAsync(json);
-    }
-});
 
 // Swagger UI - tüm ortamlarda aktif (API dokümantasyonu)
 app.UseSwagger(c =>

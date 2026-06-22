@@ -1,4 +1,6 @@
 ﻿@page "/araclar/plaka-takip"
+@page "/filo-operasyon/kiralik-c-plaka-takip"
+@page "/filo-operasyon/kiralık-c-plaka-takip"
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services.Interfaces
 @using KOAFiloServis.Web.Services
@@ -29,8 +31,8 @@
             <small class="text-muted">Yeni kayıt yalnızca Excel ile yapılır.</small>
         </div>
         <div class="d-flex gap-2 flex-wrap">
-            <button class="btn btn-outline-warning" @onclick="OtomatikEslestir" disabled="@_eslestirmeCalisiyor">
-                @if (_eslestirmeCalisiyor)
+            <button class="btn btn-outline-warning" @onclick="OtomatikEslestir" disabled="@_eslestirmeCalisiyor || _faturaEslestirmeCalisiyor">
+                @if (_eslestirmeCalisiyor || _faturaEslestirmeCalisiyor)
                 {
                     <span class="spinner-border spinner-border-sm me-1"></span>
                 }
@@ -38,7 +40,18 @@
                 {
                     <i class="bi bi-link-45deg me-1"></i>
                 }
-                Otomatik Eşleştir
+                Araç Eşleştir
+            </button>
+            <button class="btn btn-outline-primary" @onclick="FaturaOtomatikEslestir" disabled="@_eslestirmeCalisiyor || _faturaEslestirmeCalisiyor">
+                @if (_faturaEslestirmeCalisiyor)
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                }
+                else
+                {
+                    <i class="bi bi-receipt-cutoff me-1"></i>
+                }
+                Fatura Eşleştir
             </button>
             <button class="btn btn-outline-secondary" @onclick="OnizlemeAc" disabled="@(!FiltrelenmisListe.Any())"><i class="bi bi-eye me-1"></i> Önizleme</button>
             <button class="btn btn-outline-danger" @onclick="PdfAktar" disabled="@(!FiltrelenmisListe.Any())"><i class="bi bi-file-earmark-pdf me-1"></i> PDF</button>
@@ -702,6 +715,7 @@
     private bool showImportModal;
     private bool isImporting;
     private bool _eslestirmeCalisiyor;
+    private bool _faturaEslestirmeCalisiyor;
     private bool showOnizlemeModal;
     private bool showAracDetayModal;
     private Arac? seciliArac;
@@ -962,7 +976,7 @@
 
     private async Task OtomatikEslestir()
     {
-        if (_eslestirmeCalisiyor) return;
+        if (_eslestirmeCalisiyor || _faturaEslestirmeCalisiyor) return;
         _eslestirmeCalisiyor = true;
         try
         {
@@ -984,6 +998,33 @@
         finally
         {
             _eslestirmeCalisiyor = false;
+        }
+    }
+
+    private async Task FaturaOtomatikEslestir()
+    {
+        if (_eslestirmeCalisiyor || _faturaEslestirmeCalisiyor) return;
+        _faturaEslestirmeCalisiyor = true;
+        try
+        {
+            var eslesen = await TakipService.FaturaEslestirmeYapAsync();
+            if (eslesen > 0)
+            {
+                ToastService.ShowSuccess($"{eslesen} kayıt fatura ile eşleştirildi.");
+                await LoadData();
+            }
+            else
+            {
+                ToastService.ShowInfo("Eşleştirilecek yeni fatura kaydı bulunamadı.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Fatura eşleştirme başarısız: {ex.Message}");
+        }
+        finally
+        {
+            _faturaEslestirmeCalisiyor = false;
         }
     }
 
