@@ -795,21 +795,35 @@
                                             }
                                         </td>
                                         <td class="text-end">
-                                            @if (evrak.Tamamlandi && !string.IsNullOrWhiteSpace(evrak.DosyaYolu))
-                                            {
-                                                <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => EvrakOnizle(evrak)" title="Önizle">
-                                                    <i class="bi bi-eye"></i>
+                                            <div class="btn-group btn-group-sm">
+                                                @if (evrak.Tamamlandi && !string.IsNullOrWhiteSpace(evrak.DosyaYolu))
+                                                {
+                                                    <button class="btn btn-outline-primary" @onclick="() => EvrakOnizle(evrak)" title="Önizle">
+                                                        <i class="bi bi-eye"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-dark" @onclick="() => EvrakYazdir(evrak)" title="Yazdır">
+                                                        <i class="bi bi-printer"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-success" @onclick="() => EvrakGonder(evrak)" title="Gönder">
+                                                        <i class="bi bi-send"></i>
+                                                    </button>
+                                                }
+                                                <button class="btn btn-outline-info" @onclick="() => EvrakDetayAc(evrak)" title="Detay">
+                                                    <i class="bi bi-search"></i>
                                                 </button>
-                                                <button class="btn btn-sm btn-outline-dark me-1" @onclick="() => EvrakYazdir(evrak)" title="Yazdır">
-                                                    <i class="bi bi-printer"></i>
+                                                @if (evrak.Tamamlandi && !string.IsNullOrWhiteSpace(evrak.DosyaYolu))
+                                                {
+                                                    <button class="btn btn-outline-secondary" @onclick="() => EvrakDosyaIndir(evrak)" title="İndir">
+                                                        <i class="bi bi-download"></i>
+                                                    </button>
+                                                }
+                                                <button class="btn btn-outline-warning" @onclick="() => EvrakDuzenleModalAc(evrak)" title="Düzenle">
+                                                    <i class="bi bi-pencil"></i>
                                                 </button>
-                                                <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => EvrakDosyaIndir(evrak)" title="İndir">
-                                                    <i class="bi bi-download"></i>
+                                                <button class="btn btn-outline-success" @onclick="() => EvrakYukleModalAc(evrak)" title="Yükle">
+                                                    <i class="bi bi-upload"></i>
                                                 </button>
-                                            }
-                                            <button class="btn btn-sm btn-outline-success" @onclick="() => EvrakYukleModalAc(evrak)" title="Yükle">
-                                                <i class="bi bi-upload"></i>
-                                            </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 }
@@ -944,6 +958,191 @@
     </div>
 }
 
+@* Özlük Evrak Detay Modal *@
+@if (showEvrakDetayModal && seciliDetayEvrak != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-file-earmark-text me-2"></i>@seciliDetayEvrak.EvrakAdi Detay</h5>
+                    <button type="button" class="btn-close" @onclick="EvrakDetayKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Kategori:</strong> @GetKategoriAdi(seciliDetayEvrak.Kategori)
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Zorunluluk:</strong> @(seciliDetayEvrak.Zorunlu ? "Zorunlu" : "Opsiyonel")
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Durum:</strong>
+                            @if (seciliDetayEvrak.Tamamlandi)
+                            {
+                                <span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Tamam</span>
+                            }
+                            else
+                            {
+                                <span class="text-warning"><i class="bi bi-exclamation-circle-fill me-1"></i>Eksik</span>
+                            }
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Tamamlanma:</strong> @(seciliDetayEvrak.TamamlanmaTarihi?.ToString("dd.MM.yyyy") ?? "-")
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Geçerlilik Bitiş:</strong> @(seciliDetayEvrak.GecerlilikBitisTarihi?.ToString("dd.MM.yyyy") ?? "-")
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Dosya:</strong> @(string.IsNullOrWhiteSpace(seciliDetayEvrak.DosyaYolu) ? "Yok" : EncExtensionTemizle(Path.GetFileName(seciliDetayEvrak.DosyaYolu)))
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(seciliDetayEvrak.Aciklama))
+                    {
+                        <div class="mb-0">
+                            <strong>Açıklama:</strong> @seciliDetayEvrak.Aciklama
+                        </div>
+                    }
+
+                    <hr />
+                    <h6><i class="bi bi-paperclip me-2"></i>Dosyalar</h6>
+                    @if (detayDosyalariYukleniyor)
+                    {
+                        <div class="text-center py-3">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                        </div>
+                    }
+                    else if (seciliDetayDosyalari.Count > 0)
+                    {
+                        <div class="list-group">
+                            @foreach (var dosya in seciliDetayDosyalari)
+                            {
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <i class="bi bi-file-earmark me-2"></i>
+                                        @EncExtensionTemizle(dosya.DosyaAdi)
+                                        <small class="text-muted ms-2">(@FormatDosyaBoyutu(dosya.DosyaBoyutu))</small>
+                                        @if (dosya.GuncelKayit)
+                                        {
+                                            <span class="badge bg-success ms-2">Güncel</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary ms-2">Arşiv</span>
+                                        }
+                                    </div>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary" @onclick="() => DetayDosyaOnizle(dosya)" title="Önizle">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                        <button class="btn btn-outline-dark" @onclick="() => DetayDosyaYazdir(dosya)" title="Yazdır">
+                                            <i class="bi bi-printer"></i>
+                                        </button>
+                                        <button class="btn btn-outline-success" @onclick="() => DetayDosyaGonder(dosya)" title="Gönder">
+                                            <i class="bi bi-send"></i>
+                                        </button>
+                                        <button class="btn btn-outline-secondary" @onclick="() => DetayDosyaIndir(dosya)" title="İndir">
+                                            <i class="bi bi-download"></i>
+                                        </button>
+                                        <button class="btn btn-outline-danger" @onclick="() => DetayDosyaSil(dosya)" title="Sil">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-secondary mb-0">
+                            <i class="bi bi-info-circle me-2"></i>Henüz dosya yok.
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" @onclick="() => EvrakYukleModalAc(seciliDetayEvrak)">
+                        <i class="bi bi-upload me-1"></i>Dosya Yükle
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="EvrakDetayKapat">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Özlük Evrak Düzenle Modal *@
+@if (showEvrakDuzenleModal && duzenleSecilenEvrak != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>@duzenleSecilenEvrak.EvrakAdi Düzenle</h5>
+                    <button type="button" class="btn-close" @onclick="EvrakDuzenlemeKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="form-label">Evrak Adı *</label>
+                            <input type="text" class="form-control" value="@duzenleSecilenEvrak.EvrakAdi" readonly />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Kategori</label>
+                            <input type="text" class="form-control" value="@GetKategoriAdi(duzenleSecilenEvrak.Kategori)" readonly />
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Tamamlanma Tarihi</label>
+                            <input type="text" class="form-control" value="@(duzenleSecilenEvrak.TamamlanmaTarihi?.ToString("dd.MM.yyyy") ?? "-")" readonly />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Geçerlilik Bitiş Tarihi</label>
+                            <input type="date" class="form-control" @bind="duzenleGecerlilikBitisTarihi" />
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <label class="form-label">Açıklama / Not</label>
+                        <textarea class="form-control" @bind="duzenleSecilenEvrak.Aciklama" rows="2" placeholder="Açıklama bilgileri..."></textarea>
+                    </div>
+                    <div class="mt-3">
+                        <label class="form-label">Son Değişiklik Notu</label>
+                        <input type="text" class="form-control" @bind="duzenleSonDegisiklikNotu" placeholder="Güncelleme nedeni..." />
+                    </div>
+                    @if (!EvrakDuzenlemeDegisiklikVar)
+                    {
+                        <div class="alert alert-secondary mt-3 mb-0 py-2">
+                            <i class="bi bi-info-circle me-1"></i>Henüz değişiklik yapılmadı.
+                        </div>
+                    }
+                    <div class="mt-3">
+                        <label class="form-label">Versiyon</label>
+                        <div class="alert alert-info mb-0">
+                            <strong>Mevcut Versiyon:</strong> @duzenleSecilenEvrak.VersiyonNo 
+                            <br />
+                            <small>Dosya kaydedildiğinde otomatik artırılır</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="EvrakDuzenlemeKapat">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="EvrakDuzenlemeKaydet" disabled="@(evrakDuzenleniyor || !EvrakDuzenlemeDegisiklikVar)">
+                        @if (evrakDuzenleniyor)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-check-lg me-1"></i>Güncelle
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @* Evrak Yükleme Modal *@
 @if (showEvrakYukleModal && seciliEvrakDetay != null)
 {
@@ -1029,6 +1228,9 @@
                             disabled="@(!onizlemeDestekleniyor)">
                         <i class="bi bi-printer me-1"></i>Yazdır
                     </button>
+                    <button type="button" class="btn btn-success" @onclick="OnizlenenDosyayiGonder">
+                        <i class="bi bi-send me-1"></i>Gönder
+                    </button>
                 </div>
             </div>
         </div>
@@ -1066,6 +1268,10 @@
     private OzlukEvrakDetay? seciliEvrakDetay;
     private IBrowserFile? secilenEvrakDosya;
     private bool evrakYukleniyor = false;
+    private bool showEvrakDetayModal = false;
+    private OzlukEvrakDetay? seciliDetayEvrak;
+    private List<PersonelEvrakDosyaListeItem> seciliDetayDosyalari = new();
+    private bool detayDosyalariYukleniyor = false;
 
     // Özlük Evrak Önizleme
     private bool onizlemeModalAcik;
@@ -1075,6 +1281,16 @@
     private string? onizlemeDataUrl;
     private string? onizlemeDosyaAdi;
     private bool onizlemeDestekleniyor;
+
+    // Özlük Evrak Düzenleme
+    private bool showEvrakDuzenleModal = false;
+    private OzlukEvrakDetay? duzenleSecilenEvrak;
+    private DateTime? duzenleGecerlilikBitisTarihi;
+    private string? duzenleSonDegisiklikNotu;
+    private bool evrakDuzenleniyor = false;
+    private string? duzenleOrijinalAciklama;
+    private DateTime? duzenleOrijinalGecerlilikBitisTarihi;
+    private string? duzenleOrijinalSonDegisiklikNotu;
 
     // Araç Eşleştirme
     private List<PersonelAracAtama>? aracAtamalari;
@@ -1725,6 +1941,25 @@
         try
         {
             evrakDurumu = await OzlukService.GetPersonelEvrakDurumuAsync(Id!.Value);
+            if (seciliDetayEvrak != null)
+            {
+                var guncelDetay = evrakDurumu.Evraklar
+                    .FirstOrDefault(e => e.EvrakTanimId == seciliDetayEvrak.EvrakTanimId);
+                if (guncelDetay != null)
+                {
+                    seciliDetayEvrak = guncelDetay;
+                }
+            }
+
+            if (seciliEvrakDetay != null)
+            {
+                var guncelYuklemeDetay = evrakDurumu.Evraklar
+                    .FirstOrDefault(e => e.EvrakTanimId == seciliEvrakDetay.EvrakTanimId);
+                if (guncelYuklemeDetay != null)
+                {
+                    seciliEvrakDetay = guncelYuklemeDetay;
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -1741,6 +1976,7 @@
         seciliEvrakDetay = evrak;
         secilenEvrakDosya = null;
         showEvrakYukleModal = true;
+        showEvrakDetayModal = false;
     }
 
     private void EvrakYukleModalKapat()
@@ -1748,6 +1984,41 @@
         showEvrakYukleModal = false;
         seciliEvrakDetay = null;
         secilenEvrakDosya = null;
+    }
+
+    private async Task EvrakDetayAc(OzlukEvrakDetay evrak)
+    {
+        await EvrakDurumuYukle();
+        seciliDetayEvrak = evrakDurumu?.Evraklar.FirstOrDefault(e => e.EvrakTanimId == evrak.EvrakTanimId) ?? evrak;
+        await DetayDosyalariYukle(seciliDetayEvrak);
+        showEvrakDetayModal = true;
+    }
+
+    private void EvrakDetayKapat()
+    {
+        showEvrakDetayModal = false;
+        seciliDetayEvrak = null;
+        seciliDetayDosyalari.Clear();
+        detayDosyalariYukleniyor = false;
+    }
+
+    private async Task DetayDosyalariYukle(OzlukEvrakDetay evrak)
+    {
+        if (!Id.HasValue) return;
+        detayDosyalariYukleniyor = true;
+        try
+        {
+            seciliDetayDosyalari = await OzlukService.GetEvrakDosyaListesiAsync(Id.Value, evrak.EvrakTanimId);
+        }
+        catch (Exception ex)
+        {
+            seciliDetayDosyalari = new();
+            ToastService.ShowError($"Dosya listesi yüklenemedi: {ex.Message}");
+        }
+        finally
+        {
+            detayDosyalariYukleniyor = false;
+        }
     }
 
     private void OnEvrakDosyaSecildi(InputFileChangeEventArgs e)
@@ -1760,6 +2031,10 @@
         if (secilenEvrakDosya == null || seciliEvrakDetay == null) return;
 
         evrakYukleniyor = true;
+        string? yeniRelativePath = null;
+        var yuklenenEvrakTanimId = seciliEvrakDetay.EvrakTanimId;
+        var yuklenenEvrakAdi = seciliEvrakDetay.EvrakAdi;
+        var oncekiRelativePath = seciliEvrakDetay.DosyaYolu;
         try
         {
             await using var stream = secilenEvrakDosya.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
@@ -1779,12 +2054,20 @@
             var normAd = AppStoragePaths.NormalizeFolderName(sofor?.Ad ?? "PERSONEL");
             var normSoyad = AppStoragePaths.NormalizeFolderName(sofor?.Soyad ?? Id?.ToString() ?? "PERSONEL");
             var normEvrakAdi = AppStoragePaths.NormalizeFolderName(seciliEvrakDetay.EvrakAdi).Replace(" ", "").Replace("-", "");
-            var arsivDosyaAdi = $"{normAd}{normSoyad}{normEvrakAdi}_{DateTime.Now:yyyyMMdd_HHmmss}{uzanti}";
+            var benzersizEk = Guid.NewGuid().ToString("N")[..6];
+            var arsivDosyaAdi = $"{normAd}{normSoyad}{normEvrakAdi}_{DateTime.Now:yyyyMMdd_HHmmss_fff}_{benzersizEk}{uzanti}";
 
-            var relativePath = await SecureFileService.SaveEncryptedAsync(
+            yeniRelativePath = await SecureFileService.SaveEncryptedAsync(
                 $"{AppStoragePaths.PersonelEvrakRelativeRoot}/{personelKlasoru}",
                 arsivDosyaAdi,
                 icerik);
+
+            // Yeni yazılan dosya gerçekten okunabiliyor mu? (şifreleme/anahtar/path doğrulaması)
+            var yeniDosyaDogrulama = await SecureFileService.ReadDecryptedAsync(yeniRelativePath);
+            if (yeniDosyaDogrulama == null || yeniDosyaDogrulama.Length == 0)
+            {
+                throw new InvalidOperationException("Yüklenen dosya doğrulanamadı. Kayıt geri alındı.");
+            }
 
             // Arşiv kopyaları (şifreli + şifresiz)
             var adSoyad = sofor?.TamAd ?? Id?.ToString() ?? "PERSONEL";
@@ -1797,14 +2080,57 @@
                 // Arşiv hatası ana upload'ı engellememeli (EvrakArsivService içinde loglanır)
             }
 
-            await OzlukService.EvrakDosyaYukle(Id!.Value, seciliEvrakDetay.EvrakTanimId, relativePath);
+            var dosyaTipi = string.IsNullOrWhiteSpace(secilenEvrakDosya.ContentType)
+                ? GetContentType(secilenEvrakDosya.Name)
+                : secilenEvrakDosya.ContentType;
 
-            ToastService.ShowSuccess($"{seciliEvrakDetay.EvrakAdi} başarıyla yüklendi.");
-            EvrakYukleModalKapat();
+            await OzlukService.EvrakDosyaYukle(
+                Id!.Value,
+                seciliEvrakDetay.EvrakTanimId,
+                yeniRelativePath,
+                dosyaAdi: secilenEvrakDosya.Name,
+                dosyaTipi: dosyaTipi,
+                dosyaBoyutu: secilenEvrakDosya.Size);
+
+            // DB kaydından sonra da bir kez daha oku: kayıt + storage birlikte tutarlı mı?
+            var dbSonrasiDogrulama = await SecureFileService.ReadDecryptedAsync(yeniRelativePath);
+            if (dbSonrasiDogrulama == null || dbSonrasiDogrulama.Length == 0)
+            {
+                throw new InvalidOperationException("Dosya kaydı oluşturuldu ancak içerik açılamadı.");
+            }
+
+            // Eski dosyayı burada fiziksel silmiyoruz.
+            // Personel tarafında versiyon/fallback okuma için eski dosya erişilebilir kalmalı.
+
+            // Re-upload sonrası eski dosyanın önizleme state'i kalmasın.
+            OnizlemeKapat();
+
             await EvrakDurumuYukle();
+            seciliDetayEvrak = evrakDurumu?.Evraklar.FirstOrDefault(e => e.EvrakTanimId == yuklenenEvrakTanimId);
+            if (seciliDetayEvrak != null)
+            {
+                await DetayDosyalariYukle(seciliDetayEvrak);
+                showEvrakDetayModal = true;
+            }
+
+            ToastService.ShowSuccess($"{yuklenenEvrakAdi} başarıyla yüklendi.");
+            EvrakYukleModalKapat();
+            await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)
         {
+            if (!string.IsNullOrWhiteSpace(yeniRelativePath))
+            {
+                try
+                {
+                    await SecureFileService.DeleteAsync(yeniRelativePath);
+                }
+                catch
+                {
+                    // Rollback temizliği başarısız olsa da asıl hatayı gizleme.
+                }
+            }
+
             ToastService.ShowError($"Dosya yüklenirken hata: {ex.Message}");
         }
         finally
@@ -1815,20 +2141,14 @@
 
     private async Task EvrakDosyaIndir(OzlukEvrakDetay evrak)
     {
-        if (string.IsNullOrWhiteSpace(evrak.DosyaYolu)) return;
+        var sonuc = await EvrakIcerigiGetirAsync(evrak);
+        if (sonuc == null) return;
 
         try
         {
-            var content = await SecureFileService.ReadDecryptedAsync(evrak.DosyaYolu);
-            if (content == null)
-            {
-                ToastService.ShowWarning("Dosya bulunamadı.");
-                return;
-            }
-
-            var downloadFileName = EncExtensionTemizle(Path.GetFileName(evrak.DosyaYolu));
-            var extension = Path.GetExtension(downloadFileName).TrimStart('.').ToLower();
-            var mimeType = GetMimeType(extension);
+            var content = sonuc.Icerik;
+            var downloadFileName = EncExtensionTemizle(sonuc.DosyaAdi);
+            var mimeType = string.IsNullOrWhiteSpace(sonuc.ContentType) ? "application/octet-stream" : sonuc.ContentType;
 
             await AktiviteLog.LogGoruntulemeAsync("Şoforler", "OzlukEvrak", 0, downloadFileName, $"Özlük evrak indirildi: {downloadFileName} (Şoför #{Id})");
             await JS.InvokeVoidAsync("downloadFile", downloadFileName, Convert.ToBase64String(content), mimeType);
@@ -1844,6 +2164,117 @@
         if (yuzde >= 80) return "bg-success";
         if (yuzde >= 50) return "bg-warning";
         return "bg-danger";
+    }
+
+    private void EvrakDuzenleModalAc(OzlukEvrakDetay evrak)
+    {
+        duzenleSecilenEvrak = new OzlukEvrakDetay
+        {
+            EvrakTanimId = evrak.EvrakTanimId,
+            EvrakAdi = evrak.EvrakAdi,
+            Kategori = evrak.Kategori,
+            Zorunlu = evrak.Zorunlu,
+            Tamamlandi = evrak.Tamamlandi,
+            TamamlanmaTarihi = evrak.TamamlanmaTarihi,
+            GecerlilikBitisTarihi = evrak.GecerlilikBitisTarihi,
+            DosyaYolu = evrak.DosyaYolu,
+            DosyaAdi = evrak.DosyaAdi,
+            DosyaTipi = evrak.DosyaTipi,
+            DosyaBoyutu = evrak.DosyaBoyutu,
+            Aciklama = evrak.Aciklama,
+            VersiyonNo = evrak.VersiyonNo,
+            SonDegisiklikNotu = evrak.SonDegisiklikNotu
+        };
+
+        duzenleGecerlilikBitisTarihi = evrak.GecerlilikBitisTarihi;
+        duzenleSonDegisiklikNotu = evrak.SonDegisiklikNotu;
+        duzenleOrijinalAciklama = evrak.Aciklama;
+        duzenleOrijinalGecerlilikBitisTarihi = evrak.GecerlilikBitisTarihi;
+        duzenleOrijinalSonDegisiklikNotu = evrak.SonDegisiklikNotu;
+        showEvrakDuzenleModal = true;
+    }
+
+    private void EvrakDuzenlemeKapat()
+    {
+        showEvrakDuzenleModal = false;
+        duzenleSecilenEvrak = null;
+        duzenleGecerlilikBitisTarihi = null;
+        duzenleSonDegisiklikNotu = null;
+        duzenleOrijinalAciklama = null;
+        duzenleOrijinalGecerlilikBitisTarihi = null;
+        duzenleOrijinalSonDegisiklikNotu = null;
+    }
+
+    private async Task EvrakDuzenlemeKaydet()
+    {
+        if (duzenleSecilenEvrak == null || !Id.HasValue) return;
+        if (!EvrakDuzenlemeDegisiklikVar)
+        {
+            ToastService.ShowInfo("Herhangi bir değişiklik yapılmadı.");
+            return;
+        }
+
+        evrakDuzenleniyor = true;
+        try
+        {
+            // Güncellenebilir alanlar
+            duzenleSecilenEvrak.Aciklama = duzenleSecilenEvrak.Aciklama ?? "";
+            duzenleSecilenEvrak.GecerlilikBitisTarihi = duzenleGecerlilikBitisTarihi;
+            duzenleSecilenEvrak.SonDegisiklikNotu = duzenleSonDegisiklikNotu ?? "";
+
+            // Service üzerinden güncelle
+            await OzlukService.EvrakDuzenle(
+                Id.Value,
+                duzenleSecilenEvrak.EvrakTanimId,
+                duzenleSecilenEvrak.Aciklama,
+                duzenleGecerlilikBitisTarihi,
+                duzenleSonDegisiklikNotu);
+
+            // Versiyon otomatik artar, durumu yenile
+            await EvrakDurumuYukle();
+
+            // Detay modal'ı tekrar aç (güncellenmiş veriler ile)
+            seciliDetayEvrak = evrakDurumu?.Evraklar
+                .FirstOrDefault(e => e.EvrakTanimId == duzenleSecilenEvrak.EvrakTanimId);
+            if (seciliDetayEvrak != null)
+            {
+                await DetayDosyalariYukle(seciliDetayEvrak);
+                showEvrakDetayModal = true;
+            }
+
+            ToastService.ShowSuccess($"{duzenleSecilenEvrak.EvrakAdi} başarıyla güncellendi.");
+            EvrakDuzenlemeKapat();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Güncelleme hatası: {ex.Message}");
+        }
+        finally
+        {
+            evrakDuzenleniyor = false;
+        }
+    }
+
+    private bool EvrakDuzenlemeDegisiklikVar
+    {
+        get
+        {
+            if (duzenleSecilenEvrak == null) return false;
+
+            var aciklamaDegisti = !string.Equals(
+                (duzenleSecilenEvrak.Aciklama ?? string.Empty).Trim(),
+                (duzenleOrijinalAciklama ?? string.Empty).Trim(),
+                StringComparison.Ordinal);
+
+            var gecerlilikDegisti = duzenleGecerlilikBitisTarihi != duzenleOrijinalGecerlilikBitisTarihi;
+
+            var notDegisti = !string.Equals(
+                (duzenleSonDegisiklikNotu ?? string.Empty).Trim(),
+                (duzenleOrijinalSonDegisiklikNotu ?? string.Empty).Trim(),
+                StringComparison.Ordinal);
+
+            return aciklamaDegisti || gecerlilikDegisti || notDegisti;
+        }
     }
 
     private string GetKategoriAdi(OzlukEvrakKategori kategori) => kategori switch
@@ -1906,23 +2337,15 @@
 
     private async Task EvrakOnizle(OzlukEvrakDetay evrak)
     {
-        if (string.IsNullOrWhiteSpace(evrak.DosyaYolu))
-        {
-            ToastService.ShowWarning("Bu evrak için dosya bulunamadı.");
-            return;
-        }
+        var sonuc = await EvrakIcerigiGetirAsync(evrak);
+        if (sonuc == null) return;
 
         try
         {
-            var bytes = await SecureFileService.ReadDecryptedAsync(evrak.DosyaYolu);
-            if (bytes == null || bytes.Length == 0)
-            {
-                ToastService.ShowWarning("Dosya bulunamadı veya şifresi çözülemedi.");
-                return;
-            }
+            var bytes = sonuc.Icerik;
 
-            var dosyaAdi = EncExtensionTemizle(Path.GetFileName(evrak.DosyaYolu));
-            var contentType = GetContentType(dosyaAdi);
+            var dosyaAdi = EncExtensionTemizle(sonuc.DosyaAdi);
+            var contentType = string.IsNullOrWhiteSpace(sonuc.ContentType) ? GetContentType(dosyaAdi) : sonuc.ContentType;
 
             onizlemeBaslik = dosyaAdi;
             onizlemeDosyaAdi = dosyaAdi;
@@ -1941,31 +2364,22 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[EvrakOnizle HATA] EvrakId={evrak.EvrakTanimId}, Adi={evrak.EvrakAdi}, Yol={evrak.DosyaYolu}: {ex.Message}");
+            Console.WriteLine($"[EvrakOnizle HATA] EvrakId={evrak.EvrakTanimId}, Adi={evrak.EvrakAdi}: {ex.Message}");
             ToastService.ShowError("Evrak önizlenemedi. Dosya bulunamadı veya şifresi çözülemedi.");
         }
     }
 
     private async Task EvrakYazdir(OzlukEvrakDetay evrak)
     {
-        // Önce önizleme state'ini hazırla, sonra yazdırma penceresini aç.
-        if (string.IsNullOrWhiteSpace(evrak.DosyaYolu))
-        {
-            ToastService.ShowWarning("Bu evrak için dosya bulunamadı.");
-            return;
-        }
+        var sonuc = await EvrakIcerigiGetirAsync(evrak);
+        if (sonuc == null) return;
 
         try
         {
-            var bytes = await SecureFileService.ReadDecryptedAsync(evrak.DosyaYolu);
-            if (bytes == null || bytes.Length == 0)
-            {
-                ToastService.ShowWarning("Dosya bulunamadı veya şifresi çözülemedi.");
-                return;
-            }
+            var bytes = sonuc.Icerik;
 
-            var dosyaAdi = EncExtensionTemizle(Path.GetFileName(evrak.DosyaYolu));
-            var contentType = GetContentType(dosyaAdi);
+            var dosyaAdi = EncExtensionTemizle(sonuc.DosyaAdi);
+            var contentType = string.IsNullOrWhiteSpace(sonuc.ContentType) ? GetContentType(dosyaAdi) : sonuc.ContentType;
 
             var destekleniyor =
                 contentType == "application/pdf" ||
@@ -1987,6 +2401,140 @@
         {
             Console.WriteLine($"[EvrakYazdir HATA] EvrakId={evrak.EvrakTanimId}, Adi={evrak.EvrakAdi}: {ex.Message}");
             ToastService.ShowError("Evrak yazdırılamadı.");
+        }
+    }
+
+    private async Task EvrakGonder(OzlukEvrakDetay evrak)
+    {
+        var sonuc = await EvrakIcerigiGetirAsync(evrak);
+        if (sonuc == null) return;
+
+        try
+        {
+            var bytes = sonuc.Icerik;
+
+            var dosyaAdi = EncExtensionTemizle(sonuc.DosyaAdi);
+            var contentType = string.IsNullOrWhiteSpace(sonuc.ContentType) ? GetContentType(dosyaAdi) : sonuc.ContentType;
+            var paylasildi = await JS.InvokeAsync<bool>(
+                "shareBase64File",
+                dosyaAdi,
+                Convert.ToBase64String(bytes),
+                contentType);
+
+            if (!paylasildi)
+                ToastService.ShowInfo("Bu cihazda paylaşım desteklenmiyor, dosya indirildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Evrak gönderilemedi: {ex.Message}");
+        }
+    }
+
+    private async Task<PersonelEvrakDosyaIcerik?> EvrakIcerigiGetirAsync(OzlukEvrakDetay evrak)
+    {
+        if (!Id.HasValue)
+            return null;
+
+        var sonuc = await OzlukService.GetGuncelEvrakDosyaIcerigiAsync(Id.Value, evrak.EvrakTanimId);
+        if (sonuc == null || sonuc.Icerik == null || sonuc.Icerik.Length == 0)
+        {
+            ToastService.ShowWarning("Dosya bulunamadı veya şifresi çözülemedi.");
+            return null;
+        }
+
+        return sonuc;
+    }
+
+    private async Task<PersonelEvrakDosyaIcerik?> DetayDosyaIcerigiGetirAsync(PersonelEvrakDosyaListeItem dosya)
+    {
+        if (!Id.HasValue) return null;
+
+        var sonuc = await OzlukService.GetEvrakDosyaIcerigiAsync(
+            Id.Value,
+            dosya.EvrakTanimId,
+            dosya.PersonelEvrakId,
+            dosya.VersiyonId);
+
+        if (sonuc == null || sonuc.Icerik == null || sonuc.Icerik.Length == 0)
+        {
+            ToastService.ShowWarning("Dosya bulunamadı veya şifresi çözülemedi.");
+            return null;
+        }
+
+        return sonuc;
+    }
+
+    private async Task DetayDosyaIndir(PersonelEvrakDosyaListeItem dosya)
+    {
+        var sonuc = await DetayDosyaIcerigiGetirAsync(dosya);
+        if (sonuc == null) return;
+        await JS.InvokeVoidAsync("downloadFile", EncExtensionTemizle(sonuc.DosyaAdi), Convert.ToBase64String(sonuc.Icerik), sonuc.ContentType);
+    }
+
+    private async Task DetayDosyaOnizle(PersonelEvrakDosyaListeItem dosya)
+    {
+        var sonuc = await DetayDosyaIcerigiGetirAsync(dosya);
+        if (sonuc == null) return;
+
+        var dosyaAdi = EncExtensionTemizle(sonuc.DosyaAdi);
+        var contentType = string.IsNullOrWhiteSpace(sonuc.ContentType) ? GetContentType(dosyaAdi) : sonuc.ContentType;
+        onizlemeBaslik = dosyaAdi;
+        onizlemeDosyaAdi = dosyaAdi;
+        onizlemeContentType = contentType;
+        onizlemeBase64 = Convert.ToBase64String(sonuc.Icerik);
+        onizlemeDataUrl = $"data:{contentType};base64,{onizlemeBase64}";
+        onizlemeDestekleniyor = contentType == "application/pdf" || contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+        onizlemeModalAcik = true;
+    }
+
+    private async Task DetayDosyaYazdir(PersonelEvrakDosyaListeItem dosya)
+    {
+        var sonuc = await DetayDosyaIcerigiGetirAsync(dosya);
+        if (sonuc == null) return;
+
+        var contentType = string.IsNullOrWhiteSpace(sonuc.ContentType) ? GetContentType(sonuc.DosyaAdi) : sonuc.ContentType;
+        if (contentType != "application/pdf" && !contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            ToastService.ShowWarning("Bu dosya türü yazdırma için desteklenmiyor.");
+            return;
+        }
+
+        await JS.InvokeVoidAsync("printBase64File", Convert.ToBase64String(sonuc.Icerik), contentType);
+    }
+
+    private async Task DetayDosyaGonder(PersonelEvrakDosyaListeItem dosya)
+    {
+        var sonuc = await DetayDosyaIcerigiGetirAsync(dosya);
+        if (sonuc == null) return;
+
+        var dosyaAdi = EncExtensionTemizle(sonuc.DosyaAdi);
+        var contentType = string.IsNullOrWhiteSpace(sonuc.ContentType) ? GetContentType(dosyaAdi) : sonuc.ContentType;
+        var paylasildi = await JS.InvokeAsync<bool>("shareBase64File", dosyaAdi, Convert.ToBase64String(sonuc.Icerik), contentType);
+        if (!paylasildi)
+            ToastService.ShowInfo("Bu cihazda paylaşım desteklenmiyor, dosya indirildi.");
+    }
+
+    private async Task DetayDosyaSil(PersonelEvrakDosyaListeItem dosya)
+    {
+        if (!Id.HasValue || seciliDetayEvrak == null) return;
+        var onay = await JS.InvokeAsync<bool>("confirm", $"'{EncExtensionTemizle(dosya.DosyaAdi)}' dosyasını silmek istiyor musunuz?");
+        if (!onay) return;
+
+        try
+        {
+            await OzlukService.DeleteEvrakDosyaAsync(
+                Id.Value,
+                seciliDetayEvrak.EvrakTanimId,
+                dosya.PersonelEvrakId,
+                dosya.VersiyonId);
+
+            ToastService.ShowSuccess("Dosya silindi.");
+            await EvrakDurumuYukle();
+            await DetayDosyalariYukle(seciliDetayEvrak);
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Dosya silinemedi: {ex.Message}");
         }
     }
 
@@ -2020,6 +2568,23 @@
             "printBase64File",
             onizlemeBase64,
             onizlemeContentType);
+    }
+
+    private async Task OnizlenenDosyayiGonder()
+    {
+        if (string.IsNullOrWhiteSpace(onizlemeBase64) ||
+            string.IsNullOrWhiteSpace(onizlemeDosyaAdi) ||
+            string.IsNullOrWhiteSpace(onizlemeContentType))
+            return;
+
+        var paylasildi = await JS.InvokeAsync<bool>(
+            "shareBase64File",
+            onizlemeDosyaAdi,
+            onizlemeBase64,
+            onizlemeContentType);
+
+        if (!paylasildi)
+            ToastService.ShowInfo("Bu cihazda paylaşım desteklenmiyor, dosya indirildi.");
     }
 
     private void OnizlemeKapat()

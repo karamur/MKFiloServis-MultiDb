@@ -1,4 +1,6 @@
 ﻿@page "/araclar/plaka-takip"
+@page "/filo-operasyon/kiralik-c-plaka-takip"
+@page "/filo-operasyon/kiralık-c-plaka-takip"
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services.Interfaces
 @using KOAFiloServis.Web.Services
@@ -9,7 +11,9 @@
 @using QuestPDF.Infrastructure
 @using KOAFiloServis.Web.Data
 @using Microsoft.EntityFrameworkCore
+@using System.Globalization
 @inject IKiralikPlakaTakipService TakipService
+@inject IFaturaSablonService FaturaSablonService
 @inject IToastService ToastService
 @inject IJSRuntime JS
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
@@ -29,8 +33,8 @@
             <small class="text-muted">Yeni kayıt yalnızca Excel ile yapılır.</small>
         </div>
         <div class="d-flex gap-2 flex-wrap">
-            <button class="btn btn-outline-warning" @onclick="OtomatikEslestir" disabled="@_eslestirmeCalisiyor">
-                @if (_eslestirmeCalisiyor)
+            <button class="btn btn-outline-warning" @onclick="OtomatikEslestir" disabled="@_eslestirmeCalisiyor || _faturaEslestirmeCalisiyor">
+                @if (_eslestirmeCalisiyor || _faturaEslestirmeCalisiyor)
                 {
                     <span class="spinner-border spinner-border-sm me-1"></span>
                 }
@@ -38,7 +42,11 @@
                 {
                     <i class="bi bi-link-45deg me-1"></i>
                 }
-                Otomatik Eşleştir
+                Araç Eşleştir
+            </button>
+            <button class="btn btn-outline-secondary" disabled title="Manuel fatura girişi aktif">
+                <i class="bi bi-hand-index-thumb me-1"></i>
+                Fatura Eşleştir (Kapalı)
             </button>
             <button class="btn btn-outline-secondary" @onclick="OnizlemeAc" disabled="@(!FiltrelenmisListe.Any())"><i class="bi bi-eye me-1"></i> Önizleme</button>
             <button class="btn btn-outline-danger" @onclick="PdfAktar" disabled="@(!FiltrelenmisListe.Any())"><i class="bi bi-file-earmark-pdf me-1"></i> PDF</button>
@@ -101,11 +109,15 @@
                 </div>
                 <div class="mt-2 d-flex flex-wrap gap-3 small text-muted">
                     <span><i class="bi bi-list-ol me-1"></i><strong>@FiltrelenmisListe.Count</strong> / @_liste.Count kayıt</span>
-                    <span class="text-success"><i class="bi bi-check-circle me-1"></i>Eşleşen: <strong>@FiltrelenmisListe.Count(x => x.Arac != null)</strong></span>
-                    <span class="text-danger"><i class="bi bi-x-circle me-1"></i>Eşleşmeyen: <strong>@FiltrelenmisListe.Count(x => x.Arac == null)</strong></span>
+                    <span class="text-success"><i class="bi bi-check-circle me-1"></i>Eşleşen: <strong>@FiltrelenmisListe.Count(x => x.Arac != null && x.Arac.Aktif)</strong></span>
+                    <span class="text-danger"><i class="bi bi-x-circle me-1"></i>Eşleşmeyen: <strong>@FiltrelenmisListe.Count(x => x.Arac == null || (x.Arac != null && !x.Arac.Aktif))</strong></span>
                     <span class="text-danger"><i class="bi bi-clock-history me-1"></i>Süresi Geçen: <strong>@FiltrelenmisListe.Count(x => (x.BitisTarihi.Date - DateTime.Today).Days < 0)</strong></span>
                     <span class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>7 Gün İçinde: <strong>@FiltrelenmisListe.Count(x => { var g = (x.BitisTarihi.Date - DateTime.Today).Days; return g >= 0 && g <= 7; })</strong></span>
-                    <span><i class="bi bi-cash-coin me-1"></i>Toplam: <strong>@FiltrelenmisListe.Sum(x => x.Toplam).ToString("N2")</strong> ₺</span>
+                    <span><i class="bi bi-cash-coin me-1"></i>Tamamı: <strong>@FiltrelenmisListe.Sum(x => x.ToplamOdeme > 0 ? x.ToplamOdeme : x.Toplam).ToString("N2")</strong> ₺</span>
+                    <span class="text-info"><i class="bi bi-receipt me-1"></i>Kesilen Toplam Fatura: <strong>@FiltrelenmisListe.Sum(x => x.KesilenFaturaTutar).ToString("N2")</strong> ₺</span>
+                    <span class="text-success"><i class="bi bi-cash-stack me-1"></i>Ödenen Toplam Fatura: <strong>@FiltrelenmisListe.Sum(x => Math.Min(x.OdenenTutar, x.KesilenFaturaTutar)).ToString("N2")</strong> ₺</span>
+                    <span class="text-danger"><i class="bi bi-hourglass-split me-1"></i>Kalan Fatura: <strong>@FiltrelenmisListe.Sum(x => Math.Max(0, x.KesilenFaturaTutar - x.OdenenTutar)).ToString("N2")</strong> ₺</span>
+                    <span class="text-primary"><i class="bi bi-wallet2 me-1"></i>Ödenmesi Gereken Miktar: <strong>@FiltrelenmisListe.Sum(x => Math.Max(0, (x.ToplamOdeme > 0 ? x.ToplamOdeme : x.Toplam) - x.OdenenTutar)).ToString("N2")</strong> ₺</span>
                 </div>
             </div>
         </div>
@@ -142,10 +154,11 @@
                             <th>AYLIK / YILLIK</th>
                             <th>EK TUTAR</th>
                             <th>TOPLAM</th>
-                            <th>KESİLEN FATURA NO</th>
-                            <th class="text-end">KESİLEN FATURA</th>
-                            <th class="text-end">KALAN</th>
-                            <th class="text-end">ÖDENEN</th>
+                            <th class="text-end">TAMAMI</th>
+                            <th class="text-end">KESİLEN TOPLAM FATURA</th>
+                            <th class="text-end">ÖDENEN TOPLAM FATURA</th>
+                            <th class="text-end">KALAN FATURA</th>
+                            <th class="text-end">ÖDENMESİ GEREKEN MİKTAR</th>
                             <th class="text-end">İşlem</th>
                         </tr>
                     </thead>
@@ -156,7 +169,8 @@
                         @for (int i = 0; i < liste.Count; i++)
                         {
                             var item = liste[i];
-                            var eslesmedi = item.Arac == null;
+                            var pasifAracBagli = item.Arac != null && !item.Arac.Aktif;
+                            var eslesmedi = item.Arac == null || pasifAracBagli;
                             var kalanGun = (item.BitisTarihi.Date - DateTime.Today).Days;
                             var bitisClass = kalanGun < 0 ? "bg-danger text-white"
                                 : kalanGun <= 7 ? "bg-warning text-dark"
@@ -181,6 +195,10 @@
                                             }
                                         </a>
                                     }
+                                    else if (pasifAracBagli)
+                                    {
+                                        <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-circle me-1"></i>Pasif araç</span>
+                                    }
                                     else
                                     {
                                         <span class="badge bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>Eşleşmedi</span>
@@ -200,21 +218,35 @@
                                 <td>@item.Periyot <br /><small class="text-muted">@item.AylikVeyaYillikTutar.ToString("N2")</small></td>
                                 <td>@item.EkTutar.ToString("N2")</td>
                                 <td><strong>@item.Toplam.ToString("N2")</strong></td>
-                                <td>@(item.KesilenFaturaNo ?? "-")</td>
+                                <td class="text-end fw-semibold">@((item.ToplamOdeme > 0 ? item.ToplamOdeme : item.Toplam).ToString("N2"))</td>
                                 <td class="text-end">@(item.KesilenFaturaTutar > 0 ? item.KesilenFaturaTutar.ToString("N2") : "-")</td>
                                 <td class="text-end">
-                                    @if (item.KalanFaturaTutar > 0)
-                                    { <span class="text-danger fw-semibold">@item.KalanFaturaTutar.ToString("N2")</span> }
+                                    @{
+                                        var kesilendenOdenenToplam = Math.Min(item.OdenenTutar, item.KesilenFaturaTutar);
+                                    }
+                                    @if (kesilendenOdenenToplam > 0)
+                                    { <span class="text-success fw-semibold">@kesilendenOdenenToplam.ToString("N2")</span> }
                                     else { <span>-</span> }
                                 </td>
                                 <td class="text-end">
-                                    @if (item.OdenenTutar > 0)
-                                    { <span class="text-success fw-semibold">@item.OdenenTutar.ToString("N2")</span> }
+                                    @{
+                                        var kalanFatura = Math.Max(0, item.KesilenFaturaTutar - item.OdenenTutar);
+                                    }
+                                    @if (kalanFatura > 0)
+                                    { <span class="text-danger fw-semibold">@kalanFatura.ToString("N2")</span> }
+                                    else { <span>-</span> }
+                                </td>
+                                <td class="text-end">
+                                    @{
+                                        var odenmesiGerekenMiktar = Math.Max(0, (item.ToplamOdeme > 0 ? item.ToplamOdeme : item.Toplam) - item.OdenenTutar);
+                                    }
+                                    @if (odenmesiGerekenMiktar > 0)
+                                    { <span class="text-primary fw-semibold">@odenmesiGerekenMiktar.ToString("N2")</span> }
                                     else { <span>-</span> }
                                 </td>
                                 <td class="text-end">
                                     <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-dark" title="Hesap Pusulası" @onclick="() => HesapPusulasiGoster(item)"><i class="bi bi-journal-text"></i></button>
+                                        <button class="btn btn-outline-dark" title="Hesap Pusulası" @onclick="() => HesapPusulasiGosterAsync(item)"><i class="bi bi-journal-text"></i></button>
                                         <a href="/araclar/plaka-takip/@item.Id/duzenle" class="btn btn-outline-primary" title="Düzenle"><i class="bi bi-pencil"></i></a>
                                         <button class="btn btn-outline-danger" title="Sil" @onclick="() => Sil(item)"><i class="bi bi-trash"></i></button>
                                     </div>
@@ -306,8 +338,8 @@
                 <div class="modal-body">
                     <div class="d-flex flex-wrap gap-2 mb-3">
                         <span class="badge bg-primary">Toplam: @FiltrelenmisListe.Count</span>
-                        <span class="badge bg-success">Eşleşen: @FiltrelenmisListe.Count(x => x.Arac != null)</span>
-                        <span class="badge bg-danger">Eşleşmeyen: @FiltrelenmisListe.Count(x => x.Arac == null)</span>
+                        <span class="badge bg-success">Eşleşen: @FiltrelenmisListe.Count(x => x.Arac != null && x.Arac.Aktif)</span>
+                        <span class="badge bg-danger">Eşleşmeyen: @FiltrelenmisListe.Count(x => x.Arac == null || (x.Arac != null && !x.Arac.Aktif))</span>
                         <span class="badge bg-dark">Süresi Geçen: @FiltrelenmisListe.Count(x => (x.BitisTarihi.Date - DateTime.Today).Days < 0)</span>
                         <span class="badge bg-warning text-dark">7 Gün İçinde: @FiltrelenmisListe.Count(x => { var g = (x.BitisTarihi.Date - DateTime.Today).Days; return g >= 0 && g <= 7; })</span>
                         <span class="badge bg-info text-dark">Toplam Tutar: @FiltrelenmisListe.Sum(x => x.Toplam).ToString("N2") ₺</span>
@@ -407,14 +439,18 @@
                                         <td>@(ix++)</td>
                                         <td><strong>@item.Plaka</strong></td>
                                         <td>
-                                            @if (item.Arac != null)
-                                            {
-                                                @($"{item.Arac.AktifPlaka} - {item.Arac.Marka} {item.Arac.Model}")
-                                            }
-                                            else
-                                            {
-                                                <span class="badge bg-danger">Eşleşmedi</span>
-                                            }
+                                            @if (item.Arac != null && item.Arac.Aktif)
+                                                        {
+                                                            @($"{item.Arac.AktifPlaka} - {item.Arac.Marka} {item.Arac.Model}")
+                                                        }
+                                                        else if (item.Arac != null)
+                                                        {
+                                                            <span class="badge bg-warning text-dark">Pasif araç</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge bg-danger">Eşleşmedi</span>
+                                                        }
                                         </td>
                                         <td>@item.IsimSoyisim</td>
                                         <td>@item.BaslamaTarihi.ToString("dd.MM.yyyy")</td>
@@ -520,24 +556,136 @@
                     </div>
 
                     <!-- Fatura Bilgileri -->
-                    @if (!string.IsNullOrWhiteSpace(seciliHesapItem.KesilenFaturaNo) || seciliHesapItem.KesilenFaturaTutar > 0)
-                    {
-                        <div class="card mb-3">
-                            <div class="card-header py-2 bg-light"><strong><i class="bi bi-receipt me-1"></i>Fatura Bilgileri</strong></div>
-                            <div class="card-body py-2">
-                                <table class="table table-sm table-borderless mb-0">
-                                    <tr><td class="text-muted" width="120">Kesilen Fatura No</td><td><strong>@(seciliHesapItem.KesilenFaturaNo ?? "-")</strong></td></tr>
-                                    <tr><td class="text-muted">Fatura Tarihi</td><td>@(seciliHesapItem.KesilenFaturaTarih?.ToString("dd.MM.yyyy") ?? "-")</td></tr>
-                                    <tr><td class="text-muted">Fatura Tutarı</td><td><strong>@seciliHesapItem.KesilenFaturaTutar.ToString("N2")</strong></td></tr>
-                                    <tr><td class="text-muted">Kalan Fatura</td><td><strong class="text-danger">@seciliHesapItem.KalanFaturaTutar.ToString("N2")</strong></td></tr>
-                                </table>
+                    <div class="card mb-3">
+                        <div class="card-header py-2 bg-light d-flex justify-content-between align-items-center">
+                            <strong><i class="bi bi-receipt me-1"></i>Fatura Bilgileri</strong>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-secondary">Adet: @seciliFaturaSatirlari.Count</span>
+                                <span class="badge bg-dark">Toplam: @seciliFaturaSatirlari.Sum(x => x.Toplam).ToString("N2", CultureInfo.GetCultureInfo("tr-TR")) ₺</span>
+                                @if (seciliFaturaSatirlari.Any(x => x.FaturaId.HasValue))
+                                {
+                                    <button class="btn btn-sm btn-outline-info" @onclick="HesapPusulasiPdfOnizle" disabled="@hesapPusulasiPdfYukleniyor">
+                                        @if (hesapPusulasiPdfYukleniyor)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-1"></span>
+                                        }
+                                        <i class="bi bi-eye me-1"></i>PDF Önizle
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="HesapPusulasiPdfIndir" disabled="@hesapPusulasiPdfYukleniyor">
+                                        @if (hesapPusulasiPdfYukleniyor)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-1"></span>
+                                        }
+                                        <i class="bi bi-file-pdf me-1"></i>PDF
+                                    </button>
+                                }
                             </div>
                         </div>
-                    }
+                        <div class="card-body py-2">
+                            @if (hesapPusulasiYukleniyor)
+                            {
+                                <div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></div>
+                            }
+                            else if (!seciliFaturaSatirlari.Any())
+                            {
+                                <div class="text-muted">Kayıtta fatura detayı bulunamadı.</div>
+                            }
+                            else
+                            {
+                                <div class="table-responsive" style="max-height:280px; overflow-y:auto;">
+                                    <table class="table table-sm table-striped align-middle mb-0">
+                                        <thead class="table-light sticky-top">
+                                            <tr>
+                                                <th>Fatura No</th>
+                                                <th>Tarih</th>
+                                                <th>Cari</th>
+                                                <th>Açıklama</th>
+                                                <th class="text-end">KDV</th>
+                                                <th class="text-end">Toplam</th>
+                                                <th class="text-center">Detay</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var fs in seciliFaturaSatirlari)
+                                            {
+                                                <tr>
+                                                    <td><strong>@(string.IsNullOrWhiteSpace(fs.FaturaNo) ? "-" : fs.FaturaNo)</strong></td>
+                                                    <td>@(fs.FaturaTarihi?.ToString("dd.MM.yyyy") ?? "-")</td>
+                                                    <td>@(string.IsNullOrWhiteSpace(fs.CariUnvan) ? "-" : fs.CariUnvan)</td>
+                                                    <td class="small">@(string.IsNullOrWhiteSpace(fs.Aciklama) ? "-" : fs.Aciklama)</td>
+                                                    <td class="text-end">@fs.Kdv.ToString("N2", CultureInfo.GetCultureInfo("tr-TR"))</td>
+                                                    <td class="text-end fw-semibold">@fs.Toplam.ToString("N2", CultureInfo.GetCultureInfo("tr-TR"))</td>
+                                                    <td class="text-center">
+                                                        @if (fs.FaturaId.HasValue)
+                                                        {
+                                                            <a class="btn btn-sm btn-outline-primary" href="/faturalar/detay/@fs.FaturaId.Value" target="_blank">
+                                                                <i class="bi bi-box-arrow-up-right"></i>
+                                                            </a>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">-</span>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                                @if (fs.Kalemler.Any())
+                                                {
+                                                    <tr>
+                                                        <td colspan="7" class="bg-light">
+                                                            <div class="small fw-semibold mb-1">Kalemler</div>
+                                                            <div class="table-responsive">
+                                                                <table class="table table-sm table-borderless mb-0">
+                                                                    <thead>
+                                                                        <tr>
+                                                                            <th>Açıklama</th>
+                                                                            <th class="text-end">Miktar</th>
+                                                                            <th>Birim</th>
+                                                                            <th class="text-end">Birim Fiyat</th>
+                                                                            <th class="text-end">KDV %</th>
+                                                                            <th class="text-end">KDV</th>
+                                                                            <th class="text-end">Toplam</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody>
+                                                                        @foreach (var k in fs.Kalemler)
+                                                                        {
+                                                                            <tr>
+                                                                                <td>@k.Aciklama</td>
+                                                                                <td class="text-end">@k.Miktar.ToString("N2", CultureInfo.GetCultureInfo("tr-TR"))</td>
+                                                                                <td>@k.Birim</td>
+                                                                                <td class="text-end">@k.BirimFiyat.ToString("N2", CultureInfo.GetCultureInfo("tr-TR"))</td>
+                                                                                <td class="text-end">@k.KdvOrani.ToString("N2", CultureInfo.GetCultureInfo("tr-TR"))</td>
+                                                                                <td class="text-end">@k.KdvTutari.ToString("N2", CultureInfo.GetCultureInfo("tr-TR"))</td>
+                                                                                <td class="text-end fw-semibold">@k.Toplam.ToString("N2", CultureInfo.GetCultureInfo("tr-TR"))</td>
+                                                                            </tr>
+                                                                        }
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            }
+                                        </tbody>
+                                        <tfoot class="table-light">
+                                            <tr>
+                                                <th colspan="5" class="text-end">Fatura Toplamı</th>
+                                                <th class="text-end">@seciliFaturaSatirlari.Sum(x => x.Toplam).ToString("N2", CultureInfo.GetCultureInfo("tr-TR"))</th>
+                                                <th></th>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                                <div class="mt-2 small text-muted">
+                                    Kalan Fatura: <strong class="text-danger">@seciliHesapItem.KalanFaturaTutar.ToString("N2", CultureInfo.GetCultureInfo("tr-TR")) ₺</strong>
+                                </div>
+                            }
+                        </div>
+                    </div>
 
                     <!-- Aylık Vade Takvimi -->
                     @{
-                        var vadeAylari = HesapPlaniHesapla(seciliHesapItem);
+                        var vadeAylari = HesapPlaniHesapla(seciliHesapItem, seciliFaturaSatirlari);
                     }
                     @if (vadeAylari.Any())
                     {
@@ -553,7 +701,12 @@
                                             <th width="40">#</th>
                                             <th>Ay</th>
                                             <th class="text-end">Tutar</th>
+                                            <th>Eşleşen Faturalar</th>
+                                            <th class="text-end">Eşleşen Toplam</th>
+                                            <th class="text-end">Bu Ay Ödenen</th>
+                                            <th class="text-end">Bu Ay Kalan</th>
                                             <th class="text-end">Durum</th>
+                                            <th class="text-center">İşlem</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -563,21 +716,94 @@
                                                 <td>@ay.Sira</td>
                                                 <td>@ay.AyAdi @ay.Yil</td>
                                                 <td class="text-end">@ay.OdemeTutari.ToString("N2")</td>
-                                                <td class="text-end">
-                                                    @if (ay.BugundenOnce && seciliHesapItem.OdenenTutar <= 0)
-                                                    { <span class="badge bg-danger">Ödenmedi</span> }
-                                                    else if (ay.BugundenOnce)
-                                                    { <span class="badge bg-warning text-dark">Geçmiş</span> }
+                                                <td>
+                                                    @if (ay.EslesenFaturaNoListesi.Any())
+                                                    {
+                                                        <div class="d-flex flex-wrap gap-1">
+                                                            @foreach (var fno in ay.EslesenFaturaNoListesi)
+                                                            {
+                                                                <span class="badge bg-light text-dark border">@fno</span>
+                                                            }
+                                                        </div>
+                                                    }
                                                     else
-                                                    { <span class="badge bg-info text-dark">Gelecek</span> }
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                                <td class="text-end">
+                                                    @if (ay.EslesenFaturaTutari > 0)
+                                                    {
+                                                        <span class="fw-semibold text-primary">@ay.EslesenFaturaTutari.ToString("N2")</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                                <td class="text-end text-success fw-semibold">@ay.BuAyOdenen.ToString("N2")</td>
+                                                <td class="text-end text-danger fw-semibold">@ay.BuAyKalan.ToString("N2")</td>
+                                                <td class="text-end">
+                                                    @if (ay.OdemeDurumu == "YAPILDI")
+                                                    { <span class="badge bg-success">Ödeme Yapıldı</span> }
+                                                    else if (ay.OdemeDurumu == "KISMI")
+                                                    { <span class="badge bg-warning text-dark">Kısmi Ödeme</span> }
+                                                    else if (ay.BugundenOnce)
+                                                    { <span class="badge bg-danger">Ödenmedi</span> }
+                                                    else
+                                                    { <span class="badge bg-info text-dark">Bekliyor</span> }
+                                                </td>
+                                                <td class="text-center">
+                                                    <a class="btn btn-sm btn-outline-primary" href="/araclar/plaka-takip/@seciliHesapItem.Id/duzenle">
+                                                        <i class="bi bi-link-45deg"></i>
+                                                    </a>
                                                 </td>
                                             </tr>
+                                            @if (ay.EslesenFaturaDetaylari.Any())
+                                            {
+                                                <tr>
+                                                    <td></td>
+                                                    <td colspan="8" class="bg-light">
+                                                        <div class="small fw-semibold mb-1">Ay Detayı</div>
+                                                        <div class="table-responsive">
+                                                            <table class="table table-sm mb-0">
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th>Fatura No</th>
+                                                                        <th>Tarih</th>
+                                                                        <th>Cari</th>
+                                                                        <th>Açıklama</th>
+                                                                        <th class="text-end">Toplam</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    @foreach (var fd in ay.EslesenFaturaDetaylari)
+                                                                    {
+                                                                        <tr>
+                                                                            <td>@fd.FaturaNo</td>
+                                                                            <td>@(fd.FaturaTarihi?.ToString("dd.MM.yyyy") ?? "-")</td>
+                                                                            <td>@(fd.CariUnvan ?? "-")</td>
+                                                                            <td>@(fd.Aciklama ?? "-")</td>
+                                                                            <td class="text-end fw-semibold">@fd.Toplam.ToString("N2")</td>
+                                                                        </tr>
+                                                                    }
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            }
                                         }
                                     </tbody>
                                     <tfoot class="table-light">
                                         <tr>
                                             <th colspan="2">Toplam</th>
                                             <th class="text-end">@vadeAylari.Sum(a => a.OdemeTutari).ToString("N2")</th>
+                                            <th></th>
+                                            <th class="text-end">@vadeAylari.Sum(a => a.EslesenFaturaTutari).ToString("N2")</th>
+                                            <th class="text-end">@vadeAylari.Sum(a => a.BuAyOdenen).ToString("N2")</th>
+                                            <th class="text-end">@vadeAylari.Sum(a => a.BuAyKalan).ToString("N2")</th>
+                                            <th></th>
                                             <th></th>
                                         </tr>
                                     </tfoot>
@@ -591,6 +817,29 @@
                         <i class="bi bi-pencil me-1"></i>Düzenle
                     </a>
                     <button type="button" class="btn btn-secondary" @onclick="HesapPusulasiKapat">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showHesapPusulasiPdfOnizleme && !string.IsNullOrWhiteSpace(hesapPusulasiPdfDataUrl))
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.7);" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-secondary text-white">
+                    <h5 class="modal-title"><i class="bi bi-file-pdf me-2"></i>PDF Önizleme - @(hesapPusulasiPdfDosyaAdi ?? "fatura")</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="KapatHesapPusulasiPdfOnizleme"></button>
+                </div>
+                <div class="modal-body p-0" style="height:75vh;">
+                    <iframe src="@hesapPusulasiPdfDataUrl" style="width:100%; height:100%; border:none;"></iframe>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-danger" @onclick="HesapPusulasiPdfIndir">
+                        <i class="bi bi-download me-1"></i>İndir
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="KapatHesapPusulasiPdfOnizleme">Kapat</button>
                 </div>
             </div>
         </div>
@@ -702,12 +951,19 @@
     private bool showImportModal;
     private bool isImporting;
     private bool _eslestirmeCalisiyor;
+    private bool _faturaEslestirmeCalisiyor;
     private bool showOnizlemeModal;
     private bool showAracDetayModal;
     private Arac? seciliArac;
     private List<GuzergahBilgisi> seciliGuzergahBilgisi = new();
     private bool showHesapPusulasiModal;
     private KiralikPlakaTakip? seciliHesapItem;
+    private List<HesapPusulasiFaturaSatiri> seciliFaturaSatirlari = new();
+    private bool hesapPusulasiYukleniyor;
+    private bool hesapPusulasiPdfYukleniyor;
+    private bool showHesapPusulasiPdfOnizleme;
+    private string? hesapPusulasiPdfDataUrl;
+    private string? hesapPusulasiPdfDosyaAdi;
     private IBrowserFile? importFile;
     private KiralikPlakaImportResult? importResult;
 
@@ -757,8 +1013,8 @@
         })
         .Where(x => eslesmeFiltre switch
         {
-            "eslesti" => x.Arac != null,
-            "eslesmedi" => x.Arac == null,
+            "eslesti" => x.Arac != null && x.Arac.Aktif,
+            "eslesmedi" => x.Arac == null || (x.Arac != null && !x.Arac.Aktif),
             _ => true
         })
         .OrderBy(x => x.BitisTarihi)
@@ -851,19 +1107,107 @@
         seciliGuzergahBilgisi.Clear();
     }
 
-    private void HesapPusulasiGoster(KiralikPlakaTakip item)
+    private async Task HesapPusulasiGosterAsync(KiralikPlakaTakip item)
     {
         seciliHesapItem = item;
         showHesapPusulasiModal = true;
+        hesapPusulasiYukleniyor = true;
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            var faturaNoSet = ParseFaturaNoListesi(item.KesilenFaturaNo)
+                .Select(x => x.ToUpperInvariant())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var linkedById = new List<Fatura>();
+            if (item.GelenFaturaId.HasValue && item.GelenFaturaId.Value > 0)
+            {
+                var fatura = await db.Faturalar
+                    .Include(f => f.Cari)
+                    .Include(f => f.FaturaKalemleri)
+                    .FirstOrDefaultAsync(f => !f.IsDeleted && f.Id == item.GelenFaturaId.Value);
+                if (fatura != null)
+                    linkedById.Add(fatura);
+            }
+
+            var linkedByNo = await db.Faturalar
+                .Include(f => f.Cari)
+                .Include(f => f.FaturaKalemleri)
+                .Where(f => !f.IsDeleted && faturaNoSet.Contains(f.FaturaNo.ToUpper()))
+                .OrderByDescending(f => f.FaturaTarihi)
+                .ToListAsync();
+
+            var allLinked = linkedById
+                .Concat(linkedByNo)
+                .GroupBy(f => f.Id)
+                .Select(g => g.First())
+                .OrderByDescending(f => f.FaturaTarihi)
+                .ToList();
+
+            seciliFaturaSatirlari = allLinked.Select(f => new HesapPusulasiFaturaSatiri
+            {
+                FaturaId = f.Id,
+                FaturaNo = f.FaturaNo,
+                FaturaTarihi = f.FaturaTarihi,
+                Aciklama = f.Aciklama,
+                CariUnvan = f.Cari?.Unvan,
+                Kdv = f.KdvTutar,
+                Toplam = f.GenelToplam,
+                Kalemler = (f.FaturaKalemleri ?? new List<FaturaKalem>())
+                    .OrderBy(k => k.SiraNo)
+                    .Select(k => new HesapPusulasiFaturaKalemi
+                    {
+                        Aciklama = k.Aciklama,
+                        Miktar = k.Miktar,
+                        Birim = k.Birim,
+                        BirimFiyat = k.BirimFiyat,
+                        KdvOrani = k.KdvOrani,
+                        KdvTutari = k.KdvTutar,
+                        Toplam = k.ToplamTutar
+                    })
+                    .ToList()
+            }).ToList();
+
+            if (!seciliFaturaSatirlari.Any())
+            {
+                var manualNos = ParseFaturaNoListesi(item.KesilenFaturaNo).ToList();
+                if (manualNos.Any())
+                {
+                    var parca = manualNos.Count > 0 ? item.KesilenFaturaTutar / manualNos.Count : 0;
+                    seciliFaturaSatirlari = manualNos.Select(no => new HesapPusulasiFaturaSatiri
+                    {
+                        FaturaNo = no,
+                        FaturaTarihi = item.KesilenFaturaTarih,
+                        Toplam = parca,
+                        Aciklama = "Manuel fatura girişi"
+                    }).ToList();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowWarning($"Fatura detayları yüklenirken uyarı oluştu: {ex.Message}");
+            seciliFaturaSatirlari = new();
+        }
+        finally
+        {
+            hesapPusulasiYukleniyor = false;
+        }
     }
 
     private void HesapPusulasiKapat()
     {
         showHesapPusulasiModal = false;
         seciliHesapItem = null;
+        seciliFaturaSatirlari.Clear();
+        hesapPusulasiYukleniyor = false;
+        hesapPusulasiPdfYukleniyor = false;
+        KapatHesapPusulasiPdfOnizleme();
     }
 
-    private static List<OdemePlanSatiri> HesapPlaniHesapla(KiralikPlakaTakip item)
+    private static List<OdemePlanSatiri> HesapPlaniHesapla(KiralikPlakaTakip item, IReadOnlyCollection<HesapPusulasiFaturaSatiri> faturalar)
     {
         var liste = new List<OdemePlanSatiri>();
         if (item.Periyot != "AYLIK") return liste;
@@ -872,21 +1216,55 @@
         var bitis = item.BitisTarihi;
         var bugun = DateTime.Today;
 
+        var faturaAyGruplari = faturalar
+            .Where(f => f.FaturaTarihi.HasValue)
+            .GroupBy(f => (f.FaturaTarihi!.Value.Year, f.FaturaTarihi!.Value.Month))
+            .ToDictionary(g => g.Key, g => g.ToList());
+
         var tarih = new DateTime(baslangic.Year, baslangic.Month, 1);
         var bitisAy = new DateTime(bitis.Year, bitis.Month, 1);
         int sira = 0;
+        var kalanOdenen = item.OdenenTutar;
 
         while (tarih <= bitisAy)
         {
             sira++;
+            var aylikTutar = item.AylikVeyaYillikTutar;
+            var buAyOdenen = Math.Min(aylikTutar, Math.Max(0, kalanOdenen));
+            kalanOdenen = Math.Max(0, kalanOdenen - aylikTutar);
+
+            var ayAnahtar = (tarih.Year, tarih.Month);
+            var eslesenFaturalar = faturaAyGruplari.TryGetValue(ayAnahtar, out var ayFaturalari)
+                ? ayFaturalari
+                : new List<HesapPusulasiFaturaSatiri>();
+
+            var eslesenFaturaToplami = eslesenFaturalar.Sum(x => x.Toplam);
+            var odemeDurumu = buAyOdenen >= aylikTutar && aylikTutar > 0
+                ? "YAPILDI"
+                : (buAyOdenen > 0 ? "KISMI" : "YAPILMADI");
+
             liste.Add(new OdemePlanSatiri
             {
                 Sira = sira,
                 Yil = tarih.Year,
                 AyAdi = new DateTime(2024, tarih.Month, 1).ToString("MMMM"),
-                OdemeTutari = item.AylikVeyaYillikTutar,
+                OdemeTutari = aylikTutar,
+                EslesenFaturaTutari = eslesenFaturaToplami,
+                EslesenFaturaNoListesi = eslesenFaturalar
+                    .Select(x => x.FaturaNo)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Cast<string>()
+                    .ToList(),
+                EslesenFaturaDetaylari = eslesenFaturalar
+                    .OrderByDescending(x => x.FaturaTarihi)
+                    .ToList(),
+                BuAyOdenen = buAyOdenen,
+                BuAyKalan = Math.Max(0, aylikTutar - buAyOdenen),
+                OdemeDurumu = odemeDurumu,
                 BugundenOnce = tarih < bugun
             });
+
             tarih = tarih.AddMonths(1);
         }
 
@@ -899,7 +1277,130 @@
         public int Yil { get; set; }
         public string AyAdi { get; set; } = "";
         public decimal OdemeTutari { get; set; }
+        public decimal EslesenFaturaTutari { get; set; }
+        public List<string> EslesenFaturaNoListesi { get; set; } = new();
+        public List<HesapPusulasiFaturaSatiri> EslesenFaturaDetaylari { get; set; } = new();
+        public decimal BuAyOdenen { get; set; }
+        public decimal BuAyKalan { get; set; }
+        public string OdemeDurumu { get; set; } = "YAPILMADI";
         public bool BugundenOnce { get; set; }
+    }
+
+    private class HesapPusulasiFaturaSatiri
+    {
+        public int? FaturaId { get; set; }
+        public string? FaturaNo { get; set; }
+        public DateTime? FaturaTarihi { get; set; }
+        public string? Aciklama { get; set; }
+        public string? CariUnvan { get; set; }
+        public decimal Kdv { get; set; }
+        public decimal Toplam { get; set; }
+        public List<HesapPusulasiFaturaKalemi> Kalemler { get; set; } = new();
+    }
+
+    private class HesapPusulasiFaturaKalemi
+    {
+        public string? Aciklama { get; set; }
+        public decimal Miktar { get; set; }
+        public string? Birim { get; set; }
+        public decimal BirimFiyat { get; set; }
+        public decimal KdvOrani { get; set; }
+        public decimal KdvTutari { get; set; }
+        public decimal Toplam { get; set; }
+    }
+
+    private static IEnumerable<string> ParseFaturaNoListesi(string? kesilenFaturaNo)
+    {
+        if (string.IsNullOrWhiteSpace(kesilenFaturaNo))
+            return Enumerable.Empty<string>();
+
+        return kesilenFaturaNo
+            .Split(new[] { ';', ',', '|' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private async Task HesapPusulasiPdfIndir()
+    {
+        if (hesapPusulasiPdfYukleniyor || !seciliFaturaSatirlari.Any(x => x.FaturaId.HasValue))
+            return;
+
+        hesapPusulasiPdfYukleniyor = true;
+        try
+        {
+            var result = await HesapPusulasiPdfOlustur();
+            if (result?.Basarili == true && result.PdfData != null)
+            {
+                var dosyaAdi = string.IsNullOrWhiteSpace(result.DosyaAdi)
+                    ? "fatura.pdf"
+                    : result.DosyaAdi;
+                var base64 = Convert.ToBase64String(result.PdfData);
+                await JS.InvokeVoidAsync("downloadFile", dosyaAdi, base64, "application/pdf");
+                ToastService.ShowSuccess("Fatura PDF indirildi.");
+            }
+            else if (result != null)
+            {
+                ToastService.ShowWarning(result.Mesaj ?? "Fatura PDF oluşturulamadı.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hesap pusulası PDF işlemi başarısız: {ex.Message}");
+        }
+        finally
+        {
+            hesapPusulasiPdfYukleniyor = false;
+        }
+    }
+
+    private async Task HesapPusulasiPdfOnizle()
+    {
+        if (hesapPusulasiPdfYukleniyor || !seciliFaturaSatirlari.Any(x => x.FaturaId.HasValue))
+            return;
+
+        hesapPusulasiPdfYukleniyor = true;
+        try
+        {
+            var result = await HesapPusulasiPdfOlustur();
+            if (result?.Basarili == true && result.PdfData != null)
+            {
+                var base64 = Convert.ToBase64String(result.PdfData);
+                hesapPusulasiPdfDataUrl = $"data:application/pdf;base64,{base64}";
+                hesapPusulasiPdfDosyaAdi = string.IsNullOrWhiteSpace(result.DosyaAdi) ? "fatura.pdf" : result.DosyaAdi;
+                showHesapPusulasiPdfOnizleme = true;
+            }
+            else if (result != null)
+            {
+                ToastService.ShowWarning(result.Mesaj ?? "PDF önizleme oluşturulamadı.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"PDF önizleme hatası: {ex.Message}");
+        }
+        finally
+        {
+            hesapPusulasiPdfYukleniyor = false;
+        }
+    }
+
+    private async Task<FaturaPdfResult?> HesapPusulasiPdfOlustur()
+    {
+        var faturaId = seciliFaturaSatirlari.FirstOrDefault(x => x.FaturaId.HasValue)?.FaturaId;
+        if (!faturaId.HasValue)
+        {
+            ToastService.ShowInfo("PDF için bağlı fatura bulunamadı.");
+            return null;
+        }
+
+        return await FaturaSablonService.FaturaPdfOlusturAsync(faturaId.Value);
+    }
+
+    private void KapatHesapPusulasiPdfOnizleme()
+    {
+        showHesapPusulasiPdfOnizleme = false;
+        hesapPusulasiPdfDataUrl = null;
+        hesapPusulasiPdfDosyaAdi = null;
     }
 
     private static string GetDurumClass(string? durum)
@@ -962,20 +1463,26 @@
 
     private async Task OtomatikEslestir()
     {
-        if (_eslestirmeCalisiyor) return;
+        if (_eslestirmeCalisiyor || _faturaEslestirmeCalisiyor) return;
         _eslestirmeCalisiyor = true;
         try
         {
-            var eslesen = await TakipService.EslestirmeYapAsync();
-            if (eslesen > 0)
+            var sonuc = await TakipService.EslestirmeYapAsync();
+            if (sonuc.Eslesen > 0)
             {
-                ToastService.ShowSuccess($"{eslesen} kayıt araç ile eşleştirildi.");
+                ToastService.ShowSuccess($"{sonuc.Eslesen} kayıt araç ile eşleştirildi.");
                 await LoadData();
             }
             else
             {
                 ToastService.ShowInfo("Eşleştirilecek yeni kayıt bulunamadı.");
             }
+
+            if (sonuc.CokluAdayNedeniyleAtlanan > 0)
+                ToastService.ShowWarning($"{sonuc.CokluAdayNedeniyleAtlanan} kayıt çoklu aday nedeniyle otomatik eşleştirilmedi.");
+
+            if (sonuc.PasifAracNedeniyleAtlanan > 0)
+                ToastService.ShowInfo($"{sonuc.PasifAracNedeniyleAtlanan} kayıt yalnız pasif araç adayı bulunduğu için eşleştirilmedi.");
         }
         catch (Exception ex)
         {
@@ -985,6 +1492,12 @@
         {
             _eslestirmeCalisiyor = false;
         }
+    }
+
+    private async Task FaturaOtomatikEslestir()
+    {
+        await Task.CompletedTask;
+        ToastService.ShowInfo("Otomatik fatura eşleştirme kapalı. Manuel giriş kullanın.");
     }
 
     private void ExcelImportModalAc()

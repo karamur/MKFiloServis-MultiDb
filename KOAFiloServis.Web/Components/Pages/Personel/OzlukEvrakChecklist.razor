@@ -912,16 +912,13 @@
     /// </summary>
     private async Task UploadOzlukEvrakDosyasiAsync(int soforId, OzlukEvrakDetay evrak, IBrowserFile file)
     {
+        string? yeniDosyaYolu = null;
         try
         {
+            var oncekiDosyaYolu = evrak.DosyaYolu;
             await using var stream = file.OpenReadStream(10 * 1024 * 1024);
             using var memoryStream = new MemoryStream();
             await stream.CopyToAsync(memoryStream);
-
-            if (!string.IsNullOrWhiteSpace(evrak.DosyaYolu))
-            {
-                await SecureFileService.DeleteAsync(evrak.DosyaYolu);
-            }
 
             var icerik = memoryStream.ToArray();
             var uzanti = Path.GetExtension(file.Name);
@@ -952,7 +949,7 @@
             var normEvrakAdi = AppStoragePaths.NormalizeFolderName(evrak.EvrakAdi).Replace(" ", "").Replace("-", "");
             var arsivDosyaAdi = $"{normAd}{normSoyad}{normEvrakAdi}_{DateTime.Now:yyyyMMdd_HHmmss}{uzanti}";
 
-            var relativePath = await SecureFileService.SaveEncryptedAsync(
+            yeniDosyaYolu = await SecureFileService.SaveEncryptedAsync(
                 $"{AppStoragePaths.PersonelEvrakRelativeRoot}/{personelKlasoru}",
                 arsivDosyaAdi,
                 icerik);
@@ -968,11 +965,26 @@
                 Logger.LogError(ex, "Personel evrak arşivleme başarısız oldu. PersonelId={PersonelId}, Evrak={Evrak}", soforId, evrak.EvrakAdi);
             }
 
-            await OzlukService.EvrakDosyaYukle(soforId, evrak.EvrakTanimId, relativePath);
+            await OzlukService.EvrakDosyaYukle(soforId, evrak.EvrakTanimId, yeniDosyaYolu);
             await PersonelBelgeTarihiniGuncelleAsync(soforId, evrak);
             seciliDurum = await OzlukService.GetPersonelEvrakDurumuAsync(soforId);
             await EvrakGecerlilikTarihleriniYukleAsync(soforId);
             await LoadData();
+
+            // Yeni kayıt başarıyla tamamlandıktan sonra eski fiziksel dosyayı temizle.
+            if (!string.IsNullOrWhiteSpace(oncekiDosyaYolu) &&
+                !string.Equals(oncekiDosyaYolu, yeniDosyaYolu, StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    await SecureFileService.DeleteAsync(oncekiDosyaYolu);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Eski personel evrak dosyası silinemedi. SoforId={SoforId}, Yol={Yol}", soforId, oncekiDosyaYolu);
+                }
+            }
+
             ToastService.ShowSuccess($"{evrak.EvrakAdi} dosyası yüklendi.");
 
             // Başarılı upload sonrası: aynı canonical kategorideki eski/kayıp EvrakDosya kayıtlarını temizle.
@@ -982,6 +994,18 @@
         }
         catch (Exception ex)
         {
+            if (!string.IsNullOrWhiteSpace(yeniDosyaYolu))
+            {
+                try
+                {
+                    await SecureFileService.DeleteAsync(yeniDosyaYolu);
+                }
+                catch (Exception cleanupEx)
+                {
+                    Logger.LogWarning(cleanupEx, "Başarısız upload sonrası yeni dosya temizlenemedi. SoforId={SoforId}, Yol={Yol}", soforId, yeniDosyaYolu);
+                }
+            }
+
             Logger.LogError(ex, "Personel ozluk evrak yukleme hatasi. SoforId={SoforId}, EvrakTanimId={EvrakTanimId}, FileName={FileName}",
                 soforId, evrak.EvrakTanimId, file?.Name);
             ToastService.ShowError($"Dosya yüklenemedi: {ex.Message}");
@@ -1147,11 +1171,14 @@
     {
         if (seciliDurum == null) return;
         var soforId = seciliDurum.SoforId;
+        var kayitTemizlendi = false;
+        var fizikselSilmeBasarisiz = false;
 
         var tanim = await FindOzlukEvrakTanimForCanonicalTipAsync(canonicalTip);
         if (tanim == null)
         {
             Logger.LogInformation("HizliEvrakSil: '{Tip}' için eşleşen OzlukEvrakTanim bulunamadı, sadece EvrakDosya temizlendi.", canonicalTip);
+            ToastService.ShowInfo($"'{canonicalTip}' için evrak tanımı bulunamadı.");
             // _mevcutTipler ve ana listeyi yine de yenile
             await DetayAc(soforId);
             await LoadData();
@@ -1164,19 +1191,42 @@
             var personelEvrak = await OzlukService.EvrakIsaretle(soforId, tanim.Id, false);
             if (personelEvrak != null)
             {
+                var silinecekDosyaYolu = personelEvrak.DosyaYolu;
+
                 // Dosya alanlarını da temizle
                 personelEvrak.DosyaYolu = null;
                 personelEvrak.DosyaAdi = null;
                 personelEvrak.DosyaTipi = null;
                 personelEvrak.DosyaBoyutu = null;
                 await OzlukService.UpdatePersonelEvrakAsync(personelEvrak);
+                kayitTemizlendi = true;
+
+                if (!string.IsNullOrWhiteSpace(silinecekDosyaYolu))
+                {
+                    try
+                    {
+                        await SecureFileService.DeleteAsync(silinecekDosyaYolu);
+                    }
+                    catch (Exception ex)
+                    {
+                        fizikselSilmeBasarisiz = true;
+                        Logger.LogWarning(ex, "HizliEvrakSil: fiziksel dosya silme hatası. SoforId={SoforId}, Tip={Tip}, Yol={Yol}",
+                            soforId, canonicalTip, silinecekDosyaYolu);
+                    }
+                }
+
                 Logger.LogInformation("HizliEvrakSil: PersonelOzlukEvrak temizlendi. SoforId={SoforId}, EvrakTanimId={Id}, Tip={Tip}",
                     soforId, tanim.Id, canonicalTip);
+            }
+            else
+            {
+                ToastService.ShowInfo($"{canonicalTip} için temizlenecek kayıt bulunamadı.");
             }
         }
         catch (Exception ex)
         {
             Logger.LogWarning(ex, "HizliEvrakSil: PersonelOzlukEvrak temizleme hatası. Tip={Tip}", canonicalTip);
+            ToastService.ShowError($"{canonicalTip} kaydı temizlenemedi: {ex.GetBaseException().Message}");
         }
 
         // UI'ı yenile
@@ -1184,6 +1234,11 @@
         await EvrakGecerlilikTarihleriniYukleAsync(soforId);
         await DetayAc(soforId);
         await LoadData();
+
+        if (kayitTemizlendi && fizikselSilmeBasarisiz)
+            ToastService.ShowWarning($"{canonicalTip} kaydı temizlendi, ancak fiziksel dosya silinemedi.");
+        else if (kayitTemizlendi)
+            ToastService.ShowSuccess($"{canonicalTip} kaydı temizlendi.");
     }
 
     /// <summary>Hızlı karttan preview: canonical tip → PersonelOzlukEvrak → SecureFileService önizleme.</summary>
@@ -1667,7 +1722,19 @@
             var bytes = await SecureFileService.ReadDecryptedAsync(evrak.DosyaYolu);
             if (bytes == null || bytes.Length == 0)
             {
-                ToastService.ShowWarning("Dosya bulunamadı veya boş.");
+                var onay = await JS.InvokeAsync<bool>(
+                    "confirm",
+                    $"'{evrak.EvrakAdi}' dosyası bulunamadı veya boş. Bozuk dosya kaydını temizleyip yeniden yüklemek ister misiniz?");
+
+                if (onay && seciliDurum != null)
+                {
+                    await TemizleBozukEvrakReferansiAsync(seciliDurum.SoforId, evrak);
+                }
+                else
+                {
+                    ToastService.ShowWarning("Dosya bulunamadı veya boş.");
+                }
+
                 return;
             }
 
@@ -1697,6 +1764,33 @@
             Logger.LogError(ex, "Personel evrak önizleme hatası. Evrak={EvrakAdi}, DosyaYolu={DosyaYolu}",
                 evrak.EvrakAdi, evrak.DosyaYolu);
             ToastService.ShowError("Evrak önizlenemedi. Dosya şifresi çözülemedi veya dosya bulunamadı.");
+        }
+    }
+
+    private async Task TemizleBozukEvrakReferansiAsync(int soforId, OzlukEvrakDetay evrak)
+    {
+        try
+        {
+            var personelEvrak = await OzlukService.EvrakIsaretle(soforId, evrak.EvrakTanimId, false, evrak.Aciklama);
+            personelEvrak.DosyaYolu = null;
+            personelEvrak.DosyaAdi = null;
+            personelEvrak.DosyaTipi = null;
+            personelEvrak.DosyaBoyutu = null;
+            personelEvrak.Tamamlandi = false;
+            personelEvrak.TamamlanmaTarihi = null;
+            personelEvrak.SonDegisiklikNotu = "Bozuk dosya referansı temizlendi";
+
+            await OzlukService.UpdatePersonelEvrakAsync(personelEvrak);
+            seciliDurum = await OzlukService.GetPersonelEvrakDurumuAsync(soforId);
+            await EvrakGecerlilikTarihleriniYukleAsync(soforId);
+            await LoadData();
+
+            ToastService.ShowInfo($"{evrak.EvrakAdi} için bozuk dosya kaydı temizlendi. 'Dosya Seç' ile yeniden yükleyebilirsiniz.");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Bozuk evrak referansı temizlenemedi. SoforId={SoforId}, EvrakTanimId={EvrakTanimId}", soforId, evrak.EvrakTanimId);
+            ToastService.ShowError("Bozuk dosya kaydı temizlenemedi.");
         }
     }
 

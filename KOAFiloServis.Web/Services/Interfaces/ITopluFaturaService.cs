@@ -26,11 +26,6 @@ public interface ITopluFaturaService
     Task<TopluFaturaSonuc> TekFaturaOlusturAsync(TopluFaturaOnizleme onizleme, int? firmaId = null);
     
     /// <summary>
-    /// Puantaj kayıtlarını fatura ile eşleştirir (fatura kesildikten sonra)
-    /// </summary>
-    Task<bool> PuantajFaturaEslestirAsync(int faturaId, List<int> puantajKayitIdleri, FaturaYonu yon);
-    
-    /// <summary>
     /// Cari için varsayılan fatura ayarlarını getirir
     /// </summary>
     Task<CariFaturaAyar?> GetCariFaturaAyarAsync(int cariId);

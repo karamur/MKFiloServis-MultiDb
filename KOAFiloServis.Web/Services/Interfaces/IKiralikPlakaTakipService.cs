@@ -11,7 +11,8 @@ public interface IKiralikPlakaTakipService
     Task DeleteAsync(int id);
     Task<byte[]> GetExcelSablonAsync();
     Task<KiralikPlakaImportResult> ImportFromExcelAsync(byte[] fileContent);
-    Task<int> EslestirmeYapAsync();
+    Task<AracEslestirmeSonuc> EslestirmeYapAsync();
+    Task<int> FaturaEslestirmeYapAsync();
 }
 
 public class KiralikPlakaImportResult
@@ -23,4 +24,12 @@ public class KiralikPlakaImportResult
     public List<string> Errors { get; set; } = new();
     public List<string> SkippedRecords { get; set; } = new();
     public bool Success { get; set; }
+}
+
+public class AracEslestirmeSonuc
+{
+    public int Eslesen { get; set; }
+    public int CokluAdayNedeniyleAtlanan { get; set; }
+    public int PasifAracNedeniyleAtlanan { get; set; }
+    public int EslesmeBulunamayan { get; set; }
 }

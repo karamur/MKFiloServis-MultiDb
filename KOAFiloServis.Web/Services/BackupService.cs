@@ -1669,11 +1669,11 @@ public class BackupService : IBackupService
                 await ZipKlasorEkleAsync(archive, kaynakYol, klasorAdi, storageRoot, cancellationToken);
             }
 
-            // Master key doğrulaması
-            var masterKeyEntry = archive.GetEntry("keys/master.key");
-            if (masterKeyEntry == null)
+            // Create modda archive.GetEntry/Entries erişimi yapılmamalı.
+            // Güvence için kaynak dosya varlığını kullanıyoruz (yukarıda da kontrol edildi).
+            if (!File.Exists(masterKeyPath))
             {
-                result.ErrorMessage = "ZIP içinde keys/master.key bulunamadı.";
+                result.ErrorMessage = "Kaynak depolamada keys/master.key bulunamadı.";
                 _logger.LogError(result.ErrorMessage);
                 return result;
             }

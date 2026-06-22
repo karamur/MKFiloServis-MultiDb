@@ -63,6 +63,11 @@ public class Arac : BaseEntity, IKopyalanabilirTenant, IFirmaTenant
     public virtual TasimaTedarikci? TasimaTedarikci { get; set; }
 
     // Geriye dönük uyumluluk için araç üzerindeki belge tarihleri
+    // Ruhsat için bitiş tarihi kullanılmaz; bu üç tarih takip edilir.
+    public DateTime? RuhsatTrafigeCikisTarihi { get; set; }
+    public DateTime? RuhsatSatisTarihi { get; set; }
+    public DateTime? RuhsatTescilTarihi { get; set; }
+
     public DateTime? TrafikSigortaBitisTarihi { get; set; }
     public DateTime? KaskoBitisTarihi { get; set; }
     public DateTime? MuayeneBitisTarihi { get; set; }

@@ -11,13 +11,20 @@ public class AracService : IAracService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly ISecureFileService _secureFileService;
+    private readonly IEvrakArsivService _evrakArsivService;
     private readonly ICacheService _cache;
     private readonly IAktifFirmaProvider _aktifFirmaProvider;
 
-    public AracService(IDbContextFactory<ApplicationDbContext> contextFactory, ISecureFileService secureFileService, ICacheService cache, IAktifFirmaProvider aktifFirmaProvider)
+    public AracService(
+        IDbContextFactory<ApplicationDbContext> contextFactory,
+        ISecureFileService secureFileService,
+        IEvrakArsivService evrakArsivService,
+        ICacheService cache,
+        IAktifFirmaProvider aktifFirmaProvider)
     {
         _contextFactory = contextFactory;
         _secureFileService = secureFileService;
+        _evrakArsivService = evrakArsivService;
         _cache = cache;
         _aktifFirmaProvider = aktifFirmaProvider;
     }
@@ -253,7 +260,7 @@ public class AracService : IAracService
         try
         {
             // Mevcut kaydı veritabanından al
-            var existing = await context.Araclar.FindAsync(arac.Id);
+            var existing = await context.Araclar.FirstOrDefaultAsync(a => a.Id == arac.Id && !a.IsDeleted);
             if (existing == null)
                 throw new InvalidOperationException("Araç bulunamadı.");
 
@@ -319,7 +326,7 @@ public class AracService : IAracService
         await using var context = await _contextFactory.CreateDbContextAsync();
         var arac = await context.Araclar
             .Include(a => a.PlakaGecmisi.Where(p => !p.IsDeleted))
-            .FirstOrDefaultAsync(a => a.Id == id);
+            .FirstOrDefaultAsync(a => a.Id == id && !a.IsDeleted);
 
         if (arac != null)
         {
@@ -388,7 +395,7 @@ public class AracService : IAracService
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.AracPlakalar
             .Include(ap => ap.Cari)
-            .Where(ap => ap.AracId == aracId)
+            .Where(ap => ap.AracId == aracId && !ap.IsDeleted)
             .OrderByDescending(ap => ap.GirisTarihi)
             .ToListAsync();
     }
@@ -403,7 +410,7 @@ public class AracService : IAracService
         
         // Mevcut aktif plakayı kapat
         var mevcutAktif = await context.AracPlakalar
-            .FirstOrDefaultAsync(ap => ap.AracId == aracId && ap.CikisTarihi == null);
+            .FirstOrDefaultAsync(ap => ap.AracId == aracId && !ap.IsDeleted && ap.CikisTarihi == null);
             
         if (mevcutAktif != null)
         {
@@ -426,7 +433,7 @@ public class AracService : IAracService
         context.AracPlakalar.Add(yeniPlakaKaydi);
         
         // Araçtaki aktif plakayı güncelle
-        var arac = await context.Araclar.FindAsync(aracId);
+        var arac = await context.Araclar.FirstOrDefaultAsync(a => a.Id == aracId && !a.IsDeleted);
         if (arac != null)
         {
             arac.AktifPlaka = yeniPlaka;
@@ -447,7 +454,7 @@ public class AracService : IAracService
         if (await PlakaMevcutMu(plakaText, yeniPlaka.Id > 0 ? yeniPlaka.Id : null))
             throw new InvalidOperationException($"Bu plaka ({plakaText}) başka bir araçta aktif olarak kullanılıyor.");
 
-        var arac = await context.Araclar.FindAsync(yeniPlaka.AracId);
+        var arac = await context.Araclar.FirstOrDefaultAsync(a => a.Id == yeniPlaka.AracId && !a.IsDeleted);
         if (arac == null)
             throw new InvalidOperationException("Araç bulunamadı.");
 
@@ -507,7 +514,7 @@ public class AracService : IAracService
         await using var context = await _contextFactory.CreateDbContextAsync();
         var plakaKaydi = await context.AracPlakalar
             .Include(ap => ap.Arac)
-            .FirstOrDefaultAsync(ap => ap.Id == aracPlakaId);
+            .FirstOrDefaultAsync(ap => ap.Id == aracPlakaId && !ap.IsDeleted);
             
         if (plakaKaydi == null)
             throw new InvalidOperationException("Plaka kaydı bulunamadı.");
@@ -534,7 +541,7 @@ public class AracService : IAracService
     
     private async Task GuncelleAktifPlaka(ApplicationDbContext context, int aracId)
     {
-        var arac = await context.Araclar.FindAsync(aracId);
+        var arac = await context.Araclar.FirstOrDefaultAsync(a => a.Id == aracId && !a.IsDeleted);
         if (arac == null) return;
         
         // CikisTarihi null olan veya CikisTarihi bugünden sonra olan plakalardan en son eklenen
@@ -558,7 +565,7 @@ public class AracService : IAracService
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Araclar
             .Include(a => a.PlakaGecmisi.Where(p => !p.IsDeleted))
-            .Where(a => a.SatisaAcik && a.Aktif)
+            .Where(a => a.SatisaAcik && a.Aktif && !a.IsDeleted)
             .OrderBy(a => a.SatisaAcilmaTarihi)
             .ToListAsync();
     }
@@ -566,7 +573,7 @@ public class AracService : IAracService
     public async Task AracSatisaAc(int aracId, decimal satisFiyati, string? aciklama = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var arac = await context.Araclar.FindAsync(aracId);
+        var arac = await context.Araclar.FirstOrDefaultAsync(a => a.Id == aracId && !a.IsDeleted);
         if (arac == null)
             throw new InvalidOperationException("Araç bulunamadı.");
             
@@ -582,7 +589,7 @@ public class AracService : IAracService
     public async Task AracSatisKapat(int aracId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var arac = await context.Araclar.FindAsync(aracId);
+        var arac = await context.Araclar.FirstOrDefaultAsync(a => a.Id == aracId && !a.IsDeleted);
         if (arac == null)
             throw new InvalidOperationException("Araç bulunamadı.");
             
@@ -603,8 +610,8 @@ public class AracService : IAracService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.AracEvraklari
-            .Include(e => e.Dosyalar)
-            .Where(e => e.AracId == aracId)
+            .Include(e => e.Dosyalar.Where(d => !d.IsDeleted))
+            .Where(e => e.AracId == aracId && !e.IsDeleted)
             .OrderBy(e => e.EvrakKategorisi)
             .ThenByDescending(e => e.BitisTarihi)
             .ToListAsync();
@@ -614,8 +621,8 @@ public class AracService : IAracService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.AracEvraklari
-            .Include(e => e.Dosyalar)
-            .FirstOrDefaultAsync(e => e.Id == evrakId);
+            .Include(e => e.Dosyalar.Where(d => !d.IsDeleted))
+            .FirstOrDefaultAsync(e => e.Id == evrakId && !e.IsDeleted);
     }
 
     public async Task<AracEvrak> CreateAracEvrakAsync(AracEvrak evrak)
@@ -652,8 +659,8 @@ public class AracService : IAracService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var evrak = await context.AracEvraklari
-            .Include(e => e.Dosyalar)
-            .FirstOrDefaultAsync(e => e.Id == evrakId);
+            .Include(e => e.Dosyalar.Where(d => !d.IsDeleted))
+            .FirstOrDefaultAsync(e => e.Id == evrakId && !e.IsDeleted);
 
         if (evrak != null)
         {
@@ -661,6 +668,7 @@ public class AracService : IAracService
             foreach (var dosya in evrak.Dosyalar)
             {
                 await _secureFileService.DeleteAsync(dosya.DosyaYolu);
+                dosya.IsDeleted = true;
             }
 
             evrak.IsDeleted = true;
@@ -726,7 +734,7 @@ public class AracService : IAracService
         var evrak = await context.AracEvraklari
             .Include(e => e.Arac)
                 .ThenInclude(a => a!.Firma)
-            .FirstOrDefaultAsync(e => e.Id == evrakId);
+            .FirstOrDefaultAsync(e => e.Id == evrakId && !e.IsDeleted);
         if (evrak == null)
             throw new Exception("Evrak bulunamadi");
 
@@ -745,31 +753,56 @@ public class AracService : IAracService
         var normPlaka = AppStoragePaths.NormalizeFolderName(plaka).Replace(" ", "").Replace("-", "");
         var normEvrak = AppStoragePaths.NormalizeFolderName(evrak.EvrakKategorisi ?? "Evrak").Replace(" ", "").Replace("-", "");
         var arsivDosyaAdi = $"{normPlaka}{normEvrak}_{DateTime.Now:yyyyMMdd_HHmmss}{uzanti}";
-
-        var storedPath = await _secureFileService.SaveEncryptedAsync(
-            $"{AppStoragePaths.AracEvrakRelativeRoot}/{aracKlasoru}",
-            arsivDosyaAdi,
-            icerik);
-
-        var evrakDosya = new AracEvrakDosya
+        string? storedPath = null;
+        try
         {
-            AracEvrakId = evrakId,
-            DosyaAdi = arsivDosyaAdi,
-            DosyaYolu = storedPath,
-            DosyaTipi = uzanti.TrimStart('.').ToLower(),
-            DosyaBoyutu = icerik.LongLength,
-            CreatedAt = DateTime.UtcNow
-        };
+            storedPath = await _secureFileService.SaveEncryptedAsync(
+                $"{AppStoragePaths.AracEvrakRelativeRoot}/{aracKlasoru}",
+                arsivDosyaAdi,
+                icerik);
 
-        context.AracEvrakDosyalari.Add(evrakDosya);
-        await context.SaveChangesAsync();
-        return evrakDosya;
+            // Arşiv kopyaları (şifreli + şifresiz) - BelgeUyariService akışıyla aynı.
+            var sasiNo = evrak.Arac?.SaseNo ?? evrak.AracId.ToString();
+            try
+            {
+                await _evrakArsivService.ArsivleAracEvrakAsync(plaka, sasiNo, evrak.EvrakKategorisi ?? "Evrak", icerik, uzanti);
+            }
+            catch
+            {
+                // Arşivleme hatası ana upload akışını kesmemeli.
+            }
+
+            var evrakDosya = new AracEvrakDosya
+            {
+                AracEvrakId = evrakId,
+                DosyaAdi = arsivDosyaAdi,
+                DosyaYolu = storedPath,
+                DosyaTipi = uzanti.TrimStart('.').ToLower(),
+                DosyaBoyutu = icerik.LongLength,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            context.AracEvrakDosyalari.Add(evrakDosya);
+            await context.SaveChangesAsync();
+            return evrakDosya;
+        }
+        catch
+        {
+            if (!string.IsNullOrWhiteSpace(storedPath))
+            {
+                try { await _secureFileService.DeleteAsync(storedPath); } catch { }
+            }
+
+            throw;
+        }
     }
 
     public async Task<byte[]> GetEvrakDosyaAsync(int dosyaId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var dosya = await context.AracEvrakDosyalari.FindAsync(dosyaId);
+        var dosya = await context.AracEvrakDosyalari
+            .Include(d => d.AracEvrak)
+            .FirstOrDefaultAsync(d => d.Id == dosyaId && !d.IsDeleted && d.AracEvrak != null && !d.AracEvrak.IsDeleted);
         if (dosya == null)
             throw new Exception("Dosya bulunamadi");
 
@@ -783,7 +816,9 @@ public class AracService : IAracService
     public async Task DeleteEvrakDosyaAsync(int dosyaId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var dosya = await context.AracEvrakDosyalari.FindAsync(dosyaId);
+        var dosya = await context.AracEvrakDosyalari
+            .Include(d => d.AracEvrak)
+            .FirstOrDefaultAsync(d => d.Id == dosyaId && !d.IsDeleted && d.AracEvrak != null && !d.AracEvrak.IsDeleted);
         if (dosya != null)
         {
             await _secureFileService.DeleteAsync(dosya.DosyaYolu);

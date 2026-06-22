@@ -126,6 +126,28 @@
                     </div>
                 </div>
 
+                <h5 class="border-bottom pb-2 mb-3 mt-4"><i class="bi bi-card-text me-2"></i>Ruhsat Tarihleri</h5>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">Trafiğe Çıkış Tarihi</label>
+                            <InputDate @bind-Value="arac.RuhsatTrafigeCikisTarihi" class="form-control" />
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">Satış Tarihi</label>
+                            <InputDate @bind-Value="arac.RuhsatSatisTarihi" class="form-control" />
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">Tescil Tarihi</label>
+                            <InputDate @bind-Value="arac.RuhsatTescilTarihi" class="form-control" />
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Sahiplik ve Kiralama Bilgileri -->
                 <h5 class="border-bottom pb-2 mb-3 mt-4"><i class="bi bi-building me-2"></i>Sahiplik & Kiralama Bilgileri</h5>
                 <div class="row">
@@ -439,6 +461,7 @@
                                         @foreach (var evrak in katEvraklari)
                                         {
                                             var durumClass = GetEvrakDurumClass(evrak);
+                                            var oncelikliDosya = GetOncelikliDosya(evrak);
                                             <tr>
                                                 <td>
                                                     <span class="badge @GetKategoriBadgeClass(evrak.EvrakKategorisi)">
@@ -479,6 +502,18 @@
                                                 </td>
                                                 <td class="text-end">
                                                     <div class="btn-group btn-group-sm">
+                                                        @if (oncelikliDosya != null)
+                                                        {
+                                                            <button class="btn btn-outline-info" @onclick="() => DosyaOnizle(oncelikliDosya)" title="Önizle">
+                                                                <i class="bi bi-search"></i>
+                                                            </button>
+                                                            <button class="btn btn-outline-warning" @onclick="() => DosyaYazdir(oncelikliDosya)" title="Yazdır">
+                                                                <i class="bi bi-printer"></i>
+                                                            </button>
+                                                            <button class="btn btn-outline-success" @onclick="() => DosyaGonder(oncelikliDosya)" title="Gönder">
+                                                                <i class="bi bi-send"></i>
+                                                            </button>
+                                                        }
                                                         <button class="btn btn-outline-primary" @onclick="() => EvrakDetayGoster(evrak)" title="Detay">
                                                             <i class="bi bi-eye"></i>
                                                         </button>
@@ -658,6 +693,15 @@
                                         <small class="text-muted ms-2">(@FormatDosyaBoyutu(dosya.DosyaBoyutu))</small>
                                     </div>
                                     <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-info" @onclick="() => DosyaOnizle(dosya)" title="Önizle">
+                                            <i class="bi bi-search"></i>
+                                        </button>
+                                        <button class="btn btn-outline-warning" @onclick="() => DosyaYazdir(dosya)" title="Yazdır">
+                                            <i class="bi bi-printer"></i>
+                                        </button>
+                                        <button class="btn btn-outline-success" @onclick="() => DosyaGonder(dosya)" title="Gönder">
+                                            <i class="bi bi-send"></i>
+                                        </button>
                                         <button class="btn btn-outline-primary" @onclick="() => DosyaIndir(dosya)" title="İndir">
                                             <i class="bi bi-download"></i>
                                         </button>
@@ -681,6 +725,79 @@
                         <i class="bi bi-upload me-1"></i>Dosya Yükle
                     </button>
                     <button type="button" class="btn btn-secondary" @onclick="EvrakDetayKapat">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Dosya Önizleme Modal *@
+@if (showDosyaOnizlemeModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.35);">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content" style="height:90vh;">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">
+                        <i class="bi bi-eye me-2"></i>
+                        @onizlemeBaslik
+                        @if (!string.IsNullOrWhiteSpace(onizlemeDosyaAdi))
+                        {
+                            <span class="text-muted small ms-2">— @onizlemeDosyaAdi</span>
+                        }
+                    </h6>
+                    <div class="d-flex gap-2 align-items-center">
+                        @if (!string.IsNullOrWhiteSpace(onizlemeDataUrl) && onizlemeDosya != null)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-success"
+                                    @onclick="() => DosyaIndir(onizlemeDosya)" title="İndir">
+                                <i class="bi bi-download"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-warning"
+                                    @onclick="() => DosyaYazdir(onizlemeDosya)" title="Yazdır">
+                                <i class="bi bi-printer"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary"
+                                    @onclick="() => DosyaGonder(onizlemeDosya)" title="Gönder">
+                                <i class="bi bi-send"></i>
+                            </button>
+                        }
+                        <button type="button" class="btn-close btn-sm" @onclick="DosyaOnizlemeKapat"></button>
+                    </div>
+                </div>
+                <div class="modal-body p-0" style="background:#3a3a3a;">
+                    @if (onizlemeYukleniyor)
+                    {
+                        <div class="d-flex justify-content-center align-items-center h-100">
+                            <div class="spinner-border text-light"></div>
+                        </div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(onizlemeHata))
+                    {
+                        <div class="d-flex justify-content-center align-items-center h-100 text-light">
+                            <div class="text-center">
+                                <i class="bi bi-exclamation-triangle display-4 text-warning"></i>
+                                <p class="mt-3">@onizlemeHata</p>
+                                @if (onizlemeDosya != null)
+                                {
+                                    <button type="button" class="btn btn-success btn-sm"
+                                            @onclick="() => DosyaIndir(onizlemeDosya)">
+                                        <i class="bi bi-download me-1"></i>Dosyayı İndir
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+                    else if (onizlemeTipi == "pdf")
+                    {
+                        <iframe src="@onizlemeDataUrl" style="width:100%;height:100%;border:0;" title="PDF Önizleme"></iframe>
+                    }
+                    else if (onizlemeTipi == "image")
+                    {
+                        <div class="d-flex justify-content-center align-items-center h-100 p-2">
+                            <img src="@onizlemeDataUrl" alt="Belge" style="max-width:100%;max-height:100%;object-fit:contain;" />
+                        </div>
+                    }
                 </div>
             </div>
         </div>
@@ -823,6 +940,14 @@
     private IBrowserFile? secilenDosya;
     private bool evrakKaydediliyor = false;
     private bool dosyaYukleniyor = false;
+    private bool showDosyaOnizlemeModal = false;
+    private bool onizlemeYukleniyor = false;
+    private string? onizlemeDataUrl;
+    private string onizlemeTipi = string.Empty; // "pdf" | "image"
+    private string onizlemeBaslik = string.Empty;
+    private string onizlemeDosyaAdi = string.Empty;
+    private string? onizlemeHata;
+    private AracEvrakDosya? onizlemeDosya;
 
     protected override async Task OnInitializedAsync()
     {
@@ -916,6 +1041,7 @@
         showYeniEvrakModal = false;
         showEvrakDetayModal = false;
         showDosyaYukleModal = false;
+        showDosyaOnizlemeModal = false;
     }
 
     private async Task EvraklariYukle()
@@ -1285,6 +1411,120 @@
         }
     }
 
+    private async Task DosyaOnizle(AracEvrakDosya dosya)
+    {
+        showDosyaOnizlemeModal = true;
+        onizlemeYukleniyor = true;
+        onizlemeDataUrl = null;
+        onizlemeTipi = string.Empty;
+        onizlemeHata = null;
+        onizlemeDosya = dosya;
+        onizlemeBaslik = seciliEvrak?.EvrakKategorisi ?? "Belge";
+        onizlemeDosyaAdi = dosya.DosyaAdi ?? string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var content = await AracService.GetEvrakDosyaAsync(dosya.Id);
+            if (content == null || content.Length == 0)
+            {
+                onizlemeHata = "Dosya okunamadı veya boş.";
+                return;
+            }
+
+            var uzanti = GetRealExtension(dosya);
+            var mime = GetMimeType(uzanti.TrimStart('.'));
+            if (uzanti == ".pdf")
+            {
+                onizlemeTipi = "pdf";
+                onizlemeDataUrl = $"data:{mime};base64,{Convert.ToBase64String(content)}";
+            }
+            else if (uzanti is ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp")
+            {
+                onizlemeTipi = "image";
+                onizlemeDataUrl = $"data:{mime};base64,{Convert.ToBase64String(content)}";
+            }
+            else
+            {
+                onizlemeHata = $"Bu dosya türü ({uzanti}) için önizleme desteklenmiyor. Dosyayı indirip görüntüleyebilirsiniz.";
+            }
+        }
+        catch (Exception ex)
+        {
+            onizlemeHata = $"Önizleme yüklenemedi: {ex.Message}";
+        }
+        finally
+        {
+            onizlemeYukleniyor = false;
+            StateHasChanged();
+        }
+    }
+
+    private void DosyaOnizlemeKapat()
+    {
+        showDosyaOnizlemeModal = false;
+        onizlemeYukleniyor = false;
+        onizlemeDataUrl = null;
+        onizlemeTipi = string.Empty;
+        onizlemeBaslik = string.Empty;
+        onizlemeDosyaAdi = string.Empty;
+        onizlemeHata = null;
+        onizlemeDosya = null;
+    }
+
+    private async Task DosyaYazdir(AracEvrakDosya dosya)
+    {
+        try
+        {
+            var content = await AracService.GetEvrakDosyaAsync(dosya.Id);
+            if (content == null || content.Length == 0)
+            {
+                ToastService.ShowWarning("Yazdırılacak dosya bulunamadı.");
+                return;
+            }
+
+            var uzanti = GetRealExtension(dosya);
+            var mime = GetMimeType(uzanti.TrimStart('.'));
+            if (uzanti == ".pdf" || uzanti is ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp")
+            {
+                await JS.InvokeVoidAsync("printBase64File", Convert.ToBase64String(content), mime);
+            }
+            else
+            {
+                ToastService.ShowWarning($"Bu dosya türü ({uzanti}) için yazdırma desteklenmiyor.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Yazdırma hatası: {ex.Message}");
+        }
+    }
+
+    private async Task DosyaGonder(AracEvrakDosya dosya)
+    {
+        try
+        {
+            var content = await AracService.GetEvrakDosyaAsync(dosya.Id);
+            if (content == null || content.Length == 0)
+            {
+                ToastService.ShowWarning("Gönderilecek dosya bulunamadı.");
+                return;
+            }
+
+            var fileName = dosya.DosyaAdi ?? $"dosya.{dosya.DosyaTipi}";
+            var mime = GetMimeType(dosya.DosyaTipi);
+            var paylasildi = await JS.InvokeAsync<bool>("shareBase64File", fileName, Convert.ToBase64String(content), mime);
+            if (!paylasildi)
+            {
+                ToastService.ShowInfo("Bu cihazda paylaşım desteklenmiyor, dosya indirildi.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Gönderme hatası: {ex.Message}");
+        }
+    }
+
     private async Task DosyaSil(AracEvrakDosya dosya)
     {
         try
@@ -1389,6 +1629,15 @@
         return "";
     }
 
+    private static AracEvrakDosya? GetOncelikliDosya(AracEvrak evrak)
+    {
+        return evrak.Dosyalar?
+            .Where(d => !d.IsDeleted)
+            .OrderByDescending(d => d.CreatedAt)
+            .ThenByDescending(d => d.Id)
+            .FirstOrDefault();
+    }
+
     private string GetDosyaIkon(string? dosyaTipi) => dosyaTipi?.ToLower() switch
     {
         "pdf" => "bi-file-earmark-pdf text-danger",
@@ -1409,10 +1658,24 @@
         "pdf" => "application/pdf",
         "jpg" or "jpeg" => "image/jpeg",
         "png" => "image/png",
+        "gif" => "image/gif",
+        "bmp" => "image/bmp",
+        "webp" => "image/webp",
         "doc" => "application/msword",
         "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         _ => "application/octet-stream"
     };
+
+    private static string GetRealExtension(AracEvrakDosya dosya)
+    {
+        if (!string.IsNullOrWhiteSpace(dosya.DosyaTipi))
+            return "." + dosya.DosyaTipi.Trim().TrimStart('.').ToLowerInvariant();
+
+        var ad = dosya.DosyaAdi ?? string.Empty;
+        while (ad.EndsWith(".enc", StringComparison.OrdinalIgnoreCase))
+            ad = ad[..^4];
+        return Path.GetExtension(ad).ToLowerInvariant();
+    }
 
     #endregion
 }

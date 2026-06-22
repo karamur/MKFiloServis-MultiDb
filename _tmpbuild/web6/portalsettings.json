@@ -1,0 +1,246 @@
+{
+  "LandingPageEnabled": false,
+  "CompanyName": "Allbatros Global Teknoloji",
+  "SupportEmail": "info@allglb.com",
+  "SupportPhone": "0850 000 00 00",
+  "SupportLocation": "Ankara/ T\u00FCrkiye",
+  "TopbarMessage": "Kurumsal dan\u0131\u015Fmanl\u0131k, bordro ve dijital d\u00F6n\u00FC\u015F\u00FCm",
+  "HeroTitle": "\u0130\u015F s\u00FCre\u00E7lerinizi tek merkezden y\u00F6netin",
+  "HeroSubtitle": "Profesyonel \u00FCr\u00FCn giri\u015F ekran\u0131 \u00FCzerinden projenizi se\u00E7in, ard\u0131ndan g\u00FCvenli \u015Fekilde sisteme devam edin.",
+  "Content": {
+    "BrowserTitle": "Portal - Koa Teknoloji",
+    "BrandTagline": "Kurumsal \u00E7\u00F6z\u00FCm portal\u0131",
+    "Navigation": {
+      "AboutText": "Hakk\u0131m\u0131zda",
+      "ServicesText": "Hizmetler",
+      "ProjectsText": "Dijital \u00C7\u00F6z\u00FCmler",
+      "ContactText": "\u0130leti\u015Fim"
+    },
+    "Hero": {
+      "BadgeText": "Kurumsal \u00C7\u00F6z\u00FCm Portal\u0131",
+      "Title": "\u0130\u015F s\u00FCre\u00E7lerinizi tek merkezden y\u00F6netin",
+      "Subtitle": "Kurumsal portal \u00FCzerinden projenizi se\u00E7in ve g\u00FCvenli giri\u015Fe devam edin.",
+      "PrimaryButtonText": "Programa Ge\u00E7",
+      "SecondaryButtonText": "Teklif Al",
+      "Highlights": [
+        "Public web sayfas\u0131 ve y\u00F6netim paneli ayn\u0131 \u00E7\u00F6z\u00FCm i\u00E7inde kurgulanabilir",
+        "Yetki kontroll\u00FC giri\u015F, personel ve bordro y\u00F6netimi tek portalda toplan\u0131r",
+        "Kurumsal tasar\u0131m, \u00FCr\u00FCn se\u00E7imi ve login ak\u0131\u015F\u0131 marka b\u00FCt\u00FCnl\u00FC\u011F\u00FCyle sunulur"
+      ],
+      "Stats": [
+        {
+          "Value": "12\u002B",
+          "Label": "Kurumsal mod\u00FCl yakla\u015F\u0131m\u0131"
+        },
+        {
+          "Value": "7/24",
+          "Label": "Portal eri\u015Fimi"
+        },
+        {
+          "Value": "%100",
+          "Label": "Y\u00F6netilebilir i\u00E7erik kurgusu"
+        }
+      ],
+      "FlowEyebrow": "Portal Ak\u0131\u015F\u0131",
+      "FlowTitle": "3 ad\u0131mda giri\u015F",
+      "FlowSteps": [
+        {
+          "Number": "01",
+          "Title": "Kurumsal \u00E7\u00F6z\u00FCm\u00FC se\u00E7in",
+          "Description": "Aktif projeler aras\u0131ndan ihtiyac\u0131n\u0131za uygun \u00FCr\u00FCn\u00FC se\u00E7in."
+        },
+        {
+          "Number": "02",
+          "Title": "Giri\u015F ekran\u0131na ilerleyin",
+          "Description": "Se\u00E7ti\u011Finiz \u00FCr\u00FCn i\u00E7in markalanm\u0131\u015F giri\u015F sayfas\u0131na ge\u00E7in."
+        },
+        {
+          "Number": "03",
+          "Title": "Sisteme devam edin",
+          "Description": "Kullan\u0131c\u0131 hesab\u0131n\u0131zla oturum a\u00E7\u0131p operasyon ekranlar\u0131na ge\u00E7in."
+        }
+      ]
+    },
+    "About": {
+      "Tag": "Hakk\u0131m\u0131zda",
+      "Title": "Mali s\u00FCre\u00E7leri, bordroyu ve kurumsal operasyonu tek \u00E7at\u0131 alt\u0131nda topluyoruz",
+      "Description": "Koa Teknoloji; mali dan\u0131\u015Fmanl\u0131k, personel s\u00FCre\u00E7leri, bordro operasyonlar\u0131 ve y\u00F6netim raporlar\u0131n\u0131 dijitalle\u015Ftiren \u00E7\u00F6z\u00FCmler \u00FCretir. Public tan\u0131t\u0131m sayfas\u0131 ile kurumsal uygulama giri\u015Fini ayn\u0131 yap\u0131da birle\u015Ftirerek marka b\u00FCt\u00FCnl\u00FC\u011F\u00FC sa\u011Flar.",
+      "PanelTitle": "Neler sa\u011Fl\u0131yoruz?",
+      "Cards": [
+        {
+          "Icon": "bi bi-briefcase",
+          "Title": "Operasyon ve finans birlikte",
+          "Description": "Muhasebe, bordro ve \u015Firket s\u00FCre\u00E7lerini ayr\u0131 ekranlar yerine tek kurgu \u00FCzerinden y\u00F6netin."
+        },
+        {
+          "Icon": "bi bi-shield-check",
+          "Title": "Yetki bazl\u0131 y\u00F6netim",
+          "Description": "Aktif/pasif kullan\u0131c\u0131 kontrol\u00FC, men\u00FC g\u00F6r\u00FCn\u00FCrl\u00FC\u011F\u00FC ve rol bazl\u0131 eri\u015Fim merkezi olarak y\u00F6netilir."
+        },
+        {
+          "Icon": "bi bi-globe2",
+          "Title": "Public \u002B uygulama entegrasyonu",
+          "Description": "Tan\u0131t\u0131m sitesi ile kurumsal uygulama ge\u00E7i\u015Fi tek k\u00F6k domain veya ayr\u0131 \u00E7al\u0131\u015Fan yap\u0131 ile sunulabilir."
+        }
+      ],
+      "Features": [
+        {
+          "Icon": "",
+          "Title": "Kurumsal i\u00E7erik y\u00F6netimi",
+          "Description": "Hizmetler, ekip, referanslar ve \u00E7a\u011Fr\u0131 alanlar\u0131 markaya uygun olarak d\u00FCzenlenir."
+        },
+        {
+          "Icon": "",
+          "Title": "Bordro ve personel oda\u011F\u0131",
+          "Description": "Personel listesi, bordro t\u00FCrleri ve finansal s\u00FCre\u00E7ler uygulama taraf\u0131na entegre edilir."
+        },
+        {
+          "Icon": "",
+          "Title": "Test edilebilir ak\u0131\u015F",
+          "Description": "Kullan\u0131c\u0131 senaryolar\u0131 Playwright ile do\u011Frulanarak yay\u0131n \u00F6ncesi g\u00FCvence sa\u011Flan\u0131r."
+        }
+      ]
+    },
+    "Services": {
+      "Tag": "Hizmetler",
+      "Title": "Kurumsal ihtiya\u00E7lara g\u00F6re \u015Fekillenen \u00E7\u00F6z\u00FCm ba\u015Fl\u0131klar\u0131",
+      "Description": "Muhasebe ve bordrodan yaz\u0131l\u0131m altyap\u0131s\u0131na kadar u\u00E7tan uca destek verin, ayn\u0131 zamanda kullan\u0131c\u0131lar\u0131 tek bir giri\u015F ak\u0131\u015F\u0131nda toplay\u0131n.",
+      "Cards": [
+        {
+          "Icon": "bi bi-calculator",
+          "Title": "Mali dan\u0131\u015Fmanl\u0131k ve raporlama",
+          "Description": "Kurumsal m\u00FC\u015Fteriler i\u00E7in finansal g\u00F6r\u00FCn\u00FCrl\u00FCk olu\u015Fturan mod\u00FCler ekranlar.",
+          "Bullets": [
+            "Ayl\u0131k finans \u00F6zetleri",
+            "Y\u00F6netim raporlar\u0131",
+            "B\u00FCt\u00E7e ve \u00F6deme ak\u0131\u015F\u0131"
+          ]
+        },
+        {
+          "Icon": "bi bi-people",
+          "Title": "Personel ve bordro s\u00FCre\u00E7leri",
+          "Description": "\u0130\u015Fe giri\u015Ften \u00E7\u0131k\u0131\u015Fa kadar personel hareketlerini ve bordro hesaplamalar\u0131n\u0131 tek panelden y\u00F6netin.",
+          "Bullets": [
+            "Normal ve AR-GE bordro",
+            "\u0130zin ve maa\u015F y\u00F6netimi",
+            "\u00C7\u0131k\u0131\u015F tarihine g\u00F6re hesaplama"
+          ]
+        },
+        {
+          "Icon": "bi bi-window-stack",
+          "Title": "Kurumsal portal ve giri\u015F deneyimi",
+          "Description": "Public sayfa, proje se\u00E7imi ve kullan\u0131c\u0131 login ak\u0131\u015F\u0131 markal\u0131 deneyimle sunulur.",
+          "Bullets": [
+            "Anonim tan\u0131t\u0131m sayfas\u0131",
+            "Projeye \u00F6zel login y\u00F6nlendirme",
+            "Aktif/pasif proje yay\u0131n\u0131"
+          ]
+        }
+      ]
+    },
+    "Projects": {
+      "Tag": "Projeler",
+      "Title": "Kurumsal uygulamalar\u0131n\u0131z\u0131 tek kap\u0131da toplay\u0131n",
+      "Description": "Bu alana yeni projeler ekleyebilir, aktif olanlar\u0131 do\u011Frudan login ekran\u0131na ba\u011Flayabilirsiniz.",
+      "ReadyBadgeText": "Giri\u015Fe Haz\u0131r",
+      "SoonBadgeText": "Yak\u0131nda",
+      "OpenButtonText": "Projeyi Se\u00E7 ve Giri\u015Fe Git",
+      "SoonButtonText": "Yak\u0131nda Aktif Olacak"
+    },
+    "Team": {
+      "Tag": "Ekip",
+      "Title": "Alan uzmanl\u0131\u011F\u0131 ile teknolojiyi ayn\u0131 masada bulu\u015Fturan ekip",
+      "Description": "Yaz\u0131l\u0131m, bordro, mali s\u00FCre\u00E7ler ve operasyon y\u00F6netimini birlikte ele alan disiplinler aras\u0131 yap\u0131.",
+      "Members": [
+        {
+          "Initials": "KT",
+          "Name": "Koa Teknoloji Ekibi",
+          "Role": "\u00DCr\u00FCn Y\u00F6netimi",
+          "Description": "Kurumsal ihtiya\u00E7lar\u0131 yaz\u0131l\u0131m mimarisi ve kullan\u0131m senaryolar\u0131na d\u00F6n\u00FC\u015Ft\u00FCr\u00FCr."
+        },
+        {
+          "Initials": "MY",
+          "Name": "Mali Operasyon",
+          "Role": "Mali S\u00FCre\u00E7ler",
+          "Description": "Muhasebe, bordro ve raporlama ihtiya\u00E7lar\u0131n\u0131n uygulama taraf\u0131na do\u011Fru yans\u0131mas\u0131n\u0131 sa\u011Flar."
+        },
+        {
+          "Initials": "PY",
+          "Name": "Portal Y\u00F6netimi",
+          "Role": "Kullan\u0131c\u0131 Deneyimi",
+          "Description": "Public sayfa, giri\u015F ekran\u0131 ve y\u00F6netim paneli aras\u0131ndaki ak\u0131\u015F\u0131 sadele\u015Ftirir."
+        },
+        {
+          "Initials": "QA",
+          "Name": "Test Ekibi",
+          "Role": "Kalite G\u00FCvencesi",
+          "Description": "Playwright senaryolar\u0131 ile kritik kullan\u0131c\u0131 yolculuklar\u0131n\u0131 otomatik do\u011Frular."
+        }
+      ]
+    },
+    "Contact": {
+      "Tag": "\u0130leti\u015Fim",
+      "Title": "Kurumsal tan\u0131t\u0131m sayfan\u0131z\u0131 ve y\u00F6netim panelinizi birlikte kural\u0131m",
+      "Description": "\u0130ster sadece public tan\u0131t\u0131m ekran\u0131, ister login ba\u011Flant\u0131l\u0131 tam kurumsal portal kurgusu isteyin; ayn\u0131 proje i\u00E7inde y\u00F6netilebilir bir yap\u0131 sunuyoruz.",
+      "PrimaryButtonText": "Login Ak\u0131\u015F\u0131n\u0131 A\u00E7",
+      "SecondaryButtonText": "E-posta G\u00F6nder",
+      "SecondaryButtonUrl": "mailto:info@allglb.com",
+      "Cards": [
+        {
+          "Icon": "bi bi-layout-text-window",
+          "Title": "Public web yay\u0131n\u0131",
+          "Description": "Markan\u0131za uygun ana sayfa, hizmet kartlar\u0131 ve ileti\u015Fim alanlar\u0131yla yay\u0131n al\u0131n."
+        },
+        {
+          "Icon": "bi bi-toggles",
+          "Title": "Y\u00F6netim ekran\u0131",
+          "Description": "Kullan\u0131c\u0131, proje veya mod\u00FCl bazl\u0131 aktif/pasif kontrol mekanizmalar\u0131 ekleyin."
+        },
+        {
+          "Icon": "bi bi-robot",
+          "Title": "Test otomasyonu",
+          "Description": "Selenium yerine Playwright temelli kullan\u0131c\u0131 testleriyle yay\u0131n kalitesini y\u00FCkseltin."
+        },
+        {
+          "Icon": "bi bi-git",
+          "Title": "Yay\u0131n ve versiyonlama",
+          "Description": "Kod g\u00F6zden ge\u00E7irme sonras\u0131 GitHub ak\u0131\u015F\u0131 ile de\u011Fi\u015Fiklikleri kontroll\u00FC y\u00F6netin."
+        }
+      ]
+    }
+  },
+  "Projects": [
+    {
+      "Slug": "http://allglb.com/",
+      "Name": "Koa Filo Servis",
+      "BrandHighlight": "Koa Filo Servis",
+      "Category": "Filo Y\u00F6netimi",
+      "Subtitle": "Filo operasyonu, muhasebe ve servis s\u00FCre\u00E7leri tek panelde.",
+      "Description": "Ara\u00E7, s\u00FCr\u00FCc\u00FC, cari, muhasebe ve servis operasyonlar\u0131n\u0131 kurumsal bir ak\u0131\u015Fla y\u00F6netin.",
+      "Icon": "bi bi-truck",
+      "ThemeColor": "#1e3c72",
+      "LoginEnabled": true,
+      "Highlights": [
+        "Operasyon ve ara\u00E7 y\u00F6netimi",
+        "Muhasebe ve raporlama mod\u00FClleri",
+        "Kurumsal kullan\u0131c\u0131 giri\u015F ak\u0131\u015F\u0131"
+      ]
+    },
+    {
+      "Slug": "gelecek-proje",
+      "Name": "Yeni Proje Alan\u0131",
+      "BrandHighlight": "Yeni Proje",
+      "Category": "Yak\u0131nda",
+      "Subtitle": "Ayn\u0131 portal alt\u0131nda yeni uygulamalar ekleyin.",
+      "Description": "Bu alan, ileride sisteme eklenecek di\u011Fer projeleri ziyaret\u00E7ilere sunmak i\u00E7in haz\u0131rland\u0131.",
+      "Icon": "bi bi-grid-1x2-fill",
+      "ThemeColor": "#2a5298",
+      "LoginEnabled": false,
+      "Highlights": [
+        "\u00C7oklu proje deste\u011Fi",
+        "Kurumsal kar\u015F\u0131lama sayfas\u0131",
+        "Geni\u015Fletilebilir portal yap\u0131s\u0131"
+      ]
+    }
+  ]
+}

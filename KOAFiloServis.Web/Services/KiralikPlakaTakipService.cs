@@ -36,8 +36,11 @@ public class KiralikPlakaTakipService : IKiralikPlakaTakipService
     public async Task<KiralikPlakaTakip> CreateAsync(KiralikPlakaTakip entity)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
+        await EnsureNoDuplicateDonemAsync(context, entity);
         entity.CreatedAt = DateTime.UtcNow;
-        entity.AracId = await FindAracIdByPlakaAsync(context, entity.Plaka);
+        entity.AracId ??= await TryFindUniqueActiveAracIdByPlakaAsync(context, entity.Plaka);
+        // Manuel fatura girişi kullanılacak; otomatik fatura eşleştirme uygulanmıyor.
+        ApplyCalculatedFields(entity);
         context.KiralikPlakaTakipler.Add(entity);
         await context.SaveChangesAsync();
         return entity;
@@ -46,12 +49,14 @@ public class KiralikPlakaTakipService : IKiralikPlakaTakipService
     public async Task<KiralikPlakaTakip> UpdateAsync(KiralikPlakaTakip entity)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var existing = await context.KiralikPlakaTakipler.FindAsync(entity.Id);
+        var existing = await context.KiralikPlakaTakipler
+            .AsTracking()
+            .FirstOrDefaultAsync(x => !x.IsDeleted && x.Id == entity.Id);
         if (existing == null) throw new InvalidOperationException("Kayıt bulunamadı.");
-        
+
         existing.Plaka = entity.Plaka;
-        // Kullanıcı dropdown'dan bir araç seçmişse onu koru; seçmemişse plakaya göre otomatik bul
-        existing.AracId = entity.AracId ?? await FindAracIdByPlakaAsync(context, entity.Plaka);
+        // Manuel seçim öncelikli: kullanıcı eşleşmeyi kaldırdıysa AracId=null korunur.
+        existing.AracId = entity.AracId;
         existing.IsimSoyisim = entity.IsimSoyisim;
         existing.BaslamaTarihi = entity.BaslamaTarihi;
         existing.BitisTarihi = entity.BitisTarihi;
@@ -69,11 +74,15 @@ public class KiralikPlakaTakipService : IKiralikPlakaTakipService
         existing.ToplamOdeme = entity.ToplamOdeme;
         existing.OdenenTutar = entity.OdenenTutar;
         existing.SonOdemeTarihi = entity.SonOdemeTarihi?.Date;
+        await EnsureNoDuplicateDonemAsync(context, existing);
+        // Manuel fatura girişi kullanılacak; otomatik fatura eşleştirme uygulanmıyor.
+        ApplyCalculatedFields(existing);
         existing.UpdatedAt = DateTime.UtcNow;
 
         await context.SaveChangesAsync();
         return existing;
     }
+
 
     public async Task DeleteAsync(int id)
     {
@@ -179,7 +188,8 @@ public class KiralikPlakaTakipService : IKiralikPlakaTakipService
                     decimal tutar = ParseDecimal(ws.Cell(row, 9));
                     decimal ekTutar = ParseDecimal(ws.Cell(row, 10));
 
-                    var existing = await context.KiralikPlakaTakipler.FirstOrDefaultAsync(x => x.Plaka == plaka && !x.IsDeleted);
+                    var normalizedPlaka = NormalizePlaka(plaka);
+                    var existing = await FindByNormalizedPlakaAsync(context, normalizedPlaka);
                     if (existing == null)
                     {
                         var entity = new KiralikPlakaTakip
@@ -194,9 +204,11 @@ public class KiralikPlakaTakipService : IKiralikPlakaTakipService
                             Periyot = periyot,
                             AylikVeyaYillikTutar = tutar,
                             EkTutar = ekTutar,
-                            AracId = await FindAracIdByPlakaAsync(context, plaka),
+                            AracId = await TryFindUniqueActiveAracIdByPlakaAsync(context, plaka),
                             CreatedAt = DateTime.UtcNow
                         };
+                        await EnsureNoDuplicateDonemAsync(context, entity);
+                        ApplyCalculatedFields(entity);
                         context.KiralikPlakaTakipler.Add(entity);
                         result.ImportedCount++;
                     }
@@ -211,7 +223,10 @@ public class KiralikPlakaTakipService : IKiralikPlakaTakipService
                         existing.Periyot = periyot;
                         existing.AylikVeyaYillikTutar = tutar;
                         existing.EkTutar = ekTutar;
-                        existing.AracId = await FindAracIdByPlakaAsync(context, plaka);
+                        // Excel import güncellemesinde manuel eşleşmeyi bozma: sadece gerçekten boşsa otomatik dene.
+                        existing.AracId ??= await TryFindUniqueActiveAracIdByPlakaAsync(context, plaka);
+                        await EnsureNoDuplicateDonemAsync(context, existing);
+                        ApplyCalculatedFields(existing);
                         existing.UpdatedAt = DateTime.UtcNow;
                         result.UpdatedCount++;
                     }
@@ -256,50 +271,118 @@ public class KiralikPlakaTakipService : IKiralikPlakaTakipService
         return new string(plaka.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
     }
 
-    private static async Task<int?> FindAracIdByPlakaAsync(ApplicationDbContext context, string? plaka)
+    private static async Task<int?> TryFindUniqueActiveAracIdByPlakaAsync(ApplicationDbContext context, string? plaka)
     {
         var p = NormalizePlaka(plaka);
         if (string.IsNullOrEmpty(p)) return null;
 
-        // Aktif plakalarda boşluk/tire normalize ederek ara (DB tarafında REPLACE)
-        var activeMatch = await context.Araclar
+        // Aktif ve silinmemiş araçlardan normalize aktif plaka eşleşmeleri
+        var aktifPlakaAdaylari = await context.Araclar
+            .Where(a => !a.IsDeleted && a.Aktif && a.AktifPlaka != null
+                && a.AktifPlaka.ToUpper().Replace(" ", "").Replace("-", "") == p)
+            .Select(a => a.Id)
+            .ToListAsync();
+
+        if (aktifPlakaAdaylari.Count == 1)
+            return aktifPlakaAdaylari[0];
+
+        if (aktifPlakaAdaylari.Count > 1)
+            return null;
+
+        // Aktif araçların plaka geçmişinde eşleşme ara
+        var gecmisAdaylari = await context.AracPlakalar
+            .Where(ap => !ap.IsDeleted && ap.Plaka != null
+                && ap.Plaka.ToUpper().Replace(" ", "").Replace("-", "") == p
+                && ap.Arac != null && !ap.Arac.IsDeleted && ap.Arac.Aktif)
+            .OrderByDescending(ap => ap.GirisTarihi)
+            .Select(ap => ap.AracId)
+            .Distinct()
+            .ToListAsync();
+
+        return gecmisAdaylari.Count == 1 ? gecmisAdaylari[0] : null;
+    }
+
+    private static async Task<(int? AracId, bool CokluAday, bool PasifAdayVar)> EvaluateAracMatchByPlakaAsync(ApplicationDbContext context, string? plaka)
+    {
+        var p = NormalizePlaka(plaka);
+        if (string.IsNullOrEmpty(p)) return (null, false, false);
+
+        var tumAktifPlakaAdaylari = await context.Araclar
             .Where(a => !a.IsDeleted && a.AktifPlaka != null
                 && a.AktifPlaka.ToUpper().Replace(" ", "").Replace("-", "") == p)
-            .Select(a => (int?)a.Id)
-            .FirstOrDefaultAsync();
-        if (activeMatch.HasValue) return activeMatch;
+            .Select(a => new { a.Id, a.Aktif })
+            .ToListAsync();
 
-        // Aktifte yoksa plaka geçmişinde ara
-        return await context.AracPlakalar
+        var aktifPlakaAdaylari = tumAktifPlakaAdaylari.Where(x => x.Aktif).Select(x => x.Id).Distinct().ToList();
+        var pasifAdayVar = tumAktifPlakaAdaylari.Any(x => !x.Aktif);
+
+        if (aktifPlakaAdaylari.Count > 1)
+            return (null, true, pasifAdayVar);
+
+        if (aktifPlakaAdaylari.Count == 1)
+            return (aktifPlakaAdaylari[0], false, pasifAdayVar);
+
+        var tumGecmisAdaylari = await context.AracPlakalar
             .Where(ap => !ap.IsDeleted && ap.Plaka != null
                 && ap.Plaka.ToUpper().Replace(" ", "").Replace("-", "") == p
                 && ap.Arac != null && !ap.Arac.IsDeleted)
             .OrderByDescending(ap => ap.GirisTarihi)
-            .Select(ap => (int?)ap.AracId)
-            .FirstOrDefaultAsync();
+            .Select(ap => new { ap.AracId, ap.Arac!.Aktif })
+            .ToListAsync();
+
+        var aktifGecmisAdaylari = tumGecmisAdaylari.Where(x => x.Aktif).Select(x => x.AracId).Distinct().ToList();
+        pasifAdayVar = pasifAdayVar || tumGecmisAdaylari.Any(x => !x.Aktif);
+
+        if (aktifGecmisAdaylari.Count > 1)
+            return (null, true, pasifAdayVar);
+
+        if (aktifGecmisAdaylari.Count == 1)
+            return (aktifGecmisAdaylari[0], false, pasifAdayVar);
+
+        return (null, false, pasifAdayVar);
     }
 
-    public async Task<int> EslestirmeYapAsync()
+    public async Task<AracEslestirmeSonuc> EslestirmeYapAsync()
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var eslesmeyenler = await context.KiralikPlakaTakipler
             .Where(x => !x.IsDeleted && x.AracId == null)
             .ToListAsync();
 
-        int eslesen = 0;
+        var sonuc = new AracEslestirmeSonuc();
+
         foreach (var kayit in eslesmeyenler)
         {
-            var aracId = await FindAracIdByPlakaAsync(context, kayit.Plaka);
-            if (aracId.HasValue)
+            var degerlendirme = await EvaluateAracMatchByPlakaAsync(context, kayit.Plaka);
+            if (degerlendirme.AracId.HasValue)
             {
-                kayit.AracId = aracId;
+                kayit.AracId = degerlendirme.AracId.Value;
                 kayit.UpdatedAt = DateTime.UtcNow;
-                eslesen++;
+                sonuc.Eslesen++;
+            }
+            else if (degerlendirme.CokluAday)
+            {
+                sonuc.CokluAdayNedeniyleAtlanan++;
+            }
+            else if (degerlendirme.PasifAdayVar)
+            {
+                sonuc.PasifAracNedeniyleAtlanan++;
+            }
+            else
+            {
+                sonuc.EslesmeBulunamayan++;
             }
         }
 
-        if (eslesen > 0) await context.SaveChangesAsync();
-        return eslesen;
+        if (sonuc.Eslesen > 0) await context.SaveChangesAsync();
+        return sonuc;
+    }
+
+    public async Task<int> FaturaEslestirmeYapAsync()
+    {
+        // FAZ: Manuel fatura girişi. Otomatik fatura eşleştirme devre dışı.
+        await Task.CompletedTask;
+        return 0;
     }
 
     private static string? NormalizePeriyot(string? value)
@@ -326,6 +409,117 @@ public class KiralikPlakaTakipService : IKiralikPlakaTakipService
             return invValue;
 
         return 0;
+    }
+
+    private static void ApplyCalculatedFields(KiralikPlakaTakip entity)
+    {
+        if (entity.ToplamOdeme <= 0)
+            entity.ToplamOdeme = entity.Toplam;
+
+        if (entity.KesilenFaturaTutar > 0)
+            entity.KalanFaturaTutar = Math.Max(0, entity.KesilenFaturaTutar - entity.OdenenTutar);
+    }
+
+    private static async Task EnsureNoDuplicateDonemAsync(ApplicationDbContext context, KiralikPlakaTakip entity)
+    {
+        var p = NormalizePlaka(entity.Plaka);
+        if (string.IsNullOrEmpty(p))
+            throw new InvalidOperationException("Plaka boş olamaz.");
+
+        var sameDonemCandidates = await context.KiralikPlakaTakipler
+            .Where(x => !x.IsDeleted && x.Id != entity.Id)
+            .Where(x =>
+                x.BaslamaTarihi.Date == entity.BaslamaTarihi.Date &&
+                x.BitisTarihi.Date == entity.BitisTarihi.Date &&
+                x.Periyot == entity.Periyot)
+            .Select(x => x.Plaka)
+            .ToListAsync();
+
+        var hasDuplicate = sameDonemCandidates.Any(existingPlaka => NormalizePlaka(existingPlaka) == p);
+
+        if (hasDuplicate)
+            throw new InvalidOperationException("Aynı plaka ve ödeme dönemi için kayıt zaten mevcut.");
+    }
+
+    private static async Task<KiralikPlakaTakip?> FindByNormalizedPlakaAsync(ApplicationDbContext context, string normalizedPlaka)
+    {
+        if (string.IsNullOrWhiteSpace(normalizedPlaka)) return null;
+
+        var sqlNormalized = normalizedPlaka.Replace(" ", "").Replace("-", "");
+        var candidates = await context.KiralikPlakaTakipler
+            .Where(x => !x.IsDeleted && x.Plaka != null
+                && x.Plaka.ToUpper().Replace(" ", "").Replace("-", "") == sqlNormalized)
+            .OrderByDescending(x => x.Id)
+            .Take(20)
+            .ToListAsync();
+
+        return candidates.FirstOrDefault(x => NormalizePlaka(x.Plaka) == normalizedPlaka)
+               ?? candidates.FirstOrDefault();
+    }
+
+    private static async Task ApplyFaturaEslemeAsync(ApplicationDbContext context, KiralikPlakaTakip entity)
+    {
+        Fatura? fatura = null;
+
+        var kesilenNo = (entity.KesilenFaturaNo ?? string.Empty).Trim();
+        var cokluFaturaGirisi = kesilenNo.Contains(';') || kesilenNo.Contains(',') || kesilenNo.Contains('|');
+
+        if (entity.GelenFaturaId.HasValue && entity.GelenFaturaId.Value > 0)
+        {
+            fatura = await context.Faturalar
+                .FirstOrDefaultAsync(f => !f.IsDeleted && f.Id == entity.GelenFaturaId.Value);
+        }
+
+        if (fatura == null && !string.IsNullOrWhiteSpace(entity.KesilenFaturaNo) && !cokluFaturaGirisi)
+        {
+            var no = entity.KesilenFaturaNo.Trim().ToUpperInvariant();
+            fatura = await context.Faturalar
+                .Where(f => !f.IsDeleted && f.FaturaNo == no)
+                .OrderByDescending(f => f.FaturaTarihi)
+                .FirstOrDefaultAsync();
+        }
+
+        if (fatura == null && !cokluFaturaGirisi)
+        {
+            var hedefTutar = entity.KesilenFaturaTutar > 0
+                ? entity.KesilenFaturaTutar
+                : (entity.AylikVeyaYillikTutar > 0 ? entity.AylikVeyaYillikTutar : entity.FaturaOdemesi);
+
+            var baslangic = entity.BaslamaTarihi.Date;
+            var bitis = entity.BitisTarihi.Date;
+
+            var adaylar = await context.Faturalar
+                .Where(f => !f.IsDeleted
+                            && f.FaturaTarihi.Date >= baslangic
+                            && f.FaturaTarihi.Date <= bitis
+                            && !context.KiralikPlakaTakipler.Any(k => !k.IsDeleted && k.Id != entity.Id && k.GelenFaturaId == f.Id))
+                .OrderByDescending(f => f.FaturaTarihi)
+                .Take(200)
+                .ToListAsync();
+
+            fatura = adaylar
+                .OrderBy(f => Math.Abs(f.GenelToplam - hedefTutar))
+                .ThenByDescending(f => f.FaturaTarihi)
+                .FirstOrDefault();
+        }
+
+        if (fatura == null)
+        {
+            if (cokluFaturaGirisi)
+            {
+                entity.GelenFaturaId = null;
+                entity.KalanFaturaTutar = Math.Max(0, entity.KesilenFaturaTutar - entity.OdenenTutar);
+            }
+            return;
+        }
+
+        entity.GelenFaturaId = fatura.Id;
+        entity.KesilenFaturaNo = fatura.FaturaNo;
+        entity.KesilenFaturaTarih = fatura.FaturaTarihi.Date;
+        entity.KesilenFaturaTutar = fatura.GenelToplam;
+        entity.KalanFaturaTutar = Math.Max(0, fatura.GenelToplam - entity.OdenenTutar);
+        if (entity.ToplamOdeme <= 0)
+            entity.ToplamOdeme = entity.Toplam;
     }
 }
 

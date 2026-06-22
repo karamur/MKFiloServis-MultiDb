@@ -177,7 +177,7 @@ public sealed class PuantajEngineService : IPuantajEngineService
                     pk.TransferDurum = ilk.TransferDurum;
                     pk.Notlar = ilk.Notlar;
                     pk.UpdatedAt = DateTime.UtcNow;
-                    KurumPuantajService.EnsurePuantajDefaults(pk);
+                    EnsurePuantajDefaults(pk);
 
                     if (guzergahlar.TryGetValue(guzergahId, out var g))
                     {
@@ -326,5 +326,21 @@ public sealed class PuantajEngineService : IPuantajEngineService
                 HesaplananTutar = d.HesaplananTutar
             })
             .ToListAsync(ct);
+    }
+
+    private static void EnsurePuantajDefaults(PuantajKayit kayit)
+    {
+        if (kayit.OnayDurum == default)
+            kayit.OnayDurum = PuantajOnayDurum.Taslak;
+        if (kayit.GelirOdemeDurumu == default)
+            kayit.GelirOdemeDurumu = PuantajOdemeDurum.Odenmedi;
+        if (kayit.GiderOdemeDurumu == default)
+            kayit.GiderOdemeDurumu = PuantajOdemeDurum.Odenmedi;
+        if (kayit.SoforOdemeTipi == default)
+            kayit.SoforOdemeTipi = SoforOdemeTipi.Ozmal;
+        if (kayit.Kaynak == default)
+            kayit.Kaynak = PuantajKaynak.Manuel;
+        if (kayit.Yon == default)
+            kayit.Yon = PuantajYon.SabahAksam;
     }
 }

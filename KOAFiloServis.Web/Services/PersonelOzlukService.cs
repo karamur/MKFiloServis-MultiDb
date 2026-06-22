@@ -11,10 +11,14 @@ namespace KOAFiloServis.Web.Services;
 public class PersonelOzlukService : IPersonelOzlukService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+    private readonly ISecureFileService _secureFileService;
 
-    public PersonelOzlukService(IDbContextFactory<ApplicationDbContext> contextFactory)
+    public PersonelOzlukService(
+        IDbContextFactory<ApplicationDbContext> contextFactory,
+        ISecureFileService secureFileService)
     {
         _contextFactory = contextFactory;
+        _secureFileService = secureFileService;
         QuestPDF.Settings.License = LicenseType.Community;
     }
 
@@ -43,7 +47,8 @@ public class PersonelOzlukService : IPersonelOzlukService
     public async Task<OzlukEvrakTanim?> GetEvrakTanimByIdAsync(int id)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.OzlukEvrakTanimlari.FindAsync(id);
+        return await context.OzlukEvrakTanimlari
+            .FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted);
     }
 
     public async Task<OzlukEvrakTanim> CreateEvrakTanimAsync(OzlukEvrakTanim tanim)
@@ -58,7 +63,8 @@ public class PersonelOzlukService : IPersonelOzlukService
     public async Task<OzlukEvrakTanim> UpdateEvrakTanimAsync(OzlukEvrakTanim tanim)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var existing = await context.OzlukEvrakTanimlari.FindAsync(tanim.Id);
+        var existing = await context.OzlukEvrakTanimlari
+            .FirstOrDefaultAsync(t => t.Id == tanim.Id && !t.IsDeleted);
         if (existing == null)
             throw new InvalidOperationException("Evrak tanımı bulunamadı.");
 
@@ -78,7 +84,8 @@ public class PersonelOzlukService : IPersonelOzlukService
     public async Task DeleteEvrakTanimAsync(int id)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var tanim = await context.OzlukEvrakTanimlari.FindAsync(id);
+        var tanim = await context.OzlukEvrakTanimlari
+            .FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted);
         if (tanim == null)
             return;
 
@@ -243,12 +250,22 @@ public class PersonelOzlukService : IPersonelOzlukService
     public async Task<PersonelOzlukEvrakDurum> GetPersonelEvrakDurumuAsync(int soforId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var personel = await context.Soforler.FindAsync(soforId);
+        var personel = await context.Soforler.FirstOrDefaultAsync(s => s.Id == soforId && !s.IsDeleted);
         if (personel == null)
             throw new InvalidOperationException("Personel bulunamadı.");
 
         var evrakTanimlari = await GetGecerliEvrakTanimlariAsync(context, personel.Gorev);
         var personelEvraklari = await GetPersonelEvraklariAsync(soforId);
+        var evrakByTanimId = personelEvraklari
+            .GroupBy(e => e.EvrakTanimId)
+            .ToDictionary(
+                g => g.Key,
+                g => g
+                    .OrderByDescending(e => !string.IsNullOrWhiteSpace(e.DosyaYolu))
+                    .ThenByDescending(e => e.TamamlanmaTarihi ?? DateTime.MinValue)
+                    .ThenByDescending(e => e.UpdatedAt ?? e.CreatedAt)
+                    .ThenByDescending(e => e.Id)
+                    .First());
 
         var durum = new PersonelOzlukEvrakDurum
         {
@@ -262,7 +279,9 @@ public class PersonelOzlukService : IPersonelOzlukService
 
         foreach (var tanim in evrakTanimlari)
         {
-            var personelEvrak = personelEvraklari.FirstOrDefault(e => e.EvrakTanimId == tanim.Id);
+            evrakByTanimId.TryGetValue(tanim.Id, out var personelEvrak);
+            var dosyaVar = !string.IsNullOrWhiteSpace(personelEvrak?.DosyaYolu);
+            var tamamlandi = personelEvrak?.Tamamlandi == true && dosyaVar;
 
             durum.Evraklar.Add(new OzlukEvrakDetay
             {
@@ -270,8 +289,8 @@ public class PersonelOzlukService : IPersonelOzlukService
                 EvrakAdi = tanim.EvrakAdi,
                 Kategori = tanim.Kategori,
                 Zorunlu = tanim.Zorunlu,
-                Tamamlandi = personelEvrak?.Tamamlandi ?? false,
-                TamamlanmaTarihi = personelEvrak?.TamamlanmaTarihi,
+                Tamamlandi = tamamlandi,
+                TamamlanmaTarihi = tamamlandi ? personelEvrak?.TamamlanmaTarihi : null,
                 GecerlilikBitisTarihi = personelEvrak?.GecerlilikBitisTarihi,
                 DosyaYolu = personelEvrak?.DosyaYolu,
                 Aciklama = personelEvrak?.Aciklama ?? tanim.Aciklama
@@ -304,6 +323,75 @@ public class PersonelOzlukService : IPersonelOzlukService
         }
 
         return result;
+    }
+
+    public async Task<List<PersonelEvrakDosyaListeItem>> GetEvrakDosyaListesiAsync(int soforId, int evrakTanimId)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var result = new List<PersonelEvrakDosyaListeItem>();
+
+        var aktifKayitlar = await context.PersonelOzlukEvraklar
+            .Where(e => e.SoforId == soforId && e.EvrakTanimId == evrakTanimId && !e.IsDeleted && !string.IsNullOrWhiteSpace(e.DosyaYolu))
+            .OrderByDescending(e => e.UpdatedAt ?? e.CreatedAt)
+            .ThenByDescending(e => e.Id)
+            .ToListAsync();
+
+        foreach (var e in aktifKayitlar)
+        {
+            var dosyaAdi = !string.IsNullOrWhiteSpace(e.DosyaAdi)
+                ? e.DosyaAdi!
+                : EncExtensionTemizle(Path.GetFileName(e.DosyaYolu!));
+            var contentType = !string.IsNullOrWhiteSpace(e.DosyaTipi) ? e.DosyaTipi! : GetContentTypeFromName(dosyaAdi);
+            result.Add(new PersonelEvrakDosyaListeItem
+            {
+                PersonelEvrakId = e.Id,
+                VersiyonId = null,
+                GuncelKayit = true,
+                EvrakTanimId = evrakTanimId,
+                DosyaAdi = dosyaAdi,
+                ContentType = contentType,
+                DosyaBoyutu = e.DosyaBoyutu ?? 0,
+                Tarih = e.UpdatedAt ?? e.CreatedAt
+            });
+
+        }
+
+        var versiyonlar = await context.PersonelOzlukEvrakVersiyonlar
+            .Where(v =>
+                !v.IsDeleted &&
+                !string.IsNullOrWhiteSpace(v.DosyaYolu) &&
+                v.PersonelOzlukEvrak != null &&
+                !v.PersonelOzlukEvrak.IsDeleted &&
+                v.PersonelOzlukEvrak.SoforId == soforId &&
+                v.PersonelOzlukEvrak.EvrakTanimId == evrakTanimId)
+            .OrderByDescending(v => v.OlusturmaTarihi)
+            .ThenByDescending(v => v.VersiyonNo)
+            .ThenByDescending(v => v.Id)
+            .ToListAsync();
+
+        foreach (var v in versiyonlar)
+        {
+            var dosyaAdi = !string.IsNullOrWhiteSpace(v.DosyaAdi)
+                ? v.DosyaAdi!
+                : EncExtensionTemizle(Path.GetFileName(v.DosyaYolu!));
+            var contentType = !string.IsNullOrWhiteSpace(v.DosyaTipi) ? v.DosyaTipi! : GetContentTypeFromName(dosyaAdi);
+            result.Add(new PersonelEvrakDosyaListeItem
+            {
+                PersonelEvrakId = v.PersonelOzlukEvrakId,
+                VersiyonId = v.Id,
+                GuncelKayit = false,
+                EvrakTanimId = evrakTanimId,
+                DosyaAdi = dosyaAdi,
+                ContentType = contentType,
+                DosyaBoyutu = v.DosyaBoyutu ?? 0,
+                Tarih = v.OlusturmaTarihi
+            });
+        }
+
+        return result
+            .OrderByDescending(x => x.Tarih)
+            .ThenByDescending(x => x.GuncelKayit)
+            .ToList();
     }
 
     public async Task<PersonelOzlukEvrak> EvrakIsaretle(int soforId, int evrakTanimId, bool tamamlandi, string? aciklama = null)
@@ -341,53 +429,367 @@ public class PersonelOzlukService : IPersonelOzlukService
         string? dosyaAdi = null, string? dosyaTipi = null, long? dosyaBoyutu = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var existing = await context.PersonelOzlukEvraklar
-            .FirstOrDefaultAsync(e => e.SoforId == soforId && e.EvrakTanimId == evrakTanimId && !e.IsDeleted);
+        var aktifKayitlar = await context.PersonelOzlukEvraklar
+            .Where(e => e.SoforId == soforId && e.EvrakTanimId == evrakTanimId && !e.IsDeleted)
+            .ToListAsync();
 
-        if (existing != null)
+        var simdi = DateTime.UtcNow;
+        var kaydedilecekDosyaAdi = !string.IsNullOrWhiteSpace(dosyaAdi)
+            ? dosyaAdi
+            : Path.GetFileName(dosyaYolu);
+
+        var anaKayit = aktifKayitlar
+            .OrderByDescending(e => !string.IsNullOrWhiteSpace(e.DosyaYolu))
+            .ThenByDescending(e => e.Tamamlandi)
+            .ThenByDescending(e => e.Id)
+            .FirstOrDefault();
+
+        if (anaKayit != null)
         {
-            // 🔴 Duplicate upload → update (overwrite YOK, versiyon artar)
-            existing.VersiyonNo++;
-            existing.SonDegisiklikNotu = $"Re-upload: {dosyaAdi}";
-            existing.DosyaYolu = dosyaYolu;
-            existing.DosyaAdi = dosyaAdi ?? existing.DosyaAdi;
-            existing.DosyaTipi = dosyaTipi ?? existing.DosyaTipi;
-            existing.DosyaBoyutu = dosyaBoyutu ?? existing.DosyaBoyutu;
-            existing.Tamamlandi = true;
-            existing.TamamlanmaTarihi = DateTime.UtcNow;
-            existing.UpdatedAt = DateTime.UtcNow;
+            var oncekiDosyaYolu = anaKayit.DosyaYolu;
+            var oncekiDosyaAdi = anaKayit.DosyaAdi;
+            var oncekiDosyaTipi = anaKayit.DosyaTipi;
+            var oncekiDosyaBoyutu = anaKayit.DosyaBoyutu;
+            var oncekiVersiyonNo = Math.Max(1, anaKayit.VersiyonNo);
 
-            // Versiyon geçmişi kaydı
-            context.PersonelOzlukEvrakVersiyonlar.Add(new PersonelOzlukEvrakVersiyon
+            // Aynı SoforId + EvrakTanimId için tek aktif kayıt bırak.
+            foreach (var duplikat in aktifKayitlar.Where(e => e.Id != anaKayit.Id))
             {
-                PersonelOzlukEvrakId = existing.Id,
-                VersiyonNo = existing.VersiyonNo,
-                DosyaYolu = dosyaYolu,
-                DosyaAdi = dosyaAdi,
-                DosyaTipi = dosyaTipi,
-                OlusturmaTarihi = DateTime.UtcNow
-            });
+                duplikat.IsDeleted = true;
+                duplikat.DeletedAt = simdi;
+                duplikat.UpdatedAt = simdi;
+            }
+
+            if (!string.IsNullOrWhiteSpace(oncekiDosyaYolu))
+            {
+                context.PersonelOzlukEvrakVersiyonlar.Add(new PersonelOzlukEvrakVersiyon
+                {
+                    PersonelOzlukEvrakId = anaKayit.Id,
+                    VersiyonNo = oncekiVersiyonNo,
+                    DosyaYolu = oncekiDosyaYolu,
+                    DosyaAdi = oncekiDosyaAdi,
+                    DosyaTipi = oncekiDosyaTipi,
+                    DosyaBoyutu = oncekiDosyaBoyutu,
+                    DegisiklikNotu = $"Arsiv: {oncekiDosyaAdi ?? Path.GetFileName(oncekiDosyaYolu)}",
+                    OlusturmaTarihi = simdi
+                });
+            }
+
+            anaKayit.VersiyonNo = oncekiVersiyonNo + 1;
+            anaKayit.SonDegisiklikNotu = $"Re-upload: {kaydedilecekDosyaAdi}";
+            anaKayit.DosyaYolu = dosyaYolu;
+            anaKayit.DosyaAdi = kaydedilecekDosyaAdi;
+            anaKayit.DosyaTipi = dosyaTipi;
+            anaKayit.DosyaBoyutu = dosyaBoyutu;
+            anaKayit.Tamamlandi = true;
+            anaKayit.TamamlanmaTarihi = simdi;
+            anaKayit.UpdatedAt = simdi;
         }
         else
         {
-            existing = new PersonelOzlukEvrak
+            anaKayit = new PersonelOzlukEvrak
             {
                 SoforId = soforId,
                 EvrakTanimId = evrakTanimId,
                 DosyaYolu = dosyaYolu,
-                DosyaAdi = dosyaAdi,
+                DosyaAdi = kaydedilecekDosyaAdi,
                 DosyaTipi = dosyaTipi,
                 DosyaBoyutu = dosyaBoyutu,
                 Tamamlandi = true,
-                TamamlanmaTarihi = DateTime.UtcNow,
+                TamamlanmaTarihi = simdi,
                 VersiyonNo = 1,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = simdi
             };
-            context.PersonelOzlukEvraklar.Add(existing);
+            context.PersonelOzlukEvraklar.Add(anaKayit);
         }
 
         await context.SaveChangesAsync();
-        return existing;
+        return anaKayit;
+    }
+
+    public async Task<PersonelOzlukEvrak> EvrakDuzenle(int soforId, int evrakTanimId, string? aciklama = null,
+        DateTime? gecerlilikBitisTarihi = null, string? sonDegisiklikNotu = null)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var evrak = await context.PersonelOzlukEvraklar
+            .FirstOrDefaultAsync(e => e.SoforId == soforId && e.EvrakTanimId == evrakTanimId && !e.IsDeleted);
+
+        if (evrak == null)
+            throw new InvalidOperationException("Evrak kaydı bulunamadı.");
+
+        var simdi = DateTime.UtcNow;
+
+        // Mevcut dosya varsa eski durumu versiyonla sakla
+        if (!string.IsNullOrWhiteSpace(evrak.DosyaYolu))
+        {
+            // Düzenleme öncesi versiyonu sakla
+            context.PersonelOzlukEvrakVersiyonlar.Add(new PersonelOzlukEvrakVersiyon
+            {
+                PersonelOzlukEvrakId = evrak.Id,
+                VersiyonNo = evrak.VersiyonNo,
+                DosyaYolu = evrak.DosyaYolu,
+                DosyaAdi = evrak.DosyaAdi,
+                DosyaTipi = evrak.DosyaTipi,
+                DosyaBoyutu = evrak.DosyaBoyutu,
+                DegisiklikNotu = sonDegisiklikNotu ?? "Evrak bilgileri güncellendi",
+                OlusturmaTarihi = simdi
+            });
+
+            // Versiyonu artır
+            evrak.VersiyonNo++;
+        }
+
+        // Güncellenebilir alanlar
+        evrak.Aciklama = aciklama ?? evrak.Aciklama;
+        evrak.GecerlilikBitisTarihi = gecerlilikBitisTarihi ?? evrak.GecerlilikBitisTarihi;
+        evrak.SonDegisiklikNotu = sonDegisiklikNotu ?? "";
+        evrak.UpdatedAt = simdi;
+
+        await context.SaveChangesAsync();
+        return evrak;
+    }
+
+    public async Task<PersonelEvrakDosyaIcerik?> GetGuncelEvrakDosyaIcerigiAsync(int soforId, int evrakTanimId)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var aktifKayitlar = await context.PersonelOzlukEvraklar
+            .Where(e =>
+                e.SoforId == soforId &&
+                e.EvrakTanimId == evrakTanimId &&
+                !e.IsDeleted &&
+                !string.IsNullOrWhiteSpace(e.DosyaYolu))
+            .OrderByDescending(e => e.UpdatedAt ?? e.CreatedAt)
+            .ThenByDescending(e => e.TamamlanmaTarihi ?? DateTime.MinValue)
+            .ThenByDescending(e => e.Id)
+            .ToListAsync();
+
+        foreach (var evrak in aktifKayitlar)
+        {
+            if (string.IsNullOrWhiteSpace(evrak.DosyaYolu))
+                continue;
+
+            var content = await TryReadDecryptedWithFallbackAsync(evrak.DosyaYolu);
+            if (content == null || content.Length == 0)
+                continue;
+
+            var dosyaAdi = !string.IsNullOrWhiteSpace(evrak.DosyaAdi)
+                ? evrak.DosyaAdi!
+                : EncExtensionTemizle(Path.GetFileName(evrak.DosyaYolu));
+
+            var contentType = !string.IsNullOrWhiteSpace(evrak.DosyaTipi)
+                ? evrak.DosyaTipi!
+                : GetContentTypeFromName(dosyaAdi);
+
+            return new PersonelEvrakDosyaIcerik
+            {
+                EvrakTanimId = evrak.EvrakTanimId,
+                DosyaAdi = dosyaAdi,
+                ContentType = contentType,
+                Icerik = content
+            };
+        }
+
+        return null;
+    }
+
+    public async Task<PersonelEvrakDosyaIcerik?> GetEvrakDosyaIcerigiAsync(int soforId, int evrakTanimId, int? personelEvrakId, int? versiyonId)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        if (versiyonId.HasValue)
+        {
+            var v = await context.PersonelOzlukEvrakVersiyonlar
+                .Where(x =>
+                    x.Id == versiyonId.Value &&
+                    !x.IsDeleted &&
+                    x.PersonelOzlukEvrak != null &&
+                    !x.PersonelOzlukEvrak.IsDeleted &&
+                    x.PersonelOzlukEvrak.SoforId == soforId &&
+                    x.PersonelOzlukEvrak.EvrakTanimId == evrakTanimId)
+                .FirstOrDefaultAsync();
+            if (v == null || string.IsNullOrWhiteSpace(v.DosyaYolu)) return null;
+
+            var content = await TryReadDecryptedWithFallbackAsync(v.DosyaYolu);
+            if (content == null || content.Length == 0) return null;
+
+            var dosyaAdi = !string.IsNullOrWhiteSpace(v.DosyaAdi) ? v.DosyaAdi! : EncExtensionTemizle(Path.GetFileName(v.DosyaYolu));
+            var contentType = !string.IsNullOrWhiteSpace(v.DosyaTipi) ? v.DosyaTipi! : GetContentTypeFromName(dosyaAdi);
+
+            return new PersonelEvrakDosyaIcerik
+            {
+                EvrakTanimId = evrakTanimId,
+                DosyaAdi = dosyaAdi,
+                ContentType = contentType,
+                Icerik = content
+            };
+        }
+
+        if (personelEvrakId.HasValue)
+        {
+            var e = await context.PersonelOzlukEvraklar
+                .Where(x =>
+                    x.Id == personelEvrakId.Value &&
+                    x.SoforId == soforId &&
+                    x.EvrakTanimId == evrakTanimId &&
+                    !x.IsDeleted)
+                .FirstOrDefaultAsync();
+            if (e == null || string.IsNullOrWhiteSpace(e.DosyaYolu)) return null;
+
+            var content = await TryReadDecryptedWithFallbackAsync(e.DosyaYolu);
+            if (content == null || content.Length == 0) return null;
+
+            var dosyaAdi = !string.IsNullOrWhiteSpace(e.DosyaAdi) ? e.DosyaAdi! : EncExtensionTemizle(Path.GetFileName(e.DosyaYolu));
+            var contentType = !string.IsNullOrWhiteSpace(e.DosyaTipi) ? e.DosyaTipi! : GetContentTypeFromName(dosyaAdi);
+
+            return new PersonelEvrakDosyaIcerik
+            {
+                EvrakTanimId = evrakTanimId,
+                DosyaAdi = dosyaAdi,
+                ContentType = contentType,
+                Icerik = content
+            };
+        }
+
+        return await GetGuncelEvrakDosyaIcerigiAsync(soforId, evrakTanimId);
+    }
+
+    private async Task<byte[]?> TryReadDecryptedWithFallbackAsync(string? dosyaYolu)
+    {
+        if (string.IsNullOrWhiteSpace(dosyaYolu))
+            return null;
+
+        var adayYollar = BuildDosyaYoluAdaylari(dosyaYolu);
+        foreach (var aday in adayYollar)
+        {
+            try
+            {
+                var content = await _secureFileService.ReadDecryptedAsync(aday);
+                if (content != null && content.Length > 0)
+                    return content;
+            }
+            catch
+            {
+                // Bir aday hatalıysa akışı kesme, diğer path formatlarını dene.
+            }
+        }
+
+        return null;
+    }
+
+    private static List<string> BuildDosyaYoluAdaylari(string dosyaYolu)
+    {
+        var adaylar = new List<string>();
+        void Ekle(string? yol)
+        {
+            if (string.IsNullOrWhiteSpace(yol)) return;
+            if (!adaylar.Any(x => string.Equals(x, yol, StringComparison.OrdinalIgnoreCase)))
+                adaylar.Add(yol);
+        }
+
+        Ekle(dosyaYolu);
+
+        var n = dosyaYolu.Replace('\\', '/').Trim();
+        Ekle(n);
+
+        // uploads prefix normalize
+        if (n.StartsWith("uploads/", StringComparison.OrdinalIgnoreCase))
+            Ekle(n["uploads/".Length..]);
+
+        // absolute path içinden Arsiv/... veya uploads/... segmentini çıkar
+        var idxArsiv = n.IndexOf("/Arsiv/", StringComparison.OrdinalIgnoreCase);
+        if (idxArsiv >= 0)
+            Ekle(n[(idxArsiv + 1)..]);
+
+        var idxUploads = n.IndexOf("/uploads/", StringComparison.OrdinalIgnoreCase);
+        if (idxUploads >= 0)
+            Ekle(n[(idxUploads + 1)..]);
+
+        // baştaki slash varyasyonları
+        Ekle(n.TrimStart('/'));
+
+        return adaylar;
+    }
+
+    public async Task DeleteEvrakDosyaAsync(int soforId, int evrakTanimId, int? personelEvrakId, int? versiyonId)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        string? silinecekDosyaYolu = null;
+        var simdi = DateTime.UtcNow;
+
+        if (versiyonId.HasValue)
+        {
+            var versiyon = await context.PersonelOzlukEvrakVersiyonlar
+                .Where(v =>
+                    v.Id == versiyonId.Value &&
+                    !v.IsDeleted &&
+                    v.PersonelOzlukEvrak != null &&
+                    !v.PersonelOzlukEvrak.IsDeleted &&
+                    v.PersonelOzlukEvrak.SoforId == soforId &&
+                    v.PersonelOzlukEvrak.EvrakTanimId == evrakTanimId)
+                .FirstOrDefaultAsync();
+
+            if (versiyon == null)
+                throw new InvalidOperationException("Silinecek dosya bulunamadı.");
+
+            silinecekDosyaYolu = versiyon.DosyaYolu;
+            context.PersonelOzlukEvrakVersiyonlar.Remove(versiyon);
+            await context.SaveChangesAsync();
+
+            var verify = await context.PersonelOzlukEvrakVersiyonlar
+                .AsNoTracking()
+                .FirstOrDefaultAsync(v => v.Id == versiyonId.Value && !v.IsDeleted);
+            if (verify != null)
+                throw new InvalidOperationException("Dosya silme doğrulaması başarısız.");
+        }
+        else if (personelEvrakId.HasValue)
+        {
+            var evrak = await context.PersonelOzlukEvraklar
+                .Where(e =>
+                    e.Id == personelEvrakId.Value &&
+                    e.SoforId == soforId &&
+                    e.EvrakTanimId == evrakTanimId &&
+                    !e.IsDeleted)
+                .FirstOrDefaultAsync();
+
+            if (evrak == null)
+                throw new InvalidOperationException("Silinecek dosya bulunamadı.");
+
+            silinecekDosyaYolu = evrak.DosyaYolu;
+
+            var affected = await context.PersonelOzlukEvraklar
+                .Where(e =>
+                    e.Id == personelEvrakId.Value &&
+                    e.SoforId == soforId &&
+                    e.EvrakTanimId == evrakTanimId &&
+                    !e.IsDeleted)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(x => x.DosyaYolu, (string?)null)
+                    .SetProperty(x => x.DosyaAdi, (string?)null)
+                    .SetProperty(x => x.DosyaTipi, (string?)null)
+                    .SetProperty(x => x.DosyaBoyutu, (long?)null)
+                    .SetProperty(x => x.Tamamlandi, false)
+                    .SetProperty(x => x.TamamlanmaTarihi, (DateTime?)null)
+                    .SetProperty(x => x.UpdatedAt, simdi));
+
+            if (affected != 1)
+                throw new InvalidOperationException("Dosya silinemedi (DB güncellemesi uygulanmadı).");
+
+            var verify = await context.PersonelOzlukEvraklar
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.Id == personelEvrakId.Value && !e.IsDeleted);
+            if (verify == null || !string.IsNullOrWhiteSpace(verify.DosyaYolu))
+                throw new InvalidOperationException("Dosya silme doğrulaması başarısız.");
+        }
+        else
+        {
+            throw new InvalidOperationException("Silinecek dosya parametreleri geçersiz.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(silinecekDosyaYolu))
+        {
+            try { await _secureFileService.DeleteAsync(silinecekDosyaYolu); } catch { }
+        }
     }
 
     /// <summary>
@@ -879,6 +1281,32 @@ public class PersonelOzlukService : IPersonelOzlukService
         OzlukEvrakKategori.Diger => "Diğer",
         _ => "Bilinmiyor"
     };
+
+    private static string EncExtensionTemizle(string dosyaAdi)
+    {
+        while (dosyaAdi.EndsWith(".enc", StringComparison.OrdinalIgnoreCase))
+            dosyaAdi = dosyaAdi[..^4];
+        return dosyaAdi;
+    }
+
+    private static string GetContentTypeFromName(string fileName)
+    {
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        return ext switch
+        {
+            ".pdf" => "application/pdf",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            ".bmp" => "image/bmp",
+            ".doc" => "application/msword",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".xls" => "application/vnd.ms-excel",
+            ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            _ => "application/octet-stream"
+        };
+    }
 
     #endregion
 }

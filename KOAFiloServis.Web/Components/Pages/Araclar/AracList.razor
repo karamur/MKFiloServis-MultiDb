@@ -142,6 +142,32 @@
                     </button>
                 </div>
             </div>
+            <div class="row g-2 align-items-end mt-1">
+                <div class="col-md-2">
+                    <label class="form-label small">Trafiğe Çıkış (Baş)</label>
+                    <input type="date" class="form-control form-control-sm" @bind="filtreRuhsatTrafigeCikisBas" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Trafiğe Çıkış (Bit)</label>
+                    <input type="date" class="form-control form-control-sm" @bind="filtreRuhsatTrafigeCikisBit" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Satış (Baş)</label>
+                    <input type="date" class="form-control form-control-sm" @bind="filtreRuhsatSatisBas" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Satış (Bit)</label>
+                    <input type="date" class="form-control form-control-sm" @bind="filtreRuhsatSatisBit" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Tescil (Baş)</label>
+                    <input type="date" class="form-control form-control-sm" @bind="filtreRuhsatTescilBas" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Tescil (Bit)</label>
+                    <input type="date" class="form-control form-control-sm" @bind="filtreRuhsatTescilBit" />
+                </div>
+            </div>
         </div>
     </div>
 
@@ -217,6 +243,7 @@
                                 <th>Durum</th>
                                 <th>Model Yılı</th>
                                 <th>Koltuk</th>
+                                <th>Ruhsat Tarihleri</th>
                                 <th style="width: 120px;" class="text-center">İşlemler</th>
                             </tr>
                         </thead>
@@ -288,6 +315,13 @@
                                     </td>
                                     <td>@arac.ModelYili</td>
                                     <td>@arac.KoltukSayisi</td>
+                                    <td>
+                                        <div class="small">
+                                            <div><span class="text-muted">Trafiğe Çıkış:</span> @(arac.RuhsatTrafigeCikisTarihi?.ToString("dd.MM.yyyy") ?? "-")</div>
+                                            <div><span class="text-muted">Satış:</span> @(arac.RuhsatSatisTarihi?.ToString("dd.MM.yyyy") ?? "-")</div>
+                                            <div><span class="text-muted">Tescil:</span> @(arac.RuhsatTescilTarihi?.ToString("dd.MM.yyyy") ?? "-")</div>
+                                        </div>
+                                    </td>
                                     <td class="text-center">
                                         <div class="btn-group btn-group-sm">
                                             <button class="btn btn-outline-info" @onclick="() => EvraklarGit(arac.Id)" title="Evraklar">
@@ -659,6 +693,12 @@
     private string filtreSinifTipi = "Tumu";
     private int? filtreYil;
     private int? filtreAy;
+    private DateTime? filtreRuhsatTrafigeCikisBas;
+    private DateTime? filtreRuhsatTrafigeCikisBit;
+    private DateTime? filtreRuhsatSatisBas;
+    private DateTime? filtreRuhsatSatisBit;
+    private DateTime? filtreRuhsatTescilBas;
+    private DateTime? filtreRuhsatTescilBit;
 
     protected override async Task OnInitializedAsync()
     {
@@ -813,6 +853,42 @@
             sorgu = sorgu.Where(a => a.CreatedAt.Month == filtreAy.Value);
         }
 
+        // Ruhsat Trafiğe Çıkış Tarihi (aralık)
+        if (filtreRuhsatTrafigeCikisBas.HasValue)
+        {
+            var bas = filtreRuhsatTrafigeCikisBas.Value.Date;
+            sorgu = sorgu.Where(a => a.RuhsatTrafigeCikisTarihi.HasValue && a.RuhsatTrafigeCikisTarihi.Value.Date >= bas);
+        }
+        if (filtreRuhsatTrafigeCikisBit.HasValue)
+        {
+            var bit = filtreRuhsatTrafigeCikisBit.Value.Date;
+            sorgu = sorgu.Where(a => a.RuhsatTrafigeCikisTarihi.HasValue && a.RuhsatTrafigeCikisTarihi.Value.Date <= bit);
+        }
+
+        // Ruhsat Satış Tarihi (aralık)
+        if (filtreRuhsatSatisBas.HasValue)
+        {
+            var bas = filtreRuhsatSatisBas.Value.Date;
+            sorgu = sorgu.Where(a => a.RuhsatSatisTarihi.HasValue && a.RuhsatSatisTarihi.Value.Date >= bas);
+        }
+        if (filtreRuhsatSatisBit.HasValue)
+        {
+            var bit = filtreRuhsatSatisBit.Value.Date;
+            sorgu = sorgu.Where(a => a.RuhsatSatisTarihi.HasValue && a.RuhsatSatisTarihi.Value.Date <= bit);
+        }
+
+        // Ruhsat Tescil Tarihi (aralık)
+        if (filtreRuhsatTescilBas.HasValue)
+        {
+            var bas = filtreRuhsatTescilBas.Value.Date;
+            sorgu = sorgu.Where(a => a.RuhsatTescilTarihi.HasValue && a.RuhsatTescilTarihi.Value.Date >= bas);
+        }
+        if (filtreRuhsatTescilBit.HasValue)
+        {
+            var bit = filtreRuhsatTescilBit.Value.Date;
+            sorgu = sorgu.Where(a => a.RuhsatTescilTarihi.HasValue && a.RuhsatTescilTarihi.Value.Date <= bit);
+        }
+
         filtrelenmisAraclar = sorgu.ToList();
     }
 
@@ -831,6 +907,12 @@
         filtreSinifTipi = "Tumu";
         filtreYil = null;
         filtreAy = null;
+        filtreRuhsatTrafigeCikisBas = null;
+        filtreRuhsatTrafigeCikisBit = null;
+        filtreRuhsatSatisBas = null;
+        filtreRuhsatSatisBit = null;
+        filtreRuhsatTescilBas = null;
+        filtreRuhsatTescilBit = null;
         Filtrele();
     }
 

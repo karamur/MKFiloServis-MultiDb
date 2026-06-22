@@ -1,4 +1,6 @@
-﻿@page "/araclar/{AracId:int}/evraklar"
+﻿git add KOAFiloServis.Web/Services/KiralikPlakaTakipService.cs KOAFiloServis.Web/Components/Pages/FiloOperasyon/KiralikPlakaList.razor
+git commit -m "fix(kiralik-plaka): otomatik fatura eslestirmeyi kapat, manuel girisi zorunlu yap"
+git push origin main@page "/araclar/{AracId:int}/evraklar"
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
 @using Microsoft.AspNetCore.Components.Forms
@@ -46,6 +48,7 @@
             {
                 var kategoriEvraklari = evraklar.Where(e => e.EvrakKategorisi == kategori).ToList();
                 var aktifEvrak = kategoriEvraklari.FirstOrDefault(e => e.Durum == EvrakDurum.Aktif);
+                var oncelikliDosya = GetOncelikliDosya(aktifEvrak);
                 var suresiDolacak = aktifEvrak?.BitisTarihi.HasValue == true && aktifEvrak.BitisTarihi.Value <= DateTime.Today.AddDays(30);
                 var suresiDolmus = aktifEvrak?.BitisTarihi.HasValue == true && aktifEvrak.BitisTarihi.Value < DateTime.Today;
 
@@ -97,12 +100,12 @@
                                     <button class="btn btn-sm btn-outline-primary flex-grow-1" @onclick="() => EvrakDetayAc(aktifEvrak)">
                                         <i class="bi bi-eye me-1"></i>Detay
                                     </button>
-                                    @if (aktifEvrak.Dosyalar.Any())
+                                    @if (oncelikliDosya != null)
                                     {
-                                        <button class="btn btn-sm btn-outline-info" @onclick="() => OnIzlemeAc(aktifEvrak.Dosyalar.First(), aktifEvrak.EvrakKategorisi)" title="Önizle">
+                                        <button class="btn btn-sm btn-outline-info" @onclick="() => OnIzlemeAc(oncelikliDosya, aktifEvrak.EvrakKategorisi)" title="Önizle">
                                             <i class="bi bi-search"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-outline-warning" @onclick="() => YazdirAc(aktifEvrak.Dosyalar.First())" title="Yazdır">
+                                        <button class="btn btn-sm btn-outline-warning" @onclick="() => YazdirAc(oncelikliDosya)" title="Yazdır">
                                             <i class="bi bi-printer"></i>
                                         </button>
                                     }
@@ -324,6 +327,10 @@
                                     @onclick="() => YazdirAc(previewDownloadable)" title="Yazdır">
                                 <i class="bi bi-printer"></i>
                             </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary"
+                                    @onclick="() => DosyaGonder(previewDownloadable)" title="Gönder">
+                                <i class="bi bi-send"></i>
+                            </button>
                         }
                         <button type="button" class="btn-close btn-sm" @onclick="OnIzlemeKapat"></button>
                     </div>
@@ -375,7 +382,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title"><i class="bi bi-file-earmark-text me-2"></i>@detayEvrak.EvrakKategorisi Detay</h5>
-                    <button type="button" class="btn-close" @onclick="ModalKapat"></button>
+                    <button type="button" class="btn-close" @onclick="DetayModalKapat"></button>
                 </div>
                 <div class="modal-body">
                     <div class="row">
@@ -427,6 +434,9 @@
                                             <button class="btn btn-sm btn-outline-warning" @onclick="() => YazdirAc(dosya)" title="Yazdır">
                                                 <i class="bi bi-printer"></i>
                                             </button>
+                                            <button class="btn btn-sm btn-outline-success" @onclick="() => DosyaGonder(dosya)" title="Gönder">
+                                                <i class="bi bi-send"></i>
+                                            </button>
                                         }
                                         <button class="btn btn-sm btn-outline-primary" @onclick="() => DosyaIndir(dosya)" title="İndir">
                                             <i class="bi bi-download"></i>
@@ -444,7 +454,74 @@
                     <button type="button" class="btn btn-outline-primary" @onclick="() => EvrakDuzenle(detayEvrak)">
                         <i class="bi bi-pencil me-1"></i>Duzenle
                     </button>
-                    <button type="button" class="btn btn-secondary" @onclick="ModalKapat">Kapat</button>
+                    <button type="button" class="btn btn-secondary" @onclick="DetayModalKapat">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Kategori Evrak Listesi Modal -->
+@if (showKategoriModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-collection me-2"></i>@(seciliKategori ?? "Kategori") Evrakları</h5>
+                    <button type="button" class="btn-close" @onclick="KategoriModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!seciliKategoriEvraklari.Any())
+                    {
+                        <div class="text-muted">Bu kategoride listelenecek evrak bulunamadı.</div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Evrak</th>
+                                        <th>Baslangic</th>
+                                        <th>Bitis</th>
+                                        <th>Durum</th>
+                                        <th>Dosya</th>
+                                        <th class="text-end">Islem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var evrak in seciliKategoriEvraklari)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="fw-semibold">@(string.IsNullOrWhiteSpace(evrak.EvrakAdi) ? evrak.EvrakKategorisi : evrak.EvrakAdi)</div>
+                                                @if (!string.IsNullOrWhiteSpace(evrak.PoliceNo))
+                                                {
+                                                    <div class="small text-muted">Police: @evrak.PoliceNo</div>
+                                                }
+                                            </td>
+                                            <td>@evrak.BaslangicTarihi?.ToString("dd.MM.yyyy")</td>
+                                            <td>@evrak.BitisTarihi?.ToString("dd.MM.yyyy")</td>
+                                            <td><span class="badge @GetDurumClass(evrak.Durum)">@evrak.Durum</span></td>
+                                            <td>@(evrak.Dosyalar?.Count ?? 0)</td>
+                                            <td class="text-end" style="white-space:nowrap">
+                                                <button class="btn btn-sm btn-outline-primary" @onclick="() => EvrakDetayAc(evrak)">
+                                                    <i class="bi bi-eye"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-info ms-1" @onclick="() => DosyaEkleAc(evrak)">
+                                                    <i class="bi bi-paperclip"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="KategoriModalKapat">Kapat</button>
                 </div>
             </div>
         </div>
@@ -462,10 +539,13 @@
     private bool showEvrakModal = false;
     private bool showDosyaModal = false;
     private bool showDetayModal = false;
+    private bool showKategoriModal = false;
     private bool showPreviewModal = false;
     private AracEvrak editEvrak = new();
     private AracEvrak? dosyaEvrak;
     private AracEvrak? detayEvrak;
+    private string? seciliKategori;
+    private List<AracEvrak> seciliKategoriEvraklari = new();
 
     // Dosya yukleme
     private List<IBrowserFile> secilenDosyalar = new();
@@ -744,6 +824,11 @@
         previewDownloadable = null;
     }
 
+    private void DetayModalKapat()
+    {
+        showDetayModal = false;
+    }
+
     /// <summary>
     /// Dosyayı yazdırma penceresinde açar.
     /// PDF ise yeni pencerede açıp print tetikler.
@@ -785,6 +870,37 @@
         }
     }
 
+    private async Task DosyaGonder(AracEvrakDosya dosya)
+    {
+        if (string.IsNullOrEmpty(dosya.DosyaYolu))
+        {
+            ToastService.ShowWarning("Gönderilecek dosya bulunamadı.");
+            return;
+        }
+
+        try
+        {
+            var bytes = await SecureFileService.ReadDecryptedAsync(dosya.DosyaYolu);
+            if (bytes == null || bytes.Length == 0)
+            {
+                ToastService.ShowWarning("Dosya okunamadı veya boş.");
+                return;
+            }
+
+            var fileName = EncExtensionTemizle(dosya.DosyaAdi);
+            var mime = GetMimeType(dosya.DosyaTipi);
+            var base64 = Convert.ToBase64String(bytes);
+            var paylasildi = await JS.InvokeAsync<bool>("shareBase64File", fileName, base64, mime);
+
+            if (!paylasildi)
+                ToastService.ShowInfo("Bu cihazda paylaşım desteklenmiyor, dosya indirildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Gönderme hatası: " + ex.Message);
+        }
+    }
+
     private static string EncExtensionTemizle(string dosyaAdi)
     {
         while (dosyaAdi.EndsWith(".enc", StringComparison.OrdinalIgnoreCase))
@@ -816,7 +932,35 @@
 
     private void KategoriEvraklariniGoster(string kategori)
     {
-        ToastService.ShowInfo($"{kategori} evraklari gosteriliyor...");
+        seciliKategori = kategori;
+        seciliKategoriEvraklari = GetKategoriEvraklari(kategori);
+        showKategoriModal = true;
+    }
+
+    private List<AracEvrak> GetKategoriEvraklari(string kategori)
+    {
+        return evraklar
+            .Where(e => string.Equals(e.EvrakKategorisi, kategori, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(e => e.Durum == EvrakDurum.Aktif)
+            .ThenBy(e => e.BitisTarihi ?? DateTime.MaxValue)
+            .ThenByDescending(e => e.Id)
+            .ToList();
+    }
+
+    private void KategoriModalKapat()
+    {
+        showKategoriModal = false;
+        seciliKategori = null;
+        seciliKategoriEvraklari = new();
+    }
+
+    private static AracEvrakDosya? GetOncelikliDosya(AracEvrak? evrak)
+    {
+        return evrak?.Dosyalar?
+            .Where(d => !d.IsDeleted)
+            .OrderByDescending(d => d.CreatedAt)
+            .ThenByDescending(d => d.Id)
+            .FirstOrDefault();
     }
 
     private void ModalKapat()
@@ -824,6 +968,7 @@
         showEvrakModal = false;
         showDosyaModal = false;
         showDetayModal = false;
+        showKategoriModal = false;
     }
 
     private string GetKategoriIcon(string kategori) => kategori switch

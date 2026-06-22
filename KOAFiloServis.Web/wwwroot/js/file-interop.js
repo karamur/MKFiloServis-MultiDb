@@ -196,6 +196,29 @@
         }
     }
 
+    async function shareBase64File(filename, base64Content, contentType) {
+        try {
+            var byteArray = base64ToUint8Array(base64Content);
+            var mimeType = contentType || getMimeTypeFromFilename(filename);
+            var file = new File([byteArray], filename || 'belge', { type: mimeType });
+
+            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    title: filename || 'Belge',
+                    files: [file]
+                });
+                return true;
+            }
+
+            // Fallback: paylaşım yoksa indir.
+            downloadFileFromBase64(filename || 'belge', base64Content, mimeType);
+            return false;
+        } catch (e) {
+            console.error('shareBase64File error:', e);
+            throw e;
+        }
+    }
+
     // Birden fazla dosyanın içeriğini tek bir yazdırma penceresinde göster
     // items: [{ name, base64, mime }]
     function printDocumentFiles(items) {
@@ -291,6 +314,7 @@
     window.getLocalStorageItem = getLocalStorageItem;
     window.printBase64Pdf = printBase64Pdf;
     window.printBase64File = printBase64File;
+    window.shareBase64File = shareBase64File;
     window.printDocumentFiles = printDocumentFiles;
     window.scrollToElementById = scrollToElementById;
 })();

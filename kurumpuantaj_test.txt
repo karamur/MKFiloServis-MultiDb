@@ -1,0 +1,59 @@
+  Determining projects to restore...
+C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\KOAFiloServis.Tests.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q
+  All projects are up-to-date for restore.
+C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\KOAFiloServis.Tests.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q
+  KOAFiloServis.Shared -> C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Shared\bin\Debug\net10.0\KOAFiloServis.Shared.dll
+  KOAFiloServis.Web -> C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Web\bin\Debug\net10.0\KOAFiloServis.Web.dll
+  KOAFiloServis.Tests -> C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\bin\Debug\net10.0\KOAFiloServis.Tests.dll
+Test run for C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\bin\Debug\net10.0\KOAFiloServis.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:04.39]     KOAFiloServis.Tests.Services.KurumPuantajEndToEndTests.SablonOlustur_TumunuKaydet_NoErrors [FAIL]
+  Failed KOAFiloServis.Tests.Services.KurumPuantajEndToEndTests.SablonOlustur_TumunuKaydet_NoErrors [4 s]
+  Error Message:
+   Microsoft.EntityFrameworkCore.DbUpdateException : An error occurred while saving the entity changes. See the inner exception for details.
+---- Npgsql.PostgresException : 23505: duplicate key value violates unique constraint "IX_PuantajKayitlar_Yil_Ay_GuzergahId_AracId_Slot"
+
+DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+  Stack Trace:
+     at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalDatabase.SaveChangesAsync(IList`1 entries, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.NpgsqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at KOAFiloServis.Web.Services.KurumPuantajService.<>c__DisplayClass10_0.<<TopluSavePuantajAsync>b__2>d.MoveNext() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Web\Services\KurumPuantajService.cs:line 424
+--- End of stack trace from previous location ---
+   at KOAFiloServis.Web.Services.KurumPuantajService.<>c__DisplayClass10_0.<<TopluSavePuantajAsync>b__2>d.MoveNext() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Web\Services\KurumPuantajService.cs:line 431
+--- End of stack trace from previous location ---
+   at KOAFiloServis.Web.Services.KurumPuantajService.<>c__DisplayClass10_0.<<TopluSavePuantajAsync>b__2>d.MoveNext() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Web\Services\KurumPuantajService.cs:line 432
+--- End of stack trace from previous location ---
+   at KOAFiloServis.Web.Services.KurumPuantajService.<>c__DisplayClass10_0.<<TopluSavePuantajAsync>b__2>d.MoveNext() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Web\Services\KurumPuantajService.cs:line 432
+--- End of stack trace from previous location ---
+   at Microsoft.EntityFrameworkCore.ExecutionStrategyExtensions.<>c.<<ExecuteAsync>b__3_0>d.MoveNext()
+--- End of stack trace from previous location ---
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.NpgsqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at KOAFiloServis.Web.Services.KurumPuantajService.TopluSavePuantajAsync(IEnumerable`1 kayitlar) in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Web\Services\KurumPuantajService.cs:line 329
+   at KOAFiloServis.Web.Services.KurumPuantajService.TopluSavePuantajAsync(IEnumerable`1 kayitlar) in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Web\Services\KurumPuantajService.cs:line 329
+   at KOAFiloServis.Tests.Services.KurumPuantajEndToEndTests.SablonOlustur_TumunuKaydet_NoErrors() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\KurumPuantajEndToEndTests.cs:line 77
+   at KOAFiloServis.Tests.Services.KurumPuantajEndToEndTests.SablonOlustur_TumunuKaydet_NoErrors() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\KurumPuantajEndToEndTests.cs:line 91
+--- End of stack trace from previous location ---
+----- Inner Stack Trace -----
+   at Npgsql.Internal.NpgsqlConnector.ReadMessageLong(Boolean async, DataRowLoadingMode dataRowLoadingMode, Boolean readingNotifications, Boolean isReadingPrependedMessage)
+   at System.Runtime.CompilerServices.PoolingAsyncValueTaskMethodBuilder`1.StateMachineBox`1.System.Threading.Tasks.Sources.IValueTaskSource<TResult>.GetResult(Int16 token)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+  Standard Output Messages:
+ Kurum: TURKAK 2026 (Id=4)
+ ┼Şablon: 2 sat─▒r
+ SoforId DOLU: 2, EKS─░K: 0
+
+
+
+Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 4 s - KOAFiloServis.Tests.dll (net10.0)

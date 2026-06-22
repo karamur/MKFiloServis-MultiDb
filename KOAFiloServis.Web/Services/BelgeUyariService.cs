@@ -375,7 +375,7 @@ public class BelgeUyariService : IBelgeUyariService
     public async Task<bool> PersonelBelgeTarihGuncelleAsync(int soforId, string belgeAlani, DateTime? tarih)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var sofor = await context.Soforler.FindAsync(soforId);
+        var sofor = await context.Soforler.FirstOrDefaultAsync(s => s.Id == soforId && !s.IsDeleted);
         if (sofor == null) return false;
 
         switch (belgeAlani)
@@ -407,38 +407,69 @@ public class BelgeUyariService : IBelgeUyariService
     public async Task<byte[]> SeciliPersonelBelgelerZipAsync(List<int> soforIdler, List<string>? seciliDosyaYollari = null)
     {
         using var zipMs = new MemoryStream();
+        var kullanilanZipYollari = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seciliDosyalar = seciliDosyaYollari?.Count > 0
+            ? new HashSet<string>(seciliDosyaYollari, StringComparer.OrdinalIgnoreCase)
+            : null;
+        var eklenenDosyaSayisi = 0;
+
         using (var archive = new ZipArchive(zipMs, ZipArchiveMode.Create, leaveOpen: true))
         {
             foreach (var soforId in soforIdler)
             {
-                var evrakDurum = await _ozlukService.GetPersonelEvrakDurumuAsync(soforId);
-                var personelKlasoru = string.Join("_",
-                    (evrakDurum.PersonelAdi?.Length > 0 ? evrakDurum.PersonelAdi : evrakDurum.PersonelKodu ?? soforId.ToString())
-                    .Split(Path.GetInvalidFileNameChars()));
+                PersonelOzlukEvrakDurum evrakDurum;
+                try
+                {
+                    evrakDurum = await _ozlukService.GetPersonelEvrakDurumuAsync(soforId);
+                }
+                catch
+                {
+                    // Tek bir personeldeki veri sorunu toplu ZIP akışını durdurmamalı.
+                    continue;
+                }
+
+                var personelKlasoru = SanitizeZipSegment(
+                    evrakDurum.PersonelAdi?.Length > 0 ? evrakDurum.PersonelAdi : evrakDurum.PersonelKodu ?? soforId.ToString(),
+                    $"personel_{soforId}");
 
                 // Seçili dosya yolu filtresi varsa uygula
                 var evraklar = evrakDurum.Evraklar
                     .Where(e => !string.IsNullOrEmpty(e.DosyaYolu))
-                    .Where(e => seciliDosyaYollari == null || seciliDosyaYollari.Contains(e.DosyaYolu!))
+                    .Where(e => seciliDosyalar == null || seciliDosyalar.Contains(e.DosyaYolu!))
                     .ToList();
 
                 foreach (var evrak in evraklar)
                 {
-                    var icerik = await _secureFileService.ReadDecryptedAsync(evrak.DosyaYolu);
-                    if (icerik == null || icerik.Length == 0) continue;
+                    try
+                    {
+                        var icerik = await _secureFileService.ReadDecryptedAsync(evrak.DosyaYolu);
+                        if (icerik == null || icerik.Length == 0) continue;
 
-                    var uzanti = GetGercekUzanti(evrak.DosyaYolu);
-                    var guvenliEvrakAd = string.Join("_", evrak.EvrakAdi.Split(Path.GetInvalidFileNameChars()));
-                    var zipYolu = soforIdler.Count > 1
-                        ? $"{personelKlasoru}/{guvenliEvrakAd}{uzanti}"
-                        : $"{guvenliEvrakAd}{uzanti}";
+                        var uzanti = GetGercekUzanti(evrak.DosyaYolu);
+                        var guvenliEvrakAd = SanitizeZipSegment(evrak.EvrakAdi, "belge");
+                        var zipDosyaAdi = string.IsNullOrWhiteSpace(uzanti) ? guvenliEvrakAd : $"{guvenliEvrakAd}{uzanti}";
+                        var zipYolu = soforIdler.Count > 1
+                            ? $"{personelKlasoru}/{zipDosyaAdi}"
+                            : zipDosyaAdi;
+                        var entryYolu = BuildUniqueZipEntryPath(zipYolu, kullanilanZipYollari);
 
-                    var entry = archive.CreateEntry(zipYolu, CompressionLevel.Optimal);
-                    await using var entryStream = entry.Open();
-                    await entryStream.WriteAsync(icerik);
+                        var entry = archive.CreateEntry(entryYolu, CompressionLevel.Optimal);
+                        await using var entryStream = entry.Open();
+                        await entryStream.WriteAsync(icerik);
+                        eklenenDosyaSayisi++;
+                    }
+                    catch
+                    {
+                        // Tek bir bozuk dosya toplu ZIP indirmeyi durdurmamalı.
+                        continue;
+                    }
                 }
             }
         }
+
+        if (eklenenDosyaSayisi == 0)
+            return Array.Empty<byte>();
+
         zipMs.Position = 0;
         return zipMs.ToArray();
     }
@@ -464,6 +495,42 @@ public class BelgeUyariService : IBelgeUyariService
         var uzanti = GetGercekUzanti(dosyaYolu);
         var guvenliAd = string.Join("_", (evrakAdi ?? "belge").Split(Path.GetInvalidFileNameChars()));
         return string.IsNullOrEmpty(uzanti) ? guvenliAd : $"{guvenliAd}{uzanti}";
+    }
+
+    private static string SanitizeZipSegment(string? value, string fallback)
+    {
+        var raw = string.IsNullOrWhiteSpace(value) ? fallback : value;
+        var cleaned = string.Join("_", raw.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries))
+            .Replace("/", "_")
+            .Replace("\\", "_")
+            .Trim()
+            .Trim('.');
+        return string.IsNullOrWhiteSpace(cleaned) ? fallback : cleaned;
+    }
+
+    private static string BuildUniqueZipEntryPath(string basePath, HashSet<string> usedPaths)
+    {
+        var candidate = basePath.Replace("\\", "/");
+        if (usedPaths.Add(candidate))
+            return candidate;
+
+        var sonSlash = candidate.LastIndexOf('/');
+        var klasor = sonSlash >= 0 ? candidate[..sonSlash] : string.Empty;
+        var dosyaAdi = sonSlash >= 0 ? candidate[(sonSlash + 1)..] : candidate;
+        var adGovdesi = Path.GetFileNameWithoutExtension(dosyaAdi);
+        var uzanti = Path.GetExtension(dosyaAdi);
+
+        var sayac = 1;
+        while (true)
+        {
+            var yeniDosyaAdi = $"{adGovdesi}_{sayac}{uzanti}";
+            var yeniAday = string.IsNullOrWhiteSpace(klasor)
+                ? yeniDosyaAdi
+                : $"{klasor}/{yeniDosyaAdi}";
+            if (usedPaths.Add(yeniAday))
+                return yeniAday;
+            sayac++;
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -610,12 +677,16 @@ public class BelgeUyariService : IBelgeUyariService
     public async Task<bool> AracBelgeTarihGuncelleAsync(int aracId, string belgeAlani, DateTime? bitisTarihi)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var arac = await context.Araclar.FindAsync(aracId);
+        var arac = await context.Araclar.FirstOrDefaultAsync(a => a.Id == aracId && !a.IsDeleted);
         if (arac == null) return false;
 
         // Doğrudan Arac entity'de tutulan tarihler
         switch (belgeAlani)
         {
+            case "Ruhsat":
+                // Ruhsat tarihi Arac entity'de ayrı alan olarak tutulmuyor.
+                // Bu akışta AracEvrak kaydı güncellenerek tarih yönetilir.
+                break;
             case "Sigorta":
                 arac.TrafikSigortaBitisTarihi = bitisTarihi.HasValue
                     ? DateTime.SpecifyKind(bitisTarihi.Value, DateTimeKind.Utc) : null;
@@ -675,7 +746,7 @@ public class BelgeUyariService : IBelgeUyariService
         await using var context = await _contextFactory.CreateDbContextAsync();
         var arac = await context.Araclar
             .Include(a => a.Firma)
-            .FirstOrDefaultAsync(a => a.Id == aracId);
+            .FirstOrDefaultAsync(a => a.Id == aracId && !a.IsDeleted);
         if (arac == null) return false;
 
         var kategori = KategoriEslestir(belgeAlani);
@@ -709,35 +780,47 @@ public class BelgeUyariService : IBelgeUyariService
         var normPlaka = AppStoragePaths.NormalizeFolderName(plaka).Replace(" ", "").Replace("-", "");
         var normBelge = AppStoragePaths.NormalizeFolderName(belgeAlani).Replace(" ", "").Replace("-", "");
         var arsivDosyaAdi = $"{normPlaka}{normBelge}_{DateTime.Now:yyyyMMdd_HHmmss}{uzanti}";
-
-        var storedPath = await _secureFileService.SaveEncryptedAsync(
-            $"{AppStoragePaths.AracEvrakRelativeRoot}/{aracKlasoru}",
-            arsivDosyaAdi,
-            icerik);
-
-        // Arşiv kopyaları (şifreli + şifresiz)
-        var sasiNo = arac.SaseNo ?? aracId.ToString();
+        string? storedPath = null;
         try
         {
-            await _evrakArsivService.ArsivleAracEvrakAsync(plaka, sasiNo, belgeAlani, icerik, uzanti);
+            storedPath = await _secureFileService.SaveEncryptedAsync(
+                $"{AppStoragePaths.AracEvrakRelativeRoot}/{aracKlasoru}",
+                arsivDosyaAdi,
+                icerik);
+
+            // Arşiv kopyaları (şifreli + şifresiz)
+            var sasiNo = arac.SaseNo ?? aracId.ToString();
+            try
+            {
+                await _evrakArsivService.ArsivleAracEvrakAsync(plaka, sasiNo, belgeAlani, icerik, uzanti);
+            }
+            catch
+            {
+                // Arşiv hatası ana upload'ı engellememeli (EvrakArsivService içinde loglanır)
+            }
+
+            var evrakDosya = new AracEvrakDosya
+            {
+                AracEvrakId = evrak.Id,
+                DosyaAdi = arsivDosyaAdi,
+                DosyaYolu = storedPath,
+                DosyaTipi = uzanti.TrimStart('.').ToLowerInvariant(),
+                DosyaBoyutu = icerik.LongLength,
+                CreatedAt = DateTime.UtcNow
+            };
+            context.AracEvrakDosyalari.Add(evrakDosya);
+            await context.SaveChangesAsync();
+            return true;
         }
         catch
         {
-            // Arşiv hatası ana upload'ı engellememeli (EvrakArsivService içinde loglanır)
-        }
+            if (!string.IsNullOrWhiteSpace(storedPath))
+            {
+                try { await _secureFileService.DeleteAsync(storedPath); } catch { }
+            }
 
-        var evrakDosya = new AracEvrakDosya
-        {
-            AracEvrakId = evrak.Id,
-            DosyaAdi = arsivDosyaAdi,
-            DosyaYolu = storedPath,
-            DosyaTipi = uzanti.TrimStart('.').ToLowerInvariant(),
-            DosyaBoyutu = icerik.LongLength,
-            CreatedAt = DateTime.UtcNow
-        };
-        context.AracEvrakDosyalari.Add(evrakDosya);
-        await context.SaveChangesAsync();
-        return true;
+            throw;
+        }
     }
 
     public async Task<byte[]> SeciliAracBelgelerZipAsync(List<int> aracIdler, List<string>? seciliDosyaYollari = null)
@@ -745,17 +828,21 @@ public class BelgeUyariService : IBelgeUyariService
         await using var context = await _contextFactory.CreateDbContextAsync();
 
         using var zipMs = new MemoryStream();
+        var kullanilanZipYollari = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seciliDosyalar = seciliDosyaYollari?.Count > 0
+            ? new HashSet<string>(seciliDosyaYollari, StringComparer.OrdinalIgnoreCase)
+            : null;
+        var eklenenDosyaSayisi = 0;
+
         using (var archive = new ZipArchive(zipMs, ZipArchiveMode.Create, leaveOpen: true))
         {
             foreach (var aracId in aracIdler)
             {
                 var arac = await context.Araclar.AsNoTracking()
-                    .FirstOrDefaultAsync(a => a.Id == aracId);
+                    .FirstOrDefaultAsync(a => a.Id == aracId && !a.IsDeleted);
                 if (arac == null) continue;
 
-                var aracKlasoru = string.Join("_",
-                    (arac.AktifPlaka ?? arac.SaseNo ?? aracId.ToString())
-                    .Split(Path.GetInvalidFileNameChars()));
+                var aracKlasoru = SanitizeZipSegment(arac.AktifPlaka ?? arac.SaseNo ?? aracId.ToString(), $"arac_{aracId}");
 
                 var evraklar = await context.AracEvraklari
                     .AsNoTracking()
@@ -768,36 +855,43 @@ public class BelgeUyariService : IBelgeUyariService
                     foreach (var dosya in evrak.Dosyalar)
                     {
                         if (string.IsNullOrEmpty(dosya.DosyaYolu)) continue;
-                        if (seciliDosyaYollari != null && !seciliDosyaYollari.Contains(dosya.DosyaYolu)) continue;
+                        if (seciliDosyalar != null && !seciliDosyalar.Contains(dosya.DosyaYolu)) continue;
 
-                        var icerik = await _secureFileService.ReadDecryptedAsync(dosya.DosyaYolu);
-                        if (icerik == null || icerik.Length == 0) continue;
-
-                        var uzanti = GetGercekUzanti(dosya.DosyaYolu);
-                        var temelAd = !string.IsNullOrWhiteSpace(evrak.EvrakAdi) ? evrak.EvrakAdi : evrak.EvrakKategorisi;
-                        var guvenliAd = string.Join("_", (temelAd ?? "belge").Split(Path.GetInvalidFileNameChars()));
-                        var zipYolu = aracIdler.Count > 1
-                            ? $"{aracKlasoru}/{guvenliAd}{uzanti}"
-                            : $"{guvenliAd}{uzanti}";
-
-                        // Aynı isimde dosya çakışmasın
-                        var entryYolu = zipYolu;
-                        var sayac = 1;
-                        while (archive.GetEntry(entryYolu) != null)
+                        try
                         {
-                            entryYolu = aracIdler.Count > 1
-                                ? $"{aracKlasoru}/{guvenliAd}_{sayac}{uzanti}"
-                                : $"{guvenliAd}_{sayac}{uzanti}";
-                            sayac++;
-                        }
+                            var icerik = await _secureFileService.ReadDecryptedAsync(dosya.DosyaYolu);
+                            if (icerik == null || icerik.Length == 0) continue;
 
-                        var entry = archive.CreateEntry(entryYolu, CompressionLevel.Optimal);
-                        await using var entryStream = entry.Open();
-                        await entryStream.WriteAsync(icerik);
+                            var uzanti = GetGercekUzanti(dosya.DosyaYolu);
+                            if (string.IsNullOrWhiteSpace(uzanti))
+                                uzanti = Path.GetExtension(dosya.DosyaAdi);
+
+                            var temelAd = !string.IsNullOrWhiteSpace(evrak.EvrakAdi) ? evrak.EvrakAdi : evrak.EvrakKategorisi;
+                            var guvenliAd = SanitizeZipSegment(temelAd, "belge");
+                            var zipDosyaAdi = string.IsNullOrWhiteSpace(uzanti) ? guvenliAd : $"{guvenliAd}{uzanti}";
+                            var zipYolu = aracIdler.Count > 1
+                                ? $"{aracKlasoru}/{zipDosyaAdi}"
+                                : zipDosyaAdi;
+                            var entryYolu = BuildUniqueZipEntryPath(zipYolu, kullanilanZipYollari);
+
+                            var entry = archive.CreateEntry(entryYolu, CompressionLevel.Optimal);
+                            await using var entryStream = entry.Open();
+                            await entryStream.WriteAsync(icerik);
+                            eklenenDosyaSayisi++;
+                        }
+                        catch
+                        {
+                            // Tek bir bozuk dosya toplu ZIP indirmeyi durdurmamalı.
+                            continue;
+                        }
                     }
                 }
             }
         }
+
+        if (eklenenDosyaSayisi == 0)
+            return Array.Empty<byte>();
+
         zipMs.Position = 0;
         return zipMs.ToArray();
     }

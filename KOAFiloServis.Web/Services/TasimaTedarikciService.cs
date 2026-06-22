@@ -77,7 +77,7 @@ public class TasimaTedarikciService : ITasimaTedarikciService
             .Include(t => t.Araclar)
             .Include(t => t.Isler)
                 .ThenInclude(i => i.Guzergah)
-            .FirstOrDefaultAsync(t => t.Id == id);
+            .FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted);
     }
 
     public async Task<TasimaTedarikci> CreateAsync(TasimaTedarikci tedarikci)
@@ -190,7 +190,7 @@ public class TasimaTedarikciService : ITasimaTedarikciService
     public async Task DeleteAsync(int id)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var entity = await context.TasimaTedarikciler.FindAsync(id);
+        var entity = await context.TasimaTedarikciler.FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted);
         if (entity is null) return;
         entity.IsDeleted = true;
         entity.UpdatedAt = DateTime.UtcNow;
@@ -212,6 +212,7 @@ public class TasimaTedarikciService : ITasimaTedarikciService
             .Include(i => i.Guzergah)
             .Include(i => i.Arac)
             .Include(i => i.Sofor)
+            .Where(i => !i.IsDeleted)
             .AsQueryable();
 
         if (tedarikciId.HasValue)
@@ -228,7 +229,7 @@ public class TasimaTedarikciService : ITasimaTedarikciService
             .Include(i => i.Guzergah)
             .Include(i => i.Arac)
             .Include(i => i.Sofor)
-            .FirstOrDefaultAsync(i => i.Id == id);
+            .FirstOrDefaultAsync(i => i.Id == id && !i.IsDeleted);
     }
 
     public async Task<TasimaTedarikciIs> CreateIsAsync(TasimaTedarikciIs tedarikciIs)
@@ -252,7 +253,7 @@ public class TasimaTedarikciService : ITasimaTedarikciService
     public async Task DeleteIsAsync(int id)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var entity = await context.TasimaTedarikciIsler.FindAsync(id);
+        var entity = await context.TasimaTedarikciIsler.FirstOrDefaultAsync(i => i.Id == id && !i.IsDeleted);
         if (entity is null) return;
         entity.IsDeleted = true;
         entity.UpdatedAt = DateTime.UtcNow;
@@ -263,7 +264,7 @@ public class TasimaTedarikciService : ITasimaTedarikciService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Soforler
-            .Where(s => s.TasimaTedarikciId == tedarikciId)
+            .Where(s => s.TasimaTedarikciId == tedarikciId && !s.IsDeleted)
             .OrderBy(s => s.Ad).ThenBy(s => s.Soyad)
             .ToListAsync();
     }
@@ -272,7 +273,7 @@ public class TasimaTedarikciService : ITasimaTedarikciService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Araclar
-            .Where(a => a.TasimaTedarikciId == tedarikciId)
+            .Where(a => a.TasimaTedarikciId == tedarikciId && !a.IsDeleted)
             .OrderBy(a => a.AktifPlaka)
             .ToListAsync();
     }
@@ -283,8 +284,8 @@ public class TasimaTedarikciService : ITasimaTedarikciService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.TedarikciEvraklari
-            .Include(e => e.Dosyalar)
-            .Where(e => e.TasimaTedarikciId == tedarikciId)
+            .Include(e => e.Dosyalar.Where(d => !d.IsDeleted))
+            .Where(e => e.TasimaTedarikciId == tedarikciId && !e.IsDeleted)
             .OrderBy(e => e.EvrakKategorisi)
             .ThenByDescending(e => e.BitisTarihi)
             .ToListAsync();
@@ -294,8 +295,9 @@ public class TasimaTedarikciService : ITasimaTedarikciService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.TedarikciEvraklari
-            .Include(e => e.Dosyalar)
+            .Include(e => e.Dosyalar.Where(d => !d.IsDeleted))
             .Include(e => e.TasimaTedarikci)
+            .Where(e => !e.IsDeleted)
             .OrderBy(e => e.TasimaTedarikci!.Unvan)
             .ThenBy(e => e.EvrakKategorisi)
             .ThenByDescending(e => e.BitisTarihi)
@@ -334,13 +336,16 @@ public class TasimaTedarikciService : ITasimaTedarikciService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var evrak = await context.TedarikciEvraklari
-            .Include(e => e.Dosyalar)
-            .FirstOrDefaultAsync(e => e.Id == evrakId);
+            .Include(e => e.Dosyalar.Where(d => !d.IsDeleted))
+            .FirstOrDefaultAsync(e => e.Id == evrakId && !e.IsDeleted);
 
         if (evrak != null)
         {
             foreach (var dosya in evrak.Dosyalar)
+            {
                 await _secureFileService.DeleteAsync(dosya.DosyaYolu);
+                dosya.IsDeleted = true;
+            }
 
             evrak.IsDeleted = true;
             await context.SaveChangesAsync();
@@ -350,37 +355,52 @@ public class TasimaTedarikciService : ITasimaTedarikciService
     public async Task<TedarikciEvrakDosya> UploadTedarikciEvrakDosyaAsync(int evrakId, IBrowserFile file)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var evrak = await context.TedarikciEvraklari.FindAsync(evrakId)
+        var evrak = await context.TedarikciEvraklari.FirstOrDefaultAsync(e => e.Id == evrakId && !e.IsDeleted)
             ?? throw new Exception("Evrak bulunamadı");
 
         await using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
         using var ms = new MemoryStream();
         await stream.CopyToAsync(ms);
 
-        var storedPath = await _secureFileService.SaveEncryptedAsync(
-            $"tedarikci-evraklar/{evrakId}",
-            file.Name,
-            ms.ToArray());
-
-        var dosya = new TedarikciEvrakDosya
+        string? storedPath = null;
+        try
         {
-            TedarikciEvrakId = evrakId,
-            DosyaAdi = file.Name,
-            DosyaYolu = storedPath,
-            DosyaTipi = Path.GetExtension(file.Name).TrimStart('.').ToLower(),
-            DosyaBoyutu = file.Size,
-            CreatedAt = DateTime.UtcNow
-        };
+            storedPath = await _secureFileService.SaveEncryptedAsync(
+                $"tedarikci-evraklar/{evrakId}",
+                file.Name,
+                ms.ToArray());
 
-        context.TedarikciEvrakDosyalari.Add(dosya);
-        await context.SaveChangesAsync();
-        return dosya;
+            var dosya = new TedarikciEvrakDosya
+            {
+                TedarikciEvrakId = evrakId,
+                DosyaAdi = file.Name,
+                DosyaYolu = storedPath,
+                DosyaTipi = Path.GetExtension(file.Name).TrimStart('.').ToLower(),
+                DosyaBoyutu = file.Size,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            context.TedarikciEvrakDosyalari.Add(dosya);
+            await context.SaveChangesAsync();
+            return dosya;
+        }
+        catch
+        {
+            if (!string.IsNullOrWhiteSpace(storedPath))
+            {
+                try { await _secureFileService.DeleteAsync(storedPath); } catch { }
+            }
+
+            throw;
+        }
     }
 
     public async Task<byte[]> GetTedarikciEvrakDosyaAsync(int dosyaId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var dosya = await context.TedarikciEvrakDosyalari.FindAsync(dosyaId)
+        var dosya = await context.TedarikciEvrakDosyalari
+            .Include(d => d.TedarikciEvrak)
+            .FirstOrDefaultAsync(d => d.Id == dosyaId && !d.IsDeleted && d.TedarikciEvrak != null && !d.TedarikciEvrak.IsDeleted)
             ?? throw new Exception("Dosya bulunamadı");
 
         return await _secureFileService.ReadDecryptedAsync(dosya.DosyaYolu)
@@ -390,7 +410,9 @@ public class TasimaTedarikciService : ITasimaTedarikciService
     public async Task DeleteTedarikciEvrakDosyaAsync(int dosyaId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var dosya = await context.TedarikciEvrakDosyalari.FindAsync(dosyaId);
+        var dosya = await context.TedarikciEvrakDosyalari
+            .Include(d => d.TedarikciEvrak)
+            .FirstOrDefaultAsync(d => d.Id == dosyaId && !d.IsDeleted && d.TedarikciEvrak != null && !d.TedarikciEvrak.IsDeleted);
         if (dosya != null)
         {
             await _secureFileService.DeleteAsync(dosya.DosyaYolu);
@@ -405,7 +427,7 @@ public class TasimaTedarikciService : ITasimaTedarikciService
 
         var tedarikci = await context.TasimaTedarikciler
             .AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Id == tedarikciId);
+            .FirstOrDefaultAsync(t => t.Id == tedarikciId && !t.IsDeleted);
 
         if (tedarikci is null)
             throw new InvalidOperationException("Tedarikçi bulunamadı.");
@@ -417,8 +439,8 @@ public class TasimaTedarikciService : ITasimaTedarikciService
 
         var evrakQuery = context.TedarikciEvraklari
             .AsNoTracking()
-            .Include(e => e.Dosyalar)
-            .Where(e => e.TasimaTedarikciId == tedarikciId)
+            .Include(e => e.Dosyalar.Where(d => !d.IsDeleted))
+            .Where(e => e.TasimaTedarikciId == tedarikciId && !e.IsDeleted)
             .AsQueryable();
 
         if (evrakIdSet.Count > 0)
@@ -433,6 +455,7 @@ public class TasimaTedarikciService : ITasimaTedarikciService
         using var zipMs = new MemoryStream();
         using var archive = new ZipArchive(zipMs, ZipArchiveMode.Create, leaveOpen: true);
         var usedEntryNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var eklenenDosyaSayisi = 0;
 
         foreach (var evrak in evraklar)
         {
@@ -444,30 +467,42 @@ public class TasimaTedarikciService : ITasimaTedarikciService
 
             foreach (var dosya in evrak.Dosyalar.OrderBy(d => d.DosyaAdi))
             {
-                var rawBytes = await _secureFileService.ReadDecryptedAsync(dosya.DosyaYolu);
-                if (rawBytes is null || rawBytes.Length == 0)
-                    continue;
-
-                var fileName = SanitizePathSegment(dosya.DosyaAdi, $"dosya_{dosya.Id}");
-                var entryName = $"{kategori}/{evrakAdi}/{fileName}";
-
-                if (!usedEntryNames.Add(entryName))
+                try
                 {
-                    var name = Path.GetFileNameWithoutExtension(fileName);
-                    var ext = Path.GetExtension(fileName);
-                    var i = 2;
-                    while (!usedEntryNames.Add(entryName))
-                    {
-                        entryName = $"{kategori}/{evrakAdi}/{name}_{i}{ext}";
-                        i++;
-                    }
-                }
+                    var rawBytes = await _secureFileService.ReadDecryptedAsync(dosya.DosyaYolu);
+                    if (rawBytes is null || rawBytes.Length == 0)
+                        continue;
 
-                var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
-                await using var entryStream = entry.Open();
-                await entryStream.WriteAsync(rawBytes);
+                    var fileName = SanitizePathSegment(dosya.DosyaAdi, $"dosya_{dosya.Id}");
+                    var entryName = $"{kategori}/{evrakAdi}/{fileName}";
+
+                    if (!usedEntryNames.Add(entryName))
+                    {
+                        var name = Path.GetFileNameWithoutExtension(fileName);
+                        var ext = Path.GetExtension(fileName);
+                        var i = 2;
+                        while (!usedEntryNames.Add(entryName))
+                        {
+                            entryName = $"{kategori}/{evrakAdi}/{name}_{i}{ext}";
+                            i++;
+                        }
+                    }
+
+                    var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
+                    await using var entryStream = entry.Open();
+                    await entryStream.WriteAsync(rawBytes);
+                    eklenenDosyaSayisi++;
+                }
+                catch
+                {
+                    // Tek bir bozuk dosya tüm tedarikçi ZIP indirmesini durdurmamalı.
+                    continue;
+                }
             }
         }
+
+        if (eklenenDosyaSayisi == 0)
+            return Array.Empty<byte>();
 
         var ozet = new StringBuilder();
         ozet.AppendLine($"Tedarikçi: {tedarikci.Unvan}");

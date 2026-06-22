@@ -4,6 +4,7 @@
 @using KOAFiloServis.Shared.Entities
 @using KOAFiloServis.Web.Services
 @using Microsoft.AspNetCore.Components.Forms
+@using System.IO
 @inject ITasimaTedarikciService TedarikciService
 @inject IToastService ToastService
 @inject IJSRuntime JS
@@ -440,6 +441,9 @@
                                             <small class="text-muted ms-2">(@FormatDosyaBoyutu(dosya.DosyaBoyutu))</small>
                                         </div>
                                         <div>
+                                            <button class="btn btn-sm btn-outline-info me-1" @onclick="() => OnIzlemeAc(dosya, dosyaEvrak.EvrakKategorisi)">
+                                                <i class="bi bi-search"></i>
+                                            </button>
                                             <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => DosyaIndir(dosya)">
                                                 <i class="bi bi-download"></i>
                                             </button>
@@ -529,9 +533,14 @@
                                         @dosya.DosyaAdi
                                         <small class="text-muted ms-2">(@FormatDosyaBoyutu(dosya.DosyaBoyutu))</small>
                                     </div>
-                                    <button class="btn btn-sm btn-outline-primary" @onclick="() => DosyaIndir(dosya)">
-                                        <i class="bi bi-download"></i>
-                                    </button>
+                                    <div class="d-flex gap-1">
+                                        <button class="btn btn-sm btn-outline-info" @onclick="() => OnIzlemeAc(dosya, detayEvrak.EvrakKategorisi)">
+                                            <i class="bi bi-search"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-primary" @onclick="() => DosyaIndir(dosya)">
+                                            <i class="bi bi-download"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             }
                         </div>
@@ -545,6 +554,56 @@
                         <i class="bi bi-pencil me-1"></i>Düzenle
                     </button>
                     <button type="button" class="btn btn-secondary" @onclick="ModalKapat">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Önizleme Modal -->
+@if (showPreviewModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content" style="height:90vh;">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-eye me-2"></i>@previewTitle
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="OnIzlemeKapat"></button>
+                </div>
+                <div class="modal-body p-0" style="overflow:hidden;">
+                    @if (isPreviewLoading)
+                    {
+                        <div class="h-100 d-flex align-items-center justify-content-center">
+                            <div class="spinner-border text-primary" role="status"></div>
+                        </div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(previewError))
+                    {
+                        <div class="h-100 d-flex align-items-center justify-content-center p-4">
+                            <div class="alert alert-warning mb-0">@previewError</div>
+                        </div>
+                    }
+                    else if (previewType == "pdf" && !string.IsNullOrWhiteSpace(previewDataUrl))
+                    {
+                        <iframe src="@previewDataUrl" style="width:100%;height:100%;border:none;"></iframe>
+                    }
+                    else if (previewType == "image" && !string.IsNullOrWhiteSpace(previewDataUrl))
+                    {
+                        <div class="h-100 d-flex align-items-center justify-content-center bg-light">
+                            <img src="@previewDataUrl" style="max-width:100%;max-height:100%;object-fit:contain;" alt="Önizleme" />
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="OnIzlemeKapat">Kapat</button>
+                    @if (previewDownloadable != null)
+                    {
+                        <button type="button" class="btn btn-primary" @onclick="() => DosyaIndir(previewDownloadable)">
+                            <i class="bi bi-download me-1"></i>İndir
+                        </button>
+                    }
                 </div>
             </div>
         </div>
@@ -629,11 +688,18 @@
     private bool showDosyaModal = false;
     private bool showDetayModal = false;
     private bool showKategoriModal = false;
+    private bool showPreviewModal = false;
     private TedarikciEvrak editEvrak = new();
     private TedarikciEvrak? dosyaEvrak;
     private TedarikciEvrak? detayEvrak;
     private string? seciliKategori;
     private List<TedarikciEvrak> seciliKategoriEvraklari = new();
+    private bool isPreviewLoading = false;
+    private string? previewDataUrl;
+    private string previewType = string.Empty;
+    private string previewTitle = string.Empty;
+    private string? previewError;
+    private TedarikciEvrakDosya? previewDownloadable;
 
     private List<IBrowserFile> secilenDosyalar = new();
     private bool isUploading = false;
@@ -855,6 +921,65 @@
         }
     }
 
+    private async Task OnIzlemeAc(TedarikciEvrakDosya dosya, string belgeAdi)
+    {
+        showPreviewModal = true;
+        isPreviewLoading = true;
+        previewDataUrl = null;
+        previewType = string.Empty;
+        previewError = null;
+        previewTitle = belgeAdi;
+        previewDownloadable = dosya;
+        StateHasChanged();
+
+        try
+        {
+            var bytes = await TedarikciService.GetTedarikciEvrakDosyaAsync(dosya.Id);
+            if (bytes == null || bytes.Length == 0)
+            {
+                previewError = "Dosya okunamadı veya boş.";
+                return;
+            }
+
+            var uzanti = GetRealExtension(dosya);
+            var mime = GetMimeType(uzanti.TrimStart('.'));
+
+            if (uzanti == ".pdf")
+            {
+                previewType = "pdf";
+                previewDataUrl = $"data:{mime};base64,{Convert.ToBase64String(bytes)}";
+            }
+            else if (uzanti is ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp")
+            {
+                previewType = "image";
+                previewDataUrl = $"data:{mime};base64,{Convert.ToBase64String(bytes)}";
+            }
+            else
+            {
+                previewError = $"Bu dosya türü ({uzanti}) için ön izleme desteklenmiyor. Dosyayı indirip görüntüleyebilirsiniz.";
+            }
+        }
+        catch (Exception ex)
+        {
+            previewError = $"Ön izleme yüklenemedi: {ex.Message}";
+        }
+        finally
+        {
+            isPreviewLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OnIzlemeKapat()
+    {
+        showPreviewModal = false;
+        previewDataUrl = null;
+        previewType = string.Empty;
+        previewTitle = string.Empty;
+        previewError = null;
+        previewDownloadable = null;
+    }
+
     private async Task TopluYazdir()
     {
         await JS.InvokeVoidAsync("window.print");
@@ -937,6 +1062,46 @@
         showDosyaModal = false;
         showDetayModal = false;
         showKategoriModal = false;
+        showPreviewModal = false;
+    }
+
+    private static string GetRealExtension(TedarikciEvrakDosya dosya)
+    {
+        var ad = dosya.DosyaAdi ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(ad))
+        {
+            while (ad.EndsWith(".enc", StringComparison.OrdinalIgnoreCase))
+                ad = ad[..^4];
+            var extFromName = Path.GetExtension(ad).ToLowerInvariant();
+            if (!string.IsNullOrWhiteSpace(extFromName))
+                return extFromName;
+        }
+
+        var tip = dosya.DosyaTipi?.Trim().TrimStart('.').ToLowerInvariant();
+        return string.IsNullOrWhiteSpace(tip) ? string.Empty : "." + tip;
+    }
+
+    private static string GetMimeType(string? extension)
+    {
+        return extension?.ToLowerInvariant() switch
+        {
+            "pdf" => "application/pdf",
+            "jpg" or "jpeg" => "image/jpeg",
+            "png" => "image/png",
+            "gif" => "image/gif",
+            "bmp" => "image/bmp",
+            "webp" => "image/webp",
+            "doc" => "application/msword",
+            "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "xls" => "application/vnd.ms-excel",
+            "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "ppt" => "application/vnd.ms-powerpoint",
+            "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "txt" => "text/plain",
+            "csv" => "text/csv",
+            "zip" => "application/zip",
+            _ => "application/octet-stream"
+        };
     }
 
     private string GetKategoriIcon(string kategori) => kategori switch

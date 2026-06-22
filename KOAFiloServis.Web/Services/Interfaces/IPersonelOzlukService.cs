@@ -18,9 +18,15 @@ public interface IPersonelOzlukService
     Task<PersonelOzlukEvrak?> GetPersonelEvrakByIdAsync(int evrakId);
     Task<PersonelOzlukEvrakDurum> GetPersonelEvrakDurumuAsync(int soforId);
     Task<List<PersonelOzlukEvrakDurum>> GetTumPersonelEvrakDurumlariAsync();
+    Task<List<PersonelEvrakDosyaListeItem>> GetEvrakDosyaListesiAsync(int soforId, int evrakTanimId);
     Task<PersonelOzlukEvrak> EvrakIsaretle(int soforId, int evrakTanimId, bool tamamlandi, string? aciklama = null);
     Task<PersonelOzlukEvrak> EvrakDosyaYukle(int soforId, int evrakTanimId, string dosyaYolu,
         string? dosyaAdi = null, string? dosyaTipi = null, long? dosyaBoyutu = null);
+    Task<PersonelOzlukEvrak> EvrakDuzenle(int soforId, int evrakTanimId, string? aciklama = null,
+        DateTime? gecerlilikBitisTarihi = null, string? sonDegisiklikNotu = null);
+    Task<PersonelEvrakDosyaIcerik?> GetGuncelEvrakDosyaIcerigiAsync(int soforId, int evrakTanimId);
+    Task<PersonelEvrakDosyaIcerik?> GetEvrakDosyaIcerigiAsync(int soforId, int evrakTanimId, int? personelEvrakId, int? versiyonId);
+    Task DeleteEvrakDosyaAsync(int soforId, int evrakTanimId, int? personelEvrakId, int? versiyonId);
     Task<PersonelOzlukEvrak?> BelgeAlaniIleDosyaYukleAsync(int soforId, string belgeAlani, string dosyaYolu);
     Task<PersonelOzlukEvrak> UpdatePersonelEvrakAsync(PersonelOzlukEvrak evrak);
     Task SoforBelgeTarihleriniSenkronizeEtAsync(int soforId, DateTime? ehliyetTarihi, DateTime? srcTarihi, DateTime? psikoteknikTarihi, DateTime? saglikTarihi);
@@ -56,5 +62,30 @@ public class OzlukEvrakDetay
     public DateTime? TamamlanmaTarihi { get; set; }
     public DateTime? GecerlilikBitisTarihi { get; set; }
     public string? DosyaYolu { get; set; }
+    public string? DosyaAdi { get; set; }
+    public string? DosyaTipi { get; set; }
+    public long DosyaBoyutu { get; set; }
     public string? Aciklama { get; set; }
+    public int VersiyonNo { get; set; } = 1;
+    public string? SonDegisiklikNotu { get; set; }
+}
+
+public class PersonelEvrakDosyaIcerik
+{
+    public int EvrakTanimId { get; set; }
+    public string DosyaAdi { get; set; } = string.Empty;
+    public string ContentType { get; set; } = "application/octet-stream";
+    public byte[] Icerik { get; set; } = Array.Empty<byte>();
+}
+
+public class PersonelEvrakDosyaListeItem
+{
+    public int? PersonelEvrakId { get; set; }
+    public int? VersiyonId { get; set; }
+    public bool GuncelKayit { get; set; }
+    public int EvrakTanimId { get; set; }
+    public string DosyaAdi { get; set; } = string.Empty;
+    public string ContentType { get; set; } = "application/octet-stream";
+    public long DosyaBoyutu { get; set; }
+    public DateTime Tarih { get; set; }
 }

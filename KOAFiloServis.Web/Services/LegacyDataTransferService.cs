@@ -66,6 +66,7 @@ public class LegacyDataTransferService
         result.Add(await SafeTransferAsync(TransferRolYetkileriAsync, "RolYetkileri"));
         // Cariler — generic transfer (ortak kolonlar otomatik keşfedilir)
         result.Add(await SafeTransferAsync(() => TransferSimpleWithFirmaIdAsync("Cariler", firmaIdVarsayilan), "Cariler"));
+        result.Add(await SafeTransferAsync(TransferMuhasebeHesaplariAsync, "MuhasebeHesaplari"));
 
         // ── Kaynak DB'deki TÜM diğer tablolar (otomatik keşif) ────────
         var allSourceTables = await DiscoverSourceTablesAsync();
@@ -73,6 +74,7 @@ public class LegacyDataTransferService
         {
             "__EFMigrationsHistory", "Organizasyonlar", "Firmalar", "Roller",
             "Kullanicilar", "RolYetkileri", "Cariler", "Sirketler",
+            "MuhasebeHesaplari",
             "SirketTransferLoglari", "PlanlamaKayitlar", "Randevular",
             "KullaniciBildirimleri", "KullaniciMesajlari", "KullaniciOturumlari",
             "MesajKonusmalari", "MailGonderimleri", "ModulYetkileri",
@@ -216,6 +218,120 @@ public class LegacyDataTransferService
         return result;
     }
 
+    private async Task<TransferResult> TransferMuhasebeHesaplariAsync()
+    {
+        const string tableName = "MuhasebeHesaplari";
+
+        var result = new TransferResult();
+        using var source = await OpenSourceAsync();
+        using var target = await OpenTargetAsync();
+
+        var sourceCols = await GetColumnNamesAsync(source, tableName);
+        if (sourceCols.Count == 0) return result;
+
+        var targetCols = await GetColumnNamesAsync(target, tableName);
+        if (targetCols.Count == 0)
+        {
+            _logger.LogInformation("{Table}: hedef tablo yok, atlandi", tableName);
+            return result;
+        }
+
+        if (!sourceCols.Contains("Id", StringComparer.OrdinalIgnoreCase) ||
+            !sourceCols.Contains("HesapKodu", StringComparer.OrdinalIgnoreCase) ||
+            !targetCols.Contains("HesapKodu", StringComparer.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning("{Table}: zorunlu kolonlar bulunamadi, generic aktarim deneniyor", tableName);
+            return await TransferSimpleWithFirmaIdAsync(tableName, 1);
+        }
+
+        var targetColsByName = targetCols.ToDictionary(c => c, c => c, StringComparer.OrdinalIgnoreCase);
+        var commonCols = sourceCols
+            .Where(c => !c.Equals("UstHesapId", StringComparison.OrdinalIgnoreCase))
+            .Where(c => targetColsByName.ContainsKey(c))
+            .Select(c => (sourceName: c, targetName: targetColsByName[c]))
+            .ToList();
+
+        var sourceColList = string.Join(", ", sourceCols.Select(QuoteIdentifier));
+        var rows = new List<Dictionary<string, object?>>();
+        var legacyIdToKod = new Dictionary<int, string>();
+
+        using (var cmd = new NpgsqlCommand($"SELECT {sourceColList} FROM {QuoteIdentifier(tableName)}", source))
+        using (var reader = await cmd.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+                for (var i = 0; i < sourceCols.Count; i++)
+                    row[sourceCols[i]] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+
+                rows.Add(row);
+
+                if (TryGetInt(row, "Id", out var id) && row.TryGetValue("HesapKodu", out var kodValue) && kodValue is string kod)
+                    legacyIdToKod[id] = kod;
+            }
+        }
+
+        foreach (var row in rows)
+        {
+            try
+            {
+                await UpsertMuhasebeHesapAsync(target, commonCols, row);
+                result.Transferred++;
+            }
+            catch (PostgresException ex) when (ex.SqlState == "23505" && commonCols.Any(c => c.targetName.Equals("Id", StringComparison.OrdinalIgnoreCase)))
+            {
+                // Hedefte seed ile ayni Id baska bir hesapta olabilir. Bu durumda Id'yi hedef DB uretsin,
+                // sonraki parent baglantisini HesapKodu uzerinden kuracagiz.
+                var withoutId = commonCols
+                    .Where(c => !c.targetName.Equals("Id", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                await UpsertMuhasebeHesapAsync(target, withoutId, row);
+                result.Transferred++;
+            }
+        }
+
+        var parentUpdates = 0;
+        foreach (var row in rows)
+        {
+            if (!row.TryGetValue("HesapKodu", out var kodValue) || kodValue is not string childKod)
+                continue;
+
+            if (!TryGetInt(row, "UstHesapId", out var legacyParentId))
+            {
+                using var clearCmd = new NpgsqlCommand(
+                    $@"UPDATE {QuoteIdentifier(tableName)}
+                       SET ""UstHesapId"" = NULL
+                       WHERE ""HesapKodu"" = @childKod AND ""UstHesapId"" IS NOT NULL", target);
+                clearCmd.Parameters.AddWithValue("@childKod", childKod);
+                parentUpdates += await clearCmd.ExecuteNonQueryAsync();
+                continue;
+            }
+
+            if (!legacyIdToKod.TryGetValue(legacyParentId, out var parentKod))
+            {
+                _logger.LogWarning("{Table}: {HesapKodu} icin legacy parent bulunamadi: {ParentId}", tableName, childKod, legacyParentId);
+                continue;
+            }
+
+            using var updateCmd = new NpgsqlCommand(
+                $@"UPDATE {QuoteIdentifier(tableName)} AS child
+                   SET ""UstHesapId"" = parent.""Id""
+                   FROM {QuoteIdentifier(tableName)} AS parent
+                   WHERE child.""HesapKodu"" = @childKod
+                     AND parent.""HesapKodu"" = @parentKod
+                     AND child.""UstHesapId"" IS DISTINCT FROM parent.""Id""", target);
+            updateCmd.Parameters.AddWithValue("@childKod", childKod);
+            updateCmd.Parameters.AddWithValue("@parentKod", parentKod);
+            parentUpdates += await updateCmd.ExecuteNonQueryAsync();
+        }
+
+        await ResetSequenceAsync(target, tableName);
+
+        _logger.LogInformation("{Table}: {Count} kayit, {ParentUpdates} ust hesap baglantisi", tableName, result.Transferred, parentUpdates);
+        return result;
+    }
+
     /// <summary>
     /// Kaynak ve hedef tablodaki ORTAK kolonları keşfeder, sadece onları transfer eder.
     /// Hedefte FirmaId varsa ekler, yoksa eklemez.
@@ -341,6 +457,78 @@ public class LegacyDataTransferService
         using var cmd = new NpgsqlCommand(sql, conn);
         cmd.Parameters.AddRange(parameters);
         await cmd.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<List<string>> GetColumnNamesAsync(NpgsqlConnection conn, string tableName)
+    {
+        using var cmd = new NpgsqlCommand(
+            @"SELECT column_name FROM information_schema.columns
+              WHERE table_schema='public' AND table_name=@tableName
+              ORDER BY ordinal_position", conn);
+        cmd.Parameters.AddWithValue("@tableName", tableName);
+
+        var columns = new List<string>();
+        using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            columns.Add(reader.GetString(0));
+
+        return columns;
+    }
+
+    private static async Task UpsertMuhasebeHesapAsync(
+        NpgsqlConnection target,
+        List<(string sourceName, string targetName)> columns,
+        Dictionary<string, object?> row)
+    {
+        var insertColumns = string.Join(", ", columns.Select(c => QuoteIdentifier(c.targetName)));
+        var valueNames = columns.Select((_, i) => $"@p{i}").ToList();
+        var updateColumns = columns
+            .Where(c => !c.targetName.Equals("Id", StringComparison.OrdinalIgnoreCase))
+            .Where(c => !c.targetName.Equals("HesapKodu", StringComparison.OrdinalIgnoreCase))
+            .Select(c => $"{QuoteIdentifier(c.targetName)} = EXCLUDED.{QuoteIdentifier(c.targetName)}")
+            .ToList();
+
+        var conflictSql = updateColumns.Count > 0
+            ? $"DO UPDATE SET {string.Join(", ", updateColumns)}"
+            : "DO NOTHING";
+
+        using var cmd = new NpgsqlCommand(
+            $@"INSERT INTO ""MuhasebeHesaplari"" ({insertColumns})
+               VALUES ({string.Join(", ", valueNames)})
+               ON CONFLICT (""HesapKodu"") {conflictSql}", target);
+
+        for (var i = 0; i < columns.Count; i++)
+        {
+            var value = row.TryGetValue(columns[i].sourceName, out var rawValue) && rawValue is not null
+                ? rawValue
+                : DBNull.Value;
+            cmd.Parameters.Add(new NpgsqlParameter(valueNames[i], value));
+        }
+
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    private static async Task ResetSequenceAsync(NpgsqlConnection conn, string tableName)
+    {
+        using var cmd = new NpgsqlCommand(
+            @"SELECT setval(
+                  pg_get_serial_sequence(@tableName, 'Id'),
+                  COALESCE((SELECT MAX(""Id"") FROM ""MuhasebeHesaplari""), 1),
+                  true)", conn);
+        cmd.Parameters.AddWithValue("@tableName", QuoteIdentifier(tableName));
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    private static string QuoteIdentifier(string identifier) => $"\"{identifier.Replace("\"", "\"\"")}\"";
+
+    private static bool TryGetInt(Dictionary<string, object?> row, string key, out int value)
+    {
+        value = 0;
+        if (!row.TryGetValue(key, out var rawValue) || rawValue is null || rawValue is DBNull)
+            return false;
+
+        value = Convert.ToInt32(rawValue);
+        return true;
     }
 
 }

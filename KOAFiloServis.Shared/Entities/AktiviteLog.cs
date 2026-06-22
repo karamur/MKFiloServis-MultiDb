@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace KOAFiloServis.Shared.Entities;
 
@@ -8,7 +8,7 @@ namespace KOAFiloServis.Shared.Entities;
 public class AktiviteLog : BaseEntity, IFirmaTenant
 {
     [Required]
-    public DateTime IslemZamani { get; set; } = DateTime.Now;
+    public DateTime IslemZamani { get; set; } = DateTime.UtcNow;
 
     [Required]
     public string IslemTipi { get; set; } = string.Empty; // Ekleme, Guncelleme, Silme, Giris, Cikis

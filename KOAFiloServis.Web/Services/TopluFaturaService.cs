@@ -359,43 +359,6 @@ public class TopluFaturaService : ITopluFaturaService
         return sonuc;
     }
 
-    public async Task<bool> PuantajFaturaEslestirAsync(int faturaId, List<int> puantajKayitIdleri, FaturaYonu yon)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-
-        var fatura = await context.Faturalar.FindAsync(faturaId);
-        if (fatura == null) return false;
-
-        var kayitlar = await context.PuantajKayitlar
-            .Where(p => puantajKayitIdleri.Contains(p.Id))
-            .ToListAsync();
-
-        foreach (var kayit in kayitlar)
-        {
-            if (yon == FaturaYonu.Giden)
-            {
-                // Satış faturası (Gelir)
-                kayit.GelirFaturaKesildi = true;
-                kayit.GelirFaturaNo = fatura.FaturaNo;
-                kayit.GelirFaturaTarihi = fatura.FaturaTarihi;
-                kayit.GelirFaturaId = faturaId;
-            }
-            else
-            {
-                // Alış faturası (Gider)
-                kayit.GiderFaturaAlindi = true;
-                kayit.GiderFaturaNo = fatura.FaturaNo;
-                kayit.GiderFaturaTarihi = fatura.FaturaTarihi;
-                kayit.GiderFaturaId = faturaId;
-            }
-
-            context.PuantajKayitlar.Update(kayit);
-        }
-
-        await context.SaveChangesAsync();
-        return true;
-    }
-
     public async Task<CariFaturaAyar?> GetCariFaturaAyarAsync(int cariId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
