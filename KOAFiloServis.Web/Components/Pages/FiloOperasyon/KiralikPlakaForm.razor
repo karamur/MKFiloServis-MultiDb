@@ -56,11 +56,11 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Başlama Tarihi</label>
-                            <input type="date" class="form-control" @bind="_model.BaslamaTarihi" @bind:after="OnPlanParametreDegisti" />
+                            <input type="date" class="form-control" @bind="_model.BaslamaTarihi" @bind:after="OnTarihAraligiDegisti" />
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Bitiş Tarihi</label>
-                            <input type="date" class="form-control" @bind="_model.BitisTarihi" @bind:after="OnPlanParametreDegisti" />
+                            <input type="date" class="form-control" @bind="_model.BitisTarihi" @bind:after="OnTarihAraligiDegisti" />
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Durum</label>
@@ -76,7 +76,7 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Periyot (Aylık/Yıllık)</label>
-                            <select class="form-select" @bind="_model.Periyot" @bind:after="OnPlanParametreDegisti">
+                            <select class="form-select" @bind="_model.Periyot" @bind:after="OnPeriyotDegisti">
                                 <option value="AYLIK">AYLIK</option>
                                 <option value="YILLIK">YILLIK</option>
                             </select>
@@ -86,21 +86,79 @@
                             <input type="number" step="0.01" class="form-control" @bind="_model.AylikVeyaYillikTutar" @bind:after="OnPlanParametreDegisti" />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Ek Tutar</label>
-                            <input type="number" step="0.01" class="form-control" @bind="_model.EkTutar" />
+                            <label class="form-label">Ödeme Sayısı</label>
+                            <input type="number" min="1" class="form-control" @bind="_model.OdemeSayisi" @bind:after="OnOdemeSayisiDegisti" />
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Toplam (Fatura + Ek Tutar)</label>
-                            <input type="text" class="form-control bg-light fw-bold" value="@_model.Toplam.ToString("N2")" readonly />
+                            <input type="text" class="form-control bg-light fw-bold" value="@GosterilenToplam.ToString("N2")" readonly />
                         </div>
                     </div>
 
                     <h5 class="border-bottom pb-2 mb-3 mt-4 d-flex justify-content-between align-items-center">
                         <span><i class="bi bi-table me-2"></i>Tek Birleşik Takip Listesi</span>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="BirlesikTakipPlaniniYenile">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="BirlesikTakipPlaniniElleYenile">
                             <i class="bi bi-arrow-repeat me-1"></i>Planı Yenile
                         </button>
                     </h5>
+
+                    <div class="card border-0 bg-light mb-3">
+                        <div class="card-body py-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0"><i class="bi bi-cash-coin me-2"></i>Ek Ödeme Girişleri</h6>
+                                <button type="button" class="btn btn-sm btn-outline-primary" @onclick="EkOdemeSatiriEkle">
+                                    <i class="bi bi-plus-lg me-1"></i>Ek Ödeme Ekle
+                                </button>
+                            </div>
+
+                            @if (_ekOdemeSatirlari.Count == 0)
+                            {
+                                <div class="text-muted small">Ek ödeme yok. Gerekirse ilgili ay için ek satır ekleyin.</div>
+                            }
+                            else
+                            {
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered mb-0 align-middle">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width:220px;">Dönem</th>
+                                                <th style="width:180px;" class="text-end">Ek Ödeme Tutarı</th>
+                                                <th>Açıklama</th>
+                                                <th style="width:90px;"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @for (int i = 0; i < _ekOdemeSatirlari.Count; i++)
+                                            {
+                                                var satir = _ekOdemeSatirlari[i];
+                                                <tr>
+                                                    <td>
+                                                        <select class="form-select form-select-sm" @bind="satir.DonemAnahtari" @bind:after="OnPlanParametreDegisti">
+                                                            @foreach (var donem in GetPlanDonemSecenekleri())
+                                                            {
+                                                                <option value="@donem.Key">@donem.Label</option>
+                                                            }
+                                                        </select>
+                                                    </td>
+                                                    <td>
+                                                        <input type="number" step="0.01" class="form-control form-control-sm text-end" @bind="satir.Tutar" @bind:after="OnPlanParametreDegisti" />
+                                                    </td>
+                                                    <td>
+                                                        <input class="form-control form-control-sm" @bind="satir.Aciklama" />
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => EkOdemeSatiriSil(i)">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                        </div>
+                    </div>
 
                     <div class="table-responsive">
                         <table class="table table-sm table-bordered align-middle">
@@ -108,6 +166,8 @@
                                 <tr>
                                     <th width="40">#</th>
                                     <th>Ay</th>
+                                    <th class="text-end">Baz Plan</th>
+                                    <th class="text-end">Ek Ödeme</th>
                                     <th class="text-end">Plan Tutarı</th>
                                     <th style="min-width:180px;">Fatura No</th>
                                     <th style="min-width:170px;">Fatura Tarihi</th>
@@ -124,10 +184,12 @@
                                     <tr>
                                         <td><span class="badge bg-secondary">@satir.Sira</span></td>
                                         <td>@satir.AyAdi @satir.Yil</td>
+                                        <td class="text-end">@satir.BazPlanTutari.ToString("N2")</td>
+                                        <td class="text-end text-warning fw-semibold">@satir.EkOdemeTutari.ToString("N2")</td>
                                         <td class="text-end fw-semibold">@satir.PlanTutari.ToString("N2")</td>
-                                        <td><input class="form-control form-control-sm" @bind="satir.FaturaNo" placeholder="Fatura no" /></td>
+                                        <td><input class="form-control form-control-sm" @bind="satir.FaturaNo" @bind:event="oninput" placeholder="Fatura no" /></td>
                                         <td><input type="date" class="form-control form-control-sm" @bind="satir.FaturaTarihi" /></td>
-                                        <td><input type="number" step="0.01" class="form-control form-control-sm text-end" @bind="satir.FaturaTutari" /></td>
+                                        <td><input type="number" step="0.01" class="form-control form-control-sm text-end" @bind="satir.FaturaTutari" @bind:event="oninput" /></td>
                                         <td><input type="number" step="0.01" class="form-control form-control-sm text-end" @bind="satir.BuAyOdenen" /></td>
                                         <td class="text-end text-danger fw-semibold">@Math.Max(0, satir.PlanTutari - satir.BuAyOdenen).ToString("N2")</td>
                                         <td class="text-end">
@@ -144,6 +206,8 @@
                             <tfoot class="table-light">
                                 <tr>
                                     <th colspan="2">Toplam</th>
+                                    <th class="text-end">@_aylikTakipSatirlari.Sum(x => x.BazPlanTutari).ToString("N2")</th>
+                                    <th class="text-end">@_aylikTakipSatirlari.Sum(x => x.EkOdemeTutari).ToString("N2")</th>
                                     <th class="text-end">@_aylikTakipSatirlari.Sum(x => x.PlanTutari).ToString("N2")</th>
                                     <th></th>
                                     <th></th>
@@ -160,6 +224,10 @@
                         <div class="col-md-2">
                             <label class="form-label">Tamamı (Plan Toplamı)</label>
                             <input type="text" class="form-control bg-light fw-bold" value="@_aylikTakipSatirlari.Sum(x => x.PlanTutari).ToString("N2")" readonly />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Ek Ödeme Toplamı</label>
+                            <input type="text" class="form-control bg-light fw-bold text-warning" value="@_aylikTakipSatirlari.Sum(x => x.EkOdemeTutari).ToString("N2")" readonly />
                         </div>
                         <div class="col-md-2">
                             <label class="form-label">Kesilen Toplam Fatura</label>
@@ -231,22 +299,21 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var ay in _aylikTakipSatirlari)
+                                @foreach (var ay in aylar)
                                 {
-                                    var buAyKalan = Math.Max(0, ay.PlanTutari - ay.BuAyOdenen);
                                     <tr>
                                         <td>@ay.Sira</td>
                                         <td>@ay.AyAdi @ay.Yil</td>
-                                        <td class="text-end">@ay.PlanTutari.ToString("N2")</td>
-                                        <td>@(string.IsNullOrWhiteSpace(ay.FaturaNo) ? "-" : ay.FaturaNo)</td>
-                                        <td>@(ay.FaturaTarihi?.ToString("dd.MM.yyyy") ?? "-")</td>
-                                        <td class="text-end">@ay.FaturaTutari.ToString("N2")</td>
+                                        <td class="text-end">@ay.OdemeTutari.ToString("N2")</td>
+                                        <td>@(ay.EslesenFaturaNoListesi.Any() ? string.Join(", ", ay.EslesenFaturaNoListesi) : "-")</td>
+                                        <td>@(ay.EslesenFaturaDetaylari.FirstOrDefault()?.FaturaTarihi?.ToString("dd.MM.yyyy") ?? "-")</td>
+                                        <td class="text-end">@ay.EslesenFaturaTutari.ToString("N2")</td>
                                         <td class="text-end">@ay.BuAyOdenen.ToString("N2")</td>
-                                        <td class="text-end">@buAyKalan.ToString("N2")</td>
+                                        <td class="text-end">@ay.BuAyKalan.ToString("N2")</td>
                                         <td class="text-end">
-                                            @if (ay.BuAyOdenen >= ay.PlanTutari && ay.PlanTutari > 0)
+                                            @if (ay.OdemeDurumu == "YAPILDI")
                                             { <span class="badge bg-success">Ödeme Yapıldı</span> }
-                                            else if (ay.BuAyOdenen > 0)
+                                            else if (ay.OdemeDurumu == "KISMI")
                                             { <span class="badge bg-warning text-dark">Kısmi</span> }
                                             else
                                             { <span class="badge bg-danger">Yapılmadı</span> }
@@ -273,9 +340,11 @@
     private List<Arac> _araclar = new();
     private readonly List<FaturaSatiri> _faturaSatirlari = new();
     private readonly List<AylikTakipSatiri> _aylikTakipSatirlari = new();
+    private readonly List<EkOdemeSatiri> _ekOdemeSatirlari = new();
     private string _odemeDurumuSecimi = "YAPILMADI";
     private bool _showOnizlemeModal;
     private decimal FaturaToplami => _faturaSatirlari.Sum(x => x.Tutar);
+    private decimal GosterilenToplam => _aylikTakipSatirlari.Sum(x => x.PlanTutari);
 
     protected override async Task OnInitializedAsync() {
         _araclar = await AracService.GetActiveAsync();
@@ -285,7 +354,8 @@
             else NavManager.NavigateTo("/araclar/plaka-takip");
         }
         FaturaSatirlariniModeldenYukle();
-        BirlesikTakipPlaniniYenile();
+        _model.OdemeSayisi = _model.OdemeSayisi <= 0 ? DonemSayisiniHesapla(_model.BaslamaTarihi, _model.BitisTarihi, _model.Periyot) : _model.OdemeSayisi;
+        BirlesikTakipPlaniniYenile(false);
         SenkronizeOdemeDurumuModelden();
         _loading = false;
     }
@@ -315,6 +385,40 @@
     {
         _faturaSatirlari.Clear();
 
+        var detaylar = _model.FaturaDetaylari?
+            .Where(x => !x.IsDeleted)
+            .OrderBy(x => x.Yil)
+            .ThenBy(x => x.Ay)
+            .ThenBy(x => x.Sira)
+            .ToList() ?? new List<KiralikPlakaTakipFatura>();
+
+        if (detaylar.Count > 0)
+        {
+            _faturaSatirlari.AddRange(detaylar.Select(x => new FaturaSatiri
+            {
+                Sira = x.Sira,
+                Yil = x.Yil,
+                Ay = x.Ay,
+                BazPlanTutari = x.BazPlanTutari > 0 ? x.BazPlanTutari : entityFallbackBazPlan(x),
+                EkOdemeTutari = x.EkOdemeTutari,
+                PlanTutari = x.PlanTutari > 0 ? x.PlanTutari : ((x.BazPlanTutari > 0 ? x.BazPlanTutari : entityFallbackBazPlan(x)) + x.EkOdemeTutari),
+                FaturaNo = x.FaturaNo,
+                FaturaTarihi = x.FaturaTarihi,
+                Tutar = x.FaturaTutari,
+                BuAyOdenen = x.BuAyOdenen
+            }));
+
+            _ekOdemeSatirlari.Clear();
+            _ekOdemeSatirlari.AddRange(detaylar
+                .Where(x => x.EkOdemeTutari > 0)
+                .Select(x => new EkOdemeSatiri
+                {
+                    DonemAnahtari = $"{x.Yil:D4}-{x.Ay:D2}",
+                    Tutar = x.EkOdemeTutari
+                }));
+            return;
+        }
+
         var noParcalari = (_model.KesilenFaturaNo ?? string.Empty)
             .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
@@ -326,7 +430,7 @@
                 _faturaSatirlari.Add(new FaturaSatiri
                 {
                     FaturaNo = no,
-                    FaturaTarihi = _model.KesilenFaturaTarih,
+                    FaturaTarihi = null,
                     Tutar = parcaTutari
                 });
             }
@@ -358,7 +462,101 @@
             _faturaSatirlari.Add(new FaturaSatiri());
     }
 
-    private void BirlesikTakipPlaniniYenile()
+    private void EkOdemeSatiriEkle()
+    {
+        var ilkDonem = GetPlanDonemSecenekleri().FirstOrDefault();
+        if (ilkDonem == null)
+        {
+            ToastService.ShowWarning("Önce başlangıç tarihi ve ödeme planını oluşturun.");
+            return;
+        }
+
+        _ekOdemeSatirlari.Add(new EkOdemeSatiri
+        {
+            DonemAnahtari = ilkDonem.Key,
+            Tutar = 0
+        });
+    }
+
+    private void EkOdemeSatiriSil(int index)
+    {
+        if (index < 0 || index >= _ekOdemeSatirlari.Count)
+            return;
+
+        _ekOdemeSatirlari.RemoveAt(index);
+        OnPlanParametreDegisti();
+    }
+
+    private List<DonemSecenegi> GetPlanDonemSecenekleri()
+    {
+        var liste = new List<DonemSecenegi>();
+        if (_model.BaslamaTarihi == default || _model.OdemeSayisi <= 0)
+            return liste;
+
+        var tarih = new DateTime(_model.BaslamaTarihi.Year, _model.BaslamaTarihi.Month, 1);
+        for (int i = 0; i < _model.OdemeSayisi; i++)
+        {
+            liste.Add(new DonemSecenegi
+            {
+                Key = $"{tarih.Year:D4}-{tarih.Month:D2}",
+                Label = $"{CultureInfo.GetCultureInfo("tr-TR").TextInfo.ToTitleCase(tarih.ToString("MMMM yyyy", CultureInfo.GetCultureInfo("tr-TR")))}"
+            });
+
+            tarih = _model.Periyot == "YILLIK" ? tarih.AddYears(1) : tarih.AddMonths(1);
+        }
+
+        return liste;
+    }
+
+    private Dictionary<(int Yil, int Ay), decimal> GetEkOdemeSozlugu()
+    {
+        var sozluk = new Dictionary<(int Yil, int Ay), decimal>();
+        foreach (var satir in _ekOdemeSatirlari)
+        {
+            if (string.IsNullOrWhiteSpace(satir.DonemAnahtari) || satir.Tutar == 0)
+                continue;
+
+            var parcali = satir.DonemAnahtari.Split('-');
+            if (parcali.Length != 2 || !int.TryParse(parcali[0], out var yil) || !int.TryParse(parcali[1], out var ay))
+                continue;
+
+            var anahtar = (yil, ay);
+            sozluk[anahtar] = sozluk.GetValueOrDefault(anahtar) + satir.Tutar;
+        }
+
+        return sozluk;
+    }
+
+    private static int DonemSayisiniHesapla(DateTime baslangic, DateTime bitis, string? periyot)
+    {
+        if (baslangic == default || bitis == default || bitis < baslangic)
+            return 1;
+
+        if (string.Equals(periyot, "YILLIK", StringComparison.OrdinalIgnoreCase))
+        {
+            var yilSayisi = (bitis.Year - baslangic.Year) + 1;
+            if (bitis.Month < baslangic.Month || (bitis.Month == baslangic.Month && bitis.Day < baslangic.Day))
+                yilSayisi--;
+
+            return Math.Max(1, yilSayisi);
+        }
+
+        var aySayisi = ((bitis.Year - baslangic.Year) * 12) + bitis.Month - baslangic.Month + 1;
+        if (bitis.Day < baslangic.Day)
+            aySayisi--;
+
+        return Math.Max(1, aySayisi);
+    }
+
+    private static DateTime DonemBitisTarihiHesapla(DateTime baslangic, int odemeSayisi, string? periyot)
+    {
+        var guvenliOdemeSayisi = Math.Max(1, odemeSayisi);
+        return string.Equals(periyot, "YILLIK", StringComparison.OrdinalIgnoreCase)
+            ? baslangic.Date.AddYears(guvenliOdemeSayisi).AddDays(-1)
+            : baslangic.Date.AddMonths(guvenliOdemeSayisi).AddDays(-1);
+    }
+
+    private void BirlesikTakipPlaniniYenile(bool bitisTarihiniYenidenHesapla = true)
     {
         var oncekiSatirlar = _aylikTakipSatirlari
             .GroupBy(x => (x.Yil, x.Ay))
@@ -366,52 +564,62 @@
 
         _aylikTakipSatirlari.Clear();
 
-        if (_model.BaslamaTarihi == default || _model.BitisTarihi == default)
+        if (_model.BaslamaTarihi == default)
             return;
 
-        var ilkAy = new DateTime(_model.BaslamaTarihi.Year, _model.BaslamaTarihi.Month, 1);
-        var sonAy = new DateTime(_model.BitisTarihi.Year, _model.BitisTarihi.Month, 1);
+        _model.OdemeSayisi = Math.Max(1, _model.OdemeSayisi);
+        var ilkDonem = new DateTime(_model.BaslamaTarihi.Year, _model.BaslamaTarihi.Month, 1);
+        if (bitisTarihiniYenidenHesapla || _model.BitisTarihi == default || _model.BitisTarihi < _model.BaslamaTarihi)
+            _model.BitisTarihi = DonemBitisTarihiHesapla(_model.BaslamaTarihi, _model.OdemeSayisi, _model.Periyot);
 
+        var ekOdemeSozlugu = GetEkOdemeSozlugu();
         var faturaAyGruplari = _faturaSatirlari
-            .Where(x => x.FaturaTarihi.HasValue)
-            .GroupBy(x => (x.FaturaTarihi!.Value.Year, x.FaturaTarihi!.Value.Month))
-            .ToDictionary(g => g.Key, g => g.ToList());
+            .Where(x => (x.Yil.HasValue && x.Ay.HasValue) || x.FaturaTarihi.HasValue)
+            .GroupBy(x => x.Yil.HasValue && x.Ay.HasValue
+                ? (x.Yil!.Value, x.Ay!.Value)
+                : (x.FaturaTarihi!.Value.Year, x.FaturaTarihi!.Value.Month))
+            .ToDictionary(g => g.Key, g => g.OrderBy(x => x.Sira).ToList());
 
-        var tarih = ilkAy;
-        var sira = 0;
-        var kalanOdenen = _model.OdenenTutar;
+        var tarih = ilkDonem;
+        var toplamOdenen = Math.Max(0, _model.OdenenTutar);
+        var siraliEskiSatirlar = oncekiSatirlar.Values.OrderBy(x => x.Sira).ToList();
+        var kalanOdenen = toplamOdenen;
 
-        while (tarih <= sonAy)
+        for (int i = 0; i < _model.OdemeSayisi; i++)
         {
-            sira++;
-            var plan = _model.AylikVeyaYillikTutar;
             var ayAnahtar = (tarih.Year, tarih.Month);
+            oncekiSatirlar.TryGetValue(ayAnahtar, out var oncekiSatir);
+            var kaynakSatir = oncekiSatir ?? (i < siraliEskiSatirlar.Count ? siraliEskiSatirlar[i] : null);
+            var bazPlan = _model.AylikVeyaYillikTutar;
+            var ekOdeme = ekOdemeSozlugu.GetValueOrDefault(ayAnahtar);
+            var plan = bazPlan + ekOdeme;
             var ayFaturalari = faturaAyGruplari.TryGetValue(ayAnahtar, out var bulunanlar)
                 ? bulunanlar
                 : new List<FaturaSatiri>();
-
-            var secilenFatura = ayFaturalari.FirstOrDefault();
-            var varsayilanBuAyOdenen = Math.Min(plan, Math.Max(0, kalanOdenen));
-            kalanOdenen = Math.Max(0, kalanOdenen - plan);
-
-            oncekiSatirlar.TryGetValue(ayAnahtar, out var oncekiSatir);
+            var buAyOdenen = kaynakSatir?.BuAyOdenen ?? Math.Min(plan, kalanOdenen);
+            kalanOdenen = Math.Max(0, kalanOdenen - buAyOdenen);
 
             _aylikTakipSatirlari.Add(new AylikTakipSatiri
             {
-                Sira = sira,
+                Sira = i + 1,
                 Yil = tarih.Year,
                 Ay = tarih.Month,
-                AyAdi = new DateTime(2024, tarih.Month, 1).ToString("MMMM"),
+                AyAdi = CultureInfo.GetCultureInfo("tr-TR").TextInfo.ToTitleCase(tarih.ToString("MMMM")),
+                BazPlanTutari = bazPlan,
+                EkOdemeTutari = ekOdeme,
                 PlanTutari = plan,
-                FaturaNo = oncekiSatir?.FaturaNo ?? secilenFatura?.FaturaNo,
-                FaturaTarihi = oncekiSatir?.FaturaTarihi ?? secilenFatura?.FaturaTarihi,
-                FaturaTutari = oncekiSatir?.FaturaTutari ?? ayFaturalari.Sum(x => x.Tutar),
-                BuAyOdenen = oncekiSatir?.BuAyOdenen ?? varsayilanBuAyOdenen
+                FaturaNo = kaynakSatir?.FaturaNo ?? ayFaturalari.FirstOrDefault()?.FaturaNo,
+                FaturaTarihi = kaynakSatir?.FaturaTarihi ?? ayFaturalari.FirstOrDefault()?.FaturaTarihi,
+                FaturaTutari = kaynakSatir?.FaturaTutari ?? ayFaturalari.Sum(x => x.Tutar),
+                BuAyOdenen = buAyOdenen
             });
 
-            tarih = tarih.AddMonths(1);
+            tarih = string.Equals(_model.Periyot, "YILLIK", StringComparison.OrdinalIgnoreCase)
+                ? tarih.AddYears(1)
+                : tarih.AddMonths(1);
         }
 
+        _model.EkTutar = _ekOdemeSatirlari.Sum(x => x.Tutar);
         _model.ToplamOdeme = _aylikTakipSatirlari.Sum(x => x.PlanTutari);
         _model.OdenenTutar = _aylikTakipSatirlari.Sum(x => x.BuAyOdenen);
         SenkronizeOdemeDurumuModelden();
@@ -420,8 +628,6 @@
     private List<OdemePlanSatiri> OdemePlaniHesapla()
     {
         var liste = new List<OdemePlanSatiri>();
-        var baslangic = _model.BaslamaTarihi;
-        var bitis = _model.BitisTarihi;
         var bugun = DateTime.Today;
 
         var faturaAyGruplari = _faturaSatirlari
@@ -429,34 +635,24 @@
             .GroupBy(x => (x.FaturaTarihi!.Value.Year, x.FaturaTarihi!.Value.Month))
             .ToDictionary(g => g.Key, g => g.ToList());
 
-        var tarih = new DateTime(baslangic.Year, baslangic.Month, 1);
-        var bitisAy = new DateTime(bitis.Year, bitis.Month, 1);
-        int sira = 0;
-        var kalanOdenen = _model.OdenenTutar;
-
-        while (tarih <= bitisAy)
+        foreach (var satir in _aylikTakipSatirlari.OrderBy(x => x.Sira))
         {
-            sira++;
-            var aylikTutar = _model.AylikVeyaYillikTutar;
-            var buAyOdenen = Math.Min(aylikTutar, Math.Max(0, kalanOdenen));
-            kalanOdenen = Math.Max(0, kalanOdenen - aylikTutar);
-
-            var ayAnahtar = (tarih.Year, tarih.Month);
+            var ayAnahtar = (satir.Yil, satir.Ay);
             var eslesenFaturalar = faturaAyGruplari.TryGetValue(ayAnahtar, out var ayFaturalari)
                 ? ayFaturalari
                 : new List<FaturaSatiri>();
             var eslesenFaturaToplami = eslesenFaturalar.Sum(x => x.Tutar);
 
-            var odemeDurumu = buAyOdenen >= aylikTutar && aylikTutar > 0
+            var odemeDurumu = satir.BuAyOdenen >= satir.PlanTutari && satir.PlanTutari > 0
                 ? "YAPILDI"
-                : (buAyOdenen > 0 ? "KISMI" : "YAPILMADI");
+                : (satir.BuAyOdenen > 0 ? "KISMI" : "YAPILMADI");
 
             liste.Add(new OdemePlanSatiri
             {
-                Sira = sira,
-                Yil = tarih.Year,
-                AyAdi = new DateTime(2024, tarih.Month, 1).ToString("MMMM"),
-                OdemeTutari = aylikTutar,
+                Sira = satir.Sira,
+                Yil = satir.Yil,
+                AyAdi = satir.AyAdi,
+                OdemeTutari = satir.PlanTutari,
                 EslesenFaturaTutari = eslesenFaturaToplami,
                 EslesenFaturaNoListesi = eslesenFaturalar
                     .Select(x => x.FaturaNo)
@@ -467,12 +663,11 @@
                 EslesenFaturaDetaylari = eslesenFaturalar
                     .OrderByDescending(x => x.FaturaTarihi)
                     .ToList(),
-                BuAyOdenen = buAyOdenen,
-                BuAyKalan = Math.Max(0, aylikTutar - buAyOdenen),
+                BuAyOdenen = satir.BuAyOdenen,
+                BuAyKalan = Math.Max(0, satir.PlanTutari - satir.BuAyOdenen),
                 OdemeDurumu = odemeDurumu,
-                BugundenOnce = tarih < bugun
+                BugundenOnce = new DateTime(satir.Yil, satir.Ay, 1) < bugun
             });
-            tarih = tarih.AddMonths(1);
         }
 
         return liste;
@@ -524,16 +719,67 @@
             _odemeDurumuSecimi = "KISMI";
     }
 
-    private void OnPlanParametreDegisti()
+    private decimal entityFallbackBazPlan(KiralikPlakaTakipFatura _) => _model.AylikVeyaYillikTutar;
+
+    private void OnTarihAraligiDegisti()
+    {
+        if (_model.BaslamaTarihi != default && _model.BitisTarihi != default && _model.BitisTarihi >= _model.BaslamaTarihi)
+            _model.OdemeSayisi = DonemSayisiniHesapla(_model.BaslamaTarihi, _model.BitisTarihi, _model.Periyot);
+
+        BirlesikTakipPlaniniYenile(false);
+    }
+
+    private void OnPeriyotDegisti()
+    {
+        if (_model.BaslamaTarihi != default && _model.BitisTarihi != default && _model.BitisTarihi >= _model.BaslamaTarihi)
+            _model.OdemeSayisi = DonemSayisiniHesapla(_model.BaslamaTarihi, _model.BitisTarihi, _model.Periyot);
+        else
+            _model.OdemeSayisi = Math.Max(1, _model.OdemeSayisi);
+
+        BirlesikTakipPlaniniYenile(false);
+    }
+
+    private void OnOdemeSayisiDegisti()
+    {
+        _model.OdemeSayisi = Math.Max(1, _model.OdemeSayisi);
+        BirlesikTakipPlaniniYenile();
+    }
+
+    private void BirlesikTakipPlaniniElleYenile()
     {
         BirlesikTakipPlaniniYenile();
     }
 
+    private void OnPlanParametreDegisti()
+    {
+        BirlesikTakipPlaniniYenile(false);
+    }
+
     private class FaturaSatiri
     {
+        public int Sira { get; set; }
+        public int? Yil { get; set; }
+        public int? Ay { get; set; }
+        public decimal BazPlanTutari { get; set; }
+        public decimal EkOdemeTutari { get; set; }
+        public decimal PlanTutari { get; set; }
         public string? FaturaNo { get; set; }
         public DateTime? FaturaTarihi { get; set; }
         public decimal Tutar { get; set; }
+        public decimal BuAyOdenen { get; set; }
+    }
+
+    private class DonemSecenegi
+    {
+        public string Key { get; set; } = string.Empty;
+        public string Label { get; set; } = string.Empty;
+    }
+
+    private class EkOdemeSatiri
+    {
+        public string DonemAnahtari { get; set; } = string.Empty;
+        public decimal Tutar { get; set; }
+        public string? Aciklama { get; set; }
     }
 
     private class AylikTakipSatiri
@@ -542,6 +788,8 @@
         public int Yil { get; set; }
         public int Ay { get; set; }
         public string AyAdi { get; set; } = string.Empty;
+        public decimal BazPlanTutari { get; set; }
+        public decimal EkOdemeTutari { get; set; }
         public decimal PlanTutari { get; set; }
         public string? FaturaNo { get; set; }
         public DateTime? FaturaTarihi { get; set; }
@@ -587,6 +835,7 @@
         _model.Durum = string.IsNullOrWhiteSpace(_model.Durum) ? "ÖNÜ AÇIK" : Kirp(_model.Durum, 50);
         _model.KasaDurumu = string.IsNullOrWhiteSpace(_model.KasaDurumu) ? "PLAKA" : Kirp(_model.KasaDurumu, 50);
         _model.Periyot = string.IsNullOrWhiteSpace(_model.Periyot) ? "AYLIK" : Kirp(_model.Periyot, 20).ToUpperInvariant();
+        _model.OdemeSayisi = Math.Max(1, _model.OdemeSayisi);
         _model.KesilenFaturaNo = string.IsNullOrWhiteSpace(_model.KesilenFaturaNo) ? null : Kirp(_model.KesilenFaturaNo, 50);
     }
 
@@ -601,37 +850,55 @@
 
     private void BirlesikTabloyuModeleAktar()
     {
-        // Tablodan fatura satırlarını topla
-        _faturaSatirlari.Clear();
-        _faturaSatirlari.AddRange(_aylikTakipSatirlari
-            .Where(x => !string.IsNullOrWhiteSpace(x.FaturaNo) || x.FaturaTutari > 0 || x.FaturaTarihi.HasValue)
-            .Select(x => new FaturaSatiri
+        var detaySatirlar = _aylikTakipSatirlari
+            .Select((x, index) => new KiralikPlakaTakipFatura
             {
+                Sira = index + 1,
+                Yil = x.Yil,
+                Ay = x.Ay,
+                BazPlanTutari = x.BazPlanTutari,
+                EkOdemeTutari = x.EkOdemeTutari,
+                PlanTutari = x.PlanTutari,
                 FaturaNo = x.FaturaNo?.Trim(),
                 FaturaTarihi = x.FaturaTarihi,
-                Tutar = x.FaturaTutari
-            }));
+                FaturaTutari = x.FaturaTutari,
+                BuAyOdenen = x.BuAyOdenen
+            })
+            .ToList();
 
-        var doluSatirlar = _faturaSatirlari.ToList();
+        _model.FaturaDetaylari = detaySatirlar;
 
-        // Birleşik fatura no string'ini oluştur
-        var birlesikFaturaNo = string.Join("; ", doluSatirlar
+        // Ekrandaki çalışma koleksiyonu da detaylarla senkron kalsın
+        _faturaSatirlari.Clear();
+        _faturaSatirlari.AddRange(detaySatirlar.Select(x => new FaturaSatiri
+        {
+            Sira = x.Sira,
+            Yil = x.Yil,
+            Ay = x.Ay,
+            FaturaNo = x.FaturaNo,
+            FaturaTarihi = x.FaturaTarihi,
+            Tutar = x.FaturaTutari,
+            BuAyOdenen = x.BuAyOdenen
+        }));
+
+        // Birleşik fatura no string'ini oluştur (geriye dönük alan)
+        var birlesikFaturaNo = string.Join("; ", detaySatirlar
             .Select(x => x.FaturaNo?.Trim())
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Distinct(StringComparer.OrdinalIgnoreCase));
+            .Where(x => !string.IsNullOrWhiteSpace(x)));
 
         if (birlesikFaturaNo.Length > 50)
             birlesikFaturaNo = birlesikFaturaNo[..50];
 
-        _model.KesilenFaturaNo = birlesikFaturaNo;
+        _model.KesilenFaturaNo = string.IsNullOrWhiteSpace(birlesikFaturaNo) ? null : birlesikFaturaNo;
 
-        // En son fatura tarihini al
-        _model.KesilenFaturaTarih = doluSatirlar
+        // Tek tarih varsa legacy tarih alanını doldur, birden çok tarih varsa null bırak
+        var tarihliSatirlar = detaySatirlar
             .Where(x => x.FaturaTarihi.HasValue)
             .Select(x => x.FaturaTarihi!.Value.Date)
-            .OrderByDescending(x => x)
-            .Cast<DateTime?>()
-            .FirstOrDefault();
+            .Distinct()
+            .ToList();
+
+        _model.KesilenFaturaTarih = tarihliSatirlar.Count == 1 ? tarihliSatirlar[0] : null;
 
         // Toplamları hesapla ve modele aktar
         _model.KesilenFaturaTutar = _aylikTakipSatirlari.Sum(x => x.FaturaTutari);

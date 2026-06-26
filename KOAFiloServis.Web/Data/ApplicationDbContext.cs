@@ -189,6 +189,7 @@ public class ApplicationDbContext : DbContext
 
     // Kiralık Plaka Takip
     public DbSet<KiralikPlakaTakip> KiralikPlakaTakipler { get; set; }
+    public DbSet<KiralikPlakaTakipFatura> KiralikPlakaTakipFaturalar { get; set; }
 
     // Filo Komisyon ve Araç Operasyon Puantaj Modülü
     public DbSet<FiloGuzergahEslestirme> FiloGuzergahEslestirmeleri { get; set; }
@@ -209,11 +210,10 @@ public class ApplicationDbContext : DbContext
     public DbSet<AracMarkaModel> AracMarkaModeller { get; set; }
     public DbSet<PiyasaKaynak> PiyasaKaynaklar { get; set; }
 
-    // Filo Operasyon Modülü (Araç Alım/Satım, Kiralık C Plaka Takip)
+    // Filo Operasyon Modülü (Araç Alım/Satım)
     public DbSet<AracAlimSatim> AracAlimSatimlar { get; set; }
     public DbSet<PlakaDonusum> PlakaDonusumler { get; set; }
     public DbSet<AracOperasyonDurum> AracOperasyonDurumlari { get; set; }
-    public DbSet<KiralikCPlakaTakip> KiralikCPlakaTakipler { get; set; }
 
     // CRM Modulu
     public DbSet<Bildirim> Bildirimler { get; set; }
@@ -1427,12 +1427,30 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.Periyot).HasMaxLength(20);
             entity.Property(e => e.FaturaOdemesi).HasPrecision(18, 2);
             entity.Property(e => e.AylikVeyaYillikTutar).HasPrecision(18, 2);
+            entity.Property(e => e.EkTutar).HasPrecision(18, 2);
 
             entity.HasOne(e => e.Arac)
                 .WithMany()
                 .HasForeignKey(e => e.AracId)
                 .OnDelete(DeleteBehavior.SetNull);
 
+            entity.HasMany(e => e.FaturaDetaylari)
+                .WithOne(e => e.KiralikPlakaTakip)
+                .HasForeignKey(e => e.KiralikPlakaTakipId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasQueryFilter(e => !e.IsDeleted);
+        });
+
+        modelBuilder.Entity<KiralikPlakaTakipFatura>(entity =>
+        {
+            entity.Property(e => e.FaturaNo).HasMaxLength(50);
+            entity.Property(e => e.BazPlanTutari).HasPrecision(18, 2);
+            entity.Property(e => e.EkOdemeTutari).HasPrecision(18, 2);
+            entity.Property(e => e.PlanTutari).HasPrecision(18, 2);
+            entity.Property(e => e.FaturaTutari).HasPrecision(18, 2);
+            entity.Property(e => e.BuAyOdenen).HasPrecision(18, 2);
+            entity.HasIndex(e => new { e.KiralikPlakaTakipId, e.Yil, e.Ay, e.Sira });
             entity.HasQueryFilter(e => !e.IsDeleted);
         });
         // AracOperasyonDurum

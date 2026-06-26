@@ -315,13 +315,6 @@
                                     </td>
                                     <td>@arac.ModelYili</td>
                                     <td>@arac.KoltukSayisi</td>
-                                    <td>
-                                        <div class="small">
-                                            <div><span class="text-muted">Trafiğe Çıkış:</span> @(arac.RuhsatTrafigeCikisTarihi?.ToString("dd.MM.yyyy") ?? "-")</div>
-                                            <div><span class="text-muted">Satış:</span> @(arac.RuhsatSatisTarihi?.ToString("dd.MM.yyyy") ?? "-")</div>
-                                            <div><span class="text-muted">Tescil:</span> @(arac.RuhsatTescilTarihi?.ToString("dd.MM.yyyy") ?? "-")</div>
-                                        </div>
-                                    </td>
                                     <td class="text-center">
                                         <div class="btn-group btn-group-sm">
                                             <button class="btn btn-outline-info" @onclick="() => EvraklarGit(arac.Id)" title="Evraklar">

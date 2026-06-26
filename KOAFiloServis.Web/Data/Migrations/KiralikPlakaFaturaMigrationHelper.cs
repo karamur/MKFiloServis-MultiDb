@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace KOAFiloServis.Web.Data.Migrations;
@@ -22,7 +22,8 @@ public static class KiralikPlakaFaturaMigrationHelper
             ["GelenFaturaId"] = "integer NULL",
             ["ToplamOdeme"] = "numeric NOT NULL DEFAULT 0",
             ["OdenenTutar"] = "numeric NOT NULL DEFAULT 0",
-            ["SonOdemeTarihi"] = "timestamp NULL"
+            ["SonOdemeTarihi"] = "timestamp NULL",
+            ["OdemeSayisi"] = "integer NOT NULL DEFAULT 12"
         };
 
         foreach (var (col, type) in columnsToAdd)

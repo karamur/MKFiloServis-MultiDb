@@ -7,6 +7,7 @@ public class KiralikPlakaTakip : BaseEntity
 {
     public int? AracId { get; set; }
     public virtual Arac? Arac { get; set; }
+    public virtual ICollection<KiralikPlakaTakipFatura> FaturaDetaylari { get; set; } = new List<KiralikPlakaTakipFatura>();
 
     [Required, StringLength(15)]
     public string Plaka { get; set; } = string.Empty;
@@ -27,6 +28,8 @@ public class KiralikPlakaTakip : BaseEntity
     
     [StringLength(20)]
     public string Periyot { get; set; } = "AYLIK";
+
+    public int OdemeSayisi { get; set; } = 12;
 
     public decimal AylikVeyaYillikTutar { get; set; } = 0;
 

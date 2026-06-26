@@ -3,6 +3,7 @@ using System;
 using KOAFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace KOAFiloServis.Web.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260625132528_AddKiralikPlakaTakipFaturaDetay")]
+    partial class AddKiralikPlakaTakipFaturaDetay
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -8593,6 +8596,65 @@ namespace KOAFiloServis.Web.Data.Migrations
                     b.HasIndex("KiralayiciCariId");
 
                     b.ToTable("KiralamaAraclar");
+                });
+
+            modelBuilder.Entity("KOAFiloServis.Shared.Entities.KiralikCPlakaTakip", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AylikYillik")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("BaslamaTarihi")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime>("BitisTarihi")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int?>("DeletedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Durum")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("FaturaBedeli")
+                        .HasColumnType("numeric");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("IsimSoyisim")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("KasaDurumu")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Plaka")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal>("Toplam")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("KiralikCPlakaTakipler");
                 });
 
             modelBuilder.Entity("KOAFiloServis.Shared.Entities.KiralikPlakaTakip", b =>

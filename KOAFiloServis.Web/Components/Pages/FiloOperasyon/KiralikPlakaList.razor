@@ -501,9 +501,77 @@
 
 @if (showHesapPusulasiModal && seciliHesapItem != null)
 {
+    <style>
+        .hesap-pusulasi-surface {
+            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+        }
+
+        .hesap-pusulasi-surface .modal-header {
+            background: #1f2937 !important;
+        }
+
+        .hesap-pusulasi-summary-card {
+            border: 0;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+        }
+
+        .hesap-pusulasi-summary-card small,
+        .hesap-pusulasi-summary-card h5 {
+            color: #0f172a !important;
+        }
+
+        .hesap-pusulasi-summary-card.is-primary { background: #dbeafe !important; }
+        .hesap-pusulasi-summary-card.is-success { background: #dcfce7 !important; }
+        .hesap-pusulasi-summary-card.is-danger { background: #fee2e2 !important; }
+        .hesap-pusulasi-summary-card.is-warning { background: #fef3c7 !important; }
+
+        .hesap-pusulasi-table thead th {
+            background: #eff6ff !important;
+            color: #1e3a8a !important;
+            border-bottom: 1px solid #bfdbfe;
+        }
+
+        .hesap-pusulasi-table tbody td,
+        .hesap-pusulasi-table tbody th,
+        .hesap-pusulasi-table tfoot th,
+        .hesap-pusulasi-table tfoot td {
+            color: #111827;
+        }
+
+        .hesap-pusulasi-print-area {
+            background: #fff;
+            color: #111827;
+        }
+
+        @@media print {
+            body * {
+                visibility: hidden !important;
+            }
+
+            #hesapPusulasiPrintArea,
+            #hesapPusulasiPrintArea * {
+                visibility: visible !important;
+            }
+
+            #hesapPusulasiPrintArea {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                padding: 0 !important;
+                margin: 0 !important;
+                background: #fff !important;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
     <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.6);" tabindex="-1">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
-            <div class="modal-content">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content hesap-pusulasi-surface">
                 <div class="modal-header bg-dark text-white">
                     <h5 class="modal-title"><i class="bi bi-journal-text me-2"></i>Hesap Pusulası - @seciliHesapItem.Plaka</h5>
                     <button type="button" class="btn-close btn-close-white" @onclick="HesapPusulasiKapat"></button>
@@ -512,7 +580,7 @@
                     <!-- Genel Bilgiler -->
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
-                            <div class="card border-primary">
+                            <div class="card border-primary shadow-sm">
                                 <div class="card-header py-2 bg-primary text-white"><strong><i class="bi bi-person me-1"></i>@seciliHesapItem.IsimSoyisim</strong></div>
                                 <div class="card-body py-2 small">
                                     <table class="table table-sm table-borderless mb-0">
@@ -528,27 +596,27 @@
                         <div class="col-md-6">
                             <div class="row g-2">
                                 <div class="col-6">
-                                    <div class="card bg-info text-white text-center py-2">
+                                    <div class="card hesap-pusulasi-summary-card is-primary text-center py-2">
                                         <small>Toplam Borç</small>
-                                        <h5 class="mb-0">@seciliHesapItem.ToplamOdeme.ToString("N2")</h5>
+                                        <h5 class="mb-0 fw-bold">@seciliHesapItem.ToplamOdeme.ToString("N2")</h5>
                                     </div>
                                 </div>
                                 <div class="col-6">
-                                    <div class="card bg-success text-white text-center py-2">
+                                    <div class="card hesap-pusulasi-summary-card is-success text-center py-2">
                                         <small>Ödenen</small>
-                                        <h5 class="mb-0">@seciliHesapItem.OdenenTutar.ToString("N2")</h5>
+                                        <h5 class="mb-0 fw-bold">@seciliHesapItem.OdenenTutar.ToString("N2")</h5>
                                     </div>
                                 </div>
                                 <div class="col-6">
-                                    <div class="card @(seciliHesapItem.KalanOdeme > 0 ? "bg-danger" : "bg-success") text-white text-center py-2">
+                                    <div class="card hesap-pusulasi-summary-card @(seciliHesapItem.KalanOdeme > 0 ? "is-danger" : "is-success") text-center py-2">
                                         <small>Kalan Ödeme</small>
-                                        <h5 class="mb-0">@seciliHesapItem.KalanOdeme.ToString("N2")</h5>
+                                        <h5 class="mb-0 fw-bold">@seciliHesapItem.KalanOdeme.ToString("N2")</h5>
                                     </div>
                                 </div>
                                 <div class="col-6">
-                                    <div class="card @(seciliHesapItem.KalanFaturaTutar > 0 ? "bg-warning" : "bg-success") text-dark text-center py-2">
+                                    <div class="card hesap-pusulasi-summary-card @(seciliHesapItem.KalanFaturaTutar > 0 ? "is-warning" : "is-success") text-center py-2">
                                         <small>Kalan Fatura</small>
-                                        <h5 class="mb-0">@seciliHesapItem.KalanFaturaTutar.ToString("N2")</h5>
+                                        <h5 class="mb-0 fw-bold">@seciliHesapItem.KalanFaturaTutar.ToString("N2")</h5>
                                     </div>
                                 </div>
                             </div>
@@ -593,7 +661,7 @@
                             else
                             {
                                 <div class="table-responsive" style="max-height:280px; overflow-y:auto;">
-                                    <table class="table table-sm table-striped align-middle mb-0">
+                                    <table class="table table-sm table-striped align-middle mb-0 hesap-pusulasi-table">
                                         <thead class="table-light sticky-top">
                                             <tr>
                                                 <th>Fatura No</th>
@@ -695,7 +763,7 @@
                                 <small class="text-muted">@vadeAylari.Count ay</small>
                             </div>
                             <div class="card-body p-0" style="max-height: 300px; overflow-y: auto;">
-                                <table class="table table-sm table-striped mb-0">
+                                <table class="table table-sm table-striped mb-0 hesap-pusulasi-table">
                                     <thead class="table-light sticky-top">
                                         <tr>
                                             <th width="40">#</th>
@@ -812,11 +880,40 @@
                         </div>
                     }
                 </div>
-                <div class="modal-footer">
+                <div class="modal-footer no-print">
+                    <button type="button" class="btn btn-outline-info" @onclick="HesapPusulasiOnizlemeAc">
+                        <i class="bi bi-eye me-1"></i>Önizle
+                    </button>
+                    <button type="button" class="btn btn-outline-dark" @onclick="HesapPusulasiYazdir">
+                        <i class="bi bi-printer me-1"></i>Yazdır
+                    </button>
                     <a href="/araclar/plaka-takip/@seciliHesapItem.Id/duzenle" class="btn btn-outline-primary">
                         <i class="bi bi-pencil me-1"></i>Düzenle
                     </a>
                     <button type="button" class="btn btn-secondary" @onclick="HesapPusulasiKapat">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showHesapPusulasiOnizleme && seciliHesapItem != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.7);" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Hesap Pusulası Önizleme - @seciliHesapItem.Plaka</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="HesapPusulasiOnizlemeKapat"></button>
+                </div>
+                <div class="modal-body p-0" style="height:80vh;">
+                    <iframe srcdoc="@hesapPusulasiHtmlOnizleme" style="width:100%; height:100%; border:none;"></iframe>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-dark" @onclick="HesapPusulasiYazdir">
+                        <i class="bi bi-printer me-1"></i>Yazdır
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="HesapPusulasiOnizlemeKapat">Kapat</button>
                 </div>
             </div>
         </div>
@@ -962,6 +1059,8 @@
     private bool hesapPusulasiYukleniyor;
     private bool hesapPusulasiPdfYukleniyor;
     private bool showHesapPusulasiPdfOnizleme;
+    private bool showHesapPusulasiOnizleme;
+    private string? hesapPusulasiHtmlOnizleme;
     private string? hesapPusulasiPdfDataUrl;
     private string? hesapPusulasiPdfDosyaAdi;
     private IBrowserFile? importFile;
@@ -1109,7 +1208,6 @@
 
     private async Task HesapPusulasiGosterAsync(KiralikPlakaTakip item)
     {
-        seciliHesapItem = item;
         showHesapPusulasiModal = true;
         hesapPusulasiYukleniyor = true;
 
@@ -1117,17 +1215,35 @@
         {
             await using var db = await DbFactory.CreateDbContextAsync();
 
-            var faturaNoSet = ParseFaturaNoListesi(item.KesilenFaturaNo)
+            seciliHesapItem = await db.KiralikPlakaTakipler
+                .Include(x => x.Arac)
+                .Include(x => x.FaturaDetaylari.Where(fd => !fd.IsDeleted))
+                .FirstOrDefaultAsync(x => !x.IsDeleted && x.Id == item.Id);
+
+            if (seciliHesapItem == null)
+            {
+                ToastService.ShowWarning("Kayıt detayları bulunamadı.");
+                showHesapPusulasiModal = false;
+                return;
+            }
+
+            seciliHesapItem.FaturaDetaylari = seciliHesapItem.FaturaDetaylari
+                .OrderBy(x => x.Yil)
+                .ThenBy(x => x.Ay)
+                .ThenBy(x => x.Sira)
+                .ToList();
+
+            var faturaNoSet = ParseFaturaNoListesi(seciliHesapItem.KesilenFaturaNo)
                 .Select(x => x.ToUpperInvariant())
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             var linkedById = new List<Fatura>();
-            if (item.GelenFaturaId.HasValue && item.GelenFaturaId.Value > 0)
+            if (seciliHesapItem.GelenFaturaId.HasValue && seciliHesapItem.GelenFaturaId.Value > 0)
             {
                 var fatura = await db.Faturalar
                     .Include(f => f.Cari)
                     .Include(f => f.FaturaKalemleri)
-                    .FirstOrDefaultAsync(f => !f.IsDeleted && f.Id == item.GelenFaturaId.Value);
+                    .FirstOrDefaultAsync(f => !f.IsDeleted && f.Id == seciliHesapItem.GelenFaturaId.Value);
                 if (fatura != null)
                     linkedById.Add(fatura);
             }
@@ -1170,16 +1286,31 @@
                     .ToList()
             }).ToList();
 
+            if (!seciliFaturaSatirlari.Any() && seciliHesapItem.FaturaDetaylari.Any())
+            {
+                seciliFaturaSatirlari = seciliHesapItem.FaturaDetaylari
+                    .Select(detay => new HesapPusulasiFaturaSatiri
+                    {
+                        FaturaNo = detay.FaturaNo,
+                        FaturaTarihi = detay.FaturaTarihi,
+                        Toplam = detay.FaturaTutari,
+                        Aciklama = detay.EkOdemeTutari > 0
+                            ? $"Birleşik takip satırı • Baz: {detay.BazPlanTutari:N2} + Ek: {detay.EkOdemeTutari:N2}"
+                            : "Birleşik takip satırı"
+                    })
+                    .ToList();
+            }
+
             if (!seciliFaturaSatirlari.Any())
             {
-                var manualNos = ParseFaturaNoListesi(item.KesilenFaturaNo).ToList();
+                var manualNos = ParseFaturaNoListesi(seciliHesapItem.KesilenFaturaNo).ToList();
                 if (manualNos.Any())
                 {
-                    var parca = manualNos.Count > 0 ? item.KesilenFaturaTutar / manualNos.Count : 0;
+                    var parca = manualNos.Count > 0 ? seciliHesapItem.KesilenFaturaTutar / manualNos.Count : 0;
                     seciliFaturaSatirlari = manualNos.Select(no => new HesapPusulasiFaturaSatiri
                     {
                         FaturaNo = no,
-                        FaturaTarihi = item.KesilenFaturaTarih,
+                        FaturaTarihi = seciliHesapItem.KesilenFaturaTarih,
                         Toplam = parca,
                         Aciklama = "Manuel fatura girişi"
                     }).ToList();
@@ -1204,6 +1335,7 @@
         seciliFaturaSatirlari.Clear();
         hesapPusulasiYukleniyor = false;
         hesapPusulasiPdfYukleniyor = false;
+        HesapPusulasiOnizlemeKapat();
         KapatHesapPusulasiPdfOnizleme();
     }
 
@@ -1382,6 +1514,116 @@
         {
             hesapPusulasiPdfYukleniyor = false;
         }
+    }
+
+    private async Task HesapPusulasiOnizlemeAc()
+    {
+        if (seciliHesapItem == null)
+            return;
+
+        hesapPusulasiHtmlOnizleme = HesapPusulasiHtmlOlustur();
+        showHesapPusulasiOnizleme = true;
+        await Task.CompletedTask;
+    }
+
+    private void HesapPusulasiOnizlemeKapat()
+    {
+        showHesapPusulasiOnizleme = false;
+        hesapPusulasiHtmlOnizleme = null;
+    }
+
+    private async Task HesapPusulasiYazdir()
+    {
+        try
+        {
+            var html = HesapPusulasiHtmlOlustur();
+            await JS.InvokeVoidAsync("printContent", html);
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Yazdırma hatası: {ex.Message}");
+        }
+    }
+
+    private string HesapPusulasiHtmlOlustur()
+    {
+        if (seciliHesapItem == null)
+            return string.Empty;
+
+        var tr = CultureInfo.GetCultureInfo("tr-TR");
+        var vadeAylari = HesapPlaniHesapla(seciliHesapItem, seciliFaturaSatirlari);
+        var faturaRows = string.Join(string.Empty, seciliFaturaSatirlari.Select(fs => $@"<tr>
+<td><strong>{System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(fs.FaturaNo) ? "-" : fs.FaturaNo)}</strong></td>
+<td>{(fs.FaturaTarihi?.ToString("dd.MM.yyyy") ?? "-")}</td>
+<td>{System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(fs.CariUnvan) ? "-" : fs.CariUnvan)}</td>
+<td>{System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(fs.Aciklama) ? "-" : fs.Aciklama)}</td>
+<td style='text-align:right'>{fs.Kdv.ToString("N2", tr)}</td>
+<td style='text-align:right'><strong>{fs.Toplam.ToString("N2", tr)}</strong></td>
+</tr>"));
+
+        var vadeRows = string.Join(string.Empty, vadeAylari.Select(ay => $@"<tr>
+<td>{ay.Sira}</td>
+<td>{System.Net.WebUtility.HtmlEncode($"{ay.AyAdi} {ay.Yil}")}</td>
+<td style='text-align:right'>{ay.OdemeTutari.ToString("N2", tr)}</td>
+<td>{System.Net.WebUtility.HtmlEncode(ay.EslesenFaturaNoListesi.Any() ? string.Join(", ", ay.EslesenFaturaNoListesi) : "-")}</td>
+<td style='text-align:right'>{(ay.EslesenFaturaTutari > 0 ? ay.EslesenFaturaTutari.ToString("N2", tr) : "-")}</td>
+<td style='text-align:right; color:#047857; font-weight:700;'>{ay.BuAyOdenen.ToString("N2", tr)}</td>
+<td style='text-align:right; color:#dc2626; font-weight:700;'>{ay.BuAyKalan.ToString("N2", tr)}</td>
+<td style='text-align:right'>{System.Net.WebUtility.HtmlEncode(ay.OdemeDurumu == "YAPILDI" ? "Ödeme Yapıldı" : ay.OdemeDurumu == "KISMI" ? "Kısmi Ödeme" : ay.BugundenOnce ? "Ödenmedi" : "Bekliyor")}</td>
+</tr>"));
+
+        return $@"<!doctype html>
+<html lang='tr'>
+<head>
+<meta charset='utf-8' />
+<title>Hesap Pusulası - {System.Net.WebUtility.HtmlEncode(seciliHesapItem.Plaka)}</title>
+<style>
+body {{ font-family: Arial, Helvetica, sans-serif; color:#111827; margin:24px; background:#fff; }}
+.header {{ background:#1f2937; color:#fff; padding:16px 20px; border-radius:12px; margin-bottom:16px; }}
+.grid {{ display:grid; grid-template-columns: 1.2fr 1fr 1fr; gap:12px; margin-bottom:16px; }}
+.card {{ border:1px solid #dbeafe; border-radius:14px; overflow:hidden; }}
+.card .title {{ background:#2563eb; color:#fff; padding:10px 14px; font-weight:700; }}
+.card .content {{ padding:12px 14px; }}
+.summary {{ border-radius:14px; padding:12px; text-align:center; font-weight:700; }}
+.summary small {{ display:block; color:#334155; font-weight:600; margin-bottom:4px; }}
+.s1 {{ background:#dbeafe; }} .s2 {{ background:#dcfce7; }} .s3 {{ background:#fee2e2; }} .s4 {{ background:#fef3c7; }}
+table {{ width:100%; border-collapse:collapse; margin-top:8px; }}
+th, td {{ border:1px solid #e5e7eb; padding:8px; font-size:13px; }}
+th {{ background:#eff6ff; color:#1e3a8a; text-align:left; }}
+.text-end {{ text-align:right; }}
+.section {{ margin-top:18px; }}
+.section h3 {{ margin:0 0 8px 0; font-size:18px; color:#111827; }}
+.footer-note {{ margin-top:10px; color:#6b7280; font-size:13px; }}
+</style>
+</head>
+<body>
+<div class='header'><h2 style='margin:0;'>Hesap Pusulası - {System.Net.WebUtility.HtmlEncode(seciliHesapItem.Plaka)}</h2></div>
+<div class='grid'>
+<div class='card'>
+<div class='title'>{System.Net.WebUtility.HtmlEncode(seciliHesapItem.IsimSoyisim)}</div>
+<div class='content'>
+<div><strong>Plaka:</strong> {System.Net.WebUtility.HtmlEncode(seciliHesapItem.Plaka)}</div>
+<div><strong>Başlama:</strong> {seciliHesapItem.BaslamaTarihi:dd.MM.yyyy}</div>
+<div><strong>Bitiş:</strong> {seciliHesapItem.BitisTarihi:dd.MM.yyyy}</div>
+<div><strong>Durum:</strong> {System.Net.WebUtility.HtmlEncode(seciliHesapItem.Durum)}</div>
+<div><strong>Periyot:</strong> {System.Net.WebUtility.HtmlEncode(seciliHesapItem.Periyot)}</div>
+</div>
+</div>
+<div class='summary s1'><small>Toplam Borç</small>{seciliHesapItem.ToplamOdeme.ToString("N2", tr)}</div>
+<div class='summary s2'><small>Ödenen</small>{seciliHesapItem.OdenenTutar.ToString("N2", tr)}</div>
+<div class='summary s3'><small>Kalan Ödeme</small>{seciliHesapItem.KalanOdeme.ToString("N2", tr)}</div>
+<div class='summary s4'><small>Kalan Fatura</small>{seciliHesapItem.KalanFaturaTutar.ToString("N2", tr)}</div>
+</div>
+<div class='section'>
+<h3>Vade / Ödeme Takvimi</h3>
+<table>
+<thead><tr><th>#</th><th>Ay</th><th class='text-end'>Tutar</th><th>Eşleşen Faturalar</th><th class='text-end'>Eşleşen Toplam</th><th class='text-end'>Bu Ay Ödenen</th><th class='text-end'>Bu Ay Kalan</th><th class='text-end'>Durum</th></tr></thead>
+<tbody>{vadeRows}</tbody>
+<tfoot><tr><th colspan='2'>Toplam</th><th class='text-end'>{vadeAylari.Sum(a => a.OdemeTutari).ToString("N2", tr)}</th><th></th><th class='text-end'>{vadeAylari.Sum(a => a.EslesenFaturaTutari).ToString("N2", tr)}</th><th class='text-end'>{vadeAylari.Sum(a => a.BuAyOdenen).ToString("N2", tr)}</th><th class='text-end'>{vadeAylari.Sum(a => a.BuAyKalan).ToString("N2", tr)}</th><th></th></tr></tfoot>
+</table>
+</div>
+</body>
+</html>";
     }
 
     private async Task<FaturaPdfResult?> HesapPusulasiPdfOlustur()

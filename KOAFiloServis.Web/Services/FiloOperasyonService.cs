@@ -1,4 +1,4 @@
-using KOAFiloServis.Shared.Entities;
+﻿using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -22,12 +22,6 @@ public interface IFiloOperasyonService
     Task<PlakaDonusum> UpdatePlakaDonusumAsync(PlakaDonusum donusum);
     Task DeletePlakaDonusumAsync(int id);
 
-        // Kiralik C Plaka Takibi
-    Task<List<KiralikCPlakaTakip>> GetKiralikCPlakaTakiplerAsync();
-    Task<KiralikCPlakaTakip?> GetKiralikCPlakaTakipAsync(int id);
-    Task<KiralikCPlakaTakip> CreateKiralikCPlakaTakipAsync(KiralikCPlakaTakip takip);
-    Task<KiralikCPlakaTakip> UpdateKiralikCPlakaTakipAsync(KiralikCPlakaTakip takip);
-    Task DeleteKiralikCPlakaTakipAsync(int id);
 
     // Operasyon Durum
     Task<List<AracOperasyonDurum>> GetAracOperasyonDurumlariAsync(int yil, int ay);
@@ -245,61 +239,6 @@ public class FiloOperasyonService : IFiloOperasyonService
 
     #endregion
 
-    #region Kiralik C Plaka Takip
-
-    public async Task<List<KiralikCPlakaTakip>> GetKiralikCPlakaTakiplerAsync()
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.KiralikCPlakaTakipler.OrderByDescending(x => x.BaslamaTarihi).ToListAsync();
-    }
-
-    public async Task<KiralikCPlakaTakip?> GetKiralikCPlakaTakipAsync(int id)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.KiralikCPlakaTakipler.FirstOrDefaultAsync(x => x.Id == id);
-    }
-
-    public async Task<KiralikCPlakaTakip> CreateKiralikCPlakaTakipAsync(KiralikCPlakaTakip takip)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        takip.CreatedAt = DateTime.UtcNow;
-        context.KiralikCPlakaTakipler.Add(takip);
-        await context.SaveChangesAsync();
-        return takip;
-    }
-
-    public async Task<KiralikCPlakaTakip> UpdateKiralikCPlakaTakipAsync(KiralikCPlakaTakip takip)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var existing = await context.KiralikCPlakaTakipler.FindAsync(takip.Id);
-        if (existing == null) throw new InvalidOperationException("Kayıt bulunamadı.");
-        existing.Plaka = takip.Plaka;
-        existing.IsimSoyisim = takip.IsimSoyisim;
-        existing.BaslamaTarihi = takip.BaslamaTarihi;
-        existing.BitisTarihi = takip.BitisTarihi;
-        existing.Durum = takip.Durum;
-        existing.KasaDurumu = takip.KasaDurumu;
-        existing.FaturaBedeli = takip.FaturaBedeli;
-        existing.AylikYillik = takip.AylikYillik;
-        existing.Toplam = takip.Toplam;
-        existing.UpdatedAt = DateTime.UtcNow;
-        await context.SaveChangesAsync();
-        return existing;
-    }
-
-    public async Task DeleteKiralikCPlakaTakipAsync(int id)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var takip = await context.KiralikCPlakaTakipler.FindAsync(id);
-        if (takip != null)
-        {
-            takip.IsDeleted = true;
-            takip.UpdatedAt = DateTime.UtcNow;
-            await context.SaveChangesAsync();
-        }
-    }
-
-    #endregion
 
     #region Operasyon Durum
 

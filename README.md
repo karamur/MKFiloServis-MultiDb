@@ -1,4 +1,4 @@
-# 🚍 KOAFiloServis
+﻿# 🚍 KOAFiloServis
 
 <div align="center">
 
@@ -297,9 +297,9 @@ pg_dump -h <host> -U <user> -d KOAFiloServis_Master -F c -f master-$(date +%Y%m%
 
 ## 🔄 Veri Aktarımı
 
-### PostgreSQL → SQLite
+### Veritabanı Geçiş ve İlk Kurulum
 
-`KOAFiloServis.DataSync.exe` GUI/CLI ile PostgreSQL ↔ SQLite aktarımı.
+İlk kurulumda `dbsettings.json` hedef veritabanını gösterir. Web uygulaması başlangıcında gerekli migration/helper akışları çalıştırılarak şema güncellemeleri uygulanır.
 
 ### DestekCRMServisBlazorDb → KOAFiloServis
 
@@ -324,17 +324,17 @@ dotnet test  # 363 test, < 1 saniye
 
 | Katman | Teknoloji |
 |--------|-----------|
-| Runtime | .NET 10.0 |
+| Runtime | .NET 10.0 / .NET 8.0 |
 | UI | Blazor Interactive Server, Bootstrap 5 |
-| ORM | EF Core 10 (Npgsql, Sqlite, SqlServer, MySQL) |
+| ORM | EF Core 10 (Npgsql odaklı, çoklu sağlayıcı uyarlamaları ile) |
 | Cache | Redis + InMemory |
 | Jobs | Quartz.NET 3.x |
 | Doküman | ClosedXML, EPPlus, QuestPDF |
-| AI | Microsoft.Extensions.AI, OllamaSharp |
+| AI | Microsoft.Extensions.AI |
 | Auth | ASP.NET Core Identity + JWT |
-| Test | xUnit, Moq, FluentAssertions, Playwright |
-| Setup | Inno Setup 6 |
-| Lisans | WinForms (.NET 10) |
+| Test | Playwright, Selenium |
+| Setup | Deploy scriptleri + Inno Setup bileşenleri |
+| Lisans | WinForms (.NET 8 Windows) |
 
 ---
 
@@ -342,19 +342,18 @@ dotnet test  # 363 test, < 1 saniye
 
 ```
 KOAFiloServis-MultiDb/
-├── KOAFiloServis.Web/          # Ana Blazor uygulaması
-│   ├── Components/Pages/       # Modül sayfaları
-│   ├── Controllers/            # REST API (JWT)
-│   ├── Services/               # İş katmanı (100+ servis)
-│   ├── Data/                   # DbContext, Migration
-│   ├── Hubs/                   # SignalR
-│   └── Jobs/                   # Quartz job'ları
-├── KOAFiloServis.Shared/       # Entity, DTO, kontratlar
-├── KOAFiloServis.DataSync/     # Veri aktarım aracı
-├── KOAFiloServis.LisansDesktop/# Lisans yöneticisi
-├── KOAFiloServis.Tests/        # Test suite
-├── setup/                      # Inno Setup installer
-└── docs/                       # Mimari dokümanlar
+├── KOAFiloServis.Web/             # Ana Blazor uygulaması
+│   ├── Components/Pages/          # Modül sayfaları
+│   ├── Controllers/               # REST API (JWT)
+│   ├── Services/                  # İş katmanı
+│   ├── Data/                      # DbContext, migration, helper'lar
+│   ├── Docs/                      # Ürün ve süreç dokümantasyonu
+│   ├── Deploy/                    # Kurulum/deploy scriptleri
+│   └── wwwroot/                   # Statik içerikler
+├── KOAFiloServis.Shared/          # Entity, DTO ve ortak modeller
+├── KOAFiloServis.LisansDesktop/   # Windows lisans yardımcı uygulaması
+├── KOAFiloServis.slnx             # Çözüm dosyası
+└── README.md                      # Ana proje dokümantasyonu
 ```
 
 ---

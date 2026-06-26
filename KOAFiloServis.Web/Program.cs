@@ -895,6 +895,13 @@ await RunScopedSafeAsync(app, "KiralikPlakaFaturaMigration", async services =>
     await KOAFiloServis.Web.Data.Migrations.KiralikPlakaFaturaMigrationHelper.ApplyAsync(context, logger);
 });
 
+await RunScopedSafeAsync(app, "KiralikPlakaTakipFaturaPlanMigration", async services =>
+{
+    var context = services.GetRequiredService<ApplicationDbContext>();
+    var logger = services.GetRequiredService<ILogger<Program>>();
+    await KOAFiloServis.Web.Data.Migrations.KiralikPlakaTakipFaturaPlanMigrationHelper.ApplyAsync(context, logger);
+});
+
 await RunScopedSafeAsync(app, "SeedDefaultEvrakTanimlari", async services =>
 {
     var ozlukService = services.GetRequiredService<IPersonelOzlukService>();
@@ -914,6 +921,7 @@ await RunScopedSafeAsync(app, "ApplyMigrations", async services =>
     await KOAFiloServis.Web.Data.Migrations.GuzergahKoordinatMigrationHelper.ApplyGuzergahKoordinatMigrationPostgresAsync(ctx);
     await KOAFiloServis.Web.Data.Migrations.PuantajSlotMigrationHelper.ApplyAsync(ctx, logger);
     await KOAFiloServis.Web.Data.Migrations.KiralikPlakaFaturaMigrationHelper.ApplyAsync(ctx, logger);
+    await KOAFiloServis.Web.Data.Migrations.KiralikPlakaTakipFaturaPlanMigrationHelper.ApplyAsync(ctx, logger);
     await KOAFiloServis.Web.Data.Migrations.GuzergahSeferFirmaIdConstraintHelper.ApplyAsync(ctx, logger);
     await KOAFiloServis.Web.Data.Migrations.SyncPuantajSchemaMigrationHelper.ApplyAsync(ctx, logger);
     await KOAFiloServis.Web.Data.Migrations.PuantajCarpaniMigrationHelper.ApplyAsync(ctx, logger);
