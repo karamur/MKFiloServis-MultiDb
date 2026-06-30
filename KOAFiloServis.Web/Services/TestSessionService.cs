@@ -1,7 +1,9 @@
-using KOAFiloServis.Shared;
+﻿using KOAFiloServis.Shared;
 using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
+using System.Data;
+using System.Text.RegularExpressions;
 
 namespace KOAFiloServis.Web.Services;
 
@@ -22,6 +24,8 @@ public class TestSessionService
         "MuhasebeFisleri",
         "SnapshotTransactions"
     };
+
+    private static readonly Regex SafeIdentifierRegex = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
 
     public bool IsTestActive { get; private set; }
 
@@ -45,11 +49,10 @@ public class TestSessionService
             // Her tablo için backup oluştur
             foreach (var table in _backupTables)
             {
-                var backupName = $"backup_{table}_{tag}";
-                await db.Database.ExecuteSqlRawAsync(
-                    $"DROP TABLE IF EXISTS \"{backupName}\"");
-                await db.Database.ExecuteSqlRawAsync(
-                    $"CREATE TABLE \"{backupName}\" AS SELECT * FROM \"{table}\"");
+                var safeTable = EnsureSafeIdentifier(table, nameof(table));
+                var backupName = BuildBackupTableName(safeTable, tag);
+                await ExecuteNonQueryAsync(db, $"DROP TABLE IF EXISTS \"{backupName}\"");
+                await ExecuteNonQueryAsync(db, $"CREATE TABLE \"{backupName}\" AS SELECT * FROM \"{safeTable}\"");
                 sonuc.BackupTables.Add(backupName);
             }
 
@@ -124,17 +127,16 @@ public class TestSessionService
         {
             foreach (var table in _backupTables)
             {
-                var backupName = $"backup_{table}_{tag}";
+                var safeTable = EnsureSafeIdentifier(table, nameof(table));
+                var backupName = BuildBackupTableName(safeTable, tag);
 
                 // Backup tablosu var mı kontrol et
-                var exists = await db.Database.SqlQueryRaw<int>(
-                    $"SELECT 1 FROM information_schema.tables WHERE table_name = '{backupName}'").AnyAsync();
+                var exists = await TableExistsAsync(db, backupName);
                 if (!exists) continue;
 
                 // Tabloyu temizle ve backup'tan geri yükle
-                await db.Database.ExecuteSqlRawAsync($"TRUNCATE TABLE \"{table}\" CASCADE");
-                await db.Database.ExecuteSqlRawAsync(
-                    $"INSERT INTO \"{table}\" SELECT * FROM \"{backupName}\"");
+                await ExecuteNonQueryAsync(db, $"TRUNCATE TABLE \"{safeTable}\" CASCADE");
+                await ExecuteNonQueryAsync(db, $"INSERT INTO \"{safeTable}\" SELECT * FROM \"{backupName}\"");
             }
 
             sonuc.Basarili = true;
@@ -162,9 +164,60 @@ public class TestSessionService
         await using var db = await _dbFactory.CreateDbContextAsync();
         foreach (var table in _backupTables)
         {
-            var backupName = $"backup_{table}_{tag}";
-            await db.Database.ExecuteSqlRawAsync($"DROP TABLE IF EXISTS \"{backupName}\"");
+            var safeTable = EnsureSafeIdentifier(table, nameof(table));
+            var backupName = BuildBackupTableName(safeTable, tag);
+            await ExecuteNonQueryAsync(db, $"DROP TABLE IF EXISTS \"{backupName}\"");
         }
+    }
+
+    private static string BuildBackupTableName(string table, string tag)
+    {
+        var normalizedTag = NormalizeTag(tag);
+        return EnsureSafeIdentifier($"backup_{table}_{normalizedTag}", nameof(tag));
+    }
+
+    private static string NormalizeTag(string tag)
+    {
+        var cleaned = new string((tag ?? string.Empty)
+            .Trim()
+            .Select(ch => char.IsLetterOrDigit(ch) || ch == '_' ? ch : '_')
+            .ToArray());
+
+        return string.IsNullOrWhiteSpace(cleaned) ? "default" : cleaned;
+    }
+
+    private static string EnsureSafeIdentifier(string value, string paramName)
+    {
+        if (!SafeIdentifierRegex.IsMatch(value))
+            throw new ArgumentException($"Geçersiz SQL identifier: {value}", paramName);
+
+        return value;
+    }
+
+    private static async Task ExecuteNonQueryAsync(ApplicationDbContext db, string sql)
+    {
+        await using var command = db.Database.GetDbConnection().CreateCommand();
+        if (command.Connection!.State != ConnectionState.Open)
+            await command.Connection.OpenAsync();
+
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<bool> TableExistsAsync(ApplicationDbContext db, string tableName)
+    {
+        await using var command = db.Database.GetDbConnection().CreateCommand();
+        if (command.Connection!.State != ConnectionState.Open)
+            await command.Connection.OpenAsync();
+
+        command.CommandText = "SELECT 1 FROM information_schema.tables WHERE table_name = @tableName LIMIT 1";
+        var param = command.CreateParameter();
+        param.ParameterName = "@tableName";
+        param.Value = tableName;
+        command.Parameters.Add(param);
+
+        var result = await command.ExecuteScalarAsync();
+        return result != null && result != DBNull.Value;
     }
 
     /// <summary>Test oturumunu SONLANDIR ve TÜM kayıtları GERİ AL (eski yöntem)</summary>

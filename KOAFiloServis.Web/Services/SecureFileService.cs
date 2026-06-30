@@ -13,18 +13,21 @@ public sealed class SecureFileService : ISecureFileService
     private readonly string _storageRoot;        // C:\KOAFiloServis_yedekleme\uploads
     private readonly string _baseStorageRoot;    // C:\KOAFiloServis_yedekleme (uploads üst dizini)
     private readonly ILogger<SecureFileService> _logger;
+    private readonly IDecryptionRecoveryTracker _recoveryTracker;
 
     public SecureFileService(
         IFileProtector fileProtector,
         IDataProtectionProvider dataProtectionProvider,
         IWebHostEnvironment environment,
-        ILogger<SecureFileService> logger)
+        ILogger<SecureFileService> logger,
+        IDecryptionRecoveryTracker recoveryTracker)
     {
         _fileProtector = fileProtector;
         _legacyProtector = dataProtectionProvider.CreateProtector("KOAFiloServis.SecureFileStorage.v1");
         _storageRoot = AppStoragePaths.GetUploadsRoot(environment.ContentRootPath);
         _baseStorageRoot = AppStoragePaths.GetStorageRoot(environment.ContentRootPath);
         _logger = logger;
+        _recoveryTracker = recoveryTracker;
         Directory.CreateDirectory(_storageRoot);
     }
 
@@ -77,7 +80,7 @@ public sealed class SecureFileService : ISecureFileService
             }
             catch (CryptographicException ex)
             {
-                _logger.LogWarning(ex, "Yeni format decrypt başarısız, legacy format deneniyor. Path={Path}", relativePath);
+                _logger.LogWarning(ex, "❌ Yeni format decrypt başarısız, legacy format deneniyor. Path={Path}. İçerik: {ExMsg}", relativePath, ex.Message);
             }
         }
 
@@ -85,12 +88,28 @@ public sealed class SecureFileService : ISecureFileService
         try
         {
             var result = _legacyProtector.Unprotect(rawContent);
-            _logger.LogInformation("Dosya legacy formatla çözüldü. Path={Path}", relativePath);
+            _logger.LogInformation("✓ Dosya legacy formatla çözüldü (eski master key ile). Path={Path}", relativePath);
             return result;
         }
         catch (CryptographicException ex)
         {
-            _logger.LogError(ex, "Dosya decrypt başarısız (AES + Legacy). Path={Path}", relativePath);
+            _logger.LogError(ex,
+                "❌ DECODE HATA: Dosya dekrypt edilemedi (AES + Legacy). " +
+                "Muhtemel Sebepler:\n" +
+                "  - Master key değişti (eski key ile şifrelenmiş)\n" +
+                "  - Dosya başka makinede şifrelenmiş\n" +
+                "  - Dosya bozulmuş veya kesilebilir\n" +
+                "Path={Path}\n" +
+                "Detay: {DetailMessage}", relativePath, ex.Message);
+
+            // Diagnostic bilgisi ekle (üretim ortamında sensitive değil)
+            _logger.LogInformation("📋 Diagnostic: KOA1Format={IsKoa1}, RawLength={Length}", koa1Format, rawContent.Length);
+
+            // Recovery tracker'a kaydet
+            _recoveryTracker.TrackDecryptionFailure(
+                relativePath,
+                ex.InnerException?.Message ?? ex.Message);
+
             return null;
         }
     }

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     KOAFiloServis-MultiDb kurulum paketleri uretir.
 
@@ -116,7 +116,7 @@ Write-Host "Output klasoru : $Output" -ForegroundColor DarkGray
 
 if (-not $LisansOnly) {
     Write-Host "[4/7] Inno Setup - Ana paket..." -ForegroundColor Green
-    & $IsccExe "/DMyAppVersion=$Version" "/DOutputDir=$Output" (Join-Path $Root 'Setup.iss')
+    & $IsccExe "/DMyAppVersion=$Version" "/DOutputDir=$Output" "/DMyInstallDirBase=C:\KOAFiloServis_ustun" "/DMyBackupDirBase=C:\KOAFiloServis_yedekleme_ustun" (Join-Path $Root 'Setup.iss')
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup (Setup.iss) basarisiz." }
 
     Write-Host "[5/7] Inno Setup - Guncelleme paketi..." -ForegroundColor Green
@@ -124,7 +124,7 @@ if (-not $LisansOnly) {
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup (GuncelleSetup.iss) basarisiz." }
 
     Write-Host "[6/7] Inno Setup - Musteri paketi..." -ForegroundColor Green
-    & $IsccExe "/DMyAppVersion=$Version" "/DOutputDir=$Output" (Join-Path $Root 'MusteriSetup.iss')
+    & $IsccExe "/DMyAppVersion=$Version" "/DOutputDir=$Output" "/DMyInstallDirBase=C:\KOAFiloServis_ustun" (Join-Path $Root 'MusteriSetup.iss')
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup (MusteriSetup.iss) basarisiz." }
 }
 

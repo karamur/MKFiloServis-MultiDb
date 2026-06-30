@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -50,6 +50,9 @@ public class LicenseService
 
     public static bool HasDemoBeenUsed()
     {
+        if (!OperatingSystem.IsWindows())
+            return false;
+
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(RegistryPath);
@@ -63,6 +66,9 @@ public class LicenseService
 
     public static void MarkDemoUsed()
     {
+        if (!OperatingSystem.IsWindows())
+            return;
+
         try
         {
             using var key = Registry.CurrentUser.CreateSubKey(RegistryPath);
@@ -611,8 +617,8 @@ public class LicenseService
                 var lisansMakineKodu = mk.GetString() ?? "";
                 var currentMakineKodu = GetMachineId();
                 if (!string.Equals(
-                    KOAFiloServis.Shared.LisansHelper.NormalizeMachineCode(lisansMakineKodu),
-                    KOAFiloServis.Shared.LisansHelper.NormalizeMachineCode(currentMakineKodu),
+                    NormalizeMachineCodeSafe(lisansMakineKodu),
+                    NormalizeMachineCodeSafe(currentMakineKodu),
                     StringComparison.Ordinal))
                 {
                     throw new Exception("Bu lisans baska bir bilgisayar icin olusturulmus!");
@@ -641,6 +647,18 @@ public class LicenseService
         {
             throw new Exception($"Lisans aktive edilemedi: {ex.Message}");
         }
+    }
+
+    private static string NormalizeMachineCodeSafe(string? machineCode)
+    {
+        if (OperatingSystem.IsWindows())
+            return KOAFiloServis.Shared.LisansHelper.NormalizeMachineCode(machineCode);
+
+        return (machineCode ?? string.Empty)
+            .Trim()
+            .Replace("-", string.Empty)
+            .Replace(" ", string.Empty)
+            .ToUpperInvariant();
     }
 
     private const string LisansAesKey = "KOAFiloServis2026SecretKey!@";

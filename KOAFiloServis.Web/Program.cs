@@ -64,38 +64,45 @@ if (File.Exists(dbSettingsPath))
 }
 
 // URL baglama: IIS tarafi zaten adres/port yonetir; burada zorlama yapma.
-// Sadece yerel calistirmada (Development) ve explicit URL verilmediyse otomatik port sec.
+// Explicit URL verilmediyse development ve self-hosted production icin cakismayan port sec.
 var hasExplicitUrls = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URLS"))
     || args.Any(a => a.StartsWith("--urls", StringComparison.OrdinalIgnoreCase));
 var isIisHosted = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_IIS_PHYSICAL_PATH"))
     || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_PORT"));
 
-if (!hasExplicitUrls && !isIisHosted && builder.Environment.IsDevelopment())
+static bool PortKullanilabilirMi(int port)
 {
-    static bool PortKullanilabilirMi(int port)
+    try
     {
-        try
-        {
-            using var listener = new TcpListener(IPAddress.Any, port);
-            listener.Start();
-            listener.Stop();
-            return true;
-        }
-        catch (SocketException)
-        {
-            return false;
-        }
+        using var listener = new TcpListener(IPAddress.Any, port);
+        listener.Start();
+        listener.Stop();
+        return true;
     }
+    catch (SocketException)
+    {
+        return false;
+    }
+}
 
-    var baslangicPortu = 5190;
+static int UygunPortSec(int baslangicPortu, int denemeSayisi)
+{
     var secilenPort = baslangicPortu;
 
-    while (secilenPort < baslangicPortu + 10 && !PortKullanilabilirMi(secilenPort))
+    while (secilenPort < baslangicPortu + denemeSayisi && !PortKullanilabilirMi(secilenPort))
     {
         secilenPort++;
     }
 
+    return secilenPort;
+}
+
+if (!hasExplicitUrls && !isIisHosted)
+{
+    var baslangicPortu = 5191;
+    var secilenPort = UygunPortSec(baslangicPortu, 20);
     builder.WebHost.UseUrls($"http://0.0.0.0:{secilenPort}");
+    Environment.SetEnvironmentVariable("KOAFILOSERVIS_ACTIVE_PORT", secilenPort.ToString());
 }
 
 // Add services to the container.
@@ -123,6 +130,8 @@ builder.Services.AddPooledDbContextFactory<ApplicationDbContext>((sp, options) =
             maxRetryCount: 3,
             maxRetryDelay: TimeSpan.FromSeconds(5),
             errorCodesToAdd: null);
+        // Birden fazla collection Include/projection içeren sorgularda kartesyen çoğalmayı azaltır.
+        npgsqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
         npgsqlOptions.CommandTimeout(30);
         npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "public");
     });
@@ -138,6 +147,7 @@ builder.Services.AddPooledDbContextFactory<ApplicationDbContext>((sp, options) =
     options.ConfigureWarnings(w =>
     {
         w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning);
+        w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.MultipleCollectionIncludeWarning);
     });
     options.AddInterceptors(sp.GetRequiredService<AktiviteLogInterceptor>());
 });
@@ -273,6 +283,7 @@ builder.Services.AddSingleton<IMasterKeyProvider>(sp =>
     return new DpapiMasterKeyProvider(keyPath, logger, throwOnMissing: isProduction);
 });
 builder.Services.AddSingleton<IFileProtector, AesGcmFileProtector>();
+builder.Services.AddSingleton<IDecryptionRecoveryTracker, InMemoryDecryptionRecoveryTracker>();
 builder.Services.AddScoped<IEvrakArsivService, EvrakArsivService>();
 builder.Services.AddScoped<IEvrakArsivBackfillService, EvrakArsivBackfillService>();
 builder.Services.AddScoped<FileService>(); // YENI: Basit evrak dosya servisi (C:\KOAFiloServis\uploads)
@@ -357,6 +368,7 @@ builder.Services.AddScoped<IDestekTalebiService, DestekTalebiService>(); // Dest
 builder.Services.AddScoped<IEbysEvrakService, EbysEvrakService>(); // EBYS Gelen/Giden Evrak Servisi
 builder.Services.AddScoped<IBelgeVersiyonService, BelgeVersiyonService>(); // EBYS Belge Versiyon Yönetimi Servisi
 builder.Services.AddScoped<IEbysBelgeAramaService, EbysBelgeAramaService>(); // EBYS Gelişmiş Belge Arama Servisi
+builder.Services.AddScoped<ISemanticSearchService, SemanticSearchService>(); // EBYS Semantik Arama Servisi
 builder.Services.AddScoped<IBildirimService, BildirimService>(); // Bildirim Sistemi Servisi
 builder.Services.AddScoped<ISmsService, SmsService>(); // SMS Gönderim Servisi
 builder.Services.AddScoped<IWebhookService, WebhookService>(); // Webhook Sistemi Servisi

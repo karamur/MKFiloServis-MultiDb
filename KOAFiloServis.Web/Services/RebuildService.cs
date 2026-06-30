@@ -1,4 +1,4 @@
-using KOAFiloServis.Shared.Entities;
+﻿using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Data;
 using KOAFiloServis.Web.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -65,70 +65,73 @@ public class RebuildService
             db.SystemLocks.Add(lockEntity);
             await db.SaveChangesAsync();
 
-            await using var tx = await db.Database.BeginTransactionAsync();
+            var strategy = db.Database.CreateExecutionStrategy();
 
-            _logger.LogInformation("Rebuild başladı: Firma={FirmaId} Yil={Yil} Ay={Ay}", firmaId, yil, ay);
-
-            // Adım 0: Snapshot BACKUP (SnapshotHistory)
-            await BackupSnapshotAsync(db, firmaId, yil, ay);
-
-            // Adım 1: SnapshotTransaction'ları soft-delete
-            var txCount = await db.SnapshotTransactions
-                .Where(t => t.FirmaId == firmaId && t.Yil == yil && t.Ay == ay && !t.IsDeleted)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(t => t.IsDeleted, true)
-                    .SetProperty(t => t.DeletedAt, DateTime.UtcNow));
-            sonuc.SnapshotTransactionSilinen = txCount;
-
-            // Adım 2: HakedisPuantaj fatura referanslarını temizle
-            var hakedisler = await db.HakedisPuantajlar
-                .Where(h => h.FirmaId == firmaId && h.Yil == yil && h.Ay == ay && !h.IsDeleted)
-                .ToListAsync();
-        sonuc.ToplamHakedis = hakedisler.Count;
-
-        foreach (var h in hakedisler)
-        {
-            h.GelirFaturaId = null;
-            h.GiderFaturaId = null;
-        }
-        await db.SaveChangesAsync();
-
-        // Adım 3: Snapshot HakedisGelir/HakedisGider sıfırla
-        await db.MaasOdemeSnapshotlar
-            .Where(s => s.FirmaId == firmaId && s.Yil == yil && s.Ay == ay && !s.IsDeleted)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(x => x.HakedisGelir, 0m)
-                .SetProperty(x => x.HakedisGider, 0m)
-                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow));
-
-        // Adım 4: Her HakedisPuantaj için IsleAsync çağır
-        foreach (var h in hakedisler)
-        {
-            try
+            await strategy.ExecuteAsync(async () =>
             {
-                var finansSonuc = await _finansService.IsleAsync(h);
-                if (finansSonuc.Basarili)
-                    sonuc.BasariliIslem++;
-                else
+                await using var tx = await db.Database.BeginTransactionAsync();
+
+                _logger.LogInformation("Rebuild başladı: Firma={FirmaId} Yil={Yil} Ay={Ay}", firmaId, yil, ay);
+
+                // Adım 0: Snapshot BACKUP (SnapshotHistory)
+                await BackupSnapshotAsync(db, firmaId, yil, ay);
+
+                // Adım 1: SnapshotTransaction'ları soft-delete
+                var txCount = await db.SnapshotTransactions
+                    .Where(t => t.FirmaId == firmaId && t.Yil == yil && t.Ay == ay && !t.IsDeleted)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(t => t.IsDeleted, true)
+                        .SetProperty(t => t.DeletedAt, DateTime.UtcNow));
+                sonuc.SnapshotTransactionSilinen = txCount;
+
+                // Adım 2: HakedisPuantaj fatura referanslarını temizle
+                var hakedisler = await db.HakedisPuantajlar
+                    .Where(h => h.FirmaId == firmaId && h.Yil == yil && h.Ay == ay && !h.IsDeleted)
+                    .ToListAsync();
+                sonuc.ToplamHakedis = hakedisler.Count;
+
+                foreach (var h in hakedisler)
                 {
-                    sonuc.AtlananIslem++;
-                    sonuc.Hatalar.Add($"#{h.Id}: {finansSonuc.Mesaj}");
+                    h.GelirFaturaId = null;
+                    h.GiderFaturaId = null;
                 }
-            }
-            catch (Exception ex)
-            {
-                sonuc.Hata++;
-                sonuc.Hatalar.Add($"#{h.Id}: {ex.Message}");
-                _logger.LogError(ex, "Rebuild hatası: HakedisPuantaj #{Id}", h.Id);
-            }
-        }
+                await db.SaveChangesAsync();
 
-            await tx.CommitAsync();
+                // Adım 3: Snapshot HakedisGelir/HakedisGider sıfırla
+                await db.MaasOdemeSnapshotlar
+                    .Where(s => s.FirmaId == firmaId && s.Yil == yil && s.Ay == ay && !s.IsDeleted)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(x => x.HakedisGelir, 0m)
+                        .SetProperty(x => x.HakedisGider, 0m)
+                        .SetProperty(x => x.UpdatedAt, DateTime.UtcNow));
+
+                // Adım 4: Her HakedisPuantaj için IsleAsync çağır
+                foreach (var h in hakedisler)
+                {
+                    try
+                    {
+                        var finansSonuc = await _finansService.IsleAsync(h);
+                        if (finansSonuc.Basarili)
+                            sonuc.BasariliIslem++;
+                        else
+                        {
+                            sonuc.AtlananIslem++;
+                            sonuc.Hatalar.Add($"#{h.Id}: {finansSonuc.Mesaj}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        sonuc.Hata++;
+                        sonuc.Hatalar.Add($"#{h.Id}: {ex.Message}");
+                        _logger.LogError(ex, "Rebuild hatası: HakedisPuantaj #{Id}", h.Id);
+                    }
+                }
+
+                await tx.CommitAsync();
+            });
         }
         catch
         {
-            if (lockEntity != null)
-                try { await using var db2 = await _dbFactory.CreateDbContextAsync(); await db2.Database.RollbackTransactionAsync(default); } catch { }
             throw;
         }
         finally
@@ -187,50 +190,56 @@ public class RebuildService
     {
         var sonuc = new RebuildSonuc();
         await using var db = await _dbFactory.CreateDbContextAsync();
-        await using var tx = await db.Database.BeginTransactionAsync();
 
-        try
+        var strategy = db.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
         {
-            // Auto-fix: Negatif ve aşırı değerleri clamp'la
-            await db.Database.ExecuteSqlRawAsync(@"
-                UPDATE ""HakedisPuantajDetaylar""
-                SET ""SeferSayisi"" = LEAST(GREATEST(""SeferSayisi"", 0), 10)");
-            await db.Database.ExecuteSqlRawAsync(@"
-                UPDATE ""HakedisPuantajlar""
-                SET ""ToplamSefer"" = LEAST(GREATEST(""ToplamSefer"", 0), 310)");
+            await using var tx = await db.Database.BeginTransactionAsync();
 
-            // SnapshotTransactions temizle
-            await db.SnapshotTransactions
-                .Where(t => t.FirmaId == firmaId && t.Yil == yil && t.Ay == ay)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsDeleted, true));
+            try
+            {
+                // Auto-fix: Negatif ve aşırı değerleri clamp'la
+                await db.Database.ExecuteSqlRawAsync(@"
+                    UPDATE ""HakedisPuantajDetaylar""
+                    SET ""SeferSayisi"" = LEAST(GREATEST(""SeferSayisi"", 0), 10)");
+                await db.Database.ExecuteSqlRawAsync(@"
+                    UPDATE ""HakedisPuantajlar""
+                    SET ""ToplamSefer"" = LEAST(GREATEST(""ToplamSefer"", 0), 310)");
 
-            // HakedisPuantajDetaylar temizle
-            await db.HakedisPuantajDetaylar
-                .Where(d => d.HakedisPuantaj != null
-                    && d.HakedisPuantaj.FirmaId == firmaId
-                    && d.HakedisPuantaj.Yil == yil && d.HakedisPuantaj.Ay == ay)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsDeleted, true));
+                // SnapshotTransactions temizle
+                await db.SnapshotTransactions
+                    .Where(t => t.FirmaId == firmaId && t.Yil == yil && t.Ay == ay)
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsDeleted, true));
 
-            // HakedisPuantajlar temizle
-            await db.HakedisPuantajlar
-                .Where(h => h.FirmaId == firmaId && h.Yil == yil && h.Ay == ay && !h.IsDeleted)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsDeleted, true));
+                // HakedisPuantajDetaylar temizle
+                await db.HakedisPuantajDetaylar
+                    .Where(d => d.HakedisPuantaj != null
+                        && d.HakedisPuantaj.FirmaId == firmaId
+                        && d.HakedisPuantaj.Yil == yil && d.HakedisPuantaj.Ay == ay)
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsDeleted, true));
 
-            // Snapshot sıfırla
-            await db.MaasOdemeSnapshotlar
-                .Where(s => s.FirmaId == firmaId && s.Yil == yil && s.Ay == ay && !s.IsDeleted)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(x => x.HakedisGelir, 0m)
-                    .SetProperty(x => x.HakedisGider, 0m));
+                // HakedisPuantajlar temizle
+                await db.HakedisPuantajlar
+                    .Where(h => h.FirmaId == firmaId && h.Yil == yil && h.Ay == ay && !h.IsDeleted)
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsDeleted, true));
 
-            // Grid verisinden yeniden üret (Grid kaydettikten sonra SyncFromGridAsync zaten çağrılır)
-            sonuc.ToplamHakedis = 0;
-            sonuc.BasariliIslem = 0;
-            sonuc.Hatalar.Add("Hard clean tamamlandı. Grid'den tekrar Kaydet yaparak HakedisPuantaj'ları yeniden oluşturun.");
+                // Snapshot sıfırla
+                await db.MaasOdemeSnapshotlar
+                    .Where(s => s.FirmaId == firmaId && s.Yil == yil && s.Ay == ay && !s.IsDeleted)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(x => x.HakedisGelir, 0m)
+                        .SetProperty(x => x.HakedisGider, 0m));
 
-            await tx.CommitAsync();
-        }
-        catch { await tx.RollbackAsync(); throw; }
+                // Grid verisinden yeniden üret (Grid kaydettikten sonra SyncFromGridAsync zaten çağrılır)
+                sonuc.ToplamHakedis = 0;
+                sonuc.BasariliIslem = 0;
+                sonuc.Hatalar.Add("Hard clean tamamlandı. Grid'den tekrar Kaydet yaparak HakedisPuantaj'ları yeniden oluşturun.");
+
+                await tx.CommitAsync();
+            }
+            catch { await tx.RollbackAsync(); throw; }
+        });
 
         return sonuc;
     }

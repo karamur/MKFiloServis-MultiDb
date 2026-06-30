@@ -1,4 +1,4 @@
-using KOAFiloServis.Shared.Entities;
+﻿using KOAFiloServis.Shared.Entities;
 using KOAFiloServis.Web.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -28,7 +28,7 @@ public class PuantajIstisnaController : ControllerBase
         return Ok(list);
     }
 
-    /// <summary>GET /api/puantaj-istisna/donem?yil=2026&ay=6 — dönem bazlı tüm istisnalar</summary>
+    /// <summary>GET /api/puantaj-istisna/donem?yil=2026&amp;ay=6 — dönem bazlı tüm istisnalar</summary>
     [HttpGet("donem")]
     public async Task<IActionResult> GetByDonem([FromQuery] int yil, [FromQuery] int ay, [FromQuery] int? kurumId = null)
     {

@@ -202,10 +202,10 @@ public class LisansService : ILisansService
                 throw new Exception("Geçersiz lisans formatı - JSON parse edilemedi");
 
             // Makine kodu kontrolü
-#pragma warning disable CA1416
-            var currentMakineKodu = KOAFiloServis.Shared.LisansHelper.NormalizeMachineCode(GetMakineKoduAsync().Result);
-            var lisansMakineKodu = KOAFiloServis.Shared.LisansHelper.NormalizeMachineCode(lisansBilgi.MakineKodu);
-#pragma warning restore CA1416
+            var currentMakineKoduRaw = GetMakineKoduAsync().Result;
+            var lisansMakineKoduRaw = lisansBilgi.MakineKodu;
+            var currentMakineKodu = NormalizeMachineCodeSafe(currentMakineKoduRaw);
+            var lisansMakineKodu = NormalizeMachineCodeSafe(lisansMakineKoduRaw);
             if (!string.Equals(lisansMakineKodu, currentMakineKodu, StringComparison.Ordinal))
             {
                 throw new Exception($"Bu lisans başka bir bilgisayar için oluşturulmuş!\n\nLisans Makine Kodu: {lisansBilgi.MakineKodu}\nBu PC Makine Kodu: {currentMakineKodu}");
@@ -248,6 +248,18 @@ public class LisansService : ILisansService
         {
             throw new Exception($"Lisans aktive edilemedi: {ex.Message}");
         }
+    }
+
+    private static string NormalizeMachineCodeSafe(string? machineCode)
+    {
+        if (OperatingSystem.IsWindows())
+            return KOAFiloServis.Shared.LisansHelper.NormalizeMachineCode(machineCode);
+
+        return (machineCode ?? string.Empty)
+            .Trim()
+            .Replace("-", string.Empty)
+            .Replace(" ", string.Empty)
+            .ToUpperInvariant();
     }
 
     private const string LisansAnahtar = "KOAFiloServis2026SecretKey!@";

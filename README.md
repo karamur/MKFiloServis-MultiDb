@@ -369,7 +369,40 @@ KOAFiloServis-MultiDb/
 
 ---
 
-## 🤝 Katkıda Bulunma
+---
+
+## 🔐 Dosya Şifreleme & DPAPI Kurtarma
+
+### Mimari
+
+KOAFiloServis **Windows DPAPI (Data Protection API)** ile AES-256-GCM formatında dosyaları şifreler.
+
+```
+SecureFileService → [AES-256-GCM | Legacy IDataProtector] → Master Key (32 bytes, DPAPI protected)
+```
+
+### Master Key Sorunları
+
+Yeni ortamda başlatıldığında master key decrypt başarısız olabilir. Çözüm:
+
+1. **Eski key'i restore et**: `Copy-Item <backup>/master.key C:\KOAFiloServis_yedekleme\keys\master.key`
+2. **Uygulamayı yeniden başlat**
+3. **Dashboard'dan kontrol et**: `/api/system/decryption-recovery-status`
+
+Detaylı rehber: `KOAFiloServis.Web/Tools/MasterKeyRecoveryGuide.ps1`
+
+---
+
+## 🔧 Yardımcı Araçlar
+
+| Araç | Amaç |
+|------|------|
+| `MasterKeyRecovery.ps1` | Master key ortamını tanı |
+| `MasterKeyRecoveryGuide.ps1` | DPAPI recovery prosedürü ve best practices |
+
+---
+
+## 🤝 Katk
 
 ```bash
 git checkout -b feature/yeni-ozellik
@@ -392,6 +425,6 @@ Commit konvansiyonu: `<tip>(<modul>): <aciklama>` — `feat`, `fix`, `refactor`,
 
 **KOA Filo Servis** — Operasyondan muhasebeye, filodan hakedişe tek panel.
 
-<sub>.NET 10 · Blazor · PostgreSQL · Quartz · SignalR</sub>
+<sub>.NET 10 · Blazor · PostgreSQL · Quartz · SignalR · DPAPI Encryption</sub>
 
 </div>

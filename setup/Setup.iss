@@ -1,4 +1,4 @@
-; ============================================================
+﻿; ============================================================
 ; KOAFiloServis — Simplified Direct-EXE Installer
 ; No IIS, no firewall, just run the self-contained EXE.
 ; ============================================================
@@ -7,8 +7,8 @@
 #define MyAppPublisher   "KOA Yazilim"
 #define MyAppURL         "https://github.com/karamur/KOAFiloServis-MultiDb"
 #define MyAppExeName     "KOAFiloServis.Web.exe"
-#define MyInstallDir     "C:\KOAFiloServis"
-#define MyBackupDir      "C:\KOAFiloServis_yedekleme"
+#define MyInstallDirBase "C:\KOAFiloServis_ustun"
+#define MyBackupDirBase  "C:\KOAFiloServis_yedekleme_ustun"
 #define MyLisansExe      "KOAFiloServisLisans.exe"
 #define MyDataSyncExe    "KOAFiloServis.DataSync.exe"
 
@@ -16,8 +16,14 @@
 #define MyAppVersion "1.0.26"
 #endif
 
+#define MyVersionToken StringChange(MyAppVersion, ".", "_")
+#define MyInstallDir MyInstallDirBase
+#define MyBackupDir MyBackupDirBase
+#define MyAppId "A1B2C3D4-E5F6-7890-ABCD-EF1234567890-USTUN"
+#define MyShortcutName MyAppName + " Ustun"
+
 [Setup]
-AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
+AppId={{#MyAppId}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
@@ -70,12 +76,12 @@ Name: "{app}\Backups"; Permissions: users-modify
 Name: "{#MyBackupDir}"; Permissions: users-modify
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\app\{#MyAppExeName}"; WorkingDir: "{app}\app"
-Name: "{group}\Lisans Yonetimi"; Filename: "{app}\tools\lisans\{#MyLisansExe}"; WorkingDir: "{app}\tools\lisans"
-Name: "{group}\Veri Aktarim"; Filename: "{app}\tools\datasync\{#MyDataSyncExe}"; WorkingDir: "{app}\tools\datasync"
-Name: "{group}\Kurulum Klasorunu Ac"; Filename: "{app}"
-Name: "{group}\Kaldir"; Filename: "{uninstallexe}"
-Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\app\{#MyAppExeName}"; WorkingDir: "{app}\app"
+Name: "{group}\{#MyShortcutName}"; Filename: "{app}\app\{#MyAppExeName}"; WorkingDir: "{app}\app"
+Name: "{group}\{#MyShortcutName} - Lisans Yonetimi"; Filename: "{app}\tools\lisans\{#MyLisansExe}"; WorkingDir: "{app}\tools\lisans"
+Name: "{group}\{#MyShortcutName} - Veri Aktarim"; Filename: "{app}\tools\datasync\{#MyDataSyncExe}"; WorkingDir: "{app}\tools\datasync"
+Name: "{group}\{#MyShortcutName} - Kurulum Klasorunu Ac"; Filename: "{app}"
+Name: "{group}\{#MyShortcutName} - Kaldir"; Filename: "{uninstallexe}"
+Name: "{commondesktop}\{#MyShortcutName}"; Filename: "{app}\app\{#MyAppExeName}"; WorkingDir: "{app}\app"
 
 [Run]
 Filename: "{app}\app\{#MyAppExeName}"; Description: "Uygulamayi Baslat"; Flags: nowait postinstall skipifsilent; WorkingDir: "{app}\app"
@@ -85,43 +91,20 @@ Type: filesandordirs; Name: "{app}\app\wwwroot\_framework"
 Type: dirifempty; Name: "{app}\app"
 
 [Code]
-function GetInstallPath(): String;
-var sPrevPath: String;
-begin
-  if RegQueryStringValue(HKLM,
-        'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#SetupSetting("AppId")}_is1',
-        'InstallLocation', sPrevPath) then
-    Result := sPrevPath
-  else
-    Result := '';
-end;
-
-function IsUpgrade(): Boolean;
-begin
-  Result := (GetInstallPath() <> '');
-end;
-
 procedure InitializeWizard();
 begin
-  if IsUpgrade() then
-    WizardForm.Caption := '{#MyAppName} Guncelleme Sihirbazi'
-  else
-    WizardForm.Caption := '{#MyAppName} Kurulum Sihirbazi';
+  WizardForm.Caption := '{#MyAppName} {#MyAppVersion} Kurulum Sihirbazi';
 end;
 
 function InitializeSetup(): Boolean;
 var
-  PrevPath, Msg: String;
+  Msg: String;
 begin
   Result := True;
-  PrevPath := GetInstallPath();
-  if PrevPath <> '' then
-  begin
-    Msg := '{#MyAppName} sistemde kurulu:' + #13#10 + PrevPath + #13#10#13#10 +
-           'Bu islem mevcut kurulumu GUNCELLER.' + #13#10 +
-           '* Konfigurasyon dosyalariniz KORUNUR.' + #13#10#13#10 +
-           'Devam etmek istiyor musunuz?';
-    if MsgBox(Msg, mbConfirmation, MB_YESNO) = IDNO then
-    begin Result := False; Exit; end;
-  end;
+  Msg := '{#MyAppName} {#MyAppVersion} ayri bir klasore kurulacaktir:' + #13#10 +
+         '{#MyInstallDir}' + #13#10#13#10 +
+         'Bu kurulum mevcut versiyonlara dokunmaz ve yan yana calisabilir.' + #13#10 +
+         'Devam etmek istiyor musunuz?';
+  if MsgBox(Msg, mbConfirmation, MB_YESNO) = IDNO then
+  begin Result := False; Exit; end;
 end;

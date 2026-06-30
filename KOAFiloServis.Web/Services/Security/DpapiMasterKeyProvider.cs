@@ -80,10 +80,12 @@ public sealed class DpapiMasterKeyProvider : IMasterKeyProvider
             {
                 plain = System.Security.Cryptography.ProtectedData.Unprotect(
                     protectedBytes, Entropy, DataProtectionScope.LocalMachine);
+                _logger.LogDebug("Master key LocalMachine scope ile başarıyla yüklendi.");
             }
             catch (CryptographicException ex)
             {
                 localMachineEx = ex;
+                _logger.LogDebug("LocalMachine scope başarısız, CurrentUser denenecek: {Exception}", ex.Message);
             }
 
             if (plain == null)
@@ -92,11 +94,12 @@ public sealed class DpapiMasterKeyProvider : IMasterKeyProvider
                 {
                     plain = System.Security.Cryptography.ProtectedData.Unprotect(
                         protectedBytes, Entropy, DataProtectionScope.CurrentUser);
-                    _logger.LogWarning("Master key CurrentUser scope ile yuklendi: {Path}", _keyFilePath);
+                    _logger.LogWarning("⚠️ Master key CurrentUser scope ile yüklendi (eski ortam fallback). Dosyalar kurtarılabilir ama yeni key'e migration önerilir.");
                 }
                 catch (CryptographicException ex)
                 {
                     currentUserEx = ex;
+                    _logger.LogDebug("CurrentUser scope da başarısız: {Exception}", ex.Message);
                 }
             }
 
