@@ -1,0 +1,232 @@
+@page "/rapor/ozmal-arac"
+@using MKFiloServis.Web.Services
+@using Models = MKFiloServis.Web.Models
+@inject IMaliAnalizService MaliAnalizService
+@rendermode InteractiveServer
+
+<PageTitle>Özmal Araç Raporu</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="bi bi-truck me-2"></i>Özmal Araç Raporu (Personel Servis Hizmeti)</h3>
+        <div class="d-flex gap-2">
+            <select class="form-select" style="width: 120px;" @bind="secilenYil" @bind:after="YenileData">
+                @for (int y = DateTime.Today.Year; y >= DateTime.Today.Year - 3; y--)
+                {
+                    <option value="@y">@y</option>
+                }
+            </select>
+            <select class="form-select" style="width: 150px;" @bind="secilenAy" @bind:after="YenileData">
+                @for (int m = 1; m <= 12; m++)
+                {
+                    <option value="@m">@(new DateTime(2024, m, 1).ToString("MMMM"))</option>
+                }
+            </select>
+            <a href="/mali-analiz" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>Dashboard
+            </a>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else if (rapor != null)
+    {
+        <!-- Özet -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body text-center">
+                        <h6 class="text-white-50">Toplam Gelir</h6>
+                        <h3>@rapor.ToplamGelir.ToString("N0") ₺</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-danger text-white">
+                    <div class="card-body text-center">
+                        <h6 class="text-white-50">Toplam Gider</h6>
+                        <h3>@rapor.ToplamGider.ToString("N0") ₺</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card @(rapor.NetKar >= 0 ? "bg-primary" : "bg-warning") text-white">
+                    <div class="card-body text-center">
+                        <h6 class="text-white-50">Net Kar</h6>
+                        <h3>@rapor.NetKar.ToString("N0") ₺</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body text-center">
+                        <h6 class="text-white-50">Toplam Sefer</h6>
+                        <h3>@rapor.ToplamSefer</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Araç Detayları -->
+        @foreach (var arac in rapor.AracDetaylari.OrderByDescending(a => a.NetKar))
+        {
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0">
+                            <i class="bi bi-truck me-2"></i>@arac.Plaka
+                            <small class="text-muted ms-2">@arac.Marka @arac.Model</small>
+                        </h5>
+                        @if (!string.IsNullOrEmpty(arac.AtananSofor))
+                        {
+                            <small class="text-muted"><i class="bi bi-person me-1"></i>@arac.AtananSofor</small>
+                        }
+                    </div>
+                    <div class="text-end">
+                        <span class="badge @(arac.NetKar >= 0 ? "bg-success" : "bg-danger") fs-6">
+                            Net: @arac.NetKar.ToString("N0") ₺
+                        </span>
+                        <br />
+                        <small class="text-muted">Karlılık: %@arac.KarlilikOrani.ToString("N1")</small>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- Gelirler -->
+                        <div class="col-md-4">
+                            <h6 class="text-success"><i class="bi bi-arrow-up-circle me-1"></i>Gelirler</h6>
+                            <table class="table table-sm">
+                                <tr>
+                                    <td>Sefer Geliri (@arac.SeferSayisi sefer)</td>
+                                    <td class="text-end text-success">@arac.SeferGeliri.ToString("N0") ₺</td>
+                                </tr>
+                                <tr>
+                                    <td>Ek Gelirler</td>
+                                    <td class="text-end text-success">@arac.EkGelirler.ToString("N0") ₺</td>
+                                </tr>
+                                <tr class="table-success">
+                                    <th>Toplam Gelir</th>
+                                    <th class="text-end">@arac.ToplamGelir.ToString("N0") ₺</th>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <!-- Giderler -->
+                        <div class="col-md-4">
+                            <h6 class="text-danger"><i class="bi bi-arrow-down-circle me-1"></i>Giderler</h6>
+                            <table class="table table-sm">
+                                <tr>
+                                    <td>Şoför Maaşı</td>
+                                    <td class="text-end text-danger">@arac.SoforMasrafi.ToString("N0") ₺</td>
+                                </tr>
+                                <tr>
+                                    <td>AkarYakıt</td>
+                                    <td class="text-end text-danger">@arac.AkaryakitMasrafi.ToString("N0") ₺</td>
+                                </tr>
+                                <tr>
+                                    <td>Bakım/Onarım</td>
+                                    <td class="text-end text-danger">@arac.BakimMasrafi.ToString("N0") ₺</td>
+                                </tr>
+                                <tr>
+                                    <td>Sigorta</td>
+                                    <td class="text-end text-danger">@arac.SigortaMasrafi.ToString("N0") ₺</td>
+                                </tr>
+                                <tr>
+                                    <td>Diğer</td>
+                                    <td class="text-end text-danger">@arac.DigerMasraflar.ToString("N0") ₺</td>
+                                </tr>
+                                <tr class="table-danger">
+                                    <th>Toplam Gider</th>
+                                    <th class="text-end">@arac.ToplamGider.ToString("N0") ₺</th>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <!-- Çalışılan Güzergahlar -->
+                        <div class="col-md-4">
+                            <h6 class="text-info"><i class="bi bi-signpost me-1"></i>Çalışılan Güzergahlar</h6>
+                            @if (arac.CalistigiGuzergahlar.Any())
+                            {
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Güzergah</th>
+                                            <th class="text-center">Sefer</th>
+                                            <th class="text-end">Gelir</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var guzergah in arac.CalistigiGuzergahlar.Take(5))
+                                        {
+                                            <tr>
+                                                <td>
+                                                    @guzergah.GuzergahAdi
+                                                    <br /><small class="text-muted">@guzergah.MusteriUnvan</small>
+                                                </td>
+                                                <td class="text-center">@guzergah.SeferSayisi</td>
+                                                <td class="text-end text-success">@guzergah.Gelir.ToString("N0") ₺</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                            else
+                            {
+                                <p class="text-muted">Bu dönemde sefer yok</p>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (!rapor.AracDetaylari.Any())
+        {
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>Bu dönemde Özmal Araç verisi bulunmuyor.
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private int secilenYil = DateTime.Today.Year;
+    private int secilenAy = DateTime.Today.Month;
+    private Models.OzmalAracRaporu? rapor;
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await YenileData();
+    }
+
+    private async Task YenileData()
+    {
+        isLoading = true;
+        try
+        {
+            rapor = await MaliAnalizService.GetOzmalAracRaporuAsync(secilenYil, secilenAy);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+

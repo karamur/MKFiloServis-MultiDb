@@ -16,9 +16,9 @@ Proje 3 firma ile çalışıyor. Önceki "Shared Database + FirmaId row-level is
 ## Decision
 **Hybrid model: Database-Per-Firma + Shared Master DB**
 
-1. **Master DB** (`KOAFiloServis_Master`): Sadece global tablolar (Firmalar, Kullanicilar, Roller, Lisanslar)
+1. **Master DB** (`MKFiloServis_Master`): Sadece global tablolar (Firmalar, Kullanicilar, Roller, Lisanslar)
 2. **Tenant DB'ler** (`Koa_[FirmaKodu]_[ID]`): Her firmanın kendi DB'si, tam fiziksel izolasyon
-3. **Holding DB** (`KOAFiloServis_Holding`): Konsolide raporlama (read model, eventual consistency)
+3. **Holding DB** (`MKFiloServis_Holding`): Konsolide raporlama (read model, eventual consistency)
 4. **Geçiş stratejisi**: `Firma.DatabaseName == null` → shared DB, `!= null` → tenant DB (kademeli)
 
 **Interface**: `IFirmaTenant` marker interface. `ApplyFirmaTenantQueryFilter` ile otomatik global query filter.
@@ -67,3 +67,4 @@ Proje 3 firma ile çalışıyor. Önceki "Shared Database + FirmaId row-level is
 - [x] Migration: tüm tenant DB'lere otomatik uygulanır
 - [x] Build: 0 hata, 0 uyarı
 - [x] Test: 305/305 başarılı
+

@@ -1,0 +1,449 @@
+@page "/stok/arac-islem"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using AracIslemEntity = MKFiloServis.Shared.Entities.AracIslem
+@inject IStokService StokService
+@inject IAracService AracService
+@inject ICariService CariService
+@inject NavigationManager Navigation
+@inject IToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>Araç Alış/Satış</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="mb-0">
+            <i class="bi bi-truck me-2"></i>Araç Alış/Satış İşlemleri
+        </h3>
+        <div>
+            <button class="btn btn-outline-secondary me-2" @onclick='() => Navigation.NavigateTo("/stok")'>
+                <i class="bi bi-arrow-left me-1"></i>Geri
+            </button>
+            <button class="btn btn-success" @onclick="YeniIslem">
+                <i class="bi bi-plus-lg me-1"></i>Yeni İşlem
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtreler -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">İşlem Tipi</label>
+                    <select class="form-select" @bind="filtreIslemTipi" @bind:after="LoadDataAsync">
+                        <option value="">Tümü</option>
+                        @foreach (var tip in Enum.GetValues<AracIslemTipi>())
+                        {
+                            <option value="@tip">@GetIslemTipiAdi(tip)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Araç</label>
+                    <select class="form-select" @bind="filtreAracId" @bind:after="LoadDataAsync">
+                        <option value="">Tümü</option>
+                        @foreach (var arac in araclar)
+                        {
+                            <option value="@arac.Id">@arac.AktifPlaka - @arac.Marka @arac.Model</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Başlangıç Tarihi</label>
+                    <input type="date" class="form-control" @bind="filtreBaslangic" @bind:after="LoadDataAsync" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Bitiş Tarihi</label>
+                    <input type="date" class="form-control" @bind="filtreBitis" @bind:after="LoadDataAsync" />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Özet Kartlar -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6>Toplam Alış</h6>
+                            <h3>@islemler.Where(i => i.IslemTipi == AracIslemTipi.Alis).Count() araç</h3>
+                            <span>@islemler.Where(i => i.IslemTipi == AracIslemTipi.Alis).Sum(i => i.ToplamTutar).ToString("N0") ₺</span>
+                        </div>
+                        <i class="bi bi-arrow-down-circle" style="font-size: 3rem; opacity: 0.5;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6>Toplam Satış</h6>
+                            <h3>@islemler.Where(i => i.IslemTipi == AracIslemTipi.Satis).Count() araç</h3>
+                            <span>@islemler.Where(i => i.IslemTipi == AracIslemTipi.Satis).Sum(i => i.ToplamTutar).ToString("N0") ₺</span>
+                        </div>
+                        <i class="bi bi-arrow-up-circle" style="font-size: 3rem; opacity: 0.5;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6>Net Fark</h6>
+                            @{
+                                var satis = islemler.Where(i => i.IslemTipi == AracIslemTipi.Satis).Sum(i => i.ToplamTutar);
+                                var alis = islemler.Where(i => i.IslemTipi == AracIslemTipi.Alis).Sum(i => i.ToplamTutar);
+                                var fark = satis - alis;
+                            }
+                            <h3 class="@(fark >= 0 ? "" : "text-warning")">@fark.ToString("N0") ₺</h3>
+                            <span>@(fark >= 0 ? "Kâr" : "Zarar")</span>
+                        </div>
+                        <i class="bi bi-graph-up-arrow" style="font-size: 3rem; opacity: 0.5;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="d-flex justify-content-center my-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Tarih</th>
+                                <th>İşlem Tipi</th>
+                                <th>Araç</th>
+                                <th>Cari</th>
+                                <th class="text-end">Tutar</th>
+                                <th class="text-end">KDV</th>
+                                <th class="text-end">Toplam</th>
+                                <th>Km</th>
+                                <th>Noter</th>
+                                <th class="text-center">İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (islemler.Any())
+                            {
+                                @foreach (var islem in islemler)
+                                {
+                                    var isAlis = islem.IslemTipi == AracIslemTipi.Alis;
+                                    <tr>
+                                        <td>@islem.IslemTarihi.ToString("dd.MM.yyyy")</td>
+                                        <td>
+                                            <span class="badge @(isAlis ? "bg-success" : "bg-danger")">
+                                                @GetIslemTipiAdi(islem.IslemTipi)
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <strong>@islem.Arac?.AktifPlaka</strong><br/>
+                                            <small class="text-muted">@islem.Arac?.Marka @islem.Arac?.Model</small>
+                                        </td>
+                                        <td>@(islem.Cari?.Unvan ?? "-")</td>
+                                        <td class="text-end">@islem.Tutar.ToString("N2") ₺</td>
+                                        <td class="text-end">@islem.KdvTutar.ToString("N2") ₺</td>
+                                        <td class="text-end fw-bold">@islem.ToplamTutar.ToString("N2") ₺</td>
+                                        <td>@(islem.Kilometre?.ToString("N0") ?? "-")</td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(islem.NoterId))
+                                            {
+                                                <span title="@islem.NoterTarihi?.ToString("dd.MM.yyyy")">
+                                                    <i class="bi bi-check-circle text-success"></i> @islem.NoterId
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => DuzenleIslem(islem)" title="Düzenle">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => SilIslem(islem)" title="Sil">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="10" class="text-center text-muted py-4">
+                                        <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                                        <p class="mb-0 mt-2">Kayıt bulunamadı</p>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- İşlem Modal -->
+@if (showModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-truck me-2"></i>
+                        @(editingIslem?.Id > 0 ? "İşlem Düzenle" : "Yeni Araç İşlemi")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="editingIslem" OnValidSubmit="SaveIslem">
+                        <DataAnnotationsValidator />
+                        
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">İşlem Tipi *</label>
+                                <InputSelect class="form-select" @bind-Value="editingIslem!.IslemTipi">
+                                    @foreach (var tip in Enum.GetValues<AracIslemTipi>())
+                                    {
+                                        <option value="@tip">@GetIslemTipiAdi(tip)</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">İşlem Tarihi *</label>
+                                <InputDate class="form-control" @bind-Value="editingIslem.IslemTarihi" />
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label">Araç *</label>
+                                <InputSelect class="form-select" @bind-Value="editingIslem.AracId">
+                                    <option value="0">Seçiniz</option>
+                                    @foreach (var arac in araclar)
+                                    {
+                                        <option value="@arac.Id">@arac.AktifPlaka - @arac.Marka @arac.Model (@arac.ModelYili)</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Cari (Kimden/Kime)</label>
+                                <InputSelect class="form-select" @bind-Value="editingIslem.CariId">
+                                    <option value="">Seçiniz</option>
+                                    @foreach (var cari in cariler)
+                                    {
+                                        <option value="@cari.Id">@cari.Unvan</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <label class="form-label">Tutar (KDV Hariç)</label>
+                                <InputNumber class="form-control" @bind-Value="editingIslem.Tutar" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">KDV Oranı (%)</label>
+                                <InputNumber class="form-control" @bind-Value="editingIslem.KdvOrani" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Kilometre</label>
+                                <InputNumber class="form-control" @bind-Value="editingIslem.Kilometre" />
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label">Noter ID</label>
+                                <InputText class="form-control" @bind-Value="editingIslem.NoterId" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Noter Tarihi</label>
+                                <InputDate class="form-control" @bind-Value="editingIslem.NoterTarihi" />
+                            </div>
+                            
+                            <div class="col-12">
+                                <label class="form-label">Açıklama</label>
+                                <InputTextArea class="form-control" @bind-Value="editingIslem.Aciklama" rows="2" />
+                            </div>
+                            
+                            <div class="col-12">
+                                <label class="form-label">Notlar</label>
+                                <InputTextArea class="form-control" @bind-Value="editingIslem.Notlar" rows="2" />
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4 d-flex justify-content-end">
+                            <button type="button" class="btn btn-secondary me-2" @onclick="CloseModal">İptal</button>
+                            <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                                @if (isSaving)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                Kaydet
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private bool showModal = false;
+    private bool isSaving = false;
+    
+    private List<AracIslemEntity> islemler = new();
+    private List<Arac> araclar = new();
+    private List<Cari> cariler = new();
+    private AracIslemEntity? editingIslem;
+    
+    // Filtreler
+    private AracIslemTipi? filtreIslemTipi;
+    private int? filtreAracId;
+    private DateTime? filtreBaslangic;
+    private DateTime? filtreBitis;
+
+    protected override async Task OnInitializedAsync()
+    {
+        araclar = await AracService.GetAllAsync();
+        cariler = await CariService.GetAllAsync();
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            isLoading = true;
+            islemler = await StokService.GetAracIslemleriAsync(filtreAracId, filtreIslemTipi);
+            
+            // Tarih filtresi
+            if (filtreBaslangic.HasValue)
+                islemler = islemler.Where(i => i.IslemTarihi >= filtreBaslangic.Value).ToList();
+            if (filtreBitis.HasValue)
+                islemler = islemler.Where(i => i.IslemTarihi <= filtreBitis.Value).ToList();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Veri yüklenirken hata: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void YeniIslem()
+    {
+        editingIslem = new AracIslemEntity
+        {
+            IslemTarihi = DateTime.Today,
+            IslemTipi = AracIslemTipi.Alis,
+            KdvOrani = 20
+        };
+        showModal = true;
+    }
+
+    private void DuzenleIslem(AracIslemEntity islem)
+    {
+        editingIslem = new AracIslemEntity
+        {
+            Id = islem.Id,
+            AracId = islem.AracId,
+            IslemTipi = islem.IslemTipi,
+            IslemTarihi = islem.IslemTarihi,
+            CariId = islem.CariId,
+            Tutar = islem.Tutar,
+            KdvOrani = islem.KdvOrani,
+            Aciklama = islem.Aciklama,
+            Notlar = islem.Notlar,
+            Kilometre = islem.Kilometre,
+            NoterId = islem.NoterId,
+            NoterTarihi = islem.NoterTarihi
+        };
+        showModal = true;
+    }
+
+    private async Task SaveIslem()
+    {
+        if (editingIslem == null || editingIslem.AracId == 0) return;
+        
+        try
+        {
+            isSaving = true;
+            
+            if (editingIslem.Id > 0)
+            {
+                await StokService.UpdateAracIslemAsync(editingIslem);
+                ToastService.ShowSuccess("İşlem güncellendi");
+            }
+            else
+            {
+                await StokService.CreateAracIslemAsync(editingIslem);
+                ToastService.ShowSuccess("İşlem oluşturuldu");
+            }
+            
+            showModal = false;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Kayıt hatası: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task SilIslem(AracIslemEntity islem)
+    {
+        try
+        {
+            await StokService.DeleteAracIslemAsync(islem.Id);
+            ToastService.ShowSuccess("İşlem silindi");
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Silme hatası: {ex.Message}");
+        }
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        editingIslem = null;
+    }
+
+    private string GetIslemTipiAdi(AracIslemTipi tip) => tip switch
+    {
+        AracIslemTipi.Alis => "Alış",
+        AracIslemTipi.Satis => "Satış",
+        AracIslemTipi.Takas => "Takas",
+        AracIslemTipi.TakasGiris => "Takas Giriş",
+        AracIslemTipi.TakasCikis => "Takas Çıkış",
+        AracIslemTipi.Devir => "Devir",
+        _ => tip.ToString()
+    };
+}
+

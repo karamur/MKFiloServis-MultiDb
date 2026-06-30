@@ -1,0 +1,341 @@
+@page "/arac-takip/gecmis/{AracId:int}"
+@using MKFiloServis.Web.Services.Interfaces
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Shared.Entities
+@inject IAracTakipService AracTakipService
+@inject IAracService AracService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavigationManager
+@implements IAsyncDisposable
+
+<PageTitle>Araç Konum Geçmişi</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-2">
+                    <li class="breadcrumb-item"><a href="/arac-takip">Canlı Takip</a></li>
+                    <li class="breadcrumb-item active">Konum Geçmişi</li>
+                </ol>
+            </nav>
+            <div class="d-flex justify-content-between align-items-center">
+                <h3 class="mb-0">
+                    <i class="bi bi-clock-history text-primary me-2"></i>
+                    Konum Geçmişi - <span class="text-primary">@(arac?.AktifPlaka ?? "Yükleniyor...")</span>
+                </h3>
+                <a href="/arac-takip/@AracId" class="btn btn-outline-primary">
+                    <i class="bi bi-geo-alt-fill"></i> Canlı Takip
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtre Kartı -->
+    <div class="card shadow-sm mb-3">
+        <div class="card-body py-2">
+            <div class="row align-items-center">
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Başlangıç</label>
+                    <input type="datetime-local" class="form-control form-control-sm" @bind="baslangicTarihi" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Bitiş</label>
+                    <input type="datetime-local" class="form-control form-control-sm" @bind="bitisTarihi" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">&nbsp;</label>
+                    <div class="btn-group d-block">
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => HizliTarih(1)">Bugün</button>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => HizliTarih(7)">7 Gün</button>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => HizliTarih(30)">30 Gün</button>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">&nbsp;</label>
+                    <button class="btn btn-primary btn-sm d-block w-100" @onclick="GecmisiYukle" disabled="@yukleniyor">
+                        @if (yukleniyor)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-search"></i> Ara
+                    </button>
+                </div>
+                <div class="col-md-2 text-end">
+                    @if (konumlar.Any())
+                    {
+                        <label class="form-label small mb-1">@konumlar.Count kayıt</label>
+                        <button class="btn btn-outline-success btn-sm d-block w-100" @onclick="ExportExcel">
+                            <i class="bi bi-file-earmark-excel"></i> Excel
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Sol Panel - İstatistikler ve Liste -->
+        <div class="col-md-4">
+            <!-- İstatistik Kartları -->
+            @if (istatistik != null)
+            {
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <div class="card text-center py-2 bg-primary text-white">
+                            <div class="fs-5 fw-bold">@istatistik.ToplamMesafeKm.ToString("F1") km</div>
+                            <small>Toplam Mesafe</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card text-center py-2 bg-success text-white">
+                            <div class="fs-5 fw-bold">@istatistik.ToplamHareketSuresi.ToString(@"hh\:mm")</div>
+                            <small>Hareket Süresi</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card text-center py-2 bg-warning text-dark">
+                            <div class="fs-5 fw-bold">@istatistik.MaxHizKmSaat.ToString("F0") km/s</div>
+                            <small>Max Hız</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card text-center py-2 bg-info text-white">
+                            <div class="fs-5 fw-bold">@istatistik.DurakSayisi</div>
+                            <small>Durak Sayısı</small>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Duraklar -->
+            <div class="card shadow-sm mb-3">
+                <div class="card-header py-2 bg-light">
+                    <i class="bi bi-stop-circle me-2"></i>Durak Noktaları (@duraklar.Count)
+                </div>
+                <div class="card-body p-0" style="max-height: 250px; overflow-y: auto;">
+                    @if (!duraklar.Any())
+                    {
+                        <div class="text-center text-muted py-3">
+                            <small>Durak noktası bulunamadı</small>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var durak in duraklar.Take(20))
+                            {
+                                <div class="list-group-item py-2" @onclick="() => DuragaGit(durak)" style="cursor: pointer;">
+                                    <div class="d-flex justify-content-between">
+                                        <small><strong>@durak.BaslangicZamani.ToString("HH:mm")</strong> - @(durak.BitisZamani?.ToString("HH:mm") ?? "...")</small>
+                                        <span class="badge bg-secondary">@durak.Sure.ToString(@"hh\:mm")</span>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(durak.Adres))
+                                    {
+                                        <small class="text-muted d-block text-truncate">@durak.Adres</small>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Alarmlar -->
+            @if (alarmlar.Any())
+            {
+                <div class="card shadow-sm border-danger">
+                    <div class="card-header py-2 bg-danger text-white">
+                        <i class="bi bi-exclamation-triangle me-2"></i>Alarmlar (@alarmlar.Count)
+                    </div>
+                    <div class="card-body p-0" style="max-height: 200px; overflow-y: auto;">
+                        <div class="list-group list-group-flush">
+                            @foreach (var alarm in alarmlar.Take(10))
+                            {
+                                <div class="list-group-item py-2">
+                                    <div class="d-flex justify-content-between">
+                                        <span class="badge @GetAlarmBadgeClass(alarm.AlarmTipi)">@alarm.AlarmTipi</span>
+                                        <small>@alarm.AlarmZamani.ToString("HH:mm")</small>
+                                    </div>
+                                    <small class="text-muted">@alarm.Mesaj</small>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Sağ Panel - Harita -->
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-map me-2"></i>Rota Haritası</span>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="rotaGoster" @bind="rotaGoster" @bind:after="HaritayiGuncelle" />
+                        <label class="form-check-label" for="rotaGoster">Rota çizgisi göster</label>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div id="gecmis-harita" style="height: 65vh;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public int AracId { get; set; }
+
+    private Arac? arac;
+    private List<AracKonum> konumlar = new();
+    private List<DurakNoktasi> duraklar = new();
+    private List<AracTakipAlarm> alarmlar = new();
+    private AracTakipIstatistik? istatistik;
+    
+    private DateTime baslangicTarihi = DateTime.Today;
+    private DateTime bitisTarihi = DateTime.Today.AddDays(1).AddSeconds(-1);
+    private bool yukleniyor = false;
+    private bool rotaGoster = true;
+    private bool haritaHazir = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        arac = await AracService.GetByIdAsync(AracId);
+        HizliTarih(1); // Bugün
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("leafletInterop.initMap", "gecmis-harita", 39.0, 35.0, 6);
+            haritaHazir = true;
+            await GecmisiYukle();
+        }
+    }
+
+    private void HizliTarih(int gunSayisi)
+    {
+        if (gunSayisi == 1)
+        {
+            baslangicTarihi = DateTime.Today;
+            bitisTarihi = DateTime.Today.AddDays(1).AddSeconds(-1);
+        }
+        else
+        {
+            baslangicTarihi = DateTime.Today.AddDays(-gunSayisi + 1);
+            bitisTarihi = DateTime.Today.AddDays(1).AddSeconds(-1);
+        }
+    }
+
+    private async Task GecmisiYukle()
+    {
+        yukleniyor = true;
+        try
+        {
+            konumlar = await AracTakipService.GetKonumGecmisiAsync(AracId, baslangicTarihi, bitisTarihi);
+            duraklar = await AracTakipService.GetDurakNoktalariAsync(AracId, baslangicTarihi, bitisTarihi);
+            alarmlar = await AracTakipService.GetAlarmlarByAracIdAsync(AracId, baslangicTarihi, bitisTarihi);
+            istatistik = await AracTakipService.GetIstatistikAsync(AracId, baslangicTarihi, bitisTarihi);
+            
+            if (haritaHazir)
+            {
+                await HaritayiGuncelle();
+            }
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private async Task HaritayiGuncelle()
+    {
+        if (!haritaHazir) return;
+        
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("leafletInterop.clearMarkers", "gecmis-harita");
+            await JSRuntime.InvokeVoidAsync("leafletInterop.clearRoute", "gecmis-harita");
+            
+            if (!konumlar.Any()) return;
+            
+            // Başlangıç marker'ı (yeşil)
+            var ilk = konumlar.First();
+            await JSRuntime.InvokeVoidAsync("leafletInterop.addMarker", 
+                "gecmis-harita", ilk.Latitude, ilk.Longitude, "#28a745",
+                $"<strong>Başlangıç</strong><br/>{ilk.KayitZamani:HH:mm:ss}");
+            
+            // Bitiş marker'ı (kırmızı)
+            var son = konumlar.Last();
+            if (konumlar.Count > 1)
+            {
+                await JSRuntime.InvokeVoidAsync("leafletInterop.addMarker", 
+                    "gecmis-harita", son.Latitude, son.Longitude, "#dc3545",
+                    $"<strong>Bitiş</strong><br/>{son.KayitZamani:HH:mm:ss}");
+            }
+            
+            // Durak noktaları (mavi)
+            foreach (var durak in duraklar)
+            {
+                await JSRuntime.InvokeVoidAsync("leafletInterop.addMarker",
+                    "gecmis-harita", durak.Latitude, durak.Longitude, "#0d6efd",
+                    $"<strong>Durak</strong><br/>{durak.BaslangicZamani:HH:mm} - {durak.Sure:hh\\:mm}");
+            }
+            
+            // Rota çizgisi
+            if (rotaGoster && konumlar.Count > 1)
+            {
+                var koordinatlar = konumlar.Select(k => new { lat = k.Latitude, lng = k.Longitude }).ToList();
+                await JSRuntime.InvokeVoidAsync("leafletInterop.drawRoute", "gecmis-harita", koordinatlar, "#0d6efd");
+            }
+            
+            // Haritayı sığdır
+            await JSRuntime.InvokeVoidAsync("leafletInterop.fitBounds", "gecmis-harita");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Harita güncelleme hatası: {ex.Message}");
+        }
+    }
+
+    private async Task DuragaGit(DurakNoktasi durak)
+    {
+        if (haritaHazir)
+        {
+            await JSRuntime.InvokeVoidAsync("leafletInterop.setView", "gecmis-harita", durak.Latitude, durak.Longitude, 16);
+        }
+    }
+
+    private string GetAlarmBadgeClass(AlarmTipi tip)
+    {
+        return tip switch
+        {
+            AlarmTipi.HizAsimi => "bg-warning text-dark",
+            AlarmTipi.BolgeGiris or AlarmTipi.BolgeCikis => "bg-info",
+            AlarmTipi.SOS or AlarmTipi.Carpisma => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+
+    private async Task ExportExcel()
+    {
+        // TODO: Excel export implementasyonu
+        await JSRuntime.InvokeVoidAsync("alert", "Excel export özelliği yakında eklenecek.");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (haritaHazir)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("leafletInterop.destroyMap", "gecmis-harita");
+            }
+            catch { }
+        }
+    }
+}
+

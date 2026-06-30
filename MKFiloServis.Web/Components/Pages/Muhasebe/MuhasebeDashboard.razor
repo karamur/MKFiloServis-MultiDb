@@ -1,0 +1,536 @@
+@page "/muhasebe"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Data
+@using MKFiloServis.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject IMuhasebeService MuhasebeService
+@inject ICRMService CRMService
+@inject IDbContextFactory<ApplicationDbContext> DbContextFactory
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@rendermode InteractiveServer
+
+<PageTitle>Muhasebe</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="bi bi-journal-text me-2"></i>Muhasebe Modulu</h3>
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary" @onclick="HesapPlaniOlustur" disabled="@hesapPlaniVar">
+                <i class="bi bi-plus-lg me-1"></i>Hesap Plani Olustur
+            </button>
+            <button class="btn btn-outline-secondary" @onclick="WidgetAyarlariAc">
+                <i class="bi bi-grid me-1"></i>Widget Ayarlari
+            </button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else
+    {
+        <!-- Ozet Kartlari -->
+        @if (WidgetGorunur("muhasebe-ozet-kartlar"))
+        {
+            <div class="row mb-4 g-3">
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white h-100" style="cursor: pointer;" @onclick='() => Navigation.NavigateTo("/muhasebe/hesap-plani")'>
+                        <div class="card-body text-center">
+                            <i class="bi bi-list-nested fs-1 mb-2"></i>
+                            <h6>Hesap Plani</h6>
+                            <h3>@hesapSayisi</h3>
+                            <small>Aktif Hesap</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white h-100" style="cursor: pointer;" @onclick='() => Navigation.NavigateTo("/muhasebe/fisler")'>
+                        <div class="card-body text-center">
+                            <i class="bi bi-receipt fs-1 mb-2"></i>
+                            <h6>Muhasebe Fisleri</h6>
+                            <h3>@fisSayisi</h3>
+                            <small>Bu Ay</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white h-100" style="cursor: pointer;" @onclick='() => Navigation.NavigateTo("/muhasebe/raporlar")'>
+                        <div class="card-body text-center">
+                            <i class="bi bi-file-earmark-bar-graph fs-1 mb-2"></i>
+                            <h6>Raporlar</h6>
+                            <p class="mb-0 small">Muavin, Yevmiye, Bilanco</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-dark h-100" style="cursor: pointer;" @onclick='() => Navigation.NavigateTo("/muhasebe/analiz")'>
+                        <div class="card-body text-center">
+                            <i class="bi bi-graph-up-arrow fs-1 mb-2"></i>
+                            <h6>Mali Analiz</h6>
+                            <p class="mb-0 small">Gelir/Gider, Trendler</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Hizli Erisim -->
+        <div class="row mb-4">
+            @if (WidgetGorunur("muhasebe-hizli-islemler"))
+            {
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-lightning me-2"></i>Hizli Islemler</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-outline-primary" @onclick='() => Navigation.NavigateTo("/muhasebe/fisler/yeni")'>
+                                    <i class="bi bi-plus-circle me-2"></i>Yeni Muhasebe Fisi
+                                </button>
+                                <button class="btn btn-outline-success" @onclick='() => Navigation.NavigateTo("/muhasebe/raporlar/muavin")'>
+                                    <i class="bi bi-file-text me-2"></i>Muavin Raporu
+                                </button>
+                                <button class="btn btn-outline-info" @onclick='() => Navigation.NavigateTo("/muhasebe/raporlar/mizan")'>
+                                    <i class="bi bi-table me-2"></i>Mizan
+                                </button>
+                                <button class="btn btn-outline-warning" @onclick='() => Navigation.NavigateTo("/muhasebe/raporlar/bilanco")'>
+                                    <i class="bi bi-layout-split me-2"></i>Bilanco
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+            @if (WidgetGorunur("muhasebe-bu-ay-ozeti"))
+            {
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>Bu Ay Ozeti</h5>
+                        </div>
+                        <div class="card-body">
+                            @if (gelirGiderRapor != null)
+                            {
+                                <div class="row text-center">
+                                    <div class="col-4">
+                                        <h6 class="text-muted">Gelir</h6>
+                                        <h4 class="text-success">@FormatPara(gelirGiderRapor.ToplamGelir)</h4>
+                                    </div>
+                                    <div class="col-4">
+                                        <h6 class="text-muted">Gider</h6>
+                                        <h4 class="text-danger">@FormatPara(gelirGiderRapor.ToplamGider)</h4>
+                                    </div>
+                                    <div class="col-4">
+                                        <h6 class="text-muted">Net</h6>
+                                        <h4 class="@(gelirGiderRapor.NetKar >= 0 ? "text-success" : "text-danger")">
+                                            @FormatPara(gelirGiderRapor.NetKar)
+                                        </h4>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="text-muted text-center">Veri bulunamadi</p>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Son Fisler -->
+        @if (WidgetGorunur("muhasebe-son-fisler"))
+        {
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Son Fisler</h5>
+                    <a href="/muhasebe/fisler" class="btn btn-sm btn-outline-primary">Tumu</a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Fis No</th>
+                                    <th>Tarih</th>
+                                    <th>Tip</th>
+                                    <th>Aciklama</th>
+                                    <th class="text-end">Borc</th>
+                                    <th class="text-end">Alacak</th>
+                                    <th class="text-center">Durum</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (sonFisler != null && sonFisler.Any())
+                                {
+                                    @foreach (var fis in sonFisler)
+                                    {
+                                        <tr style="cursor: pointer;" @onclick='() => Navigation.NavigateTo($"/muhasebe/fisler/{fis.Id}")'>
+                                            <td><strong>@fis.FisNo</strong></td>
+                                            <td>@fis.FisTarihi.ToString("dd.MM.yyyy")</td>
+                                            <td><span class="badge bg-secondary">@GetFisTipAdi(fis.FisTipi)</span></td>
+                                            <td>@(fis.Aciklama?.Length > 50 ? fis.Aciklama.Substring(0, 50) + "..." : fis.Aciklama)</td>
+                                            <td class="text-end">@FormatPara(fis.ToplamBorc)</td>
+                                            <td class="text-end">@FormatPara(fis.ToplamAlacak)</td>
+                                            <td class="text-center">
+                                                <span class="badge @GetDurumClass(fis.Durum)">@GetDurumAdi(fis.Durum)</span>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="7" class="text-center text-muted py-4">Fis bulunamadi</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@if (showWidgetSettings)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-secondary text-white">
+                    <h5 class="modal-title"><i class="bi bi-grid me-2"></i>Muhasebe Widget Ayarlari</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="WidgetAyarlariKapat"></button>
+                </div>
+                <div class="modal-body">
+                    @foreach (var widget in widgetPreferences.OrderBy(x => x.Sira))
+                    {
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" @bind="widget.Gorunur" id="@widget.WidgetKodu" />
+                            <label class="form-check-label" for="@widget.WidgetKodu">@widget.Baslik</label>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" @onclick="VarsayilanWidgetAyarlariYukle">Varsayilan</button>
+                    <button class="btn btn-secondary" @onclick="WidgetAyarlariKapat">Iptal</button>
+                    <button class="btn btn-primary" @onclick="WidgetAyarlariKaydet" disabled="@isWidgetSaving">
+                        @if (isWidgetSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private bool isLoadInProgress;
+    private bool isWidgetSaving;
+    private bool showWidgetSettings;
+    private bool hesapPlaniVar = false;
+    private int hesapSayisi = 0;
+    private int fisSayisi = 0;
+    private int? kullaniciId;
+    private List<MuhasebeFis>? sonFisler;
+    private GelirGiderRapor? gelirGiderRapor;
+    private List<MuhasebeWidgetPreference> widgetPreferences = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadWidgetPreferencesAsync();
+        await LoadDataAsync();
+    }
+
+    private async Task LoadWidgetPreferencesAsync()
+    {
+        var defaults = GetDefaultWidgetPreferences();
+
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            var kullaniciIdClaim = user.FindFirst("KullaniciId")?.Value;
+            if (!int.TryParse(kullaniciIdClaim, out var currentUserId))
+            {
+                widgetPreferences = defaults;
+                return;
+            }
+
+            kullaniciId = currentUserId;
+            var savedWidgets = await CRMService.GetDashboardWidgetlarAsync(currentUserId);
+            var muhasebeWidgets = savedWidgets.Where(x => x.WidgetKodu.StartsWith("muhasebe-", StringComparison.OrdinalIgnoreCase)).ToList();
+
+            if (!muhasebeWidgets.Any())
+            {
+                widgetPreferences = defaults;
+                await SaveWidgetPreferencesAsync();
+                return;
+            }
+
+            widgetPreferences = defaults
+                .Select(def =>
+                {
+                    var saved = muhasebeWidgets.FirstOrDefault(x => x.WidgetKodu == def.WidgetKodu);
+                    if (saved != null)
+                    {
+                        def.Gorunur = saved.Gorunur;
+                        def.Sira = saved.Sira;
+                    }
+
+                    return def;
+                })
+                .OrderBy(x => x.Sira)
+                .ToList();
+        }
+        catch
+        {
+            widgetPreferences = defaults;
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        if (isLoadInProgress)
+            return;
+
+        isLoadInProgress = true;
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            await using var context = await DbContextFactory.CreateDbContextAsync();
+
+            hesapSayisi = await context.MuhasebeHesaplari.CountAsync();
+            hesapPlaniVar = hesapSayisi > 0;
+
+            var buAy = DateTime.Today.Month;
+            var buYil = DateTime.Today.Year;
+            var baslangic = new DateTime(buYil, buAy, 1);
+            var bitis = baslangic.AddMonths(1);
+            var fisler = await context.MuhasebeFisleri
+                .Where(f => f.FisTarihi >= baslangic && f.FisTarihi < bitis)
+                .OrderByDescending(f => f.FisTarihi)
+                .ThenByDescending(f => f.Id)
+                .ToListAsync();
+            fisSayisi = fisler.Count;
+            sonFisler = fisler.Take(10).ToList();
+
+            try
+            {
+                gelirGiderRapor = await BuildGelirGiderRaporAsync(context, buYil, buAy);
+            }
+            catch { }
+        }
+        finally
+        {
+            isLoading = false;
+            isLoadInProgress = false;
+            StateHasChanged();
+        }
+    }
+
+    private static async Task<GelirGiderRapor> BuildGelirGiderRaporAsync(ApplicationDbContext context, int yil, int ay)
+    {
+        var gelirHesaplar = await context.MuhasebeHesaplari
+            .Where(h => h.HesapGrubu == HesapGrubu.GelirTablosu && h.HesapTuru == HesapTuru.Gelir)
+            .Select(h => new { h.Id, h.HesapKodu, h.HesapAdi })
+            .ToListAsync();
+
+        var giderHesaplar = await context.MuhasebeHesaplari
+            .Where(h => (h.HesapGrubu == HesapGrubu.GelirTablosu || h.HesapGrubu == HesapGrubu.MaliyetHesaplari) &&
+                        (h.HesapTuru == HesapTuru.Gider || h.HesapTuru == HesapTuru.Maliyet))
+            .Select(h => new { h.Id, h.HesapKodu, h.HesapAdi })
+            .ToListAsync();
+
+        var kalemler = await context.MuhasebeFisKalemleri
+            .Where(k => k.Fis.FisTarihi.Year == yil && k.Fis.FisTarihi.Month == ay && k.Fis.Durum == FisDurum.Onaylandi)
+            .Select(k => new
+            {
+                k.HesapId,
+                k.Borc,
+                k.Alacak,
+                k.Hesap.HesapKodu,
+                k.Hesap.HesapAdi
+            })
+            .ToListAsync();
+
+        var gelirIds = gelirHesaplar.Select(h => h.Id).ToHashSet();
+        var giderIds = giderHesaplar.Select(h => h.Id).ToHashSet();
+
+        var rapor = new GelirGiderRapor { Yil = yil, Ay = ay };
+
+        var gelirKalemler = kalemler.Where(k => gelirIds.Contains(k.HesapId)).ToList();
+        rapor.ToplamGelir = gelirKalemler.Sum(k => k.Alacak - k.Borc);
+        rapor.Gelirler = gelirKalemler
+            .GroupBy(k => new { k.HesapKodu, k.HesapAdi })
+            .Select(g => new GelirGiderKalem
+            {
+                HesapKodu = g.Key.HesapKodu,
+                HesapAdi = g.Key.HesapAdi,
+                Tutar = g.Sum(k => k.Alacak - k.Borc)
+            })
+            .OrderByDescending(g => g.Tutar)
+            .ToList();
+
+        var giderKalemler = kalemler.Where(k => giderIds.Contains(k.HesapId)).ToList();
+        rapor.ToplamGider = giderKalemler.Sum(k => k.Borc - k.Alacak);
+        rapor.Giderler = giderKalemler
+            .GroupBy(k => new { k.HesapKodu, k.HesapAdi })
+            .Select(g => new GelirGiderKalem
+            {
+                HesapKodu = g.Key.HesapKodu,
+                HesapAdi = g.Key.HesapAdi,
+                Tutar = g.Sum(k => k.Borc - k.Alacak)
+            })
+            .OrderByDescending(g => g.Tutar)
+            .ToList();
+
+        rapor.NetKar = rapor.ToplamGelir - rapor.ToplamGider;
+
+        foreach (var gelir in rapor.Gelirler)
+            gelir.Yuzde = rapor.ToplamGelir > 0 ? Math.Round(gelir.Tutar / rapor.ToplamGelir * 100, 1) : 0;
+        foreach (var gider in rapor.Giderler)
+            gider.Yuzde = rapor.ToplamGider > 0 ? Math.Round(gider.Tutar / rapor.ToplamGider * 100, 1) : 0;
+
+        return rapor;
+    }
+
+    private bool WidgetGorunur(string widgetKodu)
+        => widgetPreferences.FirstOrDefault(x => x.WidgetKodu == widgetKodu)?.Gorunur ?? true;
+
+    private void WidgetAyarlariAc()
+    {
+        showWidgetSettings = true;
+    }
+
+    private void WidgetAyarlariKapat()
+    {
+        showWidgetSettings = false;
+    }
+
+    private async Task WidgetAyarlariKaydet()
+    {
+        isWidgetSaving = true;
+
+        try
+        {
+            await SaveWidgetPreferencesAsync();
+            ToastService.ShowSuccess("Widget ayarlari kaydedildi.");
+            showWidgetSettings = false;
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Widget ayarlari kaydedilemedi: " + ex.Message);
+        }
+        finally
+        {
+            isWidgetSaving = false;
+        }
+    }
+
+    private async Task SaveWidgetPreferencesAsync()
+    {
+        if (!kullaniciId.HasValue)
+            return;
+
+        var widgets = widgetPreferences
+            .OrderBy(x => x.Sira)
+            .Select((x, index) => new DashboardWidget
+            {
+                KullaniciId = kullaniciId.Value,
+                WidgetKodu = x.WidgetKodu,
+                Sira = index,
+                Kolon = 0,
+                Genislik = x.WidgetKodu == "muhasebe-son-fisler" ? 12 : 6,
+                Gorunur = x.Gorunur,
+                Kucultulmus = false
+            })
+            .ToList();
+
+        await CRMService.SaveDashboardWidgetlarAsync(kullaniciId.Value, widgets);
+    }
+
+    private void VarsayilanWidgetAyarlariYukle()
+    {
+        widgetPreferences = GetDefaultWidgetPreferences();
+    }
+
+    private static List<MuhasebeWidgetPreference> GetDefaultWidgetPreferences()
+    {
+        return new List<MuhasebeWidgetPreference>
+        {
+            new() { WidgetKodu = "muhasebe-ozet-kartlar", Baslik = "Özet Kartları", Sira = 0, Gorunur = true },
+            new() { WidgetKodu = "muhasebe-hizli-islemler", Baslik = "Hızlı İşlemler", Sira = 1, Gorunur = true },
+            new() { WidgetKodu = "muhasebe-bu-ay-ozeti", Baslik = "Bu Ay Özeti", Sira = 2, Gorunur = true },
+            new() { WidgetKodu = "muhasebe-son-fisler", Baslik = "Son Fişler", Sira = 3, Gorunur = true }
+        };
+    }
+
+    private async Task HesapPlaniOlustur()
+    {
+        if (isLoadInProgress)
+            return;
+
+        try
+        {
+            await MuhasebeService.SeedVarsayilanHesapPlaniAsync();
+            ToastService.ShowSuccess("Hesap plani olusturuldu!");
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
+        }
+    }
+
+    private string GetFisTipAdi(FisTipi tip) => tip switch
+    {
+        FisTipi.Mahsup => "Mahsup",
+        FisTipi.Tahsilat => "Tahsilat",
+        FisTipi.Tediye => "Tediye",
+        FisTipi.Acilis => "Acilis",
+        FisTipi.Kapanis => "Kapanis",
+        FisTipi.Devir => "Devir",
+        _ => tip.ToString()
+    };
+
+    private string GetDurumAdi(FisDurum durum) => durum switch
+    {
+        FisDurum.Taslak => "Taslak",
+        FisDurum.Onaylandi => "Onaylandi",
+        FisDurum.IptalEdildi => "Iptal",
+        _ => durum.ToString()
+    };
+
+    private string GetDurumClass(FisDurum durum) => durum switch
+    {
+        FisDurum.Taslak => "bg-warning text-dark",
+        FisDurum.Onaylandi => "bg-success",
+        FisDurum.IptalEdildi => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private string FormatPara(decimal tutar) => tutar.ToString("N2") + " TL";
+
+    private sealed class MuhasebeWidgetPreference
+    {
+        public string WidgetKodu { get; set; } = string.Empty;
+        public string Baslik { get; set; } = string.Empty;
+        public int Sira { get; set; }
+        public bool Gorunur { get; set; } = true;
+    }
+}
+

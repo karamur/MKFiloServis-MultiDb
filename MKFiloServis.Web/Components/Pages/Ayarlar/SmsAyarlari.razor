@@ -1,0 +1,735 @@
+@page "/ayarlar/sms"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+@inject ISmsService SmsService
+@inject IToastService Toast
+@rendermode InteractiveServer
+
+<PageTitle>SMS Ayarları - CRM Filo Servis</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Ana Sayfa</a></li>
+                    <li class="breadcrumb-item"><a href="/ayarlar">Ayarlar</a></li>
+                    <li class="breadcrumb-item active">SMS Ayarları</li>
+                </ol>
+            </nav>
+            <h3><i class="fas fa-sms me-2"></i>SMS Ayarları</h3>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Sol Panel: SMS Sağlayıcı Ayarları -->
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-cog me-2"></i>SMS Sağlayıcı Ayarları</span>
+                    <button class="btn btn-sm btn-primary" @onclick="YeniAyarEkle">
+                        <i class="fas fa-plus me-1"></i>Yeni Sağlayıcı
+                    </button>
+                </div>
+                <div class="card-body">
+                    @if (yukleniyor)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Yükleniyor...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (ayarlar == null || !ayarlar.Any())
+                    {
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Henüz SMS sağlayıcı ayarı yapılmamış. SMS gönderimi için sağlayıcı bilgilerinizi ekleyin.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Sağlayıcı</th>
+                                        <th>Gönderici</th>
+                                        <th>Bakiye</th>
+                                        <th>İstatistik</th>
+                                        <th>Durum</th>
+                                        <th class="text-end">İşlemler</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var ayar in ayarlar)
+                                    {
+                                        <tr class="@(ayar.Aktif ? "table-success" : "")">
+                                            <td>
+                                                <span class="badge bg-info">@ayar.Provider</span>
+                                            </td>
+                                            <td>@(ayar.GondericiNumara ?? "-")</td>
+                                            <td>
+                                                @if (ayar.Bakiye.HasValue)
+                                                {
+                                                    <span class="badge bg-primary">@ayar.Bakiye?.ToString("N2") TL</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <small>
+                                                    <span class="text-success">@ayar.ToplamGonderilenSms gönderildi</span>
+                                                    @if (ayar.ToplamBasarisizSms > 0)
+                                                    {
+                                                        <span class="text-danger ms-2">@ayar.ToplamBasarisizSms başarısız</span>
+                                                    }
+                                                </small>
+                                            </td>
+                                            <td>
+                                                @if (ayar.Aktif)
+                                                {
+                                                    <span class="badge bg-success">Aktif</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">Pasif</span>
+                                                }
+                                            </td>
+                                            <td class="text-end">
+                                                <div class="btn-group btn-group-sm">
+                                                    <button class="btn btn-outline-info" @onclick="() => BakiyeSorgula(ayar.Id)" 
+                                                            title="Bakiye Sorgula" disabled="@bakiyeSorgulamada">
+                                                        <i class="fas fa-sync-alt @(bakiyeSorgulamada ? "fa-spin" : "")"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-success" @onclick="() => TestGonder(ayar.Id)"
+                                                            title="Test SMS Gönder" disabled="@testGonderimde">
+                                                        <i class="fas fa-paper-plane"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-primary" @onclick="() => AyarDuzenle(ayar)">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-danger" @onclick="() => AyarSil(ayar.Id)">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- SMS Şablonları -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-file-alt me-2"></i>SMS Şablonları</span>
+                    <button class="btn btn-sm btn-primary" @onclick="YeniSablonEkle">
+                        <i class="fas fa-plus me-1"></i>Yeni Şablon
+                    </button>
+                </div>
+                <div class="card-body">
+                    @if (sablonlar != null && sablonlar.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Şablon Adı</th>
+                                        <th>Tip</th>
+                                        <th>Şablon İçeriği</th>
+                                        <th>Durum</th>
+                                        <th class="text-end">İşlemler</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var sablon in sablonlar)
+                                    {
+                                        <tr>
+                                            <td>
+                                                @sablon.Adi
+                                                @if (sablon.Varsayilan)
+                                                {
+                                                    <span class="badge bg-warning ms-1" title="Varsayılan">★</span>
+                                                }
+                                            </td>
+                                            <td><span class="badge bg-secondary">@sablon.Tip</span></td>
+                                            <td>
+                                                <small class="text-muted">@(sablon.Sablon.Length > 60 ? sablon.Sablon[..60] + "..." : sablon.Sablon)</small>
+                                            </td>
+                                            <td>
+                                                @if (sablon.Aktif)
+                                                {
+                                                    <span class="badge bg-success">Aktif</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">Pasif</span>
+                                                }
+                                            </td>
+                                            <td class="text-end">
+                                                <div class="btn-group btn-group-sm">
+                                                    <button class="btn btn-outline-primary" @onclick="() => SablonDuzenle(sablon)">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-danger" @onclick="() => SablonSil(sablon.Id)">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-info mb-0">
+                            <i class="fas fa-info-circle me-2"></i>Henüz SMS şablonu bulunmuyor.
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Sağ Panel: İstatistikler ve Son Gönderimler -->
+        <div class="col-lg-4">
+            <!-- İstatistikler -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-chart-bar me-2"></i>SMS İstatistikleri (Son 30 Gün)
+                </div>
+                <div class="card-body">
+                    @if (istatistik != null)
+                    {
+                        <div class="row g-2 text-center">
+                            <div class="col-6">
+                                <div class="border rounded p-2">
+                                    <h4 class="mb-0 text-primary">@istatistik.ToplamGonderen</h4>
+                                    <small class="text-muted">Toplam</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="border rounded p-2">
+                                    <h4 class="mb-0 text-success">@istatistik.Basarili</h4>
+                                    <small class="text-muted">Başarılı</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="border rounded p-2">
+                                    <h4 class="mb-0 text-danger">@istatistik.Basarisiz</h4>
+                                    <small class="text-muted">Başarısız</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="border rounded p-2">
+                                    <h4 class="mb-0 text-info">@(istatistik.KalanBakiye?.ToString("N2") ?? "-")</h4>
+                                    <small class="text-muted">Bakiye (TL)</small>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted mb-0">İstatistik yüklenemedi.</p>
+                    }
+                </div>
+            </div>
+
+            <!-- Değişken Bilgileri -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-code me-2"></i>Şablon Değişkenleri
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-2">Şablonlarda kullanabileceğiniz değişkenler:</p>
+                    <ul class="list-unstyled small mb-0">
+                        <li><code>{MusteriAdi}</code> - Müşteri adı</li>
+                        <li><code>{FaturaNo}</code> - Fatura numarası</li>
+                        <li><code>{Tutar}</code> - Tutar (TL)</li>
+                        <li><code>{VadeTarihi}</code> - Vade tarihi</li>
+                        <li><code>{FirmaAdi}</code> - Firma adı</li>
+                        <li><code>{Mesaj}</code> - Genel mesaj</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Desteklenen Sağlayıcılar -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-building me-2"></i>Desteklenen Sağlayıcılar
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>NetGSM</span>
+                            <span class="badge bg-success">Tam Destek</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>İletimerkezi</span>
+                            <span class="badge bg-success">Tam Destek</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>Mutlucell</span>
+                            <span class="badge bg-success">Tam Destek</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>Twilio</span>
+                            <span class="badge bg-warning">Temel</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Ayar Düzenleme Modal -->
+@if (showAyarModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-cog me-2"></i>
+                        @(secilenAyar?.Id > 0 ? "SMS Sağlayıcı Düzenle" : "Yeni SMS Sağlayıcı")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="ModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    @if (secilenAyar != null)
+                    {
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">SMS Sağlayıcı <span class="text-danger">*</span></label>
+                                <select class="form-select" @bind="secilenAyar.Provider">
+                                    @foreach (var provider in Enum.GetValues<SmsProvider>())
+                                    {
+                                        <option value="@provider">@provider</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Gönderici Numarası/Başlık</label>
+                                <input type="text" class="form-control" @bind="secilenAyar.GondericiNumara" 
+                                       placeholder="Örn: FIRMAADI veya +905xxxxxxxxx" />
+                                <small class="text-muted">Alıcılara görünecek gönderici adı</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Kullanıcı Adı <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" @bind="secilenAyar.KullaniciAdi" 
+                                       placeholder="API kullanıcı adı" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">API Key / Şifre <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <input type="@(showApiKey ? "text" : "password")" class="form-control" 
+                                           @bind="secilenAyar.ApiKey" placeholder="API anahtarı veya şifre" />
+                                    <button type="button" class="btn btn-outline-secondary" @onclick="() => showApiKey = !showApiKey">
+                                        <i class="fas @(showApiKey ? "fa-eye-slash" : "fa-eye")"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Özel API URL (Opsiyonel)</label>
+                                <input type="text" class="form-control" @bind="secilenAyar.ApiUrl" 
+                                       placeholder="Boş bırakılırsa varsayılan URL kullanılır" />
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" @bind="secilenAyar.Aktif" id="ayarAktif">
+                                    <label class="form-check-label" for="ayarAktif">
+                                        <strong>Aktif</strong> - Bu sağlayıcı ile SMS gönderimi yapılsın
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="ModalKapat">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="AyarKaydet" disabled="@kaydediliyor">
+                        @if (kaydediliyor)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="fas fa-save me-1"></i>Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Şablon Düzenleme Modal -->
+@if (showSablonModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-file-alt me-2"></i>
+                        @(secilenSablon?.Id > 0 ? "SMS Şablon Düzenle" : "Yeni SMS Şablon")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="SablonModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    @if (secilenSablon != null)
+                    {
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Şablon Adı <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" @bind="secilenSablon.Adi" 
+                                       placeholder="Örn: Vade Hatırlatma" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">SMS Tipi</label>
+                                <select class="form-select" @bind="secilenSablon.Tip">
+                                    @foreach (var tip in Enum.GetValues<SmsTipi>())
+                                    {
+                                        <option value="@tip">@tip</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Açıklama</label>
+                                <input type="text" class="form-control" @bind="secilenSablon.Aciklama" 
+                                       placeholder="Şablon açıklaması" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Şablon İçeriği <span class="text-danger">*</span></label>
+                                <textarea class="form-control" rows="4" @bind="secilenSablon.Sablon"
+                                          placeholder="Örn: {MusteriAdi}, {FaturaNo} no'lu faturanızın vadesi {VadeTarihi} tarihinde dolacaktır."></textarea>
+                                <small class="text-muted">
+                                    Kullanılabilir değişkenler: {MusteriAdi}, {FaturaNo}, {Tutar}, {VadeTarihi}, {FirmaAdi}, {Mesaj}
+                                </small>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" @bind="secilenSablon.Aktif" id="sablonAktif">
+                                    <label class="form-check-label" for="sablonAktif">Aktif</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" @bind="secilenSablon.Varsayilan" id="sablonVarsayilan">
+                                    <label class="form-check-label" for="sablonVarsayilan">Bu tip için varsayılan şablon</label>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="SablonModalKapat">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="SablonKaydet" disabled="@kaydediliyor">
+                        @if (kaydediliyor)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="fas fa-save me-1"></i>Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Test SMS Modal -->
+@if (showTestModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-paper-plane me-2"></i>Test SMS Gönder</h5>
+                    <button type="button" class="btn-close" @onclick="() => showTestModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Telefon Numarası <span class="text-danger">*</span></label>
+                        <input type="tel" class="form-control" @bind="testTelefon" placeholder="05XX XXX XX XX" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Mesaj</label>
+                        <textarea class="form-control" rows="3" @bind="testMesaj"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showTestModal = false">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="TestSmsGonder" disabled="@testGonderimde">
+                        @if (testGonderimde)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="fas fa-paper-plane me-1"></i>Gönder
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<SmsAyar>? ayarlar;
+    private List<SmsSablon>? sablonlar;
+    private SmsIstatistik? istatistik;
+    private SmsAyar? secilenAyar;
+    private SmsSablon? secilenSablon;
+    
+    private bool yukleniyor = true;
+    private bool kaydediliyor = false;
+    private bool bakiyeSorgulamada = false;
+    private bool testGonderimde = false;
+    
+    private bool showAyarModal = false;
+    private bool showSablonModal = false;
+    private bool showTestModal = false;
+    private bool showApiKey = false;
+    
+    private int testAyarId;
+    private string testTelefon = "";
+    private string testMesaj = "CRM Filo Servis SMS test mesajı.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await VerileriYukle();
+    }
+
+    private async Task VerileriYukle()
+    {
+        yukleniyor = true;
+        try
+        {
+            ayarlar = await SmsService.GetTumAyarlarAsync();
+            sablonlar = await SmsService.GetSablonlarAsync();
+            istatistik = await SmsService.GetIstatistikAsync();
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"Veriler yüklenirken hata: {ex.Message}");
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    // Ayar İşlemleri
+    private void YeniAyarEkle()
+    {
+        secilenAyar = new SmsAyar
+        {
+            Provider = SmsProvider.NetGsm,
+            Aktif = false,
+            CreatedAt = DateTime.Now
+        };
+        showAyarModal = true;
+    }
+
+    private void AyarDuzenle(SmsAyar ayar)
+    {
+        secilenAyar = new SmsAyar
+        {
+            Id = ayar.Id,
+            Provider = ayar.Provider,
+            KullaniciAdi = ayar.KullaniciAdi,
+            ApiKey = ayar.ApiKey,
+            GondericiNumara = ayar.GondericiNumara,
+            ApiUrl = ayar.ApiUrl,
+            Aktif = ayar.Aktif,
+            CreatedAt = ayar.CreatedAt
+        };
+        showAyarModal = true;
+    }
+
+    private async Task AyarKaydet()
+    {
+        if (secilenAyar == null) return;
+        
+        if (string.IsNullOrWhiteSpace(secilenAyar.KullaniciAdi) || string.IsNullOrWhiteSpace(secilenAyar.ApiKey))
+        {
+            Toast.ShowWarning("Kullanıcı adı ve API key zorunludur.");
+            return;
+        }
+
+        kaydediliyor = true;
+        try
+        {
+            await SmsService.SaveAyarAsync(secilenAyar);
+            Toast.ShowSuccess("SMS ayarları kaydedildi.");
+            showAyarModal = false;
+            await VerileriYukle();
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"Kaydetme hatası: {ex.Message}");
+        }
+        finally
+        {
+            kaydediliyor = false;
+        }
+    }
+
+    private async Task AyarSil(int id)
+    {
+        var ayar = ayarlar?.FirstOrDefault(a => a.Id == id);
+        if (ayar == null) return;
+
+        ayar.IsDeleted = true;
+        await SmsService.SaveAyarAsync(ayar);
+        Toast.ShowSuccess("SMS sağlayıcı silindi.");
+        await VerileriYukle();
+    }
+
+    private void ModalKapat()
+    {
+        showAyarModal = false;
+        secilenAyar = null;
+    }
+
+    // Bakiye Sorgulama
+    private async Task BakiyeSorgula(int ayarId)
+    {
+        bakiyeSorgulamada = true;
+        try
+        {
+            var bakiye = await SmsService.BakiyeSorgulaAsync(ayarId);
+            if (bakiye.HasValue)
+            {
+                Toast.ShowSuccess($"Bakiye: {bakiye:N2} TL");
+                await VerileriYukle();
+            }
+            else
+            {
+                Toast.ShowWarning("Bakiye sorgulanamadı. API bilgilerini kontrol edin.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"Bakiye sorgulama hatası: {ex.Message}");
+        }
+        finally
+        {
+            bakiyeSorgulamada = false;
+        }
+    }
+
+    // Test SMS
+    private void TestGonder(int ayarId)
+    {
+        testAyarId = ayarId;
+        testTelefon = "";
+        showTestModal = true;
+    }
+
+    private async Task TestSmsGonder()
+    {
+        if (string.IsNullOrWhiteSpace(testTelefon))
+        {
+            Toast.ShowWarning("Telefon numarası giriniz.");
+            return;
+        }
+
+        testGonderimde = true;
+        try
+        {
+            var sonuc = await SmsService.GonderAsync(testTelefon, testMesaj);
+            if (sonuc.Basarili)
+            {
+                Toast.ShowSuccess("Test SMS gönderildi!");
+                showTestModal = false;
+            }
+            else
+            {
+                Toast.ShowError($"SMS gönderilemedi: {sonuc.HataMesaji}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"Gönderim hatası: {ex.Message}");
+        }
+        finally
+        {
+            testGonderimde = false;
+        }
+    }
+
+    // Şablon İşlemleri
+    private void YeniSablonEkle()
+    {
+        secilenSablon = new SmsSablon
+        {
+            Tip = SmsTipi.Bildirim,
+            Aktif = true,
+            CreatedAt = DateTime.Now
+        };
+        showSablonModal = true;
+    }
+
+    private void SablonDuzenle(SmsSablon sablon)
+    {
+        secilenSablon = new SmsSablon
+        {
+            Id = sablon.Id,
+            Adi = sablon.Adi,
+            Aciklama = sablon.Aciklama,
+            Sablon = sablon.Sablon,
+            Tip = sablon.Tip,
+            Aktif = sablon.Aktif,
+            Varsayilan = sablon.Varsayilan,
+            CreatedAt = sablon.CreatedAt
+        };
+        showSablonModal = true;
+    }
+
+    private async Task SablonKaydet()
+    {
+        if (secilenSablon == null) return;
+        
+        if (string.IsNullOrWhiteSpace(secilenSablon.Adi) || string.IsNullOrWhiteSpace(secilenSablon.Sablon))
+        {
+            Toast.ShowWarning("Şablon adı ve içeriği zorunludur.");
+            return;
+        }
+
+        kaydediliyor = true;
+        try
+        {
+            await SmsService.SaveSablonAsync(secilenSablon);
+            Toast.ShowSuccess("SMS şablonu kaydedildi.");
+            showSablonModal = false;
+            await VerileriYukle();
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"Kaydetme hatası: {ex.Message}");
+        }
+        finally
+        {
+            kaydediliyor = false;
+        }
+    }
+
+    private async Task SablonSil(int id)
+    {
+        await SmsService.DeleteSablonAsync(id);
+        Toast.ShowSuccess("SMS şablonu silindi.");
+        await VerileriYukle();
+    }
+
+    private void SablonModalKapat()
+    {
+        showSablonModal = false;
+        secilenSablon = null;
+    }
+}
+

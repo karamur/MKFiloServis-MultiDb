@@ -1,0 +1,826 @@
+@page "/raporlar/cari-ekstre"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using OfficeOpenXml
+@using OfficeOpenXml.Style
+@inject ICariService CariService
+@inject IFaturaService FaturaService
+@inject IBankaKasaHareketService BankaKasaHareketService
+@inject IFirmaService FirmaService
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Cari Ekstre Raporu</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="bi bi-file-earmark-text me-2"></i>Cari Ekstre Raporu</h3>
+        @if (secilenCariler.Any() && tumEkstreHareketleri.Any())
+        {
+            <div class="btn-group">
+                <button class="btn btn-outline-primary" @onclick="OnIzleme">
+                    <i class="bi bi-eye me-1"></i>On Izleme
+                </button>
+                <button class="btn btn-outline-success" @onclick="Yazdir">
+                    <i class="bi bi-printer me-1"></i>Yazdir
+                </button>
+                <button class="btn btn-outline-danger" @onclick="PdfExport">
+                    <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+                </button>
+                <button class="btn btn-outline-info" @onclick="ExcelExport">
+                    <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                </button>
+            </div>
+        }
+    </div>
+    <hr />
+
+    <div class="row mb-4">
+        <div class="col-lg-9">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Cari Secimi (Coklu Secim Yapabilirsiniz)</label>
+                            <div class="input-group mb-2">
+                                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                <input type="text" class="form-control" placeholder="Cari ara..." 
+                                       @bind="cariArama" @bind:event="oninput" />
+                                @if (!string.IsNullOrEmpty(cariArama))
+                                {
+                                    <button class="btn btn-outline-secondary" @onclick="() => cariArama = string.Empty">
+                                        <i class="bi bi-x"></i>
+                                    </button>
+                                }
+                            </div>
+                            <div class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                                <div class="mb-2 pb-2 border-bottom">
+                                    <button class="btn btn-sm btn-outline-primary me-1" @onclick="TumunuSec">
+                                        <i class="bi bi-check-all me-1"></i>Tumunu Sec
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="SecimTemizle">
+                                        <i class="bi bi-x-circle me-1"></i>Temizle
+                                    </button>
+                                    <span class="badge bg-info ms-2">@secilenCariler.Count secili</span>
+                                </div>
+                                @foreach (var cari in filtrelenmisCariler)
+                                {
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" 
+                                               id="cari_@cari.Id" 
+                                               checked="@secilenCariler.Contains(cari.Id)"
+                                               @onchange="(e) => CariSecimDegisti(cari.Id, (bool)e.Value!)" />
+                                        <label class="form-check-label" for="cari_@cari.Id">
+                                            <span class="badge bg-secondary me-1">@cari.CariKodu</span>
+                                            @cari.Unvan
+                                        </label>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Baslangic Tarihi</label>
+                            <input type="date" class="form-control" @bind="baslangicTarihi" />
+                            
+                            <label class="form-label mt-2">Bitis Tarihi</label>
+                            <input type="date" class="form-control" @bind="bitisTarihi" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Hizli Tarih</label>
+                            <div class="d-grid gap-1">
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="@(() => HizliTarih(30))">Son 30 Gun</button>
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="@(() => HizliTarih(90))">Son 90 Gun</button>
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="BuYil">Bu Yil</button>
+                                <button class="btn btn-primary mt-2" @onclick="RaporuGetir" disabled="@(!secilenCariler.Any())">
+                                    <i class="bi bi-search me-1"></i>Raporu Getir
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-info-circle me-1"></i>Ozet Bilgiler
+                </div>
+                <div class="card-body">
+                    @if (tumEkstreHareketleri.Any())
+                    {
+                        <div class="mb-2">
+                            <small class="text-muted">Secili Cari Sayisi</small>
+                            <h5 class="mb-0">@secilenCariler.Count</h5>
+                        </div>
+                        <div class="mb-2">
+                            <small class="text-muted">Toplam Alacak</small>
+                            <h5 class="text-success mb-0">@FormatPara(genelToplamAlacak)</h5>
+                        </div>
+                        <div class="mb-2">
+                            <small class="text-muted">Toplam Borc</small>
+                            <h5 class="text-danger mb-0">@FormatPara(genelToplamBorc)</h5>
+                        </div>
+                        <hr />
+                        <div>
+                            <small class="text-muted">Net Bakiye</small>
+                            <h4 class="@(genelNetBakiye >= 0 ? "text-success" : "text-danger") mb-0">
+                                @FormatPara(genelNetBakiye)
+                            </h4>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted mb-0">Rapor icin cari secin ve "Raporu Getir" butonuna basin.</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (tumEkstreHareketleri.Any())
+    {
+        @foreach (var cariGrup in tumEkstreHareketleri.GroupBy(e => e.CariId))
+        {
+            var cari = cariler.FirstOrDefault(c => c.Id == cariGrup.Key);
+            var cariHareketler = cariGrup.OrderBy(e => e.Tarih).ToList();
+            var cariOncekiBakiye = oncekiBakiyeler.GetValueOrDefault(cariGrup.Key, 0);
+            var cariToplamAlacak = cariHareketler.Sum(e => e.Alacak);
+            var cariToplamBorc = cariHareketler.Sum(e => e.Borc);
+            var cariBakiye = cariOncekiBakiye + cariToplamAlacak - cariToplamBorc;
+            
+            <div class="card mb-3">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-0">
+                            <i class="bi bi-person-circle me-2"></i>
+                            <span class="badge bg-secondary me-2">@cari?.CariKodu</span>
+                            @cari?.Unvan
+                        </h6>
+                    </div>
+                    <div>
+                        <span class="badge bg-success me-2">Alacak: @FormatPara(cariToplamAlacak)</span>
+                        <span class="badge bg-danger me-2">Borc: @FormatPara(cariToplamBorc)</span>
+                        <span class="badge @(cariBakiye >= 0 ? "bg-primary" : "bg-warning text-dark")">
+                            Bakiye: @FormatPara(cariBakiye)
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 100px;">Tarih</th>
+                                    <th style="width: 120px;">Islem Turu</th>
+                                    <th style="width: 120px;">Belge No</th>
+                                    <th>Aciklama</th>
+                                    <th class="text-end" style="width: 120px;">Borc</th>
+                                    <th class="text-end" style="width: 120px;">Alacak</th>
+                                    <th class="text-end" style="width: 120px;">Bakiye</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="table-secondary">
+                                    <td colspan="4"><strong>Onceki Donem Bakiyesi</strong></td>
+                                    <td class="text-end">@(cariOncekiBakiye < 0 ? FormatPara(Math.Abs(cariOncekiBakiye)) : "-")</td>
+                                    <td class="text-end">@(cariOncekiBakiye >= 0 ? FormatPara(cariOncekiBakiye) : "-")</td>
+                                    <td class="text-end"><strong>@FormatPara(cariOncekiBakiye)</strong></td>
+                                </tr>
+                                @{
+                                    var calisanBakiye = cariOncekiBakiye;
+                                }
+                                @foreach (var hareket in cariHareketler)
+                                {
+                                    calisanBakiye += hareket.Alacak - hareket.Borc;
+                                    <tr>
+                                        <td>@hareket.Tarih.ToString("dd.MM.yyyy")</td>
+                                        <td>
+                                            <span class="badge @GetIslemTipiBadge(hareket.IslemTipi)">@hareket.IslemTipi</span>
+                                        </td>
+                                        <td><small>@hareket.BelgeNo</small></td>
+                                        <td><small>@hareket.Aciklama</small></td>
+                                        <td class="text-end @(hareket.Borc > 0 ? "text-danger" : "")">
+                                            @(hareket.Borc > 0 ? FormatPara(hareket.Borc) : "-")
+                                        </td>
+                                        <td class="text-end @(hareket.Alacak > 0 ? "text-success" : "")">
+                                            @(hareket.Alacak > 0 ? FormatPara(hareket.Alacak) : "-")
+                                        </td>
+                                        <td class="text-end">
+                                            <strong class="@(calisanBakiye < 0 ? "text-danger" : "text-success")">
+                                                @FormatPara(calisanBakiye)
+                                            </strong>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot class="table-primary">
+                                <tr>
+                                    <td colspan="4"><strong>Donem Sonu Bakiyesi</strong></td>
+                                    <td class="text-end"><strong>@FormatPara(cariToplamBorc)</strong></td>
+                                    <td class="text-end"><strong>@FormatPara(cariToplamAlacak)</strong></td>
+                                    <td class="text-end">
+                                        <strong class="@(cariBakiye < 0 ? "text-danger" : "text-success")">
+                                            @FormatPara(cariBakiye)
+                                        </strong>
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+        
+        <!-- Genel Toplam -->
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-calculator me-2"></i>GENEL TOPLAM</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <h6 class="text-muted">Cari Sayisi</h6>
+                        <h3>@secilenCariler.Count</h3>
+                    </div>
+                    <div class="col-md-3">
+                        <h6 class="text-muted">Toplam Alacak</h6>
+                        <h3 class="text-success">@FormatPara(genelToplamAlacak)</h3>
+                    </div>
+                    <div class="col-md-3">
+                        <h6 class="text-muted">Toplam Borc</h6>
+                        <h3 class="text-danger">@FormatPara(genelToplamBorc)</h3>
+                    </div>
+                    <div class="col-md-3">
+                        <h6 class="text-muted">Net Bakiye</h6>
+                        <h3 class="@(genelNetBakiye >= 0 ? "text-success" : "text-danger")">@FormatPara(genelNetBakiye)</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else if (raporGetirildimi && secilenCariler.Any())
+    {
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>Secilen tarih araliginda hareket bulunamadi.
+        </div>
+    }
+</div>
+
+<!-- Yazdir icin gizli alan -->
+<div id="printArea" class="d-none">
+    @if (firma != null)
+    {
+        <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px;">
+            <h2 style="margin: 0;">@firma.FirmaAdi</h2>
+            @if (!string.IsNullOrEmpty(firma.UnvanTam))
+            {
+                <p style="margin: 5px 0;">@firma.UnvanTam</p>
+            }
+            @if (!string.IsNullOrEmpty(firma.Adres))
+            {
+                <p style="margin: 5px 0; font-size: 12px;">@firma.Adres</p>
+            }
+            <p style="margin: 5px 0; font-size: 12px;">
+                @if (!string.IsNullOrEmpty(firma.Telefon)) { <span>Tel: @firma.Telefon</span> }
+                @if (!string.IsNullOrEmpty(firma.VergiNo)) { <span> | VKN: @firma.VergiNo</span> }
+            </p>
+        </div>
+    }
+    
+    <h3 style="text-align: center; margin-bottom: 10px;">CARI EKSTRE RAPORU</h3>
+    <p style="text-align: center; margin-bottom: 20px;">@baslangicTarihi.ToString("dd.MM.yyyy") - @bitisTarihi.ToString("dd.MM.yyyy")</p>
+    
+    @foreach (var cariGrup in tumEkstreHareketleri.GroupBy(e => e.CariId))
+    {
+        var cari = cariler.FirstOrDefault(c => c.Id == cariGrup.Key);
+        var cariHareketler = cariGrup.OrderBy(e => e.Tarih).ToList();
+        var cariOncekiBakiye = oncekiBakiyeler.GetValueOrDefault(cariGrup.Key, 0);
+        var cariToplamAlacak = cariHareketler.Sum(e => e.Alacak);
+        var cariToplamBorc = cariHareketler.Sum(e => e.Borc);
+        var cariBakiye = cariOncekiBakiye + cariToplamAlacak - cariToplamBorc;
+        
+        <div style="margin-bottom: 20px; page-break-inside: avoid;">
+            <h4 style="background: #f0f0f0; padding: 8px; margin-bottom: 5px;">@cari?.CariKodu - @cari?.Unvan</h4>
+            
+            <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+                <thead>
+                    <tr style="background-color: #e0e0e0;">
+                        <th style="border: 1px solid #000; padding: 5px;">Tarih</th>
+                        <th style="border: 1px solid #000; padding: 5px;">Islem</th>
+                        <th style="border: 1px solid #000; padding: 5px;">Belge No</th>
+                        <th style="border: 1px solid #000; padding: 5px;">Aciklama</th>
+                        <th style="border: 1px solid #000; padding: 5px; text-align: right;">Borc</th>
+                        <th style="border: 1px solid #000; padding: 5px; text-align: right;">Alacak</th>
+                        <th style="border: 1px solid #000; padding: 5px; text-align: right;">Bakiye</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="background-color: #f5f5f5;">
+                        <td colspan="4" style="border: 1px solid #000; padding: 5px;"><strong>Onceki Donem</strong></td>
+                        <td style="border: 1px solid #000; padding: 5px; text-align: right;">@(cariOncekiBakiye < 0 ? FormatPara(Math.Abs(cariOncekiBakiye)) : "-")</td>
+                        <td style="border: 1px solid #000; padding: 5px; text-align: right;">@(cariOncekiBakiye >= 0 ? FormatPara(cariOncekiBakiye) : "-")</td>
+                        <td style="border: 1px solid #000; padding: 5px; text-align: right;"><strong>@FormatPara(cariOncekiBakiye)</strong></td>
+                    </tr>
+                    @{
+                        var printBakiye = cariOncekiBakiye;
+                    }
+                    @foreach (var hareket in cariHareketler)
+                    {
+                        printBakiye += hareket.Alacak - hareket.Borc;
+                        <tr>
+                            <td style="border: 1px solid #000; padding: 4px;">@hareket.Tarih.ToString("dd.MM.yyyy")</td>
+                            <td style="border: 1px solid #000; padding: 4px;">@hareket.IslemTipi</td>
+                            <td style="border: 1px solid #000; padding: 4px;">@hareket.BelgeNo</td>
+                            <td style="border: 1px solid #000; padding: 4px;">@hareket.Aciklama</td>
+                            <td style="border: 1px solid #000; padding: 4px; text-align: right;">@(hareket.Borc > 0 ? FormatPara(hareket.Borc) : "-")</td>
+                            <td style="border: 1px solid #000; padding: 4px; text-align: right;">@(hareket.Alacak > 0 ? FormatPara(hareket.Alacak) : "-")</td>
+                            <td style="border: 1px solid #000; padding: 4px; text-align: right;"><strong>@FormatPara(printBakiye)</strong></td>
+                        </tr>
+                    }
+                    <tr style="background-color: #d0e0f0; font-weight: bold;">
+                        <td colspan="4" style="border: 1px solid #000; padding: 5px;"><strong>TOPLAM</strong></td>
+                        <td style="border: 1px solid #000; padding: 5px; text-align: right;">@FormatPara(cariToplamBorc)</td>
+                        <td style="border: 1px solid #000; padding: 5px; text-align: right;">@FormatPara(cariToplamAlacak)</td>
+                        <td style="border: 1px solid #000; padding: 5px; text-align: right;">@FormatPara(cariBakiye)</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    }
+    
+    <div style="margin-top: 30px; padding: 15px; background: #f0f0f0; border: 2px solid #000;">
+        <h4 style="margin: 0 0 10px 0;">GENEL TOPLAM</h4>
+        <table style="width: 100%;">
+            <tr>
+                <td><strong>Cari Sayisi:</strong> @secilenCariler.Count</td>
+                <td style="text-align: right;"><strong>Toplam Alacak:</strong> @FormatPara(genelToplamAlacak)</td>
+                <td style="text-align: right;"><strong>Toplam Borc:</strong> @FormatPara(genelToplamBorc)</td>
+                <td style="text-align: right;"><strong>Net Bakiye:</strong> @FormatPara(genelNetBakiye)</td>
+            </tr>
+        </table>
+    </div>
+    
+    <div style="margin-top: 30px; font-size: 10px; text-align: center; color: #666;">
+        Rapor Tarihi: @DateTime.Now.ToString("dd.MM.yyyy HH:mm") | © 2025 Allbatros Global Teknoloji
+    </div>
+</div>
+
+<!-- On Izleme Modal -->
+@if (showOnIzleme)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.7);" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Yazdir On Izleme - Cari Ekstre</h5>
+                    <button type="button" class="btn-close" @onclick="() => showOnIzleme = false"></button>
+                </div>
+                <div class="modal-body bg-light" style="max-height: 70vh; overflow-y: auto;">
+                    <div class="bg-white p-4 shadow" style="max-width: 210mm; margin: 0 auto;">
+                        @if (firma != null)
+                        {
+                            <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px;">
+                                <h3 style="margin: 0;">@firma.FirmaAdi</h3>
+                                @if (!string.IsNullOrEmpty(firma.Adres))
+                                {
+                                    <p style="margin: 5px 0; font-size: 12px;">@firma.Adres</p>
+                                }
+                            </div>
+                        }
+                        
+                        <h4 style="text-align: center; margin-bottom: 20px;">CARI EKSTRE RAPORU</h4>
+                        <p class="text-center text-muted">@baslangicTarihi.ToString("dd.MM.yyyy") - @bitisTarihi.ToString("dd.MM.yyyy")</p>
+                        
+                        @foreach (var cariGrup in tumEkstreHareketleri.GroupBy(e => e.CariId))
+                        {
+                            var cari = cariler.FirstOrDefault(c => c.Id == cariGrup.Key);
+                            var cariHareketler = cariGrup.OrderBy(e => e.Tarih).ToList();
+                            var cariOncekiBakiye = oncekiBakiyeler.GetValueOrDefault(cariGrup.Key, 0);
+                            var cariToplamAlacak = cariHareketler.Sum(e => e.Alacak);
+                            var cariToplamBorc = cariHareketler.Sum(e => e.Borc);
+                            var cariBakiye = cariOncekiBakiye + cariToplamAlacak - cariToplamBorc;
+                            
+                            <div class="mb-4">
+                                <h6 class="bg-light p-2 border">@cari?.CariKodu - @cari?.Unvan</h6>
+                                <table class="table table-bordered table-sm" style="font-size: 10px;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Tarih</th>
+                                            <th>Islem</th>
+                                            <th>Belge</th>
+                                            <th>Aciklama</th>
+                                            <th class="text-end">Borc</th>
+                                            <th class="text-end">Alacak</th>
+                                            <th class="text-end">Bakiye</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @{
+                                            var prevBakiye = cariOncekiBakiye;
+                                        }
+                                        <tr class="table-secondary">
+                                            <td colspan="4"><strong>Onceki Donem</strong></td>
+                                            <td class="text-end">-</td>
+                                            <td class="text-end">-</td>
+                                            <td class="text-end"><strong>@FormatPara(cariOncekiBakiye)</strong></td>
+                                        </tr>
+                                        @foreach (var h in cariHareketler)
+                                        {
+                                            prevBakiye += h.Alacak - h.Borc;
+                                            <tr>
+                                                <td>@h.Tarih.ToString("dd.MM.yy")</td>
+                                                <td>@h.IslemTipi</td>
+                                                <td>@h.BelgeNo</td>
+                                                <td>@h.Aciklama</td>
+                                                <td class="text-end">@(h.Borc > 0 ? FormatPara(h.Borc) : "-")</td>
+                                                <td class="text-end">@(h.Alacak > 0 ? FormatPara(h.Alacak) : "-")</td>
+                                                <td class="text-end"><strong>@FormatPara(prevBakiye)</strong></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                    <tfoot class="table-primary">
+                                        <tr>
+                                            <td colspan="4"><strong>TOPLAM</strong></td>
+                                            <td class="text-end"><strong>@FormatPara(cariToplamBorc)</strong></td>
+                                            <td class="text-end"><strong>@FormatPara(cariToplamAlacak)</strong></td>
+                                            <td class="text-end"><strong>@FormatPara(cariBakiye)</strong></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        }
+                        
+                        <div class="alert alert-primary mt-4">
+                            <div class="row text-center">
+                                <div class="col-3"><strong>Cari:</strong> @secilenCariler.Count</div>
+                                <div class="col-3"><strong>Alacak:</strong> @FormatPara(genelToplamAlacak)</div>
+                                <div class="col-3"><strong>Borc:</strong> @FormatPara(genelToplamBorc)</div>
+                                <div class="col-3"><strong>Net:</strong> @FormatPara(genelNetBakiye)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showOnIzleme = false">
+                        <i class="bi bi-x me-1"></i>Kapat
+                    </button>
+                    <button type="button" class="btn btn-danger" @onclick="PdfExport">
+                        <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+                    </button>
+                    <button type="button" class="btn btn-success" @onclick="ExcelExport">
+                        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                    </button>
+                    <button type="button" class="btn btn-primary" @onclick="Yazdir">
+                        <i class="bi bi-printer me-1"></i>Yazdir
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Cari> cariler = new();
+    private HashSet<int> secilenCariler = new();
+    private Firma? firma;
+    private string cariArama = "";
+    private DateTime baslangicTarihi = DateTime.Today.AddMonths(-1);
+    private DateTime bitisTarihi = DateTime.Today;
+    private bool showOnIzleme = false;
+    private bool raporGetirildimi = false;
+
+    private List<EkstreHareket> tumEkstreHareketleri = new();
+    private Dictionary<int, decimal> oncekiBakiyeler = new();
+    private decimal genelToplamAlacak;
+    private decimal genelToplamBorc;
+    private decimal genelNetBakiye;
+
+    private IEnumerable<Cari> filtrelenmisCariler => string.IsNullOrEmpty(cariArama) 
+        ? cariler 
+        : cariler.Where(c => c.Unvan.Contains(cariArama, StringComparison.OrdinalIgnoreCase) 
+                          || c.CariKodu.Contains(cariArama, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        cariler = (await CariService.GetAllAsync()).OrderBy(c => c.Unvan).ToList();
+        firma = await FirmaService.GetVarsayilanFirmaAsync();
+    }
+
+    private string FormatPara(decimal tutar) => tutar.ToString("N2") + " TL";
+
+    private void CariSecimDegisti(int cariId, bool secili)
+    {
+        if (secili)
+            secilenCariler.Add(cariId);
+        else
+            secilenCariler.Remove(cariId);
+    }
+
+    private void TumunuSec()
+    {
+        foreach (var cari in filtrelenmisCariler)
+            secilenCariler.Add(cari.Id);
+    }
+
+    private void SecimTemizle()
+    {
+        secilenCariler.Clear();
+        tumEkstreHareketleri.Clear();
+    }
+
+    private async Task RaporuGetir()
+    {
+        if (!secilenCariler.Any()) return;
+
+        tumEkstreHareketleri.Clear();
+        oncekiBakiyeler.Clear();
+        raporGetirildimi = true;
+
+        foreach (var cariId in secilenCariler)
+        {
+            // Faturalari getir
+            var faturalar = await FaturaService.GetByCariIdAsync(cariId);
+            var donemFaturalar = faturalar
+                .Where(f => f.FaturaTarihi >= baslangicTarihi && f.FaturaTarihi <= bitisTarihi)
+                .ToList();
+
+            foreach (var fatura in donemFaturalar)
+            {
+                var hareket = new EkstreHareket
+                {
+                    CariId = cariId,
+                    Tarih = fatura.FaturaTarihi,
+                    IslemTipi = fatura.FaturaTipi == FaturaTipi.SatisFaturasi ? "Satis" : "Alis",
+                    BelgeNo = fatura.FaturaNo,
+                    Aciklama = fatura.Aciklama ?? $"{fatura.FaturaNo}"
+                };
+
+                if (fatura.FaturaTipi == FaturaTipi.SatisFaturasi)
+                    hareket.Alacak = fatura.GenelToplam;
+                else
+                    hareket.Borc = fatura.GenelToplam;
+
+                tumEkstreHareketleri.Add(hareket);
+            }
+
+            // Odemeleri getir
+            var odemeler = await BankaKasaHareketService.GetByCariIdAsync(cariId);
+            var donemOdemeler = odemeler
+                .Where(o => o.IslemTarihi >= baslangicTarihi && o.IslemTarihi <= bitisTarihi)
+                .ToList();
+
+            foreach (var odeme in donemOdemeler)
+            {
+                var hareket = new EkstreHareket
+                {
+                    CariId = cariId,
+                    Tarih = odeme.IslemTarihi,
+                    IslemTipi = odeme.HareketTipi == HareketTipi.Giris ? "Tahsilat" : "Odeme",
+                    BelgeNo = odeme.IslemNo,
+                    Aciklama = odeme.Aciklama ?? $"{odeme.IslemNo}"
+                };
+
+                if (odeme.HareketTipi == HareketTipi.Giris)
+                    hareket.Borc = odeme.Tutar;
+                else
+                    hareket.Alacak = odeme.Tutar;
+
+                tumEkstreHareketleri.Add(hareket);
+            }
+
+            // Onceki donem bakiyesini hesapla
+            var oncekiFaturalar = faturalar.Where(f => f.FaturaTarihi < baslangicTarihi).ToList();
+            var oncekiOdemeler = odemeler.Where(o => o.IslemTarihi < baslangicTarihi).ToList();
+
+            decimal oncekiAlacak = oncekiFaturalar.Where(f => f.FaturaTipi == FaturaTipi.SatisFaturasi).Sum(f => f.GenelToplam);
+            oncekiAlacak += oncekiOdemeler.Where(o => o.HareketTipi == HareketTipi.Cikis).Sum(o => o.Tutar);
+
+            decimal oncekiBorc = oncekiFaturalar.Where(f => f.FaturaTipi == FaturaTipi.AlisFaturasi).Sum(f => f.GenelToplam);
+            oncekiBorc += oncekiOdemeler.Where(o => o.HareketTipi == HareketTipi.Giris).Sum(o => o.Tutar);
+
+            oncekiBakiyeler[cariId] = oncekiAlacak - oncekiBorc;
+        }
+
+        // Genel toplamlari hesapla
+        genelToplamAlacak = tumEkstreHareketleri.Sum(e => e.Alacak);
+        genelToplamBorc = tumEkstreHareketleri.Sum(e => e.Borc);
+        genelNetBakiye = oncekiBakiyeler.Values.Sum() + genelToplamAlacak - genelToplamBorc;
+    }
+
+    private void HizliTarih(int gun)
+    {
+        bitisTarihi = DateTime.Today;
+        baslangicTarihi = DateTime.Today.AddDays(-gun);
+    }
+
+    private void BuYil()
+    {
+        baslangicTarihi = new DateTime(DateTime.Today.Year, 1, 1);
+        bitisTarihi = DateTime.Today;
+    }
+
+    private void OnIzleme()
+    {
+        showOnIzleme = true;
+    }
+
+    private async Task Yazdir()
+    {
+        showOnIzleme = false;
+        await JS.InvokeVoidAsync("eval", @"
+            var printContent = document.getElementById('printArea').innerHTML;
+            var printWindow = window.open('', '_blank', 'width=900,height=700');
+            printWindow.document.write('<html><head><title>Cari Ekstre Raporu</title>');
+            printWindow.document.write('<style>body{font-family:Arial,sans-serif;margin:15px;font-size:11px;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #000;padding:4px;} @media print{body{margin:0;} @page{size:A4;margin:10mm;}}</style>');
+            printWindow.document.write('</head><body>');
+            printWindow.document.write(printContent);
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(function(){printWindow.print();},300);
+        ");
+    }
+
+    private async Task PdfExport()
+    {
+        showOnIzleme = false;
+        // PDF export - print dialog kullanarak PDF olarak kaydet
+        await JS.InvokeVoidAsync("eval", @"
+            var printContent = document.getElementById('printArea').innerHTML;
+            var printWindow = window.open('', '_blank', 'width=900,height=700');
+            printWindow.document.write('<html><head><title>Cari Ekstre Raporu - PDF</title>');
+            printWindow.document.write('<style>body{font-family:Arial,sans-serif;margin:15px;font-size:11px;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #000;padding:4px;} @media print{body{margin:0;} @page{size:A4;margin:10mm;}}</style>');
+            printWindow.document.write('</head><body>');
+            printWindow.document.write(printContent);
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+            printWindow.focus();
+            alert('Yazici dialogunda PDF olarak kaydet secenegini kullanin.');
+            setTimeout(function(){printWindow.print();},300);
+        ");
+    }
+
+    private async Task ExcelExport()
+    {
+        try
+        {
+            // EPPlus 8+ için yeni lisans ayar©
+            OfficeOpenXml.ExcelPackage.License.SetNonCommercialPersonal("MKFiloServis");
+            using var package = new ExcelPackage();
+            var ws = package.Workbook.Worksheets.Add("Cari Ekstre");
+
+            int row = 1;
+
+            // Baslik
+            ws.Cells[row, 1].Value = firma?.FirmaAdi ?? "CRM Filo Servis";
+            ws.Cells[row, 1, row, 7].Merge = true;
+            ws.Cells[row, 1].Style.Font.Bold = true;
+            ws.Cells[row, 1].Style.Font.Size = 16;
+            ws.Cells[row, 1].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+            row += 2;
+
+            ws.Cells[row, 1].Value = "CARI EKSTRE RAPORU";
+            ws.Cells[row, 1, row, 7].Merge = true;
+            ws.Cells[row, 1].Style.Font.Bold = true;
+            ws.Cells[row, 1].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+            row++;
+
+            ws.Cells[row, 1].Value = $"Tarih Araligi: {baslangicTarihi:dd.MM.yyyy} - {bitisTarihi:dd.MM.yyyy}";
+            ws.Cells[row, 1, row, 7].Merge = true;
+            ws.Cells[row, 1].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+            row += 2;
+
+            foreach (var cariGrup in tumEkstreHareketleri.GroupBy(e => e.CariId))
+            {
+                var cari = cariler.FirstOrDefault(c => c.Id == cariGrup.Key);
+                var cariHareketler = cariGrup.OrderBy(e => e.Tarih).ToList();
+                var cariOncekiBakiye = oncekiBakiyeler.GetValueOrDefault(cariGrup.Key, 0);
+                var cariToplamAlacak = cariHareketler.Sum(e => e.Alacak);
+                var cariToplamBorc = cariHareketler.Sum(e => e.Borc);
+                var cariBakiye = cariOncekiBakiye + cariToplamAlacak - cariToplamBorc;
+
+                // Cari baslik
+                ws.Cells[row, 1].Value = $"{cari?.CariKodu} - {cari?.Unvan}";
+                ws.Cells[row, 1, row, 7].Merge = true;
+                ws.Cells[row, 1].Style.Font.Bold = true;
+                ws.Cells[row, 1].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 1].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
+                row++;
+
+                // Basliklar
+                var headers = new[] { "Tarih", "Islem Turu", "Belge No", "Aciklama", "Borc", "Alacak", "Bakiye" };
+                for (int i = 0; i < headers.Length; i++)
+                {
+                    ws.Cells[row, i + 1].Value = headers[i];
+                    ws.Cells[row, i + 1].Style.Font.Bold = true;
+                    ws.Cells[row, i + 1].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                    ws.Cells[row, i + 1].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightBlue);
+                }
+                row++;
+
+                // Onceki donem
+                ws.Cells[row, 1].Value = "Onceki Donem";
+                ws.Cells[row, 1, row, 4].Merge = true;
+                ws.Cells[row, 7].Value = cariOncekiBakiye;
+                ws.Cells[row, 7].Style.Numberformat.Format = "#,##0.00";
+                row++;
+
+                // Hareketler
+                var runningBakiye = cariOncekiBakiye;
+                foreach (var h in cariHareketler)
+                {
+                    runningBakiye += h.Alacak - h.Borc;
+                    ws.Cells[row, 1].Value = h.Tarih;
+                    ws.Cells[row, 1].Style.Numberformat.Format = "dd.MM.yyyy";
+                    ws.Cells[row, 2].Value = h.IslemTipi;
+                    ws.Cells[row, 3].Value = h.BelgeNo;
+                    ws.Cells[row, 4].Value = h.Aciklama;
+                    ws.Cells[row, 5].Value = h.Borc > 0 ? h.Borc : null;
+                    ws.Cells[row, 6].Value = h.Alacak > 0 ? h.Alacak : null;
+                    ws.Cells[row, 7].Value = runningBakiye;
+                    ws.Cells[row, 5, row, 7].Style.Numberformat.Format = "#,##0.00";
+                    row++;
+                }
+
+                // Toplam
+                ws.Cells[row, 1].Value = "TOPLAM";
+                ws.Cells[row, 1, row, 4].Merge = true;
+                ws.Cells[row, 1].Style.Font.Bold = true;
+                ws.Cells[row, 5].Value = cariToplamBorc;
+                ws.Cells[row, 6].Value = cariToplamAlacak;
+                ws.Cells[row, 7].Value = cariBakiye;
+                ws.Cells[row, 5, row, 7].Style.Numberformat.Format = "#,##0.00";
+                ws.Cells[row, 5, row, 7].Style.Font.Bold = true;
+                ws.Cells[row, 1, row, 7].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 1, row, 7].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightYellow);
+                row += 2;
+            }
+
+            // Genel Toplam
+            ws.Cells[row, 1].Value = "GENEL TOPLAM";
+            ws.Cells[row, 1, row, 4].Merge = true;
+            ws.Cells[row, 1].Style.Font.Bold = true;
+            ws.Cells[row, 1].Style.Font.Size = 12;
+            ws.Cells[row, 5].Value = genelToplamBorc;
+            ws.Cells[row, 6].Value = genelToplamAlacak;
+            ws.Cells[row, 7].Value = genelNetBakiye;
+            ws.Cells[row, 5, row, 7].Style.Numberformat.Format = "#,##0.00";
+            ws.Cells[row, 5, row, 7].Style.Font.Bold = true;
+            ws.Cells[row, 1, row, 7].Style.Fill.PatternType = ExcelFillStyle.Solid;
+            ws.Cells[row, 1, row, 7].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGreen);
+
+            // Kolon genislik
+            ws.Cells.AutoFitColumns();
+            ws.Column(4).Width = 40; // Aciklama
+
+            // Border
+            var dataRange = ws.Cells[1, 1, row, 7];
+            dataRange.Style.Border.Top.Style = ExcelBorderStyle.Thin;
+            dataRange.Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+            dataRange.Style.Border.Left.Style = ExcelBorderStyle.Thin;
+            dataRange.Style.Border.Right.Style = ExcelBorderStyle.Thin;
+
+            var bytes = package.GetAsByteArray();
+            var base64 = Convert.ToBase64String(bytes);
+            var fileName = $"CariEkstre_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+
+            await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, base64);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Excel export hatasi: {ex.Message}");
+        }
+    }
+
+    private string GetIslemTipiBadge(string islemTipi) => islemTipi switch
+    {
+        "Satis" => "bg-success",
+        "Alis" => "bg-primary",
+        "Tahsilat" => "bg-info",
+        "Odeme" => "bg-warning text-dark",
+        _ => "bg-secondary"
+    };
+
+    private class EkstreHareket
+    {
+        public int CariId { get; set; }
+        public DateTime Tarih { get; set; }
+        public string IslemTipi { get; set; } = "";
+        public string? BelgeNo { get; set; }
+        public string? Aciklama { get; set; }
+        public decimal Borc { get; set; }
+        public decimal Alacak { get; set; }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+

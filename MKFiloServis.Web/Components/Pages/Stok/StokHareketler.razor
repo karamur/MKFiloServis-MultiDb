@@ -1,0 +1,432 @@
+@page "/stok/hareketler"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IStokService StokService
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Stok Hareketleri</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h3>
+                <i class="bi bi-arrow-left-right me-2"></i>Stok Hareketleri
+                @if (stokKarti != null)
+                {
+                    <span class="text-muted fs-5">- @stokKarti.StokKodu / @stokKarti.StokAdi</span>
+                }
+            </h3>
+        </div>
+        <div class="d-flex gap-2">
+            @if (stokKarti != null)
+            {
+                <button class="btn btn-success" @onclick="YeniHareket">
+                    <i class="bi bi-plus-lg me-1"></i>Yeni Hareket
+                </button>
+            }
+            <button class="btn btn-outline-secondary" @onclick='() => Navigation.NavigateTo("/stok/kartlar")'>
+                <i class="bi bi-arrow-left me-1"></i>Geri
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtreler -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small">Stok Kartı</label>
+                    <select class="form-select form-select-sm" @bind="filtreStokId" @bind:after="LoadDataAsync">
+                        <option value="0">Tüm Stoklar</option>
+                        @foreach (var stok in stokKartlari)
+                        {
+                            <option value="@stok.Id">@stok.StokKodu - @stok.StokAdi</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Başlangıç</label>
+                    <input type="date" class="form-control form-control-sm" @bind="filtreBaslangic" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Bitiş</label>
+                    <input type="date" class="form-control form-control-sm" @bind="filtreBitis" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Hareket Tipi</label>
+                    <select class="form-select form-select-sm" @bind="filtreHareketTipi">
+                        <option value="">Tümü</option>
+                        <option value="@((int)StokHareketTipi.Giris)">Giriş</option>
+                        <option value="@((int)StokHareketTipi.Cikis)">Çıkış</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary btn-sm w-100" @onclick="LoadDataAsync">
+                        <i class="bi bi-search me-1"></i>Filtrele
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stok Özet Kartı -->
+    @if (stokKarti != null)
+    {
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body py-2 text-center">
+                        <h5 class="mb-0">@stokKarti.MevcutStok.ToString("N2")</h5>
+                        <small>Mevcut Stok (@stokKarti.Birim)</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body py-2 text-center">
+                        <h5 class="mb-0">@toplamGiris.ToString("N2")</h5>
+                        <small>Toplam Giriş</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-danger text-white">
+                    <div class="card-body py-2 text-center">
+                        <h5 class="mb-0">@toplamCikis.ToString("N2")</h5>
+                        <small>Toplam Çıkış</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body py-2 text-center">
+                        <h5 class="mb-0">@hareketler.Count</h5>
+                        <small>Hareket Sayısı</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Hareketler Tablosu -->
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2">Yükleniyor...</p>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 100px;">Tarih</th>
+                                <th style="width: 100px;">Belge No</th>
+                                <th>Stok</th>
+                                <th style="width: 100px;">Hareket</th>
+                                <th class="text-end" style="width: 100px;">Miktar</th>
+                                <th class="text-end" style="width: 100px;">Birim Fiyat</th>
+                                <th class="text-end" style="width: 120px;">Toplam</th>
+                                <th>Açıklama</th>
+                                <th>Cari</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (hareketler.Any())
+                            {
+                                @foreach (var hareket in hareketler)
+                                {
+                                    <tr>
+                                        <td>@hareket.IslemTarihi.ToString("dd.MM.yyyy")</td>
+                                        <td><small>@(hareket.BelgeNo ?? "-")</small></td>
+                                        <td>
+                                            <strong>@hareket.StokKarti?.StokKodu</strong>
+                                            <br /><small class="text-muted">@hareket.StokKarti?.StokAdi</small>
+                                        </td>
+                                        <td>
+                                            <span class="badge @GetHareketTipiBadge(hareket.HareketTipi)">
+                                                @GetHareketTipiAdi(hareket.HareketTipi)
+                                            </span>
+                                        </td>
+                                        <td class="text-end @(IsGiris(hareket.HareketTipi) ? "text-success" : "text-danger")">
+                                            @(IsGiris(hareket.HareketTipi) ? "+" : "-")@hareket.Miktar.ToString("N2")
+                                        </td>
+                                        <td class="text-end">@hareket.BirimFiyat.ToString("N2") ₺</td>
+                                        <td class="text-end"><strong>@hareket.ToplamTutar.ToString("N2") ₺</strong></td>
+                                        <td><small>@TruncateText(hareket.Aciklama, 40)</small></td>
+                                        <td><small>@(hareket.Cari?.Unvan ?? "-")</small></td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="9" class="text-center text-muted py-4">
+                                        <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                                        <p class="mb-0 mt-2">Hareket bulunamadı</p>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            @if (hareketler.Any())
+            {
+                <div class="card-footer">
+                    <small class="text-muted">@hareketler.Count hareket gösteriliyor</small>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- Yeni Hareket Modal -->
+@if (showModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-plus-circle me-2"></i>Yeni Stok Hareketi
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Stok Kartı</label>
+                        <select class="form-select" @bind="yeniHareket.StokKartiId">
+                            @foreach (var stok in stokKartlari)
+                            {
+                                <option value="@stok.Id">@stok.StokKodu - @stok.StokAdi</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Hareket Tipi</label>
+                        <select class="form-select" @bind="yeniHareket.HareketTipi">
+                            <option value="@StokHareketTipi.Giris">Giriş</option>
+                            <option value="@StokHareketTipi.Cikis">Çıkış</option>
+                            <option value="@StokHareketTipi.SayimFazlasi">Sayım Fazlası</option>
+                            <option value="@StokHareketTipi.SayimNoksani">Sayım Noksanı</option>
+                            <option value="@StokHareketTipi.FireZayiat">Fire/Zayiat</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Tarih</label>
+                            <input type="date" class="form-control" @bind="yeniHareket.IslemTarihi" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Belge No</label>
+                            <input type="text" class="form-control" @bind="yeniHareket.BelgeNo" />
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Miktar</label>
+                            <input type="number" step="0.01" class="form-control" @bind="yeniHareket.Miktar" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Birim Fiyat</label>
+                            <input type="number" step="0.01" class="form-control" @bind="yeniHareket.BirimFiyat" />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Açıklama</label>
+                        <textarea class="form-control" rows="2" @bind="yeniHareket.Aciklama"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">İptal</button>
+                    <button type="button" class="btn btn-success" @onclick="SaveHareket" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-check-lg me-1"></i>Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "stokId")]
+    public int? StokIdParam { get; set; }
+
+    private List<StokHareket> hareketler = new();
+    private List<StokKarti> stokKartlari = new();
+    private StokKarti? stokKarti;
+    private StokHareket yeniHareket = new();
+    private bool isLoading = true;
+    private bool showModal = false;
+    private bool isSaving = false;
+
+    // Filtreler
+    private int filtreStokId = 0;
+    private DateTime? filtreBaslangic;
+    private DateTime? filtreBitis;
+    private string filtreHareketTipi = "";
+
+    // Özet
+    private decimal toplamGiris = 0;
+    private decimal toplamCikis = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        filtreBaslangic = new DateTime(DateTime.Today.Year, 1, 1);
+        filtreBitis = DateTime.Today;
+
+        if (StokIdParam.HasValue)
+        {
+            filtreStokId = StokIdParam.Value;
+        }
+
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+
+            // Stok kartlarını yükle
+            stokKartlari = await StokService.GetStokKartlariAsync(aktif: true);
+
+            // Seçili stok kartı varsa detayını al
+            if (filtreStokId > 0)
+            {
+                stokKarti = await StokService.GetStokKartiByIdAsync(filtreStokId);
+            }
+            else
+            {
+                stokKarti = null;
+            }
+
+            // Hareketleri yükle
+            hareketler = await StokService.GetStokHareketleriAsync(
+                stokKartiId: filtreStokId > 0 ? filtreStokId : null,
+                baslangic: filtreBaslangic,
+                bitis: filtreBitis
+            );
+
+            // Hareket tipi filtresi
+            if (!string.IsNullOrEmpty(filtreHareketTipi) && int.TryParse(filtreHareketTipi, out var tip))
+            {
+                hareketler = hareketler.Where(h => (int)h.HareketTipi == tip).ToList();
+            }
+
+            // Özet hesapla
+            toplamGiris = hareketler.Where(h => IsGiris(h.HareketTipi)).Sum(h => h.Miktar);
+            toplamCikis = hareketler.Where(h => !IsGiris(h.HareketTipi)).Sum(h => h.Miktar);
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Veri yüklenirken hata: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void YeniHareket()
+    {
+        yeniHareket = new StokHareket
+        {
+            StokKartiId = filtreStokId > 0 ? filtreStokId : (stokKartlari.FirstOrDefault()?.Id ?? 0),
+            HareketTipi = StokHareketTipi.Giris,
+            IslemTarihi = DateTime.Today,
+            Miktar = 1,
+            BirimFiyat = 0
+        };
+        showModal = true;
+    }
+
+    private async Task SaveHareket()
+    {
+        if (isSaving) return;
+
+        try
+        {
+            isSaving = true;
+            StateHasChanged();
+
+            if (yeniHareket.Miktar <= 0)
+            {
+                ToastService.ShowWarning("Miktar 0'dan büyük olmalıdır");
+                return;
+            }
+
+            await StokService.CreateStokHareketAsync(yeniHareket);
+            ToastService.ShowSuccess("Stok hareketi kaydedildi");
+
+            showModal = false;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Kayıt hatası: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+    }
+
+    private bool IsGiris(StokHareketTipi tip) => tip switch
+    {
+        StokHareketTipi.Giris => true,
+        StokHareketTipi.SatisIade => true,
+        StokHareketTipi.SayimFazlasi => true,
+        StokHareketTipi.AracAlis => true,
+        StokHareketTipi.UretimGiris => true,
+        _ => false
+    };
+
+    private string GetHareketTipiAdi(StokHareketTipi tip) => tip switch
+    {
+        StokHareketTipi.Giris => "Giriş",
+        StokHareketTipi.Cikis => "Çıkış",
+        StokHareketTipi.SatisIade => "Satış İade",
+        StokHareketTipi.AlisIade => "Alış İade",
+        StokHareketTipi.SayimFazlasi => "Sayım Fazlası",
+        StokHareketTipi.SayimNoksani => "Sayım Noksanı",
+        StokHareketTipi.FireZayiat => "Fire/Zayiat",
+        StokHareketTipi.StokZarari => "Stok Zararı",
+        StokHareketTipi.DepoTransferi => "Depo Transferi",
+        StokHareketTipi.AracAlis => "Araç Alış",
+        StokHareketTipi.AracSatis => "Araç Satış",
+        StokHareketTipi.ServisGiris => "Servis Giriş",
+        StokHareketTipi.UretimGiris => "Üretim Giriş",
+        StokHareketTipi.UretimCikis => "Üretim Çıkış",
+        _ => tip.ToString()
+    };
+
+    private string GetHareketTipiBadge(StokHareketTipi tip) => IsGiris(tip) ? "bg-success" : "bg-danger";
+
+    private string TruncateText(string? text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        return text.Length <= maxLength ? text : text.Substring(0, maxLength) + "...";
+    }
+}
+

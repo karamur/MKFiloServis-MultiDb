@@ -1,4 +1,4 @@
-﻿# 🚍 KOAFiloServis
+# 🚍 MKFiloServis
 
 <div align="center">
 
@@ -18,14 +18,14 @@
 
 ## ⚡ Nihai Mimari (Haziran 2026)
 
-**KOAFiloServis artık Tenant Database (Database-per-Tenant) mimarisi kullanmamaktadır.**
+**MKFiloServis artık Tenant Database (Database-per-Tenant) mimarisi kullanmamaktadır.**
 
 > 🔄 **32 commit'lik dönüşüm** ile tek PostgreSQL veritabanı + FirmId bazlı satır seviyesi izolasyona geçilmiştir.
 
 ### Mimari
 
 ```
-Tek PostgreSQL: KOAFiloServis
+Tek PostgreSQL: MKFiloServis
         ↓
 Organizasyon (Üstün Holding)
     ├── Üstün Grup
@@ -57,7 +57,7 @@ Firma → Global Query Filter (HasQueryFilter(x => x.FirmaId == CurrentFirmaId))
 
 | Eski | Yeni |
 |------|------|
-| Master DB + Tenant DB + Holding DB | Tek `KOAFiloServis` |
+| Master DB + Tenant DB + Holding DB | Tek `MKFiloServis` |
 | `MasterDbContext` | `ApplicationDbContext` (birleşik) |
 | `TenantDbContextFactory` | `IDbContextFactory<ApplicationDbContext>` |
 | `ITenantConnectionStringProvider` | Tek connection string |
@@ -67,7 +67,7 @@ Firma → Global Query Filter (HasQueryFilter(x => x.FirmaId == CurrentFirmaId))
 
 ## 📌 Genel Bakış
 
-**KOAFiloServis**, personel taşımacılığı firmaları için tasarlanmış kurumsal bir **Blazor Interactive Server** uygulamasıdır. Araç, şoför, güzergâh ve müşteri verilerinden başlayan operasyonel zinciri **puantaj → hakediş → fatura → muhasebe** akışıyla tek platformda yönetir.
+**MKFiloServis**, personel taşımacılığı firmaları için tasarlanmış kurumsal bir **Blazor Interactive Server** uygulamasıdır. Araç, şoför, güzergâh ve müşteri verilerinden başlayan operasyonel zinciri **puantaj → hakediş → fatura → muhasebe** akışıyla tek platformda yönetir.
 
 > 🏢 Çok-firmalı altyapı, FirmId bazlı veri izolasyonu, rol bazlı yetkilendirme ve AI destekli servislerle kurumsal ölçeğe hazırdır.
 
@@ -97,7 +97,7 @@ Firma → Global Query Filter (HasQueryFilter(x => x.FirmaId == CurrentFirmaId))
 ## 🏢 Tek Veritabanı + FirmId İzolasyonu
 
 ```
-PostgreSQL: KOAFiloServis (tek veritabanı)
+PostgreSQL: MKFiloServis (tek veritabanı)
         ↓
 Organizasyon → Firma → Şube hiyerarşisi
         ↓
@@ -121,32 +121,30 @@ Tüm CRUD işlemleri FirmaId filtreli
 ## 🏗️ Mimari
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                     KOAFiloServis.Web                         │
-│  ┌─────────────────┐  ┌──────────────┐  ┌────────────────┐   │
+┌─────────────────────────────────────────────────────-─────────┐
+│                     MKFiloServis.Web                         │
+│  ┌─────────────────-┐  ┌──────────────┐  ┌────────────────┐   │
 │  │ Blazor Server    │  │ REST API     │  │ Quartz Jobs    │   │
 │  │ Components/Pages │  │ Controllers  │  │ Backup, Engine │   │
-│  │ SignalR
- Hubs     │  │ JWT + Swagger│  │ GunlukOzet     │   │
+│  │ SignalR Hubs     │  │ JWT + Swagger│  │ GunlukOzet     │   │
 │  └────────┬─────────┘  └──────┬───────┘  └───────┬────────┘   │
 │           └───────────────────┼──────────────────┘            │
 │                               ▼                               │
 │  ┌──────────────────────────────────────────────────────────┐ │
-│  │ Services Katmanı (100+ servis)                            │ │
+│  │ Services Katmanı (100+ servis)                           │ │
 │  │ Filo · Puantaj · Hakedis · Fatura · Muhasebe · Bordro    │ │
 │  │ EBYS · AI · Cache · SecureFile · AuditLog                │ │
 │  └──────────────────────────────────────────────────────────┘ │
 │                               ▼                               │
 │  ┌──────────────────────────────────────────────────────────┐ │
 │  │ EF Core 10                                               │ │
-│  │ ApplicationDbContext (Tek DbContext)                      │ │
-│  │ Global Query Filter (FirmaId + IsDeleted)                 │ │
+│  │ ApplicationDbContext (Tek DbContext)                     │ │
+│  │ Global Query Filter (FirmaId + IsDeleted)                │ │
 │  └──────────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────┘
+└───────────────────────────────────────────────────────────-───┘
                                 ▼
 ┌──────────────────────────────────────────────────────────────┐
 │ PostgreSQL 14+ (varsayılan) · SQLite · SQL Server · MySQL    │
-
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -165,10 +163,10 @@ Tüm CRUD işlemleri FirmaId filtreli
 ### Geliştirme
 
 ```bash
-git clone https://github.com/karamur/KOAFiloServis-MultiDb.git
-cd KOAFiloServis-MultiDb
+git clone https://github.com/karamur/MKFiloServis-MultiDb.git
+cd MKFiloServis-MultiDb
 dotnet build && dotnet test
-dotnet run --project KOAFiloServis.Web
+dotnet run --project MKFiloServis.Web
 ```
 
 Uygulama **`https://localhost:5001`** adresinde başlar.
@@ -191,12 +189,12 @@ Uygulama **`https://localhost:5001`** adresinde başlar.
 {
   "DatabaseProvider": "PostgreSQL",
   "ConnectionStrings": {
-    "DefaultConnection": "Host=localhost;Database=KOAFiloServis;Username=postgres;Password=***"
+    "DefaultConnection": "Host=localhost;Database=MKFiloServis;Username=postgres;Password=***"
   },
   "Jwt": {
     "Secret": "<min-32-char-secret>",
-    "Issuer": "KOAFiloServis",
-    "Audience": "KOAFiloServis-API",
+    "Issuer": "MKFiloServis",
+    "Audience": "MKFiloServis-API",
     "ExpirationHours": 8
   },
   "GpsApi": { "ApiKey": "<gps-device-api-key>" },
@@ -216,7 +214,7 @@ Uygulama **`https://localhost:5001`** adresinde başlar.
   "Provider": 2,
   "Host": "localhost",
   "Port": 5432,
-  "DatabaseName": "KOAFiloServis",
+  "DatabaseName": "MKFiloServis",
   "Username": "postgres",
   "Password": "***"
 }
@@ -240,7 +238,7 @@ iscc setup/Setup.iss          # Tam: Web + Lisans + DataSync (129 MB)
 iscc setup/MusteriSetup.iss   # Müşteri: Web + DataSync (95 MB)
 ```
 
-Çıktı: `setup/output/v1.0.24/KOAFiloServisKurulum-1.0.24.exe`
+Çıktı: `setup/output/v1.0.24/MKFiloServisKurulum-1.0.24.exe`
 
 ### Kurulum
 
@@ -249,7 +247,7 @@ iscc setup/MusteriSetup.iss   # Müşteri: Web + DataSync (95 MB)
 3. IIS Site + AppPool otomatik yapılandırma (`localhost:5190`)
 4. Firewall kuralı (opsiyonel)
 
-Kurulum dizini: `C:\KOAFiloServis`
+Kurulum dizini: `C:\MKFiloServis`
 
 ### Güncelleme
 
@@ -258,7 +256,7 @@ Setup mevcut kurulumu otomatik algılar → IIS durdurulur → DB yedeklenir →
 ### Manual Deploy
 
 ```bash
-dotnet publish KOAFiloServis.Web -c Release -o ./publish-prod
+dotnet publish MKFiloServis.Web -c Release -o ./publish-prod
 # publish-prod dizinini sunucuya kopyala
 ```
 
@@ -273,7 +271,7 @@ dotnet publish KOAFiloServis.Web -c Release -o ./publish-prod
 ### Yedekleme
 
 ```bash
-pg_dump -h <host> -U <user> -d KOAFiloServis_Master -F c -f master-$(date +%Y%m%d-%H%M).dump
+pg_dump -h <host> -U <user> -d MKFiloServis_Master -F c -f master-$(date +%Y%m%d-%H%M).dump
 ```
 
 > ⚠️ Yıkıcı migration'lardan önce backup zorunludur.
@@ -301,7 +299,7 @@ pg_dump -h <host> -U <user> -d KOAFiloServis_Master -F c -f master-$(date +%Y%m%
 
 İlk kurulumda `dbsettings.json` hedef veritabanını gösterir. Web uygulaması başlangıcında gerekli migration/helper akışları çalıştırılarak şema güncellemeleri uygulanır.
 
-### DestekCRMServisBlazorDb → KOAFiloServis
+### DestekCRMServisBlazorDb → MKFiloServis
 
 İlk kurulumda `dbsettings.json` hedef veritabanını gösterir. `DbInitializer` otomatik olarak bağlanır, EF Core migration'larını uygular, rolleri ve admin kullanıcısını seed eder. Mevcut veriler korunur.
 
@@ -341,8 +339,8 @@ dotnet test  # 363 test, < 1 saniye
 ## 📂 Proje Yapısı
 
 ```
-KOAFiloServis-MultiDb/
-├── KOAFiloServis.Web/             # Ana Blazor uygulaması
+MKFiloServis-MultiDb/
+├── MKFiloServis.Web/             # Ana Blazor uygulaması
 │   ├── Components/Pages/          # Modül sayfaları
 │   ├── Controllers/               # REST API (JWT)
 │   ├── Services/                  # İş katmanı
@@ -350,9 +348,9 @@ KOAFiloServis-MultiDb/
 │   ├── Docs/                      # Ürün ve süreç dokümantasyonu
 │   ├── Deploy/                    # Kurulum/deploy scriptleri
 │   └── wwwroot/                   # Statik içerikler
-├── KOAFiloServis.Shared/          # Entity, DTO ve ortak modeller
-├── KOAFiloServis.LisansDesktop/   # Windows lisans yardımcı uygulaması
-├── KOAFiloServis.slnx             # Çözüm dosyası
+├── MKFiloServis.Shared/          # Entity, DTO ve ortak modeller
+├── MKFiloServis.LisansDesktop/   # Windows lisans yardımcı uygulaması
+├── MKFiloServis.slnx             # Çözüm dosyası
 └── README.md                      # Ana proje dokümantasyonu
 ```
 
@@ -375,7 +373,7 @@ KOAFiloServis-MultiDb/
 
 ### Mimari
 
-KOAFiloServis **Windows DPAPI (Data Protection API)** ile AES-256-GCM formatında dosyaları şifreler.
+MKFiloServis **Windows DPAPI (Data Protection API)** ile AES-256-GCM formatında dosyaları şifreler.
 
 ```
 SecureFileService → [AES-256-GCM | Legacy IDataProtector] → Master Key (32 bytes, DPAPI protected)
@@ -385,11 +383,11 @@ SecureFileService → [AES-256-GCM | Legacy IDataProtector] → Master Key (32 b
 
 Yeni ortamda başlatıldığında master key decrypt başarısız olabilir. Çözüm:
 
-1. **Eski key'i restore et**: `Copy-Item <backup>/master.key C:\KOAFiloServis_yedekleme\keys\master.key`
+1. **Eski key'i restore et**: `Copy-Item <backup>/master.key C:\MKFiloServis_yedekleme\keys\master.key`
 2. **Uygulamayı yeniden başlat**
 3. **Dashboard'dan kontrol et**: `/api/system/decryption-recovery-status`
 
-Detaylı rehber: `KOAFiloServis.Web/Tools/MasterKeyRecoveryGuide.ps1`
+Detaylı rehber: `MKFiloServis.Web/Tools/MasterKeyRecoveryGuide.ps1`
 
 ---
 
@@ -428,3 +426,4 @@ Commit konvansiyonu: `<tip>(<modul>): <aciklama>` — `feat`, `fix`, `refactor`,
 <sub>.NET 10 · Blazor · PostgreSQL · Quartz · SignalR · DPAPI Encryption</sub>
 
 </div>
+

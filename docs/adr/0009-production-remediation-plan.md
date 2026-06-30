@@ -20,9 +20,9 @@ Sprint 10:
 ### Phase A: Exception Hierarchy
 
 ```csharp
-// ── KOAFiloServis.Shared/Exceptions/PuantajJobExceptions.cs ──
+// ── MKFiloServis.Shared/Exceptions/PuantajJobExceptions.cs ──
 
-namespace KOAFiloServis.Shared.Exceptions;
+namespace MKFiloServis.Shared.Exceptions;
 
 /// <summary>Engine tarafından fırlatılan, retry gerektirmeyen iş kuralı hataları.</summary>
 public abstract class PuantajBusinessException : Exception
@@ -120,7 +120,7 @@ catch (Exception ex)
 **Options class:**
 
 ```csharp
-// KOAFiloServis.Web/Services/PuantajJobOptions.cs
+// MKFiloServis.Web/Services/PuantajJobOptions.cs
 public sealed class PuantajJobOptions
 {
     public const string Section = "PuantajEngine:AutoProcess";
@@ -145,7 +145,7 @@ builder.Services.Configure<PuantajJobOptions>(
 **Refactored retry policy (non-static, config-driven):**
 
 ```csharp
-// KOAFiloServis.Web/Services/PuantajRetryPolicy.cs
+// MKFiloServis.Web/Services/PuantajRetryPolicy.cs
 public interface IPuantajRetryPolicy
 {
     Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> action,
@@ -332,7 +332,7 @@ private static async Task WriteAuditLogAsync(
 **Amaç:** Audit log eksikliklerini, inconsistent mutex durumlarını ve orphan kayıtları tespit edip düzeltmek.
 
 ```csharp
-// KOAFiloServis.Web/Jobs/PuantajReconciliationJob.cs
+// MKFiloServis.Web/Jobs/PuantajReconciliationJob.cs
 
 [DisallowConcurrentExecution]
 public class PuantajReconciliationJob : IJob
@@ -587,7 +587,7 @@ using var tenantScope = _logger.BeginScope(new Dictionary<string, object>
 ### Key Metrics (Numeric + Structured)
 
 ```csharp
-// KOAFiloServis.Web/Telemetry/PuantajJobMetrics.cs
+// MKFiloServis.Web/Telemetry/PuantajJobMetrics.cs
 public sealed class PuantajJobMetricsDefinitions
 {
     // Counters
@@ -618,7 +618,7 @@ public sealed class PuantajJobMetricsDefinitions
 ### NuGet Packages
 
 ```xml
-<!-- KOAFiloServis.Web.csproj -->
+<!-- MKFiloServis.Web.csproj -->
 <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.11.2" />
 <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.11.1-beta.1" />
 <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.11.1" />
@@ -637,7 +637,7 @@ builder.Services.AddOpenTelemetry()
         .AddEntityFrameworkCoreInstrumentation()
         .AddQuartzInstrumentation()
         .AddRuntimeInstrumentation()
-        .AddMeter("KOAFiloServis.Puantaj")
+        .AddMeter("MKFiloServis.Puantaj")
         .AddPrometheusExporter())
     .WithTracing(tracing => tracing
         .AddAspNetCoreInstrumentation()
@@ -657,7 +657,7 @@ app.UseOpenTelemetryPrometheusScrapingEndpoint(); // GET /metrics
 ### Custom Meter
 
 ```csharp
-// KOAFiloServis.Web/Telemetry/PuantajMeter.cs
+// MKFiloServis.Web/Telemetry/PuantajMeter.cs
 public sealed class PuantajMeter : IDisposable
 {
     private readonly Meter _meter;
@@ -667,7 +667,7 @@ public sealed class PuantajMeter : IDisposable
 
     public PuantajMeter()
     {
-        _meter = new Meter("KOAFiloServis.Puantaj", "1.0.0");
+        _meter = new Meter("MKFiloServis.Puantaj", "1.0.0");
 
         _tenantsProcessed = _meter.CreateCounter<long>(
             "puantaj_tenants_processed_total",
@@ -722,7 +722,7 @@ builder.Services.AddSingleton<PuantajMeter>();
 ### Implementation
 
 ```csharp
-// KOAFiloServis.Web/HealthChecks/PuantajJobHealthCheck.cs
+// MKFiloServis.Web/HealthChecks/PuantajJobHealthCheck.cs
 public sealed class PuantajJobHealthCheck : IHealthCheck
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
@@ -890,3 +890,4 @@ else { Write-Host "FAIL" -ForegroundColor Red }
 | P2 | Chaos test scripts (Phase G) | 3h | Düşük |
 | P2 | SRP refactor (retry, metrics, scope) | 4h | Düşük |
 | P3 | Integration test suite (PostgreSQL container) | 6h | Düşük |
+

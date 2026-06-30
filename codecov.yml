@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 📊 Codecov yapılandırması
 # https://docs.codecov.com/docs/codecov-yaml
 # ============================================================
@@ -41,16 +41,17 @@ ignore:
   - "**/obj/**"
   - "**/*.Designer.cs"
   - "**/Program.cs"
-  - "KOAFiloServis.Tests/**"
+  - "MKFiloServis.Tests/**"
   - "Tests/**"
   - "archive/**"
   - "setup/**"
-  - "KOAFiloServis.LisansDesktop/**"  # WinForms — Linux runner'da test edilmiyor
-  - "KOAFiloServis.DataSync/**"        # WinForms — Linux runner'da test edilmiyor
+  - "MKFiloServis.LisansDesktop/**"  # WinForms — Linux runner'da test edilmiyor
+  - "MKFiloServis.DataSync/**"        # WinForms — Linux runner'da test edilmiyor
 
 flags:
   unittests:
     paths:
-      - KOAFiloServis.Web/
-      - KOAFiloServis.Shared/
+      - MKFiloServis.Web/
+      - MKFiloServis.Shared/
     carryforward: true
+

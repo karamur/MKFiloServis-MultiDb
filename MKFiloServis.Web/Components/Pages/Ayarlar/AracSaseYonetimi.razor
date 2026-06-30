@@ -1,0 +1,176 @@
+@page "/ayarlar/arac-sase-yonetimi"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IAracService AracService
+@inject IKullaniciService KullaniciService
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Araç Şase Yönetimi</PageTitle>
+
+<YetkiKontrol Yetki="aracsase.oku" GerekliYetkiAdi="Araç Şase Yönetimi Görüntüleme">
+    <Yetkili>
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h3><i class="bi bi-upc-scan me-2"></i>Araç Şase Yönetimi</h3>
+                <button class="btn btn-secondary" @onclick="GeriDon">
+                    <i class="bi bi-arrow-left me-1"></i>Araç Listesine Dön
+                </button>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label small">Şase / Plaka / Marka</label>
+                            <input class="form-control form-control-sm" @bind="arama" placeholder="Ara..." />
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-primary btn-sm w-100" @onclick="Filtrele">Ara</button>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-outline-secondary btn-sm w-100" @onclick="Temizle">Temizle</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @if (isLoading)
+            {
+                <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+            }
+            else
+            {
+                <div class="card">
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped mb-0 align-middle">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Plaka</th>
+                                        <th>Marka/Model</th>
+                                        <th>Mevcut Şase</th>
+                                        <th>Yeni Şase</th>
+                                        <th style="width:160px;">İşlem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in filtreli)
+                                    {
+                                        <tr>
+                                            <td><span class="badge bg-primary">@(item.AktifPlaka ?? "-")</span></td>
+                                            <td>@item.Marka @item.Model</td>
+                                            <td><code>@item.SaseNo</code></td>
+                                            <td>
+                                                <input class="form-control form-control-sm" value="@GetYeniSase(item.Id)" @oninput="(e => YeniSaseYaz(item.Id, e.Value?.ToString()))" style="text-transform: uppercase;" />
+                                            </td>
+                                            <td>
+                                                <button class="btn btn-success btn-sm" disabled="@(!duzenlemeYetkisi)" @onclick="(() => SaseKaydet(item))">
+                                                    <i class="bi bi-save me-1"></i>Kaydet
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                @if (!duzenlemeYetkisi)
+                {
+                    <div class="alert alert-warning mt-3 mb-0">
+                        <i class="bi bi-shield-lock me-2"></i>Şase güncelleme için <strong>aracsase.duzenle</strong> yetkisi gerekli.
+                    </div>
+                }
+            }
+        </div>
+    </Yetkili>
+</YetkiKontrol>
+
+@code {
+    private List<Arac> tum = new();
+    private List<Arac> filtreli = new();
+    private readonly Dictionary<int, string> yeniSase = new();
+    private string? arama;
+    private bool isLoading = true;
+    private bool duzenlemeYetkisi;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var aktif = await KullaniciService.GetAktifKullaniciAsync();
+        if (aktif != null)
+            duzenlemeYetkisi = await KullaniciService.YetkiVarMiAsync(aktif.Id, "aracsase.duzenle");
+
+        tum = await AracService.GetAllAsync() ?? new();
+        foreach (var a in tum)
+            yeniSase[a.Id] = a.SaseNo;
+
+        Filtrele();
+        isLoading = false;
+    }
+
+    private void Filtrele()
+    {
+        var q = tum.AsQueryable();
+        if (!string.IsNullOrWhiteSpace(arama))
+        {
+            q = q.Where(a =>
+                (!string.IsNullOrWhiteSpace(a.SaseNo) && a.SaseNo.Contains(arama, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrWhiteSpace(a.AktifPlaka) && a.AktifPlaka.Contains(arama, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrWhiteSpace(a.Marka) && a.Marka.Contains(arama, StringComparison.OrdinalIgnoreCase)));
+        }
+        filtreli = q.OrderBy(a => a.AktifPlaka ?? a.SaseNo).ToList();
+    }
+
+    private void Temizle()
+    {
+        arama = null;
+        Filtrele();
+    }
+
+    private string GetYeniSase(int aracId) => yeniSase.TryGetValue(aracId, out var v) ? v : string.Empty;
+
+    private void YeniSaseYaz(int aracId, string? value)
+    {
+        yeniSase[aracId] = (value ?? string.Empty).Trim().ToUpperInvariant();
+    }
+
+    private void GeriDon() => Navigation.NavigateTo("/araclar");
+
+    private async Task SaseKaydet(Arac item)
+    {
+        if (!duzenlemeYetkisi)
+        {
+            ToastService.ShowWarning("Şase güncelleme yetkiniz yok.");
+            return;
+        }
+
+        var yeni = GetYeniSase(item.Id);
+        if (string.IsNullOrWhiteSpace(yeni))
+        {
+            ToastService.ShowError("Şase numarası boş olamaz.");
+            return;
+        }
+
+        if (string.Equals(item.SaseNo, yeni, StringComparison.OrdinalIgnoreCase))
+        {
+            ToastService.ShowInfo("Değişiklik yok.");
+            return;
+        }
+
+        try
+        {
+            item.SaseNo = yeni;
+            await AracService.UpdateAsync(item);
+            ToastService.ShowSuccess($"{item.AktifPlaka ?? item.Id.ToString()} için şase güncellendi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Şase güncellenemedi: {ex.Message}");
+            yeniSase[item.Id] = item.SaseNo;
+        }
+    }
+}
+

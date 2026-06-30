@@ -1,4 +1,4 @@
-﻿# 🚀 Koa Filo Servis - Kurulum Kılavuzu
+# 🚀 Koa Filo Servis - Kurulum Kılavuzu
 
 ## 📋 Sistem Gereksinimleri
 
@@ -235,14 +235,14 @@ C:\Apps\CRMFiloServis\logs\
 ```powershell
 # IIS / Hosting Bundle / web.config / stdout / Event Viewer tek raporda toplanir
 powershell -ExecutionPolicy Bypass -File .\setup\scripts\collect-iis-diagnostics.ps1 \
-  -InstallPath "C:\KOAFiloServis\IIS" \
-  -SiteName "KOAFiloServis"
+  -InstallPath "C:\MKFiloServis\IIS" \
+  -SiteName "MKFiloServis"
 ```
 
 Rapor dosyasi varsayilan olarak su klasore yazilir:
 
 ```
-C:\KOAFiloServis\IIS\logs\diag-YYYYMMDD-HHMMSS.txt
+C:\MKFiloServis\IIS\logs\diag-YYYYMMDD-HHMMSS.txt
 ```
 
 ---
@@ -255,3 +255,4 @@ C:\KOAFiloServis\IIS\logs\diag-YYYYMMDD-HHMMSS.txt
 ---
 
 *Son güncelleme: Haziran 2025*
+

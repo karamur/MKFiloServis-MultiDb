@@ -1,0 +1,929 @@
+@page "/ayarlar/yedekleme"
+@using MKFiloServis.Web.Helpers
+@using MKFiloServis.Web.Services
+@using System.Globalization
+@using Microsoft.AspNetCore.Components.Forms
+@inject IBackupService BackupService
+@inject IWebHostEnvironment Environment
+@inject IToastService ToastService
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Veritabani Yedekleme</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="bi bi-database-down me-2"></i>Veritabani Yedekleme</h3>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary" @onclick="() => showMigrationModal = true" disabled="@IsAnyOperationInProgress">
+                <i class="bi bi-arrow-repeat me-1"></i>Migration
+            </button>
+            <button class="btn btn-outline-warning" @onclick="() => showYukleModal = true" disabled="@IsAnyOperationInProgress">
+                <i class="bi bi-upload me-1"></i>Yedek Yukle
+            </button>
+            <div class="btn-group">
+                <button class="btn btn-success" @onclick="YedekAl" disabled="@IsAnyOperationInProgress">
+                    @if (isBackingUp)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-database-down me-1"></i>
+                    }
+                    DB Yedek
+                </button>
+                <button class="btn btn-outline-success" @onclick="DosyaYedekAl" disabled="@IsAnyOperationInProgress">
+                    @if (isFileBackup)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-file-zip me-1"></i>
+                    }
+                    Dosya Yedek
+                </button>
+                <button class="btn btn-outline-info" @onclick="TamYedekAl" disabled="@IsAnyOperationInProgress">
+                    @if (isFullBackup)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-shield-check me-1"></i>
+                    }
+                    Tam Yedek
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Veritabani Bilgisi -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-database me-2"></i>Aktif Veritabani
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="me-3">
+                            @switch (dbProvider.ToUpper())
+                            {
+                                case "POSTGRESQL":
+                                    <i class="bi bi-database-fill text-primary" style="font-size: 3rem;"></i>
+                                    break;
+                                case "MSSQL":
+                                case "SQLSERVER":
+                                    <i class="bi bi-database-fill text-danger" style="font-size: 3rem;"></i>
+                                    break;
+                                default:
+                                    <i class="bi bi-database-fill text-success" style="font-size: 3rem;"></i>
+                                    break;
+                            }
+                        </div>
+                        <div>
+                            <h4 class="mb-0">@dbProvider</h4>
+                            <small class="text-muted">Aktif veritabani saglayicisi</small>
+                        </div>
+                    </div>
+                    <table class="table table-sm table-borderless mb-0">
+                        <tr>
+                            <td><strong>Son Yedekleme:</strong></td>
+                            <td>
+                                @if (settings.LastBackupTime.HasValue)
+                                {
+                                    @settings.LastBackupTime.Value.ToString("dd.MM.yyyy HH:mm")
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Henuz yedek alinmadi</span>
+                                }
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Otomatik Yedekleme:</strong></td>
+                            <td>
+                                @if (settings.AutoBackupEnabled)
+                                {
+                                    <span class="badge bg-success">@GetScheduleSummary()</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">Pasif</span>
+                                }
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Sonraki Çalışma:</strong></td>
+                            <td>
+                                @if (GetNextBackupTime() is DateTime nextBackup)
+                                {
+                                    @nextBackup.ToString("dd.MM.yyyy HH:mm")
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Planlı değil</span>
+                                }
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <i class="bi bi-gear me-2"></i>Yedekleme Ayarlari
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" @bind="settings.AutoBackupEnabled" id="chkAuto">
+                            <label class="form-check-label" for="chkAuto">Otomatik Yedekleme</label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Planlama Tipi</label>
+                        <select class="form-select" @bind="settings.ScheduleType">
+                            <option value="@BackupScheduleType.Daily">Günlük</option>
+                            <option value="@BackupScheduleType.Weekly">Haftalık</option>
+                            <option value="@BackupScheduleType.Interval">Saat Bazlı</option>
+                        </select>
+                    </div>
+                    @if (settings.ScheduleType == BackupScheduleType.Interval)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Yedekleme Araligi (Saat)</label>
+                            <input type="number" class="form-control" @bind="settings.AutoBackupIntervalHours" min="1" max="168" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Saat</label>
+                                <input type="number" class="form-control" @bind="settings.ScheduledHour" min="0" max="23" />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Dakika</label>
+                                <input type="number" class="form-control" @bind="settings.ScheduledMinute" min="0" max="59" />
+                            </div>
+                        </div>
+                    }
+                    @if (settings.ScheduleType == BackupScheduleType.Weekly)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Haftalık Gün</label>
+                            <select class="form-select" @bind="settings.WeeklyBackupDay">
+                                @foreach (var day in Enum.GetValues<DayOfWeek>())
+                                {
+                                    <option value="@day">@GetDayName(day)</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                    <div class="mb-3">
+                        <label class="form-label">Saklanacak Yedek Sayisi</label>
+                        <input type="number" class="form-control" @bind="settings.KeepBackupCount" min="1" max="100" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Yedekleme Klasoru</label>
+                        <input type="text" class="form-control" @bind="settings.BackupFolder" placeholder="Backups" />
+                    </div>
+                    <button class="btn btn-primary" @onclick="AyarlariKaydet" disabled="@IsAnyOperationInProgress">
+                        <i class="bi bi-check-lg me-1"></i>Ayarlari Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Yedek Listesi -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-archive me-2"></i>Yedek Dosyalari (@backups.Count adet)</h5>
+            <button class="btn btn-outline-primary btn-sm" @onclick="YedekleriYenile" disabled="@IsAnyOperationInProgress">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+        </div>
+        <div class="card-body p-0">
+            @if (isLoading)
+            {
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary"></div>
+                </div>
+            }
+            else if (!backups.Any())
+            {
+                <div class="text-center py-4 text-muted">
+                    <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                    <p class="mt-2">Henuz yedek dosyasi bulunmuyor.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Dosya Adi</th>
+                                <th>Tarih</th>
+                                <th>Boyut</th>
+                                <th>Tip</th>
+                                <th class="text-center">Islem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var backup in backups)
+                            {
+                                <tr class="@(backup.FileName.StartsWith("uploaded_") ? "table-info" : "")">
+                                    <td>
+                                        <i class="bi @GetFileIcon(backup.FileName) me-1"></i>
+                                        @backup.FileName
+                                        @if (backup.FileName.StartsWith("uploaded_"))
+                                        {
+                                            <span class="badge bg-info ms-1">Yuklendi</span>
+                                        }
+                                    </td>
+                                    <td>@backup.CreatedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                                    <td>@backup.FileSizeFormatted</td>
+                                    <td>
+                                        <span class="badge @GetTypeBadge(backup.FileName)">@GetFileType(backup.FileName)</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-success" @onclick="() => YedekIndir(backup)" title="Indir" disabled="@IsAnyOperationInProgress">
+                                                <i class="bi bi-download"></i>
+                                            </button>
+                                            @if (CanRestore(backup.FileName))
+                                            {
+                                                <button class="btn btn-outline-warning" @onclick="() => GeriYukleOnay(backup)" title="Geri Yukle" disabled="@IsAnyOperationInProgress">
+                                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                                </button>
+                                            }
+                                            @if (CanConvert(backup.FileName))
+                                            {
+                                                <button class="btn btn-outline-info" @onclick="() => DonusumAc(backup)" title="Donustur ve Yukle" disabled="@IsAnyOperationInProgress">
+                                                    <i class="bi bi-arrow-left-right"></i>
+                                                </button>
+                                            }
+                                            <button class="btn btn-outline-danger" @onclick="() => SilOnay(backup)" title="Sil" disabled="@IsAnyOperationInProgress">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Silme Onay Modal -->
+@if (showSilModal && silinecekYedek != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="bi bi-trash me-2"></i>Yedek Sil</h5>
+                </div>
+                <div class="modal-body text-center">
+                    <p>Bu yedek dosyasini silmek istediginize emin misiniz?</p>
+                    <p class="text-muted small">@silinecekYedek.FileName</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => showSilModal = false">Iptal</button>
+                    <button class="btn btn-danger" @onclick="YedekSil" disabled="@IsAnyOperationInProgress">Sil</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Geri Yukleme Onay Modal -->
+@if (showRestoreModal && yuklenecekYedek != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>Geri Yukleme Onayi</h5>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger">
+                        <strong>Dikkat!</strong> Bu islem mevcut veritabanini tamamen degistirecektir!
+                    </div>
+                    <p>Yedek dosyasi: <strong>@yuklenecekYedek.FileName</strong></p>
+                    <p>Tarih: @yuklenecekYedek.CreatedAt.ToString("dd.MM.yyyy HH:mm")</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => showRestoreModal = false">Iptal</button>
+                    <button class="btn btn-warning" @onclick="GeriYukle" disabled="@IsAnyOperationInProgress">
+                        @if (isRestoring)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Geri Yukle
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Yedek Yukle Modal -->
+@if (showYukleModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Yedek Dosyasi Yukle</h5>
+                    <button type="button" class="btn-close" @onclick="() => showYukleModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Dikkat!</strong> Yuklenen yedek dosyasi geri yuklendiginde mevcut veriler silinecektir!
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Yedek Dosyasi Secin</label>
+                        <InputFile class="form-control" OnChange="YedekDosyaSecildi" accept=".sql,.db,.bak,.backup" />
+                        <small class="text-muted">Desteklenen formatlar: .sql, .db, .bak, .backup</small>
+                    </div>
+                    @if (yuklenecekDosya != null)
+                    {
+                        <div class="alert alert-info">
+                            <i class="bi bi-file-earmark me-2"></i>
+                            <strong>@yuklenecekDosya.Name</strong> - @FormatSize(yuklenecekDosya.Size)
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => { showYukleModal = false; yuklenecekDosya = null; }">Iptal</button>
+                    <button class="btn btn-warning" @onclick="YedekDosyaYukle" disabled="@(yuklenecekDosya == null || IsAnyOperationInProgress)">
+                        @if (isUploading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-upload me-1"></i>Yukle
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Migration Modal -->
+@if (showMigrationModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title"><i class="bi bi-arrow-repeat me-2"></i>Veritabani Migration</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => showMigrationModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Migration islemi veritabani sema degisikliklerini uygular. Yeni tablolar, alanlar veya indeksler eklenir.
+                    </div>
+                    <p><strong>Aktif Veritabani:</strong> @dbProvider</p>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="chkMigrationOnay" @bind="migrationOnay" />
+                        <label class="form-check-label" for="chkMigrationOnay">
+                            Migration islemini onayliyorum
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => { showMigrationModal = false; migrationOnay = false; }">Iptal</button>
+                    <button class="btn btn-primary" @onclick="MigrationUygula" disabled="@(!migrationOnay || IsAnyOperationInProgress)">
+                        @if (isMigrating)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-play-fill me-1"></i>Migration Uygula
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Veritabani Donusum Modal -->
+@if (showDonusumModal && donusumYedek != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>Veritabani Donusumu</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => showDonusumModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Dikkat!</strong> Bu islem hedef veritabanindaki mevcut verileri silecek ve yedekteki verilerle degistirecektir!
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Kaynak Yedek:</strong></label>
+                        <div class="alert alert-secondary py-2">@donusumYedek.FileName</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Kaynak Veritabani Tipi:</strong></label>
+                        <select class="form-select" @bind="donusumKaynakTip">
+                            <option value="SQLite">SQLite (.db)</option>
+                            <option value="PostgreSQL">PostgreSQL (.sql)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Hedef Veritabani (Mevcut):</strong></label>
+                        <div class="alert alert-primary py-2">@dbProvider</div>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="chkDonusumOnay" @bind="donusumOnay" />
+                        <label class="form-check-label" for="chkDonusumOnay">
+                            Mevcut verilerin silinecegini ve yedekteki verilerle degistirilecegini onayliyorum
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => { showDonusumModal = false; donusumOnay = false; }">Iptal</button>
+                    <button class="btn btn-info" @onclick="DonusumYap" disabled="@(!donusumOnay || IsAnyOperationInProgress)">
+                        @if (isDonusuyor)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-arrow-left-right me-1"></i>Donustur ve Yukle
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<BackupInfo> backups = new();
+    private BackupSettings settings = new();
+    private string dbProvider = "SQLite";
+    private bool isLoading = true;
+    private bool isBackingUp = false;
+    private bool isFileBackup = false;
+    private bool isFullBackup = false;
+    private bool isRestoring = false;
+    private bool isUploading = false;
+    private bool isMigrating = false;
+    private bool isDonusuyor = false;
+    private bool showSilModal = false;
+    private bool showRestoreModal = false;
+    private bool showYukleModal = false;
+    private bool showMigrationModal = false;
+    private bool showDonusumModal = false;
+    private bool migrationOnay = false;
+    private bool donusumOnay = false;
+    private string donusumKaynakTip = "SQLite";
+    private BackupInfo? silinecekYedek;
+    private BackupInfo? yuklenecekYedek;
+    private BackupInfo? donusumYedek;
+    private IBrowserFile? yuklenecekDosya;
+
+    protected override async Task OnInitializedAsync()
+    {
+        dbProvider = BackupService.GetCurrentDatabaseProvider();
+        settings = BackupService.GetSettings();
+        await YedekleriYenile();
+    }
+
+    private async Task YedekleriYenile()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var dbBackups = await BackupService.GetBackupListAsync();
+            var fileBackups = await BackupService.GetFileBackupListAsync();
+            backups = dbBackups.Concat(fileBackups).OrderByDescending(b => b.CreatedAt).ToList();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task YedekAl()
+    {
+        isBackingUp = true;
+        StateHasChanged();
+
+        try
+        {
+            var result = await BackupService.CreateBackupAsync();
+            if (result.Success)
+            {
+                ToastService.ShowSuccess($"Yedek alindi: {result.FileName} ({FormatSize(result.FileSizeBytes)})");
+                settings = BackupService.GetSettings();
+                await YedekleriYenile();
+            }
+            else
+            {
+                ToastService.ShowError($"Yedekleme hatasi: {result.ErrorMessage}");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+        finally
+        {
+            isBackingUp = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DosyaYedekAl()
+    {
+        isFileBackup = true;
+        StateHasChanged();
+        try
+        {
+            var result = await BackupService.CreateFileBackupAsync();
+            if (result.Success)
+            {
+                ToastService.ShowSuccess($"Dosya yedeği alındı: {result.FileName} ({FormatSize(result.FileSizeBytes)})");
+                await YedekleriYenile();
+            }
+            else
+            {
+                ToastService.ShowError($"Dosya yedekleme hatası: {result.ErrorMessage}");
+            }
+        }
+        catch (Exception ex) { ToastService.ShowError($"Hata: {ex.Message}"); }
+        finally { isFileBackup = false; StateHasChanged(); }
+    }
+
+    private async Task TamYedekAl()
+    {
+        isFullBackup = true;
+        StateHasChanged();
+        try
+        {
+            var result = await BackupService.CreateFullBackupAsync();
+            if (result.Success)
+            {
+                ToastService.ShowSuccess($"Tam yedek alındı ({FormatSize(result.FileSizeBytes)})");
+                await YedekleriYenile();
+            }
+            else
+            {
+                ToastService.ShowError($"Tam yedek hatası: {result.ErrorMessage}");
+            }
+        }
+        catch (Exception ex) { ToastService.ShowError($"Hata: {ex.Message}"); }
+        finally { isFullBackup = false; StateHasChanged(); }
+    }
+
+    private async Task AyarlariKaydet()
+    {
+        try
+        {
+            settings.ScheduledHour = Math.Clamp(settings.ScheduledHour, 0, 23);
+            settings.ScheduledMinute = Math.Clamp(settings.ScheduledMinute, 0, 59);
+            settings.AutoBackupIntervalHours = Math.Clamp(settings.AutoBackupIntervalHours, 1, 168);
+            settings.KeepBackupCount = Math.Clamp(settings.KeepBackupCount, 1, 100);
+
+            await BackupService.SaveSettingsAsync(settings);
+            ToastService.ShowSuccess("Ayarlar kaydedildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+    }
+
+    private async Task YedekIndir(BackupInfo backup)
+    {
+        try
+        {
+            byte[] bytes;
+            // FileShare.ReadWrite ile açarak başka işlemlerin dosyayı kullanmasına izin ver
+            await using (var fs = new FileStream(backup.FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            {
+                bytes = new byte[fs.Length];
+                await fs.ReadExactlyAsync(bytes, 0, bytes.Length);
+            }
+            await JS.InvokeVoidAsync("downloadFileFromBase64", backup.FileName, Convert.ToBase64String(bytes));
+            ToastService.ShowSuccess("Dosya indiriliyor...");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"İndirme hatası: {ex.Message}");
+        }
+    }
+
+    private void SilOnay(BackupInfo backup)
+    {
+        silinecekYedek = backup;
+        showSilModal = true;
+    }
+
+    private async Task YedekSil()
+    {
+        if (silinecekYedek == null) return;
+
+        try
+        {
+            var isFileBackup = silinecekYedek.FileName.EndsWith(".zip");
+            var sonuc = isFileBackup
+                ? await BackupService.DeleteFileBackupAsync(silinecekYedek.FileName)
+                : await BackupService.DeleteBackupAsync(silinecekYedek.FileName);
+            if (sonuc)
+            {
+                ToastService.ShowSuccess("Yedek silindi.");
+                await YedekleriYenile();
+            }
+            else
+            {
+                ToastService.ShowError("Yedek silinemedi.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+        finally
+        {
+            showSilModal = false;
+            silinecekYedek = null;
+        }
+    }
+
+    private void GeriYukleOnay(BackupInfo backup)
+    {
+        yuklenecekYedek = backup;
+        showRestoreModal = true;
+    }
+
+    private async Task GeriYukle()
+    {
+        if (yuklenecekYedek == null) return;
+
+        isRestoring = true;
+        StateHasChanged();
+
+        try
+        {
+            var sonuc = await BackupService.RestoreBackupAsync(yuklenecekYedek.FileName);
+            if (sonuc)
+            {
+                ToastService.ShowSuccess("Veritabani geri yuklendi. Uygulama yeniden baslatilmali.");
+            }
+            else
+            {
+                ToastService.ShowError("Geri yukleme basarisiz. JSON yedekler desteklenmez.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+        finally
+        {
+            isRestoring = false;
+            showRestoreModal = false;
+            yuklenecekYedek = null;
+            StateHasChanged();
+        }
+    }
+
+    private string GetFileIcon(string fileName)
+    {
+        if (fileName.EndsWith(".zip")) return "bi-file-zip text-warning";
+        if (fileName.EndsWith(".db")) return "bi-database-fill text-success";
+        if (fileName.EndsWith(".sql")) return "bi-filetype-sql text-primary";
+        if (fileName.EndsWith(".bak")) return "bi-file-earmark-zip text-danger";
+        if (fileName.EndsWith(".backup")) return "bi-file-earmark-arrow-up text-info";
+        if (fileName.EndsWith(".json")) return "bi-filetype-json text-warning";
+        return "bi-file-earmark";
+    }
+
+    private string GetTypeBadge(string fileName)
+    {
+        if (fileName.EndsWith(".zip")) return "bg-warning text-dark";
+        if (fileName.EndsWith(".db")) return "bg-success";
+        if (fileName.EndsWith(".sql")) return "bg-primary";
+        if (fileName.EndsWith(".bak")) return "bg-danger";
+        if (fileName.EndsWith(".backup")) return "bg-info";
+        if (fileName.EndsWith(".json")) return "bg-warning text-dark";
+        return "bg-secondary";
+    }
+
+    private string GetFileType(string fileName)
+    {
+        if (fileName.EndsWith(".zip")) return "Dosya";
+        if (fileName.EndsWith(".db")) return "SQLite";
+        if (fileName.EndsWith(".sql") && fileName.Contains("PostgreSQL")) return "PostgreSQL";
+        if (fileName.EndsWith(".sql") && fileName.Contains("MySQL")) return "MySQL";
+        if (fileName.EndsWith(".sql")) return "SQL";
+        if (fileName.EndsWith(".bak")) return "MSSQL";
+        if (fileName.EndsWith(".backup")) return "Backup";
+        if (fileName.EndsWith(".json")) return "JSON";
+        return "Bilinmiyor";
+    }
+
+    private string FormatSize(long bytes)
+    {
+        if (bytes < 1024)
+            return $"{bytes} B";
+        else if (bytes < 1024 * 1024)
+            return $"{bytes / 1024.0:F1} KB";
+        else
+            return $"{bytes / (1024.0 * 1024.0):F2} MB";
+    }
+
+    private void YedekDosyaSecildi(InputFileChangeEventArgs e)
+    {
+        yuklenecekDosya = e.File;
+    }
+
+    private async Task YedekDosyaYukle()
+    {
+        if (yuklenecekDosya == null) return;
+
+        isUploading = true;
+        StateHasChanged();
+
+        try
+        {
+            var backupFolder = settings.BackupFolder;
+            if (string.IsNullOrWhiteSpace(backupFolder))
+            {
+                backupFolder = "database";
+            }
+
+            if (!Path.IsPathRooted(backupFolder))
+            {
+                backupFolder = Path.Combine(AppStoragePaths.GetStorageRoot(Environment.ContentRootPath), backupFolder);
+            }
+
+            Directory.CreateDirectory(backupFolder);
+
+            var fileName = $"uploaded_{DateTime.Now:yyyyMMdd_HHmmss}_{yuklenecekDosya.Name}";
+            var filePath = Path.Combine(backupFolder, fileName);
+
+            using var stream = yuklenecekDosya.OpenReadStream(maxAllowedSize: 500 * 1024 * 1024); // 500MB max
+            using var fileStream = new FileStream(filePath, FileMode.Create);
+            await stream.CopyToAsync(fileStream);
+
+            ToastService.ShowSuccess($"Yedek dosyasi yuklendi: {fileName}");
+            showYukleModal = false;
+            yuklenecekDosya = null;
+            await YedekleriYenile();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Yukleme hatasi: {ex.Message}");
+        }
+        finally
+        {
+            isUploading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task MigrationUygula()
+    {
+        if (!migrationOnay) return;
+
+        isMigrating = true;
+        StateHasChanged();
+
+        try
+        {
+            var result = await BackupService.ApplyMigrationsAsync();
+            if (result)
+            {
+                ToastService.ShowSuccess("Migration basariyla uygulandi!");
+            }
+            else
+            {
+                ToastService.ShowWarning("Migration islemi tamamlandi, ancak degisiklik olmayabilir.");
+            }
+            showMigrationModal = false;
+            migrationOnay = false;
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Migration hatasi: {ex.Message}");
+        }
+        finally
+        {
+            isMigrating = false;
+            StateHasChanged();
+        }
+    }
+
+    private void DonusumAc(BackupInfo backup)
+    {
+        donusumYedek = backup;
+        donusumOnay = false;
+
+        // Dosya uzantısına göre kaynak tipi belirle
+        if (backup.FileName.EndsWith(".db", StringComparison.OrdinalIgnoreCase))
+            donusumKaynakTip = "SQLite";
+        else if (backup.FileName.EndsWith(".sql", StringComparison.OrdinalIgnoreCase))
+            donusumKaynakTip = "PostgreSQL";
+        else
+            donusumKaynakTip = "SQLite";
+
+        showDonusumModal = true;
+    }
+
+    private async Task DonusumYap()
+    {
+        if (!donusumOnay || donusumYedek == null) return;
+
+        isDonusuyor = true;
+        StateHasChanged();
+
+        try
+        {
+            var result = await BackupService.ConvertAndRestoreAsync(donusumYedek.FileName, donusumKaynakTip, dbProvider);
+            if (result)
+            {
+                ToastService.ShowSuccess($"Veritabani donusumu basarili! {donusumKaynakTip} -> {dbProvider}");
+            }
+            else
+            {
+                ToastService.ShowError("Veritabani donusumu basarisiz.");
+            }
+            showDonusumModal = false;
+            donusumOnay = false;
+            donusumYedek = null;
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Donusum hatasi: {ex.Message}");
+        }
+        finally
+        {
+            isDonusuyor = false;
+            StateHasChanged();
+        }
+    }
+
+    private bool IsAnyOperationInProgress => isBackingUp || isFileBackup || isFullBackup || isRestoring || isUploading || isMigrating || isDonusuyor;
+
+    private static bool CanRestore(string fileName)
+    {
+        // JSON dosyalari restore edilemez
+        if (fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // Desteklenen formatlar
+        return fileName.EndsWith(".sql", StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith(".db", StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith(".bak", StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith(".backup", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool CanConvert(string fileName)
+    {
+        // SQLite ve PostgreSQL SQL dosyaları dönüştürülebilir
+        return fileName.EndsWith(".db", StringComparison.OrdinalIgnoreCase) ||
+               (fileName.EndsWith(".sql", StringComparison.OrdinalIgnoreCase) && 
+                (fileName.Contains("PostgreSQL") || fileName.Contains("SQLite")));
+    }
+
+    private DateTime? GetNextBackupTime() => settings.GetNextBackupTime();
+
+    private string GetScheduleSummary()
+    {
+        return settings.ScheduleType switch
+        {
+            BackupScheduleType.Interval => $"Aktif - Her {settings.AutoBackupIntervalHours} saat",
+            BackupScheduleType.Weekly => $"Aktif - Her {GetDayName(settings.WeeklyBackupDay)} {settings.ScheduledHour:00}:{settings.ScheduledMinute:00}",
+            _ => $"Aktif - Her gün {settings.ScheduledHour:00}:{settings.ScheduledMinute:00}"
+        };
+    }
+
+    private static string GetDayName(DayOfWeek day)
+    {
+        return CultureInfo.GetCultureInfo("tr-TR").DateTimeFormat.GetDayName(day);
+    }
+}
+
+
+
+
+

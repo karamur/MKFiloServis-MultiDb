@@ -1,0 +1,378 @@
+@page "/muhasebe/raporlar/yevmiye"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IMuhasebeService MuhasebeService
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Yevmiye Defteri</PageTitle>
+
+<div class="container-fluid">
+    @if (!yazdirModu)
+    {
+        <div class="d-flex justify-content-between align-items-center mb-3 no-print">
+            <div>
+                <h3><i class="bi bi-journal-text me-2"></i>Yevmiye Defteri</h3>
+                <small class="text-muted">Tarih bazlı yevmiye kayıtları raporu</small>
+            </div>
+            <div class="d-flex gap-2 align-items-center">
+                <div class="input-group input-group-sm" style="width: auto;">
+                    <span class="input-group-text">Başlangıç</span>
+                    <input type="date" class="form-control" @bind="baslangicTarihi" style="width: 140px;" />
+                </div>
+                <div class="input-group input-group-sm" style="width: auto;">
+                    <span class="input-group-text">Bitiş</span>
+                    <input type="date" class="form-control" @bind="bitisTarihi" style="width: 140px;" />
+                </div>
+                <button class="btn btn-primary btn-sm" @onclick="RaporOlustur">
+                    <i class="bi bi-search me-1"></i>Rapor Oluştur
+                </button>
+                <div class="btn-group">
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="Yazdir" disabled="@(!raporYuklendi)">
+                        <i class="bi bi-printer me-1"></i>Yazdır
+                    </button>
+                    <button class="btn btn-outline-success btn-sm" @onclick="ExcelExport" disabled="@(!raporYuklendi)">
+                        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                    </button>
+                    <button class="btn btn-outline-primary btn-sm" @onclick="ZirveExport" disabled="@(!raporYuklendi)" title="Zirve Muhasebe Programı Formatı">
+                        <i class="bi bi-building me-1"></i>Zirve
+                    </button>
+                </div>
+                <button class="btn btn-secondary btn-sm" @onclick='() => Navigation.NavigateTo("/muhasebe/raporlar")'>
+                    <i class="bi bi-arrow-left me-1"></i>Geri
+                </button>
+            </div>
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+            <p class="mt-2">Rapor yükleniyor...</p>
+        </div>
+    }
+    else if (rapor != null)
+    {
+        <!-- Yazdırma Başlığı (sadece yazdırırken görünür) -->
+        <div class="print-header d-none">
+            <div class="text-center mb-4">
+                <h2>YEVMİYE DEFTERİ</h2>
+                <p class="mb-0">Tarih Aralığı: @baslangicTarihi.ToString("dd.MM.yyyy") - @bitisTarihi.ToString("dd.MM.yyyy")</p>
+                <p class="mb-0 text-muted small">Oluşturulma: @DateTime.Now.ToString("dd.MM.yyyy HH:mm")</p>
+            </div>
+        </div>
+
+        <!-- Özet Kartları -->
+        <div class="row g-3 mb-3 no-print">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body py-2">
+                        <small>Kayıt Sayısı</small>
+                        <h5 class="mb-0">@rapor.Satirlar.Count</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body py-2">
+                        <small>Toplam Borç</small>
+                        <h5 class="mb-0">@FormatPara(rapor.ToplamBorc)</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-dark">
+                    <div class="card-body py-2">
+                        <small>Toplam Alacak</small>
+                        <h5 class="mb-0">@FormatPara(rapor.ToplamAlacak)</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card @(rapor.ToplamBorc == rapor.ToplamAlacak ? "bg-info" : "bg-danger") text-white">
+                    <div class="card-body py-2">
+                        <small>Bakiye Farkı</small>
+                        <h5 class="mb-0">@FormatPara(rapor.ToplamBorc - rapor.ToplamAlacak)</h5>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fiş Bazlı Görünüm -->
+        @if (gorunumModu == "fis")
+        {
+            <div class="mb-2 no-print">
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-primary active">
+                        <i class="bi bi-receipt me-1"></i>Fiş Bazlı
+                    </button>
+                    <button class="btn btn-outline-primary" @onclick='() => gorunumModu = "satir"'>
+                        <i class="bi bi-list me-1"></i>Satır Bazlı
+                    </button>
+                </div>
+            </div>
+
+            @foreach (var fisGrup in rapor.Satirlar.GroupBy(s => new { s.FisNo, s.Tarih }).OrderBy(g => g.Key.Tarih).ThenBy(g => g.Key.FisNo))
+            {
+                <div class="card mb-3 yevmiye-fis">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
+                        <div>
+                            <strong class="text-primary">@fisGrup.Key.FisNo</strong>
+                            <span class="text-muted ms-2">@fisGrup.Key.Tarih.ToLocalTime().ToString("dd.MM.yyyy")</span>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge bg-success me-2">Borç: @FormatPara(fisGrup.Sum(s => s.Borc))</span>
+                            <span class="badge bg-warning text-dark">Alacak: @FormatPara(fisGrup.Sum(s => s.Alacak))</span>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th width="50">#</th>
+                                    <th width="100">Hesap Kodu</th>
+                                    <th>Hesap Adı</th>
+                                    <th>Açıklama</th>
+                                    <th class="text-end" width="120">Borç</th>
+                                    <th class="text-end" width="120">Alacak</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var satir in fisGrup.OrderBy(s => s.SiraNo))
+                                {
+                                    <tr class="@(satir.Borc > 0 ? "table-success bg-opacity-10" : "table-warning bg-opacity-10")">
+                                        <td class="text-muted">@satir.SiraNo</td>
+                                        <td><code>@satir.HesapKodu</code></td>
+                                        <td>@satir.HesapAdi</td>
+                                        <td class="text-muted small">@satir.Aciklama</td>
+                                        <td class="text-end @(satir.Borc > 0 ? "fw-bold text-success" : "")">
+                                            @(satir.Borc > 0 ? FormatPara(satir.Borc) : "")
+                                        </td>
+                                        <td class="text-end @(satir.Alacak > 0 ? "fw-bold text-warning" : "")">
+                                            @(satir.Alacak > 0 ? FormatPara(satir.Alacak) : "")
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <!-- Satır Bazlı Görünüm -->
+            <div class="mb-2 no-print">
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary" @onclick='() => gorunumModu = "fis"'>
+                        <i class="bi bi-receipt me-1"></i>Fiş Bazlı
+                    </button>
+                    <button class="btn btn-primary active">
+                        <i class="bi bi-list me-1"></i>Satır Bazlı
+                    </button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover table-striped mb-0 yevmiye-table">
+                        <thead class="table-dark sticky-top">
+                            <tr>
+                                <th width="50">Sıra</th>
+                                <th width="100">Tarih</th>
+                                <th width="130">Fiş No</th>
+                                <th width="100">Hesap Kodu</th>
+                                <th>Hesap Adı</th>
+                                <th>Açıklama</th>
+                                <th class="text-end" width="120">Borç</th>
+                                <th class="text-end" width="120">Alacak</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var satir in rapor.Satirlar)
+                            {
+                                <tr>
+                                    <td class="text-muted">@satir.SiraNo</td>
+                                    <td>@satir.Tarih.ToLocalTime().ToString("dd.MM.yyyy")</td>
+                                    <td><strong class="text-primary">@satir.FisNo</strong></td>
+                                    <td><code>@satir.HesapKodu</code></td>
+                                    <td>@satir.HesapAdi</td>
+                                    <td class="text-muted small">@satir.Aciklama</td>
+                                    <td class="text-end @(satir.Borc > 0 ? "fw-bold text-success" : "")">
+                                        @(satir.Borc > 0 ? FormatPara(satir.Borc) : "")
+                                    </td>
+                                    <td class="text-end @(satir.Alacak > 0 ? "fw-bold text-warning" : "")">
+                                        @(satir.Alacak > 0 ? FormatPara(satir.Alacak) : "")
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-secondary fw-bold">
+                            <tr>
+                                <td colspan="6" class="text-end">TOPLAM:</td>
+                                <td class="text-end text-success">@FormatPara(rapor.ToplamBorc)</td>
+                                <td class="text-end text-warning">@FormatPara(rapor.ToplamAlacak)</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        }
+
+        <!-- Yazdırma için Toplam (her iki görünümde de) -->
+        <div class="print-footer d-none mt-4">
+            <div class="border-top pt-3">
+                <div class="row">
+                    <div class="col-6">
+                        <p class="mb-1"><strong>Toplam Kayıt:</strong> @rapor.Satirlar.Count</p>
+                        <p class="mb-1"><strong>Fiş Sayısı:</strong> @rapor.Satirlar.GroupBy(s => s.FisNo).Count()</p>
+                    </div>
+                    <div class="col-6 text-end">
+                        <p class="mb-1"><strong>Toplam Borç:</strong> @FormatPara(rapor.ToplamBorc)</p>
+                        <p class="mb-1"><strong>Toplam Alacak:</strong> @FormatPara(rapor.ToplamAlacak)</p>
+                        <p class="mb-1"><strong>Fark:</strong> @FormatPara(rapor.ToplamBorc - rapor.ToplamAlacak)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else if (raporYuklendi)
+    {
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>
+            Seçilen tarih aralığında yevmiye kaydı bulunamadı.
+        </div>
+    }
+</div>
+
+<!-- Yazdırma CSS -->
+<style>
+    @@media print {
+        .no-print { display: none !important; }
+        .print-header, .print-footer { display: block !important; }
+        .card { break-inside: avoid; }
+        .yevmiye-fis { margin-bottom: 1rem !important; }
+        .yevmiye-table { font-size: 10pt; }
+        body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    }
+    
+    @@media screen {
+        .print-header, .print-footer { display: none; }
+    }
+</style>
+
+@code {
+    [SupplyParameterFromQuery(Name = "baslangic")]
+    public string? BaslangicParam { get; set; }
+
+    [SupplyParameterFromQuery(Name = "bitis")]
+    public string? BitisParam { get; set; }
+
+    [SupplyParameterFromQuery(Name = "yazdir")]
+    public bool YazdirParam { get; set; }
+
+    private DateTime baslangicTarihi = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime bitisTarihi = DateTime.Today;
+    private YevmiyeRapor? rapor;
+    private bool isLoading;
+    private bool raporYuklendi;
+    private bool yazdirModu;
+    private string gorunumModu = "fis";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // URL parametrelerinden tarih al
+        if (!string.IsNullOrEmpty(BaslangicParam) && DateTime.TryParse(BaslangicParam, out var bas))
+            baslangicTarihi = bas;
+
+        if (!string.IsNullOrEmpty(BitisParam) && DateTime.TryParse(BitisParam, out var bit))
+            bitisTarihi = bit;
+
+        // Eğer tarih parametreleri varsa otomatik rapor oluştur
+        if (!string.IsNullOrEmpty(BaslangicParam) || !string.IsNullOrEmpty(BitisParam))
+        {
+            await RaporOlustur();
+
+            if (YazdirParam)
+            {
+                yazdirModu = true;
+                await Task.Delay(500); // Render tamamlanması için bekle
+                await JS.InvokeVoidAsync("window.print");
+            }
+        }
+    }
+
+    private async Task RaporOlustur()
+    {
+        if (baslangicTarihi > bitisTarihi)
+        {
+            ToastService.ShowWarning("Başlangıç tarihi bitiş tarihinden büyük olamaz.");
+            return;
+        }
+
+        isLoading = true;
+        try
+        {
+            rapor = await MuhasebeService.GetYevmiyeRaporuAsync(baslangicTarihi, bitisTarihi);
+            raporYuklendi = true;
+
+            if (rapor.Satirlar.Count == 0)
+            {
+                ToastService.ShowInfo("Seçilen tarih aralığında kayıt bulunamadı.");
+            }
+            else
+            {
+                ToastService.ShowSuccess($"{rapor.Satirlar.Count} kayıt listelendi.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Rapor oluşturulurken hata: " + ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task Yazdir()
+    {
+        await JS.InvokeVoidAsync("window.print");
+    }
+
+    private async Task ExcelExport()
+    {
+        try
+        {
+            var excelBytes = await MuhasebeService.ExportYevmiyeToExcelAsync(baslangicTarihi, bitisTarihi);
+            var fileName = $"Yevmiye_{baslangicTarihi:yyyyMMdd}_{bitisTarihi:yyyyMMdd}.xlsx";
+            await JS.InvokeVoidAsync("downloadFileFromBytes", fileName, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", excelBytes);
+            ToastService.ShowSuccess("Excel dosyası indirildi!");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Excel export hatası: " + ex.Message);
+        }
+    }
+
+    private async Task ZirveExport()
+    {
+        try
+        {
+            var excelBytes = await MuhasebeService.ExportZirveFormatAsync(baslangicTarihi, bitisTarihi);
+            var fileName = $"Zirve_Yevmiye_{baslangicTarihi:yyyyMMdd}_{bitisTarihi:yyyyMMdd}.xlsx";
+            await JS.InvokeVoidAsync("downloadFileFromBytes", fileName, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", excelBytes);
+            ToastService.ShowSuccess("Zirve formatında Excel dosyası indirildi!");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Zirve export hatası: " + ex.Message);
+        }
+    }
+
+    private static string FormatPara(decimal value) => value.ToString("N2") + " ₺";
+}
+

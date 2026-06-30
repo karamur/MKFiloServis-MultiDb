@@ -1,0 +1,814 @@
+@page "/proforma-fatura/{Id:int}/yazdir"
+@layout EmptyLayout
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+
+@inject IProformaFaturaService ProformaService
+@inject IFirmaService FirmaService
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Proforma Yazdir - @(proforma?.ProformaNo ?? "")</PageTitle>
+
+<style>
+    body {
+        margin: 0;
+        background: #e8e8e8;
+        font-family: 'Century Gothic', 'Trebuchet MS', Calibri, Arial, sans-serif;
+    }
+
+    .page-controls {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        z-index: 1000;
+        display: flex;
+        gap: 8px;
+    }
+
+    .page-controls button {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .btn-print { background: #1e3a5f; color: #fff; }
+    .btn-close-win { background: #6c757d; color: #fff; }
+
+    .a4-page {
+        width: 210mm;
+        min-height: 297mm;
+        margin: 20px auto;
+        background: #fff;
+        box-shadow: 0 0 20px rgba(0,0,0,0.2);
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    /* ---- HEADER ---- */
+    .letterhead-header {
+        padding: 12mm 15mm 6mm 15mm;
+        border-bottom: 2px solid #1e3a5f;
+        position: relative;
+    }
+
+    .header-inner {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+    }
+
+    .header-logo-block {
+        text-align: center;
+        flex: 1;
+    }
+
+    .header-logo-block img {
+        max-height: calc(70px * var(--logo-scale, 1));
+        max-width: calc(140px * var(--logo-scale, 1));
+        object-fit: contain;
+        margin-bottom: 6px;
+    }
+
+    .logo-size-control {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: #fff;
+        border: 1px solid #d0d7e2;
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 13px;
+        color: #333;
+    }
+
+    .logo-size-control input[type=range] {
+        width: 110px;
+        cursor: pointer;
+    }
+
+    .logo-size-control button {
+        padding: 2px 8px;
+        background: #eef2f7;
+        border: 1px solid #c5cfdc;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .logo-size-control .val {
+        min-width: 42px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .header-logo-block .firma-adi {
+        font-family: 'Century Gothic', 'Trebuchet MS', Calibri, Arial, sans-serif;
+        font-size: 24pt;
+        font-weight: 900;
+        color: #1e3a5f;
+        letter-spacing: 6px;
+        line-height: 1.1;
+        text-transform: uppercase;
+    }
+
+    .header-logo-block .firma-tagline {
+        font-family: 'Century Gothic', 'Trebuchet MS', Calibri, Arial, sans-serif;
+        font-size: 8.5pt;
+        letter-spacing: 4px;
+        color: #1e3a5f;
+        border-top: 1px solid #1e3a5f;
+        border-bottom: 1px solid #1e3a5f;
+        padding: 3px 0;
+        margin-top: 4px;
+        display: inline-block;
+    }
+
+    .header-tagline-deco {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 5px;
+        color: #1e3a5f;
+        font-family: 'Century Gothic', 'Trebuchet MS', Calibri, Arial, sans-serif;
+        font-size: 8pt;
+        letter-spacing: 5px;
+        font-weight: 600;
+    }
+
+    .header-tagline-deco::before,
+    .header-tagline-deco::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: #1e3a5f;
+        max-width: 40px;
+    }
+
+    /* ---- WATERMARK ---- */
+    .watermark {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) rotate(-30deg);
+        pointer-events: none;
+        z-index: 0;
+        text-align: center;
+        opacity: 0.045;
+    }
+
+    .watermark-text {
+        font-size: 70pt;
+        font-weight: 900;
+        color: #1e3a5f;
+        text-transform: uppercase;
+        line-height: 1;
+        letter-spacing: 4px;
+        white-space: nowrap;
+    }
+
+    .watermark-sub {
+        font-size: 20pt;
+        font-weight: 700;
+        color: #1e3a5f;
+        letter-spacing: 8px;
+        white-space: nowrap;
+    }
+
+    /* ---- BODY CONTENT ---- */
+    .doc-body {
+        flex: 1;
+        padding: 8mm 15mm;
+        position: relative;
+        z-index: 1;
+    }
+
+    .doc-title {
+        text-align: center;
+        margin-bottom: 8mm;
+    }
+
+    .doc-title h1 {
+        font-family: 'Century Gothic', 'Trebuchet MS', Calibri, Arial, sans-serif;
+        font-size: 15pt;
+        font-weight: 700;
+        color: #1e3a5f;
+        letter-spacing: 4px;
+        text-transform: uppercase;
+        margin: 0;
+        border-bottom: 1px solid #1e3a5f;
+        display: inline-block;
+        padding-bottom: 4px;
+    }
+
+    .doc-meta {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 7mm;
+        gap: 10mm;
+    }
+
+    .doc-meta-left,
+    .doc-meta-right {
+        flex: 1;
+    }
+
+    .meta-box {
+        border: 1px solid #ccc;
+        padding: 5mm;
+        font-size: 9pt;
+        font-family: 'Century Gothic', 'Trebuchet MS', Calibri, Arial, sans-serif;
+    }
+
+    .meta-box .meta-title {
+        font-family: 'Century Gothic', 'Trebuchet MS', Calibri, Arial, sans-serif;
+        font-size: 8pt;
+        font-weight: 700;
+        color: #1e3a5f;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        border-bottom: 1px solid #eee;
+        margin-bottom: 4px;
+        padding-bottom: 3px;
+    }
+
+    .meta-row {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 2px;
+    }
+
+    .meta-row .label {
+        color: #555;
+        min-width: 100px;
+        flex-shrink: 0;
+    }
+
+    .meta-row .value {
+        font-weight: 600;
+        color: #1a1a1a;
+    }
+
+    /* ---- TABLE ---- */
+    .items-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 8.5pt;
+        margin-bottom: 6mm;
+    }
+
+    .items-table thead tr {
+        background-color: #1e3a5f;
+        color: #fff;
+    }
+
+    .items-table thead th {
+        padding: 5px 6px;
+        text-align: left;
+        border: 1px solid #1e3a5f;
+        font-weight: 700;
+        font-size: 8pt;
+        letter-spacing: 0.5px;
+    }
+
+    .items-table thead th.text-right { text-align: right; }
+
+    .items-table tbody tr:nth-child(even) {
+        background: #f7f8fb;
+    }
+
+    .items-table tbody td {
+        padding: 4px 6px;
+        border: 1px solid #d0d0d0;
+        vertical-align: top;
+        font-size: 8.5pt;
+    }
+
+    .items-table tbody td.text-right { text-align: right; }
+
+    /* ---- TOTALS ---- */
+    .totals-area {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 6mm;
+    }
+
+    .totals-table {
+        width: 220px;
+        border-collapse: collapse;
+        font-size: 9pt;
+    }
+
+    .totals-table td {
+        padding: 3px 8px;
+        border: 1px solid #ddd;
+    }
+
+    .totals-table td:last-child { text-align: right; }
+
+    .totals-table .grand-total {
+        background: #1e3a5f;
+        color: #fff;
+        font-weight: 700;
+        font-size: 10pt;
+    }
+
+    /* ---- NOTES ---- */
+    .notes-area {
+        font-size: 8.5pt;
+        margin-bottom: 6mm;
+    }
+
+    .notes-area .notes-title {
+        font-weight: 700;
+        color: #1e3a5f;
+        border-bottom: 1px solid #ccc;
+        margin-bottom: 3px;
+        font-size: 8pt;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    /* ---- VALIDITY / CONDITIONS ---- */
+    .conditions-row {
+        display: flex;
+        gap: 6mm;
+        margin-bottom: 6mm;
+        font-size: 8.5pt;
+    }
+
+    .cond-box {
+        flex: 1;
+        border: 1px solid #e0e0e0;
+        padding: 4mm;
+        background: #f9f9f9;
+    }
+
+    .cond-box .cond-label {
+        font-weight: 700;
+        color: #1e3a5f;
+        font-size: 7.5pt;
+        text-transform: uppercase;
+        display: block;
+        margin-bottom: 2px;
+    }
+
+    /* ---- FOOTER ---- */
+    .letterhead-footer {
+        border-top: 1px solid #1e3a5f;
+        padding: 4mm 15mm;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0;
+        font-size: 7.5pt;
+        color: #1e3a5f;
+    }
+
+    .footer-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 4mm;
+        border-right: 1px solid #ccc;
+        border-bottom: 1px solid #ccc;
+    }
+
+    .footer-item:nth-child(2) { border-right: none; }
+    .footer-item:nth-child(3) { border-bottom: none; border-right: 1px solid #ccc; }
+    .footer-item:nth-child(4) { border-bottom: none; border-right: none; }
+
+    .footer-item .fi-icon {
+        font-size: 12px;
+        flex-shrink: 0;
+    }
+
+    /* ---- ANTETSİZ MOD ---- */
+    .a4-page.antetsiz-mod .letterhead-header { display: none !important; }
+    .a4-page.antetsiz-mod .letterhead-footer { display: none !important; }
+    .a4-page.antetsiz-mod .watermark { display: none !important; }
+    .a4-page.antetsiz-mod .doc-body { padding-top: 38mm; padding-bottom: 28mm; }
+
+    .mod-badge {
+        position: absolute;
+        top: 6px;
+        left: 15mm;
+        font-size: 7pt;
+        font-weight: 700;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        padding: 2px 10px;
+        border-radius: 3px;
+    }
+    .mod-badge.antetli { background: #1e3a5f; color: #fff; }
+    .mod-badge.antetsiz { background: #f5f5f5; color: #888; border: 1px dashed #aaa; }
+
+    .btn-mod { background: #5a6e8a; color: #fff; }
+    .btn-mod.aktif { background: #2e7d32; color: #fff; }
+
+    /* ---- PRINT MEDIA ---- */
+    @@media print {
+        body { margin: 0; background: #fff; }
+        .page-controls { display: none; }
+        .mod-badge { display: none; }
+        .a4-page { margin: 0; width: 100%; box-shadow: none; }
+        .watermark { opacity: 0.045; }
+        @@page { size: A4; margin: 0; }
+    }
+</style>
+
+@if (isLoading)
+{
+    <div class="page-controls">
+        <span style="color:#555; padding:8px;">Yükleniyor...</span>
+    </div>
+    <div style="text-align:center; padding:40px; color:#555;">
+        <div>Proforma fatura yükleniyor...</div>
+    </div>
+}
+else if (proforma == null)
+{
+    <div style="text-align:center; padding:60px; color:red;">Proforma fatura bulunamadı (ID: @Id)</div>
+}
+else
+{
+    <div class="page-controls no-print">
+        <button class="btn-mod @(antetsiz ? "aktif" : "")" @onclick="ToggleMod">
+            @if (antetsiz)
+            {
+                <span>📋 Antetli Mod</span>
+            }
+            else
+            {
+                <span>📄 Antetsiz Mod</span>
+            }
+        </button>
+        <button class="btn-mod @(logoGoster ? "aktif" : "")" @onclick="() => logoGoster = !logoGoster" title="Logoyu göster/gizle">
+            @(logoGoster ? "🖼️ Logo Açık" : "🖼️ Logo Kapalı")
+        </button>
+        @if (logoGoster)
+        {
+            <div class="logo-size-control no-print" title="Logo boyutu (%)">
+                <button type="button" @onclick="() => SetLogoBoyut(logoBoyut - 10)">−</button>
+                <input type="range" min="50" max="300" step="10" value="@logoBoyut"
+                       @oninput="OnLogoBoyutChanged" />
+                <button type="button" @onclick="() => SetLogoBoyut(logoBoyut + 10)">+</button>
+                <span class="val">@logoBoyut%</span>
+            </div>
+        }
+        <button class="btn-mod @(firmaAdiGoster ? "aktif" : "")" @onclick="() => firmaAdiGoster = !firmaAdiGoster" title="Firma adını göster/gizle">
+            @(firmaAdiGoster ? "🏢 Ad Açık" : "🏢 Ad Kapalı")
+        </button>
+        <button class="btn-print" onclick="window.print()">
+            🖨️ Yazdır / PDF Al
+        </button>
+        <button class="btn-close-win" onclick="window.close()">
+            ✕ Kapat
+        </button>
+    </div>
+
+    <div class="a4-page @(antetsiz ? "antetsiz-mod" : "")" style="--logo-scale: @((logoBoyut / 100.0).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture));">
+
+        <!-- MOD GÖSTERGESİ (yalnızca ekranda) -->
+        <div class="mod-badge @(antetsiz ? "antetsiz" : "antetli") no-print">
+            @(antetsiz ? "Antetsiz — Antetli Kağıda Yazdırılacak" : "Antetli — Düz Kağıda Yazdırılacak")
+        </div>
+
+        <!-- ANTET BAŞLIK -->
+        <div class="letterhead-header">
+            <div class="header-inner">
+                <div class="header-logo-block">
+                    @if (logoGoster && !string.IsNullOrEmpty(firma?.Logo))
+                    {
+                        @if (firma.Logo.StartsWith("data:") || firma.Logo.StartsWith("/uploads/"))
+                        {
+                            <img src="@firma.Logo" alt="Logo" />
+                        }
+                    }
+                    @if (firmaAdiGoster)
+                    {
+                        <div class="firma-adi">@(firma?.FirmaAdi ?? "FİRMA ADI")</div>
+                        @if (!string.IsNullOrEmpty(firma?.UnvanTam) && firma.UnvanTam != firma.FirmaAdi)
+                        {
+                            <div class="header-tagline-deco">
+                                @firma.UnvanTam.ToUpperInvariant()
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- WATERMARK -->
+        <div class="watermark" aria-hidden="true">
+            <div class="watermark-text">@(firma?.FirmaAdi?.Split(' ')[0] ?? "FİRMA")</div>
+            @if (!string.IsNullOrEmpty(firma?.UnvanTam))
+            {
+                <div class="watermark-sub">@firma.UnvanTam.ToUpperInvariant()</div>
+            }
+        </div>
+
+        <!-- BELGE İÇERİĞİ -->
+        <div class="doc-body">
+
+            <!-- Başlık -->
+            <div class="doc-title">
+                <h1>Proforma Fatura</h1>
+            </div>
+
+            <!-- Meta bilgiler: sol = cari, sağ = belge bilgileri -->
+            <div class="doc-meta">
+                <div class="doc-meta-left">
+                    <div class="meta-box">
+                        <div class="meta-title">Alıcı Bilgileri</div>
+                        @if (proforma.Cari != null)
+                        {
+                            <div class="meta-row">
+                                <span class="label">Firma:</span>
+                                <span class="value">@proforma.Cari.Unvan</span>
+                            </div>
+                            @if (!string.IsNullOrEmpty(proforma.Cari.VergiNo))
+                            {
+                                <div class="meta-row">
+                                    <span class="label">Vergi No:</span>
+                                    <span class="value">@proforma.Cari.VergiNo</span>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(proforma.Cari.VergiDairesi))
+                            {
+                                <div class="meta-row">
+                                    <span class="label">Vergi Dairesi:</span>
+                                    <span class="value">@proforma.Cari.VergiDairesi</span>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(proforma.Cari.Adres))
+                            {
+                                <div class="meta-row">
+                                    <span class="label">Adres:</span>
+                                    <span class="value">@proforma.Cari.Adres</span>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(proforma.Cari.Telefon))
+                            {
+                                <div class="meta-row">
+                                    <span class="label">Telefon:</span>
+                                    <span class="value">@proforma.Cari.Telefon</span>
+                                </div>
+                            }
+                        }
+                        @if (!string.IsNullOrEmpty(proforma.IlgiliKisi))
+                        {
+                            <div class="meta-row">
+                                <span class="label">İlgili Kişi:</span>
+                                <span class="value">@proforma.IlgiliKisi</span>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(proforma.Email))
+                        {
+                            <div class="meta-row">
+                                <span class="label">E-posta:</span>
+                                <span class="value">@proforma.Email</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="doc-meta-right">
+                    <div class="meta-box">
+                        <div class="meta-title">Belge Bilgileri</div>
+                        <div class="meta-row">
+                            <span class="label">Proforma No:</span>
+                            <span class="value">@proforma.ProformaNo</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="label">Tarih:</span>
+                            <span class="value">@proforma.ProformaTarihi.ToString("dd.MM.yyyy")</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="label">Geçerlilik:</span>
+                            <span class="value">@proforma.GecerlilikTarihi.ToString("dd.MM.yyyy")</span>
+                        </div>
+                        @if (proforma.VadeGun.HasValue)
+                        {
+                            <div class="meta-row">
+                                <span class="label">Vade:</span>
+                                <span class="value">@proforma.VadeGun gün</span>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(proforma.OdemeKosulu))
+                        {
+                            <div class="meta-row">
+                                <span class="label">Ödeme Koşulu:</span>
+                                <span class="value">@proforma.OdemeKosulu</span>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(proforma.TeslimKosulu))
+                        {
+                            <div class="meta-row">
+                                <span class="label">Teslim Koşulu:</span>
+                                <span class="value">@proforma.TeslimKosulu</span>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(firma?.VergiNo))
+                        {
+                            <div class="meta-row">
+                                <span class="label">Düzenleyen VKN:</span>
+                                <span class="value">@firma.VergiNo</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Kalemler tablosu -->
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th style="width:28px;">#</th>
+                        <th>Ürün / Hizmet</th>
+                        <th style="width:50px;" class="text-right">Miktar</th>
+                        <th style="width:38px;">Birim</th>
+                        <th style="width:72px;" class="text-right">Birim Fiyat</th>
+                        <th style="width:60px;" class="text-right">İskonto</th>
+                        <th style="width:40px;" class="text-right">KDV%</th>
+                        <th style="width:64px;" class="text-right">KDV Tutarı</th>
+                        <th style="width:72px;" class="text-right">Toplam</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var kalem in proforma.Kalemler.Where(k => !k.IsDeleted).OrderBy(k => k.SiraNo))
+                    {
+                        <tr>
+                            <td>@kalem.SiraNo</td>
+                            <td>
+                                <span style="font-weight:600;">@kalem.UrunAdi</span>
+                                @if (!string.IsNullOrEmpty(kalem.UrunKodu))
+                                {
+                                    <span style="font-size:7.5pt; color:#666;"> (@kalem.UrunKodu)</span>
+                                }
+                                @if (!string.IsNullOrEmpty(kalem.Aciklama))
+                                {
+                                    <div style="font-size:7.5pt; color:#666;">@kalem.Aciklama</div>
+                                }
+                            </td>
+                            <td class="text-right">@kalem.Miktar.ToString("N2")</td>
+                            <td>@kalem.Birim</td>
+                            <td class="text-right">@kalem.BirimFiyat.ToString("N2") ₺</td>
+                            <td class="text-right">
+                                @if (kalem.IskontoTutar > 0)
+                                {
+                                    <span style="color:#b00;">-@kalem.IskontoTutar.ToString("N2") ₺</span>
+                                }
+                                else { <span>-</span> }
+                            </td>
+                            <td class="text-right">%@kalem.KdvOrani</td>
+                            <td class="text-right">@kalem.KdvTutar.ToString("N2") ₺</td>
+                            <td class="text-right" style="font-weight:700;">@kalem.ToplamTutar.ToString("N2") ₺</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <!-- Toplamlar -->
+            <div class="totals-area">
+                <table class="totals-table">
+                    <tr>
+                        <td>Ara Toplam</td>
+                        <td>@proforma.AraToplam.ToString("N2") ₺</td>
+                    </tr>
+                    @if (proforma.IskontoTutar > 0)
+                    {
+                        <tr>
+                            <td style="color:#b00;">İskonto</td>
+                            <td style="color:#b00;">- @proforma.IskontoTutar.ToString("N2") ₺</td>
+                        </tr>
+                    }
+                    <tr>
+                        <td>KDV (%@proforma.KdvOrani)</td>
+                        <td>@proforma.KdvTutar.ToString("N2") ₺</td>
+                    </tr>
+                    <tr class="grand-total">
+                        <td style="font-size:10pt;">GENEL TOPLAM</td>
+                        <td style="font-size:11pt;">@proforma.GenelToplam.ToString("N2") ₺</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Koşul kutuları -->
+            @if (!string.IsNullOrEmpty(proforma.OdemeKosulu) || !string.IsNullOrEmpty(proforma.TeslimKosulu) || !string.IsNullOrEmpty(proforma.Aciklama))
+            {
+                <div class="conditions-row">
+                    @if (!string.IsNullOrEmpty(proforma.OdemeKosulu))
+                    {
+                        <div class="cond-box">
+                            <span class="cond-label">Ödeme Koşulu</span>
+                            @proforma.OdemeKosulu
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(proforma.TeslimKosulu))
+                    {
+                        <div class="cond-box">
+                            <span class="cond-label">Teslim Koşulu</span>
+                            @proforma.TeslimKosulu
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(proforma.Aciklama))
+                    {
+                        <div class="cond-box" style="flex:2;">
+                            <span class="cond-label">Açıklama / Not</span>
+                            @proforma.Aciklama
+                        </div>
+                    }
+                </div>
+            }
+
+            <!-- İmza alanı -->
+            <div style="display:flex; justify-content:flex-end; margin-top:10mm; font-size:8.5pt;">
+                <div style="text-align:center; width:120px; border-top:1px solid #aaa; padding-top:4px;">
+                    Yetkili İmza / Kaşe
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ANTET ALT (Footer) -->
+        <div class="letterhead-footer">
+            <div class="footer-item">
+                <span class="fi-icon">📞</span>
+                <span>@(firma?.Telefon ?? "")</span>
+            </div>
+            <div class="footer-item">
+                <span class="fi-icon">📍</span>
+                <span>@(firma?.Adres ?? "")</span>
+            </div>
+            <div class="footer-item">
+                <span class="fi-icon">🌐</span>
+                <span>@(firma?.WebSite ?? "")</span>
+            </div>
+            <div class="footer-item">
+                <span class="fi-icon">✉</span>
+                <span>@(firma?.Email ?? "")</span>
+            </div>
+        </div>
+
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private ProformaFatura? proforma;
+    private Firma? firma;
+    private bool isLoading = true;
+    private bool antetsiz = false;
+    private bool logoGoster = true;
+    private bool firmaAdiGoster = true;
+    private int logoBoyut = 100; // %, 50–300 arası
+
+    private void ToggleMod() => antetsiz = !antetsiz;
+
+    private void SetLogoBoyut(int yeni)
+    {
+        logoBoyut = Math.Clamp(yeni, 50, 300);
+    }
+
+    private void OnLogoBoyutChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var v))
+        {
+            SetLogoBoyut(v);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        proforma = await ProformaService.GetByIdWithKalemlerAsync(Id);
+
+        if (proforma?.FirmaId.HasValue == true)
+        {
+            firma = await FirmaService.GetByIdAsync(proforma.FirmaId.Value);
+        }
+        firma ??= await FirmaService.GetVarsayilanFirmaAsync();
+
+        isLoading = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !isLoading && proforma != null)
+        {
+            // Sayfa yüklenince otomatik yazdır dialogu açma — kullanıcı butonla açacak
+            // İstersen aşağıdaki satırı açarak otomatik da tetikleyebilirsin:
+            // await JS.InvokeVoidAsync("window.print");
+        }
+    }
+}
+

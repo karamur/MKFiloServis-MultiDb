@@ -1,0 +1,1269 @@
+@page "/muhasebe/muhasbelestirme"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Models
+@inject IMuhasebeService MuhasebeService
+@inject IOllamaService OllamaService
+@inject IJSRuntime JS
+@implements IDisposable
+@rendermode InteractiveServer
+
+<PageTitle>Fatura/Masraf Muhasebeleştirme</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="bi bi-journal-check me-2"></i>Fatura/Masraf Muhasebeleştirme</h3>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2">Yükleniyor...</p>
+        </div>
+    }
+    else
+    {
+        <!-- Özet Kartları -->
+        @if (durum != null)
+        {
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card border-warning">
+                        <div class="card-body text-center py-2">
+                            <h6 class="mb-0 text-muted">Bekleyen Fatura</h6>
+                            <h3 class="mb-0 text-warning">@durum.BekleyenFatura</h3>
+                            <small class="text-muted">@durum.BekleyenFaturaTutar.ToString("N2") ₺</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-success">
+                        <div class="card-body text-center py-2">
+                            <h6 class="mb-0 text-muted">İşlenmiş Fatura</h6>
+                            <h3 class="mb-0 text-success">@durum.MuhasbelestirilmisFatura</h3>
+                            <small class="text-muted">/ @durum.ToplamFatura toplam</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-warning">
+                        <div class="card-body text-center py-2">
+                            <h6 class="mb-0 text-muted">Bekleyen Masraf</h6>
+                            <h3 class="mb-0 text-warning">@durum.BekleyenMasraf</h3>
+                            <small class="text-muted">@durum.BekleyenMasrafTutar.ToString("N2") ₺</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-success">
+                        <div class="card-body text-center py-2">
+                            <h6 class="mb-0 text-muted">İşlenmiş Masraf</h6>
+                            <h3 class="mb-0 text-success">@durum.MuhasbelestirilmisMasraf</h3>
+                            <small class="text-muted">/ @durum.ToplamMasraf toplam</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Filtreler -->
+        <div class="card mb-3">
+            <div class="card-body py-2">
+                <div class="row align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label small">Başlangıç Tarihi</label>
+                        <input type="date" class="form-control form-control-sm" @bind="filtreBaslangic" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">Bitiş Tarihi</label>
+                        <input type="date" class="form-control form-control-sm" @bind="filtreBitis" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">Fatura Yönü</label>
+                        <select class="form-select form-select-sm" @bind="filtreFaturaYonu">
+                            <option value="">Tümü</option>
+                            <option value="Giden">Giden Faturalar</option>
+                            <option value="Gelen">Gelen Faturalar</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-primary btn-sm" @onclick="FiltreleVeYenile">
+                            <i class="bi bi-search me-1"></i>Filtrele
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm ms-1" @onclick="FiltreTemizle">
+                            <i class="bi bi-x-circle me-1"></i>Temizle
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sekme Navigasyonu -->
+        <ul class="nav nav-tabs mb-3">
+            <li class="nav-item">
+                <button class="nav-link @(aktifSekme == "fatura" ? "active" : "")" @onclick='() => SekmeSecimi("fatura")'>
+                    <i class="bi bi-receipt me-1"></i>Faturalar
+                    @if (bekleyenFaturalar.Count > 0)
+                    {
+                        <span class="badge bg-warning text-dark ms-1">@bekleyenFaturalar.Count</span>
+                    }
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(aktifSekme == "masraf" ? "active" : "")" @onclick='() => SekmeSecimi("masraf")'>
+                    <i class="bi bi-cash-stack me-1"></i>Masraflar
+                    @if (bekleyenMasraflar.Count > 0)
+                    {
+                        <span class="badge bg-warning text-dark ms-1">@bekleyenMasraflar.Count</span>
+                    }
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(aktifSekme == "islenmis" ? "active" : "")" @onclick='() => SekmeSecimi("islenmis")'>
+                    <i class="bi bi-check-circle me-1 text-success"></i>İşlenmiş Kayıtlar
+                    @if (islenmisSayisi > 0)
+                    {
+                        <span class="badge bg-success ms-1">@islenmisSayisi</span>
+                    }
+                </button>
+            </li>
+        </ul>
+
+        <!-- FATURA SEKMESİ -->
+        @if (aktifSekme == "fatura")
+        {
+            @if (bekleyenFaturalar.Count == 0)
+            {
+                <div class="alert alert-success">
+                    <i class="bi bi-check-circle me-2"></i>Muhasebeleştirilmemiş fatura bulunmamaktadır.
+                </div>
+            }
+            else
+            {
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div>
+                        <button class="btn btn-sm btn-outline-primary" @onclick="TumFaturalariSec">
+                            <i class="bi bi-check-all me-1"></i>Tümünü Seç
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary ms-1" @onclick="TumFaturalariKaldir">
+                            <i class="bi bi-x-lg me-1"></i>Seçimi Kaldır
+                        </button>
+                        <span class="text-muted ms-2">@seciliFaturaCount / @bekleyenFaturalar.Count seçili</span>
+                    </div>
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-outline-info btn-sm" @onclick="FaturaKontrolYap" disabled="@(seciliFaturaCount == 0 || isIslemYapiliyor)">
+                            <i class="bi bi-clipboard-check me-1"></i>Kontrol Et
+                        </button>
+                        <button class="btn btn-outline-purple btn-sm" @onclick="FaturaAIAnaliz" disabled="@(seciliFaturaCount == 0 || aiAnalizing)"
+                                style="border-color: #6f42c1; color: #6f42c1;">
+                            @if (aiAnalizing && aktifSekme == "fatura")
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            <i class="bi bi-robot me-1"></i>AI Analiz
+                        </button>
+                        <button class="btn btn-outline-success btn-sm" @onclick="FaturaExcelExport" disabled="@(seciliFaturaCount == 0)">
+                            <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                        </button>
+                        <button class="btn btn-success" @onclick="SeciliFaturalariMuhasbelestir"
+                                disabled="@(seciliFaturaCount == 0 || isIslemYapiliyor)">
+                            @if (isIslemYapiliyor && aktifSekme == "fatura")
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            <i class="bi bi-journal-check me-1"></i>Muhasebeleştir (@seciliFaturaCount)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th class="text-center" style="width:40px;">
+                                    <input type="checkbox" class="form-check-input"
+                                           checked="@tumFaturalarSecili"
+                                           @onchange="ToggleTumFaturalar" />
+                                </th>
+                                <th>Fatura No</th>
+                                <th>Tarih</th>
+                                <th>Cari</th>
+                                <th class="text-center">Yön</th>
+                                <th class="text-end">Ara Toplam</th>
+                                <th class="text-end">KDV</th>
+                                <th class="text-end">Genel Toplam</th>
+                                <th class="text-center">Tevkifat</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var fatura in bekleyenFaturalar)
+                            {
+                                <tr class="@(fatura.Secildi ? "table-info" : "")">
+                                    <td class="text-center">
+                                        <input type="checkbox" class="form-check-input"
+                                               checked="@fatura.Secildi"
+                                               @onchange="() => ToggleFaturaSecim(fatura)" />
+                                    </td>
+                                    <td><strong>@fatura.FaturaNo</strong></td>
+                                    <td>@fatura.FaturaTarihi.ToString("dd.MM.yyyy")</td>
+                                    <td>@fatura.CariUnvan</td>
+                                    <td class="text-center">
+                                        <span class="badge @(fatura.FaturaYonu == "Giden" ? "bg-primary" : "bg-info")">
+                                            @fatura.FaturaYonu
+                                        </span>
+                                    </td>
+                                    <td class="text-end">@fatura.AraToplam.ToString("N2") ₺</td>
+                                    <td class="text-end">@fatura.KdvTutar.ToString("N2") ₺</td>
+                                    <td class="text-end"><strong>@fatura.GenelToplam.ToString("N2") ₺</strong></td>
+                                    <td class="text-center">
+                                        @if (fatura.TevkifatliMi)
+                                        {
+                                            <span class="badge bg-warning text-dark" title="Tevkifat: @fatura.TevkifatTutar.ToString("N2") ₺">
+                                                <i class="bi bi-exclamation-triangle"></i>
+                                            </span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-secondary fw-bold">
+                                <td colspan="5" class="text-end">Seçili Toplam:</td>
+                                <td class="text-end">@seciliFaturaAraToplam.ToString("N2") ₺</td>
+                                <td class="text-end">@seciliFaturaKdvToplam.ToString("N2") ₺</td>
+                                <td class="text-end">@seciliFaturaGenelToplam.ToString("N2") ₺</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            }
+        }
+
+        <!-- MASRAF SEKMESİ -->
+        @if (aktifSekme == "masraf")
+        {
+            @if (bekleyenMasraflar.Count == 0)
+            {
+                <div class="alert alert-success">
+                    <i class="bi bi-check-circle me-2"></i>Muhasebeleştirilmemiş masraf bulunmamaktadır.
+                </div>
+            }
+            else
+            {
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div>
+                        <button class="btn btn-sm btn-outline-primary" @onclick="TumMasraflariSec">
+                            <i class="bi bi-check-all me-1"></i>Tümünü Seç
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary ms-1" @onclick="TumMasraflariKaldir">
+                            <i class="bi bi-x-lg me-1"></i>Seçimi Kaldır
+                        </button>
+                        <span class="text-muted ms-2">@seciliMasrafCount / @bekleyenMasraflar.Count seçili</span>
+                    </div>
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-outline-info btn-sm" @onclick="MasrafKontrolYap" disabled="@(seciliMasrafCount == 0 || isIslemYapiliyor)">
+                            <i class="bi bi-clipboard-check me-1"></i>Kontrol Et
+                        </button>
+                        <button class="btn btn-outline-purple btn-sm" @onclick="MasrafAIAnaliz" disabled="@(seciliMasrafCount == 0 || aiAnalizing)"
+                                style="border-color: #6f42c1; color: #6f42c1;">
+                            @if (aiAnalizing && aktifSekme == "masraf")
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            <i class="bi bi-robot me-1"></i>AI Analiz
+                        </button>
+                        <button class="btn btn-outline-success btn-sm" @onclick="MasrafExcelExport" disabled="@(seciliMasrafCount == 0)">
+                            <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                        </button>
+                        <button class="btn btn-success" @onclick="SeciliMasraflariMuhasbelestir"
+                                disabled="@(seciliMasrafCount == 0 || isIslemYapiliyor)">
+                            @if (isIslemYapiliyor && aktifSekme == "masraf")
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            <i class="bi bi-journal-check me-1"></i>Muhasebeleştir (@seciliMasrafCount)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th class="text-center" style="width:40px;">
+                                    <input type="checkbox" class="form-check-input"
+                                           checked="@tumMasraflarSecili"
+                                           @onchange="ToggleTumMasraflar" />
+                                </th>
+                                <th>Tarih</th>
+                                <th>Araç</th>
+                                <th>Masraf Kalemi</th>
+                                <th>Kategori</th>
+                                <th class="text-end">Tutar</th>
+                                <th>Belge No</th>
+                                <th>Muhatap</th>
+                                <th>Açıklama</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var masraf in bekleyenMasraflar)
+                            {
+                                <tr class="@(masraf.Secildi ? "table-info" : "")">
+                                    <td class="text-center">
+                                        <input type="checkbox" class="form-check-input"
+                                               checked="@masraf.Secildi"
+                                               @onchange="() => ToggleMasrafSecim(masraf)" />
+                                    </td>
+                                    <td>@masraf.MasrafTarihi.ToString("dd.MM.yyyy")</td>
+                                    <td><strong>@masraf.AracPlaka</strong></td>
+                                    <td>@masraf.MasrafKalemi</td>
+                                    <td>
+                                        <span class="badge bg-secondary">@masraf.MasrafKategori</span>
+                                    </td>
+                                    <td class="text-end"><strong>@masraf.Tutar.ToString("N2") ₺</strong></td>
+                                    <td>@masraf.BelgeNo</td>
+                                    <td>@(masraf.CariUnvan ?? masraf.SoforAd ?? "-")</td>
+                                    <td><small>@masraf.Aciklama</small></td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-secondary fw-bold">
+                                <td colspan="5" class="text-end">Seçili Toplam:</td>
+                                <td class="text-end">@seciliMasrafToplam.ToString("N2") ₺</td>
+                                <td colspan="3"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            }
+        }
+
+        <!-- İŞLENMİŞ KAYITLAR SEKMESİ -->
+        @if (aktifSekme == "islenmis")
+        {
+            @if (islenmisLoading)
+            {
+                <div class="text-center py-3">
+                    <div class="spinner-border spinner-border-sm text-primary"></div>
+                    <span class="ms-2">Yükleniyor...</span>
+                </div>
+            }
+            else if (islenmisKayitlar.Count == 0)
+            {
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>Seçili tarih aralığında muhasebeleştirilmiş kayıt bulunmamaktadır.
+                </div>
+            }
+            else
+            {
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div>
+                        <select class="form-select form-select-sm d-inline-block" style="width: auto;" @bind="islenmisFiltreTip">
+                            <option value="">Tümü</option>
+                            <option value="Fatura">Faturalar</option>
+                            <option value="Masraf">Masraflar</option>
+                        </select>
+                        <button class="btn btn-sm btn-outline-primary ms-1" @onclick="TumIslenmisleriSec">
+                            <i class="bi bi-check-all me-1"></i>Tümünü Seç
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary ms-1" @onclick="TumIslenmisleriKaldir">
+                            <i class="bi bi-x-lg me-1"></i>Kaldır
+                        </button>
+                        <span class="text-muted ms-2">@seciliIslenmisCount seçili</span>
+                    </div>
+                    <button class="btn btn-outline-danger btn-sm" @onclick="SecilileriGeriAl"
+                            disabled="@(seciliIslenmisCount == 0 || isIslemYapiliyor)">
+                        @if (isIslemYapiliyor && aktifSekme == "islenmis")
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Geri Al (@seciliIslenmisCount)
+                    </button>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th class="text-center" style="width:40px;">
+                                    <input type="checkbox" class="form-check-input" @onchange="ToggleTumIslenmisler" />
+                                </th>
+                                <th>Tip</th>
+                                <th>Kaynak No</th>
+                                <th>Kaynak Tarih</th>
+                                <th>Cari / Muhatap</th>
+                                <th class="text-end">Tutar</th>
+                                <th>Fiş No</th>
+                                <th>Fiş Tarihi</th>
+                                <th>Açıklama</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var kayit in FiltrelenmisIslenmisler())
+                            {
+                                <tr class="@(kayit.Secildi ? "table-info" : "")">
+                                    <td class="text-center">
+                                        <input type="checkbox" class="form-check-input"
+                                               checked="@kayit.Secildi"
+                                               @onchange="() => kayit.Secildi = !kayit.Secildi" />
+                                    </td>
+                                    <td>
+                                        <span class="badge @(kayit.KaynakTip == "Fatura" ? "bg-primary" : "bg-info")">
+                                            @kayit.KaynakTip
+                                        </span>
+                                    </td>
+                                    <td><strong>@kayit.KaynakNo</strong></td>
+                                    <td>@kayit.KaynakTarih.ToString("dd.MM.yyyy")</td>
+                                    <td>@(kayit.CariUnvan ?? "-")</td>
+                                    <td class="text-end"><strong>@kayit.Tutar.ToString("N2") ₺</strong></td>
+                                    <td>
+                                        <a href="/muhasebe/fis/@kayit.FisId" class="text-decoration-none">@kayit.FisNo</a>
+                                    </td>
+                                    <td>@(kayit.FisTarihi != DateTime.MinValue ? kayit.FisTarihi.ToString("dd.MM.yyyy") : "-")</td>
+                                    <td><small>@kayit.Aciklama</small></td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-secondary fw-bold">
+                                <td colspan="5" class="text-end">Toplam:</td>
+                                <td class="text-end">@FiltrelenmisIslenmisler().Sum(k => k.Tutar).ToString("N2") ₺</td>
+                                <td colspan="3"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            }
+        }
+    }
+</div>
+
+<!-- Kontrol Listesi Modalı -->
+@if (kontrolModal && kontrolSonuc != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header @(kontrolSonuc.HataSayisi > 0 ? "bg-danger" : kontrolSonuc.UyariSayisi > 0 ? "bg-warning" : "bg-success") text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-clipboard-check me-2"></i>Muhasebeleştirme Kontrol Listesi
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => kontrolModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row text-center mb-3">
+                        <div class="col-4">
+                            <div class="card border-danger">
+                                <div class="card-body py-2">
+                                    <h4 class="text-danger mb-0">@kontrolSonuc.HataSayisi</h4>
+                                    <small>Hata</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="card border-warning">
+                                <div class="card-body py-2">
+                                    <h4 class="text-warning mb-0">@kontrolSonuc.UyariSayisi</h4>
+                                    <small>Uyarı</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="card border-info">
+                                <div class="card-body py-2">
+                                    <h4 class="text-info mb-0">@kontrolSonuc.BilgiSayisi</h4>
+                                    <small>Bilgi</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @foreach (var madde in kontrolSonuc.Maddeler)
+                    {
+                        <div class="alert @GetKontrolAlertClass(madde.Seviye) py-2 mb-2">
+                            <div class="d-flex align-items-start">
+                                <i class="bi @GetKontrolIcon(madde.Seviye) me-2 mt-1"></i>
+                                <div>
+                                    <strong>@madde.Baslik</strong>
+                                    <div class="small">@madde.Aciklama</div>
+                                    @if (!string.IsNullOrEmpty(madde.IlgiliKayit))
+                                    {
+                                        <div class="small text-muted mt-1">
+                                            <i class="bi bi-link-45deg me-1"></i>@madde.IlgiliKayit
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    @if (!kontrolSonuc.HazirMi)
+                    {
+                        <div class="alert alert-danger mt-3">
+                            <i class="bi bi-exclamation-octagon me-2"></i>
+                            <strong>Kritik hatalar mevcut!</strong> Muhasebeleştirme öncesi hataları giderin.
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => kontrolModal = false">Kapat</button>
+                    @if (kontrolSonuc.HazirMi)
+                    {
+                        <button class="btn btn-success" @onclick="KontroldenMuhasbelestir">
+                            <i class="bi bi-journal-check me-1"></i>Devam Et - Muhasebeleştir
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Sonuç Modalı -->
+@if (sonucModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header @(sonuc?.HataliSayisi > 0 ? "bg-warning" : "bg-success") text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-journal-check me-2"></i>Muhasebeleştirme Sonucu
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="SonucModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    @if (sonuc != null)
+                    {
+                        <div class="row text-center mb-3">
+                            <div class="col-6">
+                                <div class="card border-success">
+                                    <div class="card-body py-2">
+                                        <h3 class="text-success mb-0">@sonuc.BasariliSayisi</h3>
+                                        <small>Başarılı</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="card border-danger">
+                                    <div class="card-body py-2">
+                                        <h3 class="text-danger mb-0">@sonuc.HataliSayisi</h3>
+                                        <small>Hatalı</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (sonuc.Hatalar.Count > 0)
+                        {
+                            <div class="alert alert-danger">
+                                <h6><i class="bi bi-exclamation-triangle me-1"></i>Hatalar:</h6>
+                                <ul class="mb-0 small">
+                                    @foreach (var hata in sonuc.Hatalar)
+                                    {
+                                        <li>@hata</li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+
+                        @if (sonuc.BasariliSayisi > 0)
+                        {
+                            <div class="alert alert-success">
+                                <i class="bi bi-check-circle me-1"></i>
+                                @sonuc.BasariliSayisi adet muhasebe fişi başarıyla oluşturuldu.
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" @onclick="SonucModalKapat">Tamam</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- AI Analiz Modalı -->
+@if (aiModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header" style="background: linear-gradient(135deg, #6f42c1, #4a1f9e); color: white;">
+                    <h5 class="modal-title">
+                        <i class="bi bi-robot me-2"></i>AI Muhasebe Analizi
+                        <small class="ms-2 opacity-75">(@OllamaService.ModelAdi)</small>
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => aiModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    @if (aiAnalizing)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-purple" style="color: #6f42c1;" role="status"></div>
+                            <p class="mt-3 text-muted">AI analiz yapılıyor, lütfen bekleyin...</p>
+                            <small class="text-muted">Bu işlem modele bağlı olarak 30-120 saniye sürebilir</small>
+                        </div>
+                    }
+                    else if (!string.IsNullOrEmpty(aiSonuc))
+                    {
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span class="badge bg-purple px-3 py-2" style="background-color: #6f42c1;">
+                                <i class="bi bi-clock me-1"></i>Analiz süresi: @aiSure
+                            </span>
+                            <div>
+                                @if (aiKontrolBulguVar)
+                                {
+                                    <span class="badge bg-info me-1">Kontrol bulguları dahil</span>
+                                }
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="AISonucTemizle">
+                                    <i class="bi bi-trash me-1"></i>Temizle
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-body" style="max-height: 500px; overflow-y: auto;">
+                                <div style="white-space: pre-wrap; line-height: 1.6;">@aiSonuc</div>
+                            </div>
+                        </div>
+
+                        @if (aiAksiyonlar.Count > 0)
+                        {
+                            <div class="card mt-3 border-warning">
+                                <div class="card-header bg-warning bg-opacity-10 py-2">
+                                    <strong><i class="bi bi-lightning-charge me-1"></i>Önerilen Aksiyonlar</strong>
+                                </div>
+                                <div class="card-body py-2">
+                                    @foreach (var aksiyon in aiAksiyonlar)
+                                    {
+                                        <div class="form-check mb-1">
+                                            <input type="checkbox" class="form-check-input" id="@($"aksiyon_{aiAksiyonlar.IndexOf(aksiyon)}")"
+                                                   checked="@aksiyon.Secildi" @onchange="() => aksiyon.Secildi = !aksiyon.Secildi" />
+                                            <label class="form-check-label small" for="@($"aksiyon_{aiAksiyonlar.IndexOf(aksiyon)}")">
+                                                <span class="badge @GetAksiyonBadge(aksiyon.Oncelik) me-1">@aksiyon.Oncelik</span>
+                                                @aksiyon.Aciklama
+                                            </label>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => aiModal = false">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Bildirim Toast -->
+@if (!string.IsNullOrEmpty(bildirimMesaj))
+{
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 9999;">
+        <div class="toast show" role="alert">
+            <div class="toast-header @(bildirimBasarili ? "bg-success" : "bg-danger") text-white">
+                <i class="bi @(bildirimBasarili ? "bi-check-circle" : "bi-exclamation-circle") me-2"></i>
+                <strong class="me-auto">@(bildirimBasarili ? "Başarılı" : "Hata")</strong>
+                <button type="button" class="btn-close btn-close-white" @onclick="() => bildirimMesaj = null"></button>
+            </div>
+            <div class="toast-body">
+                @bildirimMesaj
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private bool isIslemYapiliyor = false;
+    private bool islenmisLoading = false;
+    private string aktifSekme = "fatura";
+
+    private MuhasbelestirmeDurum? durum;
+    private List<MuhasebeFaturaOzet> bekleyenFaturalar = new();
+    private List<MuhasebeMasrafOzet> bekleyenMasraflar = new();
+
+    // İşlenmiş kayıtlar
+    private List<MuhasbelestirilmisKayit> islenmisKayitlar = new();
+    private string islenmisFiltreTip = "";
+    private int islenmisSayisi;
+
+    // Filtre
+    private DateTime? filtreBaslangic;
+    private DateTime? filtreBitis;
+    private string filtreFaturaYonu = "";
+
+    // Kontrol modal
+    private bool kontrolModal = false;
+    private MuhasbelestirmeKontrol? kontrolSonuc;
+    private string kontrolKaynak = ""; // "fatura" veya "masraf"
+
+    // Sonuç modal
+    private bool sonucModal = false;
+    private MuhasbelestirmeSonuc? sonuc;
+
+    // Bildirim
+    private string? bildirimMesaj;
+    private bool bildirimBasarili;
+    private System.Threading.Timer? bildirimTimer;
+
+    // AI Analiz
+    private bool aiModal = false;
+    private bool aiAnalizing = false;
+    private string? aiSonuc;
+    private string aiSure = "";
+    private bool aiKontrolBulguVar = false;
+    private List<AIAksiyon> aiAksiyonlar = new();
+
+    // Hesaplanan
+    private int seciliFaturaCount => bekleyenFaturalar.Count(f => f.Secildi);
+    private decimal seciliFaturaAraToplam => bekleyenFaturalar.Where(f => f.Secildi).Sum(f => f.AraToplam);
+    private decimal seciliFaturaKdvToplam => bekleyenFaturalar.Where(f => f.Secildi).Sum(f => f.KdvTutar);
+    private decimal seciliFaturaGenelToplam => bekleyenFaturalar.Where(f => f.Secildi).Sum(f => f.GenelToplam);
+    private bool tumFaturalarSecili => bekleyenFaturalar.Count > 0 && bekleyenFaturalar.All(f => f.Secildi);
+
+    private int seciliMasrafCount => bekleyenMasraflar.Count(m => m.Secildi);
+    private decimal seciliMasrafToplam => bekleyenMasraflar.Where(m => m.Secildi).Sum(m => m.Tutar);
+    private bool tumMasraflarSecili => bekleyenMasraflar.Count > 0 && bekleyenMasraflar.All(m => m.Secildi);
+
+    private int seciliIslenmisCount => islenmisKayitlar.Count(k => k.Secildi);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await YenileData();
+    }
+
+    private async Task YenileData()
+    {
+        isLoading = true;
+        try
+        {
+            durum = await MuhasebeService.GetMuhasbelestirmeDurumuAsync();
+
+            FaturaYonu? faturaYonuFilter = filtreFaturaYonu switch
+            {
+                "Giden" => FaturaYonu.Giden,
+                "Gelen" => FaturaYonu.Gelen,
+                _ => null
+            };
+
+            bekleyenFaturalar = await MuhasebeService.GetMuhasbelestirilmemisFaturalarAsync(
+                filtreBaslangic, filtreBitis, faturaYonuFilter);
+
+            bekleyenMasraflar = await MuhasebeService.GetMuhasbelestirilmemisMasraflarAsync(
+                filtreBaslangic, filtreBitis);
+
+            islenmisSayisi = (durum?.MuhasbelestirilmisFatura ?? 0) + (durum?.MuhasbelestirilmisMasraf ?? 0);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task IslenmisKayitlariYukle()
+    {
+        islenmisLoading = true;
+        try
+        {
+            islenmisKayitlar = await MuhasebeService.GetMuhasbelestirilmisKayitlarAsync(
+                filtreBaslangic, filtreBitis);
+        }
+        finally
+        {
+            islenmisLoading = false;
+        }
+    }
+
+    private async Task FiltreleVeYenile()
+    {
+        await YenileData();
+        if (aktifSekme == "islenmis")
+            await IslenmisKayitlariYukle();
+    }
+
+    private async Task FiltreTemizle()
+    {
+        filtreBaslangic = null;
+        filtreBitis = null;
+        filtreFaturaYonu = "";
+        await YenileData();
+        if (aktifSekme == "islenmis")
+            await IslenmisKayitlariYukle();
+    }
+
+    private async Task SekmeSecimi(string sekme)
+    {
+        aktifSekme = sekme;
+        if (sekme == "islenmis" && islenmisKayitlar.Count == 0)
+            await IslenmisKayitlariYukle();
+    }
+
+    // Fatura seçim işlemleri
+    private void ToggleFaturaSecim(MuhasebeFaturaOzet fatura) => fatura.Secildi = !fatura.Secildi;
+    private void TumFaturalariSec() { foreach (var f in bekleyenFaturalar) f.Secildi = true; }
+    private void TumFaturalariKaldir() { foreach (var f in bekleyenFaturalar) f.Secildi = false; }
+    private void ToggleTumFaturalar()
+    {
+        var hedef = !tumFaturalarSecili;
+        foreach (var f in bekleyenFaturalar) f.Secildi = hedef;
+    }
+
+    // Masraf seçim işlemleri
+    private void ToggleMasrafSecim(MuhasebeMasrafOzet masraf) => masraf.Secildi = !masraf.Secildi;
+    private void TumMasraflariSec() { foreach (var m in bekleyenMasraflar) m.Secildi = true; }
+    private void TumMasraflariKaldir() { foreach (var m in bekleyenMasraflar) m.Secildi = false; }
+    private void ToggleTumMasraflar()
+    {
+        var hedef = !tumMasraflarSecili;
+        foreach (var m in bekleyenMasraflar) m.Secildi = hedef;
+    }
+
+    // İşlenmiş kayıt seçim
+    private void TumIslenmisleriSec() { foreach (var k in FiltrelenmisIslenmisler()) k.Secildi = true; }
+    private void TumIslenmisleriKaldir() { foreach (var k in islenmisKayitlar) k.Secildi = false; }
+    private void ToggleTumIslenmisler()
+    {
+        var hedef = !islenmisKayitlar.All(k => k.Secildi);
+        foreach (var k in FiltrelenmisIslenmisler()) k.Secildi = hedef;
+    }
+
+    private List<MuhasbelestirilmisKayit> FiltrelenmisIslenmisler()
+    {
+        if (string.IsNullOrEmpty(islenmisFiltreTip))
+            return islenmisKayitlar;
+        return islenmisKayitlar.Where(k => k.KaynakTip == islenmisFiltreTip).ToList();
+    }
+
+    // Kontrol işlemleri
+    private async Task FaturaKontrolYap()
+    {
+        var seciliIdler = bekleyenFaturalar.Where(f => f.Secildi).Select(f => f.FaturaId).ToList();
+        if (seciliIdler.Count == 0) return;
+
+        kontrolKaynak = "fatura";
+        kontrolSonuc = await MuhasebeService.KontrolYapAsync(faturaIdleri: seciliIdler);
+        kontrolModal = true;
+    }
+
+    private async Task MasrafKontrolYap()
+    {
+        var seciliIdler = bekleyenMasraflar.Where(m => m.Secildi).Select(m => m.MasrafId).ToList();
+        if (seciliIdler.Count == 0) return;
+
+        kontrolKaynak = "masraf";
+        kontrolSonuc = await MuhasebeService.KontrolYapAsync(masrafIdleri: seciliIdler);
+        kontrolModal = true;
+    }
+
+    private async Task KontroldenMuhasbelestir()
+    {
+        kontrolModal = false;
+        if (kontrolKaynak == "fatura")
+            await SeciliFaturalariMuhasbelestir();
+        else if (kontrolKaynak == "masraf")
+            await SeciliMasraflariMuhasbelestir();
+    }
+
+    // Excel Export
+    private async Task FaturaExcelExport()
+    {
+        var seciliIdler = bekleyenFaturalar.Where(f => f.Secildi).Select(f => f.FaturaId).ToList();
+        if (seciliIdler.Count == 0) return;
+
+        try
+        {
+            var bytes = await MuhasebeService.ExportMuhasbelestirmeKontrolExcelAsync(faturaIdleri: seciliIdler);
+            var base64 = Convert.ToBase64String(bytes);
+            await JS.InvokeVoidAsync("downloadFileFromBase64", $"Fatura_Kontrol_{DateTime.Now:yyyyMMdd}.xlsx", base64);
+        }
+        catch (Exception ex)
+        {
+            BildirimGoster($"Excel export hatası: {ex.Message}", false);
+        }
+    }
+
+    private async Task MasrafExcelExport()
+    {
+        var seciliIdler = bekleyenMasraflar.Where(m => m.Secildi).Select(m => m.MasrafId).ToList();
+        if (seciliIdler.Count == 0) return;
+
+        try
+        {
+            var bytes = await MuhasebeService.ExportMuhasbelestirmeKontrolExcelAsync(masrafIdleri: seciliIdler);
+            var base64 = Convert.ToBase64String(bytes);
+            await JS.InvokeVoidAsync("downloadFileFromBase64", $"Masraf_Kontrol_{DateTime.Now:yyyyMMdd}.xlsx", base64);
+        }
+        catch (Exception ex)
+        {
+            BildirimGoster($"Excel export hatası: {ex.Message}", false);
+        }
+    }
+
+    // Toplu muhasebeleştirme
+    private async Task SeciliFaturalariMuhasbelestir()
+    {
+        var seciliIdler = bekleyenFaturalar.Where(f => f.Secildi).Select(f => f.FaturaId).ToList();
+        if (seciliIdler.Count == 0) return;
+
+        isIslemYapiliyor = true;
+        try
+        {
+            sonuc = await MuhasebeService.TopluFaturaMuhasbelestirAsync(seciliIdler);
+            sonucModal = true;
+            await YenileData();
+        }
+        catch (Exception ex)
+        {
+            BildirimGoster($"İşlem hatası: {ex.Message}", false);
+        }
+        finally
+        {
+            isIslemYapiliyor = false;
+        }
+    }
+
+    private async Task SeciliMasraflariMuhasbelestir()
+    {
+        var seciliIdler = bekleyenMasraflar.Where(m => m.Secildi).Select(m => m.MasrafId).ToList();
+        if (seciliIdler.Count == 0) return;
+
+        isIslemYapiliyor = true;
+        try
+        {
+            sonuc = await MuhasebeService.TopluMasrafMuhasbelestirAsync(seciliIdler);
+            sonucModal = true;
+            await YenileData();
+        }
+        catch (Exception ex)
+        {
+            BildirimGoster($"İşlem hatası: {ex.Message}", false);
+        }
+        finally
+        {
+            isIslemYapiliyor = false;
+        }
+    }
+
+    // Geri alma
+    private async Task SecilileriGeriAl()
+    {
+        var seciliFisIdler = islenmisKayitlar
+            .Where(k => k.Secildi && k.FisId > 0)
+            .Select(k => k.FisId)
+            .Distinct()
+            .ToList();
+
+        if (seciliFisIdler.Count == 0) return;
+
+        isIslemYapiliyor = true;
+        try
+        {
+            sonuc = await MuhasebeService.TopluGeriAlAsync(seciliFisIdler);
+            sonucModal = true;
+            await YenileData();
+            await IslenmisKayitlariYukle();
+        }
+        catch (Exception ex)
+        {
+            BildirimGoster($"Geri alma hatası: {ex.Message}", false);
+        }
+        finally
+        {
+            isIslemYapiliyor = false;
+        }
+    }
+
+    private void SonucModalKapat()
+    {
+        sonucModal = false;
+        sonuc = null;
+    }
+
+    // Yardımcı metotlar
+    private static string GetKontrolAlertClass(KontrolSeviye seviye) => seviye switch
+    {
+        KontrolSeviye.Hata => "alert-danger",
+        KontrolSeviye.Uyari => "alert-warning",
+        _ => "alert-info"
+    };
+
+    private static string GetKontrolIcon(KontrolSeviye seviye) => seviye switch
+    {
+        KontrolSeviye.Hata => "bi-x-circle-fill text-danger",
+        KontrolSeviye.Uyari => "bi-exclamation-triangle-fill text-warning",
+        _ => "bi-info-circle-fill text-info"
+    };
+
+    private void BildirimGoster(string mesaj, bool basarili)
+    {
+        bildirimMesaj = mesaj;
+        bildirimBasarili = basarili;
+        bildirimTimer?.Dispose();
+        bildirimTimer = new System.Threading.Timer(_ =>
+        {
+            bildirimMesaj = null;
+            InvokeAsync(StateHasChanged);
+        }, null, 3000, System.Threading.Timeout.Infinite);
+    }
+
+    // --- AI Analiz Metotları ---
+
+    private async Task FaturaAIAnaliz()
+    {
+        var secililer = bekleyenFaturalar.Where(f => f.Secildi).ToList();
+        if (secililer.Count == 0) return;
+
+        aiAnalizing = true;
+        aiModal = true;
+        aiSonuc = null;
+        aiAksiyonlar.Clear();
+        StateHasChanged();
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            // Önce kontrol yap
+            var seciliIdler = secililer.Select(f => f.FaturaId).ToList();
+            var kontrol = await MuhasebeService.KontrolYapAsync(faturaIdleri: seciliIdler);
+            aiKontrolBulguVar = kontrol.Maddeler.Count > 0;
+
+            var prompt = BuildFaturaAIPrompt(secililer, kontrol);
+            var sistemPrompt = @"Sen deneyimli bir Türk mali müşavir ve muhasebe uzmanısın.
+Fatura muhasebeleştirme sürecini analiz edip Türkçe rapor yazıyorsun.
+Kontrol bulgularını değerlendir, risk ve tutarlılık analizi yap.
+Muhasebe standartlarına uygunluk kontrol et.
+Önerilerini somut ve aksiyona yönelik yaz. Madde işaretleri kullan.
+Emoji kullanma. Tutarları TL olarak göster.
+Sonunda 'AKSIYONLAR:' başlığı altında öncelikli yapılması gerekenleri listele.
+Her aksiyonu '[YÜKSEK]', '[ORTA]' veya '[DÜŞÜK]' öncelik etiketiyle başlat.";
+
+            aiSonuc = await OllamaService.AnalizYapAsync(prompt, sistemPrompt);
+            ParseAIAksiyonlar(aiSonuc);
+        }
+        catch (Exception ex)
+        {
+            aiSonuc = $"AI analiz hatası: {ex.Message}";
+        }
+        finally
+        {
+            sw.Stop();
+            aiSure = $"{sw.Elapsed.TotalSeconds:F1} sn";
+            aiAnalizing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task MasrafAIAnaliz()
+    {
+        var secililer = bekleyenMasraflar.Where(m => m.Secildi).ToList();
+        if (secililer.Count == 0) return;
+
+        aiAnalizing = true;
+        aiModal = true;
+        aiSonuc = null;
+        aiAksiyonlar.Clear();
+        StateHasChanged();
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            var seciliIdler = secililer.Select(m => m.MasrafId).ToList();
+            var kontrol = await MuhasebeService.KontrolYapAsync(masrafIdleri: seciliIdler);
+            aiKontrolBulguVar = kontrol.Maddeler.Count > 0;
+
+            var prompt = BuildMasrafAIPrompt(secililer, kontrol);
+            var sistemPrompt = @"Sen deneyimli bir Türk mali müşavir ve muhasebe uzmanısın.
+Araç masrafı muhasebeleştirme sürecini analiz edip Türkçe rapor yazıyorsun.
+Kontrol bulgularını değerlendir, masraf dağılımını ve tutarlılığını analiz et.
+Gider hesap eşleştirmelerini kontrol et (770.06 Yakıt, 770.07 Bakım, 770.08 Sigorta vb.).
+Anormal masraf tutarlarını tespit et. Önerilerini somut yaz. Madde işaretleri kullan.
+Emoji kullanma. Tutarları TL olarak göster.
+Sonunda 'AKSIYONLAR:' başlığı altında öncelikli yapılması gerekenleri listele.
+Her aksiyonu '[YÜKSEK]', '[ORTA]' veya '[DÜŞÜK]' öncelik etiketiyle başlat.";
+
+            aiSonuc = await OllamaService.AnalizYapAsync(prompt, sistemPrompt);
+            ParseAIAksiyonlar(aiSonuc);
+        }
+        catch (Exception ex)
+        {
+            aiSonuc = $"AI analiz hatası: {ex.Message}";
+        }
+        finally
+        {
+            sw.Stop();
+            aiSure = $"{sw.Elapsed.TotalSeconds:F1} sn";
+            aiAnalizing = false;
+            StateHasChanged();
+        }
+    }
+
+    private string BuildFaturaAIPrompt(List<MuhasebeFaturaOzet> faturalar, MuhasbelestirmeKontrol kontrol)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("## Muhasebeleştirilecek Faturalar Analizi");
+        sb.AppendLine($"Toplam: {faturalar.Count} fatura, Genel Toplam: {faturalar.Sum(f => f.GenelToplam):N2} TL");
+        sb.AppendLine($"Giden: {faturalar.Count(f => f.FaturaYonu == "Giden")} adet ({faturalar.Where(f => f.FaturaYonu == "Giden").Sum(f => f.GenelToplam):N2} TL)");
+        sb.AppendLine($"Gelen: {faturalar.Count(f => f.FaturaYonu == "Gelen")} adet ({faturalar.Where(f => f.FaturaYonu == "Gelen").Sum(f => f.GenelToplam):N2} TL)");
+        sb.AppendLine($"Tevkifatlı: {faturalar.Count(f => f.TevkifatliMi)} adet");
+        sb.AppendLine($"Toplam KDV: {faturalar.Sum(f => f.KdvTutar):N2} TL");
+        sb.AppendLine();
+
+        sb.AppendLine("### Fatura Detayları:");
+        foreach (var f in faturalar.Take(20))
+        {
+            sb.AppendLine($"- {f.FaturaNo} | {f.FaturaTarihi:dd.MM.yyyy} | {f.CariUnvan} | {f.FaturaYonu} | {f.GenelToplam:N2} TL | KDV: {f.KdvTutar:N2} TL{(f.TevkifatliMi ? $" | Tevkifat: {f.TevkifatTutar:N2} TL" : "")}");
+        }
+        if (faturalar.Count > 20)
+            sb.AppendLine($"... ve {faturalar.Count - 20} fatura daha");
+
+        if (kontrol.Maddeler.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("### Kontrol Bulguları:");
+            sb.AppendLine($"Hata: {kontrol.HataSayisi}, Uyarı: {kontrol.UyariSayisi}, Bilgi: {kontrol.BilgiSayisi}");
+            foreach (var m in kontrol.Maddeler)
+            {
+                sb.AppendLine($"- [{m.Seviye}] {m.Baslik}: {m.Aciklama}");
+            }
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("Lütfen analiz et:");
+        sb.AppendLine("1. Kontrol bulgularının değerlendirmesi ve çözüm önerileri");
+        sb.AppendLine("2. Fatura tutarlılık analizi (aynı cariye birden fazla fatura, olağandışı tutarlar)");
+        sb.AppendLine("3. KDV ve tevkifat doğruluğu");
+        sb.AppendLine("4. Muhasebe kaydı oluşturulurken dikkat edilecekler");
+        sb.AppendLine("5. Vergisel risk veya uyarılar");
+
+        return sb.ToString();
+    }
+
+    private string BuildMasrafAIPrompt(List<MuhasebeMasrafOzet> masraflar, MuhasbelestirmeKontrol kontrol)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("## Muhasebeleştirilecek Araç Masrafları Analizi");
+        sb.AppendLine($"Toplam: {masraflar.Count} masraf, Genel Toplam: {masraflar.Sum(m => m.Tutar):N2} TL");
+
+        // Kategori dağılımı
+        var kategoriler = masraflar.GroupBy(m => m.MasrafKategori)
+            .Select(g => new { Kategori = g.Key, Adet = g.Count(), Toplam = g.Sum(m => m.Tutar) })
+            .OrderByDescending(k => k.Toplam);
+        sb.AppendLine();
+        sb.AppendLine("### Kategori Dağılımı:");
+        foreach (var k in kategoriler)
+        {
+            sb.AppendLine($"- {k.Kategori}: {k.Adet} adet, {k.Toplam:N2} TL (%{(masraflar.Sum(m => m.Tutar) > 0 ? k.Toplam / masraflar.Sum(m => m.Tutar) * 100 : 0):F1})");
+        }
+
+        // Araç dağılımı
+        var araclar = masraflar.GroupBy(m => m.AracPlaka)
+            .Select(g => new { Plaka = g.Key, Adet = g.Count(), Toplam = g.Sum(m => m.Tutar) })
+            .OrderByDescending(a => a.Toplam);
+        sb.AppendLine();
+        sb.AppendLine("### Araç Bazlı Dağılım:");
+        foreach (var a in araclar.Take(10))
+        {
+            sb.AppendLine($"- {a.Plaka}: {a.Adet} masraf, {a.Toplam:N2} TL");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("### Masraf Detayları:");
+        foreach (var m in masraflar.Take(20))
+        {
+            sb.AppendLine($"- {m.MasrafTarihi:dd.MM.yyyy} | {m.AracPlaka} | {m.MasrafKategori} | {m.MasrafKalemi} | {m.Tutar:N2} TL | {m.Aciklama ?? "-"}");
+        }
+        if (masraflar.Count > 20)
+            sb.AppendLine($"... ve {masraflar.Count - 20} masraf daha");
+
+        if (kontrol.Maddeler.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("### Kontrol Bulguları:");
+            foreach (var m in kontrol.Maddeler)
+            {
+                sb.AppendLine($"- [{m.Seviye}] {m.Baslik}: {m.Aciklama}");
+            }
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("Lütfen analiz et:");
+        sb.AppendLine("1. Kontrol bulgularının değerlendirmesi");
+        sb.AppendLine("2. Masraf tutarlılık analizi (olağandışı tutarlar, sık tekrarlar)");
+        sb.AppendLine("3. Araç bazlı masraf dağılımı ve anomali tespiti");
+        sb.AppendLine("4. Gider hesap eşleştirme önerileri (770.06 Yakıt, 770.07 Bakım vb.)");
+        sb.AppendLine("5. Maliyet optimizasyonu önerileri");
+
+        return sb.ToString();
+    }
+
+    private void ParseAIAksiyonlar(string? sonuc)
+    {
+        aiAksiyonlar.Clear();
+        if (string.IsNullOrEmpty(sonuc)) return;
+
+        var lines = sonuc.Split('\n');
+        bool aksiyonBasladi = false;
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+            if (trimmed.Contains("AKSIYONLAR:") || trimmed.Contains("AKSİYONLAR:"))
+            {
+                aksiyonBasladi = true;
+                continue;
+            }
+            if (aksiyonBasladi && trimmed.Length > 5)
+            {
+                var oncelik = "ORTA";
+                var aciklama = trimmed.TrimStart('-', '*', ' ', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.');
+
+                if (aciklama.Contains("[YÜKSEK]") || aciklama.Contains("[YUKSEK]"))
+                {
+                    oncelik = "YÜKSEK";
+                    aciklama = aciklama.Replace("[YÜKSEK]", "").Replace("[YUKSEK]", "").Trim();
+                }
+                else if (aciklama.Contains("[ORTA]"))
+                {
+                    oncelik = "ORTA";
+                    aciklama = aciklama.Replace("[ORTA]", "").Trim();
+                }
+                else if (aciklama.Contains("[DÜŞÜK]") || aciklama.Contains("[DUSUK]"))
+                {
+                    oncelik = "DÜŞÜK";
+                    aciklama = aciklama.Replace("[DÜŞÜK]", "").Replace("[DUSUK]", "").Trim();
+                }
+
+                if (!string.IsNullOrWhiteSpace(aciklama))
+                {
+                    aiAksiyonlar.Add(new AIAksiyon { Aciklama = aciklama, Oncelik = oncelik });
+                }
+            }
+        }
+    }
+
+    private void AISonucTemizle()
+    {
+        aiSonuc = null;
+        aiAksiyonlar.Clear();
+        aiKontrolBulguVar = false;
+    }
+
+    private static string GetAksiyonBadge(string oncelik) => oncelik switch
+    {
+        "YÜKSEK" => "bg-danger",
+        "DÜŞÜK" => "bg-secondary",
+        _ => "bg-warning text-dark"
+    };
+
+    public void Dispose()
+    {
+        bildirimTimer?.Dispose();
+    }
+}
+

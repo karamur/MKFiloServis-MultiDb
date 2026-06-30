@@ -1,0 +1,838 @@
+@page "/personel/excel-import"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using ClosedXML.Excel
+@using Microsoft.AspNetCore.Authorization
+@inject ISoforService SoforService
+@inject IJSRuntime JS
+@attribute [Authorize]
+
+<PageTitle>Personel Excel Import</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-file-earmark-excel me-2"></i>Personel Excel Import</h2>
+            <p class="text-muted mb-0">Excel dosyasından toplu personel yükleme</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-success" @onclick="SablonIndir">
+                <i class="bi bi-download me-1"></i> Şablon İndir
+            </button>
+            <a href="/personel" class="btn btn-outline-primary">
+                <i class="bi bi-people me-1"></i> Personel Listesi
+            </a>
+        </div>
+    </div>
+
+    <!-- Adım 1: Dosya Yükleme -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="bi bi-upload me-2"></i>1. Excel Dosyası Seçin</h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-6">
+                    <label class="form-label">Excel Dosyası (.xlsx)</label>
+                    <InputFile class="form-control" OnChange="OnFileSelected" accept=".xlsx" />
+                    @if (!string.IsNullOrEmpty(dosyaAdi))
+                    {
+                        <small class="text-success mt-1 d-block">
+                            <i class="bi bi-check-circle me-1"></i>@dosyaAdi yüklendi
+                        </small>
+                    }
+                </div>
+                <div class="col-md-3">
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" @bind="mevcutGuncelle" id="chkGuncelle" />
+                        <label class="form-check-label" for="chkGuncelle">
+                            Mevcut personeli güncelle
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-3 text-end">
+                    <button class="btn btn-primary" @onclick="OnizlemeYap" disabled="@(isLoading || excelStream == null)">
+                        @if (isLoading && !isImporting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-search me-1"></i> Önizleme Yap
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Şablon Bilgi Kartı -->
+    <div class="card mb-4 border-info">
+        <div class="card-header bg-info bg-opacity-10 d-flex justify-content-between align-items-center">
+            <h6 class="mb-0"><i class="bi bi-info-circle me-2 text-info"></i>Excel Şablon Formatı</h6>
+            <button class="btn btn-sm btn-outline-info" @onclick="() => showSablonBilgi = !showSablonBilgi">
+                <i class="bi @(showSablonBilgi ? "bi-chevron-up" : "bi-chevron-down")"></i>
+            </button>
+        </div>
+        @if (showSablonBilgi)
+        {
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6 class="text-primary"><i class="bi bi-person me-1"></i>Temel Bilgiler</h6>
+                        <ul class="list-unstyled small">
+                            <li><strong>A:</strong> Ad <span class="text-danger">*</span></li>
+                            <li><strong>B:</strong> Soyad <span class="text-danger">*</span></li>
+                            <li><strong>C:</strong> TC Kimlik No</li>
+                            <li><strong>D:</strong> Telefon</li>
+                            <li><strong>E:</strong> Email</li>
+                            <li><strong>F:</strong> Adres</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="text-success"><i class="bi bi-briefcase me-1"></i>Görev & İş Bilgileri</h6>
+                        <ul class="list-unstyled small">
+                            <li><strong>G:</strong> Görev (Şoför/Ofis/Muhasebe/Yönetici/Teknik/Diğer)</li>
+                            <li><strong>H:</strong> Departman</li>
+                            <li><strong>I:</strong> Pozisyon</li>
+                            <li><strong>J:</strong> İşe Başlama Tarihi</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="text-warning"><i class="bi bi-cash me-1"></i>Maaş & Banka</h6>
+                        <ul class="list-unstyled small">
+                            <li><strong>K:</strong> Brüt Maaş</li>
+                            <li><strong>L:</strong> Net Maaş</li>
+                            <li><strong>M:</strong> SGK Maaşı</li>
+                            <li><strong>N:</strong> Bordro Tipi (Yok/Normal/Arge)</li>
+                            <li><strong>O:</strong> Banka Adı</li>
+                            <li><strong>P:</strong> IBAN</li>
+                        </ul>
+                    </div>
+                </div>
+                <small class="text-muted"><span class="text-danger">*</span> Zorunlu alanlar. İlk satır başlık satırıdır, veriler 2. satırdan başlar.</small>
+            </div>
+        }
+    </div>
+
+    <!-- Hata/Uyarı Mesajları -->
+    @if (hatalar.Any())
+    {
+        <div class="alert alert-danger alert-dismissible mb-4">
+            <h6><i class="bi bi-exclamation-triangle me-2"></i>Import Hataları</h6>
+            <ul class="mb-0 small">
+                @foreach (var hata in hatalar)
+                {
+                    <li>@hata</li>
+                }
+            </ul>
+            <button type="button" class="btn-close" @onclick="() => hatalar.Clear()"></button>
+        </div>
+    }
+
+    <!-- Önizleme Özeti -->
+    @if (importSatirlari.Any())
+    {
+        <div class="row mb-4 g-3">
+            <div class="col-md-2">
+                <div class="card bg-primary text-white">
+                    <div class="card-body py-2 text-center">
+                        <h4 class="mb-0">@importSatirlari.Count</h4>
+                        <small>Toplam Satır</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card bg-success text-white">
+                    <div class="card-body py-2 text-center">
+                        <h4 class="mb-0">@importSatirlari.Count(s => s.Durum == ImportDurum.Yeni)</h4>
+                        <small>Yeni Eklenecek</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card bg-warning text-dark">
+                    <div class="card-body py-2 text-center">
+                        <h4 class="mb-0">@importSatirlari.Count(s => s.Durum == ImportDurum.Guncelleme)</h4>
+                        <small>Güncellenecek</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card bg-info text-white">
+                    <div class="card-body py-2 text-center">
+                        <h4 class="mb-0">@importSatirlari.Count(s => s.Durum == ImportDurum.Atlandi)</h4>
+                        <small>Atlanacak</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card bg-danger text-white">
+                    <div class="card-body py-2 text-center">
+                        <h4 class="mb-0">@importSatirlari.Count(s => s.Durum == ImportDurum.Hata)</h4>
+                        <small>Hatalı</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card bg-dark text-white">
+                    <div class="card-body py-2 text-center">
+                        <h4 class="mb-0">@importSatirlari.Where(s => s.Durum == ImportDurum.Yeni || s.Durum == ImportDurum.Guncelleme).Count()</h4>
+                        <small>İşlenecek</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Önizleme Tablosu -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-table me-2"></i>2. Önizleme</h5>
+                <div class="d-flex gap-2">
+                    <select class="form-select form-select-sm" style="width: auto;" @bind="filtreDurum">
+                        <option value="">Tümü</option>
+                        <option value="Yeni">Yeni</option>
+                        <option value="Guncelleme">Güncellenecek</option>
+                        <option value="Atlandi">Atlanacak</option>
+                        <option value="Hata">Hatalı</option>
+                    </select>
+                    <button class="btn btn-success btn-sm" @onclick="ImportYap"
+                            disabled="@(isImporting || !importSatirlari.Any(s => s.Durum == ImportDurum.Yeni || s.Durum == ImportDurum.Guncelleme))">
+                        @if (isImporting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-check2-all me-1"></i> İçe Aktar
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                    <table class="table table-sm table-hover table-striped mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th style="width:40px;">#</th>
+                                <th style="width:90px;">Durum</th>
+                                <th>Ad</th>
+                                <th>Soyad</th>
+                                <th>TC Kimlik</th>
+                                <th>Telefon</th>
+                                <th>Görev</th>
+                                <th>Departman</th>
+                                <th class="text-end">Brüt Maaş</th>
+                                <th class="text-end">Net Maaş</th>
+                                <th>Bordro Tipi</th>
+                                <th>IBAN</th>
+                                <th>Açıklama</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var satir in FiltrelenmisListe())
+                            {
+                                <tr class="@GetSatirClass(satir.Durum)">
+                                    <td>@satir.SatirNo</td>
+                                    <td>
+                                        <span class="badge @GetDurumBadge(satir.Durum)">
+                                            @GetDurumText(satir.Durum)
+                                        </span>
+                                    </td>
+                                    <td>@satir.Ad</td>
+                                    <td>@satir.Soyad</td>
+                                    <td>@satir.TcKimlikNo</td>
+                                    <td>@satir.Telefon</td>
+                                    <td>@satir.GorevText</td>
+                                    <td>@satir.Departman</td>
+                                    <td class="text-end">@satir.BrutMaas.ToString("N2")</td>
+                                    <td class="text-end">@satir.NetMaas.ToString("N2")</td>
+                                    <td>@satir.BordroTipiText</td>
+                                    <td class="small">@(satir.IBAN?.Length > 10 ? satir.IBAN[..10] + "..." : satir.IBAN)</td>
+                                    <td class="small">@satir.Aciklama</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Import Sonucu -->
+    @if (importTamamlandi)
+    {
+        <div class="alert alert-success">
+            <h5><i class="bi bi-check-circle me-2"></i>Import Tamamlandı</h5>
+            <p class="mb-0">
+                <strong>@eklenenSayisi</strong> yeni personel eklendi,
+                <strong>@guncellenenSayisi</strong> personel güncellendi,
+                <strong>@atlananSayisi</strong> satır atlandı.
+            </p>
+        </div>
+    }
+</div>
+
+<!-- Bildirim Toast -->
+@if (!string.IsNullOrEmpty(bildirimMesaj))
+{
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 9999;">
+        <div class="toast show" role="alert">
+            <div class="toast-header @(bildirimBasarili ? "bg-success" : "bg-danger") text-white">
+                <i class="bi @(bildirimBasarili ? "bi-check-circle" : "bi-exclamation-circle") me-2"></i>
+                <strong class="me-auto">@(bildirimBasarili ? "Başarılı" : "Hata")</strong>
+                <button type="button" class="btn-close btn-close-white" @onclick="() => bildirimMesaj = null"></button>
+            </div>
+            <div class="toast-body">
+                @bildirimMesaj
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    // State
+    private bool isLoading;
+    private bool isImporting;
+    private bool importTamamlandi;
+    private bool mevcutGuncelle;
+    private bool showSablonBilgi = true;
+    private string? dosyaAdi;
+    private string? bildirimMesaj;
+    private bool bildirimBasarili;
+    private string filtreDurum = "";
+
+    // Data
+    private MemoryStream? excelStream;
+    private List<ImportSatir> importSatirlari = new();
+    private List<Sofor> mevcutPersoneller = new();
+    private List<string> hatalar = new();
+
+    // Sonuç
+    private int eklenenSayisi;
+    private int guncellenenSayisi;
+    private int atlananSayisi;
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            if (file.Size > 10 * 1024 * 1024) // 10MB limit
+            {
+                ShowBildirim("Dosya boyutu 10MB'dan büyük olamaz.", false);
+                return;
+            }
+
+            dosyaAdi = file.Name;
+            excelStream?.Dispose();
+            excelStream = new MemoryStream();
+            await file.OpenReadStream(10 * 1024 * 1024).CopyToAsync(excelStream);
+            excelStream.Position = 0;
+
+            importSatirlari.Clear();
+            importTamamlandi = false;
+            hatalar.Clear();
+        }
+        catch (Exception ex)
+        {
+            ShowBildirim($"Dosya yükleme hatası: {ex.Message}", false);
+        }
+    }
+
+    private async Task OnizlemeYap()
+    {
+        if (excelStream == null) return;
+
+        isLoading = true;
+        importSatirlari.Clear();
+        hatalar.Clear();
+        importTamamlandi = false;
+
+        try
+        {
+            mevcutPersoneller = await SoforService.GetAllAsync();
+            excelStream.Position = 0;
+
+            using var workbook = new XLWorkbook(excelStream);
+            var ws = workbook.Worksheets.First();
+            var lastRow = ws.LastRowUsed()?.RowNumber() ?? 1;
+
+            if (lastRow < 2)
+            {
+                hatalar.Add("Excel dosyasında veri bulunamadı. Veriler 2. satırdan başlamalıdır.");
+                return;
+            }
+
+            for (int row = 2; row <= lastRow; row++)
+            {
+                var satir = new ImportSatir { SatirNo = row };
+
+                try
+                {
+                    // Temel Bilgiler
+                    satir.Ad = ws.Cell(row, 1).GetString().Trim();
+                    satir.Soyad = ws.Cell(row, 2).GetString().Trim();
+                    satir.TcKimlikNo = ws.Cell(row, 3).GetString().Trim();
+                    satir.Telefon = ws.Cell(row, 4).GetString().Trim();
+                    satir.Email = ws.Cell(row, 5).GetString().Trim();
+                    satir.Adres = ws.Cell(row, 6).GetString().Trim();
+
+                    // Görev & İş Bilgileri
+                    satir.GorevText = ws.Cell(row, 7).GetString().Trim();
+                    satir.Departman = ws.Cell(row, 8).GetString().Trim();
+                    satir.Pozisyon = ws.Cell(row, 9).GetString().Trim();
+                    satir.IseBaslamaTarihi = ParseTarih(ws.Cell(row, 10));
+
+                    // Maaş & Banka
+                    satir.BrutMaas = ParseDecimal(ws.Cell(row, 11));
+                    satir.NetMaas = ParseDecimal(ws.Cell(row, 12));
+                    satir.SgkMaasi = ParseDecimal(ws.Cell(row, 13));
+                    satir.BordroTipiText = ws.Cell(row, 14).GetString().Trim();
+                    satir.BankaAdi = ws.Cell(row, 15).GetString().Trim();
+                    satir.IBAN = ws.Cell(row, 16).GetString().Trim();
+
+                    // Boş satır kontrolü
+                    if (string.IsNullOrWhiteSpace(satir.Ad) && string.IsNullOrWhiteSpace(satir.Soyad))
+                        continue;
+
+                    // Validasyon
+                    if (string.IsNullOrWhiteSpace(satir.Ad))
+                    {
+                        satir.Durum = ImportDurum.Hata;
+                        satir.Aciklama = "Ad boş olamaz";
+                    }
+                    else if (string.IsNullOrWhiteSpace(satir.Soyad))
+                    {
+                        satir.Durum = ImportDurum.Hata;
+                        satir.Aciklama = "Soyad boş olamaz";
+                    }
+                    else if (!string.IsNullOrWhiteSpace(satir.TcKimlikNo) && satir.TcKimlikNo.Length != 11)
+                    {
+                        satir.Durum = ImportDurum.Hata;
+                        satir.Aciklama = "TC Kimlik No 11 haneli olmalıdır";
+                    }
+                    else
+                    {
+                        // Mevcut personel kontrolü (TC veya Ad+Soyad ile)
+                        var mevcutTc = !string.IsNullOrWhiteSpace(satir.TcKimlikNo)
+                            ? mevcutPersoneller.FirstOrDefault(p => p.TcKimlikNo == satir.TcKimlikNo)
+                            : null;
+                        var mevcutAdSoyad = mevcutPersoneller.FirstOrDefault(p =>
+                            string.Equals(p.Ad, satir.Ad, StringComparison.OrdinalIgnoreCase) &&
+                            string.Equals(p.Soyad, satir.Soyad, StringComparison.OrdinalIgnoreCase));
+
+                        var mevcut = mevcutTc ?? mevcutAdSoyad;
+
+                        if (mevcut != null)
+                        {
+                            satir.MevcutId = mevcut.Id;
+                            satir.MevcutKod = mevcut.SoforKodu;
+                            if (mevcutGuncelle)
+                            {
+                                satir.Durum = ImportDurum.Guncelleme;
+                                satir.Aciklama = $"Mevcut: {mevcut.SoforKodu} - {mevcut.TamAd}";
+                            }
+                            else
+                            {
+                                satir.Durum = ImportDurum.Atlandi;
+                                satir.Aciklama = $"Zaten mevcut: {mevcut.SoforKodu}";
+                            }
+                        }
+                        else
+                        {
+                            satir.Durum = ImportDurum.Yeni;
+                            satir.Aciklama = "Yeni eklenecek";
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    satir.Durum = ImportDurum.Hata;
+                    satir.Aciklama = $"Satır okuma hatası: {ex.Message}";
+                }
+
+                importSatirlari.Add(satir);
+            }
+
+            if (!importSatirlari.Any())
+            {
+                hatalar.Add("Excel dosyasında geçerli veri satırı bulunamadı.");
+            }
+        }
+        catch (Exception ex)
+        {
+            hatalar.Add($"Excel dosyası okunamadı: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ImportYap()
+    {
+        isImporting = true;
+        eklenenSayisi = 0;
+        guncellenenSayisi = 0;
+        atlananSayisi = 0;
+
+        try
+        {
+            var islenecekler = importSatirlari
+                .Where(s => s.Durum == ImportDurum.Yeni || s.Durum == ImportDurum.Guncelleme)
+                .ToList();
+
+            foreach (var satir in islenecekler)
+            {
+                try
+                {
+                    var gorev = ParseGorev(satir.GorevText);
+                    var bordroTipi = ParseBordroTipi(satir.BordroTipiText);
+
+                    if (satir.Durum == ImportDurum.Yeni)
+                    {
+                        var kod = await SoforService.GenerateNextKodAsync(gorev);
+                        var yeniPersonel = new Sofor
+                        {
+                            SoforKodu = kod,
+                            Ad = satir.Ad,
+                            Soyad = satir.Soyad,
+                            TcKimlikNo = string.IsNullOrWhiteSpace(satir.TcKimlikNo) ? null : satir.TcKimlikNo,
+                            Telefon = string.IsNullOrWhiteSpace(satir.Telefon) ? null : satir.Telefon,
+                            Email = string.IsNullOrWhiteSpace(satir.Email) ? null : satir.Email,
+                            Adres = string.IsNullOrWhiteSpace(satir.Adres) ? null : satir.Adres,
+                            Gorev = gorev,
+                            Departman = string.IsNullOrWhiteSpace(satir.Departman) ? null : satir.Departman,
+                            Pozisyon = string.IsNullOrWhiteSpace(satir.Pozisyon) ? null : satir.Pozisyon,
+                            IseBaslamaTarihi = satir.IseBaslamaTarihi,
+                            BrutMaas = satir.BrutMaas,
+                            ResmiNetMaas = satir.NetMaas,
+                            NetMaas = satir.NetMaas,
+                            SgkMaasi = satir.SgkMaasi,
+                            BordroTipiPersonel = bordroTipi,
+                            SGKBordroDahilMi = bordroTipi != PersonelBordroTipi.Yok,
+                            BankaAdi = string.IsNullOrWhiteSpace(satir.BankaAdi) ? null : satir.BankaAdi,
+                            IBAN = string.IsNullOrWhiteSpace(satir.IBAN) ? null : satir.IBAN,
+                            Aktif = true
+                        };
+
+                        await SoforService.CreateAsync(yeniPersonel);
+                        satir.Durum = ImportDurum.Basarili;
+                        satir.Aciklama = $"Eklendi: {kod}";
+                        eklenenSayisi++;
+                    }
+                    else if (satir.Durum == ImportDurum.Guncelleme && satir.MevcutId.HasValue)
+                    {
+                        var mevcut = await SoforService.GetByIdAsync(satir.MevcutId.Value);
+                        if (mevcut != null)
+                        {
+                            mevcut.Ad = satir.Ad;
+                            mevcut.Soyad = satir.Soyad;
+                            if (!string.IsNullOrWhiteSpace(satir.TcKimlikNo))
+                                mevcut.TcKimlikNo = satir.TcKimlikNo;
+                            if (!string.IsNullOrWhiteSpace(satir.Telefon))
+                                mevcut.Telefon = satir.Telefon;
+                            if (!string.IsNullOrWhiteSpace(satir.Email))
+                                mevcut.Email = satir.Email;
+                            if (!string.IsNullOrWhiteSpace(satir.Adres))
+                                mevcut.Adres = satir.Adres;
+                            mevcut.Gorev = gorev;
+                            if (!string.IsNullOrWhiteSpace(satir.Departman))
+                                mevcut.Departman = satir.Departman;
+                            if (!string.IsNullOrWhiteSpace(satir.Pozisyon))
+                                mevcut.Pozisyon = satir.Pozisyon;
+                            if (satir.IseBaslamaTarihi.HasValue)
+                                mevcut.IseBaslamaTarihi = satir.IseBaslamaTarihi;
+                            if (satir.BrutMaas > 0)
+                                mevcut.BrutMaas = satir.BrutMaas;
+                            if (satir.NetMaas > 0)
+                            {
+                                mevcut.ResmiNetMaas = satir.NetMaas;
+                                mevcut.NetMaas = satir.NetMaas;
+                            }
+                            if (satir.SgkMaasi > 0)
+                                mevcut.SgkMaasi = satir.SgkMaasi;
+                            mevcut.BordroTipiPersonel = bordroTipi;
+                            mevcut.SGKBordroDahilMi = bordroTipi != PersonelBordroTipi.Yok;
+                            if (!string.IsNullOrWhiteSpace(satir.BankaAdi))
+                                mevcut.BankaAdi = satir.BankaAdi;
+                            if (!string.IsNullOrWhiteSpace(satir.IBAN))
+                                mevcut.IBAN = satir.IBAN;
+
+                            await SoforService.UpdateAsync(mevcut);
+                            satir.Durum = ImportDurum.Basarili;
+                            satir.Aciklama = $"Güncellendi: {mevcut.SoforKodu}";
+                            guncellenenSayisi++;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    satir.Durum = ImportDurum.Hata;
+                    satir.Aciklama = $"Hata: {ex.Message}";
+                }
+            }
+
+            atlananSayisi = importSatirlari.Count(s => s.Durum == ImportDurum.Atlandi);
+            importTamamlandi = true;
+            ShowBildirim($"{eklenenSayisi} eklendi, {guncellenenSayisi} güncellendi.", true);
+        }
+        catch (Exception ex)
+        {
+            ShowBildirim($"Import hatası: {ex.Message}", false);
+        }
+        finally
+        {
+            isImporting = false;
+        }
+    }
+
+    private async Task SablonIndir()
+    {
+        try
+        {
+            using var workbook = new XLWorkbook();
+            var ws = workbook.Worksheets.Add("Personel");
+
+            // Başlık satırı
+            var basliklar = new[]
+            {
+                "Ad *", "Soyad *", "TC Kimlik No", "Telefon", "Email", "Adres",
+                "Görev", "Departman", "Pozisyon", "İşe Başlama Tarihi",
+                "Brüt Maaş", "Net Maaş", "SGK Maaşı", "Bordro Tipi",
+                "Banka Adı", "IBAN"
+            };
+
+            for (int i = 0; i < basliklar.Length; i++)
+            {
+                var cell = ws.Cell(1, i + 1);
+                cell.Value = basliklar[i];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = XLColor.LightSteelBlue;
+                cell.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+            }
+
+            // Örnek veriler
+            ws.Cell(2, 1).Value = "Ahmet";
+            ws.Cell(2, 2).Value = "Yılmaz";
+            ws.Cell(2, 3).Value = "12345678901";
+            ws.Cell(2, 4).Value = "0532 111 2233";
+            ws.Cell(2, 5).Value = "ahmet@email.com";
+            ws.Cell(2, 6).Value = "İstanbul";
+            ws.Cell(2, 7).Value = "Şoför";
+            ws.Cell(2, 8).Value = "Operasyon";
+            ws.Cell(2, 9).Value = "Şoför";
+            ws.Cell(2, 10).Value = DateTime.Today.ToString("dd.MM.yyyy");
+            ws.Cell(2, 11).Value = 35000;
+            ws.Cell(2, 12).Value = 28000;
+            ws.Cell(2, 13).Value = 22104;
+            ws.Cell(2, 14).Value = "Normal";
+            ws.Cell(2, 15).Value = "Ziraat Bankası";
+            ws.Cell(2, 16).Value = "TR000000000000000000000000";
+
+            ws.Cell(3, 1).Value = "Fatma";
+            ws.Cell(3, 2).Value = "Kaya";
+            ws.Cell(3, 3).Value = "98765432109";
+            ws.Cell(3, 4).Value = "0533 444 5566";
+            ws.Cell(3, 5).Value = "fatma@email.com";
+            ws.Cell(3, 6).Value = "Ankara";
+            ws.Cell(3, 7).Value = "Muhasebe";
+            ws.Cell(3, 8).Value = "Mali İşler";
+            ws.Cell(3, 9).Value = "Muhasebe Uzmanı";
+            ws.Cell(3, 10).Value = DateTime.Today.AddYears(-1).ToString("dd.MM.yyyy");
+            ws.Cell(3, 11).Value = 40000;
+            ws.Cell(3, 12).Value = 32000;
+            ws.Cell(3, 13).Value = 22104;
+            ws.Cell(3, 14).Value = "Arge";
+            ws.Cell(3, 15).Value = "İş Bankası";
+            ws.Cell(3, 16).Value = "TR000000000000000000000001";
+
+            // Görev açıklama notu
+            var notWs = workbook.Worksheets.Add("Açıklamalar");
+            notWs.Cell(1, 1).Value = "Alan";
+            notWs.Cell(1, 2).Value = "Açıklama";
+            notWs.Cell(1, 1).Style.Font.Bold = true;
+            notWs.Cell(1, 2).Style.Font.Bold = true;
+
+            notWs.Cell(2, 1).Value = "Görev";
+            notWs.Cell(2, 2).Value = "Şoför, Ofis, Muhasebe, Yönetici, Teknik, Diğer";
+            notWs.Cell(3, 1).Value = "Bordro Tipi";
+            notWs.Cell(3, 2).Value = "Yok, Normal, Arge";
+            notWs.Cell(4, 1).Value = "Tarih Formatı";
+            notWs.Cell(4, 2).Value = "GG.AA.YYYY (örn: 15.01.2024)";
+            notWs.Cell(5, 1).Value = "Maaş";
+            notWs.Cell(5, 2).Value = "Ondalık ayracı virgül veya nokta olabilir";
+
+            // Kolon genişlikleri
+            ws.Columns().AdjustToContents();
+            notWs.Columns().AdjustToContents();
+
+            using var ms = new MemoryStream();
+            workbook.SaveAs(ms);
+            var base64 = Convert.ToBase64String(ms.ToArray());
+            await JS.InvokeVoidAsync("downloadFileFromBase64", "Personel_Import_Sablon.xlsx", base64);
+        }
+        catch (Exception ex)
+        {
+            ShowBildirim($"Şablon indirme hatası: {ex.Message}", false);
+        }
+    }
+
+    // Yardımcı Metotlar
+    private List<ImportSatir> FiltrelenmisListe()
+    {
+        if (string.IsNullOrEmpty(filtreDurum))
+            return importSatirlari;
+
+        return filtreDurum switch
+        {
+            "Yeni" => importSatirlari.Where(s => s.Durum == ImportDurum.Yeni).ToList(),
+            "Guncelleme" => importSatirlari.Where(s => s.Durum == ImportDurum.Guncelleme).ToList(),
+            "Atlandi" => importSatirlari.Where(s => s.Durum == ImportDurum.Atlandi).ToList(),
+            "Hata" => importSatirlari.Where(s => s.Durum == ImportDurum.Hata).ToList(),
+            _ => importSatirlari
+        };
+    }
+
+    private static PersonelGorev ParseGorev(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return PersonelGorev.Sofor;
+        return text.Trim().ToLowerInvariant() switch
+        {
+            "şoför" or "sofor" or "şöför" or "driver" => PersonelGorev.Sofor,
+            "ofis" or "ofis çalışanı" or "office" => PersonelGorev.OfisCalisani,
+            "muhasebe" or "accounting" => PersonelGorev.Muhasebe,
+            "yönetici" or "yonetici" or "manager" => PersonelGorev.Yonetici,
+            "teknik" or "technical" => PersonelGorev.Teknik,
+            "diğer" or "diger" or "other" => PersonelGorev.Diger,
+            _ => PersonelGorev.Sofor
+        };
+    }
+
+    private static PersonelBordroTipi ParseBordroTipi(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return PersonelBordroTipi.Yok;
+        return text.Trim().ToLowerInvariant() switch
+        {
+            "normal" => PersonelBordroTipi.Normal,
+            "arge" or "ar-ge" or "argé" => PersonelBordroTipi.Arge,
+            _ => PersonelBordroTipi.Yok
+        };
+    }
+
+    private static DateTime? ParseTarih(IXLCell cell)
+    {
+        try
+        {
+            if (cell.DataType == XLDataType.DateTime)
+                return cell.GetDateTime();
+
+            var text = cell.GetString().Trim();
+            if (string.IsNullOrWhiteSpace(text)) return null;
+
+            if (DateTime.TryParseExact(text,
+                new[] { "dd.MM.yyyy", "dd/MM/yyyy", "yyyy-MM-dd", "d.M.yyyy", "d/M/yyyy" },
+                System.Globalization.CultureInfo.GetCultureInfo("tr-TR"),
+                System.Globalization.DateTimeStyles.None, out var dt))
+                return dt;
+
+            if (DateTime.TryParse(text, out var dt2))
+                return dt2;
+
+            return null;
+        }
+        catch { return null; }
+    }
+
+    private static decimal ParseDecimal(IXLCell cell)
+    {
+        try
+        {
+            if (cell.DataType == XLDataType.Number)
+                return (decimal)cell.GetDouble();
+
+            var text = cell.GetString().Trim().Replace("₺", "").Replace("TL", "").Trim();
+            if (string.IsNullOrWhiteSpace(text)) return 0;
+
+            text = text.Replace(".", "").Replace(",", ".");
+            return decimal.TryParse(text, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var val) ? val : 0;
+        }
+        catch { return 0; }
+    }
+
+    private static string GetSatirClass(ImportDurum durum) => durum switch
+    {
+        ImportDurum.Yeni => "",
+        ImportDurum.Guncelleme => "table-warning",
+        ImportDurum.Atlandi => "table-secondary",
+        ImportDurum.Hata => "table-danger",
+        ImportDurum.Basarili => "table-success",
+        _ => ""
+    };
+
+    private static string GetDurumBadge(ImportDurum durum) => durum switch
+    {
+        ImportDurum.Yeni => "bg-success",
+        ImportDurum.Guncelleme => "bg-warning text-dark",
+        ImportDurum.Atlandi => "bg-secondary",
+        ImportDurum.Hata => "bg-danger",
+        ImportDurum.Basarili => "bg-primary",
+        _ => "bg-secondary"
+    };
+
+    private static string GetDurumText(ImportDurum durum) => durum switch
+    {
+        ImportDurum.Yeni => "Yeni",
+        ImportDurum.Guncelleme => "Güncelle",
+        ImportDurum.Atlandi => "Atla",
+        ImportDurum.Hata => "Hata",
+        ImportDurum.Basarili => "Tamam",
+        _ => "?"
+    };
+
+    private void ShowBildirim(string mesaj, bool basarili)
+    {
+        bildirimMesaj = mesaj;
+        bildirimBasarili = basarili;
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(4000);
+            bildirimMesaj = null;
+            await InvokeAsync(StateHasChanged);
+        });
+    }
+
+    // DTO Sınıfları
+    private class ImportSatir
+    {
+        public int SatirNo { get; set; }
+        public string Ad { get; set; } = "";
+        public string Soyad { get; set; } = "";
+        public string? TcKimlikNo { get; set; }
+        public string? Telefon { get; set; }
+        public string? Email { get; set; }
+        public string? Adres { get; set; }
+        public string? GorevText { get; set; }
+        public string? Departman { get; set; }
+        public string? Pozisyon { get; set; }
+        public DateTime? IseBaslamaTarihi { get; set; }
+        public decimal BrutMaas { get; set; }
+        public decimal NetMaas { get; set; }
+        public decimal SgkMaasi { get; set; }
+        public string? BordroTipiText { get; set; }
+        public string? BankaAdi { get; set; }
+        public string? IBAN { get; set; }
+
+        // Eşleşme
+        public ImportDurum Durum { get; set; } = ImportDurum.Yeni;
+        public string? Aciklama { get; set; }
+        public int? MevcutId { get; set; }
+        public string? MevcutKod { get; set; }
+    }
+
+    private enum ImportDurum
+    {
+        Yeni,
+        Guncelleme,
+        Atlandi,
+        Hata,
+        Basarili
+    }
+}
+

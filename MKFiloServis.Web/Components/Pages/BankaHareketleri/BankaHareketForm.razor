@@ -1,0 +1,497 @@
+@page "/banka-hareketleri/yeni"
+@page "/banka-hareketleri/{Id:int}"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IBankaKasaHareketService HareketService
+@inject IBankaHesapService BankaHesapService
+@inject ICariService CariService
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>@(IsEdit ? "Hareket Düzenle" : "Yeni Hareket")</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="bi bi-arrow-left-right me-2"></i>@(IsEdit ? "Hareket Düzenle" : "Yeni Banka/Kasa Hareketi")</h3>
+        <button class="btn btn-secondary" @onclick="Geri">
+            <i class="bi bi-arrow-left me-1"></i>Geri
+        </button>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            @if (!string.IsNullOrWhiteSpace(saveErrorMessage))
+            {
+                <div class="alert alert-danger" role="alert">
+                    <i class="bi bi-exclamation-octagon me-2"></i>@saveErrorMessage
+                </div>
+            }
+
+            <EditForm Model="hareket" OnValidSubmit="Kaydet">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">İşlem No *</label>
+                            <InputText @bind-Value="hareket.IslemNo" class="form-control" />
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">İşlem Tarihi *</label>
+                            <InputDate @bind-Value="hareket.IslemTarihi" class="form-control" />
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">Hareket Tipi *</label>
+                            <InputSelect @bind-Value="hareket.HareketTipi" @bind-Value:after="OnHareketTipiChanged" class="form-select">
+                                <option value="@HareketTipi.Giris">Giriş (Tahsilat)</option>
+                                <option value="@HareketTipi.Cikis">Çıkış (Ödeme)</option>
+                            </InputSelect>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert @HareketTipiAlertClass py-2">
+                    <div class="small d-flex align-items-center gap-2">
+                        <i class="bi @HareketTipiIconClass"></i>
+                        <span>@HareketTipiBilgiMesaji</span>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Hesap *</label>
+                            <InputSelect @bind-Value="hareket.BankaHesapId" @bind-Value:after="OnHesapChanged" class="form-select">
+                                <option value="0">-- Hesap Seçiniz --</option>
+                                @foreach (var hesap in hesaplar)
+                                {
+                                    <option value="@hesap.Id">@hesap.HesapAdi (@GetTipText(hesap.HesapTipi))</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Cari (Opsiyonel)</label>
+                            <InputSelect @bind-Value="hareket.CariId" @bind-Value:after="OnCariChanged" class="form-select">
+                                <option value="">-- Cari Seçiniz --</option>
+                                @foreach (var cari in cariler)
+                                {
+                                    <option value="@cari.Id">@cari.Unvan</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                </div>
+
+                @if (SeciliHesap is not null)
+                {
+                    <div class="alert @(SeciliHesap.Aktif ? "alert-light" : "alert-warning") py-2">
+                        <div class="d-flex flex-wrap gap-3 small align-items-center">
+                            <span><strong>Seçili Hesap:</strong> @SeciliHesap.HesapAdi</span>
+                            <span><strong>Tip:</strong> @GetTipText(SeciliHesap.HesapTipi)</span>
+                            <span><strong>Para Birimi:</strong> @(SeciliHesap.ParaBirimi ?? "TRY")</span>
+                            @if (hesapBilgisiYukleniyor)
+                            {
+                                <span><strong>Güncel Bakiye:</strong> Yükleniyor...</span>
+                            }
+                            else if (seciliHesapBakiye.HasValue)
+                            {
+                                <span><strong>Güncel Bakiye:</strong> @seciliHesapBakiye.Value.ToString("N2") @SeciliParaBirimi</span>
+                                @if (KayitHaricBakiye.HasValue && KayitHaricBakiye != seciliHesapBakiye)
+                                {
+                                    <span><strong>Kayıt Hariç:</strong> @KayitHaricBakiye.Value.ToString("N2") @SeciliParaBirimi</span>
+                                }
+                                @if (TahminiBakiye.HasValue && hareket.Tutar > 0)
+                                {
+                                    <span><strong>İşlem Sonrası:</strong> <span class="@TahminiBakiyeTextClass">@TahminiBakiye.Value.ToString("N2") @SeciliParaBirimi</span></span>
+                                }
+                            }
+                            @if (!string.IsNullOrWhiteSpace(SeciliHesap.VarsayilanMuhasebeKodu))
+                            {
+                                <span><strong>Muhasebe:</strong> <code>@SeciliHesap.VarsayilanMuhasebeKodu</code></span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(SeciliHesap.VarsayilanKostMerkezi))
+                            {
+                                <span><strong>Kost Merkezi:</strong> <code>@SeciliHesap.VarsayilanKostMerkezi</code></span>
+                            }
+                            @if (!SeciliHesap.Aktif)
+                            {
+                                <span class="badge bg-warning text-dark">Pasif hesap</span>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (BakiyeUyariGoster)
+                {
+                    <div class="alert alert-warning py-2">
+                        <div class="small d-flex align-items-center gap-2">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <span>Bu çıkış tutarı mevcut bakiyeyi aşıyor. Güncel bakiye: @seciliHesapBakiye!.Value.ToString("N2") @SeciliParaBirimi</span>
+                        </div>
+                    </div>
+                }
+
+                @if (SeciliCari is not null)
+                {
+                    <div class="alert alert-light py-2">
+                        <div class="d-flex flex-wrap gap-3 small align-items-center">
+                            <span><strong>Seçili Cari:</strong> @SeciliCari.Unvan</span>
+                            @if (!string.IsNullOrWhiteSpace(SeciliCari.Telefon))
+                            {
+                                <span><strong>Telefon:</strong> @SeciliCari.Telefon</span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(SeciliCari.Email))
+                            {
+                                <span><strong>E-posta:</strong> @SeciliCari.Email</span>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">Tutar (@SeciliParaBirimi) *</label>
+                            <div class="input-group">
+                                <InputNumber @bind-Value="hareket.Tutar" class="form-control" />
+                                <span class="input-group-text">@SeciliParaBirimi</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">Belge No</label>
+                            <InputText @bind-Value="hareket.BelgeNo" class="form-control" />
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">İşlem Kaynağı</label>
+                            <InputSelect @bind-Value="hareket.IslemKaynak" class="form-select">
+                                @foreach (IslemKaynak kaynak in Enum.GetValues(typeof(IslemKaynak)))
+                                {
+                                    <option value="@kaynak">@GetKaynakText(kaynak)</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Açıklama</label>
+                    <InputTextArea @bind-Value="hareket.Aciklama" class="form-control" rows="3" />
+                </div>
+
+                <div class="card border-light-subtle mb-3">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <strong><i class="bi bi-journal-code me-2"></i>Muhasebe Eşleştirme</strong>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick='() => HesapVarsayilanlariniUygula(force: true)' disabled="@(hareket.BankaHesapId == 0)">
+                            <i class="bi bi-magic me-1"></i>Hesap Varsayılanlarını Uygula
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Muhasebe Hesap Kodu</label>
+                                <InputText @bind-Value="hareket.MuhasebeHesapKodu" class="form-control" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Alt Hesap Kodu</label>
+                                <InputText @bind-Value="hareket.MuhasebeAltHesapKodu" class="form-control" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Kost Merkezi</label>
+                                <InputText @bind-Value="hareket.KostMerkeziKodu" class="form-control" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Proje Kodu</label>
+                                <InputText @bind-Value="hareket.ProjeKodu" class="form-control" />
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label">Muhasebe Açıklama</label>
+                                <InputText @bind-Value="hareket.MuhasebeAciklama" class="form-control" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert @KayitOzetiAlertClass py-2">
+                    <div class="small d-flex flex-wrap gap-3 align-items-center">
+                        <span><strong>Özet:</strong> @GetKayitOzetiMesaji()</span>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check-lg me-1"></i>
+                        }
+                        Kaydet
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="Geri" disabled="@isSaving">
+                        <i class="bi bi-x-lg me-1"></i>İptal
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public int? Id { get; set; }
+
+    private BankaKasaHareket hareket = new();
+    private List<BankaHesap> hesaplar = new();
+    private List<Cari> cariler = new();
+    private bool IsEdit => Id.HasValue;
+    private BankaHesap? SeciliHesap => hesaplar.FirstOrDefault(x => x.Id == hareket.BankaHesapId);
+    private Cari? SeciliCari => hareket.CariId.HasValue ? cariler.FirstOrDefault(x => x.Id == hareket.CariId.Value) : null;
+    private string SeciliParaBirimi => SeciliHesap?.ParaBirimi ?? "TRY";
+    private decimal? KayitHaricBakiye => !seciliHesapBakiye.HasValue
+        ? null
+        : IsEdit && originalBankaHesapId == hareket.BankaHesapId
+            ? seciliHesapBakiye.Value - OrijinalHareketEtkisi
+            : seciliHesapBakiye.Value;
+    private decimal? TahminiBakiye => !KayitHaricBakiye.HasValue
+        ? null
+        : hareket.HareketTipi == HareketTipi.Giris
+            ? KayitHaricBakiye.Value + hareket.Tutar
+            : KayitHaricBakiye.Value - hareket.Tutar;
+    private string TahminiBakiyeTextClass => !TahminiBakiye.HasValue || TahminiBakiye.Value >= 0 ? "text-success" : "text-danger";
+    private bool BakiyeUyariGoster =>
+        !hesapBilgisiYukleniyor
+        && hareket.HareketTipi == HareketTipi.Cikis
+        && hareket.Tutar > 0
+        && KayitHaricBakiye.HasValue
+        && hareket.Tutar > KayitHaricBakiye.Value;
+    private bool isSaving;
+    private bool hesapBilgisiYukleniyor;
+    private decimal? seciliHesapBakiye;
+    private int? originalBankaHesapId;
+    private HareketTipi originalHareketTipi;
+    private decimal originalTutar;
+    private string? saveErrorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        cariler = await CariService.GetAllAsync();
+
+        if (IsEdit)
+        {
+            var existing = await HareketService.GetByIdAsync(Id!.Value);
+            if (existing != null)
+            {
+                hesaplar = await BankaHesapService.GetAllAsync();
+                hareket = existing;
+                originalBankaHesapId = existing.BankaHesapId;
+                originalHareketTipi = existing.HareketTipi;
+                originalTutar = existing.Tutar;
+                await SeciliHesapBilgileriniYukleAsync();
+            }
+            else
+            {
+                Navigation.NavigateTo("/banka-hareketleri");
+            }
+        }
+        else
+        {
+            hesaplar = await BankaHesapService.GetActiveAsync();
+            hareket.IslemNo = await HareketService.GenerateNextIslemNoAsync();
+            hareket.IslemTarihi = DateTime.Today;
+            hareket.HareketTipi = HareketTipi.Giris;
+            hareket.IslemKaynak = IslemKaynak.Manuel;
+        }
+    }
+
+    private async Task Kaydet()
+    {
+        if (isSaving)
+            return;
+
+        if (hareket.BankaHesapId == 0 || hareket.Tutar <= 0)
+        {
+            ToastService.ShowWarning("Lütfen tüm zorunlu alanları doldurunuz.");
+            return;
+        }
+
+        saveErrorMessage = null;
+        isSaving = true;
+
+        try
+        {
+            if (IsEdit)
+            {
+                await HareketService.UpdateAsync(hareket);
+                ToastService.ShowSuccess("Hareket güncellendi.");
+            }
+            else
+            {
+                await HareketService.CreateAsync(hareket);
+                ToastService.ShowSuccess("Hareket kaydedildi.");
+            }
+            Navigation.NavigateTo("/banka-hareketleri");
+        }
+        catch (InvalidOperationException ex)
+        {
+            saveErrorMessage = ex.Message;
+            ToastService.ShowError(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            saveErrorMessage = "Kayıt sırasında beklenmeyen bir hata oluştu.";
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void Geri()
+    {
+        Navigation.NavigateTo("/banka-hareketleri");
+    }
+
+    private Task OnHesapChanged()
+    {
+        saveErrorMessage = null;
+        HesapVarsayilanlariniUygula();
+        return SeciliHesapBilgileriniYukleAsync();
+    }
+
+    private Task OnCariChanged()
+    {
+        saveErrorMessage = null;
+        return Task.CompletedTask;
+    }
+
+    private Task OnHareketTipiChanged()
+    {
+        saveErrorMessage = null;
+        return Task.CompletedTask;
+    }
+
+    private void HesapVarsayilanlariniUygula(bool force = false)
+    {
+        var seciliHesap = hesaplar.FirstOrDefault(x => x.Id == hareket.BankaHesapId);
+        if (seciliHesap == null)
+            return;
+
+        if (force || string.IsNullOrWhiteSpace(hareket.MuhasebeHesapKodu))
+            hareket.MuhasebeHesapKodu = seciliHesap.VarsayilanMuhasebeKodu;
+
+        if (force || string.IsNullOrWhiteSpace(hareket.KostMerkeziKodu))
+            hareket.KostMerkeziKodu = seciliHesap.VarsayilanKostMerkezi;
+
+        if (force || string.IsNullOrWhiteSpace(hareket.MuhasebeAciklama))
+            hareket.MuhasebeAciklama = hareket.Aciklama;
+    }
+
+    private async Task SeciliHesapBilgileriniYukleAsync()
+    {
+        if (SeciliHesap is null)
+        {
+            seciliHesapBakiye = null;
+            return;
+        }
+
+        hesapBilgisiYukleniyor = true;
+
+        try
+        {
+            seciliHesapBakiye = await BankaHesapService.GetBakiyeAsync(SeciliHesap.Id);
+        }
+        finally
+        {
+            hesapBilgisiYukleniyor = false;
+        }
+    }
+
+    private string GetTipText(HesapTipi tip) => tip switch
+    {
+        HesapTipi.Kasa => "Kasa",
+        HesapTipi.VadesizHesap => "Vadesiz",
+        HesapTipi.VadeliHesap => "Vadeli",
+        HesapTipi.KrediHesabi => "Kredi",
+        _ => tip.ToString()
+    };
+
+    private string HareketTipiBilgiMesaji => hareket.HareketTipi switch
+    {
+        HareketTipi.Giris => "Giriş hareketi seçildi. Bu kayıt seçili hesaba tahsilat/giriş olarak işlenecek.",
+        HareketTipi.Cikis => "Çıkış hareketi seçildi. Bu kayıt seçili hesaptan ödeme/çıkış olarak işlenecek.",
+        _ => string.Empty
+    };
+
+    private string HareketTipiAlertClass => hareket.HareketTipi switch
+    {
+        HareketTipi.Giris => "alert-success",
+        HareketTipi.Cikis => "alert-danger",
+        _ => "alert-light"
+    };
+
+    private string HareketTipiIconClass => hareket.HareketTipi switch
+    {
+        HareketTipi.Giris => "bi-arrow-down-circle",
+        HareketTipi.Cikis => "bi-arrow-up-circle",
+        _ => "bi-info-circle"
+    };
+
+    private string KayitOzetiAlertClass => !FormKaydaHazirMi
+        ? "alert-secondary"
+        : BakiyeUyariGoster
+            ? "alert-warning"
+            : "alert-info";
+
+    private bool FormKaydaHazirMi =>
+        !string.IsNullOrWhiteSpace(hareket.IslemNo)
+        && hareket.IslemTarihi != default
+        && SeciliHesap is not null
+        && hareket.Tutar > 0;
+
+    private string GetKayitOzetiMesaji()
+    {
+        if (!FormKaydaHazirMi)
+            return "Kaydetmeden önce işlem no, tarih, hesap ve tutar alanlarını kontrol edin.";
+
+        var cariBilgisi = SeciliCari is null ? "Cari seçilmedi" : $"Cari: {SeciliCari.Unvan}";
+        var tahminiBakiyeBilgisi = TahminiBakiye.HasValue
+            ? $"Tahmini Bakiye: {TahminiBakiye.Value:N2} {SeciliParaBirimi}"
+            : "Tahmini bakiye hesaplanamadı";
+
+        var mesaj = $"{hareket.IslemNo} | {hareket.IslemTarihi:dd.MM.yyyy} | {GetTipText(SeciliHesap!.HesapTipi)} / {SeciliHesap.HesapAdi} | {hareket.Tutar:N2} {SeciliParaBirimi} | {cariBilgisi} | {tahminiBakiyeBilgisi}";
+
+        if (BakiyeUyariGoster)
+            mesaj += " | Uyarı: çıkış tutarı mevcut bakiyeyi aşıyor";
+
+        return mesaj;
+    }
+
+    private decimal OrijinalHareketEtkisi => originalHareketTipi == HareketTipi.Giris ? originalTutar : -originalTutar;
+
+    private string GetKaynakText(IslemKaynak kaynak) => kaynak switch
+    {
+        IslemKaynak.Manuel => "Manuel",
+        IslemKaynak.FaturaOdeme => "Fatura Ödeme",
+        IslemKaynak.FaturaTahsilat => "Fatura Tahsilat",
+        IslemKaynak.Havale => "Havale",
+        IslemKaynak.Eft => "EFT",
+        IslemKaynak.Nakit => "Nakit",
+        _ => kaynak.ToString()
+    };
+}
+

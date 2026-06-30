@@ -1,0 +1,251 @@
+@page "/admin/evrak-bakim"
+@attribute [Authorize(Roles = "Admin")]
+@using Microsoft.AspNetCore.Authorization
+@using MKFiloServis.Web.Services.Interfaces
+@inject IEvrakDosyaMaintenanceService MaintenanceService
+@inject IToastService ToastService
+@inject IJSRuntime JS
+@inject ILogger<EvrakDosyaBakim> Logger
+@rendermode InteractiveServer
+
+<PageTitle>Kayıp Evrak Dosyası Bakım</PageTitle>
+
+<div class="container-fluid">
+    <h3><i class="bi bi-tools me-2"></i>Kayıp Evrak Dosyası Bakım</h3>
+    <p class="text-muted">Eski bozuk hızlı yükleme sisteminden kalma, fiziksel dosyası diskte olmayan EvrakDosya kayıtlarını tespit ve temizler.</p>
+
+    @if (isRunning)
+    {
+        <div class="alert alert-info">
+            <span class="spinner-border spinner-border-sm me-2"></span>
+            @statusMessage
+        </div>
+    }
+    else if (report != null)
+    {
+        <div class="alert @(report.DryRun ? "alert-info" : report.TemizlenenEvrakDosya > 0 ? "alert-success" : "alert-warning")">
+            <strong>@(report.DryRun ? "RAPOR MODU" : "TEMİZLİK TAMAMLANDI")</strong>
+            @if (!string.IsNullOrEmpty(report.HataMesaji))
+            {
+                <span class="text-danger"> — Hata: @report.HataMesaji</span>
+            }
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card border-secondary text-center">
+                    <div class="card-body py-2"><small>Toplam Kayıt</small><h4>@report.ToplamEvrakDosya</h4></div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-success text-center">
+                    <div class="card-body py-2"><small>Sağlam</small><h4 class="text-success">@report.SaglamSayisi</h4></div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-danger text-center">
+                    <div class="card-body py-2"><small>Kayıp</small><h4 class="text-danger">@report.KayipSayisi</h4></div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-primary text-center">
+                    <div class="card-body py-2">
+                        <small>Temizlenen</small>
+                        <h4 class="text-primary">@report.TemizlenenEvrakDosya Evrak + @report.TemizlenenOzlukEvrak Özlük</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (report.Kayiplar.Count > 0)
+        {
+            <div class="card mb-3">
+                <div class="card-header bg-danger bg-opacity-10">
+                    <strong><i class="bi bi-exclamation-triangle me-1"></i>Kayıp Evrak Kayıtları (@report.Kayiplar.Count)</strong>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 400px;">
+                        <table class="table table-sm table-striped mb-0">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Personel</th>
+                                    <th>Evrak Tipi</th>
+                                    <th>Dosya Adı</th>
+                                    <th>Dosya Yolu</th>
+                                    <th>Canonical</th>
+                                    <th>Özlük Eşleşme</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var k in report.Kayiplar)
+                                {
+                                    <tr>
+                                        <td>@k.EvrakDosyaId</td>
+                                        <td>@k.PersonelAdi <small class="text-muted">(@k.PersonelId)</small></td>
+                                        <td><span class="badge bg-danger">@k.EvrakTipi</span></td>
+                                        <td><small>@k.DosyaAdi</small></td>
+                                        <td><small class="text-muted">@k.DosyaYolu</small></td>
+                                        <td><span class="badge bg-info">@k.CanonicalTip</span></td>
+                                        <td>
+                                            @if (k.EslesenOzlukEvrakId.HasValue)
+                                            {
+                                                <span class="badge @(k.OzlukEvrakTamamlandi ? "bg-success" : "bg-secondary")">
+                                                    @k.OzlukEvrakAdi (@(k.OzlukEvrakTamamlandi ? "Tamam" : "Eksik"))
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">—</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (report.Saglamlar.Count > 0)
+        {
+            <div class="card mb-3">
+                <div class="card-header bg-success bg-opacity-10">
+                    <strong><i class="bi bi-check-circle me-1"></i>Sağlam Kayıtlar (@report.Saglamlar.Count) — Etkilenmez</strong>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 300px;">
+                        <table class="table table-sm table-striped mb-0">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Personel</th>
+                                    <th>Evrak Tipi</th>
+                                    <th>Dosya Adı</th>
+                                    <th>Tam Yol</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var s in report.Saglamlar)
+                                {
+                                    <tr>
+                                        <td>@s.EvrakDosyaId</td>
+                                        <td>@s.PersonelAdi</td>
+                                        <td><span class="badge bg-success">@s.EvrakTipi</span></td>
+                                        <td><small>@s.DosyaAdi</small></td>
+                                        <td><small class="text-muted" title="@s.TamYol">@s.TamYol</small></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="alert alert-secondary">
+            <i class="bi bi-info-circle me-1"></i>Henüz rapor alınmadı. Aşağıdaki butonla başlayın.
+        </div>
+    }
+
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary" @onclick="RaporAl" disabled="@isRunning">
+            @if (isRunning && !temizlikModu)
+            {
+                <span class="spinner-border spinner-border-sm me-1"></span>
+            }
+            <i class="bi bi-clipboard-data me-1"></i>Rapor Al (Dry-Run)
+        </button>
+
+        <button class="btn btn-danger" @onclick="TemizlikOnay"
+                disabled="@(isRunning || report == null || report.KayipSayisi == 0 || !report.DryRun)">
+            <i class="bi bi-eraser me-1"></i>
+            @(report is { DryRun: false } ? "Temizlik Yapıldı" : "Kayıp Kayıtları Temizle")
+        </button>
+    </div>
+
+    <div class="mt-2">
+        <small class="text-muted">
+            <i class="bi bi-shield-check me-1"></i>
+            "Rapor Al" hiçbir değişiklik yapmaz. "Temizle" butonu onay ister ve sadece fiziksel dosyası diskte olmayan kayıtları etkiler.
+        </small>
+    </div>
+</div>
+
+@code {
+    private EvrakDosyaMaintenanceReport? report;
+    private bool isRunning;
+    private bool temizlikModu;
+    private string statusMessage = string.Empty;
+
+    private async Task RaporAl()
+    {
+        isRunning = true;
+        temizlikModu = false;
+        report = null;
+        statusMessage = "Kayıp evrak raporu alınıyor...";
+        StateHasChanged();
+
+        try
+        {
+            report = await MaintenanceService.AnalyzeAsync();
+            statusMessage = string.Empty;
+            ToastService.ShowSuccess($"Rapor tamam: {report.KayipSayisi} kayıp, {report.SaglamSayisi} sağlam.");
+            Logger.LogInformation("EvrakDosya bakim raporu: Toplam={T} Kayip={K} Saglam={S}",
+                report.ToplamEvrakDosya, report.KayipSayisi, report.SaglamSayisi);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "EvrakDosya rapor hatasi");
+            ToastService.ShowError($"Rapor alınamadı: {ex.Message}");
+        }
+        finally
+        {
+            isRunning = false;
+            temizlikModu = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task TemizlikOnay()
+    {
+        if (report == null || report.KayipSayisi == 0) return;
+
+        var eminMi = await JS.InvokeAsync<bool>("confirm",
+            $"DİKKAT!\n\n{report.KayipSayisi} adet kayıp EvrakDosya kaydı soft-delete edilecek.\n" +
+            $"Etkilenen PersonelOzlukEvrak kayıtları da temizlenecek (Tamamlandi=false).\n\n" +
+            $"Bu işlem geri alınamaz. Devam etmek istediğinize emin misiniz?");
+
+        if (!eminMi) return;
+
+        isRunning = true;
+        temizlikModu = true;
+        statusMessage = $"{report.KayipSayisi} kayıp kayıt temizleniyor...";
+        StateHasChanged();
+
+        try
+        {
+            report = await MaintenanceService.CleanupAsync(report);
+            statusMessage = string.Empty;
+            ToastService.ShowSuccess(
+                $"Temizlik tamam: {report.TemizlenenEvrakDosya} EvrakDosya + {report.TemizlenenOzlukEvrak} Özlük kaydı temizlendi.");
+            Logger.LogWarning("EvrakDosya TEMIZLIK: Evrak={E} Ozluk={O}",
+                report.TemizlenenEvrakDosya, report.TemizlenenOzlukEvrak);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "EvrakDosya temizlik hatasi");
+            ToastService.ShowError($"Temizlik hatası: {ex.Message}");
+        }
+        finally
+        {
+            isRunning = false;
+            temizlikModu = false;
+            StateHasChanged();
+        }
+    }
+}
+

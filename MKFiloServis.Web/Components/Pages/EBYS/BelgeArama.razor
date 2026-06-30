@@ -1,0 +1,751 @@
+@page "/ebys/arama"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+@inject IEbysBelgeAramaService AramaService
+@inject ISemanticSearchService SemanticSearchService
+@inject IEbysService EbysService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>EBYS Belge Arama - Koa Filo Servis</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h4 class="mb-0">
+                <i class="bi bi-search me-2"></i>EBYS Belge Arama
+            </h4>
+            <small class="text-muted">Tüm belgelerde gelişmiş arama yapın</small>
+        </div>
+        <div class="col-auto">
+            @* Semantic Search Toggle *@
+            <div class="form-check form-switch">
+                <input type="checkbox" class="form-check-input" id="semanticToggle" 
+                       @bind="semanticAramaModu" @bind:after="OnSemanticToggleChanged" />
+                <label class="form-check-label" for="semanticToggle">
+                    <i class="bi bi-robot me-1"></i>
+                    <span class="@(semanticAramaModu ? "text-primary fw-bold" : "")">AI Akıllı Arama</span>
+                </label>
+            </div>
+            @if (semanticAramaModu && !ollamaBaglantisiVar)
+            {
+                <small class="text-danger d-block">
+                    <i class="bi bi-exclamation-triangle me-1"></i>Ollama bağlantısı yok
+                </small>
+            }
+        </div>
+    </div>
+
+    @* Arama Kutusu *@
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-8">
+                    <div class="input-group input-group-lg">
+                        <span class="input-group-text bg-primary text-white">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input type="text" class="form-control" 
+                               placeholder="Belge adı, kategori, açıklama veya ilgili kayıt ara..."
+                               @bind="filtre.AramaMetni"
+                               @bind:event="oninput"
+                               @onkeyup="OnAramaTusuBasildi" />
+                        @if (!string.IsNullOrWhiteSpace(filtre.AramaMetni))
+                        {
+                            <button class="btn btn-outline-secondary" type="button" @onclick="TemizleArama">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        }
+                    </div>
+
+                    @* Arama Önerileri *@
+                    @if (aramaOnerileri.Count > 0 && !string.IsNullOrWhiteSpace(filtre.AramaMetni))
+                    {
+                        <div class="list-group position-absolute w-100 shadow" style="z-index: 1000; max-width: 600px;">
+                            @foreach (var oneri in aramaOnerileri.Take(5))
+                            {
+                                <button type="button" class="list-group-item list-group-item-action d-flex align-items-center"
+                                        @onclick="() => OneriSec(oneri.Oneri)">
+                                    <i class="bi @GetOneriIcon(oneri.Tip) me-2 text-muted"></i>
+                                    <span>@oneri.Oneri</span>
+                                    <small class="text-muted ms-auto">@GetOneriTipAdi(oneri.Tip)</small>
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="col-md-4">
+                    <div class="btn-group w-100">
+                        <button class="btn btn-primary" @onclick="AramaYap" disabled="@aramaSuruyor">
+                            @if (aramaSuruyor)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-search me-1"></i>
+                            }
+                            Ara
+                        </button>
+                        <button class="btn btn-outline-secondary" @onclick="() => gelismisFiltrelerAcik = !gelismisFiltrelerAcik">
+                            <i class="bi bi-funnel me-1"></i>
+                            Filtreler
+                            @if (AktifFiltreSayisi > 0)
+                            {
+                                <span class="badge bg-warning ms-1">@AktifFiltreSayisi</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            @* Gelişmiş Filtreler *@
+            @if (gelismisFiltrelerAcik)
+            {
+                <div class="border-top pt-3 mt-3">
+                    <div class="row g-3">
+                        @* Kaynak Seçimi *@
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted">Kaynak</label>
+                            <div class="btn-group-vertical w-100" role="group">
+                                @foreach (var kaynak in Enum.GetValues<EbysAramaKaynak>())
+                                {
+                                    <input type="checkbox" class="btn-check" id="kaynak_@kaynak" 
+                                           checked="@filtre.Kaynaklar.Contains(kaynak)"
+                                           @onchange="(e) => ToggleKaynak(kaynak, (bool)e.Value!)" />
+                                    <label class="btn btn-outline-secondary btn-sm" for="kaynak_@kaynak">
+                                        <i class="bi @GetKaynakIcon(kaynak) me-1"></i>
+                                        @GetKaynakAdi(kaynak)
+                                    </label>
+                                }
+                            </div>
+                        </div>
+
+                        @* Kategori Seçimi *@
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted">Kategori</label>
+                            <select class="form-select form-select-sm" @bind="seciliKategori" @bind:after="KategoriDegisti">
+                                <option value="">Tümü</option>
+                                @foreach (var kategori in kategoriler)
+                                {
+                                    <option value="@kategori">@kategori</option>
+                                }
+                            </select>
+                        </div>
+
+                        @* Tarih Aralığı *@
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted">Tarih Aralığı</label>
+                            <div class="input-group input-group-sm">
+                                <input type="date" class="form-control" @bind="filtre.BaslangicTarihi" />
+                                <span class="input-group-text">-</span>
+                                <input type="date" class="form-control" @bind="filtre.BitisTarihi" />
+                            </div>
+                        </div>
+
+                        @* Diğer Filtreler *@
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted">Ek Filtreler</label>
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="dosyasiOlanlar" 
+                                       @bind="filtre.SadeceDosyasiOlanlar" />
+                                <label class="form-check-label small" for="dosyasiOlanlar">Sadece dosyası olanlar</label>
+                            </div>
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="suresiDolmuslar" 
+                                       @bind="filtre.SadeceSuresiDolmuslar" />
+                                <label class="form-check-label small" for="suresiDolmuslar">Süresi dolmuşlar</label>
+                            </div>
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="yaklasanlar" 
+                                       @bind="filtre.SadeceYaklasanlar" />
+                                <label class="form-check-label small" for="yaklasanlar">Yaklaşanlar (30 gün)</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-3">
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="FiltreleriTemizle">
+                            <i class="bi bi-x-circle me-1"></i>Filtreleri Temizle
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    @* Arama Sonuçları *@
+    @if (semanticAramaModu && semanticSonuclar.Count > 0)
+    {
+        @* Semantic Search Sonuçları *@
+        <div class="row mb-3">
+            <div class="col">
+                <div class="d-flex align-items-center justify-content-between">
+                    <span class="text-muted">
+                        <i class="bi bi-robot me-1 text-primary"></i>
+                        <strong>@semanticSonuclar.Count</strong> semantik eşleşme bulundu
+                    </span>
+                    <button class="btn btn-sm btn-outline-primary" @onclick="IndekslemeleriYenile" disabled="@indekslemeSuruyor">
+                        @if (indekslemeSuruyor)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                            @indekslemeMesaj
+                        }
+                        else
+                        {
+                            <i class="bi bi-arrow-repeat me-1"></i>
+                            <text>Indeksi Yenile</text>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        @* Embedding İstatistikleri *@
+        @if (embeddingIstatistik != null)
+        {
+            <div class="alert alert-info py-2 mb-3">
+                <small>
+                    <i class="bi bi-info-circle me-1"></i>
+                    <strong>@embeddingIstatistik.ToplamEmbedding</strong> belge indeksli
+                    @if (embeddingIstatistik.SonIndekslemeTarihi.HasValue)
+                    {
+                        <span class="ms-2">| Son güncelleme: @embeddingIstatistik.SonIndekslemeTarihi.Value.ToString("dd.MM.yyyy HH:mm")</span>
+                    }
+                    @if (!string.IsNullOrEmpty(embeddingIstatistik.KullanilanModel))
+                    {
+                        <span class="ms-2">| Model: @embeddingIstatistik.KullanilanModel</span>
+                    }
+                </small>
+            </div>
+        }
+
+        @* Semantic Sonuç Listesi *@
+        <div class="list-group shadow-sm">
+            @foreach (var item in semanticSonuclar)
+            {
+                <div class="list-group-item list-group-item-action" @onclick="() => SemanticSonucaTikla(item)">
+                    <div class="d-flex w-100 justify-content-between align-items-start">
+                        <div class="d-flex align-items-start">
+                            <div class="me-3">
+                                <span class="badge @GetSemanticKaynakBadgeClass(item.Embedding.Kaynak) rounded-pill">
+                                    <i class="bi @GetKaynakIcon(item.Embedding.Kaynak)"></i>
+                                </span>
+                            </div>
+                            <div>
+                                <h6 class="mb-1">
+                                    @item.BelgeAdi
+                                    <span class="badge bg-primary ms-2" title="Benzerlik skoru">
+                                        <i class="bi bi-cpu me-1"></i>@((item.BenzerlikSkoru * 100).ToString("N0"))%
+                                    </span>
+                                </h6>
+                                <p class="mb-1 text-muted small">
+                                    <span class="badge bg-light text-dark border me-1">@item.Kaynak</span>
+                                </p>
+                                @if (!string.IsNullOrWhiteSpace(item.Ozet))
+                                {
+                                    <small class="text-muted d-block" style="max-width: 600px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                        @item.Ozet
+                                    </small>
+                                }
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            <small class="d-block text-muted">
+                                <i class="bi bi-calendar3 me-1"></i>
+                                @(item.Tarih?.ToString("dd.MM.yyyy") ?? "-")
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else if (sonuc != null)
+    {
+        <div class="row mb-3">
+            <div class="col">
+                <div class="d-flex align-items-center justify-content-between">
+                    <span class="text-muted">
+                        <strong>@sonuc.ToplamSonuc</strong> sonuç bulundu
+                        <small>(@sonuc.AramaSuresi.TotalMilliseconds.ToString("N0") ms)</small>
+                    </span>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary @(filtre.Siralama == EbysAramaSiralama.Alaka ? "active" : "")"
+                                @onclick="() => SiralamaAyarla(EbysAramaSiralama.Alaka)">
+                            <i class="bi bi-star me-1"></i>Alaka
+                        </button>
+                        <button class="btn btn-outline-secondary @(filtre.Siralama == EbysAramaSiralama.TarihAzalan ? "active" : "")"
+                                @onclick="() => SiralamaAyarla(EbysAramaSiralama.TarihAzalan)">
+                            <i class="bi bi-calendar me-1"></i>Tarih
+                        </button>
+                        <button class="btn btn-outline-secondary @(filtre.Siralama == EbysAramaSiralama.AdAZ ? "active" : "")"
+                                @onclick="() => SiralamaAyarla(EbysAramaSiralama.AdAZ)">
+                            <i class="bi bi-sort-alpha-down me-1"></i>Ad
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* İstatistik Kartları *@
+        @if (sonuc.Istatistikler != null)
+        {
+            <div class="row g-2 mb-3">
+                <div class="col-auto">
+                    <span class="badge bg-primary">
+                        <i class="bi bi-person me-1"></i>Personel: @sonuc.Istatistikler.PersonelOzlukSayisi
+                    </span>
+                </div>
+                <div class="col-auto">
+                    <span class="badge bg-info">
+                        <i class="bi bi-truck me-1"></i>Araç: @sonuc.Istatistikler.AracEvrakSayisi
+                    </span>
+                </div>
+                <div class="col-auto">
+                    <span class="badge bg-success">
+                        <i class="bi bi-envelope-arrow-down me-1"></i>Gelen: @sonuc.Istatistikler.GelenEvrakSayisi
+                    </span>
+                </div>
+                <div class="col-auto">
+                    <span class="badge bg-warning text-dark">
+                        <i class="bi bi-envelope-arrow-up me-1"></i>Giden: @sonuc.Istatistikler.GidenEvrakSayisi
+                    </span>
+                </div>
+                @if (sonuc.Istatistikler.RiskliSayisi > 0)
+                {
+                    <div class="col-auto">
+                        <span class="badge bg-danger">
+                            <i class="bi bi-exclamation-triangle me-1"></i>Riskli: @sonuc.Istatistikler.RiskliSayisi
+                        </span>
+                    </div>
+                }
+            </div>
+        }
+
+        @* Sonuç Listesi *@
+        <div class="list-group shadow-sm">
+            @if (sonuc.Sonuclar.Count == 0)
+            {
+                <div class="list-group-item text-center py-5">
+                    <i class="bi bi-search display-4 text-muted"></i>
+                    <p class="text-muted mt-3 mb-0">Aramanıza uygun sonuç bulunamadı.</p>
+                    <small class="text-muted">Farklı anahtar kelimeler veya filtreler deneyin.</small>
+                </div>
+            }
+            else
+            {
+                @foreach (var item in sonuc.Sonuclar)
+                {
+                    <div class="list-group-item list-group-item-action" @onclick="() => SonucaTikla(item)">
+                        <div class="d-flex w-100 justify-content-between align-items-start">
+                            <div class="d-flex align-items-start">
+                                <div class="me-3">
+                                    <span class="badge @GetKaynakBadgeClass(item.Kaynak) rounded-pill">
+                                        <i class="bi @GetKaynakIcon(item.Kaynak)"></i>
+                                    </span>
+                                </div>
+                                <div>
+                                    <h6 class="mb-1">
+                                        @item.BelgeAdi
+                                        @if (item.DosyaVar)
+                                        {
+                                            <i class="bi bi-paperclip text-success ms-1" title="Dosya mevcut"></i>
+                                        }
+                                    </h6>
+                                    <p class="mb-1 text-muted small">
+                                        <span class="badge bg-light text-dark border me-1">@item.Kategori</span>
+                                        <i class="bi bi-link-45deg me-1"></i>@item.IlgiliKayitAdi
+                                        @if (!string.IsNullOrWhiteSpace(item.IlgiliKayitKodu))
+                                        {
+                                            <span class="text-muted">(@item.IlgiliKayitKodu)</span>
+                                        }
+                                    </p>
+                                    @if (!string.IsNullOrWhiteSpace(item.Aciklama))
+                                    {
+                                        <small class="text-muted d-block" style="max-width: 600px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                            @item.Aciklama
+                                        </small>
+                                    }
+                                </div>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge @GetRiskBadgeClass(item.RiskDurumu)">
+                                    @item.RiskDurumu
+                                </span>
+                                <small class="d-block text-muted mt-1">
+                                    <i class="bi bi-calendar3 me-1"></i>
+                                    @(item.OlusturmaTarihi?.ToString("dd.MM.yyyy") ?? "-")
+                                </small>
+                                @if (item.BitisTarihi.HasValue)
+                                {
+                                    <small class="d-block @(item.SuresiDolmusMu ? "text-danger" : item.YaklasanMi ? "text-warning" : "text-muted")">
+                                        <i class="bi bi-hourglass me-1"></i>
+                                        @item.BitisTarihi.Value.ToString("dd.MM.yyyy")
+                                    </small>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+
+        @* Sayfalama *@
+        @if (sonuc.ToplamSayfa > 1)
+        {
+            <nav class="mt-3">
+                <ul class="pagination justify-content-center">
+                    <li class="page-item @(filtre.Sayfa == 1 ? "disabled" : "")">
+                        <button class="page-link" @onclick="() => SayfaDegistir(filtre.Sayfa - 1)">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                    </li>
+                    @for (int i = Math.Max(1, filtre.Sayfa - 2); i <= Math.Min(sonuc.ToplamSayfa, filtre.Sayfa + 2); i++)
+                    {
+                        var sayfa = i;
+                        <li class="page-item @(sayfa == filtre.Sayfa ? "active" : "")">
+                            <button class="page-link" @onclick="() => SayfaDegistir(sayfa)">@sayfa</button>
+                        </li>
+                    }
+                    <li class="page-item @(filtre.Sayfa == sonuc.ToplamSayfa ? "disabled" : "")">
+                        <button class="page-link" @onclick="() => SayfaDegistir(filtre.Sayfa + 1)">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </li>
+                </ul>
+            </nav>
+        }
+    }
+    else if (!aramaSuruyor)
+    {
+        @* Başlangıç Ekranı *@
+        <div class="text-center py-5">
+            <i class="bi bi-file-earmark-search display-1 text-muted"></i>
+            <h5 class="text-muted mt-3">Belge Ara</h5>
+            <p class="text-muted">
+                Personel özlük evrakları, araç belgeleri ve gelen/giden evraklarda arama yapın.
+            </p>
+
+            @* Semantic Search Bilgisi *@
+            @if (semanticAramaModu)
+            {
+                <div class="alert alert-primary mx-auto mt-3" style="max-width: 500px;">
+                    <h6 class="alert-heading">
+                        <i class="bi bi-robot me-1"></i>AI Akıllı Arama Aktif
+                    </h6>
+                    <p class="small mb-2">
+                        Anahtar kelime eşleştirmesi yerine anlam tabanlı arama yapılır.
+                        Yazım hatalarına toleranslı ve benzer kavramları da bulur.
+                    </p>
+                    @if (embeddingIstatistik != null && embeddingIstatistik.ToplamEmbedding > 0)
+                    {
+                        <small class="text-primary">
+                            <i class="bi bi-check-circle me-1"></i>
+                            @embeddingIstatistik.ToplamEmbedding belge indeksli, arama için hazır.
+                        </small>
+                    }
+                    else
+                    {
+                        <small class="text-warning">
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+                            Henüz belge indekslenmemiş. "İndeksi Yenile" butonunu kullanın.
+                        </small>
+                    }
+                </div>
+            }
+
+            @* Son Aramalar *@
+            @if (sonAramalar.Count > 0)
+            {
+                <div class="mt-4">
+                    <h6 class="text-muted">Son Aramalar</h6>
+                    <div class="d-flex flex-wrap justify-content-center gap-2">
+                        @foreach (var arama in sonAramalar.Take(5))
+                        {
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="() => OneriSec(arama.AramaMetni)">
+                                <i class="bi bi-clock-history me-1"></i>@arama.AramaMetni
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private EbysGelismisAramaFiltre filtre = new();
+    private EbysAramaSonuc? sonuc;
+    private List<EbysAramaOnerisi> aramaOnerileri = [];
+    private List<EbysAramaGecmisi> sonAramalar = [];
+    private List<string> kategoriler = [];
+
+    // Semantic Search
+    private bool semanticAramaModu;
+    private bool ollamaBaglantisiVar;
+    private List<SemanticAramaSonuc> semanticSonuclar = [];
+    private EmbeddingIstatistik? embeddingIstatistik;
+    private bool indekslemeSuruyor;
+    private string indekslemeMesaj = "";
+
+    private bool aramaSuruyor;
+    private bool gelismisFiltrelerAcik;
+    private string seciliKategori = "";
+
+    private int AktifFiltreSayisi =>
+        filtre.Kaynaklar.Count +
+        filtre.Kategoriler.Count +
+        (filtre.BaslangicTarihi.HasValue ? 1 : 0) +
+        (filtre.BitisTarihi.HasValue ? 1 : 0) +
+        (filtre.SadeceDosyasiOlanlar == true ? 1 : 0) +
+        (filtre.SadeceSuresiDolmuslar == true ? 1 : 0) +
+        (filtre.SadeceYaklasanlar == true ? 1 : 0);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            kategoriler = await AramaService.GetTumKategorilerAsync();
+            sonAramalar = await AramaService.GetAramaGecmisiAsync(1, 10); // TODO: Gerçek kullanıcı ID
+
+            // Ollama bağlantı kontrolü
+            ollamaBaglantisiVar = await SemanticSearchService.BaglantiKontrolAsync();
+
+            // Embedding istatistiklerini al
+            embeddingIstatistik = await SemanticSearchService.IstatistikleriGetirAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Başlangıç hatası: {ex.Message}");
+        }
+    }
+
+    private async Task OnSemanticToggleChanged()
+    {
+        if (semanticAramaModu && !ollamaBaglantisiVar)
+        {
+            ollamaBaglantisiVar = await SemanticSearchService.BaglantiKontrolAsync();
+        }
+
+        // Mevcut sonuçları temizle
+        sonuc = null;
+        semanticSonuclar.Clear();
+    }
+
+    private async Task AramaYap()
+    {
+        if (aramaSuruyor) return;
+
+        aramaSuruyor = true;
+        aramaOnerileri.Clear();
+        StateHasChanged();
+
+        try
+        {
+            if (semanticAramaModu && ollamaBaglantisiVar && !string.IsNullOrWhiteSpace(filtre.AramaMetni))
+            {
+                // Semantic Search
+                semanticSonuclar = await SemanticSearchService.SemanticAraAsync(
+                    filtre.AramaMetni, 
+                    filtre.Kaynaklar, 
+                    maxSonuc: 20, 
+                    minBenzerlik: 0.4);
+                sonuc = null;
+            }
+            else
+            {
+                // Normal keyword arama
+                sonuc = await AramaService.AraAsync(filtre);
+                semanticSonuclar.Clear();
+
+                // Arama geçmişine kaydet
+                if (!string.IsNullOrWhiteSpace(filtre.AramaMetni) && sonuc != null)
+                {
+                    await AramaService.KaydetAramaGecmisiAsync(1, filtre, sonuc.ToplamSonuc); // TODO: Gerçek kullanıcı ID
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Arama hatası: {ex.Message}");
+        }
+        finally
+        {
+            aramaSuruyor = false;
+        }
+    }
+
+    private async Task OnAramaTusuBasildi(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await AramaYap();
+        }
+        else if (!string.IsNullOrWhiteSpace(filtre.AramaMetni) && filtre.AramaMetni.Length >= 2)
+        {
+            // Önerileri getir
+            aramaOnerileri = await AramaService.GetAramaOnerileriAsync(filtre.AramaMetni, 1); // TODO: Gerçek kullanıcı ID
+        }
+    }
+
+    private async Task OneriSec(string oneri)
+    {
+        filtre.AramaMetni = oneri;
+        aramaOnerileri.Clear();
+        await AramaYap();
+    }
+
+    private void TemizleArama()
+    {
+        filtre.AramaMetni = "";
+        aramaOnerileri.Clear();
+        sonuc = null;
+    }
+
+    private void FiltreleriTemizle()
+    {
+        filtre = new EbysGelismisAramaFiltre();
+        seciliKategori = "";
+        sonuc = null;
+    }
+
+    private void ToggleKaynak(EbysAramaKaynak kaynak, bool dahil)
+    {
+        if (dahil && !filtre.Kaynaklar.Contains(kaynak))
+            filtre.Kaynaklar.Add(kaynak);
+        else if (!dahil && filtre.Kaynaklar.Contains(kaynak))
+            filtre.Kaynaklar.Remove(kaynak);
+    }
+
+    private void KategoriDegisti()
+    {
+        filtre.Kategoriler.Clear();
+        if (!string.IsNullOrWhiteSpace(seciliKategori))
+            filtre.Kategoriler.Add(seciliKategori);
+    }
+
+    private async Task SiralamaAyarla(EbysAramaSiralama siralama)
+    {
+        filtre.Siralama = siralama;
+        if (sonuc != null)
+            await AramaYap();
+    }
+
+    private async Task SayfaDegistir(int sayfa)
+    {
+        filtre.Sayfa = sayfa;
+        await AramaYap();
+    }
+
+    private void SonucaTikla(EbysAramaSonucItem item)
+    {
+        if (!string.IsNullOrWhiteSpace(item.DetayUrl))
+            Navigation.NavigateTo(item.DetayUrl);
+    }
+
+    private static string GetKaynakAdi(EbysAramaKaynak kaynak) => kaynak switch
+    {
+        EbysAramaKaynak.PersonelOzluk => "Personel Özlük",
+        EbysAramaKaynak.AracEvrak => "Araç Evrak",
+        EbysAramaKaynak.GelenEvrak => "Gelen Evrak",
+        EbysAramaKaynak.GidenEvrak => "Giden Evrak",
+        _ => kaynak.ToString()
+    };
+
+    private static string GetKaynakIcon(EbysAramaKaynak kaynak) => kaynak switch
+    {
+        EbysAramaKaynak.PersonelOzluk => "bi-person-badge",
+        EbysAramaKaynak.AracEvrak => "bi-truck",
+        EbysAramaKaynak.GelenEvrak => "bi-envelope-arrow-down",
+        EbysAramaKaynak.GidenEvrak => "bi-envelope-arrow-up",
+        _ => "bi-file-earmark"
+    };
+
+    private static string GetKaynakBadgeClass(EbysAramaKaynak kaynak) => kaynak switch
+    {
+        EbysAramaKaynak.PersonelOzluk => "bg-primary",
+        EbysAramaKaynak.AracEvrak => "bg-info",
+        EbysAramaKaynak.GelenEvrak => "bg-success",
+        EbysAramaKaynak.GidenEvrak => "bg-warning text-dark",
+        _ => "bg-secondary"
+    };
+
+    private static string GetRiskBadgeClass(string risk) => risk switch
+    {
+        "Normal" => "bg-success",
+        "Yaklaşan" => "bg-warning text-dark",
+        "Süresi Dolmuş" or "Cevap Gecikmis" => "bg-danger",
+        "Dosya Eksik" => "bg-secondary",
+        _ => "bg-light text-dark"
+    };
+
+    private static string GetOneriIcon(EbysOneriTipi tip) => tip switch
+    {
+        EbysOneriTipi.SonArama => "bi-clock-history",
+        EbysOneriTipi.PopulerArama => "bi-fire",
+        EbysOneriTipi.BenzerArama => "bi-search",
+        EbysOneriTipi.Kategori => "bi-folder",
+        EbysOneriTipi.Etiket => "bi-tag",
+        _ => "bi-search"
+    };
+
+    private static string GetOneriTipAdi(EbysOneriTipi tip) => tip switch
+    {
+        EbysOneriTipi.SonArama => "Son arama",
+        EbysOneriTipi.PopulerArama => "Popüler",
+        EbysOneriTipi.BenzerArama => "Benzer",
+        EbysOneriTipi.Kategori => "Kategori",
+        EbysOneriTipi.Etiket => "Etiket",
+        _ => ""
+    };
+
+    private static string GetSemanticKaynakBadgeClass(EbysAramaKaynak kaynak) => kaynak switch
+    {
+        EbysAramaKaynak.PersonelOzluk => "bg-primary",
+        EbysAramaKaynak.AracEvrak => "bg-info",
+        EbysAramaKaynak.GelenEvrak => "bg-success",
+        EbysAramaKaynak.GidenEvrak => "bg-warning text-dark",
+        _ => "bg-secondary"
+    };
+
+    private void SemanticSonucaTikla(SemanticAramaSonuc item)
+    {
+        if (!string.IsNullOrWhiteSpace(item.DetayUrl))
+            Navigation.NavigateTo(item.DetayUrl);
+    }
+
+    private async Task IndekslemeleriYenile()
+    {
+        if (indekslemeSuruyor) return;
+
+        indekslemeSuruyor = true;
+        indekslemeMesaj = "İndeksleme başlıyor...";
+        StateHasChanged();
+
+        try
+        {
+            var progress = new Progress<EmbeddingIndekslemeProgress>(p =>
+            {
+                indekslemeMesaj = $"{p.AktifKaynak}: {p.Tamamlanan}/{p.Toplam}";
+                InvokeAsync(StateHasChanged);
+            });
+
+            var rapor = await SemanticSearchService.TumBelgeleriIndeksleAsync(progress);
+            indekslemeMesaj = $"Tamamlandı: {rapor.BasariliIndekslenen} belge ({rapor.Sure.TotalSeconds:N0} sn)";
+
+            // İstatistikleri güncelle
+            embeddingIstatistik = await SemanticSearchService.IstatistikleriGetirAsync();
+        }
+        catch (Exception ex)
+        {
+            indekslemeMesaj = $"Hata: {ex.Message}";
+        }
+        finally
+        {
+            indekslemeSuruyor = false;
+        }
+    }
+}
+

@@ -1,0 +1,332 @@
+@page "/servis-operasyon/kurumlar"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IKurumService KurumService
+@inject IJSRuntime JS
+
+<PageTitle>Kurum (Müşteri) Kartları | KOA Filo Servis</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-building me-2"></i> Kurum (Müşteri) Kartları</h2>
+    <div>
+        <button class="btn btn-primary" @onclick="YeniKurumEkle">
+            <i class="bi bi-plus-lg me-1"></i> Yeni Kurum Kartı Ekle
+        </button>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <div class="d-flex justify-content-center text-primary my-5">
+        <div class="spinner-border" role="status"></div>
+    </div>
+}
+else if (kurumlar != null && !kurumlar.Any())
+{
+    <div class="alert alert-info shadow-sm d-flex align-items-center">
+        <i class="bi bi-info-circle-fill fs-4 me-3"></i>
+        <div>Kayıtlı kurum / müşteri kartı bulunmamaktadır. Yeni ekleyerek başlayabilirsiniz.</div>
+    </div>
+}
+else if (kurumlar != null)
+{
+    <div class="card shadow-sm mb-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Kod</th>
+                            <th>Kurum / Müşteri Adı</th>
+                            <th>Vergi Dairesi / No</th>
+                            <th>Telefon</th>
+                            <th>İl / İlçe</th>
+                            <th>Durum</th>
+                            <th class="text-end">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var kurum in kurumlar)
+                        {
+                            <tr>
+                                <td><strong>@kurum.KurumKodu</strong></td>
+                                <td>@kurum.KurumAdi</td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(kurum.VergiDairesi) || !string.IsNullOrEmpty(kurum.VergiNo))
+                                    {
+                                        <small class="text-muted">@kurum.VergiDairesi / @kurum.VergiNo</small>
+                                    }
+                                </td>
+                                <td>@kurum.Telefon</td>
+                                <td>@kurum.Il @(string.IsNullOrEmpty(kurum.Ilce) ? "" : $"/ {kurum.Ilce}")</td>
+                                <td>
+                                    @if (kurum.Aktif)
+                                    {
+                                        <span class="badge bg-success">Aktif</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">Pasif</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => KurumDuzenle(kurum)" title="Düzenle">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => KurumSil(kurum)" title="Sil">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Kurum Modal -->
+@if (isModalOpen)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title">@(isEditing ? "Kurum Kartı Düzenle" : "Yeni Kurum Kartı")</h5>
+                    <button type="button" class="btn-close" @onclick="ModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="seciliKurum" OnValidSubmit="KaydetAsync">
+                        <DataAnnotationsValidator />
+
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Kurum Kodu</label>
+                                <InputText @bind-Value="seciliKurum.KurumKodu" class="form-control" />
+                                <ValidationMessage For="() => seciliKurum.KurumKodu" />
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label">Kurum / Müşteri Adı</label>
+                                <InputText @bind-Value="seciliKurum.KurumAdi" class="form-control" />
+                                <ValidationMessage For="() => seciliKurum.KurumAdi" />
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label">Tam Unvan</label>
+                                <InputText @bind-Value="seciliKurum.UnvanTam" class="form-control" />
+                                <ValidationMessage For="() => seciliKurum.UnvanTam" />
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Vergi Dairesi</label>
+                                <InputText @bind-Value="seciliKurum.VergiDairesi" class="form-control" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Vergi No / TC Kimlik No</label>
+                                <InputText @bind-Value="seciliKurum.VergiNo" class="form-control" />
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Ana Telefon</label>
+                                <InputText @bind-Value="seciliKurum.Telefon" class="form-control" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">E-Posta</label>
+                                <InputText @bind-Value="seciliKurum.Email" class="form-control" />
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label">Adres</label>
+                                <InputTextArea @bind-Value="seciliKurum.Adres" class="form-control" rows="2" />
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">İl</label>
+                                <InputText @bind-Value="seciliKurum.Il" class="form-control" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">İlçe</label>
+                                <InputText @bind-Value="seciliKurum.Ilce" class="form-control" />
+                            </div>
+
+                            <hr class="mt-4 mb-2" />
+                            <h6 class="text-muted">Yetkili Bilgileri</h6>
+
+                            <div class="col-md-4">
+                                <label class="form-label">Yetkili Kişi</label>
+                                <InputText @bind-Value="seciliKurum.YetkiliKisi" class="form-control" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Yetkili Telefon</label>
+                                <InputText @bind-Value="seciliKurum.YetkiliTelefon" class="form-control" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Yetkili Email</label>
+                                <InputText @bind-Value="seciliKurum.YetkiliEmail" class="form-control" />
+                            </div>
+
+                            <div class="col-12 mt-3">
+                                <div class="form-check form-switch mt-2">
+                                    <InputCheckbox @bind-Value="seciliKurum.Aktif" class="form-check-input" id="checkAktif" />
+                                    <label class="form-check-label" for="checkAktif">Aktif Durumda</label>
+                                </div>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(errorMessage))
+                            {
+                                <div class="col-12">
+                                    <div class="alert alert-danger mt-2">@errorMessage</div>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="modal-footer px-0 pb-0 mt-4">
+                            <button type="button" class="btn btn-secondary" @onclick="ModalKapat" disabled="@isSaving">Vazgeç</button>
+                            <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                                @if (isSaving)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                    <span>Kaydediliyor...</span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-save me-1"></i>
+                                    <span>Kaydet</span>
+                                }
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Kurum> kurumlar = new();
+    private bool isLoading = true;
+
+    private bool isModalOpen = false;
+    private bool isEditing = false;
+    private bool isSaving = false;
+    private string? errorMessage;
+
+    private Kurum seciliKurum = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            isLoading = true;
+            kurumlar = await KurumService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Hata oluştu: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void YeniKurumEkle()
+    {
+        seciliKurum = new Kurum 
+        { 
+            Aktif = true 
+        };
+        isEditing = false;
+        errorMessage = null;
+        isModalOpen = true;
+    }
+
+    private void KurumDuzenle(Kurum kurum)
+    {
+        // Deep copy
+        seciliKurum = new Kurum
+        {
+            Id = kurum.Id,
+            KurumKodu = kurum.KurumKodu,
+            KurumAdi = kurum.KurumAdi,
+            UnvanTam = kurum.UnvanTam,
+            VergiNo = kurum.VergiNo,
+            VergiDairesi = kurum.VergiDairesi,
+            Adres = kurum.Adres,
+            Il = kurum.Il,
+            Ilce = kurum.Ilce,
+            Telefon = kurum.Telefon,
+            Telefon2 = kurum.Telefon2,
+            Email = kurum.Email,
+            WebSite = kurum.WebSite,
+            YetkiliKisi = kurum.YetkiliKisi,
+            YetkiliTelefon = kurum.YetkiliTelefon,
+            YetkiliEmail = kurum.YetkiliEmail,
+            Notlar = kurum.Notlar,
+            Aktif = kurum.Aktif,
+            CariId = kurum.CariId
+        };
+
+        isEditing = true;
+        errorMessage = null;
+        isModalOpen = true;
+    }
+
+    private async Task KurumSil(Kurum kurum)
+    {
+        if (await JS.InvokeAsync<bool>("confirm", $"'{kurum.KurumAdi}' adlı kaydı silmek istediğinize emin misiniz?"))
+        {
+            try
+            {
+                await KurumService.DeleteAsync(kurum.Id);
+                await LoadDataAsync();
+            }
+            catch (Exception ex)
+            {
+                await JS.InvokeVoidAsync("alert", $"Silme işlemi başarısız: {ex.Message}");
+            }
+        }
+    }
+
+    private void ModalKapat()
+    {
+        isModalOpen = false;
+        seciliKurum = new();
+    }
+
+    private async Task KaydetAsync()
+    {
+        try
+        {
+            errorMessage = null;
+            isSaving = true;
+
+            if (isEditing)
+            {
+                await KurumService.UpdateAsync(seciliKurum);
+            }
+            else
+            {
+                await KurumService.CreateAsync(seciliKurum);
+            }
+
+            isModalOpen = false;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Kayıt sırasında hata oluştu: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}
+

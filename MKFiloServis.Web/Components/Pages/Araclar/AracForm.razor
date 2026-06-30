@@ -1,0 +1,1685 @@
+@page "/araclar/yeni"
+@page "/araclar/{Id:int}"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject IAracService AracService
+@inject ICariService CariService
+@inject ITasimaTedarikciService TasimaTedarikciService
+@inject IFirmaService FirmaService
+@inject IAktifFirmaProvider AktifFirmaProvider
+@inject FirmaTransferService FirmaTransferService
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject IAktiviteLogService AktiviteLog
+@rendermode InteractiveServer
+
+<PageTitle>@(IsEdit ? "Araç Düzenle" : "Yeni Araç")</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="bi bi-truck me-2"></i>@(IsEdit ? "Araç Düzenle" : "Yeni Araç")</h3>
+        <button class="btn btn-secondary" @onclick="Geri">
+            <i class="bi bi-arrow-left me-1"></i>Geri
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(loadWarning))
+    {
+        <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle me-2"></i>@loadWarning
+        </div>
+    }
+
+    <div class="card">
+        <div class="card-body">
+            <EditForm Model="arac" OnValidSubmit="Kaydet">
+                <DataAnnotationsValidator />
+
+                <!-- Temel Bilgiler -->
+                <h5 class="border-bottom pb-2 mb-3"><i class="bi bi-info-circle me-2"></i>Temel Bilgiler</h5>
+                
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">Şase No * <small class="text-muted">(Tekil)</small></label>
+                            <InputText @bind-Value="arac.SaseNo" class="form-control" style="text-transform: uppercase;" disabled="@IsEdit" />
+                            <ValidationMessage For="@(() => arac.SaseNo)" />
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">@(IsEdit ? "Aktif Plaka" : "Plaka *")</label>
+                            <InputText @bind-Value="plaka" class="form-control" style="text-transform: uppercase;" disabled="@IsEdit" />
+                            @if (IsEdit)
+                            {
+                                <small class="text-info">
+                                    <i class="bi bi-info-circle"></i> Plaka değişikliği için "Plaka Geçmişi" sekmesini kullanın
+                                </small>
+                            }
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">Araç Tipi *</label>
+                            <InputSelect @bind-Value="arac.AracTipi" class="form-select">
+                                @foreach (AracTipi tip in Enum.GetValues(typeof(AracTipi)))
+                                {
+                                    <option value="@tip">@GetTipText(tip)</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">Sınıf</label>
+                            <InputSelect @bind-Value="arac.AracSinifi" class="form-select">
+                                @foreach (AracSinifi sinif in Enum.GetValues(typeof(AracSinifi)))
+                                {
+                                    <option value="@sinif">@GetSinifText(sinif)</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label class="form-label">Marka</label>
+                            <InputText @bind-Value="arac.Marka" class="form-control" />
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label class="form-label">Model</label>
+                            <InputText @bind-Value="arac.Model" class="form-control" />
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="mb-3">
+                            <label class="form-label">Model Yılı</label>
+                            <InputNumber @bind-Value="arac.ModelYili" class="form-control" />
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="mb-3">
+                            <label class="form-label">Koltuk Sayısı</label>
+                            <InputNumber @bind-Value="arac.KoltukSayisi" class="form-control" />
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="mb-3">
+                            <label class="form-label">Renk</label>
+                            <InputText @bind-Value="arac.Renk" class="form-control" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">Motor No</label>
+                            <InputText @bind-Value="arac.MotorNo" class="form-control" />
+                        </div>
+                    </div>
+                </div>
+
+                <h5 class="border-bottom pb-2 mb-3 mt-4"><i class="bi bi-card-text me-2"></i>Ruhsat Tarihleri</h5>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">Trafiğe Çıkış Tarihi</label>
+                            <InputDate @bind-Value="arac.RuhsatTrafigeCikisTarihi" class="form-control" />
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">Satış Tarihi</label>
+                            <InputDate @bind-Value="arac.RuhsatSatisTarihi" class="form-control" />
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">Tescil Tarihi</label>
+                            <InputDate @bind-Value="arac.RuhsatTescilTarihi" class="form-control" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sahiplik ve Kiralama Bilgileri -->
+                <h5 class="border-bottom pb-2 mb-3 mt-4"><i class="bi bi-building me-2"></i>Sahiplik & Kiralama Bilgileri</h5>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">Sahiplik Tipi *</label>
+                            <InputSelect @bind-Value="arac.SahiplikTipi" class="form-select" @oninput="OnSahiplikTipiChanged">
+                                @foreach (AracSahiplikTipi tip in Enum.GetValues(typeof(AracSahiplikTipi)))
+                                {
+                                    <option value="@tip">@GetSahiplikText(tip)</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                    @if (arac.SahiplikTipi == AracSahiplikTipi.Kiralik)
+                    {
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Araç Sahibi (Kiralayan) *</label>
+                                <InputSelect @bind-Value="arac.KiralikCariId" class="form-select">
+                                    <option value="">-- Seçiniz --</option>
+                                    @foreach (var cari in tedarikciCariler)
+                                    {
+                                        <option value="@cari.Id">@cari.Unvan</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Kira Hesaplama Tipi</label>
+                                <InputSelect @bind-Value="arac.KiraHesaplamaTipi" class="form-select">
+                                    <option value="">-- Seçiniz --</option>
+                                    @foreach (KiraHesaplamaTipi tip in Enum.GetValues(typeof(KiraHesaplamaTipi)))
+                                    {
+                                        <option value="@tip">@GetKiraHesaplamaText(tip)</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                        </div>
+                    }
+                    @if (arac.SahiplikTipi == AracSahiplikTipi.Tedarikci)
+                    {
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Taşıma Tedarikçisi</label>
+                                <InputSelect @bind-Value="arac.TasimaTedarikciId" class="form-select">
+                                    <option value="">-- Yok --</option>
+                                    @foreach (var t in tasimaTedarikciler)
+                                    {
+                                        <option value="@t.Id">@t.Unvan</option>
+                                    }
+                                </InputSelect>
+                                <small class="text-muted">Alt yüklenici aracıysa seçin</small>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @if (arac.SahiplikTipi == AracSahiplikTipi.Kiralik)
+                {
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Günlük Kira Bedeli (?)</label>
+                                <InputNumber @bind-Value="arac.GunlukKiraBedeli" class="form-control" />
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Aylık Kira Bedeli (?)</label>
+                                <InputNumber @bind-Value="arac.AylikKiraBedeli" class="form-control" />
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Sefer Başına Kira Bedeli (?)</label>
+                                <InputNumber @bind-Value="arac.SeferBasinaKiraBedeli" class="form-control" />
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <!-- Komisyon Bilgileri -->
+                <h5 class="border-bottom pb-2 mb-3 mt-4"><i class="bi bi-percent me-2"></i>Komisyon Bilgileri</h5>
+                
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="mb-3 pt-4">
+                            <div class="form-check">
+                                <InputCheckbox @bind-Value="arac.KomisyonVar" class="form-check-input" id="komisyonVar" />
+                                <label class="form-check-label" for="komisyonVar">Komisyon Var</label>
+                            </div>
+                        </div>
+                    </div>
+                    @if (arac.KomisyonVar)
+                    {
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Komisyoncu *</label>
+                                <InputSelect @bind-Value="arac.KomisyoncuCariId" class="form-select">
+                                    <option value="">-- Seçiniz --</option>
+                                    @foreach (var cari in tedarikciCariler)
+                                    {
+                                        <option value="@cari.Id">@cari.Unvan</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Komisyon Hesaplama Tipi</label>
+                                <InputSelect @bind-Value="arac.KomisyonHesaplamaTipi" class="form-select">
+                                    <option value="">-- Seçiniz --</option>
+                                    @foreach (KomisyonHesaplamaTipi tip in Enum.GetValues(typeof(KomisyonHesaplamaTipi)))
+                                    {
+                                        <option value="@tip">@GetKomisyonHesaplamaText(tip)</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @if (arac.KomisyonVar)
+                {
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Komisyon Oranı (%)</label>
+                                <InputNumber @bind-Value="arac.KomisyonOrani" class="form-control" />
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Sabit Komisyon Tutarı (?)</label>
+                                <InputNumber @bind-Value="arac.SabitKomisyonTutari" class="form-control" />
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">Km Durumu</label>
+                            <InputNumber @bind-Value="arac.KmDurumu" class="form-control" />
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label class="form-label">Araç Durumu *</label>
+                            <InputSelect @bind-Value="arac.Durumu" class="form-select">
+                                @foreach (AracDurumu durum in Enum.GetValues(typeof(AracDurumu)))
+                                {
+                                    <option value="@durum">@GetAracDurumuText(durum)</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="mb-3 pt-4">
+                            <div class="form-check">
+                                <InputCheckbox @bind-Value="arac.Aktif" class="form-check-input" id="aktif" />
+                                <label class="form-check-label" for="aktif">Aktif</label>
+                            </div>
+                        </div>
+                    </div>
+                    @if (arac.Durumu == AracDurumu.Satis)
+                    {
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label class="form-label">Satış Fiyatı</label>
+                                <InputNumber @bind-Value="arac.SatisFiyati" class="form-control text-end text-danger fw-bold" />
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Firma (Tenant) Bilgisi -->
+                <h5 class="border-bottom pb-2 mb-3 mt-4"><i class="bi bi-building me-2"></i>Firma (Tenant)</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Aracın Bağlı Olduğu Firma *</label>
+                            <InputSelect @bind-Value="arac.FirmaId" class="form-select">
+                                <option value="">-- Firma Seçiniz --</option>
+                                @foreach (var f in firmalar)
+                                {
+                                    <option value="@f.Id">@f.FirmaAdi @(f.VarsayilanFirma ? "⭐" : "")</option>
+                                }
+                            </InputSelect>
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle"></i>
+                                Yeni araçlarda aktif firma otomatik atanır. Aracı başka bir firmaya taşımak için buradan değiştirin. Mevcut veriler korunur.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Notlar</label>
+                    <InputTextArea @bind-Value="arac.Notlar" class="form-control" rows="2" />
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg me-1"></i>Kaydet
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="Geri">
+                        <i class="bi bi-x-lg me-1"></i>İptal
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+
+    @* Belgeler Bölümü - Sadece Düzenleme Modunda *@
+    @if (IsEdit)
+    {
+
+        <div class="card mt-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Araç Belgeleri</h5>
+                <button class="btn btn-primary btn-sm" @onclick="YeniEvrakModalAc">
+                    <i class="bi bi-plus-lg me-1"></i>Yeni Belge Ekle
+                </button>
+            </div>
+            <div class="card-body">
+                @if (evraklarYukleniyor)
+                {
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Yükleniyor...</span>
+                        </div>
+                    </div>
+                }
+                else if (aracEvraklari.Count == 0)
+                {
+                    <div class="alert alert-info mb-2 py-2">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Henüz belge eklenmemiş. Aşağıdaki kategorilerden istediğinize <strong>Yükle</strong> butonu ile dosya ekleyebilirsiniz.
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Belge Türü</th>
+                                    <th>Belge Adı</th>
+                                    <th>Başlangıç</th>
+                                    <th>Bitiş</th>
+                                    <th>Durum</th>
+                                    <th>Dosya</th>
+                                    <th class="text-end">İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var kat in EvrakKategorileri.TumKategoriler)
+                                {
+                                    <tr class="text-muted">
+                                        <td><span class="badge @GetKategoriBadgeClass(kat)">@GetKategoriGosterimAdi(kat)</span></td>
+                                        <td colspan="5"><em>Henüz eklenmedi</em></td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm btn-outline-primary" @onclick="() => YeniEvrakKategoriIle(kat)">
+                                                <i class="bi bi-plus-circle me-1"></i>Ekle
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Belge Türü</th>
+                                    <th>Belge Adı</th>
+                                    <th>Başlangıç</th>
+                                    <th>Bitiş</th>
+                                    <th>Durum</th>
+                                    <th>Dosya</th>
+                                    <th class="text-end">İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var kat in EvrakKategorileri.TumKategoriler)
+                                {
+                                    var katEvraklari = aracEvraklari
+                                        .Where(e => string.Equals(e.EvrakKategorisi, kat, StringComparison.OrdinalIgnoreCase))
+                                        .OrderByDescending(e => e.BitisTarihi ?? DateTime.MinValue)
+                                        .ToList();
+
+                                    if (katEvraklari.Count == 0)
+                                    {
+                                        <tr class="text-muted">
+                                            <td><span class="badge @GetKategoriBadgeClass(kat)">@GetKategoriGosterimAdi(kat)</span></td>
+                                            <td colspan="5"><em>Henüz eklenmedi</em></td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-outline-primary" @onclick="() => YeniEvrakKategoriIle(kat)">
+                                                    <i class="bi bi-plus-circle me-1"></i>Ekle
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var evrak in katEvraklari)
+                                        {
+                                            var durumClass = GetEvrakDurumClass(evrak);
+                                            var oncelikliDosya = GetOncelikliDosya(evrak);
+                                            <tr>
+                                                <td>
+                                                    <span class="badge @GetKategoriBadgeClass(evrak.EvrakKategorisi)">
+                                                        @GetKategoriGosterimAdi(evrak.EvrakKategorisi)
+                                                    </span>
+                                                </td>
+                                                <td>@(evrak.EvrakAdi ?? "-")</td>
+                                                <td>@(evrak.BaslangicTarihi?.ToString("dd.MM.yyyy") ?? "-")</td>
+                                                <td class="@durumClass">
+                                                    @(evrak.BitisTarihi?.ToString("dd.MM.yyyy") ?? "-")
+                                                    @if (evrak.EvrakKategorisi != EvrakKategorileri.Ruhsat && evrak.BitisTarihi.HasValue)
+                                                    {
+                                                        var gunKaldi = (evrak.BitisTarihi.Value - DateTime.Today).Days;
+                                                        if (gunKaldi < 0)
+                                                        {
+                                                            <span class="badge bg-danger ms-1">Süresi Doldu</span>
+                                                        }
+                                                        else if (gunKaldi <= 30)
+                                                        {
+                                                            <span class="badge bg-warning text-dark ms-1">@gunKaldi gün</span>
+                                                        }
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <span class="badge @(evrak.Durum == EvrakDurum.Aktif ? "bg-success" : "bg-secondary")">
+                                                        @(evrak.Durum == EvrakDurum.Aktif ? "Aktif" : "Pasif")
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    @if (evrak.Dosyalar?.Any() == true)
+                                                    {
+                                                        <span class="badge bg-info">@evrak.Dosyalar.Count dosya</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                                <td class="text-end">
+                                                    <div class="btn-group btn-group-sm">
+                                                        @if (oncelikliDosya != null)
+                                                        {
+                                                            <button class="btn btn-outline-info" @onclick="() => DosyaOnizle(oncelikliDosya)" title="Önizle">
+                                                                <i class="bi bi-search"></i>
+                                                            </button>
+                                                            <button class="btn btn-outline-warning" @onclick="() => DosyaYazdir(oncelikliDosya)" title="Yazdır">
+                                                                <i class="bi bi-printer"></i>
+                                                            </button>
+                                                            <button class="btn btn-outline-success" @onclick="() => DosyaGonder(oncelikliDosya)" title="Gönder">
+                                                                <i class="bi bi-send"></i>
+                                                            </button>
+                                                        }
+                                                        <button class="btn btn-outline-primary" @onclick="() => EvrakDetayGoster(evrak)" title="Detay">
+                                                            <i class="bi bi-eye"></i>
+                                                        </button>
+                                                        <button class="btn btn-outline-success" @onclick="() => DosyaYukleModalAc(evrak)" title="Dosya Yükle">
+                                                            <i class="bi bi-upload"></i>
+                                                        </button>
+                                                        <button class="btn btn-outline-danger" @onclick="() => EvrakSil(evrak)" title="Sil">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@* Yeni Evrak Modal *@
+@if (showYeniEvrakModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-file-earmark-plus me-2"></i>Yeni Belge Ekle</h5>
+                    <button type="button" class="btn-close" @onclick="YeniEvrakModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Belge Türü *</label>
+                        <select class="form-select" @bind="yeniEvrak.EvrakKategorisi">
+                            <option value="">-- Seçiniz --</option>
+                            @foreach (var kat in EvrakKategorileri.TumKategoriler)
+                            {
+                                <option value="@kat">@GetKategoriGosterimAdi(kat)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Belge Adı</label>
+                        <input type="text" class="form-control" @bind="yeniEvrak.EvrakAdi" placeholder="Örn: 2024 Trafik Sigortası" />
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Başlangıç Tarihi</label>
+                                <input type="date" class="form-control" @bind="yeniEvrak.BaslangicTarihi" />
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Bitiş Tarihi</label>
+                                <input type="date" class="form-control" @bind="yeniEvrak.BitisTarihi" disabled="@(yeniEvrak.EvrakKategorisi == EvrakKategorileri.Ruhsat)" />
+                                @if (yeniEvrak.EvrakKategorisi == EvrakKategorileri.Ruhsat)
+                                {
+                                    <small class="text-muted">Ruhsat için bitiş tarihi kullanılmaz.</small>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                    @if (yeniEvrak.EvrakKategorisi == EvrakKategorileri.TrafikSigortasi || yeniEvrak.EvrakKategorisi == EvrakKategorileri.Kasko)
+                    {
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Sigorta Şirketi</label>
+                                    <input type="text" class="form-control" @bind="yeniEvrak.SigortaSirketi" />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Poliçe No</label>
+                                    <input type="text" class="form-control" @bind="yeniEvrak.PoliceNo" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Tutar (₺)</label>
+                            <input type="number" class="form-control" @bind="yeniEvrak.Tutar" step="0.01" />
+                        </div>
+                    }
+                    <div class="mb-3">
+                        <label class="form-label">Açıklama</label>
+                        <textarea class="form-control" rows="2" @bind="yeniEvrak.Aciklama"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="YeniEvrakModalKapat">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="YeniEvrakKaydet" disabled="@evrakKaydediliyor">
+                        @if (evrakKaydediliyor)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-check-lg me-1"></i>Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Evrak Detay Modal *@
+@if (showEvrakDetayModal && seciliEvrak != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-file-earmark-text me-2"></i>
+                        @seciliEvrak.EvrakKategorisi - @(seciliEvrak.EvrakAdi ?? "Detay")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="EvrakDetayKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Belge Türü:</strong> @seciliEvrak.EvrakKategorisi
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Durum:</strong>
+                            <span class="badge @(seciliEvrak.Durum == EvrakDurum.Aktif ? "bg-success" : "bg-secondary")">
+                                @(seciliEvrak.Durum == EvrakDurum.Aktif ? "Aktif" : "Pasif")
+                            </span>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Başlangıç:</strong> @(seciliEvrak.BaslangicTarihi?.ToString("dd.MM.yyyy") ?? "-")
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Bitiş:</strong> @(seciliEvrak.BitisTarihi?.ToString("dd.MM.yyyy") ?? "-")
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(seciliEvrak.SigortaSirketi))
+                    {
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <strong>Sigorta Şirketi:</strong> @seciliEvrak.SigortaSirketi
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Poliçe No:</strong> @(seciliEvrak.PoliceNo ?? "-")
+                            </div>
+                        </div>
+                    }
+                    @if (seciliEvrak.Tutar.HasValue)
+                    {
+                        <div class="mb-3">
+                            <strong>Tutar:</strong> @seciliEvrak.Tutar.Value.ToString("N2") ₺
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(seciliEvrak.Aciklama))
+                    {
+                        <div class="mb-3">
+                            <strong>Açıklama:</strong> @seciliEvrak.Aciklama
+                        </div>
+                    }
+
+                    <hr />
+                    <h6><i class="bi bi-paperclip me-2"></i>Dosyalar</h6>
+                    @if (seciliEvrak.Dosyalar?.Any() == true)
+                    {
+                        <div class="list-group">
+                            @foreach (var dosya in seciliEvrak.Dosyalar)
+                            {
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <i class="bi @GetDosyaIkon(dosya.DosyaTipi) me-2"></i>
+                                        @dosya.DosyaAdi
+                                        <small class="text-muted ms-2">(@FormatDosyaBoyutu(dosya.DosyaBoyutu))</small>
+                                    </div>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-info" @onclick="() => DosyaOnizle(dosya)" title="Önizle">
+                                            <i class="bi bi-search"></i>
+                                        </button>
+                                        <button class="btn btn-outline-warning" @onclick="() => DosyaYazdir(dosya)" title="Yazdır">
+                                            <i class="bi bi-printer"></i>
+                                        </button>
+                                        <button class="btn btn-outline-success" @onclick="() => DosyaGonder(dosya)" title="Gönder">
+                                            <i class="bi bi-send"></i>
+                                        </button>
+                                        <button class="btn btn-outline-primary" @onclick="() => DosyaIndir(dosya)" title="İndir">
+                                            <i class="bi bi-download"></i>
+                                        </button>
+                                        <button class="btn btn-outline-danger" @onclick="() => DosyaSil(dosya)" title="Sil">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-secondary mb-0">
+                            <i class="bi bi-info-circle me-2"></i>Henüz dosya yüklenmemiş.
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" @onclick="() => DosyaYukleModalAc(seciliEvrak)">
+                        <i class="bi bi-upload me-1"></i>Dosya Yükle
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="EvrakDetayKapat">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Dosya Önizleme Modal *@
+@if (showDosyaOnizlemeModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.35);">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content" style="height:90vh;">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">
+                        <i class="bi bi-eye me-2"></i>
+                        @onizlemeBaslik
+                        @if (!string.IsNullOrWhiteSpace(onizlemeDosyaAdi))
+                        {
+                            <span class="text-muted small ms-2">— @onizlemeDosyaAdi</span>
+                        }
+                    </h6>
+                    <div class="d-flex gap-2 align-items-center">
+                        @if (!string.IsNullOrWhiteSpace(onizlemeDataUrl) && onizlemeDosya != null)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-success"
+                                    @onclick="() => DosyaIndir(onizlemeDosya)" title="İndir">
+                                <i class="bi bi-download"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-warning"
+                                    @onclick="() => DosyaYazdir(onizlemeDosya)" title="Yazdır">
+                                <i class="bi bi-printer"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary"
+                                    @onclick="() => DosyaGonder(onizlemeDosya)" title="Gönder">
+                                <i class="bi bi-send"></i>
+                            </button>
+                        }
+                        <button type="button" class="btn-close btn-sm" @onclick="DosyaOnizlemeKapat"></button>
+                    </div>
+                </div>
+                <div class="modal-body p-0" style="background:#3a3a3a;">
+                    @if (onizlemeYukleniyor)
+                    {
+                        <div class="d-flex justify-content-center align-items-center h-100">
+                            <div class="spinner-border text-light"></div>
+                        </div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(onizlemeHata))
+                    {
+                        <div class="d-flex justify-content-center align-items-center h-100 text-light">
+                            <div class="text-center">
+                                <i class="bi bi-exclamation-triangle display-4 text-warning"></i>
+                                <p class="mt-3">@onizlemeHata</p>
+                                @if (onizlemeDosya != null)
+                                {
+                                    <button type="button" class="btn btn-success btn-sm"
+                                            @onclick="() => DosyaIndir(onizlemeDosya)">
+                                        <i class="bi bi-download me-1"></i>Dosyayı İndir
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+                    else if (onizlemeTipi == "pdf")
+                    {
+                        <iframe src="@onizlemeDataUrl" style="width:100%;height:100%;border:0;" title="PDF Önizleme"></iframe>
+                    }
+                    else if (onizlemeTipi == "image")
+                    {
+                        <div class="d-flex justify-content-center align-items-center h-100 p-2">
+                            <img src="@onizlemeDataUrl" alt="Belge" style="max-width:100%;max-height:100%;object-fit:contain;" />
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Dosya Yükle Modal *@
+@if (showDosyaYukleModal && dosyaYukleEvrak != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Dosya Yükle</h5>
+                    <button type="button" class="btn-close" @onclick="DosyaYukleModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <strong>@dosyaYukleEvrak.EvrakKategorisi</strong> belgesi için dosya yükleyin.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Dosya Seçin *</label>
+                        <InputFile OnChange="OnDosyaSecildi" class="form-control" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" />
+                        <small class="text-muted">PDF, JPG, PNG, DOC formatları desteklenir. Maks 10MB.</small>
+                    </div>
+                    @if (secilenDosya != null)
+                    {
+                        <div class="alert alert-success">
+                            <i class="bi bi-file-earmark-check me-2"></i>
+                            @secilenDosya.Name (@FormatDosyaBoyutu(secilenDosya.Size))
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="DosyaYukleModalKapat">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="DosyaYukle" disabled="@(secilenDosya == null || dosyaYukleniyor)">
+                        @if (dosyaYukleniyor)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-upload me-1"></i>Yükle
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showFirmaDegisiklikModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title"><i class="bi bi-building-exclamation me-2"></i>Firma Değişikliği</h5>
+                    <button type="button" class="btn-close" @onclick="FirmaDegisiklikIptal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Araç <strong>@orijinalFirmaAdi</strong> firmasından <strong>@yeniFirmaAdi</strong> firmasına taşınacak.</p>
+
+                    @if (transferItems == null)
+                    {
+                        <div class="d-grid gap-2">
+                            <button type="button" class="btn btn-primary" @onclick="FirmaTransferListele">
+                                <i class="bi bi-list-check me-1"></i>Taşınacak Verileri Listele
+                            </button>
+                        </div>
+                    }
+                    else if (!transferItems.Any())
+                    {
+                        <p class="text-muted">Taşınacak ek veri bulunamadı. Sadece araç kaydı taşınacak.</p>
+                        <div class="d-grid gap-2">
+                            <button type="button" class="btn btn-primary" @onclick="AracTasinsinOnay">
+                                <i class="bi bi-check-lg me-1"></i>Onayla ve Taşı
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="fw-bold">Taşınacak veriler (seçiniz):</p>
+                        @foreach (var item in transferItems)
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" checked="@item.Selected"
+                                       @onchange="e => item.Selected = (bool)(e.Value ?? false)" id="@item.Key" />
+                                <label class="form-check-label" for="@item.Key">@item.Label</label>
+                            </div>
+                        }
+                        <div class="d-flex gap-2 mt-3">
+                            <button type="button" class="btn btn-primary" @onclick="AracTasinsinOnay">
+                                <i class="bi bi-check-lg me-1"></i>Seçilenleri Taşı
+                            </button>
+                            <button type="button" class="btn btn-outline-primary" @onclick="BugundenOnay">
+                                <i class="bi bi-calendar-check me-1"></i>Bugünden Sonra Kopyala
+                            </button>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="FirmaDegisiklikIptal">İptal</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int? Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "tedarikciId")]
+    public int? TedarikciIdQuery { get; set; }
+
+    private Arac arac = new();
+    private List<Cari> tedarikciCariler = new();
+    private List<TasimaTedarikci> tasimaTedarikciler = new();
+    private bool IsEdit => Id.HasValue;
+    private string plaka = string.Empty;
+    private string? loadWarning;
+
+    // Firma listesi
+    private List<MKFiloServis.Shared.Entities.Firma> firmalar = new();
+    private int? orijinalFirmaId;
+    private string orijinalFirmaAdi = "";
+    private string yeniFirmaAdi = "";
+    private bool showFirmaDegisiklikModal;
+
+    // Evrak yönetimi
+    private List<AracEvrak> aracEvraklari = new();
+    private static readonly List<string> _aracEvrakTipleri = new() { "Ruhsat", "Sigorta", "Muayene", "Kasko", "Uygunluk Belgesi", "Diger" };
+    /// <summary>AracEvrak üzerinden tamamlanmış evrak kategorileri — EvrakYonetimi'ne gönderilir.</summary>
+    private HashSet<string> _aracMevcutTipler = new();
+    private bool evraklarYukleniyor = false;
+    private bool showYeniEvrakModal = false;
+    private bool showEvrakDetayModal = false;
+    private bool showDosyaYukleModal = false;
+    private AracEvrak yeniEvrak = new();
+    private AracEvrak? seciliEvrak;
+    private AracEvrak? dosyaYukleEvrak;
+    private IBrowserFile? secilenDosya;
+    private bool evrakKaydediliyor = false;
+    private bool dosyaYukleniyor = false;
+    private bool showDosyaOnizlemeModal = false;
+    private bool onizlemeYukleniyor = false;
+    private string? onizlemeDataUrl;
+    private string onizlemeTipi = string.Empty; // "pdf" | "image"
+    private string onizlemeBaslik = string.Empty;
+    private string onizlemeDosyaAdi = string.Empty;
+    private string? onizlemeHata;
+    private AracEvrakDosya? onizlemeDosya;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            tedarikciCariler = await CariService.GetByTipAsync(CariTipi.Tedarikci);
+        }
+        catch (Exception ex)
+        {
+            tedarikciCariler = new();
+            loadWarning = $"Cari listesi yüklenemedi: {ex.GetBaseException().Message}";
+            ToastService.ShowWarning(loadWarning);
+        }
+
+        try
+        {
+            tasimaTedarikciler = await TasimaTedarikciService.GetAllAsync(sadeceAktif: true);
+        }
+        catch
+        {
+            tasimaTedarikciler = new();
+        }
+
+        try
+        {
+            firmalar = await FirmaService.GetAktifFirmalarAsync();
+        }
+        catch
+        {
+            firmalar = new();
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsEdit)
+        {
+            try
+            {
+                var existing = await AracService.GetByIdAsync(Id!.Value);
+                if (existing != null)
+                {
+                    arac = existing;
+                    orijinalFirmaId = existing.FirmaId;
+                    orijinalFirmaAdi = firmalar.FirstOrDefault(f => f.Id == existing.FirmaId)?.FirmaAdi ?? "";
+                    plaka = arac.AktifPlaka ?? string.Empty;
+                    await EvraklariYukle();
+                }
+                else
+                {
+                    ToastService.ShowWarning("Araç kaydı bulunamadı.");
+                    Navigation.NavigateTo("/araclar");
+                }
+            }
+            catch (Exception ex)
+            {
+                ToastService.ShowError($"Araç kartı açılırken hata oluştu: {ex.GetBaseException().Message}");
+                Navigation.NavigateTo("/araclar");
+            }
+        }
+        else
+        {
+            YeniAracFormunuSifirla();
+        }
+    }
+
+    private void YeniAracFormunuSifirla()
+    {
+        // Yeni araçta aktif firmayı default ata (Tüm Firmalar modunda boş kalır,
+        // kullanıcı manuel seçebilir)
+        int? defaultFirmaId = null;
+        if (!AktifFirmaProvider.TumFirmalar && AktifFirmaProvider.AktifFirmaId.HasValue && AktifFirmaProvider.AktifFirmaId.Value > 0)
+        {
+            defaultFirmaId = AktifFirmaProvider.AktifFirmaId.Value;
+        }
+
+        arac = new Arac
+        {
+            Aktif = true,
+            AracTipi = AracTipi.Minibus,
+            AracSinifi = AracSinifi.PersonelTasiti,
+            SahiplikTipi = TedarikciIdQuery.HasValue ? AracSahiplikTipi.Tedarikci : AracSahiplikTipi.Ozmal,
+            TasimaTedarikciId = TedarikciIdQuery,
+            FirmaId = defaultFirmaId
+        };
+
+        plaka = string.Empty;
+        aracEvraklari = new();
+        seciliEvrak = null;
+        dosyaYukleEvrak = null;
+        showYeniEvrakModal = false;
+        showEvrakDetayModal = false;
+        showDosyaYukleModal = false;
+        showDosyaOnizlemeModal = false;
+    }
+
+    private async Task EvraklariYukle()
+    {
+        if (!IsEdit) return;
+        evraklarYukleniyor = true;
+        try
+        {
+            aracEvraklari = await AracService.GetAracEvraklariAsync(Id!.Value);
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Evraklar yüklenirken hata: {ex.Message}");
+        }
+        finally
+        {
+            evraklarYukleniyor = false;
+        }
+
+        // Hızlı kart durumları için tamamlanmış kategorileri hesapla
+        _aracMevcutTipler = new HashSet<string>(
+            aracEvraklari.Select(e => e.EvrakKategorisi).Distinct());
+    }
+
+    /// <summary>EvrakYonetimi component'inden gelen refresh sinyali.</summary>
+    private async Task EvrakGuncellendi()
+    {
+        await EvraklariYukle();
+        StateHasChanged();
+    }
+
+    private async Task AracEvrakOnizleAsync(string kategori)
+    {
+        var evrak = aracEvraklari.FirstOrDefault(e => e.EvrakKategorisi == kategori);
+        if (evrak == null) { ToastService.ShowWarning($"'{kategori}' için belge bulunamadı."); return; }
+        var sonDosya = evrak.Dosyalar.OrderByDescending(d => d.Id).FirstOrDefault();
+        if (sonDosya == null) { ToastService.ShowWarning($"'{kategori}' için dosya bulunamadı."); return; }
+        await DosyaIndir(sonDosya); // preview = download in vehicle context
+    }
+
+    private async Task AracEvrakIndirAsync(string kategori)
+    {
+        var evrak = aracEvraklari.FirstOrDefault(e => e.EvrakKategorisi == kategori);
+        if (evrak == null) { ToastService.ShowWarning($"'{kategori}' için belge bulunamadı."); return; }
+        var sonDosya = evrak.Dosyalar.OrderByDescending(d => d.Id).FirstOrDefault();
+        if (sonDosya == null) { ToastService.ShowWarning($"'{kategori}' için dosya bulunamadı."); return; }
+        await DosyaIndir(sonDosya);
+    }
+
+    private List<TransferableItem>? transferItems;
+
+    private async Task FirmaTransferListele()
+    {
+        transferItems = await FirmaTransferService.GetAracTransferItemsAsync(arac.Id);
+    }
+
+    private void FirmaDegisiklikIptal()
+    {
+        showFirmaDegisiklikModal = false;
+        arac.FirmaId = orijinalFirmaId;
+        transferItems = null;
+    }
+
+    private async Task AracTasinsinOnay()
+    {
+        var selectedKeys = transferItems?.Where(t => t.Selected).Select(t => t.Key).ToList() ?? new List<string>();
+        showFirmaDegisiklikModal = false;
+        transferItems = null;
+        try
+        {
+            var (moved, errors) = await FirmaTransferService.MoveAracToFirmaAsync(arac.Id, arac.FirmaId!.Value, selectedKeys);
+            await AracService.UpdateAsync(arac);
+            if (errors.Any())
+                ToastService.ShowError($"Taşıma hatası: {string.Join("; ", errors)}");
+            else
+            {
+                ToastService.ShowSuccess($"Araç taşındı ({moved} kayıt).");
+                Navigation.NavigateTo("/araclar");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Kayıt hatası: {ex.InnerException?.Message ?? ex.Message}");
+        }
+    }
+
+    private async Task BugundenOnay()
+    {
+        var selectedKeys = transferItems?.Where(t => t.Selected).Select(t => t.Key).ToList() ?? new List<string>();
+        showFirmaDegisiklikModal = false;
+        transferItems = null;
+        try
+        {
+            var (moved, errors) = await FirmaTransferService.MoveAracToFirmaAsync(arac.Id, arac.FirmaId!.Value, selectedKeys);
+            await AracService.UpdateAsync(arac);
+            if (errors.Any())
+                ToastService.ShowError($"Kopyalama hatası: {string.Join("; ", errors)}");
+            else
+            {
+                ToastService.ShowSuccess($"Araç kaydedildi ({moved} kayıt).");
+                Navigation.NavigateTo("/araclar");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Kayıt hatası: {ex.InnerException?.Message ?? ex.Message}");
+        }
+    }
+
+    private void OnSahiplikTipiChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<AracSahiplikTipi>(e.Value?.ToString(), out var tip))
+        {
+            arac.SahiplikTipi = tip;
+            if (tip == AracSahiplikTipi.Ozmal)
+            {
+                arac.KiralikCariId = null;
+                arac.GunlukKiraBedeli = null;
+                arac.AylikKiraBedeli = null;
+                arac.SeferBasinaKiraBedeli = null;
+                arac.KiraHesaplamaTipi = null;
+            }
+        }
+    }
+
+    private async Task Kaydet()
+    {
+        if (string.IsNullOrWhiteSpace(arac.SaseNo))
+        {
+            ToastService.ShowError("Şase numarası zorunludur!");
+            return;
+        }
+
+        if (!IsEdit && string.IsNullOrWhiteSpace(plaka))
+        {
+            ToastService.ShowError("Plaka zorunludur!");
+            return;
+        }
+
+        arac.SaseNo = arac.SaseNo.ToUpper().Trim();
+        if (!string.IsNullOrWhiteSpace(plaka))
+            plaka = plaka.ToUpper().Trim();
+
+        // Firma seçilmemişse aktif firmayı otomatik ata (Tüm Firmalar modunda kullanıcı uyarılır)
+        if (!arac.FirmaId.HasValue || arac.FirmaId.Value <= 0)
+        {
+            if (!AktifFirmaProvider.TumFirmalar && AktifFirmaProvider.AktifFirmaId.HasValue && AktifFirmaProvider.AktifFirmaId.Value > 0)
+            {
+                arac.FirmaId = AktifFirmaProvider.AktifFirmaId.Value;
+            }
+            else
+            {
+                ToastService.ShowError("Lütfen aracın bağlı olduğu firmayı seçin. (Üst bardaki firma seçicide bir firma seçili olmalı ya da form üstündeki firma alanından seçim yapın.)");
+                return;
+            }
+        }
+
+        if (arac.SahiplikTipi == AracSahiplikTipi.Ozmal)
+        {
+            arac.KiralikCariId = null;
+            arac.GunlukKiraBedeli = null;
+            arac.AylikKiraBedeli = null;
+            arac.SeferBasinaKiraBedeli = null;
+            arac.KiraHesaplamaTipi = null;
+        }
+
+        // Sahiplik Tedarikçi değilse taşıma tedarikçisi temizlenir
+        if (arac.SahiplikTipi != AracSahiplikTipi.Tedarikci)
+        {
+            arac.TasimaTedarikciId = null;
+        }
+
+        if (!arac.KomisyonVar)
+        {
+            arac.KomisyoncuCariId = null;
+            arac.KomisyonOrani = null;
+            arac.SabitKomisyonTutari = null;
+            arac.KomisyonHesaplamaTipi = null;
+        }
+
+        if (arac.SatisaAcik)
+        {
+            arac.Aktif = false;
+            if (arac.SatisaAcilmaTarihi == null)
+            {
+                arac.SatisaAcilmaTarihi = DateTime.Now;
+            }
+        }
+        else
+        {
+            arac.SatisaAcilmaTarihi = null;
+            arac.SatisFiyati = null;
+        }
+
+        // Firma degisti mi kontrol et
+        if (IsEdit && orijinalFirmaId.HasValue && arac.FirmaId != orijinalFirmaId)
+        {
+            yeniFirmaAdi = firmalar.FirstOrDefault(f => f.Id == arac.FirmaId)?.FirmaAdi ?? "?";
+            showFirmaDegisiklikModal = true;
+            return;
+        }
+
+        try
+        {
+            if (IsEdit)
+            {
+                await AracService.UpdateAsync(arac);
+                ToastService.ShowSuccess($"{arac.AktifPlaka ?? arac.SaseNo} başarıyla güncellendi.");
+            }
+            else
+            {
+                await AracService.CreateAsync(arac, plaka!, PlakaIslemTipi.Alis);
+                ToastService.ShowSuccess($"{plaka} plakalı araç başarıyla eklendi.");
+                YeniAracFormunuSifirla();
+                Navigation.NavigateTo("/araclar/yeni", forceLoad: false);
+                return;
+            }
+            Navigation.NavigateTo("/araclar");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Kayıt sırasında hata oluştu: {ex.Message}");
+        }
+    }
+
+    private void Geri()
+    {
+        Navigation.NavigateTo("/araclar");
+    }
+
+    #region Evrak İşlemleri
+
+    private void YeniEvrakModalAc()
+    {
+        yeniEvrak = new AracEvrak { AracId = Id!.Value, Durum = EvrakDurum.Aktif };
+        showYeniEvrakModal = true;
+    }
+
+    private void YeniEvrakKategoriIle(string kategori)
+    {
+        yeniEvrak = new AracEvrak
+        {
+            AracId = Id!.Value,
+            Durum = EvrakDurum.Aktif,
+            EvrakKategorisi = kategori
+        };
+        showYeniEvrakModal = true;
+    }
+
+    private void YeniEvrakModalKapat()
+    {
+        showYeniEvrakModal = false;
+        yeniEvrak = new();
+    }
+
+    private async Task YeniEvrakKaydet()
+    {
+        if (string.IsNullOrWhiteSpace(yeniEvrak.EvrakKategorisi))
+        {
+            ToastService.ShowWarning("Belge türü seçiniz!");
+            return;
+        }
+
+        if (yeniEvrak.EvrakKategorisi == EvrakKategorileri.Ruhsat)
+        {
+            yeniEvrak.BitisTarihi = null;
+        }
+
+        evrakKaydediliyor = true;
+        try
+        {
+            await AracService.CreateAracEvrakAsync(yeniEvrak);
+            ToastService.ShowSuccess("Belge başarıyla eklendi.");
+            YeniEvrakModalKapat();
+            await EvraklariYukle();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Belge eklenirken hata: {ex.Message}");
+        }
+        finally
+        {
+            evrakKaydediliyor = false;
+        }
+    }
+
+    private void EvrakDetayGoster(AracEvrak evrak)
+    {
+        seciliEvrak = evrak;
+        showEvrakDetayModal = true;
+    }
+
+    private void EvrakDetayKapat()
+    {
+        showEvrakDetayModal = false;
+        seciliEvrak = null;
+    }
+
+    private async Task EvrakSil(AracEvrak evrak)
+    {
+        try
+        {
+            await AracService.DeleteAracEvrakAsync(evrak.Id);
+            ToastService.ShowSuccess("Belge silindi.");
+            await EvraklariYukle();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Belge silinirken hata: {ex.Message}");
+        }
+    }
+
+    private void DosyaYukleModalAc(AracEvrak evrak)
+    {
+        dosyaYukleEvrak = evrak;
+        secilenDosya = null;
+        showDosyaYukleModal = true;
+        showEvrakDetayModal = false;
+    }
+
+    private void DosyaYukleModalKapat()
+    {
+        showDosyaYukleModal = false;
+        dosyaYukleEvrak = null;
+        secilenDosya = null;
+    }
+
+    private void OnDosyaSecildi(InputFileChangeEventArgs e)
+    {
+        secilenDosya = e.File;
+    }
+
+    private async Task DosyaYukle()
+    {
+        if (secilenDosya == null || dosyaYukleEvrak == null) return;
+
+        dosyaYukleniyor = true;
+        try
+        {
+            await AracService.UploadEvrakDosyaAsync(dosyaYukleEvrak.Id, secilenDosya);
+            ToastService.ShowSuccess("Dosya başarıyla yüklendi.");
+            DosyaYukleModalKapat();
+            await EvraklariYukle();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Dosya yüklenirken hata: {ex.Message}");
+        }
+        finally
+        {
+            dosyaYukleniyor = false;
+        }
+    }
+
+    private async Task DosyaIndir(AracEvrakDosya dosya)
+    {
+        try
+        {
+            var content = await AracService.GetEvrakDosyaAsync(dosya.Id);
+            var fileName = dosya.DosyaAdi ?? $"dosya.{dosya.DosyaTipi}";
+            await AktiviteLog.LogGoruntulemeAsync("Araçlar", "AracEvrakDosya", dosya.Id, fileName, $"Araç evrak indirildi: {fileName}");
+            await JS.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(content), GetMimeType(dosya.DosyaTipi));
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Dosya indirilirken hata: {ex.Message}");
+        }
+    }
+
+    private async Task DosyaOnizle(AracEvrakDosya dosya)
+    {
+        showDosyaOnizlemeModal = true;
+        onizlemeYukleniyor = true;
+        onizlemeDataUrl = null;
+        onizlemeTipi = string.Empty;
+        onizlemeHata = null;
+        onizlemeDosya = dosya;
+        onizlemeBaslik = seciliEvrak?.EvrakKategorisi ?? "Belge";
+        onizlemeDosyaAdi = dosya.DosyaAdi ?? string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var content = await AracService.GetEvrakDosyaAsync(dosya.Id);
+            if (content == null || content.Length == 0)
+            {
+                onizlemeHata = "Dosya okunamadı veya boş.";
+                return;
+            }
+
+            var uzanti = GetRealExtension(dosya);
+            var mime = GetMimeType(uzanti.TrimStart('.'));
+            if (uzanti == ".pdf")
+            {
+                onizlemeTipi = "pdf";
+                onizlemeDataUrl = $"data:{mime};base64,{Convert.ToBase64String(content)}";
+            }
+            else if (uzanti is ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp")
+            {
+                onizlemeTipi = "image";
+                onizlemeDataUrl = $"data:{mime};base64,{Convert.ToBase64String(content)}";
+            }
+            else
+            {
+                onizlemeHata = $"Bu dosya türü ({uzanti}) için önizleme desteklenmiyor. Dosyayı indirip görüntüleyebilirsiniz.";
+            }
+        }
+        catch (Exception ex)
+        {
+            onizlemeHata = $"Önizleme yüklenemedi: {ex.Message}";
+        }
+        finally
+        {
+            onizlemeYukleniyor = false;
+            StateHasChanged();
+        }
+    }
+
+    private void DosyaOnizlemeKapat()
+    {
+        showDosyaOnizlemeModal = false;
+        onizlemeYukleniyor = false;
+        onizlemeDataUrl = null;
+        onizlemeTipi = string.Empty;
+        onizlemeBaslik = string.Empty;
+        onizlemeDosyaAdi = string.Empty;
+        onizlemeHata = null;
+        onizlemeDosya = null;
+    }
+
+    private async Task DosyaYazdir(AracEvrakDosya dosya)
+    {
+        try
+        {
+            var content = await AracService.GetEvrakDosyaAsync(dosya.Id);
+            if (content == null || content.Length == 0)
+            {
+                ToastService.ShowWarning("Yazdırılacak dosya bulunamadı.");
+                return;
+            }
+
+            var uzanti = GetRealExtension(dosya);
+            var mime = GetMimeType(uzanti.TrimStart('.'));
+            if (uzanti == ".pdf" || uzanti is ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp")
+            {
+                await JS.InvokeVoidAsync("printBase64File", Convert.ToBase64String(content), mime);
+            }
+            else
+            {
+                ToastService.ShowWarning($"Bu dosya türü ({uzanti}) için yazdırma desteklenmiyor.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Yazdırma hatası: {ex.Message}");
+        }
+    }
+
+    private async Task DosyaGonder(AracEvrakDosya dosya)
+    {
+        try
+        {
+            var content = await AracService.GetEvrakDosyaAsync(dosya.Id);
+            if (content == null || content.Length == 0)
+            {
+                ToastService.ShowWarning("Gönderilecek dosya bulunamadı.");
+                return;
+            }
+
+            var fileName = dosya.DosyaAdi ?? $"dosya.{dosya.DosyaTipi}";
+            var mime = GetMimeType(dosya.DosyaTipi);
+            var paylasildi = await JS.InvokeAsync<bool>("shareBase64File", fileName, Convert.ToBase64String(content), mime);
+            if (!paylasildi)
+            {
+                ToastService.ShowInfo("Bu cihazda paylaşım desteklenmiyor, dosya indirildi.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Gönderme hatası: {ex.Message}");
+        }
+    }
+
+    private async Task DosyaSil(AracEvrakDosya dosya)
+    {
+        try
+        {
+            await AracService.DeleteEvrakDosyaAsync(dosya.Id);
+            ToastService.ShowSuccess("Dosya silindi.");
+            await EvraklariYukle();
+            if (seciliEvrak != null)
+            {
+                seciliEvrak = aracEvraklari.FirstOrDefault(e => e.Id == seciliEvrak.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Dosya silinirken hata: {ex.Message}");
+        }
+    }
+
+    #endregion
+
+    #region Helper Metodları
+
+    private string GetSinifText(AracSinifi sinif) => sinif switch
+    {
+        AracSinifi.PersonelTasiti => "Personel Taşıtı",
+        AracSinifi.OkulTasiti => "Okul Taşıtı",
+        AracSinifi.Hususi => "Hususi",
+        _ => sinif.ToString()
+    };
+
+    private string GetTipText(AracTipi tip) => tip switch
+    {
+        AracTipi.Minibus => "Minibüs",
+        AracTipi.Midibus => "Midibüs",
+        AracTipi.Otobus => "Otobüs",
+        AracTipi.Otomobil => "Otomobil",
+        AracTipi.Panelvan => "Panelvan",
+        _ => tip.ToString()
+    };
+
+    private string GetSahiplikText(AracSahiplikTipi tip) => SahiplikHelper.GetMetin(tip);
+
+    private string GetAracDurumuText(AracDurumu durum) => durum switch
+    {
+        AracDurumu.Bosta => "Boşta",
+        AracDurumu.Operasyon => "Operasyon",
+        AracDurumu.Yonetim => "Yönetim",
+        AracDurumu.Satis => "Satış",
+        _ => durum.ToString()
+    };
+
+    private string GetKiraHesaplamaText(KiraHesaplamaTipi tip) => tip switch
+    {
+        KiraHesaplamaTipi.Gunluk => "Günlük",
+        KiraHesaplamaTipi.Aylik => "Aylık",
+        KiraHesaplamaTipi.SeferBasina => "Sefer Başına",
+        _ => tip.ToString()
+    };
+
+    private string GetKomisyonHesaplamaText(KomisyonHesaplamaTipi tip) => tip switch
+    {
+        KomisyonHesaplamaTipi.YuzdeOrani => "Yüzde Oranı",
+        KomisyonHesaplamaTipi.SabitTutar => "Sabit Tutar",
+        _ => tip.ToString()
+    };
+
+    private string GetKategoriBadgeClass(string kategori) => kategori switch
+    {
+        EvrakKategorileri.Ruhsat => "bg-primary",
+        EvrakKategorileri.TrafikSigortasi => "bg-info",
+        EvrakKategorileri.KoltukSigortasi => "bg-danger",
+        EvrakKategorileri.Kasko => "bg-success",
+        EvrakKategorileri.Muayene => "bg-warning text-dark",
+        EvrakKategorileri.UygunlukBelgesi => "bg-warning",
+        EvrakKategorileri.EmisyonBelgesi => "bg-secondary",
+        EvrakKategorileri.YetkiBelgesi => "bg-info text-dark",
+        EvrakKategorileri.Diger => "bg-dark",
+        _ => "bg-dark"
+    };
+
+    private static string GetKategoriGosterimAdi(string kategori) => kategori switch
+    {
+        EvrakKategorileri.Ruhsat => "Ruhsat",
+        EvrakKategorileri.TrafikSigortasi => "Trafik Sigortası",
+        EvrakKategorileri.KoltukSigortasi => "Koltuk Sigortası",
+        EvrakKategorileri.Kasko => "Kasko",
+        EvrakKategorileri.Muayene => "Muayene",
+        EvrakKategorileri.UygunlukBelgesi => "Uygunluk Belgesi",
+        EvrakKategorileri.EmisyonBelgesi => "Emisyon Belgesi",
+        EvrakKategorileri.YetkiBelgesi => "Yetki Belgesi",
+        EvrakKategorileri.Diger => "Diğer",
+        _ => kategori
+    };
+
+    private string GetEvrakDurumClass(AracEvrak evrak)
+    {
+        if (evrak.EvrakKategorisi == EvrakKategorileri.Ruhsat) return "";
+        if (!evrak.BitisTarihi.HasValue) return "";
+        var gunKaldi = (evrak.BitisTarihi.Value - DateTime.Today).Days;
+        if (gunKaldi < 0) return "text-danger fw-bold";
+        if (gunKaldi <= 30) return "text-warning fw-bold";
+        return "";
+    }
+
+    private static AracEvrakDosya? GetOncelikliDosya(AracEvrak evrak)
+    {
+        return evrak.Dosyalar?
+            .Where(d => !d.IsDeleted)
+            .OrderByDescending(d => d.CreatedAt)
+            .ThenByDescending(d => d.Id)
+            .FirstOrDefault();
+    }
+
+    private string GetDosyaIkon(string? dosyaTipi) => dosyaTipi?.ToLower() switch
+    {
+        "pdf" => "bi-file-earmark-pdf text-danger",
+        "jpg" or "jpeg" or "png" => "bi-file-earmark-image text-primary",
+        "doc" or "docx" => "bi-file-earmark-word text-info",
+        _ => "bi-file-earmark"
+    };
+
+    private string FormatDosyaBoyutu(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+
+    private string GetMimeType(string? extension) => extension?.ToLower() switch
+    {
+        "pdf" => "application/pdf",
+        "jpg" or "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "gif" => "image/gif",
+        "bmp" => "image/bmp",
+        "webp" => "image/webp",
+        "doc" => "application/msword",
+        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        _ => "application/octet-stream"
+    };
+
+    private static string GetRealExtension(AracEvrakDosya dosya)
+    {
+        if (!string.IsNullOrWhiteSpace(dosya.DosyaTipi))
+            return "." + dosya.DosyaTipi.Trim().TrimStart('.').ToLowerInvariant();
+
+        var ad = dosya.DosyaAdi ?? string.Empty;
+        while (ad.EndsWith(".enc", StringComparison.OrdinalIgnoreCase))
+            ad = ad[..^4];
+        return Path.GetExtension(ad).ToLowerInvariant();
+    }
+
+    #endregion
+}
+
+
+
+

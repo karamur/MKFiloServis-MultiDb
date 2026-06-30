@@ -1,0 +1,448 @@
+@page "/filo-operasyon/alim-satim/yeni"
+@page "/filo-operasyon/alim-satim/{Id:int}/duzenle"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IFiloOperasyonService FiloOperasyonService
+@inject IAracService AracService
+@inject ICariService CariService
+@inject NavigationManager NavigationManager
+@inject IToastService ToastService
+
+<PageTitle>@(_isEdit ? "İşlem Düzenle" : "Yeni Araç Alım/Satım") | KOA Filo Servis</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item"><a href="/filo-operasyon">Filo Operasyon</a></li>
+                    <li class="breadcrumb-item"><a href="/filo-operasyon/alim-satim">Alım/Satım</a></li>
+                    <li class="breadcrumb-item active">@(_isEdit ? "Düzenle" : "Yeni İşlem")</li>
+                </ol>
+            </nav>
+            <h3 class="mb-0">
+                <i class="bi bi-cart-plus me-2"></i>@(_isEdit ? "Araç Alım/Satım Düzenle" : "Yeni Araç Alım/Satım")
+            </h3>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <EditForm Model="_model" OnValidSubmit="Kaydet">
+            <DataAnnotationsValidator />
+
+            <div class="row">
+                <!-- Sol Kolon -->
+                <div class="col-md-8">
+                    <!-- İşlem Bilgileri -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>İşlem Bilgileri</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">İşlem Tipi <span class="text-danger">*</span></label>
+                                    <select class="form-select" @bind="_model.IslemTipi" disabled="@_isEdit">
+                                        <option value="@AracIslemTipiDetay.Alis">Araç Alış</option>
+                                        <option value="@AracIslemTipiDetay.Satis">Araç Satış</option>
+                                        <option value="@AracIslemTipiDetay.Takas">Takas</option>
+                                        <option value="@AracIslemTipiDetay.SatisYerineAlim">Satış + Yerine Alım</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">İşlem Tarihi</label>
+                                    <input type="date" class="form-control" @bind="_model.IslemTarihi" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Araç <span class="text-danger">*</span></label>
+                                    <select class="form-select" @bind="_model.AracId" disabled="@_isEdit">
+                                        <option value="0">-- Araç Seçin --</option>
+                                        @foreach (var arac in _araclar)
+                                        {
+                                            <option value="@arac.Id">@arac.AktifPlaka - @arac.Marka @arac.Model</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Karşı Taraf Bilgileri -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="bi bi-person me-2"></i>
+                                @(_model.IslemTipi == AracIslemTipiDetay.Alis ? "Satıcı" : "Alıcı") Bilgileri
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Cari Seçin (Varsa)</label>
+                                    <select class="form-select" @bind="_model.KarsiTarafCariId">
+                                        <option value="">-- Kayıtlı Cari Seç veya Aşağıya Manuel Gir --</option>
+                                        @foreach (var cari in _cariler)
+                                        {
+                                            <option value="@cari.Id">@cari.Unvan</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Ad Soyad / Unvan</label>
+                                    <input type="text" class="form-control" @bind="_model.KarsiTarafAdSoyad" 
+                                           placeholder="Manuel giriş (cari seçilmediyse)" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">TC Kimlik No</label>
+                                    <input type="text" class="form-control" @bind="_model.KarsiTarafTcKimlik" 
+                                           maxlength="11" placeholder="11 haneli TC" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Telefon</label>
+                                    <input type="text" class="form-control" @bind="_model.KarsiTarafTelefon" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tutar Bilgileri -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-currency-exchange me-2"></i>Tutar Bilgileri</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">İşlem Tutarı (KDV Hariç)</label>
+                                    <div class="input-group">
+                                        <input type="number" step="0.01" class="form-control" @bind="_model.IslemTutari" 
+                                               @bind:after="HesaplaToplamTutar" />
+                                        <span class="input-group-text">₺</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">KDV Tutarı</label>
+                                    <div class="input-group">
+                                        <input type="number" step="0.01" class="form-control" @bind="_model.KDVTutari" 
+                                               @bind:after="HesaplaToplamTutar" />
+                                        <span class="input-group-text">₺</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Toplam Tutar</label>
+                                    <div class="input-group">
+                                        <input type="number" step="0.01" class="form-control fw-bold" @bind="_model.ToplamTutar" />
+                                        <span class="input-group-text">₺</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Noter Bilgileri -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-building me-2"></i>Noter Bilgileri</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Noter Adı</label>
+                                    <input type="text" class="form-control" @bind="_model.NoterAdi" 
+                                           placeholder="Ör: 15. Noter" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Noter Tarihi</label>
+                                    <input type="date" class="form-control" @bind="_model.NoterTarihi" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Yevmiye No</label>
+                                    <input type="text" class="form-control" @bind="_model.NoterYevmiyeNo" />
+                                </div>
+                                <div class="col-md-2 d-flex align-items-end">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="noterTamam" 
+                                               @bind="_model.NoterIslemTamam" />
+                                        <label class="form-check-label" for="noterTamam">
+                                            İşlem Tamam
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Belge Teslim Durumu -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-folder-check me-2"></i>Belge Teslim Durumu</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="ruhsat" @bind="_model.RuhsatTeslimAlindi" />
+                                        <label class="form-check-label" for="ruhsat">Ruhsat</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="sigorta" @bind="_model.SigortaTeslimAlindi" />
+                                        <label class="form-check-label" for="sigorta">Sigorta Poliçesi</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="muayene" @bind="_model.MuayeneBelgesiTeslimAlindi" />
+                                        <label class="form-check-label" for="muayene">Muayene Belgesi</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="anahtar" @bind="_model.AnahtarTeslimAlindi" />
+                                        <label class="form-check-label" for="anahtar">Anahtar</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="yedekAnahtar" @bind="_model.YedekAnahtarTeslimAlindi" />
+                                        <label class="form-check-label" for="yedekAnahtar">Yedek Anahtar</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="bakimDefteri" @bind="_model.ServisBakimDefteri" />
+                                        <label class="form-check-label" for="bakimDefteri">Servis Bakım Defteri</label>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Eksik Belgeler / Notlar</label>
+                                    <textarea class="form-control" rows="2" @bind="_model.EksikBelgeler" 
+                                              placeholder="Eksik belgeler veya ekstra notlar..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notlar -->
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <label class="form-label">Genel Notlar</label>
+                            <textarea class="form-control" rows="3" @bind="_model.Notlar"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sağ Kolon -->
+                <div class="col-md-4">
+                    <!-- Fatura Bilgileri -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-receipt me-2"></i>Fatura Durumu</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-check mb-3">
+                                <input type="checkbox" class="form-check-input" id="faturaKesildi" 
+                                       @bind="_model.FaturaKesildi" />
+                                <label class="form-check-label" for="faturaKesildi">
+                                    Fatura kesildi
+                                </label>
+                            </div>
+                            @if (_model.FaturaKesildi)
+                            {
+                                <div class="mb-3">
+                                    <label class="form-label">Fatura Tarihi</label>
+                                    <input type="date" class="form-control" @bind="_model.FaturaKesimTarihi" />
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Noter Tutarı ile Uyum</label>
+                                    <select class="form-select" @bind="_model.FaturaUyumu">
+                                        <option value="@FaturaUyumsuzlukDurum.Beklemede">Kontrol Bekliyor</option>
+                                        <option value="@FaturaUyumsuzlukDurum.Uyumlu">Uyumlu</option>
+                                        <option value="@FaturaUyumsuzlukDurum.TutarFarkli">Tutar Farklı</option>
+                                        <option value="@FaturaUyumsuzlukDurum.KdvFarkli">KDV Farklı</option>
+                                        <option value="@FaturaUyumsuzlukDurum.BelgeEksik">Belge Eksik</option>
+                                        <option value="@FaturaUyumsuzlukDurum.DigerUyumsuzluk">Diğer Uyumsuzluk</option>
+                                    </select>
+                                </div>
+                                @if (_model.FaturaUyumu != FaturaUyumsuzlukDurum.Uyumlu && _model.FaturaUyumu != FaturaUyumsuzlukDurum.Beklemede)
+                                {
+                                    <div class="mb-3">
+                                        <label class="form-label">Uyumsuzluk Açıklaması</label>
+                                        <textarea class="form-control" rows="2" @bind="_model.FaturaUyumsuzlukAciklama"></textarea>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Ödeme Durumu -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-wallet2 me-2"></i>Ödeme Durumu</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">Ödeme Durumu</label>
+                                <select class="form-select" @bind="_model.OdemeDurum">
+                                    <option value="@AracIslemOdemeDurum.Beklemede">Beklemede</option>
+                                    <option value="@AracIslemOdemeDurum.KismiOdendi">Kısmi Ödendi</option>
+                                    <option value="@AracIslemOdemeDurum.TamOdendi">Tam Ödendi</option>
+                                    <option value="@AracIslemOdemeDurum.Vadeli">Vadeli</option>
+                                    <option value="@AracIslemOdemeDurum.IptalEdildi">İptal Edildi</option>
+                                </select>
+                            </div>
+                            @if (_model.OdemeDurum == AracIslemOdemeDurum.KismiOdendi || _model.OdemeDurum == AracIslemOdemeDurum.TamOdendi)
+                            {
+                                <div class="mb-3">
+                                    <label class="form-label">Ödenen Tutar</label>
+                                    <div class="input-group">
+                                        <input type="number" step="0.01" class="form-control" @bind="_model.OdenenTutar" />
+                                        <span class="input-group-text">₺</span>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Ödeme Tarihi</label>
+                                    <input type="date" class="form-control" @bind="_model.OdemeTarihi" />
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    @if (_model.IslemTipi == AracIslemTipiDetay.Satis && !_model.FaturaKesildi && _model.NoterIslemTamam)
+                    {
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            <strong>Dikkat:</strong> Noter işlemi tamamlandı fakat fatura henüz kesilmedi.
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Kaydet Butonları -->
+            <div class="card">
+                <div class="card-body d-flex justify-content-between">
+                    <a href="/filo-operasyon/alim-satim" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left me-1"></i> Geri
+                    </a>
+                    <button type="submit" class="btn btn-primary" disabled="@_saving">
+                        @if (_saving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-check-lg me-1"></i> 
+                        @(_isEdit ? "Güncelle" : "Kaydet")
+                    </button>
+                </div>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int? Id { get; set; }
+
+    [SupplyParameterFromQuery]
+    public string? Tip { get; set; }
+
+    private bool _isEdit => Id.HasValue;
+    private bool _loading = true;
+    private bool _saving = false;
+    private AracAlimSatim _model = new();
+    private List<Arac> _araclar = new();
+    private List<Cari> _cariler = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _araclar = await AracService.GetAllAsync();
+            _cariler = await CariService.GetAllAsync();
+
+            if (_isEdit)
+            {
+                var existing = await FiloOperasyonService.GetAracAlimSatimAsync(Id!.Value);
+                if (existing == null)
+                {
+                    ToastService.ShowError("Kayıt bulunamadı.");
+                    NavigationManager.NavigateTo("/filo-operasyon/alim-satim");
+                    return;
+                }
+                _model = existing;
+            }
+            else
+            {
+                _model.IslemTarihi = DateTime.Today;
+                
+                // URL'den tip parametresi varsa ayarla
+                if (!string.IsNullOrEmpty(Tip))
+                {
+                    _model.IslemTipi = Tip.ToLower() switch
+                    {
+                        "satis" => AracIslemTipiDetay.Satis,
+                        "alim" or "alis" => AracIslemTipiDetay.Alis,
+                        "takas" => AracIslemTipiDetay.Takas,
+                        _ => AracIslemTipiDetay.Alis
+                    };
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Veri yüklenirken hata: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void HesaplaToplamTutar()
+    {
+        _model.ToplamTutar = _model.IslemTutari + _model.KDVTutari;
+    }
+
+    private async Task Kaydet()
+    {
+        if (_model.AracId == 0)
+        {
+            ToastService.ShowError("Lütfen araç seçin.");
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            if (_isEdit)
+            {
+                await FiloOperasyonService.UpdateAracAlimSatimAsync(_model);
+                ToastService.ShowSuccess("Kayıt başarıyla güncellendi.");
+            }
+            else
+            {
+                await FiloOperasyonService.CreateAracAlimSatimAsync(_model);
+                ToastService.ShowSuccess("Kayıt başarıyla oluşturuldu.");
+            }
+            NavigationManager.NavigateTo("/filo-operasyon/alim-satim");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Kayıt hatası: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}
+

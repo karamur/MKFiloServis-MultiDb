@@ -1,0 +1,509 @@
+@page "/cariler"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Models
+@using MKFiloServis.Web.Components.Shared
+@inject ICariService CariService
+@inject NavigationManager Navigation
+@inject IToastService ToastService
+@implements IDisposable
+@rendermode InteractiveServer
+
+<PageTitle>Cariler</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h3><i class="bi bi-people-fill me-2 text-primary"></i>Cari Listesi</h3>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0 small">
+                    <li class="breadcrumb-item"><a href="/dashboard">Ana Sayfa</a></li>
+                    <li class="breadcrumb-item active">Cari Yönetimi</li>
+                </ol>
+            </nav>
+        </div>
+        <button class="btn btn-primary" @onclick="YeniCari">
+            <i class="bi bi-plus-lg me-1"></i>Yeni Cari
+        </button>
+    </div>
+
+    <!-- Filtreler -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-center">
+                <div class="col-md-3">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control" placeholder="Ara (Kod, Unvan, Yetkili...)"
+                               @bind="aramaMetni" @bind:event="oninput" @bind:after="FiltreUygula" />
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" @bind="filtreTip" @bind:after="FiltreUygula">
+                        <option value="">Tum Tipler</option>
+                        <option value="Musteri">Musteri</option>
+                        <option value="Tedarikci">Tedarikci</option>
+                        <option value="MusteriTedarikci">Musteri+Tedarikci</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" @bind="filtreDurum" @bind:after="FiltreUygula">
+                        <option value="">Tum Durumlar</option>
+                        <option value="borclu">Borclu Cariler</option>
+                        <option value="alacakli">Alacakli Cariler</option>
+                        <option value="sifir">Bakiyesi Sifir</option>
+                        <option value="islemsiz">Islem Yapilmamis</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" @bind="filtreAktif" @bind:after="FiltreUygula">
+                        <option value="aktif">Aktif Cariler</option>
+                        <option value="pasif">Pasif Cariler</option>
+                        <option value="">Tumu</option>
+                    </select>
+                </div>
+                <div class="col-md-3 text-end">
+                    <span class="badge bg-secondary">@pagedResult?.TotalCount kayit</span>
+                    <button class="btn btn-outline-secondary btn-sm ms-2" @onclick="FiltreleriTemizle">
+                        <i class="bi bi-x-circle"></i> Temizle
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-4">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Yukleniyor...</span>
+            </div>
+        </div>
+    }
+    else if (pagedResult == null || !pagedResult.Items.Any())
+    {
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>Filtrelere uygun cari bulunamadi.
+        </div>
+    }
+    else
+    {
+        @* === ÖZET KARTLARI === *@
+        <div class="row mb-3 g-2">
+            <div class="col-6 col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body py-2 text-center">
+                        <div class="d-flex align-items-center justify-content-center">
+                            <i class="bi bi-people text-primary me-2" style="font-size: 1.5rem;"></i>
+                            <div>
+                                <div class="small text-muted">Toplam Cari</div>
+                                <div class="fs-4 fw-bold text-primary">@pagedResult.TotalCount</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body py-2 text-center">
+                        <div class="d-flex align-items-center justify-content-center">
+                            <i class="bi bi-arrow-down-circle text-danger me-2" style="font-size: 1.5rem;"></i>
+                            <div>
+                                <div class="small text-muted">Toplam Borç</div>
+                                <div class="fs-6 fw-bold text-danger">@pagedResult.Items.Sum(c => c.Borc).ToString("N0") ₺</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body py-2 text-center">
+                        <div class="d-flex align-items-center justify-content-center">
+                            <i class="bi bi-arrow-up-circle text-success me-2" style="font-size: 1.5rem;"></i>
+                            <div>
+                                <div class="small text-muted">Toplam Alacak</div>
+                                <div class="fs-6 fw-bold text-success">@pagedResult.Items.Sum(c => c.Alacak).ToString("N0") ₺</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body py-2 text-center">
+                        <div class="d-flex align-items-center justify-content-center">
+                            @{var netBakiye = pagedResult.Items.Sum(c => c.Alacak) - pagedResult.Items.Sum(c => c.Borc);}
+                            <i class="bi bi-wallet2 @(netBakiye >= 0 ? "text-success" : "text-danger") me-2" style="font-size: 1.5rem;"></i>
+                            <div>
+                                <div class="small text-muted">Net Bakiye</div>
+                                <div class="fs-6 fw-bold @(netBakiye >= 0 ? "text-success" : "text-danger")">@netBakiye.ToString("N0") ₺</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Cari Kodu</th>
+                                <th>Unvan</th>
+                                <th>Tip</th>
+                                <th>Telefon</th>
+                                <th>Yetkili</th>
+                                <th class="text-end">Borc</th>
+                                <th class="text-end">Alacak</th>
+                                <th class="text-end">Bakiye</th>
+                                <th style="width: 150px;" class="text-center">Islemler</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var cari in pagedResult.Items)
+                            {
+                                var bakiye = cari.Alacak - cari.Borc;
+                                <tr>
+                                    <td><strong>@cari.CariKodu</strong></td>
+                                    <td>@cari.Unvan</td>
+                                    <td>
+                                        <span class="badge @GetTipBadgeClass(cari.CariTipi)">
+                                            @GetTipText(cari.CariTipi)
+                                        </span>
+                                    </td>
+                                    <td><small>@cari.Telefon</small></td>
+                                    <td><small>@cari.YetkiliKisi</small></td>
+                                    <td class="text-end text-danger">
+                                        @if (cari.Borc > 0)
+                                        {
+                                            <small>@cari.Borc.ToString("N2") TL</small>
+                                        }
+                                    </td>
+                                    <td class="text-end text-success">
+                                        @if (cari.Alacak > 0)
+                                        {
+                                            <small>@cari.Alacak.ToString("N2") TL</small>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        <strong class="@(bakiye > 0 ? "text-success" : bakiye < 0 ? "text-danger" : "")">
+                                            @bakiye.ToString("N2") TL
+                                        </strong>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-info" @onclick="() => CariDetayAc(cari)" title="Detay">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                            <button class="btn btn-outline-primary" @onclick="() => Duzenle(cari.Id)" title="Duzenle">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <button class="btn btn-outline-success" @onclick="() => EkstreGit(cari.Id)" title="Ekstre">
+                                                <i class="bi bi-file-text"></i>
+                                            </button>
+                                            <button class="btn btn-outline-danger" @onclick="() => SilOnay(cari)" title="Sil">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-secondary">
+                            <tr>
+                                <td colspan="5"><strong>Sayfa Toplamı (@pagedResult.Items.Count kayıt)</strong></td>
+                                <td class="text-end text-danger"><strong>@pagedResult.Items.Sum(c => c.Borc).ToString("N2") TL</strong></td>
+                                <td class="text-end text-success"><strong>@pagedResult.Items.Sum(c => c.Alacak).ToString("N2") TL</strong></td>
+                                <td class="text-end"><strong>@((pagedResult.Items.Sum(c => c.Alacak) - pagedResult.Items.Sum(c => c.Borc)).ToString("N2")) TL</strong></td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sayfalama -->
+        <Pagination 
+            CurrentPage="@currentPage"
+            PageSize="@pageSize"
+            TotalItems="@(pagedResult?.TotalCount ?? 0)"
+            OnPageChanged="OnPageChanged"
+            PageSizeChanged="OnPageSizeChanged" />
+    }
+</div>
+
+<!-- Silme Modal -->
+@if (showDeleteModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Silme Onayi</h5>
+                    <button type="button" class="btn-close" @onclick="() => showDeleteModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p><strong>@silinecekCari?.Unvan</strong> isimli cariyi silmek istediginize emin misiniz?</p>
+                    @if (silinecekCari != null && (silinecekCari.Borc > 0 || silinecekCari.Alacak > 0))
+                    {
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            Bu carinin bakiyesi var! Borc: @silinecekCari.Borc.ToString("N2") TL, Alacak: @silinecekCari.Alacak.ToString("N2") TL
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showDeleteModal = false">Iptal</button>
+                    <button type="button" class="btn btn-danger" @onclick="SilAsync">Sil</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Detay Modal -->
+@if (showDetayModal && detayCari != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-person-lines-fill me-2"></i>Cari Detay</h5>
+                    <button type="button" class="btn-close" @onclick="() => showDetayModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-sm table-borderless">
+                                <tr><th width="120">Cari Kodu:</th><td><strong>@detayCari.CariKodu</strong></td></tr>
+                                <tr><th>Unvan:</th><td><strong>@detayCari.Unvan</strong></td></tr>
+                                <tr><th>Tip:</th><td><span class="badge @GetTipBadgeClass(detayCari.CariTipi)">@GetTipText(detayCari.CariTipi)</span></td></tr>
+                                <tr><th>Vergi No:</th><td>@(detayCari.VergiNo ?? "-")</td></tr>
+                                <tr><th>Vergi Dairesi:</th><td>@(detayCari.VergiDairesi ?? "-")</td></tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-sm table-borderless">
+                                <tr><th width="100">Yetkili:</th><td>@(detayCari.YetkiliKisi ?? "-")</td></tr>
+                                <tr><th>Telefon:</th><td>@(detayCari.Telefon ?? "-")</td></tr>
+                                <tr><th>Email:</th><td>@(detayCari.Email ?? "-")</td></tr>
+                                <tr><th>Adres:</th><td>@(detayCari.Adres ?? "-")</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    <hr />
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <h6 class="text-muted">Borc</h6>
+                            <h4 class="text-danger">@detayCari.Borc.ToString("N2") TL</h4>
+                        </div>
+                        <div class="col-4">
+                            <h6 class="text-muted">Alacak</h6>
+                            <h4 class="text-success">@detayCari.Alacak.ToString("N2") TL</h4>
+                        </div>
+                        <div class="col-4">
+                            <h6 class="text-muted">Bakiye</h6>
+                            @{var bak = detayCari.Alacak - detayCari.Borc;}
+                            <h4 class="@(bak > 0 ? "text-success" : bak < 0 ? "text-danger" : "")">@bak.ToString("N2") TL</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-info" @onclick="() => EkstreGit(detayCari.Id)">
+                        <i class="bi bi-file-text me-1"></i>Ekstre Goruntule
+                    </button>
+                    <button class="btn btn-primary" @onclick="() => Duzenle(detayCari.Id)">
+                        <i class="bi bi-pencil me-1"></i>Duzenle
+                    </button>
+                    <button class="btn btn-outline-danger" @onclick="() => { showDetayModal = false; SilOnay(detayCari); }">
+                        <i class="bi bi-trash me-1"></i>Sil
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="() => showDetayModal = false">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private PagedResult<Cari>? pagedResult;
+    private bool isLoading = true;
+    private bool showDeleteModal = false;
+    private bool showDetayModal = false;
+    private Cari? silinecekCari;
+    private Cari? detayCari;
+
+    // Sayfalama
+    private int currentPage = 1;
+    private int pageSize = 25;
+
+    // Filtre degiskenleri
+    private string aramaMetni = "";
+    private string filtreTip = "";
+    private string filtreDurum = "";
+    private string filtreAktif = "aktif";
+
+    // Debounce için timer
+    private System.Timers.Timer? _debounceTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        var filter = new CariFilterParams
+        {
+            PageNumber = currentPage,
+            PageSize = pageSize,
+            SearchTerm = aramaMetni,
+            CariTipi = string.IsNullOrEmpty(filtreTip) ? null : Enum.Parse<CariTipi>(filtreTip),
+            DurumFiltre = filtreDurum,
+            Aktif = filtreAktif switch
+            {
+                "aktif" => true,
+                "pasif" => false,
+                _ => null
+            }
+        };
+
+        pagedResult = await CariService.GetPagedAsync(filter);
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private void FiltreUygula()
+    {
+        // Debounce: Kullanıcı yazmayı bitirene kadar bekle
+        _debounceTimer?.Stop();
+        _debounceTimer?.Dispose();
+        _debounceTimer = new System.Timers.Timer(300);
+        _debounceTimer.Elapsed += async (s, e) =>
+        {
+            _debounceTimer?.Stop();
+            currentPage = 1; // Filtre değiştiğinde ilk sayfaya dön
+            await InvokeAsync(async () =>
+            {
+                await LoadData();
+            });
+        };
+        _debounceTimer.AutoReset = false;
+        _debounceTimer.Start();
+    }
+
+    private async Task FiltreleriTemizle()
+    {
+        aramaMetni = "";
+        filtreTip = "";
+        filtreDurum = "";
+        filtreAktif = "aktif";
+        currentPage = 1;
+        await LoadData();
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        currentPage = page;
+        await LoadData();
+    }
+
+    private async Task OnPageSizeChanged(int size)
+    {
+        pageSize = size;
+        currentPage = 1;
+        await LoadData();
+    }
+
+    private void YeniCari()
+    {
+        Navigation.NavigateTo("/cariler/yeni");
+    }
+
+    private void Duzenle(int id)
+    {
+        showDetayModal = false;
+        Navigation.NavigateTo($"/cariler/{id}");
+    }
+
+    private void EkstreGit(int cariId)
+    {
+        showDetayModal = false;
+        Navigation.NavigateTo($"/raporlar/cari-ekstre?cariId={cariId}");
+    }
+
+    private void CariDetayAc(Cari cari)
+    {
+        detayCari = cari;
+        showDetayModal = true;
+    }
+
+    private void SilOnay(Cari cari)
+    {
+        silinecekCari = cari;
+        showDeleteModal = true;
+    }
+
+    private async Task SilAsync()
+    {
+        if (silinecekCari != null)
+        {
+            try
+            {
+                var result = await CariService.DeleteAsync(silinecekCari.Id);
+                if (result)
+                {
+                    ToastService.ShowSuccess($"{silinecekCari.Unvan} silindi.");
+                    showDeleteModal = false;
+                    silinecekCari = null;
+
+                    // Listeyi yenile
+                    await LoadData();
+                    StateHasChanged();
+                }
+                else
+                {
+                    ToastService.ShowError("Silme islemi basarisiz.");
+                }
+            }
+            catch (Exception ex)
+            {
+                ToastService.ShowError("Silme hatasi: " + ex.Message);
+            }
+        }
+        showDeleteModal = false;
+        silinecekCari = null;
+    }
+
+    public void Dispose()
+    {
+        _debounceTimer?.Stop();
+        _debounceTimer?.Dispose();
+    }
+
+    private string GetTipBadgeClass(CariTipi tip) => tip switch
+    {
+        CariTipi.Musteri => "bg-success",
+        CariTipi.Tedarikci => "bg-warning text-dark",
+        CariTipi.MusteriTedarikci => "bg-info",
+        CariTipi.Personel => "bg-primary",
+        _ => "bg-secondary"
+    };
+
+    private string GetTipText(CariTipi tip) => tip switch
+    {
+        CariTipi.Musteri => "Musteri",
+        CariTipi.Tedarikci => "Tedarikci",
+        CariTipi.MusteriTedarikci => "M+T",
+        CariTipi.Personel => "Personel",
+        _ => tip.ToString()
+    };
+}
+

@@ -1,0 +1,220 @@
+@page "/ayarlar/gps-simulasyon"
+@using MKFiloServis.Web.Services
+@using Microsoft.AspNetCore.Authorization
+@inject GpsSimulasyonService SimulasyonService
+@inject IJSRuntime JSRuntime
+@attribute [Authorize]
+
+<PageTitle>GPS Simülasyon Yönetimi</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h3 class="mb-0">
+                    <i class="bi bi-broadcast text-primary me-2"></i>GPS Simülasyon Yönetimi
+                </h3>
+                <a href="/arac-takip" class="btn btn-outline-primary">
+                    <i class="bi bi-geo-alt"></i> Canlı Takip
+                </a>
+            </div>
+            <p class="text-muted mt-2 mb-0">
+                Test ve demo amaçlı GPS verisi simülasyonu. Aktif araç takip cihazları için gerçekçi konum verileri üretir.
+            </p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-gear me-2"></i>Simülasyon Kontrolü
+                </div>
+                <div class="card-body">
+                    <!-- Durum -->
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div>
+                            <h5 class="mb-1">Simülasyon Durumu</h5>
+                            <p class="text-muted mb-0">
+                                @if (aktif)
+                                {
+                                    <span class="badge bg-success fs-6">
+                                        <i class="bi bi-play-circle me-1"></i> Çalışıyor
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary fs-6">
+                                        <i class="bi bi-pause-circle me-1"></i> Durduruldu
+                                    </span>
+                                }
+                            </p>
+                        </div>
+                        <div>
+                            @if (aktif)
+                            {
+                                <button class="btn btn-danger btn-lg" @onclick="Durdur">
+                                    <i class="bi bi-stop-fill me-2"></i>Durdur
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-success btn-lg" @onclick="Baslat">
+                                    <i class="bi bi-play-fill me-2"></i>Başlat
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    <hr />
+
+                    <!-- Güncelleme Aralığı -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Güncelleme Aralığı</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" @bind="guncellemeAraligi" min="1" max="60" />
+                            <span class="input-group-text">saniye</span>
+                            <button class="btn btn-outline-primary" @onclick="GuncellemeAraligiKaydet">
+                                <i class="bi bi-check"></i> Uygula
+                            </button>
+                        </div>
+                        <small class="text-muted">Konum güncellemesi arasındaki süre (1-60 saniye)</small>
+                    </div>
+
+                    <hr />
+
+                    <!-- Sıfırlama -->
+                    <div>
+                        <button class="btn btn-outline-warning" @onclick="Sifirla">
+                            <i class="bi bi-arrow-counterclockwise me-2"></i>Araç Durumlarını Sıfırla
+                        </button>
+                        <small class="d-block text-muted mt-1">
+                            Tüm araçların simülasyon durumunu sıfırlar ve yeni rastgele başlangıç noktaları atar.
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-info text-white">
+                    <i class="bi bi-info-circle me-2"></i>Bilgilendirme
+                </div>
+                <div class="card-body">
+                    <h6 class="fw-bold">Simülasyon Nasıl Çalışır?</h6>
+                    <ul class="mb-4">
+                        <li>Aktif GPS cihazları için otomatik konum verisi üretir</li>
+                        <li>Her araç 3 modda çalışır: <strong>Hareket</strong>, <strong>Bekliyor</strong>, <strong>Park</strong></li>
+                        <li>Modlar rastgele 5-15 dakika aralığında değişir</li>
+                        <li>Konum verileri veritabanına kaydedilir</li>
+                        <li>SignalR ile canlı takip sayfasına anlık iletilir</li>
+                    </ul>
+
+                    <h6 class="fw-bold">Üretilen Veriler</h6>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <div class="border rounded p-2 text-center">
+                                <i class="bi bi-geo-alt text-primary fs-4"></i>
+                                <div class="small">Konum (Lat/Lng)</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-2 text-center">
+                                <i class="bi bi-speedometer2 text-success fs-4"></i>
+                                <div class="small">Hız (km/s)</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-2 text-center">
+                                <i class="bi bi-compass text-warning fs-4"></i>
+                                <div class="small">Yön (derece)</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-2 text-center">
+                                <i class="bi bi-fuel-pump text-danger fs-4"></i>
+                                <div class="small">Yakıt (%)</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-2 text-center">
+                                <i class="bi bi-key text-info fs-4"></i>
+                                <div class="small">Kontak Durumu</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-2 text-center">
+                                <i class="bi bi-battery-half text-secondary fs-4"></i>
+                                <div class="small">Batarya (%)</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-warning mt-4 mb-0">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Not:</strong> Bu özellik yalnızca test ve demo amaçlıdır. 
+                        Gerçek GPS cihazları bağlandığında simülasyonu kapatmanız önerilir.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Yapılandırma Bilgisi -->
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <i class="bi bi-code-slash me-2"></i>appsettings.json Yapılandırması
+                </div>
+                <div class="card-body">
+                    <pre class="bg-dark text-light p-3 rounded mb-0"><code>{
+  "GpsSimulasyon": {
+    "Aktif": @(aktif ? "true" : "false"),
+    "GuncellemeAraligiSaniye": @guncellemeAraligi
+  }
+}</code></pre>
+                    <small class="text-muted">
+                        Uygulama başlangıcında bu ayarlar okunur. Çalışma sırasında bu sayfadan değiştirilebilir.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool aktif = false;
+    private int guncellemeAraligi = 10;
+
+    protected override void OnInitialized()
+    {
+        aktif = SimulasyonService.AktifMi;
+    }
+
+    private async Task Baslat()
+    {
+        SimulasyonService.Baslat();
+        aktif = true;
+        await Task.CompletedTask;
+    }
+
+    private async Task Durdur()
+    {
+        SimulasyonService.Durdur();
+        aktif = false;
+        await Task.CompletedTask;
+    }
+
+    private void GuncellemeAraligiKaydet()
+    {
+        SimulasyonService.GuncellemeAraligiAyarla(guncellemeAraligi);
+    }
+
+    private void Sifirla()
+    {
+        SimulasyonService.Sifirla();
+    }
+}
+

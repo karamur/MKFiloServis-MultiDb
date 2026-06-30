@@ -1,4 +1,4 @@
-﻿name: 🛡️ NuGet Vulnerability Audit
+name: 🛡️ NuGet Vulnerability Audit
 
 on:
   schedule:
@@ -129,3 +129,4 @@ jobs:
                 labels: ['type: security', 'dependencies', 'priority: high'],
               });
             }
+

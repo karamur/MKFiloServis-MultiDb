@@ -4,7 +4,7 @@
 
 ## OperasyonKaydi Entity
 
-**Dosya:** `KOAFiloServis.Shared/Entities/OperasyonKaydi.cs`
+**Dosya:** `MKFiloServis.Shared/Entities/OperasyonKaydi.cs`
 **Base:** `BaseEntity` + `IFirmaTenant`
 
 ### Alan Listesi (39 alan)
@@ -154,3 +154,4 @@ PuantajKayit (aylık)
 **Yeni Kayıt:**
 - Inline form: Araç autocomplete + Şoför autocomplete + Slot toggle + Sefer sayısı
 - Ekle butonu → listeye ekler + dirty tracking
+

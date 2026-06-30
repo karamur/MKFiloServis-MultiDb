@@ -1,0 +1,2598 @@
+@page "/ihale-hazirlik"
+@page "/ihale-hazirlik/{ProjeId:int}"
+@rendermode InteractiveServer
+@using System.Globalization
+@using System.Net
+@using System.Text.RegularExpressions
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Models
+@using MKFiloServis.Web.Services
+@inject IIhaleHazirlikService IhaleService
+@inject IIhaleTeklifVersiyonService TeklifVersiyonService
+@inject IIhaleTeklifKarsilastirmaService TeklifKarsilastirmaService
+@inject IIhaleTeklifExportService TeklifExportService
+@inject IOllamaService OllamaService
+@inject ICariService CariService
+@inject IGuzergahService GuzergahService
+@inject IAracService AracService
+@inject IKullaniciService KullaniciService
+@inject IExcelService ExcelService
+@inject IHttpClientFactory HttpClientFactory
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject IToastService ToastService
+
+<PageTitle>İhale Hazırlık</PageTitle>
+
+@if (secilenProje == null)
+{
+    <!-- PROJE LİSTESİ -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4><i class="bi bi-briefcase me-2"></i>İhale Hazırlık Projeleri</h4>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-success" @onclick="OrnekVeriOlusturAsync" disabled="@yukleniyor">
+                <i class="bi bi-magic me-1"></i> Örnek Veri Oluştur
+            </button>
+            <button class="btn btn-primary" @onclick="YeniProjeModal">
+                <i class="bi bi-plus-circle me-1"></i> Yeni Proje
+            </button>
+        </div>
+    </div>
+
+    @if (operasyonDashboard != null && operasyonDashboard.KazanilanProjeSayisi > 0)
+    {
+        <div class="card shadow-sm mb-3 border-warning-subtle">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>İhale Sonrası Operasyon Özeti</h6>
+                <div class="d-flex gap-2 align-items-center">
+                    <small class="text-muted">Kazanılan projeler baz alınır</small>
+                    <button class="btn btn-sm btn-outline-success" @onclick="OperasyonDashboardExcelExportAsync">
+                        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-2">
+                        <div class="card bg-light h-100">
+                            <div class="card-body py-2 text-center">
+                                <small class="text-muted">Kazanılan / Analiz Edilen</small><br/>
+                                <strong>@operasyonDashboard.KazanilanProjeSayisi / @operasyonDashboard.AnalizEdilenProjeSayisi</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card border-primary h-100">
+                            <div class="card-body py-2 text-center">
+                                <small class="text-muted">Ort. Teklif Doğruluk</small><br/>
+                                <strong class="text-primary">%@operasyonDashboard.OrtalamaTeklifDogrulukSkoru.ToString("N1")</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card border-danger h-100">
+                            <div class="card-body py-2 text-center">
+                                <small class="text-muted">Riskli Proje Sayısı</small><br/>
+                                <strong class="text-danger">@operasyonDashboard.RiskliProjeSayisi</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card border-info h-100">
+                            <div class="card-body py-2 text-center">
+                                <small class="text-muted">Revizyonlu Proje</small><br/>
+                                <strong class="text-info">@operasyonDashboard.RevizyonluProjeSayisi</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card border-secondary h-100">
+                            <div class="card-body py-2 text-center">
+                                <small class="text-muted">Süre Uzatımı</small><br/>
+                                <strong>@operasyonDashboard.SureUzatimliProjeSayisi</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card border-warning h-100">
+                            <div class="card-body py-2 text-center">
+                                <small class="text-muted">En Kötü Kâr Sapması</small><br/>
+                                <strong class="@GetKarSapmaClass(operasyonDashboard.EnKotusuKarSapmasi)">@FormatSigned(operasyonDashboard.EnKotusuKarSapmasi) ₺</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @if (operasyonDashboard.ToplamRevizyonBedelFarki != 0)
+                {
+                    <div class="alert alert-info py-2 mb-3">
+                        <strong>Toplam revizyon bedel farkı:</strong>
+                        <span class="ms-1 @(operasyonDashboard.ToplamRevizyonBedelFarki >= 0 ? "text-success" : "text-danger")">@FormatSigned(operasyonDashboard.ToplamRevizyonBedelFarki) ₺</span>
+                    </div>
+                }
+
+                @if (operasyonDashboard.RiskliProjeler.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Proje</th>
+                                    <th class="text-center">Risk</th>
+                                    <th class="text-center">Revizyon</th>
+                                    <th class="text-end">Doğruluk</th>
+                                    <th class="text-end">Maliyet Sapma %</th>
+                                    <th class="text-end">Bedel Farkı</th>
+                                    <th class="text-end">Kâr Sapması</th>
+                                    <th class="text-end">İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var riskli in operasyonDashboard.RiskliProjeler)
+                                {
+                                    <tr>
+                                        <td>
+                                            <strong>@riskli.ProjeAdi</strong>
+                                            <div class="small text-muted">@riskli.ProjeKodu</div>
+                                        </td>
+                                        <td class="text-center"><span class="badge @GetRiskBadge(riskli.RiskSeviyesi)">@GetRiskMetni(riskli.RiskSeviyesi)</span></td>
+                                        <td class="text-center">@riskli.AktifRevizyonSayisi</td>
+                                        <td class="text-end">%@riskli.TeklifDogrulukSkoru.ToString("N1")</td>
+                                        <td class="text-end @GetFarkTextClass(riskli.MaliyetSapmaOrani)">@FormatSigned(riskli.MaliyetSapmaOrani)</td>
+                                        <td class="text-end @(riskli.ToplamRevizyonBedelFarki >= 0 ? "text-success" : "text-danger")">@FormatSigned(riskli.ToplamRevizyonBedelFarki)</td>
+                                        <td class="text-end @GetKarSapmaClass(riskli.KarSapmasi)">@FormatSigned(riskli.KarSapmasi)</td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm btn-outline-primary" @onclick="() => ProjeSecAsync(riskli.ProjeId)">
+                                                <i class="bi bi-eye me-1"></i>Aç
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    @if (projeler == null)
+    {
+        <div class="text-center py-5"><div class="spinner-border"></div></div>
+    }
+    else if (!projeler.Any())
+    {
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>Henüz ihale projesi oluşturulmamış.
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            @foreach (var p in projeler)
+            {
+                <div class="col-md-6 col-xl-4 mb-3">
+                    <div class="card h-100 shadow-sm border-start border-4 @GetDurumBorderColor(p.Durum)">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <h6 class="mb-0">@p.ProjeAdi</h6>
+                                    <small class="text-muted">@p.ProjeKodu</small>
+                                </div>
+                                <span class="badge @GetDurumBadge(p.Durum)">@GetDurumMetin(p.Durum)</span>
+                            </div>
+                            <div class="small text-muted mb-2">
+                                @if (p.Cari != null) { <span><i class="bi bi-building me-1"></i>@p.Cari.Unvan</span><br/> }
+                                <span><i class="bi bi-calendar me-1"></i>@p.BaslangicTarihi.ToString("dd.MM.yyyy") - @p.BitisTarihi.ToString("dd.MM.yyyy")</span><br/>
+                                <span><i class="bi bi-clock me-1"></i>@p.SozlesmeSuresiAy ay</span>
+                                <span class="ms-2"><i class="bi bi-signpost me-1"></i>@p.Kalemler.Count(k => !k.IsDeleted) hat</span>
+                            </div>
+                            <div class="d-flex gap-1 mt-2">
+                                <button class="btn btn-sm btn-outline-primary flex-fill" @onclick="() => ProjeSecAsync(p.Id)">
+                                    <i class="bi bi-pencil me-1"></i>Düzenle
+                                </button>
+                                <button class="btn btn-sm btn-outline-success" @onclick="() => KopyalaProjeAsync(p)" title="Kopyala">
+                                    <i class="bi bi-copy"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => SilProjeAsync(p.Id)" title="Sil">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+}
+else
+{
+    <!-- PROJE DETAY -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <button class="btn btn-sm btn-outline-secondary me-2" @onclick="ListeyeDon">
+                <i class="bi bi-arrow-left me-1"></i>Projeler
+            </button>
+            <span class="h5 mb-0">@secilenProje.ProjeAdi</span>
+            <span class="badge @GetDurumBadge(secilenProje.Durum) ms-2">@GetDurumMetin(secilenProje.Durum)</span>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-info" @onclick="ProjeAyarModal">
+                <i class="bi bi-gear me-1"></i>Proje Ayarları
+            </button>
+            @if (aiAktif)
+            {
+                <button class="btn btn-sm btn-purple" @onclick="AIProjeAnalizAsync" disabled="@yukleniyor">
+                    <i class="bi bi-robot me-1"></i>AI Analiz
+                </button>
+            }
+            <button class="btn btn-sm btn-success" @onclick="RaporGosterAsync">
+                <i class="bi bi-file-earmark-bar-graph me-1"></i>Rapor
+            </button>
+        </div>
+    </div>
+
+    <!-- Proje Bilgi Kartları -->
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <div class="card bg-light">
+                <div class="card-body py-2 text-center">
+                    <small class="text-muted">Müşteri</small><br/>
+                    <strong>@(secilenProje.Cari?.Unvan ?? secilenProje.Firma?.FirmaAdi ?? "-")</strong>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-light">
+                <div class="card-body py-2 text-center">
+                    <small class="text-muted">Süre</small><br/>
+                    <strong>@secilenProje.SozlesmeSuresiAy ay</strong>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-light">
+                <div class="card-body py-2 text-center">
+                    <small class="text-muted">Hat Sayısı</small><br/>
+                    <strong>@aktifKalemler.Count</strong>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-light">
+                <div class="card-body py-2 text-center">
+                    <small class="text-muted">Aylık Maliyet</small><br/>
+                    <strong class="text-danger">@aktifKalemler.Sum(k => k.AylikMaliyet).ToString("N0") ₺</strong>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-light">
+                <div class="card-body py-2 text-center">
+                    <small class="text-muted">Aylık Teklif</small><br/>
+                    <strong class="text-success">@aktifKalemler.Sum(k => k.AylikTeklifFiyati).ToString("N0") ₺</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rapor Bölümü -->
+    @if (projeOzet != null && raporGoster)
+    {
+        <div id="raporKart" class="card shadow-sm mb-3 border-primary">
+            <div class="card-header d-flex justify-content-between align-items-center bg-primary text-white">
+                <h6 class="mb-0"><i class="bi bi-file-earmark-bar-graph me-2"></i>Kâr/Zarar/Masraf Tablosu - Enflasyonlu Projeksiyon</h6>
+                <button class="btn btn-sm btn-outline-light" @onclick="() => raporGoster = false"><i class="bi bi-x"></i></button>
+            </div>
+            <div class="card-body p-0">
+                @if (projeOzet.AylikProjeksiyonlar.Any())
+                {
+                    var ilkAy = projeOzet.AylikProjeksiyonlar.First();
+                    var sonAy = projeOzet.AylikProjeksiyonlar.Last();
+                    var artisTutari = sonAy.ToplamMaliyet - ilkAy.ToplamMaliyet;
+                    var artisOrani = ilkAy.ToplamMaliyet > 0 ? artisTutari / ilkAy.ToplamMaliyet * 100 : 0;
+
+                    <div class="row g-0 border-bottom">
+                        <div class="col-md-4 p-3 text-center border-end">
+                            <small class="text-muted d-block">İlk Ay Maliyeti</small>
+                            <strong class="text-primary">@ilkAy.ToplamMaliyet.ToString("N0") ₺</strong>
+                        </div>
+                        <div class="col-md-4 p-3 text-center border-end">
+                            <small class="text-muted d-block">Son Ay Tahmini Maliyeti</small>
+                            <strong class="text-danger">@sonAy.ToplamMaliyet.ToString("N0") ₺</strong>
+                        </div>
+                        <div class="col-md-4 p-3 text-center">
+                            <small class="text-muted d-block">Süre Sonu Maliyet Artışı</small>
+                            <strong class="@(artisTutari >= 0 ? "text-warning" : "text-success")">@artisTutari.ToString("N0") ₺ (%@artisOrani.ToString("N1"))</strong>
+                        </div>
+                    </div>
+                }
+
+                <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                    <table class="table table-sm table-striped mb-0">
+                        <thead class="table-dark sticky-top">
+                            <tr>
+                                <th>Dönem</th>
+                                <th class="text-end">Maliyet</th>
+                                <th class="text-end">Kâr</th>
+                                <th class="text-end">Teklif</th>
+                                <th class="text-end">Enflasyon Etkisi</th>
+                                <th class="text-end">Küm. Maliyet</th>
+                                <th class="text-end">Küm. Kâr</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var ay in projeOzet.AylikProjeksiyonlar)
+                            {
+                                <tr>
+                                    <td>@ay.DonemAdi</td>
+                                    <td class="text-end text-danger">@ay.ToplamMaliyet.ToString("N0")</td>
+                                    <td class="text-end text-success">@ay.ToplamKar.ToString("N0")</td>
+                                    <td class="text-end fw-bold">@ay.ToplamTeklif.ToString("N0")</td>
+                                    <td class="text-end @(ay.EnflasyonEtkisi > 0 ? "text-danger" : "")">
+                                        @(ay.EnflasyonEtkisi > 0 ? "+" : "")@ay.EnflasyonEtkisi.ToString("N0")
+                                    </td>
+                                    <td class="text-end">@ay.KumulatifMaliyet.ToString("N0")</td>
+                                    <td class="text-end text-success">@ay.KumulatifKar.ToString("N0")</td>
+                                </tr>
+                            }
+                        </tbody>
+                        @if (projeOzet.AylikProjeksiyonlar.Any())
+                        {
+                            <tfoot class="table-dark">
+                                <tr class="fw-bold">
+                                    <td>TOPLAM</td>
+                                    <td class="text-end text-danger">@projeOzet.AylikProjeksiyonlar.Sum(a => a.ToplamMaliyet).ToString("N0")</td>
+                                    <td class="text-end text-success">@projeOzet.AylikProjeksiyonlar.Sum(a => a.ToplamKar).ToString("N0")</td>
+                                    <td class="text-end">@projeOzet.AylikProjeksiyonlar.Sum(a => a.ToplamTeklif).ToString("N0")</td>
+                                    <td class="text-end">@projeOzet.AylikProjeksiyonlar.Sum(a => a.EnflasyonEtkisi).ToString("N0")</td>
+                                    <td class="text-end">—</td>
+                                    <td class="text-end text-success">@projeOzet.AylikProjeksiyonlar.Last().KumulatifKar.ToString("N0")</td>
+                                </tr>
+                            </tfoot>
+                        }
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Maliyet Dağılım Kartları -->
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <div class="card border-danger">
+                    <div class="card-body text-center py-2">
+                        <small class="text-muted">Toplam Proje Maliyeti</small>
+                        <h5 class="text-danger mb-0">@projeOzet.AylikProjeksiyonlar.Sum(a => a.ToplamMaliyet).ToString("N0") ₺</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-success">
+                    <div class="card-body text-center py-2">
+                        <small class="text-muted">Toplam Proje Kârı</small>
+                        <h5 class="text-success mb-0">@projeOzet.AylikProjeksiyonlar.Sum(a => a.ToplamKar).ToString("N0") ₺</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-primary">
+                    <div class="card-body text-center py-2">
+                        <small class="text-muted">Toplam Teklif Bedeli</small>
+                        <h5 class="text-primary mb-0">@projeOzet.AylikProjeksiyonlar.Sum(a => a.ToplamTeklif).ToString("N0") ₺</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-warning">
+                    <div class="card-body text-center py-2">
+                        <small class="text-muted">Enflasyon Toplam Etkisi</small>
+                        <h5 class="text-warning mb-0">@projeOzet.AylikProjeksiyonlar.Sum(a => a.EnflasyonEtkisi).ToString("N0") ₺</h5>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (gerceklesenAnaliz != null && (secilenProje.Durum == IhaleProjeDurum.Kazanildi || gerceklesenAnaliz.ToplamGerceklesenSeferSayisi > 0))
+    {
+        var enKarlıHat = gerceklesenAnaliz.Kalemler.OrderByDescending(x => x.GerceklesenKar).FirstOrDefault();
+        var enRiskliHat = gerceklesenAnaliz.Kalemler.OrderBy(x => x.KarSapmasi).FirstOrDefault();
+        var enYuksekMaliyetSapmaliHat = gerceklesenAnaliz.Kalemler.OrderByDescending(x => Math.Abs(x.MaliyetSapmasi)).FirstOrDefault();
+
+        <div class="card shadow-sm mb-3 border-success-subtle">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-graph-up-arrow me-2"></i>Gerçekleşen vs Tekliflenen Analiz</h6>
+                <div class="d-flex gap-2 align-items-center">
+                    <small class="text-muted">@gerceklesenAnaliz.AnalizBaslangicTarihi.ToString("dd.MM.yyyy") - @gerceklesenAnaliz.AnalizBitisTarihi.ToString("dd.MM.yyyy")</small>
+                    <button class="btn btn-sm btn-outline-success" @onclick="GerceklesenAnalizExcelExportAsync">
+                        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3">
+                        <div class="card bg-light h-100">
+                            <div class="card-body py-2 text-center">
+                                <small class="text-muted">Geçen Ay / Sefer</small><br/>
+                                <strong>@gerceklesenAnaliz.GecenAySayisi ay / @gerceklesenAnaliz.ToplamGerceklesenSeferSayisi sefer</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-danger h-100">
+                            <div class="card-body py-2 text-center">
+                                <small class="text-muted">Planlanan / Gerçekleşen Maliyet</small><br/>
+                                <strong class="text-danger">@gerceklesenAnaliz.PlanlananToplamMaliyet.ToString("N0") / @gerceklesenAnaliz.GerceklesenToplamMaliyet.ToString("N0") ₺</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-primary h-100">
+                            <div class="card-body py-2 text-center">
+                                <small class="text-muted">Planlanan / Gerçekleşen Gelir</small><br/>
+                                <strong class="text-primary">@gerceklesenAnaliz.PlanlananToplamTeklif.ToString("N0") / @gerceklesenAnaliz.GerceklesenToplamGelir.ToString("N0") ₺</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-warning h-100">
+                            <div class="card-body py-2 text-center">
+                                <small class="text-muted">Kâr Sapması</small><br/>
+                                <strong class="@GetKarSapmaClass(gerceklesenAnaliz.KarSapmasi)">@FormatSigned(gerceklesenAnaliz.KarSapmasi) ₺</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @if (gerceklesenAnaliz.AktifSozlesmeRevizyonSayisi > 0)
+                {
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <div class="card border-info h-100">
+                                <div class="card-body py-2 text-center">
+                                    <small class="text-muted">Aktif Revizyon Sayısı</small><br/>
+                                    <strong class="text-info">@gerceklesenAnaliz.AktifSozlesmeRevizyonSayisi</strong>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-secondary h-100">
+                                <div class="card-body py-2 text-center">
+                                    <small class="text-muted">Toplam Bedel Farkı</small><br/>
+                                    <strong class="@(gerceklesenAnaliz.ToplamRevizyonBedelFarki >= 0 ? "text-success" : "text-danger")">@FormatSigned(gerceklesenAnaliz.ToplamRevizyonBedelFarki) ₺</strong>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-dark h-100">
+                                <div class="card-body py-2 text-center">
+                                    <small class="text-muted">Toplam Süre Farkı</small><br/>
+                                    <strong>@gerceklesenAnaliz.ToplamRevizyonSureFarkiAy ay</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info py-2 mb-3">
+                        <strong>Revizyon etkili planlanan gelir:</strong>
+                        <span class="ms-1">@gerceklesenAnaliz.RevizyonEtkiliPlanlananTeklif.ToString("N0") ₺</span>
+                        <span class="mx-2">|</span>
+                        <strong>Revizyon sonrası gelir sapması:</strong>
+                        <span class="ms-1 @GetFarkTextClass(gerceklesenAnaliz.RevizyonEtkiliGelirSapmasi)">@FormatSigned(gerceklesenAnaliz.RevizyonEtkiliGelirSapmasi) ₺</span>
+                    </div>
+
+                    <div class="table-responsive mb-3">
+                        <table class="table table-sm table-bordered align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Revizyon No</th>
+                                    <th>Tip</th>
+                                    <th>Başlık</th>
+                                    <th>Tarih</th>
+                                    <th>Yürürlük</th>
+                                    <th class="text-end">Bedel Farkı</th>
+                                    <th class="text-center">Süre Farkı</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var revizyon in gerceklesenAnaliz.AktifRevizyonlar)
+                                {
+                                    <tr>
+                                        <td><strong>@revizyon.RevizyonNo</strong></td>
+                                        <td>@revizyon.Tip</td>
+                                        <td>@revizyon.Baslik</td>
+                                        <td>@revizyon.RevizyonTarihi.ToString("dd.MM.yyyy")</td>
+                                        <td>@(revizyon.YurutmeTarihi?.ToString("dd.MM.yyyy") ?? "-")</td>
+                                        <td class="text-end @(revizyon.BedelFarki >= 0 ? "text-success" : "text-danger")">@FormatSigned(revizyon.BedelFarki)</td>
+                                        <td class="text-center">@revizyon.SureFarkiAy</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <div class="card border-success h-100">
+                            <div class="card-body py-2 text-center">
+                                <small class="text-muted">En Karlı Hat</small><br/>
+                                <strong class="text-success">@(enKarlıHat?.HatAdi ?? "-")</strong>
+                                <div class="small text-muted">@(enKarlıHat != null ? $"{enKarlıHat.GerceklesenKar:N0} ₺" : "-")</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-danger h-100">
+                            <div class="card-body py-2 text-center">
+                                <small class="text-muted">En Riskli Hat</small><br/>
+                                <strong class="text-danger">@(enRiskliHat?.HatAdi ?? "-")</strong>
+                                <div class="small text-muted">@(enRiskliHat != null ? $"{enRiskliHat.KarSapmasi:N0} ₺ kâr sapması" : "-")</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-warning h-100">
+                            <div class="card-body py-2 text-center">
+                                <small class="text-muted">En Yüksek Maliyet Sapması</small><br/>
+                                <strong class="text-warning">@(enYuksekMaliyetSapmaliHat?.HatAdi ?? "-")</strong>
+                                <div class="small text-muted">@(enYuksekMaliyetSapmaliHat != null ? $"{enYuksekMaliyetSapmaliHat.MaliyetSapmasi:N0} ₺" : "-")</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <div class="card border-primary h-100">
+                            <div class="card-body py-2 text-center">
+                                <small class="text-muted">Teklif Doğruluk Skoru</small><br/>
+                                <strong class="text-primary fs-5">%@gerceklesenAnaliz.TeklifDogrulukSkoru.ToString("N1")</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card border-secondary h-100">
+                            <div class="card-body py-2 text-center">
+                                <small class="text-muted">Risk Seviyesi</small><br/>
+                                <span class="badge @GetRiskBadge(gerceklesenAnaliz.RiskSeviyesi) fs-6">@GetRiskMetni(gerceklesenAnaliz.RiskSeviyesi)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <div class="alert @(gerceklesenAnaliz.MaliyetSapmasi > 0 ? "alert-danger" : "alert-success") py-2 mb-0">
+                            <strong>Maliyet Sapması:</strong>
+                            <span class="ms-1">@FormatSigned(gerceklesenAnaliz.MaliyetSapmasi) ₺ (%@gerceklesenAnaliz.MaliyetSapmaOrani.ToString("N1"))</span>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="alert @(gerceklesenAnaliz.GelirSapmasi >= 0 ? "alert-success" : "alert-danger") py-2 mb-0">
+                            <strong>Gelir Sapması:</strong>
+                            <span class="ms-1">@FormatSigned(gerceklesenAnaliz.GelirSapmasi) ₺ (%@gerceklesenAnaliz.GelirSapmaOrani.ToString("N1"))</span>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="alert @(gerceklesenAnaliz.KarSapmasi >= 0 ? "alert-success" : "alert-danger") py-2 mb-0">
+                            <strong>Gerçekleşen Kâr:</strong>
+                            <span class="ms-1">@gerceklesenAnaliz.GerceklesenToplamKar.ToString("N0") ₺</span>
+                        </div>
+                    </div>
+                </div>
+
+                @if (gerceklesenAnaliz.Kalemler.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Hat</th>
+                                    <th class="text-center">Sahiplik</th>
+                                    <th class="text-center">Skor</th>
+                                    <th class="text-center">Risk</th>
+                                    <th class="text-center">Sefer</th>
+                                    <th class="text-end">Planlanan Maliyet</th>
+                                    <th class="text-end">Gerçekleşen Maliyet</th>
+                                    <th class="text-end">Maliyet Sapması</th>
+                                    <th class="text-end">Planlanan Gelir</th>
+                                    <th class="text-end">Gerçekleşen Gelir</th>
+                                    <th class="text-end">Kâr Sapması</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var kalem in gerceklesenAnaliz.Kalemler.OrderByDescending(x => Math.Abs(x.KarSapmasi)))
+                                {
+                                    <tr>
+                                        <td><strong>@kalem.HatAdi</strong></td>
+                                        <td class="text-center"><span class="badge @GetSahiplikBadge(ParseSahiplik(kalem.SahiplikDurumu))">@GetSahiplikMetin(ParseSahiplik(kalem.SahiplikDurumu))</span></td>
+                                        <td class="text-center"><span class="badge bg-primary-subtle text-primary border">%@kalem.TeklifDogrulukSkoru.ToString("N1")</span></td>
+                                        <td class="text-center"><span class="badge @GetRiskBadge(kalem.RiskSeviyesi)">@GetRiskMetni(kalem.RiskSeviyesi)</span></td>
+                                        <td class="text-center">@kalem.GerceklesenSeferSayisi</td>
+                                        <td class="text-end">@kalem.PlanlananMaliyet.ToString("N0")</td>
+                                        <td class="text-end">@kalem.GerceklesenMaliyet.ToString("N0")</td>
+                                        <td class="text-end @GetFarkTextClass(kalem.MaliyetSapmasi)">@FormatSigned(kalem.MaliyetSapmasi)</td>
+                                        <td class="text-end">@kalem.PlanlananTeklif.ToString("N0")</td>
+                                        <td class="text-end">@kalem.GerceklesenGelir.ToString("N0")</td>
+                                        <td class="text-end @GetKarSapmaClass(kalem.KarSapmasi)">@FormatSigned(kalem.KarSapmasi)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    <!-- Teklif Versiyonları -->
+    <div class="card shadow-sm mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0"><i class="bi bi-layers me-2"></i>Teklif Versiyonları</h6>
+            <div class="d-flex gap-2">
+                @if (!teklifVersiyonlari.Any())
+                {
+                    <button class="btn btn-sm btn-primary" @onclick="IlkVersiyonOlusturAsync" disabled="@(!CanManageDraftTeklif() || yukleniyor)">
+                        <i class="bi bi-plus-circle me-1"></i>İlk Versiyonu Oluştur
+                    </button>
+                }
+                else
+                {
+                    <button class="btn btn-sm btn-outline-primary" @onclick="RevizyonModalAc" disabled="@(!CanManageDraftTeklif() || yukleniyor || aktifTeklifVersiyon == null)">
+                        <i class="bi bi-copy me-1"></i>Yeni Revizyon
+                    </button>
+                }
+            </div>
+        </div>
+        <div class="card-body">
+            @if (!teklifVersiyonlari.Any())
+            {
+                <div class="alert alert-info mb-0">
+                    <i class="bi bi-info-circle me-2"></i>Bu proje için henüz teklif versiyonu oluşturulmamış.
+                </div>
+            }
+            else
+            {
+                <AktifTeklifVersiyonKarti AktifVersiyon="aktifTeklifVersiyon" />
+
+                <TeklifVersiyonlariTablosu Versiyonlar="teklifVersiyonlari"
+                                          CanManageDraft="CanManageDraftTeklif()"
+                                          CanApprovePredicate="CanApproveTeklif"
+                                          CanExportPredicate="CanExportTeklif"
+                                          OnSetActive="AktifVersiyonYapAsync"
+                                          OnSendToReview="IncelemeyeGonderAsync"
+                                          OnApprove="OnayModalAc"
+                                          OnReject="RedModalAc"
+                                          OnPdfExport="PdfExportAsync"
+                                          OnExcelExport="ExcelExportAsync" />
+
+                @if (teklifVersiyonlari.Count >= 2)
+                {
+                    <TeklifVersiyonKarsilastirmaPaneli Versiyonlar="teklifVersiyonlari"
+                                                     @bind-SolVersiyonId="karsilastirmaSolVersiyonId"
+                                                     @bind-SagVersiyonId="karsilastirmaSagVersiyonId"
+                                                     Yukleniyor="yukleniyor"
+                                                     Karsilastirma="teklifKarsilastirma"
+                                                     OnCompare="VersiyonKarsilastirAsync" />
+                }
+
+                <TeklifKararGecmisiPaneli KararLoglari="teklifKararLoglari" />
+            }
+        </div>
+    </div>
+
+    <!-- Rakip / Piyasa Benchmark -->
+    <div class="mb-3">
+        <RakipBenchmarkPaneli IhaleProjeId="secilenProje.Id"
+                              BizimTeklifimiz="@(aktifTeklifVersiyon?.TeklifTutari ?? 0)" />
+    </div>
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Sözleşme Revizyon / Ek Protokol Takibi</h6>
+            <button class="btn btn-sm btn-outline-primary" @onclick="SozlesmeRevizyonModalAc">
+                <i class="bi bi-plus-circle me-1"></i>Yeni Kayıt
+            </button>
+        </div>
+        <div class="card-body">
+            @if (!sozlesmeRevizyonlari.Any())
+            {
+                <div class="alert alert-light border mb-0">
+                    <i class="bi bi-info-circle me-2"></i>Bu proje için henüz sözleşme revizyonu veya ek protokol kaydı yok.
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>No</th>
+                                <th>Tip</th>
+                                <th>Başlık</th>
+                                <th>Tarih</th>
+                                <th>Yürürlük</th>
+                                <th class="text-end">Bedel Farkı</th>
+                                <th class="text-center">Süre Farkı</th>
+                                <th class="text-center">Durum</th>
+                                <th class="text-end">İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var revizyon in sozlesmeRevizyonlari)
+                            {
+                                <tr>
+                                    <td><strong>@revizyon.RevizyonNo</strong></td>
+                                    <td><span class="badge bg-secondary">@GetSozlesmeRevizyonTipiMetni(revizyon.RevizyonTipi)</span></td>
+                                    <td>
+                                        <div class="fw-semibold">@revizyon.Baslik</div>
+                                        @if (!string.IsNullOrWhiteSpace(revizyon.Aciklama))
+                                        {
+                                            <div class="small text-muted">@revizyon.Aciklama</div>
+                                        }
+                                    </td>
+                                    <td>@revizyon.RevizyonTarihi.ToString("dd.MM.yyyy")</td>
+                                    <td>@(revizyon.YurutmeTarihi?.ToString("dd.MM.yyyy") ?? "-")</td>
+                                    <td class="text-end @(revizyon.BedelFarki >= 0 ? "text-success" : "text-danger")">@FormatSigned(revizyon.BedelFarki)</td>
+                                    <td class="text-center">@revizyon.SureFarkiAy</td>
+                                    <td class="text-center"><span class="badge @(revizyon.Aktif ? "bg-success" : "bg-secondary")">@(revizyon.Aktif ? "Aktif" : "Pasif")</span></td>
+                                    <td class="text-end">
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" @onclick="() => SozlesmeRevizyonDuzenle(revizyon)">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <button class="btn btn-outline-danger" @onclick="() => SozlesmeRevizyonSilAsync(revizyon.Id)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Hat/Güzergah Tablosu -->
+    <div class="card shadow-sm mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0"><i class="bi bi-signpost-2 me-2"></i>Güzergah/Hat Kalemleri</h6>
+            <button class="btn btn-sm btn-primary" @onclick="YeniKalemModal">
+                <i class="bi bi-plus me-1"></i>Hat Ekle
+            </button>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Hat Adı</th>
+                            <th class="text-center">Mesafe</th>
+                            <th class="text-center">Sefer</th>
+                            <th class="text-center">Araç</th>
+                            <th class="text-center">Sahiplik</th>
+                            <th class="text-end">Yakıt</th>
+                            <th class="text-end">Masraf</th>
+                            <th class="text-end">Şoför</th>
+                            <th class="text-end">Aylık Maliyet</th>
+                            <th class="text-end">Teklif</th>
+                            <th class="text-end">Kâr%</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var k in aktifKalemler)
+                        {
+                            var topMasraf = k.AylikBakimMasrafi + k.AylikLastikMasrafi + k.AylikSigortaMasrafi +
+                                k.AylikKaskoMasrafi + k.AylikMuayeneMasrafi + k.AylikYedekParcaMasrafi + k.AylikDigerMasraf +
+                                k.AylikKiraBedeli + k.AylikKomisyonToplam + k.AylikAmortisman;
+                            <tr>
+                                <td>
+                                    <strong>@k.HatAdi</strong>
+                                    @if (k.AITahminiKullanildi)
+                                    {
+                                        <i class="bi bi-robot text-info ms-1" title="AI tahmin kullanıldı"></i>
+                                    }
+                                </td>
+                                <td class="text-center">@k.MesafeKm km</td>
+                                <td class="text-center">@k.GunlukSeferSayisi/@k.AylikSeferGunu</td>
+                                <td class="text-center small">@(k.AracModelBilgi ?? "-")</td>
+                                <td class="text-center">
+                                    <span class="badge @GetSahiplikBadge(k.SahiplikDurumu)">@GetSahiplikMetin(k.SahiplikDurumu)</span>
+                                </td>
+                                <td class="text-end">@k.AylikYakitMaliyeti.ToString("N0")</td>
+                                <td class="text-end">@topMasraf.ToString("N0")</td>
+                                <td class="text-end">@k.SoforToplamMaliyet.ToString("N0")</td>
+                                <td class="text-end fw-bold text-danger">@k.AylikMaliyet.ToString("N0")</td>
+                                <td class="text-end fw-bold text-success">@k.AylikTeklifFiyati.ToString("N0")</td>
+                                <td class="text-end">%@k.KarMarjiOrani.ToString("N0")</td>
+                                <td class="text-end">
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary" @onclick="() => DuzenleKalemModal(k)">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button class="btn btn-outline-danger" @onclick="() => SilKalemAsync(k.Id)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    @if (aktifKalemler.Any())
+                    {
+                        <tfoot class="table-light fw-bold">
+                            <tr>
+                                <td colspan="5">TOPLAM</td>
+                                <td class="text-end">@aktifKalemler.Sum(k => k.AylikYakitMaliyeti).ToString("N0")</td>
+                                <td class="text-end">—</td>
+                                <td class="text-end">@aktifKalemler.Sum(k => k.SoforToplamMaliyet).ToString("N0")</td>
+                                <td class="text-end text-danger">@aktifKalemler.Sum(k => k.AylikMaliyet).ToString("N0")</td>
+                                <td class="text-end text-success">@aktifKalemler.Sum(k => k.AylikTeklifFiyati).ToString("N0")</td>
+                                <td class="text-end">%@(aktifKalemler.Any() ? aktifKalemler.Average(k => k.KarMarjiOrani).ToString("N0") : "0")</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    }
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Birim Fiyat Özeti -->
+    @if (aktifKalemler.Any())
+    {
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <div class="card border-primary">
+                    <div class="card-body text-center py-2">
+                        <small class="text-muted">Ort. Sefer Başı Teklif</small><br/>
+                        <h5 class="text-primary mb-0">@aktifKalemler.Average(k => k.SeferBasiTeklifFiyati).ToString("N2") ₺</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-info">
+                    <div class="card-body text-center py-2">
+                        <small class="text-muted">Ort. Saatlik Teklif</small><br/>
+                        <h5 class="text-info mb-0">@aktifKalemler.Average(k => k.SaatlikTeklifFiyati).ToString("N2") ₺</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-warning">
+                    <div class="card-body text-center py-2">
+                        <small class="text-muted">Ort. Km Başı Maliyet</small><br/>
+                        <h5 class="text-warning mb-0">@aktifKalemler.Average(k => k.KmBasiMaliyet).ToString("N2") ₺</h5>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+@if (sozlesmeRevizyonModalGoster)
+{
+    <div class="modal show d-block" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(editSozlesmeRevizyon.Id == 0 ? "Yeni Sözleşme Revizyonu / Ek Protokol" : "Sözleşme Revizyonu Düzenle")</h5>
+                    <button type="button" class="btn-close" @onclick="SozlesmeRevizyonModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Tip</label>
+                            <select class="form-select" @bind="editSozlesmeRevizyon.RevizyonTipi">
+                                @foreach (var tip in Enum.GetValues<IhaleSozlesmeRevizyonTipi>())
+                                {
+                                    <option value="@tip">@GetSozlesmeRevizyonTipiMetni(tip)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Revizyon No</label>
+                            <input type="text" class="form-control" @bind="editSozlesmeRevizyon.RevizyonNo" />
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="sozlesmeRevizyonAktif" @bind="editSozlesmeRevizyon.Aktif" />
+                                <label class="form-check-label" for="sozlesmeRevizyonAktif">Aktif kayıt</label>
+                            </div>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Başlık</label>
+                            <input type="text" class="form-control" @bind="editSozlesmeRevizyon.Baslik" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Revizyon Tarihi</label>
+                            <input type="date" class="form-control" @bind="editSozlesmeRevizyon.RevizyonTarihi" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Yürürlük Tarihi</label>
+                            <input type="date" class="form-control" @bind="editSozlesmeRevizyon.YurutmeTarihi" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Bedel Farkı</label>
+                            <input type="number" step="0.01" class="form-control" @bind="editSozlesmeRevizyon.BedelFarki" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Süre Farkı (Ay)</label>
+                            <input type="number" class="form-control" @bind="editSozlesmeRevizyon.SureFarkiAy" />
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Açıklama</label>
+                            <textarea class="form-control" rows="4" @bind="editSozlesmeRevizyon.Aciklama"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="SozlesmeRevizyonModalKapat">İptal</button>
+                    <button class="btn btn-primary" @onclick="SozlesmeRevizyonKaydetAsync" disabled="@yukleniyor">
+                        <i class="bi bi-check me-1"></i>Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+    <!-- AI Analiz Sonucu -->
+    @if (!string.IsNullOrEmpty(aiAnalizSonuc))
+    {
+        <div class="card shadow-sm mb-3 border-purple">
+            <div class="card-header bg-purple text-white d-flex justify-content-between">
+                <span><i class="bi bi-robot me-2"></i>AI Proje Analizi</span>
+                <button class="btn btn-sm btn-outline-light" @onclick="() => aiAnalizSonuc = null"><i class="bi bi-x"></i></button>
+            </div>
+            <div class="card-body" style="white-space: pre-wrap;">@aiAnalizSonuc</div>
+        </div>
+    }
+}
+
+<!-- YENİ/DÜZENLE PROJE MODAL -->
+@if (projeModalGoster)
+{
+    <div class="modal show d-block" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(editProje.Id == 0 ? "Yeni İhale Projesi" : "Proje Düzenle")</h5>
+                    <button type="button" class="btn-close" @onclick="() => projeModalGoster = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label">Proje Adı</label>
+                            <input type="text" class="form-control" @bind="editProje.ProjeAdi" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Durum</label>
+                            <select class="form-select" @bind="editProje.Durum">
+                                @foreach (var d in Enum.GetValues<IhaleProjeDurum>())
+                                {
+                                    <option value="@d">@GetDurumMetin(d)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Müşteri (Cari)</label>
+                            <select class="form-select" @bind="editProje.CariId">
+                                <option value="">-- Seçiniz --</option>
+                                @if (tumCariler != null)
+                                {
+                                    @foreach (var c in tumCariler)
+                                    {
+                                        <option value="@c.Id">@c.Unvan</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Açıklama</label>
+                            <input type="text" class="form-control" @bind="editProje.Aciklama" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Başlangıç</label>
+                            <input type="date" class="form-control" @bind="editProje.BaslangicTarihi" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Bitiş</label>
+                            <input type="date" class="form-control" @bind="editProje.BitisTarihi" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Sözleşme (ay)</label>
+                            <input type="number" class="form-control" @bind="editProje.SozlesmeSuresiAy" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Çalışma Günü/Ay</label>
+                            <input type="number" class="form-control" @bind="editProje.AylikCalismGunu" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Günlük Saat</label>
+                            <input type="number" class="form-control" @bind="editProje.GunlukCalismaSaati" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Enflasyon (%/yıl)</label>
+                            <input type="number" step="0.1" class="form-control" @bind="editProje.EnflasyonOrani" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Yakıt Zam (%/yıl)</label>
+                            <input type="number" step="0.1" class="form-control" @bind="editProje.YakitZamOrani" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => projeModalGoster = false">İptal</button>
+                    <button class="btn btn-primary" @onclick="KaydetProjeAsync" disabled="@yukleniyor">
+                        <i class="bi bi-check me-1"></i>Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- YENİ/DÜZENLE KALEM MODAL -->
+@if (kalemModalGoster)
+{
+    <div class="modal show d-block" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(editKalem.Id == 0 ? "Yeni Hat/Güzergah" : "Hat Düzenle")</h5>
+                    <button type="button" class="btn-close" @onclick="() => kalemModalGoster = false"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Güzergah & Mesafe -->
+                    <h6 class="border-bottom pb-1 mb-3"><i class="bi bi-signpost me-1"></i>Güzergah Bilgileri</h6>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Hazır Güzergah</label>
+                            <select class="form-select" @bind="editKalem.GuzergahId">
+                                <option value="">-- Seçiniz --</option>
+                                @foreach (var guzergah in tumGuzergahlar)
+                                {
+                                    <option value="@guzergah.Id">@guzergah.GuzergahAdi</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Bölge (yakıt fiyatı için)</label>
+                            <input type="text" class="form-control" @bind="editKalemBolge" placeholder="örn: Ankara, İstanbul Avrupa" />
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end gap-2">
+                            <button class="btn btn-outline-primary flex-fill" @onclick="GuzergahtanDoldurAsync">
+                                <i class="bi bi-signpost me-1"></i>Güzergahı Doldur
+                            </button>
+                            <button class="btn btn-outline-success flex-fill" @onclick="GuncelYakitFiyatiGetirAsync">
+                                <i class="bi bi-fuel-pump me-1"></i>Motorin Al
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Hat Adı</label>
+                            <input type="text" class="form-control" @bind="editKalem.HatAdi" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Başlangıç</label>
+                            <input type="text" class="form-control" @bind="editKalem.BaslangicNoktasi" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Bitiş</label>
+                            <input type="text" class="form-control" @bind="editKalem.BitisNoktasi" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Mesafe (km)</label>
+                            <input type="number" step="0.1" class="form-control" @bind="editKalem.MesafeKm" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Süre (dk)</label>
+                            <input type="number" class="form-control" @bind="editKalem.TahminiSureDakika" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Sefer Tipi</label>
+                            <select class="form-select" @bind="editKalem.SeferTipi">
+                                @foreach (var s in Enum.GetValues<SeferTipi>())
+                                {
+                                    <option value="@s">@s</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Günlük Sefer</label>
+                            <input type="number" class="form-control" @bind="editKalem.GunlukSeferSayisi" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Aylık Gün</label>
+                            <input type="number" class="form-control" @bind="editKalem.AylikSeferGunu" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Personel Sayısı</label>
+                            <input type="number" class="form-control" @bind="editKalem.PersonelSayisi" />
+                        </div>
+                    </div>
+
+                    <!-- Araç Bilgisi -->
+                    <h6 class="border-bottom pb-1 mb-3"><i class="bi bi-truck me-1"></i>Araç Bilgileri</h6>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Sahiplik</label>
+                            <select class="form-select" @bind="editKalem.SahiplikDurumu">
+                                @foreach (var s in Enum.GetValues<AracSahiplikKalem>())
+                                {
+                                    <option value="@s">@GetSahiplikMetin(s)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button class="btn btn-outline-info w-100" @onclick="AracOnerAsync">
+                                <i class="bi bi-magic me-1"></i>Müsait Araç Öner
+                            </button>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label">Araç Model Bilgisi</label>
+                            <input type="text" class="form-control" @bind="editKalem.AracModelBilgi" placeholder="örn: 2022 Mercedes Sprinter" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Koltuk</label>
+                            <input type="number" class="form-control" @bind="editKalem.AracKoltukSayisi" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Yakıt (lt/100km)</label>
+                            <input type="number" step="0.1" class="form-control" @bind="editKalem.YakitTuketimi" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Yakıt Fiyatı (TL)</label>
+                            <input type="number" step="0.01" class="form-control" @bind="editKalem.YakitFiyati" />
+                        </div>
+                        @if (editKalem.SahiplikDurumu == AracSahiplikKalem.Kiralik)
+                        {
+                            <div class="col-md-3">
+                                <label class="form-label">Aylık Kira (TL)</label>
+                                <input type="number" step="0.01" class="form-control" @bind="editKalem.AylikKiraBedeli" />
+                            </div>
+                        }
+                        @if (editKalem.SahiplikDurumu == AracSahiplikKalem.Komisyon)
+                        {
+                            <div class="col-md-3">
+                                <label class="form-label">Sefer Başı Komisyon (TL)</label>
+                                <input type="number" step="0.01" class="form-control" @bind="editKalem.SeferBasiKomisyon" />
+                            </div>
+                        }
+                        @if (editKalem.SahiplikDurumu == AracSahiplikKalem.Ozmal)
+                        {
+                            <div class="col-md-3">
+                                <label class="form-label">Araç Değeri (TL)</label>
+                                <input type="number" class="form-control" @bind="editKalem.AracDegeri" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Amortisman (yıl)</label>
+                                <input type="number" class="form-control" @bind="editKalem.AmortismanYili" />
+                            </div>
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(kalemOneriMesaji))
+                    {
+                        <div class="alert alert-info small">
+                            <i class="bi bi-info-circle me-2"></i>@kalemOneriMesaji
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(yakitFiyatMesaji))
+                    {
+                        <div class="alert alert-warning small">
+                            <i class="bi bi-fuel-pump me-2"></i>@yakitFiyatMesaji
+                        </div>
+                    }
+
+                    <!-- Araç Masrafları -->
+                    <h6 class="border-bottom pb-1 mb-3">
+                        <i class="bi bi-cash-stack me-1"></i>Aylık Araç Masrafları
+                        @if (aiAktif)
+                        {
+                            <button class="btn btn-sm btn-purple ms-2" @onclick="AITahminMasrafAsync" disabled="@aiYukleniyor">
+                                @if (aiYukleniyor)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                <i class="bi bi-robot me-1"></i>AI Tahmin
+                            </button>
+                        }
+                    </h6>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Bakım/Onarım</label>
+                            <input type="number" step="0.01" class="form-control" @bind="editKalem.AylikBakimMasrafi" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Lastik</label>
+                            <input type="number" step="0.01" class="form-control" @bind="editKalem.AylikLastikMasrafi" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Sigorta</label>
+                            <input type="number" step="0.01" class="form-control" @bind="editKalem.AylikSigortaMasrafi" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Kasko</label>
+                            <input type="number" step="0.01" class="form-control" @bind="editKalem.AylikKaskoMasrafi" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Muayene</label>
+                            <input type="number" step="0.01" class="form-control" @bind="editKalem.AylikMuayeneMasrafi" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Yedek Parça</label>
+                            <input type="number" step="0.01" class="form-control" @bind="editKalem.AylikYedekParcaMasrafi" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Diğer Masraf</label>
+                            <input type="number" step="0.01" class="form-control" @bind="editKalem.AylikDigerMasraf" />
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(aiTahminMesaj))
+                    {
+                        <div class="alert alert-info small">
+                            <i class="bi bi-robot me-2"></i>@aiTahminMesaj
+                        </div>
+                    }
+
+                    <!-- Şoför Maaş -->
+                    <h6 class="border-bottom pb-1 mb-3">
+                        <i class="bi bi-person me-1"></i>Şoför Maaş Bilgileri
+                        @if (aiAktif)
+                        {
+                            <button class="btn btn-sm btn-purple ms-2" @onclick="AITahminMaasAsync" disabled="@aiYukleniyor">
+                                @if (aiYukleniyor)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                <i class="bi bi-robot me-1"></i>AI Tahmin
+                            </button>
+                        }
+                    </h6>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Brüt Maaş (TL)</label>
+                            <input type="number" step="0.01" class="form-control" @bind="editKalem.SoforBrutMaas" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Net Maaş (TL)</label>
+                            <input type="number" step="0.01" class="form-control" @bind="editKalem.SoforNetMaas" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">SGK İşveren Payı</label>
+                            <input type="number" step="0.01" class="form-control" @bind="editKalem.SoforSGKIsverenPay" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Kâr Marjı (%)</label>
+                            <input type="number" step="0.1" class="form-control" @bind="editKalem.KarMarjiOrani" />
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(aiMaasTahminMesaj))
+                    {
+                        <div class="alert alert-info small">
+                            <i class="bi bi-robot me-2"></i>@aiMaasTahminMesaj
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => kalemModalGoster = false">İptal</button>
+                    <button class="btn btn-primary" @onclick="KaydetKalemAsync" disabled="@yukleniyor">
+                        <i class="bi bi-check me-1"></i>Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (revizyonModalGoster)
+{
+    <div class="modal show d-block" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Yeni Revizyon Oluştur</h5>
+                    <button type="button" class="btn-close" @onclick="RevizyonModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-2">Yeni revizyon aktif versiyonun snapshot bilgileri üzerinden oluşturulur.</p>
+                    <label class="form-label">Revizyon Notu</label>
+                    <textarea class="form-control" rows="4" @bind="revizyonNotu" placeholder="Revizyon nedeni veya açıklama"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="RevizyonModalKapat">İptal</button>
+                    <button class="btn btn-primary" @onclick="RevizyonOlusturAsync" disabled="@yukleniyor">
+                        <i class="bi bi-check me-1"></i>Oluştur
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (kararModalGoster)
+{
+    <div class="modal show d-block" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(redIslemi ? "Teklifi Reddet" : "Teklifi Onayla")</h5>
+                    <button type="button" class="btn-close" @onclick="KararModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">Karar Notu @(redIslemi ? "*" : "")</label>
+                    <textarea class="form-control" rows="4" @bind="kararNotu" placeholder="Karar notu"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="KararModalKapat">İptal</button>
+                    <button class="btn @(redIslemi ? "btn-danger" : "btn-success")" @onclick="KararVerAsync" disabled="@yukleniyor">
+                        <i class="bi bi-check me-1"></i>@(redIslemi ? "Reddet" : "Onayla")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Loading overlay -->
+@if (yukleniyor)
+{
+    <div class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="background: rgba(0,0,0,0.3); z-index: 9999;">
+        <div class="text-center text-white">
+            <div class="spinner-border spinner-border-lg mb-2"></div>
+            <div>İşlem devam ediyor...</div>
+        </div>
+    </div>
+}
+
+<style>
+    .btn-purple { background-color: #7c3aed; color: white; border: none; }
+    .btn-purple:hover { background-color: #6d28d9; color: white; }
+    .bg-purple { background-color: #7c3aed !important; }
+    .border-purple { border-color: #7c3aed !important; }
+</style>
+
+@code {
+    [Parameter] public int? ProjeId { get; set; }
+
+    private List<IhaleProje>? projeler;
+    private IhaleProje? secilenProje;
+    private List<IhaleGuzergahKalem> aktifKalemler = [];
+    private List<IhaleTeklifVersiyon> teklifVersiyonlari = [];
+    private List<IhaleTeklifKararLog> teklifKararLoglari = [];
+    private List<Cari>? tumCariler;
+    private List<Guzergah> tumGuzergahlar = [];
+    private List<Arac> tumAraclar = [];
+    private Kullanici? aktifKullanici;
+    private IhaleTeklifVersiyon? aktifTeklifVersiyon;
+    private IhaleGerceklesenAnalizOzet? gerceklesenAnaliz;
+    private IhaleOperasyonDashboardOzet? operasyonDashboard;
+    private List<IhaleSozlesmeRevizyon> sozlesmeRevizyonlari = [];
+
+    private IhaleProje editProje = new();
+    private IhaleGuzergahKalem editKalem = new();
+    private IhaleSozlesmeRevizyon editSozlesmeRevizyon = new();
+
+    private bool projeModalGoster;
+    private bool kalemModalGoster;
+    private bool revizyonModalGoster;
+    private bool kararModalGoster;
+    private bool sozlesmeRevizyonModalGoster;
+    private bool yukleniyor;
+    private bool aiAktif;
+    private bool aiYukleniyor;
+    private bool raporGoster;
+    private bool redIslemi;
+
+    private string? aiAnalizSonuc;
+    private string? aiTahminMesaj;
+    private string? aiMaasTahminMesaj;
+    private string? kalemOneriMesaji;
+    private string? yakitFiyatMesaji;
+    private string? editKalemBolge;
+    private string? revizyonNotu;
+    private string kararNotu = string.Empty;
+    private int? seciliTeklifVersiyonId;
+    private int? karsilastirmaSolVersiyonId;
+    private int? karsilastirmaSagVersiyonId;
+    private IhaleTeklifKarsilastirmaDto? teklifKarsilastirma;
+
+    private IhaleProjeOzet? projeOzet;
+
+    protected override async Task OnInitializedAsync()
+    {
+        aiAktif = await OllamaService.BaglantiKontrolAsync();
+        tumCariler = await CariService.GetAllAsync();
+        tumGuzergahlar = await GuzergahService.GetActiveAsync();
+        tumAraclar = await AracService.GetActiveAsync();
+        aktifKullanici = await KullaniciService.GetAktifKullaniciAsync();
+
+        if (ProjeId.HasValue)
+            await ProjeSecAsync(ProjeId.Value);
+        else
+            await LoadProjelerAsync();
+    }
+
+    private async Task LoadProjelerAsync()
+    {
+        projeler = await IhaleService.GetProjelerAsync();
+        operasyonDashboard = await IhaleService.GetOperasyonDashboardOzetAsync();
+    }
+
+    // ===== Proje İşlemleri =====
+
+    private void YeniProjeModal()
+    {
+        editProje = new IhaleProje
+        {
+            BaslangicTarihi = DateTime.Today,
+            BitisTarihi = DateTime.Today.AddMonths(12),
+            SozlesmeSuresiAy = 12,
+            AylikCalismGunu = 22,
+            GunlukCalismaSaati = 8,
+            EnflasyonOrani = 25,
+            YakitZamOrani = 30
+        };
+        projeModalGoster = true;
+    }
+
+    private void ProjeAyarModal()
+    {
+        if (secilenProje == null) return;
+        editProje = secilenProje;
+        projeModalGoster = true;
+    }
+
+    private async Task KaydetProjeAsync()
+    {
+        if (string.IsNullOrWhiteSpace(editProje.ProjeAdi)) return;
+        yukleniyor = true;
+
+        try
+        {
+            if (editProje.Id == 0)
+            {
+                var yeni = await IhaleService.CreateProjeAsync(editProje);
+                await ProjeSecAsync(yeni.Id);
+            }
+            else
+            {
+                await IhaleService.UpdateProjeAsync(editProje);
+                secilenProje = await IhaleService.GetProjeByIdAsync(editProje.Id);
+                RefreshKalemler();
+            }
+            projeModalGoster = false;
+            ToastService.ShowSuccess("Proje kaydedildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+        finally { yukleniyor = false; }
+    }
+
+    private async Task ProjeSecAsync(int projeId)
+    {
+        secilenProje = await IhaleService.GetProjeByIdAsync(projeId);
+        RefreshKalemler();
+        await RefreshTeklifVersiyonlariAsync();
+        await RefreshGerceklesenAnalizAsync();
+        await RefreshSozlesmeRevizyonlariAsync();
+    }
+
+    private void RefreshKalemler()
+    {
+        aktifKalemler = secilenProje?.Kalemler?.Where(k => !k.IsDeleted).ToList() ?? [];
+    }
+
+    private async Task ListeyeDon()
+    {
+        secilenProje = null;
+        raporGoster = false;
+        aiAnalizSonuc = null;
+        projeOzet = null;
+        teklifVersiyonlari = [];
+        teklifKararLoglari = [];
+        aktifTeklifVersiyon = null;
+        await LoadProjelerAsync();
+    }
+
+    private async Task RefreshTeklifVersiyonlariAsync()
+    {
+        if (secilenProje == null)
+        {
+            teklifVersiyonlari = [];
+            teklifKararLoglari = [];
+            aktifTeklifVersiyon = null;
+            teklifKarsilastirma = null;
+            sozlesmeRevizyonlari = [];
+            return;
+        }
+
+        teklifVersiyonlari = await TeklifVersiyonService.GetListByIhaleProjeIdAsync(secilenProje.Id);
+        aktifTeklifVersiyon = teklifVersiyonlari.FirstOrDefault(x => x.AktifVersiyon);
+        teklifKararLoglari = aktifTeklifVersiyon != null
+            ? await TeklifVersiyonService.GetKararLoglariAsync(aktifTeklifVersiyon.Id)
+            : [];
+
+        if (karsilastirmaSolVersiyonId.HasValue && !teklifVersiyonlari.Any(x => x.Id == karsilastirmaSolVersiyonId.Value))
+            karsilastirmaSolVersiyonId = null;
+
+        if (karsilastirmaSagVersiyonId.HasValue && !teklifVersiyonlari.Any(x => x.Id == karsilastirmaSagVersiyonId.Value))
+            karsilastirmaSagVersiyonId = null;
+
+        teklifKarsilastirma = null;
+    }
+
+    private async Task RefreshGerceklesenAnalizAsync()
+    {
+        if (secilenProje == null)
+        {
+            gerceklesenAnaliz = null;
+            return;
+        }
+
+        try
+        {
+            gerceklesenAnaliz = await IhaleService.GetProjeGerceklesenAnalizAsync(secilenProje.Id);
+        }
+        catch
+        {
+            gerceklesenAnaliz = null;
+        }
+    }
+
+    private async Task RefreshSozlesmeRevizyonlariAsync()
+    {
+        if (secilenProje == null)
+        {
+            sozlesmeRevizyonlari = [];
+            return;
+        }
+
+        sozlesmeRevizyonlari = await IhaleService.GetSozlesmeRevizyonlariAsync(secilenProje.Id);
+    }
+
+    private async Task VersiyonKarsilastirAsync()
+    {
+        if (!karsilastirmaSolVersiyonId.HasValue || !karsilastirmaSagVersiyonId.HasValue)
+            return;
+
+        try
+        {
+            teklifKarsilastirma = await TeklifKarsilastirmaService.CompareAsync(karsilastirmaSolVersiyonId.Value, karsilastirmaSagVersiyonId.Value);
+            if (teklifKarsilastirma == null)
+                ToastService.ShowWarning("Seçilen versiyonlar karşılaştırılamadı.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex.Message);
+        }
+    }
+
+    private async Task IlkVersiyonOlusturAsync()
+    {
+        if (secilenProje == null) return;
+
+        yukleniyor = true;
+        try
+        {
+            await TeklifVersiyonService.CreateInitialAsync(secilenProje.Id);
+            await RefreshTeklifVersiyonlariAsync();
+            ToastService.ShowSuccess("İlk teklif versiyonu oluşturuldu.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex.Message);
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private void RevizyonModalAc()
+    {
+        if (aktifTeklifVersiyon == null)
+        {
+            ToastService.ShowWarning("Önce aktif bir teklif versiyonu seçin.");
+            return;
+        }
+
+        revizyonNotu = null;
+        revizyonModalGoster = true;
+    }
+
+    private void RevizyonModalKapat()
+    {
+        revizyonModalGoster = false;
+        revizyonNotu = null;
+    }
+
+    private async Task RevizyonOlusturAsync()
+    {
+        if (aktifTeklifVersiyon == null) return;
+
+        yukleniyor = true;
+        try
+        {
+            await TeklifVersiyonService.CreateRevisionAsync(aktifTeklifVersiyon.Id, revizyonNotu);
+            RevizyonModalKapat();
+            await RefreshTeklifVersiyonlariAsync();
+            ToastService.ShowSuccess("Yeni revizyon oluşturuldu.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex.Message);
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private async Task AktifVersiyonYapAsync(int versiyonId)
+    {
+        yukleniyor = true;
+        try
+        {
+            await TeklifVersiyonService.SetActiveAsync(versiyonId);
+            await RefreshTeklifVersiyonlariAsync();
+            ToastService.ShowSuccess("Aktif versiyon güncellendi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex.Message);
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private async Task IncelemeyeGonderAsync(int versiyonId)
+    {
+        yukleniyor = true;
+        try
+        {
+            await TeklifVersiyonService.SendToReviewAsync(versiyonId);
+            await RefreshTeklifVersiyonlariAsync();
+            ToastService.ShowSuccess("Teklif incelemeye gönderildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex.Message);
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private void KararModalAc(int versiyonId, bool red)
+    {
+        seciliTeklifVersiyonId = versiyonId;
+        redIslemi = red;
+        kararNotu = string.Empty;
+        kararModalGoster = true;
+    }
+
+    private Task OnayModalAc(int versiyonId)
+    {
+        KararModalAc(versiyonId, false);
+        return Task.CompletedTask;
+    }
+
+    private Task RedModalAc(int versiyonId)
+    {
+        KararModalAc(versiyonId, true);
+        return Task.CompletedTask;
+    }
+
+    private void KararModalKapat()
+    {
+        kararModalGoster = false;
+        seciliTeklifVersiyonId = null;
+        kararNotu = string.Empty;
+        redIslemi = false;
+    }
+
+    private async Task KararVerAsync()
+    {
+        if (!seciliTeklifVersiyonId.HasValue)
+            return;
+
+        yukleniyor = true;
+        try
+        {
+            if (redIslemi)
+                await TeklifVersiyonService.RejectAsync(seciliTeklifVersiyonId.Value, kararNotu);
+            else
+                await TeklifVersiyonService.ApproveAsync(seciliTeklifVersiyonId.Value, string.IsNullOrWhiteSpace(kararNotu) ? null : kararNotu);
+
+            KararModalKapat();
+            await RefreshTeklifVersiyonlariAsync();
+            ToastService.ShowSuccess(redIslemi ? "Teklif reddedildi." : "Teklif onaylandı.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex.Message);
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private bool CanApproveTeklif(IhaleTeklifVersiyon versiyon)
+    {
+        if (versiyon.Durum != IhaleTeklifVersiyonDurum.Incelemede || aktifKullanici?.Rol == null)
+            return false;
+
+        return HasAnyRole("Admin", "Yönetici", "Yonetici");
+    }
+
+    private bool CanManageDraftTeklif()
+    {
+        return HasAnyRole("Admin", "Operasyon");
+    }
+
+    private bool CanExportTeklif(IhaleTeklifVersiyon versiyon)
+    {
+        if (versiyon.Durum == IhaleTeklifVersiyonDurum.Onaylandi)
+            return true;
+
+        return HasAnyRole("Admin", "Yönetici", "Yonetici");
+    }
+
+    private bool HasAnyRole(params string[] roller)
+    {
+        var rolAdi = aktifKullanici?.Rol?.RolAdi;
+        if (string.IsNullOrWhiteSpace(rolAdi))
+            return false;
+
+        return roller.Any(rol => string.Equals(rolAdi, rol, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task PdfExportAsync(int versiyonId)
+    {
+        try
+        {
+            yukleniyor = true;
+            var bytes = await TeklifExportService.ExportPdfAsync(versiyonId);
+            await JS.InvokeVoidAsync("downloadFileFromBytes", GetTeklifExportFileName(versiyonId, "pdf"), "application/pdf", bytes);
+            ToastService.ShowSuccess("PDF dosyası indirildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex.Message);
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private async Task ExcelExportAsync(int versiyonId)
+    {
+        try
+        {
+            yukleniyor = true;
+            var bytes = await TeklifExportService.ExportExcelAsync(versiyonId);
+            await JS.InvokeVoidAsync("downloadFileFromBytes", GetTeklifExportFileName(versiyonId, "xlsx"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes);
+            ToastService.ShowSuccess("Excel dosyası indirildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex.Message);
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private async Task OperasyonDashboardExcelExportAsync()
+    {
+        if (operasyonDashboard == null)
+        {
+            ToastService.ShowWarning("Aktarılacak operasyon dashboard verisi bulunamadı.");
+            return;
+        }
+
+        try
+        {
+            yukleniyor = true;
+
+            var headers = new[]
+            {
+                "Bölüm", "Alan", "Değer", "Proje Kodu", "Proje Adı", "Risk", "Revizyon", "Doğruluk", "Maliyet Sapma %", "Bedel Farkı", "Kâr Sapması"
+            };
+
+            var rows = new List<object[]>
+            {
+                new object[] { "Özet", "Kazanılan Proje Sayısı", operasyonDashboard.KazanilanProjeSayisi, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty },
+                new object[] { "Özet", "Analiz Edilen Proje Sayısı", operasyonDashboard.AnalizEdilenProjeSayisi, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty },
+                new object[] { "Özet", "Riskli Proje Sayısı", operasyonDashboard.RiskliProjeSayisi, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty },
+                new object[] { "Özet", "Revizyonlu Proje Sayısı", operasyonDashboard.RevizyonluProjeSayisi, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty },
+                new object[] { "Özet", "Süre Uzatımlı Proje Sayısı", operasyonDashboard.SureUzatimliProjeSayisi, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty },
+                new object[] { "Özet", "Ortalama Teklif Doğruluk Skoru", operasyonDashboard.OrtalamaTeklifDogrulukSkoru, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty },
+                new object[] { "Özet", "Toplam Revizyon Bedel Farkı", operasyonDashboard.ToplamRevizyonBedelFarki, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty },
+                new object[] { "Özet", "Toplam Kâr Sapması", operasyonDashboard.ToplamKarSapmasi, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty },
+                new object[] { "Özet", "En Kötü Kâr Sapması", operasyonDashboard.EnKotusuKarSapmasi, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty }
+            };
+
+            rows.AddRange(operasyonDashboard.RiskliProjeler.Select(riskli => new object[]
+            {
+                "Riskli Projeler",
+                "Proje",
+                string.Empty,
+                riskli.ProjeKodu,
+                riskli.ProjeAdi,
+                GetRiskMetni(riskli.RiskSeviyesi),
+                riskli.AktifRevizyonSayisi,
+                riskli.TeklifDogrulukSkoru,
+                riskli.MaliyetSapmaOrani,
+                riskli.ToplamRevizyonBedelFarki,
+                riskli.KarSapmasi
+            }));
+
+            var bytes = ExcelService.CreateExcel(headers, rows, "OperasyonDashboard");
+            await JS.InvokeVoidAsync("downloadFileFromBytes", $"IhaleOperasyonDashboard_{DateTime.Now:yyyyMMddHHmmss}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes);
+            ToastService.ShowSuccess("Operasyon dashboard Excel olarak indirildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex.Message);
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private async Task SilProjeAsync(int id)
+    {
+        await IhaleService.DeleteProjeAsync(id);
+        await LoadProjelerAsync();
+        ToastService.ShowSuccess("Proje silindi.");
+    }
+
+    private async Task KopyalaProjeAsync(IhaleProje p)
+    {
+        yukleniyor = true;
+        try
+        {
+            await IhaleService.KopyalaProjeAsync(p.Id, $"{p.ProjeAdi} (Kopya)");
+            await LoadProjelerAsync();
+            ToastService.ShowSuccess("Proje kopyalandı.");
+        }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); }
+        finally { yukleniyor = false; }
+    }
+
+    private async Task OrnekVeriOlusturAsync()
+    {
+        yukleniyor = true;
+        StateHasChanged();
+        try
+        {
+            var ornekProje = await IhaleService.OrnekProjeOlusturAsync();
+            await ProjeSecAsync(ornekProje.Id);
+            ToastService.ShowSuccess("Örnek proje ve güzergah oluşturuldu! Rapor butonuna tıklayarak maliyet analizini görüntüleyebilirsiniz.");
+        }
+        catch (Exception ex) 
+        { 
+            ToastService.ShowError($"Örnek veri oluşturma hatası: {ex.Message}"); 
+        }
+        finally { yukleniyor = false; }
+    }
+
+    // ===== Kalem İşlemleri =====
+
+    private void YeniKalemModal()
+    {
+        if (secilenProje == null) return;
+        editKalem = new IhaleGuzergahKalem
+        {
+            IhaleProjeId = secilenProje.Id,
+            GunlukSeferSayisi = 2,
+            AylikSeferGunu = secilenProje.AylikCalismGunu,
+            SeferTipi = SeferTipi.SabahAksam,
+            AracKoltukSayisi = 27,
+            YakitTuketimi = 18,
+            YakitFiyati = 42,
+            KarMarjiOrani = 15,
+            AmortismanYili = 5
+        };
+        aiTahminMesaj = null;
+        aiMaasTahminMesaj = null;
+        kalemOneriMesaji = null;
+        yakitFiyatMesaji = null;
+        editKalemBolge = null;
+        kalemModalGoster = true;
+    }
+
+    private void DuzenleKalemModal(IhaleGuzergahKalem kalem)
+    {
+        editKalem = kalem;
+        aiTahminMesaj = null;
+        aiMaasTahminMesaj = null;
+        kalemOneriMesaji = null;
+        yakitFiyatMesaji = null;
+        editKalemBolge = BolgeMetniGetir(kalem);
+        kalemModalGoster = true;
+    }
+
+    private async Task GuzergahtanDoldurAsync()
+    {
+        if (!editKalem.GuzergahId.HasValue)
+        {
+            ToastService.ShowWarning("Önce bir güzergah seçin.");
+            return;
+        }
+
+        var guzergah = tumGuzergahlar.FirstOrDefault(g => g.Id == editKalem.GuzergahId.Value)
+            ?? await GuzergahService.GetByIdAsync(editKalem.GuzergahId.Value);
+        if (guzergah == null)
+        {
+            ToastService.ShowError("Güzergah bulunamadı.");
+            return;
+        }
+
+        editKalem.HatAdi = string.IsNullOrWhiteSpace(editKalem.HatAdi) ? guzergah.GuzergahAdi : editKalem.HatAdi;
+        editKalem.BaslangicNoktasi = string.IsNullOrWhiteSpace(editKalem.BaslangicNoktasi) ? guzergah.BaslangicNoktasi : editKalem.BaslangicNoktasi;
+        editKalem.BitisNoktasi = string.IsNullOrWhiteSpace(editKalem.BitisNoktasi) ? guzergah.BitisNoktasi : editKalem.BitisNoktasi;
+        if (editKalem.MesafeKm <= 0 && guzergah.Mesafe.HasValue)
+            editKalem.MesafeKm = guzergah.Mesafe.Value;
+        if (editKalem.TahminiSureDakika <= 0 && guzergah.TahminiSure.HasValue)
+            editKalem.TahminiSureDakika = guzergah.TahminiSure.Value;
+        if (editKalem.PersonelSayisi <= 0)
+            editKalem.PersonelSayisi = guzergah.PersonelSayisi;
+        if (editKalem.GunlukSeferSayisi <= 0)
+            editKalem.GunlukSeferSayisi = guzergah.SeferTipi == SeferTipi.SabahAksam ? 2 : 1;
+
+        editKalem.SeferTipi = guzergah.SeferTipi;
+        editKalemBolge ??= BolgeMetniGetir(editKalem);
+        kalemOneriMesaji = $"Güzergah bilgileri '{guzergah.GuzergahAdi}' üzerinden dolduruldu.";
+    }
+
+    private Task AracOnerAsync()
+    {
+        var gerekliKapasite = Math.Max(1, editKalem.PersonelSayisi);
+        var adaylar = tumAraclar
+            .Where(a => a.Aktif && !a.IsDeleted && a.KoltukSayisi >= gerekliKapasite)
+            .Where(a => editKalem.SahiplikDurumu switch
+            {
+                AracSahiplikKalem.Ozmal => a.SahiplikTipi == AracSahiplikTipi.Ozmal,
+                AracSahiplikKalem.Kiralik => a.SahiplikTipi == AracSahiplikTipi.Kiralik,
+                AracSahiplikKalem.Komisyon => a.SahiplikTipi == AracSahiplikTipi.Komisyon,
+                _ => true
+            })
+            .OrderBy(a => a.KoltukSayisi - gerekliKapasite)
+            .ThenBy(a => a.KmDurumu ?? int.MaxValue)
+            .ThenByDescending(a => a.ModelYili ?? 0)
+            .ToList();
+
+        if (!adaylar.Any())
+        {
+            adaylar = tumAraclar
+                .Where(a => a.Aktif && !a.IsDeleted && a.KoltukSayisi >= gerekliKapasite)
+                .OrderBy(a => a.KoltukSayisi - gerekliKapasite)
+                .ThenBy(a => a.KmDurumu ?? int.MaxValue)
+                .ThenByDescending(a => a.ModelYili ?? 0)
+                .ToList();
+        }
+
+        var arac = adaylar.FirstOrDefault();
+        if (arac == null)
+        {
+            kalemOneriMesaji = "Uygun aktif araç bulunamadı.";
+            return Task.CompletedTask;
+        }
+
+        editKalem.AracId = arac.Id;
+        editKalem.AracModelBilgi = string.Join(" ", new[] { arac.ModelYili?.ToString(), arac.Marka, arac.Model }.Where(x => !string.IsNullOrWhiteSpace(x)));
+        editKalem.AracKoltukSayisi = arac.KoltukSayisi;
+        editKalem.SahiplikDurumu = arac.SahiplikTipi switch
+        {
+            AracSahiplikTipi.Ozmal => AracSahiplikKalem.Ozmal,
+            AracSahiplikTipi.Kiralik => AracSahiplikKalem.Kiralik,
+            AracSahiplikTipi.Komisyon => AracSahiplikKalem.Komisyon,
+            _ => editKalem.SahiplikDurumu
+        };
+
+        if (arac.AylikKiraBedeli.HasValue)
+            editKalem.AylikKiraBedeli = arac.AylikKiraBedeli.Value;
+        if (arac.KomisyonVar && arac.SabitKomisyonTutari.HasValue)
+            editKalem.SeferBasiKomisyon = arac.SabitKomisyonTutari.Value;
+
+        editKalem.YakitTuketimi = AracTipineGoreVarsayilanYakit(arac.AracTipi, editKalem.YakitTuketimi);
+        kalemOneriMesaji = $"Önerilen araç: {editKalem.AracModelBilgi} {(string.IsNullOrWhiteSpace(arac.AktifPlaka) ? string.Empty : $"({arac.AktifPlaka})")} - {arac.KoltukSayisi} koltuk.";
+        return Task.CompletedTask;
+    }
+
+    private async Task GuncelYakitFiyatiGetirAsync()
+    {
+        var bolge = string.IsNullOrWhiteSpace(editKalemBolge) ? BolgeMetniGetir(editKalem) : editKalemBolge;
+        if (string.IsNullOrWhiteSpace(bolge))
+        {
+            ToastService.ShowWarning("Yakıt fiyatı için önce bölge veya başlangıç bilgisi girin.");
+            return;
+        }
+
+        try
+        {
+            yakitFiyatMesaji = "Petrol Ofisi verilerinden güncel motorin fiyatı alınıyor...";
+            StateHasChanged();
+
+            var client = HttpClientFactory.CreateClient();
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0");
+            var html = await client.GetStringAsync("https://www.petrolofisi.com.tr/akaryakit-fiyatlari");
+            var fiyat = PetrolOfisiMotorinFiyatiBul(html, bolge);
+
+            if (fiyat.HasValue)
+            {
+                editKalem.YakitFiyati = fiyat.Value;
+                editKalemBolge = bolge;
+                yakitFiyatMesaji = $"{bolge} için webden motorin fiyatı alındı: {fiyat.Value:N2} TL/LT.";
+            }
+            else
+            {
+                yakitFiyatMesaji = $"{bolge} için web sayfasında eşleşen güncel motorin fiyatı bulunamadı. Mevcut değer korundu.";
+            }
+        }
+        catch (Exception ex)
+        {
+            yakitFiyatMesaji = $"Yakıt fiyatı alınamadı: {ex.Message}";
+        }
+    }
+
+    private async Task KaydetKalemAsync()
+    {
+        if (string.IsNullOrWhiteSpace(editKalem.HatAdi) || secilenProje == null) return;
+        yukleniyor = true;
+
+        try
+        {
+            if (editKalem.Id == 0)
+                await IhaleService.AddKalemAsync(editKalem);
+            else
+                await IhaleService.UpdateKalemAsync(editKalem);
+
+            secilenProje = await IhaleService.GetProjeByIdAsync(secilenProje.Id);
+            RefreshKalemler();
+            await RefreshGerceklesenAnalizAsync();
+            kalemModalGoster = false;
+            ToastService.ShowSuccess("Hat kaydedildi.");
+        }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); }
+        finally { yukleniyor = false; }
+    }
+
+    private async Task SilKalemAsync(int kalemId)
+    {
+        await IhaleService.DeleteKalemAsync(kalemId);
+        secilenProje = await IhaleService.GetProjeByIdAsync(secilenProje!.Id);
+        RefreshKalemler();
+        await RefreshGerceklesenAnalizAsync();
+        ToastService.ShowSuccess("Hat silindi.");
+    }
+
+    // ===== AI İşlemleri =====
+
+    private async Task AITahminMasrafAsync()
+    {
+        aiYukleniyor = true;
+        aiTahminMesaj = "AI masraf tahmini yapılıyor...";
+        StateHasChanged();
+
+        try
+        {
+            var istek = new IhaleMaliyetTahminIstek
+            {
+                AracModel = editKalem.AracModelBilgi ?? "Servis minibüsü",
+                AracModelYili = 2022,
+                KoltukSayisi = editKalem.AracKoltukSayisi,
+                MesafeKm = editKalem.MesafeKm,
+                GunlukSeferSayisi = editKalem.GunlukSeferSayisi,
+                AylikCalismGunu = editKalem.AylikSeferGunu,
+                SahiplikDurumu = editKalem.SahiplikDurumu,
+                YakitTuketimi = editKalem.YakitTuketimi,
+                YakitFiyati = editKalem.YakitFiyati,
+                SozlesmeSuresiAy = secilenProje?.SozlesmeSuresiAy ?? 12,
+                EnflasyonOrani = secilenProje?.EnflasyonOrani ?? 25
+            };
+
+            var sonuc = await IhaleService.AIAracMasrafTahminAsync(istek);
+
+            if (sonuc.Basarili)
+            {
+                editKalem.AylikBakimMasrafi = sonuc.TahminiAylikBakim;
+                editKalem.AylikLastikMasrafi = sonuc.TahminiAylikLastik;
+                editKalem.AylikSigortaMasrafi = sonuc.TahminiAylikSigorta;
+                editKalem.AylikKaskoMasrafi = sonuc.TahminiAylikKasko;
+                editKalem.AylikMuayeneMasrafi = sonuc.TahminiAylikMuayene;
+                editKalem.AylikYedekParcaMasrafi = sonuc.TahminiAylikYedekParca;
+                editKalem.AylikDigerMasraf = sonuc.TahminiAylikDigerMasraf;
+                editKalem.AITahminiKullanildi = true;
+                aiTahminMesaj = $"✅ AI tahmin uygulandı. {sonuc.AIAciklama}";
+            }
+            else
+            {
+                aiTahminMesaj = $"⚠️ AI tahmin başarısız: {sonuc.AIAciklama}";
+            }
+        }
+        catch (Exception ex) { aiTahminMesaj = $"❌ Hata: {ex.Message}"; }
+        finally { aiYukleniyor = false; }
+    }
+
+    private async Task AITahminMaasAsync()
+    {
+        aiYukleniyor = true;
+        aiMaasTahminMesaj = "AI maaş tahmini yapılıyor...";
+        StateHasChanged();
+
+        try
+        {
+            var sonuc = await IhaleService.AISoforMaasTahminAsync(
+                editKalem.AracModelBilgi ?? "Servis minibüsü",
+                editKalem.MesafeKm,
+                editKalem.GunlukSeferSayisi,
+                secilenProje?.EnflasyonOrani ?? 25,
+                secilenProje?.SozlesmeSuresiAy ?? 12);
+
+            if (sonuc.Basarili)
+            {
+                editKalem.SoforBrutMaas = sonuc.TahminiBrutMaas;
+                editKalem.SoforNetMaas = sonuc.TahminiNetMaas;
+                editKalem.SoforSGKIsverenPay = sonuc.TahminiSGKIsverenPay;
+                editKalem.SoforToplamMaliyet = sonuc.TahminiToplamMaliyet;
+                aiMaasTahminMesaj = $"✅ AI maaş tahmini uygulandı. Sözleşme sonu tahmini brüt: {sonuc.EnflasyonluBrutMaas:N0} TL. {sonuc.AIAciklama}";
+            }
+            else
+            {
+                aiMaasTahminMesaj = $"⚠️ AI tahmin başarısız: {sonuc.AIAciklama}";
+            }
+        }
+        catch (Exception ex) { aiMaasTahminMesaj = $"❌ Hata: {ex.Message}"; }
+        finally { aiYukleniyor = false; }
+    }
+
+    private async Task AIProjeAnalizAsync()
+    {
+        if (secilenProje == null) return;
+        yukleniyor = true;
+        aiAnalizSonuc = "AI proje analizi yapılıyor...";
+        StateHasChanged();
+
+        try
+        {
+            aiAnalizSonuc = await IhaleService.AIProjeAnalizAsync(secilenProje.Id);
+        }
+        catch (Exception ex) { aiAnalizSonuc = $"Hata: {ex.Message}"; }
+        finally { yukleniyor = false; }
+    }
+
+    private async Task RaporGosterAsync()
+    {
+        if (secilenProje == null) return;
+        yukleniyor = true;
+
+        try
+        {
+            projeOzet = await IhaleService.GetProjeOzetAsync(secilenProje.Id);
+            raporGoster = true;
+            StateHasChanged();
+            await JS.InvokeVoidAsync("eval", "document.getElementById('raporKart')?.scrollIntoView({behavior:'smooth',block:'start'})");
+        }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); }
+        finally { yukleniyor = false; }
+    }
+
+    private async Task GerceklesenAnalizExcelExportAsync()
+    {
+        if (secilenProje == null || gerceklesenAnaliz == null || !gerceklesenAnaliz.Kalemler.Any())
+        {
+            ToastService.ShowWarning("Aktarılacak gerçekleşen analiz verisi bulunamadı.");
+            return;
+        }
+
+        try
+        {
+            yukleniyor = true;
+
+            var headers = new[]
+            {
+                "Hat", "Sahiplik", "Dogruluk Skoru", "Risk", "Sefer", "Planlanan Maliyet", "Gerçekleşen Maliyet", "Maliyet Sapması",
+                "Planlanan Gelir", "Gerçekleşen Gelir", "Gelir Sapması", "Planlanan Kâr", "Gerçekleşen Kâr", "Kâr Sapması"
+            };
+
+            var rows = gerceklesenAnaliz.Kalemler
+                .Select(x => new object[]
+                {
+                    x.HatAdi,
+                    x.SahiplikDurumu,
+                    x.TeklifDogrulukSkoru,
+                    x.RiskSeviyesi,
+                    x.GerceklesenSeferSayisi,
+                    x.PlanlananMaliyet,
+                    x.GerceklesenMaliyet,
+                    x.MaliyetSapmasi,
+                    x.PlanlananTeklif,
+                    x.GerceklesenGelir,
+                    x.GelirSapmasi,
+                    x.PlanlananKar,
+                    x.GerceklesenKar,
+                    x.KarSapmasi
+                })
+                .ToList();
+
+            rows.Add(new object[]
+            {
+                "TOPLAM",
+                string.Empty,
+                gerceklesenAnaliz.TeklifDogrulukSkoru,
+                gerceklesenAnaliz.RiskSeviyesi,
+                gerceklesenAnaliz.ToplamGerceklesenSeferSayisi,
+                gerceklesenAnaliz.PlanlananToplamMaliyet,
+                gerceklesenAnaliz.GerceklesenToplamMaliyet,
+                gerceklesenAnaliz.MaliyetSapmasi,
+                gerceklesenAnaliz.PlanlananToplamTeklif,
+                gerceklesenAnaliz.GerceklesenToplamGelir,
+                gerceklesenAnaliz.GelirSapmasi,
+                gerceklesenAnaliz.PlanlananToplamKar,
+                gerceklesenAnaliz.GerceklesenToplamKar,
+                gerceklesenAnaliz.KarSapmasi
+            });
+
+            var bytes = ExcelService.CreateExcel(headers, rows, "GerceklesenAnaliz");
+            await JS.InvokeVoidAsync("downloadFileFromBytes", $"IhaleGerceklesenAnaliz_{SanitizeFileNamePart(secilenProje.ProjeKodu)}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes);
+            ToastService.ShowSuccess("Gerçekleşen analiz Excel olarak indirildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex.Message);
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private void SozlesmeRevizyonModalAc()
+    {
+        if (secilenProje == null)
+            return;
+
+        editSozlesmeRevizyon = new IhaleSozlesmeRevizyon
+        {
+            IhaleProjeId = secilenProje.Id,
+            RevizyonTarihi = DateTime.Today,
+            Aktif = true
+        };
+        sozlesmeRevizyonModalGoster = true;
+    }
+
+    private void SozlesmeRevizyonDuzenle(IhaleSozlesmeRevizyon revizyon)
+    {
+        editSozlesmeRevizyon = new IhaleSozlesmeRevizyon
+        {
+            Id = revizyon.Id,
+            IhaleProjeId = revizyon.IhaleProjeId,
+            RevizyonTipi = revizyon.RevizyonTipi,
+            RevizyonNo = revizyon.RevizyonNo,
+            Baslik = revizyon.Baslik,
+            Aciklama = revizyon.Aciklama,
+            RevizyonTarihi = revizyon.RevizyonTarihi,
+            YurutmeTarihi = revizyon.YurutmeTarihi,
+            BedelFarki = revizyon.BedelFarki,
+            SureFarkiAy = revizyon.SureFarkiAy,
+            Aktif = revizyon.Aktif
+        };
+        sozlesmeRevizyonModalGoster = true;
+    }
+
+    private void SozlesmeRevizyonModalKapat()
+    {
+        sozlesmeRevizyonModalGoster = false;
+        editSozlesmeRevizyon = new();
+    }
+
+    private async Task SozlesmeRevizyonKaydetAsync()
+    {
+        if (secilenProje == null || string.IsNullOrWhiteSpace(editSozlesmeRevizyon.Baslik))
+            return;
+
+        try
+        {
+            yukleniyor = true;
+            editSozlesmeRevizyon.IhaleProjeId = secilenProje.Id;
+
+            if (editSozlesmeRevizyon.Id == 0)
+                await IhaleService.AddSozlesmeRevizyonAsync(editSozlesmeRevizyon);
+            else
+                await IhaleService.UpdateSozlesmeRevizyonAsync(editSozlesmeRevizyon);
+
+            await RefreshSozlesmeRevizyonlariAsync();
+            SozlesmeRevizyonModalKapat();
+            ToastService.ShowSuccess("Sözleşme revizyon kaydı kaydedildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex.Message);
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private async Task SozlesmeRevizyonSilAsync(int revizyonId)
+    {
+        try
+        {
+            yukleniyor = true;
+            await IhaleService.DeleteSozlesmeRevizyonAsync(revizyonId);
+            await RefreshSozlesmeRevizyonlariAsync();
+            ToastService.ShowSuccess("Sözleşme revizyon kaydı silindi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex.Message);
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    // ===== Helpers =====
+
+    private static string GetDurumMetin(IhaleProjeDurum d)
+    {
+        return d switch
+        {
+            IhaleProjeDurum.Taslak => "Taslak",
+            IhaleProjeDurum.Hazirlaniyor => "Hazırlanıyor",
+            IhaleProjeDurum.TeklifVerildi => "Teklif Verildi",
+            IhaleProjeDurum.Kazanildi => "Kazanıldı",
+            IhaleProjeDurum.Kaybedildi => "Kaybedildi",
+            IhaleProjeDurum.IptalEdildi => "İptal",
+            _ => "-"
+        };
+    }
+
+    private static string GetSozlesmeRevizyonTipiMetni(IhaleSozlesmeRevizyonTipi tip)
+    {
+        return tip switch
+        {
+            IhaleSozlesmeRevizyonTipi.SozlesmeRevizyonu => "Sözleşme Revizyonu",
+            IhaleSozlesmeRevizyonTipi.EkProtokol => "Ek Protokol",
+            IhaleSozlesmeRevizyonTipi.FiyatFarki => "Fiyat Farkı",
+            IhaleSozlesmeRevizyonTipi.SureUzatimi => "Süre Uzatımı",
+            _ => "-"
+        };
+    }
+
+    private static string GetRiskBadge(string? riskSeviyesi)
+    {
+        return riskSeviyesi?.ToLowerInvariant() switch
+        {
+            "yuksek" => "bg-danger",
+            "orta" => "bg-warning text-dark",
+            _ => "bg-success"
+        };
+    }
+
+    private static string GetRiskMetni(string? riskSeviyesi)
+    {
+        return riskSeviyesi?.ToLowerInvariant() switch
+        {
+            "yuksek" => "Yüksek",
+            "orta" => "Orta",
+            _ => "Düşük"
+        };
+    }
+
+    private static AracSahiplikKalem ParseSahiplik(string? sahiplik)
+    {
+        return Enum.TryParse<AracSahiplikKalem>(sahiplik, true, out var sonuc)
+            ? sonuc
+            : AracSahiplikKalem.Ozmal;
+    }
+
+    private static string GetKarSapmaClass(decimal fark)
+    {
+        if (fark > 0)
+            return "text-success fw-semibold";
+        if (fark < 0)
+            return "text-danger fw-semibold";
+
+        return "text-muted";
+    }
+
+    private static string GetFarkTextClass(decimal fark)
+    {
+        if (fark > 0)
+            return "text-danger fw-semibold";
+        if (fark < 0)
+            return "text-success fw-semibold";
+
+        return "text-muted";
+    }
+
+    private static string FormatSigned(decimal deger)
+    {
+        return deger > 0 ? $"+{deger:N0}" : deger.ToString("N0");
+    }
+
+    private static string GetDurumBadge(IhaleProjeDurum d)
+    {
+        return d switch
+        {
+            IhaleProjeDurum.Taslak => "bg-secondary",
+            IhaleProjeDurum.Hazirlaniyor => "bg-warning text-dark",
+            IhaleProjeDurum.TeklifVerildi => "bg-info",
+            IhaleProjeDurum.Kazanildi => "bg-success",
+            IhaleProjeDurum.Kaybedildi => "bg-danger",
+            IhaleProjeDurum.IptalEdildi => "bg-dark",
+            _ => "bg-light"
+        };
+    }
+
+    private static string GetDurumBorderColor(IhaleProjeDurum d)
+    {
+        return d switch
+        {
+            IhaleProjeDurum.Taslak => "border-secondary",
+            IhaleProjeDurum.Hazirlaniyor => "border-warning",
+            IhaleProjeDurum.TeklifVerildi => "border-info",
+            IhaleProjeDurum.Kazanildi => "border-success",
+            IhaleProjeDurum.Kaybedildi => "border-danger",
+            IhaleProjeDurum.IptalEdildi => "border-dark",
+            _ => ""
+        };
+    }
+
+    private static string GetSahiplikMetin(AracSahiplikKalem s) => SahiplikHelper.GetMetin(s);
+
+    private static string GetSahiplikBadge(AracSahiplikKalem s) => SahiplikHelper.GetBadgeClass(s);
+
+    private static string GetTeklifDurumMetni(IhaleTeklifVersiyonDurum durum)
+    {
+        return durum switch
+        {
+            IhaleTeklifVersiyonDurum.Taslak => "Taslak",
+            IhaleTeklifVersiyonDurum.Incelemede => "İncelemede",
+            IhaleTeklifVersiyonDurum.Onaylandi => "Onaylandı",
+            IhaleTeklifVersiyonDurum.Reddedildi => "Reddedildi",
+            _ => "-"
+        };
+    }
+
+    private static string GetTeklifDurumBadge(IhaleTeklifVersiyonDurum durum)
+    {
+        return durum switch
+        {
+            IhaleTeklifVersiyonDurum.Taslak => "bg-secondary",
+            IhaleTeklifVersiyonDurum.Incelemede => "bg-warning text-dark",
+            IhaleTeklifVersiyonDurum.Onaylandi => "bg-success",
+            IhaleTeklifVersiyonDurum.Reddedildi => "bg-danger",
+            _ => "bg-light text-dark"
+        };
+    }
+
+    private static string GetTeklifIslemTipiMetni(IhaleTeklifIslemTipi islemTipi)
+    {
+        return islemTipi switch
+        {
+            IhaleTeklifIslemTipi.Olustur => "İlk versiyon oluşturuldu",
+            IhaleTeklifIslemTipi.RevizyonOlustur => "Revizyon oluşturuldu",
+            IhaleTeklifIslemTipi.IncelemeyeGonder => "İncelemeye gönderildi",
+            IhaleTeklifIslemTipi.Onayla => "Onaylandı",
+            IhaleTeklifIslemTipi.Reddet => "Reddedildi",
+            IhaleTeklifIslemTipi.AktifVersiyonDegisti => "Aktif versiyon değişti",
+            _ => "İşlem"
+        };
+    }
+
+    private string GetTeklifExportFileName(int versiyonId, string extension)
+    {
+        var versiyon = teklifVersiyonlari.FirstOrDefault(x => x.Id == versiyonId);
+        var projeKodu = SanitizeFileNamePart(secilenProje?.ProjeKodu);
+        var revizyonKodu = SanitizeFileNamePart(versiyon?.RevizyonKodu);
+
+        if (string.IsNullOrWhiteSpace(projeKodu))
+            projeKodu = $"Proje-{secilenProje?.Id ?? 0}";
+
+        if (string.IsNullOrWhiteSpace(revizyonKodu))
+            revizyonKodu = $"Versiyon-{versiyonId}";
+
+        return $"IhaleTeklif_{projeKodu}_{revizyonKodu}.{extension}";
+    }
+
+    private static string SanitizeFileNamePart(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var sanitized = new string(value.Trim().Select(ch => invalidChars.Contains(ch) ? '-' : ch).ToArray());
+
+        return sanitized.Replace(' ', '-');
+    }
+
+    private static string? BolgeMetniGetir(IhaleGuzergahKalem kalem)
+    {
+        if (!string.IsNullOrWhiteSpace(kalem.BaslangicNoktasi))
+            return kalem.BaslangicNoktasi;
+        if (!string.IsNullOrWhiteSpace(kalem.BitisNoktasi))
+            return kalem.BitisNoktasi;
+        return null;
+    }
+
+    private static decimal AracTipineGoreVarsayilanYakit(AracTipi aracTipi, decimal mevcut)
+    {
+        if (mevcut > 0)
+            return mevcut;
+
+        return aracTipi switch
+        {
+            AracTipi.Minibus => 14,
+            AracTipi.Midibus => 18,
+            AracTipi.Otobus => 28,
+            AracTipi.Otomobil => 8,
+            AracTipi.Panelvan => 11,
+            _ => 15
+        };
+    }
+
+    private static decimal? PetrolOfisiMotorinFiyatiBul(string html, string bolge)
+    {
+        var normalizedBolge = NormalizeBolge(bolge);
+        if (string.IsNullOrWhiteSpace(normalizedBolge))
+            return null;
+
+        var rowMatches = Regex.Matches(html,
+            @"<tr class=""price-row[^""]*""[^>]*data-disctrict-name=""(?<name>[^""]+)""[^>]*>(?<row>.*?)</tr>",
+            RegexOptions.Singleline | RegexOptions.IgnoreCase);
+
+        foreach (Match match in rowMatches)
+        {
+            var name = WebUtility.HtmlDecode(match.Groups["name"].Value);
+            var normalizedName = NormalizeBolge(name);
+            if (!normalizedName.Contains(normalizedBolge) && !normalizedBolge.Contains(normalizedName))
+                continue;
+
+            var priceMatches = Regex.Matches(match.Groups["row"].Value, @"<span class=""with-tax"">(?<price>[0-9]+(?:\.[0-9]+)?)</span>", RegexOptions.IgnoreCase);
+            if (priceMatches.Count >= 2 && decimal.TryParse(priceMatches[1].Groups["price"].Value, NumberStyles.Any, CultureInfo.InvariantCulture, out var motorin))
+                return motorin;
+        }
+
+        return null;
+    }
+
+    private static string NormalizeBolge(string value)
+    {
+        return (value ?? string.Empty)
+            .Trim()
+            .ToUpperInvariant()
+            .Replace("İ", "I")
+            .Replace("İ", "I")
+            .Replace("Ş", "S")
+            .Replace("Ğ", "G")
+            .Replace("Ü", "U")
+            .Replace("Ö", "O")
+            .Replace("Ç", "C");
+    }
+}
+

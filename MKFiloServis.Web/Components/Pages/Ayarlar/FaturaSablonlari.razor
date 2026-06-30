@@ -1,0 +1,777 @@
+@page "/ayarlar/fatura-sablonlari"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject IFaturaSablonService FaturaSablonService
+@inject IToastService ToastService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Fatura Şablonları</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">
+                    <i class="bi bi-file-earmark-pdf text-danger me-2"></i>
+                    Fatura Şablonları
+                </h4>
+                <button class="btn btn-primary" @onclick="YeniSablonEkle">
+                    <i class="bi bi-plus-lg me-1"></i> Yeni Şablon
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (yukleniyor)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <!-- Sol Panel: Şablon Listesi -->
+            <div class="col-md-3">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="bi bi-list-ul me-1"></i> Şablonlar</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            @if (sablonlar.Count == 0)
+                            {
+                                <div class="list-group-item text-center text-muted py-4">
+                                    <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                    Henüz şablon yok
+                                </div>
+                            }
+                            else
+                            {
+                                @foreach (var sablon in sablonlar)
+                                {
+                                    <a href="javascript:;" class="list-group-item list-group-item-action @(seciliSablon?.Id == sablon.Id ? "active" : "")"
+                                       @onclick="() => SablonSec(sablon)">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <strong>@sablon.SablonAdi</strong>
+                                                @if (sablon.Varsayilan)
+                                                {
+                                                    <span class="badge bg-success ms-1">Varsayılan</span>
+                                                }
+                                                @if (!sablon.Aktif)
+                                                {
+                                                    <span class="badge bg-secondary ms-1">Pasif</span>
+                                                }
+                                            </div>
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-primary btn-sm" @onclick:stopPropagation="true"
+                                                        @onclick="() => OnizlemeGoster(sablon)" title="Önizleme">
+                                                    <i class="bi bi-eye"></i>
+                                                </button>
+                                                <button class="btn btn-outline-secondary btn-sm" @onclick:stopPropagation="true"
+                                                        @onclick="() => SablonKopyala(sablon)" title="Kopyala">
+                                                    <i class="bi bi-copy"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </a>
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sağ Panel: Şablon Detayları -->
+            <div class="col-md-9">
+                @if (seciliSablon != null)
+                {
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">
+                                <i class="bi bi-pencil-square me-1"></i>
+                                @(seciliSablon.Id == 0 ? "Yeni Şablon" : seciliSablon.SablonAdi)
+                            </h6>
+                            <div class="btn-group">
+                                <button class="btn btn-success btn-sm" @onclick="SablonKaydet" disabled="@kaydediliyor">
+                                    @if (kaydediliyor)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                    }
+                                    <i class="bi bi-check-lg me-1"></i> Kaydet
+                                </button>
+                                @if (seciliSablon.Id > 0 && !seciliSablon.Varsayilan)
+                                {
+                                    <button class="btn btn-warning btn-sm" @onclick="VarsayilanYap">
+                                        <i class="bi bi-star me-1"></i> Varsayılan Yap
+                                    </button>
+                                    <button class="btn btn-danger btn-sm" @onclick="SablonSil">
+                                        <i class="bi bi-trash me-1"></i> Sil
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <!-- Tab Navigasyonu -->
+                            <ul class="nav nav-tabs mb-3">
+                                <li class="nav-item">
+                                    <a class="nav-link @(aktifTab == "genel" ? "active" : "")" href="javascript:;" @onclick='() => aktifTab = "genel"'>
+                                        <i class="bi bi-gear me-1"></i> Genel
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link @(aktifTab == "logo" ? "active" : "")" href="javascript:;" @onclick='() => aktifTab = "logo"'>
+                                        <i class="bi bi-image me-1"></i> Logo & Başlık
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link @(aktifTab == "renkler" ? "active" : "")" href="javascript:;" @onclick='() => aktifTab = "renkler"'>
+                                        <i class="bi bi-palette me-1"></i> Renkler
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link @(aktifTab == "tablo" ? "active" : "")" href="javascript:;" @onclick='() => aktifTab = "tablo"'>
+                                        <i class="bi bi-table me-1"></i> Tablo
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link @(aktifTab == "diger" ? "active" : "")" href="javascript:;" @onclick='() => aktifTab = "diger"'>
+                                        <i class="bi bi-sliders me-1"></i> Diğer
+                                    </a>
+                                </li>
+                            </ul>
+
+                            <!-- Tab İçerikleri -->
+                            @if (aktifTab == "genel")
+                            {
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Şablon Adı</label>
+                                        <input type="text" class="form-control" @bind="seciliSablon.SablonAdi" />
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Sayfa Boyutu</label>
+                                        <select class="form-select" @bind="seciliSablon.SayfaBoyutu">
+                                            <option value="@SayfaBoyutu.A4">A4</option>
+                                            <option value="@SayfaBoyutu.A5">A5</option>
+                                            <option value="@SayfaBoyutu.Letter">Letter</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Sayfa Yönelimi</label>
+                                        <select class="form-select" @bind="seciliSablon.SayfaYonelimi">
+                                            <option value="@SayfaYonelimi.Dikey">Dikey (Portrait)</option>
+                                            <option value="@SayfaYonelimi.Yatay">Yatay (Landscape)</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label class="form-label">Sayfa Kenar Boşlukları (piksel)</label>
+                                        <div class="row g-2">
+                                            <div class="col-3">
+                                                <div class="input-group input-group-sm">
+                                                    <span class="input-group-text">Sol</span>
+                                                    <input type="number" class="form-control" @bind="seciliSablon.SayfaKenarBoslukSol" />
+                                                </div>
+                                            </div>
+                                            <div class="col-3">
+                                                <div class="input-group input-group-sm">
+                                                    <span class="input-group-text">Sağ</span>
+                                                    <input type="number" class="form-control" @bind="seciliSablon.SayfaKenarBoslukSag" />
+                                                </div>
+                                            </div>
+                                            <div class="col-3">
+                                                <div class="input-group input-group-sm">
+                                                    <span class="input-group-text">Üst</span>
+                                                    <input type="number" class="form-control" @bind="seciliSablon.SayfaKenarBoslukUst" />
+                                                </div>
+                                            </div>
+                                            <div class="col-3">
+                                                <div class="input-group input-group-sm">
+                                                    <span class="input-group-text">Alt</span>
+                                                    <input type="number" class="form-control" @bind="seciliSablon.SayfaKenarBoslukAlt" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label">Font Boyutu</label>
+                                        <input type="number" class="form-control" @bind="seciliSablon.VarsayilanFontBoyutu" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Başlık Font Boyutu</label>
+                                        <input type="number" class="form-control" @bind="seciliSablon.BaslikFontBoyutu" />
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.Aktif" id="aktifCheck">
+                                            <label class="form-check-label" for="aktifCheck">Aktif</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+
+                            @if (aktifTab == "logo")
+                            {
+                                <div class="row g-3">
+                                    <div class="col-md-12">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.LogoGoster" id="logoGosterCheck">
+                                            <label class="form-check-label" for="logoGosterCheck">Logo Göster</label>
+                                        </div>
+                                    </div>
+                                    @if (seciliSablon.LogoGoster)
+                                    {
+                                        <div class="col-md-4">
+                                            <label class="form-label">Logo Konumu</label>
+                                            <select class="form-select" @bind="seciliSablon.LogoKonumu">
+                                                <option value="@LogoKonumu.Sol">Sol</option>
+                                                <option value="@LogoKonumu.Orta">Orta</option>
+                                                <option value="@LogoKonumu.Sag">Sağ</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">Logo Genişlik (px)</label>
+                                            <input type="number" class="form-control" @bind="seciliSablon.LogoGenislik" />
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">Logo Yükseklik (px)</label>
+                                            <input type="number" class="form-control" @bind="seciliSablon.LogoYukseklik" />
+                                        </div>
+                                        <div class="col-md-12">
+                                            <label class="form-label">Özel Logo Yükle</label>
+                                            <InputFile class="form-control" OnChange="LogoYukle" accept="image/*" />
+                                            @if (!string.IsNullOrEmpty(seciliSablon.OzelLogo))
+                                            {
+                                                <div class="mt-2">
+                                                    <img src="data:image/png;base64,@seciliSablon.OzelLogo" alt="Logo" style="max-height:60px;" />
+                                                    <button class="btn btn-sm btn-outline-danger ms-2" @onclick="LogoSil">
+                                                        <i class="bi bi-x"></i> Logoyu Kaldır
+                                                    </button>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+
+                                    <div class="col-12"><hr /></div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label">Fatura Başlık Metni</label>
+                                        <input type="text" class="form-control" @bind="seciliSablon.FaturaBaslikMetni" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Başlık Konumu</label>
+                                        <select class="form-select" @bind="seciliSablon.FaturaBaslikKonumu">
+                                            <option value="@BaslikKonumu.Sol">Sol</option>
+                                            <option value="@BaslikKonumu.Orta">Orta</option>
+                                            <option value="@BaslikKonumu.Sag">Sağ</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="col-12"><hr /></div>
+                                    <div class="col-12"><h6>Firma Bilgileri Gösterimi</h6></div>
+
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.FirmaAdiGoster" id="firmaAdiCheck">
+                                            <label class="form-check-label" for="firmaAdiCheck">Firma Adı</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.FirmaAdresGoster" id="firmaAdresCheck">
+                                            <label class="form-check-label" for="firmaAdresCheck">Adres</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.FirmaTelefonGoster" id="firmaTelCheck">
+                                            <label class="form-check-label" for="firmaTelCheck">Telefon</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.FirmaEmailGoster" id="firmaEmailCheck">
+                                            <label class="form-check-label" for="firmaEmailCheck">E-posta</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.FirmaVergiGoster" id="firmaVergiCheck">
+                                            <label class="form-check-label" for="firmaVergiCheck">Vergi Bilgisi</label>
+                                        </div>
+                                    </div>
+                                    @if (seciliSablon.FirmaAdiGoster)
+                                    {
+                                        <div class="col-md-4">
+                                            <label class="form-label">Firma Adı Font Boyutu</label>
+                                            <input type="number" class="form-control" @bind="seciliSablon.FirmaAdiFontBoyutu" />
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                            @if (aktifTab == "renkler")
+                            {
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Ana Renk (Primary)</label>
+                                        <div class="input-group">
+                                            <input type="color" class="form-control form-control-color" @bind="seciliSablon.AnaPrimaryRenk" />
+                                            <input type="text" class="form-control" @bind="seciliSablon.AnaPrimaryRenk" />
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">İkincil Renk (Secondary)</label>
+                                        <div class="input-group">
+                                            <input type="color" class="form-control form-control-color" @bind="seciliSablon.AnaSecondaryRenk" />
+                                            <input type="text" class="form-control" @bind="seciliSablon.AnaSecondaryRenk" />
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Tablo Başlık Arkaplan</label>
+                                        <div class="input-group">
+                                            <input type="color" class="form-control form-control-color" @bind="seciliSablon.TabloBaslikArkaplanRenk" />
+                                            <input type="text" class="form-control" @bind="seciliSablon.TabloBaslikArkaplanRenk" />
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Tablo Başlık Yazı</label>
+                                        <div class="input-group">
+                                            <input type="color" class="form-control form-control-color" @bind="seciliSablon.TabloBaslikYaziRenk" />
+                                            <input type="text" class="form-control" @bind="seciliSablon.TabloBaslikYaziRenk" />
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Tablo Satır Çizgi</label>
+                                        <div class="input-group">
+                                            <input type="color" class="form-control form-control-color" @bind="seciliSablon.TabloSatirCizgiRenk" />
+                                            <input type="text" class="form-control" @bind="seciliSablon.TabloSatirCizgiRenk" />
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Toplam Arkaplan</label>
+                                        <div class="input-group">
+                                            <input type="color" class="form-control form-control-color" @bind="seciliSablon.ToplamArkaplanRenk" />
+                                            <input type="text" class="form-control" @bind="seciliSablon.ToplamArkaplanRenk" />
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+
+                            @if (aktifTab == "tablo")
+                            {
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.TabloSiraNoGoster" id="siraNoCheck">
+                                            <label class="form-check-label" for="siraNoCheck">Sıra No Sütunu</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.TabloKdvSutunuGoster" id="kdvSutunCheck">
+                                            <label class="form-check-label" for="kdvSutunCheck">KDV Sütunu</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.TabloIskontoSutunuGoster" id="iskontoSutunCheck">
+                                            <label class="form-check-label" for="iskontoSutunCheck">İskonto Sütunu</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.TabloZebraDeseni" id="zebraCheck">
+                                            <label class="form-check-label" for="zebraCheck">Zebra Deseni</label>
+                                        </div>
+                                    </div>
+                                    @if (seciliSablon.TabloZebraDeseni)
+                                    {
+                                        <div class="col-md-4">
+                                            <label class="form-label">Zebra Renk</label>
+                                            <div class="input-group">
+                                                <input type="color" class="form-control form-control-color" @bind="seciliSablon.TabloZebraRenk" />
+                                                <input type="text" class="form-control" @bind="seciliSablon.TabloZebraRenk" />
+                                            </div>
+                                        </div>
+                                    }
+
+                                    <div class="col-12"><hr /></div>
+                                    <div class="col-12"><h6>Toplam Bölümü</h6></div>
+
+                                    <div class="col-md-4">
+                                        <label class="form-label">Toplam Konumu</label>
+                                        <select class="form-select" @bind="seciliSablon.ToplamKonumu">
+                                            <option value="@ToplamKonumu.Sol">Sol</option>
+                                            <option value="@ToplamKonumu.Orta">Orta</option>
+                                            <option value="@ToplamKonumu.Sag">Sağ</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Toplam Genişlik (px)</label>
+                                        <input type="number" class="form-control" @bind="seciliSablon.ToplamBolumGenislik" />
+                                    </div>
+                                    <div class="col-md-4"></div>
+
+                                    <div class="col-md-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.AraToplamGoster" id="araToplamCheck">
+                                            <label class="form-check-label" for="araToplamCheck">Ara Toplam</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.KdvToplamGoster" id="kdvToplamCheck">
+                                            <label class="form-check-label" for="kdvToplamCheck">KDV Toplam</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.OdenenGoster" id="odenenCheck">
+                                            <label class="form-check-label" for="odenenCheck">Ödenen</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.KalanGoster" id="kalanCheck">
+                                            <label class="form-check-label" for="kalanCheck">Kalan</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+
+                            @if (aktifTab == "diger")
+                            {
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.FaturaBilgiKutusuGoster" id="faturaBilgiCheck">
+                                            <label class="form-check-label" for="faturaBilgiCheck">Fatura Bilgi Kutusu</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.CariBilgiKutusuGoster" id="cariBilgiCheck">
+                                            <label class="form-check-label" for="cariBilgiCheck">Cari Bilgi Kutusu</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.KutuCercevesiGoster" id="kutuCerceveCheck">
+                                            <label class="form-check-label" for="kutuCerceveCheck">Kutu Çerçeveleri</label>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-12"><hr /></div>
+
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.BankaBilgileriGoster" id="bankaCheck">
+                                            <label class="form-check-label" for="bankaCheck">Banka Bilgileri</label>
+                                        </div>
+                                    </div>
+                                    @if (seciliSablon.BankaBilgileriGoster)
+                                    {
+                                        <div class="col-md-12">
+                                            <textarea class="form-control" rows="3" @bind="seciliSablon.BankaBilgileri"
+                                                      placeholder="Banka adı, IBAN, hesap no vb."></textarea>
+                                        </div>
+                                    }
+
+                                    <div class="col-12"><hr /></div>
+
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.NotlarGoster" id="notlarCheck">
+                                            <label class="form-check-label" for="notlarCheck">Fatura Notları</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.SayfaNumarasiGoster" id="sayfaNoCheck">
+                                            <label class="form-check-label" for="sayfaNoCheck">Sayfa Numarası</label>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-12">
+                                        <label class="form-label">Alt Bilgi Metni (Sabit)</label>
+                                        <textarea class="form-control" rows="2" @bind="seciliSablon.AltBilgiMetni"
+                                                  placeholder="Tüm faturalarda görünecek sabit metin..."></textarea>
+                                    </div>
+
+                                    <div class="col-12"><hr /></div>
+                                    <div class="col-12"><h6>Kaşe ve İmza</h6></div>
+
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.KaseAlaniGoster" id="kaseCheck">
+                                            <label class="form-check-label" for="kaseCheck">Kaşe Alanı</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" @bind="seciliSablon.ImzaAlaniGoster" id="imzaCheck">
+                                            <label class="form-check-label" for="imzaCheck">İmza Alanı</label>
+                                        </div>
+                                    </div>
+                                    @if (seciliSablon.ImzaAlaniGoster)
+                                    {
+                                        <div class="col-md-4">
+                                            <label class="form-label">İmza Metni</label>
+                                            <input type="text" class="form-control" @bind="seciliSablon.ImzaMetni" />
+                                        </div>
+                                    }
+                                    @if (seciliSablon.KaseAlaniGoster)
+                                    {
+                                        <div class="col-md-12">
+                                            <label class="form-label">Kaşe Resmi Yükle</label>
+                                            <InputFile class="form-control" OnChange="KaseYukle" accept="image/*" />
+                                            @if (!string.IsNullOrEmpty(seciliSablon.KaseResmi))
+                                            {
+                                                <div class="mt-2">
+                                                    <img src="data:image/png;base64,@seciliSablon.KaseResmi" alt="Kaşe" style="max-height:60px;" />
+                                                    <button class="btn btn-sm btn-outline-danger ms-2" @onclick="KaseSil">
+                                                        <i class="bi bi-x"></i> Kaşeyi Kaldır
+                                                    </button>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="card shadow-sm">
+                        <div class="card-body text-center py-5">
+                            <i class="bi bi-file-earmark-pdf text-muted fs-1 mb-3 d-block"></i>
+                            <p class="text-muted mb-0">Sol panelden bir şablon seçin veya yeni şablon ekleyin</p>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+<!-- PDF Önizleme Modal -->
+@if (onizlemeGoster && onizlemeData != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-eye me-2"></i>PDF Önizleme</h5>
+                    <button type="button" class="btn-close" @onclick="OnizlemeKapat"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <iframe src="data:application/pdf;base64,@onizlemeData" style="width:100%;height:70vh;border:none;"></iframe>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="OnizlemeKapat">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool yukleniyor = true;
+    private bool kaydediliyor = false;
+    private List<FaturaSablon> sablonlar = new();
+    private FaturaSablon? seciliSablon;
+    private string aktifTab = "genel";
+    private bool onizlemeGoster = false;
+    private string? onizlemeData;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await YukleAsync();
+    }
+
+    private async Task YukleAsync()
+    {
+        yukleniyor = true;
+        try
+        {
+            sablonlar = await FaturaSablonService.TumSablonlariGetirAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Şablonlar yüklenirken hata: {ex.Message}");
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private void SablonSec(FaturaSablon sablon)
+    {
+        seciliSablon = sablon;
+        aktifTab = "genel";
+    }
+
+    private void YeniSablonEkle()
+    {
+        seciliSablon = new FaturaSablon
+        {
+            SablonAdi = "Yeni Şablon",
+            Aktif = true
+        };
+        aktifTab = "genel";
+    }
+
+    private async Task SablonKaydet()
+    {
+        if (seciliSablon == null) return;
+
+        kaydediliyor = true;
+        try
+        {
+            if (seciliSablon.Id == 0)
+            {
+                var yeniSablon = await FaturaSablonService.SablonEkleAsync(seciliSablon);
+                seciliSablon = yeniSablon;
+                ToastService.ShowSuccess("Şablon eklendi.");
+            }
+            else
+            {
+                await FaturaSablonService.SablonGuncelleAsync(seciliSablon);
+                ToastService.ShowSuccess("Şablon güncellendi.");
+            }
+            await YukleAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Kaydetme hatası: {ex.Message}");
+        }
+        finally
+        {
+            kaydediliyor = false;
+        }
+    }
+
+    private async Task SablonSil()
+    {
+        if (seciliSablon?.Id == 0) return;
+
+        var onay = await JSRuntime.InvokeAsync<bool>("confirm", "Bu şablonu silmek istediğinize emin misiniz?");
+        if (!onay) return;
+
+        try
+        {
+            await FaturaSablonService.SablonSilAsync(seciliSablon!.Id);
+            ToastService.ShowSuccess("Şablon silindi.");
+            seciliSablon = null;
+            await YukleAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Silme hatası: {ex.Message}");
+        }
+    }
+
+    private async Task VarsayilanYap()
+    {
+        if (seciliSablon?.Id == 0) return;
+
+        try
+        {
+            await FaturaSablonService.VarsayilanYapAsync(seciliSablon!.Id);
+            ToastService.ShowSuccess("Şablon varsayılan yapıldı.");
+            await YukleAsync();
+            seciliSablon = sablonlar.FirstOrDefault(s => s.Id == seciliSablon.Id);
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+    }
+
+    private async Task SablonKopyala(FaturaSablon sablon)
+    {
+        try
+        {
+            var yeniAd = $"{sablon.SablonAdi} (Kopya)";
+            var kopyalanan = await FaturaSablonService.SablonKopyalaAsync(sablon.Id, yeniAd);
+            ToastService.ShowSuccess("Şablon kopyalandı.");
+            await YukleAsync();
+            seciliSablon = kopyalanan;
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Kopyalama hatası: {ex.Message}");
+        }
+    }
+
+    private async Task OnizlemeGoster(FaturaSablon sablon)
+    {
+        try
+        {
+            var pdfData = await FaturaSablonService.OnizlemePdfOlusturAsync(sablon);
+            onizlemeData = Convert.ToBase64String(pdfData);
+            onizlemeGoster = true;
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Önizleme hatası: {ex.Message}");
+        }
+    }
+
+    private void OnizlemeKapat()
+    {
+        onizlemeGoster = false;
+        onizlemeData = null;
+    }
+
+    private async Task LogoYukle(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            using var stream = new MemoryStream();
+            await e.File.OpenReadStream(maxAllowedSize: 2 * 1024 * 1024).CopyToAsync(stream);
+            seciliSablon!.OzelLogo = Convert.ToBase64String(stream.ToArray());
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Logo yükleme hatası: {ex.Message}");
+        }
+    }
+
+    private void LogoSil()
+    {
+        if (seciliSablon != null)
+            seciliSablon.OzelLogo = null;
+    }
+
+    private async Task KaseYukle(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            using var stream = new MemoryStream();
+            await e.File.OpenReadStream(maxAllowedSize: 2 * 1024 * 1024).CopyToAsync(stream);
+            seciliSablon!.KaseResmi = Convert.ToBase64String(stream.ToArray());
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Kaşe yükleme hatası: {ex.Message}");
+        }
+    }
+
+    private void KaseSil()
+    {
+        if (seciliSablon != null)
+            seciliSablon.KaseResmi = null;
+    }
+}
+

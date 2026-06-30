@@ -1,0 +1,359 @@
+@page "/ayarlar/sistem-saglik"
+@using MKFiloServis.Web.Services
+@inject ISystemHealthService HealthService
+@inject IBackupService BackupService
+@inject IToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>Sistem Sağlık Durumu</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="bi bi-heart-pulse me-2"></i>Sistem Sağlık Durumu</h3>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary" @onclick="LoadHealthReport" disabled="@isLoading">
+                <i class="bi bi-arrow-clockwise me-1"></i>Yenile
+            </button>
+            <button class="btn btn-success" @onclick="CreateBackup" disabled="@isBackingUp">
+                @if (isBackingUp)
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                }
+                <i class="bi bi-cloud-arrow-up me-1"></i>Yedek Al
+            </button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2">Sistem kontrolü yapılıyor...</p>
+        </div>
+    }
+    else if (report != null)
+    {
+        <!-- GENEL DURUM -->
+        <div class="alert @GetStatusClass(report.OverallStatus) d-flex align-items-center mb-4">
+            <i class="bi @GetStatusIcon(report.OverallStatus) fs-3 me-3"></i>
+            <div>
+                <h5 class="mb-0">Sistem Durumu: @GetStatusText(report.OverallStatus)</h5>
+                <small>Son kontrol: @report.CheckedAt.ToString("dd.MM.yyyy HH:mm:ss")</small>
+            </div>
+        </div>
+
+        <!-- SİSTEM BİLGİLERİ -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="bi bi-pc-display fs-1 text-primary mb-2"></i>
+                        <h6>Sunucu</h6>
+                        <p class="mb-0 fw-bold">@report.MachineName</p>
+                        <small class="text-muted">@report.OsVersion</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="bi bi-clock-history fs-1 text-success mb-2"></i>
+                        <h6>Çalışma Süresi</h6>
+                        <p class="mb-0 fw-bold">@report.UptimeFormatted</p>
+                        <small class="text-muted">Uygulama başlangıcından beri</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="bi bi-cpu fs-1 text-info mb-2"></i>
+                        <h6>İşlemci</h6>
+                        <p class="mb-0 fw-bold">@report.ProcessorCount Çekirdek</p>
+                        <small class="text-muted">@report.ThreadCount aktif thread</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="bi bi-code-slash fs-1 text-warning mb-2"></i>
+                        <h6>.NET Sürümü</h6>
+                        <p class="mb-0 fw-bold">@report.DotNetVersion</p>
+                        <small class="text-muted">.NET Runtime</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- VERİTABANI -->
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 @(report.Database.IsHealthy ? "" : "border-danger")">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-database me-2"></i>Veritabanı</span>
+                        <span class="badge @(report.Database.IsHealthy ? "bg-success" : "bg-danger")">
+                            @(report.Database.IsHealthy ? "Sağlıklı" : "Sorunlu")
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        @if (report.Database.IsHealthy)
+                        {
+                            <div class="mb-3">
+                                <small class="text-muted">Yanıt Süresi</small>
+                                <div class="fw-bold @(report.Database.ResponseTimeMs > 500 ? "text-warning" : "text-success")">
+                                    @report.Database.ResponseTimeMs ms
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <small class="text-muted">Sağlayıcı</small>
+                                <div class="fw-bold">@report.Database.ProviderName</div>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(report.Database.DatabasePath))
+                            {
+                                <div class="mb-3">
+                                    <small class="text-muted">Veritabanı Dosyası</small>
+                                    <div class="small text-break">@report.Database.DatabasePath</div>
+                                </div>
+                            }
+                            <div class="mb-3">
+                                <small class="text-muted">Veritabanı Boyutu</small>
+                                <div class="fw-bold">@report.Database.DatabaseSizeFormatted</div>
+                            </div>
+                            <div class="mb-3">
+                                <small class="text-muted">Tablo Sayısı</small>
+                                <div class="fw-bold">@report.Database.TableCount</div>
+                            </div>
+                            <div>
+                                <small class="text-muted">Aktif Bağlantılar</small>
+                                <div class="fw-bold">@report.Database.ActiveConnections</div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-danger mb-0">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                @report.Database.ErrorMessage
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- DİSK -->
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 @(report.Disk.IsHealthy ? "" : "border-warning")">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-hdd me-2"></i>Disk</span>
+                        <span class="badge @(report.Disk.IsHealthy ? "bg-success" : "bg-warning")">
+                            @(report.Disk.IsHealthy ? "Sağlıklı" : "Uyarı")
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <small class="text-muted">Sürücü</small>
+                            <div class="fw-bold">@report.Disk.DriveName (@report.Disk.DriveFormat)</div>
+                        </div>
+                        <div class="mb-3">
+                            <small class="text-muted">Kullanım</small>
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar @(report.Disk.UsedPercentage > 80 ? "bg-danger" : report.Disk.UsedPercentage > 60 ? "bg-warning" : "bg-success")" 
+                                     style="width: @(report.Disk.UsedPercentage)%">
+                                    %@report.Disk.UsedPercentage
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-6">
+                                <small class="text-muted">Kullanılan</small>
+                                <div class="fw-bold text-danger">@report.Disk.UsedSpaceFormatted</div>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">Boş</small>
+                                <div class="fw-bold text-success">@report.Disk.FreeSpaceFormatted</div>
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(report.Disk.WarningMessage))
+                        {
+                            <div class="alert alert-warning mt-2 mb-0 py-1 px-2">
+                                <small><i class="bi bi-exclamation-triangle me-1"></i>@report.Disk.WarningMessage</small>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- BELLEK -->
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 @(report.Memory.IsHealthy ? "" : "border-warning")">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-memory me-2"></i>Bellek</span>
+                        <span class="badge @(report.Memory.IsHealthy ? "bg-success" : "bg-warning")">
+                            @(report.Memory.IsHealthy ? "Sağlıklı" : "Uyarı")
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <small class="text-muted">Working Set</small>
+                            <div class="fw-bold">@report.Memory.WorkingSetFormatted</div>
+                        </div>
+                        <div class="mb-3">
+                            <small class="text-muted">GC Bellek</small>
+                            <div class="fw-bold">@report.Memory.GcMemoryFormatted</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-4 text-center">
+                                <small class="text-muted">Gen0</small>
+                                <div class="fw-bold">@report.Memory.Gen0Collections</div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <small class="text-muted">Gen1</small>
+                                <div class="fw-bold">@report.Memory.Gen1Collections</div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <small class="text-muted">Gen2</small>
+                                <div class="fw-bold">@report.Memory.Gen2Collections</div>
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(report.Memory.WarningMessage))
+                        {
+                            <div class="alert alert-warning mt-2 mb-0 py-1 px-2">
+                                <small><i class="bi bi-exclamation-triangle me-1"></i>@report.Memory.WarningMessage</small>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- YEDEKLER -->
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-archive me-2"></i>Mevcut Yedekler
+            </div>
+            <div class="card-body p-0">
+                @if (backups.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Dosya Adı</th>
+                                    <th>Boyut</th>
+                                    <th>Tarih</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var backup in backups.Take(10))
+                                {
+                                    <tr>
+                                        <td>
+                                            <i class="bi bi-file-earmark-zip text-warning me-2"></i>
+                                            @backup.FileName
+                                        </td>
+                                        <td>@backup.FileSizeFormatted</td>
+                                        <td>@backup.CreatedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-4 text-muted">
+                        <i class="bi bi-inbox fs-1"></i>
+                        <p class="mt-2 mb-0">Henüz yedek bulunmuyor</p>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool isLoading = true;
+    private bool isBackingUp = false;
+    private SystemHealthReport? report;
+    private List<BackupInfo> backups = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadHealthReport();
+    }
+
+    private async Task LoadHealthReport()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            report = await HealthService.GetHealthReportAsync();
+            backups = await BackupService.GetBackupListAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Sistem kontrolü başarısız: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task CreateBackup()
+    {
+        isBackingUp = true;
+        StateHasChanged();
+
+        try
+        {
+            var result = await BackupService.CreateBackupAsync();
+
+            if (result.Success)
+            {
+                ToastService.ShowSuccess($"Yedek oluşturuldu: {Path.GetFileName(result.FilePath)}");
+                backups = await BackupService.GetBackupListAsync();
+            }
+            else
+            {
+                ToastService.ShowError($"Yedekleme hatası: {result.ErrorMessage}");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Yedekleme hatası: {ex.Message}");
+        }
+        finally
+        {
+            isBackingUp = false;
+        }
+    }
+
+    private string GetStatusClass(HealthStatus status) => status switch
+    {
+        HealthStatus.Healthy => "alert-success",
+        HealthStatus.Warning => "alert-warning",
+        HealthStatus.Critical => "alert-danger",
+        _ => "alert-secondary"
+    };
+
+    private string GetStatusIcon(HealthStatus status) => status switch
+    {
+        HealthStatus.Healthy => "bi-check-circle-fill",
+        HealthStatus.Warning => "bi-exclamation-triangle-fill",
+        HealthStatus.Critical => "bi-x-circle-fill",
+        _ => "bi-question-circle-fill"
+    };
+
+    private string GetStatusText(HealthStatus status) => status switch
+    {
+        HealthStatus.Healthy => "Sağlıklı",
+        HealthStatus.Warning => "Uyarı",
+        HealthStatus.Critical => "Kritik",
+        _ => "Bilinmiyor"
+    };
+}
+
+

@@ -1,0 +1,567 @@
+@page "/butce/takvim-raporu"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IBudgetService BudgetService
+@inject IExcelService ExcelService
+@inject IPdfService PdfService
+@inject IToastService ToastService
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Butce Takvim Raporu</PageTitle>
+
+<div class="container-fluid">
+    <!-- Baslik ve Butonlar -->
+    <div class="d-flex justify-content-between align-items-center mb-3 no-print">
+        <h4><i class="bi bi-calendar3 me-2"></i>Butce Takvim Raporu</h4>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary" @onclick="YaziciOnizleme">
+                <i class="bi bi-printer me-1"></i>Yazdir
+            </button>
+            <button class="btn btn-outline-success" @onclick="ExcelExport">
+                <i class="bi bi-file-earmark-excel me-1"></i>Excel
+            </button>
+            <button class="btn btn-outline-danger" @onclick="PdfExport">
+                <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtre -->
+    <div class="card mb-3 no-print">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Rapor Tipi</label>
+                    <select class="form-select form-select-sm" @bind="raporTipi" @bind:after="Filtrele">
+                        <option value="ay">Ay Bazli</option>
+                        <option value="yil">Yil Bazli</option>
+                        <option value="tarih">Tarih Araligi</option>
+                    </select>
+                </div>
+                @if (raporTipi == "ay")
+                {
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Yil</label>
+                        <select class="form-select form-select-sm" @bind="seciliYil" @bind:after="Filtrele">
+                            @for (int y = DateTime.Today.Year; y >= DateTime.Today.Year - 5; y--)
+                            {
+                                <option value="@y">@y</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Ay</label>
+                        <select class="form-select form-select-sm" @bind="seciliAy" @bind:after="Filtrele">
+                            @for (int m = 1; m <= 12; m++)
+                            {
+                                <option value="@m">@GetAyAdi(m)</option>
+                            }
+                        </select>
+                    </div>
+                }
+                else if (raporTipi == "yil")
+                {
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Yil</label>
+                        <select class="form-select form-select-sm" @bind="seciliYil" @bind:after="Filtrele">
+                            @for (int y = DateTime.Today.Year; y >= DateTime.Today.Year - 5; y--)
+                            {
+                                <option value="@y">@y</option>
+                            }
+                        </select>
+                    </div>
+                }
+                else
+                {
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Baslangic</label>
+                        <input type="date" class="form-control form-control-sm" @bind="baslangicTarihi" @bind:after="Filtrele" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Bitis</label>
+                        <input type="date" class="form-control form-control-sm" @bind="bitisTarihi" @bind:after="Filtrele" />
+                    </div>
+                }
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Durum</label>
+                    <select class="form-select form-select-sm" @bind="filtreDurum" @bind:after="Filtrele">
+                        <option value="">Tumu</option>
+                        <option value="1">Bekliyor</option>
+                        <option value="2">Odendi</option>
+                        <option value="3">Iptal</option>
+                        <option value="4">Ertelendi</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else
+    {
+        <!-- Rapor Alani -->
+        <div class="rapor-container" id="raporContainer">
+            <!-- Baslik -->
+            <div class="text-center mb-4 rapor-baslik">
+                <h3>BUTCE TAKVIM RAPORU</h3>
+                <p class="text-muted mb-0">
+                    @if (raporTipi == "ay")
+                    {
+                        @($"{GetAyAdi(seciliAy)} {seciliYil}")
+                    }
+                    else if (raporTipi == "yil")
+                    {
+                        @seciliYil
+                    }
+                    else
+                    {
+                        @($"{baslangicTarihi:dd.MM.yyyy} - {bitisTarihi:dd.MM.yyyy}")
+                    }
+                </p>
+                <small class="text-muted">Olusturulma: @DateTime.Now.ToString("dd.MM.yyyy HH:mm")</small>
+            </div>
+
+            <!-- Ozet Kartlar -->
+            <div class="row mb-4 g-3">
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white h-100">
+                        <div class="card-body text-center py-2">
+                            <small>Toplam Odeme</small>
+                            <h4 class="mb-0">@filtrelenmisOdemeler.Count</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-danger text-white h-100">
+                        <div class="card-body text-center py-2">
+                            <small>Toplam Tutar</small>
+                            <h4 class="mb-0">@FormatPara(filtrelenmisOdemeler.Sum(o => o.Miktar))</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white h-100">
+                        <div class="card-body text-center py-2">
+                            <small>Odenen</small>
+                            <h4 class="mb-0">@FormatPara(filtrelenmisOdemeler.Where(o => o.Durum == OdemeDurum.Odendi || o.Durum == OdemeDurum.KismiOdendi).Sum(GetOdenenTutar))</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-dark h-100">
+                        <div class="card-body text-center py-2">
+                            <small>Bekleyen</small>
+                            <h4 class="mb-0">@FormatPara(filtrelenmisOdemeler.Where(o => o.Durum == OdemeDurum.Bekliyor || o.Durum == OdemeDurum.KismiOdendi || o.Durum == OdemeDurum.Ertelendi).Sum(GetBekleyenTutar))</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Takvim Gorunumu -->
+            @if (raporTipi == "ay")
+            {
+                <div class="card mb-4 takvim-gorunumu">
+                    <div class="card-header d-flex justify-content-between">
+                        <h6 class="mb-0"><i class="bi bi-calendar-week me-2"></i>Takvim Gorunumu (Yatay A4)</h6>
+                        <span class="badge bg-secondary">Sayfa 1</span>
+                    </div>
+                    <div class="card-body p-2">
+                        <table class="table table-bordered table-sm mb-0 takvim-table">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th class="text-center" style="width: 14%;">Pazartesi</th>
+                                    <th class="text-center" style="width: 14%;">Sali</th>
+                                    <th class="text-center" style="width: 14%;">Carsamba</th>
+                                    <th class="text-center" style="width: 14%;">Persembe</th>
+                                    <th class="text-center" style="width: 14%;">Cuma</th>
+                                    <th class="text-center" style="width: 14%;">Cumartesi</th>
+                                    <th class="text-center" style="width: 14%;">Pazar</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var hafta in takvimHaftalari)
+                                {
+                                    <tr>
+                                        @foreach (var gun in hafta)
+                                        {
+                                            <td class="takvim-gun @(gun.HasValue ? "" : "bg-light")">
+                                                @if (gun.HasValue)
+                                                {
+                                                    var gunOdemeleri = GetGunOdemeleri(gun.Value);
+                                                    <div class="gun-baslik">@gun.Value</div>
+                                                    @if (gunOdemeleri.Any())
+                                                    {
+                                                        <div class="gun-odemeler d-flex flex-column gap-1">
+                                                            @foreach (var odeme in gunOdemeleri.OrderBy(o => o.Durum))
+                                                            {
+                                                                int kalanGun = (odeme.OdemeTarihi.Date - DateTime.Today).Days;
+                                                                string bgClass = "bg-light text-dark";
+                                                                string timeText = "Odenen";
+
+                                                                if (odeme.Durum == OdemeDurum.Bekliyor || odeme.Durum == OdemeDurum.Ertelendi)
+                                                                {
+                                                                    if (kalanGun < 0) {
+                                                                        bgClass = "bg-danger text-white"; 
+                                                                        timeText = $"{Math.Abs(kalanGun)}g gecikti";
+                                                                    } else if (kalanGun == 0) {
+                                                                        bgClass = "bg-warning text-dark"; 
+                                                                        timeText = "Bugun";
+                                                                    } else {
+                                                                        bgClass = "bg-success text-white"; 
+                                                                        timeText = $"{kalanGun}g kaldi";
+                                                                    }
+                                                                }
+
+                                                                <div class="odeme-item @bgClass p-1 border rounded" title="@odeme.MasrafKalemi - @FormatPara(GetGorunenTutar(odeme))">
+                                                                    <div class="d-flex justify-content-between mb-1" style="font-size:0.75rem;">
+                                                                        <span class="fw-bold text-truncate" style="max-width:80px;">@odeme.MasrafKalemi</span>
+                                                                        <span>@FormatPara(GetGorunenTutar(odeme))</span>
+                                                                    </div>
+                                                                    <div class="text-end" style="font-size:0.65rem; opacity:0.9;">
+                                                                        @timeText
+                                                                    </div>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                        <div class="mt-2 pt-1 border-top text-end fw-bold" style="font-size: 0.85rem;">
+                                                            Top: @FormatPara(gunOdemeleri.Sum(GetGorunenTutar))
+                                                        </div>
+                                                    }
+                                                }
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+
+            <div style="page-break-before: always;" class="d-none d-print-block"></div>
+
+            <!-- Odeme Listesi -->
+            <div class="card liste-gorunumu">
+                <div class="card-header d-flex justify-content-between">
+                    <h6 class="mb-0"><i class="bi bi-list-ul me-2"></i>Odeme Listesi (Tarih Sirasina Gore)</h6>
+                    <span class="badge bg-secondary">Sayfa 2</span>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-striped mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width: 100px;">Tarih</th>
+                                <th>Masraf Kalemi</th>
+                                <th>Aciklama</th>
+                                <th class="text-end" style="width: 120px;">Tutar</th>
+                                <th class="text-center" style="width: 100px;">Durum</th>
+                                <th style="width: 120px;">Zaman/Sure</th>
+                                <th style="width: 100px;">Odeme Tarihi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var odeme in filtrelenmisOdemeler.OrderBy(o => o.OdemeTarihi))
+                            {
+                                int kalanGun = (odeme.OdemeTarihi.Date - DateTime.Today).Days;
+                                string timeText = "-";
+                                string timeClass = "text-muted";
+                                if (odeme.Durum == OdemeDurum.Bekliyor || odeme.Durum == OdemeDurum.Ertelendi)
+                                {
+                                    if (kalanGun < 0) { timeText = $"{Math.Abs(kalanGun)} Gun Gecikti"; timeClass = "text-danger fw-bold"; }
+                                    else if (kalanGun == 0) { timeText = "Bugun"; timeClass = "text-warning fw-bold"; }
+                                    else { timeText = $"{kalanGun} Gun Kaldi"; timeClass = "text-success fw-bold"; }
+                                }
+
+                                <tr>
+                                    <td>@odeme.OdemeTarihi.ToString("dd.MM.yyyy")</td>
+                                    <td><strong>@odeme.MasrafKalemi</strong></td>
+                                    <td><small>@odeme.Aciklama</small></td>
+                                    <td class="text-end fw-bold">@FormatPara(GetGorunenTutar(odeme))</td>
+                                    <td class="text-center">
+                                        <span class="badge @GetDurumBadgeClass(odeme.Durum)">@GetDurumAdi(odeme.Durum)</span>
+                                    </td>
+                                    <td class="@timeClass">@timeText</td>
+                                    <td>@(odeme.GercekOdemeTarihi?.ToString("dd.MM.yyyy") ?? "-")</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-warning">
+                            <tr class="fw-bold">
+                                <td colspan="3">TOPLAM</td>
+                                <td class="text-end">@FormatPara(filtrelenmisOdemeler.Sum(GetGorunenTutar))</td>
+                                <td colspan="3"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool isLoading = true;
+    private string raporTipi = "ay";
+    private int seciliYil = DateTime.Today.Year;
+    private int seciliAy = DateTime.Today.Month;
+    private DateTime baslangicTarihi = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime bitisTarihi = DateTime.Today;
+    private string filtreDurum = "";
+
+    private List<BudgetOdeme> tumOdemeler = new();
+    private List<BudgetOdeme> filtrelenmisOdemeler = new();
+    private List<int?[]> takvimHaftalari = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            tumOdemeler = await BudgetService.GetOdemelerAsync(seciliYil);
+            await Filtrele();
+            TakvimOlustur();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task Filtrele()
+    {
+        if (raporTipi == "ay")
+        {
+            tumOdemeler = await BudgetService.GetOdemelerAsync(seciliYil, seciliAy);
+        }
+        else if (raporTipi == "yil")
+        {
+            tumOdemeler = await BudgetService.GetOdemelerAsync(seciliYil);
+        }
+        else
+        {
+            // Tarih araligi
+            var baslangicYil = baslangicTarihi.Year;
+            tumOdemeler = await BudgetService.GetOdemelerAsync(baslangicYil);
+            tumOdemeler = tumOdemeler.Where(o => o.OdemeTarihi >= baslangicTarihi && o.OdemeTarihi <= bitisTarihi).ToList();
+        }
+
+        var filtered = tumOdemeler.AsEnumerable();
+
+        if (!string.IsNullOrEmpty(filtreDurum) && int.TryParse(filtreDurum, out var durum))
+        {
+            filtered = filtered.Where(o => (int)o.Durum == durum);
+        }
+
+        filtrelenmisOdemeler = filtered.ToList();
+        TakvimOlustur();
+        StateHasChanged();
+    }
+
+    private void TakvimOlustur()
+    {
+        takvimHaftalari.Clear();
+        if (raporTipi != "ay") return;
+
+        var ilkGun = new DateTime(seciliYil, seciliAy, 1);
+        var sonGun = ilkGun.AddMonths(1).AddDays(-1);
+        var ilkGunHafta = ((int)ilkGun.DayOfWeek + 6) % 7; // Pazartesi = 0
+
+        var hafta = new int?[7];
+        var gunIndex = ilkGunHafta;
+
+        for (int gun = 1; gun <= sonGun.Day; gun++)
+        {
+            hafta[gunIndex] = gun;
+            gunIndex++;
+
+            if (gunIndex == 7 || gun == sonGun.Day)
+            {
+                takvimHaftalari.Add(hafta);
+                hafta = new int?[7];
+                gunIndex = 0;
+            }
+        }
+    }
+
+    private List<BudgetOdeme> GetGunOdemeleri(int gun)
+    {
+        return filtrelenmisOdemeler.Where(o => o.OdemeTarihi.Day == gun).ToList();
+    }
+
+    private async Task YaziciOnizleme()
+    {
+        await JS.InvokeVoidAsync("window.print");
+    }
+
+    private async Task ExcelExport()
+    {
+        try
+        {
+            var headers = new[] { "Tarih", "Masraf Kalemi", "Aciklama", "Tutar", "Durum", "Odeme Tarihi" };
+            var data = filtrelenmisOdemeler.OrderBy(o => o.OdemeTarihi).Select(o => new object[]
+            {
+                o.OdemeTarihi.ToString("dd.MM.yyyy"),
+                o.MasrafKalemi,
+                o.Aciklama ?? "",
+                GetGorunenTutar(o),
+                GetDurumAdi(o.Durum),
+                o.GercekOdemeTarihi?.ToString("dd.MM.yyyy") ?? ""
+            }).ToList();
+
+            var bytes = ExcelService.CreateExcel(headers, data, "Butce Takvim Raporu");
+            var fileName = $"ButceTakvimRaporu_{DateTime.Now:yyyyMMdd}.xlsx";
+            await JS.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(bytes), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            ToastService.ShowSuccess("Excel dosyasi indirildi!");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
+        }
+    }
+
+    private async Task PdfExport()
+    {
+        ToastService.ShowInfo("PDF export hazirlaniyor...");
+        await JS.InvokeVoidAsync("window.print");
+    }
+
+    private string GetAyAdi(int ay) => ay switch
+    {
+        1 => "Ocak", 2 => "Subat", 3 => "Mart", 4 => "Nisan",
+        5 => "Mayis", 6 => "Haziran", 7 => "Temmuz", 8 => "Agustos",
+        9 => "Eylul", 10 => "Ekim", 11 => "Kasim", 12 => "Aralik",
+        _ => ""
+    };
+
+    private string GetDurumAdi(OdemeDurum d) => d switch
+    {
+        OdemeDurum.Bekliyor => "Beklemede",
+        OdemeDurum.KismiOdendi => "Kısmi Ödendi",
+        OdemeDurum.Odendi => "Odendi",
+        OdemeDurum.Ertelendi => "Ertelendi",
+        OdemeDurum.Iptal => "Iptal",
+        _ => d.ToString()
+    };
+
+    private string GetDurumBadgeClass(OdemeDurum d) => d switch
+    {
+        OdemeDurum.Bekliyor => "bg-warning text-dark",
+        OdemeDurum.KismiOdendi => "bg-info text-white",
+        OdemeDurum.Odendi => "bg-success",
+        OdemeDurum.Ertelendi => "bg-info",
+        OdemeDurum.Iptal => "bg-secondary",
+        _ => "bg-secondary"
+    };
+
+    private string GetDurumClass(OdemeDurum d) => d switch
+    {
+        OdemeDurum.Bekliyor => "odeme-beklemede",
+        OdemeDurum.Odendi => "odeme-odendi",
+        OdemeDurum.Ertelendi => "odeme-ertelendi",
+        _ => ""
+    };
+
+    private decimal GetBekleyenTutar(BudgetOdeme odeme) => odeme.Durum == OdemeDurum.KismiOdendi ? odeme.KalanTutar : odeme.Miktar;
+    private decimal GetOdenenTutar(BudgetOdeme odeme) => odeme.Durum == OdemeDurum.KismiOdendi ? odeme.ToplamKismiOdenen : (odeme.OdenenTutar ?? odeme.Miktar);
+    private decimal GetGorunenTutar(BudgetOdeme odeme) => odeme.Durum == OdemeDurum.KismiOdendi ? odeme.KalanTutar : odeme.Miktar;
+    private string FormatPara(decimal t) => t.ToString("N2") + " TL";
+}
+
+<style>
+    .takvim-table {
+        table-layout: fixed;
+    }
+    .takvim-gun {
+        height: 130px;
+        vertical-align: top;
+        padding: 4px !important;
+    }
+    .gun-baslik {
+        font-weight: bold;
+        font-size: 1.1rem;
+        margin-bottom: 4px;
+        color: #555;
+    }
+    .gun-odemeler {
+        font-size: 0.75rem;
+    }
+    .text-truncate {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: inline-block;
+    }
+
+    @@media print {
+        @@page {
+            size: A4 landscape;
+            margin: 1cm;
+        }
+        .no-print {
+            display: none !important;
+        }
+        .takvim-gorunumu {
+            page-break-after: always;
+            width: 100%;
+        }
+        .liste-gorunumu {
+            page-break-before: always;
+            width: 100%;
+        }
+        .takvim-gun {
+            height: 110px !important;
+        }
+        .rapor-container {
+            padding: 0px;
+        }
+        .card {
+            border: 1px solid #ddd !important;
+            box-shadow: none !important;
+            break-inside: avoid;
+        }
+        .page {
+            display: block !important;
+        }
+        .sidebar {
+            display: none !important;
+        }
+        main {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        .top-row {
+            display: none !important;
+        }
+        .content {
+            padding: 0 !important;
+        }
+        /* Ozel yazdirma duzenlemeleri */
+        * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+        .badge {
+            border: 1px solid #000;
+            color: #000 !important;
+            background-color: transparent !important;
+        }
+        .bg-danger { background-color: #f8d7da !important; color: #842029 !important; border: 1px solid #f5c2c7 !important; }
+        .bg-warning { background-color: #fff3cd !important; color: #664d03 !important; border: 1px solid #ffecb5 !important; }
+        .bg-success { background-color: #d1e7dd !important; color: #0f5132 !important; border: 1px solid #badbcc !important; }
+    }
+</style>
+

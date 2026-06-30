@@ -1,0 +1,432 @@
+@page "/satis/ilan/{IlanId:int}"
+@page "/satis/ilan/yeni"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject ISatisService SatisService
+@inject ICariService CariService
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>@(isNew ? "Yeni Ilan" : $"Ilan - {ilan?.Plaka}")</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex align-items-center gap-2">
+            <a href="/satis" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <h4 class="mb-0">
+                @if (isNew)
+                {
+                    <i class="bi bi-plus-circle me-2"></i><text>Yeni Arac Ilani</text>
+                }
+                else
+                {
+                    <i class="bi bi-car-front me-2"></i>@($"{ilan?.Plaka} - {ilan?.Marka} {ilan?.Model}")
+                }
+            </h4>
+        </div>
+        <div class="d-flex gap-2">
+            @if (!isNew && ilan != null)
+            {
+                <button class="btn btn-info" @onclick="PiyasaKarsilastirmaAc">
+                    <i class="bi bi-graph-up me-1"></i>Piyasa Karsilastirma
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+        </div>
+    }
+    else
+    {
+        <div class="row g-3">
+            <!-- Sol Panel - Form -->
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Arac Bilgileri</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <!-- Temel Bilgiler -->
+                            <div class="col-md-3">
+                                <label class="form-label">Plaka *</label>
+                                <input type="text" class="form-control" @bind="ilan!.Plaka" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Marka *</label>
+                                <select class="form-select" @bind="ilan.Marka">
+                                    <option value="">Secin...</option>
+                                    @foreach (var marka in markalar)
+                                    {
+                                        <option value="@marka.MarkaAdi">@marka.MarkaAdi</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Model *</label>
+                                <input type="text" class="form-control" @bind="ilan.Model" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Model Yili *</label>
+                                <input type="number" class="form-control" @bind="ilan.ModelYili" />
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label">Versiyon</label>
+                                <input type="text" class="form-control" @bind="ilan.Versiyon" placeholder="1.6 TDI" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Kilometre</label>
+                                <input type="number" class="form-control" @bind="ilan.Kilometre" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Yakit</label>
+                                <select class="form-select" @bind="ilan.YakitTuru">
+                                    @foreach (var yakit in Enum.GetValues<YakitTuru>())
+                                    {
+                                        <option value="@yakit">@yakit</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Vites</label>
+                                <select class="form-select" @bind="ilan.VitesTuru">
+                                    @foreach (var vites in Enum.GetValues<VitesTuru>())
+                                    {
+                                        <option value="@vites">@GetVitesAdi(vites)</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label">Kasa Tipi</label>
+                                <select class="form-select" @bind="ilan.KasaTipi">
+                                    @foreach (var kasa in Enum.GetValues<KasaTipi>())
+                                    {
+                                        <option value="@kasa">@kasa</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Renk</label>
+                                <select class="form-select" @bind="ilan.Renk">
+                                    @foreach (var renk in Enum.GetValues<AracRenk>())
+                                    {
+                                        <option value="@renk">@renk</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Durum</label>
+                                <select class="form-select" @bind="ilan.Durum">
+                                    <option value="@AracDurum.Sifir">Sifir</option>
+                                    <option value="@AracDurum.IkinciEl">Ikinci El</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Satis Personeli</label>
+                                <select class="form-select" @bind="ilan.SatisPersoneliId">
+                                    <option value="">Secin...</option>
+                                    @foreach (var p in personeller)
+                                    {
+                                        <option value="@p.Id">@p.AdSoyad</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <!-- Hasar Bilgileri -->
+                            <div class="col-12">
+                                <hr />
+                                <h6><i class="bi bi-exclamation-triangle me-2"></i>Hasar/Boya Bilgileri</h6>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="boyali" @bind="ilan.Boyali" />
+                                    <label class="form-check-label" for="boyali">Boyali Parca Var</label>
+                                </div>
+                                @if (ilan.Boyali)
+                                {
+                                    <input type="number" class="form-control form-control-sm mt-1" @bind="ilan.BoyaliParcaSayisi" placeholder="Parca sayisi" />
+                                    <input type="text" class="form-control form-control-sm mt-1" @bind="ilan.BoyaliParcalar" placeholder="Parcalar..." />
+                                }
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="degisen" @bind="ilan.DegisenVar" />
+                                    <label class="form-check-label" for="degisen">Degisen Parca Var</label>
+                                </div>
+                                @if (ilan.DegisenVar)
+                                {
+                                    <input type="number" class="form-control form-control-sm mt-1" @bind="ilan.DegisenParcaSayisi" placeholder="Parca sayisi" />
+                                    <input type="text" class="form-control form-control-sm mt-1" @bind="ilan.DegisenParcalar" placeholder="Parcalar..." />
+                                }
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="tramer" @bind="ilan.TramerKaydi" />
+                                    <label class="form-check-label" for="tramer">Tramer Kaydi Var</label>
+                                </div>
+                                @if (ilan.TramerKaydi)
+                                {
+                                    <input type="number" class="form-control form-control-sm mt-1" @bind="ilan.TramerTutari" placeholder="Tramer tutari" />
+                                }
+                            </div>
+
+                            <!-- Fiyat Bilgileri -->
+                            <div class="col-12">
+                                <hr />
+                                <h6><i class="bi bi-currency-lira me-2"></i>Fiyat Bilgileri</h6>
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label">Alis Fiyati</label>
+                                <input type="number" class="form-control" @bind="ilan.AlisFiyati" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Satis Fiyati *</label>
+                                <input type="number" class="form-control" @bind="ilan.SatisFiyati" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Kasko Degeri</label>
+                                <input type="number" class="form-control" @bind="ilan.KaskoDegeri" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Ilan Durumu</label>
+                                <select class="form-select" @bind="ilan.IlanDurum">
+                                    @foreach (var durum in Enum.GetValues<IlanDurum>())
+                                    {
+                                        <option value="@durum">@GetIlanDurumAdi(durum)</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label">Aciklama</label>
+                                <textarea class="form-control" rows="3" @bind="ilan.Aciklama"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer text-end">
+                        <button class="btn btn-secondary me-2" @onclick="IptalEt">Iptal</button>
+                        <button class="btn btn-primary" @onclick="KaydetAsync">
+                            <i class="bi bi-check-lg me-1"></i>Kaydet
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sag Panel - Piyasa Degerlendirme -->
+            <div class="col-lg-4">
+                @if (!isNew && ilan != null)
+                {
+                    <!-- Piyasa Ozet -->
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h6 class="mb-0"><i class="bi bi-graph-up me-2"></i>Piyasa Degerlendirme</h6>
+                        </div>
+                        <div class="card-body">
+                            @if (piyasaDegerlendirme != null && piyasaDegerlendirme.KarsilastirmaAdet > 0)
+                            {
+                                <div class="text-center mb-3">
+                                    <span class="badge fs-6 @(piyasaDegerlendirme.Degerlendirme.Contains("Uygun") ? "bg-success" : 
+                                        piyasaDegerlendirme.Degerlendirme.Contains("Piyasa") ? "bg-warning text-dark" : "bg-danger")">
+                                        @piyasaDegerlendirme.Degerlendirme
+                                    </span>
+                                </div>
+                                <div class="row g-2 text-center">
+                                    <div class="col-4">
+                                        <small class="text-muted">Min</small>
+                                        <div class="fw-bold">@FormatPara(piyasaDegerlendirme.MinFiyat)</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <small class="text-muted">Ortalama</small>
+                                        <div class="fw-bold text-primary">@FormatPara(piyasaDegerlendirme.OrtalamaFiyat)</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <small class="text-muted">Max</small>
+                                        <div class="fw-bold">@FormatPara(piyasaDegerlendirme.MaxFiyat)</div>
+                                    </div>
+                                </div>
+                                <hr />
+                                <div class="d-flex justify-content-between">
+                                    <span>Bizim Fiyat:</span>
+                                    <strong class="text-success">@FormatPara(ilan.SatisFiyati)</strong>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>Fark:</span>
+                                    <span class="@(piyasaDegerlendirme.FiyatFarki < 0 ? "text-success" : "text-danger")">
+                                        @(piyasaDegerlendirme.FiyatFarki >= 0 ? "+" : "")@FormatPara(piyasaDegerlendirme.FiyatFarki)
+                                        (@piyasaDegerlendirme.FiyatFarkiYuzde%)
+                                    </span>
+                                </div>
+                                <small class="text-muted">@piyasaDegerlendirme.KarsilastirmaAdet ilan ile karsilastirildi</small>
+                            }
+                            else
+                            {
+                                <p class="text-muted text-center">Piyasa verisi yok</p>
+                                <button class="btn btn-sm btn-outline-primary w-100" @onclick="PiyasaKarsilastirmaAc">
+                                    <i class="bi bi-plus me-1"></i>Piyasa Ilani Ekle
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Kar/Zarar -->
+                    @if (ilan.AlisFiyati > 0)
+                    {
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="bi bi-calculator me-2"></i>Kar/Zarar Analizi</h6>
+                            </div>
+                            <div class="card-body">
+                                @{
+                                    var kar = ilan.SatisFiyati - ilan.AlisFiyati;
+                                    var karOrani = ilan.AlisFiyati > 0 ? (kar / ilan.AlisFiyati * 100) : 0;
+                                }
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Alis:</span>
+                                    <span>@FormatPara(ilan.AlisFiyati)</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Satis:</span>
+                                    <span>@FormatPara(ilan.SatisFiyati)</span>
+                                </div>
+                                <hr />
+                                <div class="d-flex justify-content-between">
+                                    <strong>Kar/Zarar:</strong>
+                                    <strong class="@(kar >= 0 ? "text-success" : "text-danger")">
+                                        @(kar >= 0 ? "+" : "")@FormatPara(kar)
+                                        (@Math.Round(karOrani, 1)%)
+                                    </strong>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int IlanId { get; set; }
+
+    private bool isLoading = true;
+    private bool isNew => IlanId == 0;
+    private AracIlan ilan = new();
+    private List<AracMarka> markalar = new();
+    private List<SatisPersoneli> personeller = new();
+    private PiyasaDegerlendirme? piyasaDegerlendirme;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            markalar = await SatisService.GetAracMarkalarAsync();
+            personeller = await SatisService.GetSatisPersonelListesiAsync();
+
+            if (!isNew)
+            {
+                var existingIlan = await SatisService.GetAracIlanByIdAsync(IlanId);
+                if (existingIlan != null)
+                {
+                    ilan = existingIlan;
+                    piyasaDegerlendirme = await SatisService.GetPiyasaDegerlendirmeAsync(IlanId);
+                }
+                else
+                {
+                    ToastService.ShowError("Ilan bulunamadi!");
+                    Navigation.NavigateTo("/satis");
+                    return;
+                }
+            }
+            else
+            {
+                ilan = new AracIlan
+                {
+                    ModelYili = DateTime.Today.Year,
+                    IlanDurum = IlanDurum.Aktif
+                };
+            }
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task KaydetAsync()
+    {
+        if (string.IsNullOrWhiteSpace(ilan.Plaka) || string.IsNullOrWhiteSpace(ilan.Marka) || ilan.SatisFiyati <= 0)
+        {
+            ToastService.ShowWarning("Plaka, marka ve satis fiyati zorunlu!");
+            return;
+        }
+
+        try
+        {
+            if (isNew)
+            {
+                var yeniIlan = await SatisService.CreateAracIlanAsync(ilan);
+                ToastService.ShowSuccess("Ilan olusturuldu!");
+                Navigation.NavigateTo($"/satis/ilan/{yeniIlan.Id}");
+            }
+            else
+            {
+                await SatisService.UpdateAracIlanAsync(ilan);
+                ToastService.ShowSuccess("Ilan guncellendi!");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
+        }
+    }
+
+    private void IptalEt()
+    {
+        Navigation.NavigateTo("/satis");
+    }
+
+    private void PiyasaKarsilastirmaAc()
+    {
+        Navigation.NavigateTo($"/satis/ilan/{ilan.Id}/piyasa");
+    }
+
+    private string GetVitesAdi(VitesTuru v) => v switch
+    {
+        VitesTuru.Manuel => "Manuel",
+        VitesTuru.Otomatik => "Otomatik",
+        VitesTuru.YariOtomatik => "Yari Otomatik",
+        _ => v.ToString()
+    };
+
+    private string GetIlanDurumAdi(IlanDurum d) => d switch
+    {
+        IlanDurum.Aktif => "Aktif",
+        IlanDurum.Pasif => "Pasif",
+        IlanDurum.Satildi => "Satildi",
+        IlanDurum.Rezerve => "Rezerve",
+        _ => d.ToString()
+    };
+
+    private string FormatPara(decimal t) => t.ToString("N0") + " TL";
+}
+

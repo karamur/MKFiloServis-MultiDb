@@ -1,0 +1,40 @@
+@using MKFiloServis.Shared.Entities
+
+<div class="table-responsive">
+    <table class="table table-bordered table-sm align-middle mb-0">
+        <thead class="table-light">
+            <tr>
+                <th>Tarih</th>
+                <th>Masraf Kalemi</th>
+                <th>Açıklama</th>
+                <th class="text-end">Tutar</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Odemeler != null && Odemeler.Any())
+            {
+                @foreach (var odeme in Odemeler.OrderBy(x => x.OdemeTarihi))
+                {
+                    <tr style="cursor:pointer" @onclick="() => OnOdemeClick.InvokeAsync(odeme)">
+                        <td>@odeme.OdemeTarihi.ToString("dd.MM.yyyy")</td>
+                        <td>@odeme.MasrafKalemi</td>
+                        <td>@odeme.Aciklama</td>
+                        <td class="text-end">@odeme.Miktar.ToString("N2")</td>
+                    </tr>
+                }
+            }
+            else
+            {
+                <tr>
+                    <td colspan="4" class="text-center text-muted py-3">Kayıt bulunamadı</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    [Parameter] public IEnumerable<BudgetOdeme> Odemeler { get; set; } = Enumerable.Empty<BudgetOdeme>();
+    [Parameter] public EventCallback<BudgetOdeme> OnOdemeClick { get; set; }
+}
+

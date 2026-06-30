@@ -1,0 +1,318 @@
+@page "/muhasebe/analiz"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Models
+@inject IMaliAnalizService MaliAnalizService
+@inject IToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>Mali Analiz</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="bi bi-graph-up-arrow me-2"></i>Mali Analiz - Gelir/Gider</h3>
+        <div class="d-flex gap-2">
+            <div class="input-group" style="width: 250px;">
+                <label class="input-group-text">Ay</label>
+                <input type="month" class="form-control" value="@seciliAy" @onchange="SeciliAyDegisti" />
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Yukleniyor...</span>
+            </div>
+        </div>
+    }
+    else if (dashboard == null)
+    {
+        <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle me-2"></i>Veri bulunamadi
+        </div>
+    }
+    else
+    {
+        <!-- Ozet Kartlari -->
+        <div class="row mb-4 g-3">
+            <div class="col-md-3">
+                <div class="card border-success">
+                    <div class="card-body">
+                        <h6 class="text-muted mb-1">
+                            <i class="bi bi-plus-circle text-success me-1"></i>Toplam Gelir
+                        </h6>
+                        <h3 class="text-success">
+                            @dashboard.ToplamGelir.ToString("C2")
+                        </h3>
+                        <small class="text-muted">Bu Ay</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-danger">
+                    <div class="card-body">
+                        <h6 class="text-muted mb-1">
+                            <i class="bi bi-dash-circle text-danger me-1"></i>Toplam Gider
+                        </h6>
+                        <h3 class="text-danger">
+                            @dashboard.ToplamGider.ToString("C2")
+                        </h3>
+                        <small class="text-muted">Bu Ay</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-primary">
+                    <div class="card-body">
+                        <h6 class="text-muted mb-1">
+                            <i class="bi bi-arrow-down-up text-primary me-1"></i>Net Kar
+                        </h6>
+                        <h3 class="@(dashboard.ToplamGelir - dashboard.ToplamGider >= 0 ? "text-success" : "text-danger")">
+                            @((dashboard.ToplamGelir - dashboard.ToplamGider).ToString("C2"))
+                        </h3>
+                        <small class="text-muted">Gelir - Gider</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-info">
+                    <div class="card-body">
+                        <h6 class="text-muted mb-1">
+                            <i class="bi bi-percent text-info me-1"></i>Kar Margini
+                        </h6>
+                        <h3 class="text-info">
+                            @(dashboard.ToplamGelir > 0 ? ((dashboard.ToplamGelir - dashboard.ToplamGider) / dashboard.ToplamGelir * 100).ToString("F1") : "0")%
+                        </h3>
+                        <small class="text-muted">Kar / Gelir</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Segment Analizi -->
+        <div class="row mb-4 g-3">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <i class="bi bi-pie-chart me-2"></i>Segment Bazli Analiz
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Segment</th>
+                                        <th class="text-end">Arac</th>
+                                        <th class="text-end">Sefer</th>
+                                        <th class="text-end">Gelir</th>
+                                        <th class="text-end">Gider</th>
+                                        <th class="text-end">Kar</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Ozmal Araclar</strong></td>
+                                        <td class="text-end">@dashboard.OzmalAracAnaliz.AracSayisi</td>
+                                        <td class="text-end">@dashboard.OzmalAracAnaliz.SeferSayisi</td>
+                                        <td class="text-end text-success">@dashboard.OzmalAracAnaliz.Gelir.ToString("N0")</td>
+                                        <td class="text-end text-danger">@dashboard.OzmalAracAnaliz.Gider.ToString("N0")</td>
+                                        <td class="text-end">@((dashboard.OzmalAracAnaliz.Gelir - dashboard.OzmalAracAnaliz.Gider).ToString("N0"))</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Kiralik Araclar</strong></td>
+                                        <td class="text-end">@dashboard.KiralikAracAnaliz.AracSayisi</td>
+                                        <td class="text-end">@dashboard.KiralikAracAnaliz.SeferSayisi</td>
+                                        <td class="text-end text-success">@dashboard.KiralikAracAnaliz.Gelir.ToString("N0")</td>
+                                        <td class="text-end text-danger">@dashboard.KiralikAracAnaliz.Gider.ToString("N0")</td>
+                                        <td class="text-end">@((dashboard.KiralikAracAnaliz.Gelir - dashboard.KiralikAracAnaliz.Gider).ToString("N0"))</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Komisyon Isleri</strong></td>
+                                        <td class="text-end">@dashboard.KomisyonAnaliz.AracSayisi</td>
+                                        <td class="text-end">@dashboard.KomisyonAnaliz.SeferSayisi</td>
+                                        <td class="text-end text-success">@dashboard.KomisyonAnaliz.Gelir.ToString("N0")</td>
+                                        <td class="text-end text-danger">@dashboard.KomisyonAnaliz.Gider.ToString("N0")</td>
+                                        <td class="text-end">@((dashboard.KomisyonAnaliz.Gelir - dashboard.KomisyonAnaliz.Gider).ToString("N0"))</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <i class="bi bi-bar-chart me-2"></i>Onceki Ay Karsilastirmasi
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Donem</th>
+                                        <th class="text-end">Gelir</th>
+                                        <th class="text-end">Gider</th>
+                                        <th class="text-end">Kar</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Bu Ay</strong></td>
+                                        <td class="text-end text-success">@dashboard.ToplamGelir.ToString("N0")</td>
+                                        <td class="text-end text-danger">@dashboard.ToplamGider.ToString("N0")</td>
+                                        <td class="text-end fw-bold">@((dashboard.ToplamGelir - dashboard.ToplamGider).ToString("N0"))</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Onceki Ay</strong></td>
+                                        <td class="text-end text-success">@dashboard.OncekiAyGelir.ToString("N0")</td>
+                                        <td class="text-end text-danger">@dashboard.OncekiAyGider.ToString("N0")</td>
+                                        <td class="text-end">@((dashboard.OncekiAyGelir - dashboard.OncekiAyGider).ToString("N0"))</td>
+                                    </tr>
+                                    <tr class="table-info">
+                                        <td><strong>Degisim</strong></td>
+                                        <td class="text-end">
+                                            @{
+                                                var gelirDegisimi = dashboard.ToplamGelir - dashboard.OncekiAyGelir;
+                                                <span class="@(gelirDegisimi >= 0 ? "text-success" : "text-danger")">
+                                                    @(gelirDegisimi >= 0 ? "+" : "")@gelirDegisimi.ToString("N0")
+                                                </span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            @{
+                                                var giderDegisimi = dashboard.ToplamGider - dashboard.OncekiAyGider;
+                                                <span class="@(giderDegisimi <= 0 ? "text-success" : "text-danger")">
+                                                    @(giderDegisimi >= 0 ? "+" : "")@giderDegisimi.ToString("N0")
+                                                </span>
+                                            }
+                                        </td>
+                                        <td class="text-end fw-bold">
+                                            @{
+                                                var karDegisimi = (dashboard.ToplamGelir - dashboard.ToplamGider) - (dashboard.OncekiAyGelir - dashboard.OncekiAyGider);
+                                                <span class="@(karDegisimi >= 0 ? "text-success" : "text-danger")">
+                                                    @(karDegisimi >= 0 ? "+" : "")@karDegisimi.ToString("N0")
+                                                </span>
+                                            }
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grafikler -->
+        @if (dashboard.EnKarliGuzergahlar?.Any() == true)
+        {
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">
+                                <i class="bi bi-graph-up me-2"></i>En Kali Guzergahlar
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="list-group">
+                                @foreach (var item in dashboard.EnKarliGuzergahlar)
+                                {
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between">
+                                            <strong>@item.Etiket</strong>
+                                            <span class="badge bg-success">@item.Deger.ToString("N0")</span>
+                                        </div>
+                                        <small class="text-muted">@item.Renk</small>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">
+                                <i class="bi bi-truck me-2"></i>Arac Bazli Karlilik
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="list-group">
+                                @foreach (var item in dashboard.AracBazliKarlilik ?? new List<Models.GrafikVeri>())
+                                {
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between">
+                                            <strong>@item.Etiket</strong>
+                                            <span class="badge bg-info">@item.Deger.ToString("N0")</span>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Notlar -->
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong>Bilgi:</strong> Bu analizler secilen ay icin gerçeklestirilmis seferler ve masraflara dayanmaktadir.
+        </div>
+    }
+</div>
+
+@code {
+    private MaliAnalizDashboard? dashboard;
+    private bool isLoading = true;
+    private string seciliAy = DateTime.Now.ToString("yyyy-MM");
+
+    protected override async Task OnInitializedAsync()
+    {
+        await VeriYukle();
+    }
+
+    private async Task SeciliAyDegisti(ChangeEventArgs e)
+    {
+        seciliAy = e.Value?.ToString() ?? DateTime.Now.ToString("yyyy-MM");
+        await VeriYukle();
+    }
+
+    private async Task VeriYukle()
+    {
+        try
+        {
+            isLoading = true;
+            
+            // seciliAy'dan yil ve ay'i parse et
+            var parts = seciliAy.Split("-");
+            int yil = int.Parse(parts[0]);
+            int ay = int.Parse(parts[1]);
+
+            dashboard = await MaliAnalizService.GetDashboardAsync(yil, ay);
+            
+            if (dashboard == null)
+            {
+                ToastService?.ShowWarning("Mali analiz verisi yuklenmedi");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService?.ShowError($"Hata: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}
+

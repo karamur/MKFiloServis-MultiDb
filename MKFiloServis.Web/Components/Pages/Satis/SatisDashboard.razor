@@ -1,0 +1,451 @@
+@page "/satis"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject ISatisService SatisService
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Satis Modulu</PageTitle>
+
+<div class="container-fluid">
+    <!-- Baslik -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="bi bi-car-front me-2"></i>Arac Satis Modulu</h3>
+        <div class="d-flex gap-2">
+            <select class="form-select form-select-sm" style="width: 100px;" @bind="secilenYil" @bind:after="LoadDataAsync">
+                @for (int y = DateTime.Today.Year; y >= DateTime.Today.Year - 3; y--)
+                {
+                    <option value="@y">@y</option>
+                }
+            </select>
+            <button class="btn btn-primary" @onclick="YeniIlanAc">
+                <i class="bi bi-plus-lg me-1"></i>Yeni Ilan
+            </button>
+            <button class="btn btn-outline-primary" @onclick="PersonelSayfasinaGit">
+                <i class="bi bi-people me-1"></i>Personel
+            </button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else
+    {
+        <!-- Ozet Kartlari -->
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-md-3">
+                <div class="card bg-primary text-white h-100">
+                    <div class="card-body py-3">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <small class="opacity-75">Aktif Ilan</small>
+                                <h3 class="mb-0">@dashboard.ToplamAktifIlan</h3>
+                            </div>
+                            <i class="bi bi-card-list fs-2 opacity-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card bg-success text-white h-100">
+                    <div class="card-body py-3">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <small class="opacity-75">Bu Ay Satilan</small>
+                                <h3 class="mb-0">@dashboard.BuAySatilanArac</h3>
+                            </div>
+                            <i class="bi bi-check2-circle fs-2 opacity-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card bg-info text-white h-100">
+                    <div class="card-body py-3">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <small class="opacity-75">Bu Ay Ciro</small>
+                                <h3 class="mb-0">@FormatPara(dashboard.BuAySatisTutari)</h3>
+                            </div>
+                            <i class="bi bi-currency-lira fs-2 opacity-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card bg-warning text-dark h-100">
+                    <div class="card-body py-3">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <small>Komisyon</small>
+                                <h3 class="mb-0">@FormatPara(dashboard.BuAyKomisyon)</h3>
+                            </div>
+                            <i class="bi bi-percent fs-2 opacity-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3">
+            <!-- Sol Panel - Ilan Listesi -->
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Aktif Ilanlar</h5>
+                        <div class="d-flex gap-2">
+                            <select class="form-select form-select-sm" style="width: 130px;" @bind="filtreDurum" @bind:after="FiltreUygula">
+                                <option value="">Tum Durumlar</option>
+                                <option value="1">Aktif</option>
+                                <option value="2">Pasif</option>
+                                <option value="3">Satildi</option>
+                                <option value="4">Rezerve</option>
+                            </select>
+                            <input type="text" class="form-control form-control-sm" placeholder="Ara..." 
+                                   style="width: 150px;" @bind="aramaText" @bind:event="oninput" @bind:after="FiltreUygula" />
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-sm mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Plaka</th>
+                                        <th>Marka/Model</th>
+                                        <th class="text-center">Yil</th>
+                                        <th class="text-end">KM</th>
+                                        <th class="text-end">Fiyat</th>
+                                        <th class="text-center">Durum</th>
+                                        <th>Personel</th>
+                                        <th class="text-center">Islem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (!filtrelenmisIlanlar.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="8" class="text-center text-muted py-3">Ilan bulunamadi</td>
+                                        </tr>
+                                    }
+                                    @foreach (var ilan in filtrelenmisIlanlar.Take(20))
+                                    {
+                                        <tr>
+                                            <td>
+                                                <a href="/satis/ilan/@ilan.Id" class="text-decoration-none">
+                                                    <strong>@ilan.Plaka</strong>
+                                                </a>
+                                            </td>
+                                            <td>
+                                                <span>@ilan.Marka @ilan.Model</span>
+                                                @if (!string.IsNullOrEmpty(ilan.Versiyon))
+                                                {
+                                                    <small class="text-muted ms-1">@ilan.Versiyon</small>
+                                                }
+                                            </td>
+                                            <td class="text-center">@ilan.ModelYili</td>
+                                            <td class="text-end">@ilan.Kilometre.ToString("N0")</td>
+                                            <td class="text-end">
+                                                <strong class="text-success">@FormatPara(ilan.SatisFiyati)</strong>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge @GetDurumBadgeClass(ilan.IlanDurum)">@GetDurumAdi(ilan.IlanDurum)</span>
+                                                @if (ilan.Boyali || ilan.DegisenVar)
+                                                {
+                                                    <br />
+                                                    @if (ilan.Boyali)
+                                                    {
+                                                        <span class="badge bg-warning text-dark" style="font-size:0.6rem;">B:@ilan.BoyaliParcaSayisi</span>
+                                                    }
+                                                    @if (ilan.DegisenVar)
+                                                    {
+                                                        <span class="badge bg-danger" style="font-size:0.6rem;">D:@ilan.DegisenParcaSayisi</span>
+                                                    }
+                                                }
+                                            </td>
+                                            <td>
+                                                <small>@(ilan.SatisPersoneli?.AdSoyad ?? "-")</small>
+                                            </td>
+                                            <td class="text-center">
+                                                <div class="btn-group btn-group-sm">
+                                                    <button class="btn btn-outline-primary" @onclick="() => IlanDetayAc(ilan)" title="Detay">
+                                                        <i class="bi bi-eye"></i>
+                                                    </button>
+                                                    @if (ilan.IlanDurum == IlanDurum.Aktif)
+                                                    {
+                                                        <button class="btn btn-outline-success" @onclick="() => SatisModalAc(ilan)" title="Sat">
+                                                            <i class="bi bi-check-lg"></i>
+                                                        </button>
+                                                    }
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sag Panel -->
+            <div class="col-lg-4">
+                <!-- Personel Performans -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-person-badge me-2"></i>Personel Performans</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            @foreach (var ozet in dashboard.PersonelOzetleri.Take(5))
+                            {
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>@ozet.PersonelAdi</strong>
+                                        <br />
+                                        <small class="text-muted">@ozet.AktifIlan ilan / @ozet.BuAySatis satis</small>
+                                    </div>
+                                    <span class="badge bg-success">@FormatPara(ozet.BuAyKomisyon)</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Marka Dagilimi -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-pie-chart me-2"></i>Marka Dagilimi</h6>
+                    </div>
+                    <div class="card-body">
+                        @foreach (var marka in dashboard.MarkaIlanDagilimi.Take(5))
+                        {
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>@marka.Marka</span>
+                                <div>
+                                    <span class="badge bg-primary">@marka.IlanSayisi ilan</span>
+                                    <span class="badge bg-success">@marka.SatisSayisi satis</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Aylik Trend -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-graph-up me-2"></i>Aylik Satis Trendi</h6>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="satisChart" height="150"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Satis Modal -->
+@if (showSatisModal && seciliIlan != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title"><i class="bi bi-check-lg me-2"></i>Arac Satis</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="ModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <strong>@seciliIlan.Plaka</strong> - @seciliIlan.Marka @seciliIlan.Model @seciliIlan.ModelYili
+                        <br />
+                        <span class="fs-5 text-success">@FormatPara(seciliIlan.SatisFiyati)</span>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Satis Fiyati *</label>
+                        <input type="number" class="form-control" @bind="satisForm.SatisFiyati" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Odeme Sekli</label>
+                        <select class="form-select" @bind="satisForm.OdemeSekli">
+                            <option value="@SatisOdemeSekli.Nakit">Nakit</option>
+                            <option value="@SatisOdemeSekli.Kredi">Kredi</option>
+                            <option value="@SatisOdemeSekli.Takas">Takas</option>
+                            <option value="@SatisOdemeSekli.NakitKredi">Nakit + Kredi</option>
+                            <option value="@SatisOdemeSekli.TakasNakit">Takas + Nakit</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Not</label>
+                        <textarea class="form-control" rows="2" @bind="satisForm.Notlar"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="ModalKapat">Iptal</button>
+                    <button type="button" class="btn btn-success" @onclick="SatisKaydet">
+                        <i class="bi bi-check-lg me-1"></i>Satisi Tamamla
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private int secilenYil = DateTime.Today.Year;
+    private string filtreDurum = "";
+    private string aramaText = "";
+
+    private SatisDashboardData dashboard = new();
+    private List<AracIlan> ilanlar = new();
+    private List<AracIlan> filtrelenmisIlanlar = new();
+
+    private bool showSatisModal = false;
+    private AracIlan? seciliIlan;
+    private AracSatis satisForm = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && dashboard.AylikTrend.Any())
+        {
+            await RenderChartAsync();
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            dashboard = await SatisService.GetDashboardDataAsync(secilenYil);
+            ilanlar = await SatisService.GetAracIlanListesiAsync();
+            FiltreUygula();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void FiltreUygula()
+    {
+        var query = ilanlar.AsEnumerable();
+
+        if (!string.IsNullOrEmpty(filtreDurum) && int.TryParse(filtreDurum, out var durum))
+        {
+            query = query.Where(i => (int)i.IlanDurum == durum);
+        }
+
+        if (!string.IsNullOrEmpty(aramaText))
+        {
+            var ara = aramaText.ToLower();
+            query = query.Where(i =>
+                i.Plaka.ToLower().Contains(ara) ||
+                i.Marka.ToLower().Contains(ara) ||
+                i.Model.ToLower().Contains(ara));
+        }
+
+        filtrelenmisIlanlar = query.ToList();
+        StateHasChanged();
+    }
+
+    private async Task RenderChartAsync()
+    {
+        try
+        {
+            var labels = dashboard.AylikTrend.Select(t => t.AyAdi.Substring(0, 3)).ToArray();
+            var data = dashboard.AylikTrend.Select(t => (double)t.SatisSayisi).ToArray();
+            await JS.InvokeVoidAsync("createBarChart", "satisChart", labels, data);
+        }
+        catch { }
+    }
+
+    private void YeniIlanAc()
+    {
+        Navigation.NavigateTo("/satis/ilan/yeni");
+    }
+
+    private void PersonelSayfasinaGit()
+    {
+        Navigation.NavigateTo("/satis/personel");
+    }
+
+    private void IlanDetayAc(AracIlan ilan)
+    {
+        Navigation.NavigateTo($"/satis/ilan/{ilan.Id}");
+    }
+
+    private void SatisModalAc(AracIlan ilan)
+    {
+        seciliIlan = ilan;
+        satisForm = new AracSatis
+        {
+            SatisFiyati = ilan.SatisFiyati,
+            SatisPersoneliId = ilan.SatisPersoneliId,
+            OdemeSekli = SatisOdemeSekli.Nakit
+        };
+        showSatisModal = true;
+    }
+
+    private void ModalKapat()
+    {
+        showSatisModal = false;
+        seciliIlan = null;
+    }
+
+    private async Task SatisKaydet()
+    {
+        if (seciliIlan == null || satisForm.SatisFiyati <= 0)
+        {
+            ToastService.ShowWarning("Satis fiyati girmelisiniz!");
+            return;
+        }
+
+        try
+        {
+            await SatisService.IlanSatAsync(seciliIlan.Id, satisForm);
+            ToastService.ShowSuccess("Satis kaydedildi!");
+            ModalKapat();
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
+        }
+    }
+
+    private string GetDurumAdi(IlanDurum d) => d switch
+    {
+        IlanDurum.Aktif => "Aktif",
+        IlanDurum.Pasif => "Pasif",
+        IlanDurum.Satildi => "Satildi",
+        IlanDurum.Rezerve => "Rezerve",
+        _ => d.ToString()
+    };
+
+    private string GetDurumBadgeClass(IlanDurum d) => d switch
+    {
+        IlanDurum.Aktif => "bg-success",
+        IlanDurum.Pasif => "bg-secondary",
+        IlanDurum.Satildi => "bg-primary",
+        IlanDurum.Rezerve => "bg-warning text-dark",
+        _ => "bg-secondary"
+    };
+
+    private string FormatPara(decimal t) => t.ToString("N0") + " TL";
+}
+

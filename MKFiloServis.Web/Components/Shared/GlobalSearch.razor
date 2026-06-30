@@ -1,0 +1,242 @@
+@using MKFiloServis.Web.Services
+@using Microsoft.Extensions.Logging
+@implements IDisposable
+@inject IGlobalSearchService SearchService
+@inject NavigationManager Navigation
+@inject ILogger<GlobalSearch> Logger
+@rendermode InteractiveServer
+
+<div class="global-search-container position-relative">
+    <div class="input-group">
+        <span class="input-group-text bg-dark border-secondary">
+            <i class="bi bi-search text-light"></i>
+        </span>
+        <input type="text" 
+               class="form-control bg-dark text-light border-secondary" 
+               placeholder="Ara... (Cari, Arac, Personel, Fatura)" 
+               @bind="searchTerm" 
+               @bind:event="oninput"
+               @bind:after="OnSearchAsync"
+               @onfocus="ShowResults"
+               @onkeydown="HandleKeyDown" />
+        @if (isSearching)
+        {
+            <span class="input-group-text bg-dark border-secondary">
+                <div class="spinner-border spinner-border-sm text-light" role="status"></div>
+            </span>
+        }
+    </div>
+
+    @if (showResults && searchResult != null && searchResult.ToplamSonuc > 0)
+    {
+        <div class="search-results-dropdown position-absolute w-100 bg-white shadow-lg rounded-bottom" 
+             style="z-index: 1050; max-height: 400px; overflow-y: auto;">
+
+            @if (searchResult.Cariler.Any())
+            {
+                <div class="search-category">
+                    <div class="px-3 py-1 bg-light text-muted small fw-bold">
+                        <i class="bi bi-people me-1"></i>Cariler (@searchResult.Cariler.Count)
+                    </div>
+                    @foreach (var item in searchResult.Cariler.Take(5))
+                    {
+                        <a href="@item.Url" class="search-result-item d-flex align-items-center px-3 py-2 text-decoration-none text-dark border-bottom" @onclick="HideResults">
+                            <span class="badge @item.BadgeClass me-2"><i class="bi @item.Icon"></i></span>
+                            <div class="flex-grow-1">
+                                <div class="fw-semibold">@item.Baslik</div>
+                                <small class="text-muted">@item.AltBaslik</small>
+                            </div>
+                        </a>
+                    }
+                </div>
+            }
+
+            @if (searchResult.Araclar.Any())
+            {
+                <div class="search-category">
+                    <div class="px-3 py-1 bg-light text-muted small fw-bold">
+                        <i class="bi bi-truck me-1"></i>Araclar (@searchResult.Araclar.Count)
+                    </div>
+                    @foreach (var item in searchResult.Araclar.Take(5))
+                    {
+                        <a href="@item.Url" class="search-result-item d-flex align-items-center px-3 py-2 text-decoration-none text-dark border-bottom" @onclick="HideResults">
+                            <span class="badge @item.BadgeClass me-2"><i class="bi @item.Icon"></i></span>
+                            <div class="flex-grow-1">
+                                <div class="fw-semibold">@item.Baslik</div>
+                                <small class="text-muted">@item.AltBaslik</small>
+                            </div>
+                        </a>
+                    }
+                </div>
+            }
+
+            @if (searchResult.Personeller.Any())
+            {
+                <div class="search-category">
+                    <div class="px-3 py-1 bg-light text-muted small fw-bold">
+                        <i class="bi bi-person-badge me-1"></i>Personel (@searchResult.Personeller.Count)
+                    </div>
+                    @foreach (var item in searchResult.Personeller.Take(5))
+                    {
+                        <a href="@item.Url" class="search-result-item d-flex align-items-center px-3 py-2 text-decoration-none text-dark border-bottom" @onclick="HideResults">
+                            <span class="badge @item.BadgeClass me-2"><i class="bi @item.Icon"></i></span>
+                            <div class="flex-grow-1">
+                                <div class="fw-semibold">@item.Baslik</div>
+                                <small class="text-muted">@item.AltBaslik</small>
+                            </div>
+                        </a>
+                    }
+                </div>
+            }
+
+            @if (searchResult.Faturalar.Any())
+            {
+                <div class="search-category">
+                    <div class="px-3 py-1 bg-light text-muted small fw-bold">
+                        <i class="bi bi-receipt me-1"></i>Faturalar (@searchResult.Faturalar.Count)
+                    </div>
+                    @foreach (var item in searchResult.Faturalar.Take(5))
+                    {
+                        <a href="@item.Url" class="search-result-item d-flex align-items-center px-3 py-2 text-decoration-none text-dark border-bottom" @onclick="HideResults">
+                            <span class="badge @item.BadgeClass me-2"><i class="bi @item.Icon"></i></span>
+                            <div class="flex-grow-1">
+                                <div class="fw-semibold">@item.Baslik</div>
+                                <small class="text-muted">@item.AltBaslik</small>
+                            </div>
+                        </a>
+                    }
+                </div>
+            }
+
+            @if (searchResult.Guzergahlar.Any())
+            {
+                <div class="search-category">
+                    <div class="px-3 py-1 bg-light text-muted small fw-bold">
+                        <i class="bi bi-signpost-split me-1"></i>Guzergahlar (@searchResult.Guzergahlar.Count)
+                    </div>
+                    @foreach (var item in searchResult.Guzergahlar.Take(5))
+                    {
+                        <a href="@item.Url" class="search-result-item d-flex align-items-center px-3 py-2 text-decoration-none text-dark border-bottom" @onclick="HideResults">
+                            <span class="badge @item.BadgeClass me-2"><i class="bi @item.Icon"></i></span>
+                            <div class="flex-grow-1">
+                                <div class="fw-semibold">@item.Baslik</div>
+                                <small class="text-muted">@item.AltBaslik</small>
+                            </div>
+                        </a>
+                    }
+                </div>
+            }
+
+            <div class="px-3 py-2 bg-light text-center">
+                <small class="text-muted">Toplam @searchResult.ToplamSonuc sonuc bulundu</small>
+            </div>
+        </div>
+    }
+    else if (showResults && !string.IsNullOrEmpty(searchTerm) && searchTerm.Length >= 2 && !isSearching)
+    {
+        <div class="search-results-dropdown position-absolute w-100 bg-white shadow-lg rounded-bottom p-3 text-center" 
+             style="z-index: 1050;">
+            <i class="bi bi-search text-muted" style="font-size: 2rem;"></i>
+            <p class="text-muted mb-0 mt-2">Sonuc bulunamadi</p>
+        </div>
+    }
+</div>
+
+<style>
+    .global-search-container .form-control:focus {
+        box-shadow: none;
+        border-color: #6c757d;
+    }
+
+    .search-result-item:hover {
+        background-color: #f8f9fa;
+    }
+
+    .search-results-dropdown {
+        border: 1px solid #dee2e6;
+        border-top: none;
+    }
+</style>
+
+@code {
+    private string searchTerm = "";
+    private GlobalSearchResult? searchResult;
+    private bool isSearching = false;
+    private bool showResults = false;
+    private System.Timers.Timer? debounceTimer;
+
+    protected override void OnInitialized()
+    {
+        debounceTimer = new System.Timers.Timer(300);
+        debounceTimer.Elapsed += async (sender, e) => await PerformSearchAsync();
+        debounceTimer.AutoReset = false;
+    }
+
+    private async Task OnSearchAsync()
+    {
+        debounceTimer?.Stop();
+
+        if (string.IsNullOrWhiteSpace(searchTerm) || searchTerm.Length < 2)
+        {
+            searchResult = null;
+            showResults = false;
+            return;
+        }
+
+        debounceTimer?.Start();
+    }
+
+    private async Task PerformSearchAsync()
+    {
+        await InvokeAsync(async () =>
+        {
+            isSearching = true;
+            showResults = true;
+            StateHasChanged();
+
+            try
+            {
+                searchResult = await SearchService.SearchAsync(searchTerm);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "GlobalSearch arama yapilirken hata olustu (Term={Term})", searchTerm);
+                searchResult = null;
+            }
+            finally
+            {
+                isSearching = false;
+                StateHasChanged();
+            }
+        });
+    }
+
+    private void ShowResults()
+    {
+        if (!string.IsNullOrEmpty(searchTerm) && searchTerm.Length >= 2)
+        {
+            showResults = true;
+        }
+    }
+
+    private void HideResults()
+    {
+        showResults = false;
+        searchTerm = "";
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            HideResults();
+        }
+    }
+
+    public void Dispose()
+    {
+        debounceTimer?.Dispose();
+    }
+}
+
+

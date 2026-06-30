@@ -1,0 +1,287 @@
+@page "/ayarlar/demo-veri"
+@using MKFiloServis.Web.Data
+@inject TestDataSeeder TestDataSeeder
+@inject IJSRuntime JS
+
+<PageTitle>Demo Veri Yönetimi - Koa Filo Servis</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-1">
+                        <i class="bi bi-database-fill-gear text-primary me-2"></i>Demo Veri Yönetimi
+                    </h2>
+                    <small class="text-muted">Test ve demo amaçlı örnek veri oluşturma</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Bilgi Kartı -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-warning bg-opacity-10 border-0">
+                    <h5 class="mb-0">
+                        <i class="bi bi-exclamation-triangle text-warning me-2"></i>Önemli Bilgi
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-2">
+                        Bu sayfa, sistemi test etmek veya demo amaçlı kullanmak için <strong>örnek veriler</strong> oluşturmanızı sağlar.
+                    </p>
+                    <ul class="mb-3">
+                        <li><strong>Cariler:</strong> 10 müşteri + 5 tedarikçi firma</li>
+                        <li><strong>Şoförler:</strong> 15 şoför (ehliyet, SRC belgesi dahil)</li>
+                        <li><strong>Araçlar:</strong> 12 araç (farklı markalar, sahiplik tipleri)</li>
+                        <li><strong>Güzergahlar:</strong> 8 güzergah (İstanbul içi, koordinatlı)</li>
+                        <li><strong>Faturalar:</strong> 30 satış + 15 alış faturası (son 6 ay)</li>
+                        <li><strong>Servis Çalışmaları:</strong> Son 30 günlük sefer kayıtları</li>
+                    </ul>
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Tüm demo veriler <code>[TEST]</code> etiketi ile işaretlenir ve daha sonra tek tıkla temizlenebilir.
+                    </div>
+                </div>
+            </div>
+
+            <!-- İşlem Kartı -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-light border-0">
+                    <h5 class="mb-0">
+                        <i class="bi bi-gear text-primary me-2"></i>İşlemler
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @if (sonuc != null)
+                    {
+                        <div class="alert @(sonuc.Basarili ? "alert-success" : "alert-danger") mb-4">
+                            <h6 class="alert-heading">
+                                <i class="bi @(sonuc.Basarili ? "bi-check-circle" : "bi-x-circle") me-2"></i>
+                                @(sonuc.Basarili ? "İşlem Başarılı" : "Hata Oluştu")
+                            </h6>
+                            @foreach (var mesaj in sonuc.Mesajlar)
+                            {
+                                <p class="mb-1">@mesaj</p>
+                            }
+                            @if (sonuc.Basarili && sonuc.ToplamKayit > 0)
+                            {
+                                <hr>
+                                <div class="row">
+                                    <div class="col-4 col-md-2">
+                                        <small class="text-muted">Cari</small>
+                                        <div class="fw-bold">@sonuc.CariSayisi</div>
+                                    </div>
+                                    <div class="col-4 col-md-2">
+                                        <small class="text-muted">Şoför</small>
+                                        <div class="fw-bold">@sonuc.SoforSayisi</div>
+                                    </div>
+                                    <div class="col-4 col-md-2">
+                                        <small class="text-muted">Araç</small>
+                                        <div class="fw-bold">@sonuc.AracSayisi</div>
+                                    </div>
+                                    <div class="col-4 col-md-2">
+                                        <small class="text-muted">Güzergah</small>
+                                        <div class="fw-bold">@sonuc.GuzergahSayisi</div>
+                                    </div>
+                                    <div class="col-4 col-md-2">
+                                        <small class="text-muted">Fatura</small>
+                                        <div class="fw-bold">@sonuc.FaturaSayisi</div>
+                                    </div>
+                                    <div class="col-4 col-md-2">
+                                        <small class="text-muted">Sefer</small>
+                                        <div class="fw-bold">@sonuc.ServisCalismasiSayisi</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="card h-100 border-primary">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-plus-circle display-4 text-primary mb-3"></i>
+                                    <h5>Demo Veri Oluştur</h5>
+                                    <p class="text-muted small">Cari, şoför, araç, güzergah, fatura ve sefer kayıtları oluşturur.</p>
+                                    <button class="btn btn-primary" @onclick="DemoVeriOlustur" disabled="@islemDevamEdiyor">
+                                        @if (islemDevamEdiyor && islemTipi == "olustur")
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-2"></span>
+                                            <span>Oluşturuluyor...</span>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-magic me-2"></i>
+                                            <span>Örnek Veri Oluştur</span>
+                                        }
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card h-100 border-danger">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-trash3 display-4 text-danger mb-3"></i>
+                                    <h5>Demo Veriyi Temizle</h5>
+                                    <p class="text-muted small">[TEST] etiketi ile işaretlenmiş tüm kayıtları siler.</p>
+                                    <button class="btn btn-outline-danger" @onclick="DemoVeriTemizle" disabled="@islemDevamEdiyor">
+                                        @if (islemDevamEdiyor && islemTipi == "temizle")
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-2"></span>
+                                            <span>Temizleniyor...</span>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-eraser me-2"></i>
+                                            <span>Demo Veriyi Sil</span>
+                                        }
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" @bind="mevcutVeriTemizilensin" id="temizleOnce">
+                            <label class="form-check-label" for="temizleOnce">
+                                Yeni veri oluşturmadan önce mevcut demo veriyi temizle
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <!-- İpuçları -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-info bg-opacity-10 border-0">
+                    <h6 class="mb-0">
+                        <i class="bi bi-lightbulb text-info me-2"></i>İpuçları
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ul class="small mb-0">
+                        <li class="mb-2">Demo veriler gerçek verilerle karışmaz, <code>[TEST]</code> etiketi ile ayrılır.</li>
+                        <li class="mb-2">Dashboard ve raporlar demo verilerle birlikte çalışır.</li>
+                        <li class="mb-2">Harita görünümünde güzergahları test edebilirsiniz.</li>
+                        <li class="mb-2">Cari risk analizi ve bakiye raporlarını deneyebilirsiniz.</li>
+                        <li>Production ortamda kullanmayın!</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Hızlı Linkler -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light border-0">
+                    <h6 class="mb-0">
+                        <i class="bi bi-link-45deg text-primary me-2"></i>Hızlı Linkler
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="/cariler" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-people me-2"></i>Cariler
+                        </a>
+                        <a href="/soforler" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-person-badge me-2"></i>Şoförler
+                        </a>
+                        <a href="/araclar" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-truck me-2"></i>Araçlar
+                        </a>
+                        <a href="/guzergahlar" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-signpost-2 me-2"></i>Güzergahlar
+                        </a>
+                        <a href="/faturalar" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-receipt me-2"></i>Faturalar
+                        </a>
+                        <a href="/" class="btn btn-outline-success btn-sm">
+                            <i class="bi bi-speedometer2 me-2"></i>Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private TestDataResult? sonuc;
+    private bool islemDevamEdiyor;
+    private string islemTipi = "";
+    private bool mevcutVeriTemizilensin = true;
+
+    private async Task DemoVeriOlustur()
+    {
+        var onay = await JS.InvokeAsync<bool>("confirm", 
+            mevcutVeriTemizilensin 
+                ? "Mevcut demo veriler silinip yeni demo veriler oluşturulacak. Devam etmek istiyor musunuz?" 
+                : "Yeni demo veriler oluşturulacak. Devam etmek istiyor musunuz?");
+        
+        if (!onay) return;
+
+        islemDevamEdiyor = true;
+        islemTipi = "olustur";
+        sonuc = null;
+        StateHasChanged();
+
+        try
+        {
+            sonuc = await TestDataSeeder.SeedAllAsync(mevcutVeriTemizilensin);
+        }
+        catch (Exception ex)
+        {
+            sonuc = new TestDataResult
+            {
+                Basarili = false,
+                Mesajlar = { $"Beklenmeyen hata: {ex.Message}" }
+            };
+        }
+        finally
+        {
+            islemDevamEdiyor = false;
+            islemTipi = "";
+        }
+    }
+
+    private async Task DemoVeriTemizle()
+    {
+        var onay = await JS.InvokeAsync<bool>("confirm", 
+            "Tüm demo veriler ([TEST] etiketi ile işaretli) silinecek. Bu işlem geri alınamaz. Devam etmek istiyor musunuz?");
+        
+        if (!onay) return;
+
+        islemDevamEdiyor = true;
+        islemTipi = "temizle";
+        sonuc = null;
+        StateHasChanged();
+
+        try
+        {
+            await TestDataSeeder.TemizleAsync();
+            sonuc = new TestDataResult
+            {
+                Basarili = true,
+                Mesajlar = { "Tüm demo veriler başarıyla temizlendi." }
+            };
+        }
+        catch (Exception ex)
+        {
+            sonuc = new TestDataResult
+            {
+                Basarili = false,
+                Mesajlar = { $"Temizleme hatası: {ex.Message}" }
+            };
+        }
+        finally
+        {
+            islemDevamEdiyor = false;
+            islemTipi = "";
+        }
+    }
+}
+

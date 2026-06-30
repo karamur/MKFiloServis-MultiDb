@@ -1,0 +1,474 @@
+@page "/raporlar/aylik-kapanis-asistani"
+@using System.Globalization
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components
+@inject IServisCalismaService ServisCalismaService
+@inject IOperasyonelHakedisService HakedisService
+@inject IFirmaService FirmaService
+@inject ITasimaTedarikciService TedarikciService
+@inject IAracService AracService
+@inject IFaturaService FaturaService
+@inject IToastService ToastService
+@inject NavigationManager Nav
+@attribute [Authorize]
+
+<PageTitle>Aylık Kapanış Asistanı</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-check2-square me-2 text-primary"></i>Aylık Kapanış Asistanı</h2>
+            <p class="text-muted mb-0">Ay sonu kapanış kontrol listesi: eksik puantaj, üretilmemiş hakediş, kesilmemiş fatura, vb.</p>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body py-3">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small">Yıl</label>
+                    <select class="form-select form-select-sm" @bind="yil" @bind:after="LoadAsync">
+                        @for (int y = DateTime.Today.Year + 1; y >= DateTime.Today.Year - 5; y--)
+                        {
+                            <option value="@y">@y</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Ay</label>
+                    <select class="form-select form-select-sm" @bind="ay" @bind:after="LoadAsync">
+                        @for (int a = 1; a <= 12; a++)
+                        {
+                            <option value="@a">@(new DateTime(2000, a, 1).ToString("MMMM", new CultureInfo("tr-TR")))</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Hızlı Seçim</label>
+                    <div class="btn-group btn-group-sm w-100" role="group">
+                        <button class="btn btn-outline-secondary" @onclick="BuAy">Bu Ay</button>
+                        <button class="btn btn-outline-secondary" @onclick="OncekiAy">Önceki Ay</button>
+                    </div>
+                </div>
+                <div class="col-md-5 text-end">
+                    <span class="badge bg-@(SkorRenk(genelSkor)) fs-5">
+                        Kapanış Hazırlık Skoru: %@genelSkor.ToString("N0")
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (yukleniyor)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+            <p class="text-muted mt-2">Kapanış kontrolleri yapılıyor...</p>
+        </div>
+    }
+    else
+    {
+        <!-- KONTROL KARTLARI -->
+        <div class="row g-3 mb-3">
+            @foreach (var k in kontroller)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <div class="card border-@(k.Tamam ? "success" : k.Kritik ? "danger" : "warning") h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <i class="bi @k.Icon me-1 text-@(k.Tamam ? "success" : k.Kritik ? "danger" : "warning")"></i>
+                                    <strong>@k.Baslik</strong>
+                                </div>
+                                @if (k.Tamam)
+                                {
+                                    <span class="badge bg-success"><i class="bi bi-check-circle"></i></span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-@(k.Kritik ? "danger" : "warning text-dark")">@k.SorunSayisi</span>
+                                }
+                            </div>
+                            <p class="text-muted small mb-2">@k.Aciklama</p>
+                            @if (!k.Tamam && k.IslemUrl != null)
+                            {
+                                <a href="@k.IslemUrl" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-arrow-right me-1"></i>@k.IslemMetni
+                                </a>
+                            }
+                            @if (k.Tamam)
+                            {
+                                <div class="text-success small"><i class="bi bi-check2-all me-1"></i>Tamam</div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- DETAY LİSTELERİ -->
+        @if (eksikKurumHakedisleri.Any())
+        {
+            <div class="card mb-3">
+                <div class="card-header bg-warning text-dark">
+                    <strong><i class="bi bi-receipt me-2"></i>Hakediş Üretilmemiş Kurumlar (@eksikKurumHakedisleri.Count)</strong>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light">
+                            <tr><th>Kurum</th><th class="text-end">Sefer Sayısı</th><th class="text-end">Tahmini Tutar</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var k in eksikKurumHakedisleri.Take(20))
+                            {
+                                <tr>
+                                    <td>@k.Ad</td>
+                                    <td class="text-end">@k.SeferSayisi</td>
+                                    <td class="text-end"><strong>@k.Tutar.ToString("N2") ₺</strong></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        @if (eksikTedarikciHakedisleri.Any())
+        {
+            <div class="card mb-3">
+                <div class="card-header bg-warning text-dark">
+                    <strong><i class="bi bi-truck me-2"></i>Hakediş Üretilmemiş Tedarikçiler (@eksikTedarikciHakedisleri.Count)</strong>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light">
+                            <tr><th>Tedarikçi</th><th class="text-end">Sefer Sayısı</th><th class="text-end">Tahmini Tutar</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var t in eksikTedarikciHakedisleri.Take(20))
+                            {
+                                <tr>
+                                    <td>@t.Ad</td>
+                                    <td class="text-end">@t.SeferSayisi</td>
+                                    <td class="text-end"><strong>@t.Tutar.ToString("N2") ₺</strong></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        @if (faturalanmamisOnayli.Any())
+        {
+            <div class="card mb-3">
+                <div class="card-header bg-info text-white">
+                    <strong><i class="bi bi-file-earmark-text me-2"></i>Onaylanmış Ama Faturalanmamış (@faturalanmamisOnayli.Count)</strong>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light">
+                            <tr><th>Tip</th><th>Referans</th><th class="text-end">Tutar</th><th class="text-end">Onay</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var h in faturalanmamisOnayli.Take(20))
+                            {
+                                <tr>
+                                    <td><span class="badge bg-secondary">@h.Tip</span></td>
+                                    <td>@(h.Referans ?? "—")</td>
+                                    <td class="text-end"><strong>@h.GenelToplam.ToString("N2") ₺</strong></td>
+                                    <td class="text-end"><small>@(h.OnayTarihi?.ToString("dd.MM.yyyy") ?? "—")</small></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        <!-- ÖZET -->
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white">
+                <strong><i class="bi bi-clipboard-check me-2"></i>Ay Özeti — @(new DateTime(yil, ay, 1).ToString("MMMM yyyy", new CultureInfo("tr-TR")))</strong>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3 text-center">
+                        <div class="text-muted small">Toplam Sefer</div>
+                        <h3 class="mb-0">@aySefer.ToString("N0")</h3>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="text-muted small">Toplam Gelir (Hakediş)</div>
+                        <h3 class="mb-0 text-success">@toplamGelir.ToString("N0") ₺</h3>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="text-muted small">Toplam Gider (Hakediş)</div>
+                        <h3 class="mb-0 text-danger">@toplamGider.ToString("N0") ₺</h3>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="text-muted small">Tahmini Brüt Kâr</div>
+                        <h3 class="mb-0 text-@((toplamGelir - toplamGider) >= 0 ? "primary" : "danger")">
+                            @((toplamGelir - toplamGider).ToString("N0")) ₺
+                        </h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool yukleniyor = true;
+    private int yil = DateTime.Today.Year;
+    private int ay = DateTime.Today.Month;
+
+    private decimal genelSkor;
+    private List<KontrolItem> kontroller = new();
+    private List<RefItem> eksikKurumHakedisleri = new();
+    private List<RefItem> eksikTedarikciHakedisleri = new();
+    private List<HakedisOzet> faturalanmamisOnayli = new();
+    private int aySefer;
+    private decimal toplamGelir;
+    private decimal toplamGider;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task BuAy()
+    {
+        yil = DateTime.Today.Year; ay = DateTime.Today.Month;
+        await LoadAsync();
+    }
+
+    private async Task OncekiAy()
+    {
+        var d = DateTime.Today.AddMonths(-1);
+        yil = d.Year; ay = d.Month;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        yukleniyor = true;
+        try
+        {
+            var bas = new DateTime(yil, ay, 1);
+            var bit = bas.AddMonths(1).AddDays(-1);
+
+            var seferler = (await ServisCalismaService.GetByDateRangeAsync(bas, bit)) ?? new();
+            aySefer = seferler.Count;
+
+            // Tüm aktif kurumlar / tedarikçiler / araçlar
+            var firmalar = await FirmaService.GetAktifFirmalarAsync();
+            var tedarikciler = (await TedarikciService.GetAllAsync(true)).ToList();
+            var araclar = await AracService.GetActiveAsync();
+
+            // Mevcut hakedişler
+            var hakedisler = (await HakedisService.GetHakedislerAsync(yil, ay)) ?? new();
+            toplamGelir = hakedisler.Where(h => h.Tip == HakedisTipi.Kurum && h.Durum != HakedisDurum.Iptal)
+                                    .Sum(h => h.GenelToplam);
+            toplamGider = hakedisler.Where(h => h.Tip == HakedisTipi.Tedarikci && h.Durum != HakedisDurum.Iptal)
+                                    .Sum(h => h.GenelToplam);
+
+            // Kurum hakedişi eksikleri
+            var kurumGelirSeferleri = seferler.Where(s => s.Guzergah?.FirmaId != null).ToList();
+            var kurumIdleriHakedisli = hakedisler
+                .Where(h => h.Tip == HakedisTipi.Kurum && h.Durum != HakedisDurum.Iptal)
+                .Select(h => h.ReferansId).ToHashSet();
+            eksikKurumHakedisleri = firmalar
+                .Where(f => kurumGelirSeferleri.Any(s => s.Guzergah!.FirmaId == f.Id))
+                .Where(f => !kurumIdleriHakedisli.Contains(f.Id))
+                .Select(f =>
+                {
+                    var sList = kurumGelirSeferleri.Where(s => s.Guzergah!.FirmaId == f.Id).ToList();
+                    return new RefItem
+                    {
+                        Id = f.Id,
+                        Ad = f.FirmaAdi,
+                        SeferSayisi = sList.Count,
+                        Tutar = sList.Sum(x => x.HesaplananFiyat)
+                    };
+                }).OrderByDescending(x => x.Tutar).ToList();
+
+            // Tedarikçi hakedişi eksikleri
+            var tedSeferleri = seferler
+                .Where(s => s.Arac?.SahiplikTipi == AracSahiplikTipi.Tedarikci && s.Arac.TasimaTedarikciId.HasValue)
+                .ToList();
+            var tedHakedisli = hakedisler
+                .Where(h => h.Tip == HakedisTipi.Tedarikci && h.Durum != HakedisDurum.Iptal)
+                .Select(h => h.ReferansId).ToHashSet();
+            eksikTedarikciHakedisleri = tedarikciler
+                .Where(t => tedSeferleri.Any(s => s.Arac!.TasimaTedarikciId == t.Id))
+                .Where(t => !tedHakedisli.Contains(t.Id))
+                .Select(t =>
+                {
+                    var sList = tedSeferleri.Where(s => s.Arac!.TasimaTedarikciId == t.Id).ToList();
+                    return new RefItem
+                    {
+                        Id = t.Id,
+                        Ad = t.Unvan,
+                        SeferSayisi = sList.Count,
+                        Tutar = sList.Sum(x => x.HesaplananFiyat)
+                    };
+                }).OrderByDescending(x => x.Tutar).ToList();
+
+            // Onaylanmış ama faturalanmamış
+            faturalanmamisOnayli = hakedisler
+                .Where(h => h.Durum == HakedisDurum.Onaylandi && h.FaturaId == null
+                            && (h.Tip == HakedisTipi.Kurum || h.Tip == HakedisTipi.Tedarikci))
+                .Select(h => new HakedisOzet
+                {
+                    Id = h.Id,
+                    Tip = h.Tip.ToString(),
+                    Referans = ResolveRefAd(h, firmalar.ToList(), tedarikciler, araclar.ToList()),
+                    GenelToplam = h.GenelToplam,
+                    OnayTarihi = h.OnayTarihi
+                }).ToList();
+
+            // Eksik puantaj girişi (sefer tarihinde durum hala Planlı olanlar)
+            var eksikDurumlu = seferler.Count(s => s.Durum == CalismaDurum.Planli && s.CalismaTarihi <= DateTime.Today);
+
+            // Vadesi geçen alacaklar
+            var odenmemis = (await FaturaService.GetOdenmemisFaturalarAsync()) ?? new();
+            var vadesiGecen = odenmemis.Count(f => f.VadeTarihi.HasValue
+                                                   && f.VadeTarihi.Value.Date < DateTime.Today
+                                                   && f.KalanTutar > 0
+                                                   && f.Durum != FaturaDurum.IptalEdildi);
+
+            // Kontrol kartları
+            kontroller = new List<KontrolItem>
+            {
+                new()
+                {
+                    Baslik = "Eksik Puantaj",
+                    Aciklama = "Tarihi geçmiş ama hala 'Planlı' durumda kalan seferler.",
+                    Icon = "bi-calendar-x",
+                    SorunSayisi = eksikDurumlu,
+                    Tamam = eksikDurumlu == 0,
+                    Kritik = eksikDurumlu > 10,
+                    IslemUrl = "/filo-puantaj",
+                    IslemMetni = "Puantaja Git"
+                },
+                new()
+                {
+                    Baslik = "Kurum Hakedişleri",
+                    Aciklama = "Bu ay sefer geçtiği halde hakediş üretilmemiş kurumlar.",
+                    Icon = "bi-building",
+                    SorunSayisi = eksikKurumHakedisleri.Count,
+                    Tamam = !eksikKurumHakedisleri.Any(),
+                    Kritik = eksikKurumHakedisleri.Count > 5,
+                    IslemUrl = "/operasyonel-hakedis",
+                    IslemMetni = "Hakediş Üret"
+                },
+                new()
+                {
+                    Baslik = "Tedarikçi Hakedişleri",
+                    Aciklama = "Bu ay sefer yaptığı halde hakediş üretilmemiş tedarikçiler.",
+                    Icon = "bi-truck",
+                    SorunSayisi = eksikTedarikciHakedisleri.Count,
+                    Tamam = !eksikTedarikciHakedisleri.Any(),
+                    Kritik = eksikTedarikciHakedisleri.Count > 5,
+                    IslemUrl = "/operasyonel-hakedis",
+                    IslemMetni = "Hakediş Üret"
+                },
+                new()
+                {
+                    Baslik = "Faturalanmamış Hakedişler",
+                    Aciklama = "Onaylanmış ancak henüz faturaya bağlanmamış hakedişler.",
+                    Icon = "bi-file-earmark-text",
+                    SorunSayisi = faturalanmamisOnayli.Count,
+                    Tamam = !faturalanmamisOnayli.Any(),
+                    Kritik = faturalanmamisOnayli.Count > 5,
+                    IslemUrl = "/operasyonel-hakedis",
+                    IslemMetni = "Faturala"
+                },
+                new()
+                {
+                    Baslik = "Vadesi Geçen Faturalar",
+                    Aciklama = "Tahsilat takibi yapılması gereken vadesi geçmiş faturalar.",
+                    Icon = "bi-cash-coin",
+                    SorunSayisi = vadesiGecen,
+                    Tamam = vadesiGecen == 0,
+                    Kritik = vadesiGecen > 5,
+                    IslemUrl = "/raporlar/vade-risk-merkezi",
+                    IslemMetni = "Vade Merkezi"
+                },
+                new()
+                {
+                    Baslik = "Arızalı Sefer Takibi",
+                    Aciklama = "Bu ay arıza ile sonuçlanan seferler için onarım/maliyet kontrolü.",
+                    Icon = "bi-exclamation-triangle",
+                    SorunSayisi = seferler.Count(s => s.ArizaOlduMu),
+                    Tamam = !seferler.Any(s => s.ArizaOlduMu),
+                    Kritik = seferler.Count(s => s.ArizaOlduMu) > 10,
+                    IslemUrl = "/rapor/arac-masraf",
+                    IslemMetni = "Masraf Raporu"
+                }
+            };
+
+            // Genel skor: tamamlanan kontrol oranı
+            var toplamKontrol = kontroller.Count;
+            var tamamlanan = kontroller.Count(k => k.Tamam);
+            genelSkor = toplamKontrol > 0 ? (decimal)tamamlanan / toplamKontrol * 100m : 100m;
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Kapanış kontrolü hatası: {ex.Message}");
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private string? ResolveRefAd(Hakedis h, List<Firma> firmalar, List<TasimaTedarikci> tedarikciler, List<Arac> araclar)
+    {
+        return h.Tip switch
+        {
+            HakedisTipi.Kurum => firmalar.FirstOrDefault(f => f.Id == h.ReferansId)?.FirmaAdi,
+            HakedisTipi.Tedarikci => tedarikciler.FirstOrDefault(t => t.Id == h.ReferansId)?.Unvan,
+            HakedisTipi.Arac => araclar.FirstOrDefault(a => a.Id == h.ReferansId)?.AktifPlaka,
+            _ => null
+        };
+    }
+
+    private string SkorRenk(decimal s) => s switch
+    {
+        >= 90 => "success",
+        >= 70 => "info",
+        >= 50 => "warning text-dark",
+        _ => "danger"
+    };
+
+    private class KontrolItem
+    {
+        public string Baslik { get; set; } = "";
+        public string Aciklama { get; set; } = "";
+        public string Icon { get; set; } = "bi-circle";
+        public int SorunSayisi { get; set; }
+        public bool Tamam { get; set; }
+        public bool Kritik { get; set; }
+        public string? IslemUrl { get; set; }
+        public string IslemMetni { get; set; } = "Çöz";
+    }
+
+    private class RefItem
+    {
+        public int Id { get; set; }
+        public string Ad { get; set; } = "";
+        public int SeferSayisi { get; set; }
+        public decimal Tutar { get; set; }
+    }
+
+    private class HakedisOzet
+    {
+        public int Id { get; set; }
+        public string Tip { get; set; } = "";
+        public string? Referans { get; set; }
+        public decimal GenelToplam { get; set; }
+        public DateTime? OnayTarihi { get; set; }
+    }
+}
+

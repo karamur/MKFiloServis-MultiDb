@@ -1,15 +1,15 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    KOAFiloServis Puantaj Engine production deployment.
+    MKFiloServis Puantaj Engine production deployment.
     Timeouts: migration 10m, deployment 15m, /readyz 120s.
     Rollback: restore previous artifact + config.
 
 .PARAMETER TargetPath
-    IIS app path, default: C:\KOAFiloServis
+    IIS app path, default: C:\MKFiloServis
 
 .PARAMETER AppPoolName
-    IIS AppPool name, default: KOAFiloServis
+    IIS AppPool name, default: MKFiloServis
 
 .PARAMETER HealthUrl
     Health check base URL, default: http://localhost:5190
@@ -19,8 +19,8 @@
 #>
 
 param(
-    [string]$TargetPath = "C:\KOAFiloServis",
-    [string]$AppPoolName = "KOAFiloServis",
+    [string]$TargetPath = "C:\MKFiloServis",
+    [string]$AppPoolName = "MKFiloServis",
     [string]$HealthUrl = "http://localhost:5190",
     [switch]$SkipMigration
 )
@@ -47,7 +47,7 @@ $PublishPath = Join-Path $PSScriptRoot "publish"
 # ═══════════════════════════════════════════════════════════════════
 
 Write-Host "=====================================" -ForegroundColor Cyan
-Write-Host " KOAFiloServis Production Deployment  " -ForegroundColor Cyan
+Write-Host " MKFiloServis Production Deployment  " -ForegroundColor Cyan
 Write-Host "=====================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -82,7 +82,7 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "  Tests: OK ($(($testResult | Select-String 'Total: (\d+)').Matches.Groups[1].Value) total)" -ForegroundColor Green
 
 # appsettings.Production.json has PuantajEngine section?
-$prodConfig = Get-Content "KOAFiloServis.Web\appsettings.Production.json" -Raw | ConvertFrom-Json
+$prodConfig = Get-Content "MKFiloServis.Web\appsettings.Production.json" -Raw | ConvertFrom-Json
 if (-not $prodConfig.PuantajEngine.AutoProcess) {
     throw "PuantajEngine:AutoProcess section missing in appsettings.Production.json"
 }
@@ -91,7 +91,7 @@ Write-Host "  Config: PuantajEngine:AutoProcess present" -ForegroundColor Green
 # Publish
 Write-Host "  Publishing..." -ForegroundColor Gray
 Remove-Item -Recurse -Force $PublishPath -ErrorAction SilentlyContinue
-dotnet publish KOAFiloServis.Web -c Release -o $PublishPath 2>&1 | Out-Null
+dotnet publish MKFiloServis.Web -c Release -o $PublishPath 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "Publish failed" }
 Write-Host "  Publish: OK" -ForegroundColor Green
 
@@ -136,7 +136,7 @@ if (-not $SkipMigration) {
             Set-Location $projectDir
             $env:ASPNETCORE_ENVIRONMENT = "Production"
             dotnet ef database update `
-                --project KOAFiloServis.Web `
+                --project MKFiloServis.Web `
                 --context ApplicationDbContext `
                 -- --timeout 600 2>&1
         } -ArgumentList $PSScriptRoot
@@ -160,7 +160,7 @@ if (-not $SkipMigration) {
 
         # Get migration list for report
         $DeployReport.Migrations = @(dotnet ef migrations list `
-            --project KOAFiloServis.Web `
+            --project MKFiloServis.Web `
             --context ApplicationDbContext 2>&1 |
             Select-String -Pattern "(Pending|Applied)" |
             ForEach-Object { $_.Line.Trim() })
@@ -334,7 +334,7 @@ $DeployReport.CompletedAt = (Get-Date -Format "yyyy-MM-dd HH:mm:ss K")
 $DeployReport.Verdict = "SUCCESS"
 
 $reportContent = @"
-# KOAFiloServis Production Deploy Report
+# MKFiloServis Production Deploy Report
 
 | Field | Value |
 |-------|-------|
@@ -436,3 +436,4 @@ function Invoke-Rollback {
     # Generate rollback report
     $reportContent -replace "SUCCESS", "ROLLED BACK" | Set-Content $ReportPath -Encoding UTF8
 }
+

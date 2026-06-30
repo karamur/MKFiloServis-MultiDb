@@ -1,0 +1,99 @@
+@page "/Error"
+@page "/ters-giden-bir-sey"
+@layout MKFiloServis.Web.Components.Layout.EmptyLayout
+@inject MKFiloServis.Web.Services.AppIssueStateService AppIssueState
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Ters Giden Bir Şey Var</PageTitle>
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0"><i class="bi bi-exclamation-octagon me-2"></i>Ters Giden Bir Şey Var</h4>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Program beklenmeyen bir hata ile karşılaştı. Aşağıda hata raporu yer alıyor.</p>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="border rounded p-3 h-100">
+                                <small class="text-muted d-block">Sorunlu Sayfa</small>
+                                <strong>@(report?.CurrentPage ?? "Bilinmiyor")</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="border rounded p-3 h-100">
+                                <small class="text-muted d-block">Önceki Sayfa</small>
+                                <strong>@(report?.PreviousPage ?? "/dashboard")</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="border rounded p-3 h-100">
+                                <small class="text-muted d-block">Hata Zamanı</small>
+                                <strong>@(report?.ErrorTime.ToString("dd.MM.yyyy HH:mm:ss") ?? "-")</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="border rounded p-3 h-100">
+                                <small class="text-muted d-block">Hata Tipi</small>
+                                <strong>@(report?.ErrorType ?? "Bilinmiyor")</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <strong>Hata Mesajı:</strong><br />
+                        @(report?.ErrorMessage ?? "Henüz bir hata kaydı yok.")
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(report?.StackTrace))
+                    {
+                        <details>
+                            <summary class="mb-2">Teknik Detay</summary>
+                            <pre class="bg-light border rounded p-3 small" style="max-height: 300px; overflow:auto; white-space: pre-wrap;">@report!.StackTrace</pre>
+                        </details>
+                    }
+
+                    <div class="d-flex gap-2 mt-4">
+                        <button class="btn btn-outline-secondary" @onclick="OncekiSayfayaDonAsync">
+                            <i class="bi bi-arrow-left me-1"></i>Önceki Sayfaya Dön
+                        </button>
+                        <button class="btn btn-primary" @onclick="AnaSayfayaGit">
+                            <i class="bi bi-house-door me-1"></i>Ana Sayfaya Git
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private MKFiloServis.Web.Services.AppIssueReport? report;
+
+    protected override void OnInitialized()
+    {
+        report = AppIssueState.LastReport;
+    }
+
+    private async Task OncekiSayfayaDonAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("goBackInHistory");
+        }
+        catch
+        {
+            Navigation.NavigateTo(report?.PreviousPage ?? "/dashboard", true);
+        }
+    }
+
+    private void AnaSayfayaGit()
+    {
+        Navigation.NavigateTo("/dashboard", true);
+    }
+}
+

@@ -1,4 +1,4 @@
-﻿name: 🏷️ Sync Labels
+name: 🏷️ Sync Labels
 
 on:
   push:
@@ -24,3 +24,4 @@ jobs:
         with:
           config-file: .github/labels.yml
           delete-other-labels: false
+

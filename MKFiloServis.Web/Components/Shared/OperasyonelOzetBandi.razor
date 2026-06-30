@@ -1,0 +1,143 @@
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services.Interfaces
+@inject IOperasyonelHakedisService HakedisService
+@inject NavigationManager Nav
+
+@* Operasyonel hakediş özet bandı: Taslak / Onaylı (faturalanmamış) / Bu ay üretilen / Bu ay geliri *@
+
+<div class="row g-3 mb-4">
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm h-100 cursor-pointer" @onclick='() => Nav.NavigateTo("/operasyonel-hakedis")' style="cursor:pointer;">
+            <div class="card-body d-flex align-items-center">
+                <div class="rounded-circle bg-warning-subtle text-warning d-flex align-items-center justify-content-center me-3" style="width:48px;height:48px;">
+                    <i class="bi bi-hourglass-split fs-4"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="text-muted small">Taslak Hakediş</div>
+                    @if (yukleniyor)
+                    {
+                        <div class="placeholder-glow"><span class="placeholder col-6"></span></div>
+                    }
+                    else
+                    {
+                        <div class="fs-4 fw-semibold">@taslakAdet</div>
+                        <div class="text-muted small">@taslakTutar.ToString("N2") ₺</div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm h-100 cursor-pointer" @onclick='() => Nav.NavigateTo("/operasyonel-hakedis")' style="cursor:pointer;">
+            <div class="card-body d-flex align-items-center">
+                <div class="rounded-circle bg-info-subtle text-info d-flex align-items-center justify-content-center me-3" style="width:48px;height:48px;">
+                    <i class="bi bi-check2-circle fs-4"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="text-muted small">Faturalanmayı Bekleyen</div>
+                    @if (yukleniyor)
+                    {
+                        <div class="placeholder-glow"><span class="placeholder col-6"></span></div>
+                    }
+                    else
+                    {
+                        <div class="fs-4 fw-semibold">@onayliAdet</div>
+                        <div class="text-muted small">@onayliTutar.ToString("N2") ₺</div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm h-100 cursor-pointer" @onclick='() => Nav.NavigateTo("/operasyonel-hakedis")' style="cursor:pointer;">
+            <div class="card-body d-flex align-items-center">
+                <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center me-3" style="width:48px;height:48px;">
+                    <i class="bi bi-receipt-cutoff fs-4"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="text-muted small">Bu Ay Üretilen Hakediş</div>
+                    @if (yukleniyor)
+                    {
+                        <div class="placeholder-glow"><span class="placeholder col-6"></span></div>
+                    }
+                    else
+                    {
+                        <div class="fs-4 fw-semibold">@buAyAdet</div>
+                        <div class="text-muted small">@DateTime.Now.ToString("MMMM yyyy")</div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm h-100 cursor-pointer" @onclick='() => Nav.NavigateTo("/karlilik-raporu")' style="cursor:pointer;">
+            <div class="card-body d-flex align-items-center">
+                <div class="rounded-circle bg-success-subtle text-success d-flex align-items-center justify-content-center me-3" style="width:48px;height:48px;">
+                    <i class="bi bi-graph-up-arrow fs-4"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="text-muted small">Bu Ay Net (Gelir - Gider)</div>
+                    @if (yukleniyor)
+                    {
+                        <div class="placeholder-glow"><span class="placeholder col-6"></span></div>
+                    }
+                    else
+                    {
+                        <div class="fs-4 fw-semibold @(netTutar >= 0 ? "text-success" : "text-danger")">
+                            @netTutar.ToString("N2") ₺
+                        </div>
+                        <div class="text-muted small">
+                            <span class="text-success">+@gelirTutar.ToString("N0")</span>
+                            /
+                            <span class="text-danger">-@giderTutar.ToString("N0")</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool yukleniyor = true;
+    private int taslakAdet, onayliAdet, buAyAdet;
+    private decimal taslakTutar, onayliTutar, gelirTutar, giderTutar;
+    private decimal netTutar => gelirTutar - giderTutar;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var now = DateTime.Now;
+
+            // Taslaklar (tüm dönemler) - faturalanmayı bekleyen üretim akışını görmek için
+            var taslaklar = await HakedisService.GetHakedislerAsync(durum: HakedisDurum.Taslak);
+            taslakAdet = taslaklar.Count;
+            taslakTutar = taslaklar.Sum(h => h.GenelToplam);
+
+            // Onaylı + Araç dışı (faturalanabilir) - faturalanmayı bekleyen
+            var onaylilar = await HakedisService.GetHakedislerAsync(durum: HakedisDurum.Onaylandi);
+            var faturaBekleyen = onaylilar.Where(h => h.Tip != HakedisTipi.Arac).ToList();
+            onayliAdet = faturaBekleyen.Count;
+            onayliTutar = faturaBekleyen.Sum(h => h.GenelToplam);
+
+            // Bu ay üretilenler
+            var buAy = await HakedisService.GetHakedislerAsync(now.Year, now.Month);
+            buAyAdet = buAy.Count;
+            gelirTutar = buAy.Where(h => h.Tip == HakedisTipi.Kurum).Sum(h => h.GenelToplam);
+            giderTutar = buAy.Where(h => h.Tip == HakedisTipi.Tedarikci).Sum(h => h.GenelToplam);
+        }
+        catch
+        {
+            // Dashboard widget'ı: hata durumunda sessiz kal, ana sayfayı bozma
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+}
+

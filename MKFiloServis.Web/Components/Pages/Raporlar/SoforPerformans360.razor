@@ -1,0 +1,612 @@
+@page "/raporlar/sofor-performans-360"
+@using System.Globalization
+@using System.IO
+@using ClosedXML.Excel
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IServisCalismaService ServisCalismaService
+@inject IAracMasrafService AracMasrafService
+@inject ISoforService SoforService
+@inject IToastService ToastService
+@inject IJSRuntime JS
+@attribute [Authorize]
+
+<PageTitle>Şoför Performans 360°</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-person-badge-fill me-2 text-primary"></i>Şoför Performans 360°</h2>
+            <p class="text-muted mb-0">Sefer + km + maliyet/sefer + arıza skoru bazlı çok boyutlu performans</p>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body py-3">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small">Başlangıç</label>
+                    <input type="date" class="form-control form-control-sm" @bind="basTarih" @bind:after="LoadAsync" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Bitiş</label>
+                    <input type="date" class="form-control form-control-sm" @bind="bitTarih" @bind:after="LoadAsync" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Hızlı Seçim</label>
+                    <div class="btn-group btn-group-sm w-100" role="group">
+                        <button class="btn btn-outline-secondary" @onclick='() => HizliSecim("buAy")'>Bu Ay</button>
+                        <button class="btn btn-outline-secondary" @onclick='() => HizliSecim("oncekiAy")'>Önceki Ay</button>
+                        <button class="btn btn-outline-secondary" @onclick='() => HizliSecim("sonCeyrek")'>Son 3 Ay</button>
+                        <button class="btn btn-outline-secondary" @onclick='() => HizliSecim("buYil")'>Bu Yıl</button>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Sıralama</label>
+                    <select class="form-select form-select-sm" @bind="siralamaModu" @bind:after="ChartCiz">
+                        <option value="skor">Performans Skoru</option>
+                        <option value="sefer">Sefer Sayısı</option>
+                        <option value="km">Toplam KM</option>
+                        <option value="maliyet">Maliyet/Sefer</option>
+                        <option value="ariza">Arıza Oranı</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="cbBosGizle"
+                               @bind="bosSatirGizle" @bind:after="ChartCiz" />
+                        <label class="form-check-label small" for="cbBosGizle">Sefersiz şoförleri gizle</label>
+                    </div>
+                </div>
+                <div class="col-md-1 text-end">
+                    <button class="btn btn-outline-primary btn-sm w-100" @onclick="ExcelIndir" disabled="@yukleniyor">
+                        <i class="bi bi-file-earmark-excel"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (yukleniyor)
+    {
+        <div class="card"><div class="card-body p-4 text-center text-muted">
+            <div class="spinner-border spinner-border-sm me-2"></div> Yükleniyor...
+        </div></div>
+    }
+    else
+    {
+        var satirlar = HesaplaSatirlar();
+        var gosterilen = bosSatirGizle ? satirlar.Where(s => s.SeferSayisi > 0).ToList() : satirlar;
+        gosterilen = SiralamayaUygula(gosterilen);
+
+        // Özet kartlar
+        var aktifSofor = gosterilen.Count(s => s.SeferSayisi > 0);
+        var toplamSefer = gosterilen.Sum(s => s.SeferSayisi);
+        var toplamKm = gosterilen.Sum(s => s.ToplamKm);
+        var toplamArizali = gosterilen.Sum(s => s.ArizaSayisi);
+        var ortMaliyet = aktifSofor > 0 && toplamSefer > 0
+            ? gosterilen.Sum(s => s.ToplamMaliyet) / toplamSefer
+            : 0m;
+
+        <div class="row g-2 mb-3">
+            <div class="col-md-2">
+                <div class="card border-primary shadow-sm">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">Aktif Şoför</div>
+                        <div class="fs-4 fw-bold text-primary">@aktifSofor</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card border-info shadow-sm">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">Toplam Sefer</div>
+                        <div class="fs-4 fw-bold text-info">@toplamSefer</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card border-success shadow-sm">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">Toplam KM</div>
+                        <div class="fs-4 fw-bold text-success">@toplamKm.ToString("N0")</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card border-warning shadow-sm">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">Ort. Maliyet/Sefer</div>
+                        <div class="fs-4 fw-bold text-warning">@ortMaliyet.ToString("N2") ₺</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card border-danger shadow-sm">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">Arızalı Sefer</div>
+                        <div class="fs-4 fw-bold text-danger">@toplamArizali</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card border-secondary shadow-sm">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">Ort. Skor</div>
+                        <div class="fs-4 fw-bold text-secondary">
+                            @(aktifSofor > 0 ? (gosterilen.Where(s => s.SeferSayisi > 0).Average(s => s.PerformansSkoru)).ToString("N1") : "-")
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top 3 Yıldız -->
+        @if (gosterilen.Where(s => s.SeferSayisi > 0).Any())
+        {
+            <div class="row g-2 mb-3">
+                @{
+                    var top3 = gosterilen.Where(s => s.SeferSayisi > 0)
+                        .OrderByDescending(s => s.PerformansSkoru).Take(3).ToList();
+                    var madalyalar = new[] { "🥇", "🥈", "🥉" };
+                    var renkler = new[] { "bg-warning bg-opacity-25 border-warning", "bg-light border-secondary", "bg-warning bg-opacity-10 border-warning" };
+                }
+                @for (int i = 0; i < top3.Count; i++)
+                {
+                    var s = top3[i];
+                    var renk = renkler[i];
+                    <div class="col-md-4">
+                        <div class="card border-2 @renk shadow-sm">
+                            <div class="card-body py-3">
+                                <div class="d-flex align-items-center">
+                                    <div style="font-size: 2.5rem;" class="me-3">@madalyalar[i]</div>
+                                    <div>
+                                        <div class="fw-bold fs-5">@s.Ad</div>
+                                        <div class="small text-muted">@s.SoforKodu</div>
+                                        <div class="mt-1">
+                                            <span class="badge bg-success">Skor: @s.PerformansSkoru.ToString("N1")</span>
+                                            <span class="badge bg-primary">@s.SeferSayisi sefer</span>
+                                            <span class="badge bg-info">@s.ToplamKm.ToString("N0") km</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- Grafik -->
+        <div class="row g-3 mb-3">
+            <div class="col-lg-7">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light">
+                        <strong><i class="bi bi-bar-chart me-1"></i>Performans Skoru (Top 10)</strong>
+                    </div>
+                    <div class="card-body" style="height: 360px;">
+                        <canvas id="soforSkorChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light">
+                        <strong><i class="bi bi-pie-chart me-1"></i>Sefer Dağılımı (Top 8)</strong>
+                    </div>
+                    <div class="card-body" style="height: 360px;">
+                        <canvas id="soforSeferChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tablo -->
+        <div class="card">
+            <div class="card-header bg-light d-flex justify-content-between">
+                <strong><i class="bi bi-table me-1"></i>Detaylı Performans Tablosu</strong>
+                <span class="text-muted small">@gosterilen.Count satır</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="min-width:60px;">#</th>
+                                <th style="min-width:200px;">Şoför</th>
+                                <th class="text-center" style="min-width:80px;">Çal. Gün</th>
+                                <th class="text-center" style="min-width:80px;">Sefer</th>
+                                <th class="text-end" style="min-width:90px;">Toplam KM</th>
+                                <th class="text-end" style="min-width:90px;">Ort. KM/Sefer</th>
+                                <th class="text-end" style="min-width:110px;">Toplam Maliyet</th>
+                                <th class="text-end" style="min-width:110px;">Maliyet/Sefer</th>
+                                <th class="text-center" style="min-width:80px;">Arıza</th>
+                                <th class="text-center" style="min-width:80px;">Arıza %</th>
+                                <th class="text-center" style="min-width:120px;" title="0-100; Sefer (40) + KM (25) + Maliyet düşüklüğü (20) + Arızasızlık (15)">Skor</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!gosterilen.Any())
+                            {
+                                <tr><td colspan="11" class="text-center text-muted p-4">
+                                    <i class="bi bi-inbox fs-4 d-block mb-2"></i>Bu dönem için kayıt bulunamadı.
+                                </td></tr>
+                            }
+                            else
+                            {
+                                int sira = 1;
+                                foreach (var s in gosterilen)
+                                {
+                                    <tr>
+                                        <td>@(sira++)</td>
+                                        <td>
+                                            <strong>@s.Ad</strong>
+                                            @if (!string.IsNullOrWhiteSpace(s.SoforKodu))
+                                            {
+                                                <div class="small text-muted">@s.SoforKodu</div>
+                                            }
+                                        </td>
+                                        <td class="text-center">@s.CalisilanGun</td>
+                                        <td class="text-center">
+                                            <span class="badge bg-primary">@s.SeferSayisi</span>
+                                        </td>
+                                        <td class="text-end">@s.ToplamKm.ToString("N0")</td>
+                                        <td class="text-end">@(s.SeferSayisi > 0 ? (s.ToplamKm / (decimal)s.SeferSayisi).ToString("N1") : "-")</td>
+                                        <td class="text-end">@s.ToplamMaliyet.ToString("N2")</td>
+                                        <td class="text-end @(s.MaliyetSefer > ortMaliyet * 1.2m ? "text-danger" : "")">
+                                            @(s.SeferSayisi > 0 ? s.MaliyetSefer.ToString("N2") : "-")
+                                        </td>
+                                        <td class="text-center @(s.ArizaSayisi > 0 ? "text-danger fw-bold" : "")">@s.ArizaSayisi</td>
+                                        <td class="text-center small @(s.ArizaOrani > 10m ? "text-danger fw-bold" : "")">
+                                            @(s.SeferSayisi > 0 ? s.ArizaOrani.ToString("N1") + "%" : "-")
+                                        </td>
+                                        <td class="text-center">
+                                            @if (s.SeferSayisi > 0)
+                                            {
+                                                <div class="progress" style="height: 22px; min-width: 100px;">
+                                                    <div class="progress-bar @SkorRenk(s.PerformansSkoru)"
+                                                         role="progressbar"
+                                                         style="width: @s.PerformansSkoru.ToString("N0", CultureInfo.InvariantCulture)%;">
+                                                        <strong>@s.PerformansSkoru.ToString("N1")</strong>
+                                                    </div>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr class="fw-bold">
+                                <td colspan="2">TOPLAM</td>
+                                <td class="text-center">@gosterilen.Sum(s => s.CalisilanGun)</td>
+                                <td class="text-center text-primary">@gosterilen.Sum(s => s.SeferSayisi)</td>
+                                <td class="text-end">@gosterilen.Sum(s => s.ToplamKm).ToString("N0")</td>
+                                <td></td>
+                                <td class="text-end">@gosterilen.Sum(s => s.ToplamMaliyet).ToString("N2")</td>
+                                <td></td>
+                                <td class="text-center text-danger">@gosterilen.Sum(s => s.ArizaSayisi)</td>
+                                <td></td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-2 small text-muted">
+            <i class="bi bi-info-circle me-1"></i>
+            <strong>Performans Skoru (0-100)</strong>: Sefer (40 puan, en aktife oranla) + KM (25 puan) + Maliyet düşüklüğü (20 puan, ortalamanın altındakilere) + Arızasızlık (15 puan).
+            KM verisi <code>ServisCalisma.KmBaslangic/KmBitis</code> alanlarından, maliyet ise <code>AracMasraf</code> kayıtlarından (sefer veya şoför eşleşmesiyle) hesaplanır.
+        </div>
+    }
+</div>
+
+@code {
+    private bool yukleniyor = true;
+    private DateTime basTarih = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime bitTarih = DateTime.Today;
+    private string siralamaModu = "skor";
+    private bool bosSatirGizle = true;
+
+    private List<ServisCalisma> kayitlar = new();
+    private List<AracMasraf> masraflar = new();
+    private List<Sofor> soforler = new();
+    private bool firstRenderDone = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { soforler = await SoforService.GetAllAsync(); }
+        catch { soforler = new(); }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        yukleniyor = true;
+        StateHasChanged();
+        try
+        {
+            var bas = basTarih.Date;
+            var bit = bitTarih.Date.AddDays(1).AddSeconds(-1);
+            kayitlar = await ServisCalismaService.GetByDateRangeAsync(bas, bit);
+            masraflar = await AracMasrafService.GetByDateRangeAsync(bas, bit);
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Veri yüklenemedi: {ex.Message}");
+            kayitlar = new(); masraflar = new();
+        }
+        finally { yukleniyor = false; }
+
+        if (firstRenderDone)
+            await ChartCiz();
+    }
+
+    private async Task HizliSecim(string s)
+    {
+        var t = DateTime.Today;
+        switch (s)
+        {
+            case "buAy":
+                basTarih = new DateTime(t.Year, t.Month, 1);
+                bitTarih = t;
+                break;
+            case "oncekiAy":
+                var oy = t.AddMonths(-1);
+                basTarih = new DateTime(oy.Year, oy.Month, 1);
+                bitTarih = basTarih.AddMonths(1).AddDays(-1);
+                break;
+            case "sonCeyrek":
+                basTarih = t.AddMonths(-3);
+                bitTarih = t;
+                break;
+            case "buYil":
+                basTarih = new DateTime(t.Year, 1, 1);
+                bitTarih = t;
+                break;
+        }
+        await LoadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            firstRenderDone = true;
+            await ChartCiz();
+        }
+    }
+
+    private static int SeferSayisinaCevir(ServisTuru t) => t switch
+    {
+        ServisTuru.SabahAksam => 2,
+        _ => 1
+    };
+
+    private record SoforPerfRow(
+        int SoforId, string Ad, string SoforKodu,
+        int CalisilanGun, int SeferSayisi, decimal ToplamKm,
+        decimal ToplamMaliyet, decimal MaliyetSefer,
+        int ArizaSayisi, decimal ArizaOrani,
+        decimal PerformansSkoru);
+
+    private List<SoforPerfRow> HesaplaSatirlar()
+    {
+        var aktifKayit = kayitlar
+            .Where(k => k.Durum != CalismaDurum.IptalEdildi)
+            .ToList();
+
+        // Şoför havuzu
+        var soforIds = aktifKayit.Select(k => k.SoforId).Distinct().ToHashSet();
+        var havuz = soforler
+            .Where(s => soforIds.Contains(s.Id) || !bosSatirGizle)
+            .Concat(aktifKayit.Where(k => k.Sofor != null && !soforler.Any(s => s.Id == k.SoforId))
+                .Select(k => k.Sofor!).Distinct())
+            .DistinctBy(s => s.Id)
+            .ToList();
+
+        // Maliyet eşleştirme: ServisCalismaId üzerinden öncelikle, yoksa SoforId
+        var maliyetByServisId = masraflar
+            .Where(m => m.ServisCalismaId.HasValue)
+            .GroupBy(m => m.ServisCalismaId!.Value)
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.Tutar));
+
+        var maliyetBySoforId = masraflar
+            .Where(m => !m.ServisCalismaId.HasValue && m.SoforId.HasValue)
+            .GroupBy(m => m.SoforId!.Value)
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.Tutar));
+
+        var raw = new List<SoforPerfRow>();
+        foreach (var s in havuz)
+        {
+            var ks = aktifKayit.Where(k => k.SoforId == s.Id).ToList();
+            int sefer = ks.Sum(k => SeferSayisinaCevir(k.ServisTuru));
+            int gun = ks.Select(k => k.CalismaTarihi.Date).Distinct().Count();
+            int ariza = ks.Count(k => k.ArizaOlduMu);
+            decimal arizaOran = sefer > 0 ? ((decimal)ariza / sefer * 100m) : 0m;
+
+            decimal km = ks
+                .Where(k => k.KmBaslangic.HasValue && k.KmBitis.HasValue && k.KmBitis > k.KmBaslangic)
+                .Sum(k => (decimal)(k.KmBitis!.Value - k.KmBaslangic!.Value));
+
+            // Maliyet
+            decimal maliyet = ks.Sum(k => maliyetByServisId.TryGetValue(k.Id, out var v) ? v : 0m);
+            if (maliyetBySoforId.TryGetValue(s.Id, out var dv)) maliyet += dv;
+            decimal maliyetSefer = sefer > 0 ? maliyet / sefer : 0m;
+
+            raw.Add(new SoforPerfRow(
+                s.Id, s.TamAd ?? $"#{s.Id}", s.SoforKodu ?? "",
+                gun, sefer, km, maliyet, maliyetSefer,
+                ariza, arizaOran, 0m));
+        }
+
+        // Performans skoru hesabı (relatif)
+        if (raw.Any(r => r.SeferSayisi > 0))
+        {
+            int maxSefer = raw.Max(r => r.SeferSayisi);
+            decimal maxKm = raw.Any() ? Math.Max(1, raw.Max(r => r.ToplamKm)) : 1;
+            var aktifMaliyetler = raw.Where(r => r.SeferSayisi > 0 && r.MaliyetSefer > 0).Select(r => r.MaliyetSefer).ToList();
+            decimal medMaliyet = aktifMaliyetler.Any() ? aktifMaliyetler.OrderBy(x => x).Skip(aktifMaliyetler.Count / 2).First() : 0m;
+
+            var sonuc = new List<SoforPerfRow>();
+            foreach (var r in raw)
+            {
+                if (r.SeferSayisi == 0)
+                {
+                    sonuc.Add(r with { PerformansSkoru = 0m });
+                    continue;
+                }
+
+                decimal sSefer = maxSefer > 0 ? ((decimal)r.SeferSayisi / maxSefer * 40m) : 0m;
+                decimal sKm = maxKm > 0 ? (r.ToplamKm / maxKm * 25m) : 0m;
+                decimal sMaliyet = 20m;
+                if (medMaliyet > 0 && r.MaliyetSefer > 0)
+                {
+                    // medyanın altındaysa tam puan, üstündeyse oransal düşür
+                    var oran = medMaliyet / Math.Max(r.MaliyetSefer, 0.01m);
+                    sMaliyet = Math.Min(20m, oran * 20m);
+                }
+                decimal sAriza = r.SeferSayisi > 0
+                    ? Math.Max(0m, 15m - (r.ArizaOrani * 1.5m))
+                    : 15m;
+
+                decimal toplam = Math.Round(Math.Min(100m, sSefer + sKm + sMaliyet + sAriza), 2);
+                sonuc.Add(r with { PerformansSkoru = toplam });
+            }
+            return sonuc;
+        }
+        return raw;
+    }
+
+    private List<SoforPerfRow> SiralamayaUygula(List<SoforPerfRow> liste)
+    {
+        return siralamaModu switch
+        {
+            "sefer" => liste.OrderByDescending(s => s.SeferSayisi).ThenBy(s => s.Ad).ToList(),
+            "km" => liste.OrderByDescending(s => s.ToplamKm).ThenBy(s => s.Ad).ToList(),
+            "maliyet" => liste.OrderBy(s => s.SeferSayisi == 0 ? decimal.MaxValue : s.MaliyetSefer).ThenBy(s => s.Ad).ToList(),
+            "ariza" => liste.OrderByDescending(s => s.ArizaOrani).ThenByDescending(s => s.ArizaSayisi).ToList(),
+            _ => liste.OrderByDescending(s => s.PerformansSkoru).ThenBy(s => s.Ad).ToList()
+        };
+    }
+
+    private static string SkorRenk(decimal skor) => skor switch
+    {
+        >= 75 => "bg-success",
+        >= 50 => "bg-info",
+        >= 25 => "bg-warning text-dark",
+        _ => "bg-danger"
+    };
+
+    private async Task ChartCiz()
+    {
+        if (!firstRenderDone || yukleniyor) return;
+        try
+        {
+            var satirlar = HesaplaSatirlar();
+            var aktif = satirlar.Where(s => s.SeferSayisi > 0).ToList();
+
+            var top10 = aktif.OrderByDescending(s => s.PerformansSkoru).Take(10).ToList();
+            var labels1 = top10.Select(s => s.Ad).ToArray();
+            var data1 = top10.Select(s => s.PerformansSkoru).ToArray();
+            await JS.InvokeVoidAsync("filoKpiCharts.renderSoforSkor", "soforSkorChart", labels1, data1);
+
+            var top8 = aktif.OrderByDescending(s => s.SeferSayisi).Take(8).ToList();
+            var labels2 = top8.Select(s => s.Ad).ToArray();
+            var data2 = top8.Select(s => (decimal)s.SeferSayisi).ToArray();
+            await JS.InvokeVoidAsync("filoKpiCharts.renderVadeKategori", "soforSeferChart", labels2, data2);
+        }
+        catch
+        {
+            // chart.js yoksa sessiz
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("filoKpiCharts.destroyAll"); } catch { }
+    }
+
+    private async Task ExcelIndir()
+    {
+        try
+        {
+            var satirlar = SiralamayaUygula(HesaplaSatirlar());
+            if (bosSatirGizle) satirlar = satirlar.Where(s => s.SeferSayisi > 0).ToList();
+
+            using var wb = new XLWorkbook();
+            var ws = wb.Worksheets.Add("Sofor Performans 360");
+
+            ws.Cell(1, 1).Value = $"Şoför Performans 360° — {basTarih:dd.MM.yyyy} → {bitTarih:dd.MM.yyyy}";
+            ws.Cell(1, 1).Style.Font.Bold = true;
+            ws.Cell(1, 1).Style.Font.FontSize = 13;
+            ws.Range(1, 1, 1, 11).Merge();
+
+            string[] basliklar = { "#", "Şoför", "Şoför Kodu", "Çal. Gün", "Sefer",
+                "Toplam KM", "Ort. KM/Sefer", "Toplam Maliyet", "Maliyet/Sefer",
+                "Arıza", "Arıza %", "Skor" };
+            for (int i = 0; i < basliklar.Length; i++)
+                ws.Cell(3, i + 1).Value = basliklar[i];
+            var hr = ws.Range(3, 1, 3, basliklar.Length);
+            hr.Style.Font.Bold = true;
+            hr.Style.Fill.BackgroundColor = XLColor.LightSteelBlue;
+
+            int r = 4, sira = 1;
+            foreach (var s in satirlar)
+            {
+                ws.Cell(r, 1).Value = sira++;
+                ws.Cell(r, 2).Value = s.Ad;
+                ws.Cell(r, 3).Value = s.SoforKodu;
+                ws.Cell(r, 4).Value = s.CalisilanGun;
+                ws.Cell(r, 5).Value = s.SeferSayisi;
+                ws.Cell(r, 6).Value = s.ToplamKm;
+                ws.Cell(r, 7).Value = s.SeferSayisi > 0 ? s.ToplamKm / (decimal)s.SeferSayisi : 0m;
+                ws.Cell(r, 8).Value = s.ToplamMaliyet;
+                ws.Cell(r, 9).Value = s.MaliyetSefer;
+                ws.Cell(r, 10).Value = s.ArizaSayisi;
+                ws.Cell(r, 11).Value = s.ArizaOrani;
+                ws.Cell(r, 12).Value = s.PerformansSkoru;
+
+                if (s.PerformansSkoru >= 75)
+                    ws.Range(r, 12, r, 12).Style.Fill.BackgroundColor = XLColor.LightGreen;
+                else if (s.PerformansSkoru < 25 && s.SeferSayisi > 0)
+                    ws.Range(r, 12, r, 12).Style.Fill.BackgroundColor = XLColor.LightPink;
+                r++;
+            }
+
+            // Toplam
+            ws.Cell(r, 2).Value = "TOPLAM";
+            ws.Cell(r, 4).Value = satirlar.Sum(s => s.CalisilanGun);
+            ws.Cell(r, 5).Value = satirlar.Sum(s => s.SeferSayisi);
+            ws.Cell(r, 6).Value = satirlar.Sum(s => s.ToplamKm);
+            ws.Cell(r, 8).Value = satirlar.Sum(s => s.ToplamMaliyet);
+            ws.Cell(r, 10).Value = satirlar.Sum(s => s.ArizaSayisi);
+            ws.Range(r, 1, r, 12).Style.Font.Bold = true;
+            ws.Range(r, 1, r, 12).Style.Fill.BackgroundColor = XLColor.LightYellow;
+
+            ws.Columns().AdjustToContents();
+            ws.SheetView.FreezeRows(3);
+
+            using var stream = new MemoryStream();
+            wb.SaveAs(stream);
+            var fileName = $"sofor_performans_360_{basTarih:yyyyMMdd}_{bitTarih:yyyyMMdd}.xlsx";
+            await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, Convert.ToBase64String(stream.ToArray()));
+            ToastService.ShowSuccess("Excel indirildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Excel indirilemedi: {ex.GetBaseException().Message}");
+        }
+    }
+}
+

@@ -1,0 +1,146 @@
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using Microsoft.Extensions.Logging
+@inject IFirmaService FirmaService
+@inject IToastService ToastService
+@inject ILogger<FirmaSelector> Logger
+@rendermode InteractiveServer
+
+<div class="firma-selector d-flex align-items-center gap-2">
+    <!-- Firma Dropdown -->
+    <div class="dropdown">
+        <button class="btn btn-light btn-sm dropdown-toggle d-flex align-items-center border" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="bi bi-building me-1"></i>
+            <span class="d-none d-md-inline">@aktifFirma.FirmaAdi</span>
+            @if (aktifFirma.TumFirmalar)
+            {
+                <span class="badge bg-warning ms-1">Tum</span>
+            }
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li><h6 class="dropdown-header">Firma Sec</h6></li>
+            <li>
+                <a class="dropdown-item @(aktifFirma.TumFirmalar ? "active" : "")" href="#" @onclick="() => TumFirmalarSec()" @onclick:preventDefault>
+                    <i class="bi bi-collection me-2"></i>Tum Firmalar
+                </a>
+            </li>
+            <li><hr class="dropdown-divider"></li>
+            @foreach (var firma in firmalar)
+            {
+                <li>
+                    <a class="dropdown-item @(aktifFirma.FirmaId == firma.Id && !aktifFirma.TumFirmalar ? "active" : "")" href="#" @onclick="() => FirmaSec(firma)" @onclick:preventDefault>
+                        @if (firma.VarsayilanFirma)
+                        {
+                            <i class="bi bi-star-fill text-warning me-2"></i>
+                        }
+                        else
+                        {
+                            <i class="bi bi-building me-2"></i>
+                        }
+                        @firma.FirmaAdi
+                    </a>
+                </li>
+            }
+        </ul>
+    </div>
+
+    <!-- Donem Dropdown -->
+    <div class="dropdown">
+        <button class="btn btn-light btn-sm dropdown-toggle border" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="bi bi-calendar3 me-1"></i>
+            <span class="d-none d-md-inline">@GetAyAdi(aktifFirma.AktifDonemAy) @aktifFirma.AktifDonemYil</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end" style="max-height: 300px; overflow-y: auto;">
+            <li><h6 class="dropdown-header">Aktif Donem</h6></li>
+            @for (int yil = DateTime.Today.Year; yil >= DateTime.Today.Year - 3; yil--)
+            {
+                <li><h6 class="dropdown-header small">@yil</h6></li>
+                @for (int ay = 12; ay >= 1; ay--)
+                {
+                    var y = yil;
+                    var a = ay;
+                    <li>
+                        <a class="dropdown-item @(aktifFirma.AktifDonemYil == y && aktifFirma.AktifDonemAy == a ? "active" : "")" 
+                           href="#" @onclick="() => DonemSec(y, a)" @onclick:preventDefault>
+                            @GetAyAdi(a) @y
+                        </a>
+                    </li>
+                }
+            }
+        </ul>
+    </div>
+</div>
+
+@code {
+    private List<Firma> firmalar = new();
+    private AktifFirmaBilgisi aktifFirma = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            firmalar = await FirmaService.GetAktifFirmalarAsync();
+            aktifFirma = FirmaService.GetAktifFirma();
+
+            // Hic firma yoksa seed
+            if (!firmalar.Any())
+            {
+                await FirmaService.SeedVarsayilanFirmaAsync();
+                firmalar = await FirmaService.GetAktifFirmalarAsync();
+                aktifFirma = FirmaService.GetAktifFirma();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "FirmaSelector firmalar yuklenirken hata olustu");
+        }
+    }
+
+    private void FirmaSec(Firma firma)
+    {
+        FirmaService.SetAktifFirma(firma.Id);
+        aktifFirma = FirmaService.GetAktifFirma();
+        ToastService.ShowInfo($"Aktif firma: {firma.FirmaAdi}");
+        StateHasChanged();
+    }
+
+    private void TumFirmalarSec()
+    {
+        FirmaService.SetTumFirmalar(true);
+        aktifFirma = FirmaService.GetAktifFirma();
+        ToastService.ShowInfo("Tum firmalar secildi");
+        StateHasChanged();
+    }
+
+    private void DonemSec(int yil, int ay)
+    {
+        FirmaService.SetAktifDonem(yil, ay);
+        aktifFirma = FirmaService.GetAktifFirma();
+        ToastService.ShowInfo($"Aktif donem: {GetAyAdi(ay)} {yil}");
+        StateHasChanged();
+    }
+
+    private string GetAyAdi(int ay) => ay switch
+    {
+        1 => "Ocak", 2 => "Subat", 3 => "Mart", 4 => "Nisan",
+        5 => "Mayis", 6 => "Haziran", 7 => "Temmuz", 8 => "Agustos",
+        9 => "Eylul", 10 => "Ekim", 11 => "Kasim", 12 => "Aralik",
+        _ => ""
+    };
+}
+
+<style>
+    .firma-selector .dropdown-menu {
+        min-width: 200px;
+    }
+    .firma-selector .dropdown-item.active {
+        background-color: var(--bs-primary);
+        color: white;
+    }
+</style>
+

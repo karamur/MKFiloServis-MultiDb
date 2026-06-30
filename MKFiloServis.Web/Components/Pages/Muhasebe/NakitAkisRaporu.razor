@@ -1,0 +1,309 @@
+@page "/muhasebe/raporlar/nakit-akis"
+@using MKFiloServis.Web.Services
+@inject IMuhasebeService MuhasebeService
+@inject IToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>Nakit Akış Raporu</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="bi bi-cash-stack me-2"></i>Nakit Akış Raporu</h3>
+        <div class="d-flex gap-2">
+            <select class="form-select" style="width: 100px;" @bind="secilenYil" @bind:after="LoadRapor">
+                @for (int y = DateTime.Now.Year; y >= DateTime.Now.Year - 5; y--)
+                {
+                    <option value="@y">@y</option>
+                }
+            </select>
+            <select class="form-select" style="width: 130px;" @bind="secilenAy" @bind:after="LoadRapor">
+                <option value="0">Tüm Yıl</option>
+                <option value="1">Ocak</option>
+                <option value="2">Şubat</option>
+                <option value="3">Mart</option>
+                <option value="4">Nisan</option>
+                <option value="5">Mayıs</option>
+                <option value="6">Haziran</option>
+                <option value="7">Temmuz</option>
+                <option value="8">Ağustos</option>
+                <option value="9">Eylül</option>
+                <option value="10">Ekim</option>
+                <option value="11">Kasım</option>
+                <option value="12">Aralık</option>
+            </select>
+            <button class="btn btn-outline-primary" @onclick="LoadRapor">
+                <i class="bi bi-arrow-clockwise me-1"></i>Yenile
+            </button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else if (rapor != null)
+    {
+        <!-- ÖZET KARTLAR -->
+        <div class="row mb-4 g-3">
+            <div class="col-md-3">
+                <div class="card bg-secondary text-white h-100">
+                    <div class="card-body text-center">
+                        <i class="bi bi-wallet2 fs-1 mb-2"></i>
+                        <h6>Dönem Başı Bakiye</h6>
+                        <h3>@rapor.DonemBasiBakiye.ToString("N2") ₺</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white h-100">
+                    <div class="card-body text-center">
+                        <i class="bi bi-arrow-down-circle fs-1 mb-2"></i>
+                        <h6>Toplam Giriş</h6>
+                        <h3>+@rapor.ToplamGiris.ToString("N2") ₺</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-danger text-white h-100">
+                    <div class="card-body text-center">
+                        <i class="bi bi-arrow-up-circle fs-1 mb-2"></i>
+                        <h6>Toplam Çıkış</h6>
+                        <h3>-@rapor.ToplamCikis.ToString("N2") ₺</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card @(rapor.DonemSonuBakiye >= 0 ? "bg-primary" : "bg-warning") text-white h-100">
+                    <div class="card-body text-center">
+                        <i class="bi bi-piggy-bank fs-1 mb-2"></i>
+                        <h6>Dönem Sonu Bakiye</h6>
+                        <h3>@rapor.DonemSonuBakiye.ToString("N2") ₺</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- GİRİŞ DETAY -->
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="bi bi-arrow-down-circle me-2"></i>Nakit Girişleri</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (rapor.GirisDetay.Any())
+                        {
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Fiş Tipi</th>
+                                        <th class="text-end">Tutar</th>
+                                        <th class="text-end">%</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var detay in rapor.GirisDetay.OrderByDescending(d => d.Tutar))
+                                    {
+                                        var yuzde = rapor.ToplamGiris > 0 ? (detay.Tutar / rapor.ToplamGiris * 100) : 0;
+                                        <tr>
+                                            <td>@GetFisTipiAdi(detay.Tur)</td>
+                                            <td class="text-end text-success">@detay.Tutar.ToString("N2") ₺</td>
+                                            <td class="text-end">%@yuzde.ToString("N1")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot class="table-success">
+                                    <tr>
+                                        <th>TOPLAM</th>
+                                        <th class="text-end">@rapor.ToplamGiris.ToString("N2") ₺</th>
+                                        <th class="text-end">%100</th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-inbox fs-1"></i>
+                                <p class="mt-2">Bu dönemde nakit girişi yok</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- ÇIKIŞ DETAY -->
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-danger text-white">
+                        <h5 class="mb-0"><i class="bi bi-arrow-up-circle me-2"></i>Nakit Çıkışları</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (rapor.CikisDetay.Any())
+                        {
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Fiş Tipi</th>
+                                        <th class="text-end">Tutar</th>
+                                        <th class="text-end">%</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var detay in rapor.CikisDetay.OrderByDescending(d => d.Tutar))
+                                    {
+                                        var yuzde = rapor.ToplamCikis > 0 ? (detay.Tutar / rapor.ToplamCikis * 100) : 0;
+                                        <tr>
+                                            <td>@GetFisTipiAdi(detay.Tur)</td>
+                                            <td class="text-end text-danger">@detay.Tutar.ToString("N2") ₺</td>
+                                            <td class="text-end">%@yuzde.ToString("N1")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot class="table-danger">
+                                    <tr>
+                                        <th>TOPLAM</th>
+                                        <th class="text-end">@rapor.ToplamCikis.ToString("N2") ₺</th>
+                                        <th class="text-end">%100</th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-inbox fs-1"></i>
+                                <p class="mt-2">Bu dönemde nakit çıkışı yok</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AYLIK DETAY (Yıllık raporda) -->
+        @if (secilenAy == 0 && rapor.AylikDetay.Any())
+        {
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-calendar3 me-2"></i>Aylık Nakit Akışı</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Ay</th>
+                                    <th class="text-end">Başlangıç</th>
+                                    <th class="text-end">Giriş</th>
+                                    <th class="text-end">Çıkış</th>
+                                    <th class="text-end">Net</th>
+                                    <th class="text-end">Son Bakiye</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var ay in rapor.AylikDetay)
+                                {
+                                    var net = ay.Giris - ay.Cikis;
+                                    <tr>
+                                        <td><strong>@ay.AyAdi</strong></td>
+                                        <td class="text-end">@ay.BaslangicBakiye.ToString("N2") ₺</td>
+                                        <td class="text-end text-success">+@ay.Giris.ToString("N2") ₺</td>
+                                        <td class="text-end text-danger">-@ay.Cikis.ToString("N2") ₺</td>
+                                        <td class="text-end @(net >= 0 ? "text-success" : "text-danger")">
+                                            @(net >= 0 ? "+" : "")@net.ToString("N2") ₺
+                                        </td>
+                                        <td class="text-end fw-bold @(ay.SonBakiye >= 0 ? "text-primary" : "text-warning")">
+                                            @ay.SonBakiye.ToString("N2") ₺
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GRAFİK -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>Nakit Akış Grafiği</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        @foreach (var ay in rapor.AylikDetay)
+                        {
+                            var maxValue = rapor.AylikDetay.Max(a => Math.Max(a.Giris, a.Cikis));
+                            var girisHeight = maxValue > 0 ? (ay.Giris / maxValue * 150) : 0;
+                            var cikisHeight = maxValue > 0 ? (ay.Cikis / maxValue * 150) : 0;
+                            
+                            <div class="col text-center">
+                                <div class="d-flex justify-content-center align-items-end" style="height: 160px;">
+                                    <div class="bg-success me-1" style="width: 15px; height: @(girisHeight)px;" 
+                                         title="Giriş: @ay.Giris.ToString("N0") ₺"></div>
+                                    <div class="bg-danger" style="width: 15px; height: @(cikisHeight)px;" 
+                                         title="Çıkış: @ay.Cikis.ToString("N0") ₺"></div>
+                                </div>
+                                <small class="text-muted">@ay.AyAdi.Substring(0, 3)</small>
+                            </div>
+                        }
+                    </div>
+                    <div class="d-flex justify-content-center mt-3 gap-4">
+                        <span><span class="badge bg-success">&nbsp;</span> Giriş</span>
+                        <span><span class="badge bg-danger">&nbsp;</span> Çıkış</span>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private bool isLoading = true;
+    private int secilenYil = DateTime.Now.Year;
+    private int secilenAy = 0; // 0 = Tüm yıl
+    
+    private NakitAkisRapor? rapor;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRapor();
+    }
+
+    private async Task LoadRapor()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            int? ay = secilenAy > 0 ? secilenAy : null;
+            rapor = await MuhasebeService.GetNakitAkisRaporuAsync(secilenYil, ay);
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Rapor yüklenirken hata: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private string GetFisTipiAdi(string tip)
+    {
+        return tip switch
+        {
+            "Mahsup" => "Mahsup Fişi",
+            "Tahsilat" => "Tahsilat",
+            "Tediye" => "Ödeme",
+            "Acilis" => "Açılış",
+            "Kapanis" => "Kapanış",
+            "Devir" => "Devir",
+            _ => tip
+        };
+    }
+}
+

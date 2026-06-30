@@ -1,0 +1,448 @@
+@page "/crm/cari-eslestirme"
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Shared.Entities
+@inject ICRMService CRMService
+@inject ICariService CariService
+@inject AppAuthenticationStateProvider AuthProvider
+@inject IToastService ToastService
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<PageTitle>Cari Eşleştirme - CRM</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="mb-0"><i class="bi bi-person-lines-fill me-2 text-secondary"></i>Cari Eşleştirme</h3>
+            <small class="text-muted">Kullanıcınıza bağlı carileri yönetin ve ekstre Görüntüleyin</small>
+        </div>
+        <button class="btn btn-primary" @onclick="YeniEslestirmeBaslat">
+            <i class="bi bi-link-45deg me-1"></i>Cari Bağla
+        </button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="d-flex justify-content-center p-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <!-- bağlı Cariler -->
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white">
+                        <ul class="nav nav-tabs card-header-tabs">
+                            <li class="nav-item">
+                                <button class="nav-link @(aktifTab == "tumu" ? "active" : "")" @onclick="TabTumu">
+                                    <i class="bi bi-list me-1"></i>Tümü (@bagliCariler.Count)
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link @(aktifTab == "musteri" ? "active" : "")" @onclick="TabMusteri">
+                                    <i class="bi bi-person me-1"></i>Müşteriler (@bagliCariler.Count(c => c.Tip == KullaniciCariTip.Musteri))
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link @(aktifTab == "tedarikci" ? "active" : "")" @onclick="TabTedarikci">
+                                    <i class="bi bi-building me-1"></i>Tedarikçiler (@bagliCariler.Count(c => c.Tip == KullaniciCariTip.Tedarikci))
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link @(aktifTab == "personel" ? "active" : "")" @onclick="TabPersonel">
+                                    <i class="bi bi-person-badge me-1"></i>Personel (@bagliCariler.Count(c => c.Tip == KullaniciCariTip.Personel))
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (!filtreliBagliCariler.Any())
+                        {
+                            <div class="text-center p-5 text-muted">
+                                <i class="bi bi-person-x" style="font-size: 3rem;"></i>
+                                <p class="mt-2">Henüz bağlı cari yok</p>
+                                <button class="btn btn-primary" @onclick="YeniEslestirmeBaslat">
+                                    <i class="bi bi-link-45deg me-1"></i>Cari Bağla
+                                </button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Cari</th>
+                                            <th>Tip</th>
+                                            <th>Bakiye</th>
+                                            <th class="text-center">Ekstre</th>
+                                            <th class="text-center">Fatura</th>
+                                            <th class="text-center">Ödeme</th>
+                                            <th class="text-center">Düzenleme</th>
+                                            <th>Not</th>
+                                            <th class="text-end">İşlem</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var kc in filtreliBagliCariler)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <div>
+                                                        <strong>@kc.Cari?.Unvan</strong>
+                                                        <br/><small class="text-muted">@kc.Cari?.CariKodu</small>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span class="badge @GetTipBadge(kc.Tip)">
+                                                        @GetTipAdi(kc.Tip)
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span class="text-muted">-</span>
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (kc.EkstreGorebilir)
+                                                    {
+                                                        <i class="bi bi-check-circle-fill text-success"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="bi bi-x-circle text-danger"></i>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (kc.FaturaGorebilir)
+                                                    {
+                                                        <i class="bi bi-check-circle-fill text-success"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="bi bi-x-circle text-danger"></i>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (kc.OdemeYapabilir)
+                                                    {
+                                                        <i class="bi bi-check-circle-fill text-success"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="bi bi-x-circle text-danger"></i>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (kc.DuzenlemeYapabilir)
+                                                    {
+                                                        <i class="bi bi-check-circle-fill text-success"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="bi bi-x-circle text-danger"></i>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <small class="text-muted">@(kc.Not ?? "-")</small>
+                                                </td>
+                                                <td class="text-end">
+                                                    @if (kc.EkstreGorebilir)
+                                                    {
+                                                        <button class="btn btn-sm btn-info me-1" @onclick="() => EkstreGoruntule(kc.CariId)" title="Ekstre">
+                                                            <i class="bi bi-file-earmark-text"></i>
+                                                        </button>
+                                                    }
+                                                    <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => EslestirmeDuzenle(kc)" title="Düzenle">
+                                                        <i class="bi bi-pencil"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => EslestirmeSil(kc.Id)" title="Bağlantıyı Kaldır">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Eşleştirme Modal -->
+@if (showModal)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-link-45deg me-2"></i>
+                        @(editingEslestirme?.Id > 0 ? "Eşleştirme Düzenle" : "Cari Bağla")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="ModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    @if (editingEslestirme?.Id == 0)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Cari seçin *</label>
+                            <select class="form-select" @bind="editingEslestirme!.CariId">
+                                <option value="0">seçiniz</option>
+                                @foreach (var cari in mevcutCariler)
+                                {
+                                    <option value="@cari.Id">@cari.CariKodu - @cari.Unvan</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Cari</label>
+                            <input type="text" class="form-control" value="@editingEslestirme?.Cari?.Unvan" readonly />
+                        </div>
+                    }
+
+                    <div class="mb-3">
+                        <label class="form-label">Cari Tipi</label>
+                        <select class="form-select" @bind="editingEslestirme!.Tip">
+                            @foreach (var tip in Enum.GetValues<KullaniciCariTip>())
+                            {
+                                <option value="@tip">@GetTipAdi(tip)</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">İzinler</label>
+                        <div class="border rounded p-3">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" @bind="editingEslestirme.EkstreGorebilir" />
+                                <label class="form-check-label">
+                                    <i class="bi bi-file-earmark-text me-1"></i>Ekstre Görüntüleyebilir
+                                </label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" @bind="editingEslestirme.FaturaGorebilir" />
+                                <label class="form-check-label">
+                                    <i class="bi bi-receipt me-1"></i>Faturaları Görüntüleyebilir
+                                </label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" @bind="editingEslestirme.OdemeYapabilir" />
+                                <label class="form-check-label">
+                                    <i class="bi bi-credit-card me-1"></i>Ödeme kaydı Yapabilir
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" @bind="editingEslestirme.DuzenlemeYapabilir" />
+                                <label class="form-check-label">
+                                    <i class="bi bi-pencil me-1"></i>Cari Bilgilerini Düzenleyebilir
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Not</label>
+                        <textarea class="form-control" rows="2" @bind="editingEslestirme.Not" placeholder="İsteğe bağlı not"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="ModalKapat">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="EslestirmeKaydet" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-check-lg me-1"></i>Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private bool showModal = false;
+    private string aktifTab = "tumu";
+    private List<KullaniciCari> bagliCariler = new();
+    private List<Cari> tumCariler = new();
+    private int? aktifKullaniciId;
+
+    // Modal
+    private KullaniciCari? editingEslestirme;
+
+    private List<KullaniciCari> filtreliBagliCariler => aktifTab switch
+    {
+        "musteri" => bagliCariler.Where(c => c.Tip == KullaniciCariTip.Musteri).ToList(),
+        "tedarikci" => bagliCariler.Where(c => c.Tip == KullaniciCariTip.Tedarikci).ToList(),
+        "personel" => bagliCariler.Where(c => c.Tip == KullaniciCariTip.Personel).ToList(),
+        _ => bagliCariler
+    };
+
+    private List<Cari> mevcutCariler => tumCariler
+        .Where(c => !bagliCariler.Any(bc => bc.CariId == c.Id))
+        .OrderBy(c => c.Unvan)
+        .ToList();
+    
+    private void TabTumu() => aktifTab = "tumu";
+    private void TabMusteri() => aktifTab = "musteri";
+    private void TabTedarikci() => aktifTab = "tedarikci";
+    private void TabPersonel() => aktifTab = "personel";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var kullanici = AuthProvider.GetAktifKullanici();
+        if (kullanici != null)
+        {
+            aktifKullaniciId = kullanici.Id;
+            await LoadData();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            if (aktifKullaniciId.HasValue)
+            {
+                bagliCariler = await CRMService.GetKullaniciBagliCarilerAsync(aktifKullaniciId.Value);
+                tumCariler = await CariService.GetAllAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Veriler Yüklenirken hata: " + ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void YeniEslestirmeBaslat()
+    {
+        editingEslestirme = new KullaniciCari
+        {
+            KullaniciId = aktifKullaniciId ?? 0,
+            EkstreGorebilir = true,
+            FaturaGorebilir = true,
+            OdemeYapabilir = false,
+            DuzenlemeYapabilir = false,
+            Tip = KullaniciCariTip.Musteri
+        };
+        showModal = true;
+    }
+
+    private void EslestirmeDuzenle(KullaniciCari kc)
+    {
+        editingEslestirme = new KullaniciCari
+        {
+            Id = kc.Id,
+            KullaniciId = kc.KullaniciId,
+            CariId = kc.CariId,
+            Cari = kc.Cari,
+            Tip = kc.Tip,
+            EkstreGorebilir = kc.EkstreGorebilir,
+            FaturaGorebilir = kc.FaturaGorebilir,
+            OdemeYapabilir = kc.OdemeYapabilir,
+            DuzenlemeYapabilir = kc.DuzenlemeYapabilir,
+            Not = kc.Not
+        };
+        showModal = true;
+    }
+
+    private void ModalKapat()
+    {
+        showModal = false;
+        editingEslestirme = null;
+    }
+
+    private async Task EslestirmeKaydet()
+    {
+        if (editingEslestirme == null || editingEslestirme.CariId == 0)
+        {
+            ToastService.ShowWarning("Cari seçimi zorunludur.");
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            if (editingEslestirme.Id == 0)
+            {
+                await CRMService.AddKullaniciCariAsync(editingEslestirme);
+                ToastService.ShowSuccess("Cari Bağlandı.");
+            }
+            else
+            {
+                await CRMService.UpdateKullaniciCariAsync(editingEslestirme);
+                ToastService.ShowSuccess("Eşleştirme güncellendi.");
+            }
+
+            ModalKapat();
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task EslestirmeSil(int id)
+    {
+        await CRMService.DeleteKullaniciCariAsync(id);
+        bagliCariler.RemoveAll(x => x.Id == id);
+        ToastService.ShowSuccess("Cari Bağlantısı Kaldırıldı.");
+    }
+
+    private void EkstreGoruntule(int cariId)
+    {
+        NavigationManager.NavigateTo($"/raporlar/cari-ekstre?cariId={cariId}");
+    }
+
+    private string GetTipAdi(KullaniciCariTip tip) => tip switch
+    {
+        KullaniciCariTip.Musteri => "Müşteri",
+        KullaniciCariTip.Tedarikci => "Tedarikçi",
+        KullaniciCariTip.Personel => "Personel",
+        KullaniciCariTip.Ozel => "Özel",
+        _ => "Bilinmiyor"
+    };
+
+    private string GetTipBadge(KullaniciCariTip tip) => tip switch
+    {
+        KullaniciCariTip.Musteri => "bg-primary",
+        KullaniciCariTip.Tedarikci => "bg-success",
+        KullaniciCariTip.Personel => "bg-info",
+        KullaniciCariTip.Ozel => "bg-secondary",
+        _ => "bg-light text-dark"
+    };
+}
+
+
+
+
+
+
+
+
+
+
+
+

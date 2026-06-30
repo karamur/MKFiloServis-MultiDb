@@ -1,0 +1,345 @@
+@page "/raporlar/komuta-merkezi"
+@using System.Globalization
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+@using Microsoft.AspNetCore.Authorization
+@inject IServisCalismaService ServisCalismaService
+@inject IBelgeUyariService BelgeUyariService
+@inject IFaturaService FaturaService
+@inject IOperasyonelHakedisService HakedisService
+@inject ITasimaTedarikciService TedarikciService
+@inject IKiralikPlakaTakipService KiralikService
+@inject IAracService AracService
+@inject ISoforService SoforService
+@inject IFirmaService FirmaService
+@attribute [Authorize]
+
+<PageTitle>Komuta Merkezi</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-grid-3x3-gap-fill me-2 text-primary"></i>Filo Komuta Merkezi</h2>
+            <p class="text-muted mb-0">Tüm operasyonel raporlar için canlı özet ve hızlı erişim</p>
+        </div>
+        <div>
+            <small class="text-muted me-2">@DateTime.Now.ToString("dd MMMM yyyy HH:mm", new CultureInfo("tr-TR"))</small>
+            <button class="btn btn-outline-primary btn-sm" @onclick="LoadAsync" disabled="@yukleniyor">
+                <i class="bi bi-arrow-clockwise me-1"></i>Yenile
+            </button>
+        </div>
+    </div>
+
+    @if (yukleniyor)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+            <p class="text-muted mt-2">Komuta merkezi verileri toplanıyor...</p>
+        </div>
+    }
+    else
+    {
+        <!-- ÜST METRİK BANDI -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-2">
+                <div class="card text-center bg-primary text-white">
+                    <div class="card-body py-3">
+                        <i class="bi bi-truck-front-fill display-6"></i>
+                        <h4 class="mb-0 mt-1">@bugunSefer</h4>
+                        <small>Bugünkü Sefer</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center bg-success text-white">
+                    <div class="card-body py-3">
+                        <i class="bi bi-currency-exchange display-6"></i>
+                        <h4 class="mb-0 mt-1">@bugunCiro.ToString("N0")₺</h4>
+                        <small>Bugünkü Ciro</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center bg-info text-white">
+                    <div class="card-body py-3">
+                        <i class="bi bi-people-fill display-6"></i>
+                        <h4 class="mb-0 mt-1">@aktifArac/@aktifSofor</h4>
+                        <small>Araç / Şoför</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center bg-warning text-dark">
+                    <div class="card-body py-3">
+                        <i class="bi bi-exclamation-triangle-fill display-6"></i>
+                        <h4 class="mb-0 mt-1">@kritikBelge</h4>
+                        <small>Kritik Belge</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center bg-danger text-white">
+                    <div class="card-body py-3">
+                        <i class="bi bi-cash-coin display-6"></i>
+                        <h4 class="mb-0 mt-1">@vadeGecen</h4>
+                        <small>Vade Geçti</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center bg-secondary text-white">
+                    <div class="card-body py-3">
+                        <i class="bi bi-calendar-event-fill display-6"></i>
+                        <h4 class="mb-0 mt-1">@sozlesmeKritik</h4>
+                        <small>Sözleşme Kritik</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GENEL DURUM SKORU -->
+        <div class="card mb-4 border-@(SkorRenk(genelSkor))">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-3 text-center">
+                        <div class="display-2 text-@(SkorRenk(genelSkor)) fw-bold">@genelSkor.ToString("N0")</div>
+                        <div class="text-muted">/ 100 Operasyon Sağlık Skoru</div>
+                    </div>
+                    <div class="col-md-9">
+                        <h5 class="mb-2"><i class="bi bi-activity me-2"></i>Sistem Durum Özeti</h5>
+                        <div class="progress mb-2" style="height: 22px;">
+                            <div class="progress-bar bg-@(SkorRenk(genelSkor))" style="width: @genelSkor.ToString("N0", CultureInfo.InvariantCulture)%">
+                                %@genelSkor.ToString("N0")
+                            </div>
+                        </div>
+                        <ul class="list-unstyled small mb-0">
+                            <li><i class="bi @(eksikPuantaj == 0 ? "bi-check-circle-fill text-success" : "bi-x-circle-fill text-danger") me-1"></i>Eksik Puantaj: <strong>@eksikPuantaj</strong></li>
+                            <li><i class="bi @(eksikHakedis == 0 ? "bi-check-circle-fill text-success" : "bi-x-circle-fill text-danger") me-1"></i>Eksik Hakediş Üretimi: <strong>@eksikHakedis</strong></li>
+                            <li><i class="bi @(faturaBekleyen == 0 ? "bi-check-circle-fill text-success" : "bi-x-circle-fill text-warning") me-1"></i>Faturalanmamış Onaylı: <strong>@faturaBekleyen</strong></li>
+                            <li><i class="bi @(kritikBelge == 0 ? "bi-check-circle-fill text-success" : "bi-x-circle-fill text-danger") me-1"></i>Kritik Belge Uyarısı: <strong>@kritikBelge</strong></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RAPOR KATEGORİLERİ -->
+        <h5 class="mb-3"><i class="bi bi-bar-chart-fill me-2 text-primary"></i>Raporlar</h5>
+
+        <!-- OPERASYON RAPORLARI -->
+        <h6 class="text-muted mt-3 mb-2"><i class="bi bi-truck me-1"></i>OPERASYON</h6>
+        <div class="row g-3 mb-3">
+            @foreach (var k in operasyonRaporlari)
+            {
+                @RenderRaporKart(k)
+            }
+        </div>
+
+        <!-- FİNANS RAPORLARI -->
+        <h6 class="text-muted mt-3 mb-2"><i class="bi bi-cash-stack me-1"></i>FİNANS & HAKEDİŞ</h6>
+        <div class="row g-3 mb-3">
+            @foreach (var k in finansRaporlari)
+            {
+                @RenderRaporKart(k)
+            }
+        </div>
+
+        <!-- ANALİZ RAPORLARI -->
+        <h6 class="text-muted mt-3 mb-2"><i class="bi bi-graph-up me-1"></i>ANALİZ & PERFORMANS</h6>
+        <div class="row g-3 mb-3">
+            @foreach (var k in analizRaporlari)
+            {
+                @RenderRaporKart(k)
+            }
+        </div>
+
+        <!-- KOMUTA & TAKİP RAPORLARI -->
+        <h6 class="text-muted mt-3 mb-2"><i class="bi bi-shield-check me-1"></i>KOMUTA & TAKİP</h6>
+        <div class="row g-3 mb-3">
+            @foreach (var k in komutaRaporlari)
+            {
+                @RenderRaporKart(k)
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private bool yukleniyor = true;
+
+    private int bugunSefer;
+    private decimal bugunCiro;
+    private int aktifArac;
+    private int aktifSofor;
+    private int kritikBelge;
+    private int vadeGecen;
+    private int sozlesmeKritik;
+    private int eksikPuantaj;
+    private int eksikHakedis;
+    private int faturaBekleyen;
+    private decimal genelSkor;
+
+    private List<RaporKart> operasyonRaporlari = new();
+    private List<RaporKart> finansRaporlari = new();
+    private List<RaporKart> analizRaporlari = new();
+    private List<RaporKart> komutaRaporlari = new();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        yukleniyor = true;
+        try
+        {
+            var bugun = DateTime.Today;
+            var ayBas = new DateTime(bugun.Year, bugun.Month, 1);
+            var ayBit = ayBas.AddMonths(1).AddDays(-1);
+
+            // Sefer
+            var bugunList = (await ServisCalismaService.GetByDateRangeAsync(bugun, bugun)) ?? new();
+            bugunSefer = bugunList.Count;
+            bugunCiro = bugunList.Sum(s => s.HesaplananFiyat);
+
+            // Kapasite
+            aktifArac = await AracService.GetActiveCountAsync();
+            aktifSofor = await SoforService.GetActiveCountAsync();
+
+            // Belge uyarıları
+            try
+            {
+                var ozet = await BelgeUyariService.GetBelgeUyarilarAsync(30);
+                kritikBelge = ozet?.TumUyarilar.Count(u => u.Seviye == BelgeUyariSeviye.Kritik) ?? 0;
+            }
+            catch { }
+
+            // Vade
+            try
+            {
+                var odenmemis = (await FaturaService.GetOdenmemisFaturalarAsync()) ?? new();
+                vadeGecen = odenmemis.Count(f => f.VadeTarihi.HasValue
+                                                  && f.VadeTarihi.Value.Date < bugun
+                                                  && f.KalanTutar > 0
+                                                  && f.Durum != FaturaDurum.IptalEdildi);
+            }
+            catch { }
+
+            // Sözleşme
+            try
+            {
+                var ted = await TedarikciService.GetAllAsync(false);
+                var kira = await KiralikService.GetAllAsync();
+                sozlesmeKritik = ted.Count(t => t.SozlesmeBitisTarihi.HasValue
+                                                && (t.SozlesmeBitisTarihi.Value.Date - bugun).Days <= 30)
+                              + kira.Count(k => (k.BitisTarihi.Date - bugun).Days <= 30);
+            }
+            catch { }
+
+            // Eksik puantaj (geçmiş tarihli planlı)
+            var aySeferleri = (await ServisCalismaService.GetByDateRangeAsync(ayBas, ayBit)) ?? new();
+            eksikPuantaj = aySeferleri.Count(s => s.Durum == CalismaDurum.Planli && s.CalismaTarihi <= bugun);
+
+            // Eksik hakediş + bekleyen fatura
+            try
+            {
+                var firmalar = await FirmaService.GetAktifFirmalarAsync();
+                var tedAll = await TedarikciService.GetAllAsync(true);
+                var hakedisler = (await HakedisService.GetHakedislerAsync(bugun.Year, bugun.Month)) ?? new();
+                var kurumIds = hakedisler.Where(h => h.Tip == HakedisTipi.Kurum && h.Durum != HakedisDurum.Iptal)
+                                         .Select(h => h.ReferansId).ToHashSet();
+                var tedIds = hakedisler.Where(h => h.Tip == HakedisTipi.Tedarikci && h.Durum != HakedisDurum.Iptal)
+                                       .Select(h => h.ReferansId).ToHashSet();
+                var eksikKurum = firmalar.Count(f =>
+                    aySeferleri.Any(s => s.Guzergah?.FirmaId == f.Id) && !kurumIds.Contains(f.Id));
+                var eksikTed = tedAll.Count(t =>
+                    aySeferleri.Any(s => s.Arac?.TasimaTedarikciId == t.Id) && !tedIds.Contains(t.Id));
+                eksikHakedis = eksikKurum + eksikTed;
+                faturaBekleyen = hakedisler.Count(h => h.Durum == HakedisDurum.Onaylandi && h.FaturaId == null);
+            }
+            catch { }
+
+            // Genel sağlık skoru
+            decimal skor = 100;
+            skor -= Math.Min(30, eksikPuantaj * 2);
+            skor -= Math.Min(25, eksikHakedis * 5);
+            skor -= Math.Min(15, faturaBekleyen * 3);
+            skor -= Math.Min(15, kritikBelge * 2);
+            skor -= Math.Min(15, vadeGecen * 2);
+            genelSkor = Math.Max(0, skor);
+
+            // Rapor kart listeleri
+            operasyonRaporlari = new()
+            {
+                new("Günlük Operasyon Brifingi", "Bugünkü sefer akışı + kritik alarmlar", "/raporlar/gunluk-brifing", "bi-clipboard-data-fill", "primary", $"{bugunSefer} sefer"),
+                new("Haftalık Puantaj Matrisi", "Haftalık şoför × gün matrisi", "/raporlar/haftalik-puantaj", "bi-calendar-week", "info", "matrix"),
+                new("Filo KPI Dashboard", "Operasyonel KPI özet ekranı", "/raporlar/filo-kpi", "bi-speedometer2", "danger", "live"),
+                new("Araç KM & Yakıt", "Araç bazında km + yakıt tüketimi", "/raporlar/arac-km-yakit", "bi-fuel-pump-fill", "warning", "trend"),
+            };
+
+            finansRaporlari = new()
+            {
+                new("Aylık Kapanış Asistanı", "Ay sonu kontrol listesi", "/raporlar/aylik-kapanis-asistani", "bi-check2-square", "primary", $"%{genelSkor:N0}"),
+                new("Operasyonel Hakediş", "Hakediş üretim + faturalama", "/operasyonel-hakedis", "bi-receipt", "success", $"{eksikHakedis} eksik"),
+                new("Kurum Aylık Hakediş", "Kurum bazlı aylık hakediş raporu", "/raporlar/kurum-aylik-hakedis", "bi-building", "info", "aylık"),
+                new("Vade Risk Merkezi", "Belge + vade risk komutası", "/raporlar/vade-risk-merkezi", "bi-shield-exclamation", "danger", $"{vadeGecen} vade"),
+            };
+
+            analizRaporlari = new()
+            {
+                new("Karlılık Raporu", "Aylık gelir-gider-net kâr", "/raporlar/karlilik", "bi-graph-up-arrow", "success", "trend"),
+                new("Araç Yıllık Karlılık", "Araç bazlı yıllık kâr matrisi", "/raporlar/arac-yillik-karlilik", "bi-truck-flatbed", "primary", "yıllık"),
+                new("Şoför Performans 360°", "Sefer + km + maliyet + arıza skoru", "/raporlar/sofor-performans-360", "bi-person-badge-fill", "primary", "skor"),
+                new("Tedarikçi Karnesi", "Tedarikçi performans skor matrisi", "/raporlar/tedarikci-performans-karnesi", "bi-award-fill", "warning", "karne"),
+            };
+
+            komutaRaporlari = new()
+            {
+                new("Sözleşme Takvimi", "Sözleşme bitiş zaman çizelgesi", "/raporlar/sozlesme-yenileme-takvimi", "bi-calendar-event-fill", "info", $"{sozlesmeKritik} kritik"),
+                new("Belge Uyarıları", "Klasik belge uyarı ekranı", "/raporlar/belge-uyarilari", "bi-files", "secondary", $"{kritikBelge} kritik"),
+                new("Kurum Yıllık Trend", "Kurum bazlı 12 aylık trend", "/raporlar/kurum-yillik-trend", "bi-graph-up", "primary", "trend"),
+                new("Cari Yaşlandırma", "Cari hesap yaşlandırma raporu", "/raporlar/cari-yaslandirma", "bi-clock-history", "warning", "yaşlandırma"),
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Hub yükleme hatası: {ex.Message}");
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private RenderFragment RenderRaporKart(RaporKart k) => @<text>
+        <div class="col-md-6 col-lg-3">
+            <a href="@k.Url" class="text-decoration-none">
+                <div class="card h-100 border-@k.Renk shadow-sm hub-card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <i class="bi @k.Icon display-6 text-@k.Renk"></i>
+                            <span class="badge bg-@k.Renk">@k.Rozet</span>
+                        </div>
+                        <h6 class="mb-1 text-dark">@k.Baslik</h6>
+                        <small class="text-muted">@k.Aciklama</small>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </text>;
+
+    private string SkorRenk(decimal s) => s switch
+    {
+        >= 85 => "success",
+        >= 65 => "info",
+        >= 45 => "warning",
+        _ => "danger"
+    };
+
+    private record RaporKart(string Baslik, string Aciklama, string Url, string Icon, string Renk, string Rozet);
+}
+
+<style>
+    .hub-card { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+    .hub-card:hover { transform: translateY(-3px); box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15) !important; }
+</style>
+

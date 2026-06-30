@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 🧪 Tests — Build, Test & Coverage Reporting
 # ------------------------------------------------------------
 # Tamamen ücretsiz: GitHub Actions (Linux runner) + Codecov (public repo)
@@ -60,18 +60,18 @@ jobs:
           cache-dependency-path: "**/*.csproj"
 
       - name: 📦 Restore dependencies
-        run: dotnet restore KOAFiloServis.Tests/KOAFiloServis.Tests.csproj
+        run: dotnet restore MKFiloServis.Tests/MKFiloServis.Tests.csproj
 
       - name: 🔨 Build (no restore)
         run: |
-          dotnet build KOAFiloServis.Tests/KOAFiloServis.Tests.csproj \
+          dotnet build MKFiloServis.Tests/MKFiloServis.Tests.csproj \
             --configuration Release \
             --no-restore \
             /p:ContinuousIntegrationBuild=true
 
       - name: 🧪 Run tests with coverage
         run: |
-          dotnet test KOAFiloServis.Tests/KOAFiloServis.Tests.csproj \
+          dotnet test MKFiloServis.Tests/MKFiloServis.Tests.csproj \
             --configuration Release \
             --no-build \
             --logger "trx;LogFileName=test-results.trx" \
@@ -87,7 +87,7 @@ jobs:
           reports: "TestResults/**/coverage.cobertura.xml"
           targetdir: "coverage-report"
           reporttypes: "MarkdownSummaryGithub;Cobertura;HtmlSummary;Badges"
-          title: "KOAFiloServis Coverage"
+          title: "MKFiloServis Coverage"
           tag: "${{ github.run_number }}_${{ github.run_id }}"
 
       - name: 📝 Add coverage to job summary
@@ -100,7 +100,7 @@ jobs:
         with:
           files: ./TestResults/**/coverage.cobertura.xml
           flags: unittests
-          name: koafiloservis-coverage
+          name: MKFiloServis-coverage
           fail_ci_if_error: false
           verbose: false
         continue-on-error: true
@@ -138,3 +138,4 @@ jobs:
         run: |
           echo "::error::Tests failed. See job summary for details."
           exit 1
+

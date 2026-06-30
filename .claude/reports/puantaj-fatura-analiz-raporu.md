@@ -73,14 +73,14 @@
 
 | Bileşen | Dosya | Ana Metot |
 |---------|-------|-----------|
-| OperasyonKaydi entity | `KOAFiloServis.Shared/Entities/OperasyonKaydi.cs` | Tarih, GuzergahId, AracId, Slot, SeferSayisi, PuantajCarpani |
-| PuantajKayit entity | `KOAFiloServis.Shared/Entities/PuantajKayit.cs` | Gun01..Gun31, BirimGelir/Gider, KDV10/20, Kesinti, Alinacak/Odenecek |
-| PuantajDetay entity | `KOAFiloServis.Shared/Entities/PuantajDetay.cs` | OperasyonKaydiId, PuantajKayitId, HesapDonemiId |
-| PuantajEngineService | `KOAFiloServis.Web/Services/PuantajEngineService.cs` | `ProcessDonemAsync()` satır 22 |
-| PuantajEngineJob | `KOAFiloServis.Web/Jobs/PuantajEngineJob.cs` | Aylık otomatik Quartz job |
-| PuantajFaturaRaporService | `KOAFiloServis.Web/Services/PuantajFaturaRaporService.cs` | 5 public metot |
-| PuantajFaturaRaporController | `KOAFiloServis.Web/Controllers/PuantajFaturaRaporController.cs` | 4 API endpoint |
-| PuantajFinansService | `KOAFiloServis.Web/Services/PuantajFinansService.cs` | FinansalKayit + Fatura üretimi |
+| OperasyonKaydi entity | `MKFiloServis.Shared/Entities/OperasyonKaydi.cs` | Tarih, GuzergahId, AracId, Slot, SeferSayisi, PuantajCarpani |
+| PuantajKayit entity | `MKFiloServis.Shared/Entities/PuantajKayit.cs` | Gun01..Gun31, BirimGelir/Gider, KDV10/20, Kesinti, Alinacak/Odenecek |
+| PuantajDetay entity | `MKFiloServis.Shared/Entities/PuantajDetay.cs` | OperasyonKaydiId, PuantajKayitId, HesapDonemiId |
+| PuantajEngineService | `MKFiloServis.Web/Services/PuantajEngineService.cs` | `ProcessDonemAsync()` satır 22 |
+| PuantajEngineJob | `MKFiloServis.Web/Jobs/PuantajEngineJob.cs` | Aylık otomatik Quartz job |
+| PuantajFaturaRaporService | `MKFiloServis.Web/Services/PuantajFaturaRaporService.cs` | 5 public metot |
+| PuantajFaturaRaporController | `MKFiloServis.Web/Controllers/PuantajFaturaRaporController.cs` | 4 API endpoint |
+| PuantajFinansService | `MKFiloServis.Web/Services/PuantajFinansService.cs` | FinansalKayit + Fatura üretimi |
 
 ---
 
@@ -486,3 +486,4 @@ Yapılacaklar:
 - `PuantajFaturaRaporService` B1-only yapıldığında ~80 satır hafifliyor, merge/dedup riski sıfırlanıyor
 
 **PuantajFaturaRaporService B2'den arındırıldığında:** Tek kaynak, tek mapper, tek sorgu. Hiçbir DTO veya API endpoint değişikliği gerekmez.
+

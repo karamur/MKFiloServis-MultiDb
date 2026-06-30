@@ -1,6 +1,6 @@
-﻿# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7
 # ============================================================
-# 🐳 KOAFiloServis.Web — Multi-stage Dockerfile (.NET 10)
+# 🐳 MKFiloServis.Web — Multi-stage Dockerfile (.NET 10)
 # ============================================================
 
 # ─── 1) BUILD STAGE ───────────────────────────────────────────
@@ -9,16 +9,16 @@ ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 
 # Sadece csproj'ları önce kopyala → restore katmanı cache'lensin
-COPY ["KOAFiloServis.Web/KOAFiloServis.Web.csproj", "KOAFiloServis.Web/"]
-COPY ["KOAFiloServis.Shared/KOAFiloServis.Shared.csproj", "KOAFiloServis.Shared/"]
-RUN dotnet restore "KOAFiloServis.Web/KOAFiloServis.Web.csproj"
+COPY ["MKFiloServis.Web/MKFiloServis.Web.csproj", "MKFiloServis.Web/"]
+COPY ["MKFiloServis.Shared/MKFiloServis.Shared.csproj", "MKFiloServis.Shared/"]
+RUN dotnet restore "MKFiloServis.Web/MKFiloServis.Web.csproj"
 
 # Tüm kaynak kodu kopyala
-COPY KOAFiloServis.Web/   KOAFiloServis.Web/
-COPY KOAFiloServis.Shared/ KOAFiloServis.Shared/
+COPY MKFiloServis.Web/   MKFiloServis.Web/
+COPY MKFiloServis.Shared/ MKFiloServis.Shared/
 
-WORKDIR /src/KOAFiloServis.Web
-RUN dotnet build "KOAFiloServis.Web.csproj" \
+WORKDIR /src/MKFiloServis.Web
+RUN dotnet build "MKFiloServis.Web.csproj" \
     -c $BUILD_CONFIGURATION \
     -o /app/build \
     --no-restore
@@ -26,7 +26,7 @@ RUN dotnet build "KOAFiloServis.Web.csproj" \
 # ─── 2) PUBLISH STAGE ─────────────────────────────────────────
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "KOAFiloServis.Web.csproj" \
+RUN dotnet publish "MKFiloServis.Web.csproj" \
     -c $BUILD_CONFIGURATION \
     -o /app/publish \
     --no-restore \
@@ -67,4 +67,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD curl -fsS http://localhost:8080/ || exit 1
 
-ENTRYPOINT ["dotnet", "KOAFiloServis.Web.dll"]
+ENTRYPOINT ["dotnet", "MKFiloServis.Web.dll"]
+

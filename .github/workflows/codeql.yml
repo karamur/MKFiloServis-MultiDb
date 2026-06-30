@@ -1,4 +1,4 @@
-﻿name: 🛡️ CodeQL Security Scan
+name: 🛡️ CodeQL Security Scan
 
 on:
   push:
@@ -46,3 +46,4 @@ jobs:
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:${{ matrix.language }}"
+

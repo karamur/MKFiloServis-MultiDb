@@ -1,0 +1,574 @@
+@page "/ayarlar/bildirimler"
+@rendermode InteractiveServer
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+@inject IBildirimService BildirimService
+@inject IKullaniciService KullaniciService
+@inject IToastService ToastService
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Bildirimler - Koa Filo Servis</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row">
+        <!-- Sol Panel - Bildirim Listesi -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-bell-fill me-2"></i>Bildirimlerim
+                        @if (okunmamisSayisi > 0)
+                        {
+                            <span class="badge bg-light text-primary ms-2">@okunmamisSayisi okunmamış</span>
+                        }
+                    </h5>
+                    <div class="btn-group btn-group-sm">
+                        @if (okunmamisSayisi > 0)
+                        {
+                            <button class="btn btn-light btn-sm" @onclick="TumunuOkunduYap">
+                                <i class="bi bi-check-all me-1"></i>Tümünü Okundu Yap
+                            </button>
+                        }
+                        <button class="btn btn-light btn-sm" @onclick="YenidenTara">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Yeni Bildirimleri Tara
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filtre -->
+                <div class="card-body border-bottom py-2">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-auto">
+                            <select class="form-select form-select-sm" @bind="secilenFiltre">
+                                <option value="Tumu">Tümü</option>
+                                <option value="Okunmamis">Okunmamış</option>
+                                <option value="Okunmus">Okunmuş</option>
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            <select class="form-select form-select-sm" @bind="secilenTip">
+                                <option value="">Tüm Tipler</option>
+                                @foreach (var tip in Enum.GetValues<BildirimTipi>())
+                                {
+                                    <option value="@tip">@GetTipAdi(tip)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-outline-primary btn-sm" @onclick="FiltreleAsync">
+                                <i class="bi bi-funnel me-1"></i>Filtrele
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-body p-0" style="max-height: 600px; overflow-y: auto;">
+                    @if (yukleniyor)
+                    {
+                        <div class="text-center p-5">
+                            <div class="spinner-border text-primary" role="status"></div>
+                            <p class="mt-2 text-muted">Bildirimler yükleniyor...</p>
+                        </div>
+                    }
+                    else if (!filtreliBildirimler.Any())
+                    {
+                        <div class="text-center p-5 text-muted">
+                            <i class="bi bi-bell-slash display-4 d-block mb-3"></i>
+                            <h6>Bildirim bulunmuyor</h6>
+                            <p class="small">Yeni bildirimler için "Yeni Bildirimleri Tara" butonuna tıklayabilirsiniz.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var bildirim in filtreliBildirimler)
+                        {
+                            <div class="bildirim-item p-3 border-bottom @(bildirim.Okundu ? "bg-light" : "")" 
+                                 style="cursor: pointer;" @onclick="() => BildirimTiklandi(bildirim)">
+                                <div class="d-flex align-items-start">
+                                    <div class="me-3">
+                                        <span class="badge rounded-circle p-2 @GetOncelikClass(bildirim.Oncelik)" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                                            <i class="bi @GetBildirimIcon(bildirim.Tip) fs-5"></i>
+                                        </span>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div>
+                                                <strong class="@(bildirim.Okundu ? "text-muted" : "")">@bildirim.Baslik</strong>
+                                                @if (!bildirim.Okundu)
+                                                {
+                                                    <span class="badge bg-primary ms-2">Yeni</span>
+                                                }
+                                            </div>
+                                            <small class="text-muted">@bildirim.CreatedAt.ToString("dd.MM.yyyy HH:mm")</small>
+                                        </div>
+                                        <p class="mb-1 text-muted small">@bildirim.Icerik</p>
+                                        <div class="d-flex gap-2 mt-2">
+                                            <span class="badge bg-secondary">@GetTipAdi(bildirim.Tip)</span>
+                                            @if (!string.IsNullOrEmpty(bildirim.Link))
+                                            {
+                                                <a href="@bildirim.Link" class="badge bg-info text-decoration-none">
+                                                    <i class="bi bi-box-arrow-up-right me-1"></i>Detay
+                                                </a>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="ms-2">
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => BildirimSil(bildirim.Id)" @onclick:stopPropagation="true">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Sağ Panel - Dashboard ve Ayarlar -->
+        <div class="col-lg-4">
+            <!-- Dashboard Özet -->
+            <div class="card shadow-sm mb-3">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0"><i class="bi bi-graph-up me-2"></i>Bildirim Özeti</h6>
+                </div>
+                <div class="card-body">
+                    @if (dashboard != null)
+                    {
+                        <div class="row g-2 text-center">
+                            <div class="col-6">
+                                <div class="p-2 bg-light rounded">
+                                    <h4 class="mb-0 text-primary">@dashboard.OkunmamisBildirim</h4>
+                                    <small class="text-muted">Okunmamış</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-2 bg-light rounded">
+                                    <h4 class="mb-0 text-danger">@dashboard.KritikBildirim</h4>
+                                    <small class="text-muted">Kritik</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-2 bg-light rounded">
+                                    <h4 class="mb-0 text-warning">@dashboard.VadeYaklasanFatura</h4>
+                                    <small class="text-muted">Vadesi Yakın Fatura</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-2 bg-light rounded">
+                                    <h4 class="mb-0 text-info">@dashboard.SuresiDolanBelge</h4>
+                                    <small class="text-muted">Süresi Dolan Belge</small>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Ayarlar -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="bi bi-gear me-2"></i>Bildirim Ayarları</h6>
+                    <button class="btn btn-sm btn-light" @onclick="AyarlariKaydet" disabled="@kaydediliyor">
+                        @if (kaydediliyor)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-check-lg me-1"></i>Kaydet
+                    </button>
+                </div>
+                <div class="card-body">
+                    @if (ayar != null)
+                    {
+                        <h6 class="text-muted mb-3"><i class="bi bi-bell me-1"></i>Bildirim Türleri</h6>
+                        
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" @bind="ayar.FaturaVadeUyarisi" id="faturaVade">
+                            <label class="form-check-label" for="faturaVade">
+                                <i class="bi bi-receipt text-warning me-1"></i>Fatura Vade Uyarıları
+                            </label>
+                        </div>
+                        
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" @bind="ayar.EhliyetBitisUyarisi" id="ehliyet">
+                            <label class="form-check-label" for="ehliyet">
+                                <i class="bi bi-card-heading text-info me-1"></i>Ehliyet Bitiş Uyarıları
+                            </label>
+                        </div>
+                        
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" @bind="ayar.SrcBelgesiUyarisi" id="src">
+                            <label class="form-check-label" for="src">
+                                <i class="bi bi-file-earmark-text text-primary me-1"></i>SRC Belgesi Uyarıları
+                            </label>
+                        </div>
+                        
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" @bind="ayar.PsikoteknikUyarisi" id="psikoteknik">
+                            <label class="form-check-label" for="psikoteknik">
+                                <i class="bi bi-clipboard2-pulse text-success me-1"></i>Psikoteknik Uyarıları
+                            </label>
+                        </div>
+                        
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" @bind="ayar.SaglikRaporuUyarisi" id="saglik">
+                            <label class="form-check-label" for="saglik">
+                                <i class="bi bi-heart-pulse text-danger me-1"></i>Sağlık Raporu Uyarıları
+                            </label>
+                        </div>
+                        
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" @bind="ayar.TrafikSigortaUyarisi" id="trafik">
+                            <label class="form-check-label" for="trafik">
+                                <i class="bi bi-shield-check text-info me-1"></i>Trafik Sigortası Uyarıları
+                            </label>
+                        </div>
+                        
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" @bind="ayar.KaskoUyarisi" id="kasko">
+                            <label class="form-check-label" for="kasko">
+                                <i class="bi bi-car-front text-secondary me-1"></i>Kasko Uyarıları
+                            </label>
+                        </div>
+                        
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" @bind="ayar.MuayeneUyarisi" id="muayene">
+                            <label class="form-check-label" for="muayene">
+                                <i class="bi bi-wrench-adjustable text-dark me-1"></i>Muayene Uyarıları
+                            </label>
+                        </div>
+                        
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" @bind="ayar.DestekTalebiUyarisi" id="destek">
+                            <label class="form-check-label" for="destek">
+                                <i class="bi bi-headset text-success me-1"></i>Destek Talebi Uyarıları
+                            </label>
+                        </div>
+                        
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" @bind="ayar.SistemBildirimleri" id="sistem">
+                            <label class="form-check-label" for="sistem">
+                                <i class="bi bi-gear text-muted me-1"></i>Sistem Bildirimleri
+                            </label>
+                        </div>
+                        
+                        <hr />
+                        
+                        <h6 class="text-muted mb-3"><i class="bi bi-calendar me-1"></i>Uyarı Süreleri</h6>
+                        
+                        <div class="mb-3">
+                            <label class="form-label small">Fatura vadesi kaç gün önceden uyarılsın?</label>
+                            <input type="number" class="form-control form-control-sm" @bind="ayar.VadeUyariGunSayisi" min="1" max="30" />
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label small">Belge süresi kaç gün önceden uyarılsın?</label>
+                            <input type="number" class="form-control form-control-sm" @bind="ayar.BelgeUyariGunSayisi" min="1" max="90" />
+                        </div>
+
+                        <hr />
+
+                        <h6 class="text-muted mb-3"><i class="bi bi-envelope me-1"></i>E-posta Bildirimleri</h6>
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" @bind="ayar.EpostaAlsin" id="epostaAlsin">
+                            <label class="form-check-label" for="epostaAlsin">
+                                <i class="bi bi-envelope-at text-primary me-1"></i>E-posta ile bildirim al
+                            </label>
+                        </div>
+
+                        @if (ayar.EpostaAlsin)
+                        {
+                            <div class="mb-3">
+                                <label class="form-label small">E-posta Adresi</label>
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text"><i class="bi bi-at"></i></span>
+                                    <input type="email" class="form-control" @bind="ayar.EpostaAdresi" 
+                                           placeholder="ornek@email.com" />
+                                </div>
+                                <small class="text-muted">Bildirimler bu adrese gönderilecektir.</small>
+                            </div>
+
+                            <button class="btn btn-outline-info btn-sm w-100" @onclick="TestEpostaGonder" disabled="@testGonderiliyor">
+                                @if (testGonderiliyor)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                <i class="bi bi-send me-1"></i>Test E-postası Gönder
+                            </button>
+
+                            <div class="alert alert-info mt-3 py-2 small">
+                                <i class="bi bi-info-circle me-1"></i>
+                                E-posta bildirimleri günde bir kez gönderilir ve yukarıda seçtiğiniz uyarı türlerine göre filtrelenir.
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .bildirim-item:hover {
+        background-color: #e9ecef !important;
+    }
+</style>
+
+@code {
+    private List<Bildirim> bildirimler = new();
+    private List<Bildirim> filtreliBildirimler = new();
+    private BildirimAyar? ayar;
+    private BildirimDashboardDto? dashboard;
+    private int? aktifKullaniciId;
+    private int okunmamisSayisi = 0;
+    private bool yukleniyor = true;
+    private bool kaydediliyor = false;
+    private bool testGonderiliyor = false;
+    private string secilenFiltre = "Tumu";
+    private string secilenTip = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await KullaniciBilgisiYukle();
+        
+        if (aktifKullaniciId.HasValue)
+        {
+            await YukleAsync();
+        }
+    }
+
+    private async Task KullaniciBilgisiYukle()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                var kullaniciIdClaim = user.FindFirst("KullaniciId")?.Value;
+                if (int.TryParse(kullaniciIdClaim, out var id))
+                {
+                    aktifKullaniciId = id;
+                }
+            }
+        }
+        catch { }
+    }
+
+    private async Task YukleAsync()
+    {
+        if (!aktifKullaniciId.HasValue) return;
+        
+        yukleniyor = true;
+        
+        try
+        {
+            bildirimler = await BildirimService.GetKullaniciBildirimlerAsync(aktifKullaniciId.Value);
+            okunmamisSayisi = await BildirimService.GetOkunmamisBildirimSayisiAsync(aktifKullaniciId.Value);
+            dashboard = await BildirimService.GetDashboardOzetAsync(aktifKullaniciId.Value);
+            ayar = await BildirimService.GetKullaniciAyarAsync(aktifKullaniciId.Value);
+            
+            // Ayar yoksa yeni oluştur
+            if (ayar == null)
+            {
+                ayar = new BildirimAyar { KullaniciId = aktifKullaniciId.Value };
+            }
+            
+            await FiltreleAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Yükleme hatası: {ex.Message}");
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private Task FiltreleAsync()
+    {
+        filtreliBildirimler = bildirimler;
+        
+        // Okunma durumu filtresi
+        filtreliBildirimler = secilenFiltre switch
+        {
+            "Okunmamis" => filtreliBildirimler.Where(b => !b.Okundu).ToList(),
+            "Okunmus" => filtreliBildirimler.Where(b => b.Okundu).ToList(),
+            _ => filtreliBildirimler
+        };
+        
+        // Tip filtresi
+        if (!string.IsNullOrEmpty(secilenTip) && Enum.TryParse<BildirimTipi>(secilenTip, out var tip))
+        {
+            filtreliBildirimler = filtreliBildirimler.Where(b => b.Tip == tip).ToList();
+        }
+        
+        return Task.CompletedTask;
+    }
+
+    private async Task YenidenTara()
+    {
+        if (!aktifKullaniciId.HasValue) return;
+        
+        yukleniyor = true;
+        
+        try
+        {
+            var ozetler = await BildirimService.TaraVeBildirimOlusturAsync();
+            ToastService.ShowSuccess($"{ozetler.Count} yeni uyarı tarandı.");
+            await YukleAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Tarama hatası: {ex.Message}");
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private async Task BildirimTiklandi(Bildirim bildirim)
+    {
+        if (!bildirim.Okundu)
+        {
+            await BildirimService.OkunduOlarakIsaretle(bildirim.Id);
+            bildirim.Okundu = true;
+            okunmamisSayisi = Math.Max(0, okunmamisSayisi - 1);
+        }
+    }
+
+    private async Task TumunuOkunduYap()
+    {
+        if (!aktifKullaniciId.HasValue) return;
+        
+        await BildirimService.TumunuOkunduYapAsync(aktifKullaniciId.Value);
+        
+        foreach (var b in bildirimler)
+        {
+            b.Okundu = true;
+        }
+        okunmamisSayisi = 0;
+        
+        ToastService.ShowSuccess("Tüm bildirimler okundu olarak işaretlendi.");
+    }
+
+    private async Task BildirimSil(int id)
+    {
+        await BildirimService.DeleteAsync(id);
+        bildirimler.RemoveAll(b => b.Id == id);
+        filtreliBildirimler.RemoveAll(b => b.Id == id);
+        ToastService.ShowInfo("Bildirim silindi.");
+    }
+
+    private async Task AyarlariKaydet()
+    {
+        if (ayar == null) return;
+        
+        kaydediliyor = true;
+        
+        try
+        {
+            await BildirimService.SaveAyarAsync(ayar);
+            ToastService.ShowSuccess("Bildirim ayarları kaydedildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Kaydetme hatası: {ex.Message}");
+        }
+        finally
+        {
+            kaydediliyor = false;
+        }
+    }
+
+    private async Task TestEpostaGonder()
+    {
+        if (!aktifKullaniciId.HasValue || ayar == null) return;
+
+        if (string.IsNullOrWhiteSpace(ayar.EpostaAdresi))
+        {
+            ToastService.ShowWarning("Lütfen önce e-posta adresini girin.");
+            return;
+        }
+
+        // Önce ayarları kaydet
+        await AyarlariKaydet();
+
+        testGonderiliyor = true;
+
+        try
+        {
+            var basarili = await BildirimService.TestEpostaGonderAsync(aktifKullaniciId.Value);
+
+            if (basarili)
+            {
+                ToastService.ShowSuccess($"Test e-postası {ayar.EpostaAdresi} adresine gönderildi.");
+            }
+            else
+            {
+                ToastService.ShowError("Test e-postası gönderilemedi. E-posta ayarlarını kontrol edin.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"E-posta gönderme hatası: {ex.Message}");
+        }
+        finally
+        {
+            testGonderiliyor = false;
+        }
+    }
+
+    private string GetBildirimIcon(BildirimTipi tip) => tip switch
+    {
+        BildirimTipi.FaturaVade => "bi-receipt",
+        BildirimTipi.EhliyetBitis => "bi-card-heading",
+        BildirimTipi.SrcBelgesi => "bi-file-earmark-text",
+        BildirimTipi.Psikoteknik => "bi-clipboard2-pulse",
+        BildirimTipi.SaglikRaporu => "bi-heart-pulse",
+        BildirimTipi.TrafikSigorta => "bi-shield-check",
+        BildirimTipi.Kasko => "bi-car-front",
+        BildirimTipi.Muayene => "bi-wrench-adjustable",
+        BildirimTipi.DestekTalebi => "bi-headset",
+        BildirimTipi.Sistem => "bi-gear",
+        BildirimTipi.Bilgi => "bi-info-circle",
+        BildirimTipi.Uyari => "bi-exclamation-triangle",
+        BildirimTipi.Hata => "bi-x-circle",
+        BildirimTipi.Basari => "bi-check-circle",
+        _ => "bi-bell"
+    };
+
+    private string GetOncelikClass(BildirimOncelik oncelik) => oncelik switch
+    {
+        BildirimOncelik.Kritik => "bg-danger text-white",
+        BildirimOncelik.Yuksek => "bg-warning text-dark",
+        BildirimOncelik.Normal => "bg-info text-white",
+        BildirimOncelik.Dusuk => "bg-secondary text-white",
+        _ => "bg-light text-dark"
+    };
+
+    private string GetTipAdi(BildirimTipi tip) => tip switch
+    {
+        BildirimTipi.FaturaVade => "Fatura Vade",
+        BildirimTipi.EhliyetBitis => "Ehliyet",
+        BildirimTipi.SrcBelgesi => "SRC Belgesi",
+        BildirimTipi.Psikoteknik => "Psikoteknik",
+        BildirimTipi.SaglikRaporu => "Sağlık Raporu",
+        BildirimTipi.TrafikSigorta => "Trafik Sigortası",
+        BildirimTipi.Kasko => "Kasko",
+        BildirimTipi.Muayene => "Muayene",
+        BildirimTipi.DestekTalebi => "Destek Talebi",
+        BildirimTipi.Sistem => "Sistem",
+        BildirimTipi.Bilgi => "Bilgi",
+        BildirimTipi.Uyari => "Uyarı",
+        BildirimTipi.Hata => "Hata",
+        BildirimTipi.Basari => "Başarı",
+        _ => tip.ToString()
+    };
+}
+

@@ -1,0 +1,686 @@
+@page "/ayarlar/web-sayfasi"
+@using MKFiloServis.Web.Services
+@inject IPortalProjectCatalogService PortalProjectCatalogService
+@inject IToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>Web Sayfası Yönetimi</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="bi bi-window me-2"></i>Web Sayfası Yönetimi</h3>
+        <button class="btn btn-primary" @onclick="KaydetAsync" disabled="@isSaving">
+            @if (isSaving)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            <i class="bi bi-save me-1"></i>Kaydet
+        </button>
+    </div>
+
+    @if (settings is null)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else
+    {
+        <div class="row g-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header"><strong>Genel Ayarlar</strong></div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-lg-3">
+                                <div class="form-check form-switch mt-4">
+                                    <input class="form-check-input" type="checkbox" id="landingEnabled" @bind="settings.LandingPageEnabled" />
+                                    <label class="form-check-label" for="landingEnabled">İlk ekran web sayfası aktif</label>
+                                </div>
+                            </div>
+                            <div class="col-lg-3">
+                                <label class="form-label">Tarayıcı Başlığı</label>
+                                <input class="form-control" @bind="settings.Content.BrowserTitle" />
+                            </div>
+                            <div class="col-lg-3">
+                                <label class="form-label">Şirket Adı</label>
+                                <input class="form-control" @bind="settings.CompanyName" />
+                            </div>
+                            <div class="col-lg-3">
+                                <label class="form-label">Marka Alt Yazısı</label>
+                                <input class="form-control" @bind="settings.Content.BrandTagline" />
+                            </div>
+                        </div>
+                        <div class="row g-3 mt-1">
+                            <div class="col-lg-4">
+                                <label class="form-label">Üst Bar Mesajı</label>
+                                <input class="form-control" @bind="settings.TopbarMessage" />
+                            </div>
+                            <div class="col-lg-4">
+                                <label class="form-label">E-posta</label>
+                                <input class="form-control" @bind="settings.SupportEmail" />
+                            </div>
+                            <div class="col-lg-4">
+                                <label class="form-label">Telefon</label>
+                                <input class="form-control" @bind="settings.SupportPhone" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Konum</label>
+                                <input class="form-control" @bind="settings.SupportLocation" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header"><strong>Navigasyon ve Hero</strong></div>
+                    <div class="card-body d-flex flex-column gap-3">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Menü - Hakkımızda</label>
+                                <input class="form-control" @bind="settings.Content.Navigation.AboutText" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Menü - Hizmetler</label>
+                                <input class="form-control" @bind="settings.Content.Navigation.ServicesText" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Menü - Projeler</label>
+                                <input class="form-control" @bind="settings.Content.Navigation.ProjectsText" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Menü - İletişim</label>
+                                <input class="form-control" @bind="settings.Content.Navigation.ContactText" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Hero Rozeti</label>
+                                <input class="form-control" @bind="settings.Content.Hero.BadgeText" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Hero Ana Buton</label>
+                                <input class="form-control" @bind="settings.Content.Hero.PrimaryButtonText" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Hero İkincil Buton</label>
+                                <input class="form-control" @bind="settings.Content.Hero.SecondaryButtonText" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Akış Üst Başlığı</label>
+                                <input class="form-control" @bind="settings.Content.Hero.FlowEyebrow" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Hero Başlığı</label>
+                                <input class="form-control" @bind="settings.Content.Hero.Title" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Hero Alt Başlığı</label>
+                                <textarea class="form-control" rows="3" @bind="settings.Content.Hero.Subtitle"></textarea>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Hero Vurguları</label>
+                                <textarea class="form-control" rows="4" value="@GetLines(settings.Content.Hero.Highlights)" @onchange="e => settings.Content.Hero.Highlights = ParseLines(e.Value?.ToString())"></textarea>
+                                <small class="text-muted">Her satıra bir madde yazın.</small>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Akış Başlığı</label>
+                                <input class="form-control" @bind="settings.Content.Hero.FlowTitle" />
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <strong>Hero İstatistikleri</strong>
+                                <button class="btn btn-sm btn-outline-primary" @onclick="YeniHeroIstatistikEkle">
+                                    <i class="bi bi-plus-lg me-1"></i>İstatistik Ekle
+                                </button>
+                            </div>
+                            <div class="d-flex flex-column gap-2">
+                                @for (var i = 0; i < settings.Content.Hero.Stats.Count; i++)
+                                {
+                                    var stat = settings.Content.Hero.Stats[i];
+                                    <div class="border rounded p-3 bg-light-subtle">
+                                        <div class="row g-2 align-items-end">
+                                            <div class="col-md-3">
+                                                <label class="form-label">Değer</label>
+                                                <input class="form-control" @bind="stat.Value" />
+                                            </div>
+                                            <div class="col-md-8">
+                                                <label class="form-label">Açıklama</label>
+                                                <input class="form-control" @bind="stat.Label" />
+                                            </div>
+                                            <div class="col-md-1 d-grid">
+                                                <button class="btn btn-outline-danger" @onclick="() => RemoveAt(settings.Content.Hero.Stats, i)">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <strong>Akış Adımları</strong>
+                                <button class="btn btn-sm btn-outline-primary" @onclick="YeniHeroAkisAdimiEkle">
+                                    <i class="bi bi-plus-lg me-1"></i>Adım Ekle
+                                </button>
+                            </div>
+                            <div class="d-flex flex-column gap-2">
+                                @for (var i = 0; i < settings.Content.Hero.FlowSteps.Count; i++)
+                                {
+                                    var step = settings.Content.Hero.FlowSteps[i];
+                                    <div class="border rounded p-3 bg-light-subtle">
+                                        <div class="row g-2">
+                                            <div class="col-md-2">
+                                                <label class="form-label">No</label>
+                                                <input class="form-control" @bind="step.Number" />
+                                            </div>
+                                            <div class="col-md-9">
+                                                <label class="form-label">Başlık</label>
+                                                <input class="form-control" @bind="step.Title" />
+                                            </div>
+                                            <div class="col-md-1 d-grid">
+                                                <button class="btn btn-outline-danger" @onclick="() => RemoveAt(settings.Content.Hero.FlowSteps, i)">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                            <div class="col-12">
+                                                <label class="form-label">Açıklama</label>
+                                                <textarea class="form-control" rows="2" @bind="step.Description"></textarea>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header"><strong>Hakkımızda</strong></div>
+                    <div class="card-body d-flex flex-column gap-3">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Etiket</label>
+                                <input class="form-control" @bind="settings.Content.About.Tag" />
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label">Panel Başlığı</label>
+                                <input class="form-control" @bind="settings.Content.About.PanelTitle" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Başlık</label>
+                                <input class="form-control" @bind="settings.Content.About.Title" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Açıklama</label>
+                                <textarea class="form-control" rows="4" @bind="settings.Content.About.Description"></textarea>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <strong>Bilgi Kartları</strong>
+                                <button class="btn btn-sm btn-outline-primary" @onclick="YeniHakkimizdaKartiEkle">
+                                    <i class="bi bi-plus-lg me-1"></i>Kart Ekle
+                                </button>
+                            </div>
+                            <div class="d-flex flex-column gap-2">
+                                @for (var i = 0; i < settings.Content.About.Cards.Count; i++)
+                                {
+                                    var card = settings.Content.About.Cards[i];
+                                    <div class="border rounded p-3 bg-light-subtle">
+                                        <div class="row g-2">
+                                            <div class="col-md-3">
+                                                <label class="form-label">İkon</label>
+                                                <input class="form-control" @bind="card.Icon" />
+                                            </div>
+                                            <div class="col-md-8">
+                                                <label class="form-label">Başlık</label>
+                                                <input class="form-control" @bind="card.Title" />
+                                            </div>
+                                            <div class="col-md-1 d-grid">
+                                                <button class="btn btn-outline-danger" @onclick="() => RemoveAt(settings.Content.About.Cards, i)">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                            <div class="col-12">
+                                                <label class="form-label">Açıklama</label>
+                                                <textarea class="form-control" rows="2" @bind="card.Description"></textarea>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <strong>Özellik Maddeleri</strong>
+                                <button class="btn btn-sm btn-outline-primary" @onclick="YeniOzellikEkle">
+                                    <i class="bi bi-plus-lg me-1"></i>Özellik Ekle
+                                </button>
+                            </div>
+                            <div class="d-flex flex-column gap-2">
+                                @for (var i = 0; i < settings.Content.About.Features.Count; i++)
+                                {
+                                    var feature = settings.Content.About.Features[i];
+                                    <div class="border rounded p-3 bg-light-subtle">
+                                        <div class="row g-2">
+                                            <div class="col-md-11">
+                                                <label class="form-label">Başlık</label>
+                                                <input class="form-control" @bind="feature.Title" />
+                                            </div>
+                                            <div class="col-md-1 d-grid">
+                                                <button class="btn btn-outline-danger" @onclick="() => RemoveAt(settings.Content.About.Features, i)">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                            <div class="col-12">
+                                                <label class="form-label">Açıklama</label>
+                                                <textarea class="form-control" rows="2" @bind="feature.Description"></textarea>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong>Hizmetler</strong>
+                        <button class="btn btn-sm btn-outline-primary" @onclick="YeniHizmetKartiEkle">
+                            <i class="bi bi-plus-lg me-1"></i>Hizmet Ekle
+                        </button>
+                    </div>
+                    <div class="card-body d-flex flex-column gap-3">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Etiket</label>
+                                <input class="form-control" @bind="settings.Content.Services.Tag" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Başlık</label>
+                                <input class="form-control" @bind="settings.Content.Services.Title" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Açıklama</label>
+                                <textarea class="form-control" rows="3" @bind="settings.Content.Services.Description"></textarea>
+                            </div>
+                        </div>
+
+                        @for (var i = 0; i < settings.Content.Services.Cards.Count; i++)
+                        {
+                            var service = settings.Content.Services.Cards[i];
+                            <div class="border rounded p-3 bg-light-subtle">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <strong>@service.Title</strong>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveAt(settings.Content.Services.Cards, i)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-md-3">
+                                        <label class="form-label">İkon</label>
+                                        <input class="form-control" @bind="service.Icon" />
+                                    </div>
+                                    <div class="col-md-9">
+                                        <label class="form-label">Başlık</label>
+                                        <input class="form-control" @bind="service.Title" />
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Açıklama</label>
+                                        <textarea class="form-control" rows="2" @bind="service.Description"></textarea>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Maddeler</label>
+                                        <textarea class="form-control" rows="3" value="@GetLines(service.Bullets)" @onchange="e => service.Bullets = ParseLines(e.Value?.ToString())"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong>Ekip</strong>
+                        <button class="btn btn-sm btn-outline-primary" @onclick="YeniEkipUyesiEkle">
+                            <i class="bi bi-plus-lg me-1"></i>Ekip Üyesi Ekle
+                        </button>
+                    </div>
+                    <div class="card-body d-flex flex-column gap-3">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Etiket</label>
+                                <input class="form-control" @bind="settings.Content.Team.Tag" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Başlık</label>
+                                <input class="form-control" @bind="settings.Content.Team.Title" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Açıklama</label>
+                                <textarea class="form-control" rows="3" @bind="settings.Content.Team.Description"></textarea>
+                            </div>
+                        </div>
+
+                        @for (var i = 0; i < settings.Content.Team.Members.Count; i++)
+                        {
+                            var member = settings.Content.Team.Members[i];
+                            <div class="border rounded p-3 bg-light-subtle">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <strong>@member.Name</strong>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveAt(settings.Content.Team.Members, i)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-md-2">
+                                        <label class="form-label">Kısaltma</label>
+                                        <input class="form-control" @bind="member.Initials" />
+                                    </div>
+                                    <div class="col-md-5">
+                                        <label class="form-label">Ad</label>
+                                        <input class="form-control" @bind="member.Name" />
+                                    </div>
+                                    <div class="col-md-5">
+                                        <label class="form-label">Rol</label>
+                                        <input class="form-control" @bind="member.Role" />
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Açıklama</label>
+                                        <textarea class="form-control" rows="2" @bind="member.Description"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong>İletişim</strong>
+                        <button class="btn btn-sm btn-outline-primary" @onclick="YeniIletisimKartiEkle">
+                            <i class="bi bi-plus-lg me-1"></i>Kart Ekle
+                        </button>
+                    </div>
+                    <div class="card-body d-flex flex-column gap-3">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Etiket</label>
+                                <input class="form-control" @bind="settings.Content.Contact.Tag" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Ana Buton</label>
+                                <input class="form-control" @bind="settings.Content.Contact.PrimaryButtonText" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">İkincil Buton</label>
+                                <input class="form-control" @bind="settings.Content.Contact.SecondaryButtonText" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">İkincil Buton Linki</label>
+                                <input class="form-control" @bind="settings.Content.Contact.SecondaryButtonUrl" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Başlık</label>
+                                <input class="form-control" @bind="settings.Content.Contact.Title" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Açıklama</label>
+                                <textarea class="form-control" rows="3" @bind="settings.Content.Contact.Description"></textarea>
+                            </div>
+                        </div>
+
+                        @for (var i = 0; i < settings.Content.Contact.Cards.Count; i++)
+                        {
+                            var card = settings.Content.Contact.Cards[i];
+                            <div class="border rounded p-3 bg-light-subtle">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <strong>@card.Title</strong>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveAt(settings.Content.Contact.Cards, i)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-md-3">
+                                        <label class="form-label">İkon</label>
+                                        <input class="form-control" @bind="card.Icon" />
+                                    </div>
+                                    <div class="col-md-9">
+                                        <label class="form-label">Başlık</label>
+                                        <input class="form-control" @bind="card.Title" />
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Açıklama</label>
+                                        <textarea class="form-control" rows="2" @bind="card.Description"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong>Proje Alanı</strong>
+                        <button class="btn btn-sm btn-outline-primary" @onclick="YeniProjeEkle">
+                            <i class="bi bi-plus-lg me-1"></i>Proje Ekle
+                        </button>
+                    </div>
+                    <div class="card-body d-flex flex-column gap-3">
+                        <div class="row g-3 mb-1">
+                            <div class="col-md-4">
+                                <label class="form-label">Etiket</label>
+                                <input class="form-control" @bind="settings.Content.Projects.Tag" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Hazır Rozeti</label>
+                                <input class="form-control" @bind="settings.Content.Projects.ReadyBadgeText" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Yakında Rozeti</label>
+                                <input class="form-control" @bind="settings.Content.Projects.SoonBadgeText" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Başlık</label>
+                                <input class="form-control" @bind="settings.Content.Projects.Title" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Açıklama</label>
+                                <textarea class="form-control" rows="3" @bind="settings.Content.Projects.Description"></textarea>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Açık Proje Butonu</label>
+                                <input class="form-control" @bind="settings.Content.Projects.OpenButtonText" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Pasif Proje Butonu</label>
+                                <input class="form-control" @bind="settings.Content.Projects.SoonButtonText" />
+                            </div>
+                        </div>
+
+                        @for (var i = 0; i < settings.Projects.Count; i++)
+                        {
+                            var project = settings.Projects[i];
+                            <div class="border rounded p-3 bg-light-subtle">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <strong>@project.Name</strong>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => ProjeSil(i)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Slug</label>
+                                        <input class="form-control" @bind="project.Slug" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Ad</label>
+                                        <input class="form-control" @bind="project.Name" />
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Vurgu Adı</label>
+                                        <input class="form-control" @bind="project.BrandHighlight" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Kategori</label>
+                                        <input class="form-control" @bind="project.Category" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">İkon</label>
+                                        <input class="form-control" @bind="project.Icon" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Tema Rengi</label>
+                                        <input class="form-control" @bind="project.ThemeColor" />
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Alt Başlık</label>
+                                        <input class="form-control" @bind="project.Subtitle" />
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Açıklama</label>
+                                        <textarea class="form-control" rows="2" @bind="project.Description"></textarea>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Vurgular</label>
+                                        <textarea class="form-control" rows="3" value="@GetHighlights(project)" @onchange="e => SetHighlights(project, e.Value?.ToString())"></textarea>
+                                        <small class="text-muted">Her satıra bir madde yazın.</small>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="form-check form-switch mt-2">
+                                            <input class="form-check-input" type="checkbox" id="loginEnabled_@i" @bind="project.LoginEnabled" />
+                                            <label class="form-check-label" for="loginEnabled_@i">Projeyi girişe aç</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private PortalProjectCatalogOptions? settings;
+    private bool isSaving;
+
+    protected override void OnInitialized()
+    {
+        settings = PortalProjectCatalogService.CreateEditableCopy();
+    }
+
+    private void YeniProjeEkle()
+    {
+        settings?.Projects.Add(new PortalProjectDefinition
+        {
+            Slug = $"proje-{Guid.NewGuid():N}"[..12],
+            Name = "Yeni Proje",
+            Category = "Genel",
+            Subtitle = "Kısa açıklama",
+            Description = "Proje açıklaması",
+            Icon = "bi bi-grid-1x2-fill",
+            ThemeColor = "#1e3c72",
+            LoginEnabled = false,
+            Highlights = new List<string> { "Örnek özellik" }
+        });
+    }
+
+    private void YeniHeroIstatistikEkle()
+        => settings?.Content.Hero.Stats.Add(new PortalStatItem { Value = "Yeni", Label = "Yeni istatistik" });
+
+    private void YeniHeroAkisAdimiEkle()
+        => settings?.Content.Hero.FlowSteps.Add(new PortalStepItem { Number = "00", Title = "Yeni adım", Description = "Adım açıklaması" });
+
+    private void YeniHakkimizdaKartiEkle()
+        => settings?.Content.About.Cards.Add(new PortalTextCard { Icon = "bi bi-info-circle", Title = "Yeni kart", Description = "Kart açıklaması" });
+
+    private void YeniOzellikEkle()
+        => settings?.Content.About.Features.Add(new PortalTextCard { Title = "Yeni özellik", Description = "Özellik açıklaması" });
+
+    private void YeniHizmetKartiEkle()
+        => settings?.Content.Services.Cards.Add(new PortalServiceCard { Icon = "bi bi-grid-1x2-fill", Title = "Yeni hizmet", Description = "Hizmet açıklaması", Bullets = ["Örnek madde"] });
+
+    private void YeniEkipUyesiEkle()
+        => settings?.Content.Team.Members.Add(new PortalTeamMember { Initials = "YK", Name = "Yeni kişi", Role = "Rol", Description = "Açıklama" });
+
+    private void YeniIletisimKartiEkle()
+        => settings?.Content.Contact.Cards.Add(new PortalTextCard { Icon = "bi bi-chat-dots", Title = "Yeni iletişim kartı", Description = "Kart açıklaması" });
+
+    private void ProjeSil(int index)
+    {
+        if (settings is null || index < 0 || index >= settings.Projects.Count)
+            return;
+
+        settings.Projects.RemoveAt(index);
+    }
+
+    private static string GetHighlights(PortalProjectDefinition project)
+        => string.Join(Environment.NewLine, project.Highlights);
+
+    private static string GetLines(List<string> values)
+        => string.Join(Environment.NewLine, values);
+
+    private static List<string> ParseLines(string? value)
+    {
+        return (value ?? string.Empty)
+            .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToList();
+    }
+
+    private static void RemoveAt<T>(List<T> items, int index)
+    {
+        if (index >= 0 && index < items.Count)
+        {
+            items.RemoveAt(index);
+        }
+    }
+
+    private static void SetHighlights(PortalProjectDefinition project, string? value)
+    {
+        project.Highlights = ParseLines(value);
+    }
+
+    private async Task KaydetAsync()
+    {
+        if (settings is null)
+            return;
+
+        isSaving = true;
+        try
+        {
+            await PortalProjectCatalogService.SaveAsync(settings);
+            ToastService.ShowSuccess("Web sayfası ayarları kaydedildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}
+

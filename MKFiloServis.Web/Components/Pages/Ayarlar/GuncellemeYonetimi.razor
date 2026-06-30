@@ -1,0 +1,360 @@
+@page "/ayarlar/guncelleme"
+@using MKFiloServis.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject UpdateService UpdateService
+@inject IToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>Güncelleme Yönetimi</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="bi bi-cloud-arrow-down me-2"></i>Güncelleme Yönetimi</h3>
+        <button class="btn btn-outline-primary" @onclick="LoadUpdateInfo">
+            <i class="bi bi-arrow-clockwise me-1"></i>Yenile
+        </button>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2">Yükleniyor...</p>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <!-- Mevcut Versiyon Bilgisi -->
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-primary text-white">
+                        <i class="bi bi-info-circle me-2"></i>Mevcut Versiyon
+                    </div>
+                    <div class="card-body">
+                        @if (_updateInfo != null)
+                        {
+                            <div class="row g-3">
+                                <div class="col-6">
+                                    <label class="form-label text-muted small">Versiyon</label>
+                                    <div class="fw-bold fs-5 text-primary">@_updateInfo.Version</div>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label text-muted small">Framework</label>
+                                    <div class="fw-bold">@_updateInfo.Framework</div>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label text-muted small">Build Tarihi</label>
+                                    <div>@_updateInfo.BuildDate</div>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label text-muted small">Build No</label>
+                                    <div class="font-monospace small">@_updateInfo.BuildNumber</div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label text-muted small">Açıklama</label>
+                                    <div>@_updateInfo.Description</div>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-warning mb-0">
+                                <i class="bi bi-exclamation-triangle me-2"></i>Versiyon bilgisi bulunamadı
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Son Değişiklikler -->
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-success text-white">
+                        <i class="bi bi-clock-history me-2"></i>Son Değişiklikler
+                    </div>
+                    <div class="card-body">
+                        @if (_manifest != null && _manifest.ChangeLog.Any())
+                        {
+                            <ul class="list-group list-group-flush">
+                                @foreach (var change in _manifest.ChangeLog)
+                                {
+                                    <li class="list-group-item px-0">
+                                        <i class="bi bi-check-circle-fill text-success me-2"></i>@change
+                                    </li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <p class="text-muted mb-0">Değişiklik günlüğü bulunamadı</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Güncelleme Paketi Yükle -->
+        <div class="card mb-4">
+            <div class="card-header bg-warning">
+                <i class="bi bi-upload me-2"></i>Güncelleme Paketi Yükle
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <InputFile OnChange="OnFileSelected" accept=".zip" class="form-control" />
+                        <small class="text-muted">Sadece .zip dosyaları kabul edilir</small>
+                    </div>
+                    <div class="col-md-6">
+                        @if (_selectedFileName != null)
+                        {
+                            <div class="d-flex align-items-center gap-3">
+                                <div>
+                                    <i class="bi bi-file-earmark-zip fs-4 text-warning"></i>
+                                </div>
+                                <div>
+                                    <strong>@_selectedFileName</strong>
+                                    <br /><small class="text-muted">@FormatFileSize(_selectedFileSize)</small>
+                                </div>
+                                <button class="btn btn-success" @onclick="UploadPackage" disabled="@_uploading">
+                                    @if (_uploading)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                    }
+                                    <i class="bi bi-cloud-upload me-1"></i>Yükle
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mevcut Güncelleme Paketleri -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <i class="bi bi-folder me-2"></i>Mevcut Güncelleme Paketleri
+            </div>
+            <div class="card-body p-0">
+                @if (_packages.Any())
+                {
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Paket Adı</th>
+                                <th style="width: 150px;">İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var package in _packages)
+                            {
+                                <tr>
+                                    <td>
+                                        <i class="bi bi-file-earmark-zip text-warning me-2"></i>@package
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-warning btn-sm" 
+                                                @onclick="@(() => ApplyUpdate(package))" 
+                                                disabled="@_applying">
+                                            @if (_applying && _applyingPackage == package)
+                                            {
+                                                <span class="spinner-border spinner-border-sm me-1"></span>
+                                            }
+                                            <i class="bi bi-play-fill me-1"></i>Uygula
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="p-4 text-center text-muted">
+                        <i class="bi bi-inbox fs-1"></i>
+                        <p class="mt-2 mb-0">Henüz güncelleme paketi bulunmuyor</p>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Dizin Bilgileri -->
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-folder2-open me-2"></i>Dizin Bilgileri
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <label class="form-label text-muted small">Artifacts Dizini</label>
+                        <div class="font-monospace bg-light p-2 rounded small">@_artifactsPath</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-muted small">Publish Dizini</label>
+                        <div class="font-monospace bg-light p-2 rounded small">@_publishPath</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private bool _uploading = false;
+    private bool _applying = false;
+    private string _applyingPackage = "";
+
+    private UpdateInfo? _updateInfo;
+    private UpdateManifest? _manifest;
+    private List<string> _packages = new();
+
+    // Dosya bilgilerini ayrı tutuyoruz - stream referansı kaybolmasın diye
+    private string? _selectedFileName;
+    private long _selectedFileSize;
+    private MemoryStream? _selectedFileStream;
+
+    private string _artifactsPath = "";
+    private string _publishPath = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUpdateInfo();
+    }
+
+    private async Task LoadUpdateInfo()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            _updateInfo = await UpdateService.GetUpdateInfoAsync();
+            _manifest = await UpdateService.GetUpdateManifestAsync();
+            _packages = UpdateService.GetAvailableUpdatePackages();
+            _artifactsPath = UpdateService.GetArtifactsPath();
+            _publishPath = UpdateService.GetPublishPath();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Bilgiler yüklenirken hata: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+
+        try
+        {
+            // Dosya bilgilerini hemen kaydet
+            _selectedFileName = file.Name;
+            _selectedFileSize = file.Size;
+
+            // Stream'i hemen MemoryStream'e kopyala - referans kaybolmadan önce
+            _selectedFileStream?.Dispose();
+            _selectedFileStream = new MemoryStream();
+            using var inputStream = file.OpenReadStream(maxAllowedSize: 500 * 1024 * 1024); // 500 MB
+            await inputStream.CopyToAsync(_selectedFileStream);
+            _selectedFileStream.Position = 0;
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Dosya okuma hatası: {ex.Message}");
+            _selectedFileName = null;
+            _selectedFileSize = 0;
+            _selectedFileStream?.Dispose();
+            _selectedFileStream = null;
+        }
+    }
+
+    private async Task UploadPackage()
+    {
+        if (_selectedFileStream == null || string.IsNullOrEmpty(_selectedFileName)) return;
+
+        _uploading = true;
+        StateHasChanged();
+
+        try
+        {
+            _selectedFileStream.Position = 0; // Stream'i başa sar
+            var result = await UpdateService.UploadUpdatePackageAsync(_selectedFileStream, _selectedFileName);
+
+            if (result.Success)
+            {
+                ToastService.ShowSuccess(result.Message);
+                _selectedFileName = null;
+                _selectedFileSize = 0;
+                _selectedFileStream?.Dispose();
+                _selectedFileStream = null;
+                await LoadUpdateInfo();
+            }
+            else
+            {
+                ToastService.ShowError(result.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Yükleme hatası: {ex.Message}");
+        }
+        finally
+        {
+            _uploading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ApplyUpdate(string packageName)
+    {
+        _applying = true;
+        _applyingPackage = packageName;
+        StateHasChanged();
+
+        try
+        {
+            var result = await UpdateService.ApplyUpdateAsync(packageName);
+
+            if (result.Success)
+            {
+                ToastService.ShowSuccess(result.Message);
+            }
+            else
+            {
+                ToastService.ShowError(result.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Güncelleme hatası: {ex.Message}");
+        }
+        finally
+        {
+            _applying = false;
+            _applyingPackage = "";
+            StateHasChanged();
+        }
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        int order = 0;
+        double size = bytes;
+        while (size >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            size /= 1024;
+        }
+        return $"{size:0.##} {sizes[order]}";
+    }
+}
+

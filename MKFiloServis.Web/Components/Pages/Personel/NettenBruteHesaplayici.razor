@@ -1,0 +1,273 @@
+@page "/personel/bordro/netten-brute"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+@inject IBordroService BordroService
+@inject IFirmaService FirmaService
+@inject IToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>Netten Brüte Hesaplayıcı</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h3><i class="bi bi-calculator me-2 text-primary"></i>Netten Brüte Hesaplayıcı</h3>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="/personel">Personel</a></li>
+                    <li class="breadcrumb-item active">Netten Brüte Hesaplayıcı</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Sol: Giriş Formu -->
+        <div class="col-lg-5">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-input-cursor-text me-2"></i>Hesaplama Parametreleri</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">İstenen Net Maaş (₺) *</label>
+                        <input type="number" class="form-control form-control-lg" @bind="netMaas" step="100" min="0"
+                               placeholder="Örn: 25.000" />
+                        <small class="text-muted">Eline geçmesini istediğiniz net maaş tutarını girin</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Firma</label>
+                        <select class="form-select" @bind="secilenFirmaId">
+                            <option value="">Genel Ayarlar</option>
+                            @if (firmalar != null)
+                            {
+                                @foreach (var firma in firmalar)
+                                {
+                                    <option value="@firma.Id">@firma.FirmaAdi</option>
+                                }
+                            }
+                        </select>
+                        <small class="text-muted">Firma seçilirse firmaya özel bordro ayarları kullanılır</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Kümülatif Vergi Matrahı (₺)</label>
+                        <input type="number" class="form-control" @bind="kumulatifMatrah" step="1000" min="0"
+                               placeholder="0" />
+                        <small class="text-muted">Yılbaşından itibaren birikmiş vergi matrahı (vergi dilimi etkisi için)</small>
+                    </div>
+
+                    <button class="btn btn-primary w-100 btn-lg" @onclick="HesaplaAsync" disabled="@(isCalculating || netMaas <= 0)">
+                        @if (isCalculating)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-calculator me-1"></i>Hesapla
+                    </button>
+                </div>
+            </div>
+
+            <!-- Hızlı Hesaplama Örnekleri -->
+            <div class="card shadow-sm mt-3">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><i class="bi bi-lightning me-2 text-warning"></i>Hızlı Hesaplama</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-2">
+                        @foreach (var tutar in new[] { 20000m, 25000m, 30000m, 35000m, 40000m, 50000m, 60000m, 75000m, 100000m })
+                        {
+                            <button class="btn btn-outline-primary btn-sm" @onclick="() => HizliHesapla(tutar)">
+                                @tutar.ToString("N0") ₺
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sağ: Sonuç -->
+        <div class="col-lg-7">
+            @if (sonuc != null)
+            {
+                <!-- Özet Kartları -->
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <div class="card bg-success text-white shadow-sm">
+                            <div class="card-body text-center py-3">
+                                <small>İstenen Net Maaş</small>
+                                <h4 class="mb-0">@sonuc.IstenenNetMaas.ToString("N2") ₺</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-primary text-white shadow-sm">
+                            <div class="card-body text-center py-3">
+                                <small>Hesaplanan Brüt Maaş</small>
+                                <h4 class="mb-0">@sonuc.HesaplananBrutMaas.ToString("N2") ₺</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-danger text-white shadow-sm">
+                            <div class="card-body text-center py-3">
+                                <small>Toplam İşveren Maliyeti</small>
+                                <h4 class="mb-0">@sonuc.ToplamMaliyet.ToString("N2") ₺</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detaylı Tablo -->
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0"><i class="bi bi-list-check me-2"></i>Detaylı Hesaplama</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-hover mb-0">
+                            <tbody>
+                                <!-- Brüt Maaş -->
+                                <tr class="table-primary">
+                                    <td class="fw-bold"><i class="bi bi-arrow-right me-1"></i>Brüt Maaş</td>
+                                    <td class="text-end fw-bold fs-5">@sonuc.HesaplananBrutMaas.ToString("N2") ₺</td>
+                                </tr>
+
+                                <!-- İşçi Kesintileri -->
+                                <tr>
+                                    <td colspan="2" class="bg-warning bg-opacity-10 fw-bold text-warning">
+                                        <i class="bi bi-dash-circle me-1"></i>İşçi Kesintileri
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="ps-4">SGK İşçi Primi (%14)</td>
+                                    <td class="text-end text-danger">-@sonuc.SgkIsciPrim.ToString("N2") ₺</td>
+                                </tr>
+                                <tr>
+                                    <td class="ps-4">İşsizlik İşçi Primi (%1)</td>
+                                    <td class="text-end text-danger">-@sonuc.IssizlikIsciPrim.ToString("N2") ₺</td>
+                                </tr>
+                                <tr class="table-light">
+                                    <td class="ps-4 fw-bold">SGK İşçi Toplam</td>
+                                    <td class="text-end fw-bold text-danger">-@sonuc.SgkIsciToplam.ToString("N2") ₺</td>
+                                </tr>
+                                <tr>
+                                    <td class="ps-4">Gelir Vergisi Matrahı</td>
+                                    <td class="text-end">@sonuc.GelirVergisiMatrahi.ToString("N2") ₺</td>
+                                </tr>
+                                <tr>
+                                    <td class="ps-4">Gelir Vergisi (Dilim: @sonuc.UygulananVergiDilimi)</td>
+                                    <td class="text-end text-danger">-@sonuc.GelirVergisi.ToString("N2") ₺</td>
+                                </tr>
+                                <tr>
+                                    <td class="ps-4">Damga Vergisi</td>
+                                    <td class="text-end text-danger">-@sonuc.DamgaVergisi.ToString("N2") ₺</td>
+                                </tr>
+                                <tr class="table-warning">
+                                    <td class="fw-bold"><i class="bi bi-arrow-down me-1"></i>Toplam Kesinti</td>
+                                    <td class="text-end fw-bold text-danger">-@sonuc.ToplamKesinti.ToString("N2") ₺</td>
+                                </tr>
+
+                                <!-- Net Maaş -->
+                                <tr class="table-success">
+                                    <td class="fw-bold fs-5"><i class="bi bi-check-circle me-1"></i>Net Maaş</td>
+                                    <td class="text-end fw-bold fs-5 text-success">@sonuc.HesaplananNetMaas.ToString("N2") ₺</td>
+                                </tr>
+
+                                <!-- İşveren Maliyeti -->
+                                <tr>
+                                    <td colspan="2" class="bg-info bg-opacity-10 fw-bold text-info">
+                                        <i class="bi bi-building me-1"></i>İşveren Maliyeti
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="ps-4">SGK İşveren Primi</td>
+                                    <td class="text-end">@sonuc.SgkIsverenPrim.ToString("N2") ₺</td>
+                                </tr>
+                                <tr>
+                                    <td class="ps-4">İşsizlik İşveren Primi</td>
+                                    <td class="text-end">@sonuc.IssizlikIsverenPrim.ToString("N2") ₺</td>
+                                </tr>
+                                <tr class="table-light">
+                                    <td class="ps-4 fw-bold">İşveren Maliyet Toplamı</td>
+                                    <td class="text-end fw-bold">@sonuc.ToplamIsverenMaliyet.ToString("N2") ₺</td>
+                                </tr>
+                                <tr class="table-danger">
+                                    <td class="fw-bold fs-5"><i class="bi bi-cash-coin me-1"></i>Toplam Maliyet (İşveren)</td>
+                                    <td class="text-end fw-bold fs-5">@sonuc.ToplamMaliyet.ToString("N2") ₺</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Kümülatif Bilgi -->
+                <div class="card shadow-sm mt-3">
+                    <div class="card-body py-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted">
+                                <i class="bi bi-info-circle me-1"></i>Yeni Kümülatif Vergi Matrahı:
+                            </span>
+                            <span class="fw-bold">@sonuc.KumulatifVergiMatrahi.ToString("N2") ₺</span>
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="card shadow-sm">
+                    <div class="card-body text-center py-5 text-muted">
+                        <i class="bi bi-calculator display-1"></i>
+                        <h5 class="mt-3">Netten Brüte Hesaplayıcı</h5>
+                        <p>Soldaki formdan net maaş tutarını girerek brüt maaş, kesintiler ve işveren maliyetini hesaplayabilirsiniz.</p>
+                        <p class="small">
+                            <i class="bi bi-lightbulb me-1 text-warning"></i>
+                            2025 yılı güncel vergi dilimleri ve SGK oranları ile hesaplama yapılır.
+                        </p>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private decimal netMaas;
+    private int? secilenFirmaId;
+    private decimal kumulatifMatrah;
+    private bool isCalculating;
+    private NettenBruteHesapSonucu? sonuc;
+    private List<Firma> firmalar = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        firmalar = await FirmaService.GetAktifFirmalarAsync();
+    }
+
+    private async Task HesaplaAsync()
+    {
+        if (netMaas <= 0) return;
+
+        isCalculating = true;
+        try
+        {
+            sonuc = await BordroService.NettenBruteHesaplaAsync(netMaas, secilenFirmaId, kumulatifMatrah);
+            ToastService.ShowSuccess($"Brüt maaş: {sonuc.HesaplananBrutMaas:N2} ₺ | Toplam maliyet: {sonuc.ToplamMaliyet:N2} ₺");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hesaplama hatası: {ex.Message}");
+        }
+        finally
+        {
+            isCalculating = false;
+        }
+    }
+
+    private async Task HizliHesapla(decimal tutar)
+    {
+        netMaas = tutar;
+        await HesaplaAsync();
+    }
+}
+

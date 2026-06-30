@@ -1,4 +1,4 @@
-﻿# ───────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────────────────
 # 🚫 .dockerignore — Docker build context'ini küçük tutar
 # ───────────────────────────────────────────────────────────────
 
@@ -36,9 +36,9 @@ archive/
 **/Setup/
 
 # Yardımcı projeler (Web image'a girmesin)
-KOAFiloServis.LisansDesktop/
-KOAFiloServis.DataSync/
-KOAFiloServis.Tests/
+MKFiloServis.LisansDesktop/
+MKFiloServis.DataSync/
+MKFiloServis.Tests/
 Tests/
 
 # Dokümantasyon (build gereksiz)
@@ -73,3 +73,4 @@ docker-compose*.yml
 # OS
 Thumbs.db
 .DS_Store
+

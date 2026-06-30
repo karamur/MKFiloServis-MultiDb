@@ -1,0 +1,347 @@
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+@using Microsoft.Extensions.Logging
+@inject IBildirimService BildirimService
+@inject IKullaniciService KullaniciService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ILogger<BildirimPanel> Logger
+@implements IDisposable
+
+<div class="bildirim-panel position-relative">
+    <button class="btn btn-link text-dark position-relative p-2" @onclick="TogglePanel" title="Bildirimler">
+        <i class="bi bi-bell fs-5"></i>
+        @if (okunmamisSayisi > 0)
+        {
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.65rem;">
+                @(okunmamisSayisi > 99 ? "99+" : okunmamisSayisi.ToString())
+            </span>
+        }
+    </button>
+
+    @if (panelAcik)
+    {
+        <div class="bildirim-dropdown shadow-lg" @onclick:stopPropagation="true">
+            <div class="bildirim-header d-flex justify-content-between align-items-center p-3 border-bottom">
+                <h6 class="mb-0">
+                    <i class="bi bi-bell-fill me-2"></i>Bildirimler
+                    @if (okunmamisSayisi > 0)
+                    {
+                        <span class="badge bg-primary ms-2">@okunmamisSayisi</span>
+                    }
+                </h6>
+                <div class="btn-group btn-group-sm">
+                    @if (okunmamisSayisi > 0)
+                    {
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="TumunuOkunduYap" title="Tümünü okundu yap">
+                            <i class="bi bi-check-all"></i>
+                        </button>
+                    }
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="Yenile" title="Yenile">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="bildirim-list" style="max-height: 400px; overflow-y: auto;">
+                @if (yukleniyor)
+                {
+                    <div class="text-center p-4">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                        <span class="ms-2">Yükleniyor...</span>
+                    </div>
+                }
+                else if (!bildirimler.Any())
+                {
+                    <div class="text-center p-4 text-muted">
+                        <i class="bi bi-bell-slash fs-1 d-block mb-2"></i>
+                        <span>Bildirim bulunmuyor</span>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var bildirim in bildirimler.Take(20))
+                    {
+                        <div class="bildirim-item p-3 border-bottom @(bildirim.Okundu ? "bg-light" : "bg-white")" 
+                             @onclick="() => BildirimTiklandi(bildirim)" 
+                             style="cursor: pointer;">
+                            <div class="d-flex align-items-start">
+                                <div class="bildirim-icon me-3">
+                                    <span class="badge rounded-circle p-2 @GetOncelikClass(bildirim.Oncelik)">
+                                        <i class="bi @GetBildirimIcon(bildirim.Tip)"></i>
+                                    </span>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <strong class="@(bildirim.Okundu ? "text-muted" : "")">@bildirim.Baslik</strong>
+                                        @if (!bildirim.Okundu)
+                                        {
+                                            <span class="badge bg-primary ms-2" style="font-size: 0.6rem;">Yeni</span>
+                                        }
+                                    </div>
+                                    <small class="text-muted d-block">@bildirim.Icerik</small>
+                                    <small class="text-secondary">
+                                        <i class="bi bi-clock me-1"></i>@FormatTarih(bildirim.CreatedAt)
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+
+            <div class="bildirim-footer p-2 border-top text-center bg-light">
+                <a href="/ayarlar/bildirimler" class="btn btn-sm btn-outline-primary" @onclick="() => panelAcik = false">
+                    <i class="bi bi-gear me-1"></i>Tüm Bildirimler
+                </a>
+            </div>
+        </div>
+    }
+</div>
+
+@if (panelAcik)
+{
+    <div class="bildirim-overlay" @onclick="() => panelAcik = false"></div>
+}
+
+<style>
+    .bildirim-panel {
+        display: inline-block;
+    }
+
+    .bildirim-dropdown {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        width: 380px;
+        background: white;
+        border-radius: 8px;
+        z-index: 1050;
+        animation: slideDown 0.2s ease-out;
+    }
+
+    @@keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .bildirim-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1040;
+    }
+
+    .bildirim-item:hover {
+        background-color: #f8f9fa !important;
+    }
+
+    .bildirim-icon .badge {
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    @@media (max-width: 576px) {
+        .bildirim-dropdown {
+            width: 300px;
+            right: -50px;
+        }
+    }
+</style>
+
+@code {
+    private List<Bildirim> bildirimler = new();
+    private int okunmamisSayisi = 0;
+    private bool panelAcik = false;
+    private bool yukleniyor = false;
+    private int? aktifKullaniciId;
+    private Timer? yenilemeTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await KullaniciBilgisiYukle();
+        
+        if (aktifKullaniciId.HasValue)
+        {
+            await Yenile();
+            
+            // Her 60 saniyede bir otomatik yenile
+            yenilemeTimer = new Timer(async _ =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    await YenileSessiz();
+                    StateHasChanged();
+                });
+            }, null, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
+        }
+    }
+
+    private async Task KullaniciBilgisiYukle()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                var kullaniciIdClaim = user.FindFirst("KullaniciId")?.Value;
+                if (int.TryParse(kullaniciIdClaim, out var id))
+                {
+                    aktifKullaniciId = id;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "BildirimPanel kullanici bilgisi yuklenirken hata olustu");
+        }
+    }
+
+    private async Task Yenile()
+    {
+        if (!aktifKullaniciId.HasValue) return;
+        
+        yukleniyor = true;
+        
+        try
+        {
+            bildirimler = await BildirimService.GetKullaniciBildirimlerAsync(aktifKullaniciId.Value);
+            okunmamisSayisi = await BildirimService.GetOkunmamisBildirimSayisiAsync(aktifKullaniciId.Value);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "BildirimPanel bildirimleri yuklerken hata olustu (KullaniciId={KullaniciId})", aktifKullaniciId);
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private async Task YenileSessiz()
+    {
+        if (!aktifKullaniciId.HasValue) return;
+        
+        try
+        {
+            okunmamisSayisi = await BildirimService.GetOkunmamisBildirimSayisiAsync(aktifKullaniciId.Value);
+            
+            if (panelAcik)
+            {
+                bildirimler = await BildirimService.GetKullaniciBildirimlerAsync(aktifKullaniciId.Value);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "BildirimPanel sessiz yenilemede hata olustu (KullaniciId={KullaniciId})", aktifKullaniciId);
+        }
+    }
+
+    private void TogglePanel()
+    {
+        panelAcik = !panelAcik;
+    }
+
+    private async Task BildirimTiklandi(Bildirim bildirim)
+    {
+        if (!bildirim.Okundu)
+        {
+            await BildirimService.OkunduOlarakIsaretle(bildirim.Id);
+            bildirim.Okundu = true;
+            okunmamisSayisi = Math.Max(0, okunmamisSayisi - 1);
+        }
+
+        if (!string.IsNullOrEmpty(bildirim.Link))
+        {
+            panelAcik = false;
+            Navigation.NavigateTo(bildirim.Link);
+        }
+    }
+
+    private async Task TumunuOkunduYap()
+    {
+        if (!aktifKullaniciId.HasValue) return;
+        
+        await BildirimService.TumunuOkunduYapAsync(aktifKullaniciId.Value);
+        
+        foreach (var b in bildirimler)
+        {
+            b.Okundu = true;
+        }
+        okunmamisSayisi = 0;
+    }
+
+    private string GetBildirimIcon(BildirimTipi tip)
+    {
+        return tip switch
+        {
+            BildirimTipi.FaturaVade => "bi-receipt",
+            BildirimTipi.EhliyetBitis => "bi-card-heading",
+            BildirimTipi.SrcBelgesi => "bi-file-earmark-text",
+            BildirimTipi.Psikoteknik => "bi-clipboard2-pulse",
+            BildirimTipi.SaglikRaporu => "bi-heart-pulse",
+            BildirimTipi.TrafikSigorta => "bi-shield-check",
+            BildirimTipi.Kasko => "bi-car-front",
+            BildirimTipi.Muayene => "bi-wrench-adjustable",
+            BildirimTipi.DestekTalebi => "bi-headset",
+            BildirimTipi.Sistem => "bi-gear",
+            BildirimTipi.Bilgi => "bi-info-circle",
+            BildirimTipi.Uyari => "bi-exclamation-triangle",
+            BildirimTipi.Hata => "bi-x-circle",
+            BildirimTipi.Basari => "bi-check-circle",
+            BildirimTipi.BelgeSuresi => "bi-calendar-x",
+            BildirimTipi.OdemeBildirimi => "bi-cash-coin",
+            BildirimTipi.Hatirlatici => "bi-alarm",
+            BildirimTipi.Mesaj => "bi-chat-dots",
+            _ => "bi-bell"
+        };
+    }
+
+    private string GetOncelikClass(BildirimOncelik oncelik)
+    {
+        return oncelik switch
+        {
+            BildirimOncelik.Kritik => "bg-danger text-white",
+            BildirimOncelik.Yuksek => "bg-warning text-dark",
+            BildirimOncelik.Normal => "bg-info text-white",
+            BildirimOncelik.Dusuk => "bg-secondary text-white",
+            _ => "bg-light text-dark"
+        };
+    }
+
+    private string FormatTarih(DateTime tarih)
+    {
+        var fark = DateTime.Now - tarih;
+        
+        if (fark.TotalMinutes < 1)
+            return "Az önce";
+        if (fark.TotalMinutes < 60)
+            return $"{(int)fark.TotalMinutes} dk önce";
+        if (fark.TotalHours < 24)
+            return $"{(int)fark.TotalHours} saat önce";
+        if (fark.TotalDays < 7)
+            return $"{(int)fark.TotalDays} gün önce";
+        
+        return tarih.ToString("dd.MM.yyyy HH:mm");
+    }
+
+    public void Dispose()
+    {
+        yenilemeTimer?.Dispose();
+    }
+}
+

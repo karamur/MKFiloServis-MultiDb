@@ -1,0 +1,236 @@
+@implements IAsyncDisposable
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using Microsoft.Extensions.Logging
+@inject ICRMService CRMService
+@inject AppAuthenticationStateProvider AuthProvider
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+@inject ILogger<BildirimDropdown> Logger
+
+<div class="dropdown">
+    <button class="btn btn-light btn-sm border position-relative" type="button" data-bs-toggle="dropdown" title="Bildirimler">
+        <i class="bi bi-bell"></i>
+        @if (okunmamisSayisi > 0)
+        {
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                @(okunmamisSayisi > 99 ? "99+" : okunmamisSayisi)
+            </span>
+        }
+    </button>
+
+    <div class="dropdown-menu dropdown-menu-end p-0 shadow-sm" style="width: 360px; max-width: 95vw;">
+        <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom bg-light">
+            <div>
+                <strong>Bildirimler</strong>
+                <div><small class="text-muted">@okunmamisSayisi okunmamis</small></div>
+            </div>
+            @if (okunmamisSayisi > 0)
+            {
+                <button class="btn btn-link btn-sm text-decoration-none p-0" @onclick="TumunuOkunduYap">
+                    Tumunu okundu yap
+                </button>
+            }
+        </div>
+
+        @if (isLoading)
+        {
+            <div class="text-center p-3">
+                <div class="spinner-border spinner-border-sm text-primary"></div>
+            </div>
+        }
+        else if (!bildirimler.Any())
+        {
+            <div class="text-center text-muted p-4">
+                <i class="bi bi-bell-slash" style="font-size: 1.75rem;"></i>
+                <div class="mt-2 small">Yeni bildirim yok</div>
+            </div>
+        }
+        else
+        {
+            <div style="max-height: 360px; overflow-y: auto;">
+                @foreach (var bildirim in bildirimler)
+                {
+                    <button class="dropdown-item border-bottom py-2 @(bildirim.Okundu ? string.Empty : "bg-light")"
+                            @onclick="() => BildirimeGit(bildirim)">
+                        <div class="d-flex align-items-start gap-2 text-start">
+                            <i class="bi @GetIcon(bildirim.Tip) @GetIconClass(bildirim.Tip) mt-1"></i>
+                            <div class="flex-grow-1">
+                                <div class="fw-semibold">@bildirim.Baslik</div>
+                                @if (!string.IsNullOrWhiteSpace(bildirim.Icerik))
+                                {
+                                    <div class="small text-muted">@bildirim.Icerik</div>
+                                }
+                                <div class="small text-muted mt-1">@FormatTarih(bildirim.CreatedAt)</div>
+                            </div>
+                            @if (!bildirim.Okundu)
+                            {
+                                <span class="badge bg-primary">Yeni</span>
+                            }
+                        </div>
+                    </button>
+                }
+            </div>
+        }
+
+        <div class="border-top p-2 text-center bg-light">
+            <a class="btn btn-sm btn-outline-primary w-100" href="/crm/bildirimler">Tum bildirimleri ac</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly CancellationTokenSource cts = new();
+    private List<Bildirim> bildirimler = new();
+    private int? aktifKullaniciId;
+    private int okunmamisSayisi;
+    private int oncekiOkunmamisSayisi;
+    private bool isLoading = true;
+    private bool ilkYuklemeTamamlandi;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var kullanici = AuthProvider.GetAktifKullanici();
+        aktifKullaniciId = kullanici?.Id;
+
+        if (!aktifKullaniciId.HasValue)
+        {
+            isLoading = false;
+            return;
+        }
+
+        await BildirimleriYukleAsync(false);
+        _ = BildirimIzlemeDongusuAsync(cts.Token);
+    }
+
+    private async Task BildirimIzlemeDongusuAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(20));
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                await InvokeAsync(() => BildirimleriYukleAsync(true));
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "BildirimDropdown izleme dongusunde hata olustu");
+        }
+    }
+
+    private async Task BildirimleriYukleAsync(bool toastKontrolEt)
+    {
+        if (!aktifKullaniciId.HasValue)
+        {
+            return;
+        }
+
+        isLoading = true;
+        try
+        {
+            var yeniBildirimler = await CRMService.GetBildirimlerAsync(aktifKullaniciId.Value, false);
+            var yeniOkunmamisSayisi = await CRMService.GetOkunmamisBildirimSayisiAsync(aktifKullaniciId.Value);
+
+            if (toastKontrolEt && ilkYuklemeTamamlandi && yeniOkunmamisSayisi > oncekiOkunmamisSayisi)
+            {
+                var fark = yeniOkunmamisSayisi - oncekiOkunmamisSayisi;
+                ToastService.ShowInfo($"{fark} yeni bildiriminiz var.", "Bildirim");
+            }
+
+            bildirimler = yeniBildirimler.Take(6).ToList();
+            okunmamisSayisi = yeniOkunmamisSayisi;
+            oncekiOkunmamisSayisi = yeniOkunmamisSayisi;
+            ilkYuklemeTamamlandi = true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "BildirimDropdown bildirimler yuklenirken hata olustu (KullaniciId={KullaniciId})", aktifKullaniciId);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task BildirimeGit(Bildirim bildirim)
+    {
+        if (!bildirim.Okundu)
+        {
+            await CRMService.BildirimOkunduIsaretle(bildirim.Id);
+            bildirim.Okundu = true;
+            okunmamisSayisi = Math.Max(0, okunmamisSayisi - 1);
+            oncekiOkunmamisSayisi = okunmamisSayisi;
+        }
+
+        Navigation.NavigateTo(string.IsNullOrWhiteSpace(bildirim.Link) ? "/crm/bildirimler" : bildirim.Link);
+    }
+
+    private async Task TumunuOkunduYap()
+    {
+        if (!aktifKullaniciId.HasValue)
+        {
+            return;
+        }
+
+        await CRMService.TumBildirimleriOkunduIsaretle(aktifKullaniciId.Value);
+        foreach (var bildirim in bildirimler)
+        {
+            bildirim.Okundu = true;
+        }
+
+        okunmamisSayisi = 0;
+        oncekiOkunmamisSayisi = 0;
+        ToastService.ShowSuccess("Bildirimler okundu olarak isaretlendi.");
+    }
+
+    private static string GetIcon(BildirimTipi tip) => tip switch
+    {
+        BildirimTipi.Bilgi => "bi-info-circle-fill",
+        BildirimTipi.Uyari => "bi-exclamation-triangle-fill",
+        BildirimTipi.Hata => "bi-x-circle-fill",
+        BildirimTipi.Basari => "bi-check-circle-fill",
+        BildirimTipi.BelgeSuresi => "bi-file-earmark-x-fill",
+        BildirimTipi.OdemeBildirimi => "bi-credit-card-fill",
+        BildirimTipi.Hatirlatici => "bi-alarm-fill",
+        BildirimTipi.Mesaj => "bi-chat-dots-fill",
+        _ => "bi-bell-fill"
+    };
+
+    private static string GetIconClass(BildirimTipi tip) => tip switch
+    {
+        BildirimTipi.Bilgi => "text-info",
+        BildirimTipi.Uyari => "text-warning",
+        BildirimTipi.Hata => "text-danger",
+        BildirimTipi.Basari => "text-success",
+        BildirimTipi.BelgeSuresi => "text-danger",
+        BildirimTipi.OdemeBildirimi => "text-primary",
+        BildirimTipi.Hatirlatici => "text-warning",
+        BildirimTipi.Mesaj => "text-primary",
+        _ => "text-secondary"
+    };
+
+    private static string FormatTarih(DateTime tarih)
+    {
+        var fark = DateTime.UtcNow - tarih;
+
+        if (fark.TotalMinutes < 1) return "Az once";
+        if (fark.TotalMinutes < 60) return $"{(int)fark.TotalMinutes} dk once";
+        if (fark.TotalHours < 24) return $"{(int)fark.TotalHours} sa once";
+        if (fark.TotalDays < 7) return $"{(int)fark.TotalDays} gun once";
+
+        return tarih.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        cts.Cancel();
+        cts.Dispose();
+        return ValueTask.CompletedTask;
+    }
+}
+

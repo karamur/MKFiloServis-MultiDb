@@ -1,6 +1,6 @@
 # Architecture Decision Records (ADR)
 
-KOAFiloServis projesi için mimari karar kayıtları.
+MKFiloServis projesi için mimari karar kayıtları.
 
 | ADR | Başlık | Status | Sprint | Tarih |
 |-----|--------|:------:|:------:|-------|
@@ -31,3 +31,4 @@ Her ADR şu başlıkları içerir:
 ## Superseded ADR'ler
 
 Henüz yok.
+

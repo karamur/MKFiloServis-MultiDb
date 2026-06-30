@@ -1,0 +1,262 @@
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Data
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<ApplicationDbContext> ContextFactory
+@inject IToastService Toast
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-graph-up-arrow me-2 text-warning"></i>Rakip / Piyasa Benchmark</span>
+        <button class="btn btn-sm btn-outline-primary" @onclick="() => yeniGoster = true">
+            <i class="bi bi-plus me-1"></i>Rakip Ekle
+        </button>
+    </div>
+    <div class="card-body">
+        @if (benchmarklar.Count == 0 && !yukleniyor)
+        {
+            <div class="text-center text-muted py-4">
+                <i class="bi bi-bar-chart-line fs-3 d-block mb-2"></i>
+                <p>Henüz benchmark kaydı yok.</p>
+                <button class="btn btn-outline-primary btn-sm" @onclick="() => yeniGoster = true">
+                    <i class="bi bi-plus me-1"></i>İlk Rakip Fiyatını Gir
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Rakip Firma</th>
+                            <th class="text-end">Aylık Teklif</th>
+                            <th class="text-end">Toplam Teklif</th>
+                            <th class="text-end">Piyasa Ort.</th>
+                            <th>Kaynak</th>
+                            <th>Fark %</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var b in benchmarklar)
+                        {
+                            <tr>
+                                <td><strong>@b.RakipFirmaAdi</strong></td>
+                                <td class="text-end">
+                                    @if (b.AylikTeklifTutari.HasValue)
+                                    {
+                                        <span>@b.AylikTeklifTutari.Value.ToString("N0") ₺</span>
+                                    }
+                                    else { <span class="text-muted">-</span> }
+                                </td>
+                                <td class="text-end">
+                                    @if (b.ToplamTeklifTutari.HasValue)
+                                    {
+                                        <span>@b.ToplamTeklifTutari.Value.ToString("N0") ₺</span>
+                                    }
+                                    else { <span class="text-muted">-</span> }
+                                </td>
+                                <td class="text-end">
+                                    @if (b.PiyasaOrtalamaFiyati.HasValue)
+                                    {
+                                        <span class="text-muted">@b.PiyasaOrtalamaFiyati.Value.ToString("N0") ₺</span>
+                                    }
+                                    else { <span class="text-muted">-</span> }
+                                </td>
+                                <td><small class="text-muted">@(b.VeriKaynagi ?? "-")</small></td>
+                                <td>
+                                    @if (bizimTeklifimiz > 0 && b.AylikTeklifTutari.HasValue && b.AylikTeklifTutari.Value > 0)
+                                    {
+                                        var fark = ((bizimTeklifimiz - b.AylikTeklifTutari.Value) / b.AylikTeklifTutari.Value) * 100;
+                                        <span class="badge @(fark > 0 ? "bg-danger" : "bg-success")">
+                                            @(fark > 0 ? "+" : "")@fark.ToString("N1")%
+                                        </span>
+                                    }
+                                    else { <span class="text-muted">-</span> }
+                                </td>
+                                <td>
+                                    <button class="btn btn-link btn-sm text-danger p-0"
+                                            @onclick="() => Sil(b)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (benchmarklar.Any(b => b.AylikTeklifTutari.HasValue))
+            {
+                <div class="row g-2 mt-2">
+                    <div class="col-auto">
+                        <div class="border rounded-3 px-3 py-2 text-center">
+                            <small class="text-muted d-block">Min Rakip</small>
+                            <strong class="text-success">@benchmarklar.Where(b => b.AylikTeklifTutari.HasValue).Min(b => b.AylikTeklifTutari!.Value).ToString("N0") ₺</strong>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <div class="border rounded-3 px-3 py-2 text-center">
+                            <small class="text-muted d-block">Maks Rakip</small>
+                            <strong class="text-danger">@benchmarklar.Where(b => b.AylikTeklifTutari.HasValue).Max(b => b.AylikTeklifTutari!.Value).ToString("N0") ₺</strong>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <div class="border rounded-3 px-3 py-2 text-center">
+                            <small class="text-muted d-block">Piyasa Ortalaması</small>
+                            <strong class="text-primary">@benchmarklar.Where(b => b.AylikTeklifTutari.HasValue).Average(b => b.AylikTeklifTutari!.Value).ToString("N0") ₺</strong>
+                        </div>
+                    </div>
+                    @if (bizimTeklifimiz > 0)
+                    {
+                        <div class="col-auto">
+                            <div class="border border-primary rounded-3 px-3 py-2 text-center">
+                                <small class="text-muted d-block">Bizim Teklifimiz</small>
+                                <strong class="text-primary">@bizimTeklifimiz.ToString("N0") ₺</strong>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </div>
+</div>
+
+<!-- Yeni Benchmark Modal -->
+@if (yeniGoster)
+{
+    <div class="modal show d-block" style="background:rgba(0,0,0,.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-bar-chart-line me-2"></i>Rakip/Piyasa Fiyat Girişi</h5>
+                    <button class="btn-close" @onclick="() => yeniGoster = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Rakip Firma Adı <span class="text-danger">*</span></label>
+                        <input class="form-control" @bind="yeni.RakipFirmaAdi" placeholder="Firma adı veya 'Piyasa Ortalaması'" />
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Aylık Teklif Tutarı (₺)</label>
+                            <input type="number" class="form-control" @bind="yeni.AylikTeklifTutari" placeholder="0" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Toplam Teklif Tutarı (₺)</label>
+                            <input type="number" class="form-control" @bind="yeni.ToplamTeklifTutari" placeholder="0" />
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-4">
+                            <label class="form-label">Min Piyasa (₺)</label>
+                            <input type="number" class="form-control" @bind="yeni.MinPiyasaFiyati" placeholder="0" />
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label">Maks Piyasa (₺)</label>
+                            <input type="number" class="form-control" @bind="yeni.MaxPiyasaFiyati" placeholder="0" />
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label">Ort. Piyasa (₺)</label>
+                            <input type="number" class="form-control" @bind="yeni.PiyasaOrtalamaFiyati" placeholder="0" />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Veri Kaynağı</label>
+                        <select class="form-select" @bind="yeni.VeriKaynagi">
+                            <option value="">Seçiniz...</option>
+                            <option value="Geçmiş ihale">Geçmiş ihale</option>
+                            <option value="Piyasa araştırması">Piyasa araştırması</option>
+                            <option value="Rakip teklif">Rakip teklif</option>
+                            <option value="Referans fiyat">Referans fiyat</option>
+                            <option value="Diğer">Diğer</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notlar</label>
+                        <textarea class="form-control" rows="2" @bind="yeni.Notlar" placeholder="Ek bilgi..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => yeniGoster = false">İptal</button>
+                    <button class="btn btn-primary" @onclick="Kaydet"
+                            disabled="@(string.IsNullOrWhiteSpace(yeni.RakipFirmaAdi))">
+                        <i class="bi bi-save me-1"></i>Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int IhaleProjeId { get; set; }
+    [Parameter] public decimal BizimTeklifimiz { get; set; }
+
+    private List<IhaleRakipBenchmark> benchmarklar = new();
+    private IhaleRakipBenchmark yeni = new();
+    private bool yeniGoster = false;
+    private bool yukleniyor = true;
+    private decimal bizimTeklifimiz;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        bizimTeklifimiz = BizimTeklifimiz;
+        await YukleAsync();
+    }
+
+    private async Task YukleAsync()
+    {
+        yukleniyor = true;
+        try
+        {
+            await using var ctx = await ContextFactory.CreateDbContextAsync();
+            benchmarklar = await ctx.IhaleRakipBenchmarklar
+                .Where(b => b.IhaleProjeId == IhaleProjeId && !b.IsDeleted)
+                .OrderByDescending(b => b.CreatedAt)
+                .ToListAsync();
+        }
+        catch { benchmarklar = new(); }
+        finally { yukleniyor = false; }
+    }
+
+    private async Task Kaydet()
+    {
+        if (string.IsNullOrWhiteSpace(yeni.RakipFirmaAdi)) return;
+        try
+        {
+            await using var ctx = await ContextFactory.CreateDbContextAsync();
+            yeni.IhaleProjeId = IhaleProjeId;
+            ctx.IhaleRakipBenchmarklar.Add(yeni);
+            await ctx.SaveChangesAsync();
+            yeni = new();
+            yeniGoster = false;
+            Toast.ShowSuccess("Benchmark kaydedildi.");
+            await YukleAsync();
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"Hata: {ex.Message}");
+        }
+    }
+
+    private async Task Sil(IhaleRakipBenchmark b)
+    {
+        try
+        {
+            await using var ctx = await ContextFactory.CreateDbContextAsync();
+            b.IsDeleted = true;
+            ctx.IhaleRakipBenchmarklar.Update(b);
+            await ctx.SaveChangesAsync();
+            benchmarklar.Remove(b);
+            Toast.ShowSuccess("Kayıt silindi.");
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"Hata: {ex.Message}");
+        }
+    }
+}
+

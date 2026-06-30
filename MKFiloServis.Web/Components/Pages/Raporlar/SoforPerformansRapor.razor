@@ -1,0 +1,546 @@
+@page "/rapor/sofor-performans"
+@attribute [Authorize]
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Models
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.JSInterop
+@inject IRaporService RaporService
+@inject ISoforService SoforService
+@inject IExcelService ExcelService
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Şoför Performans Raporu</PageTitle>
+
+<div class="container-fluid">
+    <h3 class="mb-3"><i class="bi bi-person-badge me-2"></i>Şoför Performans Raporu</h3>
+
+    <div class="card mb-3">
+        <div class="card-header">
+            <h6 class="mb-0">Filtre</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-2">
+                    <div class="mb-3">
+                        <label class="form-label">Başlangıç Tarihi</label>
+                        <input type="date" class="form-control" @bind="baslangicTarihi" />
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="mb-3">
+                        <label class="form-label">Bitiş Tarihi</label>
+                        <input type="date" class="form-control" @bind="bitisTarihi" />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="mb-3">
+                        <label class="form-label">Şoför</label>
+                        <select class="form-select" @bind="secilenSoforId">
+                            <option value="0">-- Şoför Seçin --</option>
+                            @foreach (var sofor in soforler)
+                            {
+                                <option value="@sofor.Id">@sofor.TamAd (@sofor.SoforKodu)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="mb-3">
+                        <label class="form-label">Sahiplik Tipi</label>
+                        <select class="form-select" @bind="secilenSahiplikTipi">
+                            <option value="">Tümü</option>
+                            <option value="Ozmal">Özmal</option>
+                            <option value="Kiralik">Kiralık</option>
+                            <option value="Komisyon">Komisyon</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="mb-3">
+                        <label class="form-label">&nbsp;</label>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-primary" @onclick="RaporGetir" disabled="@(secilenSoforId == 0)">
+                                <i class="bi bi-search me-1"></i>Rapor Getir
+                            </button>
+                            <button class="btn btn-outline-primary" @onclick="KarsilastirmaRaporuGetir">
+                                <i class="bi bi-bar-chart me-1"></i>Karşılaştır
+                            </button>
+                            <button class="btn btn-success" @onclick="ExceleAktar" disabled="@(performansOzet == null && karsilastirma == null)">
+                                <i class="bi bi-file-earmark-excel"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+        </div>
+    }
+    else if (karsilastirma != null && karsilastirma.Any())
+    {
+        <!-- Karşılaştırma Görünümü -->
+        <div class="card">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-bar-chart-fill me-2"></i>Şoför Karşılaştırma (@baslangicTarihi.ToString("dd.MM.yyyy") - @bitisTarihi.ToString("dd.MM.yyyy"))</h6>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => karsilastirma = null">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Şoför Adı</th>
+                                <th class="text-center">Sefer Sayısı</th>
+                                <th class="text-center">Çalışılan Gün</th>
+                                <th class="text-end">Toplam Kazanç</th>
+                                <th class="text-center">Arıza Oranı</th>
+                                <th class="text-center">İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @{
+                                var sira = 1;
+                            }
+                            @foreach (var sofor in karsilastirma)
+                            {
+                                <tr>
+                                    <td><span class="badge @(sira <= 3 ? "bg-success" : "bg-secondary")">@sira</span></td>
+                                    <td><strong>@sofor.SoforAdi</strong></td>
+                                    <td class="text-center">@sofor.SeferSayisi</td>
+                                    <td class="text-center">@sofor.CalistigiGun</td>
+                                    <td class="text-end text-success"><strong>@FormatTutar(sofor.ToplamKazanc)</strong></td>
+                                    <td class="text-center">
+                                        <span class="badge @(sofor.ArizaOrani > 5 ? "bg-danger" : sofor.ArizaOrani > 2 ? "bg-warning text-dark" : "bg-success")">
+                                            %@sofor.ArizaOrani.ToString("F1")
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <button class="btn btn-sm btn-outline-primary" @onclick="() => DetayGoster(sofor.SoforId)">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                sira++;
+                            }
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr class="fw-bold">
+                                <td colspan="2">TOPLAM</td>
+                                <td class="text-center">@karsilastirma.Sum(k => k.SeferSayisi)</td>
+                                <td class="text-center">-</td>
+                                <td class="text-end text-success">@FormatTutar(karsilastirma.Sum(k => k.ToplamKazanc))</td>
+                                <td colspan="2"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+    else if (performansOzet != null)
+    {
+        <!-- Bireysel Şoför Performansı -->
+        <div class="row mb-4">
+            <!-- Özet Kartlar -->
+            <div class="col-md-3">
+                <div class="card bg-primary text-white h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-title">Toplam Sefer</h6>
+                                <h2 class="mb-0">@performansOzet.ToplamSeferSayisi</h2>
+                            </div>
+                            <i class="bi bi-signpost-2" style="font-size: 2.5rem; opacity: 0.5;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-title">Toplam Kazanç</h6>
+                                <h2 class="mb-0">@FormatKisa(performansOzet.ToplamKazanc)</h2>
+                            </div>
+                            <i class="bi bi-currency-lira" style="font-size: 2.5rem; opacity: 0.5;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-dark h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-title">Çalışılan Gün</h6>
+                                <h2 class="mb-0">@performansOzet.CalistigiGunSayisi</h2>
+                            </div>
+                            <i class="bi bi-calendar-check" style="font-size: 2.5rem; opacity: 0.5;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card @(performansOzet.ArizaOrani > 5 ? "bg-danger" : "bg-info") text-white h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-title">Arıza Oranı</h6>
+                                <h2 class="mb-0">%@performansOzet.ArizaOrani.ToString("F1")</h2>
+                            </div>
+                            <i class="bi bi-exclamation-triangle" style="font-size: 2.5rem; opacity: 0.5;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card border-secondary h-100">
+                    <div class="card-body text-center">
+                        <small class="text-muted d-block">Ort. Günlük Kazanç</small>
+                        <h4 class="text-success mb-0">@FormatTutar(performansOzet.OrtalamaGunlukKazanc)</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-secondary h-100">
+                    <div class="card-body text-center">
+                        <small class="text-muted d-block">Ort. Sefer Başı</small>
+                        <h4 class="text-primary mb-0">@FormatTutar(performansOzet.OrtalamaSeferBasiKazanc)</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-secondary h-100">
+                    <div class="card-body text-center">
+                        <small class="text-muted d-block">Arızalı Sefer</small>
+                        <h4 class="@(performansOzet.ArizaliSeferSayisi > 0 ? "text-danger" : "text-success") mb-0">@performansOzet.ArizaliSeferSayisi</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-secondary h-100">
+                    <div class="card-body text-center">
+                        <small class="text-muted d-block">Toplam KM</small>
+                        <h4 class="text-info mb-0">@(performansOzet.ToplamKm?.ToString("N0") ?? "-")</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Aylık Performans Grafiği -->
+        @if (performansOzet.AylikPerformans.Any())
+        {
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card h-100">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0"><i class="bi bi-graph-up me-2"></i>Aylık Performans Trendi</h6>
+                        </div>
+                        <div class="card-body">
+                            <div style="height: 280px;">
+                                <canvas id="soforPerformansChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="row mb-4">
+            <!-- Çalıştığı Araçlar -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="bi bi-truck me-2"></i>Çalıştığı Araçlar (@performansOzet.CalistigiAraclar.Count)</h6>
+                    </div>
+                    <div class="card-body" style="max-height: 350px; overflow-y: auto;">
+                        @if (performansOzet.CalistigiAraclar.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Plaka</th>
+                                            <th class="text-center">Sefer</th>
+                                            <th class="text-center">Arıza</th>
+                                            <th class="text-end">Kazanç</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var arac in performansOzet.CalistigiAraclar)
+                                        {
+                                            <tr>
+                                                <td><strong>@arac.Plaka</strong></td>
+                                                <td class="text-center">@arac.SeferSayisi</td>
+                                                <td class="text-center">
+                                                    <span class="badge @(arac.ArizaSayisi > 0 ? "bg-danger" : "bg-success")">@arac.ArizaSayisi</span>
+                                                </td>
+                                                <td class="text-end text-success">@FormatKisa(arac.ToplamKazanc)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted text-center mb-0">Veri bulunamadı</p>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Çalıştığı Güzergahlar -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="bi bi-signpost-2 me-2"></i>Çalıştığı Güzergahlar (@performansOzet.CalistigiGuzergahlar.Count)</h6>
+                    </div>
+                    <div class="card-body" style="max-height: 350px; overflow-y: auto;">
+                        @if (performansOzet.CalistigiGuzergahlar.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Güzergah</th>
+                                            <th>Firma</th>
+                                            <th class="text-center">Sefer</th>
+                                            <th class="text-end">Kazanç</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var guzergah in performansOzet.CalistigiGuzergahlar)
+                                        {
+                                            <tr>
+                                                <td><strong>@guzergah.GuzergahAdi</strong></td>
+                                                <td><small>@guzergah.CariAdi</small></td>
+                                                <td class="text-center">@guzergah.SeferSayisi</td>
+                                                <td class="text-end text-success">@FormatKisa(guzergah.ToplamKazanc)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted text-center mb-0">Veri bulunamadı</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Aylık Detay Tablosu -->
+        @if (performansOzet.AylikPerformans.Any())
+        {
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><i class="bi bi-table me-2"></i>Aylık Detay</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped align-middle">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Dönem</th>
+                                    <th class="text-center">Sefer Sayısı</th>
+                                    <th class="text-center">Çalışılan Gün</th>
+                                    <th class="text-end">Toplam Kazanç</th>
+                                    <th class="text-end">Ort. Günlük</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var ay in performansOzet.AylikPerformans)
+                                {
+                                    <tr>
+                                        <td><strong>@ay.AyAdi</strong></td>
+                                        <td class="text-center">@ay.SeferSayisi</td>
+                                        <td class="text-center">@ay.CalistigiGun</td>
+                                        <td class="text-end text-success"><strong>@FormatTutar(ay.ToplamKazanc)</strong></td>
+                                        <td class="text-end">@FormatTutar(ay.CalistigiGun > 0 ? ay.ToplamKazanc / ay.CalistigiGun : 0)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot class="table-light">
+                                <tr class="fw-bold">
+                                    <td>TOPLAM</td>
+                                    <td class="text-center">@performansOzet.AylikPerformans.Sum(a => a.SeferSayisi)</td>
+                                    <td class="text-center">@performansOzet.AylikPerformans.Sum(a => a.CalistigiGun)</td>
+                                    <td class="text-end text-success">@FormatTutar(performansOzet.AylikPerformans.Sum(a => a.ToplamKazanc))</td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>
+            Rapor görüntülemek için şoför seçin ve "Rapor Getir" butonuna tıklayın veya tüm şoförleri karşılaştırmak için "Karşılaştır" butonunu kullanın.
+        </div>
+    }
+</div>
+
+@code {
+    private List<Sofor> soforler = new();
+    private SoforPerformansOzet? performansOzet;
+    private List<SoforKarsilastirmaOzeti>? karsilastirma;
+
+    private DateTime baslangicTarihi = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime bitisTarihi = DateTime.Today;
+    private int secilenSoforId = 0;
+    private string secilenSahiplikTipi = "";
+    private bool isLoading = false;
+    private bool chartRendered = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        soforler = await SoforService.GetActiveByGorevAsync(PersonelGorev.Sofor);
+    }
+
+    private AracSahiplikTipi? GetSahiplikTipi()
+    {
+        if (!string.IsNullOrEmpty(secilenSahiplikTipi) && Enum.TryParse<AracSahiplikTipi>(secilenSahiplikTipi, out var parsed))
+            return parsed;
+        return null;
+    }
+
+    private async Task RaporGetir()
+    {
+        if (secilenSoforId == 0) return;
+
+        isLoading = true;
+        karsilastirma = null;
+        chartRendered = false;
+        StateHasChanged();
+
+        try
+        {
+            performansOzet = await RaporService.GetSoforPerformansAsync(secilenSoforId, baslangicTarihi, bitisTarihi, GetSahiplikTipi());
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task KarsilastirmaRaporuGetir()
+    {
+        isLoading = true;
+        performansOzet = null;
+        chartRendered = false;
+        StateHasChanged();
+
+        try
+        {
+            karsilastirma = await RaporService.GetSoforKarsilastirmaAsync(baslangicTarihi, bitisTarihi, GetSahiplikTipi());
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DetayGoster(int soforId)
+    {
+        secilenSoforId = soforId;
+        await RaporGetir();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!isLoading && performansOzet != null && performansOzet.AylikPerformans.Any() && !chartRendered)
+        {
+            chartRendered = true;
+            await RenderChartAsync();
+        }
+    }
+
+    private async Task RenderChartAsync()
+    {
+        try
+        {
+            var aylar = performansOzet!.AylikPerformans.Select(a => a.AyAdi).ToArray();
+            var seferler = performansOzet.AylikPerformans.Select(a => (double)a.SeferSayisi).ToArray();
+            var kazanclar = performansOzet.AylikPerformans.Select(a => (double)a.ToplamKazanc).ToArray();
+
+            await JS.InvokeVoidAsync("createBarChart",
+                "soforPerformansChart",
+                aylar,
+                kazanclar,
+                seferler,
+                "Kazanç (₺)",
+                "Sefer Sayısı");
+        }
+        catch
+        {
+            // Grafik render hatası - sessizce geç
+        }
+    }
+
+    private async Task ExceleAktar()
+    {
+        try
+        {
+            byte[] excelData;
+            string fileName;
+
+            if (karsilastirma != null && karsilastirma.Any())
+            {
+                excelData = ExcelService.ExportSoforKarsilastirmaRaporu(karsilastirma);
+                fileName = $"Sofor_Karsilastirma_{baslangicTarihi:yyyyMMdd}_{bitisTarihi:yyyyMMdd}.xlsx";
+            }
+            else if (performansOzet != null)
+            {
+                excelData = ExcelService.ExportSoforPerformansRaporu(performansOzet);
+                fileName = $"Sofor_Performans_{performansOzet.SoforAdi.Replace(" ", "_")}_{baslangicTarihi:yyyyMMdd}_{bitisTarihi:yyyyMMdd}.xlsx";
+            }
+            else
+            {
+                return;
+            }
+
+            await JS.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(excelData), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        }
+        catch
+        {
+            // Excel export hatası
+        }
+    }
+
+    private static string FormatTutar(decimal tutar) => tutar.ToString("N2") + " ₺";
+    
+    private static string FormatKisa(decimal tutar)
+    {
+        if (tutar >= 1_000_000)
+            return (tutar / 1_000_000).ToString("N1") + "M ₺";
+        if (tutar >= 1_000)
+            return (tutar / 1_000).ToString("N1") + "K ₺";
+        return tutar.ToString("N0") + " ₺";
+    }
+}
+

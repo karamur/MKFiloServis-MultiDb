@@ -1,6 +1,6 @@
-﻿# 🤝 Katkı Rehberi
+# 🤝 Katkı Rehberi
 
-KOAFiloServis'e katkıda bulunmak istediğiniz için teşekkürler! 🎉  
+MKFiloServis'e katkıda bulunmak istediğiniz için teşekkürler! 🎉  
 Bu doküman, projeye **kaliteli ve tutarlı** katkı sağlayabilmeniz için izlemeniz gereken adımları açıklar.
 
 ---
@@ -28,7 +28,7 @@ Bu projede **saygılı, kapsayıcı ve yapıcı** bir iletişim bekliyoruz. Her 
 
 ### 🐛 Hata Bildirimi
 
-1. [Açık issue'ları](https://github.com/karamur/KOAFiloServis/issues) kontrol edin — belki aynı sorun bildirilmiştir.
+1. [Açık issue'ları](https://github.com/karamur/MKFiloServis/issues) kontrol edin — belki aynı sorun bildirilmiştir.
 2. Yoksa **Bug Report** template ile yeni issue açın.
 3. Tekrar üretebilmemiz için **adım adım** açıklayın.
 
@@ -58,8 +58,8 @@ Lütfen issue açmayın. Detaylar için [`SECURITY.md`](SECURITY.md) dosyasına 
 ### İlk Kurulum
 
 ```bash
-git clone https://github.com/karamur/KOAFiloServis.git
-cd KOAFiloServis
+git clone https://github.com/karamur/MKFiloServis.git
+cd MKFiloServis
 dotnet restore
 dotnet build
 ```
@@ -115,7 +115,7 @@ perf(faturalar): liste sorgusu indekslendi (~%70 hızlanma)
 
 ```bash
 # 1) Fork → klonla
-git clone https://github.com/<kullanici-adin>/KOAFiloServis.git
+git clone https://github.com/<kullanici-adin>/MKFiloServis.git
 
 # 2) Yeni dal aç
 git checkout -b feature/harika-ozellik
@@ -202,4 +202,5 @@ dotnet test --collect:"XPlat Code Coverage"
 ## 🙏 Teşekkürler
 
 Her katkı (kod, doküman, hata raporu, fikir) bizim için değerlidir. ❤️  
-Sorularınız için: [Issues](https://github.com/karamur/KOAFiloServis/issues) ya da [Discussions](https://github.com/karamur/KOAFiloServis/discussions).
+Sorularınız için: [Issues](https://github.com/karamur/MKFiloServis/issues) ya da [Discussions](https://github.com/karamur/MKFiloServis/discussions).
+

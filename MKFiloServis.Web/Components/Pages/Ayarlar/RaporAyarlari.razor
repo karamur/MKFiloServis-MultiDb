@@ -1,0 +1,223 @@
+@page "/ayarlar/raporlar"
+@using MKFiloServis.Web.Services
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Rapor Ayarlari</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="bi bi-file-earmark-bar-graph me-2"></i>Servis Raporlari</h3>
+    </div>
+
+    <div class="row">
+        <!-- Sol: Rapor Listesi -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Mevcut Raporlar</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        @foreach (var rapor in raporlar)
+                        {
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi @rapor.Icon me-3 fs-4 @rapor.IconColor"></i>
+                                    <div>
+                                        <h6 class="mb-0">@rapor.Baslik</h6>
+                                        <small class="text-muted">@rapor.Aciklama</small>
+                                    </div>
+                                </div>
+                                <div>
+                                    <span class="badge bg-secondary me-2">@rapor.Kategori</span>
+                                    <button class="btn btn-sm btn-primary" @onclick="() => RaporaGit(rapor.Url)">
+                                        <i class="bi bi-box-arrow-up-right me-1"></i>Ac
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sag: Hizli Erisim -->
+        <div class="col-md-4">
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-lightning me-2"></i>Hizli Erisim</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-primary" @onclick='() => RaporaGit("/rapor/servis-calisma")'>
+                            <i class="bi bi-truck me-2"></i>Servis Calisma Raporu
+                        </button>
+                        <button class="btn btn-outline-success" @onclick='() => RaporaGit("/rapor/fatura-odeme")'>
+                            <i class="bi bi-receipt me-2"></i>Fatura Odeme Raporu
+                        </button>
+                        <button class="btn btn-outline-warning" @onclick='() => RaporaGit("/rapor/arac-masraf")'>
+                            <i class="bi bi-car-front me-2"></i>Arac Masraf Raporu
+                        </button>
+                        <button class="btn btn-outline-info" @onclick='() => RaporaGit("/mali-analiz")'>
+                            <i class="bi bi-graph-up me-2"></i>Mali Analiz
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Bilgi</h6>
+                </div>
+                <div class="card-body">
+                    <p class="mb-2"><small>Sistem tarafindan desteklenen raporlar:</small></p>
+                    <ul class="small mb-0">
+                        <li>Servis calisma raporlari</li>
+                        <li>Fatura ve odeme raporlari</li>
+                        <li>Arac masraf raporlari</li>
+                        <li>Cari ekstre raporlari</li>
+                        <li>Mali analiz raporlari</li>
+                        <li>Butce ve odeme raporlari</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<RaporBilgi> raporlar = new();
+
+    protected override void OnInitialized()
+    {
+        raporlar = new List<RaporBilgi>
+        {
+            // Servis Raporlari
+            new RaporBilgi 
+            { 
+                Baslik = "Servis Calisma Raporu", 
+                Aciklama = "Araclar ve guzergahlara gore servis calismalari", 
+                Url = "/rapor/servis-calisma", 
+                Icon = "bi-truck", 
+                IconColor = "text-primary",
+                Kategori = "Servis"
+            },
+            new RaporBilgi 
+            { 
+                Baslik = "Ozmal Arac Raporu", 
+                Aciklama = "Ozmal araclarin performans ve masraf raporu", 
+                Url = "/rapor/ozmal-arac", 
+                Icon = "bi-car-front", 
+                IconColor = "text-success",
+                Kategori = "Servis"
+            },
+            new RaporBilgi 
+            { 
+                Baslik = "Kiralik Arac Raporu", 
+                Aciklama = "Kiralik araclarin performans ve masraf raporu", 
+                Url = "/rapor/kiralik-arac", 
+                Icon = "bi-building", 
+                IconColor = "text-info",
+                Kategori = "Servis"
+            },
+
+            // Fatura Raporlari
+            new RaporBilgi 
+            { 
+                Baslik = "Fatura Odeme Raporu", 
+                Aciklama = "Fatura ve odeme durumu raporu", 
+                Url = "/rapor/fatura-odeme", 
+                Icon = "bi-receipt", 
+                IconColor = "text-success",
+                Kategori = "Fatura"
+            },
+            new RaporBilgi 
+            { 
+                Baslik = "Cari Ekstre", 
+                Aciklama = "Carilerin hesap hareketleri ve bakiye durumu", 
+                Url = "/raporlar/cari-ekstre", 
+                Icon = "bi-file-earmark-ruled", 
+                IconColor = "text-primary",
+                Kategori = "Fatura"
+            },
+
+            // Masraf Raporlari
+            new RaporBilgi 
+            { 
+                Baslik = "Arac Masraf Raporu", 
+                Aciklama = "Araclara gore masraf detaylari", 
+                Url = "/rapor/arac-masraf", 
+                Icon = "bi-fuel-pump", 
+                IconColor = "text-danger",
+                Kategori = "Masraf"
+            },
+
+            // Mali Raporlar
+            new RaporBilgi 
+            { 
+                Baslik = "Mali Analiz", 
+                Aciklama = "Gelir-gider analizi ve trendler", 
+                Url = "/mali-analiz", 
+                Icon = "bi-graph-up-arrow", 
+                IconColor = "text-success",
+                Kategori = "Mali"
+            },
+            new RaporBilgi 
+            { 
+                Baslik = "Butce Analiz", 
+                Aciklama = "Butce planlama ve takip", 
+                Url = "/butce", 
+                Icon = "bi-wallet2", 
+                IconColor = "text-primary",
+                Kategori = "Mali"
+            },
+            new RaporBilgi 
+            { 
+                Baslik = "Kredi Taksit Raporu", 
+                Aciklama = "Aktif krediler ve taksit takibi", 
+                Url = "/butce/kredi-raporu", 
+                Icon = "bi-credit-card", 
+                IconColor = "text-info",
+                Kategori = "Mali"
+            },
+
+            // Diger
+            new RaporBilgi 
+            { 
+                Baslik = "Aylik Checklist", 
+                Aciklama = "Aylik gorev ve kontrol listesi", 
+                Url = "/rapor/checklist", 
+                Icon = "bi-clipboard-check", 
+                IconColor = "text-secondary",
+                Kategori = "Diger"
+            },
+            new RaporBilgi 
+            { 
+                Baslik = "Belge Uyarilari", 
+                Aciklama = "Suresi dolan belgeler ve uyarilar", 
+                Url = "/belge-uyarilari", 
+                Icon = "bi-exclamation-triangle", 
+                IconColor = "text-warning",
+                Kategori = "Diger"
+            }
+        };
+    }
+
+    private void RaporaGit(string url)
+    {
+        Navigation.NavigateTo(url);
+    }
+
+    private class RaporBilgi
+    {
+        public string Baslik { get; set; } = "";
+        public string Aciklama { get; set; } = "";
+        public string Url { get; set; } = "";
+        public string Icon { get; set; } = "bi-file-text";
+        public string IconColor { get; set; } = "text-primary";
+        public string Kategori { get; set; } = "Diger";
+    }
+}
+

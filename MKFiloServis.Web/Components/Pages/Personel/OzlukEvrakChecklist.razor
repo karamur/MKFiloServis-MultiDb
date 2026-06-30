@@ -1,0 +1,1908 @@
+@page "/personel/ozluk-evrak"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Data
+@using MKFiloServis.Web.Helpers
+@using MKFiloServis.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@inject IPersonelOzlukService OzlukService
+@inject ISoforService SoforService
+@inject ISecureFileService SecureFileService
+@inject IEvrakArsivService EvrakArsivService
+@inject IToastService ToastService
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IJSRuntime JS
+@inject ILogger<OzlukEvrakChecklist> Logger
+@rendermode InteractiveServer
+
+<PageTitle>Personel Özlük Evrak Checklist</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4><i class="bi bi-clipboard-check me-2 text-warning"></i>Personel Özlük Evrak Checklist</h4>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0 small">
+                    <li class="breadcrumb-item"><a href="/dashboard">Ana Sayfa</a></li>
+                    <li class="breadcrumb-item"><a href="/personel">Personel</a></li>
+                    <li class="breadcrumb-item active">Özlük Evrak Checklist</li>
+                </ol>
+            </nav>
+        </div>
+        <div class="btn-group">
+            <button class="btn btn-outline-primary" @onclick="SeciliEksikListeAc" disabled="@(!seciliSoforIdler.Any())">
+                <i class="bi bi-list-check me-1"></i>Seçili Eksik Listesi
+            </button>
+            <button class="btn btn-outline-dark" @onclick="BosPersonelDosyasiIndir">
+                <i class="bi bi-file-earmark-plus me-1"></i>Boş Personel Dosyası
+            </button>
+            <button class="btn btn-outline-success" @onclick="ExcelIndir">
+                <i class="bi bi-file-earmark-excel me-1"></i>Tüm Checklist Excel
+            </button>
+            <button class="btn btn-outline-secondary" @onclick="EvrakTanimModalAc">
+                <i class="bi bi-gear me-1"></i>Evrak Tanımları
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtreler -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-center">
+                <div class="col-md-3">
+                    <select class="form-select form-select-sm" @bind="filtreGorev">
+                        <option value="">Tüm Görevler</option>
+                        @foreach (PersonelGorev gorev in Enum.GetValues<PersonelGorev>())
+                        {
+                            <option value="@((int)gorev)">@GetGorevAdi(gorev)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select class="form-select form-select-sm" @bind="filtreDurum">
+                        <option value="">Tüm Durumlar</option>
+                        <option value="eksik">Eksik Evraklı</option>
+                        <option value="tamam">Tamamlanmış</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <input type="text" class="form-control form-control-sm" placeholder="Personel ara..." 
+                           @bind="aramaMetni" @bind:event="oninput" />
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-sm btn-primary w-100" @onclick="LoadData">
+                        <i class="bi bi-search me-1"></i>Filtrele
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Özet Kartlar -->
+    @if (durumlar != null)
+    {
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body text-center py-3">
+                        <h3 class="mb-0">@durumlar.Count</h3>
+                        <small>Toplam Personel</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body text-center py-3">
+                        <h3 class="mb-0">@durumlar.Count(d => d.EksikEvrak == 0)</h3>
+                        <small>Dosyası Tam</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-dark">
+                    <div class="card-body text-center py-3">
+                        <h3 class="mb-0">@durumlar.Count(d => d.EksikEvrak > 0)</h3>
+                        <small>Eksik Evraklı</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body text-center py-3">
+                        <h3 class="mb-0">@(durumlar.Count > 0 ? Math.Round(durumlar.Average(d => d.TamamlanmaYuzdesi), 1) : 0)%</h3>
+                        <small>Ortalama Tamamlanma</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Personel Listesi -->
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th class="text-center" style="width: 40px;">
+                                    <input class="form-check-input" type="checkbox" checked="@TumFiltrelenmislerSecili" @onchange="TumunuSec" />
+                                </th>
+                                <th>Personel</th>
+                                <th>Görev</th>
+                                <th class="text-center">Toplam</th>
+                                <th class="text-center">Tamam</th>
+                                <th class="text-center">Eksik</th>
+                                <th class="text-center">Durum</th>
+                                <th class="text-center" style="width: 150px;">İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var durum in FiltrelenmisListe)
+                            {
+                                <tr>
+                                    <td class="text-center align-middle">
+                                        <input class="form-check-input" type="checkbox" checked="@seciliSoforIdler.Contains(durum.SoforId)"
+                                               @onchange="e => PersonelSecimDegistir(durum.SoforId, (bool)e.Value!)" />
+                                    </td>
+                                    <td>
+                                        <strong>@durum.PersonelAdi</strong>
+                                        <br /><small class="text-muted">@durum.PersonelKodu</small>
+                                        @if (durum.EksikEvrak > 0)
+                                        {
+                                            <div class="mt-1">
+                                                @if (GetZorunluEksikEvrakSayisi(durum) > 0)
+                                                {
+                                                    <span class="badge bg-danger me-1">@GetZorunluEksikEvrakSayisi(durum) zorunlu eksik</span>
+                                                }
+                                                <small class="text-danger d-block">
+                                                    <i class="bi bi-exclamation-circle me-1"></i>@GetEksikEvrakOzeti(durum)
+                                                </small>
+                                            </div>
+                                        }
+                                    </td>
+                                    <td>@GetGorevAdi(durum.Gorev)</td>
+                                    <td class="text-center">@durum.ToplamEvrak</td>
+                                    <td class="text-center text-success">@durum.TamamlananEvrak</td>
+                                    <td class="text-center text-danger">@durum.EksikEvrak</td>
+                                    <td class="text-center">
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar @(durum.TamamlanmaYuzdesi == 100 ? "bg-success" : durum.TamamlanmaYuzdesi >= 50 ? "bg-warning" : "bg-danger")" 
+                                                 role="progressbar" style="width: @durum.TamamlanmaYuzdesi%">
+                                                %@durum.TamamlanmaYuzdesi
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => DetayAc(durum.SoforId)"
+                                                title="Detay Görüntüle">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-dark me-1" @onclick="() => PersonelDosyasiIndir(durum.SoforId)"
+                                                title="Dosya Hazırla">
+                                            <i class="bi bi-file-earmark-text"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-success me-1" @onclick="() => PdfIndir(durum.SoforId)"
+                                                title="PDF İndir">
+                                            <i class="bi bi-file-pdf"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Detay Modal -->
+@if (showDetayModal && seciliDurum != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-clipboard-check me-2"></i>
+                        @seciliDurum.PersonelAdi - Özlük Evrak Checklist
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="DetayKapat"></button>
+                </div>
+                <div class="modal-body">
+
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <button type="button" class="btn btn-sm @(detayBelgeFiltre == "" ? "btn-primary" : "btn-outline-primary")"
+                                @onclick='() => detayBelgeFiltre = ""'>Tümü</button>
+                        <button type="button" class="btn btn-sm @(detayBelgeFiltre == "ehliyet" ? "btn-primary" : "btn-outline-primary")"
+                                @onclick='() => detayBelgeFiltre = "ehliyet"'>Ehliyet</button>
+                        <button type="button" class="btn btn-sm @(detayBelgeFiltre == "diploma" ? "btn-primary" : "btn-outline-primary")"
+                                @onclick='() => detayBelgeFiltre = "diploma"'>Diploma</button>
+                        <button type="button" class="btn btn-sm @(detayBelgeFiltre == "sertifika" ? "btn-primary" : "btn-outline-primary")"
+                                @onclick='() => detayBelgeFiltre = "sertifika"'>Sertifika</button>
+                        <button type="button" class="btn btn-sm @(detayBelgeFiltre == "saglik" ? "btn-primary" : "btn-outline-primary")"
+                                @onclick='() => detayBelgeFiltre = "saglik"'>Sağlık Raporu</button>
+                        <button type="button" class="btn btn-sm @(detayBelgeFiltre == "sozlesme" ? "btn-primary" : "btn-outline-primary")"
+                                @onclick='() => detayBelgeFiltre = "sozlesme"'>İş Sözleşmesi</button>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-8">
+                            <input type="text"
+                                   class="form-control form-control-sm"
+                                   placeholder="Evrak ara..."
+                                   @bind="detayAramaMetni"
+                                   @bind:event="oninput" />
+                        </div>
+                        <div class="col-md-4 d-flex align-items-center">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="detaySadeceEksik" @bind="detaySadeceEksik" />
+                                <label class="form-check-label" for="detaySadeceEksik">Sadece eksikler</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Özet -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <div class="card border-primary">
+                                <div class="card-body text-center py-2">
+                                    <h4 class="mb-0 text-primary">@seciliDurum.ToplamEvrak</h4>
+                                    <small>Toplam Evrak</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card border-success">
+                                <div class="card-body text-center py-2">
+                                    <h4 class="mb-0 text-success">@seciliDurum.TamamlananEvrak</h4>
+                                    <small>Tamamlanan</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card border-danger">
+                                <div class="card-body text-center py-2">
+                                    <h4 class="mb-0 text-danger">@seciliDurum.EksikEvrak</h4>
+                                    <small>Eksik</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card border-info">
+                                <div class="card-body text-center py-2">
+                                    <h4 class="mb-0 text-info">%@seciliDurum.TamamlanmaYuzdesi</h4>
+                                    <small>Tamamlanma</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (seciliDurum.EksikEvrak > 0)
+                    {
+                        <div class="alert alert-warning py-2 mb-3">
+                            <div class="fw-semibold mb-1">
+                                <i class="bi bi-exclamation-triangle me-1"></i>Eksik Evrak Özeti
+                            </div>
+                            <small>@GetEksikEvrakOzeti(seciliDurum, 6)</small>
+                        </div>
+                    }
+
+                    <!-- Evrak Listesi Kategorilere Göre -->
+                    @foreach (var kategori in FiltrelenmisSeciliEvraklar.GroupBy(e => e.Kategori).OrderBy(g => g.Key))
+                    {
+                        <div class="card mb-3">
+                            <div class="card-header bg-light py-2">
+                                <strong><i class="bi bi-folder me-1"></i>@GetKategoriAdi(kategori.Key)</strong>
+                                <span class="badge @(kategori.All(e => e.Tamamlandi) ? "bg-success" : "bg-warning") float-end">
+                                    @kategori.Count(e => e.Tamamlandi) / @kategori.Count()
+                                </span>
+                            </div>
+                            <div class="card-body p-0">
+                                <table class="table table-sm mb-0">
+                                    <tbody>
+                                        @foreach (var evrak in kategori.OrderBy(e => e.EvrakAdi))
+                                        {
+                                            <tr class="@(GetRowClass(evrak))">
+                                                <td style="width: 40px;">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox"
+                                                               checked="@IsEvrakTamam(evrak)"
+                                                               @onchange="e => EvrakDurumDegistir(seciliDurum.SoforId, evrak.EvrakTanimId, (bool)e.Value!)" />
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    @evrak.EvrakAdi
+                                                    @if (evrak.Zorunlu)
+                                                    {
+                                                        <span class="badge bg-danger ms-1">Zorunlu</span>
+                                                    }
+                                                    @{ var ye = GetYeniEvrak(evrak.EvrakAdi); }
+                                                    @if (ye != null)
+                                                    {
+                                                        <br /><small class="text-success"><i class="bi bi-file-check me-1"></i>@ye.DosyaAdi</small>
+                                                    }
+                                                    @if (!string.IsNullOrEmpty(evrak.Aciklama))
+                                                    {
+                                                        <br /><small class="text-muted">@evrak.Aciklama</small>
+                                                    }
+                                                </td>
+                                                <td class="text-center" style="width: 100px;">
+                                                    @if (IsEvrakTamam(evrak))
+                                                    {
+                                                        <span class="badge bg-success">
+                                                            <i class="bi bi-check-circle me-1"></i>@(ye != null && !evrak.Tamamlandi ? "DB'de var" : "Tamam")
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-secondary">
+                                                            <i class="bi bi-x-circle me-1"></i>Eksik
+                                                        </span>
+                                                    }
+                                                </td>
+                                                 <td class="text-end text-muted" style="width: 100px;">
+                                                    @if (evrak.TamamlanmaTarihi.HasValue)
+                                                    {
+                                                        <small>@evrak.TamamlanmaTarihi.Value.ToString("dd.MM.yyyy")</small>
+                                                    }
+                                                </td>
+                                                 <td style="width: 420px;">
+                                                     <div class="d-flex gap-2 align-items-center">
+                                                         @if (GecerlilikTarihiDestekleniyor(evrak))
+                                                         {
+                                                             <input type="date"
+                                                                    class="form-control form-control-sm"
+                                                                    style="max-width: 150px;"
+                                                                    value="@FormatDateInput(GetEvrakGecerlilikTarihi(evrak.EvrakTanimId))"
+                                                                    title="@(EvrakTuruBelirle(evrak) == "Sozlesme" ? "Sözleşme tarihi" : "Geçerlilik tarihi")"
+                                                                    @onchange="e => EvrakGecerlilikTarihiDegistiAsync(seciliDurum.SoforId, evrak, e)" />
+                                                         }
+                                                         @if (!string.IsNullOrWhiteSpace(evrak.DosyaYolu))
+                                                         {
+                                                             <button type="button" class="btn btn-sm btn-outline-primary"
+                                                                     title="Önizle"
+                                                                     @onclick="() => EvrakOnizle(evrak)">
+                                                                 <i class="bi bi-eye"></i>
+                                                             </button>
+                                                             <button type="button" class="btn btn-sm btn-outline-secondary"
+                                                                     title="Dosyayı indir"
+                                                                     @onclick="() => EvrakDosyasiIndir(evrak)">
+                                                                 <i class="bi bi-download"></i>
+                                                             </button>
+                                                             <button type="button" class="btn btn-sm btn-outline-dark"
+                                                                     title="Yazdır"
+                                                                     @onclick="() => EvrakYazdir(evrak)">
+                                                                 <i class="bi bi-printer"></i>
+                                                             </button>
+                                                         }
+                                                         <InputFile class="form-control form-control-sm"
+                                                                    OnChange="e => EvrakDosyaSecildi(seciliDurum.SoforId, evrak, e)"
+                                                                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" />
+                                                     </div>
+                                                 </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" @onclick="() => PdfIndir(seciliDurum.SoforId)">
+                        <i class="bi bi-file-pdf me-1"></i>PDF İndir
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="DetayKapat">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Önizleme Modal -->
+@if (onizlemeModalAcik)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,.5);">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@onizlemeBaslik</h5>
+                    <button type="button" class="btn-close" @onclick="OnizlemeKapat"></button>
+                </div>
+
+                <div class="modal-body" style="min-height: 75vh;">
+                    @if (!onizlemeDestekleniyor)
+                    {
+                        <div class="alert alert-warning">
+                            Bu dosya türü için önizleme desteklenmiyor. Dosyayı indirerek açabilirsiniz.
+                        </div>
+                    }
+                    else if (onizlemeContentType == "application/pdf")
+                    {
+                        <iframe src="@onizlemeDataUrl"
+                                style="width:100%; height:75vh; border:0;">
+                        </iframe>
+                    }
+                    else if (onizlemeContentType?.StartsWith("image/") == true)
+                    {
+                        <img src="@onizlemeDataUrl"
+                             style="max-width:100%; height:auto;"
+                             alt="@onizlemeBaslik" />
+                    }
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="OnizlemeKapat">Kapat</button>
+                    <button class="btn btn-outline-primary"
+                            @onclick="OnizlenenDosyayiIndir">
+                        <i class="bi bi-download me-1"></i>İndir
+                    </button>
+                    <button class="btn btn-primary"
+                            @onclick="OnizlenenDosyayiYazdir"
+                            disabled="@(!onizlemeDestekleniyor)">
+                        <i class="bi bi-printer me-1"></i>Yazdır
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Evrak Tanım Modal -->
+@if (showTanimModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-secondary text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-gear me-2"></i>Evrak Tanımları
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="TanimModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="d-flex justify-content-end mb-3">
+                        <button class="btn btn-sm btn-success" @onclick="YeniEvrakTanimEkle">
+                            <i class="bi bi-plus-lg me-1"></i>Yeni Evrak Ekle
+                        </button>
+                    </div>
+
+                    @if (evrakTanimlari != null)
+                    {
+                        @foreach (var kategori in evrakTanimlari.GroupBy(e => e.Kategori).OrderBy(g => g.Key))
+                        {
+                            <div class="card mb-2">
+                                <div class="card-header bg-light py-2">
+                                    <strong>@GetKategoriAdi(kategori.Key)</strong>
+                                </div>
+                                <ul class="list-group list-group-flush">
+                                    @foreach (var tanim in kategori.OrderBy(t => t.SiraNo))
+                                    {
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <div>
+                                                @tanim.EvrakAdi
+                                                @if (tanim.Zorunlu)
+                                                {
+                                                    <span class="badge bg-danger ms-1">Zorunlu</span>
+                                                }
+                                                @if (!tanim.Aktif)
+                                                {
+                                                    <span class="badge bg-secondary ms-1">Pasif</span>
+                                                }
+                                            </div>
+                                            <div>
+                                                <button class="btn btn-sm btn-outline-primary me-1" 
+                                                        @onclick="() => EvrakTanimDuzenle(tanim)">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-danger" 
+                                                        @onclick="() => EvrakTanimSil(tanim.Id)">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="TanimModalKapat">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Evrak Tanım Düzenle Modal -->
+@if (showTanimDuzenleModal && duzenlenecekTanim != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-pencil me-2"></i>Evrak Tanımı @(duzenlenecekTanim.Id == 0 ? "Ekle" : "Düzenle")
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="TanimDuzenleKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Evrak Adı *</label>
+                        <input type="text" class="form-control" @bind="duzenlenecekTanim.EvrakAdi" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Kategori</label>
+                        <select class="form-select" @bind="duzenlenecekTanim.Kategori">
+                            @foreach (OzlukEvrakKategori kat in Enum.GetValues<OzlukEvrakKategori>())
+                            {
+                                <option value="@kat">@GetKategoriAdi(kat)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Açıklama</label>
+                        <textarea class="form-control" rows="2" @bind="duzenlenecekTanim.Aciklama"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Sıra No</label>
+                                <input type="number" class="form-control" @bind="duzenlenecekTanim.SiraNo" />
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Geçerli Görevler</label>
+                                <input type="text" class="form-control" @bind="duzenlenecekTanim.GecerliGorevler" 
+                                       placeholder="Boş: Tümü, örn: 1,2" />
+                                <small class="text-muted">1:Şoför, 2:Ofis, 3:Muhasebe, 4:Yönetici</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" @bind="duzenlenecekTanim.Zorunlu" id="zorunluCheck" />
+                                <label class="form-check-label" for="zorunluCheck">Zorunlu</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" @bind="duzenlenecekTanim.Aktif" id="aktifCheck" />
+                                <label class="form-check-label" for="aktifCheck">Aktif</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" @onclick="EvrakTanimKaydet">
+                        <i class="bi bi-check-lg me-1"></i>Kaydet
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="TanimDuzenleKapat">İptal</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Seçili Eksik Evrak Listesi Modal -->
+@if (showEksikListeModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title">
+                        <i class="bi bi-exclamation-triangle me-2"></i>Seçili Personeller Eksik Evrak Listesi
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="EksikListeKapat"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!seciliEksikDurumlar.Any())
+                    {
+                        <div class="alert alert-success mb-0">
+                            Seçili personellerde eksik evrak bulunmuyor.
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var durum in seciliEksikDurumlar)
+                        {
+                            var eksikEvraklar = durum.Evraklar.Where(e => !e.Tamamlandi).OrderBy(e => e.Kategori).ThenBy(e => e.EvrakAdi).ToList();
+
+                            <div class="card mb-3">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>@durum.PersonelAdi</strong>
+                                        <small class="text-muted ms-2">@durum.PersonelKodu</small>
+                                    </div>
+                                    <span class="badge bg-danger">@eksikEvraklar.Count eksik</span>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm mb-0">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>Kategori</th>
+                                                    <th>Evrak</th>
+                                                    <th>Durum</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var evrak in eksikEvraklar)
+                                                {
+                                                    <tr>
+                                                        <td>@GetKategoriAdi(evrak.Kategori)</td>
+                                                        <td>
+                                                            @evrak.EvrakAdi
+                                                            @if (evrak.Zorunlu)
+                                                            {
+                                                                <span class="badge bg-danger ms-1">Zorunlu</span>
+                                                            }
+                                                        </td>
+                                                        <td><span class="badge bg-secondary">Eksik</span></td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="EksikListeKapat">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Çoklu Aday Seçim Modalı — Sertifika gibi birden fazla OzlukEvrakTanim olan tipler için *@
+@if (showCokluAdayModal && _cokluAdaylar.Count > 1)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-question-circle me-2"></i>Hangi Evrak Tipi?
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CokluAdayIptal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>"@_cokluAdayCanonicalTip" için birden fazla evrak tanımı bulundu. Lütfen yüklemek istediğiniz belgeyi seçin:</p>
+
+                    <div class="list-group">
+                        @foreach (var aday in _cokluAdaylar.OrderBy(a => a.Zorunlu ? 0 : 1).ThenBy(a => a.SiraNo))
+                        {
+                            <label class="list-group-item list-group-item-action @(_cokluAdaySeciliTanimId == aday.Id ? "active" : "")"
+                                   @onclick="() => _cokluAdaySeciliTanimId = aday.Id">
+                                <input type="radio" class="form-check-input me-2"
+                                       checked="@(_cokluAdaySeciliTanimId == aday.Id)"
+                                       @onchange="() => _cokluAdaySeciliTanimId = aday.Id" />
+                                <strong>@aday.EvrakAdi</strong>
+                                @if (aday.Zorunlu)
+                                {
+                                    <span class="badge bg-danger ms-1">Zorunlu</span>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(aday.Aciklama))
+                                {
+                                    <br /><small class="text-muted">@aday.Aciklama</small>
+                                }
+                            </label>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CokluAdayIptal">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="CokluAdayOnayla"
+                            disabled="@(_cokluAdaySeciliTanimId == 0)">
+                        <i class="bi bi-upload me-1"></i>Bu Belgeyi Yükle
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<PersonelOzlukEvrakDurum>? durumlar;
+    private List<OzlukEvrakTanim>? evrakTanimlari;
+    private List<PersonelOzlukEvrakDurum> seciliEksikDurumlar = new();
+    private PersonelOzlukEvrakDurum? seciliDurum;
+    private OzlukEvrakTanim? duzenlenecekTanim;
+
+    private bool showDetayModal;
+    private bool showTanimModal;
+    private bool showTanimDuzenleModal;
+    private bool showEksikListeModal;
+    private bool showCokluAdayModal; // Sertifika gibi çoklu OzlukEvrakTanim adayı için seçim modalı
+    private List<EvrakDosya> _yeniEvraklar = new(); // YENI sistem — EvrakDosya tablosu
+    /// <summary>
+    /// Eski sistemden (PersonelOzlukEvrak) tamamlanmış evrakların canonical kategorileri.
+    /// EvrakYonetimi bileşenine gönderilir, böylece hızlı kartlar eksik göstermez.
+    /// </summary>
+    private HashSet<string> _mevcutTipler = new();
+
+    // Çoklu aday (Sertifika) seçim state
+    private List<OzlukEvrakTanim> _cokluAdaylar = new();
+    private string _cokluAdayCanonicalTip = string.Empty;
+    private IBrowserFile? _cokluAdayFile;
+    private DateTime? _cokluAdayGecerlilikTarihi;
+    private int _cokluAdaySeciliTanimId;
+
+    // Önizleme state
+    private bool onizlemeModalAcik;
+    private string? onizlemeBaslik;
+    private string? onizlemeContentType;
+    private string? onizlemeBase64;
+    private string? onizlemeDataUrl;
+    private string? onizlemeDosyaAdi;
+    private bool onizlemeDestekleniyor;
+
+    private string filtreGorev = "";
+    private string filtreDurum = "";
+    private string aramaMetni = "";
+    private string detayBelgeFiltre = "";
+    private string detayAramaMetni = "";
+    private bool detaySadeceEksik;
+    private HashSet<int> seciliSoforIdler = new();
+    private readonly Dictionary<int, DateTime?> evrakGecerlilikTarihleri = new();
+
+    private IEnumerable<PersonelOzlukEvrakDurum> FiltrelenmisListe => durumlar?
+        .Where(d => string.IsNullOrEmpty(filtreGorev) || ((int)d.Gorev).ToString() == filtreGorev)
+        .Where(d => string.IsNullOrEmpty(filtreDurum) || 
+                    (filtreDurum == "eksik" && d.EksikEvrak > 0) || 
+                    (filtreDurum == "tamam" && d.EksikEvrak == 0))
+        .Where(d => string.IsNullOrEmpty(aramaMetni) || 
+                    d.PersonelAdi.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase) ||
+                    d.PersonelKodu.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase))
+        ?? Enumerable.Empty<PersonelOzlukEvrakDurum>();
+
+    private bool TumFiltrelenmislerSecili => FiltrelenmisListe.Any() && FiltrelenmisListe.All(d => seciliSoforIdler.Contains(d.SoforId));
+
+    private IEnumerable<OzlukEvrakDetay> FiltrelenmisSeciliEvraklar => (seciliDurum?.Evraklar ?? new List<OzlukEvrakDetay>())
+        .Where(e => DetayBelgeFiltreUyuyor(e, detayBelgeFiltre))
+        .Where(e => !detaySadeceEksik || !e.Tamamlandi)
+        .Where(e => string.IsNullOrWhiteSpace(detayAramaMetni)
+                    || e.EvrakAdi.Contains(detayAramaMetni, StringComparison.OrdinalIgnoreCase)
+                    || GetKategoriAdi(e.Kategori).Contains(detayAramaMetni, StringComparison.OrdinalIgnoreCase)
+                    || (!string.IsNullOrWhiteSpace(e.Aciklama) && e.Aciklama.Contains(detayAramaMetni, StringComparison.OrdinalIgnoreCase)))
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+        if (SoforId.HasValue && SoforId.Value > 0)
+        {
+            await DetayAc(SoforId.Value);
+        }
+    }
+
+    [SupplyParameterFromQuery(Name = "soforId")]
+    public int? SoforId { get; set; }
+
+    private async Task LoadData()
+    {
+        durumlar = await OzlukService.GetTumPersonelEvrakDurumlariAsync();
+        seciliSoforIdler.IntersectWith(durumlar.Select(d => d.SoforId));
+    }
+
+    private async Task DetayAc(int soforId)
+    {
+        seciliDurum = await OzlukService.GetPersonelEvrakDurumuAsync(soforId);
+        await EvrakGecerlilikTarihleriniYukleAsync(soforId);
+
+        // YENI sistem — EvrakDosya tablosundan bu personelin evraklarını yükle
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _yeniEvraklar = await db.EvrakDosyalari
+                .Where(x => x.PersonelId == soforId && !x.IsDeleted)
+                .ToListAsync();
+        }
+        catch { _yeniEvraklar = new(); }
+
+        // Eski sistemden tamamlanmış evrakların canonical kategorilerini hesapla
+        _mevcutTipler = new HashSet<string>();
+        if (seciliDurum != null)
+        {
+            foreach (var evrak in seciliDurum.Evraklar.Where(e => e.Tamamlandi))
+            {
+                var canonical = EvrakTipiCanonicalMapper.GetCanonicalName(evrak.EvrakAdi);
+                if (canonical != null)
+                    _mevcutTipler.Add(canonical);
+            }
+        }
+
+        showDetayModal = true;
+    }
+
+    /// <summary>
+    /// Eski evrak tipine (Örn: "Kimlik Fotokopisi") karşılık gelen yeni EvrakDosya kaydını bul.
+    /// Canonical mapper ile aynı kategoriye ait olup olmadığını kontrol eder.
+    /// </summary>
+    private EvrakDosya? GetYeniEvrak(string evrakAdi)
+    {
+        if (string.IsNullOrWhiteSpace(evrakAdi))
+            return null;
+
+        var canonical = EvrakTipiCanonicalMapper.GetCanonicalName(evrakAdi);
+        if (canonical == null)
+        {
+            // Fallback: eski Contains mantığı
+            return _yeniEvraklar.FirstOrDefault(x =>
+                string.Equals(x.EvrakTipi, evrakAdi, StringComparison.OrdinalIgnoreCase) ||
+                x.EvrakTipi.Contains(evrakAdi, StringComparison.OrdinalIgnoreCase) ||
+                evrakAdi.Contains(x.EvrakTipi, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return _yeniEvraklar.FirstOrDefault(x =>
+            EvrakTipiCanonicalMapper.BelongsToCategory(x.EvrakTipi, canonical));
+    }
+
+    private bool IsEvrakTamam(OzlukEvrakDetay evrak)
+    {
+        return evrak.Tamamlandi || GetYeniEvrak(evrak.EvrakAdi) != null;
+    }
+
+    private string GetRowClass(OzlukEvrakDetay evrak)
+    {
+        return IsEvrakTamam(evrak) ? "table-success" : "";
+    }
+
+    private void DetayKapat()
+    {
+        showDetayModal = false;
+        seciliDurum = null;
+        detayBelgeFiltre = "";
+        detayAramaMetni = "";
+        detaySadeceEksik = false;
+        evrakGecerlilikTarihleri.Clear();
+    }
+
+    /// <summary>EvrakYonetimi component'inden gelen refresh sinyali — detayı ve ana listeyi DB'den yeniler.</summary>
+    private async Task EvrakGuncellendi()
+    {
+        if (seciliDurum == null) return;
+        await DetayAc(seciliDurum.SoforId);
+        await LoadData();
+        StateHasChanged();
+    }
+
+    private async Task EvrakDurumDegistir(int soforId, int evrakTanimId, bool tamamlandi)
+    {
+        try
+        {
+            await OzlukService.EvrakIsaretle(soforId, evrakTanimId, tamamlandi);
+            seciliDurum = await OzlukService.GetPersonelEvrakDurumuAsync(soforId);
+            await LoadData();
+            ToastService.ShowSuccess(tamamlandi ? "Evrak tamamlandı olarak işaretlendi." : "Evrak işareti kaldırıldı.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+    }
+
+    /// <summary>Detay checklist input'undan gelen upload.</summary>
+    private async Task EvrakDosyaSecildi(int soforId, OzlukEvrakDetay evrak, InputFileChangeEventArgs e)
+    {
+        if (e.File == null) return;
+        await UploadOzlukEvrakDosyasiAsync(soforId, evrak, e.File);
+    }
+
+    /// <summary>
+    /// ORTAK UPLOAD METODU — hem detay checklist hem hızlı kart burayı kullanır.
+    /// SecureFileService + PersonelOzlukEvrak üzerinden kaydeder.
+    /// </summary>
+    private async Task UploadOzlukEvrakDosyasiAsync(int soforId, OzlukEvrakDetay evrak, IBrowserFile file)
+    {
+        string? yeniDosyaYolu = null;
+        try
+        {
+            var oncekiDosyaYolu = evrak.DosyaYolu;
+            await using var stream = file.OpenReadStream(10 * 1024 * 1024);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+
+            var icerik = memoryStream.ToArray();
+            var uzanti = Path.GetExtension(file.Name);
+
+            // Personel arşiv klasörünü oluştur: {Ad Soyad} - {FirmaAdi}
+            string personelKlasoru;
+            string normAd, normSoyad;
+            try
+            {
+                var sofor = await SoforService.GetByIdAsync(soforId);
+                var firmaAdi = sofor?.Firma?.FirmaAdi;
+                normAd = AppStoragePaths.NormalizeFolderName(sofor?.Ad ?? "PERSONEL");
+                normSoyad = AppStoragePaths.NormalizeFolderName(sofor?.Soyad ?? soforId.ToString());
+                personelKlasoru = AppStoragePaths.BuildPersonelArsivKlasoru(
+                    sofor?.Ad ?? "PERSONEL",
+                    sofor?.Soyad ?? soforId.ToString(),
+                    firmaAdi);
+            }
+            catch
+            {
+                var fallbackAdSoyad = seciliDurum?.PersonelAdi ?? soforId.ToString();
+                normAd = AppStoragePaths.NormalizeFolderName(fallbackAdSoyad);
+                normSoyad = "";
+                personelKlasoru = AppStoragePaths.NormalizeFolderName(fallbackAdSoyad);
+            }
+
+            // Dosya adı: {PERSONELADSOYAD}{EvrakTipi}_{yyyyMMdd_HHmmss}.uzanti
+            var normEvrakAdi = AppStoragePaths.NormalizeFolderName(evrak.EvrakAdi).Replace(" ", "").Replace("-", "");
+            var arsivDosyaAdi = $"{normAd}{normSoyad}{normEvrakAdi}_{DateTime.Now:yyyyMMdd_HHmmss}{uzanti}";
+
+            yeniDosyaYolu = await SecureFileService.SaveEncryptedAsync(
+                $"{AppStoragePaths.PersonelEvrakRelativeRoot}/{personelKlasoru}",
+                arsivDosyaAdi,
+                icerik);
+
+            // Arşiv kopyaları
+            var adSoyad = seciliDurum?.PersonelAdi ?? soforId.ToString();
+            try
+            {
+                await EvrakArsivService.ArsivlePersonelEvrakAsync(adSoyad, evrak.EvrakAdi, icerik, uzanti);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Personel evrak arşivleme başarısız oldu. PersonelId={PersonelId}, Evrak={Evrak}", soforId, evrak.EvrakAdi);
+            }
+
+            await OzlukService.EvrakDosyaYukle(soforId, evrak.EvrakTanimId, yeniDosyaYolu);
+            await PersonelBelgeTarihiniGuncelleAsync(soforId, evrak);
+            seciliDurum = await OzlukService.GetPersonelEvrakDurumuAsync(soforId);
+            await EvrakGecerlilikTarihleriniYukleAsync(soforId);
+            await LoadData();
+
+            // Yeni kayıt başarıyla tamamlandıktan sonra eski fiziksel dosyayı temizle.
+            if (!string.IsNullOrWhiteSpace(oncekiDosyaYolu) &&
+                !string.Equals(oncekiDosyaYolu, yeniDosyaYolu, StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    await SecureFileService.DeleteAsync(oncekiDosyaYolu);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Eski personel evrak dosyası silinemedi. SoforId={SoforId}, Yol={Yol}", soforId, oncekiDosyaYolu);
+                }
+            }
+
+            ToastService.ShowSuccess($"{evrak.EvrakAdi} dosyası yüklendi.");
+
+            // Başarılı upload sonrası: aynı canonical kategorideki eski/kayıp EvrakDosya kayıtlarını temizle.
+            // Bunlar eski bozuk hızlı upload sisteminden kalma, yanlış path'li kayıtlardır.
+            // Yeni kayıt PersonelOzlukEvrak'ta olduğu için EvrakDosya'daki gölge kayda gerek yok.
+            await TemizleStaleEvrakDosyaKayitlariAsync(soforId, evrak.EvrakAdi);
+        }
+        catch (Exception ex)
+        {
+            if (!string.IsNullOrWhiteSpace(yeniDosyaYolu))
+            {
+                try
+                {
+                    await SecureFileService.DeleteAsync(yeniDosyaYolu);
+                }
+                catch (Exception cleanupEx)
+                {
+                    Logger.LogWarning(cleanupEx, "Başarısız upload sonrası yeni dosya temizlenemedi. SoforId={SoforId}, Yol={Yol}", soforId, yeniDosyaYolu);
+                }
+            }
+
+            Logger.LogError(ex, "Personel ozluk evrak yukleme hatasi. SoforId={SoforId}, EvrakTanimId={EvrakTanimId}, FileName={FileName}",
+                soforId, evrak.EvrakTanimId, file?.Name);
+            ToastService.ShowError($"Dosya yüklenemedi: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Hızlı Evrak Yükleme kartından gelen upload isteği.
+    /// Canonical tipi ("Kimlik") → doğru OzlukEvrakTanim ("Kimlik Fotokopisi") bulur
+    /// → ortak UploadOzlukEvrakDosyasiAsync ile kaydeder.
+    /// Çoklu aday (Sertifika → SRC/Psikoteknik/ADR/MYK) varsa seçim modalı gösterir.
+    /// </summary>
+    private async Task HizliEvrakYukleAsync(IBrowserFile file, string canonicalTip, DateTime? gecerlilikTarihi)
+    {
+        if (seciliDurum == null) return;
+        var soforId = seciliDurum.SoforId;
+
+        // Tüm eşleşen adayları bul
+        var evrakTanimlari = await OzlukService.GetAktifEvrakTanimlariAsync();
+        var candidates = evrakTanimlari
+            .Where(t => EvrakTipiCanonicalMapper.BelongsToCategory(t.EvrakAdi, canonicalTip))
+            .ToList();
+
+        if (candidates.Count == 0)
+        {
+            // Fallback: GetPrimaryAlias ile dene
+            var primaryAlias = EvrakTipiCanonicalMapper.GetPrimaryAlias(canonicalTip);
+            if (primaryAlias != null)
+            {
+                var exact = evrakTanimlari.FirstOrDefault(t =>
+                    string.Equals(t.EvrakAdi, primaryAlias, StringComparison.OrdinalIgnoreCase));
+                if (exact != null) candidates.Add(exact);
+            }
+        }
+
+        if (candidates.Count == 0)
+        {
+            ToastService.ShowWarning($"'{canonicalTip}' için eşleşen evrak tanımı bulunamadı.");
+            return;
+        }
+
+        // Çoklu aday → kullanıcıya seçim modalı göster
+        if (candidates.Count > 1)
+        {
+            _cokluAdaylar = candidates;
+            _cokluAdayCanonicalTip = canonicalTip;
+            _cokluAdayFile = file;
+            _cokluAdayGecerlilikTarihi = gecerlilikTarihi;
+            _cokluAdaySeciliTanimId = candidates.FirstOrDefault(t => t.Zorunlu)?.Id ?? candidates[0].Id;
+            showCokluAdayModal = true;
+            return;
+        }
+
+        // Tek aday → doğrudan yükle
+        await DogrudanYukleAsync(soforId, candidates[0], file, gecerlilikTarihi);
+    }
+
+    /// <summary>Çoklu aday modalında kullanıcı seçim yapıp onaylayınca çağrılır.</summary>
+    private async Task CokluAdayOnayla()
+    {
+        showCokluAdayModal = false;
+        if (seciliDurum == null || _cokluAdayFile == null || _cokluAdaySeciliTanimId == 0) return;
+
+        var secilenTanim = _cokluAdaylar.FirstOrDefault(a => a.Id == _cokluAdaySeciliTanimId);
+        if (secilenTanim == null) return;
+
+        await DogrudanYukleAsync(seciliDurum.SoforId, secilenTanim, _cokluAdayFile, _cokluAdayGecerlilikTarihi);
+        CokluAdayTemizle();
+    }
+
+    /// <summary>Çoklu aday modalında kullanıcı iptal edince çağrılır.</summary>
+    private void CokluAdayIptal()
+    {
+        showCokluAdayModal = false;
+        ToastService.ShowInfo("Yükleme iptal edildi.");
+        CokluAdayTemizle();
+    }
+
+    private void CokluAdayTemizle()
+    {
+        _cokluAdaylar = new();
+        _cokluAdayCanonicalTip = string.Empty;
+        _cokluAdayFile = null;
+        _cokluAdayGecerlilikTarihi = null;
+        _cokluAdaySeciliTanimId = 0;
+    }
+
+    /// <summary>Tek adaylı veya kullanıcı seçimi sonrası ortak yükleme.</summary>
+    private async Task DogrudanYukleAsync(int soforId, OzlukEvrakTanim tanim, IBrowserFile file, DateTime? gecerlilikTarihi)
+    {
+        var detay = new OzlukEvrakDetay
+        {
+            EvrakTanimId = tanim.Id,
+            EvrakAdi = tanim.EvrakAdi,
+            Kategori = tanim.Kategori,
+            Zorunlu = tanim.Zorunlu
+        };
+
+        await UploadOzlukEvrakDosyasiAsync(soforId, detay, file);
+
+        // Hızlı karttan gelen geçerlilik tarihini uygula
+        if (gecerlilikTarihi.HasValue)
+        {
+            try
+            {
+                evrakGecerlilikTarihleri[detay.EvrakTanimId] = gecerlilikTarihi.Value.Date;
+                await PersonelBelgeTarihiniGuncelleAsync(soforId, detay);
+                seciliDurum = await OzlukService.GetPersonelEvrakDurumuAsync(soforId);
+                await EvrakGecerlilikTarihleriniYukleAsync(soforId);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Hizli upload: gecerlilik tarihi uygulanamadi. EvrakTanimId={Id}", detay.EvrakTanimId);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Canonical tip ("Kimlik") → aktif OzlukEvrakTanim ("Kimlik Fotokopisi") bulur.
+    /// GetPrimaryAlias ile en olası adı dener, bulamazsa BelongsToCategory ile tarar.
+    /// Birden fazla aday varsa ilkini döner; 0 aday varsa null.
+    /// </summary>
+    private async Task<OzlukEvrakTanim?> FindOzlukEvrakTanimForCanonicalTipAsync(string canonicalTip)
+    {
+        var evrakTanimlari = await OzlukService.GetAktifEvrakTanimlariAsync();
+
+        // 1. Önce GetPrimaryAlias ile en olası adı dene (örn: "Kimlik" → "Kimlik Fotokopisi")
+        var primaryAlias = EvrakTipiCanonicalMapper.GetPrimaryAlias(canonicalTip);
+        if (primaryAlias != null)
+        {
+            var exact = evrakTanimlari.FirstOrDefault(t =>
+                string.Equals(t.EvrakAdi, primaryAlias, StringComparison.OrdinalIgnoreCase));
+            if (exact != null) return exact;
+        }
+
+        // 2. Canonical kategoriye ait tüm tanımları tara
+        var candidates = evrakTanimlari
+            .Where(t => EvrakTipiCanonicalMapper.BelongsToCategory(t.EvrakAdi, canonicalTip))
+            .ToList();
+
+        if (candidates.Count == 1)
+            return candidates[0];
+
+        if (candidates.Count > 1)
+        {
+            // Birden fazla aday → zorunlu olanı tercih et, yoksa ilkini al
+            var zorunlu = candidates.FirstOrDefault(t => t.Zorunlu);
+            Logger.LogInformation("HizliEvrakYukle: '{Tip}' için {Count} aday bulundu, zorunlu={Zorunlu}",
+                canonicalTip, candidates.Count, zorunlu?.EvrakAdi ?? "ilk kayıt");
+            return zorunlu ?? candidates[0];
+        }
+
+        Logger.LogWarning("HizliEvrakYukle: '{Tip}' için eşleşen OzlukEvrakTanim bulunamadı.", canonicalTip);
+        return null;
+    }
+
+    /// <summary>
+    /// Hızlı Evrak Yükleme kartından gelen silme isteği.
+    /// Canonical tip → OzlukEvrakTanim → PersonelOzlukEvrak.Tamamlandi = false yapar.
+    /// Silme idempotent: kayıt yoksa hata vermez.
+    /// </summary>
+    private async Task HizliEvrakSilAsync(string canonicalTip)
+    {
+        if (seciliDurum == null) return;
+        var soforId = seciliDurum.SoforId;
+        var kayitTemizlendi = false;
+        var fizikselSilmeBasarisiz = false;
+
+        var tanim = await FindOzlukEvrakTanimForCanonicalTipAsync(canonicalTip);
+        if (tanim == null)
+        {
+            Logger.LogInformation("HizliEvrakSil: '{Tip}' için eşleşen OzlukEvrakTanim bulunamadı, sadece EvrakDosya temizlendi.", canonicalTip);
+            ToastService.ShowInfo($"'{canonicalTip}' için evrak tanımı bulunamadı.");
+            // _mevcutTipler ve ana listeyi yine de yenile
+            await DetayAc(soforId);
+            await LoadData();
+            return;
+        }
+
+        try
+        {
+            // PersonelOzlukEvrak kaydını bul ve işaretini kaldır
+            var personelEvrak = await OzlukService.EvrakIsaretle(soforId, tanim.Id, false);
+            if (personelEvrak != null)
+            {
+                var silinecekDosyaYolu = personelEvrak.DosyaYolu;
+
+                // Dosya alanlarını da temizle
+                personelEvrak.DosyaYolu = null;
+                personelEvrak.DosyaAdi = null;
+                personelEvrak.DosyaTipi = null;
+                personelEvrak.DosyaBoyutu = null;
+                await OzlukService.UpdatePersonelEvrakAsync(personelEvrak);
+                kayitTemizlendi = true;
+
+                if (!string.IsNullOrWhiteSpace(silinecekDosyaYolu))
+                {
+                    try
+                    {
+                        await SecureFileService.DeleteAsync(silinecekDosyaYolu);
+                    }
+                    catch (Exception ex)
+                    {
+                        fizikselSilmeBasarisiz = true;
+                        Logger.LogWarning(ex, "HizliEvrakSil: fiziksel dosya silme hatası. SoforId={SoforId}, Tip={Tip}, Yol={Yol}",
+                            soforId, canonicalTip, silinecekDosyaYolu);
+                    }
+                }
+
+                Logger.LogInformation("HizliEvrakSil: PersonelOzlukEvrak temizlendi. SoforId={SoforId}, EvrakTanimId={Id}, Tip={Tip}",
+                    soforId, tanim.Id, canonicalTip);
+            }
+            else
+            {
+                ToastService.ShowInfo($"{canonicalTip} için temizlenecek kayıt bulunamadı.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "HizliEvrakSil: PersonelOzlukEvrak temizleme hatası. Tip={Tip}", canonicalTip);
+            ToastService.ShowError($"{canonicalTip} kaydı temizlenemedi: {ex.GetBaseException().Message}");
+        }
+
+        // UI'ı yenile
+        seciliDurum = await OzlukService.GetPersonelEvrakDurumuAsync(soforId);
+        await EvrakGecerlilikTarihleriniYukleAsync(soforId);
+        await DetayAc(soforId);
+        await LoadData();
+
+        if (kayitTemizlendi && fizikselSilmeBasarisiz)
+            ToastService.ShowWarning($"{canonicalTip} kaydı temizlendi, ancak fiziksel dosya silinemedi.");
+        else if (kayitTemizlendi)
+            ToastService.ShowSuccess($"{canonicalTip} kaydı temizlendi.");
+    }
+
+    /// <summary>Hızlı karttan preview: canonical tip → PersonelOzlukEvrak → SecureFileService önizleme.</summary>
+    private async Task HizliEvrakOnizleAsync(string canonicalTip)
+    {
+        if (seciliDurum == null) return;
+        var ozlukDetay = seciliDurum.Evraklar.FirstOrDefault(e =>
+            e.Tamamlandi && EvrakTipiCanonicalMapper.BelongsToCategory(e.EvrakAdi, canonicalTip));
+        if (ozlukDetay == null)
+        {
+            ToastService.ShowWarning($"'{canonicalTip}' için yüklenmiş dosya bulunamadı.");
+            return;
+        }
+        await EvrakOnizle(ozlukDetay);
+    }
+
+    /// <summary>Hızlı karttan download: canonical tip → PersonelOzlukEvrak → SecureFileService indirme.</summary>
+    private async Task HizliEvrakIndirAsync(string canonicalTip)
+    {
+        if (seciliDurum == null) return;
+        var ozlukDetay = seciliDurum.Evraklar.FirstOrDefault(e =>
+            e.Tamamlandi && EvrakTipiCanonicalMapper.BelongsToCategory(e.EvrakAdi, canonicalTip));
+        if (ozlukDetay == null)
+        {
+            ToastService.ShowWarning($"'{canonicalTip}' için yüklenmiş dosya bulunamadı.");
+            return;
+        }
+        await EvrakDosyasiIndir(ozlukDetay);
+    }
+
+    /// <summary>
+    /// Başarılı upload sonrası, aynı canonical kategorideki eski EvrakDosya kayıtlarını soft-delete yapar.
+    /// Eski bozuk hızlı upload sisteminden kalma, yanlış path'li kayıtların yeni doğru kaydı gölgelemesini engeller.
+    /// </summary>
+    private async Task TemizleStaleEvrakDosyaKayitlariAsync(int soforId, string evrakAdi)
+    {
+        var canonical = EvrakTipiCanonicalMapper.GetCanonicalName(evrakAdi);
+        if (canonical == null) return;
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var tumEvrakDosyalar = await db.EvrakDosyalari
+                .Where(x => x.PersonelId == soforId && !x.IsDeleted)
+                .ToListAsync();
+
+            var silinecekler = tumEvrakDosyalar
+                .Where(x => EvrakTipiCanonicalMapper.BelongsToCategory(x.EvrakTipi, canonical))
+                .ToList();
+
+            if (silinecekler.Count > 0)
+            {
+                foreach (var eski in silinecekler)
+                {
+                    eski.IsDeleted = true;
+                }
+                await db.SaveChangesAsync();
+                Logger.LogInformation("Stale EvrakDosya temizlendi: {Count} kayıt soft-delete. SoforId={SoforId}, Canonical={Canonical}",
+                    silinecekler.Count, soforId, canonical);
+
+                // _yeniEvraklar listesini de güncelle (DetayAc tekrar çağrılmadan önce)
+                foreach (var eski in silinecekler)
+                {
+                    _yeniEvraklar.RemoveAll(x => x.Id == eski.Id);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Stale EvrakDosya temizleme hatası. SoforId={SoforId}, EvrakAdi={EvrakAdi}", soforId, evrakAdi);
+        }
+    }
+
+    private async Task EvrakDosyasiIndir(OzlukEvrakDetay evrak)
+    {
+        if (string.IsNullOrWhiteSpace(evrak.DosyaYolu))
+            return;
+
+        try
+        {
+            var bytes = await SecureFileService.ReadDecryptedAsync(evrak.DosyaYolu);
+            if (bytes == null)
+            {
+                ToastService.ShowWarning("Dosya bulunamadı.");
+                return;
+            }
+
+            var dosyaAdi = BuildEvrakDosyaAdi(evrak.EvrakAdi, evrak.DosyaYolu);
+            await JS.InvokeVoidAsync("downloadFile", dosyaAdi, Convert.ToBase64String(bytes), GetMimeType(dosyaAdi));
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Dosya indirilemedi: {ex.GetBaseException().Message}");
+        }
+    }
+
+    private void PersonelSecimDegistir(int soforId, bool secili)
+    {
+        if (secili)
+        {
+            seciliSoforIdler.Add(soforId);
+            return;
+        }
+
+        seciliSoforIdler.Remove(soforId);
+    }
+
+    private void TumunuSec(ChangeEventArgs args)
+    {
+        var secili = args.Value is bool value && value;
+
+        if (secili)
+        {
+            foreach (var durum in FiltrelenmisListe)
+            {
+                seciliSoforIdler.Add(durum.SoforId);
+            }
+
+            return;
+        }
+
+        foreach (var durum in FiltrelenmisListe.ToList())
+        {
+            seciliSoforIdler.Remove(durum.SoforId);
+        }
+    }
+
+    private void SeciliEksikListeAc()
+    {
+        seciliEksikDurumlar = durumlar?
+            .Where(d => seciliSoforIdler.Contains(d.SoforId) && d.EksikEvrak > 0)
+            .OrderByDescending(d => d.EksikEvrak)
+            .ThenBy(d => d.PersonelAdi)
+            .ToList() ?? new List<PersonelOzlukEvrakDurum>();
+
+        showEksikListeModal = true;
+    }
+
+    private void EksikListeKapat()
+    {
+        showEksikListeModal = false;
+        seciliEksikDurumlar = new();
+    }
+
+    private async Task PersonelDosyasiIndir(int soforId)
+    {
+        try
+        {
+            var bytes = await OzlukService.ExportPersonelDosyaPdfAsync(soforId);
+            var personel = durumlar?.FirstOrDefault(d => d.SoforId == soforId);
+            var dosyaAdi = $"personel_dosyasi_{personel?.PersonelKodu ?? soforId.ToString()}_{DateTime.Now:yyyyMMdd}.pdf";
+            await JS.InvokeVoidAsync("downloadFileFromBase64", dosyaAdi, Convert.ToBase64String(bytes));
+            ToastService.ShowSuccess("Personel dosyası indirildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+    }
+
+    private async Task PdfIndir(int soforId)
+    {
+        try
+        {
+            var bytes = await OzlukService.ExportChecklistPdfAsync(soforId);
+            var personel = durumlar?.FirstOrDefault(d => d.SoforId == soforId);
+            var dosyaAdi = $"ozluk_checklist_{personel?.PersonelKodu ?? soforId.ToString()}_{DateTime.Now:yyyyMMdd}.pdf";
+            await JS.InvokeVoidAsync("downloadFileFromBase64", dosyaAdi, Convert.ToBase64String(bytes));
+            ToastService.ShowSuccess("PDF indirildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+    }
+
+    private async Task ExcelIndir()
+    {
+        try
+        {
+            var bytes = await OzlukService.ExportTumChecklistExcelAsync();
+            var dosyaAdi = $"personel_ozluk_checklist_{DateTime.Now:yyyyMMdd}.xlsx";
+            await JS.InvokeVoidAsync("downloadFileFromBase64", dosyaAdi, Convert.ToBase64String(bytes));
+            ToastService.ShowSuccess("Excel indirildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+    }
+
+    private async Task BosPersonelDosyasiIndir()
+    {
+        try
+        {
+            var bytes = await OzlukService.ExportBosPersonelDosyaPdfAsync();
+            var dosyaAdi = $"bos_personel_dosyasi_{DateTime.Now:yyyyMMdd}.pdf";
+            await JS.InvokeVoidAsync("downloadFileFromBase64", dosyaAdi, Convert.ToBase64String(bytes));
+            ToastService.ShowSuccess("Boş personel dosyası indirildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+    }
+
+    private async Task EvrakTanimModalAc()
+    {
+        evrakTanimlari = await OzlukService.GetEvrakTanimlariAsync();
+        showTanimModal = true;
+    }
+
+    private void TanimModalKapat()
+    {
+        showTanimModal = false;
+    }
+
+    private void YeniEvrakTanimEkle()
+    {
+        duzenlenecekTanim = new OzlukEvrakTanim { Aktif = true, Zorunlu = true, SiraNo = 1 };
+        showTanimDuzenleModal = true;
+    }
+
+    private void EvrakTanimDuzenle(OzlukEvrakTanim tanim)
+    {
+        duzenlenecekTanim = new OzlukEvrakTanim
+        {
+            Id = tanim.Id,
+            EvrakAdi = tanim.EvrakAdi,
+            Aciklama = tanim.Aciklama,
+            Kategori = tanim.Kategori,
+            Zorunlu = tanim.Zorunlu,
+            SiraNo = tanim.SiraNo,
+            Aktif = tanim.Aktif,
+            GecerliGorevler = tanim.GecerliGorevler
+        };
+        showTanimDuzenleModal = true;
+    }
+
+    private void TanimDuzenleKapat()
+    {
+        showTanimDuzenleModal = false;
+        duzenlenecekTanim = null;
+    }
+
+    private async Task EvrakTanimKaydet()
+    {
+        if (duzenlenecekTanim == null || string.IsNullOrWhiteSpace(duzenlenecekTanim.EvrakAdi))
+        {
+            ToastService.ShowWarning("Evrak adı zorunludur.");
+            return;
+        }
+
+        try
+        {
+            if (duzenlenecekTanim.Id == 0)
+            {
+                await OzlukService.CreateEvrakTanimAsync(duzenlenecekTanim);
+                ToastService.ShowSuccess("Evrak tanımı eklendi.");
+            }
+            else
+            {
+                await OzlukService.UpdateEvrakTanimAsync(duzenlenecekTanim);
+                ToastService.ShowSuccess("Evrak tanımı güncellendi.");
+            }
+
+            evrakTanimlari = await OzlukService.GetEvrakTanimlariAsync();
+            TanimDuzenleKapat();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+    }
+
+    private async Task EvrakTanimSil(int id)
+    {
+        try
+        {
+            await OzlukService.DeleteEvrakTanimAsync(id);
+            evrakTanimlari = await OzlukService.GetEvrakTanimlariAsync();
+            ToastService.ShowSuccess("Evrak tanımı silindi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+    }
+
+    private static string BuildEvrakDosyaAdi(string evrakAdi, string dosyaYolu)
+    {
+        var extension = Path.GetExtension(Path.GetFileNameWithoutExtension(dosyaYolu));
+        if (string.IsNullOrWhiteSpace(extension))
+        {
+            extension = ".bin";
+        }
+
+        var safeName = string.Concat(evrakAdi.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
+        return $"{safeName}{extension}";
+    }
+
+    private async Task EvrakGecerlilikTarihleriniYukleAsync(int soforId)
+    {
+        evrakGecerlilikTarihleri.Clear();
+
+        var personel = await SoforService.GetByIdAsync(soforId);
+        if (personel == null || seciliDurum == null)
+            return;
+
+        foreach (var evrak in seciliDurum.Evraklar.Where(GecerlilikTarihiDestekleniyor))
+        {
+            // Önce özlük evrak kaydındaki GecerlilikBitisTarihi'ne bak
+            if (evrak.GecerlilikBitisTarihi.HasValue)
+                evrakGecerlilikTarihleri[evrak.EvrakTanimId] = evrak.GecerlilikBitisTarihi;
+            else
+                evrakGecerlilikTarihleri[evrak.EvrakTanimId] = GetPersonelBelgeTarihi(personel, evrak);
+        }
+    }
+
+    private async Task PersonelBelgeTarihiniGuncelleAsync(int soforId, OzlukEvrakDetay evrak)
+    {
+        if (!evrakGecerlilikTarihleri.TryGetValue(evrak.EvrakTanimId, out var secilenTarih) || !secilenTarih.HasValue)
+            return;
+
+        var personel = await SoforService.GetByIdAsync(soforId);
+        if (personel == null)
+            return;
+
+        var guncellendi = EvrakTarihAlaniniUygula(personel, evrak, secilenTarih.Value.Date);
+        if (guncellendi)
+            await SoforService.UpdateAsync(personel);
+
+        // Özlük evrak kaydındaki GecerlilikBitisTarihi'ni de güncelle
+        try
+        {
+            var personelEvrak = await OzlukService.EvrakIsaretle(soforId, evrak.EvrakTanimId, true);
+            personelEvrak.GecerlilikBitisTarihi = secilenTarih.Value.Date;
+            await OzlukService.UpdatePersonelEvrakAsync(personelEvrak);
+        }
+        catch
+        {
+            // GecerlilikBitisTarihi güncellemesi başarısız olsa da devam et
+        }
+    }
+
+    private async Task EvrakGecerlilikTarihiDegistiAsync(int soforId, OzlukEvrakDetay evrak, ChangeEventArgs e)
+    {
+        var raw = e.Value?.ToString();
+        DateTime? tarih = DateTime.TryParse(raw, out var parsed)
+            ? (DateTime?)parsed.Date
+            : null;
+
+        evrakGecerlilikTarihleri[evrak.EvrakTanimId] = tarih;
+
+        if (!tarih.HasValue)
+            return;
+
+        try
+        {
+            await PersonelBelgeTarihiniGuncelleAsync(soforId, evrak);
+            seciliDurum = await OzlukService.GetPersonelEvrakDurumuAsync(soforId);
+            await EvrakGecerlilikTarihleriniYukleAsync(soforId);
+            await LoadData();
+            ToastService.ShowSuccess($"{evrak.EvrakAdi} geçerlilik tarihi güncellendi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Geçerlilik tarihi güncellenemedi: {ex.GetBaseException().Message}");
+        }
+    }
+
+    private DateTime? GetEvrakGecerlilikTarihi(int evrakTanimId)
+        => evrakGecerlilikTarihleri.TryGetValue(evrakTanimId, out var value) ? value : null;
+
+    private static string FormatDateInput(DateTime? value)
+        => value?.ToString("yyyy-MM-dd") ?? string.Empty;
+
+    private static bool GecerlilikTarihiDestekleniyor(OzlukEvrakDetay evrak)
+        => EvrakTuruBelirle(evrak) != null;
+
+    private static DateTime? GetPersonelBelgeTarihi(Sofor personel, OzlukEvrakDetay evrak)
+        => EvrakTuruBelirle(evrak) switch
+        {
+            "Ehliyet" => personel.EhliyetGecerlilikTarihi,
+            "MykBelgesi" => personel.MykBelgesiGecerlilikTarihi,
+            "Psikoteknik" => personel.PsikoteknikGecerlilikTarihi,
+            "Saglik" => personel.SaglikRaporuGecerlilikTarihi,
+            "Sozlesme" => personel.IseBaslamaTarihi,
+            _ => null
+        };
+
+    private static bool EvrakTarihAlaniniUygula(Sofor personel, OzlukEvrakDetay evrak, DateTime tarih)
+    {
+        switch (EvrakTuruBelirle(evrak))
+        {
+            case "Ehliyet":
+                personel.EhliyetGecerlilikTarihi = tarih;
+                return true;
+            case "MykBelgesi":
+                personel.MykBelgesiGecerlilikTarihi = tarih;
+                return true;
+            case "Psikoteknik":
+                personel.PsikoteknikGecerlilikTarihi = tarih;
+                return true;
+            case "Saglik":
+                personel.SaglikRaporuGecerlilikTarihi = tarih;
+                return true;
+            case "Sozlesme":
+                personel.IseBaslamaTarihi = tarih;
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static string? EvrakTuruBelirle(OzlukEvrakDetay evrak)
+    {
+        var ad = evrak.EvrakAdi;
+        var canonical = EvrakTipiCanonicalMapper.GetCanonicalName(ad);
+
+        // Ehliyet → Sofor.EhliyetGecerlilikTarihi
+        if (canonical == "Ehliyet")
+            return "Ehliyet";
+
+        // MYK / Mesleki Yeterlilik → Sofor.MykBelgesiGecerlilikTarihi
+        if (ad.Contains("MYK", StringComparison.OrdinalIgnoreCase)
+            || ad.Contains("Mesleki Yeterlilik", StringComparison.OrdinalIgnoreCase))
+            return "MykBelgesi";
+
+        // Psikoteknik → Sofor.PsikoteknikGecerlilikTarihi
+        if (canonical == "Sertifika" && ad.Contains("Psikoteknik", StringComparison.OrdinalIgnoreCase))
+            return "Psikoteknik";
+
+        // Sağlık Raporu → Sofor.SaglikRaporuGecerlilikTarihi
+        if (canonical == "Saglik Raporu")
+            return "Saglik";
+
+        // İş Sözleşmesi → Sofor.IseBaslamaTarihi
+        if (canonical == "Is Sozlesmesi")
+            return "Sozlesme";
+
+        return null;
+    }
+
+    private static bool DetayBelgeFiltreUyuyor(OzlukEvrakDetay evrak, string detayBelgeFiltre)
+    {
+        return detayBelgeFiltre switch
+        {
+            "ehliyet" => EvrakTipiCanonicalMapper.BelongsToCategory(evrak.EvrakAdi, "Ehliyet"),
+            "diploma" => EvrakTipiCanonicalMapper.BelongsToCategory(evrak.EvrakAdi, "Diploma"),
+            "sertifika" => EvrakTipiCanonicalMapper.BelongsToCategory(evrak.EvrakAdi, "Sertifika"),
+            "saglik" => EvrakTipiCanonicalMapper.BelongsToCategory(evrak.EvrakAdi, "Saglik Raporu"),
+            "sozlesme" => EvrakTipiCanonicalMapper.BelongsToCategory(evrak.EvrakAdi, "Is Sozlesmesi"),
+            _ => true
+        };
+    }
+
+    // ── Önizleme / Yazdırma ────────────────────────────────────────────────
+
+    private static string EncExtensionTemizle(string? fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+            return "evrak.pdf";
+
+        while (fileName.EndsWith(".enc", StringComparison.OrdinalIgnoreCase))
+            fileName = fileName[..^4];
+
+        return fileName;
+    }
+
+    private async Task EvrakOnizle(OzlukEvrakDetay evrak)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(evrak.DosyaYolu))
+            {
+                ToastService.ShowWarning("Evrak dosya yolu bulunamadı.");
+                return;
+            }
+
+            var bytes = await SecureFileService.ReadDecryptedAsync(evrak.DosyaYolu);
+            if (bytes == null || bytes.Length == 0)
+            {
+                var onay = await JS.InvokeAsync<bool>(
+                    "confirm",
+                    $"'{evrak.EvrakAdi}' dosyası bulunamadı veya boş. Bozuk dosya kaydını temizleyip yeniden yüklemek ister misiniz?");
+
+                if (onay && seciliDurum != null)
+                {
+                    await TemizleBozukEvrakReferansiAsync(seciliDurum.SoforId, evrak);
+                }
+                else
+                {
+                    ToastService.ShowWarning("Dosya bulunamadı veya boş.");
+                }
+
+                return;
+            }
+
+            var dosyaAdi = EncExtensionTemizle(
+                BuildEvrakDosyaAdi(evrak.EvrakAdi, evrak.DosyaYolu));
+
+            var contentType = GetMimeType(dosyaAdi);
+
+            onizlemeBaslik = dosyaAdi;
+            onizlemeDosyaAdi = dosyaAdi;
+            onizlemeContentType = contentType;
+            onizlemeBase64 = Convert.ToBase64String(bytes);
+            onizlemeDataUrl = $"data:{contentType};base64,{onizlemeBase64}";
+
+            onizlemeDestekleniyor =
+                contentType == "application/pdf" ||
+                contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+
+            onizlemeModalAcik = true;
+
+            Logger.LogInformation(
+                "Personel evrak önizleniyor. EvrakAdi={EvrakAdi}, DosyaAdi={DosyaAdi}, ContentType={ContentType}",
+                evrak.EvrakAdi, dosyaAdi, contentType);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Personel evrak önizleme hatası. Evrak={EvrakAdi}, DosyaYolu={DosyaYolu}",
+                evrak.EvrakAdi, evrak.DosyaYolu);
+            ToastService.ShowError("Evrak önizlenemedi. Dosya şifresi çözülemedi veya dosya bulunamadı.");
+        }
+    }
+
+    private async Task TemizleBozukEvrakReferansiAsync(int soforId, OzlukEvrakDetay evrak)
+    {
+        try
+        {
+            var personelEvrak = await OzlukService.EvrakIsaretle(soforId, evrak.EvrakTanimId, false, evrak.Aciklama);
+            personelEvrak.DosyaYolu = null;
+            personelEvrak.DosyaAdi = null;
+            personelEvrak.DosyaTipi = null;
+            personelEvrak.DosyaBoyutu = null;
+            personelEvrak.Tamamlandi = false;
+            personelEvrak.TamamlanmaTarihi = null;
+            personelEvrak.SonDegisiklikNotu = "Bozuk dosya referansı temizlendi";
+
+            await OzlukService.UpdatePersonelEvrakAsync(personelEvrak);
+            seciliDurum = await OzlukService.GetPersonelEvrakDurumuAsync(soforId);
+            await EvrakGecerlilikTarihleriniYukleAsync(soforId);
+            await LoadData();
+
+            ToastService.ShowInfo($"{evrak.EvrakAdi} için bozuk dosya kaydı temizlendi. 'Dosya Seç' ile yeniden yükleyebilirsiniz.");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Bozuk evrak referansı temizlenemedi. SoforId={SoforId}, EvrakTanimId={EvrakTanimId}", soforId, evrak.EvrakTanimId);
+            ToastService.ShowError("Bozuk dosya kaydı temizlenemedi.");
+        }
+    }
+
+    private async Task EvrakYazdir(OzlukEvrakDetay evrak)
+    {
+        // Önce önizle (state'i doldur), sonra modalda kullanıcı yazdırsın
+        await EvrakOnizle(evrak);
+    }
+
+    private async Task OnizlenenDosyayiIndir()
+    {
+        if (string.IsNullOrWhiteSpace(onizlemeBase64) ||
+            string.IsNullOrWhiteSpace(onizlemeDosyaAdi) ||
+            string.IsNullOrWhiteSpace(onizlemeContentType))
+            return;
+
+        await JS.InvokeVoidAsync(
+            "downloadFileFromBase64",
+            onizlemeDosyaAdi,
+            onizlemeBase64,
+            onizlemeContentType);
+    }
+
+    private async Task OnizlenenDosyayiYazdir()
+    {
+        if (string.IsNullOrWhiteSpace(onizlemeBase64) ||
+            string.IsNullOrWhiteSpace(onizlemeContentType))
+            return;
+
+        if (!onizlemeDestekleniyor)
+        {
+            ToastService.ShowWarning("Bu dosya türü yazdırma için desteklenmiyor.");
+            return;
+        }
+
+        await JS.InvokeVoidAsync(
+            "printBase64File",
+            onizlemeBase64,
+            onizlemeContentType);
+    }
+
+    private void OnizlemeKapat()
+    {
+        onizlemeModalAcik = false;
+        onizlemeBaslik = null;
+        onizlemeContentType = null;
+        onizlemeBase64 = null;
+        onizlemeDataUrl = null;
+        onizlemeDosyaAdi = null;
+        onizlemeDestekleniyor = false;
+    }
+
+    private static string GetMimeType(string fileName)
+    {
+        return Path.GetExtension(fileName).ToLowerInvariant() switch
+        {
+            ".pdf" => "application/pdf",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            ".doc" => "application/msword",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".xls" => "application/vnd.ms-excel",
+            ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            _ => "application/octet-stream"
+        };
+    }
+
+    private static int GetZorunluEksikEvrakSayisi(PersonelOzlukEvrakDurum durum)
+        => durum.Evraklar.Count(e => !e.Tamamlandi && e.Zorunlu);
+
+    private static string GetEksikEvrakOzeti(PersonelOzlukEvrakDurum durum, int maxAdet = 3)
+    {
+        var eksikEvraklar = durum.Evraklar
+            .Where(e => !e.Tamamlandi)
+            .OrderByDescending(e => e.Zorunlu)
+            .ThenBy(e => e.Kategori)
+            .ThenBy(e => e.EvrakAdi)
+            .Select(e => e.EvrakAdi)
+            .ToList();
+
+        if (!eksikEvraklar.Any())
+            return "Eksik evrak bulunmuyor.";
+
+        var gosterilecekler = eksikEvraklar.Take(maxAdet).ToList();
+        var ozet = string.Join(", ", gosterilecekler);
+        var kalan = eksikEvraklar.Count - gosterilecekler.Count;
+
+        return kalan > 0 ? $"{ozet} + {kalan} evrak daha" : ozet;
+    }
+
+    private static string GetGorevAdi(PersonelGorev gorev) => gorev switch
+    {
+        PersonelGorev.Sofor => "Şoför",
+        PersonelGorev.OfisCalisani => "Ofis Çalışanı",
+        PersonelGorev.Muhasebe => "Muhasebe",
+        PersonelGorev.Yonetici => "Yönetici",
+        PersonelGorev.Teknik => "Teknik",
+        PersonelGorev.Diger => "Diğer",
+        _ => "Bilinmiyor"
+    };
+
+    private static string GetKategoriAdi(OzlukEvrakKategori kategori) => kategori switch
+    {
+        OzlukEvrakKategori.Genel => "Genel",
+        OzlukEvrakKategori.KimlikBelgeleri => "Kimlik Belgeleri",
+        OzlukEvrakKategori.EgitimBelgeleri => "Eğitim Belgeleri",
+        OzlukEvrakKategori.SaglikBelgeleri => "Sağlık Belgeleri",
+        OzlukEvrakKategori.SoforBelgeleri => "Şoför Belgeleri",
+        OzlukEvrakKategori.SGKBelgeleri => "SGK Belgeleri",
+        OzlukEvrakKategori.IseGirisBelgeleri => "İşe Giriş Belgeleri",
+        OzlukEvrakKategori.Diger => "Diğer",
+        _ => "Bilinmiyor"
+    };
+}
+

@@ -1,0 +1,657 @@
+@page "/ayarlar/firmalar"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject IFirmaService FirmaService
+@inject ICariService CariService
+
+@inject IToastService ToastService
+@* No functional change. *@
+@rendermode InteractiveServer
+
+<PageTitle>Firma Yonetimi</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="bi bi-building me-2"></i>Firma Yonetimi</h3>
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary" @onclick="YeniFirmaAc">
+                <i class="bi bi-plus-lg me-1"></i>Yeni Firma
+            </button>
+        </div>
+    </div>
+
+    @{
+        var firmaOnerileri = firmalar
+            .Where(f => f.Aktif && f.CariId == null)
+            .Select(f => new { Firma = f, Oneri = OneriCariBulFirma(f) })
+            .Where(x => x.Oneri != null)
+            .ToList();
+    }
+    @if (firmaOnerileri.Count > 0)
+    {
+        <div class="alert alert-info d-flex justify-content-between align-items-center py-1 mb-3 small">
+            <span>
+                <i class="bi bi-magic me-1"></i>
+                <strong>@firmaOnerileri.Count</strong> firma için VKN/Ünvan eşleşmesi bulundu. Tek tıkla mutabakat için Cari bağlantısı kurulabilir.
+            </span>
+            <button class="btn btn-sm btn-success" disabled="@topluAtaYukleniyor" @onclick="TumOnerileriAtaFirma">
+                @if (topluAtaYukleniyor)
+                { <span class="spinner-border spinner-border-sm me-1"></span> }
+                else
+                { <i class="bi bi-check2-all me-1"></i> }
+                Tüm Önerileri Ata (@firmaOnerileri.Count)
+            </button>
+        </div>
+    }
+
+    @if (!isLoading && firmalar.Any())
+    {
+        <div class="card mb-3">
+            <div class="card-body py-2">
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-4">
+                        <input type="text" class="form-control form-control-sm" placeholder="Ara: ad, ünvan, vergi no..." @bind="aramaMetni" @bind:event="oninput" />
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-select form-select-sm" @bind="durumFiltre">
+                            <option value="">Tümü (Aktif + Pasif)</option>
+                            <option value="aktif">Yalnızca Aktif</option>
+                            <option value="pasif">Yalnızca Pasif</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-select form-select-sm" @bind="cariFiltre">
+                            <option value="">Cari: Hepsi</option>
+                            <option value="eksik">Yalnızca Cari Eksik</option>
+                            <option value="atanmis">Yalnızca Cari Atanmış</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 text-muted small">
+                        Gösterilen: <strong>@FiltreliFirmalar.Count</strong> / @firmalar.Count
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else
+    {
+        <div class="row g-3">
+            @foreach (var firma in FiltreliFirmalar)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100 @(firma.VarsayilanFirma ? "border-primary" : "")">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center gap-2">
+                                @if (!string.IsNullOrEmpty(firma.Logo))
+                                {
+                                    <img src="@firma.Logo" alt="Logo" style="height:32px;max-width:80px;object-fit:contain;" />
+                                }
+                                <h5 class="mb-0">
+                                    @firma.FirmaAdi
+                                    @if (firma.VarsayilanFirma)
+                                    {
+                                        <span class="badge bg-primary ms-1">Varsayilan</span>
+                                    }
+                                </h5>
+                            </div>
+                            <span class="badge @(firma.Aktif ? "bg-success" : "bg-secondary")">
+                                @(firma.Aktif ? "Aktif" : "Pasif")
+                            </span>
+                            @if (!string.IsNullOrEmpty(firma.DatabaseName))
+                            {
+                                <span class="badge bg-info" title="Bu firma kendi tenant veritabaninda">
+                                    <i class="bi bi-database"></i> @firma.DatabaseName
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-warning text-dark" title="Bu firma shared veritabaninda">
+                                    <i class="bi bi-database"></i> Shared DB
+                                </span>
+                            }
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-borderless table-sm mb-0">
+                                @if (!string.IsNullOrEmpty(firma.UnvanTam))
+                                {
+                                    <tr>
+                                        <th width="100"><i class="bi bi-building me-1"></i>Unvan:</th>
+                                        <td>@firma.UnvanTam</td>
+                                    </tr>
+                                }
+                                <tr>
+                                    <th><i class="bi bi-hash me-1"></i>Vergi No:</th>
+                                    <td>@firma.VergiNo</td>
+                                </tr>
+                                <tr>
+                                    <th><i class="bi bi-geo-alt me-1"></i>Vergi D.:</th>
+                                    <td>@firma.VergiDairesi</td>
+                                </tr>
+                                @if (!string.IsNullOrEmpty(firma.Telefon))
+                                {
+                                    <tr>
+                                        <th><i class="bi bi-telephone me-1"></i>Telefon:</th>
+                                        <td>@firma.Telefon</td>
+                                    </tr>
+                                }
+                                @if (!string.IsNullOrEmpty(firma.Email))
+                                {
+                                    <tr>
+                                        <th><i class="bi bi-envelope me-1"></i>Email:</th>
+                                        <td>@firma.Email</td>
+                                    </tr>
+                                }
+                                <tr>
+                                    <th><i class="bi bi-link-45deg me-1"></i>Cari:</th>
+                                    <td>
+                                        @{ var bagliCari = firma.CariId.HasValue ? cariler.FirstOrDefault(c => c.Id == firma.CariId.Value) : null; }
+                                        @if (bagliCari != null)
+                                        {
+                                            <span class="badge bg-success-subtle text-success border border-success" title="@bagliCari.Unvan">
+                                                <i class="bi bi-check-circle"></i> @bagliCari.CariKodu
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-warning-subtle text-warning border border-warning" title="Mutabakat için Cari atanmamış">
+                                                <i class="bi bi-exclamation-triangle"></i> Eksik
+                                            </span>
+                                            var oneriF = OneriCariBulFirma(firma);
+                                            if (oneriF != null)
+                                            {
+                                                <button class="btn btn-sm btn-outline-success ms-1 py-0"
+                                                        title="@($"Öneri: {oneriF.CariKodu} - {oneriF.Unvan}")"
+                                                        disabled="@(atamaYukleniyorFirmaId == firma.Id)"
+                                                        @onclick="() => OneriyiAtaFirma(firma, oneriF)">
+                                                    @if (atamaYukleniyorFirmaId == firma.Id)
+                                                    { <span class="spinner-border spinner-border-sm"></span> }
+                                                    else
+                                                    { <i class="bi bi-magic"></i> }
+                                                    <span class="small">Ata: @oneriF.CariKodu</span>
+                                                </button>
+                                            }
+                                        }
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="card-footer bg-transparent">
+                            <div class="d-flex flex-column gap-2">
+                                <div class="btn-group btn-group-sm w-100">
+                                    <button class="btn btn-outline-primary" @onclick="() => FirmaDuzenle(firma)">
+                                        <i class="bi bi-pencil me-1"></i>Duzenle
+                                    </button>
+                                    @if (!firma.VarsayilanFirma)
+                                    {
+                                        <button class="btn btn-outline-success" @onclick="() => VarsayilanYap(firma)">
+                                            <i class="bi bi-star me-1"></i>Varsayilan Yap
+                                        </button>
+                                    }
+                                    <button class="btn btn-outline-danger" @onclick="() => FirmaSil(firma)" disabled="@firma.VarsayilanFirma">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                                @* Tenant DB yaklaşımı terk edildi (Kural 2). Tek PostgreSQL + FirmaId izolasyonu. *@
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (!firmalar.Any())
+            {
+                <div class="col-12">
+                    <div class="alert alert-info text-center py-4">
+                        <i class="bi bi-info-circle" style="font-size: 2rem;"></i>
+                        <p class="mb-2 mt-2">Henuz firma tanimlanmamis.</p>
+                        <button class="btn btn-primary" @onclick="YeniFirmaAc">
+                            <i class="bi bi-plus-lg me-1"></i>Ilk Firmayi Ekle
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- Firma Modal -->
+@if (showModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(editFirma.Id > 0 ? "Firma Duzenle" : "Yeni Firma")</h5>
+                    <button type="button" class="btn-close" @onclick="ModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Firma Kodu *</label>
+                            <input type="text" class="form-control" @bind="editFirma.FirmaKodu" placeholder="F001" />
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Firma Adi *</label>
+                            <input type="text" class="form-control" @bind="editFirma.FirmaAdi" placeholder="Kisa isim (Menu'de gorunecek)" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Tam Unvan</label>
+                            <input type="text" class="form-control" @bind="editFirma.UnvanTam" placeholder="Resmi unvan" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Vergi No</label>
+                            <input type="text" class="form-control" @bind="editFirma.VergiNo" maxlength="11" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Vergi Dairesi</label>
+                            <input type="text" class="form-control" @bind="editFirma.VergiDairesi" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Telefon</label>
+                            <input type="text" class="form-control" @bind="editFirma.Telefon" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" @bind="editFirma.Email" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Web Sitesi</label>
+                            <input type="text" class="form-control" @bind="editFirma.WebSite" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Il</label>
+                            <input type="text" class="form-control" @bind="editFirma.Il" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Ilce</label>
+                            <input type="text" class="form-control" @bind="editFirma.Ilce" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Adres</label>
+                            <textarea class="form-control" @bind="editFirma.Adres" rows="2"></textarea>
+                        </div>
+
+                        <!-- Logo Yükleme -->
+                        <div class="col-12">
+                            <label class="form-label"><i class="bi bi-image me-1"></i>Firma Logosu</label>
+                            <div class="d-flex align-items-start gap-3">
+                                @if (!string.IsNullOrEmpty(editFirma.Logo))
+                                {
+                                    <div class="border rounded p-2 bg-light" style="min-width:120px;text-align:center;">
+                                        <img src="@editFirma.Logo" alt="Logo" style="max-height:60px;max-width:120px;object-fit:contain;" />
+                                        <div class="mt-1">
+                                            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="LogoKaldir">
+                                                <i class="bi bi-trash me-1"></i>Kaldir
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                                <div class="flex-grow-1">
+                                    <InputFile OnChange="LogoYukle" accept="image/*" class="form-control" />
+                                    <div class="form-text">PNG, JPG veya SVG. Maks 2 MB. Proforma fatura yazdirmada gorunur.</div>
+                                    @if (logoYukleniyor)
+                                    {
+                                        <div class="text-primary mt-1"><i class="bi bi-hourglass-split me-1"></i>Yukleniyor...</div>
+                                    }
+                                    @if (!string.IsNullOrEmpty(logoHata))
+                                    {
+                                        <div class="text-danger mt-1">@logoHata</div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" @bind="editFirma.Aktif" id="chkAktif" />
+                                <label class="form-check-label" for="chkAktif">Aktif</label>
+                            </div>
+                        </div>
+
+                        <!-- Mutabakat: Kurum rolündeki Cari eşlemesi -->
+                        <div class="col-12">
+                            <hr class="my-2" />
+                            <label class="form-label">
+                                <i class="bi bi-link-45deg me-1"></i>Karşılık Gelen Cari (Mutabakat)
+                            </label>
+                            <select class="form-select" @bind="editFirma.CariId">
+                                <option value="">- Seçiniz (opsiyonel) -</option>
+                                @foreach (var c in cariler)
+                                {
+                                    <option value="@c.Id">@c.CariKodu - @c.Unvan @(c.VergiNo != null ? $"(VKN: {c.VergiNo})" : "")</option>
+                                }
+                            </select>
+                            <div class="form-text">
+                                Bu firma başka bir firmamıza fatura kesiyorsa, muhasebe tarafındaki Cari kaydını buradan bağlayın.
+                                Puantaj-fatura mutabakatı bu ID üzerinden yapılır.
+                                @if (oneriCari != null && editFirma.CariId != oneriCari.Id)
+                                {
+                                    <button type="button" class="btn btn-link btn-sm p-0 ms-2"
+                                            @onclick="() => editFirma.CariId = oneriCari.Id">
+                                        <i class="bi bi-magic me-1"></i>Öneri: @oneriCari.Unvan
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="ModalKapat">Iptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="FirmaKaydet">
+                        <i class="bi bi-check-lg me-1"></i>Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Firma> firmalar = new();
+    private List<Cari> cariler = new();
+    private bool isLoading = true;
+    private bool showModal = false;
+    private Firma editFirma = new();
+    private bool logoYukleniyor = false;
+    private string? logoHata;
+    private int? atamaYukleniyorFirmaId;
+    private bool topluAtaYukleniyor = false;
+    private string aramaMetni = string.Empty;
+    private string durumFiltre = string.Empty;
+    private string cariFiltre = string.Empty;
+
+    private List<Firma> FiltreliFirmalar => firmalar
+        .Where(f => string.IsNullOrWhiteSpace(aramaMetni)
+            || (f.FirmaAdi?.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (f.UnvanTam?.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (f.VergiNo?.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (f.FirmaKodu?.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase) ?? false))
+        .Where(f => durumFiltre switch
+        {
+            "aktif" => f.Aktif,
+            "pasif" => !f.Aktif,
+            _ => true
+        })
+        .Where(f => cariFiltre switch
+        {
+            "eksik" => f.CariId == null,
+            "atanmis" => f.CariId != null,
+            _ => true
+        })
+        .ToList();
+
+    private async Task TumOnerileriAtaFirma()
+    {
+        try
+        {
+            topluAtaYukleniyor = true;
+            var hedefler = firmalar
+                .Where(f => f.Aktif && f.CariId == null)
+                .Select(f => new { Firma = f, Oneri = OneriCariBulFirma(f) })
+                .Where(x => x.Oneri != null)
+                .ToList();
+            int basarili = 0;
+            int hata = 0;
+            foreach (var h in hedefler)
+            {
+                try
+                {
+                    h.Firma.CariId = h.Oneri!.Id;
+                    await FirmaService.UpdateAsync(h.Firma);
+                    basarili++;
+                }
+                catch
+                {
+                    hata++;
+                }
+            }
+            if (basarili > 0)
+                ToastService.ShowSuccess($"{basarili} firma için Cari ataması yapıldı.");
+            if (hata > 0)
+                ToastService.ShowError($"{hata} firma ataması başarısız.");
+            await YenileAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Toplu atama başarısız: " + ex.Message);
+        }
+        finally
+        {
+            topluAtaYukleniyor = false;
+        }
+    }
+
+    private Cari? OneriCariBulFirma(Firma f)
+    {
+        if (cariler.Count == 0) return null;
+        if (!string.IsNullOrWhiteSpace(f.VergiNo))
+        {
+            var v = cariler.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c.VergiNo)
+                && string.Equals(c.VergiNo!.Trim(), f.VergiNo!.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (v != null) return v;
+        }
+        var ad = (f.UnvanTam ?? f.FirmaAdi ?? "").Trim();
+        if (string.IsNullOrEmpty(ad)) return null;
+        return cariler.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c.Unvan)
+            && string.Equals(c.Unvan!.Trim(), ad, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task OneriyiAtaFirma(Firma f, Cari c)
+    {
+        try
+        {
+            atamaYukleniyorFirmaId = f.Id;
+            f.CariId = c.Id;
+            await FirmaService.UpdateAsync(f);
+            ToastService.ShowSuccess($"{f.FirmaAdi} → {c.CariKodu} ({c.Unvan}) eşleştirildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Atama başarısız: " + ex.Message);
+        }
+        finally
+        {
+            atamaYukleniyorFirmaId = null;
+        }
+    }
+
+    private Cari? oneriCari => HesaplaOneri();
+
+    private Cari? HesaplaOneri()
+    {
+        if (editFirma == null || cariler.Count == 0) return null;
+        // Öncelik: VergiNo eşleşmesi
+        if (!string.IsNullOrWhiteSpace(editFirma.VergiNo))
+        {
+            var byVkn = cariler.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c.VergiNo)
+                && c.VergiNo.Trim() == editFirma.VergiNo.Trim());
+            if (byVkn != null) return byVkn;
+        }
+        // Sonra Unvan tam eşleşme
+        var ad = (editFirma.UnvanTam ?? editFirma.FirmaAdi ?? "").Trim().ToLower();
+        if (string.IsNullOrEmpty(ad)) return null;
+        return cariler.FirstOrDefault(c => c.Unvan.Trim().ToLower() == ad);
+    }
+
+    private async Task LogoYukle(InputFileChangeEventArgs e)
+    {
+        logoHata = null;
+        var file = e.File;
+        if (file == null) return;
+
+        if (file.Size > 2 * 1024 * 1024)
+        {
+            logoHata = "Dosya 2 MB'dan buyuk olamaz.";
+            return;
+        }
+
+        var izinliTipler = new[] { "image/png", "image/jpeg", "image/jpg", "image/svg+xml", "image/webp" };
+        if (!izinliTipler.Contains(file.ContentType))
+        {
+            logoHata = "Sadece PNG, JPG, SVG veya WebP dosyasi yukleyebilirsiniz.";
+            return;
+        }
+
+        try
+        {
+            logoYukleniyor = true;
+            using var stream = file.OpenReadStream(maxAllowedSize: 2 * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            var base64 = Convert.ToBase64String(ms.ToArray());
+            editFirma.Logo = $"data:{file.ContentType};base64,{base64}";
+        }
+        catch (Exception ex)
+        {
+            logoHata = "Logo yuklenemedi: " + ex.Message;
+        }
+        finally
+        {
+            logoYukleniyor = false;
+        }
+    }
+
+    private void LogoKaldir()
+    {
+        editFirma.Logo = null;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await YenileAsync();
+    }
+
+    private async Task YenileAsync()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            firmalar = await FirmaService.GetAllAsync();
+            // Cari listesi: Mutabakat seçimi için Müşteri / Tedarikçi / Müşteri+Tedarikçi tipleri
+            var allCariler = await CariService.GetAllAsync();
+            cariler = allCariler
+                .Where(c => c.Aktif && (c.CariTipi == CariTipi.Musteri
+                    || c.CariTipi == CariTipi.Tedarikci
+                    || c.CariTipi == CariTipi.MusteriTedarikci))
+                .OrderBy(c => c.Unvan)
+                .ToList();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void YeniFirmaAc()
+    {
+        var nextCode = firmalar.Any() ? $"F{firmalar.Count + 1:000}" : "F001";
+        editFirma = new Firma
+        {
+            FirmaKodu = nextCode,
+            Aktif = true,
+            VarsayilanFirma = !firmalar.Any()
+        };
+        showModal = true;
+    }
+
+    private void FirmaDuzenle(Firma firma)
+    {
+        editFirma = new Firma
+        {
+            Id = firma.Id,
+            FirmaKodu = firma.FirmaKodu,
+            FirmaAdi = firma.FirmaAdi,
+            UnvanTam = firma.UnvanTam,
+            VergiNo = firma.VergiNo,
+            VergiDairesi = firma.VergiDairesi,
+            Telefon = firma.Telefon,
+            Email = firma.Email,
+            WebSite = firma.WebSite,
+            Adres = firma.Adres,
+            Il = firma.Il,
+            Ilce = firma.Ilce,
+            Aktif = firma.Aktif,
+            VarsayilanFirma = firma.VarsayilanFirma,
+            Logo = firma.Logo,
+            CariId = firma.CariId
+        };
+        logoHata = null;
+        showModal = true;
+    }
+
+    private async Task FirmaKaydet()
+    {
+        if (string.IsNullOrWhiteSpace(editFirma.FirmaKodu) || string.IsNullOrWhiteSpace(editFirma.FirmaAdi))
+        {
+            ToastService.ShowWarning("Firma kodu ve adi zorunludur!");
+            return;
+        }
+
+        try
+        {
+            if (editFirma.Id > 0)
+                await FirmaService.UpdateAsync(editFirma);
+            else
+                await FirmaService.CreateAsync(editFirma);
+
+            ToastService.ShowSuccess("Firma kaydedildi.");
+            ModalKapat();
+            await YenileAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
+        }
+    }
+
+    private async Task VarsayilanYap(Firma firma)
+    {
+        try
+        {
+            await FirmaService.SetVarsayilanAsync(firma.Id);
+            ToastService.ShowSuccess(firma.FirmaAdi + " varsayilan firma olarak ayarlandi.");
+            await YenileAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
+        }
+    }
+
+    private async Task FirmaSil(Firma firma)
+    {
+        if (firma.VarsayilanFirma)
+        {
+            ToastService.ShowWarning("Varsayilan firma silinemez!");
+            return;
+        }
+
+        try
+        {
+            await FirmaService.DeleteAsync(firma.Id);
+            ToastService.ShowSuccess("Firma silindi.");
+            await YenileAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
+        }
+    }
+
+    private void ModalKapat()
+    {
+        showModal = false;
+    }
+}
+

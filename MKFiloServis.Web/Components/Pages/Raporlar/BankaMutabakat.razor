@@ -1,0 +1,184 @@
+@page "/raporlar/banka-mutabakat"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using Microsoft.Extensions.Logging
+@inject IBankaHesapService BankaHesapService
+@inject IBankaKasaHareketService HareketService
+@inject ILogger<BankaMutabakat> Logger
+
+<PageTitle>Banka/Kasa Mutabakat</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h3 class="mb-0"><i class="bi bi-bank2 text-primary me-2"></i>Banka/Kasa Mutabakat</h3>
+            <small class="text-muted">Açılış + giriş - çıkış = beklenen bakiye ile sistem bakiyesi karşılaştırması</small>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+            <label class="small text-muted mb-0">Başlangıç:</label>
+            <input type="date" class="form-control form-control-sm" style="width:170px" @bind="baslangic" @bind:format="yyyy-MM-dd" />
+            <label class="small text-muted mb-0">Bitiş:</label>
+            <input type="date" class="form-control form-control-sm" style="width:170px" @bind="bitis" @bind:format="yyyy-MM-dd" />
+            <button class="btn btn-sm btn-outline-primary" @onclick="LoadAsync" disabled="@isLoading"><i class="bi bi-funnel"></i> Uygula</button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+    }
+    else
+    {
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <div class="card border-primary shadow-sm h-100"><div class="card-body">
+                    <div class="text-muted small">Toplam Sistem Bakiye</div>
+                    <div class="fs-4 fw-bold text-primary">@toplamSistem.ToString("N2") ₺</div>
+                </div></div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-secondary shadow-sm h-100"><div class="card-body">
+                    <div class="text-muted small">Toplam Beklenen Bakiye</div>
+                    <div class="fs-4 fw-bold text-secondary">@toplamBeklenen.ToString("N2") ₺</div>
+                </div></div>
+            </div>
+            <div class="col-md-3">
+                <div class="card @(toplamFark == 0 ? "border-success" : "border-danger") shadow-sm h-100"><div class="card-body">
+                    <div class="text-muted small">Toplam Mutabakat Farkı</div>
+                    <div class="fs-4 fw-bold @(toplamFark == 0 ? "text-success" : "text-danger")">@toplamFark.ToString("N2") ₺</div>
+                </div></div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-warning shadow-sm h-100"><div class="card-body">
+                    <div class="text-muted small">Uyuşmayan Hesap</div>
+                    <div class="fs-4 fw-bold text-warning">@uyusmayanAdet</div>
+                </div></div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <strong><i class="bi bi-table me-1"></i>Mutabakat Detayları</strong>
+                <small class="text-muted">Dönem: @baslangic.ToString("dd.MM.yyyy") - @bitis.ToString("dd.MM.yyyy")</small>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Hesap</th>
+                            <th>Tip</th>
+                            <th class="text-end">Açılış</th>
+                            <th class="text-end text-success">Giriş</th>
+                            <th class="text-end text-warning">Çıkış</th>
+                            <th class="text-end">Beklenen</th>
+                            <th class="text-end">Sistem</th>
+                            <th class="text-end">Fark</th>
+                            <th>Durum</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in satirlar.OrderByDescending(x => Math.Abs(x.Fark)))
+                        {
+                            var ok = Math.Abs(s.Fark) < 0.01m;
+                            <tr class="@(ok ? "" : "table-danger")">
+                                <td>
+                                    <small><strong>@s.HesapAdi</strong></small>
+                                    <div><small class="text-muted">@s.HesapKodu</small></div>
+                                </td>
+                                <td><span class="badge bg-@(s.HesapTipi == HesapTipi.Kasa ? "success" : "primary")">@s.HesapTipi</span></td>
+                                <td class="text-end">@s.Acilis.ToString("N2")</td>
+                                <td class="text-end text-success">@s.Giris.ToString("N2")</td>
+                                <td class="text-end text-warning">@s.Cikis.ToString("N2")</td>
+                                <td class="text-end fw-semibold">@s.Beklenen.ToString("N2")</td>
+                                <td class="text-end fw-semibold">@s.Sistem.ToString("N2")</td>
+                                <td class="text-end fw-bold @(ok ? "text-success" : "text-danger")">@s.Fark.ToString("N2")</td>
+                                <td>
+                                    @if (ok)
+                                    {
+                                        <span class="badge bg-success">Uyuşuyor</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger">Fark Var</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool isLoading = true;
+    private DateTime baslangic = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime bitis = DateTime.Today;
+
+    private List<MutabakatSatir> satirlar = new();
+    private decimal toplamSistem => satirlar.Sum(x => x.Sistem);
+    private decimal toplamBeklenen => satirlar.Sum(x => x.Beklenen);
+    private decimal toplamFark => satirlar.Sum(x => x.Fark);
+    private int uyusmayanAdet => satirlar.Count(x => Math.Abs(x.Fark) >= 0.01m);
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var hesaplar = await BankaHesapService.GetActiveAsync();
+            var tumBakiyeler = await BankaHesapService.GetTumHesapBakiyeleriAsync();
+            var tumHareketler = await HareketService.GetByDateRangeAsync(baslangic.Date, bitis.Date);
+
+            satirlar = hesaplar.Select(h =>
+            {
+                var hs = tumHareketler.Where(x => x.BankaHesapId == h.Id);
+                var giris = hs.Where(x => x.HareketTipi == HareketTipi.Giris).Sum(x => x.Tutar);
+                var cikis = hs.Where(x => x.HareketTipi == HareketTipi.Cikis).Sum(x => x.Tutar);
+                var sistem = tumBakiyeler.TryGetValue(h.Id, out var b) ? b : 0m;
+                var beklenen = h.AcilisBakiye + giris - cikis;
+
+                return new MutabakatSatir
+                {
+                    HesapId = h.Id,
+                    HesapKodu = h.HesapKodu ?? "",
+                    HesapAdi = h.HesapAdi,
+                    HesapTipi = h.HesapTipi,
+                    Acilis = h.AcilisBakiye,
+                    Giris = giris,
+                    Cikis = cikis,
+                    Beklenen = beklenen,
+                    Sistem = sistem,
+                    Fark = sistem - beklenen
+                };
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Banka mutabakat yuklenirken hata");
+            satirlar = new();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private class MutabakatSatir
+    {
+        public int HesapId { get; set; }
+        public string HesapKodu { get; set; } = "";
+        public string HesapAdi { get; set; } = "";
+        public HesapTipi HesapTipi { get; set; }
+        public decimal Acilis { get; set; }
+        public decimal Giris { get; set; }
+        public decimal Cikis { get; set; }
+        public decimal Beklenen { get; set; }
+        public decimal Sistem { get; set; }
+        public decimal Fark { get; set; }
+    }
+}
+

@@ -1,6 +1,6 @@
-﻿# 🔐 Güvenlik Politikası
+# 🔐 Güvenlik Politikası
 
-KOAFiloServis ekibi olarak güvenliği **en yüksek öncelik** olarak ele alıyoruz. Bu doküman, güvenlik açıklarını sorumlu bir şekilde nasıl bildirebileceğinizi açıklar.
+MKFiloServis ekibi olarak güvenliği **en yüksek öncelik** olarak ele alıyoruz. Bu doküman, güvenlik açıklarını sorumlu bir şekilde nasıl bildirebileceğinizi açıklar.
 
 ---
 
@@ -25,7 +25,7 @@ Aşağıdaki sürümler güvenlik güncellemeleri açısından **aktif olarak de
 
 **1. Tercih edilen yöntem — GitHub Private Vulnerability Reporting:**
 
-[Yeni güvenlik bildirimi gönder](https://github.com/karamur/KOAFiloServis/security/advisories/new)
+[Yeni güvenlik bildirimi gönder](https://github.com/karamur/MKFiloServis/security/advisories/new)
 
 **2. Alternatif — E-posta:**
 
@@ -60,7 +60,7 @@ Sorumlu ifşa (responsible disclosure) yapan araştırmacıların adlarını (iz
 
 ## 🛡️ Güvenli Kullanım Önerileri
 
-KOAFiloServis kullanıcılarına yönelik öneriler:
+MKFiloServis kullanıcılarına yönelik öneriler:
 
 | Kategori | Öneri |
 |---|---|
@@ -79,3 +79,4 @@ KOAFiloServis kullanıcılarına yönelik öneriler:
 
 Sorumlu ifşada bulunan tüm güvenlik araştırmacılarına teşekkür ederiz.  
 Birlikte daha güvenli bir ekosistem inşa ediyoruz. ❤️
+

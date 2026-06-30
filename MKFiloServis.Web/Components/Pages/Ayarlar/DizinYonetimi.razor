@@ -1,0 +1,294 @@
+@page "/ayarlar/dizin-yonetimi"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Data
+@using MKFiloServis.Web.Services
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<ApplicationDbContext> DbContextFactory
+@inject IToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>Dizin Yönetimi</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3><i class="bi bi-folder-fill me-2"></i>Dizin Yönetimi</h3>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="/ayarlar/firmalar">Ayarlar</a></li>
+                    <li class="breadcrumb-item active">Dizin Yönetimi</li>
+                </ol>
+            </nav>
+        </div>
+        <button class="btn btn-success" @onclick="Kaydet" disabled="@isKaydediliyor">
+            @if (isKaydediliyor) { <span class="spinner-border spinner-border-sm me-1"></span> }
+            <i class="bi bi-floppy me-1"></i>Kaydet
+        </button>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0"><i class="bi bi-folder me-2"></i>Uygulama Dizinleri</h6>
+                </div>
+                <div class="card-body">
+                    @foreach (var ayar in dizinAyarlari)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">@ayar.Aciklama</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-folder2-open"></i></span>
+                                <input type="text" class="form-control" @bind="ayar.Deger"
+                                       placeholder="Dizin yolunu girin..." />
+                                <button class="btn btn-outline-secondary" type="button"
+                                        @onclick="() => DizinVarliginiKontrolEt(ayar)"
+                                        title="Dizin varlığını kontrol et">
+                                    <i class="bi bi-search"></i>
+                                </button>
+                            </div>
+                            @if (kontrolSonuclari.TryGetValue(ayar.Anahtar, out var sonuc))
+                            {
+                                <div class="mt-1">
+                                    @if (sonuc)
+                                    {
+                                        <small class="text-success"><i class="bi bi-check-circle me-1"></i>Dizin mevcut</small>
+                                    }
+                                    else
+                                    {
+                                        <small class="text-danger"><i class="bi bi-x-circle me-1"></i>Dizin bulunamadı</small>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Genel Ayarlar -->
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h6 class="mb-0"><i class="bi bi-gear me-2"></i>Genel Ayarlar</h6>
+                </div>
+                <div class="card-body">
+                    @foreach (var ayar in genelAyarlar)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">@ayar.Aciklama</label>
+                            <input type="text" class="form-control" @bind="ayar.Deger"
+                                   placeholder="Değer girin..." />
+                        </div>
+                    }
+                    @if (!genelAyarlar.Any())
+                    {
+                        <p class="text-muted mb-0">Genel ayar bulunamadı.</p>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <!-- Bilgi -->
+            <div class="card mb-3">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Bilgi</h6>
+                </div>
+                <div class="card-body">
+                    <p class="small mb-2">Dizin yollarını düzenleyebilir ve kaydedebilirsiniz.</p>
+                    <ul class="small mb-0">
+                        <li>Windows: <code>C:\Klasor\AltKlasor</code></li>
+                        <li>Linux: <code>/home/user/klasor</code></li>
+                        <li>Göreli yol: <code>wwwroot\uploads</code></li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Sistem Bilgisi -->
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h6 class="mb-0"><i class="bi bi-pc-display me-2"></i>Sistem Bilgisi</h6>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm table-borderless mb-0">
+                        <tr>
+                            <td class="text-muted small">İşletim Sistemi:</td>
+                            <td class="small">@System.Runtime.InteropServices.RuntimeInformation.OSDescription</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted small">Uygulama Dizini:</td>
+                            <td class="small"><code>@AppContext.BaseDirectory</code></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted small">Geçici Dizin:</td>
+                            <td class="small"><code>@Path.GetTempPath()</code></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Yeni Ayar Ekle -->
+            <div class="card mt-3">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0"><i class="bi bi-plus-circle me-2"></i>Yeni Ayar Ekle</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <input type="text" class="form-control form-control-sm" @bind="yeniAnahtar" placeholder="Anahtar (örn: BackupDizin)" />
+                    </div>
+                    <div class="mb-2">
+                        <input type="text" class="form-control form-control-sm" @bind="yeniDeger" placeholder="Değer / Dizin yolu" />
+                    </div>
+                    <div class="mb-2">
+                        <input type="text" class="form-control form-control-sm" @bind="yeniAciklama" placeholder="Açıklama" />
+                    </div>
+                    <div class="mb-2">
+                        <select class="form-select form-select-sm" @bind="yeniKategori">
+                            <option value="Dizin">Dizin</option>
+                            <option value="Genel">Genel</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-success btn-sm w-100" @onclick="YeniAyarEkle" disabled="@string.IsNullOrWhiteSpace(yeniAnahtar)">
+                        <i class="bi bi-plus me-1"></i>Ekle
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<AppAyarlari> dizinAyarlari = new();
+    private List<AppAyarlari> genelAyarlar = new();
+    private Dictionary<string, bool> kontrolSonuclari = new();
+    private bool isKaydediliyor = false;
+
+    private string yeniAnahtar = "";
+    private string yeniDeger = "";
+    private string yeniAciklama = "";
+    private string yeniKategori = "Dizin";
+
+    // Varsayılan dizin ayarları
+    private static readonly List<(string Anahtar, string Aciklama, string VarsayilanDeger)> VarsayilanDizinler = new()
+    {
+        ("UploadDizin", "Dosya Yükleme Dizini", "wwwroot\\uploads"),
+        ("BackupDizin", "Yedekleme Dizini", "C:\\KOAFiloBackup"),
+        ("RaporDizin", "Rapor Çıktı Dizini", "wwwroot\\raporlar"),
+        ("BelgeDizin", "Belge Arşiv Dizini", "wwwroot\\belgeler"),
+        ("GeciciDizin", "Geçici Dosya Dizini", ""),
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await YukleAyarlar();
+    }
+
+    private async Task YukleAyarlar()
+    {
+        using var db = await DbContextFactory.CreateDbContextAsync();
+
+        // Varsayılan dizin ayarlarını oluştur (yoksa)
+        foreach (var (anahtar, aciklama, varsayilan) in VarsayilanDizinler)
+        {
+            if (!await db.AppAyarlari.AnyAsync(a => a.Anahtar == anahtar))
+            {
+                db.AppAyarlari.Add(new AppAyarlari
+                {
+                    Anahtar = anahtar,
+                    Deger = varsayilan,
+                    Aciklama = aciklama,
+                    Kategori = "Dizin"
+                });
+            }
+        }
+        await db.SaveChangesAsync();
+
+        dizinAyarlari = await db.AppAyarlari
+            .Where(a => a.Kategori == "Dizin")
+            .OrderBy(a => a.Anahtar)
+            .ToListAsync();
+
+        genelAyarlar = await db.AppAyarlari
+            .Where(a => a.Kategori == "Genel")
+            .OrderBy(a => a.Anahtar)
+            .ToListAsync();
+    }
+
+    private void DizinVarliginiKontrolEt(AppAyarlari ayar)
+    {
+        var deger = ayar.Deger?.Trim() ?? "";
+        if (string.IsNullOrEmpty(deger))
+        {
+            kontrolSonuclari[ayar.Anahtar] = false;
+            return;
+        }
+        try
+        {
+            kontrolSonuclari[ayar.Anahtar] = Directory.Exists(deger);
+        }
+        catch
+        {
+            kontrolSonuclari[ayar.Anahtar] = false;
+        }
+    }
+
+    private async Task Kaydet()
+    {
+        isKaydediliyor = true;
+        try
+        {
+            using var db = await DbContextFactory.CreateDbContextAsync();
+            var tumAyarlar = dizinAyarlari.Concat(genelAyarlar).ToList();
+            foreach (var ayar in tumAyarlar)
+            {
+                var existing = await db.AppAyarlari.FindAsync(ayar.Id);
+                if (existing != null)
+                {
+                    existing.Deger = ayar.Deger;
+                    existing.GuncellenmeTarihi = DateTime.UtcNow;
+                }
+            }
+            await db.SaveChangesAsync();
+            ToastService.ShowSuccess("Ayarlar kaydedildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Kayıt hatası: {ex.Message}");
+        }
+        finally
+        {
+            isKaydediliyor = false;
+        }
+    }
+
+    private async Task YeniAyarEkle()
+    {
+        if (string.IsNullOrWhiteSpace(yeniAnahtar)) return;
+        try
+        {
+            using var db = await DbContextFactory.CreateDbContextAsync();
+            if (await db.AppAyarlari.AnyAsync(a => a.Anahtar == yeniAnahtar))
+            {
+                ToastService.ShowWarning("Bu anahtar zaten mevcut.");
+                return;
+            }
+            var yeni = new AppAyarlari
+            {
+                Anahtar = yeniAnahtar.Trim(),
+                Deger = yeniDeger.Trim(),
+                Aciklama = yeniAciklama.Trim(),
+                Kategori = yeniKategori,
+                GuncellenmeTarihi = DateTime.UtcNow
+            };
+            db.AppAyarlari.Add(yeni);
+            await db.SaveChangesAsync();
+            yeniAnahtar = yeniDeger = yeniAciklama = "";
+            ToastService.ShowSuccess("Yeni ayar eklendi.");
+            await YukleAyarlar();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+    }
+}
+

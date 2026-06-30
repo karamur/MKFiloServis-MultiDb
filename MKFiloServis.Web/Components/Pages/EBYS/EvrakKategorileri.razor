@@ -1,0 +1,238 @@
+@page "/ebys/kategoriler"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IEbysEvrakService EvrakService
+@inject IToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>Evrak Kategorileri - EBYS</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h3 class="mb-0"><i class="bi bi-folder2 me-2"></i>Evrak Kategorileri</h3>
+            <small class="text-muted">Gelen/giden evraklar için kategori tanımları</small>
+        </div>
+        <button class="btn btn-primary" @onclick="YeniKategoriAc">
+            <i class="bi bi-plus-circle me-1"></i>Yeni Kategori
+        </button>
+    </div>
+
+    <div class="row g-3">
+        @if (kategoriler.Count == 0)
+        {
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <i class="bi bi-folder2-open fs-1 text-muted d-block mb-3"></i>
+                        <p class="text-muted mb-3">Henüz kategori tanımlanmamış</p>
+                        <button class="btn btn-primary" @onclick="YeniKategoriAc">
+                            <i class="bi bi-plus-circle me-1"></i>İlk Kategoriyi Ekle
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @foreach (var kategori in kategoriler.OrderBy(k => k.SiraNo))
+        {
+            <div class="col-md-4 col-lg-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-start">
+                            <div class="p-2 rounded me-3" style="background-color: @(kategori.Renk ?? "#6c757d")20">
+                                <i class="@(kategori.Ikon ?? "bi-folder") fs-4" style="color: @(kategori.Renk ?? "#6c757d")"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">@kategori.KategoriAdi</h6>
+                                @if (!string.IsNullOrEmpty(kategori.Aciklama))
+                                {
+                                    <small class="text-muted d-block">@kategori.Aciklama</small>
+                                }
+                                <small class="text-muted">Sıra: @kategori.SiraNo</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-transparent border-0 pt-0">
+                        <div class="btn-group btn-group-sm w-100">
+                            <button class="btn btn-outline-primary" @onclick="() => DuzenleAc(kategori)">
+                                <i class="bi bi-pencil"></i> Düzenle
+                            </button>
+                            <button class="btn btn-outline-danger" @onclick="() => SilAsync(kategori.Id)">
+                                <i class="bi bi-trash"></i> Sil
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@* Kategori Modal *@
+@if (showModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi @(duzenlemeModu ? "bi-pencil" : "bi-plus-circle") me-2"></i>
+                        @(duzenlemeModu ? "Kategori Düzenle" : "Yeni Kategori")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="ModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Kategori Adı <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" @bind="seciliKategori.KategoriAdi" placeholder="Örn: Resmi Yazışmalar" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Açıklama</label>
+                        <textarea class="form-control" rows="2" @bind="seciliKategori.Aciklama"></textarea>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Sıra No</label>
+                            <input type="number" class="form-control" @bind="seciliKategori.SiraNo" min="1" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Renk</label>
+                            <input type="color" class="form-control form-control-color w-100" @bind="seciliKategori.Renk" />
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <label class="form-label">İkon</label>
+                        <select class="form-select" @bind="seciliKategori.Ikon">
+                            <option value="bi-folder">📁 Klasör</option>
+                            <option value="bi-file-text">📄 Dosya</option>
+                            <option value="bi-envelope">✉️ Zarf</option>
+                            <option value="bi-building">🏢 Bina</option>
+                            <option value="bi-people">👥 Kişiler</option>
+                            <option value="bi-briefcase">💼 Çanta</option>
+                            <option value="bi-cash">💵 Para</option>
+                            <option value="bi-gear">⚙️ Ayar</option>
+                            <option value="bi-shield">🛡️ Kalkan</option>
+                            <option value="bi-truck">🚚 Araç</option>
+                        </select>
+                    </div>
+                    <div class="form-check mt-3">
+                        <input class="form-check-input" type="checkbox" id="aktif" @bind="seciliKategori.Aktif" />
+                        <label class="form-check-label" for="aktif">Aktif</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="ModalKapat">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="KaydetAsync" disabled="@isLoading">
+                        @if (isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<EbysEvrakKategori> kategoriler = new();
+    private EbysEvrakKategori seciliKategori = new();
+    private bool showModal;
+    private bool duzenlemeModu;
+    private bool isLoading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        kategoriler = await EvrakService.GetKategorilerAsync();
+    }
+
+    private void YeniKategoriAc()
+    {
+        seciliKategori = new EbysEvrakKategori
+        {
+            Aktif = true,
+            SiraNo = kategoriler.Count + 1,
+            Renk = "#6c757d",
+            Ikon = "bi-folder"
+        };
+        duzenlemeModu = false;
+        showModal = true;
+    }
+
+    private void DuzenleAc(EbysEvrakKategori kategori)
+    {
+        seciliKategori = new EbysEvrakKategori
+        {
+            Id = kategori.Id,
+            KategoriAdi = kategori.KategoriAdi,
+            Aciklama = kategori.Aciklama,
+            SiraNo = kategori.SiraNo,
+            Renk = kategori.Renk,
+            Ikon = kategori.Ikon,
+            Aktif = kategori.Aktif
+        };
+        duzenlemeModu = true;
+        showModal = true;
+    }
+
+    private void ModalKapat()
+    {
+        showModal = false;
+    }
+
+    private async Task KaydetAsync()
+    {
+        if (string.IsNullOrWhiteSpace(seciliKategori.KategoriAdi))
+        {
+            ToastService.ShowWarning("Kategori adı zorunludur");
+            return;
+        }
+
+        isLoading = true;
+        try
+        {
+            if (duzenlemeModu)
+            {
+                await EvrakService.UpdateKategoriAsync(seciliKategori);
+                ToastService.ShowSuccess("Kategori güncellendi");
+            }
+            else
+            {
+                await EvrakService.CreateKategoriAsync(seciliKategori);
+                ToastService.ShowSuccess("Kategori eklendi");
+            }
+            showModal = false;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SilAsync(int id)
+    {
+        try
+        {
+            await EvrakService.DeleteKategoriAsync(id);
+            ToastService.ShowSuccess("Kategori silindi");
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+    }
+}
+

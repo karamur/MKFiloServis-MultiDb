@@ -1,17 +1,17 @@
-﻿KOAFiloServis — Yazılım Lisans Sözleşmesi
+MKFiloServis — Yazılım Lisans Sözleşmesi
 ==========================================
 
 Telif Hakkı © 2024–2026 Allbatros Global Teknoloji
 Tüm hakları saklıdır. (All rights reserved.)
 
-Bu yazılım ("KOAFiloServis"), Allbatros Global Teknoloji'nin ("Lisans Veren")
+Bu yazılım ("MKFiloServis"), Allbatros Global Teknoloji'nin ("Lisans Veren")
 fikri ve sınai mülkiyetidir. Aşağıdaki şartları kabul etmediğiniz takdirde
 bu yazılımı indiremez, kuramaz, kopyalayamaz veya kullanamazsınız.
 
 ────────────────────────────────────────────────────────────────────────
 1. KAPSAM
 ────────────────────────────────────────────────────────────────────────
-Bu lisans; KOAFiloServis kaynak kodu, derlenmiş ikili dosyaları (binary),
+Bu lisans; MKFiloServis kaynak kodu, derlenmiş ikili dosyaları (binary),
 yapılandırma şablonları, dokümantasyon, görsel materyaller, kurulum
 betikleri ve ilgili tüm dijital varlıkları kapsar.
 
@@ -53,7 +53,7 @@ gerektirir. Lütfen bilgi@allbatros.com.tr adresinden iletişime geçin.
 ────────────────────────────────────────────────────────────────────────
 5. ÜÇÜNCÜ TARAF BİLEŞENLER
 ────────────────────────────────────────────────────────────────────────
-KOAFiloServis; MIT, Apache 2.0, BSD, LGPL ve benzeri açık kaynak
+MKFiloServis; MIT, Apache 2.0, BSD, LGPL ve benzeri açık kaynak
 lisanslarla dağıtılan üçüncü taraf bileşenler içerir. Bu bileşenler
 kendi orijinal lisanslarına tabidir ve bu sözleşmenin kapsamı dışındadır.
 NuGet paket lisansları için ilgili paketin resmi sayfasına başvurunuz.
@@ -85,9 +85,10 @@ yetkilidir.
 ────────────────────────────────────────────────────────────────────────
   🏢 Allbatros Global Teknoloji
   🌐 https://www.allbatros.com
-  🐙 https://github.com/karamur/KOAFiloServis
+  🐙 https://github.com/karamur/MKFiloServis
   📧 Lisans talepleri için iletişime geçiniz.
 
 ────────────────────────────────────────────────────────────────────────
 SON
 ────────────────────────────────────────────────────────────────────────
+

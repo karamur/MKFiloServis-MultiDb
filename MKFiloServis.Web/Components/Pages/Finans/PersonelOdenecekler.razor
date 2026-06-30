@@ -1,0 +1,788 @@
+@page "/finans/personel-odenecekler"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IBankaKasaHareketService HareketService
+@inject IBankaHesapService BankaHesapService
+@inject ISoforService SoforService
+@inject IAracService AracService
+@inject IToastService ToastService
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Personele Ödenecekler</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h3><i class="bi bi-person-check me-2 text-info"></i>Personele Ödenecekler</h3>
+            <small class="text-muted">Personellerin ceplerinden yaptıkları harcamalar - geri ödeme listesi</small>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="/finans/masraf-girisi" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-circle me-1"></i>Yeni Masraf Girişi
+            </a>
+            <button class="btn btn-success btn-sm" @onclick="TopluOdeAsync" disabled="@(!secilenler.Any())">
+                <i class="bi bi-check2-all me-1"></i>Seçilenleri Öde (@secilenler.Count)
+            </button>
+            <button class="btn btn-outline-success btn-sm" @onclick="ExcelAktarAsync" disabled="@(!odenecekler.Any())">
+                <i class="bi bi-file-earmark-excel me-1"></i>Excel
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtreler -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Personel</label>
+                    <select class="form-select form-select-sm" @bind="filtrePersonelId" @bind:after="FiltreleAsync">
+                        <option value="0">Tüm Personeller</option>
+                        @foreach (var p in personeller)
+                        {
+                            <option value="@p.Id">@p.TamAd</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Başlangıç</label>
+                    <input type="date" class="form-control form-control-sm" @bind="filtreBaslangic" @bind:after="FiltreleAsync" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Bitiş</label>
+                    <input type="date" class="form-control form-control-sm" @bind="filtreBitis" @bind:after="FiltreleAsync" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Durum</label>
+                    <select class="form-select form-select-sm" @bind="filtreDurum" @bind:after="FiltreleAsync">
+                        <option value="bekleyen">Ödenmeyenler</option>
+                        <option value="odenen">Ödenenler</option>
+                        <option value="tumu">Tümü</option>
+                    </select>
+                </div>
+                <div class="col-md-3 text-end">
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="FiltreleriSifirla">
+                        <i class="bi bi-x-circle me-1"></i>Sıfırla
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Özet Kartlar -->
+    <div class="row mb-3 g-2">
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body py-2">
+                    <small>Bekleyen Ödeme</small>
+                    <h4 class="mb-0">@FormatPara(toplamBekleyen)</h4>
+                    <small>@bekleyenAdet kayıt</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body py-2">
+                    <small>Ödenen</small>
+                    <h4 class="mb-0">@FormatPara(toplamOdenen)</h4>
+                    <small>@odenenAdet kayıt</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body py-2">
+                    <small>Personel Sayısı</small>
+                    <h4 class="mb-0">@personelSayisi</h4>
+                    <small>farklı personel</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body py-2">
+                    <small>Seçilen Toplam</small>
+                    <h4 class="mb-0">@FormatPara(secilenler.Sum(x => x.Tutar))</h4>
+                    <small>@secilenler.Count kayıt</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tablo -->
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else if (!odenecekler.Any())
+    {
+        <div class="alert alert-info text-center">
+            <i class="bi bi-info-circle me-2"></i>
+            @(filtreDurum == "bekleyen" ? "Bekleyen ödeme bulunmuyor." : "Kayıt bulunmuyor.")
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 40px;">
+                                <input type="checkbox" class="form-check-input" 
+                                       @onchange="TumunuSec" 
+                                       checked="@(secilenler.Count == odenecekler.Count(x => !x.PersoneleOdendi))" />
+                            </th>
+                            <th>Tarih</th>
+                            <th>Personel</th>
+                            <th>Plaka</th>
+                            <th>Açıklama</th>
+                            <th>Belge No</th>
+                            <th class="text-end">Tutar</th>
+                            <th class="text-center">Durum</th>
+                            <th>Ödeme Tarihi</th>
+                            <th style="width: 150px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in odenecekler)
+                        {
+                            <tr class="@(item.PersoneleOdendi ? "table-success" : "")">
+                                <td>
+                                    @if (!item.PersoneleOdendi)
+                                    {
+                                        <input type="checkbox" class="form-check-input" 
+                                               checked="@secilenler.Contains(item)"
+                                               @onchange="(e) => SecimDegistir(item, (bool)(e.Value ?? false))" />
+                                    }
+                                </td>
+                                <td>@item.IslemTarihi.ToString("dd.MM.yyyy")</td>
+                                <td>
+                                    <strong>@item.PersonelCebinden?.TamAd</strong>
+                                    <small class="text-muted d-block">@item.PersonelCebinden?.SoforKodu</small>
+                                </td>
+                                <td>
+                                    @if (item.Arac != null)
+                                    {
+                                        <span class="badge bg-light text-dark border"><i class="bi bi-truck me-1"></i>@item.Arac.AktifPlaka</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">-</span>
+                                    }
+                                </td>
+                                <td>@TruncateText(item.Aciklama, 40)</td>
+                                <td>@(item.BelgeNo ?? "-")</td>
+                                <td class="text-end">
+                                    <strong class="text-danger">@FormatPara(item.Tutar)</strong>
+                                </td>
+                                <td class="text-center">
+                                    @if (item.PersoneleOdendi)
+                                    {
+                                        <span class="badge bg-success"><i class="bi bi-check2 me-1"></i>Ödendi</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>Bekliyor</span>
+                                    }
+                                </td>
+                                <td>
+                                    @(item.PersonelOdemeTarihi?.ToString("dd.MM.yyyy") ?? "-")
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        @if (!item.PersoneleOdendi)
+                                        {
+                                            <button class="btn btn-success" @onclick="() => TekOdeAsync(item)" title="Ödendi İşaretle">
+                                                <i class="bi bi-check2"></i>
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button class="btn btn-outline-warning" @onclick="() => OdemeIptalAsync(item)" title="Ödeme İptal">
+                                                <i class="bi bi-arrow-counterclockwise"></i>
+                                            </button>
+                                        }
+                                        <button class="btn btn-outline-primary" @onclick="() => DuzenleAc(item)" title="Düzenle">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button class="btn btn-outline-danger" @onclick="() => SilAsync(item)" title="Sil">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Personel Bazlı Özet -->
+        <div class="card mt-3">
+            <div class="card-header py-2">
+                <h6 class="mb-0"><i class="bi bi-pie-chart me-2"></i>Personel Bazlı Özet (Bekleyen Ödemeler)</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Personel</th>
+                                <th class="text-center">Kayıt</th>
+                                <th class="text-end">Toplam</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var ozet in personelOzetleri.Where(x => x.BekleyenTutar > 0))
+                            {
+                                <tr>
+                                    <td><strong>@ozet.PersonelAd</strong></td>
+                                    <td class="text-center">@ozet.BekleyenAdet</td>
+                                    <td class="text-end"><strong class="text-danger">@FormatPara(ozet.BekleyenTutar)</strong></td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-success" 
+                                                @onclick="() => PersonelTopluOdeAsync(ozet.PersonelId)"
+                                                title="Tümünü Öde">
+                                            <i class="bi bi-check2-all"></i> Tümünü Öde
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                        @if (personelOzetleri.Any(x => x.BekleyenTutar > 0))
+                        {
+                            <tfoot class="table-warning">
+                                <tr>
+                                    <td><strong>TOPLAM</strong></td>
+                                    <td class="text-center"><strong>@personelOzetleri.Sum(x => x.BekleyenAdet)</strong></td>
+                                    <td class="text-end"><strong class="text-danger">@FormatPara(personelOzetleri.Sum(x => x.BekleyenTutar))</strong></td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        }
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@if (duzenleModalGoster && duzenleHareket != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Personel Cebinden Kaydını Düzenle</h5>
+                    <button type="button" class="btn-close" @onclick="DuzenleKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Personel</label>
+                        <select class="form-select" @bind="duzenleHareket.PersonelCebindenId">
+                            <option value="">Seçiniz...</option>
+                            @foreach (var p in personeller)
+                            {
+                                <option value="@p.Id">@p.TamAd (@p.SoforKodu)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Araç (Plaka) <span class="text-muted">(opsiyonel)</span></label>
+                        <select class="form-select" @bind="duzenleHareket.AracId">
+                            <option value="">-- Araç Seçiniz --</option>
+                            @foreach (var a in araclar)
+                            {
+                                <option value="@a.Id">@a.AktifPlaka — @a.Marka @a.Model</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Tutar *</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" @bind="duzenleHareket.Tutar" step="0.01" min="0.01" />
+                                <span class="input-group-text">₺</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Tarih</label>
+                            <input type="date" class="form-control" @bind="duzenleHareket.IslemTarihi" />
+                        </div>
+                    </div>
+                    <div class="mb-3 mt-2">
+                        <label class="form-label small text-muted">Açıklama</label>
+                        <input type="text" class="form-control" @bind="duzenleHareket.Aciklama" placeholder="Açıklama..." />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Belge No</label>
+                        <input type="text" class="form-control" @bind="duzenleHareket.BelgeNo" placeholder="Belge no..." />
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="chkOdendi" @bind="duzenleHareket.PersoneleOdendi" />
+                        <label class="form-check-label" for="chkOdendi">Personele Ödendi</label>
+                    </div>
+                    @if (duzenleHareket.PersoneleOdendi)
+                    {
+                        <div class="mb-3 mt-2">
+                            <label class="form-label small text-muted">Ödeme Tarihi</label>
+                            <input type="date" class="form-control"
+                                   value="@(duzenleHareket.PersonelOdemeTarihi?.ToString("yyyy-MM-dd"))"
+                                   @onchange="(e) => duzenleHareket.PersonelOdemeTarihi = ParseDate(e.Value)" />
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="DuzenleKapat">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="DuzenleKaydetAsync" disabled="@isDuzenleniyor">
+                        @if (isDuzenleniyor)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-check-lg me-1"></i>Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (odemeModalGoster)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title"><i class="bi bi-cash-coin me-2"></i>Personele Geri Ödeme</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="OdemeModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info py-2 mb-3">
+                        <strong>@odemePersonelAd</strong> — @odemeKayitlari.Count kayıt,
+                        toplam <strong>@FormatPara(odemeKayitlari.Sum(x => x.Tutar))</strong>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small">Ödeme Hesabı (Kasa/Banka) *</label>
+                        <select class="form-select" @bind="odemeHesapId">
+                            <option value="0">-- Hesap seçiniz (boş = sadece kapat) --</option>
+                            @foreach (var h in odemeHesaplari)
+                            {
+                                <option value="@h.Id">@h.HesapAdi (@h.HesapTipi)</option>
+                            }
+                        </select>
+                        <small class="text-muted">Seçilen hesaptan @FormatPara(odemeKayitlari.Sum(x => x.Tutar)) çıkış hareketi oluşturulur ve kayıtlar kapatılır.</small>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label small">Ödeme Tarihi *</label>
+                            <input type="date" class="form-control" @bind="odemeTarihi" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small">Açıklama</label>
+                            <input type="text" class="form-control" @bind="odemeAciklama" placeholder="(opsiyonel)" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="OdemeModalKapat" disabled="@isOdemeYapiliyor">İptal</button>
+                    <button type="button" class="btn btn-success" @onclick="OdemeKaydetAsync" disabled="@isOdemeYapiliyor">
+                        @if (isOdemeYapiliyor)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-check-lg me-1"></i>Ödemeyi Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<BankaKasaHareket> tumKayitlar = new();
+    private List<BankaKasaHareket> odenecekler = new();
+    private List<BankaKasaHareket> secilenler = new();
+    private List<Sofor> personeller = new();
+    private List<Arac> araclar = new();
+    private List<PersonelOdemeOzet> personelOzetleri = new();
+
+    private int filtrePersonelId = 0;
+    private DateTime? filtreBaslangic;
+    private DateTime? filtreBitis;
+    private string filtreDurum = "bekleyen";
+    private bool isLoading = true;
+
+    // Düzenleme modalı
+    private bool duzenleModalGoster = false;
+    private BankaKasaHareket? duzenleHareket = null;
+    private bool isDuzenleniyor = false;
+
+    // Özet değişkenler
+    private decimal toplamBekleyen = 0;
+    private decimal toplamOdenen = 0;
+    private int bekleyenAdet = 0;
+    private int odenenAdet = 0;
+    private int personelSayisi = 0;
+
+    // Geri ödeme modalı
+    private bool odemeModalGoster = false;
+    private List<BankaHesap> odemeHesaplari = new();
+    private int odemeHesapId = 0;
+    private DateTime odemeTarihi = DateTime.Today;
+    private string? odemeAciklama;
+    private List<BankaKasaHareket> odemeKayitlari = new();
+    private string odemePersonelAd = string.Empty;
+    private bool isOdemeYapiliyor = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        personeller = (await SoforService.GetAllAsync()).Where(s => s.Aktif).ToList();
+        araclar = (await AracService.GetActiveAsync()).OrderBy(a => a.AktifPlaka).ToList();
+        odemeHesaplari = (await BankaHesapService.GetActiveAsync()).OrderBy(h => h.HesapAdi).ToList();
+
+        // Query string'ten personel filtresini uygula
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var qs = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+        if (qs.TryGetValue("personel", out var pVal) && int.TryParse(pVal, out var pid) && pid > 0)
+        {
+            filtrePersonelId = pid;
+        }
+
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var hareketler = await HareketService.GetAllAsync();
+            tumKayitlar = hareketler.Where(h => h.PersonelCebindenId.HasValue).ToList();
+            await FiltreleAsync();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task FiltreleAsync()
+    {
+        var filtrelenmis = tumKayitlar.AsEnumerable();
+
+        // Personel filtresi
+        if (filtrePersonelId > 0)
+        {
+            filtrelenmis = filtrelenmis.Where(x => x.PersonelCebindenId == filtrePersonelId);
+        }
+
+        // Tarih filtresi
+        if (filtreBaslangic.HasValue)
+        {
+            filtrelenmis = filtrelenmis.Where(x => x.IslemTarihi >= filtreBaslangic.Value);
+        }
+        if (filtreBitis.HasValue)
+        {
+            filtrelenmis = filtrelenmis.Where(x => x.IslemTarihi <= filtreBitis.Value);
+        }
+
+        // Durum filtresi
+        filtrelenmis = filtreDurum switch
+        {
+            "bekleyen" => filtrelenmis.Where(x => !x.PersoneleOdendi),
+            "odenen" => filtrelenmis.Where(x => x.PersoneleOdendi),
+            _ => filtrelenmis
+        };
+
+        odenecekler = filtrelenmis.OrderByDescending(x => x.IslemTarihi).ThenByDescending(x => x.CreatedAt).ToList();
+
+        // Özetleri hesapla
+        HesaplaOzetler();
+        secilenler.Clear();
+
+        await Task.CompletedTask;
+    }
+
+    private void HesaplaOzetler()
+    {
+        var bekleyenler = tumKayitlar.Where(x => !x.PersoneleOdendi).ToList();
+        var odenenler = tumKayitlar.Where(x => x.PersoneleOdendi).ToList();
+
+        toplamBekleyen = bekleyenler.Sum(x => x.Tutar);
+        toplamOdenen = odenenler.Sum(x => x.Tutar);
+        bekleyenAdet = bekleyenler.Count;
+        odenenAdet = odenenler.Count;
+        personelSayisi = tumKayitlar.Select(x => x.PersonelCebindenId).Distinct().Count();
+
+        // Personel bazlı özet
+        personelOzetleri = tumKayitlar
+            .GroupBy(x => x.PersonelCebindenId)
+            .Select(g => new PersonelOdemeOzet
+            {
+                PersonelId = g.Key ?? 0,
+                PersonelAd = g.First().PersonelCebinden?.TamAd ?? "Bilinmiyor",
+                BekleyenAdet = g.Count(x => !x.PersoneleOdendi),
+                BekleyenTutar = g.Where(x => !x.PersoneleOdendi).Sum(x => x.Tutar),
+                OdenenAdet = g.Count(x => x.PersoneleOdendi),
+                OdenenTutar = g.Where(x => x.PersoneleOdendi).Sum(x => x.Tutar)
+            })
+            .OrderBy(x => x.PersonelAd)
+            .ToList();
+    }
+
+    private void TumunuSec(ChangeEventArgs e)
+    {
+        var secili = (bool)(e.Value ?? false);
+        secilenler.Clear();
+        if (secili)
+        {
+            secilenler.AddRange(odenecekler.Where(x => !x.PersoneleOdendi));
+        }
+    }
+
+    private void SecimDegistir(BankaKasaHareket item, bool secili)
+    {
+        if (secili && !secilenler.Contains(item))
+        {
+            secilenler.Add(item);
+        }
+        else if (!secili)
+        {
+            secilenler.Remove(item);
+        }
+    }
+
+    private void TekOdeAsync(BankaKasaHareket item)
+    {
+        OdemeModalAc(new List<BankaKasaHareket> { item }, item.PersonelCebinden?.TamAd ?? "Personel");
+    }
+
+    private void TopluOdeAsync()
+    {
+        if (!secilenler.Any()) return;
+        // Tüm seçilenlerin aynı personele ait olduğunu doğrula
+        var personelIdleri = secilenler.Select(x => x.PersonelCebindenId).Distinct().ToList();
+        if (personelIdleri.Count > 1)
+        {
+            ToastService.ShowWarning("Toplu ödeme için aynı personele ait kayıtları seçiniz.");
+            return;
+        }
+        var ad = secilenler.First().PersonelCebinden?.TamAd ?? "Personel";
+        OdemeModalAc(secilenler.ToList(), ad);
+    }
+
+    private void PersonelTopluOdeAsync(int personelId)
+    {
+        var personelKayitlari = tumKayitlar.Where(x => x.PersonelCebindenId == personelId && !x.PersoneleOdendi).ToList();
+        if (!personelKayitlari.Any()) return;
+        var personelAd = personelKayitlari.First().PersonelCebinden?.TamAd ?? "Personel";
+        OdemeModalAc(personelKayitlari, personelAd);
+    }
+
+    private void OdemeModalAc(List<BankaKasaHareket> kayitlar, string personelAd)
+    {
+        odemeKayitlari = kayitlar;
+        odemePersonelAd = personelAd;
+        odemeHesapId = odemeHesaplari.FirstOrDefault()?.Id ?? 0;
+        odemeTarihi = DateTime.Today;
+        odemeAciklama = null;
+        odemeModalGoster = true;
+    }
+
+    private void OdemeModalKapat()
+    {
+        odemeModalGoster = false;
+        odemeKayitlari = new List<BankaKasaHareket>();
+    }
+
+    private async Task OdemeKaydetAsync()
+    {
+        if (!odemeKayitlari.Any()) return;
+        var personelId = odemeKayitlari.First().PersonelCebindenId ?? 0;
+        if (personelId <= 0)
+        {
+            ToastService.ShowError("Personel bilgisi bulunamadı.");
+            return;
+        }
+
+        try
+        {
+            isOdemeYapiliyor = true;
+            var sonuc = await HareketService.PersonelGeriOdemeYapAsync(
+                personelId,
+                odemeKayitlari.Select(x => x.Id),
+                odemeHesapId > 0 ? odemeHesapId : null,
+                odemeTarihi,
+                odemeAciklama);
+
+            if (!sonuc.Basarili)
+            {
+                ToastService.ShowError(sonuc.Hata ?? "Ödeme yapılamadı.");
+                return;
+            }
+
+            ToastService.ShowSuccess($"{odemePersonelAd}: {sonuc.KapatilanKayitSayisi} kayıt kapatıldı, toplam {FormatPara(sonuc.ToplamTutar)} ödendi.");
+            odemeModalGoster = false;
+            secilenler.Clear();
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+        finally
+        {
+            isOdemeYapiliyor = false;
+        }
+    }
+
+    private async Task OdemeIptalAsync(BankaKasaHareket item)
+    {
+        var result = await JS.InvokeAsync<bool>("confirm", "Ödeme iptal edilsin mi? (Karşı kasa/banka hareketi de geri alınacaktır)");
+        if (!result) return;
+
+        try
+        {
+            await HareketService.PersonelGeriOdemeIptalAsync(item.Id);
+            ToastService.ShowInfo("Ödeme iptal edildi.");
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+    }
+
+    private async Task SilAsync(BankaKasaHareket item)
+    {
+        var result = await JS.InvokeAsync<bool>("confirm", "Bu kayıt silinecek. Emin misiniz?");
+        if (!result) return;
+
+        try
+        {
+            await HareketService.DeleteAsync(item.Id);
+            tumKayitlar.Remove(item);
+            odenecekler.Remove(item);
+            ToastService.ShowSuccess("Kayıt silindi.");
+            HesaplaOzetler();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+    }
+
+    private void DuzenleAc(BankaKasaHareket item)
+    {
+        duzenleHareket = new BankaKasaHareket
+        {
+            Id = item.Id,
+            IslemNo = item.IslemNo,
+            BelgeNo = item.BelgeNo,
+            Tutar = item.Tutar,
+            IslemTarihi = item.IslemTarihi,
+            Aciklama = item.Aciklama,
+            PersonelCebindenId = item.PersonelCebindenId,
+            HareketTipi = item.HareketTipi,
+            BankaHesapId = item.BankaHesapId,
+            IslemKaynak = item.IslemKaynak,
+            CariId = item.CariId,
+            AracId = item.AracId,
+            MuhasebeFisId = item.MuhasebeFisId,
+            PersoneleOdendi = item.PersoneleOdendi,
+            PersonelOdemeTarihi = item.PersonelOdemeTarihi
+        };
+        duzenleModalGoster = true;
+    }
+
+    private void DuzenleKapat()
+    {
+        duzenleModalGoster = false;
+        duzenleHareket = null;
+    }
+
+    private async Task DuzenleKaydetAsync()
+    {
+        if (duzenleHareket == null) return;
+        if (duzenleHareket.Tutar <= 0)
+        {
+            ToastService.ShowWarning("Tutar 0'dan büyük olmalıdır.");
+            return;
+        }
+        if (!duzenleHareket.PersonelCebindenId.HasValue)
+        {
+            ToastService.ShowWarning("Personel seçiniz.");
+            return;
+        }
+        if (duzenleHareket.PersoneleOdendi && !duzenleHareket.PersonelOdemeTarihi.HasValue)
+        {
+            duzenleHareket.PersonelOdemeTarihi = DateTime.Today;
+        }
+        if (!duzenleHareket.PersoneleOdendi)
+        {
+            duzenleHareket.PersonelOdemeTarihi = null;
+        }
+
+        isDuzenleniyor = true;
+        try
+        {
+            await HareketService.UpdateAsync(duzenleHareket);
+            ToastService.ShowSuccess("Kayıt güncellendi.");
+            duzenleModalGoster = false;
+            duzenleHareket = null;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+        finally
+        {
+            isDuzenleniyor = false;
+        }
+    }
+
+    private static DateTime? ParseDate(object? raw)
+        => raw == null ? null : DateTime.TryParse(raw.ToString(), out var d) ? d : null;
+
+    private async Task FiltreleriSifirla()
+    {
+        filtrePersonelId = 0;
+        filtreBaslangic = null;
+        filtreBitis = null;
+        filtreDurum = "bekleyen";
+        await FiltreleAsync();
+    }
+
+    private async Task ExcelAktarAsync()
+    {
+        // TODO: Excel export implementasyonu
+        ToastService.ShowInfo("Excel export özelliği yakında eklenecek.");
+        await Task.CompletedTask;
+    }
+
+    private string FormatPara(decimal tutar) => tutar.ToString("N2", new System.Globalization.CultureInfo("tr-TR")) + " ₺";
+    private string TruncateText(string? text, int maxLength) => 
+        string.IsNullOrEmpty(text) ? "" : text.Length > maxLength ? text[..maxLength] + "..." : text;
+
+    private class PersonelOdemeOzet
+    {
+        public int PersonelId { get; set; }
+        public string PersonelAd { get; set; } = string.Empty;
+        public int BekleyenAdet { get; set; }
+        public decimal BekleyenTutar { get; set; }
+        public int OdenenAdet { get; set; }
+        public decimal OdenenTutar { get; set; }
+    }
+}
+
+

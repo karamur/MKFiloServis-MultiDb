@@ -1,4 +1,4 @@
-﻿<!--
+<!--
   Teşekkürler! 🎉
   PR açmadan önce CONTRIBUTING.md'yi okuduğunuzdan emin olun.
   Aşağıdaki tüm bölümleri eksiksiz doldurun.
@@ -73,3 +73,4 @@ Closes #
 ## 💬 Notlar (Opsiyonel)
 
 <!-- Reviewer'ların dikkat etmesi gereken nokta, kalan TODO, vb. -->
+

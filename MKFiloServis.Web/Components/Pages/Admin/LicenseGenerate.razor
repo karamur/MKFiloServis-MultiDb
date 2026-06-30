@@ -1,0 +1,139 @@
+@page "/admin/license-generate"
+@using MKFiloServis.Shared.Entities
+
+<h3 class="mb-3"><i class="bi bi-key-fill me-2 text-warning"></i>Lisans Anahtarı Üret</h3>
+<p class="text-muted small mb-4">
+    Bu sayfadan müşteriye özel lisans anahtarı üretebilirsiniz.
+    Üretilen anahtar <strong>müşterinin bilgisayarına özeldir</strong>.
+</p>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Firma Kodu</label>
+                    <input type="text" class="form-control" @bind="firmaKodu"
+                           placeholder="Örn: USTUN" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Machine ID</label>
+                    <textarea class="form-control font-monospace" rows="2"
+                              @bind="machineId"
+                              placeholder="Müşteriden gelen makine kodunu yapıştırın"></textarea>
+                    @if (otomatikDolduruldu)
+                    {
+                        <div class="form-text text-success">
+                            <i class="bi bi-check-circle me-1"></i>Link üzerinden otomatik dolduruldu
+                        </div>
+                    }
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Bitiş Tarihi</label>
+                    <input type="date" class="form-control" @bind="expireDate" />
+                    <div class="form-text">Varsayılan: 1 yıl</div>
+                </div>
+
+                <button class="btn btn-warning btn-lg w-100" @onclick="LisansUret"
+                        disabled="@(calisiyor || string.IsNullOrWhiteSpace(firmaKodu) || string.IsNullOrWhiteSpace(machineId))">
+                    @if (calisiyor)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                        <span>Üretiliyor...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-rocket-takeoff me-2"></i>
+                        <span>Lisans Üret</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        @if (!string.IsNullOrEmpty(uretilenKey))
+        {
+            <div class="card border-success">
+                <div class="card-header bg-success text-white">
+                    <i class="bi bi-check-circle me-1"></i>Lisans Anahtarı Hazır
+                </div>
+                <div class="card-body">
+                    <div class="mb-2 small text-muted">
+                        Firma: <strong>@firmaKodu</strong> &middot;
+                        Bitiş: <strong>@uretilenExpire.ToString("dd.MM.yyyy")</strong>
+                    </div>
+                    <textarea class="form-control font-monospace mb-3" rows="6"
+                              readonly>@uretilenKey</textarea>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-primary" @onclick="Kopyala">
+                            <i class="bi @(kopyalandi ? "bi-check-lg" : "bi-clipboard") me-1"></i>
+                            @(kopyalandi ? "Kopyalandı!" : "Kopyala")
+                        </button>
+                        <button class="btn btn-outline-secondary" @onclick="Sifirla">
+                            <i class="bi bi-arrow-repeat me-1"></i>Yeni Üret
+                        </button>
+                    </div>
+                    <div class="mt-3 small text-muted">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Bu anahtarı müşteriye gönderin. Müşteri giriş ekranına yapıştırarak sistemi aktif edebilir.
+                    </div>
+                </div>
+            </div>
+        }
+        else if (!string.IsNullOrEmpty(hataMesaji))
+        {
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle me-1"></i>@hataMesaji
+            </div>
+        }
+
+        @* Son üretilenler — log *@
+        @if (sonUretilenler.Any())
+        {
+            <div class="card mt-3">
+                <div class="card-header">
+                    <i class="bi bi-clock-history me-1"></i>Son Üretilenler
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Firma</th>
+                                <th>Bitiş</th>
+                                <th>Tarih</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in sonUretilenler)
+                            {
+                                <tr>
+                                    <td>@item.FirmaKodu</td>
+                                    <td>@item.ExpireDate.ToString("dd.MM.yyyy")</td>
+                                    <td>@item.CreatedAt.ToString("dd.MM HH:mm")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@* Nasıl kullanılır? *@
+<div class="card mt-3 bg-light">
+    <div class="card-body">
+        <h6><i class="bi bi-question-circle me-1"></i>Nasıl Çalışır?</h6>
+        <ol class="mb-0 small">
+            <li>Müşteri giriş ekranında makine kodunu kopyalar</li>
+            <li>Bu kodu size gönderir (WhatsApp, mail vb.)</li>
+            <li>Firma kodu + makine kodunu girer, <strong>"Lisans Üret"</strong> basarsınız</li>
+            <li>Oluşan anahtarı müşteriye gönderirsiniz</li>
+            <li>Müşteri anahtarı yapıştırır → sistem açılır</li>
+        </ol>
+    </div>
+</div>
+

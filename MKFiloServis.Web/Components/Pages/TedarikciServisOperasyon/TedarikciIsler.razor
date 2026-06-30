@@ -1,0 +1,488 @@
+@page "/tedarikci-servis/isler"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject ITasimaTedarikciService TedarikciService
+@inject IGuzergahService GuzergahService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Tedarikçi İşler</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="bi bi-briefcase me-2"></i>Tedarikçi İşler</h3>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary" @onclick='() => Navigation.NavigateTo("/personel-tasima/tedarikciler")'>
+                <i class="bi bi-truck me-1"></i>Tedarikçi Yönetimi
+            </button>
+            <button class="btn btn-success" @onclick="YeniIsAc">
+                <i class="bi bi-plus-circle me-1"></i>Yeni İş
+            </button>
+        </div>
+    </div>
+
+    @* Filtreler *@
+    <div class="card shadow-sm mb-3">
+        <div class="card-body bg-light">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small">Ara (Güzergah, Açıklama)</label>
+                    <input class="form-control form-control-sm" @bind="arama" @bind:event="oninput" placeholder="Arama..." />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Tedarikçi</label>
+                    <select class="form-select form-select-sm" @bind="seciliTedarikciId">
+                        <option value="0">Tümü</option>
+                        @foreach (var t in tedarikciler)
+                        {
+                            <option value="@t.Id">@t.TedarikciKodu - @t.Unvan</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Başlangıç (dan)</label>
+                    <input type="date" class="form-control form-control-sm" @bind="baslangicDan" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Başlangıç (e)</label>
+                    <input type="date" class="form-control form-control-sm" @bind="baslangicE" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Durum</label>
+                    <select class="form-select form-select-sm" @bind="seciliDurum">
+                        <option value="-1">Tümü</option>
+                        <option value="0">Beklemede</option>
+                        <option value="1">Aktif</option>
+                        <option value="2">Tamamlandı</option>
+                        <option value="3">İptal Edildi</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Yeni İş Formu *@
+    @if (yeniIsAcik)
+    {
+        <div class="card shadow-sm mb-3 border-success">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center py-2">
+                <span><i class="bi bi-plus-circle me-1"></i>Yeni İş Kaydı</span>
+                <button type="button" class="btn-close btn-close-white btn-sm" @onclick="() => yeniIsAcik = false"></button>
+            </div>
+            <div class="card-body">
+                @if (!string.IsNullOrEmpty(formHata))
+                {
+                    <div class="alert alert-danger py-2 small">@formHata</div>
+                }
+                <div class="row g-2">
+                    <div class="col-md-3">
+                        <label class="form-label small">Tedarikçi *</label>
+                        <select class="form-select form-select-sm" @bind="yeniIs.TasimaTedarikciId">
+                            <option value="0">— Seçiniz —</option>
+                            @foreach (var t in tedarikciler)
+                            {
+                                <option value="@t.Id">@t.TedarikciKodu - @t.Unvan</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">Güzergah *</label>
+                        <select class="form-select form-select-sm" @bind="yeniIs.GuzergahId">
+                            <option value="0">— Seçiniz —</option>
+                            @foreach (var g in guzergahlar)
+                            {
+                                <option value="@g.Id">@g.GuzergahKodu - @g.GuzergahAdi</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Başlangıç</label>
+                        <input type="date" class="form-control form-control-sm" @bind="yeniIs.BaslangicTarihi" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Bitiş</label>
+                        <input type="date" class="form-control form-control-sm" @bind="yeniIs.BitisTarihi" />
+                    </div>
+                    <div class="col-md-1">
+                        <label class="form-label small">Sefer ₺</label>
+                        <input type="number" step="0.01" class="form-control form-control-sm" @bind="yeniIs.SeferUcreti" />
+                    </div>
+                    <div class="col-md-1">
+                        <label class="form-label small">Aylık ₺</label>
+                        <input type="number" step="0.01" class="form-control form-control-sm" @bind="yeniIs.AylikUcret" />
+                    </div>
+                    <div class="col-md-9">
+                        <label class="form-label small">Açıklama</label>
+                        <input class="form-control form-control-sm" @bind="yeniIs.Aciklama" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">Durum</label>
+                        <select class="form-select form-select-sm" @bind="yeniIs.Durum">
+                            <option value="@TasimaTedarikciIsDurum.Beklemede">Beklemede</option>
+                            <option value="@TasimaTedarikciIsDurum.Aktif">Aktif</option>
+                            <option value="@TasimaTedarikciIsDurum.Tamamlandi">Tamamlandı</option>
+                            <option value="@TasimaTedarikciIsDurum.IptalEdildi">İptal Edildi</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mt-2 text-end">
+                    <button class="btn btn-sm btn-secondary me-1" @onclick="() => { yeniIsAcik = false; formHata = null; }">Vazgeç</button>
+                    <button class="btn btn-sm btn-success" @onclick="IsKaydet" disabled="@kaydetYukleniyor">
+                        @if (kaydetYukleniyor) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* İş Listesi *@
+    @if (yukleniyor)
+    {
+        <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+    }
+    else
+    {
+        var filtreli = FiltreleIsler();
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <small class="text-muted">Toplam @filtreli.Count kayıt gösteriliyor (Toplam: @tumIsler.Count)</small>
+        </div>
+
+        @if (!filtreli.Any())
+        {
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>Filtre kriterlerine uygun iş kaydı bulunamadı.
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover table-sm align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Tedarikçi</th>
+                            <th>Güzergah</th>
+                            <th>Araç</th>
+                            <th>Şoför</th>
+                            <th>Başlangıç</th>
+                            <th>Bitiş</th>
+                            <th class="text-end">Sefer ₺</th>
+                            <th class="text-end">Aylık ₺</th>
+                            <th>Durum</th>
+                            <th>Açıklama</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var is_ in filtreli)
+                        {
+                            @if (duzenlenenIsId == is_.Id && duzenlenenIs != null)
+                            {
+                                <tr class="table-primary">
+                                    <td colspan="2">
+                                        <span class="fw-semibold">@is_.TasimaTedarikci?.TedarikciKodu</span>
+                                        <span class="text-muted small ms-1">@is_.TasimaTedarikci?.Unvan</span>
+                                        <div class="small text-muted">@is_.Guzergah?.GuzergahKodu - @is_.Guzergah?.GuzergahAdi</div>
+                                    </td>
+                                    <td colspan="2" class="small text-muted">
+                                        @if (is_.Arac != null) { <span>@is_.Arac.AktifPlaka</span> }
+                                        @if (is_.Sofor != null) { <span class="ms-2">@is_.Sofor.Ad @is_.Sofor.Soyad</span> }
+                                    </td>
+                                    <td class="small">@is_.BaslangicTarihi.ToString("dd.MM.yyyy")</td>
+                                    <td>
+                                        <input type="date" class="form-control form-control-sm" style="min-width:120px"
+                                               @bind="duzenlenenIs.BitisTarihi" />
+                                    </td>
+                                    <td>
+                                        <input type="number" step="0.01" class="form-control form-control-sm" style="min-width:90px"
+                                               @bind="duzenlenenIs.SeferUcreti" placeholder="Sefer ₺" />
+                                    </td>
+                                    <td>
+                                        <input type="number" step="0.01" class="form-control form-control-sm" style="min-width:90px"
+                                               @bind="duzenlenenIs.AylikUcret" placeholder="Aylık ₺" />
+                                    </td>
+                                    <td>
+                                        <select class="form-select form-select-sm" @bind="duzenlenenIs.Durum">
+                                            <option value="@TasimaTedarikciIsDurum.Beklemede">Beklemede</option>
+                                            <option value="@TasimaTedarikciIsDurum.Aktif">Aktif</option>
+                                            <option value="@TasimaTedarikciIsDurum.Tamamlandi">Tamamlandı</option>
+                                            <option value="@TasimaTedarikciIsDurum.IptalEdildi">İptal Edildi</option>
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <input class="form-control form-control-sm" @bind="duzenlenenIs.Aciklama" placeholder="Açıklama" />
+                                    </td>
+                                    <td class="text-end" style="white-space:nowrap">
+                                        <button class="btn btn-sm btn-success" @onclick="IsGuncelle"
+                                                disabled="@duzenlemeYukleniyor" title="Kaydet">
+                                            @if (duzenlemeYukleniyor) { <span class="spinner-border spinner-border-sm"></span> }
+                                            else { <i class="bi bi-check-lg"></i> }
+                                        </button>
+                                        <button class="btn btn-sm btn-secondary ms-1" @onclick="DuzenlemeIptal" title="Vazgeç">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td>
+                                        <a href="/personel-tasima/tedarikciler/@is_.TasimaTedarikciId" class="text-decoration-none fw-semibold">
+                                            @is_.TasimaTedarikci?.TedarikciKodu
+                                        </a>
+                                        <div class="small text-muted">@is_.TasimaTedarikci?.Unvan</div>
+                                    </td>
+                                    <td>
+                                        <span class="fw-semibold">@is_.Guzergah?.GuzergahKodu</span>
+                                        <div class="small text-muted">@is_.Guzergah?.GuzergahAdi</div>
+                                    </td>
+                                    <td>
+                                        @if (is_.Arac != null)
+                                        {
+                                            <a href="/araclar/@is_.AracId" class="badge bg-light text-dark text-decoration-none border">
+                                                <i class="bi bi-truck-front me-1"></i>@is_.Arac.AktifPlaka
+                                            </a>
+                                        }
+                                        else { <span class="text-muted small">—</span> }
+                                    </td>
+                                    <td>
+                                        @if (is_.Sofor != null)
+                                        {
+                                            <a href="/personel/@is_.SoforId" class="text-decoration-none small">
+                                                @is_.Sofor.Ad @is_.Sofor.Soyad
+                                            </a>
+                                        }
+                                        else { <span class="text-muted small">—</span> }
+                                    </td>
+                                    <td class="small">@is_.BaslangicTarihi.ToString("dd.MM.yyyy")</td>
+                                    <td class="small">
+                                        @if (is_.BitisTarihi.HasValue)
+                                        {
+                                            <span class="@(is_.BitisTarihi < DateTime.Today ? "text-danger" : "")">
+                                                @is_.BitisTarihi.Value.ToString("dd.MM.yyyy")
+                                            </span>
+                                        }
+                                        else { <span class="text-muted">—</span> }
+                                    </td>
+                                    <td class="text-end small">
+                                        @if (is_.SeferUcreti.HasValue)
+                                        { <strong>@is_.SeferUcreti.Value.ToString("N2")</strong> }
+                                        else { <span class="text-muted">—</span> }
+                                    </td>
+                                    <td class="text-end small">
+                                        @if (is_.AylikUcret.HasValue)
+                                        { <strong>@is_.AylikUcret.Value.ToString("N2")</strong> }
+                                        else { <span class="text-muted">—</span> }
+                                    </td>
+                                    <td>
+                                        <span class="badge @GetDurumBadgeClass(is_.Durum)">@GetDurumText(is_.Durum)</span>
+                                    </td>
+                                    <td class="small text-muted">@is_.Aciklama</td>
+                                    <td class="text-end" style="white-space:nowrap">
+                                        <button class="btn btn-sm btn-outline-primary" title="Düzenle"
+                                                @onclick="() => DuzenlemeAc(is_)">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger ms-1" title="Sil"
+                                                @onclick="() => IsSil(is_.Id)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @* Özet Satırı *@
+            var toplamSefer = filtreli.Where(i => i.SeferUcreti.HasValue).Sum(i => i.SeferUcreti!.Value);
+            var toplamAylik = filtreli.Where(i => i.AylikUcret.HasValue).Sum(i => i.AylikUcret!.Value);
+            @if (toplamSefer > 0 || toplamAylik > 0)
+            {
+                <div class="d-flex gap-4 justify-content-end mt-2">
+                    @if (toplamSefer > 0)
+                    {
+                        <span class="text-muted small">Toplam Sefer Ücreti: <strong class="text-primary">@toplamSefer.ToString("N2") ₺</strong></span>
+                    }
+                    @if (toplamAylik > 0)
+                    {
+                        <span class="text-muted small">Toplam Aylık Ücret: <strong class="text-success">@toplamAylik.ToString("N2") ₺</strong></span>
+                    }
+                </div>
+            }
+        }
+    }
+</div>
+
+@code {
+    private List<TasimaTedarikciIs> tumIsler = new();
+    private List<TasimaTedarikci> tedarikciler = new();
+    private List<Guzergah> guzergahlar = new();
+
+    private bool yukleniyor = true;
+    private bool yeniIsAcik = false;
+    private bool kaydetYukleniyor = false;
+    private string? formHata;
+
+    private string arama = "";
+    private int seciliTedarikciId = 0;
+    private int seciliDurum = -1;
+    private DateTime? baslangicDan;
+    private DateTime? baslangicE;
+
+    private TasimaTedarikciIs yeniIs = new() { BaslangicTarihi = DateTime.Today };
+
+    private int? duzenlenenIsId;
+    private TasimaTedarikciIs? duzenlenenIs;
+    private bool duzenlemeYukleniyor = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        tedarikciler = await TedarikciService.GetAllAsync();
+        guzergahlar = await GuzergahService.GetAllAsync();
+        tumIsler = await TedarikciService.GetIslerAsync();
+        yukleniyor = false;
+    }
+
+    private List<TasimaTedarikciIs> FiltreleIsler()
+    {
+        var liste = tumIsler.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(arama))
+        {
+            var a = arama.Trim().ToLowerInvariant();
+            liste = liste.Where(i =>
+                (i.Guzergah?.GuzergahKodu?.ToLower().Contains(a) ?? false) ||
+                (i.Guzergah?.GuzergahAdi?.ToLower().Contains(a) ?? false) ||
+                (i.Aciklama?.ToLower().Contains(a) ?? false) ||
+                (i.TasimaTedarikci?.Unvan?.ToLower().Contains(a) ?? false) ||
+                (i.TasimaTedarikci?.TedarikciKodu?.ToLower().Contains(a) ?? false)
+            );
+        }
+
+        if (seciliTedarikciId > 0)
+            liste = liste.Where(i => i.TasimaTedarikciId == seciliTedarikciId);
+
+        if (seciliDurum >= 0)
+            liste = liste.Where(i => (int)i.Durum == seciliDurum);
+
+        if (baslangicDan.HasValue)
+            liste = liste.Where(i => i.BaslangicTarihi >= baslangicDan.Value);
+
+        if (baslangicE.HasValue)
+            liste = liste.Where(i => i.BaslangicTarihi <= baslangicE.Value);
+
+        return liste.OrderByDescending(i => i.BaslangicTarihi).ToList();
+    }
+
+    private void YeniIsAc()
+    {
+        yeniIs = new TasimaTedarikciIs { BaslangicTarihi = DateTime.Today, Durum = TasimaTedarikciIsDurum.Aktif };
+        formHata = null;
+        yeniIsAcik = true;
+    }
+
+    private async Task IsKaydet()
+    {
+        formHata = null;
+
+        if (yeniIs.TasimaTedarikciId <= 0)
+        {
+            formHata = "Tedarikçi seçiniz.";
+            return;
+        }
+        if (yeniIs.GuzergahId <= 0)
+        {
+            formHata = "Güzergah seçiniz.";
+            return;
+        }
+
+        kaydetYukleniyor = true;
+        try
+        {
+            var olusan = await TedarikciService.CreateIsAsync(yeniIs);
+            tumIsler = await TedarikciService.GetIslerAsync();
+            yeniIsAcik = false;
+            yeniIs = new TasimaTedarikciIs { BaslangicTarihi = DateTime.Today };
+        }
+        catch (Exception ex)
+        {
+            formHata = $"Kayıt sırasında hata: {ex.Message}";
+        }
+        finally
+        {
+            kaydetYukleniyor = false;
+        }
+    }
+
+    private async Task IsSil(int id)
+    {
+        await TedarikciService.DeleteIsAsync(id);
+        tumIsler = await TedarikciService.GetIslerAsync();
+    }
+
+    private void DuzenlemeAc(TasimaTedarikciIs is_)
+    {
+        duzenlenenIsId = is_.Id;
+        duzenlenenIs = new TasimaTedarikciIs
+        {
+            Id = is_.Id,
+            TasimaTedarikciId = is_.TasimaTedarikciId,
+            GuzergahId = is_.GuzergahId,
+            AracId = is_.AracId,
+            SoforId = is_.SoforId,
+            BaslangicTarihi = is_.BaslangicTarihi,
+            BitisTarihi = is_.BitisTarihi,
+            SeferUcreti = is_.SeferUcreti,
+            AylikUcret = is_.AylikUcret,
+            Durum = is_.Durum,
+            Aciklama = is_.Aciklama
+        };
+    }
+
+    private void DuzenlemeIptal()
+    {
+        duzenlenenIsId = null;
+        duzenlenenIs = null;
+    }
+
+    private async Task IsGuncelle()
+    {
+        if (duzenlenenIs == null) return;
+        duzenlemeYukleniyor = true;
+        try
+        {
+            await TedarikciService.UpdateIsAsync(duzenlenenIs);
+            tumIsler = await TedarikciService.GetIslerAsync();
+            duzenlenenIsId = null;
+            duzenlenenIs = null;
+        }
+        finally
+        {
+            duzenlemeYukleniyor = false;
+        }
+    }
+
+    private string GetDurumText(TasimaTedarikciIsDurum durum) => durum switch
+    {
+        TasimaTedarikciIsDurum.Beklemede => "Beklemede",
+        TasimaTedarikciIsDurum.Aktif => "Aktif",
+        TasimaTedarikciIsDurum.Tamamlandi => "Tamamlandı",
+        TasimaTedarikciIsDurum.IptalEdildi => "İptal Edildi",
+        _ => durum.ToString()
+    };
+
+    private string GetDurumBadgeClass(TasimaTedarikciIsDurum durum) => durum switch
+    {
+        TasimaTedarikciIsDurum.Beklemede => "bg-warning text-dark",
+        TasimaTedarikciIsDurum.Aktif => "bg-success",
+        TasimaTedarikciIsDurum.Tamamlandi => "bg-secondary",
+        TasimaTedarikciIsDurum.IptalEdildi => "bg-danger",
+        _ => "bg-light text-dark"
+    };
+}
+

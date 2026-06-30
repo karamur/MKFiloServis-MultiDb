@@ -1,0 +1,2098 @@
+﻿@page "/efatura/gelen"
+@using System.IO.Compression
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject IFaturaService FaturaService
+@inject ICariService CariService
+@inject IBankaKasaHareketService BankaKasaService
+@inject IFirmaService FirmaService
+@inject IMuhasebeService MuhasebeService
+@inject IToastService ToastService
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Gelen Faturalar</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h3><i class="bi bi-file-earmark-arrow-down text-danger me-2"></i>Gelen Faturalar (Alış)</h3>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0 small">
+                    <li class="breadcrumb-item"><a href="/dashboard">Ana Sayfa</a></li>
+                    <li class="breadcrumb-item"><a href="/cariler">Cari Yönetimi</a></li>
+                    <li class="breadcrumb-item active">Gelen Faturalar</li>
+                </ol>
+            </nav>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary" @onclick="YeniFaturaAc">
+                <i class="bi bi-plus-lg me-1"></i>Yeni Fatura
+            </button>
+            <div class="btn-group">
+                <button class="btn btn-outline-info" @onclick="SablonIndir" title="Excel Şablon İndir">
+                    <i class="bi bi-download"></i>
+                </button>
+                <button class="btn btn-outline-success" @onclick="ExcelImportAc" title="Fatura Yükle (Excel/XML)">
+                    <i class="bi bi-upload"></i>
+                </button>
+                <button class="btn btn-success" @onclick="ExcelExport" disabled="@(!filtreliFaturalar.Any())" title="Excel İndir">
+                    <i class="bi bi-file-earmark-excel"></i>
+                </button>
+                <button class="btn btn-outline-danger" @onclick="FirmaBazliXmlPdfAktarAsync" disabled="@(!filtreliFaturalar.Any())" title="XML + PDF Aktar">
+                    <i class="bi bi-file-zip"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtre -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Firma</label>
+                    <select class="form-select form-select-sm" @bind="filtreFirmaId" @bind:after="Filtrele">
+                        <option value="0">Tum Firmalar</option>
+                        @if (firmalar != null)
+                        {
+                            @foreach (var firma in firmalar)
+                            {
+                                <option value="@firma.Id">@firma.FirmaAdi</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Baslangic</label>
+                    <input type="date" class="form-control form-control-sm" @bind="filtreBaslangic" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Bitis</label>
+                    <input type="date" class="form-control form-control-sm" @bind="filtreBitis" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Odeme Durumu</label>
+                    <select class="form-select form-select-sm" @bind="filtreDurum">
+                        <option value="">Tumu</option>
+                        <option value="1">Odenmedi</option>
+                        <option value="2">Kismi Odendi</option>
+                        <option value="3">Odendi</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Ara</label>
+                    <input type="text" class="form-control form-control-sm" placeholder="Fatura No / Cari" @bind="aramaMetni" @bind:event="oninput" />
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary btn-sm me-1" @onclick="Filtrele"><i class="bi bi-search"></i></button>
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="FiltreTemizle"><i class="bi bi-x-lg"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ozet Kartlari -->
+    <div class="row mb-3 g-2">
+        <div class="col-6 col-md-3">
+            <div class="card bg-primary text-white h-100">
+                <div class="card-body py-2 text-center">
+                    <small>Toplam Fatura</small>
+                    <h4 class="mb-0">@filtreliFaturalar.Count</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card bg-danger text-white h-100">
+                <div class="card-body py-2 text-center">
+                    <small>Toplam Borc</small>
+                    <h4 class="mb-0">@FormatPara(filtreliFaturalar.Sum(f => f.GenelToplam))</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card bg-success text-white h-100">
+                <div class="card-body py-2 text-center">
+                    <small>Odenen</small>
+                    <h4 class="mb-0">@FormatPara(filtreliFaturalar.Sum(f => f.OdenenTutar))</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card bg-warning text-dark h-100">
+                <div class="card-body py-2 text-center">
+                    <small>Odenecek</small>
+                    <h4 class="mb-0">@FormatPara(filtreliFaturalar.Sum(f => f.KalanTutar))</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Fatura Listesi -->
+        <div class="@(pdfOnizlemeFatura != null ? "col-md-7" : "col-12")">
+            @if (isLoading)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+            }
+            else
+            {
+                <div class="card">
+                    <div class="card-body p-0">
+                        <div class="table-responsive" style="max-height: 65vh; overflow-y: auto;">
+                            <table class="table table-hover table-sm mb-0">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th>Fatura No</th>
+                                        <th>Tarih</th>
+                                        <th>Tedarikci</th>
+                                        <th>Odeme Tarihi</th>
+                                        <th class="text-end">Tutar</th>
+                                        <th class="text-end">Kalan</th>
+                                        <th class="text-center">Durum</th>
+                                        <th class="text-center">Islem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var fatura in filtreliFaturalar)
+                                    {
+                                        var vadeGecmis = fatura.VadeTarihi.HasValue && fatura.VadeTarihi.Value < DateTime.Today && fatura.KalanTutar > 0;
+                                        var isSelected = pdfOnizlemeFatura?.Id == fatura.Id;
+                                        <tr class="@(isSelected ? "table-primary" : vadeGecmis ? "table-danger" : "")" 
+                                            @onclick="() => FaturaSecildi(fatura)" style="cursor: pointer;">
+                                            <td>
+                                                <strong>@fatura.FaturaNo</strong>
+                                                @if (fatura.FirmalarArasiFatura)
+                                                {
+                                                    <span class="badge bg-info ms-1" title="Firmalar Arası Fatura - @(fatura.KarsiFirma?.FirmaAdi ?? "Karşı Firma")">
+                                                        <i class="bi bi-building"></i>
+                                                    </span>
+                                                }
+                                                @if (!string.IsNullOrEmpty(fatura.PdfDosyaYolu))
+                                                {
+                                                    <i class="bi bi-file-pdf text-danger ms-1" title="PDF Mevcut"></i>
+                                                }
+                                            </td>
+                                            <td>@fatura.FaturaTarihi.ToString("dd.MM.yyyy")</td>
+                                            <td>
+                                                @if (fatura.Cari != null)
+                                                {
+                                                    <span class="text-truncate d-inline-block" style="max-width: 120px;" title="@fatura.Cari.Unvan">
+                                                        @fatura.Cari.Unvan
+                                                    </span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (fatura.VadeTarihi.HasValue)
+                                                {
+                                                    <span class="@(vadeGecmis ? "text-danger fw-bold" : "")">
+                                                        @fatura.VadeTarihi.Value.ToString("dd.MM.yy")
+                                                    </span>
+                                                }
+                                            </td>
+                                            <td class="text-end">@FormatPara(fatura.GenelToplam)</td>
+                                            <td class="text-end text-danger"><strong>@FormatPara(fatura.KalanTutar)</strong></td>
+                                            <td class="text-center">
+                                                <span class="badge @GetDurumClass(fatura.Durum)">@GetDurumKisaAdi(fatura.Durum)</span>
+                                            </td>
+                                            <td class="text-center">
+                                                <div class="btn-group btn-group-sm">
+                                                    @if (fatura.KalanTutar > 0)
+                                                    {
+                                                        <button class="btn btn-success btn-sm" @onclick="() => OdemeYapAc(fatura)" @onclick:stopPropagation title="Odeme Yap">
+                                                            <i class="bi bi-cash-coin"></i>
+                                                        </button>
+                                                    }
+                                                    <button class="btn btn-outline-primary btn-sm" @onclick="() => FaturaDetayAc(fatura)" @onclick:stopPropagation title="Detay">
+                                                        <i class="bi bi-eye"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-danger btn-sm" @onclick="() => FaturaSilOnay(fatura)" @onclick:stopPropagation title="Sil">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- PDF Önizleme Paneli -->
+        @if (pdfOnizlemeFatura != null)
+        {
+            <div class="col-md-5">
+                <div class="card h-100">
+                    <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="bi bi-file-pdf text-danger me-1"></i>
+                            <strong>@pdfOnizlemeFatura.FaturaNo</strong>
+                            <small class="text-muted ms-2">@pdfOnizlemeFatura.Cari?.Unvan</small>
+                        </div>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-primary" @onclick="() => FaturaDetayAc(pdfOnizlemeFatura)" title="Detay">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                            <button class="btn btn-outline-secondary" @onclick="() => FaturaDuzenle(pdfOnizlemeFatura)" title="Düzenle">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            @if (!string.IsNullOrEmpty(pdfOnizlemeBase64))
+                            {
+                                <button class="btn btn-outline-danger" @onclick="PdfIndirAsync" title="PDF İndir">
+                                    <i class="bi bi-download"></i>
+                                </button>
+                            }
+                            <button class="btn btn-outline-dark" @onclick="PdfOnizlemeKapat" title="Kapat">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body p-0" style="height: 60vh;">
+                        @if (pdfOnizlemeYukleniyor)
+                        {
+                            <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted">
+                                <div class="spinner-border text-danger mb-3" role="status"></div>
+                                <h5>PDF yükleniyor</h5>
+                            </div>
+                        }
+                        else if (!string.IsNullOrEmpty(pdfOnizlemeUrl))
+                        {
+                            <iframe src="@pdfOnizlemeUrl" style="width: 100%; height: 100%; border: none;"></iframe>
+                        }
+                        else
+                        {
+                            <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted">
+                                <i class="bi bi-file-earmark-x display-1 mb-3"></i>
+                                <h5>PDF Dosyası Yok</h5>
+                                <p class="text-center small">Bu fatura için henüz PDF yüklenmemiş.</p>
+                                <label class="btn btn-outline-primary">
+                                    <i class="bi bi-upload me-1"></i>PDF Yükle
+                                    <InputFile class="d-none" OnChange="e => PdfYukle(e, pdfOnizlemeFatura.Id)" accept=".pdf" />
+                                </label>
+                            </div>
+                        }
+                    </div>
+                    <div class="card-footer bg-light py-2">
+                        <div class="row text-center small">
+                            <div class="col-4">
+                                <div class="text-muted">Toplam</div>
+                                <strong>@FormatPara(pdfOnizlemeFatura.GenelToplam)</strong>
+                            </div>
+                            <div class="col-4">
+                                <div class="text-muted">Ödenen</div>
+                                <strong class="text-success">@FormatPara(pdfOnizlemeFatura.OdenenTutar)</strong>
+                            </div>
+                            <div class="col-4">
+                                <div class="text-muted">Kalan</div>
+                                <strong class="text-danger">@FormatPara(pdfOnizlemeFatura.KalanTutar)</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Odeme Yap Modal -->
+@if (showOdemeModal && odemeFatura != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title"><i class="bi bi-cash-coin me-2"></i>Odeme Yap</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="ModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info py-2">
+                        <strong>@odemeFatura.FaturaNo</strong> - @odemeFatura.Cari?.Unvan<br/>
+                        <span class="text-danger">Kalan: @FormatPara(odemeFatura.KalanTutar)</span>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Odeme Tarihi *</label>
+                            <input type="date" class="form-control" @bind="odemeTarihi" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Odeme Tutari *</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" @bind="odemeTutar" step="0.01" max="@odemeFatura.KalanTutar" />
+                                <span class="input-group-text">TL</span>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Odeme Yontemi *</label>
+                            <select class="form-select" @bind="odemeHesapId">
+                                <option value="0">Secin...</option>
+                                @foreach (var hesap in bankaHesaplari)
+                                {
+                                    <option value="@hesap.Id">@hesap.HesapAdi (@hesap.HesapTipi)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Aciklama</label>
+                            <input type="text" class="form-control" @bind="odemeAciklama" placeholder="Odeme aciklamasi" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="ModalKapat">Iptal</button>
+                    <button type="button" class="btn btn-success" @onclick="OdemeKaydetAsync">
+                        <i class="bi bi-check-lg me-1"></i>Odemeyi Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Odeme Tarihi Degistir Modal -->
+@if (showOdemeTarihiModal && odemeTarihiFatura != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-calendar-event me-2"></i>Odeme Tarihi</h5>
+                    <button type="button" class="btn-close" @onclick="ModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2"><strong>@odemeTarihiFatura.FaturaNo</strong></p>
+                    <label class="form-label">Planlanan Odeme Tarihi</label>
+                    <input type="date" class="form-control" @bind="yeniOdemeTarihi" />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="ModalKapat">Iptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="OdemeTarihiKaydetAsync">
+                        <i class="bi bi-check-lg me-1"></i>Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Yeni/Duzenle Fatura Modal -->
+@if (showFaturaModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(editFatura.Id > 0 ? "Fatura Duzenle" : "Yeni Alis Faturasi")</h5>
+                    <button type="button" class="btn-close" @onclick="ModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrWhiteSpace(faturaFormHataMesaji))
+                    {
+                        <div class="alert alert-warning py-2">
+                            <i class="bi bi-exclamation-triangle me-1"></i>@faturaFormHataMesaji
+                        </div>
+                    }
+
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Fatura No *</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" @bind="editFatura.FaturaNo" />
+                                    <button type="button" class="btn btn-outline-secondary" @onclick="GelenFaturaNoUretAsync" title="Numara Üret">
+                                        <i class="bi bi-arrow-repeat"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Fatura Tarihi *</label>
+                                <input type="date" class="form-control" @bind="editFatura.FaturaTarihi" />
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Vade Tarihi</label>
+                                <input type="date" class="form-control" @bind="editFatura.VadeTarihi" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Firma *</label>
+                                <select class="form-select" @bind="editFatura.FirmaId" @bind:after="GelenFirmaDegistiAsync">
+                                    <option value="">Secin...</option>
+                                    @foreach (var firma in (firmalar ?? []).Where(f => f.Aktif))
+                                    {
+                                        <option value="@firma.Id">@firma.FirmaAdi</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3 form-check mt-4 pt-2">
+                                <input class="form-check-input" type="checkbox" @bind="editFatura.FirmalarArasiFatura" @bind:after="GelenFirmalarArasiDurumDegisti" id="gelenFirmalarArasiFatura" />
+                                <label class="form-check-label" for="gelenFirmalarArasiFatura">Firmalar Arası Fatura</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Karşı Firma</label>
+                                <select class="form-select" @bind="editFatura.KarsiFirmaId" disabled="@(!editFatura.FirmalarArasiFatura)">
+                                    <option value="">Secin...</option>
+                                    @foreach (var firma in (firmalar ?? []).Where(f => f.Aktif && (!editFatura.FirmaId.HasValue || f.Id != editFatura.FirmaId.Value)))
+                                    {
+                                        <option value="@firma.Id">@firma.FirmaAdi</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Tedarikci *</label>
+                                <select class="form-select" @bind="editFatura.CariId">
+                                    <option value="0">Secin...</option>
+                                    @foreach (var cari in GetGelenCariSecenekleri())
+                                    {
+                                        <option value="@cari.Id">@cari.Unvan</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label class="form-label">E-Fatura Tipi</label>
+                                <select class="form-select" @bind="editFatura.EFaturaTipi">
+                                    <option value="@EFaturaTipi.EFatura">E-Fatura</option>
+                                    <option value="@EFaturaTipi.EArsiv">E-Arsiv</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label class="form-label">Durum</label>
+                                <select class="form-select" @bind="editFatura.Durum">
+                                    <option value="@FaturaDurum.Beklemede">Beklemede</option>
+                                    <option value="@FaturaDurum.KismiOdendi">Kismi Odendi</option>
+                                    <option value="@FaturaDurum.Odendi">Odendi</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Ara Toplam *</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" @bind="editFatura.AraToplam" step="0.01" />
+                                    <span class="input-group-text">TL</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">KDV Tutar</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" @bind="editFatura.KdvTutar" step="0.01" />
+                                    <span class="input-group-text">TL</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Genel Toplam *</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" @bind="editFatura.GenelToplam" step="0.01" />
+                                    <span class="input-group-text">TL</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">ETTN No</label>
+                                <input type="text" class="form-control" @bind="editFatura.EttnNo" />
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Aciklama</label>
+                                <input type="text" class="form-control" @bind="editFatura.Aciklama" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="ModalKapat">Iptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="FaturaKaydet">Kaydet</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Import Modal -->
+@if (showImportModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-file-earmark-arrow-up me-2"></i>Fatura Yükle</h5>
+                    <button type="button" class="btn-close" @onclick="ModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Firma *</label>
+                            <select class="form-select @(importFirmaId == 0 ? "border-danger" : "")" 
+                                    value="@importFirmaId" 
+                                    @onchange="ImportFirmaDegisti">
+                                <option value="0">-- Firma Seçin --</option>
+                                @if (firmalar != null)
+                                {
+                                    @foreach (var firma in firmalar)
+                                    {
+                                        <option value="@firma.Id">@firma.FirmaAdi</option>
+                                    }
+                                }
+                            </select>
+                            @if (importFirmaId == 0)
+                            {
+                                <small class="text-danger">Firma seçimi zorunludur</small>
+                            }
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Aktarım Tipi *</label>
+                            <select class="form-select" @bind="importTipi">
+                                <option value="excel">Excel'den Yükle</option>
+                                <option value="xml">XML (UBL) Yükle</option>
+                                <option value="xmlpdf">XML + PDF Yükle</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">E-Fatura Tipi *</label>
+                            <select class="form-select" @bind="importEFaturaTipi">
+                                <option value="1">E-Fatura</option>
+                                <option value="2">E-Arsiv Fatura</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Dosya Seç *</label>
+                            @if (importTipi == "excel")
+                            {
+                                <InputFile @key="@($"{importFirmaId}_{importTipi}")" class="form-control" OnChange="DosyaSecildi" accept=".xlsx,.xls" />
+                            }
+                            else if (importTipi == "xml")
+                            {
+                                <InputFile @key="@($"{importFirmaId}_{importTipi}")" class="form-control" OnChange="XmlDosyalariSecildi" accept=".xml,.xlm" multiple />
+                            }
+                            else
+                            {
+                                <InputFile @key="@($"{importFirmaId}_{importTipi}")" class="form-control" OnChange="XmlPdfDosyalariSecildi" accept=".xml,.xlm,.pdf" multiple />
+                            }
+                        </div>
+                    </div>
+
+                    @if(importTipi == "xml")
+                    {
+                        <div class="alert alert-info py-2">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Birden fazla XML dosyası seçebilirsiniz. Faturalar <strong>@(firmalar?.FirstOrDefault(f => f.Id == importFirmaId)?.FirmaAdi ?? "seçilen firma")</strong> adına kaydedilecektir.
+                        </div>
+                    }
+                    else if(importTipi == "xmlpdf")
+                    {
+                        <div class="alert alert-info py-2">
+                            <i class="bi bi-file-earmark-pdf me-1"></i>
+                            XML ve PDF dosyalarını birlikte seçin. PDF dosyaları aynı isimli XML ile eşleştirilecektir.
+                            <br/><small class="text-muted">Örn: ABC123.xml ve ABC123.pdf birlikte yüklenirse PDF otomatik eşleşir.</small>
+                            @if (importXmlPdfFiles?.Any() == true)
+                            {
+                                <br /><small class="text-success fw-semibold">Seçilen dosya sayısı: @importXmlPdfFiles.Count</small>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-info py-2">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Şablon dosyasını indirip doldurduktan sonra yükleyin. Faturalar <strong>@(firmalar?.FirstOrDefault(f => f.Id == importFirmaId)?.FirmaAdi ?? "seçilen firma")</strong> adına kaydedilecektir.
+                        </div>
+                    }
+                    
+                    @if (importResult != null)
+                    {
+                        <!-- Ozet -->
+                        <div class="row g-2 mb-3">
+                            <div class="col-4">
+                                <div class="card bg-success text-white text-center py-2">
+                                    <h4 class="mb-0">@importResult.ImportedCount</h4>
+                                    <small>Aktarilan</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="card bg-warning text-dark text-center py-2">
+                                    <h4 class="mb-0">@importResult.SkippedCount</h4>
+                                    <small>Atlanan (Mevcut)</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="card bg-danger text-white text-center py-2">
+                                    <h4 class="mb-0">@importResult.ErrorCount</h4>
+                                    <small>Hata</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Hatalar Listesi -->
+                        @if (importResult.Errors.Any())
+                        {
+                            <div class="card">
+                                <div class="card-header bg-danger text-white py-2">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>
+                                    Kaydedilemeyenler (@importResult.Errors.Count)
+                                </div>
+                                <div class="card-body p-0" style="max-height: 300px; overflow-y: auto;">
+                                    <table class="table table-sm table-striped mb-0">
+                                        <thead class="table-light sticky-top">
+                                            <tr>
+                                                <th width="80">Satir</th>
+                                                <th>Hata Detayi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var err in importResult.Errors)
+                                            {
+                                                <tr>
+                                                    @{
+                                                        var parts = err.Split(':', 2);
+                                                        var satir = parts.Length > 0 ? parts[0].Trim() : "";
+                                                        var mesaj = parts.Length > 1 ? parts[1].Trim() : err;
+                                                    }
+                                                    <td><span class="badge bg-secondary">@satir</span></td>
+                                                    <td><small class="text-danger">@mesaj</small></td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        }
+                        else if (importResult.Success)
+                        {
+                            <div class="alert alert-success py-2 mb-0">
+                                <i class="bi bi-check-circle me-1"></i>
+                                Tum faturalar basariyla aktarildi!
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    @if(importTipi == "excel") {
+                        <button type="button" class="btn btn-outline-info" @onclick="SablonIndir">
+                            <i class="bi bi-download me-1"></i>Sablon Indir
+                        </button>
+                    }
+                    <button type="button" class="btn btn-secondary" @onclick="ModalKapat">Kapat</button>
+                    <button type="button" class="btn btn-primary" @onclick="ImportYap" disabled="@(isImporting || !ImportIcinHazirMi())">
+                        @if (isImporting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Faturaları Aktar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Detay Modal -->
+@if (showDetayModal && detayFatura != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="bi bi-receipt me-2"></i>Fatura Detayi - @detayFatura.FaturaNo</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="ModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-borderless table-sm">
+                                <tr><th width="120">Fatura No:</th><td><strong>@detayFatura.FaturaNo</strong></td></tr>
+                                <tr><th>Tarih:</th><td>@detayFatura.FaturaTarihi.ToString("dd.MM.yyyy")</td></tr>
+                                <tr><th>Vade:</th><td>@detayFatura.VadeTarihi?.ToString("dd.MM.yyyy")</td></tr>
+                                <tr><th>Tedarikci:</th><td>@detayFatura.Cari?.Unvan</td></tr>
+                                <tr><th>Vergi No:</th><td>@(detayFatura.Cari?.VergiNo ?? "-")</td></tr>
+                                <tr><th>Tip:</th><td><span class="badge @(detayFatura.EFaturaTipi == EFaturaTipi.EFatura ? "bg-primary" : "bg-secondary")">@(detayFatura.EFaturaTipi == EFaturaTipi.EFatura ? "E-Fatura" : "E-Arsiv")</span></td></tr>
+                                <tr><th>Durum:</th><td><span class="badge @GetDurumClass(detayFatura.Durum)">@GetDurumAdi(detayFatura.Durum)</span></td></tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-borderless table-sm">
+                                <tr><th>Ara Toplam:</th><td class="text-end">@FormatPara(detayFatura.AraToplam)</td></tr>
+                                <tr><th>KDV:</th><td class="text-end">@FormatPara(detayFatura.KdvTutar)</td></tr>
+                                <tr><th>Genel Toplam:</th><td class="text-end"><strong class="text-danger fs-5">@FormatPara(detayFatura.GenelToplam)</strong></td></tr>
+                                <tr><th>Odenen:</th><td class="text-end text-success">@FormatPara(detayFatura.OdenenTutar)</td></tr>
+                                <tr><th>Kalan:</th><td class="text-end text-danger"><strong>@FormatPara(detayFatura.KalanTutar)</strong></td></tr>
+                            </table>
+                            <div class="mt-2">
+                                @if (detayFatura.MuhasebeFisiOlusturuldu)
+                                {
+                                    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Muhasebe fisi olusturuldu</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>Muhasebeleşirilmedi</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(detayFatura.EttnNo))
+                    {
+                        <div class="alert alert-light py-2 mt-2">
+                            <strong>ETTN:</strong> @detayFatura.EttnNo
+                        </div>
+                    }
+                    
+                    <!-- Fatura Kalemleri -->
+                    @if (detayFatura.FaturaKalemleri != null && detayFatura.FaturaKalemleri.Any())
+                    {
+                        <div class="mt-3">
+                            <h6><i class="bi bi-list-ul me-1"></i>Fatura Kalemleri</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Kod</th>
+                                            <th>Aciklama</th>
+                                            <th class="text-center">Miktar</th>
+                                            <th>Birim</th>
+                                            <th class="text-end">Birim Fiyat</th>
+                                            <th class="text-end">KDV %</th>
+                                            <th class="text-end">Tutar</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var kalem in detayFatura.FaturaKalemleri.OrderBy(k => k.SiraNo))
+                                        {
+                                            <tr>
+                                                <td>@kalem.SiraNo</td>
+                                                <td><small>@kalem.UrunKodu</small></td>
+                                                <td>@kalem.Aciklama</td>
+                                                <td class="text-center">@kalem.Miktar</td>
+                                                <td>@kalem.Birim</td>
+                                                <td class="text-end">@FormatPara(kalem.BirimFiyat)</td>
+                                                <td class="text-end">%@kalem.KdvOrani</td>
+                                                <td class="text-end"><strong>@FormatPara(kalem.ToplamTutar)</strong></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer d-flex justify-content-between">
+                    <div>
+                        <button type="button" class="btn btn-outline-danger" @onclick="DetayFaturaSil">
+                            <i class="bi bi-trash me-1"></i>Sil
+                        </button>
+                    </div>
+                    <div class="d-flex gap-2">
+                        @if (!detayFatura.MuhasebeFisiOlusturuldu)
+                        {
+                            <button type="button" class="btn btn-info" @onclick="DetayFaturaMuhasebeles" disabled="@isMuhasebeLeniyor">
+                                @if (isMuhasebeLeniyor)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                <i class="bi bi-journal-plus me-1"></i>Muhasebeleştir
+                            </button>
+                        }
+                        @if (detayFatura.KalanTutar > 0)
+                        {
+                            <button type="button" class="btn btn-success" @onclick="DetayFaturaOdemeYap">
+                                <i class="bi bi-cash-coin me-1"></i>Odeme Yap
+                            </button>
+                        }
+                        <button type="button" class="btn btn-primary" @onclick="DetayFaturaDuzenle">
+                            <i class="bi bi-pencil me-1"></i>Duzenle
+                        </button>
+                        <button type="button" class="btn btn-secondary" @onclick="ModalKapat">Kapat</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Cari Kart Modal -->
+@if (showCariKartModal && cariKartCari != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-person-circle me-2"></i>
+                        Cari Kart - @cariKartCari.CariKodu - @cariKartCari.Unvan
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => showCariKartModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Cari Bilgileri -->
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body py-2">
+                                    <small class="text-muted">Vergi No / TCKN</small>
+                                    <div class="fw-bold">@(cariKartCari.VergiNo ?? cariKartCari.TcKimlikNo ?? "-")</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body py-2">
+                                    <small class="text-muted">Telefon</small>
+                                    <div class="fw-bold">@(cariKartCari.Telefon ?? "-")</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body py-2">
+                                    <small class="text-muted">Email</small>
+                                    <div class="fw-bold">@(cariKartCari.Email ?? "-")</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tarih Filtresi -->
+                    <div class="row g-2 mb-3 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label small">Baslangic Tarihi</label>
+                            <input type="date" class="form-control form-control-sm" @bind="cariKartBaslangic" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Bitis Tarihi</label>
+                            <input type="date" class="form-control form-control-sm" @bind="cariKartBitis" />
+                        </div>
+                        <div class="col-md-6">
+                            <div class="btn-group">
+                                <button class="btn btn-primary btn-sm" @onclick="CariKartEkstreYukle" disabled="@cariKartYukleniyor">
+                                    @if (cariKartYukleniyor)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-search me-1"></i>
+                                    }
+                                    Ekstre Getir
+                                </button>
+                                <button class="btn btn-outline-success btn-sm" @onclick="CariKartExcelExport" 
+                                        disabled="@(!cariKartHareketler.Any())">
+                                    <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                                </button>
+                                <button class="btn btn-outline-info btn-sm" @onclick="CariKartYazdir"
+                                        disabled="@(!cariKartHareketler.Any())">
+                                    <i class="bi bi-printer me-1"></i>Yazdir
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Ozet Kartlari -->
+                    @if (cariKartHareketler.Any())
+                    {
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-4">
+                                <div class="card border-success">
+                                    <div class="card-body py-2 text-center">
+                                        <small class="text-muted">Toplam Alacak</small>
+                                        <h5 class="text-success mb-0">@FormatPara(cariKartToplamAlacak)</h5>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card border-danger">
+                                    <div class="card-body py-2 text-center">
+                                        <small class="text-muted">Toplam Borc</small>
+                                        <h5 class="text-danger mb-0">@FormatPara(cariKartToplamBorc)</h5>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card @(cariKartBakiye >= 0 ? "border-primary" : "border-warning")">
+                                    <div class="card-body py-2 text-center">
+                                        <small class="text-muted">Net Bakiye</small>
+                                        <h5 class="@(cariKartBakiye >= 0 ? "text-primary" : "text-warning") mb-0">
+                                            @FormatPara(cariKartBakiye)
+                                        </h5>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Hareket Tablosu -->
+                    <div class="table-responsive" style="max-height: 400px;">
+                        <table class="table table-hover table-sm mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>Tarih</th>
+                                    <th>Islem Turu</th>
+                                    <th>Belge No</th>
+                                    <th>Aciklama</th>
+                                    <th class="text-end">Borc</th>
+                                    <th class="text-end">Alacak</th>
+                                    <th class="text-end">Bakiye</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (cariKartYukleniyor)
+                                {
+                                    <tr>
+                                        <td colspan="7" class="text-center py-4">
+                                            <div class="spinner-border text-primary"></div>
+                                        </td>
+                                    </tr>
+                                }
+                                else if (!cariKartHareketler.Any())
+                                {
+                                    <tr>
+                                        <td colspan="7" class="text-center py-4 text-muted">
+                                            <i class="bi bi-inbox display-6"></i>
+                                            <div class="mt-2">Hareket bulunamadi</div>
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    decimal calisanBakiye = 0;
+                                    @foreach (var hareket in cariKartHareketler)
+                                    {
+                                        calisanBakiye += hareket.Alacak - hareket.Borc;
+                                        <tr>
+                                            <td>@hareket.Tarih.ToString("dd.MM.yyyy")</td>
+                                            <td>
+                                                <span class="badge @GetIslemTipiBadge(hareket.IslemTipi)">
+                                                    @hareket.IslemTipi
+                                                </span>
+                                            </td>
+                                            <td><small>@hareket.BelgeNo</small></td>
+                                            <td><small>@hareket.Aciklama</small></td>
+                                            <td class="text-end @(hareket.Borc > 0 ? "text-danger" : "")">
+                                                @(hareket.Borc > 0 ? FormatPara(hareket.Borc) : "-")
+                                            </td>
+                                            <td class="text-end @(hareket.Alacak > 0 ? "text-success" : "")">
+                                                @(hareket.Alacak > 0 ? FormatPara(hareket.Alacak) : "-")
+                                            </td>
+                                            <td class="text-end fw-bold @(calisanBakiye >= 0 ? "text-success" : "text-danger")">
+                                                @FormatPara(calisanBakiye)
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showCariKartModal = false">
+                        <i class="bi bi-x me-1"></i>Kapat
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Fatura> faturalar = new();
+    private List<Fatura> filtreliFaturalar = new();
+    private List<Cari> cariler = new();
+    private List<BankaHesap> bankaHesaplari = new();
+    private List<Firma> firmalar = new();
+    private bool isLoading = true;
+
+    // PDF Önizleme
+    private Fatura? pdfOnizlemeFatura;
+    private string? pdfOnizlemeUrl;
+    private string? pdfOnizlemeBase64;
+    private string? pdfOnizlemeDosyaAdi;
+    private bool pdfOnizlemeYukleniyor;
+
+    // Filtre
+    private DateTime? filtreBaslangic;
+    private DateTime? filtreBitis;
+    private string filtreEFaturaTipi = "";
+    private string filtreDurum = "";
+    private string aramaMetni = "";
+    private int filtreFirmaId = 0;
+
+    // Modals
+    private bool showFaturaModal = false;
+    private bool showImportModal = false;
+    private bool showDetayModal = false;
+    private bool showOdemeModal = false;
+    private bool showOdemeTarihiModal = false;
+    private bool showCariKartModal = false;
+    private Fatura editFatura = new();
+    private Fatura? detayFatura;
+    private string? faturaFormHataMesaji;
+
+    // Odeme Modal
+    private Fatura? odemeFatura;
+    private DateTime odemeTarihi = DateTime.Today;
+    private decimal odemeTutar;
+    private int odemeHesapId;
+    private string odemeAciklama = "";
+
+    // Odeme Tarihi Modal
+    private Fatura? odemeTarihiFatura;
+    private DateTime yeniOdemeTarihi = DateTime.Today;
+
+    // Cari Kart (Ekstre)
+    private Cari? cariKartCari;
+    private DateTime cariKartBaslangic = new DateTime(DateTime.Today.Year, 1, 1);
+    private DateTime cariKartBitis = DateTime.Today;
+    private List<CariEkstreHareket> cariKartHareketler = new();
+    private decimal cariKartToplamAlacak;
+    private decimal cariKartToplamBorc;
+    private decimal cariKartBakiye;
+    private bool cariKartYukleniyor = false;
+
+    // Import
+    private string importTipi = "excel";
+    private IBrowserFile? importFile;
+    private IReadOnlyList<IBrowserFile>? importXmlFiles;
+    private IReadOnlyList<IBrowserFile>? importXmlPdfFiles;
+    private EFaturaImportResult? importResult;
+    private bool isImporting = false;
+    private int importEFaturaTipi = 1; // Default to E-Fatura (1)
+    private int importFirmaId = 0; // Fatura yüklenecek firma
+    
+    // Detay Modal
+    private bool isMuhasebeLeniyor = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        cariler = await CariService.GetAllAsync();
+        bankaHesaplari = await BankaKasaService.GetAktifHesaplarAsync();
+        firmalar = await FirmaService.GetAllAsync();
+        await YenileAsync();
+    }
+
+    private async Task YenileAsync()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            faturalar = await FaturaService.GetByYonAsync(FaturaYonu.Gelen);
+            Filtrele();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void Filtrele()
+    {
+        var filtered = faturalar.AsEnumerable();
+        
+        if (filtreBaslangic.HasValue)
+            filtered = filtered.Where(f => f.FaturaTarihi >= filtreBaslangic.Value);
+        
+        if (filtreBitis.HasValue)
+            filtered = filtered.Where(f => f.FaturaTarihi <= filtreBitis.Value);
+        
+        if (!string.IsNullOrEmpty(filtreEFaturaTipi) && int.TryParse(filtreEFaturaTipi, out var efTip))
+            filtered = filtered.Where(f => (int)f.EFaturaTipi == efTip);
+        
+        if (!string.IsNullOrEmpty(filtreDurum) && int.TryParse(filtreDurum, out var durum))
+            filtered = filtered.Where(f => (int)f.Durum == durum);
+        
+        if (!string.IsNullOrEmpty(aramaMetni))
+            filtered = filtered.Where(f => 
+                f.FaturaNo.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase) ||
+                (f.Cari?.Unvan?.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase) ?? false));
+        
+        if (filtreFirmaId > 0)
+            filtered = filtered.Where(f => f.FirmaId == filtreFirmaId || f.Cari?.FirmaId == filtreFirmaId);
+        
+        // Tarihe gore azalan, sonra fatura numarasina gore azalan sirala
+        filtreliFaturalar = filtered
+            .OrderByDescending(f => f.FaturaTarihi)
+            .ThenByDescending(f => f.FaturaNo)
+            .ToList();
+        StateHasChanged();
+    }
+
+    private void FiltreTemizle()
+    {
+        filtreBaslangic = null;
+        filtreBitis = null;
+        filtreEFaturaTipi = "";
+        filtreDurum = "";
+        aramaMetni = "";
+        filtreFirmaId = 0;
+        Filtrele();
+    }
+
+    private async Task YeniFaturaAc()
+    {
+        faturaFormHataMesaji = null;
+        var varsayilanFirmaId = filtreFirmaId > 0 ? filtreFirmaId : firmalar.FirstOrDefault(f => f.Aktif)?.Id;
+        editFatura = new Fatura
+        {
+            FaturaTarihi = DateTime.Today,
+            FaturaYonu = FaturaYonu.Gelen,
+            FaturaTipi = FaturaTipi.AlisFaturasi,
+            EFaturaTipi = EFaturaTipi.EArsiv,
+            Durum = FaturaDurum.Beklemede,
+            FirmaId = varsayilanFirmaId
+        };
+        editFatura.FaturaNo = await FaturaService.GenerateNextFaturaNoAsync(editFatura.FaturaTipi, editFatura.FaturaYonu, editFatura.FirmaId);
+        showFaturaModal = true;
+    }
+
+    private void FaturaDuzenle(Fatura fatura)
+    {
+        faturaFormHataMesaji = null;
+        editFatura = new Fatura
+        {
+            Id = fatura.Id,
+            FaturaNo = fatura.FaturaNo,
+            FaturaTarihi = fatura.FaturaTarihi,
+            VadeTarihi = fatura.VadeTarihi,
+            CariId = fatura.CariId,
+            FirmaId = fatura.FirmaId,
+            FirmalarArasiFatura = fatura.FirmalarArasiFatura,
+            KarsiFirmaId = fatura.KarsiFirmaId,
+            EFaturaTipi = fatura.EFaturaTipi,
+            AraToplam = fatura.AraToplam,
+            KdvTutar = fatura.KdvTutar,
+            GenelToplam = fatura.GenelToplam,
+            EttnNo = fatura.EttnNo,
+            Aciklama = fatura.Aciklama,
+            Durum = fatura.Durum,
+            FaturaYonu = FaturaYonu.Gelen,
+            FaturaTipi = FaturaTipi.AlisFaturasi
+        };
+        TemizleGelenFaturaSecimleri();
+        showFaturaModal = true;
+    }
+
+    private IEnumerable<Cari> GetGelenCariSecenekleri()
+    {
+        return cariler.Where(c =>
+            (c.CariTipi == CariTipi.Tedarikci || c.CariTipi == CariTipi.MusteriTedarikci) &&
+            (!editFatura.FirmaId.HasValue || c.Id == editFatura.CariId || c.FirmaId == null || c.FirmaId == editFatura.FirmaId));
+    }
+
+    private async Task GelenFirmaDegistiAsync()
+    {
+        faturaFormHataMesaji = null;
+        TemizleGelenFaturaSecimleri();
+
+        if (editFatura.Id <= 0 && editFatura.FirmaId.HasValue)
+            editFatura.FaturaNo = await FaturaService.GenerateNextFaturaNoAsync(FaturaTipi.AlisFaturasi, FaturaYonu.Gelen, editFatura.FirmaId);
+    }
+
+    private void GelenFirmalarArasiDurumDegisti()
+    {
+        faturaFormHataMesaji = null;
+        if (!editFatura.FirmalarArasiFatura)
+            editFatura.KarsiFirmaId = null;
+
+        if (editFatura.KarsiFirmaId == editFatura.FirmaId)
+            editFatura.KarsiFirmaId = null;
+    }
+
+    private void TemizleGelenFaturaSecimleri()
+    {
+        if (!editFatura.FirmalarArasiFatura || editFatura.KarsiFirmaId == editFatura.FirmaId)
+            editFatura.KarsiFirmaId = null;
+
+        var seciliCariGecerli = editFatura.CariId > 0 && GetGelenCariSecenekleri().Any(c => c.Id == editFatura.CariId);
+        if (!seciliCariGecerli)
+            editFatura.CariId = 0;
+    }
+
+    private async Task GelenFaturaNoUretAsync()
+    {
+        faturaFormHataMesaji = null;
+
+        if (!editFatura.FirmaId.HasValue)
+        {
+            faturaFormHataMesaji = "Numara üretmeden önce firma seçiniz.";
+            return;
+        }
+
+        editFatura.FaturaNo = await FaturaService.GenerateNextFaturaNoAsync(FaturaTipi.AlisFaturasi, FaturaYonu.Gelen, editFatura.FirmaId);
+        StateHasChanged();
+    }
+
+    private async Task FaturaDetayAc(Fatura fatura)
+    {
+        var faturaDetay = await FaturaService.GetByIdWithKalemlerAsync(fatura.Id);
+        detayFatura = faturaDetay ?? fatura;
+        showDetayModal = true;
+    }
+
+    private void OdemeYapAc(Fatura fatura)
+    {
+        odemeFatura = fatura;
+        odemeTarihi = DateTime.Today;
+        odemeTutar = fatura.KalanTutar;
+        odemeHesapId = bankaHesaplari.FirstOrDefault()?.Id ?? 0;
+        odemeAciklama = $"{fatura.FaturaNo} fatura odemesi";
+        showOdemeModal = true;
+    }
+
+    private void OdemeTarihiDegistirAc(Fatura fatura)
+    {
+        odemeTarihiFatura = fatura;
+        yeniOdemeTarihi = fatura.VadeTarihi ?? DateTime.Today.AddDays(30);
+        showOdemeTarihiModal = true;
+    }
+
+    private async Task FaturaSilOnay(Fatura fatura)
+    {
+        var result = await JS.InvokeAsync<bool>("confirm", $"'{fatura.FaturaNo}' numarali faturayi silmek istediginizden emin misiniz?");
+        if (!result) return;
+        
+        try
+        {
+            await FaturaService.DeleteAsync(fatura.Id);
+            ToastService.ShowSuccess("Fatura silindi.");
+            await YenileAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+    }
+
+    private async Task FaturaKaydet()
+    {
+        faturaFormHataMesaji = null;
+
+        if (string.IsNullOrWhiteSpace(editFatura.FaturaNo) || editFatura.CariId <= 0 || editFatura.GenelToplam <= 0 || !editFatura.FirmaId.HasValue)
+        {
+            faturaFormHataMesaji = "Fatura no, firma, cari ve tutar alanlari zorunludur!";
+            return;
+        }
+
+        if (editFatura.FirmalarArasiFatura && (!editFatura.KarsiFirmaId.HasValue || editFatura.KarsiFirmaId == editFatura.FirmaId))
+        {
+            faturaFormHataMesaji = "Firmalar arası faturada farklı bir karşı firma seçin.";
+            return;
+        }
+
+        if (!editFatura.FirmalarArasiFatura)
+            editFatura.KarsiFirmaId = null;
+
+        try
+        {
+            editFatura.FaturaYonu = FaturaYonu.Gelen;
+            editFatura.FaturaTipi = FaturaTipi.AlisFaturasi;
+            editFatura.FaturaTarihi = DateTime.SpecifyKind(editFatura.FaturaTarihi, DateTimeKind.Utc);
+            if (editFatura.VadeTarihi.HasValue)
+                editFatura.VadeTarihi = DateTime.SpecifyKind(editFatura.VadeTarihi.Value, DateTimeKind.Utc);
+
+            if (editFatura.Id > 0)
+                await FaturaService.UpdateAsync(editFatura);
+            else
+                await FaturaService.CreateAsync(editFatura);
+
+            ToastService.ShowSuccess("Fatura kaydedildi.");
+            ModalKapat();
+            await YenileAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            faturaFormHataMesaji = ex.Message;
+        }
+        catch (Exception)
+        {
+            faturaFormHataMesaji = "Fatura kaydedilirken beklenmeyen bir hata oluştu.";
+        }
+    }
+
+    private async Task OdemeKaydetAsync()
+    {
+        if (odemeFatura == null || odemeTutar <= 0 || odemeHesapId <= 0)
+        {
+            ToastService.ShowWarning("Lutfen tum alanlari doldurun!");
+            return;
+        }
+
+        try
+        {
+            // Banka/Kasa hareket olustur
+            var hareket = new BankaKasaHareket
+            {
+                BankaHesapId = odemeHesapId,
+                IslemTarihi = DateTime.SpecifyKind(odemeTarihi, DateTimeKind.Utc),
+                HareketTipi = HareketTipi.Cikis,
+                IslemKaynak = IslemKaynak.FaturaOdeme,
+                Tutar = odemeTutar,
+                Aciklama = odemeAciklama,
+                CariId = odemeFatura.CariId
+            };
+            await BankaKasaService.CreateAsync(hareket);
+
+            // Fatura odenen tutari guncelle
+            await FaturaService.UpdateOdenenTutarAsync(odemeFatura.Id);
+
+            ToastService.ShowSuccess("Odeme kaydedildi.");
+            ModalKapat();
+            await YenileAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
+        }
+    }
+
+    private async Task OdemeTarihiKaydetAsync()
+    {
+        if (odemeTarihiFatura == null) return;
+
+        try
+        {
+            odemeTarihiFatura.VadeTarihi = DateTime.SpecifyKind(yeniOdemeTarihi, DateTimeKind.Utc);
+            await FaturaService.UpdateAsync(odemeTarihiFatura);
+
+            ToastService.ShowSuccess("Odeme tarihi guncellendi.");
+            ModalKapat();
+            await YenileAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
+        }
+    }
+
+    private void ExcelImportAc()
+    {
+        importFile = null;
+        importXmlFiles = null;
+        importXmlPdfFiles = null;
+        importResult = null;
+        importFirmaId = filtreFirmaId > 0 ? filtreFirmaId : (firmalar?.FirstOrDefault()?.Id ?? 0); // Filtredeki firma veya ilk firma
+        showImportModal = true;
+    }
+
+    private async Task SablonIndir()
+    {
+        try
+        {
+            var bytes = await FaturaService.GetExcelSablonAsync(FaturaYonu.Gelen);
+            await JS.InvokeVoidAsync("downloadFileFromBase64", "gelen_fatura_sablon.xlsx", Convert.ToBase64String(bytes));
+            ToastService.ShowSuccess("Sablonindirildi!");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
+        }
+    }
+
+    private void DosyaSecildi(InputFileChangeEventArgs e)
+    {
+        importFile = e.File;
+        importResult = null;
+    }
+
+    private bool ImportIcinHazirMi()
+    {
+        if (importFirmaId == 0)
+            return false;
+
+        return importTipi switch
+        {
+            "excel" => importFile != null,
+            "xml" => importXmlFiles?.Any() == true,
+            "xmlpdf" => importXmlPdfFiles?.Any() == true,
+            _ => false
+        };
+    }
+
+    private void XmlDosyalariSecildi(InputFileChangeEventArgs e)
+    {
+        importXmlFiles = e.GetMultipleFiles(500); // En fazla 500 dosya ayni anda
+        importResult = null;
+    }
+
+    private void XmlPdfDosyalariSecildi(InputFileChangeEventArgs e)
+    {
+        importXmlPdfFiles = e.GetMultipleFiles(1000); // XML + PDF
+        importResult = null;
+    }
+
+    private void ImportFirmaDegisti(ChangeEventArgs e)
+    {
+        importFirmaId = int.TryParse(e.Value?.ToString(), out var id) ? id : 0;
+        // Firma değiştiğinde dosya seçimlerini temizle
+        importFile = null;
+        importXmlFiles = null;
+        importXmlPdfFiles = null;
+        importResult = null;
+    }
+
+    private async Task ImportYap()
+    {
+        // Firma seçimi kontrolü
+        if (importFirmaId == 0)
+        {
+            ToastService.ShowWarning("Lütfen bir firma seçin!");
+            return;
+        }
+
+        if (importTipi == "excel" && importFile == null) return;
+        if (importTipi == "xml" && (importXmlFiles == null || !importXmlFiles.Any())) return;
+        if (importTipi == "xmlpdf" && (importXmlPdfFiles == null || !importXmlPdfFiles.Any())) return;
+
+        isImporting = true;
+        importResult = null;
+        StateHasChanged();
+
+        try
+        {
+            var firmaId = importFirmaId; // Modaldan seçilen firma
+            var eFaturaTip = (EFaturaTipi)importEFaturaTipi;
+
+            if (importTipi == "excel")
+            {
+                using var stream = new MemoryStream();
+                await importFile!.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024).CopyToAsync(stream);
+                var fileContent = stream.ToArray();
+                importResult = await FaturaService.ImportFromExcelAsync(fileContent, FaturaYonu.Gelen, firmaId, eFaturaTip);
+            }
+            else if(importTipi == "xml")
+            {
+                var xmlContents = new List<MKFiloServis.Web.Services.Interfaces.XmlFileContent>();
+                foreach (var f in importXmlFiles!)
+                {
+                    using var ms = new MemoryStream();
+                    await f.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024).CopyToAsync(ms); // 5mb max per file
+                    xmlContents.Add(new MKFiloServis.Web.Services.Interfaces.XmlFileContent { FileName = f.Name, Content = ms.ToArray() });
+                }
+                importResult = await FaturaService.ImportFromXmlAsync(xmlContents, FaturaYonu.Gelen, firmaId, eFaturaTip);
+            }
+            else if(importTipi == "xmlpdf")
+            {
+                // XML ve PDF dosyalarını grupla
+                var xmlFiles = importXmlPdfFiles!.Where(f => IsXmlFileName(f.Name)).ToList();
+                var pdfFiles = importXmlPdfFiles!.Where(f => f.Name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)).ToList();
+
+                if (!xmlFiles.Any())
+                {
+                    ToastService.ShowWarning("Aktarim icin en az bir XML/XLM dosyasi secin!");
+                    return;
+                }
+
+                var xmlPdfContents = new List<MKFiloServis.Web.Services.Interfaces.XmlPdfFileContent>();
+                foreach (var xmlFile in xmlFiles)
+                {
+                    using var xmlMs = new MemoryStream();
+                    await xmlFile.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024).CopyToAsync(xmlMs);
+
+                    var xmlBaseName = Path.GetFileNameWithoutExtension(xmlFile.Name);
+                    var matchingPdf = pdfFiles.FirstOrDefault(p => 
+                        Path.GetFileNameWithoutExtension(p.Name).Equals(xmlBaseName, StringComparison.OrdinalIgnoreCase));
+
+                    byte[]? pdfContent = null;
+                    string? pdfFileName = null;
+                    if (matchingPdf != null)
+                    {
+                        using var pdfMs = new MemoryStream();
+                        await matchingPdf.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024).CopyToAsync(pdfMs);
+                        pdfContent = pdfMs.ToArray();
+                        pdfFileName = matchingPdf.Name;
+                    }
+
+                    xmlPdfContents.Add(new MKFiloServis.Web.Services.Interfaces.XmlPdfFileContent
+                    { 
+                        XmlFileName = xmlFile.Name, 
+                        XmlContent = xmlMs.ToArray(),
+                        PdfFileName = pdfFileName,
+                        PdfContent = pdfContent
+                    });
+                }
+                importResult = await FaturaService.ImportFromXmlWithPdfAsync(xmlPdfContents, FaturaYonu.Gelen, firmaId, eFaturaTip);
+            }
+
+            if (importResult != null && importResult.Success)
+            {
+                ToastService.ShowSuccess($"{importResult.ImportedCount} fatura aktarildi.");
+                await YenileAsync();
+            }
+            else if (importResult != null && importResult.ImportedCount == 0 && importResult.SkippedCount > 0)
+            {
+                ToastService.ShowWarning($"{importResult.SkippedCount} fatura zaten mevcut.");
+            }
+            else if (importResult?.Errors?.Any() == true)
+            {
+                ToastService.ShowError($"Hata: {importResult.Errors.FirstOrDefault()}");
+            }
+        }
+        catch (Exception ex)
+        {
+            importResult = new EFaturaImportResult 
+            { 
+                Success = false, 
+                Errors = new List<string> { $"Import hatasi: {ex.Message}" } 
+            };
+            ToastService.ShowError($"Import hatasi: {ex.Message}");
+        }
+        finally
+        {
+            isImporting = false;
+            StateHasChanged();
+        }
+    }
+
+    private static bool IsXmlFileName(string fileName)
+        => fileName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
+           || fileName.EndsWith(".xlm", StringComparison.OrdinalIgnoreCase);
+
+    private async Task ExcelExport()
+    {
+        if (!filtreliFaturalar.Any())
+        {
+            ToastService.ShowWarning("Indirilecek fatura yok!");
+            return;
+        }
+
+        try
+        {
+            var bytes = await FaturaService.ExportToExcelAsync(filtreliFaturalar);
+            await JS.InvokeVoidAsync("downloadFileFromBase64", $"gelen_faturalar_{DateTime.Now:yyyyMMdd}.xlsx", Convert.ToBase64String(bytes));
+            ToastService.ShowSuccess("Excel indirildi!");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
+        }
+    }
+
+    private async Task FirmaBazliXmlPdfAktarAsync()
+    {
+        if (!filtreliFaturalar.Any())
+        {
+            ToastService.ShowWarning("Aktarilacak fatura yok!");
+            return;
+        }
+
+        try
+        {
+            using var zipStream = new MemoryStream();
+
+            var xmlSayisi = 0;
+            var pdfSayisi = 0;
+            var dosyaliFaturaSayisi = 0;
+
+            using (var zip = new ZipArchive(zipStream, ZipArchiveMode.Create, true))
+            {
+                foreach (var fatura in filtreliFaturalar)
+                {
+                    var firmaKlasoru = GetFaturaFirmaKlasoru(fatura);
+                    var faturaKlasoru = SanitizePathSegment($"{fatura.FaturaTarihi:yyyyMMdd}_{fatura.FaturaNo}");
+                    var hedefKlasor = $"{firmaKlasoru}/{faturaKlasoru}";
+
+                    var xmlDosya = await FaturaService.GetFaturaDosyaAsync(fatura.Id, FaturaDosyaTuru.Xml);
+                    var pdfDosya = await FaturaService.GetFaturaDosyaAsync(fatura.Id, FaturaDosyaTuru.Pdf);
+
+                    var buFaturadaDosyaVar = false;
+
+                    if (xmlDosya != null)
+                    {
+                        var xmlEntry = zip.CreateEntry($"{hedefKlasor}/{SanitizePathSegment(xmlDosya.FileName)}", CompressionLevel.Optimal);
+                        await using var xmlEntryStream = xmlEntry.Open();
+                        await xmlEntryStream.WriteAsync(xmlDosya.Content);
+                        xmlSayisi++;
+                        buFaturadaDosyaVar = true;
+                    }
+
+                    if (pdfDosya != null)
+                    {
+                        var pdfEntry = zip.CreateEntry($"{hedefKlasor}/{SanitizePathSegment(pdfDosya.FileName)}", CompressionLevel.Optimal);
+                        await using var pdfEntryStream = pdfEntry.Open();
+                        await pdfEntryStream.WriteAsync(pdfDosya.Content);
+                        pdfSayisi++;
+                        buFaturadaDosyaVar = true;
+                    }
+
+                    if (buFaturadaDosyaVar)
+                        dosyaliFaturaSayisi++;
+                }
+            }
+
+            if (xmlSayisi == 0 && pdfSayisi == 0)
+            {
+                ToastService.ShowWarning("Seçili faturalarda aktarılacak XML veya PDF bulunamadı.");
+                return;
+            }
+
+            var zipDosyaAdi = $"gelen_faturalar_xml_pdf_{DateTime.Now:yyyyMMdd_HHmmss}.zip";
+            await JS.InvokeVoidAsync("downloadFile", zipDosyaAdi, Convert.ToBase64String(zipStream.ToArray()), "application/zip");
+            ToastService.ShowSuccess($"{dosyaliFaturaSayisi} faturaya ait {xmlSayisi} XML ve {pdfSayisi} PDF aktarıldı.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Aktarım hatası: {ex.Message}");
+        }
+    }
+
+    private string GetFaturaFirmaKlasoru(Fatura fatura)
+    {
+        var firmaId = fatura.FirmaId ?? fatura.Cari?.FirmaId;
+        var firmaAdi = firmalar.FirstOrDefault(x => x.Id == firmaId)?.FirmaAdi;
+
+        if (string.IsNullOrWhiteSpace(firmaAdi))
+            firmaAdi = "Firma_Bilinmiyor";
+
+        return SanitizePathSegment(firmaAdi);
+    }
+
+    private static string SanitizePathSegment(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "Bilinmiyor";
+
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var sanitized = new string(value.Trim().Select(ch => invalidChars.Contains(ch) ? '_' : ch).ToArray());
+
+        return string.IsNullOrWhiteSpace(sanitized) ? "Bilinmiyor" : sanitized;
+    }
+
+    private void ModalKapat()
+    {
+        showFaturaModal = false;
+        showImportModal = false;
+        showDetayModal = false;
+        showOdemeModal = false;
+        showOdemeTarihiModal = false;
+        showCariKartModal = false;
+    }
+
+    private string GetDurumAdi(FaturaDurum d) => d switch
+    {
+        FaturaDurum.Beklemede => "Odenmedi",
+        FaturaDurum.KismiOdendi => "Kismi Odendi",
+        FaturaDurum.Odendi => "Odendi",
+        FaturaDurum.IptalEdildi => "Iptal",
+        _ => d.ToString()
+    };
+
+    private string GetDurumKisaAdi(FaturaDurum d) => d switch
+    {
+        FaturaDurum.Beklemede => "Bkl",
+        FaturaDurum.KismiOdendi => "Kısmi",
+        FaturaDurum.Odendi => "Ödendi",
+        FaturaDurum.IptalEdildi => "İptal",
+        _ => d.ToString()
+    };
+
+    private string GetDurumClass(FaturaDurum d) => d switch
+    {
+        FaturaDurum.Beklemede => "bg-danger",
+        FaturaDurum.KismiOdendi => "bg-warning text-dark",
+        FaturaDurum.Odendi => "bg-success",
+        FaturaDurum.IptalEdildi => "bg-secondary",
+        _ => "bg-secondary"
+    };
+
+    private string FormatPara(decimal t) => t.ToString("N2", new System.Globalization.CultureInfo("tr-TR")) + " TL";
+
+    private async Task FaturaSecildi(Fatura fatura)
+    {
+        pdfOnizlemeFatura = fatura;
+        await PdfOnizlemeYukleAsync(fatura);
+    }
+
+    private void PdfOnizlemeKapat()
+    {
+        pdfOnizlemeFatura = null;
+        pdfOnizlemeUrl = null;
+        pdfOnizlemeBase64 = null;
+        pdfOnizlemeDosyaAdi = null;
+        pdfOnizlemeYukleniyor = false;
+    }
+
+    private async Task PdfYukle(InputFileChangeEventArgs e, int faturaId)
+    {
+        try
+        {
+            using var stream = new MemoryStream();
+            await e.File.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024).CopyToAsync(stream);
+            var pdfContent = stream.ToArray();
+
+            var result = await FaturaService.UploadFaturaPdfAsync(faturaId, e.File.Name, pdfContent);
+            if (result)
+            {
+                ToastService.ShowSuccess("PDF yüklendi.");
+                await YenileAsync();
+                // Seçili faturayı güncelle
+                pdfOnizlemeFatura = filtreliFaturalar.FirstOrDefault(f => f.Id == faturaId);
+                if (pdfOnizlemeFatura != null)
+                    await PdfOnizlemeYukleAsync(pdfOnizlemeFatura);
+            }
+            else
+            {
+                ToastService.ShowError("PDF yüklenemedi.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+    }
+
+    private async Task PdfOnizlemeYukleAsync(Fatura fatura)
+    {
+        pdfOnizlemeUrl = null;
+        pdfOnizlemeBase64 = null;
+        pdfOnizlemeDosyaAdi = null;
+
+        if (string.IsNullOrWhiteSpace(fatura.PdfDosyaYolu))
+            return;
+
+        pdfOnizlemeYukleniyor = true;
+        StateHasChanged();
+
+        try
+        {
+            var dosya = await FaturaService.GetFaturaDosyaAsync(fatura.Id, FaturaDosyaTuru.Pdf);
+            if (dosya == null)
+                return;
+
+            pdfOnizlemeBase64 = Convert.ToBase64String(dosya.Content);
+            pdfOnizlemeDosyaAdi = dosya.FileName;
+            pdfOnizlemeUrl = $"data:{dosya.ContentType};base64,{pdfOnizlemeBase64}";
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"PDF açılamadı: {ex.Message}");
+        }
+        finally
+        {
+            pdfOnizlemeYukleniyor = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task PdfIndirAsync()
+    {
+        if (string.IsNullOrWhiteSpace(pdfOnizlemeBase64))
+            return;
+
+        await JS.InvokeVoidAsync("downloadFile", pdfOnizlemeDosyaAdi ?? "fatura.pdf", pdfOnizlemeBase64, "application/pdf");
+    }
+
+    private void CariKartAc(Cari cari)
+    {
+        cariKartCari = cari;
+        cariKartBaslangic = new DateTime(DateTime.Today.Year, 1, 1);
+        cariKartBitis = DateTime.Today;
+        showCariKartModal = true;
+        _ = CariKartEkstreYukle();
+    }
+
+    private async Task CariKartEkstreYukle()
+    {
+        if (cariKartCari == null) return;
+
+        cariKartYukleniyor = true;
+        cariKartHareketler.Clear();
+        StateHasChanged();
+
+        try
+        {
+            // Faturalari getir
+            var faturalarList = await FaturaService.GetByCariIdAsync(cariKartCari.Id);
+            var donemFaturalar = faturalarList
+                .Where(f => f.FaturaTarihi >= cariKartBaslangic && f.FaturaTarihi <= cariKartBitis)
+                .ToList();
+
+            foreach (var fatura in donemFaturalar)
+            {
+                cariKartHareketler.Add(new CariEkstreHareket
+                {
+                    Tarih = fatura.FaturaTarihi,
+                    IslemTipi = fatura.FaturaTipi == FaturaTipi.SatisFaturasi ? "Satis Faturasi" : "Alis Faturasi",
+                    BelgeNo = fatura.FaturaNo,
+                    Aciklama = fatura.Aciklama ?? fatura.FaturaNo,
+                    Alacak = fatura.FaturaTipi == FaturaTipi.SatisFaturasi ? fatura.GenelToplam : 0,
+                    Borc = fatura.FaturaTipi == FaturaTipi.AlisFaturasi ? fatura.GenelToplam : 0
+                });
+            }
+
+            // Odemeleri getir
+            var odemeler = await BankaKasaService.GetByCariIdAsync(cariKartCari.Id);
+            var donemOdemeler = odemeler
+                .Where(o => o.IslemTarihi >= cariKartBaslangic && o.IslemTarihi <= cariKartBitis)
+                .ToList();
+
+            foreach (var odeme in donemOdemeler)
+            {
+                cariKartHareketler.Add(new CariEkstreHareket
+                {
+                    Tarih = odeme.IslemTarihi,
+                    IslemTipi = odeme.HareketTipi == HareketTipi.Giris ? "Tahsilat" : "Odeme",
+                    BelgeNo = odeme.IslemNo,
+                    Aciklama = odeme.Aciklama ?? odeme.IslemNo,
+                    Borc = odeme.HareketTipi == HareketTipi.Giris ? odeme.Tutar : 0,
+                    Alacak = odeme.HareketTipi == HareketTipi.Cikis ? odeme.Tutar : 0
+                });
+            }
+
+            // Sirala
+            cariKartHareketler = cariKartHareketler.OrderBy(h => h.Tarih).ThenBy(h => h.BelgeNo).ToList();
+
+            // Toplamlari hesapla
+            cariKartToplamAlacak = cariKartHareketler.Sum(h => h.Alacak);
+            cariKartToplamBorc = cariKartHareketler.Sum(h => h.Borc);
+            cariKartBakiye = cariKartToplamAlacak - cariKartToplamBorc;
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Ekstre yuklenemedi: {ex.Message}");
+        }
+        finally
+        {
+            cariKartYukleniyor = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CariKartExcelExport()
+    {
+        if (cariKartCari == null || !cariKartHareketler.Any())
+        {
+            ToastService.ShowWarning("Indirilecek hareket yok!");
+            return;
+        }
+
+        try
+        {
+            using var workbook = new ClosedXML.Excel.XLWorkbook();
+            var ws = workbook.Worksheets.Add("Cari Ekstre");
+
+            ws.Cell(1, 1).Value = $"CARi EKSTRE - {cariKartCari.Unvan}";
+            ws.Range(1, 1, 1, 7).Merge();
+            ws.Cell(1, 1).Style.Font.Bold = true;
+            ws.Cell(2, 1).Value = $"Tarih: {cariKartBaslangic:dd.MM.yyyy} - {cariKartBitis:dd.MM.yyyy}";
+
+            var row = 4;
+            var headers = new[] { "Tarih", "Islem Turu", "Belge No", "Aciklama", "Borc", "Alacak", "Bakiye" };
+            for (int i = 0; i < headers.Length; i++)
+            {
+                ws.Cell(row, i + 1).Value = headers[i];
+                ws.Cell(row, i + 1).Style.Font.Bold = true;
+                ws.Cell(row, i + 1).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightBlue;
+            }
+            row++;
+
+            decimal bakiye = 0;
+            foreach (var h in cariKartHareketler)
+            {
+                bakiye += h.Alacak - h.Borc;
+                ws.Cell(row, 1).Value = h.Tarih;
+                ws.Cell(row, 1).Style.DateFormat.Format = "dd.MM.yyyy";
+                ws.Cell(row, 2).Value = h.IslemTipi;
+                ws.Cell(row, 3).Value = h.BelgeNo;
+                ws.Cell(row, 4).Value = h.Aciklama;
+                ws.Cell(row, 5).Value = h.Borc > 0 ? (double)h.Borc : 0;
+                ws.Cell(row, 6).Value = h.Alacak > 0 ? (double)h.Alacak : 0;
+                ws.Cell(row, 7).Value = (double)bakiye;
+                ws.Cell(row, 5).Style.NumberFormat.Format = "#,##0.00";
+                ws.Cell(row, 6).Style.NumberFormat.Format = "#,##0.00";
+                ws.Cell(row, 7).Style.NumberFormat.Format = "#,##0.00";
+                row++;
+            }
+
+            ws.Cell(row, 1).Value = "TOPLAM";
+            ws.Range(row, 1, row, 4).Merge();
+            ws.Cell(row, 5).Value = (double)cariKartToplamBorc;
+            ws.Cell(row, 6).Value = (double)cariKartToplamAlacak;
+            ws.Cell(row, 7).Value = (double)cariKartBakiye;
+            ws.Row(row).Style.Font.Bold = true;
+
+            ws.Columns().AdjustToContents();
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            var base64 = Convert.ToBase64String(stream.ToArray());
+            await JS.InvokeVoidAsync("downloadFileFromBase64", $"CariEkstre_{cariKartCari.CariKodu}_{DateTime.Now:yyyyMMdd}.xlsx", base64);
+            ToastService.ShowSuccess("Excel indirildi!");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Excel hatasi: {ex.Message}");
+        }
+    }
+
+    private async Task CariKartYazdir()
+    {
+        if (cariKartCari == null) return;
+
+        var yazdirIcerik = $@"
+            <html><head><title>Cari Ekstre</title>
+            <style>body{{font-family:Arial;margin:20px;}} table{{width:100%;border-collapse:collapse;font-size:12px;}} 
+            th,td{{border:1px solid #000;padding:6px;}} th{{background:#f0f0f0;}}</style></head>
+            <body>
+            <h2>CARi EKSTRE</h2>
+            <p><strong>Cari:</strong> {cariKartCari.CariKodu} - {cariKartCari.Unvan}</p>
+            <p><strong>Tarih:</strong> {cariKartBaslangic:dd.MM.yyyy} - {cariKartBitis:dd.MM.yyyy}</p>
+            <table>
+            <tr><th>Tarih</th><th>Islem</th><th>Belge No</th><th>Aciklama</th><th>Borc</th><th>Alacak</th><th>Bakiye</th></tr>";
+
+        decimal bakiye = 0;
+        foreach (var h in cariKartHareketler)
+        {
+            bakiye += h.Alacak - h.Borc;
+            yazdirIcerik += $@"<tr>
+                <td>{h.Tarih:dd.MM.yyyy}</td><td>{h.IslemTipi}</td><td>{h.BelgeNo}</td><td>{h.Aciklama}</td>
+                <td style='text-align:right'>{(h.Borc > 0 ? FormatPara(h.Borc) : "-")}</td>
+                <td style='text-align:right'>{(h.Alacak > 0 ? FormatPara(h.Alacak) : "-")}</td>
+                <td style='text-align:right;font-weight:bold'>{FormatPara(bakiye)}</td>
+            </tr>";
+        }
+
+        yazdirIcerik += $@"<tr style='background:#ffffa0;font-weight:bold;'>
+            <td colspan='4'>TOPLAM</td>
+            <td style='text-align:right'>{FormatPara(cariKartToplamBorc)}</td>
+            <td style='text-align:right'>{FormatPara(cariKartToplamAlacak)}</td>
+            <td style='text-align:right'>{FormatPara(cariKartBakiye)}</td>
+        </tr></table></body></html>";
+
+        await JS.InvokeVoidAsync("eval", $@"
+            var w = window.open('', '_blank', 'width=900,height=700');
+            w.document.write(`{yazdirIcerik.Replace("`", "\\`")}`);
+            w.document.close();
+            w.focus();
+            setTimeout(function(){{w.print();}},300);
+        ");
+    }
+
+    private string GetIslemTipiBadge(string islemTipi) => islemTipi switch
+    {
+        "Satis Faturasi" => "bg-success",
+        "Alis Faturasi" => "bg-primary",
+        "Tahsilat" => "bg-info",
+        "Odeme" => "bg-warning text-dark",
+        _ => "bg-secondary"
+    };
+
+    #region Detay Modal Islemleri
+
+    private void DetayFaturaDuzenle()
+    {
+        if (detayFatura == null) return;
+        FaturaDuzenle(detayFatura);
+        showDetayModal = false;
+    }
+
+    private void DetayFaturaOdemeYap()
+    {
+        if (detayFatura == null) return;
+        OdemeYapAc(detayFatura);
+        showDetayModal = false;
+    }
+
+    private async Task DetayFaturaSil()
+    {
+        if (detayFatura == null) return;
+        
+        var result = await JS.InvokeAsync<bool>("confirm", $"'{detayFatura.FaturaNo}' numarali faturayi silmek istediginizden emin misiniz?");
+        if (!result) return;
+        
+        try
+        {
+            await FaturaService.DeleteAsync(detayFatura.Id);
+            ToastService.ShowSuccess("Fatura silindi.");
+            showDetayModal = false;
+            detayFatura = null;
+            await YenileAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+    }
+
+    private async Task DetayFaturaMuhasebeles()
+    {
+        if (detayFatura == null) return;
+        
+        isMuhasebeLeniyor = true;
+        StateHasChanged();
+        
+        try
+        {
+            if (detayFatura.Cari == null)
+            {
+                ToastService.ShowError("Faturaya ait cari bulunamadi!");
+                return;
+            }
+            
+            var fis = await MuhasebeService.CreateFaturaFisiAsync(detayFatura);
+            
+            detayFatura.MuhasebeFisiOlusturuldu = true;
+            detayFatura.MuhasebeFisId = fis.Id;
+            await FaturaService.UpdateAsync(detayFatura);
+            
+            ToastService.ShowSuccess($"Muhasebe fisi olusturuldu. Fis No: {fis.FisNo}");
+            await YenileAsync();
+            
+            detayFatura = await FaturaService.GetByIdWithKalemlerAsync(detayFatura.Id);
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Muhaselelestirme hatasi: {ex.Message}");
+        }
+        finally
+        {
+            isMuhasebeLeniyor = false;
+            StateHasChanged();
+        }
+    }
+
+    #endregion
+
+    // Cari Ekstre Hareket sinifi
+    private class CariEkstreHareket
+    {
+        public DateTime Tarih { get; set; }
+        public string IslemTipi { get; set; } = "";
+        public string? BelgeNo { get; set; }
+        public string? Aciklama { get; set; }
+        public decimal Borc { get; set; }
+        public decimal Alacak { get; set; }
+    }
+}
+

@@ -1,0 +1,215 @@
+@page "/ayarlar/firma-kopyalama"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IFirmaService FirmaService
+@inject IFirmaKopyalamaService KopyalamaService
+@inject IToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>Şirketler Arası Kopyalama</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="bi bi-arrow-left-right me-2"></i>Şirketler Arası Master Kart Kopyalama</h3>
+    </div>
+
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle me-1"></i>
+        Sadece <b>master kartlar</b> kopyalanır (Cari, Kurum, Güzergah, Araç, Şoför).
+        Hareketler (fatura, masraf, puantaj, plaka geçmişi) kopyalanmaz.
+        Hedef firmada aynı <b>kod</b> ile kayıt varsa o satır <b>atlanır</b>.
+        Kopyalanan kayıtlar <code>KaynakFirmaId</code> + <code>KaynakKayitId</code> ile izlenir.
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">Kaynak Firma</label>
+                    <select class="form-select" @bind="kaynakFirmaId" @bind:after="OnSecimDegisti">
+                        <option value="0">— Seçin —</option>
+                        @foreach (var f in firmalar)
+                        {
+                            <option value="@f.Id">@f.FirmaKodu — @f.FirmaAdi</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Hedef Firma</label>
+                    <select class="form-select" @bind="hedefFirmaId" @bind:after="OnSecimDegisti">
+                        <option value="0">— Seçin —</option>
+                        @foreach (var f in firmalar)
+                        {
+                            <option value="@f.Id">@f.FirmaKodu — @f.FirmaAdi</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Modül</label>
+                    <select class="form-select" @bind="modul" @bind:after="OnSecimDegisti">
+                        <option value="@FirmaKopyalamaModulu.Cari">Cari (Müşteri/Tedarikçi/Personel)</option>
+                        <option value="@FirmaKopyalamaModulu.Kurum">Kurum / Müşteri Kartı</option>
+                        <option value="@FirmaKopyalamaModulu.Guzergah">Güzergah</option>
+                        <option value="@FirmaKopyalamaModulu.Arac">Araç</option>
+                        <option value="@FirmaKopyalamaModulu.Sofor">Personel / Şoför</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (yukleniyor)
+    {
+        <div class="text-center my-4"><div class="spinner-border" role="status"></div></div>
+    }
+    else if (kayitlar.Count > 0)
+    {
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <input type="checkbox" class="form-check-input me-2"
+                           checked="@TumuSecili"
+                           @onchange="TumuSecToggle" />
+                    <span><b>@SeciliSayi</b> / @kayitlar.Count seçili</span>
+                </div>
+                <button class="btn btn-primary" @onclick="KopyalaAsync" disabled="@(SeciliSayi == 0 || kopyalaniyor)">
+                    @if (kopyalaniyor)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    <i class="bi bi-clipboard-check me-1"></i>
+                    Seçilenleri Kopyala (@SeciliSayi)
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:40px;"></th>
+                            <th>Kod</th>
+                            <th>Ad / Ünvan</th>
+                            <th>Ek Bilgi</th>
+                            <th>Hedefte</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var k in kayitlar)
+                        {
+                            <tr class="@(k.HedefteVarMi ? "table-warning" : null)">
+                                <td>
+                                    <input type="checkbox" class="form-check-input"
+                                           checked="@secimler.Contains(k.Id)"
+                                           disabled="@k.HedefteVarMi"
+                                           @onchange="e => SatirToggle(k.Id, (bool)e.Value!)" />
+                                </td>
+                                <td><code>@k.Kod</code></td>
+                                <td>@k.Ad</td>
+                                <td><small class="text-muted">@k.EkBilgi</small></td>
+                                <td>
+                                    @if (k.HedefteVarMi)
+                                    {
+                                        <span class="badge bg-warning text-dark">Var (atlanır)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-success">Yok</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+    else if (kaynakFirmaId > 0 && hedefFirmaId > 0)
+    {
+        <div class="alert alert-secondary">Bu modülde kaynak firmaya ait kayıt bulunamadı.</div>
+    }
+</div>
+
+@code {
+    private List<Firma> firmalar = new();
+    private int kaynakFirmaId;
+    private int hedefFirmaId;
+    private FirmaKopyalamaModulu modul = FirmaKopyalamaModulu.Cari;
+
+    private List<FirmaKopyalamaKayitOzeti> kayitlar = new();
+    private HashSet<int> secimler = new();
+    private bool yukleniyor;
+    private bool kopyalaniyor;
+
+    private int SeciliSayi => secimler.Count;
+    private bool TumuSecili => kayitlar.Count > 0
+        && kayitlar.Where(k => !k.HedefteVarMi).All(k => secimler.Contains(k.Id));
+
+    protected override async Task OnInitializedAsync()
+    {
+        firmalar = (await FirmaService.GetAllAsync()).Where(f => f.Aktif).OrderBy(f => f.FirmaAdi).ToList();
+    }
+
+    private async Task OnSecimDegisti()
+    {
+        kayitlar.Clear();
+        secimler.Clear();
+        if (kaynakFirmaId <= 0 || hedefFirmaId <= 0) return;
+        if (kaynakFirmaId == hedefFirmaId)
+        {
+            ToastService.ShowWarning("Kaynak ve hedef firma aynı olamaz.");
+            return;
+        }
+
+        yukleniyor = true;
+        try
+        {
+            kayitlar = await KopyalamaService.ListeleAsync(modul, kaynakFirmaId, hedefFirmaId);
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Liste alınamadı: {ex.Message}");
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private void TumuSecToggle(ChangeEventArgs e)
+    {
+        var seciliMi = (bool)e.Value!;
+        secimler.Clear();
+        if (seciliMi)
+        {
+            foreach (var k in kayitlar.Where(k => !k.HedefteVarMi))
+                secimler.Add(k.Id);
+        }
+    }
+
+    private void SatirToggle(int id, bool secili)
+    {
+        if (secili) secimler.Add(id); else secimler.Remove(id);
+    }
+
+    private async Task KopyalaAsync()
+    {
+        if (secimler.Count == 0) return;
+        kopyalaniyor = true;
+        try
+        {
+            var sonuc = await KopyalamaService.KopyalaAsync(modul, kaynakFirmaId, hedefFirmaId, secimler.ToList());
+            ToastService.ShowSuccess(
+                $"{sonuc.KopyalananSayisi} kayıt kopyalandı." +
+                (sonuc.AtlananSayisi > 0 ? $" {sonuc.AtlananSayisi} kayıt atlandı (hedefte mevcut)." : ""));
+            await OnSecimDegisti();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Kopyalama hatası: {ex.Message}");
+        }
+        finally
+        {
+            kopyalaniyor = false;
+        }
+    }
+}
+

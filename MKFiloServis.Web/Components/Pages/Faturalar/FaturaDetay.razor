@@ -1,0 +1,490 @@
+@page "/faturalar/detay/{Id:int}"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+@inject IFaturaService FaturaService
+@inject IFaturaSablonService FaturaSablonService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Fatura Detay</PageTitle>
+
+<div class="container-fluid">
+    @if (fatura == null)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        @* İşlem Mesajı *@
+        @if (!string.IsNullOrEmpty(islemMesaji))
+        {
+            <div class="alert @(islemBasarili ? "alert-success" : "alert-danger") alert-dismissible fade show" role="alert">
+                <i class="bi @(islemBasarili ? "bi-check-circle" : "bi-exclamation-circle") me-2"></i>
+                @islemMesaji
+                <button type="button" class="btn-close" @onclick="() => islemMesaji = null"></button>
+            </div>
+        }
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3><i class="bi bi-receipt me-2"></i>Fatura Detay - @fatura.FaturaNo</h3>
+            <div>
+                <button class="btn btn-danger me-2" @onclick="PdfIndir" disabled="@pdfYukleniyor">
+                    @if (pdfYukleniyor)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-file-pdf me-1"></i>
+                    }
+                    PDF İndir
+                </button>
+                <button class="btn btn-info me-2" @onclick="EmailModalAc" disabled="@emailGonderiliyor">
+                    @if (emailGonderiliyor)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-envelope me-1"></i>
+                    }
+                    E-posta Gönder
+                </button>
+                <button class="btn btn-outline-primary me-2" @onclick="Duzenle">
+                    <i class="bi bi-pencil me-1"></i>Düzenle
+                </button>
+                <button class="btn btn-secondary" @onclick="Geri">
+                    <i class="bi bi-arrow-left me-1"></i>Geri
+                </button>
+            </div>
+        </div>
+
+        @* E-posta Modal *@
+        @if (emailModalGoster)
+        {
+            <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title"><i class="bi bi-envelope me-2"></i>Fatura E-posta Gönder</h5>
+                            <button type="button" class="btn-close" @onclick="EmailModalKapat"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label">E-posta Adresi</label>
+                                <input type="email" class="form-control" @bind="emailAdresi" placeholder="ornek@email.com" />
+                                <div class="form-text">Fatura PDF olarak bu adrese gönderilecektir.</div>
+                            </div>
+                            <div class="alert alert-info mb-0">
+                                <small>
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    Fatura: <strong>@fatura.FaturaNo</strong> - 
+                                    Tutar: <strong>@fatura.GenelToplam.ToString("C2", new System.Globalization.CultureInfo("tr-TR"))</strong>
+                                </small>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="EmailModalKapat">İptal</button>
+                            <button type="button" class="btn btn-primary" @onclick="EmailGonder" 
+                                    disabled="@(string.IsNullOrWhiteSpace(emailAdresi) || emailGonderiliyor)">
+                                @if (emailGonderiliyor)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                Gönder
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">Fatura Bilgileri</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <table class="table table-borderless">
+                                    <tr>
+                                        <td class="text-muted" style="width: 150px;">Fatura No:</td>
+                                        <td><strong>@fatura.FaturaNo</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Fatura Tarihi:</td>
+                                        <td>@fatura.FaturaTarihi.ToString("dd.MM.yyyy")</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Vade Tarihi:</td>
+                                        <td>
+                                            @if (fatura.VadeTarihi.HasValue)
+                                            {
+                                                var vadeGunu = (fatura.VadeTarihi.Value - DateTime.Today).Days;
+                                                <span>@fatura.VadeTarihi.Value.ToString("dd.MM.yyyy")</span>
+                                                @if (fatura.KalanTutar > 0)
+                                                {
+                                                    <span class="badge ms-2 @(vadeGunu < 0 ? "bg-danger" : vadeGunu < 7 ? "bg-warning text-dark" : "bg-success")">
+                                                        @(vadeGunu < 0 ? $"{Math.Abs(vadeGunu)} gün gecikmiş" : $"{vadeGunu} gün kaldı")
+                                                    </span>
+                                                }
+                                            }
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Fatura Tipi:</td>
+                                        <td><span class="badge @GetTipBadgeClass(fatura.FaturaTipi)">@GetTipText(fatura.FaturaTipi)</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Fatura Yönü:</td>
+                                        <td>
+                                            <span class="badge @(fatura.FaturaYonu == FaturaYonu.Giden ? "bg-success" : "bg-primary")">
+                                                @(fatura.FaturaYonu == FaturaYonu.Giden ? "Kesilen" : "Gelen")
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Firma:</td>
+                                        <td>@(fatura.Firma?.FirmaAdi ?? "-")</td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <table class="table table-borderless">
+                                    <tr>
+                                        <td class="text-muted" style="width: 100px;">Cari:</td>
+                                        <td><strong>@fatura.Cari?.Unvan</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Cari Kodu:</td>
+                                        <td>@fatura.Cari?.CariKodu</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Durum:</td>
+                                        <td><span class="badge @GetDurumBadgeClass(fatura.Durum)">@GetDurumText(fatura.Durum)</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Firma Tipi:</td>
+                                        <td>
+                                            @if (fatura.FirmalarArasiFatura)
+                                            {
+                                                <span>
+                                                    <span class="badge bg-info text-dark me-2">Firmalar Arası</span>
+                                                    @if (fatura.KarsiFirma != null)
+                                                    {
+                                                        <small class="text-muted">Karşı Firma: @fatura.KarsiFirma.FirmaAdi</small>
+                                                    }
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Standart</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(fatura.Aciklama))
+                        {
+                            <div class="mt-2">
+                                <small class="text-muted">Açıklama:</small>
+                                <p class="mb-0">@fatura.Aciklama</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">Fatura Kalemleri</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Açıklama</th>
+                                        <th class="text-center">Miktar</th>
+                                        <th>Birim</th>
+                                        <th class="text-end">Birim Fiyat</th>
+                                        <th class="text-center">KDV %</th>
+                                        <th class="text-end">KDV Tutar</th>
+                                        <th class="text-end">Toplam</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (fatura.FaturaKalemleri != null)
+                                    {
+                                        @foreach (var kalem in fatura.FaturaKalemleri.OrderBy(k => k.SiraNo))
+                                        {
+                                            <tr>
+                                                <td>@kalem.SiraNo</td>
+                                                <td>@kalem.Aciklama</td>
+                                                <td class="text-center">@kalem.Miktar.ToString("N2")</td>
+                                                <td>@kalem.Birim</td>
+                                                <td class="text-end">@kalem.BirimFiyat.ToString("N2") ?</td>
+                                                <td class="text-center">%@kalem.KdvOrani</td>
+                                                <td class="text-end">@kalem.KdvTutar.ToString("N2") ?</td>
+                                                <td class="text-end"><strong>@kalem.ToplamTutar.ToString("N2") ?</strong></td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                @if (fatura.OdemeEslestirmeleri != null && fatura.OdemeEslestirmeleri.Any())
+                {
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">Ödeme Geçmişi</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Tarih</th>
+                                            <th>İşlem No</th>
+                                            <th>Hesap</th>
+                                            <th class="text-end">Tutar</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var odeme in fatura.OdemeEslestirmeleri)
+                                        {
+                                            <tr>
+                                                <td>@odeme.EslestirmeTarihi.ToString("dd.MM.yyyy")</td>
+                                                <td>@odeme.BankaKasaHareket?.IslemNo</td>
+                                                <td>@odeme.BankaKasaHareket?.BankaHesap?.HesapAdi</td>
+                                                <td class="text-end text-success"><strong>@odeme.EslestirilenTutar.ToString("N2") ?</strong></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h6 class="mb-0">Tutar Özeti</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Ara Toplam:</span>
+                            <strong>@fatura.AraToplam.ToString("N2") ?</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>KDV Toplam:</span>
+                            <strong>@fatura.KdvTutar.ToString("N2") ?</strong>
+                        </div>
+                        <hr />
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="h6">Genel Toplam:</span>
+                            <strong class="h6 text-primary">@fatura.GenelToplam.ToString("N2") ?</strong>
+                        </div>
+                        <hr />
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Ödenen:</span>
+                            <strong class="text-success">@fatura.OdenenTutar.ToString("N2") ?</strong>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="h5">Kalan:</span>
+                            <strong class="h5 @(fatura.KalanTutar > 0 ? "text-danger" : "text-success")">@fatura.KalanTutar.ToString("N2") ?</strong>
+                        </div>
+
+                        @if (fatura.KalanTutar > 0)
+                        {
+                            <hr />
+                            <a href="/odeme-eslestirme" class="btn btn-success w-100">
+                                <i class="bi bi-link-45deg me-1"></i>Ödeme Eşleştir
+                            </a>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Fatura? fatura;
+    private bool pdfYukleniyor = false;
+    private bool emailGonderiliyor = false;
+    private bool emailModalGoster = false;
+    private string emailAdresi = "";
+    private string? islemMesaji;
+    private bool islemBasarili = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        fatura = await FaturaService.GetByIdWithKalemlerAsync(Id);
+        if (fatura == null)
+        {
+            Navigation.NavigateTo("/faturalar");
+        }
+        else if (fatura.Cari != null && !string.IsNullOrEmpty(fatura.Cari.Email))
+        {
+            emailAdresi = fatura.Cari.Email;
+        }
+    }
+
+    private async Task PdfIndir()
+    {
+        if (fatura == null) return;
+
+        pdfYukleniyor = true;
+        islemMesaji = null;
+        StateHasChanged();
+
+        try
+        {
+            var result = await FaturaSablonService.FaturaPdfOlusturAsync(fatura.Id);
+
+            if (result.Basarili && result.PdfData != null)
+            {
+                // JavaScript ile dosyayı indir
+                var base64 = Convert.ToBase64String(result.PdfData);
+                await JS.InvokeVoidAsync("downloadFile", result.DosyaAdi, base64, "application/pdf");
+                islemMesaji = "PDF başarıyla indirildi.";
+                islemBasarili = true;
+            }
+            else
+            {
+                islemMesaji = result.Mesaj ?? "PDF oluşturulurken bir hata oluştu.";
+                islemBasarili = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            islemMesaji = $"Hata: {ex.Message}";
+            islemBasarili = false;
+        }
+        finally
+        {
+            pdfYukleniyor = false;
+            StateHasChanged();
+        }
+    }
+
+    private void EmailModalAc()
+    {
+        emailModalGoster = true;
+        islemMesaji = null;
+    }
+
+    private void EmailModalKapat()
+    {
+        emailModalGoster = false;
+    }
+
+    private async Task EmailGonder()
+    {
+        if (fatura == null || string.IsNullOrWhiteSpace(emailAdresi)) return;
+
+        emailGonderiliyor = true;
+        islemMesaji = null;
+        StateHasChanged();
+
+        try
+        {
+            var request = new FaturaYazdirRequest
+            {
+                FaturaId = fatura.Id,
+                EmailGonder = true,
+                EmailAdresi = emailAdresi
+            };
+
+            var basarili = await FaturaSablonService.FaturaEmailGonderAsync(request);
+
+            if (basarili)
+            {
+                islemMesaji = $"Fatura {emailAdresi} adresine başarıyla gönderildi.";
+                islemBasarili = true;
+                emailModalGoster = false;
+            }
+            else
+            {
+                islemMesaji = "E-posta gönderilirken bir hata oluştu.";
+                islemBasarili = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            islemMesaji = $"Hata: {ex.Message}";
+            islemBasarili = false;
+        }
+        finally
+        {
+            emailGonderiliyor = false;
+            StateHasChanged();
+        }
+    }
+
+    private void Duzenle()
+    {
+        Navigation.NavigateTo($"/faturalar/{Id}");
+    }
+
+    private void Geri()
+    {
+        Navigation.NavigateTo("/faturalar");
+    }
+
+    private string GetTipText(FaturaTipi tip) => tip switch
+    {
+        FaturaTipi.SatisFaturasi => "Satış Faturası",
+        FaturaTipi.AlisFaturasi => "Alış Faturası",
+        FaturaTipi.SatisIadeFaturasi => "Satış İade",
+        FaturaTipi.AlisIadeFaturasi => "Alış İade",
+        _ => tip.ToString()
+    };
+
+    private string GetTipBadgeClass(FaturaTipi tip) => tip switch
+    {
+        FaturaTipi.SatisFaturasi => "bg-success",
+        FaturaTipi.AlisFaturasi => "bg-primary",
+        FaturaTipi.SatisIadeFaturasi => "bg-warning text-dark",
+        FaturaTipi.AlisIadeFaturasi => "bg-info",
+        _ => "bg-secondary"
+    };
+
+    private string GetDurumText(FaturaDurum durum) => durum switch
+    {
+        FaturaDurum.Beklemede => "Beklemede",
+        FaturaDurum.KismiOdendi => "Kısmi Ödendi",
+        FaturaDurum.Odendi => "Ödendi",
+        FaturaDurum.IptalEdildi => "İptal Edildi",
+        _ => durum.ToString()
+    };
+
+    private string GetDurumBadgeClass(FaturaDurum durum) => durum switch
+    {
+        FaturaDurum.Beklemede => "bg-warning text-dark",
+        FaturaDurum.KismiOdendi => "bg-info",
+        FaturaDurum.Odendi => "bg-success",
+        FaturaDurum.IptalEdildi => "bg-danger",
+        _ => "bg-secondary"
+    };
+}
+

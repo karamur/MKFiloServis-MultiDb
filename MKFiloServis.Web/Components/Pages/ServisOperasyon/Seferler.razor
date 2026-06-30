@@ -1,0 +1,594 @@
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services.Interfaces
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Data
+@using Microsoft.EntityFrameworkCore
+@inject IFiloKomisyonService FiloKomisyonService
+@inject IGuzergahService GuzergahService
+@inject IFirmaService FirmaService
+@inject IKullaniciService KullaniciService
+@inject IToastService ToastService
+@inject IDbContextFactory<ApplicationDbContext> DbContextFactory
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@rendermode InteractiveServer
+
+<PageTitle>Servis Operasyon Seferler</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h3 class="mb-0"><i class="bi bi-calendar2-week me-2 text-primary"></i>Sefer Tanımları</h3>
+            <small class="text-muted">Sefer, kullanıcı ve operasyon fiyat eşleştirmelerini buradan yönetin.</small>
+        </div>
+        <button class="btn btn-primary" @onclick="YeniSeferModalAc">
+            <i class="bi bi-plus-lg me-1"></i> Yeni Sefer
+        </button>
+    </div>
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-md-2">
+                    <label class="form-label small">Güzergah Kodu</label>
+                    <input class="form-control form-control-sm" @bind="filtre.GuzergahKodu" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Güzergah Adı</label>
+                    <input class="form-control form-control-sm" @bind="filtre.GuzergahAdi" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Kurum Adı</label>
+                    <input class="form-control form-control-sm" @bind="filtre.KurumAdi" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Firma Adı</label>
+                    <input class="form-control form-control-sm" @bind="filtre.FirmaAdi" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Araç Plakası</label>
+                    <input class="form-control form-control-sm" @bind="filtre.AracPlaka" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Şoför Adı</label>
+                    <input class="form-control form-control-sm" @bind="filtre.SoforAdi" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Gelir Fiyatı (min)</label>
+                    <input class="form-control form-control-sm" type="number" step="0.01" @bind="filtre.GelirFiyatMin" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Gelir Fiyatı (max)</label>
+                    <input class="form-control form-control-sm" type="number" step="0.01" @bind="filtre.GelirFiyatMax" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Gider Fiyatı (min)</label>
+                    <input class="form-control form-control-sm" type="number" step="0.01" @bind="filtre.GiderFiyatMin" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Gider Fiyatı (max)</label>
+                    <input class="form-control form-control-sm" type="number" step="0.01" @bind="filtre.GiderFiyatMax" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Kullanıcı</label>
+                    <select class="form-select form-select-sm" @bind="filtre.KullaniciId">
+                        <option value="">Tümü</option>
+                        @foreach (var k in kullaniciListesi)
+                        {
+                            <option value="@k.Id">@k.AdSoyad</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end justify-content-end">
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="FiltreTemizle">
+                        <i class="bi bi-x-circle me-1"></i>Temizle
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2 text-muted">Sefer listesi yükleniyor...</p>
+        </div>
+    }
+    else
+    {
+        <div class="card shadow-sm">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-bordered table-sm mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Güzergah Kodu</th>
+                                <th>Güzergah Adı</th>
+                                <th>Kurum Adı</th>
+                                <th>Firma Adı</th>
+                                <th>Araç Plakası</th>
+                                <th>Şoför Adı</th>
+                                <th>Gelir Fiyatı</th>
+                                <th>Gider Fiyatı</th>
+                                <th>Kullanıcı</th>
+                                <th class="text-center">İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!FiltrelenmisEslestirmeler.Any())
+                            {
+                                <tr>
+                                    <td colspan="10" class="text-center py-4 text-muted">
+                                        <em>Kriterlere uygun sefer kaydı bulunamadı.</em>
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                foreach (var e in FiltrelenmisEslestirmeler)
+                                {
+                                    <tr>
+                                        <td><strong>@(e.Guzergah?.GuzergahKodu ?? "-")</strong></td>
+                                        <td>@(e.Guzergah?.GuzergahAdi ?? "-")</td>
+                                        <td>@(e.KurumFirma?.FirmaAdi ?? "-")</td>
+                                        <td>@GetFirmaAdi(e)</td>
+                                        <td class="fw-bold">@GetAracPlaka(e.Arac)</td>
+                                        <td>@(e.Sofor?.TamAd ?? "-")</td>
+                                        <td class="text-success fw-bold">@e.KurumaKesilecekUcret.ToString("N2") ₺</td>
+                                        <td class="text-danger fw-bold">@e.TaseronaOdenenUcret.ToString("N2") ₺</td>
+                                        <td>@(e.Kullanici?.AdSoyad ?? "-")</td>
+                                        <td class="text-center">
+                                            <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => DuzenleModalAc(e)" title="Düzenle">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => SilModalAc(e)" title="Sil">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@if (isModalOpen)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title">@(model.Id == 0 ? "Yeni Sefer" : "Sefer Düzenle")</h5>
+                    <button type="button" class="btn-close" @onclick="ModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Kurum <span class="text-danger">*</span></label>
+                            <select class="form-select" @bind="seciliKurumCariId" @bind:after="KurumSecimiDegistiAsync">
+                                <option value="0">-- Kurum Seçin --</option>
+                                @foreach (var k in cariListesi)
+                                {
+                                    <option value="@k.Id">@k.Unvan</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Güzergah <span class="text-danger">*</span></label>
+                            <select class="form-select" @bind="model.GuzergahId" @bind:after="GuzergahSecimiDegistiAsync">
+                                <option value="0">-- Güzergah Seçin --</option>
+                                @foreach (var g in guzergahListesi)
+                                {
+                                    <option value="@g.Id">@g.GuzergahKodu - @g.GuzergahAdi</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Kullanıcı</label>
+                            <select class="form-select" @bind="model.KullaniciId">
+                                <option value="">-- Kullanıcı Seçin --</option>
+                                @foreach (var k in kullaniciListesi)
+                                {
+                                    <option value="@k.Id">@k.AdSoyad (@k.KullaniciAdi)</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Araç Plakası <span class="text-danger">*</span></label>
+                            <select class="form-select" @bind="model.AracId" @bind:after="AracSecimiDegistiAsync">
+                                <option value="0">-- Araç Seçin --</option>
+                                @foreach (var a in aracListesi)
+                                {
+                                    <option value="@a.Id">@GetAracPlaka(a)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Şoför <span class="text-danger">*</span></label>
+                            <select class="form-select" @bind="model.SoforId" @bind:after="SoforSecimiDegistiAsync">
+                                <option value="0">-- Şoför Seçin --</option>
+                                @foreach (var s in soforListesi)
+                                {
+                                    <option value="@s.Id">@s.TamAd</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Sefer Tipi</label>
+                            <select class="form-select" @bind="model.ServisTuru" @bind:after="ServisTuruDegistiAsync">
+                                @foreach (var tip in Enum.GetValues<ServisTuru>())
+                                {
+                                    <option value="@tip">@tip</option>
+                                }
+                            </select>
+                            <small class="text-muted">Çarpan: <strong>@GetServisTuruCarpani(model.ServisTuru).ToString("N2")</strong></small>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(secilenSoforBilgi))
+                        {
+                            <div class="col-12">
+                                <div class="alert alert-info py-2 mb-0">
+                                    <div><strong>Personel:</strong> @secilenSoforBilgi</div>
+                                    <div><strong>Telefon:</strong> @(string.IsNullOrWhiteSpace(secilenSoforTelefon) ? "-" : secilenSoforTelefon)</div>
+                                    <div><strong>Firma:</strong> @(string.IsNullOrWhiteSpace(secilenSoforFirma) ? "-" : secilenSoforFirma)</div>
+                                </div>
+                            </div>
+                        }
+
+                        <div class="col-md-6">
+                            <label class="form-label text-success fw-bold">Gelir Fiyatı (Kuruma Kesilecek)</label>
+                            <input type="number" step="0.01" class="form-control text-success fw-bold" @bind="model.KurumaKesilecekUcret" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-danger fw-bold">Gider Fiyatı (Ödenecek)</label>
+                            <input type="number" step="0.01" class="form-control text-danger fw-bold" @bind="model.TaseronaOdenenUcret" />
+                        </div>
+
+                        <div class="col-12">
+                            <div class="form-check form-switch mt-2">
+                                <input class="form-check-input" type="checkbox" id="seferAktif" @bind="model.IsActive">
+                                <label class="form-check-label" for="seferAktif">Bu sefer tanımı aktif</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="ModalKapat">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="Kaydet">Kaydet</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private bool isModalOpen;
+    private int aktifFirmaId;
+
+    private List<FiloGuzergahEslestirme> eslestirmeler = new();
+    private List<Cari> cariListesi = new();
+    private List<Guzergah> guzergahListesi = new();
+    private List<Arac> aracListesi = new();
+    private List<Sofor> soforListesi = new();
+    private List<Kullanici> kullaniciListesi = new();
+    private Kullanici? aktifKullanici;
+
+    private Dictionary<int, PersonelAracInfo> aktifAracSoforMap = new();
+
+    private string? secilenSoforBilgi;
+    private string? secilenSoforTelefon;
+    private string? secilenSoforFirma;
+    private int seciliKurumCariId;
+    private Dictionary<int, int> cariToFirmaMap = new();
+    private Dictionary<int, int> firmaToCariMap = new();
+    private decimal modalOncekiServisCarpani = 1m;
+
+    private FiloGuzergahEslestirme model = new();
+    private SeferFiltreModel filtre = new();
+
+    private IEnumerable<FiloGuzergahEslestirme> FiltrelenmisEslestirmeler => eslestirmeler
+        .Where(e => string.IsNullOrWhiteSpace(filtre.GuzergahKodu) || (e.Guzergah?.GuzergahKodu?.Contains(filtre.GuzergahKodu, StringComparison.OrdinalIgnoreCase) ?? false))
+        .Where(e => string.IsNullOrWhiteSpace(filtre.GuzergahAdi) || (e.Guzergah?.GuzergahAdi?.Contains(filtre.GuzergahAdi, StringComparison.OrdinalIgnoreCase) ?? false))
+        .Where(e => string.IsNullOrWhiteSpace(filtre.KurumAdi) || (e.KurumFirma?.FirmaAdi?.Contains(filtre.KurumAdi, StringComparison.OrdinalIgnoreCase) ?? false))
+        .Where(e => string.IsNullOrWhiteSpace(filtre.FirmaAdi) || GetFirmaAdi(e).Contains(filtre.FirmaAdi, StringComparison.OrdinalIgnoreCase))
+        .Where(e => string.IsNullOrWhiteSpace(filtre.AracPlaka) || GetAracPlaka(e.Arac).Contains(filtre.AracPlaka, StringComparison.OrdinalIgnoreCase))
+        .Where(e => string.IsNullOrWhiteSpace(filtre.SoforAdi) || (e.Sofor?.TamAd?.Contains(filtre.SoforAdi, StringComparison.OrdinalIgnoreCase) ?? false))
+        .Where(e => !filtre.GelirFiyatMin.HasValue || e.KurumaKesilecekUcret >= filtre.GelirFiyatMin.Value)
+        .Where(e => !filtre.GelirFiyatMax.HasValue || e.KurumaKesilecekUcret <= filtre.GelirFiyatMax.Value)
+        .Where(e => !filtre.GiderFiyatMin.HasValue || e.TaseronaOdenenUcret >= filtre.GiderFiyatMin.Value)
+        .Where(e => !filtre.GiderFiyatMax.HasValue || e.TaseronaOdenenUcret <= filtre.GiderFiyatMax.Value)
+        .Where(e => !filtre.KullaniciId.HasValue || e.KullaniciId == filtre.KullaniciId)
+        .OrderBy(e => e.Guzergah?.GuzergahKodu)
+        .ThenBy(e => e.Guzergah?.GuzergahAdi)
+        .ThenBy(e => e.KurumFirma?.FirmaAdi);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var af = FirmaService.GetAktifFirma();
+        aktifFirmaId = af.TumFirmalar || af.FirmaId <= 0 ? 0 : af.FirmaId;
+        aktifKullanici = await KullaniciService.GetAktifKullaniciAsync();
+        await LoadLookups();
+        await ListeYenile();
+    }
+
+    private async Task LoadLookups()
+    {
+        cariListesi = await FiloKomisyonService.GetKurumlarAsync(aktifFirmaId);
+        aracListesi = await FiloKomisyonService.GetAraclarAsync(aktifFirmaId);
+        soforListesi = await FiloKomisyonService.GetSoforlerAsync();
+        kullaniciListesi = await FiloKomisyonService.GetKullanicilarAsync();
+
+        var firmalar = await FirmaService.GetAllAsync();
+        cariToFirmaMap = firmalar
+            .Where(f => !f.IsDeleted && f.CariId.HasValue)
+            .GroupBy(f => f.CariId!.Value)
+            .ToDictionary(g => g.Key, g => g.First().Id);
+        firmaToCariMap = firmalar
+            .Where(f => !f.IsDeleted && f.CariId.HasValue)
+            .ToDictionary(f => f.Id, f => f.CariId!.Value);
+
+        await YukleAktifAracSoforMapAsync();
+        await KurumSecimiDegistiAsync();
+    }
+
+    private async Task ListeYenile()
+    {
+        isLoading = true;
+        try
+        {
+            eslestirmeler = await FiloKomisyonService.GetEslestirmelerAsync(aktifFirmaId, sadeceAktifler: false);
+        }
+        catch
+        {
+            ToastService.ShowError("Sefer listesi yüklenirken hata oluştu.");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void YeniSeferModalAc()
+    {
+        model = new FiloGuzergahEslestirme
+        {
+            FirmaId = aktifFirmaId,
+            IsActive = true,
+            ServisTuru = ServisTuru.SabahAksam,
+            KullaniciId = aktifKullanici?.Id
+        };
+        seciliKurumCariId = 0;
+        secilenSoforBilgi = null;
+        secilenSoforTelefon = null;
+        secilenSoforFirma = null;
+        modalOncekiServisCarpani = GetServisTuruCarpani(model.ServisTuru);
+        _ = KurumSecimiDegistiAsync();
+        isModalOpen = true;
+    }
+
+    private void DuzenleModalAc(FiloGuzergahEslestirme esleme)
+    {
+        model = new FiloGuzergahEslestirme
+        {
+            Id = esleme.Id,
+            FirmaId = esleme.FirmaId,
+            KurumFirmaId = esleme.KurumFirmaId,
+            GuzergahId = esleme.GuzergahId,
+            AracId = esleme.AracId,
+            SoforId = esleme.SoforId,
+            KullaniciId = esleme.KullaniciId,
+            ServisTuru = esleme.ServisTuru,
+            KurumaKesilecekUcret = esleme.KurumaKesilecekUcret,
+            TaseronaOdenenUcret = esleme.TaseronaOdenenUcret,
+            IsActive = esleme.IsActive
+        };
+        seciliKurumCariId = firmaToCariMap.TryGetValue(model.KurumFirmaId, out var cariId) ? cariId : 0;
+
+        modalOncekiServisCarpani = GetServisTuruCarpani(model.ServisTuru);
+        _ = KurumSecimiDegistiAsync();
+        _ = AracSecimiDegistiAsync();
+        _ = SoforSecimiDegistiAsync();
+        isModalOpen = true;
+    }
+
+    private void ModalKapat() => isModalOpen = false;
+
+    private async Task SilModalAc(FiloGuzergahEslestirme esleme)
+    {
+        await FiloKomisyonService.DeleteEslestirmeAsync(esleme.Id);
+        ToastService.ShowSuccess("Sefer kaydı silindi.");
+        await ListeYenile();
+    }
+
+    private async Task Kaydet()
+    {
+        if (seciliKurumCariId == 0)
+        {
+            ToastService.ShowError("Lütfen kurum seçiniz.");
+            return;
+        }
+
+        if (!cariToFirmaMap.TryGetValue(seciliKurumCariId, out var kurumFirmaId))
+        {
+            ToastService.ShowError("Seçilen kurum bir firma kaydı ile eşleşmiyor. Lütfen kurum/firma eşleştirmesini kontrol edin.");
+            return;
+        }
+
+        model.KurumFirmaId = kurumFirmaId;
+
+        if (model.KurumFirmaId == 0 || model.GuzergahId == 0 || model.AracId == 0 || model.SoforId == 0)
+        {
+            ToastService.ShowError("Lütfen tüm zorunlu alanları doldurunuz.");
+            return;
+        }
+
+        try
+        {
+            if (model.Id == 0)
+                await FiloKomisyonService.CreateEslestirmeAsync(model);
+            else
+                await FiloKomisyonService.UpdateEslestirmeAsync(model);
+
+            ToastService.ShowSuccess("Sefer kaydı kaydedildi.");
+            isModalOpen = false;
+            await ListeYenile();
+        }
+        catch (Exception ex)
+        {
+            var detay = ex.GetBaseException().Message;
+            ToastService.ShowError("Kayıt sırasında hata oluştu: " + detay);
+        }
+    }
+
+    private Task FiltreTemizle()
+    {
+        filtre = new SeferFiltreModel();
+        return Task.CompletedTask;
+    }
+
+    private async Task KurumSecimiDegistiAsync()
+    {
+        if (seciliKurumCariId > 0)
+        {
+            guzergahListesi = await GuzergahService.GetByCariIdAsync(seciliKurumCariId);
+        }
+        else
+        {
+            guzergahListesi = await FiloKomisyonService.GetGuzergahlarAsync();
+        }
+
+        if (model.GuzergahId > 0 && !guzergahListesi.Any(g => g.Id == model.GuzergahId))
+        {
+            model.GuzergahId = 0;
+        }
+    }
+
+    private Task ServisTuruDegistiAsync()
+    {
+        var yeniCarpan = GetServisTuruCarpani(model.ServisTuru);
+        if (modalOncekiServisCarpani <= 0)
+            modalOncekiServisCarpani = 1m;
+
+        var oran = yeniCarpan / modalOncekiServisCarpani;
+        model.KurumaKesilecekUcret = Math.Round(model.KurumaKesilecekUcret * oran, 2, MidpointRounding.AwayFromZero);
+        model.TaseronaOdenenUcret = Math.Round(model.TaseronaOdenenUcret * oran, 2, MidpointRounding.AwayFromZero);
+        modalOncekiServisCarpani = yeniCarpan;
+        return Task.CompletedTask;
+    }
+
+    private Task GuzergahSecimiDegistiAsync()
+    {
+        var secilenGuzergah = guzergahListesi.FirstOrDefault(g => g.Id == model.GuzergahId);
+        if (secilenGuzergah is null)
+            return Task.CompletedTask;
+
+        var carpan = GetServisTuruCarpani(model.ServisTuru);
+        model.KurumaKesilecekUcret = Math.Round(secilenGuzergah.GelirFiyat * carpan, 2, MidpointRounding.AwayFromZero);
+        model.TaseronaOdenenUcret = Math.Round(secilenGuzergah.GiderFiyat * carpan, 2, MidpointRounding.AwayFromZero);
+        return Task.CompletedTask;
+    }
+
+    private Task AracSecimiDegistiAsync()
+    {
+        if (model.AracId > 0 && aktifAracSoforMap.TryGetValue(model.AracId, out var info))
+        {
+            model.SoforId = info.SoforId;
+            secilenSoforBilgi = info.AdSoyad;
+            secilenSoforTelefon = info.Telefon;
+            secilenSoforFirma = info.FirmaAdi;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task SoforSecimiDegistiAsync()
+    {
+        var secilen = soforListesi.FirstOrDefault(s => s.Id == model.SoforId);
+        secilenSoforBilgi = secilen?.TamAd;
+        secilenSoforTelefon = secilen?.Telefon;
+        secilenSoforFirma = secilen?.Firma?.FirmaAdi;
+        return Task.CompletedTask;
+    }
+
+    private async Task YukleAktifAracSoforMapAsync()
+    {
+        await using var context = await DbContextFactory.CreateDbContextAsync();
+
+        var atamalar = await context.PersonelAracAtamalari
+            .AsNoTracking()
+            .Where(a => !a.IsDeleted && a.Aktif)
+            .Where(a => a.BitisTarihi == null || a.BitisTarihi >= DateTime.Today)
+            .Include(a => a.Sofor)
+                .ThenInclude(s => s.Firma)
+            .OrderByDescending(a => a.BaslangicTarihi)
+            .ToListAsync();
+
+        aktifAracSoforMap = atamalar
+            .GroupBy(a => a.AracId)
+            .Select(g => g.First())
+            .ToDictionary(
+                a => a.AracId,
+                a => new PersonelAracInfo(
+                    a.SoforId,
+                    a.Sofor.TamAd,
+                    a.Sofor.Telefon,
+                    a.Sofor.Firma?.FirmaAdi));
+    }
+
+    private static decimal GetServisTuruCarpani(ServisTuru servisTuru)
+    {
+        return servisTuru switch
+        {
+            ServisTuru.Sabah => 1m,
+            ServisTuru.Aksam => 1m,
+            ServisTuru.SabahAksam => 2m,
+            ServisTuru.Ozel => 1.25m,
+            ServisTuru.YardaMesai => 1.5m,
+            _ => 1m
+        };
+    }
+
+    private static string GetAracPlaka(Arac? arac)
+        => arac?.AktifPlaka ?? arac?.AktifPlakaKaydi?.Plaka ?? "-";
+
+    private static string GetFirmaAdi(FiloGuzergahEslestirme eslestirme)
+    {
+        if (eslestirme.Arac?.TasimaTedarikci is not null)
+            return eslestirme.Arac.TasimaTedarikci.Unvan;
+
+        if (eslestirme.Arac?.KomisyoncuCari is not null)
+            return eslestirme.Arac.KomisyoncuCari.Unvan;
+
+        if (eslestirme.Arac?.KiralikCari is not null)
+            return eslestirme.Arac.KiralikCari.Unvan;
+
+        if (eslestirme.Sofor?.Firma is not null)
+            return eslestirme.Sofor.Firma.FirmaAdi;
+
+        return "-";
+    }
+
+    private sealed record PersonelAracInfo(int SoforId, string AdSoyad, string? Telefon, string? FirmaAdi);
+
+    private sealed class SeferFiltreModel
+    {
+        public string? GuzergahKodu { get; set; }
+        public string? GuzergahAdi { get; set; }
+        public string? KurumAdi { get; set; }
+        public string? FirmaAdi { get; set; }
+        public string? AracPlaka { get; set; }
+        public string? SoforAdi { get; set; }
+        public decimal? GelirFiyatMin { get; set; }
+        public decimal? GelirFiyatMax { get; set; }
+        public decimal? GiderFiyatMin { get; set; }
+        public decimal? GiderFiyatMax { get; set; }
+        public int? KullaniciId { get; set; }
+    }
+}
+

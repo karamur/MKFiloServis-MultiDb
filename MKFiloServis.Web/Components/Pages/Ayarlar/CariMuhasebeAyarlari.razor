@@ -1,0 +1,721 @@
+@page "/ayarlar/muhasebe-cari"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Data
+@using Microsoft.EntityFrameworkCore
+@using MKFiloServis.Web.Services
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IToastService ToastService
+@inject ICariService CariService
+@rendermode InteractiveServer
+
+<PageTitle>Cari / Muhasebe Ayarları</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="bi bi-journal-text me-2"></i>Cari / Muhasebe Ayarları</h3>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="mt-2 text-muted">Ayarlar Yükleniyor...</div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-md-5">
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="bi bi-gear-fill me-2"></i>Otomatik Hesap Kodu Ayarları</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted"><small>Cari için hesap planında kod yoksa üretilecek önekleri belirleyin.</small></p>
+                        @* Hesap planı autocomplete datalist *@
+                        <datalist id="hesap-list">
+                            @foreach (var h in muhasebeHesaplar)
+                            {
+                                <option value="@h.HesapKodu">@h.HesapKodu - @h.HesapAdi</option>
+                            }
+                        </datalist>
+
+                        <form @onsubmit="Kaydet">
+                            <div class="mb-3 form-check form-switch px-4">
+                                <input class="form-check-input" type="checkbox" id="otoHesap" style="transform: scale(1.5); margin-left: -2em;" @bind="ayar.OtomatikHesapDuzenlensin">
+                                <label class="form-check-label pt-1 ms-2 fw-bold" for="otoHesap">Otomatik Hesap Kartı Açılsın</label>
+                            </div>
+
+                            @if (ayar.OtomatikHesapDuzenlensin)
+                            {
+                                <div class="mb-3">
+                                    <label class="form-label">Müşteri Hesap Kodu Öneki</label>
+                                    <input type="text" class="form-control" list="hesap-list" @bind="ayar.MusteriPrefix" placeholder="120.01" />
+                                    <div class="form-text">
+                                        Ör: 120.01 → 120.01.001
+                                        @if (!string.IsNullOrWhiteSpace(ayar.MusteriPrefix) && GetHesapAdi(ayar.MusteriPrefix) != null)
+                                        { <span class="text-success ms-2"><i class="bi bi-check-circle me-1"></i>@GetHesapAdi(ayar.MusteriPrefix)</span> }
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Tedarikçi Hesap Kodu Öneki</label>
+                                    <input type="text" class="form-control" list="hesap-list" @bind="ayar.TedarikciPrefix" placeholder="320.01" />
+                                    <div class="form-text">
+                                        Ör: 320.01 → 320.01.001
+                                        @if (!string.IsNullOrWhiteSpace(ayar.TedarikciPrefix) && GetHesapAdi(ayar.TedarikciPrefix) != null)
+                                        { <span class="text-success ms-2"><i class="bi bi-check-circle me-1"></i>@GetHesapAdi(ayar.TedarikciPrefix)</span> }
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Personel Hesap Kodu Öneki (335 - Borç)</label>
+                                    <input type="text" class="form-control" list="hesap-list" @bind="ayar.PersonelPrefix" placeholder="335.01" />
+                                    <div class="form-text">
+                                        Ör: 335.01 → 335.01.001
+                                        @if (!string.IsNullOrWhiteSpace(ayar.PersonelPrefix) && GetHesapAdi(ayar.PersonelPrefix) != null)
+                                        { <span class="text-success ms-2"><i class="bi bi-check-circle me-1"></i>@GetHesapAdi(ayar.PersonelPrefix)</span> }
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Personel Avans Hesap Kodu Öneki (195 - Avans)</label>
+                                    <input type="text" class="form-control" list="hesap-list" @bind="ayar.PersonelAvansPrefix" placeholder="195.01" />
+                                    <div class="form-text">
+                                        Ör: 195.01 → 195.01.001
+                                        @if (!string.IsNullOrWhiteSpace(ayar.PersonelAvansPrefix) && GetHesapAdi(ayar.PersonelAvansPrefix) != null)
+                                        { <span class="text-success ms-2"><i class="bi bi-check-circle me-1"></i>@GetHesapAdi(ayar.PersonelAvansPrefix)</span> }
+                                    </div>
+                                </div>
+                            }
+
+                            <hr />
+                            <h6 class="text-primary"><i class="bi bi-receipt me-2"></i>Fatura Muhasebe Ayarları</h6>
+                            
+                            <div class="mb-3 form-check form-switch px-4">
+                                <input class="form-check-input" type="checkbox" id="faturaFis" style="transform: scale(1.5); margin-left: -2em;" @bind="ayar.FaturaOtomatikMuhasebeFisi">
+                                <label class="form-check-label pt-1 ms-2 fw-bold" for="faturaFis">Faturadan Otomatik Muhasebe Fişi Oluştur</label>
+                            </div>
+
+                            @if (ayar.FaturaOtomatikMuhasebeFisi)
+                            {
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Satış Gelir Hesabı</label>
+                                            <input type="text" class="form-control @(GetHesapAdi(ayar.SatisGelirHesabi) != null ? "is-valid" : "")" list="hesap-list" @bind="ayar.SatisGelirHesabi" placeholder="600.01" />
+                                            <div class="form-text">
+                                                @(GetHesapAdi(ayar.SatisGelirHesabi) != null ? $"✓ {GetHesapAdi(ayar.SatisGelirHesabi)}" : "Ör: 600.01 — Yurtiçi Satışlar")
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Alış Gider Hesabı</label>
+                                            <input type="text" class="form-control @(GetHesapAdi(ayar.AlisGiderHesabi) != null ? "is-valid" : "")" list="hesap-list" @bind="ayar.AlisGiderHesabi" placeholder="153.01" />
+                                            <div class="form-text">
+                                                @(GetHesapAdi(ayar.AlisGiderHesabi) != null ? $"✓ {GetHesapAdi(ayar.AlisGiderHesabi)}" : "Ör: 153.01 veya 740.01")
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Hesaplanan KDV Hesabı</label>
+                                            <input type="text" class="form-control @(GetHesapAdi(ayar.HesaplananKdvHesabi) != null ? "is-valid" : "")" list="hesap-list" @bind="ayar.HesaplananKdvHesabi" placeholder="391.01" />
+                                            <div class="form-text">
+                                                @(GetHesapAdi(ayar.HesaplananKdvHesabi) != null ? $"✓ {GetHesapAdi(ayar.HesaplananKdvHesabi)}" : "Ör: 391.01")
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">İndirilecek KDV Hesabı</label>
+                                            <input type="text" class="form-control @(GetHesapAdi(ayar.IndirilecekKdvHesabi) != null ? "is-valid" : "")" list="hesap-list" @bind="ayar.IndirilecekKdvHesabi" placeholder="191.01" />
+                                            <div class="form-text">
+                                                @(GetHesapAdi(ayar.IndirilecekKdvHesabi) != null ? $"✓ {GetHesapAdi(ayar.IndirilecekKdvHesabi)}" : "Ör: 191.01")
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Tevkifat KDV Hesabı</label>
+                                            <input type="text" class="form-control @(GetHesapAdi(ayar.TevkifatKdvHesabi) != null ? "is-valid" : "")" list="hesap-list" @bind="ayar.TevkifatKdvHesabi" placeholder="360.01" />
+                                            <div class="form-text">
+                                                @(GetHesapAdi(ayar.TevkifatKdvHesabi) != null ? $"✓ {GetHesapAdi(ayar.TevkifatKdvHesabi)}" : "Ör: 360.01 (Sorumlu Sıfatıyla Ödenen KDV)")
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Tevkifat Alacak Hesabı</label>
+                                            <input type="text" class="form-control @(GetHesapAdi(ayar.TevkifatAlacakHesabi) != null ? "is-valid" : "")" list="hesap-list" @bind="ayar.TevkifatAlacakHesabi" placeholder="136.01" />
+                                            <div class="form-text">
+                                                @(GetHesapAdi(ayar.TevkifatAlacakHesabi) != null ? $"✓ {GetHesapAdi(ayar.TevkifatAlacakHesabi)}" : "Ör: 136.01 (Tevkifattan Alacak)")
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <label class="form-label mb-0 fw-semibold">
+                                            <i class="bi bi-percent me-1 text-primary"></i>KDV Oranına Göre Hesap Kodu Eşleştirmesi
+                                        </label>
+                                        <button type="button" class="btn btn-outline-primary btn-sm" @onclick="KdvEslestirmeEkle">
+                                            <i class="bi bi-plus-lg me-1"></i>Oran Ekle
+                                        </button>
+                                    </div>
+                                    <div class="form-text mb-2 text-muted">
+                                        Farklı KDV oranları için ayrı hesap kodu tanımlayın (Zirve tarzı: %20 → 391.20 / 191.20, %10 → 391.10 / 191.10). Tanımlı oran bulunamazsa yukarıdaki varsayılan hesaplar kullanılır.
+                                    </div>
+                                    @if (kdvEslestirmeleri.Any())
+                                    {
+                                        <table class="table table-sm table-bordered mb-2">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th style="width:90px;">KDV %</th>
+                                                    <th>Hesaplanan KDV Hesabı</th>
+                                                    <th>İndirilecek KDV Hesabı</th>
+                                                    <th style="width:60px;"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var e in kdvEslestirmeleri)
+                                                {
+                                                    <tr>
+                                                        <td>
+                                                            <input type="number" class="form-control form-control-sm" @bind="e.KdvOrani" min="0" max="100" />
+                                                        </td>
+                                                        <td>
+                                                            <input type="text" class="form-control form-control-sm @(GetHesapAdi(e.HesaplananKdvHesabi) != null ? "is-valid" : "")" list="hesap-list" @bind="e.HesaplananKdvHesabi" placeholder="391.20" />
+                                                            @if (GetHesapAdi(e.HesaplananKdvHesabi) is { } ad1)
+                                                            { <div class="form-text text-success">@ad1</div> }
+                                                        </td>
+                                                        <td>
+                                                            <input type="text" class="form-control form-control-sm @(GetHesapAdi(e.IndirilecekKdvHesabi) != null ? "is-valid" : "")" list="hesap-list" @bind="e.IndirilecekKdvHesabi" placeholder="191.20" />
+                                                            @if (GetHesapAdi(e.IndirilecekKdvHesabi) is { } ad2)
+                                                            { <div class="form-text text-success">@ad2</div> }
+                                                        </td>
+                                                        <td class="text-center">
+                                                            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="() => KdvEslestirmeSil(e)" title="Sil">
+                                                                <i class="bi bi-trash"></i>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    }
+                                    else
+                                    {
+                                        <div class="text-muted small fst-italic">Henüz oran eşleştirmesi eklenmedi. "Oran Ekle" butonuyla ekleyebilirsiniz.</div>
+                                    }
+                                </div>
+                            }
+
+                            <hr />
+                            <h6 class="text-primary"><i class="bi bi-box-seam me-2"></i>Stok Masraf Aktarım Ayarları</h6>
+                            
+                            <div class="mb-3 form-check form-switch px-4">
+                                <input class="form-check-input" type="checkbox" id="stokMasraf" style="transform: scale(1.5); margin-left: -2em;" @bind="ayar.StokMasrafAktarimiOtomatik">
+                                <label class="form-check-label pt-1 ms-2" for="stokMasraf">Fatura Import'ta Mal/Sarf Malzeme Otomatik Masrafa Aktarılsın</label>
+                            </div>
+                            
+                            @if (ayar.StokMasrafAktarimiOtomatik)
+                            {
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            <label class="form-label">Ticari Mal Masraf Hesabı</label>
+                                            <input type="text" class="form-control @(GetHesapAdi(ayar.MalMasrafHesabi) != null ? "is-valid" : "")" list="hesap-list" @bind="ayar.MalMasrafHesabi" placeholder="740.99.001" />
+                                            <div class="form-text">
+                                                @(GetHesapAdi(ayar.MalMasrafHesabi) != null ? $"✓ {GetHesapAdi(ayar.MalMasrafHesabi)}" : "Ör: 740.99.001")
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            <label class="form-label">Sarf Malzeme Masraf Hesabı</label>
+                                            <input type="text" class="form-control @(GetHesapAdi(ayar.SarfMalzemeMasrafHesabi) != null ? "is-valid" : "")" list="hesap-list" @bind="ayar.SarfMalzemeMasrafHesabi" placeholder="740.99.002" />
+                                            <div class="form-text">
+                                                @(GetHesapAdi(ayar.SarfMalzemeMasrafHesabi) != null ? $"✓ {GetHesapAdi(ayar.SarfMalzemeMasrafHesabi)}" : "Ör: 740.99.002")
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            <label class="form-label">Stok Çıkış Hesabı</label>
+                                            <input type="text" class="form-control @(GetHesapAdi(ayar.StokCikisHesabi) != null ? "is-valid" : "")" list="hesap-list" @bind="ayar.StokCikisHesabi" placeholder="153" />
+                                            <div class="form-text">
+                                                @(GetHesapAdi(ayar.StokCikisHesabi) != null ? $"✓ {GetHesapAdi(ayar.StokCikisHesabi)}" : "Ör: 153 (Ticari Mallar)")
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+
+                            <hr />
+                            <h6 class="text-primary"><i class="bi bi-file-earmark-code me-2"></i>XML Import Ayarları</h6>
+                            
+                            <div class="mb-3 form-check form-switch px-4">
+                                <input class="form-check-input" type="checkbox" id="xmlCari" style="transform: scale(1.5); margin-left: -2em;" @bind="ayar.XmlImportOtomatikCariOlustur">
+                                <label class="form-check-label pt-1 ms-2" for="xmlCari">XML Import'ta Otomatik Cari Oluştur</label>
+                            </div>
+                            
+                            <div class="mb-3 form-check form-switch px-4">
+                                <input class="form-check-input" type="checkbox" id="xmlHesap" style="transform: scale(1.5); margin-left: -2em;" @bind="ayar.XmlImportOtomatikHesapKoduOlustur">
+                                <label class="form-check-label pt-1 ms-2" for="xmlHesap">XML Import'ta Otomatik Muhasebe Hesap Kodu Aç</label>
+                            </div>
+
+                            <button type="submit" class="btn btn-success d-flex ms-auto" disabled="@isSaving">
+                                @if (isSaving)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                    <span>Kaydediliyor...</span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-save me-2"></i><span>Ayarları Kaydet</span>
+                                }
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-7">
+                <div class="card mb-4">
+                    <div class="card-header bg-warning text-dark">
+                        <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                            <h5 class="mb-0"><i class="bi bi-link me-2"></i>Cari / Hesap Kodu Eşleştirme</h5>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button class="btn btn-outline-dark btn-sm" @onclick="FiltreyiDegistir">
+                                    <i class="bi bi-funnel me-1"></i>@(eslesenleriGoster ? "Sadece Eşleşmemişleri Göster" : "Eşleşenleri de Göster")
+                                </button>
+                                <button class="btn btn-dark btn-sm" @onclick="TopluHesapOlustur" disabled="@(!GorunenCariler.Any(c => !c.Eslesmis) || isMapping)">
+                                    @if (isMapping)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                        <span>İşleniyor...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-magic me-1"></i><span>Toplu Hesap Kodu Oluştur</span>
+                                    }
+                                </button>
+                            </div>
+                        </div>
+                        <div class="small mt-2">
+                            Toplam: <strong>@tumCariler.Count</strong> |
+                            Eşleşmiş: <strong>@tumCariler.Count(x => x.Eslesmis)</strong> |
+                            Eşleşmemiş: <strong>@tumCariler.Count(x => !x.Eslesmis)</strong>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive" style="max-height: 550px; overflow-y: auto;">
+                            <table class="table table-hover table-striped mb-0">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th style="min-width: 220px;">Cari</th>
+                                        <th style="min-width: 220px;">Durum / Mevcut Kod</th>
+                                        <th style="min-width: 170px;">Önerilen Kod</th>
+                                        <th style="width: 180px;">İşlem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (!GorunenCariler.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="4" class="text-center text-muted py-3">Gösterilecek cari bulunmuyor.</td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var c in GorunenCariler)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <div><strong>@c.Cari.CariKodu</strong></div>
+                                                    <div class="small text-muted text-truncate" style="max-width: 220px;" title="@c.Cari.Unvan">@c.Cari.Unvan</div>
+                                                </td>
+                                                <td>
+                                                    @if (c.Eslesmis)
+                                                    {
+                                                        <span class="badge bg-success">Eşleşmiş</span>
+                                                        <div class="small mt-1">@c.MevcutHesapKodu</div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-secondary">Eşleşmemiş</span>
+                                                        <div class="small mt-1 text-muted">Cari kartta hesap kodu yok.</div>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (c.Eslesmis)
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span>@c.OnerilenKod</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (c.Eslesmis)
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button class="btn btn-outline-success btn-sm" @onclick="() => HesapOlustur(c)" disabled="@c.IsProcessing">
+                                                            @if (c.IsProcessing)
+                                                            {
+                                                                <span class="spinner-border spinner-border-sm"></span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span>Hesap Kodu Oluştur</span>
+                                                            }
+                                                        </button>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private bool isMapping = false;
+    private bool eslesenleriGoster = false;
+    private MuhasebeAyar ayar = new();
+    private List<KdvHesapEslestirme> kdvEslestirmeleri = new();
+    private List<CariEslestirmeModel> tumCariler = new();
+    private List<MuhasebeHesap> muhasebeHesaplar = new();
+
+    private IEnumerable<CariEslestirmeModel> GorunenCariler => eslesenleriGoster
+        ? tumCariler
+        : tumCariler.Where(x => !x.Eslesmis);
+
+    public class CariEslestirmeModel
+    {
+        public Cari Cari { get; set; } = null!;
+        public string? MevcutHesapKodu { get; set; }
+        public string? OnerilenKod { get; set; }
+        public bool Eslesmis { get; set; }
+        public bool IsProcessing { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAyarlar();
+        await LoadCariEslesmeleri();
+    }
+
+    private async Task LoadAyarlar()
+    {
+        isLoading = true;
+        using var context = await DbFactory.CreateDbContextAsync();
+
+        var dbAyar = await context.MuhasebeAyarlari
+            .Include(a => a.KdvHesapEslestirmeleri)
+            .FirstOrDefaultAsync();
+        ayar = dbAyar ?? new MuhasebeAyar();
+        kdvEslestirmeleri = ayar.KdvHesapEslestirmeleri.OrderBy(e => e.KdvOrani).ToList();
+        isLoading = false;
+    }
+
+    private async Task LoadCariEslesmeleri()
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+
+        muhasebeHesaplar = await context.MuhasebeHesaplari
+            .AsNoTracking()
+            .OrderBy(h => h.HesapKodu)
+            .ToListAsync();
+
+        // Hesap kodlarını lookup için hazırla
+        var hesaplarByKod = muhasebeHesaplar
+            .GroupBy(h => h.HesapKodu)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        // Hesap adlarını lookup için hazırla (unvan eşleştirmesi için)
+        var hesaplarByAd = muhasebeHesaplar
+            .GroupBy(h => h.HesapAdi.ToLowerInvariant().Trim())
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var cariler = await context.Cariler
+            .AsNoTracking()
+            .Include(c => c.MuhasebeHesap)
+            .Where(c => !c.IsDeleted)
+            .OrderBy(c => c.Unvan)
+            .ToListAsync();
+
+        // Her cari tipi için son kodları hesapla
+        var musteriSonKod = GetSonrakiHesapKoduNumarasi(ayar.MusteriPrefix, muhasebeHesaplar);
+        var tedarikciSonKod = GetSonrakiHesapKoduNumarasi(ayar.TedarikciPrefix, muhasebeHesaplar);
+        var personelSonKod = GetSonrakiHesapKoduNumarasi(ayar.PersonelPrefix, muhasebeHesaplar);
+
+        var musteriSayac = 0;
+        var tedarikciSayac = 0;
+        var personelSayac = 0;
+
+        tumCariler = cariler.Select(c =>
+        {
+            // Eşleşmiş = MuhasebeHesapId dolu ise
+            var mevcutHesapKodu = c.MuhasebeHesap?.HesapKodu;
+            
+            // Eğer MuhasebeHesapId boş ama CariKodu hesap planında varsa
+            if (string.IsNullOrWhiteSpace(mevcutHesapKodu) 
+                && !string.IsNullOrWhiteSpace(c.CariKodu)
+                && hesaplarByKod.TryGetValue(c.CariKodu, out var kodHesabi))
+            {
+                mevcutHesapKodu = kodHesabi.HesapKodu;
+            }
+
+            // Eğer hâlâ boşsa ve Unvan ile hesap adı eşleşiyorsa
+            if (string.IsNullOrWhiteSpace(mevcutHesapKodu) 
+                && !string.IsNullOrWhiteSpace(c.Unvan)
+                && hesaplarByAd.TryGetValue(c.Unvan.ToLowerInvariant().Trim(), out var adHesabi))
+            {
+                mevcutHesapKodu = adHesabi.HesapKodu;
+            }
+
+            var eslesmis = c.MuhasebeHesapId.HasValue || !string.IsNullOrWhiteSpace(mevcutHesapKodu);
+
+            string? onerilenKod = null;
+            if (!eslesmis)
+            {
+                // Her eşleşmemiş cari için sıradaki kodu öner
+                if (c.CariTipi == CariTipi.Musteri || c.CariTipi == CariTipi.MusteriTedarikci)
+                {
+                    musteriSayac++;
+                    onerilenKod = $"{ayar.MusteriPrefix}.{musteriSonKod + musteriSayac:D3}";
+                }
+                else if (c.CariTipi == CariTipi.Tedarikci)
+                {
+                    tedarikciSayac++;
+                    onerilenKod = $"{ayar.TedarikciPrefix}.{tedarikciSonKod + tedarikciSayac:D3}";
+                }
+                else if (c.CariTipi == CariTipi.Personel)
+                {
+                    personelSayac++;
+                    onerilenKod = $"{ayar.PersonelPrefix}.{personelSonKod + personelSayac:D3}";
+                }
+            }
+
+            return new CariEslestirmeModel
+            {
+                Cari = c,
+                MevcutHesapKodu = mevcutHesapKodu,
+                OnerilenKod = onerilenKod,
+                Eslesmis = eslesmis
+            };
+        })
+        .OrderBy(x => x.Eslesmis)
+        .ThenBy(x => x.Cari.Unvan)
+        .ToList();
+    }
+
+    private void FiltreyiDegistir()
+    {
+        eslesenleriGoster = !eslesenleriGoster;
+    }
+
+    private async Task HesapOlustur(CariEslestirmeModel model)
+    {
+        model.IsProcessing = true;
+        StateHasChanged();
+
+        try
+        {
+            await CariService.EnsureMuhasebeHesapAsync(model.Cari.Id);
+            ToastService.ShowSuccess($"{model.Cari.Unvan} için hesap kodu oluşturuldu.");
+            await LoadCariEslesmeleri();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+        finally
+        {
+            model.IsProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task TopluHesapOlustur()
+    {
+        isMapping = true;
+        StateHasChanged();
+
+        try
+        {
+            var islenecekler = GorunenCariler.Where(x => !x.Eslesmis).ToList();
+            var basarili = 0;
+
+            foreach (var item in islenecekler)
+            {
+                await CariService.EnsureMuhasebeHesapAsync(item.Cari.Id);
+                basarili++;
+            }
+
+            ToastService.ShowSuccess($"{basarili} adet cari için hesap kodu oluşturuldu.");
+            await LoadCariEslesmeleri();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Toplu işlemde hata: {ex.Message}");
+        }
+        finally
+        {
+            isMapping = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetPrefix(CariTipi cariTipi) => cariTipi switch
+    {
+        CariTipi.Musteri => ayar.MusteriPrefix,
+        CariTipi.Tedarikci => ayar.TedarikciPrefix,
+        CariTipi.Personel => ayar.PersonelPrefix,
+        _ => ayar.MusteriPrefix
+    };
+
+    private static int GetSonrakiHesapKoduNumarasi(string? prefix, List<MuhasebeHesap> hesaplar)
+    {
+        if (string.IsNullOrWhiteSpace(prefix))
+        {
+            return 0;
+        }
+
+        var sonKod = hesaplar
+            .Where(h => h.HesapKodu.StartsWith(prefix + "."))
+            .OrderByDescending(h => h.HesapKodu)
+            .Select(h => h.HesapKodu)
+            .FirstOrDefault();
+
+        if (string.IsNullOrWhiteSpace(sonKod))
+        {
+            return 0;
+        }
+
+        var sonParca = sonKod.Split('.').LastOrDefault();
+        if (!int.TryParse(sonParca, out var sonNumara))
+        {
+            return 0;
+        }
+
+        return sonNumara;
+    }
+
+    private async Task Kaydet()
+    {
+        isSaving = true;
+        try
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+            var dbAyar = await context.MuhasebeAyarlari.FirstOrDefaultAsync();
+
+            if (dbAyar != null)
+            {
+                dbAyar.MusteriPrefix = ayar.MusteriPrefix;
+                dbAyar.TedarikciPrefix = ayar.TedarikciPrefix;
+                dbAyar.PersonelPrefix = ayar.PersonelPrefix;
+                dbAyar.PersonelAvansPrefix = ayar.PersonelAvansPrefix;
+                dbAyar.OtomatikHesapDuzenlensin = ayar.OtomatikHesapDuzenlensin;
+                dbAyar.FaturaOtomatikMuhasebeFisi = ayar.FaturaOtomatikMuhasebeFisi;
+                dbAyar.SatisGelirHesabi = ayar.SatisGelirHesabi;
+                dbAyar.AlisGiderHesabi = ayar.AlisGiderHesabi;
+                dbAyar.HesaplananKdvHesabi = ayar.HesaplananKdvHesabi;
+                dbAyar.IndirilecekKdvHesabi = ayar.IndirilecekKdvHesabi;
+                dbAyar.TevkifatKdvHesabi = ayar.TevkifatKdvHesabi;
+                dbAyar.TevkifatAlacakHesabi = ayar.TevkifatAlacakHesabi;
+                dbAyar.StokMasrafAktarimiOtomatik = ayar.StokMasrafAktarimiOtomatik;
+                dbAyar.MalMasrafHesabi = ayar.MalMasrafHesabi;
+                dbAyar.SarfMalzemeMasrafHesabi = ayar.SarfMalzemeMasrafHesabi;
+                dbAyar.StokCikisHesabi = ayar.StokCikisHesabi;
+                dbAyar.XmlImportOtomatikCariOlustur = ayar.XmlImportOtomatikCariOlustur;
+                dbAyar.XmlImportOtomatikHesapKoduOlustur = ayar.XmlImportOtomatikHesapKoduOlustur;
+                context.Update(dbAyar);
+
+                // KDV oran eşleştirmelerini güncelle: eskileri sil, yenileri ekle
+                var mevcutlar = await context.KdvHesapEslestirmeleri
+                    .Where(e => e.MuhasebeAyarId == dbAyar.Id)
+                    .ToListAsync();
+                context.KdvHesapEslestirmeleri.RemoveRange(mevcutlar);
+                foreach (var e in kdvEslestirmeleri)
+                {
+                    context.KdvHesapEslestirmeleri.Add(new KdvHesapEslestirme
+                    {
+                        MuhasebeAyarId = dbAyar.Id,
+                        KdvOrani = e.KdvOrani,
+                        HesaplananKdvHesabi = e.HesaplananKdvHesabi,
+                        IndirilecekKdvHesabi = e.IndirilecekKdvHesabi,
+                        Aciklama = e.Aciklama,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
+            else
+            {
+                context.Add(ayar);
+                foreach (var e in kdvEslestirmeleri)
+                {
+                    e.MuhasebeAyar = ayar;
+                    e.CreatedAt = DateTime.UtcNow;
+                    context.KdvHesapEslestirmeleri.Add(e);
+                }
+            }
+
+            await context.SaveChangesAsync();
+            ToastService.ShowSuccess("Muhasebe ve cari ayarları başarıyla kaydedildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata oluştu: " + ex.Message);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void KdvEslestirmeEkle()
+    {
+        kdvEslestirmeleri.Add(new KdvHesapEslestirme
+        {
+            KdvOrani = 20,
+            HesaplananKdvHesabi = "391.20",
+            IndirilecekKdvHesabi = "191.20"
+        });
+    }
+
+    private void KdvEslestirmeSil(KdvHesapEslestirme e)
+    {
+        kdvEslestirmeleri.Remove(e);
+    }
+
+    /// <summary>Girilen hesap koduna karşılık gelen hesap adını döndürür. Bulunamazsa null.</summary>
+    private string? GetHesapAdi(string? kod)
+    {
+        if (string.IsNullOrWhiteSpace(kod) || !muhasebeHesaplar.Any()) return null;
+        var hesap = muhasebeHesaplar.FirstOrDefault(h =>
+            h.HesapKodu.Equals(kod.Trim(), StringComparison.OrdinalIgnoreCase));
+        return hesap?.HesapAdi;
+    }
+}
+

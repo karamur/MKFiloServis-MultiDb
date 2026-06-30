@@ -1,0 +1,293 @@
+@page "/banka-hareketleri/import"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject IBankaHareketImportService ImportService
+@inject IBankaHesapService BankaHesapService
+@inject ICariService CariService
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Banka/Kasa Hareket İçeri Aktarma</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="bi bi-cloud-arrow-up me-2"></i>Banka/Kasa Hareket İçeri Aktarma</h3>
+        <button class="btn btn-secondary" @onclick="Geri">
+            <i class="bi bi-arrow-left me-1"></i>Geri
+        </button>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header bg-light">
+            <strong>1. Dosya Yükle</strong>
+            <small class="text-muted">Desteklenen: Excel (.xlsx/.xls), CSV, PDF (banka ekstreleri)</small>
+        </div>
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-6">
+                    <label class="form-label">Dosya</label>
+                    <InputFile OnChange="DosyaSecildi" class="form-control" accept=".xlsx,.xls,.csv,.pdf" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Hedef Banka/Kasa Hesabı</label>
+                    <select class="form-select" @bind="hedefHesapId">
+                        <option value="0">-- Hesap seçin --</option>
+                        @if (hesaplar != null)
+                        {
+                            @foreach (var h in hesaplar)
+                            {
+                                <option value="@h.Id">@h.HesapAdi (@(h.HesapKodu ?? "—"))</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-outline-danger w-100" @onclick="Temizle" disabled="@(satirlar.Count == 0)">
+                        <i class="bi bi-x-circle me-1"></i>Stage'i Temizle
+                    </button>
+                </div>
+            </div>
+
+            @if (yukleniyor)
+            {
+                <div class="mt-3 text-center">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <div class="mt-2">Dosya işleniyor...</div>
+                </div>
+            }
+
+            @if (parseSonuc != null)
+            {
+                <div class="alert @(string.IsNullOrEmpty(parseSonuc.Hata) ? "alert-info" : "alert-danger") mt-3 mb-0">
+                    @if (!string.IsNullOrEmpty(parseSonuc.Hata))
+                    {
+                        <i class="bi bi-exclamation-octagon me-2"></i>@parseSonuc.Hata
+                    }
+                    else
+                    {
+                        <i class="bi bi-info-circle me-2"></i>
+                        <text><strong>@parseSonuc.KaynakTipi</strong> dosyasından <strong>@parseSonuc.OkunanSatir</strong> satır okundu, <strong>@parseSonuc.GecerliSatir</strong> tanesi geçerli.</text>
+                        @if (parseSonuc.Uyarilar.Any())
+                        {
+                            <ul class="mb-0 mt-2">
+                                @foreach (var u in parseSonuc.Uyarilar) { <li>@u</li> }
+                            </ul>
+                        }
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (satirlar.Count > 0)
+    {
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                <div>
+                    <strong>2. Eşleştir ve Onayla</strong>
+                    <small class="text-muted ms-2">Seçili: @satirlar.Count(s => s.Secili) / @satirlar.Count</small>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="TumunuSec">
+                        <i class="bi bi-check-all me-1"></i>Tümünü Seç
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="HicbiriniSecme">
+                        <i class="bi bi-square me-1"></i>Hiçbirini Seçme
+                    </button>
+                    <button class="btn btn-success" @onclick="Yansit" disabled="@(yansitiliyor || hedefHesapId <= 0)">
+                        @if (yansitiliyor) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        else { <i class="bi bi-database-down me-1"></i> }
+                        Seçilileri Yansıt
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped align-middle mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width:40px;"><input type="checkbox" checked="@TumuSecili" @onchange="TumuToggle" /></th>
+                                <th>#</th>
+                                <th>Tarih</th>
+                                <th>Tip</th>
+                                <th>Tutar</th>
+                                <th>Açıklama</th>
+                                <th>Belge No</th>
+                                <th>Cari Eşleştir</th>
+                                <th>Muh.Kod</th>
+                                <th>Durum</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var s in satirlar)
+                            {
+                                <tr class="@(s.HataMesaji != null ? "table-warning" : "")">
+                                    <td><input type="checkbox" @bind="s.Secili" disabled="@(s.HataMesaji != null)" /></td>
+                                    <td>@s.SiraNo</td>
+                                    <td>
+                                        <input type="date" class="form-control form-control-sm"
+                                               value="@(s.Tarih?.ToString("yyyy-MM-dd"))"
+                                               @onchange="@(e => s.Tarih = DateTime.TryParse(e.Value?.ToString(), out var d) ? d : (DateTime?)null)" />
+                                    </td>
+                                    <td>
+                                        <select class="form-select form-select-sm" @bind="s.HareketTipi">
+                                            <option value="@HareketTipi.Giris">Giriş</option>
+                                            <option value="@HareketTipi.Cikis">Çıkış</option>
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <input type="number" step="0.01" class="form-control form-control-sm text-end"
+                                               @bind="s.Tutar" />
+                                    </td>
+                                    <td>
+                                        <input type="text" class="form-control form-control-sm" @bind="s.Aciklama" />
+                                    </td>
+                                    <td>
+                                        <input type="text" class="form-control form-control-sm" @bind="s.BelgeNo" />
+                                    </td>
+                                    <td>
+                                        <select class="form-select form-select-sm" @bind="s.CariId">
+                                            <option value="">-- Seçim yok --</option>
+                                            @if (cariler != null)
+                                            {
+                                                @foreach (var c in cariler)
+                                                {
+                                                    <option value="@c.Id">@c.Unvan</option>
+                                                }
+                                            }
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <input type="text" class="form-control form-control-sm" @bind="s.MuhasebeHesapKodu" placeholder="100/102..." />
+                                    </td>
+                                    <td>
+                                        @if (s.HataMesaji != null)
+                                        {
+                                            <span class="badge bg-warning text-dark" title="@s.HataMesaji">Hatalı</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-success">Hazır</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<BankaHesap>? hesaplar;
+    private List<Cari>? cariler;
+    private int hedefHesapId;
+    private bool yukleniyor;
+    private bool yansitiliyor;
+    private BankaHareketImportSonuc? parseSonuc;
+    private List<BankaHareketImportSatir> satirlar = new();
+
+    private bool TumuSecili => satirlar.Count > 0 && satirlar.Where(s => s.HataMesaji == null).All(s => s.Secili);
+
+    protected override async Task OnInitializedAsync()
+    {
+        hesaplar = await BankaHesapService.GetActiveAsync();
+        cariler = await CariService.GetAllAsync();
+        // Stage'de önceden yüklenmiş veri varsa göster
+        satirlar = ImportService.MevcutSatirlar.ToList();
+    }
+
+    private async Task DosyaSecildi(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+        yukleniyor = true;
+        parseSonuc = null;
+        StateHasChanged();
+        try
+        {
+            await using var stream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            parseSonuc = await ImportService.DosyadanYukleAsync(file.Name, ms.ToArray());
+            satirlar = ImportService.MevcutSatirlar.ToList();
+            if (string.IsNullOrEmpty(parseSonuc.Hata))
+                ToastService.ShowSuccess($"{parseSonuc.OkunanSatir} satır okundu.");
+            else
+                ToastService.ShowError(parseSonuc.Hata);
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Dosya işlenemedi: {ex.Message}");
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private void Temizle()
+    {
+        ImportService.Temizle();
+        satirlar.Clear();
+        parseSonuc = null;
+    }
+
+    private void TumunuSec()
+    {
+        foreach (var s in satirlar.Where(s => s.HataMesaji == null)) s.Secili = true;
+    }
+
+    private void HicbiriniSecme()
+    {
+        foreach (var s in satirlar) s.Secili = false;
+    }
+
+    private void TumuToggle(ChangeEventArgs e)
+    {
+        var yeni = (bool?)e.Value ?? false;
+        foreach (var s in satirlar.Where(s => s.HataMesaji == null)) s.Secili = yeni;
+    }
+
+    private async Task Yansit()
+    {
+        if (hedefHesapId <= 0)
+        {
+            ToastService.ShowWarning("Önce hedef hesabı seçin.");
+            return;
+        }
+        var secili = satirlar.Where(s => s.Secili && s.HataMesaji == null).Select(s => s.Id).ToList();
+        if (secili.Count == 0)
+        {
+            ToastService.ShowWarning("Yansıtılacak satır seçilmedi.");
+            return;
+        }
+
+        yansitiliyor = true;
+        try
+        {
+            var r = await ImportService.YansitAsync(hedefHesapId, secili);
+            if (r.Basarili)
+            {
+                ToastService.ShowSuccess($"{r.YazilanKayit} hareket yazıldı.");
+                satirlar = ImportService.MevcutSatirlar.ToList();
+            }
+            else
+            {
+                ToastService.ShowError($"Yazılan: {r.YazilanKayit}, Hata: {r.Hatalar.Count}");
+                foreach (var h in r.Hatalar.Take(5)) ToastService.ShowError(h);
+            }
+        }
+        finally
+        {
+            yansitiliyor = false;
+        }
+    }
+
+    private void Geri() => Navigation.NavigateTo("/banka-hareketleri");
+}
+

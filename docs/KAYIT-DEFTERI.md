@@ -1,4 +1,4 @@
-﻿# 📒 KOAFiloServis — Kayıt Defteri
+# 📒 MKFiloServis — Kayıt Defteri
 
 > Bu dosya, geliştirme sürecinde alınan kararları, yapılan tartışmaları ve hazırlanan raporları
 > kronolojik olarak kayıt altına alır. Her oturum sonunda güncellenir.
@@ -288,7 +288,7 @@ c2d115a feat(planlama): Slot/Guzergah gruplandirma toggle eklendi
 | Uygulama başlatma | ✅ `http://0.0.0.0:5200` |
 | Tüm startup görevleri (30+) | ✅ Hepsi başarılı |
 | PuantajSlotMigration | ✅ Tüm kolonlar mevcut |
-| EnsureHoldingDatabase | ✅ KOAFiloServis_Holding + 2 tablo |
+| EnsureHoldingDatabase | ✅ MKFiloServis_Holding + 2 tablo |
 | `/planlama` route | ✅ 401 (Authorize) |
 | `/planlama/dashboard` route | ✅ 401 (Authorize) |
 | `/holding` + 6 alt sayfa | ✅ 401 (Authorize) |
@@ -355,7 +355,7 @@ c2d115a feat(planlama): Slot/Guzergah gruplandirma toggle eklendi
 |------|:-----:|
 | `dotnet build` | ✅ 0 hata |
 | Uygulama başlatma | ✅ `http://localhost:5200` |
-| Master DB oluşturma | ✅ `KOAFiloServis_Master` (6 tablo) |
+| Master DB oluşturma | ✅ `MKFiloServis_Master` (6 tablo) |
 | Tenant DB otomatik oluşturma | ✅ 3 firma: `Koa_USTUN_GRUP_001`, `Koa_RECEP_USTUN_003`, `Koa_USTUN_FILO_005` |
 | Veri göçü (Firma 1) | ✅ 47.263 satır (lookup: 44.307 + tenant: 2.956) |
 | Veri göçü (Firma 3) | ✅ 25 Cariler + diğer veriler |
@@ -376,20 +376,20 @@ c2d115a feat(planlama): Slot/Guzergah gruplandirma toggle eklendi
 ### 📂 Yeni Eklenen Dosyalar
 
 ```
-KOAFiloServis.Web/Data/MasterDbContext.cs
-KOAFiloServis.Web/Data/TenantDbContextFactory.cs
-KOAFiloServis.Web/Services/ITenantConnectionStringProvider.cs
-KOAFiloServis.Web/Services/TenantConnectionStringProvider.cs
-KOAFiloServis.Web/Services/ITenantDatabaseService.cs
-KOAFiloServis.Web/Services/TenantDatabaseService.cs
-KOAFiloServis.Web/Migrations/..._MultiDbFaz1_AddFirmaDatabaseName.cs
+MKFiloServis.Web/Data/MasterDbContext.cs
+MKFiloServis.Web/Data/TenantDbContextFactory.cs
+MKFiloServis.Web/Services/ITenantConnectionStringProvider.cs
+MKFiloServis.Web/Services/TenantConnectionStringProvider.cs
+MKFiloServis.Web/Services/ITenantDatabaseService.cs
+MKFiloServis.Web/Services/TenantDatabaseService.cs
+MKFiloServis.Web/Migrations/..._MultiDbFaz1_AddFirmaDatabaseName.cs
 ```
 
 ### 📂 Silinen Dosyalar
 
 ```
-KOAFiloServis.Web/Data/TenantAwareDbContextFactory.cs
-KOAFiloServis.Web/Components/Pages/Ayarlar/AIAsistan.razor
+MKFiloServis.Web/Data/TenantAwareDbContextFactory.cs
+MKFiloServis.Web/Components/Pages/Ayarlar/AIAsistan.razor
 ```
 
 ---
@@ -422,7 +422,7 @@ KOAFiloServis.Web/Components/Pages/Ayarlar/AIAsistan.razor
 | `dotnet build` | ✅ **0 hata, 0 uyarı** |
 | `dotnet test` | ✅ 291/291 başarılı |
 | Uygulama başlatma | ✅ `http://0.0.0.0:5200` |
-| `EnsureHoldingDatabase` | ✅ `KOAFiloServis_Holding` DB + 2 tablo (HoldingVeriler, HoldingRaporlar) |
+| `EnsureHoldingDatabase` | ✅ `MKFiloServis_Holding` DB + 2 tablo (HoldingVeriler, HoldingRaporlar) |
 | `/holding` | ✅ 401 (Authorize - beklenen) |
 | `/holding/karsilastirma` | ✅ 401 |
 | `/holding/butce` | ✅ 401 |
@@ -564,16 +564,16 @@ Mevcut puantaj sistemini bozmadan (KurumPuantaj yaklaşımı korunarak):
 
 ```
 nuget.config                                          (YENİ)
-KOAFiloServis.Web/Data/AktiviteLogInterceptor.cs      (DI fix)
-KOAFiloServis.Web/Data/ApplicationDbContext.cs         (debug log + obsolete fix)
-KOAFiloServis.Web/Services/KullaniciService.cs         (SaveWithLogAsync + MasterDbContext)
-KOAFiloServis.Web/Services/KullaniciUserStore.cs       (MasterDbContext)
-KOAFiloServis.Web/Services/AppAuthenticationStateProvider.cs (MasterDbContext)
-KOAFiloServis.Web/Services/TenantDatabaseService.cs    (veri göçü loglama)
-KOAFiloServis.Web/Services/AracMasrafSahibiHelper.cs   (XML fix)
-KOAFiloServis.Web/Components/Pages/EBYS/EvrakDetay.razor          (EbysAIPanel kaldırıldı)
-KOAFiloServis.Web/Components/Pages/BankaHesaplari/BankaHesapList.razor (unused fields)
-KOAFiloServis.Web/appsettings.Development.json         (EF log seviyeleri)
+MKFiloServis.Web/Data/AktiviteLogInterceptor.cs      (DI fix)
+MKFiloServis.Web/Data/ApplicationDbContext.cs         (debug log + obsolete fix)
+MKFiloServis.Web/Services/KullaniciService.cs         (SaveWithLogAsync + MasterDbContext)
+MKFiloServis.Web/Services/KullaniciUserStore.cs       (MasterDbContext)
+MKFiloServis.Web/Services/AppAuthenticationStateProvider.cs (MasterDbContext)
+MKFiloServis.Web/Services/TenantDatabaseService.cs    (veri göçü loglama)
+MKFiloServis.Web/Services/AracMasrafSahibiHelper.cs   (XML fix)
+MKFiloServis.Web/Components/Pages/EBYS/EvrakDetay.razor          (EbysAIPanel kaldırıldı)
+MKFiloServis.Web/Components/Pages/BankaHesaplari/BankaHesapList.razor (unused fields)
+MKFiloServis.Web/appsettings.Development.json         (EF log seviyeleri)
 ```
 
 **Toplam: 11 dosya + 1 yeni, +64 / -93 satır (net -29)**
@@ -674,7 +674,7 @@ feat(multi-db): Faz 2 - Master DB fiziksel ayrim + TenantDatabaseService
 
 | # | Adım | Değişen Dosyalar | Özet |
 |---|------|-----------------|------|
-| 1 | Master DB oluşturma script'i | `Data/DbInitializer.cs` | `EnsureMasterDatabaseAsync` eklendi: raw SQL ile `KOAFiloServis_Master` DB + 6 tablo oluşturur, shared DB'den veri kopyalar (sütun eşleştirmeli) |
+| 1 | Master DB oluşturma script'i | `Data/DbInitializer.cs` | `EnsureMasterDatabaseAsync` eklendi: raw SQL ile `MKFiloServis_Master` DB + 6 tablo oluşturur, shared DB'den veri kopyalar (sütun eşleştirmeli) |
 | 2 | `TenantDatabaseService` | `Services/ITenantDatabaseService.cs` (YENİ), `Services/TenantDatabaseService.cs` (YENİ) | `CreateTenantDatabaseAsync`: tenant DB oluşturur, migration uygular, `Firma.DatabaseName` günceller |
 | 3 | DbInitializer akış güncelleme | `Program.cs` | `EnsureMasterDatabaseAsync` DbInitializer'dan ÖNCE çağrılır |
 | 4 | Config + DI | `appsettings.json`, `Program.cs` | `MasterConnection` ayrı DB'ye yönlendirildi, `ITenantDatabaseService` DI kaydı eklendi |
@@ -850,7 +850,7 @@ feat(ai-asistan): DeepSeek V3/R1 model katalogu + docs guncelleme
   - **Önerilen (yüklü değil):** Katalogdaki ama henüz indirilmemiş modeller
 - Yüklü olmayan model seçilince `ollama pull <model>` komutu ipucu olarak gösteriliyor
 
-**Dosya:** `KOAFiloServis.Web/Components/Pages/Ayarlar/AIAsistan.razor`
+**Dosya:** `MKFiloServis.Web/Components/Pages/Ayarlar/AIAsistan.razor`
 
 ---
 
@@ -935,15 +935,15 @@ PostgreSQL Server
 **Yöntem 1 — Fork (Önerilen)**
 ```bash
 # GitHub web arayüzünde:
-# 1. https://github.com/karamur/KOAFiloServis → "Fork" butonu
-# 2. Yeni repo adı: KOAFiloServis-v2  (veya KOAFiloServis-MultiDb)
+# 1. https://github.com/karamur/MKFiloServis → "Fork" butonu
+# 2. Yeni repo adı: MKFiloServis-v2  (veya MKFiloServis-MultiDb)
 # 3. Sadece main branch'i fork et
 
 # Yerel:
-git clone https://github.com/karamur/KOAFiloServis-v2
-cd KOAFiloServis-v2
+git clone https://github.com/karamur/MKFiloServis-v2
+cd MKFiloServis-v2
 # Upstream'i orijinal repo olarak ekle (gelecekte senkronizasyon için)
-git remote add upstream https://github.com/karamur/KOAFiloServis
+git remote add upstream https://github.com/karamur/MKFiloServis
 ```
 ✅ Orijinal repo **aynen korunur** (production backup)
 ✅ Yeni repoda Database-Per-Firma geçişi yapılır
@@ -953,16 +953,16 @@ git remote add upstream https://github.com/karamur/KOAFiloServis
 
 **Yöntem 2 — Yeni Boş Repo + Kopyalama**
 ```bash
-# GitHub'da yeni repo oluştur: KOAFiloServis-v2
+# GitHub'da yeni repo oluştur: MKFiloServis-v2
 
 # Yerel — mevcut kodu yeni remote'a bağla:
-cd "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis"
-git remote add v2 https://github.com/karamur/KOAFiloServis-v2
+cd "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis"
+git remote add v2 https://github.com/karamur/MKFiloServis-v2
 git push v2 main
 
 # Yeni çalışma klasörü:
 cd C:\Users\muratk\Desktop\d yedek\calisma\
-git clone https://github.com/karamur/KOAFiloServis-v2 KOAFiloServis-v2
+git clone https://github.com/karamur/MKFiloServis-v2 MKFiloServis-v2
 ```
 ✅ Temiz başlangıç
 ⚠️ Commit geçmişi taşınır (arzu edilmezse `--depth 1` veya squash)
@@ -971,11 +971,11 @@ git clone https://github.com/karamur/KOAFiloServis-v2 KOAFiloServis-v2
 
 **Önerilen Akış:**
 ```
-karamur/KOAFiloServis        → Mevcut production kodu (dokunulmaz, korunur)
-karamur/KOAFiloServis-MultiDb → Yeni Database-Per-Firma mimarisi geliştirme
+karamur/MKFiloServis        → Mevcut production kodu (dokunulmaz, korunur)
+karamur/MKFiloServis-MultiDb → Yeni Database-Per-Firma mimarisi geliştirme
 ```
 
-Geçiş tamamlanıp test edilince `KOAFiloServis-MultiDb` → `KOAFiloServis`'e merge edilir
+Geçiş tamamlanıp test edilince `MKFiloServis-MultiDb` → `MKFiloServis`'e merge edilir
 veya doğrudan production'a alınır.
 
 ---
@@ -1007,7 +1007,7 @@ veya doğrudan production'a alınır.
 ### 🎯 Sonraki Adım (Onay Bekliyor)
 
 Yeni repo açma ve Faz 1'e başlama kararı alınırsa:
-1. GitHub'da `KOAFiloServis-MultiDb` reposu oluştur
+1. GitHub'da `MKFiloServis-MultiDb` reposu oluştur
 2. Mevcut kodu oraya kopyala (`git push v2 main`)
 3. `GlobalDbContext` ve `TenantDbContext` dosyalarını oluştur
 4. `ITenantDbResolver` interface + implementasyonunu yaz
@@ -1023,9 +1023,9 @@ Yeni repo açma ve Faz 1'e başlama kararı alınırsa:
 | `docs/CALISMA-NOTLARI-2026-05-13.md` | Önceki oturum notları |
 | `docs/CALISMA-NOTLARI-2026-05-14.md` | Bu oturum notları |
 | `docs/OTURUM_NOTLARI_2026-05-19.md` | Tenant v1.0.21 tamamlandı notu |
-| `KOAFiloServis.Shared/Entities/IFirmaTenant.cs` | Mevcut tenant interface |
-| `KOAFiloServis.Web/Data/TenantAwareDbContextFactory.cs` | Mevcut factory |
-| `KOAFiloServis.Web/Services/IAktifFirmaProvider.cs` | Aktif firma state servisi |
+| `MKFiloServis.Shared/Entities/IFirmaTenant.cs` | Mevcut tenant interface |
+| `MKFiloServis.Web/Data/TenantAwareDbContextFactory.cs` | Mevcut factory |
+| `MKFiloServis.Web/Services/IAktifFirmaProvider.cs` | Aktif firma state servisi |
 
 ---
 
@@ -1590,3 +1590,4 @@ OperasyonKaydi (ham) → PuantajEngine → PuantajKayit (hesaplanmış)
 | `/puantaj/import` | KurumPuantajImport | Mevcut |
 
 ### Toplam: 25+ dosya, 7 sprint, 7 commit, 0 breaking change
+

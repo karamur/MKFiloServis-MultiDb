@@ -1,0 +1,221 @@
+@page "/firma-sec"
+@layout EmptyLayout
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IFirmaService FirmaService
+@inject NavigationManager Navigation
+@inject IToastService ToastService
+@inject ILogger<FirmaSec> Logger
+@rendermode InteractiveServer
+
+<PageTitle>Firma Seç</PageTitle>
+
+<div class="firma-sec-container">
+    <div class="firma-sec-card shadow-lg">
+        <div class="text-center mb-4">
+            <i class="bi bi-building-check text-primary" style="font-size: 3rem;"></i>
+            <h3 class="mt-2">Çalışmak İstediğiniz Firmayı Seçin</h3>
+            <p class="text-muted">
+                Tüm CRUD işlemleri, hesaplamalar ve raporlar seçtiğiniz firma üzerinden yürür.
+                Üst bardan istediğiniz zaman değiştirebilirsiniz.
+            </p>
+        </div>
+
+        @if (yukleniyor)
+        {
+            <div class="text-center my-5">
+                <div class="spinner-border text-primary" role="status"></div>
+            </div>
+        }
+        else if (firmalar.Count == 0)
+        {
+            <div class="alert alert-warning text-center">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                Aktif firma bulunamadı. Lütfen önce <a href="/ayarlar/firmalar">Firma Yönetimi</a> sayfasından bir firma tanımlayın.
+            </div>
+        }
+        else
+        {
+            <div class="row g-3">
+                @foreach (var f in firmalar)
+                {
+                    <div class="col-12 col-md-6">
+                        <button class="firma-card w-100 text-start" @onclick="() => SecAsync(f.Id)">
+                            <div class="d-flex align-items-center">
+                                <div class="firma-icon">
+                                    @if (f.VarsayilanFirma)
+                                    {
+                                        <i class="bi bi-star-fill text-warning"></i>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-building"></i>
+                                    }
+                                </div>
+                                <div class="ms-3 flex-grow-1">
+                                    <div class="firma-ad">@f.FirmaAdi</div>
+                                    <div class="firma-meta">
+                                        <code>@f.FirmaKodu</code>
+                                        <span class="text-muted ms-2">
+                                            <i class="bi bi-calendar3"></i>
+                                            @GetAyAdi(f.AktifDonemAy) @f.AktifDonemYil
+                                        </span>
+                                    </div>
+                                </div>
+                                <i class="bi bi-arrow-right-circle text-primary fs-3"></i>
+                            </div>
+                        </button>
+                    </div>
+                }
+            </div>
+
+            <hr class="my-4" />
+            <div class="text-center">
+                <button class="btn btn-outline-secondary" @onclick="TumFirmalarSecAsync">
+                    <i class="bi bi-collection me-1"></i>
+                    Tüm Firmalar (sadece raporlama)
+                </button>
+                <div class="form-text mt-2">
+                    Bu modda yeni kayıt ekleme yapılamaz; sadece çapraz raporlama içindir.
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .firma-sec-container {
+        min-height: 100vh;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
+
+    .firma-sec-card {
+        background: #fff;
+        border-radius: 16px;
+        padding: 2.5rem;
+        max-width: 720px;
+        width: 100%;
+    }
+
+    .firma-card {
+        background: #fff;
+        border: 2px solid #e9ecef;
+        border-radius: 12px;
+        padding: 1.25rem;
+        transition: all .15s ease-in-out;
+        cursor: pointer;
+    }
+
+    .firma-card:hover {
+        border-color: var(--bs-primary);
+        background: #f8faff;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,.06);
+    }
+
+    .firma-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: #f1f3f5;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+
+    .firma-ad { font-weight: 600; font-size: 1.05rem; }
+    .firma-meta { font-size: .85rem; }
+</style>
+
+@code {
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    private List<Firma> firmalar = new();
+    private bool yukleniyor = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            firmalar = await FirmaService.GetAktifFirmalarAsync();
+
+            // Tek firma varsa otomatik seç ve yönlendir
+            if (firmalar.Count == 1)
+            {
+                FirmaService.SetAktifFirma(firmalar[0].Id);
+                Navigation.NavigateTo(GetSafeReturnUrl(), forceLoad: false);
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "FirmaSec firmalar yüklenirken hata");
+            ToastService.ShowError("Firmalar yüklenemedi: " + ex.Message);
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private Task SecAsync(int firmaId)
+    {
+        try
+        {
+            FirmaService.SetAktifFirma(firmaId);
+            FirmaService.SetTumFirmalar(false);
+            var firma = firmalar.FirstOrDefault(f => f.Id == firmaId);
+            ToastService.ShowSuccess($"Aktif firma: {firma?.FirmaAdi}");
+            Navigation.NavigateTo(GetSafeReturnUrl(), forceLoad: false);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "FirmaSec firma seçilirken hata");
+            ToastService.ShowError("Firma seçilemedi: " + ex.Message);
+        }
+        return Task.CompletedTask;
+    }
+
+    private Task TumFirmalarSecAsync()
+    {
+        try
+        {
+            FirmaService.SetTumFirmalar(true);
+            ToastService.ShowInfo("Tüm firmalar modu aktif (sadece raporlama).");
+            Navigation.NavigateTo(GetSafeReturnUrl(), forceLoad: false);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "FirmaSec TumFirmalar seçilirken hata");
+            ToastService.ShowError("İşlem başarısız: " + ex.Message);
+        }
+        return Task.CompletedTask;
+    }
+
+    private string GetSafeReturnUrl()
+    {
+        if (string.IsNullOrWhiteSpace(ReturnUrl)) return "/dashboard";
+        var decoded = Uri.UnescapeDataString(ReturnUrl);
+        if (!decoded.StartsWith('/') || decoded.StartsWith("//")) return "/dashboard";
+        if (decoded.StartsWith("/login", StringComparison.OrdinalIgnoreCase) ||
+            decoded.StartsWith("/firma-sec", StringComparison.OrdinalIgnoreCase))
+            return "/dashboard";
+        return decoded;
+    }
+
+    private static string GetAyAdi(int ay) => ay switch
+    {
+        1 => "Ocak", 2 => "Şubat", 3 => "Mart", 4 => "Nisan",
+        5 => "Mayıs", 6 => "Haziran", 7 => "Temmuz", 8 => "Ağustos",
+        9 => "Eylül", 10 => "Ekim", 11 => "Kasım", 12 => "Aralık",
+        _ => ""
+    };
+}
+

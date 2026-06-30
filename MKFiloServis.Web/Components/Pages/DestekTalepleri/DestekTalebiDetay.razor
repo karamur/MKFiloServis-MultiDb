@@ -1,0 +1,890 @@
+@page "/destek-talepleri/{TalepId:int}"
+@rendermode InteractiveServer
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Helpers
+@inject IDestekTalebiService DestekService
+@inject IKullaniciService KullaniciService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Destek Talebi Detay - @talep?.TalepNo</PageTitle>
+
+@if (isLoading)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2">Yükleniyor...</p>
+    </div>
+}
+else if (talep == null)
+{
+    @if (!string.IsNullOrWhiteSpace(loadError))
+    {
+        <div class="alert alert-warning d-flex justify-content-between align-items-start">
+            <div>
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>Destek talebi verileri yüklenirken sorun oluştu.</strong>
+                <div class="small mt-1">@loadError</div>
+                <a href="destek-talepleri" class="alert-link d-inline-block mt-2">Listeye Dön</a>
+            </div>
+            <button class="btn btn-outline-warning btn-sm" @onclick="SayfayiYenile">
+                <i class="bi bi-arrow-clockwise me-1"></i>Tekrar Dene
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle me-2"></i>Talep bulunamadı.
+            <a href="destek-talepleri" class="alert-link ms-2">Listeye Dön</a>
+        </div>
+    }
+}
+else
+{
+    <div class="container-fluid">
+        @if (!string.IsNullOrWhiteSpace(loadError))
+        {
+            <div class="alert alert-warning d-flex justify-content-between align-items-start mb-3">
+                <div>
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Bazı referans veriler yüklenirken sorun oluştu.</strong>
+                    <div class="small mt-1">@loadError</div>
+                </div>
+                <button class="btn btn-outline-warning btn-sm" @onclick="SayfayiYenile">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Tekrar Dene
+                </button>
+            </div>
+        }
+
+        <!-- Üst Bar -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <a href="destek-talepleri" class="btn btn-outline-secondary btn-sm me-2">
+                            <i class="bi bi-arrow-left me-1"></i>Geri
+                        </a>
+                        <span class="h4 mb-0">
+                            <span class="text-muted">#</span>@talep.TalepNo
+                        </span>
+                        <span class="badge @GetDurumBadgeClass(talep.Durum) ms-2">@GetDurumText(talep.Durum)</span>
+                        <span class="badge @GetOncelikBadgeClass(talep.Oncelik) ms-1">@GetOncelikText(talep.Oncelik)</span>
+                        @if (talep.SlaAsildi)
+                        {
+                            <span class="badge bg-danger ms-1"><i class="bi bi-exclamation-triangle"></i> SLA Aşıldı</span>
+                        }
+                    </div>
+                    <div>
+                        @if (talep.Durum != DestekDurum.Kapali)
+                        {
+                            <button class="btn btn-success btn-sm me-1" @onclick="() => DurumGuncelle(DestekDurum.Cozuldu)">
+                                <i class="bi bi-check-circle me-1"></i>Çözüldü
+                            </button>
+                            <button class="btn btn-secondary btn-sm me-1" @onclick="() => DurumGuncelle(DestekDurum.Kapali)">
+                                <i class="bi bi-x-circle me-1"></i>Kapat
+                            </button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-warning btn-sm me-1" @onclick="YenidenAc">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i>Yeniden Aç
+                            </button>
+                        }
+                        <div class="btn-group">
+                            <button class="btn btn-outline-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                                <i class="bi bi-gear me-1"></i>İşlemler
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item" href="#" @onclick="AtamaModalAc" @onclick:preventDefault><i class="bi bi-person-plus me-2"></i>Ata</a></li>
+                                <li><a class="dropdown-item" href="#" @onclick="OncelikModalAc" @onclick:preventDefault><i class="bi bi-flag me-2"></i>Öncelik Değiştir</a></li>
+                                <li><a class="dropdown-item" href="#" @onclick="TransferModalAc" @onclick:preventDefault><i class="bi bi-arrow-right-circle me-2"></i>Transfer Et</a></li>
+                                <li><hr class="dropdown-divider" /></li>
+                                <li><a class="dropdown-item" href="#" @onclick="EtiketDuzenleModalAc" @onclick:preventDefault><i class="bi bi-tags me-2"></i>Etiketler</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Sol Panel - Detaylar ve Konuşma -->
+            <div class="col-md-8">
+                <!-- Talep Detayı -->
+                <div class="card mb-3">
+                    <div class="card-header bg-white">
+                        <strong>@talep.Konu</strong>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            @((MarkupString)HtmlSanitizerHelper.Sanitize(talep.Aciklama?.Replace("\n", "<br/>") ?? ""))
+                        </div>
+                        @if (!string.IsNullOrEmpty(talep.Etiketler))
+                        {
+                            <div>
+                                @foreach (var etiket in talep.Etiketler.Split(','))
+                                {
+                                    <span class="badge bg-light text-dark me-1">@etiket.Trim()</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                    <div class="card-footer bg-light small text-muted">
+                        <i class="bi bi-clock me-1"></i>Oluşturulma: @talep.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                        @if (talep.OlusturanKullanici != null)
+                        {
+                            <span class="ms-2">| <i class="bi bi-person me-1"></i>@talep.OlusturanKullanici.AdSoyad</span>
+                        }
+                    </div>
+                </div>
+
+                <!-- Dosya Ekleri -->
+                @if (talep.Ekler?.Any() == true)
+                {
+                    <div class="card mb-3">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-paperclip me-2"></i>Ekler (@talep.Ekler.Count)</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-2">
+                                @foreach (var ek in talep.Ekler.Where(e => e.YanitId == null))
+                                {
+                                    <div class="col-auto">
+                                        <a href="#" class="btn btn-outline-secondary btn-sm" @onclick="() => DosyaIndir(ek.Id)" @onclick:preventDefault>
+                                            <i class="bi @GetDosyaIcon(ek.MimeTipi) me-1"></i>
+                                            @ek.OrijinalDosyaAdi
+                                            <small class="text-muted ms-1">(@FormatFileSize(ek.DosyaBoyutu))</small>
+                                        </a>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <!-- Konuşma/Yanıtlar -->
+                <div class="card mb-3">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-chat-dots me-2"></i>Konuşma (@(talep.Yanitlar?.Count ?? 0))</span>
+                        <button class="btn btn-primary btn-sm" @onclick="YanitModalAc">
+                            <i class="bi bi-reply me-1"></i>Yanıt Ekle
+                        </button>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (talep.Yanitlar?.Any() != true)
+                        {
+                            <div class="p-3 text-center text-muted">
+                                <i class="bi bi-chat-left-text fs-1 mb-2 d-block"></i>
+                                Henüz yanıt yok
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="list-group list-group-flush">
+                                @foreach (var yanit in talep.Yanitlar.OrderBy(y => y.CreatedAt))
+                                {
+                                    <div class="list-group-item @(yanit.DahiliNot ? "bg-warning bg-opacity-10" : "") @(yanit.MusteriYaniti ? "bg-info bg-opacity-10" : "")">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div>
+                                                <strong>
+                                                    @if (yanit.MusteriYaniti)
+                                                    {
+                                                        <i class="bi bi-person-circle me-1 text-info"></i>
+                                                        @(yanit.MusteriAdi ?? talep.MusteriAdi)
+                                                        <span class="badge bg-info ms-1">Müşteri</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="bi bi-headset me-1 text-primary"></i>
+                                                        @(yanit.Kullanici?.AdSoyad ?? "Sistem")
+                                                        @if (yanit.DahiliNot)
+                                                        {
+                                                            <span class="badge bg-warning text-dark ms-1"><i class="bi bi-lock"></i> Dahili Not</span>
+                                                        }
+                                                    }
+                                                </strong>
+                                                <small class="text-muted ms-2">
+                                                    @yanit.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                                                </small>
+                                            </div>
+                                        </div>
+                                        <div class="mt-2">
+                                            @((MarkupString)HtmlSanitizerHelper.Sanitize(yanit.Icerik ?? ""))
+                                        </div>
+                                        @if (yanit.Ekler?.Any() == true)
+                                        {
+                                            <div class="mt-2 pt-2 border-top">
+                                                @foreach (var ek in yanit.Ekler)
+                                                {
+                                                    <a href="#" class="btn btn-outline-secondary btn-sm me-1" @onclick="() => DosyaIndir(ek.Id)" @onclick:preventDefault>
+                                                        <i class="bi @GetDosyaIcon(ek.MimeTipi) me-1"></i>@ek.OrijinalDosyaAdi
+                                                    </a>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Aktivite Geçmişi -->
+                <div class="card">
+                    <div class="card-header bg-white">
+                        <i class="bi bi-clock-history me-2"></i>Aktivite Geçmişi (@(talep.Aktiviteler?.Count ?? 0))
+                    </div>
+                    <div class="card-body p-0" style="max-height: 300px; overflow-y: auto;">
+                        @if (talep.Aktiviteler?.Any() == true)
+                        {
+                            <div class="list-group list-group-flush">
+                                @foreach (var aktivite in talep.Aktiviteler.OrderByDescending(a => a.CreatedAt).Take(20))
+                                {
+                                    <div class="list-group-item py-2">
+                                        <div class="d-flex align-items-center">
+                                            <span class="badge @GetAktiviteBadgeClass(aktivite.AktiviteTuru) me-2">
+                                                <i class="bi @GetAktiviteIcon(aktivite.AktiviteTuru)"></i>
+                                            </span>
+                                            <span>@aktivite.Aciklama</span>
+                                            <small class="text-muted ms-auto">
+                                                @aktivite.CreatedAt.ToLocalTime().ToString("dd.MM HH:mm")
+                                                @if (aktivite.Kullanici != null)
+                                                {
+                                                    <span class="ms-1">- @aktivite.Kullanici.AdSoyad</span>
+                                                }
+                                            </small>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="p-3 text-center text-muted">Aktivite kaydı yok</div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sağ Panel - Bilgiler -->
+            <div class="col-md-4">
+                <!-- Müşteri Bilgileri -->
+                <div class="card mb-3">
+                    <div class="card-header bg-white">
+                        <i class="bi bi-person me-2"></i>Müşteri Bilgileri
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-1"><strong>@talep.MusteriAdi</strong></p>
+                        <p class="mb-1"><i class="bi bi-envelope me-2"></i><a href="mailto:@talep.MusteriEmail">@talep.MusteriEmail</a></p>
+                        @if (!string.IsNullOrEmpty(talep.MusteriTelefon))
+                        {
+                            <p class="mb-1"><i class="bi bi-telephone me-2"></i><a href="tel:@talep.MusteriTelefon">@talep.MusteriTelefon</a></p>
+                        }
+                        @if (talep.Cari != null)
+                        {
+                            <p class="mb-0"><i class="bi bi-building me-2"></i><a href="cariler/@talep.Cari.Id">@talep.Cari.Unvan</a></p>
+                        }
+                    </div>
+                </div>
+
+                <!-- Talep Bilgileri -->
+                <div class="card mb-3">
+                    <div class="card-header bg-white">
+                        <i class="bi bi-info-circle me-2"></i>Talep Bilgileri
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm table-borderless mb-0">
+                            <tr>
+                                <td class="text-muted">Departman:</td>
+                                <td><span class="badge bg-secondary">@talep.Departman?.Ad</span></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Kategori:</td>
+                                <td>
+                                    @if (talep.Kategori != null)
+                                    {
+                                        <span class="badge" style="background-color: @(talep.Kategori.Renk ?? "#6c757d")">
+                                            @if (!string.IsNullOrEmpty(talep.Kategori.Simge))
+                                            {
+                                                <i class="bi @talep.Kategori.Simge me-1"></i>
+                                            }
+                                            @talep.Kategori.Ad
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Kaynak:</td>
+                                <td>@talep.Kaynak</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Oluşturulma:</td>
+                                <td>@talep.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                            </tr>
+                            @if (talep.KapatilmaTarihi.HasValue)
+                            {
+                                <tr>
+                                    <td class="text-muted">Kapatılma:</td>
+                                    <td>@talep.KapatilmaTarihi.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                </tr>
+                            }
+                            @if (talep.CozumSuresiDakika.HasValue)
+                            {
+                                <tr>
+                                    <td class="text-muted">Çözüm Süresi:</td>
+                                    <td>@FormatDuration(talep.CozumSuresiDakika.Value)</td>
+                                </tr>
+                            }
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Atama Bilgileri -->
+                <div class="card mb-3">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-person-badge me-2"></i>Atama</span>
+                        <button class="btn btn-outline-primary btn-sm" @onclick="AtamaModalAc">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        @if (talep.AtananKullanici != null)
+                        {
+                            <p class="mb-0">
+                                <i class="bi bi-person-check me-2 text-success"></i>
+                                <strong>@talep.AtananKullanici.AdSoyad</strong>
+                            </p>
+                        }
+                        else
+                        {
+                            <p class="mb-0 text-muted">
+                                <i class="bi bi-person-x me-2"></i>Atanmamış
+                            </p>
+                        }
+                    </div>
+                </div>
+
+                <!-- SLA Bilgileri -->
+                <div class="card mb-3">
+                    <div class="card-header bg-white">
+                        <i class="bi bi-clock me-2"></i>SLA
+                    </div>
+                    <div class="card-body">
+                        @if (talep.SlaBitisTarihi.HasValue)
+                        {
+                            var kalan = talep.SlaBitisTarihi.Value - DateTime.UtcNow;
+                            <table class="table table-sm table-borderless mb-0">
+                                <tr>
+                                    <td class="text-muted">Süre:</td>
+                                    <td>@talep.SlaSuresi saat</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Bitiş:</td>
+                                    <td>@talep.SlaBitisTarihi.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Durum:</td>
+                                    <td>
+                                        @if (talep.SlaAsildi)
+                                        {
+                                            <span class="badge bg-danger">Aşıldı!</span>
+                                        }
+                                        else if (kalan.TotalHours < 4)
+                                        {
+                                            <span class="badge bg-warning text-dark">@kalan.Hours s @kalan.Minutes dk kaldı</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-success">@((int)kalan.TotalHours) saat kaldı</span>
+                                        }
+                                    </td>
+                                </tr>
+                            </table>
+                        }
+                        else
+                        {
+                            <p class="mb-0 text-muted">SLA tanımlı değil</p>
+                        }
+                    </div>
+                </div>
+
+                <!-- İlk Yanıt Süresi -->
+                @if (talep.IlkYanitSuresiDakika.HasValue)
+                {
+                    <div class="card mb-3">
+                        <div class="card-header bg-white">
+                            <i class="bi bi-reply me-2"></i>İlk Yanıt
+                        </div>
+                        <div class="card-body">
+                            <p class="mb-0">
+                                <span class="badge bg-info">@FormatDuration(talep.IlkYanitSuresiDakika.Value)</span>
+                            </p>
+                        </div>
+                    </div>
+                }
+
+                <!-- Dahili Notlar -->
+                @if (!string.IsNullOrEmpty(talep.DahiliNotlar))
+                {
+                    <div class="card mb-3">
+                        <div class="card-header bg-warning bg-opacity-25">
+                            <i class="bi bi-lock me-2"></i>Dahili Notlar
+                        </div>
+                        <div class="card-body">
+                            <small>@((MarkupString)HtmlSanitizerHelper.Sanitize(talep.DahiliNotlar?.Replace("\n", "<br/>") ?? ""))</small>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Yanıt Ekle Modal -->
+@if (showYanitModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-reply me-2"></i>Yanıt Ekle</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Hazır Yanıt</label>
+                        <select class="form-select" @onchange="HazirYanitSec">
+                            <option value="">Seçiniz...</option>
+                            @foreach (var hy in hazirYanitlar)
+                            {
+                                <option value="@hy.Id">@hy.Ad</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Yanıt İçeriği <span class="text-danger">*</span></label>
+                        <textarea class="form-control" rows="8" @bind="yeniYanit.Icerik"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="dahiliNot" @bind="yeniYanit.DahiliNot" />
+                                <label class="form-check-label" for="dahiliNot">
+                                    <i class="bi bi-lock me-1"></i>Dahili Not (Müşteriye görünmez)
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="musteriYaniti" @bind="yeniYanit.MusteriYaniti" />
+                                <label class="form-check-label" for="musteriYaniti">
+                                    <i class="bi bi-person me-1"></i>Müşteri adına yanıt
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModals">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="YanitKaydet" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-send me-1"></i>Gönder
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Atama Modal -->
+@if (showAtamaModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Talep Ata</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Atanacak Kullanıcı</label>
+                        <select class="form-select" @bind="secilenKullaniciId">
+                            <option value="">Seçiniz...</option>
+                            @foreach (var user in kullanicilar)
+                            {
+                                <option value="@user.Id">@user.AdSoyad</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModals">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="TalepAta" disabled="@(secilenKullaniciId == null)">
+                        <i class="bi bi-check-lg me-1"></i>Ata
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Öncelik Değiştir Modal -->
+@if (showOncelikModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-flag me-2"></i>Öncelik Değiştir</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Yeni Öncelik</label>
+                        <select class="form-select" @bind="secilenOncelik">
+                            @foreach (var oncelik in Enum.GetValues<DestekOncelik>())
+                            {
+                                <option value="@oncelik">@GetOncelikText(oncelik)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModals">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="OncelikDegistir">
+                        <i class="bi bi-check-lg me-1"></i>Değiştir
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Transfer Modal -->
+@if (showTransferModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-arrow-right-circle me-2"></i>Departman Transfer</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Yeni Departman</label>
+                        <select class="form-select" @bind="secilenDepartmanId">
+                            @foreach (var dept in departmanlar.Where(d => d.Id != talep?.DepartmanId))
+                            {
+                                <option value="@dept.Id">@dept.Ad</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModals">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="TransferEt" disabled="@(secilenDepartmanId == null)">
+                        <i class="bi bi-check-lg me-1"></i>Transfer Et
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int TalepId { get; set; }
+
+    private DestekTalebi? talep;
+    private List<DestekHazirYanit> hazirYanitlar = new();
+    private List<DestekDepartman> departmanlar = new();
+    private List<Kullanici> kullanicilar = new();
+    
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private string? loadError;
+
+    // Modal kontrolleri
+    private bool showYanitModal = false;
+    private bool showAtamaModal = false;
+    private bool showOncelikModal = false;
+    private bool showTransferModal = false;
+#pragma warning disable CS0414 // Etiket modal özelliği gelecekte eklenecek
+    private bool showEtiketModal = false;
+#pragma warning restore CS0414
+    
+    private DestekTalebiYanit yeniYanit = new();
+    private int? secilenKullaniciId;
+    private DestekOncelik secilenOncelik;
+    private int? secilenDepartmanId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await SayfayiYenile();
+    }
+
+    private async Task SayfayiYenile()
+    {
+        loadError = null;
+        await LoadTalep();
+        await LoadReferansVeriler();
+    }
+
+    private async Task LoadTalep()
+    {
+        isLoading = true;
+        try
+        {
+            talep = await DestekService.GetByIdWithDetailsAsync(TalepId);
+        }
+        catch (Exception ex)
+        {
+            talep = null;
+            loadError = ex.GetBaseException().Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadReferansVeriler()
+    {
+        try
+        {
+            departmanlar = await DestekService.GetDepartmanlarAsync();
+            hazirYanitlar = await DestekService.GetHazirYanitlarAsync(talep?.DepartmanId, talep?.KategoriId);
+            kullanicilar = (await KullaniciService.GetAllAsync()).Where(k => k.Aktif).ToList();
+        }
+        catch (Exception ex)
+        {
+            departmanlar = new();
+            hazirYanitlar = new();
+            kullanicilar = new();
+            loadError ??= ex.GetBaseException().Message;
+        }
+    }
+
+    private async Task DurumGuncelle(DestekDurum yeniDurum)
+    {
+        await DestekService.UpdateDurumAsync(TalepId, yeniDurum);
+        await LoadTalep();
+    }
+
+    private async Task YenidenAc()
+    {
+        await DestekService.YenidenAcAsync(TalepId);
+        await LoadTalep();
+    }
+
+    private void YanitModalAc()
+    {
+        yeniYanit = new DestekTalebiYanit();
+        showYanitModal = true;
+    }
+
+    private void HazirYanitSec(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var id))
+        {
+            var hy = hazirYanitlar.FirstOrDefault(h => h.Id == id);
+            if (hy != null)
+            {
+                yeniYanit.Icerik = hy.Icerik;
+                yeniYanit.HazirYanitId = id;
+            }
+        }
+    }
+
+    private async Task YanitKaydet()
+    {
+        if (string.IsNullOrWhiteSpace(yeniYanit.Icerik))
+        {
+            await JS.InvokeVoidAsync("alert", "Lütfen yanıt içeriğini girin.");
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            // Aktif kullanıcı ID'si alınabilir (authentication'dan)
+            await DestekService.AddYanitAsync(TalepId, yeniYanit);
+            CloseModals();
+            await LoadTalep();
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void AtamaModalAc()
+    {
+        secilenKullaniciId = talep?.AtananKullaniciId;
+        showAtamaModal = true;
+    }
+
+    private async Task TalepAta()
+    {
+        if (!secilenKullaniciId.HasValue) return;
+        
+        await DestekService.AtaAsync(TalepId, secilenKullaniciId.Value);
+        CloseModals();
+        await LoadTalep();
+    }
+
+    private void OncelikModalAc()
+    {
+        secilenOncelik = talep?.Oncelik ?? DestekOncelik.Normal;
+        showOncelikModal = true;
+    }
+
+    private async Task OncelikDegistir()
+    {
+        await DestekService.UpdateOncelikAsync(TalepId, secilenOncelik);
+        CloseModals();
+        await LoadTalep();
+    }
+
+    private void TransferModalAc()
+    {
+        secilenDepartmanId = null;
+        showTransferModal = true;
+    }
+
+    private async Task TransferEt()
+    {
+        if (!secilenDepartmanId.HasValue) return;
+        
+        await DestekService.TransferEtAsync(TalepId, secilenDepartmanId.Value);
+        CloseModals();
+        await LoadTalep();
+    }
+
+    private void EtiketDuzenleModalAc()
+    {
+        showEtiketModal = true;
+    }
+
+    private async Task DosyaIndir(int ekId)
+    {
+        // Dosya indirme işlemi
+        await JS.InvokeVoidAsync("alert", "Dosya indirme özelliği yakında eklenecek.");
+    }
+
+    private void CloseModals()
+    {
+        showYanitModal = false;
+        showAtamaModal = false;
+        showOncelikModal = false;
+        showTransferModal = false;
+        showEtiketModal = false;
+    }
+
+    // Helper metodlar
+    private string GetDurumText(DestekDurum durum) => durum switch
+    {
+        DestekDurum.Yeni => "Yeni",
+        DestekDurum.Acik => "Açık",
+        DestekDurum.Beklemede => "Beklemede",
+        DestekDurum.YanitBekleniyor => "Yanıt Bekleniyor",
+        DestekDurum.Cozuldu => "Çözüldü",
+        DestekDurum.Kapali => "Kapalı",
+        _ => durum.ToString()
+    };
+
+    private string GetDurumBadgeClass(DestekDurum durum) => durum switch
+    {
+        DestekDurum.Yeni => "bg-primary",
+        DestekDurum.Acik => "bg-warning text-dark",
+        DestekDurum.Beklemede => "bg-secondary",
+        DestekDurum.YanitBekleniyor => "bg-info",
+        DestekDurum.Cozuldu => "bg-success",
+        DestekDurum.Kapali => "bg-dark",
+        _ => "bg-secondary"
+    };
+
+    private string GetOncelikText(DestekOncelik oncelik) => oncelik switch
+    {
+        DestekOncelik.Dusuk => "Düşük",
+        DestekOncelik.Normal => "Normal",
+        DestekOncelik.Yuksek => "Yüksek",
+        DestekOncelik.Acil => "Acil",
+        DestekOncelik.Kritik => "Kritik",
+        _ => oncelik.ToString()
+    };
+
+    private string GetOncelikBadgeClass(DestekOncelik oncelik) => oncelik switch
+    {
+        DestekOncelik.Dusuk => "bg-success",
+        DestekOncelik.Normal => "bg-primary",
+        DestekOncelik.Yuksek => "bg-warning text-dark",
+        DestekOncelik.Acil => "bg-danger",
+        DestekOncelik.Kritik => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private string GetAktiviteIcon(AktiviteTuru tur) => tur switch
+    {
+        AktiviteTuru.Olusturuldu => "bi-plus-circle",
+        AktiviteTuru.Guncellendi => "bi-pencil",
+        AktiviteTuru.DurumDegisti => "bi-arrow-repeat",
+        AktiviteTuru.OncelikDegisti => "bi-flag",
+        AktiviteTuru.Atandi => "bi-person-plus",
+        AktiviteTuru.Transferedildi => "bi-arrow-right-circle",
+        AktiviteTuru.YanitEklendi => "bi-reply",
+        AktiviteTuru.DosyaEklendi => "bi-paperclip",
+        AktiviteTuru.Kapandi => "bi-x-circle",
+        AktiviteTuru.YenidenAcildi => "bi-arrow-counterclockwise",
+        AktiviteTuru.SlaBilgilendirme => "bi-clock",
+        AktiviteTuru.Birlestirildi => "bi-link",
+        _ => "bi-circle"
+    };
+
+    private string GetAktiviteBadgeClass(AktiviteTuru tur) => tur switch
+    {
+        AktiviteTuru.Olusturuldu => "bg-primary",
+        AktiviteTuru.Kapandi => "bg-dark",
+        AktiviteTuru.YanitEklendi => "bg-info",
+        AktiviteTuru.SlaBilgilendirme => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private string GetDosyaIcon(string? mimeType)
+    {
+        if (string.IsNullOrEmpty(mimeType)) return "bi-file-earmark";
+        
+        if (mimeType.StartsWith("image/")) return "bi-file-earmark-image";
+        if (mimeType.Contains("pdf")) return "bi-file-earmark-pdf";
+        if (mimeType.Contains("word")) return "bi-file-earmark-word";
+        if (mimeType.Contains("excel") || mimeType.Contains("spreadsheet")) return "bi-file-earmark-excel";
+        if (mimeType.Contains("zip") || mimeType.Contains("compressed")) return "bi-file-earmark-zip";
+        
+        return "bi-file-earmark";
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024} KB";
+        return $"{bytes / (1024 * 1024)} MB";
+    }
+
+    private string FormatDuration(int minutes)
+    {
+        if (minutes < 60) return $"{minutes} dk";
+        if (minutes < 1440) return $"{minutes / 60} saat {minutes % 60} dk";
+        return $"{minutes / 1440} gün {(minutes % 1440) / 60} saat";
+    }
+}
+

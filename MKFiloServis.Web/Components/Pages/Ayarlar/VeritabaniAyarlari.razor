@@ -1,0 +1,341 @@
+@page "/ayarlar/veritabani"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IDatabaseSettingsService DbSettingsService
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Veritabani Ayarlari</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="bi bi-database-gear me-2"></i>Veritabani Baglanti Ayarlari</h3>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-plug me-2"></i>Baglanti Bilgileri</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Veritabani Tipi</label>
+                                <div class="btn-group w-100" role="group">
+                                    <input type="radio" class="btn-check" name="dbProvider" id="btnPostgreSQL" 
+                                           checked="@(settings.Provider == DatabaseProvider.PostgreSQL)"
+                                           @onchange="() => ProviderDegistir(DatabaseProvider.PostgreSQL)">
+                                    <label class="btn btn-outline-primary" for="btnPostgreSQL">
+                                        <i class="bi bi-database me-1"></i>PostgreSQL
+                                    </label>
+
+                                    <input type="radio" class="btn-check" name="dbProvider" id="btnSQLServer"
+                                           checked="@(settings.Provider == DatabaseProvider.SQLServer)"
+                                           @onchange="() => ProviderDegistir(DatabaseProvider.SQLServer)">
+                                    <label class="btn btn-outline-danger" for="btnSQLServer">
+                                        <i class="bi bi-microsoft me-1"></i>SQL Server
+                                    </label>
+
+                                    <input type="radio" class="btn-check" name="dbProvider" id="btnMySQL"
+                                           checked="@(settings.Provider == DatabaseProvider.MySQL)"
+                                           @onchange="() => ProviderDegistir(DatabaseProvider.MySQL)">
+                                    <label class="btn btn-outline-warning" for="btnMySQL">
+                                        <i class="bi bi-database-fill me-1"></i>MySQL
+                                    </label>
+
+                                    <input type="radio" class="btn-check" name="dbProvider" id="btnSQLite"
+                                           checked="@(settings.Provider == DatabaseProvider.SQLite)"
+                                           @onchange="() => ProviderDegistir(DatabaseProvider.SQLite)">
+                                    <label class="btn btn-outline-info" for="btnSQLite">
+                                        <i class="bi bi-file-earmark-binary me-1"></i>SQLite
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (settings.Provider != DatabaseProvider.SQLite)
+                        {
+                            <div class="row mb-3">
+                                <div class="col-md-8">
+                                    <label class="form-label">Sunucu Adresi (Host)</label>
+                                    <input type="text" class="form-control" @bind="settings.Host" placeholder="localhost veya IP adresi" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Port</label>
+                                    <input type="number" class="form-control" @bind="settings.Port" />
+                                </div>
+                            </div>
+                        }
+
+                        <div class="mb-3">
+                            <label class="form-label">Veritabani Adi</label>
+                            @if (settings.Provider == DatabaseProvider.SQLite)
+                            {
+                                <div class="input-group">
+                                    <input type="text" class="form-control" @bind="settings.DatabaseName" placeholder="veritabani.db" />
+                                    <span class="input-group-text">.db</span>
+                                </div>
+                                <small class="text-muted">SQLite icin dosya adi girin. Dosya otomatik olusturulur.</small>
+                            }
+                            else
+                            {
+                                <input type="text" class="form-control" @bind="settings.DatabaseName" placeholder="MKFiloServis" />
+                            }
+                        </div>
+
+                        @if (settings.Provider != DatabaseProvider.SQLite)
+                        {
+                            @if (settings.Provider == DatabaseProvider.SQLServer)
+                            {
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" @bind="settings.UseIntegratedSecurity" id="integratedSecurity">
+                                        <label class="form-check-label" for="integratedSecurity">
+                                            Windows Authentication (Integrated Security) Kullan
+                                        </label>
+                                    </div>
+                                </div>
+                            }
+
+                            @if (!settings.UseIntegratedSecurity || settings.Provider != DatabaseProvider.SQLServer)
+                            {
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Kullanici Adi</label>
+                                        <input type="text" class="form-control" @bind="settings.Username" placeholder="postgres / sa / root" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Sifre</label>
+                                        <div class="input-group">
+                                            <input type="@(showPassword ? "text" : "password")" class="form-control" @bind="settings.Password" />
+                                            <button class="btn btn-outline-secondary" type="button" @onclick="() => showPassword = !showPassword">
+                                                <i class="bi @(showPassword ? "bi-eye-slash" : "bi-eye")"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+
+                        <!-- Baglanti Dizesi Onizleme -->
+                        <div class="mb-3">
+                            <label class="form-label">Baglanti Dizesi (Connection String)</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control font-monospace" value="@settings.GetConnectionString()" readonly />
+                                <button class="btn btn-outline-secondary" type="button" @onclick="CopyConnectionString" title="Kopyala">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(testMessage))
+                        {
+                            <div class="alert @(testSuccess ? "alert-success" : "alert-danger") py-2">
+                                <i class="bi @(testSuccess ? "bi-check-circle" : "bi-x-circle") me-2"></i>@testMessage
+                            </div>
+                        }
+
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-info" @onclick="TestConnection" disabled="@isTesting">
+                                @if (isTesting)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-plug me-1"></i>
+                                }
+                                Baglanti Test Et
+                            </button>
+                            <button class="btn btn-success" @onclick="SaveAndApply" disabled="@isSaving">
+                                @if (isSaving)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-check-lg me-1"></i>
+                                }
+                                Kaydet ve Uygula
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <!-- Hizli Ayarlar -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-lightning me-2"></i>Hizli Ayarlar</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-outline-primary" @onclick="() => HizliAyar(DatabaseProvider.PostgreSQL)">
+                                <i class="bi bi-database me-2"></i>PostgreSQL (Varsayilan)
+                            </button>
+                            <button class="btn btn-outline-info" @onclick="() => HizliAyar(DatabaseProvider.SQLite)">
+                                <i class="bi bi-file-earmark-binary me-2"></i>SQLite (Yerel)
+                            </button>
+                            <button class="btn btn-outline-danger" @onclick="() => HizliAyar(DatabaseProvider.SQLServer)">
+                                <i class="bi bi-microsoft me-2"></i>SQL Server Express
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bilgi -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Bilgi</h6>
+                    </div>
+                    <div class="card-body">
+                        <h6>Varsayilan Portlar:</h6>
+                        <ul class="list-unstyled mb-3">
+                            <li><strong>PostgreSQL:</strong> 5432</li>
+                            <li><strong>SQL Server:</strong> 1433</li>
+                            <li><strong>MySQL:</strong> 3306</li>
+                            <li><strong>SQLite:</strong> Port yok (dosya)</li>
+                        </ul>
+                        <div class="alert alert-warning py-2 mb-0">
+                            <small><i class="bi bi-exclamation-triangle me-1"></i>Ayarlar kaydedildikten sonra uygulamayi yeniden baslatmaniz gerekir.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private DatabaseSettings settings = new();
+    private bool isLoading = true;
+    private bool isTesting = false;
+    private bool isSaving = false;
+    private bool showPassword = false;
+    private string testMessage = "";
+    private bool testSuccess = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        settings = await DbSettingsService.GetSettingsAsync();
+        isLoading = false;
+    }
+
+    private void ProviderDegistir(DatabaseProvider provider)
+    {
+        settings.Provider = provider;
+        settings.Port = settings.GetDefaultPort();
+        testMessage = "";
+
+        // Varsayilan degerler
+        switch (provider)
+        {
+            case DatabaseProvider.PostgreSQL:
+                settings.Host = "localhost";
+                settings.Username = "postgres";
+                break;
+            case DatabaseProvider.SQLServer:
+                settings.Host = "localhost";
+                settings.Username = "sa";
+                break;
+            case DatabaseProvider.MySQL:
+                settings.Host = "localhost";
+                settings.Username = "root";
+                break;
+            case DatabaseProvider.SQLite:
+                settings.DatabaseName = "MKFiloServis";
+                break;
+        }
+    }
+
+    private void HizliAyar(DatabaseProvider provider)
+    {
+        settings.Provider = provider;
+        settings.Port = settings.GetDefaultPort();
+        testMessage = "";
+
+        switch (provider)
+        {
+            case DatabaseProvider.PostgreSQL:
+                settings.Host = "localhost";
+                settings.DatabaseName = "MKFiloServis";
+                settings.Username = "postgres";
+                settings.Password = "";
+                break;
+            case DatabaseProvider.SQLite:
+                settings.DatabaseName = "MKFiloServis";
+                break;
+            case DatabaseProvider.SQLServer:
+                settings.Host = "localhost\\SQLEXPRESS";
+                settings.DatabaseName = "MKFiloServisDb";
+                settings.UseIntegratedSecurity = true;
+                break;
+        }
+    }
+
+    private async Task TestConnection()
+    {
+        isTesting = true;
+        testMessage = "";
+        StateHasChanged();
+
+        try
+        {
+            var result = await DbSettingsService.TestConnectionAsync(settings);
+            testSuccess = result.Success;
+            testMessage = result.Message;
+        }
+        finally
+        {
+            isTesting = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveAndApply()
+    {
+        isSaving = true;
+        StateHasChanged();
+
+        try
+        {
+            var result = await DbSettingsService.ApplyConnectionAsync(settings);
+
+            if (result.Success)
+            {
+                ToastService.ShowSuccess(result.Message);
+                testSuccess = true;
+                testMessage = result.Message;
+            }
+            else
+            {
+                ToastService.ShowError(result.Message);
+                testSuccess = false;
+                testMessage = result.Message;
+            }
+        }
+        finally
+        {
+            isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CopyConnectionString()
+    {
+        // JavaScript ile panoya kopyala
+        ToastService.ShowInfo("Baglanti dizesi kopyalandi.");
+    }
+}
+

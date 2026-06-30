@@ -1,0 +1,3054 @@
+@page "/belge-uyarilari"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Shared.Entities
+@using System.IO
+@inject IBelgeUyariService BelgeUyariService
+@inject ITasimaTedarikciService TasimaTedarikciService
+@inject ISecureFileService SecureFileService
+@inject IPersonelOzlukService OzlukService
+@inject IExcelService ExcelService
+@inject IPdfService PdfService
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject IToastService ToastService
+@inject ILogger<MKFiloServis.Web.Components.Pages.BelgeUyarilari> Logger
+
+<PageTitle>Belge Sure Uyarilari</PageTitle>
+
+<style>
+    .ozet-kart { transition: transform .12s ease, box-shadow .12s ease; }
+    .ozet-kart:hover { transform: translateY(-2px); box-shadow: 0 .5rem 1rem rgba(0,0,0,.15); }
+    .ozet-kart-aktif { outline: 3px solid #212529; outline-offset: -3px; box-shadow: 0 .5rem 1rem rgba(0,0,0,.25) !important; }
+</style>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="bi bi-file-earmark-medical me-2"></i>Belge Süre Uyarıları</h3>
+        <div class="d-flex gap-2">
+            <select class="form-select" style="width: 180px;" @bind="gunFiltre" @bind:after="YenileAsync">
+                <option value="7">7 Gün İçinde</option>
+                <option value="15">15 Gün İçinde</option>
+                <option value="30">30 Gün İçinde</option>
+                <option value="60">60 Gün İçinde</option>
+                <option value="90">90 Gün İçinde</option>
+            </select>
+            <button type="button" class="btn btn-danger" @onclick="PdfExport" disabled="@(uyarilar == null || !FiltrelenmisTumUyarilar.Any())">
+                <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+            </button>
+            <button type="button" class="btn btn-success" @onclick="ExcelExport" disabled="@(uyarilar == null || !FiltrelenmisTumUyarilar.Any())">
+                <i class="bi bi-file-earmark-excel me-1"></i>Excel
+            </button>
+        </div>
+    </div>
+
+    <!-- Sekme Navigasyonu -->
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <button type="button" class="nav-link @(aktifSekme == "uyarilar" ? "active" : "")" @onclick='() => aktifSekme = "uyarilar"'>
+                <i class="bi bi-exclamation-triangle me-1"></i>Süre Uyarıları
+                @if (uyarilar != null && uyarilar.TumUyarilar.Any())
+                {
+                    <span class="badge bg-danger ms-1">@uyarilar.TumUyarilar.Count(u => u.Seviye == BelgeUyariSeviye.Kritik)</span>
+                }
+            </button>
+        </li>
+        <li class="nav-item">
+            <button type="button" class="nav-link @(aktifSekme == "tablo" ? "active" : "")" @onclick="SekmeTabloAc" @onclick:preventDefault="true">
+                <i class="bi bi-table me-1"></i>Personel Belge Tablosu
+                @if (belgeTablosu != null)
+                {
+                    <span class="badge bg-secondary ms-1">@belgeTablosu.Count</span>
+                }
+            </button>
+        </li>
+        <li class="nav-item">
+            <button type="button" class="nav-link @(aktifSekme == "aractablo" ? "active" : "")" @onclick="SekmeAracTabloAc" @onclick:preventDefault="true">
+                <i class="bi bi-truck me-1"></i>Araç Belge Tablosu
+                @if (aracBelgeTablosu != null)
+                {
+                    <span class="badge bg-secondary ms-1">@aracBelgeTablosu.Count(x => x.SahiplikTipi != AracSahiplikTipi.Tedarikci)</span>
+                }
+            </button>
+        </li>
+        <li class="nav-item">
+            <button type="button" class="nav-link @(aktifSekme == "tedarikci" ? "active" : "")" @onclick="SekmeTedarikciTabloAc" @onclick:preventDefault="true">
+                <i class="bi bi-building me-1"></i>Tedarikçi Belgeleri
+                @if (tedarikciEvrakTablosu != null)
+                {
+                    <span class="badge bg-secondary ms-1">@tedarikciEvrakTablosu.Count</span>
+                }
+            </button>
+        </li>
+        <li class="nav-item">
+            <button type="button" class="nav-link @(aktifSekme == "tedarikci-personel" ? "active" : "")" @onclick="SekmeTedarikciPersonelTabloAc" @onclick:preventDefault="true">
+                <i class="bi bi-person-badge me-1"></i>Ted. Personeli
+                @if (belgeTablosu != null)
+                {
+                    <span class="badge bg-secondary ms-1">@belgeTablosu.Count(x => x.TasimaTedarikciId.HasValue)</span>
+                }
+            </button>
+        </li>
+        <li class="nav-item">
+            <button type="button" class="nav-link @(aktifSekme == "tedarikci-arac" ? "active" : "")" @onclick="SekmeTedarikciAracTabloAc" @onclick:preventDefault="true">
+                <i class="bi bi-truck me-1"></i>Ted. Araçları
+                @if (aracBelgeTablosu != null)
+                {
+                    <span class="badge bg-secondary ms-1">@aracBelgeTablosu.Count(x => x.SahiplikTipi == AracSahiplikTipi.Tedarikci)</span>
+                }
+            </button>
+        </li>
+    </ul>
+
+    <!-- Süre Uyarıları Sekmesi -->
+    @if (aktifSekme == "uyarilar")
+    {
+    <div class="card mb-4">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Kaynak</label>
+                    <select class="form-select form-select-sm" @bind="kaynakFiltre">
+                        <option value="Tumu">Tümü</option>
+                        <option value="Personel">Personel</option>
+                        <option value="Araç">Araç</option>
+                        <option value="Tedarikçi">Tedarikçi</option>
+                        <option value="Kiralık Plaka">Kiralık C Plaka</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Tedarikçi</label>
+                    <select class="form-select form-select-sm" @bind="tedarikciFiltre">
+                        <option value="">Tümü</option>
+                        <option value="-1">Sadece kendi kaynağımız</option>
+                        @foreach (var unvan in TedarikciUnvanlari)
+                        {
+                            <option value="@unvan">@unvan</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Seviye</label>
+                    <select class="form-select form-select-sm" @bind="seviyeFiltre">
+                        <option value="Tumu">Tümü</option>
+                        <option value="Kritik">Süresi Geçmiş</option>
+                        <option value="Acil">7 Gün İçinde</option>
+                        <option value="Uyari">Yaklaşan</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Arama</label>
+                    <input type="text" class="form-control form-control-sm" @bind="aramaMetni" @bind:event="oninput" placeholder="Belge türü, personel veya plaka ara..." />
+                </div>
+                <div class="col-md-12 text-end">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="FiltreleriTemizle" disabled="@(!FiltreVarMi)">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Filtreleri Temizle
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else if (uyarilar != null)
+    {
+        <!-- Ozet Kartlari (tıklanabilir - alttaki Tüm Uyarilar listesini filtreler) -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-danger text-white h-100 ozet-kart @(seviyeFiltre == "Kritik" ? "ozet-kart-aktif" : "")"
+                     style="cursor: pointer;" @onclick='() => OzetKartaTikla("Kritik")' title="Tıklayın: Süresi geçmiş kayıtları filtreler">
+                    <div class="card-body text-center">
+                        <h1 class="mb-0">@OzetSayim(BelgeUyariSeviye.Kritik)</h1>
+                        <small>Suresi Gecmis</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-dark h-100 ozet-kart @(seviyeFiltre == "Acil" ? "ozet-kart-aktif" : "")"
+                     style="cursor: pointer;" @onclick='() => OzetKartaTikla("Acil")' title="Tıklayın: 7 gün içindeki kayıtları filtreler">
+                    <div class="card-body text-center">
+                        <h1 class="mb-0">@OzetSayim(BelgeUyariSeviye.Acil)</h1>
+                        <small>7 Gun Icinde</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white h-100 ozet-kart @(seviyeFiltre == "Uyari" ? "ozet-kart-aktif" : "")"
+                     style="cursor: pointer;" @onclick='() => OzetKartaTikla("Uyari")' title="Tıklayın: 30 gün içindeki kayıtları filtreler">
+                    <div class="card-body text-center">
+                        <h1 class="mb-0">@OzetSayim(BelgeUyariSeviye.Uyari)</h1>
+                        <small>30 Gun Icinde</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white h-100 ozet-kart @(seviyeFiltre == "Tumu" ? "ozet-kart-aktif" : "")"
+                     style="cursor: pointer;" @onclick='() => OzetKartaTikla("Tumu")' title="Tıklayın: Tüm uyarıları gösterir">
+                    <div class="card-body text-center">
+                        <h1 class="mb-0">@OzetSayim(null)</h1>
+                        <small>Toplam Uyari</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Arac Belgeleri (öne alındı) -->
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-success text-white">
+                        <h6 class="mb-0"><i class="bi bi-truck me-2"></i>Arac Belgeleri</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (FiltrelenmisAracUyarilari.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Plaka</th>
+                                            <th>Belge</th>
+                                            <th>Bitis</th>
+                                            <th class="text-center">Durum</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var u in FiltrelenmisAracUyarilari)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <a href="@u.DetayUrl" class="text-decoration-none">
+                                                        <strong>@u.Baslik</strong>
+                                                    </a>
+                                                </td>
+                                                <td>@u.BelgeTuru</td>
+                                                <td>@u.BitisTarihi.ToString("dd.MM.yyyy")</td>
+                                                <td class="text-center">
+                                                    <span class="badge @u.SeviyeClass">
+                                                        @if (u.KalanGun < 0)
+                                                        {
+                                                            @(Math.Abs(u.KalanGun) + " gun gecti")
+                                                        }
+                                                        else
+                                                        {
+                                                            @(u.KalanGun + " gun")
+                                                        }
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center text-success py-4">
+                                <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
+                                <p class="mb-0 mt-2">Arac belgeleri guncel!</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Personel Belgeleri -->
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-primary text-white">
+                        <h6 class="mb-0"><i class="bi bi-person-badge me-2"></i>Personel Belgeleri</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (FiltrelenmisPersonelUyarilari.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Personel</th>
+                                            <th>Belge</th>
+                                            <th>Bitis</th>
+                                            <th class="text-center">Durum</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var u in FiltrelenmisPersonelUyarilari)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <a href="@u.DetayUrl" class="text-decoration-none">
+                                                        <strong>@u.Baslik</strong>
+                                                    </a>
+                                                </td>
+                                                <td>@u.BelgeTuru</td>
+                                                <td>@u.BitisTarihi.ToString("dd.MM.yyyy")</td>
+                                                <td class="text-center">
+                                                    <span class="badge @u.SeviyeClass">
+                                                        @if (u.KalanGun < 0)
+                                                        {
+                                                            @(Math.Abs(u.KalanGun) + " gun gecti")
+                                                        }
+                                                        else
+                                                        {
+                                                            @(u.KalanGun + " gun")
+                                                        }
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center text-success py-4">
+                                <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
+                                <p class="mb-0 mt-2">Personel belgeleri guncel!</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-list-ul me-2"></i>Tum Uyarilar</h6>
+                <span class="badge bg-dark">@FiltrelenmisTumUyarilar.Count kayıt</span>
+            </div>
+            <div class="card-body p-0">
+                @if (FiltrelenmisTumUyarilar.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Kaynak</th>
+                                    <th>Belge Türü</th>
+                                    <th>Ad / Plaka</th>
+                                    <th>Tedarikçi</th>
+                                    <th>Bitiş</th>
+                                    <th class="text-center">Durum</th>
+                                    <th class="text-center">İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var uyari in FiltrelenmisTumUyarilar)
+                                {
+                                    <tr>
+                                        <td>
+                                            <span class="badge @(uyari.Kaynak == "Personel" ? "bg-primary" : "bg-success")">@uyari.Kaynak</span>
+                                        </td>
+                                        <td>@uyari.BelgeTuru</td>
+                                        <td><strong>@uyari.Baslik</strong></td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(uyari.TasimaTedarikciUnvan))
+                                            {
+                                                <span class="badge bg-info text-dark" title="Alt yüklenici">@uyari.TasimaTedarikciUnvan</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted small">Kendi kaynağımız</span>
+                                            }
+                                        </td>
+                                        <td>@uyari.BitisTarihi.ToString("dd.MM.yyyy")</td>
+                                        <td class="text-center">
+                                            <span class="badge @uyari.SeviyeClass">
+                                                @(uyari.KalanGun < 0 ? $"{Math.Abs(uyari.KalanGun)} gün geçti" : $"{uyari.KalanGun} gün")
+                                            </span>
+                                        </td>
+                                        <td class="text-center">
+                                            <a class="btn btn-sm btn-outline-primary" href="@uyari.DetayUrl">
+                                                <i class="bi bi-box-arrow-up-right"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center text-muted py-4">Filtreye uygun uyarı bulunamadı.</div>
+                }
+            </div>
+        </div>
+
+        <!-- Belge Turu Bazinda Ozet -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-bar-chart me-2"></i>Belge Turu Ozeti</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-2 text-center mb-3">
+                        <div class="p-3 border rounded @(uyarilar.EhliyetUyarilari.Any(u => u.KalanGun < 0) ? "border-danger" : "")">
+                            <i class="bi bi-card-text" style="font-size: 2rem;"></i>
+                            <h4 class="mt-2 mb-0">@uyarilar.EhliyetUyarilari.Count</h4>
+                            <small class="text-muted">Ehliyet</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-center mb-3">
+                        <div class="p-3 border rounded @(uyarilar.MykBelgesiUyarilari.Any(u => u.KalanGun < 0) ? "border-danger" : "")">
+                            <i class="bi bi-file-earmark-check" style="font-size: 2rem;"></i>
+                            <h4 class="mt-2 mb-0">@uyarilar.MykBelgesiUyarilari.Count</h4>
+                            <small class="text-muted">MYK Belgesi</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-center mb-3">
+                        <div class="p-3 border rounded @(uyarilar.PsikoteknikUyarilari.Any(u => u.KalanGun < 0) ? "border-danger" : "")">
+                            <i class="bi bi-clipboard2-pulse" style="font-size: 2rem;"></i>
+                            <h4 class="mt-2 mb-0">@uyarilar.PsikoteknikUyarilari.Count</h4>
+                            <small class="text-muted">Psikoteknik</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-center mb-3">
+                        <div class="p-3 border rounded @(uyarilar.MuayeneUyarilari.Any(u => u.KalanGun < 0) ? "border-danger" : "")">
+                            <i class="bi bi-wrench-adjustable" style="font-size: 2rem;"></i>
+                            <h4 class="mt-2 mb-0">@uyarilar.MuayeneUyarilari.Count</h4>
+                            <small class="text-muted">Muayene</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-center mb-3">
+                        <div class="p-3 border rounded @(uyarilar.KaskoUyarilari.Any(u => u.KalanGun < 0) ? "border-danger" : "")">
+                            <i class="bi bi-shield-check" style="font-size: 2rem;"></i>
+                            <h4 class="mt-2 mb-0">@uyarilar.KaskoUyarilari.Count</h4>
+                            <small class="text-muted">Kasko</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-center mb-3">
+                        <div class="p-3 border rounded @(uyarilar.TrafikSigortasiUyarilari.Any(u => u.KalanGun < 0) ? "border-danger" : "")">
+                            <i class="bi bi-shield-exclamation" style="font-size: 2rem;"></i>
+                            <h4 class="mt-2 mb-0">@uyarilar.TrafikSigortasiUyarilari.Count</h4>
+                            <small class="text-muted">Trafik Sigortasi</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-center mb-3">
+                        <div class="p-3 border rounded @(uyarilar.DigerAracEvrakUyarilari.Any(u => u.KalanGun < 0) ? "border-danger" : "")">
+                            <i class="bi bi-folder2-open" style="font-size: 2rem;"></i>
+                            <h4 class="mt-2 mb-0">@uyarilar.DigerAracEvrakUyarilari.Count</h4>
+                            <small class="text-muted">Diger Evraklar</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-center mb-3">
+                        <div class="p-3 border rounded @(uyarilar.TedarikciSozlesmeUyarilari.Any(u => u.KalanGun < 0) ? "border-danger" : "")">
+                            <i class="bi bi-file-earmark-medical" style="font-size: 2rem;"></i>
+                            <h4 class="mt-2 mb-0">@uyarilar.TedarikciSozlesmeUyarilari.Count</h4>
+                            <small class="text-muted">Tedarikçi Sözleşme</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-center mb-3">
+                        <div class="p-3 border rounded @(uyarilar.KiralikPlakaUyarilari.Any(u => u.KalanGun < 0) ? "border-danger" : "")">
+                            <i class="bi bi-card-text" style="font-size: 2rem;"></i>
+                            <h4 class="mt-2 mb-0">@uyarilar.KiralikPlakaUyarilari.Count</h4>
+                            <small class="text-muted">Kiralık C Plaka</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    } @* /uyarilar sekmesi *@
+
+    <!-- Personel Belge Tablosu Sekmesi -->
+    @if (aktifSekme == "tablo")
+    {
+        <!-- Filtreler -->
+        <div class="card mb-3">
+            <div class="card-body py-2">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Personel Ara</label>
+                        <input type="text" class="form-control form-control-sm" placeholder="Ad, soyad veya kod..."
+                               @bind="tabloArama" @bind:event="oninput" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Görev</label>
+                        <select class="form-select form-select-sm" @bind="tabloGorevFiltre">
+                            <option value="">Tümü</option>
+                            @foreach (PersonelGorev g in Enum.GetValues(typeof(PersonelGorev)))
+                            {
+                                <option value="@g">@GetGorevAdi(g)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Durum</label>
+                        <select class="form-select form-select-sm" @bind="tabloAktifFiltre">
+                            <option value="">Tümü</option>
+                            <option value="aktif">Aktif</option>
+                            <option value="pasif">Pasif</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Belge Filtresi</label>
+                        <select class="form-select form-select-sm" @bind="tabloBelgeFiltre">
+                            <option value="">Tümü</option>
+                            <option value="eksik">Tarihi Girilmemiş</option>
+                            <option value="gecmis">Süresi Geçmiş</option>
+                            <option value="yaklasan">30 Gün İçinde</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex gap-1 align-items-end">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="TabloFiltreleriniTemizle">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-success" @onclick="TabloExcelAktar" disabled="@(FiltrelenmisBelgeTablosu.Count == 0)">
+                            <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="TabloYazdir" disabled="@(FiltrelenmisBelgeTablosu.Count == 0)">
+                            <i class="bi bi-printer me-1"></i>Yazdır
+                        </button>
+                        <button type="button" class="btn btn-sm btn-success" @onclick="SeciliPersonellerinBelgeleriniIndir"
+                                disabled="@(belgeTablosu == null || !belgeTablosu.Any(x => x.Secili))">
+                            <i class="bi bi-download me-1"></i>Seçilenleri İndir
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Özet Kartlar -->
+        @if (belgeTablosu != null)
+        {
+            <div class="row mb-3 g-2">
+                <div class="col">
+                    <div class="card border-danger text-center py-2">
+                        <div class="fw-bold text-danger fs-4">@belgeTablosu.SelectMany(GetTumBelgeTarihleri).Count(t => t < DateTime.Today)</div>
+                        <small class="text-muted">Süresi Geçmiş</small>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="card border-warning text-center py-2">
+                        <div class="fw-bold text-warning fs-4">@belgeTablosu.SelectMany(GetTumBelgeTarihleri).Count(t => t >= DateTime.Today && (t - DateTime.Today).Days <= 30)</div>
+                        <small class="text-muted">30 Gün İçinde</small>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="card border-secondary text-center py-2">
+                        <div class="fw-bold text-secondary fs-4">@belgeTablosu.Sum(p => GetEksikBelgeSayisi(p))</div>
+                        <small class="text-muted">Tarihi Girilmemiş</small>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="card border-primary text-center py-2">
+                        <div class="fw-bold text-primary fs-4">@belgeTablosu.Count</div>
+                        <small class="text-muted">Toplam Personel</small>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (isTabloyukleniyor)
+        {
+            <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+        }
+        else if (belgeTablosu != null)
+        {
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center py-2">
+                    <span>
+                        <i class="bi bi-table me-1"></i>
+                        Personel Belge Takip Tablosu
+                        <span class="badge bg-secondary ms-1">@FiltrelenmisBelgeTablosu.Count kayıt</span>
+                    </span>
+                    <div class="d-flex gap-2 align-items-center">
+                        <span class="small text-muted">
+                            @belgeTablosu.Count(x => x.Secili) personel seçildi
+                        </span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="TumunuSecToggle">
+                            <i class="bi bi-check-all me-1"></i>@(belgeTablosu.All(x => x.Secili) ? "Seçimi Kaldır" : "Tümünü Seç")
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered table-hover mb-0 align-middle" id="belgeTablosu" style="font-size:0.82rem;">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th style="width:36px;" class="text-center">
+                                        <input type="checkbox" class="form-check-input"
+                                               checked="@(FiltrelenmisBelgeTablosu.Any() && FiltrelenmisBelgeTablosu.All(x => x.Secili))"
+                                               @onchange="TumunuSecToggle" />
+                                    </th>
+                                    <th>Personel</th>
+                                    <th class="text-center" style="width:40px;">Görev</th>
+                                    <th class="text-center bg-primary bg-opacity-25" style="width:90px;" title="Ehliyet Geçerlilik">Ehliyet</th>
+                                    <th class="text-center bg-info bg-opacity-25" style="width:90px;" title="Kimlik Geçerlilik">Kimlik</th>
+                                    <th class="text-center bg-success bg-opacity-25" style="width:90px;" title="MYK Belgesi">MYK</th>
+                                    <th class="text-center bg-light" style="width:90px;" title="SRC Belgesi">SRC</th>
+                                    <th class="text-center bg-light" style="width:90px;" title="Yaygın Eğitim Sertifikası">Yaygın Eğt.</th>
+                                    <th class="text-center bg-warning bg-opacity-25" style="width:90px;" title="Psikoteknik">Psikoteknik</th>
+                                    <th class="text-center bg-danger bg-opacity-25" style="width:90px;" title="Adli Sicil">Adli Sicil</th>
+                                    <th class="text-center bg-secondary bg-opacity-25" style="width:90px;" title="Sağlık Raporu">Sağlık</th>
+                                    <th class="text-center" style="width:90px;" title="Sürücü Ceza Barkodlu Belge">Ceza Barkod</th>
+                                    <th class="text-center" style="width:60px;">İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in FiltrelenmisBelgeTablosu)
+                                {
+                                    <tr class="@(!item.Aktif ? "table-secondary opacity-75" : "")">
+                                        <td class="text-center">
+                                            <input type="checkbox" class="form-check-input"
+                                                   checked="@item.Secili"
+                                                   @onchange="(e) => item.Secili = (bool)(e.Value ?? false)" />
+                                        </td>
+                                        <td>
+                                            <strong>@item.PersonelAdi</strong>
+                                            <br /><small class="text-muted">@item.PersonelKodu</small>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge @GetGorevBadgeClass(item.Gorev)" style="font-size:0.7rem;">@GetGorevAdi(item.Gorev)</span>
+                                        </td>
+                                        <!-- Ehliyet -->
+                                        <td class="text-center p-1">
+                                            @BelgeHucre(item, "Ehliyet", item.EhliyetGecerlilik)
+                                        </td>
+                                        <!-- Kimlik -->
+                                        <td class="text-center p-1">
+                                            @BelgeHucre(item, "Kimlik", item.KimlikGecerlilik)
+                                        </td>
+                                        <!-- MYK -->
+                                        <td class="text-center p-1">
+                                            @BelgeHucre(item, "MykBelgesi", item.MykBelgesiGecerlilik)
+                                        </td>
+                                        <!-- SRC -->
+                                        <td class="text-center p-1">
+                                            @BelgeBoolHucre(item, "SrcBelgesi", item.SrcBelgesiVarMi)
+                                        </td>
+                                        <!-- Yaygın Eğitim Sertifikası -->
+                                        <td class="text-center p-1">
+                                            @BelgeBoolHucre(item, "YayginEgitim", item.YayginEgitimSertifikasiVarMi || item.YayginEgitimGecerlilik.HasValue)
+                                        </td>
+                                        <!-- Psikoteknik -->
+                                        <td class="text-center p-1">
+                                            @BelgeHucre(item, "Psikoteknik", item.PsikoteknikGecerlilik)
+                                        </td>
+                                        <!-- Adli Sicil -->
+                                        <td class="text-center p-1">
+                                            @BelgeHucre(item, "AdliSicil", item.AdliSicilGecerlilik)
+                                        </td>
+                                        <!-- Sağlık Raporu -->
+                                        <td class="text-center p-1">
+                                            @BelgeHucre(item, "SaglikRaporu", item.SaglikRaporuGecerlilik)
+                                        </td>
+                                        <!-- Sürücü Ceza Barkod -->
+                                        <td class="text-center p-1">
+                                            @BelgeHucre(item, "SuruculCezaBarkod", item.SuruculCezaBarkodGecerlilik)
+                                        </td>
+                                        <td class="text-center p-1" style="min-width:110px;">
+                                            <div class="d-flex flex-column align-items-center gap-1">
+                                                <div class="d-flex gap-1">
+                                                    <button type="button" class="btn btn-xs btn-outline-info" title="Özlük İşlem — Belgeleri Görüntüle / İndir"
+                                                            @onclick="() => OzlukIslemAc(item)" @onclick:preventDefault="true">
+                                                        <i class="bi bi-file-earmark-person"></i>
+                                                    </button>
+                                                    <a class="btn btn-xs btn-outline-secondary" href="/personel/ozluk-evrak?soforId=@item.SoforId" title="Özlük Evrak Sayfası">
+                                                        <i class="bi bi-folder2-open"></i>
+                                                    </a>
+                                                </div>
+                                                @if (item.ToplamEvrakSayisi > 0)
+                                                {
+                                                    <span class="badge @(item.YuklenmisEvrakSayisi == item.ToplamEvrakSayisi ? "bg-success" : item.YuklenmisEvrakSayisi == 0 ? "bg-secondary" : "bg-warning text-dark")" style="font-size:0.65rem;">
+                                                        @item.YuklenmisEvrakSayisi/@item.ToplamEvrakSayisi
+                                                    </span>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    } @* /tablo sekmesi *@
+
+    <!-- Araç Belge Tablosu Sekmesi -->
+    @if (aktifSekme == "aractablo")
+    {
+        <div class="card mb-3">
+            <div class="card-body py-2">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Araç Ara</label>
+                        <input type="text" class="form-control form-control-sm" placeholder="Plaka, şase, marka/model..."
+                               @bind="aracTabloArama" @bind:event="oninput" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Araç Tipi</label>
+                        <select class="form-select form-select-sm" @bind="aracTabloTipFiltre">
+                            <option value="">Tümü</option>
+                            @foreach (AracTipi t in Enum.GetValues(typeof(AracTipi)))
+                            {
+                                <option value="@t">@t</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Durum</label>
+                        <select class="form-select form-select-sm" @bind="aracTabloAktifFiltre">
+                            <option value="">Tümü</option>
+                            <option value="aktif">Aktif</option>
+                            <option value="pasif">Pasif</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Belge Filtresi</label>
+                        <select class="form-select form-select-sm" @bind="aracTabloBelgeFiltre">
+                            <option value="">Tümü</option>
+                            <option value="eksik">Tarihi Girilmemiş</option>
+                            <option value="gecmis">Süresi Geçmiş</option>
+                            <option value="yaklasan">30 Gün İçinde</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex gap-1 align-items-end">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="AracTabloFiltreleriniTemizle">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="AracTabloYazdir" disabled="@(FiltrelenmisAracBelgeTablosu.Count == 0)">
+                            <i class="bi bi-printer me-1"></i>Yazdır
+                        </button>
+                        <button type="button" class="btn btn-sm btn-success" @onclick="SeciliAraclarinBelgeleriniIndir"
+                                disabled="@(aracBelgeTablosu == null || !aracBelgeTablosu.Any(x => x.Secili))">
+                            <i class="bi bi-download me-1"></i>Seçilenleri İndir
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (aracBelgeTablosu != null)
+        {
+            var ozmalAraclar = aracBelgeTablosu.Where(x => x.SahiplikTipi != AracSahiplikTipi.Tedarikci).ToList();
+            <div class="row mb-3 g-2">
+                <div class="col">
+                    <div class="card border-danger text-center py-2">
+                        <div class="fw-bold text-danger fs-4">@ozmalAraclar.SelectMany(GetTumAracBelgeTarihleri).Count(t => t < DateTime.Today)</div>
+                        <small class="text-muted">Süresi Geçmiş</small>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="card border-warning text-center py-2">
+                        <div class="fw-bold text-warning fs-4">@ozmalAraclar.SelectMany(GetTumAracBelgeTarihleri).Count(t => t >= DateTime.Today && (t - DateTime.Today).Days <= 30)</div>
+                        <small class="text-muted">30 Gün İçinde</small>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="card border-secondary text-center py-2">
+                        <div class="fw-bold text-secondary fs-4">@ozmalAraclar.Sum(p => GetEksikAracBelgeSayisi(p))</div>
+                        <small class="text-muted">Tarihi Girilmemiş</small>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="card border-primary text-center py-2">
+                        <div class="fw-bold text-primary fs-4">@ozmalAraclar.Count</div>
+                        <small class="text-muted">Toplam Araç</small>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (isAracTabloyukleniyor)
+        {
+            <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+        }
+        else if (aracBelgeTablosu != null)
+        {
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center py-2">
+                    <span>
+                        <i class="bi bi-truck me-1"></i>
+                        Araç Belge Takip Tablosu
+                        <span class="badge bg-secondary ms-1">@FiltrelenmisAracBelgeTablosu.Count kayıt</span>
+                    </span>
+                    <div class="d-flex gap-2 align-items-center">
+                        <span class="small text-muted">@aracBelgeTablosu.Count(x => x.Secili) araç seçildi</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="AracTumunuSecToggle">
+                            <i class="bi bi-check-all me-1"></i>@(aracBelgeTablosu.All(x => x.Secili) ? "Seçimi Kaldır" : "Tümünü Seç")
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered table-hover mb-0 align-middle" id="aracBelgeTablosu" style="font-size:0.82rem;">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th style="width:36px;" class="text-center">
+                                        <input type="checkbox" class="form-check-input"
+                                               checked="@(FiltrelenmisAracBelgeTablosu.Any() && FiltrelenmisAracBelgeTablosu.All(x => x.Secili))"
+                                               @onchange="AracTumunuSecToggle" />
+                                    </th>
+                                    <th>Araç</th>
+                                    <th class="text-center" style="width:90px;">Tip</th>
+                                    <th class="text-center bg-light" style="width:90px;" title="Ruhsat">Ruhsat</th>
+                                    <th class="text-center bg-info bg-opacity-25" style="width:100px;" title="Trafik Sigortası">Sigorta</th>
+                                    <th class="text-center bg-success bg-opacity-25" style="width:100px;" title="Muayene">Muayene</th>
+                                    <th class="text-center bg-warning bg-opacity-25" style="width:100px;" title="Uygunluk Belgesi">Uygunluk</th>
+                                    <th class="text-center bg-danger bg-opacity-25" style="width:110px;" title="Koltuk Sigortası">Koltuk Sig.</th>
+                                    <th class="text-center bg-secondary bg-opacity-25" style="width:100px;" title="Kasko">Kasko</th>
+                                    <th class="text-center" style="width:60px;">İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in FiltrelenmisAracBelgeTablosu)
+                                {
+                                    <tr class="@(!item.Aktif ? "table-secondary opacity-75" : "")">
+                                        <td class="text-center">
+                                            <input type="checkbox" class="form-check-input"
+                                                   checked="@item.Secili"
+                                                   @onchange="(e) => item.Secili = (bool)(e.Value ?? false)" />
+                                        </td>
+                                        <td>
+                                            <strong>@(string.IsNullOrEmpty(item.Plaka) ? item.SaseNo : item.Plaka)</strong>
+                                            <br /><small class="text-muted">@item.MarkaModel</small>
+                                        </td>
+                                        <td class="text-center"><span class="badge bg-dark" style="font-size:0.7rem;">@item.AracTipi</span></td>
+                                        <td class="text-center p-1">@AracBelgeBoolHucre(item.RuhsatVarMi)</td>
+                                        <td class="text-center p-1">@AracBelgeHucre(item, "Sigorta", item.SigortaGecerlilik)</td>
+                                        <td class="text-center p-1">@AracBelgeHucre(item, "Muayene", item.MuayeneGecerlilik)</td>
+                                        <td class="text-center p-1">@AracBelgeHucre(item, "Uygunluk", item.UygunlukGecerlilik)</td>
+                                        <td class="text-center p-1">@AracBelgeHucre(item, "KoltukSigortasi", item.KoltukSigortasiGecerlilik)</td>
+                                        <td class="text-center p-1">@AracBelgeHucre(item, "Kasko", item.KaskoGecerlilik)</td>
+                                        <td class="text-center p-1" style="min-width:90px;">
+                                            <div class="d-flex flex-column align-items-center gap-1">
+                                                <div class="d-flex gap-1">
+                                                    <button type="button" class="btn btn-xs btn-outline-info" title="Belgeleri Görüntüle / İndir"
+                                                            @onclick="() => AracBelgeIslemAc(item)" @onclick:preventDefault="true">
+                                                        <i class="bi bi-file-earmark-text"></i>
+                                                    </button>
+                                                    <a class="btn btn-xs btn-outline-secondary" href="/araclar/@item.AracId" title="Araç Kartı">
+                                                        <i class="bi bi-pencil-square"></i>
+                                                    </a>
+                                                </div>
+                                                @if (item.ToplamEvrakSayisi > 0)
+                                                {
+                                                    <span class="badge @(item.YuklenmisEvrakSayisi == item.ToplamEvrakSayisi ? "bg-success" : item.YuklenmisEvrakSayisi == 0 ? "bg-secondary" : "bg-warning text-dark")" style="font-size:0.65rem;">
+                                                        @item.YuklenmisEvrakSayisi/@item.ToplamEvrakSayisi
+                                                    </span>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    } @* /aractablo sekmesi *@
+
+    <!-- Araç Tarih Düzenleme Modal -->
+    @if (showAracTarihModal && editAracItem != null)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color:rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-sm">
+                <div class="modal-content">
+                    <div class="modal-header py-2">
+                        <h6 class="modal-title"><i class="bi bi-pencil me-2"></i>@editAracBelgeAdi Tarihi</h6>
+                        <button type="button" class="btn-close btn-sm" @onclick="AracModalKapat"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-2 small text-muted">@(string.IsNullOrEmpty(editAracItem.Plaka) ? editAracItem.SaseNo : editAracItem.Plaka) – @editAracItem.MarkaModel</p>
+                        <label class="form-label small">Geçerlilik Bitiş Tarihi</label>
+                        <input type="date" class="form-control form-control-sm"
+                               value="@editAracTarih?.ToString("yyyy-MM-dd")"
+                               @onchange="(e) => editAracTarih = e.Value != null && DateTime.TryParse(e.Value.ToString(), out var d) ? d : (DateTime?)null" />
+                        <div class="mt-2">
+                            <button type="button" class="btn btn-sm btn-link text-danger p-0" @onclick="() => editAracTarih = null">
+                                <i class="bi bi-x-circle me-1"></i>Tarihi Kaldır
+                            </button>
+                        </div>
+                    </div>
+                    <div class="modal-footer py-2">
+                        <button type="button" class="btn btn-sm btn-secondary" @onclick="AracModalKapat">İptal</button>
+                        <button type="button" class="btn btn-sm btn-primary" @onclick="AracTarihKaydet" disabled="@isAracTarihKaydediliyor">
+                            @if (isAracTarihKaydediliyor) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                            Kaydet
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Araç Belge İşlem Modal -->
+    @if (showAracBelgeModal && aracBelgeModalItem != null)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color:rgba(0,0,0,0.5);" @onclick="AracBelgeModalKapat">
+            <div class="modal-dialog modal-lg" @onclick:stopPropagation="true">
+                <div class="modal-content">
+                    <div class="modal-header py-2">
+                        <h6 class="modal-title">
+                            <i class="bi bi-truck me-2 text-success"></i>
+                            <strong>@(string.IsNullOrEmpty(aracBelgeModalItem.Plaka) ? aracBelgeModalItem.SaseNo : aracBelgeModalItem.Plaka)</strong>
+                            <small class="text-muted ms-2">@aracBelgeModalItem.MarkaModel</small>
+                        </h6>
+                        <button type="button" class="btn-close btn-sm" @onclick="AracBelgeModalKapat"></button>
+                    </div>
+                    <div class="modal-body">
+                        @{
+                            var aracEvraklar = aracBelgeModalItem.EvrakDosyalari;
+                            var aracToplam = aracEvraklar.Count;
+                            var aracYuklenmis = aracEvraklar.Count(e => e.DosyaVar);
+                        }
+                        <div class="mb-3 d-flex align-items-center gap-2">
+                            <span class="badge bg-primary">@aracYuklenmis / @aracToplam belge yüklü</span>
+                            @if (aracEvraklar.Any(e => e.DosyaVar))
+                            {
+                                <span class="text-muted small">İndirmek istediğiniz belgeleri seçin</span>
+                            }
+                        </div>
+                        @if (!aracEvraklar.Any(e => e.DosyaVar))
+                        {
+                            <div class="alert alert-warning py-2">
+                                <i class="bi bi-exclamation-triangle me-1"></i>Bu araca ait yüklenmiş belge bulunmamaktadır.
+                                <a href="/araclar/@aracBelgeModalItem.AracId" class="alert-link ms-1">Belge yüklemek için araç kartını açın.</a>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:36px;">
+                                                <input type="checkbox" class="form-check-input"
+                                                       checked="@aracEvraklar.Where(e => e.DosyaVar).All(e => e.Secili)"
+                                                       @onchange="AracBelgeModalTumunuSec" />
+                                            </th>
+                                            <th>Belge</th>
+                                            <th style="width:120px;">Dosya</th>
+                                            <th style="width:80px;" class="text-center">İşlem</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var dosya in aracEvraklar)
+                                        {
+                                            <tr class="@(!dosya.DosyaVar ? "text-muted" : "")">
+                                                <td>
+                                                    @if (dosya.DosyaVar)
+                                                    {
+                                                        <input type="checkbox" class="form-check-input"
+                                                               checked="@dosya.Secili"
+                                                               @onchange="(e) => dosya.Secili = (bool)(e.Value ?? false)" />
+                                                    }
+                                                </td>
+                                                <td>@(string.IsNullOrWhiteSpace(dosya.EvrakAdi) ? dosya.EvrakKategorisi : dosya.EvrakAdi)</td>
+                                                <td>
+                                                    @if (dosya.DosyaVar)
+                                                    {
+                                                        <span class="badge bg-success"><i class="bi bi-paperclip me-1"></i>Var</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-secondary">Yok</span>
+                                                    }
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (dosya.DosyaVar)
+                                                    {
+                                                        <button type="button" class="btn btn-xs btn-outline-primary" title="Önizle"
+                                                                @onclick="() => AracBelgeOnizle(dosya)" @onclick:preventDefault="true">
+                                                            <i class="bi bi-eye"></i>
+                                                        </button>
+                                                        <button type="button" class="btn btn-xs btn-outline-dark" title="Yazdır"
+                                                                @onclick="() => AracBelgeYazdir(dosya)" @onclick:preventDefault="true">
+                                                            <i class="bi bi-printer"></i>
+                                                        </button>
+                                                        <button type="button" class="btn btn-xs btn-outline-secondary" title="İndir"
+                                                                @onclick="() => AracTekDosyaIndir(dosya)" @onclick:preventDefault="true">
+                                                            <i class="bi bi-download"></i>
+                                                        </button>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                    <div class="modal-footer py-2 gap-2">
+                        @if (aracBelgeModalItem.EvrakDosyalari.Any(e => e.DosyaVar))
+                        {
+                            <button type="button" class="btn btn-sm btn-success" @onclick="AracBelgeSecilenleriIndir" @onclick:preventDefault="true"
+                                    disabled="@(!aracBelgeModalItem.EvrakDosyalari.Any(e => e.Secili))">
+                                <i class="bi bi-download me-1"></i>Seçilenleri İndir
+                            </button>
+                        }
+                        <a class="btn btn-sm btn-outline-info" href="/araclar/@aracBelgeModalItem.AracId">
+                            <i class="bi bi-pencil-square me-1"></i>Araç Kartı
+                        </a>
+                        <button type="button" class="btn btn-sm btn-secondary" @onclick="AracBelgeModalKapat">Kapat</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Araç Belge Önizleme Modal -->
+    @if (belgeOnizlemeModalAcik)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,.5);">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">@belgeOnizlemeBaslik</h5>
+                        <button type="button" class="btn-close" @onclick="BelgeOnizlemeKapat"></button>
+                    </div>
+
+                    <div class="modal-body" style="min-height: 75vh;">
+                        @if (!belgeOnizlemeDestekleniyor)
+                        {
+                            <div class="alert alert-warning">
+                                Bu belge türü için önizleme desteklenmiyor. Dosyayı indirerek açabilirsiniz.
+                            </div>
+                        }
+                        else if (belgeOnizlemeContentType == "application/pdf")
+                        {
+                            <iframe src="@belgeOnizlemeDataUrl"
+                                    style="width:100%; height:75vh; border:0;">
+                            </iframe>
+                        }
+                        else if (belgeOnizlemeContentType?.StartsWith("image/") == true)
+                        {
+                            <img src="@belgeOnizlemeDataUrl"
+                                 style="max-width:100%; height:auto;"
+                                 alt="@belgeOnizlemeBaslik" />
+                        }
+                    </div>
+
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" @onclick="BelgeOnizlemeKapat">Kapat</button>
+                        <button class="btn btn-outline-primary"
+                                @onclick="BelgeOnizlenenDosyayiIndir">
+                            <i class="bi bi-download me-1"></i>İndir
+                        </button>
+                        <button class="btn btn-primary"
+                                @onclick="BelgeOnizlenenDosyayiYazdir"
+                                disabled="@(!belgeOnizlemeDestekleniyor)">
+                            <i class="bi bi-printer me-1"></i>Yazdır
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Tedarikçi Belge Tablosu Sekmesi -->
+    @if (aktifSekme == "tedarikci")
+    {
+        <div class="card mb-3">
+            <div class="card-body py-2">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label small mb-1">Tedarikçi Ara</label>
+                        <input type="text" class="form-control form-control-sm" @bind="tedarikciTabloArama" @bind:event="oninput" placeholder="Tedarikçi unvanı..." />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Durum</label>
+                        <select class="form-select form-select-sm" @bind="tedarikciTabloAktifFiltre">
+                            <option value="">Tümü</option>
+                            <option value="aktif">Aktif</option>
+                            <option value="pasif">Pasif</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Belge Filtresi</label>
+                        <select class="form-select form-select-sm" @bind="tedarikciTabloBelgeFiltre">
+                            <option value="">Tümü</option>
+                            <option value="eksik">Tarihi Girilmemiş</option>
+                            <option value="gecmis">Süresi Geçmiş</option>
+                            <option value="yaklasan">30 Gün İçinde</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex gap-1 align-items-end">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="TedarikciTabloFiltreleriniTemizle">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (isTedarikciTabloyukleniyor)
+        {
+            <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+        }
+        else if (tedarikciEvrakTablosu != null)
+        {
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center py-2">
+                    <span>
+                        <i class="bi bi-building me-1"></i>
+                        Tedarikçi Belge Takip Tablosu
+                        <span class="badge bg-secondary ms-1">@FiltrelenmisTedarikciEvrakTablosu.Count kayıt</span>
+                    </span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered table-hover mb-0 align-middle" style="font-size:0.82rem;">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th>Tedarikçi</th>
+                                    <th class="text-center" style="width:50px;">Durum</th>
+                                    @foreach (var kat in TedarikciEvrakKategorileri.TumKategoriler)
+                                    {
+                                        <th class="text-center" style="width:90px;" title="@kat">@KisaKategoriAdi(kat)</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in FiltrelenmisTedarikciEvrakTablosu)
+                                {
+                                    <tr class="@(!item.Aktif ? "table-secondary opacity-75" : "")">
+                                        <td>
+                                            <a href="/personel-tasima/tedarikciler/@item.TedarikciId/evraklar" class="text-decoration-none">
+                                                <strong>@item.TedarikciUnvan</strong>
+                                            </a>
+                                        </td>
+                                        <td class="text-center">
+                                            @if (item.Aktif)
+                                            {
+                                                <span class="badge bg-success">Aktif</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary">Pasif</span>
+                                            }
+                                        </td>
+                                        @foreach (var kat in TedarikciEvrakKategorileri.TumKategoriler)
+                                        {
+                                            var tarih = item.Belgeler.TryGetValue(kat, out var t) ? t : null;
+                                            var cls = TedarikciEvrakTabloKalemi.BelgeDurumClass(tarih);
+                                            var txt = TedarikciEvrakTabloKalemi.BelgeDurumMetin(tarih);
+                                            <td class="text-center p-1">
+                                                <a href="/personel-tasima/tedarikciler/@item.TedarikciId/evraklar"
+                                                   class="badge @cls text-decoration-none w-100" style="font-size:0.75rem;"
+                                                   title="@kat — @txt">@txt</a>
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+
+    <!-- Tedarikçi Personel Belge Tablosu Sekmesi -->
+    @if (aktifSekme == "tedarikci-personel")
+    {
+        <div class="card mb-3">
+            <div class="card-body py-2">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Tedarikçi Filtresi</label>
+                        <select class="form-select form-select-sm" @bind="tedarikciPersonelTedarikciFiltre">
+                            <option value="">Tümü</option>
+                            @foreach (var td in tedarikciler)
+                            {
+                                <option value="@td.Id">@td.Unvan</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Personel Ara</label>
+                        <input type="text" class="form-control form-control-sm" @bind="tedarikciPersonelArama" @bind:event="oninput" placeholder="Ad, kod..." />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Durum</label>
+                        <select class="form-select form-select-sm" @bind="tedarikciPersonelAktifFiltre">
+                            <option value="">Tümü</option>
+                            <option value="aktif">Aktif</option>
+                            <option value="pasif">Pasif</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Belge Filtresi</label>
+                        <select class="form-select form-select-sm" @bind="tedarikciPersonelBelgeFiltre">
+                            <option value="">Tümü</option>
+                            <option value="eksik">Tarihi Girilmemiş</option>
+                            <option value="gecmis">Süresi Geçmiş</option>
+                            <option value="yaklasan">30 Gün İçinde</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex gap-1 align-items-end">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="TedarikciPersonelFiltreleriniTemizle">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (isTabloyukleniyor)
+        {
+            <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+        }
+        else if (belgeTablosu != null)
+        {
+            <div class="card">
+                <div class="card-header py-2">
+                    <span>
+                        <i class="bi bi-person-badge me-1"></i>
+                        Tedarikçi Personel Belge Tablosu
+                        <span class="badge bg-secondary ms-1">@FiltrelenmisTedarikciPersonelTablosu.Count kayıt</span>
+                    </span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered table-hover mb-0 align-middle" style="font-size:0.82rem;">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th>Tedarikçi</th>
+                                    <th>Personel</th>
+                                    <th class="text-center" style="width:40px;">Görev</th>
+                                    <th class="text-center bg-primary bg-opacity-25" style="width:90px;" title="Ehliyet Geçerlilik">Ehliyet</th>
+                                    <th class="text-center bg-info bg-opacity-25" style="width:90px;" title="Kimlik Geçerlilik">Kimlik</th>
+                                    <th class="text-center bg-success bg-opacity-25" style="width:90px;" title="MYK Belgesi">MYK</th>
+                                    <th class="text-center bg-light" style="width:90px;" title="SRC Belgesi">SRC</th>
+                                    <th class="text-center bg-warning bg-opacity-25" style="width:90px;" title="Psikoteknik">Psikoteknik</th>
+                                    <th class="text-center bg-danger bg-opacity-25" style="width:90px;" title="Adli Sicil">Adli Sicil</th>
+                                    <th class="text-center bg-secondary bg-opacity-25" style="width:90px;" title="Sağlık Raporu">Sağlık</th>
+                                    <th class="text-center" style="width:60px;">İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in FiltrelenmisTedarikciPersonelTablosu)
+                                {
+                                    <tr class="@(!item.Aktif ? "table-secondary opacity-75" : "")">
+                                        <td>
+                                            <small>@(item.TasimaTedarikciUnvan ?? "—")</small>
+                                        </td>
+                                        <td>
+                                            <strong>@item.PersonelAdi</strong>
+                                            <br /><small class="text-muted">@item.PersonelKodu</small>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge @GetGorevBadgeClass(item.Gorev)" style="font-size:0.7rem;">@GetGorevAdi(item.Gorev)</span>
+                                        </td>
+                                        <td class="text-center p-1">@BelgeHucre(item, "Ehliyet", item.EhliyetGecerlilik)</td>
+                                        <td class="text-center p-1">@BelgeHucre(item, "Kimlik", item.KimlikGecerlilik)</td>
+                                        <td class="text-center p-1">@BelgeHucre(item, "MykBelgesi", item.MykBelgesiGecerlilik)</td>
+                                        <td class="text-center p-1">@BelgeBoolHucre(item, "SrcBelgesi", item.SrcBelgesiVarMi)</td>
+                                        <td class="text-center p-1">@BelgeHucre(item, "Psikoteknik", item.PsikoteknikGecerlilik)</td>
+                                        <td class="text-center p-1">@BelgeHucre(item, "AdliSicil", item.AdliSicilGecerlilik)</td>
+                                        <td class="text-center p-1">@BelgeHucre(item, "SaglikRaporu", item.SaglikRaporuGecerlilik)</td>
+                                        <td class="text-center p-1">
+                                            <a class="btn btn-xs btn-outline-secondary" href="/personel/ozluk-evrak?soforId=@item.SoforId" title="Özlük Evrak Sayfası">
+                                                <i class="bi bi-folder2-open"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+
+    <!-- Tedarikçi Araçlar Belge Tablosu Sekmesi -->
+    @if (aktifSekme == "tedarikci-arac")
+    {
+        <div class="card mb-3">
+            <div class="card-body py-2">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Tedarikçi Filtresi</label>
+                        <select class="form-select form-select-sm" @bind="tedarikciAracTedarikciFiltre">
+                            <option value="">Tümü</option>
+                            @foreach (var td in tedarikciler)
+                            {
+                                <option value="@td.Id">@td.Unvan</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Araç Ara</label>
+                        <input type="text" class="form-control form-control-sm" @bind="tedarikciAracArama" @bind:event="oninput" placeholder="Plaka, şase, marka/model..." />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Durum</label>
+                        <select class="form-select form-select-sm" @bind="tedarikciAracAktifFiltre">
+                            <option value="">Tümü</option>
+                            <option value="aktif">Aktif</option>
+                            <option value="pasif">Pasif</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Belge Filtresi</label>
+                        <select class="form-select form-select-sm" @bind="tedarikciAracBelgeFiltre">
+                            <option value="">Tümü</option>
+                            <option value="eksik">Tarihi Girilmemiş</option>
+                            <option value="gecmis">Süresi Geçmiş</option>
+                            <option value="yaklasan">30 Gün İçinde</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex gap-1 align-items-end">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="TedarikciAracFiltreleriniTemizle">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (isAracTabloyukleniyor)
+        {
+            <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+        }
+        else if (aracBelgeTablosu != null)
+        {
+            <div class="card">
+                <div class="card-header py-2">
+                    <span>
+                        <i class="bi bi-truck me-1"></i>
+                        Tedarikçi Araçlar Belge Tablosu
+                        <span class="badge bg-secondary ms-1">@FiltrelenmisTedarikciAracTablosu.Count kayıt</span>
+                    </span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered table-hover mb-0 align-middle" style="font-size:0.82rem;">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th>Tedarikçi</th>
+                                    <th>Plaka / Araç</th>
+                                    <th class="text-center" style="width:50px;">Durum</th>
+                                    <th class="text-center" style="width:55px;" title="Ruhsat">Ruhsat</th>
+                                    <th class="text-center" style="width:90px;" title="Trafik Sigortası">Sigorta</th>
+                                    <th class="text-center" style="width:90px;" title="Muayene">Muayene</th>
+                                    <th class="text-center" style="width:90px;" title="Uygunluk Belgesi">Uygunluk</th>
+                                    <th class="text-center" style="width:90px;" title="Koltuk Sigortası">Koltuk Sig.</th>
+                                    <th class="text-center" style="width:90px;" title="Kasko">Kasko</th>
+                                    <th class="text-center" style="width:60px;">İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in FiltrelenmisTedarikciAracTablosu)
+                                {
+                                    <tr class="@(!item.Aktif ? "table-secondary opacity-75" : "")">
+                                        <td>
+                                            <small>@(item.TasimaTedarikciUnvan ?? "—")</small>
+                                        </td>
+                                        <td>
+                                            <strong>@item.Plaka</strong>
+                                            @if (!string.IsNullOrEmpty(item.MarkaModel))
+                                            {
+                                                <br /><small class="text-muted">@item.MarkaModel</small>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @AracBelgeBoolHucre(item.Aktif)
+                                        </td>
+                                        <td class="text-center p-1">@AracBelgeBoolHucre(item.RuhsatVarMi)</td>
+                                        <td class="text-center p-1">@AracBelgeHucre(item, "Sigorta", item.SigortaGecerlilik)</td>
+                                        <td class="text-center p-1">@AracBelgeHucre(item, "Muayene", item.MuayeneGecerlilik)</td>
+                                        <td class="text-center p-1">@AracBelgeHucre(item, "Uygunluk", item.UygunlukGecerlilik)</td>
+                                        <td class="text-center p-1">@AracBelgeHucre(item, "KoltukSigortasi", item.KoltukSigortasiGecerlilik)</td>
+                                        <td class="text-center p-1">@AracBelgeHucre(item, "Kasko", item.KaskoGecerlilik)</td>
+                                        <td class="text-center p-1">
+                                            <a class="btn btn-xs btn-outline-secondary" href="/araclar/@item.AracId" title="Araç Kartı">
+                                                <i class="bi bi-pencil-square"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+
+    <!-- Tarih Düzenleme Modal -->
+    @if (showTarihModal && editItem != null)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color:rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-sm">
+                <div class="modal-content">
+                    <div class="modal-header py-2">
+                        <h6 class="modal-title"><i class="bi bi-pencil me-2"></i>@editBelgeAdi Tarihi</h6>
+                        <button type="button" class="btn-close btn-sm" @onclick="ModalKapat"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-2 small text-muted">@editItem.PersonelAdi</p>
+                        <label class="form-label small">Geçerlilik Bitiş Tarihi</label>
+                        <input type="date" class="form-control form-control-sm"
+                               value="@editTarih?.ToString("yyyy-MM-dd")"
+                               @onchange="(e) => editTarih = e.Value != null && DateTime.TryParse(e.Value.ToString(), out var d) ? d : (DateTime?)null" />
+                        <div class="mt-2">
+                            <button type="button" class="btn btn-sm btn-link text-danger p-0" @onclick="() => editTarih = null">
+                                <i class="bi bi-x-circle me-1"></i>Tarihi Kaldır
+                            </button>
+                        </div>
+                    </div>
+                    <div class="modal-footer py-2">
+                        <button type="button" class="btn btn-sm btn-secondary" @onclick="ModalKapat">İptal</button>
+                        <button type="button" class="btn btn-sm btn-primary" @onclick="TarihKaydet" disabled="@isTarihKaydediliyor">
+                            @if (isTarihKaydediliyor) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                            Kaydet
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Özlük İşlem Modal -->
+    @if (showOzlukModal && ozlukModalItem != null)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color:rgba(0,0,0,0.5);" @onclick="OzlukModalKapat">
+            <div class="modal-dialog modal-lg" @onclick:stopPropagation="true">
+                <div class="modal-content">
+                    <div class="modal-header py-2">
+                        <h6 class="modal-title">
+                            <i class="bi bi-file-earmark-person me-2 text-info"></i>
+                            <strong>@ozlukModalItem.PersonelAdi</strong>
+                            <small class="text-muted ms-2">(@ozlukModalItem.PersonelKodu)</small>
+                        </h6>
+                        <button type="button" class="btn-close btn-sm" @onclick="OzlukModalKapat"></button>
+                    </div>
+                    <div class="modal-body">
+                        @if (isOzlukYukleniyor)
+                        {
+                            <div class="text-center py-3"><div class="spinner-border spinner-border-sm text-info"></div></div>
+                        }
+                        else
+                        {
+                            var modalEvraklar = TabloyaUygunEvraklar(ozlukModalItem);
+                            var modalToplam = modalEvraklar.Count;
+                            var modalYuklenmis = modalEvraklar.Count(e => e.DosyaVar);
+                            <div class="mb-3 d-flex align-items-center gap-2">
+                                <span class="badge bg-primary">@modalYuklenmis / @modalToplam belge yüklü</span>
+                                @if (modalEvraklar.Any(e => e.DosyaVar))
+                                {
+                                    <span class="text-muted small">İndirmek istediğiniz belgeleri seçin</span>
+                                }
+                            </div>
+                            @if (!modalEvraklar.Any(e => e.DosyaVar))
+                            {
+                                <div class="alert alert-warning py-2">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>Bu personele ait yüklenmiş belge bulunmamaktadır.
+                                    <a href="/personel/ozluk-evrak?soforId=@ozlukModalItem.SoforId" class="alert-link ms-1">Belge yüklemek için tıklayın.</a>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width:36px;">
+                                                    <input type="checkbox" class="form-check-input"
+                                                           checked="@modalEvraklar.Where(e => e.DosyaVar).All(e => e.Secili)"
+                                                           @onchange="OzlukModalTumunuSec" />
+                                                </th>
+                                                <th>Belge Adı</th>
+                                                <th style="width:120px;">Dosya</th>
+                                                <th style="width:80px;" class="text-center">İşlem</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var dosya in modalEvraklar)
+                                            {
+                                                <tr class="@(!dosya.DosyaVar ? "text-muted" : "")">
+                                                    <td>
+                                                        @if (dosya.DosyaVar)
+                                                        {
+                                                            <input type="checkbox" class="form-check-input"
+                                                                   checked="@dosya.Secili"
+                                                                   @onchange="(e) => dosya.Secili = (bool)(e.Value ?? false)" />
+                                                        }
+                                                    </td>
+                                                    <td>@dosya.EvrakAdi</td>
+                                                    <td>
+                                                        @if (dosya.DosyaVar)
+                                                        {
+                                                            <span class="badge bg-success"><i class="bi bi-paperclip me-1"></i>Var</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge bg-secondary">Yok</span>
+                                                        }
+                                                    </td>
+                                                    <td class="text-center">
+                                                        @if (dosya.DosyaVar)
+                                                        {
+                                                            <button type="button" class="btn btn-xs btn-outline-primary" title="Önizle"
+                                                                    @onclick="() => OzlukTekDosyaOnizle(dosya)" @onclick:preventDefault="true">
+                                                                <i class="bi bi-eye"></i>
+                                                            </button>
+                                                            <button type="button" class="btn btn-xs btn-outline-dark" title="Yazdır"
+                                                                    @onclick="() => OzlukTekDosyaYazdir(dosya)" @onclick:preventDefault="true">
+                                                                <i class="bi bi-printer"></i>
+                                                            </button>
+                                                            <button type="button" class="btn btn-xs btn-outline-secondary" title="Bu belgeyi indir"
+                                                                    @onclick="() => TekDosyaIndir(dosya)" @onclick:preventDefault="true">
+                                                                <i class="bi bi-download"></i>
+                                                            </button>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                        }
+                    </div>
+                    <div class="modal-footer py-2 gap-2">
+                        @{
+                            var modalFooterEvraklar = TabloyaUygunEvraklar(ozlukModalItem);
+                        }
+                        @if (!isOzlukYukleniyor && modalFooterEvraklar.Any(e => e.DosyaVar))
+                        {
+                            <button type="button" class="btn btn-sm btn-success" @onclick="OzlukSecilenleriIndir" @onclick:preventDefault="true"
+                                    disabled="@(!modalFooterEvraklar.Any(e => e.Secili))">
+                                <i class="bi bi-download me-1"></i>Seçilenleri İndir
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="OzlukSeciliBelgeleriYazdir" @onclick:preventDefault="true"
+                                    disabled="@(!modalFooterEvraklar.Any(e => e.Secili))">
+                                <i class="bi bi-printer me-1"></i>Yazdır
+                            </button>
+                        }
+                        <a class="btn btn-sm btn-outline-info" href="/personel/ozluk-evrak?soforId=@ozlukModalItem.SoforId">
+                            <i class="bi bi-folder2-open me-1"></i>Özlük Sayfası
+                        </a>
+                        <button type="button" class="btn btn-sm btn-secondary" @onclick="OzlukModalKapat">Kapat</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+</div>
+
+@code {
+    private BelgeUyariOzet? uyarilar;
+    private bool isLoading = true;
+    private int gunFiltre = 30;
+    private string kaynakFiltre = "Tumu";
+    private string seviyeFiltre = "Tumu";
+    private string aramaMetni = string.Empty;
+    private string tedarikciFiltre = string.Empty; // "" = Tümü, "-1" = sadece kendi, "<unvan>" = ilgili tedarikçi (Cari veya TasimaTedarikci)
+    private List<TasimaTedarikci> tedarikciler = new();
+
+    private IEnumerable<string> TedarikciUnvanlari => (uyarilar?.TumUyarilar ?? new List<BelgeUyari>())
+        .Where(u => !string.IsNullOrWhiteSpace(u.TasimaTedarikciUnvan))
+        .Select(u => u.TasimaTedarikciUnvan!)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(u => u);
+    private string aktifSekme = "uyarilar";
+
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? TabQuery { get; set; }
+
+    // Belge Tablosu
+    private List<PersonelBelgeTabloKalemi>? belgeTablosu;
+    private bool isTabloyukleniyor = false;
+    private string tabloArama = string.Empty;
+    private string tabloGorevFiltre = string.Empty;
+    private string tabloAktifFiltre = string.Empty;
+    private string tabloBelgeFiltre = string.Empty;
+
+    // Tarih düzenleme modal
+    private bool showTarihModal = false;
+    private PersonelBelgeTabloKalemi? editItem;
+    private string editBelgeAlani = string.Empty;
+    private string editBelgeAdi = string.Empty;
+    private DateTime? editTarih;
+    private bool isTarihKaydediliyor = false;
+
+    // Özlük İşlem modal
+    private bool showOzlukModal = false;
+    private PersonelBelgeTabloKalemi? ozlukModalItem;
+    private bool isOzlukYukleniyor = false;
+
+    private bool FiltreVarMi => kaynakFiltre != "Tumu"
+        || seviyeFiltre != "Tumu"
+        || !string.IsNullOrWhiteSpace(aramaMetni)
+        || !string.IsNullOrWhiteSpace(tedarikciFiltre);
+
+    private List<BelgeUyari> FiltrelenmisPersonelUyarilari => FiltreUygula(
+        (uyarilar?.EhliyetUyarilari ?? new List<BelgeUyari>())
+        .Concat(uyarilar?.MykBelgesiUyarilari ?? new List<BelgeUyari>())
+        .Concat(uyarilar?.YayginEgitimUyarilari ?? new List<BelgeUyari>())
+        .Concat(uyarilar?.PsikoteknikUyarilari ?? new List<BelgeUyari>())
+        .Concat(uyarilar?.SaglikRaporuUyarilari ?? new List<BelgeUyari>())
+        .Concat(uyarilar?.DigerPersonelEvrakUyarilari ?? new List<BelgeUyari>()));
+
+    private List<BelgeUyari> FiltrelenmisAracUyarilari => FiltreUygula(
+        (uyarilar?.MuayeneUyarilari ?? new List<BelgeUyari>())
+        .Concat(uyarilar?.KaskoUyarilari ?? new List<BelgeUyari>())
+        .Concat(uyarilar?.TrafikSigortasiUyarilari ?? new List<BelgeUyari>())
+        .Concat(uyarilar?.DigerAracEvrakUyarilari ?? new List<BelgeUyari>()));
+
+    private List<BelgeUyari> FiltrelenmisTumUyarilar => FiltreUygula(uyarilar?.TumUyarilar ?? new List<BelgeUyari>());
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(TabQuery))
+        {
+            var t = TabQuery.Trim().ToLowerInvariant();
+            if (t == "uyarilar" || t == "tablo" || t == "aractablo"
+                || t == "tedarikci" || t == "tedarikci-personel" || t == "tedarikci-arac")
+            {
+                aktifSekme = t;
+            }
+        }
+        try
+        {
+            tedarikciler = await TasimaTedarikciService.GetAllAsync(sadeceAktif: true);
+        }
+        catch
+        {
+            tedarikciler = new();
+        }
+        await YenileAsync();
+        if (aktifSekme == "tablo")
+        {
+            await SekmeTabloAc();
+        }
+        else if (aktifSekme == "aractablo")
+        {
+            await SekmeAracTabloAc();
+        }
+        else if (aktifSekme == "tedarikci")
+        {
+            await SekmeTedarikciTabloAc();
+        }
+        else if (aktifSekme == "tedarikci-personel")
+        {
+            await SekmeTedarikciPersonelTabloAc();
+        }
+        else if (aktifSekme == "tedarikci-arac")
+        {
+            await SekmeTedarikciAracTabloAc();
+        }
+    }
+
+    private async Task YenileAsync()
+    {
+        isLoading = true;
+        try
+        {
+            uyarilar = await BelgeUyariService.GetBelgeUyarilarAsync(gunFiltre);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ExcelExport()
+    {
+        if (FiltrelenmisTumUyarilar.Any())
+        {
+            var excelBytes = ExcelService.ExportBelgeUyarilari(FiltrelenmisTumUyarilar);
+            var fileName = "BelgeUyarilari_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".xlsx";
+            var base64 = Convert.ToBase64String(excelBytes);
+            await JS.InvokeVoidAsync("downloadFile", fileName, base64, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        }
+    }
+
+    private async Task PdfExport()
+    {
+        if (FiltrelenmisTumUyarilar.Any())
+        {
+            var pdfBytes = PdfService.GenerateBelgeUyariRaporuPdf(FiltrelenmisTumUyarilar);
+            var fileName = "BelgeUyarilari_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".pdf";
+            var base64 = Convert.ToBase64String(pdfBytes);
+            await JS.InvokeVoidAsync("downloadFile", fileName, base64, "application/pdf");
+        }
+    }
+
+    private void FiltreleriTemizle()
+    {
+        kaynakFiltre = "Tumu";
+        seviyeFiltre = "Tumu";
+        aramaMetni = string.Empty;
+        tedarikciFiltre = string.Empty;
+    }
+
+    private void OzetKartaTikla(string seviye)
+    {
+        // Aynı kart tekrar tıklanırsa filtreyi kaldır (Tumu)
+        if (seviyeFiltre == seviye)
+        {
+            seviyeFiltre = "Tumu";
+        }
+        else
+        {
+            seviyeFiltre = seviye;
+        }
+    }
+
+    private int OzetSayim(BelgeUyariSeviye? seviye)
+    {
+        // Seviye filtresi göz ardı edilerek (diğer filtreler korunarak) sayım yap
+        if (uyarilar == null) return 0;
+        var oncekiSeviye = seviyeFiltre;
+        seviyeFiltre = "Tumu";
+        try
+        {
+            var liste = FiltrelenmisTumUyarilar;
+            return seviye.HasValue ? liste.Count(u => u.Seviye == seviye.Value) : liste.Count;
+        }
+        finally
+        {
+            seviyeFiltre = oncekiSeviye;
+        }
+    }
+
+    private List<BelgeUyari> FiltreUygula(IEnumerable<BelgeUyari> kaynak)
+    {
+        return kaynak
+            .Where(u => kaynakFiltre == "Tumu" || u.Kaynak == kaynakFiltre)
+            .Where(u => tedarikciFiltre switch
+            {
+                "" => true,
+                "-1" => string.IsNullOrEmpty(u.TasimaTedarikciUnvan),
+                _ => string.Equals(u.TasimaTedarikciUnvan, tedarikciFiltre, StringComparison.OrdinalIgnoreCase)
+            })
+            .Where(u => seviyeFiltre switch
+            {
+                "Kritik" => u.Seviye == BelgeUyariSeviye.Kritik,
+                "Acil" => u.Seviye == BelgeUyariSeviye.Acil,
+                "Uyari" => u.Seviye == BelgeUyariSeviye.Uyari,
+                _ => true
+            })
+            .Where(u => string.IsNullOrWhiteSpace(aramaMetni)
+                || u.Baslik.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase)
+                || u.BelgeTuru.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase)
+                || u.Kaynak.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase)
+                || (u.TasimaTedarikciUnvan?.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase) ?? false))
+            .OrderBy(u => u.KalanGun)
+            .ThenBy(u => u.Baslik)
+            .ToList();
+    }
+
+    // ─── Belge Tablosu Metodları ────────────────────────────────────────
+
+    private List<PersonelBelgeTabloKalemi> FiltrelenmisBelgeTablosu => (belgeTablosu ?? new())
+        .Where(p => string.IsNullOrWhiteSpace(tabloArama)
+            || p.PersonelAdi.Contains(tabloArama, StringComparison.OrdinalIgnoreCase)
+            || p.PersonelKodu.Contains(tabloArama, StringComparison.OrdinalIgnoreCase))
+        .Where(p => string.IsNullOrWhiteSpace(tabloGorevFiltre) || p.Gorev == tabloGorevFiltre)
+        .Where(p => tabloAktifFiltre switch
+        {
+            "aktif" => p.Aktif,
+            "pasif" => !p.Aktif,
+            _ => true
+        })
+        .Where(p => tabloBelgeFiltre switch
+        {
+            "eksik" => GetEksikBelgeSayisi(p) > 0,
+            "gecmis" => GetTumBelgeTarihleri(p).Any(t => t < DateTime.Today),
+            "yaklasan" => GetTumBelgeTarihleri(p).Any(t => t >= DateTime.Today && (t - DateTime.Today).Days <= 30),
+            _ => true
+        })
+        .ToList();
+
+    private async Task SekmeTabloAc()
+    {
+        aktifSekme = "tablo";
+        await BelgeTabloyuYukle();
+    }
+
+    private async Task BelgeTabloyuYukle()
+    {
+        if (belgeTablosu != null) return;
+        isTabloyukleniyor = true;
+        StateHasChanged();
+        try
+        {
+            belgeTablosu = await BelgeUyariService.GetPersonelBelgeTablosuAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "BelgeTabloyuYukle hatası");
+            ToastService.ShowError($"Belge tablosu yüklenirken hata: {ex.Message}");
+        }
+        finally
+        {
+            isTabloyukleniyor = false;
+            StateHasChanged();
+        }
+    }
+
+    private void TabloFiltreleriniTemizle()
+    {
+        tabloArama = string.Empty;
+        tabloGorevFiltre = string.Empty;
+        tabloAktifFiltre = string.Empty;
+        tabloBelgeFiltre = string.Empty;
+    }
+
+    private void TumunuSecToggle()
+    {
+        if (belgeTablosu == null) return;
+        var tumSecili = FiltrelenmisBelgeTablosu.All(x => x.Secili);
+        foreach (var item in FiltrelenmisBelgeTablosu)
+            item.Secili = !tumSecili;
+    }
+
+    private void TarihDuzenle(PersonelBelgeTabloKalemi item, string alan, string adiGoster, DateTime? mevcutTarih)
+    {
+        editItem = item;
+        editBelgeAlani = alan;
+        editBelgeAdi = adiGoster;
+        editTarih = mevcutTarih;
+        showTarihModal = true;
+    }
+
+    private void ModalKapat()
+    {
+        showTarihModal = false;
+        editItem = null;
+    }
+
+    private async Task TarihKaydet()
+    {
+        if (editItem == null) return;
+        isTarihKaydediliyor = true;
+        try
+        {
+            var ok = await BelgeUyariService.PersonelBelgeTarihGuncelleAsync(editItem.SoforId, editBelgeAlani, editTarih);
+            if (ok)
+            {
+                // Yerel modeli güncelle
+                switch (editBelgeAlani)
+                {
+                    case "Ehliyet": editItem.EhliyetGecerlilik = editTarih; break;
+                    case "Kimlik": editItem.KimlikGecerlilik = editTarih; break;
+                    case "MykBelgesi": editItem.MykBelgesiGecerlilik = editTarih; break;
+                    case "YayginEgitim":
+                        editItem.YayginEgitimGecerlilik = editTarih;
+                        editItem.YayginEgitimSertifikasiVarMi = editTarih.HasValue;
+                        break;
+                    case "Psikoteknik": editItem.PsikoteknikGecerlilik = editTarih; break;
+                    case "AdliSicil": editItem.AdliSicilGecerlilik = editTarih; break;
+                    case "SaglikRaporu": editItem.SaglikRaporuGecerlilik = editTarih; break;
+                    case "SuruculCezaBarkod": editItem.SuruculCezaBarkodGecerlilik = editTarih; break;
+                }
+                ToastService.ShowSuccess($"{editItem.PersonelAdi} – {editBelgeAdi} tarihi güncellendi.");
+                ModalKapat();
+            }
+            else
+            {
+                ToastService.ShowError("Güncelleme başarısız.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+        finally
+        {
+            isTarihKaydediliyor = false;
+        }
+    }
+
+    // ── Özlük İşlem Modal metodları ──────────────────────────────────────────
+    private async Task OzlukIslemAc(PersonelBelgeTabloKalemi item)
+    {
+        ozlukModalItem = item;
+        showOzlukModal = true;
+        isOzlukYukleniyor = true;
+        StateHasChanged();
+        try
+        {
+            var guncel = await BelgeUyariService.GetTekPersonelBelgeAsync(item.SoforId);
+            if (guncel != null)
+            {
+                item.EvrakDosyalari = guncel.EvrakDosyalari;
+                item.ToplamEvrakSayisi = guncel.ToplamEvrakSayisi;
+                item.YuklenmisEvrakSayisi = guncel.YuklenmisEvrakSayisi;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "OzlukIslemAc hatası SoforId={SoforId}", item.SoforId);
+            ToastService.ShowError($"Evrak bilgileri alınamadı: {ex.Message}");
+        }
+        finally
+        {
+            isOzlukYukleniyor = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OzlukModalKapat()
+    {
+        showOzlukModal = false;
+        ozlukModalItem = null;
+    }
+
+    private void OzlukModalTumunuSec(ChangeEventArgs e)
+    {
+        if (ozlukModalItem == null) return;
+        var secili = (bool)(e.Value ?? false);
+        foreach (var d in TabloyaUygunEvraklar(ozlukModalItem).Where(x => x.DosyaVar))
+            d.Secili = secili;
+    }
+
+    // Tablodaki sütunlara karşılık gelen belge tanım adları (özlük evrak tanımıyla eşleşmesi gereken).
+    // Personel listesinde görünen 8 belge (Ehliyet, Kimlik, MYK, Yaygın Eğitim, Psikoteknik, Adli Sicil, Sağlık, Ceza Barkod)
+    // dışındaki tüm özlük evrakları modalda gizlenir.
+    private static readonly string[] TabloBelgeAnahtarlari = new[]
+    {
+        "ehliyet",
+        "kimlik",
+        "myk",
+        "src",
+        "yaygın",
+        "yaygin",
+        "psikoteknik",
+        "adli sicil",
+        "sabıka",
+        "saglik",
+        "sağlık",
+        "ceza",
+        "barkod",
+        "sürücü ceza",
+        "surucu ceza"
+    };
+
+    private static List<OzlukEvrakDosyaBilgisi> TabloyaUygunEvraklar(PersonelBelgeTabloKalemi item)
+    {
+        if (item?.EvrakDosyalari == null) return new List<OzlukEvrakDosyaBilgisi>();
+        return item.EvrakDosyalari
+            .Where(e =>
+            {
+                var ad = (e.EvrakAdi ?? string.Empty).ToLowerInvariant();
+                return TabloBelgeAnahtarlari.Any(k => ad.Contains(k));
+            })
+            .ToList();
+    }
+
+    private async Task TekDosyaIndir(OzlukEvrakDosyaBilgisi dosya)
+    {
+        if (string.IsNullOrEmpty(dosya.DosyaYolu)) return;
+        try
+        {
+            var bytes = await SecureFileService.ReadDecryptedAsync(dosya.DosyaYolu);
+            if (bytes == null || bytes.Length == 0)
+            {
+                ToastService.ShowWarning("Dosya okunamadı veya boş.");
+                return;
+            }
+            var uzanti = GercekUzantiAl(dosya.DosyaYolu);
+            var contentType = MimeTipiAl(uzanti);
+            var ad = !string.IsNullOrWhiteSpace(dosya.DosyaAdi)
+                ? dosya.DosyaAdi!
+                : $"{dosya.EvrakAdi}{uzanti}";
+            await JS.InvokeVoidAsync("downloadFile", ad, Convert.ToBase64String(bytes), contentType);
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"İndirme hatası: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Personel belgesini önizleme modalında açar (mevcut belgeOnizlemeModalAcik altyapısı).
+    /// </summary>
+    private async Task OzlukTekDosyaOnizle(OzlukEvrakDosyaBilgisi dosya)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(dosya.DosyaYolu))
+            {
+                ToastService.ShowWarning("Belge dosya yolu bulunamadı.");
+                return;
+            }
+
+            var bytes = await SecureFileService.ReadDecryptedAsync(dosya.DosyaYolu);
+            if (bytes == null || bytes.Length == 0)
+            {
+                ToastService.ShowWarning("Dosya okunamadı veya boş.");
+                return;
+            }
+
+            var uzanti = GercekUzantiAl(dosya.DosyaYolu);
+            var contentType = MimeTipiAl(uzanti);
+            var ad = !string.IsNullOrWhiteSpace(dosya.DosyaAdi)
+                ? EncExtensionTemizle(dosya.DosyaAdi)
+                : $"{dosya.EvrakAdi}{uzanti}";
+
+            belgeOnizlemeBaslik = ad;
+            belgeOnizlemeDosyaAdi = ad;
+            belgeOnizlemeContentType = contentType;
+            belgeOnizlemeBase64 = Convert.ToBase64String(bytes);
+            belgeOnizlemeDataUrl = $"data:{contentType};base64,{belgeOnizlemeBase64}";
+
+            belgeOnizlemeDestekleniyor =
+                contentType == "application/pdf" ||
+                contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+
+            belgeOnizlemeModalAcik = true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex,
+                "Personel belge önizleme hatası. DosyaYolu={DosyaYolu}, Belge={Belge}",
+                dosya.DosyaYolu, dosya.EvrakAdi);
+            ToastService.ShowError("Belge önizlenemedi. Dosya şifresi çözülemedi veya dosya bulunamadı.");
+        }
+    }
+
+    /// <summary>
+    /// Personel belgesini doğrudan yazdırma penceresinde açar.
+    /// </summary>
+    private async Task OzlukTekDosyaYazdir(OzlukEvrakDosyaBilgisi dosya)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(dosya.DosyaYolu))
+            {
+                ToastService.ShowWarning("Belge dosya yolu bulunamadı.");
+                return;
+            }
+
+            var bytes = await SecureFileService.ReadDecryptedAsync(dosya.DosyaYolu);
+            if (bytes == null || bytes.Length == 0)
+            {
+                ToastService.ShowWarning("Dosya okunamadı veya boş.");
+                return;
+            }
+
+            var uzanti = GercekUzantiAl(dosya.DosyaYolu);
+            var contentType = MimeTipiAl(uzanti);
+            var base64 = Convert.ToBase64String(bytes);
+
+            var destekleniyor =
+                contentType == "application/pdf" ||
+                contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+
+            if (!destekleniyor)
+            {
+                ToastService.ShowWarning($"Bu dosya türü ({uzanti}) için yazdırma desteklenmiyor. Dosyayı indirip yazdırabilirsiniz.");
+                return;
+            }
+
+            await JS.InvokeVoidAsync("printBase64File", base64, contentType);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex,
+                "Personel belge yazdırma hatası. DosyaYolu={DosyaYolu}, Belge={Belge}",
+                dosya.DosyaYolu, dosya.EvrakAdi);
+            ToastService.ShowError($"Yazdırma hatası: {ex.Message}");
+        }
+    }
+
+    private async Task OzlukSecilenleriIndir()
+    {
+        if (ozlukModalItem == null) return;
+        var seciliDosyalar = ozlukModalItem.EvrakDosyalari.Where(d => d.Secili && d.DosyaVar).ToList();
+        if (!seciliDosyalar.Any()) { ToastService.ShowWarning("Lütfen belge seçin."); return; }
+        try
+        {
+            var seciliYollar = seciliDosyalar.Select(d => d.DosyaYolu!).ToList();
+            var zipBytes = await BelgeUyariService.SeciliPersonelBelgelerZipAsync(
+                new List<int> { ozlukModalItem.SoforId }, seciliYollar);
+            if (zipBytes.Length == 0) { ToastService.ShowWarning("İndirilebilecek belge bulunamadı."); return; }
+            var dosyaAdi = seciliDosyalar.Count == 1
+                ? (seciliDosyalar[0].DosyaAdi ?? $"{seciliDosyalar[0].EvrakAdi}{GercekUzantiAl(seciliDosyalar[0].DosyaYolu)}") 
+                : $"{ozlukModalItem.PersonelKodu}_Belgeler_{DateTime.Now:yyyyMMdd_HHmm}.zip";
+            var contentType = seciliDosyalar.Count == 1
+                ? MimeTipiAl(GercekUzantiAl(seciliDosyalar[0].DosyaYolu))
+                : "application/zip";
+            await JS.InvokeVoidAsync("downloadFile", dosyaAdi, Convert.ToBase64String(zipBytes), contentType);
+            ToastService.ShowSuccess($"{seciliDosyalar.Count} belge indirildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"İndirme hatası: {ex.Message}");
+        }
+    }
+
+    private async Task OzlukSeciliBelgeleriYazdir()
+    {
+        if (ozlukModalItem == null) return;
+        var seciliDosyalar = ozlukModalItem.EvrakDosyalari
+            .Where(d => d.Secili && d.DosyaVar)
+            .ToList();
+
+        if (!seciliDosyalar.Any())
+        {
+            ToastService.ShowWarning("Lütfen yazdırmak istediğiniz belgeleri seçin.");
+            return;
+        }
+
+        try
+        {
+            var items = new List<object>();
+            foreach (var dosya in seciliDosyalar)
+            {
+                if (string.IsNullOrEmpty(dosya.DosyaYolu)) continue;
+                var bytes = await SecureFileService.ReadDecryptedAsync(dosya.DosyaYolu);
+                if (bytes == null || bytes.Length == 0) continue;
+
+                var uzanti = GercekUzantiAl(dosya.DosyaYolu);
+                var mime = MimeTipiAl(uzanti);
+                var ad = !string.IsNullOrWhiteSpace(dosya.DosyaAdi)
+                    ? dosya.DosyaAdi!
+                    : $"{dosya.EvrakAdi}{uzanti}";
+
+                items.Add(new
+                {
+                    name = ad,
+                    base64 = Convert.ToBase64String(bytes),
+                    mime = mime
+                });
+            }
+
+            if (items.Count == 0)
+            {
+                ToastService.ShowWarning("Yazdırılabilecek belge bulunamadı.");
+                return;
+            }
+
+            await JS.InvokeVoidAsync("printDocumentFiles", items);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Belge yazdırma hatası SoforId={SoforId}", ozlukModalItem.SoforId);
+            ToastService.ShowError($"Yazdırma hatası: {ex.Message}");
+        }
+    }
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private async Task SeciliPersonellerinBelgeleriniIndir()
+    {
+        if (belgeTablosu == null) return;
+        var secili = belgeTablosu.Where(x => x.Secili).ToList();
+        if (!secili.Any()) { ToastService.ShowWarning("Lütfen en az bir personel seçin."); return; }
+
+        var dosyasiOlanlar = secili.Where(p => p.YuklenmisEvrakSayisi > 0).ToList();
+        if (!dosyasiOlanlar.Any())
+        {
+            ToastService.ShowWarning("Seçili personellerin yüklenmiş belgesi bulunmamaktadır.");
+            return;
+        }
+
+        try
+        {
+            var idler = dosyasiOlanlar.Select(p => p.SoforId).ToList();
+            var zipBytes = await BelgeUyariService.SeciliPersonelBelgelerZipAsync(idler);
+            if (zipBytes.Length == 0)
+            {
+                ToastService.ShowWarning("İndirilebilecek belge bulunamadı.");
+                return;
+            }
+            var dosyaAdi = $"PersonelBelgeler_{DateTime.Now:yyyyMMdd_HHmm}.zip";
+            await JS.InvokeVoidAsync("downloadFile", dosyaAdi, Convert.ToBase64String(zipBytes), "application/zip");
+            ToastService.ShowSuccess($"{dosyasiOlanlar.Count} personelin belgeleri ZIP olarak indirildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"İndirme hatası: {ex.Message}");
+        }
+    }
+
+    private async Task TabloExcelAktar()
+    {
+        var liste = FiltrelenmisBelgeTablosu;
+        if (!liste.Any()) return;
+        // Tüm filtrelenmiş listeyi indirme için seç ve indir
+        foreach (var x in liste) x.Secili = true;
+        await SeciliPersonellerinBelgeleriniIndir();
+        foreach (var x in liste) x.Secili = false;
+    }
+
+    private async Task TabloYazdir()
+    {
+        await JS.InvokeVoidAsync("window.print");
+    }
+
+    private static IEnumerable<DateTime> GetTumBelgeTarihleri(PersonelBelgeTabloKalemi p)
+    {
+        DateTime?[] list = [p.EhliyetGecerlilik, p.KimlikGecerlilik, p.MykBelgesiGecerlilik,
+            p.PsikoteknikGecerlilik, p.AdliSicilGecerlilik, p.SaglikRaporuGecerlilik, p.SuruculCezaBarkodGecerlilik];
+        return list.Where(d => d.HasValue).Select(d => d!.Value);
+    }
+
+    private static int GetEksikBelgeSayisi(PersonelBelgeTabloKalemi p)
+    {
+        DateTime?[] list = [p.EhliyetGecerlilik, p.KimlikGecerlilik, p.MykBelgesiGecerlilik,
+            p.PsikoteknikGecerlilik, p.AdliSicilGecerlilik, p.SaglikRaporuGecerlilik, p.SuruculCezaBarkodGecerlilik];
+        return list.Count(d => !d.HasValue);
+    }
+
+    private static string GetGorevAdi(string gorev) => gorev switch
+    {
+        "Sofor" => "Şoför",
+        "OfisCalisani" => "Ofis",
+        "Muhasebe" => "Muhasebe",
+        "Yonetici" => "Yönetici",
+        "Teknik" => "Teknik",
+        "Diger" => "Diğer",
+        _ => gorev
+    };
+
+    private static string GetGorevAdi(PersonelGorev gorev) => gorev switch
+    {
+        PersonelGorev.Sofor => "Şoför",
+        PersonelGorev.OfisCalisani => "Ofis",
+        PersonelGorev.Muhasebe => "Muhasebe",
+        PersonelGorev.Yonetici => "Yönetici",
+        PersonelGorev.Teknik => "Teknik",
+        PersonelGorev.Diger => "Diğer",
+        _ => gorev.ToString()
+    };
+
+    /// <summary>
+    /// Saklanan dosya yolundaki '.enc' uzantısını kaldırır, gerçek (örn. .pdf, .jpg) uzantıyı döndürür.
+    /// </summary>
+    private static string GercekUzantiAl(string? dosyaYolu)
+    {
+        if (string.IsNullOrWhiteSpace(dosyaYolu)) return string.Empty;
+        var ad = Path.GetFileName(dosyaYolu);
+        if (ad.EndsWith(".enc", StringComparison.OrdinalIgnoreCase))
+            ad = ad.Substring(0, ad.Length - 4);
+        return Path.GetExtension(ad).ToLowerInvariant();
+    }
+
+    private static string MimeTipiAl(string uzanti) => uzanti.ToLowerInvariant() switch
+    {
+        ".pdf" => "application/pdf",
+        ".jpg" or ".jpeg" => "image/jpeg",
+        ".png" => "image/png",
+        ".gif" => "image/gif",
+        ".bmp" => "image/bmp",
+        ".webp" => "image/webp",
+        ".tif" or ".tiff" => "image/tiff",
+        ".doc" => "application/msword",
+        ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".xls" => "application/vnd.ms-excel",
+        ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".txt" => "text/plain",
+        _ => "application/octet-stream"
+    };
+
+    private static string GetGorevBadgeClass(string gorev) => gorev switch
+    {
+        "Sofor" => "bg-primary",
+        "OfisCalisani" => "bg-info",
+        "Muhasebe" => "bg-success",
+        "Yonetici" => "bg-warning text-dark",
+        "Teknik" => "bg-secondary",
+        _ => "bg-dark"
+    };
+
+    // ─── Araç Belge Tablosu ────────────────────────────────────────────
+    private List<AracBelgeTabloKalemi>? aracBelgeTablosu;
+    private bool isAracTabloyukleniyor = false;
+    private string aracTabloArama = string.Empty;
+    private string aracTabloTipFiltre = string.Empty;
+    private string aracTabloAktifFiltre = string.Empty;
+    private string aracTabloBelgeFiltre = string.Empty;
+
+    private bool showAracTarihModal = false;
+    private AracBelgeTabloKalemi? editAracItem;
+    private string editAracBelgeAlani = string.Empty;
+    private string editAracBelgeAdi = string.Empty;
+    private DateTime? editAracTarih;
+    private bool isAracTarihKaydediliyor = false;
+
+    private bool showAracBelgeModal = false;
+    private AracBelgeTabloKalemi? aracBelgeModalItem;
+
+    // Araç belge önizleme state
+    private bool belgeOnizlemeModalAcik;
+    private string? belgeOnizlemeBaslik;
+    private string? belgeOnizlemeContentType;
+    private string? belgeOnizlemeBase64;
+    private string? belgeOnizlemeDataUrl;
+    private string? belgeOnizlemeDosyaAdi;
+    private bool belgeOnizlemeDestekleniyor;
+
+    private List<AracBelgeTabloKalemi> FiltrelenmisAracBelgeTablosu => (aracBelgeTablosu ?? new())
+        .Where(p => p.SahiplikTipi != AracSahiplikTipi.Tedarikci)
+        .Where(p => string.IsNullOrWhiteSpace(aracTabloArama)
+            || (p.Plaka ?? string.Empty).Contains(aracTabloArama, StringComparison.OrdinalIgnoreCase)
+            || (p.SaseNo ?? string.Empty).Contains(aracTabloArama, StringComparison.OrdinalIgnoreCase)
+            || (p.MarkaModel ?? string.Empty).Contains(aracTabloArama, StringComparison.OrdinalIgnoreCase))
+        .Where(p => string.IsNullOrWhiteSpace(aracTabloTipFiltre) || p.AracTipi.ToString() == aracTabloTipFiltre)
+        .Where(p => aracTabloAktifFiltre switch
+        {
+            "aktif" => p.Aktif,
+            "pasif" => !p.Aktif,
+            _ => true
+        })
+        .Where(p => aracTabloBelgeFiltre switch
+        {
+            "eksik" => GetEksikAracBelgeSayisi(p) > 0,
+            "gecmis" => GetTumAracBelgeTarihleri(p).Any(t => t < DateTime.Today),
+            "yaklasan" => GetTumAracBelgeTarihleri(p).Any(t => t >= DateTime.Today && (t - DateTime.Today).Days <= 30),
+            _ => true
+        })
+        .ToList();
+
+    private async Task SekmeAracTabloAc()
+    {
+        aktifSekme = "aractablo";
+        await AracBelgeTabloyuYukle();
+    }
+
+    private async Task AracBelgeTabloyuYukle(bool zorla = false)
+    {
+        if (aracBelgeTablosu != null && !zorla) return;
+        isAracTabloyukleniyor = true;
+        StateHasChanged();
+        try
+        {
+            aracBelgeTablosu = await BelgeUyariService.GetAracBelgeTablosuAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "AracBelgeTabloyuYukle hatası");
+            ToastService.ShowError($"Araç belge tablosu yüklenirken hata: {ex.Message}");
+        }
+        finally
+        {
+            isAracTabloyukleniyor = false;
+            StateHasChanged();
+        }
+    }
+
+    private void AracTabloFiltreleriniTemizle()
+    {
+        aracTabloArama = string.Empty;
+        aracTabloTipFiltre = string.Empty;
+        aracTabloAktifFiltre = string.Empty;
+        aracTabloBelgeFiltre = string.Empty;
+    }
+
+    private void AracTumunuSecToggle()
+    {
+        if (aracBelgeTablosu == null) return;
+        var tumSecili = FiltrelenmisAracBelgeTablosu.All(x => x.Secili);
+        foreach (var item in FiltrelenmisAracBelgeTablosu)
+            item.Secili = !tumSecili;
+    }
+
+    private void AracTarihDuzenle(AracBelgeTabloKalemi item, string alan, string adiGoster, DateTime? mevcutTarih)
+    {
+        editAracItem = item;
+        editAracBelgeAlani = alan;
+        editAracBelgeAdi = adiGoster;
+        editAracTarih = mevcutTarih;
+        showAracTarihModal = true;
+    }
+
+    private void AracModalKapat()
+    {
+        showAracTarihModal = false;
+        editAracItem = null;
+    }
+
+    private async Task AracTarihKaydet()
+    {
+        if (editAracItem == null) return;
+        isAracTarihKaydediliyor = true;
+        try
+        {
+            var ok = await BelgeUyariService.AracBelgeTarihGuncelleAsync(editAracItem.AracId, editAracBelgeAlani, editAracTarih);
+            if (ok)
+            {
+                switch (editAracBelgeAlani)
+                {
+                    case "Sigorta": editAracItem.SigortaGecerlilik = editAracTarih; break;
+                    case "Muayene": editAracItem.MuayeneGecerlilik = editAracTarih; break;
+                    case "Uygunluk": editAracItem.UygunlukGecerlilik = editAracTarih; break;
+                    case "KoltukSigortasi": editAracItem.KoltukSigortasiGecerlilik = editAracTarih; break;
+                    case "Kasko": editAracItem.KaskoGecerlilik = editAracTarih; break;
+                }
+                ToastService.ShowSuccess($"{editAracItem.Plaka} – {editAracBelgeAdi} tarihi güncellendi.");
+                AracModalKapat();
+            }
+            else
+            {
+                ToastService.ShowError("Güncelleme başarısız.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+        finally
+        {
+            isAracTarihKaydediliyor = false;
+        }
+    }
+
+    private async Task AracBelgeIslemAc(AracBelgeTabloKalemi item)
+    {
+        aracBelgeModalItem = item;
+        showAracBelgeModal = true;
+        try
+        {
+            var guncel = await BelgeUyariService.GetTekAracBelgeAsync(item.AracId);
+            if (guncel != null)
+            {
+                item.EvrakDosyalari = guncel.EvrakDosyalari;
+                item.ToplamEvrakSayisi = guncel.ToplamEvrakSayisi;
+                item.YuklenmisEvrakSayisi = guncel.YuklenmisEvrakSayisi;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "AracBelgeIslemAc hatası AracId={AracId}", item.AracId);
+            ToastService.ShowError($"Belge bilgileri alınamadı: {ex.Message}");
+        }
+        finally
+        {
+            StateHasChanged();
+        }
+    }
+
+    // ── Araç belge önizleme / yazdırma ──────────────────────────────────
+
+    private async Task AracBelgeOnizle(AracEvrakDosyaBilgisi dosya)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(dosya.DosyaYolu))
+            {
+                ToastService.ShowWarning("Belge dosya yolu bulunamadı.");
+                return;
+            }
+
+            var bytes = await SecureFileService.ReadDecryptedAsync(dosya.DosyaYolu);
+            if (bytes == null || bytes.Length == 0)
+            {
+                ToastService.ShowWarning("Dosya okunamadı veya boş.");
+                return;
+            }
+
+            var uzanti = GercekUzantiAl(dosya.DosyaYolu);
+            var contentType = MimeTipiAl(uzanti);
+            var ad = !string.IsNullOrWhiteSpace(dosya.DosyaAdi)
+                ? EncExtensionTemizle(dosya.DosyaAdi)
+                : $"{(string.IsNullOrWhiteSpace(dosya.EvrakAdi) ? dosya.EvrakKategorisi : dosya.EvrakAdi)}{uzanti}";
+
+            belgeOnizlemeBaslik = ad;
+            belgeOnizlemeDosyaAdi = ad;
+            belgeOnizlemeContentType = contentType;
+            belgeOnizlemeBase64 = Convert.ToBase64String(bytes);
+            belgeOnizlemeDataUrl = $"data:{contentType};base64,{belgeOnizlemeBase64}";
+
+            belgeOnizlemeDestekleniyor =
+                contentType == "application/pdf" ||
+                contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+
+            belgeOnizlemeModalAcik = true;
+
+            Logger.LogInformation(
+                "Araç belge önizleniyor. Belge={Belge}, DosyaAdi={DosyaAdi}, ContentType={ContentType}",
+                dosya.EvrakAdi ?? dosya.EvrakKategorisi, ad, contentType);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex,
+                "Araç belge önizleme hatası. DosyaYolu={DosyaYolu}, Belge={Belge}",
+                dosya.DosyaYolu, dosya.EvrakAdi ?? dosya.EvrakKategorisi);
+            ToastService.ShowError("Belge önizlenemedi. Dosya şifresi çözülemedi veya dosya bulunamadı.");
+        }
+    }
+
+    private async Task AracBelgeYazdir(AracEvrakDosyaBilgisi dosya)
+    {
+        await AracBelgeOnizle(dosya);
+    }
+
+    private async Task BelgeOnizlenenDosyayiIndir()
+    {
+        if (string.IsNullOrWhiteSpace(belgeOnizlemeBase64) ||
+            string.IsNullOrWhiteSpace(belgeOnizlemeDosyaAdi) ||
+            string.IsNullOrWhiteSpace(belgeOnizlemeContentType))
+            return;
+
+        await JS.InvokeVoidAsync(
+            "downloadFileFromBase64",
+            belgeOnizlemeDosyaAdi,
+            belgeOnizlemeBase64,
+            belgeOnizlemeContentType);
+    }
+
+    private async Task BelgeOnizlenenDosyayiYazdir()
+    {
+        if (string.IsNullOrWhiteSpace(belgeOnizlemeBase64) ||
+            string.IsNullOrWhiteSpace(belgeOnizlemeContentType))
+            return;
+
+        if (!belgeOnizlemeDestekleniyor)
+        {
+            ToastService.ShowWarning("Bu belge türü yazdırma için desteklenmiyor.");
+            return;
+        }
+
+        await JS.InvokeVoidAsync(
+            "printBase64File",
+            belgeOnizlemeBase64,
+            belgeOnizlemeContentType);
+    }
+
+    private void BelgeOnizlemeKapat()
+    {
+        belgeOnizlemeModalAcik = false;
+        belgeOnizlemeBaslik = null;
+        belgeOnizlemeContentType = null;
+        belgeOnizlemeBase64 = null;
+        belgeOnizlemeDataUrl = null;
+        belgeOnizlemeDosyaAdi = null;
+        belgeOnizlemeDestekleniyor = false;
+    }
+
+    private static string EncExtensionTemizle(string? fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+            return "belge.pdf";
+
+        while (fileName.EndsWith(".enc", StringComparison.OrdinalIgnoreCase))
+            fileName = fileName[..^4];
+
+        return fileName;
+    }
+
+    private void AracBelgeModalKapat()
+    {
+        showAracBelgeModal = false;
+        aracBelgeModalItem = null;
+    }
+
+    private void AracBelgeModalTumunuSec(ChangeEventArgs e)
+    {
+        if (aracBelgeModalItem == null) return;
+        var secili = (bool)(e.Value ?? false);
+        foreach (var d in aracBelgeModalItem.EvrakDosyalari.Where(x => x.DosyaVar))
+            d.Secili = secili;
+    }
+
+    private async Task AracTekDosyaIndir(AracEvrakDosyaBilgisi dosya)
+    {
+        if (string.IsNullOrEmpty(dosya.DosyaYolu)) return;
+        try
+        {
+            var bytes = await SecureFileService.ReadDecryptedAsync(dosya.DosyaYolu);
+            if (bytes == null || bytes.Length == 0)
+            {
+                ToastService.ShowWarning("Dosya okunamadı veya boş.");
+                return;
+            }
+            var uzanti = GercekUzantiAl(dosya.DosyaYolu);
+            var contentType = MimeTipiAl(uzanti);
+            var ad = !string.IsNullOrWhiteSpace(dosya.DosyaAdi)
+                ? dosya.DosyaAdi!
+                : $"{(string.IsNullOrWhiteSpace(dosya.EvrakAdi) ? dosya.EvrakKategorisi : dosya.EvrakAdi)}{uzanti}";
+            await JS.InvokeVoidAsync("downloadFile", ad, Convert.ToBase64String(bytes), contentType);
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"İndirme hatası: {ex.Message}");
+        }
+    }
+
+    private async Task AracBelgeSecilenleriIndir()
+    {
+        if (aracBelgeModalItem == null) return;
+        var seciliDosyalar = aracBelgeModalItem.EvrakDosyalari.Where(d => d.Secili && d.DosyaVar).ToList();
+        if (!seciliDosyalar.Any()) { ToastService.ShowWarning("Lütfen belge seçin."); return; }
+        try
+        {
+            var seciliYollar = seciliDosyalar.Select(d => d.DosyaYolu!).ToList();
+            var zipBytes = await BelgeUyariService.SeciliAracBelgelerZipAsync(
+                new List<int> { aracBelgeModalItem.AracId }, seciliYollar);
+            if (zipBytes.Length == 0) { ToastService.ShowWarning("İndirilebilecek belge bulunamadı."); return; }
+            var aracKod = string.IsNullOrEmpty(aracBelgeModalItem.Plaka) ? aracBelgeModalItem.SaseNo : aracBelgeModalItem.Plaka;
+            var dosyaAdi = seciliDosyalar.Count == 1
+                ? (seciliDosyalar[0].DosyaAdi ?? $"{seciliDosyalar[0].EvrakKategorisi}{GercekUzantiAl(seciliDosyalar[0].DosyaYolu)}")
+                : $"{aracKod}_Belgeler_{DateTime.Now:yyyyMMdd_HHmm}.zip";
+            var contentType = seciliDosyalar.Count == 1
+                ? MimeTipiAl(GercekUzantiAl(seciliDosyalar[0].DosyaYolu))
+                : "application/zip";
+            await JS.InvokeVoidAsync("downloadFile", dosyaAdi, Convert.ToBase64String(zipBytes), contentType);
+            ToastService.ShowSuccess($"{seciliDosyalar.Count} belge indirildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"İndirme hatası: {ex.Message}");
+        }
+    }
+
+    private async Task SeciliAraclarinBelgeleriniIndir()
+    {
+        if (aracBelgeTablosu == null) return;
+        var secili = aracBelgeTablosu.Where(x => x.Secili).ToList();
+        if (!secili.Any()) { ToastService.ShowWarning("Lütfen en az bir araç seçin."); return; }
+
+        var dosyasiOlanlar = secili.Where(p => p.YuklenmisEvrakSayisi > 0).ToList();
+        if (!dosyasiOlanlar.Any())
+        {
+            ToastService.ShowWarning("Seçili araçların yüklenmiş belgesi bulunmamaktadır.");
+            return;
+        }
+        try
+        {
+            var idler = dosyasiOlanlar.Select(p => p.AracId).ToList();
+            var zipBytes = await BelgeUyariService.SeciliAracBelgelerZipAsync(idler);
+            if (zipBytes.Length == 0)
+            {
+                ToastService.ShowWarning("İndirilebilecek belge bulunamadı.");
+                return;
+            }
+            var dosyaAdi = $"AracBelgeler_{DateTime.Now:yyyyMMdd_HHmm}.zip";
+            await JS.InvokeVoidAsync("downloadFile", dosyaAdi, Convert.ToBase64String(zipBytes), "application/zip");
+            ToastService.ShowSuccess($"{dosyasiOlanlar.Count} aracın belgeleri ZIP olarak indirildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"İndirme hatası: {ex.Message}");
+        }
+    }
+
+    private async Task AracTabloYazdir()
+    {
+        await JS.InvokeVoidAsync("window.print");
+    }
+
+    private static IEnumerable<DateTime> GetTumAracBelgeTarihleri(AracBelgeTabloKalemi p)
+    {
+        DateTime?[] list = [p.SigortaGecerlilik, p.MuayeneGecerlilik,
+            p.UygunlukGecerlilik, p.KoltukSigortasiGecerlilik, p.KaskoGecerlilik];
+        return list.Where(d => d.HasValue).Select(d => d!.Value);
+    }
+
+    private static int GetEksikAracBelgeSayisi(AracBelgeTabloKalemi p)
+    {
+        DateTime?[] list = [p.SigortaGecerlilik, p.MuayeneGecerlilik,
+            p.UygunlukGecerlilik, p.KoltukSigortasiGecerlilik, p.KaskoGecerlilik];
+        return list.Count(d => !d.HasValue);
+    }
+
+    private static string GetAracBelgeAdi(string alan) => alan switch
+    {
+        "Sigorta" => "Trafik Sigortası",
+        "Muayene" => "Muayene",
+        "Uygunluk" => "Uygunluk Belgesi",
+        "KoltukSigortasi" => "Koltuk Sigortası",
+        "Kasko" => "Kasko",
+        _ => alan
+    };
+
+    private RenderFragment AracBelgeBoolHucre(bool deger) => builder =>
+    {
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", deger ? "badge bg-success" : "badge bg-secondary");
+        builder.AddContent(2, deger ? "Var" : "Yok");
+        builder.CloseElement();
+    };
+
+    private RenderFragment AracBelgeHucre(AracBelgeTabloKalemi item, string alan, DateTime? tarih) => builder =>
+    {
+        var cls = AracBelgeTabloKalemi.BelgeDurumClass(tarih);
+        var txt = AracBelgeTabloKalemi.BelgeDurumMetin(tarih);
+        builder.OpenElement(0, "button");
+        builder.AddAttribute(1, "class", $"badge {cls} border-0 w-100");
+        builder.AddAttribute(2, "style", "cursor:pointer;font-size:0.75rem;");
+        builder.AddAttribute(3, "title", $"Düzenle: {GetAracBelgeAdi(alan)}");
+        builder.AddAttribute(4, "type", "button");
+        builder.AddAttribute(5, "onclick", EventCallback.Factory.Create(this, () =>
+            AracTarihDuzenle(item, alan, GetAracBelgeAdi(alan), tarih)));
+        builder.AddContent(6, txt);
+        builder.CloseElement();
+    };
+
+    private RenderFragment BelgeCelHtml(PersonelBelgeTabloKalemi item, string alan, DateTime? tarih) => builder =>
+    {
+        var cls = PersonelBelgeTabloKalemi.BelgeDurumClass(tarih);
+        var txt = PersonelBelgeTabloKalemi.BelgeDurumMetin(tarih);
+        builder.OpenElement(0, "button");
+        builder.AddAttribute(1, "class", $"badge {cls} border-0 w-100");
+        builder.AddAttribute(2, "style", "cursor:pointer;font-size:0.75rem;");
+        builder.AddAttribute(3, "title", $"Düzenle: {alan}");
+        builder.AddAttribute(4, "type", "button");
+        builder.AddAttribute(5, "onclick", EventCallback.Factory.Create(this, () =>
+            TarihDuzenle(item, alan, GetBelgeAdi(alan), tarih)));
+        builder.AddContent(6, txt);
+        builder.CloseElement();
+    };
+
+    /// <summary>
+    /// Bool (var/yok) badge render eder – tarih yerine Evet/Hayır gösterir.
+    /// </summary>
+    private RenderFragment BelgeBoolHucre(PersonelBelgeTabloKalemi item, string alan, bool deger) => builder =>
+    {
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", deger ? "badge bg-success" : "badge bg-secondary");
+        builder.AddContent(2, deger ? "Evet" : "Hayır");
+        builder.CloseElement();
+    };
+
+    /// <summary>
+    /// Tarih badge'i + dosya yükleme/indir ikonunu birlikte render eder.
+    /// Personel ID + alan adıyla ilişkili özlük evrak dosyasını bulur.
+    /// </summary>
+    private RenderFragment BelgeHucre(PersonelBelgeTabloKalemi item, string alan, DateTime? tarih) => builder =>
+    {
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "d-flex flex-column align-items-stretch gap-1");
+
+        // 1) Tarih badge (mevcut işlevi koru)
+        builder.AddContent(2, BelgeCelHtml(item, alan, tarih));
+
+        // 2) Dosya satırı: yüklü ise indir + tekrar yükle, değilse yükle butonu
+        var dosyaYolu = BelgeAlaniDosyaYoluAl(item, alan);
+        var inputId = $"upl_{item.SoforId}_{alan}";
+
+        builder.OpenElement(10, "div");
+        builder.AddAttribute(11, "class", "d-flex justify-content-center gap-1");
+
+        if (!string.IsNullOrEmpty(dosyaYolu))
+        {
+            // İndir butonu
+            builder.OpenElement(20, "button");
+            builder.AddAttribute(21, "type", "button");
+            builder.AddAttribute(22, "class", "btn btn-xs btn-outline-success p-0 px-1");
+            builder.AddAttribute(23, "title", $"{GetBelgeAdi(alan)} dosyasını indir");
+            builder.AddAttribute(24, "onclick", EventCallback.Factory.Create(this, () =>
+                BelgeAlaniDosyaIndir(item, alan)));
+            builder.OpenElement(25, "i");
+            builder.AddAttribute(26, "class", "bi bi-download");
+            builder.AddAttribute(27, "style", "font-size:0.7rem;");
+            builder.CloseElement();
+            builder.CloseElement();
+        }
+
+        // Yükle (her durumda - yüklüyse de değiştirilebilsin)
+        builder.OpenElement(30, "label");
+        builder.AddAttribute(31, "for", inputId);
+        builder.AddAttribute(32, "class", string.IsNullOrEmpty(dosyaYolu)
+            ? "btn btn-xs btn-outline-primary p-0 px-1 mb-0"
+            : "btn btn-xs btn-outline-secondary p-0 px-1 mb-0");
+        builder.AddAttribute(33, "style", "cursor:pointer;");
+        builder.AddAttribute(34, "title", string.IsNullOrEmpty(dosyaYolu) ? "Dosya yükle" : "Dosyayı değiştir");
+        builder.OpenElement(35, "i");
+        builder.AddAttribute(36, "class", string.IsNullOrEmpty(dosyaYolu) ? "bi bi-upload" : "bi bi-arrow-repeat");
+        builder.AddAttribute(37, "style", "font-size:0.7rem;");
+        builder.CloseElement();
+        builder.CloseElement();
+
+        // Gizli InputFile
+        builder.OpenComponent<InputFile>(40);
+        builder.AddAttribute(41, "id", inputId);
+        builder.AddAttribute(42, "class", "d-none");
+        builder.AddAttribute(43, "OnChange", EventCallback.Factory.Create<InputFileChangeEventArgs>(this, e =>
+            BelgeAlaniDosyaYukle(item, alan, e)));
+        builder.CloseComponent();
+
+        builder.CloseElement(); // d-flex
+        builder.CloseElement(); // outer div
+    };
+
+    private static string? BelgeAlaniDosyaYoluAl(PersonelBelgeTabloKalemi item, string alan)
+    {
+        if (item.EvrakDosyalari == null || item.EvrakDosyalari.Count == 0) return null;
+        var keys = alan switch
+        {
+            "Ehliyet" => new[] { "Ehliyet" },
+            "Kimlik" => new[] { "Kimlik Fotokopisi", "Nüfus Cüzdanı" },
+            "MykBelgesi" => new[] { "MYK", "Mesleki Yeterlilik", "SRC" },
+            "SrcBelgesi" => new[] { "SRC" },
+            "YayginEgitim" => new[] { "Yaygın Eğitim", "Yaygin Egitim", "Yaygın Eğitim Sertifikası", "Yaygin Egitim Sertifikasi", "SRC" },
+            "Psikoteknik" => new[] { "Psikoteknik" },
+            "AdliSicil" => new[] { "Adli Sicil", "Sabıka" },
+            "SaglikRaporu" => new[] { "Sağlık Rapor", "Saglik Rapor" },
+            "SuruculCezaBarkod" => new[] { "Sürücü Ceza", "Ceza Barkod" },
+            _ => Array.Empty<string>()
+        };
+        var dosya = item.EvrakDosyalari.FirstOrDefault(d =>
+            keys.Any(k => d.EvrakAdi.Contains(k, StringComparison.OrdinalIgnoreCase))
+            && !string.IsNullOrEmpty(d.DosyaYolu));
+        return dosya?.DosyaYolu;
+    }
+
+    private async Task BelgeAlaniDosyaIndir(PersonelBelgeTabloKalemi item, string alan)
+    {
+        var dosyaYolu = BelgeAlaniDosyaYoluAl(item, alan);
+        if (string.IsNullOrEmpty(dosyaYolu))
+        {
+            ToastService.ShowWarning("Dosya bulunamadı.");
+            return;
+        }
+        try
+        {
+            var bytes = await SecureFileService.ReadDecryptedAsync(dosyaYolu);
+            if (bytes == null || bytes.Length == 0)
+            {
+                ToastService.ShowWarning("Dosya okunamadı.");
+                return;
+            }
+            var uzanti = GercekUzantiAl(dosyaYolu);
+            var contentType = MimeTipiAl(uzanti);
+            var safeAd = string.Join("_", $"{item.PersonelKodu}_{GetBelgeAdi(alan)}".Split(Path.GetInvalidFileNameChars()));
+            var ad = $"{safeAd}{uzanti}";
+            await JS.InvokeVoidAsync("downloadFile", ad, Convert.ToBase64String(bytes), contentType);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Belge indirme hatası SoforId={SoforId} Alan={Alan}", item.SoforId, alan);
+            ToastService.ShowError($"İndirme hatası: {ex.Message}");
+        }
+    }
+
+    private async Task BelgeAlaniDosyaYukle(PersonelBelgeTabloKalemi item, string alan, InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+
+        const long maxBoyut = 25 * 1024 * 1024; // 25 MB
+        if (file.Size > maxBoyut)
+        {
+            ToastService.ShowError("Dosya 25 MB'tan büyük olamaz.");
+            return;
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream(maxAllowedSize: maxBoyut);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            var bytes = ms.ToArray();
+
+            var relativePath = await SecureFileService.SaveEncryptedAsync(
+                $"personel-ozluk/{item.SoforId}",
+                file.Name,
+                bytes);
+
+            var sonuc = await OzlukService.BelgeAlaniIleDosyaYukleAsync(item.SoforId, alan, relativePath);
+            if (sonuc == null)
+            {
+                ToastService.ShowError("Belge tanımı eşleştirilemedi.");
+                return;
+            }
+
+            // Yerel modeli güncelle: EvrakDosyalari listesini yenile
+            var guncel = await BelgeUyariService.GetTekPersonelBelgeAsync(item.SoforId);
+            if (guncel != null)
+            {
+                item.EvrakDosyalari = guncel.EvrakDosyalari;
+                item.ToplamEvrakSayisi = guncel.ToplamEvrakSayisi;
+                item.YuklenmisEvrakSayisi = guncel.YuklenmisEvrakSayisi;
+            }
+
+            ToastService.ShowSuccess($"{item.PersonelAdi} – {GetBelgeAdi(alan)} dosyası yüklendi.");
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Belge yükleme hatası SoforId={SoforId} Alan={Alan}", item.SoforId, alan);
+            ToastService.ShowError($"Yükleme hatası: {ex.Message}");
+        }
+    }
+
+    private static string GetBelgeAdi(string alan) => alan switch
+    {
+        "Ehliyet" => "Ehliyet",
+        "Kimlik" => "Kimlik",
+        "MykBelgesi" => "MYK Belgesi",
+        "SrcBelgesi" => "SRC Belgesi",
+        "YayginEgitim" => "SRC Belgesi",
+        "Psikoteknik" => "Psikoteknik",
+        "AdliSicil" => "Adli Sicil",
+        "SaglikRaporu" => "Sağlık Raporu",
+        "SuruculCezaBarkod" => "Sürücü Ceza Barkodlu Belge",
+        _ => alan
+    };
+
+    // ─── Tedarikçi Belge Tablosu ─────────────────────────────────────
+    private List<TedarikciEvrakTabloKalemi>? tedarikciEvrakTablosu;
+    private bool isTedarikciTabloyukleniyor = false;
+    private string tedarikciTabloArama = string.Empty;
+    private string tedarikciTabloAktifFiltre = string.Empty;
+    private string tedarikciTabloBelgeFiltre = string.Empty;
+
+    // Tedarikçi Personel (belgeTablosu'nun filtreli görünümü)
+    private string tedarikciPersonelTedarikciFiltre = string.Empty;
+    private string tedarikciPersonelArama = string.Empty;
+    private string tedarikciPersonelAktifFiltre = string.Empty;
+    private string tedarikciPersonelBelgeFiltre = string.Empty;
+
+    // Tedarikçi Araçlar (aracBelgeTablosu'nun filtreli görünümü)
+    private string tedarikciAracTedarikciFiltre = string.Empty;
+    private string tedarikciAracArama = string.Empty;
+    private string tedarikciAracAktifFiltre = string.Empty;
+    private string tedarikciAracBelgeFiltre = string.Empty;
+
+    private List<TedarikciEvrakTabloKalemi> FiltrelenmisTedarikciEvrakTablosu => (tedarikciEvrakTablosu ?? new())
+        .Where(p => string.IsNullOrWhiteSpace(tedarikciTabloArama)
+            || p.TedarikciUnvan.Contains(tedarikciTabloArama, StringComparison.OrdinalIgnoreCase))
+        .Where(p => tedarikciTabloAktifFiltre switch
+        {
+            "aktif" => p.Aktif,
+            "pasif" => !p.Aktif,
+            _ => true
+        })
+        .Where(p => tedarikciTabloBelgeFiltre switch
+        {
+            "eksik" => p.Belgeler.Values.Any(t => t == null),
+            "gecmis" => p.Belgeler.Values.Any(t => t.HasValue && t.Value < DateTime.Today),
+            "yaklasan" => p.Belgeler.Values.Any(t => t.HasValue && t.Value >= DateTime.Today && (t.Value - DateTime.Today).Days <= 30),
+            _ => true
+        })
+        .ToList();
+
+    private List<PersonelBelgeTabloKalemi> FiltrelenmisTedarikciPersonelTablosu => (belgeTablosu ?? new())
+        .Where(p => p.TasimaTedarikciId.HasValue)
+        .Where(p => string.IsNullOrWhiteSpace(tedarikciPersonelTedarikciFiltre)
+            || p.TasimaTedarikciId.ToString() == tedarikciPersonelTedarikciFiltre)
+        .Where(p => string.IsNullOrWhiteSpace(tedarikciPersonelArama)
+            || p.PersonelAdi.Contains(tedarikciPersonelArama, StringComparison.OrdinalIgnoreCase)
+            || p.PersonelKodu.Contains(tedarikciPersonelArama, StringComparison.OrdinalIgnoreCase))
+        .Where(p => tedarikciPersonelAktifFiltre switch
+        {
+            "aktif" => p.Aktif,
+            "pasif" => !p.Aktif,
+            _ => true
+        })
+        .Where(p => tedarikciPersonelBelgeFiltre switch
+        {
+            "eksik" => GetEksikBelgeSayisi(p) > 0,
+            "gecmis" => GetTumBelgeTarihleri(p).Any(t => t < DateTime.Today),
+            "yaklasan" => GetTumBelgeTarihleri(p).Any(t => t >= DateTime.Today && (t - DateTime.Today).Days <= 30),
+            _ => true
+        })
+        .ToList();
+
+    private List<AracBelgeTabloKalemi> FiltrelenmisTedarikciAracTablosu => (aracBelgeTablosu ?? new())
+        .Where(p => p.SahiplikTipi == AracSahiplikTipi.Tedarikci)
+        .Where(p => string.IsNullOrWhiteSpace(tedarikciAracTedarikciFiltre)
+            || p.TasimaTedarikciId.ToString() == tedarikciAracTedarikciFiltre)
+        .Where(p => string.IsNullOrWhiteSpace(tedarikciAracArama)
+            || (p.Plaka ?? string.Empty).Contains(tedarikciAracArama, StringComparison.OrdinalIgnoreCase)
+            || (p.SaseNo ?? string.Empty).Contains(tedarikciAracArama, StringComparison.OrdinalIgnoreCase)
+            || (p.MarkaModel ?? string.Empty).Contains(tedarikciAracArama, StringComparison.OrdinalIgnoreCase))
+        .Where(p => tedarikciAracAktifFiltre switch
+        {
+            "aktif" => p.Aktif,
+            "pasif" => !p.Aktif,
+            _ => true
+        })
+        .Where(p => tedarikciAracBelgeFiltre switch
+        {
+            "eksik" => GetEksikAracBelgeSayisi(p) > 0,
+            "gecmis" => GetTumAracBelgeTarihleri(p).Any(t => t < DateTime.Today),
+            "yaklasan" => GetTumAracBelgeTarihleri(p).Any(t => t >= DateTime.Today && (t - DateTime.Today).Days <= 30),
+            _ => true
+        })
+        .ToList();
+
+    private async Task SekmeTedarikciTabloAc()
+    {
+        aktifSekme = "tedarikci";
+        if (tedarikciEvrakTablosu != null) return;
+        isTedarikciTabloyukleniyor = true;
+        StateHasChanged();
+        try
+        {
+            tedarikciEvrakTablosu = await BelgeUyariService.GetTedarikciEvrakTablosuAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "TedarikciEvrakTablosuYukle hatası");
+            ToastService.ShowError($"Tedarikçi belge tablosu yüklenirken hata: {ex.Message}");
+        }
+        finally
+        {
+            isTedarikciTabloyukleniyor = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SekmeTedarikciPersonelTabloAc()
+    {
+        aktifSekme = "tedarikci-personel";
+        await BelgeTabloyuYukle();
+    }
+
+    private async Task SekmeTedarikciAracTabloAc()
+    {
+        aktifSekme = "tedarikci-arac";
+        await AracBelgeTabloyuYukle();
+    }
+
+    private void TedarikciTabloFiltreleriniTemizle()
+    {
+        tedarikciTabloArama = string.Empty;
+        tedarikciTabloAktifFiltre = string.Empty;
+        tedarikciTabloBelgeFiltre = string.Empty;
+    }
+
+    private void TedarikciPersonelFiltreleriniTemizle()
+    {
+        tedarikciPersonelTedarikciFiltre = string.Empty;
+        tedarikciPersonelArama = string.Empty;
+        tedarikciPersonelAktifFiltre = string.Empty;
+        tedarikciPersonelBelgeFiltre = string.Empty;
+    }
+
+    private void TedarikciAracFiltreleriniTemizle()
+    {
+        tedarikciAracTedarikciFiltre = string.Empty;
+        tedarikciAracArama = string.Empty;
+        tedarikciAracAktifFiltre = string.Empty;
+        tedarikciAracBelgeFiltre = string.Empty;
+    }
+
+    private static string KisaKategoriAdi(string kategori) => kategori switch
+    {
+        "Ticaret Sicil Gazetesi" => "T. Sicil",
+        "Vergi Levhası" => "Vergi Lev.",
+        "İmza Sirküleri" => "İmza Sirküleri",
+        "Yetki Belgesi" => "Yetki Bel.",
+        "Faaliyet Belgesi" => "Faaliyet",
+        "SGK Belgesi" => "SGK",
+        "İş Güvenliği Belgesi" => "İş Güv.",
+        "Sorumluluk Sigortası" => "Sorumluluk Sig.",
+        "Kapasite Raporu" => "Kapasite",
+        "Diğer" => "Diğer",
+        _ => kategori
+    };
+}
+
+
+
+
+
+
+
+
+
+
+

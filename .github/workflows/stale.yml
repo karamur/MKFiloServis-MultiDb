@@ -1,4 +1,4 @@
-﻿name: 🧹 Stale Issue & PR Bot
+name: 🧹 Stale Issue & PR Bot
 
 on:
   schedule:
@@ -56,3 +56,4 @@ jobs:
           operations-per-run: 100
           remove-stale-when-updated: true
           ascending: true
+

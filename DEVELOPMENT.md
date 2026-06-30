@@ -1,4 +1,4 @@
-﻿# DEVELOPMENT
+# DEVELOPMENT
 
 ## Proje Adı
 `Koa Filo Servis`
@@ -79,10 +79,10 @@ Sorun çıkaran, tekrar kontrol edilmesi gereken veya teknik risk barındıran k
 - Personel listelerinde "kendi personelimiz" ile "tedarikçi personeli" ayrımının net olması.
 
 **Yapılanlar:**
-- `KOAFiloServis.Web/Helpers/SahiplikHelper.cs` oluşturuldu:
+- `MKFiloServis.Web/Helpers/SahiplikHelper.cs` oluşturuldu:
   - `AracSahiplikTipi` (5 değer) ve `AracSahiplikKalem` (3 değer) için ortak `GetMetin`, `GetBadgeClass`, `GetIcon`, `GetAlertClass`, `GetAciklama` metodları.
   - Renk paleti standardize edildi: Özmal = success, Kiralık = warning, Komisyon = info, Tedarikçi = primary, Diğer = secondary.
-- `KOAFiloServis.Web/Components/Shared/SahiplikBadge.razor` shared component eklendi:
+- `MKFiloServis.Web/Components/Shared/SahiplikBadge.razor` shared component eklendi:
   - `Tip` veya `Kalem` parametresi ile çalışır.
   - `ShowIcon` ve `CssClass` opsiyonları ile esnek kullanım.
 - Aşağıdaki ekranlardaki tekrar eden `GetSahiplikMetin/GetSahiplikBadge/SahiplikBadge` metodları `SahiplikHelper` çağrılarına yönlendirildi:
@@ -106,16 +106,16 @@ Sorun çıkaran, tekrar kontrol edilmesi gereken veya teknik risk barındıran k
 - Tüm refaktör edilen sayfalar derlemede başarıyla çalıştı.
 
 **Etkilenen Dosyalar:**
-- `KOAFiloServis.Web/Helpers/SahiplikHelper.cs` (yeni)
-- `KOAFiloServis.Web/Components/Shared/SahiplikBadge.razor` (yeni)
-- `KOAFiloServis.Web/Components/Pages/Ihale/IhaleHazirlik.razor`
-- `KOAFiloServis.Web/Components/Pages/Filo/EslestirmeTanimlari.razor`
-- `KOAFiloServis.Web/Components/Pages/TedarikciServisOperasyon/TedarikciAraclari.razor`
-- `KOAFiloServis.Web/Components/Pages/TedarikciServisOperasyon/TedarikciPersonel.razor`
-- `KOAFiloServis.Web/Components/Pages/Filo/FiloGunlukPuantajPage.razor`
-- `KOAFiloServis.Web/Components/Pages/Araclar/AracMaliyetSnapshotPage.razor`
-- `KOAFiloServis.Web/Components/Pages/Lastik/LastikSezonTakip.razor`
-- `KOAFiloServis.Web/Components/Pages/Soforler/SoforList.razor`
+- `MKFiloServis.Web/Helpers/SahiplikHelper.cs` (yeni)
+- `MKFiloServis.Web/Components/Shared/SahiplikBadge.razor` (yeni)
+- `MKFiloServis.Web/Components/Pages/Ihale/IhaleHazirlik.razor`
+- `MKFiloServis.Web/Components/Pages/Filo/EslestirmeTanimlari.razor`
+- `MKFiloServis.Web/Components/Pages/TedarikciServisOperasyon/TedarikciAraclari.razor`
+- `MKFiloServis.Web/Components/Pages/TedarikciServisOperasyon/TedarikciPersonel.razor`
+- `MKFiloServis.Web/Components/Pages/Filo/FiloGunlukPuantajPage.razor`
+- `MKFiloServis.Web/Components/Pages/Araclar/AracMaliyetSnapshotPage.razor`
+- `MKFiloServis.Web/Components/Pages/Lastik/LastikSezonTakip.razor`
+- `MKFiloServis.Web/Components/Pages/Soforler/SoforList.razor`
 - `DEVELOPMENT.md`
 
 **Durum:** ✅ Tamamlandı
@@ -125,7 +125,7 @@ Sorun çıkaran, tekrar kontrol edilmesi gereken veya teknik risk barındıran k
 - Mevcut veritabanı için yedeğin gerçekten alınması.
 
 **Yapılanlar:**
-- `KOAFiloServis.Web/dbsettings.json` içindeki PostgreSQL ayarları kullanılarak manuel `pg_dump` çalıştırıldı.
+- `MKFiloServis.Web/dbsettings.json` içindeki PostgreSQL ayarları kullanılarak manuel `pg_dump` çalıştırıldı.
 - Zaman damgalı yedek klasörü oluşturuldu.
 - `database.sql` dump dosyası üretildi.
 - Aynı klasöre `dbsettings.json` kopyalandı.
@@ -136,9 +136,9 @@ Sorun çıkaran, tekrar kontrol edilmesi gereken veya teknik risk barındıran k
 - `.zip` paketi oluşturuldu.
 
 **Etkilenen Dosyalar:**
-- `KOAFiloServis.Web/Backups/Database/KOAFiloServis_Backup_20260414_150331/database.sql`
-- `KOAFiloServis.Web/Backups/Database/KOAFiloServis_Backup_20260414_150331/dbsettings.json`
-- `KOAFiloServis.Web/Backups/Database/KOAFiloServis_Backup_20260414_150331.zip`
+- `MKFiloServis.Web/Backups/Database/MKFiloServis_Backup_20260414_150331/database.sql`
+- `MKFiloServis.Web/Backups/Database/MKFiloServis_Backup_20260414_150331/dbsettings.json`
+- `MKFiloServis.Web/Backups/Database/MKFiloServis_Backup_20260414_150331.zip`
 - `DEVELOPMENT.md`
 
 **Durum:** ✅ Tamamlandı
@@ -162,9 +162,9 @@ Sorun çıkaran, tekrar kontrol edilmesi gereken veya teknik risk barındıran k
 - Publish scriptleri ve proje publish içeriği manuel olarak kontrol edildi.
 
 **Etkilenen Dosyalar:**
-- `KOAFiloServis.Web/KOAFiloServis.Web.csproj`
-- `KOAFiloServis.Web/Deploy/IIS/kur.bat`
-- `KOAFiloServis.Web/Deploy/IIS/kur.ps1`
+- `MKFiloServis.Web/MKFiloServis.Web.csproj`
+- `MKFiloServis.Web/Deploy/IIS/kur.bat`
+- `MKFiloServis.Web/Deploy/IIS/kur.ps1`
 - `publish-iis-package.bat`
 - `DEVELOPMENT.md`
 
@@ -204,15 +204,15 @@ Sorun çıkaran, tekrar kontrol edilmesi gereken veya teknik risk barındıran k
 - `run_build` başarılı.
 
 **Etkilenen Dosyalar:**
-- `KOAFiloServis.Web/Components/Pages/ServisCalismalari/ServisCalismaList.razor`
-- `KOAFiloServis.Web/Components/Pages/ServisCalismalari/ServisCalismaForm.razor`
-- `KOAFiloServis.Web/Components/Pages/ServisCalismalari/TopluServisCalismasiEkle.razor`
-- `KOAFiloServis.Web/Services/ToastService.cs`
-- `KOAFiloServis.Web/Services/ServisKiralamaService.cs`
-- `KOAFiloServis.Web/Services/PersonelMaasIzinService.cs`
-- `KOAFiloServis.Web/Services/PythonScraperService.cs`
-- `KOAFiloServis.Web/Services/SatisService.cs`
-- `KOAFiloServis.Web/Tests/MultiUserSessionTests.md`
+- `MKFiloServis.Web/Components/Pages/ServisCalismalari/ServisCalismaList.razor`
+- `MKFiloServis.Web/Components/Pages/ServisCalismalari/ServisCalismaForm.razor`
+- `MKFiloServis.Web/Components/Pages/ServisCalismalari/TopluServisCalismasiEkle.razor`
+- `MKFiloServis.Web/Services/ToastService.cs`
+- `MKFiloServis.Web/Services/ServisKiralamaService.cs`
+- `MKFiloServis.Web/Services/PersonelMaasIzinService.cs`
+- `MKFiloServis.Web/Services/PythonScraperService.cs`
+- `MKFiloServis.Web/Services/SatisService.cs`
+- `MKFiloServis.Web/Tests/MultiUserSessionTests.md`
 - `DEVELOPMENT.md`
 
 **Durum:** ✅ Tamamlandı
@@ -234,7 +234,7 @@ Sorun çıkaran, tekrar kontrol edilmesi gereken veya teknik risk barındıran k
 - `run_build` başarılı
 
 **Etkilenen Dosyalar:**
-- `KOAFiloServis.Web/Components/Pages/Faturalar/FaturaList.razor`
+- `MKFiloServis.Web/Components/Pages/Faturalar/FaturaList.razor`
 - `DEVELOPMENT.md`
 
 **Durum:** ✅ Tamamlandı
@@ -254,10 +254,10 @@ Sorun çıkaran, tekrar kontrol edilmesi gereken veya teknik risk barındıran k
 - `run_build` başarılı
 
 **Etkilenen Dosyalar:**
-- `KOAFiloServis.Web/Services/FaturaService.cs`
-- `KOAFiloServis.Web/Components/Pages/Faturalar/FaturaForm.razor`
-- `KOAFiloServis.Web/Components/Pages/EFatura/GidenFaturalar.razor`
-- `KOAFiloServis.Web/Components/Pages/EFatura/GelenFaturalar.razor`
+- `MKFiloServis.Web/Services/FaturaService.cs`
+- `MKFiloServis.Web/Components/Pages/Faturalar/FaturaForm.razor`
+- `MKFiloServis.Web/Components/Pages/EFatura/GidenFaturalar.razor`
+- `MKFiloServis.Web/Components/Pages/EFatura/GelenFaturalar.razor`
 - `DEVELOPMENT.md`
 
 **Durum:** ✅ Tamamlandı
@@ -295,7 +295,7 @@ Sorun çıkaran, tekrar kontrol edilmesi gereken veya teknik risk barındıran k
 - `run_build` başarılı
 
 **Etkilenen Dosyalar:**
-- `KOAFiloServis.Web/Controllers/FaturalarController.cs`
+- `MKFiloServis.Web/Controllers/FaturalarController.cs`
 - `DEVELOPMENT.md`
 
 **Durum:** ✅ Tamamlandı
@@ -318,8 +318,8 @@ Sorun çıkaran, tekrar kontrol edilmesi gereken veya teknik risk barındıran k
 - `run_build` başarılı
 
 **Etkilenen Dosyalar:**
-- `KOAFiloServis.Web/Data/ApplicationDbContext.cs`
-- `KOAFiloServis.Web/Data/DbInitializer.cs`
+- `MKFiloServis.Web/Data/ApplicationDbContext.cs`
+- `MKFiloServis.Web/Data/DbInitializer.cs`
 - `DEVELOPMENT.md`
 
 **Durum:** ✅ Tamamlandı
@@ -345,8 +345,8 @@ Sorun çıkaran, tekrar kontrol edilmesi gereken veya teknik risk barındıran k
 - `run_build` başarılı
 
 **Etkilenen Dosyalar:**
-- `KOAFiloServis.Web/Services/FaturaService.cs`
-- `KOAFiloServis.Web/Components/Pages/Faturalar/FaturaDetay.razor`
+- `MKFiloServis.Web/Services/FaturaService.cs`
+- `MKFiloServis.Web/Components/Pages/Faturalar/FaturaDetay.razor`
 - `DEVELOPMENT.md`
 
 **Durum:** ✅ Tamamlandı
@@ -374,8 +374,8 @@ Sorun çıkaran, tekrar kontrol edilmesi gereken veya teknik risk barındıran k
 - `run_build` başarılı
 
 **Etkilenen Dosyalar:**
-- `KOAFiloServis.Web/Components/Pages/EFatura/GidenFaturalar.razor`
-- `KOAFiloServis.Web/Components/Pages/EFatura/GelenFaturalar.razor`
+- `MKFiloServis.Web/Components/Pages/EFatura/GidenFaturalar.razor`
+- `MKFiloServis.Web/Components/Pages/EFatura/GelenFaturalar.razor`
 - `DEVELOPMENT.md`
 
 **Durum:** ✅ Tamamlandı
@@ -405,7 +405,7 @@ Sorun çıkaran, tekrar kontrol edilmesi gereken veya teknik risk barındıran k
 - `run_build` başarılı
 
 **Etkilenen Dosyalar:**
-- `KOAFiloServis.Web/Components/Pages/Faturalar/FaturaForm.razor`
+- `MKFiloServis.Web/Components/Pages/Faturalar/FaturaForm.razor`
 - `DEVELOPMENT.md`
 
 **Durum:** ✅ Tamamlandı
@@ -435,10 +435,10 @@ Sorun çıkaran, tekrar kontrol edilmesi gereken veya teknik risk barındıran k
 - `run_build` başarılı
 
 **Etkilenen Dosyalar:**
-- `KOAFiloServis.Web/Services/Interfaces/IFaturaService.cs`
-- `KOAFiloServis.Web/Services/FaturaService.cs`
-- `KOAFiloServis.Web/Components/Pages/Faturalar/FaturaForm.razor`
-- `KOAFiloServis.Web/Components/Pages/Faturalar/FaturaList.razor`
+- `MKFiloServis.Web/Services/Interfaces/IFaturaService.cs`
+- `MKFiloServis.Web/Services/FaturaService.cs`
+- `MKFiloServis.Web/Components/Pages/Faturalar/FaturaForm.razor`
+- `MKFiloServis.Web/Components/Pages/Faturalar/FaturaList.razor`
 - `DEVELOPMENT.md`
 
 **Durum:** ✅ Tamamlandı
@@ -481,10 +481,10 @@ Sorun çıkaran, tekrar kontrol edilmesi gereken veya teknik risk barındıran k
 - `run_build` başarılı
 
 **Etkilenen Dosyalar:**
-- `KOAFiloServis.Web/Services/Interfaces/IFaturaService.cs`
-- `KOAFiloServis.Web/Services/FaturaService.cs`
-- `KOAFiloServis.Web/Components/Pages/EFatura/GidenFaturalar.razor`
-- `KOAFiloServis.Web/Components/Pages/EFatura/GelenFaturalar.razor`
+- `MKFiloServis.Web/Services/Interfaces/IFaturaService.cs`
+- `MKFiloServis.Web/Services/FaturaService.cs`
+- `MKFiloServis.Web/Components/Pages/EFatura/GidenFaturalar.razor`
+- `MKFiloServis.Web/Components/Pages/EFatura/GelenFaturalar.razor`
 - `DEVELOPMENT.md`
 
 **Durum:** ✅ Tamamlandı
@@ -531,7 +531,7 @@ Sorun çıkaran, tekrar kontrol edilmesi gereken veya teknik risk barındıran k
   - kâr sapması
 
 **Etkilenen Dosyalar:**
-- `KOAFiloServis.Web/Components/Pages/Ihale/IhaleHazirlik.razor`
+- `MKFiloServis.Web/Components/Pages/Ihale/IhaleHazirlik.razor`
 - `DEVELOPMENT.md`
 
 **Durum:** ✅ Tamamlandı
@@ -1100,7 +1100,7 @@ Sorun çıkaran, tekrar kontrol edilmesi gereken veya teknik risk barındıran k
         private const string ApiBaseUrl = "http://10.0.0.2:5190/";
     #endif
 #else
-    private const string ApiBaseUrl = "https://api.koafiloservis.com/";
+    private const string ApiBaseUrl = "https://api.MKFiloServis.com/";
 #endif
 ```
 
@@ -1116,7 +1116,7 @@ Sorun çıkaran, tekrar kontrol edilmesi gereken veya teknik risk barındıran k
 | Windows Masaüstü | `localhost:5190` | Aynı makine |
 | Android Emulator | `10.0.2.2:5190` | Host makine IP |
 | Fiziksel Cihaz | `10.0.0.2:5190` | Yerel ağ IP |
-| Production | `api.koafiloservis.com` | HTTPS |
+| Production | `api.MKFiloServis.com` | HTTPS |
 
 **Etkilenen Dosyalar:**
 - `CRMFiloServis.Mobile/MauiProgram.cs` (güncellendi)
@@ -5660,3 +5660,4 @@ Projede zaten kapsamlı bir rol/yetki sistemi mevcuttu:
 - `CRMFiloServis.Web/Components/Pages/Ayarlar/SirketYonetimi.razor` (güncellendi)
 
 **Durum:** ✅ Tamamlandı
+

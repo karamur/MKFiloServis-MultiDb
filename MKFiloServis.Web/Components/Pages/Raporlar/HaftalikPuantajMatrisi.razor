@@ -1,0 +1,446 @@
+@page "/raporlar/haftalik-puantaj"
+@using System.Globalization
+@using System.IO
+@using ClosedXML.Excel
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.JSInterop
+@inject IServisCalismaService ServisCalismaService
+@inject ISoforService SoforService
+@inject IAracService AracService
+@inject IToastService ToastService
+@inject IJSRuntime JS
+@attribute [Authorize]
+
+<PageTitle>Haftalık Puantaj Matrisi</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-calendar-week me-2"></i>Haftalık Puantaj Matrisi</h2>
+            <p class="text-muted mb-0">Şoför × Gün matrisi — sefer sayıları, kullanılan araç ve toplam tutar</p>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body py-3">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small">Hafta Başlangıcı</label>
+                    <input type="date" class="form-control form-control-sm" @bind="haftaBaslangic" @bind:after="LoadAsync" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Görünüm</label>
+                    <select class="form-select form-select-sm" @bind="aktifSekme" @bind:after="StateHasChanged">
+                        <option value="sofor">👤 Şoför × Gün</option>
+                        <option value="arac">🚗 Araç × Gün</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Şoför Filtre</label>
+                    <input type="text" class="form-control form-control-sm" placeholder="Ad/soyad ile ara..." @bind="soforFiltre" @bind:after="StateHasChanged" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">&nbsp;</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="cbBosGizle" @bind="bosSatirGizle" @bind:after="StateHasChanged" />
+                        <label class="form-check-label small" for="cbBosGizle">Boş satırları gizle</label>
+                    </div>
+                </div>
+                <div class="col-md-3 text-end">
+                    <button class="btn btn-outline-secondary btn-sm me-1" @onclick="OncekiHafta" disabled="@yukleniyor">
+                        <i class="bi bi-chevron-left"></i> Önceki
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm me-1" @onclick="SonrakiHafta" disabled="@yukleniyor">
+                        Sonraki <i class="bi bi-chevron-right"></i>
+                    </button>
+                    <button class="btn btn-outline-primary btn-sm" @onclick="ExcelIndir" disabled="@yukleniyor">
+                        <i class="bi bi-file-earmark-excel me-1"></i> Excel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (yukleniyor)
+    {
+        <div class="card"><div class="card-body p-4 text-center text-muted">
+            <div class="spinner-border spinner-border-sm me-2"></div> Yükleniyor...
+        </div></div>
+    }
+    else
+    {
+        <!-- Özet kartlar -->
+        <div class="row g-2 mb-3">
+            <div class="col-md-3">
+                <div class="card border-primary shadow-sm">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">Toplam Kayıt</div>
+                        <div class="fs-4 fw-bold text-primary">@kayitlar.Count</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-info shadow-sm">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">Aktif Şoför</div>
+                        <div class="fs-4 fw-bold text-info">@aktifSoforSayisi</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-warning shadow-sm">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">Aktif Araç</div>
+                        <div class="fs-4 fw-bold text-warning">@aktifAracSayisi</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-success shadow-sm">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">Toplam Tutar</div>
+                        <div class="fs-4 fw-bold text-success">@toplamTutar.ToString("N2") ₺</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Matris -->
+        <div class="card">
+            <div class="card-header bg-light">
+                <strong>
+                    <i class="bi bi-grid-3x3 me-1"></i>
+                    @(aktifSekme == "sofor" ? "Şoför × Gün Matrisi" : "Araç × Gün Matrisi")
+                    — @haftaBaslangic.ToString("dd MMM") - @haftaBaslangic.AddDays(6).ToString("dd MMM yyyy")
+                </strong>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="min-width:200px;">@(aktifSekme == "sofor" ? "Şoför" : "Araç")</th>
+                                @for (int i = 0; i < 7; i++)
+                                {
+                                    var g = haftaBaslangic.AddDays(i);
+                                    var hafta = g.DayOfWeek == DayOfWeek.Saturday || g.DayOfWeek == DayOfWeek.Sunday;
+                                    <th class="text-center @(hafta ? "table-warning" : "")" style="min-width:90px;">
+                                        <div class="small text-muted">@GunKisa(g.DayOfWeek)</div>
+                                        <div>@g.ToString("dd MMM")</div>
+                                    </th>
+                                }
+                                <th class="text-center" style="min-width:80px;">Toplam Sefer</th>
+                                <th class="text-end" style="min-width:110px;">Toplam ₺</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @{
+                                var satirlar = aktifSekme == "sofor" ? SoforSatirlari() : AracSatirlari();
+                                if (bosSatirGizle) satirlar = satirlar.Where(s => s.ToplamSefer > 0).ToList();
+                            }
+                            @if (!satirlar.Any())
+                            {
+                                <tr>
+                                    <td colspan="10" class="text-center text-muted p-4">
+                                        <i class="bi bi-inbox fs-4 d-block mb-2"></i>
+                                        Bu hafta için kayıt bulunamadı.
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                foreach (var satir in satirlar)
+                                {
+                                    <tr>
+                                        <td>
+                                            <strong>@satir.Ad</strong>
+                                            @if (!string.IsNullOrWhiteSpace(satir.AltBilgi))
+                                            {
+                                                <div class="small text-muted">@satir.AltBilgi</div>
+                                            }
+                                        </td>
+                                        @for (int i = 0; i < 7; i++)
+                                        {
+                                            var hucre = satir.Gunler[i];
+                                            var gun = haftaBaslangic.AddDays(i);
+                                            var hafta = gun.DayOfWeek == DayOfWeek.Saturday || gun.DayOfWeek == DayOfWeek.Sunday;
+                                            <td class="text-center @(hafta ? "table-warning bg-opacity-25" : "")">
+                                                @if (hucre.SeferSayisi == 0)
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-primary" title="@hucre.Detay">
+                                                        @hucre.SeferSayisi
+                                                    </span>
+                                                    @if (!string.IsNullOrWhiteSpace(hucre.IkincilEtiket))
+                                                    {
+                                                        <div class="small text-muted text-truncate" style="max-width:80px;" title="@hucre.IkincilEtiket">
+                                                            @hucre.IkincilEtiket
+                                                        </div>
+                                                    }
+                                                }
+                                            </td>
+                                        }
+                                        <td class="text-center fw-bold">@satir.ToplamSefer</td>
+                                        <td class="text-end fw-bold text-success">@satir.ToplamTutar.ToString("N2")</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr class="fw-bold">
+                                <td>GÜNLÜK TOPLAM</td>
+                                @for (int i = 0; i < 7; i++)
+                                {
+                                    var gunToplam = kayitlar
+                                        .Where(k => k.CalismaTarihi.Date == haftaBaslangic.AddDays(i).Date)
+                                        .Sum(k => SeferSayisinaCevir(k.ServisTuru));
+                                    <td class="text-center">@gunToplam</td>
+                                }
+                                <td class="text-center text-primary">@kayitlar.Sum(k => SeferSayisinaCevir(k.ServisTuru))</td>
+                                <td class="text-end text-success">@toplamTutar.ToString("N2")</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-2 small text-muted">
+            <i class="bi bi-info-circle me-1"></i>
+            Sabah/Akşam = 1 sefer, Sabah+Akşam = 2 sefer, Özel = 1 sefer olarak hesaplanır.
+            Hücredeki ikinci satır en sık kullanılan @(aktifSekme == "sofor" ? "aracı" : "şoförü") gösterir.
+        </div>
+    }
+</div>
+
+@code {
+    private bool yukleniyor = true;
+    private DateTime haftaBaslangic = BuPazartesi();
+    private string aktifSekme = "sofor";
+    private string soforFiltre = "";
+    private bool bosSatirGizle = true;
+
+    private List<ServisCalisma> kayitlar = new();
+    private List<Sofor> soforler = new();
+    private List<Arac> araclar = new();
+
+    private int aktifSoforSayisi;
+    private int aktifAracSayisi;
+    private decimal toplamTutar;
+
+    private static DateTime BuPazartesi()
+    {
+        var bugun = DateTime.Today;
+        int diff = ((int)bugun.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+        return bugun.AddDays(-diff);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        soforler = await SoforService.GetActiveAsync();
+        araclar = await AracService.GetActiveAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        yukleniyor = true;
+        StateHasChanged();
+        try
+        {
+            var bas = haftaBaslangic.Date;
+            var bit = haftaBaslangic.Date.AddDays(7).AddSeconds(-1);
+            kayitlar = await ServisCalismaService.GetByDateRangeAsync(bas, bit);
+
+            aktifSoforSayisi = kayitlar.Select(k => k.SoforId).Distinct().Count();
+            aktifAracSayisi = kayitlar.Select(k => k.AracId).Distinct().Count();
+            toplamTutar = kayitlar.Sum(k => (k.Fiyat ?? k.Guzergah?.BirimFiyat ?? 0) * SeferSayisinaCevir(k.ServisTuru));
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Veri yüklenemedi: {ex.Message}");
+        }
+        finally { yukleniyor = false; }
+    }
+
+    private async Task OncekiHafta()
+    {
+        haftaBaslangic = haftaBaslangic.AddDays(-7);
+        await LoadAsync();
+    }
+
+    private async Task SonrakiHafta()
+    {
+        haftaBaslangic = haftaBaslangic.AddDays(7);
+        await LoadAsync();
+    }
+
+    private static int SeferSayisinaCevir(ServisTuru t) => t switch
+    {
+        ServisTuru.SabahAksam => 2,
+        _ => 1
+    };
+
+    private record HucreVeri(int SeferSayisi, decimal Tutar, string Detay, string IkincilEtiket);
+    private record SatirVeri(int Id, string Ad, string AltBilgi, HucreVeri[] Gunler, int ToplamSefer, decimal ToplamTutar);
+
+    private List<SatirVeri> SoforSatirlari()
+    {
+        var filtre = (soforFiltre ?? "").Trim().ToLowerInvariant();
+        var soforIds = kayitlar.Select(k => k.SoforId).Distinct().ToHashSet();
+        var liste = new List<SatirVeri>();
+
+        // Hem aktif şoförleri hem de kayıt sahibi şoförleri dahil et
+        var soforHavuzu = soforler
+            .Where(s => soforIds.Contains(s.Id) || !bosSatirGizle)
+            .Concat(kayitlar.Where(k => k.Sofor != null && !soforler.Any(s => s.Id == k.SoforId))
+                            .Select(k => k.Sofor!).Distinct())
+            .DistinctBy(s => s.Id)
+            .ToList();
+
+        foreach (var s in soforHavuzu)
+        {
+            var ad = s.TamAd ?? $"#{s.Id}";
+            if (!string.IsNullOrWhiteSpace(filtre) && !ad.ToLowerInvariant().Contains(filtre)) continue;
+
+            var hucreler = new HucreVeri[7];
+            int toplamSefer = 0;
+            decimal toplamTutar = 0;
+            for (int i = 0; i < 7; i++)
+            {
+                var gun = haftaBaslangic.AddDays(i).Date;
+                var gunKayitlari = kayitlar.Where(k => k.SoforId == s.Id && k.CalismaTarihi.Date == gun).ToList();
+                if (!gunKayitlari.Any()) { hucreler[i] = new(0, 0, "", ""); continue; }
+
+                var sefer = gunKayitlari.Sum(k => SeferSayisinaCevir(k.ServisTuru));
+                var tutar = gunKayitlari.Sum(k => (k.Fiyat ?? k.Guzergah?.BirimFiyat ?? 0) * SeferSayisinaCevir(k.ServisTuru));
+                var detay = string.Join("\n", gunKayitlari.Select(k => $"{k.ServisTuru}: {k.Arac?.AktifPlaka} - {k.Guzergah?.GuzergahAdi}"));
+                var enCokArac = gunKayitlari.GroupBy(k => k.Arac?.AktifPlaka ?? "?").OrderByDescending(g => g.Count()).First().Key;
+                hucreler[i] = new(sefer, tutar, detay, enCokArac);
+                toplamSefer += sefer;
+                toplamTutar += tutar;
+            }
+            liste.Add(new SatirVeri(s.Id, ad, s.SoforKodu ?? "", hucreler, toplamSefer, toplamTutar));
+        }
+        return liste.OrderByDescending(x => x.ToplamSefer).ThenBy(x => x.Ad).ToList();
+    }
+
+    private List<SatirVeri> AracSatirlari()
+    {
+        var filtre = (soforFiltre ?? "").Trim().ToLowerInvariant();
+        var aracIds = kayitlar.Select(k => k.AracId).Distinct().ToHashSet();
+        var liste = new List<SatirVeri>();
+
+        var aracHavuzu = araclar
+            .Where(a => aracIds.Contains(a.Id) || !bosSatirGizle)
+            .Concat(kayitlar.Where(k => k.Arac != null && !araclar.Any(a => a.Id == k.AracId))
+                            .Select(k => k.Arac!).Distinct())
+            .DistinctBy(a => a.Id)
+            .ToList();
+
+        foreach (var a in aracHavuzu)
+        {
+            var ad = a.AktifPlaka ?? $"#{a.Id}";
+            if (!string.IsNullOrWhiteSpace(filtre) && !ad.ToLowerInvariant().Contains(filtre)) continue;
+
+            var hucreler = new HucreVeri[7];
+            int toplamSefer = 0;
+            decimal toplamTutar = 0;
+            for (int i = 0; i < 7; i++)
+            {
+                var gun = haftaBaslangic.AddDays(i).Date;
+                var gunKayitlari = kayitlar.Where(k => k.AracId == a.Id && k.CalismaTarihi.Date == gun).ToList();
+                if (!gunKayitlari.Any()) { hucreler[i] = new(0, 0, "", ""); continue; }
+
+                var sefer = gunKayitlari.Sum(k => SeferSayisinaCevir(k.ServisTuru));
+                var tutar = gunKayitlari.Sum(k => (k.Fiyat ?? k.Guzergah?.BirimFiyat ?? 0) * SeferSayisinaCevir(k.ServisTuru));
+                var detay = string.Join("\n", gunKayitlari.Select(k => $"{k.ServisTuru}: {k.Sofor?.TamAd} - {k.Guzergah?.GuzergahAdi}"));
+                var enCokSofor = gunKayitlari.GroupBy(k => k.Sofor?.TamAd ?? "?").OrderByDescending(g => g.Count()).First().Key;
+                hucreler[i] = new(sefer, tutar, detay, enCokSofor);
+                toplamSefer += sefer;
+                toplamTutar += tutar;
+            }
+            liste.Add(new SatirVeri(a.Id, ad, $"{a.Marka} {a.Model}".Trim(), hucreler, toplamSefer, toplamTutar));
+        }
+        return liste.OrderByDescending(x => x.ToplamSefer).ThenBy(x => x.Ad).ToList();
+    }
+
+    private async Task ExcelIndir()
+    {
+        try
+        {
+            using var wb = new XLWorkbook();
+            var ws = wb.Worksheets.Add(aktifSekme == "sofor" ? "Sofor x Gun" : "Arac x Gun");
+
+            ws.Cell(1, 1).Value = $"Haftalık Puantaj — {haftaBaslangic:dd.MM.yyyy} - {haftaBaslangic.AddDays(6):dd.MM.yyyy}";
+            ws.Cell(1, 1).Style.Font.Bold = true;
+            ws.Cell(1, 1).Style.Font.FontSize = 13;
+            ws.Range(1, 1, 1, 10).Merge();
+
+            // Header
+            ws.Cell(3, 1).Value = aktifSekme == "sofor" ? "Şoför" : "Araç";
+            for (int i = 0; i < 7; i++)
+            {
+                ws.Cell(3, i + 2).Value = haftaBaslangic.AddDays(i).ToString("ddd dd.MM", new CultureInfo("tr-TR"));
+            }
+            ws.Cell(3, 9).Value = "Toplam Sefer";
+            ws.Cell(3, 10).Value = "Toplam ₺";
+            var headerRange = ws.Range(3, 1, 3, 10);
+            headerRange.Style.Font.Bold = true;
+            headerRange.Style.Fill.BackgroundColor = XLColor.LightSteelBlue;
+
+            var satirlar = aktifSekme == "sofor" ? SoforSatirlari() : AracSatirlari();
+            if (bosSatirGizle) satirlar = satirlar.Where(s => s.ToplamSefer > 0).ToList();
+
+            int r = 4;
+            foreach (var s in satirlar)
+            {
+                ws.Cell(r, 1).Value = s.Ad + (string.IsNullOrWhiteSpace(s.AltBilgi) ? "" : $" ({s.AltBilgi})");
+                for (int i = 0; i < 7; i++)
+                {
+                    var h = s.Gunler[i];
+                    if (h.SeferSayisi > 0)
+                    {
+                        ws.Cell(r, i + 2).Value = h.SeferSayisi;
+                        if (!string.IsNullOrWhiteSpace(h.Detay))
+                            ws.Cell(r, i + 2).CreateComment().AddText(h.Detay);
+                    }
+                }
+                ws.Cell(r, 9).Value = s.ToplamSefer;
+                ws.Cell(r, 10).Value = s.ToplamTutar;
+                r++;
+            }
+
+            ws.Columns().AdjustToContents();
+
+            using var stream = new MemoryStream();
+            wb.SaveAs(stream);
+            var fileName = $"haftalik_puantaj_{haftaBaslangic:yyyyMMdd}.xlsx";
+            await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, Convert.ToBase64String(stream.ToArray()));
+            ToastService.ShowSuccess("Excel indirildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Excel indirilemedi: {ex.GetBaseException().Message}");
+        }
+    }
+
+    private static string GunKisa(DayOfWeek d) => d switch
+    {
+        DayOfWeek.Monday => "Pzt",
+        DayOfWeek.Tuesday => "Sal",
+        DayOfWeek.Wednesday => "Çar",
+        DayOfWeek.Thursday => "Per",
+        DayOfWeek.Friday => "Cum",
+        DayOfWeek.Saturday => "Cmt",
+        DayOfWeek.Sunday => "Paz",
+        _ => d.ToString()
+    };
+}
+

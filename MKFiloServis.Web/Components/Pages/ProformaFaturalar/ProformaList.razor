@@ -1,0 +1,360 @@
+@page "/proforma-faturalar"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IProformaFaturaService ProformaService
+@inject ICariService CariService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Proforma Faturalar - Koa Filo Servis</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="bi bi-file-earmark-text me-2"></i>Proforma Faturalar</h3>
+        <a href="/proforma-fatura/yeni" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i> Yeni Proforma
+        </a>
+    </div>
+
+    @* Dashboard Kartları *@
+    @if (stats != null)
+    {
+        <div class="row mb-4">
+            <div class="col-md-2">
+                <div class="card bg-secondary text-white">
+                    <div class="card-body text-center">
+                        <h4 class="mb-0">@stats.TaslakSayisi</h4>
+                        <small>Taslak</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card bg-info text-white">
+                    <div class="card-body text-center">
+                        <h4 class="mb-0">@stats.GonderilmisSayisi</h4>
+                        <small>Gönderildi</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card bg-success text-white">
+                    <div class="card-body text-center">
+                        <h4 class="mb-0">@stats.OnayliSayisi</h4>
+                        <small>Onaylı</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card bg-danger text-white">
+                    <div class="card-body text-center">
+                        <h4 class="mb-0">@stats.ReddedilenSayisi</h4>
+                        <small>Reddedilen</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-primary text-white">
+                    <div class="card-body text-center">
+                        <h4 class="mb-0">@stats.ToplamTutar.ToString("N2") ₺</h4>
+                        <small>Toplam Tutar</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Filtreler *@
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Arama</label>
+                    <input type="text" class="form-control" placeholder="Proforma No, Cari..." 
+                           @bind="aramaMetni" @bind:event="oninput" @onkeyup="AramaYap" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Durum</label>
+                    <select class="form-select" @bind="seciliDurum" @bind:after="FiltreleAsync">
+                        <option value="">Tümü</option>
+                        @foreach (var durum in Enum.GetValues<ProformaDurum>())
+                        {
+                            <option value="@durum">@DurumAdiGetir(durum)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Başlangıç</label>
+                    <input type="date" class="form-control" @bind="baslangicTarihi" @bind:after="FiltreleAsync" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Bitiş</label>
+                    <input type="date" class="form-control" @bind="bitisTarihi" @bind:after="FiltreleAsync" />
+                </div>
+                <div class="col-md-3 d-flex align-items-end gap-2">
+                    <button class="btn btn-outline-secondary" @onclick="FiltreleriTemizle">
+                        <i class="bi bi-x-lg me-1"></i>Temizle
+                    </button>
+                    <button class="btn btn-outline-success" @onclick="ExcelExport">
+                        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Liste *@
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+        </div>
+    }
+    else if (filtrelenmisListe == null || !filtrelenmisListe.Any())
+    {
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>Proforma fatura bulunamadı.
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Proforma No</th>
+                            <th>Tarih</th>
+                            <th>Geçerlilik</th>
+                            <th>Cari</th>
+                            <th>Durum</th>
+                            <th class="text-end">Tutar</th>
+                            <th class="text-center" style="width: 150px;">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in filtrelenmisListe)
+                        {
+                            <tr class="@(item.GecerlilikTarihi < DateTime.Now && item.Durum == ProformaDurum.Gonderildi ? "table-warning" : "")">
+                                <td>
+                                    <a href="/proforma-fatura/@item.Id" class="fw-bold text-decoration-none">
+                                        @item.ProformaNo
+                                    </a>
+                                    @if (item.FaturayaDonusturuldu)
+                                    {
+                                        <span class="badge bg-success ms-1" title="Faturaya dönüştürüldü">
+                                            <i class="bi bi-check-lg"></i>
+                                        </span>
+                                    }
+                                </td>
+                                <td>@item.ProformaTarihi.ToString("dd.MM.yyyy")</td>
+                                <td>
+                                    @item.GecerlilikTarihi.ToString("dd.MM.yyyy")
+                                    @if (item.GecerlilikTarihi < DateTime.Now && item.Durum == ProformaDurum.Gonderildi)
+                                    {
+                                        <span class="badge bg-danger ms-1">Süresi Doldu</span>
+                                    }
+                                </td>
+                                <td>@item.Cari?.Unvan</td>
+                                <td>
+                                    <span class="badge @DurumRengiGetir(item.Durum)">
+                                        @DurumAdiGetir(item.Durum)
+                                    </span>
+                                </td>
+                                <td class="text-end fw-bold">@item.GenelToplam.ToString("N2") ₺</td>
+                                <td class="text-center">
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="/proforma-fatura/@item.Id" class="btn btn-outline-primary" title="Görüntüle">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        @if (!item.FaturayaDonusturuldu)
+                                        {
+                                            <a href="/proforma-fatura/@item.Id/duzenle" class="btn btn-outline-secondary" title="Düzenle">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                            @if (item.Durum == ProformaDurum.Onaylandi)
+                                            {
+                                                <button class="btn btn-outline-success" @onclick="() => FaturayaDonusturAsync(item.Id)" title="Faturaya Dönüştür">
+                                                    <i class="bi bi-receipt"></i>
+                                                </button>
+                                            }
+                                        }
+                                        <button class="btn btn-outline-danger" @onclick="() => SilAsync(item.Id)" title="Sil">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<ProformaFatura> tumListe = new();
+    private List<ProformaFatura> filtrelenmisListe = new();
+    private ProformaDashboardStats? stats;
+    private bool isLoading = true;
+
+    // Filtreler
+    private string aramaMetni = "";
+    private string seciliDurum = "";
+    private DateTime? baslangicTarihi;
+    private DateTime? bitisTarihi;
+    private System.Timers.Timer? debounceTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await YukleAsync();
+    }
+
+    private async Task YukleAsync()
+    {
+        isLoading = true;
+        try
+        {
+            tumListe = await ProformaService.GetAllAsync();
+            stats = await ProformaService.GetDashboardStatsAsync();
+            await FiltreleAsync();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private Task FiltreleAsync()
+    {
+        var sorgu = tumListe.AsQueryable();
+
+        // Arama
+        if (!string.IsNullOrWhiteSpace(aramaMetni))
+        {
+            var aranan = aramaMetni.ToLower();
+            sorgu = sorgu.Where(p => 
+                p.ProformaNo.ToLower().Contains(aranan) ||
+                (p.Cari != null ? p.Cari.Unvan : "").ToLower().Contains(aranan));
+        }
+
+        // Durum
+        if (!string.IsNullOrEmpty(seciliDurum) && Enum.TryParse<ProformaDurum>(seciliDurum, out var durum))
+        {
+            sorgu = sorgu.Where(p => p.Durum == durum);
+        }
+
+        // Tarih aralığı
+        if (baslangicTarihi.HasValue)
+        {
+            sorgu = sorgu.Where(p => p.ProformaTarihi >= baslangicTarihi.Value);
+        }
+        if (bitisTarihi.HasValue)
+        {
+            sorgu = sorgu.Where(p => p.ProformaTarihi <= bitisTarihi.Value);
+        }
+
+        filtrelenmisListe = sorgu.OrderByDescending(p => p.ProformaTarihi).ToList();
+        return Task.CompletedTask;
+    }
+
+    private void AramaYap()
+    {
+        debounceTimer?.Stop();
+        debounceTimer?.Dispose();
+        debounceTimer = new System.Timers.Timer(300);
+        debounceTimer.Elapsed += async (s, e) =>
+        {
+            debounceTimer?.Stop();
+            await InvokeAsync(async () =>
+            {
+                await FiltreleAsync();
+                StateHasChanged();
+            });
+        };
+        debounceTimer.Start();
+    }
+
+    private async Task FiltreleriTemizle()
+    {
+        aramaMetni = "";
+        seciliDurum = "";
+        baslangicTarihi = null;
+        bitisTarihi = null;
+        await FiltreleAsync();
+    }
+
+    private async Task FaturayaDonusturAsync(int id)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Bu proforma faturaya dönüştürülecek. Onaylıyor musunuz?");
+        if (!confirmed) return;
+
+        try
+        {
+            var fatura = await ProformaService.FaturayaDonusturAsync(id);
+            await YukleAsync();
+            Navigation.NavigateTo($"/fatura/{fatura.Id}");
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Hata: {ex.Message}");
+        }
+    }
+
+    private async Task SilAsync(int id)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Bu proforma silinecek. Onaylıyor musunuz?");
+        if (!confirmed) return;
+
+        try
+        {
+            await ProformaService.DeleteAsync(id);
+            await YukleAsync();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Hata: {ex.Message}");
+        }
+    }
+
+    private async Task ExcelExport()
+    {
+        if (!filtrelenmisListe.Any()) return;
+
+        try
+        {
+            var bytes = await ProformaService.ExportToExcelAsync(filtrelenmisListe);
+            var fileName = $"ProformaFaturalar_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+            await JS.InvokeVoidAsync("downloadFileFromBytes", fileName, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes);
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Excel export hatası: {ex.Message}");
+        }
+    }
+
+    private string DurumAdiGetir(ProformaDurum durum) => durum switch
+    {
+        ProformaDurum.Taslak => "Taslak",
+        ProformaDurum.Gonderildi => "Gönderildi",
+        ProformaDurum.Onaylandi => "Onaylandı",
+        ProformaDurum.Reddedildi => "Reddedildi",
+        ProformaDurum.FaturayaDonusturuldu => "Faturaya Dönüştürüldü",
+        ProformaDurum.SuresiDoldu => "Süresi Doldu",
+        _ => durum.ToString()
+    };
+
+    private string DurumRengiGetir(ProformaDurum durum) => durum switch
+    {
+        ProformaDurum.Taslak => "bg-secondary",
+        ProformaDurum.Gonderildi => "bg-info",
+        ProformaDurum.Onaylandi => "bg-success",
+        ProformaDurum.Reddedildi => "bg-danger",
+        ProformaDurum.FaturayaDonusturuldu => "bg-primary",
+        ProformaDurum.SuresiDoldu => "bg-warning text-dark",
+        _ => "bg-secondary"
+    };
+}
+

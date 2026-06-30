@@ -1,0 +1,476 @@
+@page "/raporlar/filo-kpi"
+@using System.Globalization
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.JSInterop
+@inject IServisCalismaService ServisCalismaService
+@inject IAracMasrafService AracMasrafService
+@inject IOperasyonelHakedisService HakedisService
+@inject IAracService AracService
+@inject ISoforService SoforService
+@inject IToastService ToastService
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+@attribute [Authorize]
+
+<PageTitle>Filo KPI Dashboard</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-speedometer2 me-2"></i>Filo Operasyonel KPI Dashboard</h2>
+            <p class="text-muted mb-0">Tüm operasyonel raporların komuta merkezi</p>
+        </div>
+        <div>
+            <select class="form-select form-select-sm" style="width: 180px;" @bind="hizliSecim" @bind:after="HizliSecimUygula">
+                <option value="buay">📅 Bu Ay</option>
+                <option value="gecenay">⏪ Geçen Ay</option>
+                <option value="son30">🕒 Son 30 Gün</option>
+                <option value="buyil">📊 Bu Yıl</option>
+            </select>
+        </div>
+    </div>
+
+    @if (yukleniyor)
+    {
+        <div class="card"><div class="card-body p-5 text-center text-muted">
+            <div class="spinner-border me-2"></div> KPI'lar hesaplanıyor...
+        </div></div>
+    }
+    else
+    {
+        <!-- ANA KPI KARTLARI -->
+        <div class="row g-2 mb-3">
+            <div class="col-md-2">
+                <div class="card border-primary shadow-sm h-100">
+                    <div class="card-body py-3 text-center">
+                        <i class="bi bi-truck fs-2 text-primary"></i>
+                        <div class="text-muted small mt-1">Aktif Araç</div>
+                        <div class="fs-4 fw-bold text-primary">@aktifAracSayisi</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card border-info shadow-sm h-100">
+                    <div class="card-body py-3 text-center">
+                        <i class="bi bi-person-badge fs-2 text-info"></i>
+                        <div class="text-muted small mt-1">Aktif Şoför</div>
+                        <div class="fs-4 fw-bold text-info">@aktifSoforSayisi</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card border-success shadow-sm h-100">
+                    <div class="card-body py-3 text-center">
+                        <i class="bi bi-arrow-repeat fs-2 text-success"></i>
+                        <div class="text-muted small mt-1">Toplam Sefer</div>
+                        <div class="fs-4 fw-bold text-success">@toplamSefer</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card border-warning shadow-sm h-100">
+                    <div class="card-body py-3 text-center">
+                        <i class="bi bi-speedometer fs-2 text-warning"></i>
+                        <div class="text-muted small mt-1">Toplam KM</div>
+                        <div class="fs-4 fw-bold text-warning">@toplamKm.ToString("N0")</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card border-danger shadow-sm h-100">
+                    <div class="card-body py-3 text-center">
+                        <i class="bi bi-fuel-pump fs-2 text-danger"></i>
+                        <div class="text-muted small mt-1">Yakıt Gideri</div>
+                        <div class="fs-5 fw-bold text-danger">@toplamYakit.ToString("N0") ₺</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card border-dark shadow-sm h-100" style="background: linear-gradient(135deg, #198754 0%, #0d6efd 100%); color: white;">
+                    <div class="card-body py-3 text-center">
+                        <i class="bi bi-graph-up-arrow fs-2"></i>
+                        <div class="small mt-1 opacity-75">Net Kâr/Zarar</div>
+                        <div class="fs-5 fw-bold">@netKar.ToString("N0") ₺</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- HAKEDİŞ DURUMU -->
+        <div class="row g-2 mb-3">
+            <div class="col-md-3">
+                <div class="card border-secondary shadow-sm h-100" @onclick='() => Goto("operasyonel-hakedis")' style="cursor:pointer;">
+                    <div class="card-body py-3">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <div class="text-muted small">📝 Taslak Hakediş</div>
+                                <div class="fs-4 fw-bold text-secondary">@taslakSayisi</div>
+                                <div class="small text-muted">@taslakTutar.ToString("N0") ₺</div>
+                            </div>
+                            <i class="bi bi-file-earmark-text fs-2 text-secondary opacity-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-warning shadow-sm h-100" @onclick='() => Goto("operasyonel-hakedis")' style="cursor:pointer;">
+                    <div class="card-body py-3">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <div class="text-muted small">✅ Onaylı (Faturalanmayı Bekleyen)</div>
+                                <div class="fs-4 fw-bold text-warning">@onayliSayisi</div>
+                                <div class="small text-muted">@onayliTutar.ToString("N0") ₺</div>
+                            </div>
+                            <i class="bi bi-check2-circle fs-2 text-warning opacity-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-info shadow-sm h-100" @onclick='() => Goto("faturalar")' style="cursor:pointer;">
+                    <div class="card-body py-3">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <div class="text-muted small">🧾 Faturalanmış</div>
+                                <div class="fs-4 fw-bold text-info">@faturalandiSayisi</div>
+                                <div class="small text-muted">@faturalandiTutar.ToString("N0") ₺</div>
+                            </div>
+                            <i class="bi bi-receipt fs-2 text-info opacity-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-success shadow-sm h-100" @onclick='() => Goto("cari-hareket-takip")' style="cursor:pointer;">
+                    <div class="card-body py-3">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <div class="text-muted small">💰 Tahsil Edildi</div>
+                                <div class="fs-4 fw-bold text-success">@tahsilSayisi</div>
+                                <div class="small text-muted">@tahsilTutar.ToString("N0") ₺</div>
+                            </div>
+                            <i class="bi bi-cash-coin fs-2 text-success opacity-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GRAFİK BÖLGESİ -->
+        <div class="row g-2 mb-3">
+            <div class="col-md-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-light"><strong><i class="bi bi-pie-chart-fill me-1"></i>Hakediş Tipi Dağılımı (Tutar)</strong></div>
+                    <div class="card-body" style="height: 280px;">
+                        <canvas id="kpiHakedisTipChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-light"><strong><i class="bi bi-bar-chart-fill me-1"></i>Günlük Sefer Trendi</strong></div>
+                    <div class="card-body" style="height: 280px;">
+                        <canvas id="kpiSeferTrendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TOP 5 LİSTELERİ -->
+        <div class="row g-2 mb-3">
+            <div class="col-md-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-light"><strong><i class="bi bi-trophy-fill me-1 text-warning"></i>En Aktif 5 Şoför</strong></div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm mb-0">
+                            <tbody>
+                                @{ int i = 1; }
+                                @foreach (var s in top5Sofor)
+                                {
+                                    <tr>
+                                        <td style="width:30px;"><span class="badge bg-secondary">@(i++)</span></td>
+                                        <td><strong>@s.Ad</strong></td>
+                                        <td class="text-end"><span class="badge bg-primary">@s.Sefer sefer</span></td>
+                                    </tr>
+                                }
+                                @if (!top5Sofor.Any())
+                                {
+                                    <tr><td colspan="3" class="text-center text-muted p-3">Veri yok</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-light"><strong><i class="bi bi-truck-front-fill me-1 text-primary"></i>En Çok Kullanılan 5 Araç</strong></div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm mb-0">
+                            <tbody>
+                                @{ int j = 1; }
+                                @foreach (var a in top5Arac)
+                                {
+                                    <tr>
+                                        <td style="width:30px;"><span class="badge bg-secondary">@(j++)</span></td>
+                                        <td><strong>@a.Plaka</strong></td>
+                                        <td class="text-end">
+                                            <span class="badge bg-info">@a.Km.ToString("N0") km</span>
+                                        </td>
+                                    </tr>
+                                }
+                                @if (!top5Arac.Any())
+                                {
+                                    <tr><td colspan="3" class="text-center text-muted p-3">Veri yok</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-light"><strong><i class="bi bi-fire me-1 text-danger"></i>En Yakıt Yiyen 5 Araç</strong></div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm mb-0">
+                            <tbody>
+                                @{ int k = 1; }
+                                @foreach (var a in top5Yakit)
+                                {
+                                    <tr>
+                                        <td style="width:30px;"><span class="badge bg-secondary">@(k++)</span></td>
+                                        <td><strong>@a.Plaka</strong></td>
+                                        <td class="text-end"><span class="badge bg-danger">@a.Tutar.ToString("N0") ₺</span></td>
+                                    </tr>
+                                }
+                                @if (!top5Yakit.Any())
+                                {
+                                    <tr><td colspan="3" class="text-center text-muted p-3">Veri yok</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- HIZLI ERİŞİM -->
+        <div class="card shadow-sm mb-3">
+            <div class="card-header bg-light"><strong><i class="bi bi-lightning-fill me-1 text-warning"></i>Hızlı Erişim</strong></div>
+            <div class="card-body py-3">
+                <div class="row g-2">
+                    <div class="col-md-3"><a href="raporlar/haftalik-puantaj" class="btn btn-outline-info w-100 text-start"><i class="bi bi-calendar-week me-2"></i>Haftalık Puantaj Matrisi</a></div>
+                    <div class="col-md-3"><a href="raporlar/sofor-aylik-hakedis" class="btn btn-outline-success w-100 text-start"><i class="bi bi-cash-coin me-2"></i>Şoför Aylık Hakediş</a></div>
+                    <div class="col-md-3"><a href="raporlar/arac-km-yakit" class="btn btn-outline-warning w-100 text-start"><i class="bi bi-fuel-pump me-2"></i>Araç KM & Yakıt</a></div>
+                    <div class="col-md-3"><a href="karlilik-raporu" class="btn btn-outline-primary w-100 text-start"><i class="bi bi-graph-up-arrow me-2"></i>Karlılık Raporu</a></div>
+                    <div class="col-md-3"><a href="operasyonel-hakedis" class="btn btn-outline-secondary w-100 text-start"><i class="bi bi-receipt-cutoff me-2"></i>Operasyonel Hakediş</a></div>
+                    <div class="col-md-3"><a href="filo/puantaj" class="btn btn-outline-success w-100 text-start"><i class="bi bi-journal-check me-2"></i>Filo Puantaj</a></div>
+                    <div class="col-md-3"><a href="filo-operasyon" class="btn btn-outline-info w-100 text-start"><i class="bi bi-gear-wide-connected me-2"></i>Filo Operasyon</a></div>
+                    <div class="col-md-3"><a href="raporlar/arac-karlilik" class="btn btn-outline-primary w-100 text-start"><i class="bi bi-truck me-2"></i>Araç Karlılık</a></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-muted small mt-2">
+            <i class="bi bi-info-circle me-1"></i>
+            Dönem: <strong>@bas:dd.MM.yyyy - @bit:dd.MM.yyyy</strong>.
+            Net Kâr/Zarar = (Faturalanan + Tahsil Edilen Kurum Hakedişi) − (Tedarikçi Hakedişi + Yakıt Gideri).
+        </div>
+    }
+</div>
+
+@code {
+    [Inject] private NavigationManager Nav { get; set; } = null!;
+
+    private bool yukleniyor = true;
+    private string hizliSecim = "buay";
+    private DateTime bas = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime bit = DateTime.Today;
+
+    // Ana KPI'lar
+    private int aktifAracSayisi, aktifSoforSayisi, toplamSefer;
+    private decimal toplamKm, toplamYakit, netKar;
+
+    // Hakediş durumları
+    private int taslakSayisi, onayliSayisi, faturalandiSayisi, tahsilSayisi;
+    private decimal taslakTutar, onayliTutar, faturalandiTutar, tahsilTutar;
+
+    // Top 5
+    private record SoforTop(string Ad, int Sefer);
+    private record AracTop(string Plaka, decimal Km);
+    private record YakitTop(string Plaka, decimal Tutar);
+    private List<SoforTop> top5Sofor = new();
+    private List<AracTop> top5Arac = new();
+    private List<YakitTop> top5Yakit = new();
+
+    // Grafik verileri
+    private decimal[] hakedisTipTutarlari = new decimal[3];
+    private List<DateTime> trendGunler = new();
+    private List<int> trendSeferler = new();
+
+    private bool _renderRequested;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task HizliSecimUygula()
+    {
+        var bugun = DateTime.Today;
+        switch (hizliSecim)
+        {
+            case "buay":
+                bas = new DateTime(bugun.Year, bugun.Month, 1); bit = bugun; break;
+            case "gecenay":
+                var ga = bugun.AddMonths(-1);
+                bas = new DateTime(ga.Year, ga.Month, 1);
+                bit = bas.AddMonths(1).AddDays(-1); break;
+            case "son30":
+                bas = bugun.AddDays(-30); bit = bugun; break;
+            case "buyil":
+                bas = new DateTime(bugun.Year, 1, 1); bit = bugun; break;
+        }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        yukleniyor = true;
+        StateHasChanged();
+        try
+        {
+            var bb = bas.Date;
+            var bs = bit.Date.AddDays(1).AddSeconds(-1);
+
+            var kayitlar = await ServisCalismaService.GetByDateRangeAsync(bb, bs);
+            var yakitMasraflari = await AracMasrafService.GetByKategoriAsync(MasrafKategori.Yakit, bb, bs);
+
+            // Tüm hakedişleri çek (yıl/ay parametreleri opsiyonel; tarih aralığı için tümünü filtrele)
+            var tumHakedisler = await HakedisService.GetHakedislerAsync();
+            var donemHakedis = tumHakedisler
+                .Where(h =>
+                {
+                    var tarih = new DateTime(h.Yil, h.Ay, 1);
+                    return tarih >= new DateTime(bb.Year, bb.Month, 1) && tarih <= bs;
+                }).ToList();
+
+            // ===== Ana KPI'lar =====
+            aktifAracSayisi = kayitlar.Select(k => k.AracId).Distinct().Count();
+            aktifSoforSayisi = kayitlar.Select(k => k.SoforId).Distinct().Count();
+            toplamSefer = kayitlar.Sum(k => SeferSayisi(k.ServisTuru));
+            toplamKm = kayitlar
+                .Where(k => k.KmBaslangic.HasValue && k.KmBitis.HasValue && k.KmBitis > k.KmBaslangic)
+                .Sum(k => (decimal)(k.KmBitis!.Value - k.KmBaslangic!.Value));
+            toplamYakit = yakitMasraflari.Sum(m => m.Tutar);
+
+            // ===== Hakediş durumları =====
+            void DurumOzeti(HakedisDurum d, out int adet, out decimal tutar)
+            {
+                var liste = donemHakedis.Where(h => h.Durum == d).ToList();
+                adet = liste.Count;
+                tutar = liste.Sum(h => h.GenelToplam);
+            }
+            DurumOzeti(HakedisDurum.Taslak, out taslakSayisi, out taslakTutar);
+            DurumOzeti(HakedisDurum.Onaylandi, out onayliSayisi, out onayliTutar);
+            DurumOzeti(HakedisDurum.Faturalandi, out faturalandiSayisi, out faturalandiTutar);
+            DurumOzeti(HakedisDurum.TahsilEdildi, out tahsilSayisi, out tahsilTutar);
+
+            // Net kâr/zarar
+            var kurumGelir = donemHakedis.Where(h => h.Tip == HakedisTipi.Kurum &&
+                (h.Durum == HakedisDurum.Faturalandi || h.Durum == HakedisDurum.TahsilEdildi))
+                .Sum(h => h.Tutar);
+            var tedarikciGider = donemHakedis.Where(h => h.Tip == HakedisTipi.Tedarikci &&
+                h.Durum != HakedisDurum.Iptal && h.Durum != HakedisDurum.Taslak)
+                .Sum(h => h.Tutar);
+            netKar = kurumGelir - tedarikciGider - toplamYakit;
+
+            // ===== Hakediş tipi grafik verisi =====
+            hakedisTipTutarlari[0] = donemHakedis.Where(h => h.Tip == HakedisTipi.Kurum).Sum(h => h.Tutar);
+            hakedisTipTutarlari[1] = donemHakedis.Where(h => h.Tip == HakedisTipi.Tedarikci).Sum(h => h.Tutar);
+            hakedisTipTutarlari[2] = donemHakedis.Where(h => h.Tip == HakedisTipi.Arac).Sum(h => h.Tutar);
+
+            // ===== Trend (günlük sefer) =====
+            trendGunler.Clear(); trendSeferler.Clear();
+            var gunSayisi = (int)Math.Min(30, (bit.Date - bas.Date).TotalDays + 1);
+            var basGosterim = bit.Date.AddDays(-gunSayisi + 1);
+            for (int idx = 0; idx < gunSayisi; idx++)
+            {
+                var g = basGosterim.AddDays(idx);
+                trendGunler.Add(g);
+                trendSeferler.Add(kayitlar.Where(k => k.CalismaTarihi.Date == g).Sum(k => SeferSayisi(k.ServisTuru)));
+            }
+
+            // ===== Top 5 listeler =====
+            top5Sofor = kayitlar
+                .GroupBy(k => k.SoforId)
+                .Select(g => new SoforTop(
+                    g.First().Sofor?.TamAd ?? $"#{g.Key}",
+                    g.Sum(k => SeferSayisi(k.ServisTuru))))
+                .OrderByDescending(x => x.Sefer)
+                .Take(5).ToList();
+
+            top5Arac = kayitlar
+                .Where(k => k.KmBaslangic.HasValue && k.KmBitis.HasValue && k.KmBitis > k.KmBaslangic)
+                .GroupBy(k => k.AracId)
+                .Select(g => new AracTop(
+                    g.First().Arac?.AktifPlaka ?? $"#{g.Key}",
+                    g.Sum(k => (decimal)(k.KmBitis!.Value - k.KmBaslangic!.Value))))
+                .OrderByDescending(x => x.Km)
+                .Take(5).ToList();
+
+            top5Yakit = yakitMasraflari
+                .GroupBy(m => m.AracId)
+                .Select(g => new YakitTop(
+                    g.First().Arac?.AktifPlaka ?? $"#{g.Key}",
+                    g.Sum(m => m.Tutar)))
+                .OrderByDescending(x => x.Tutar)
+                .Take(5).ToList();
+
+            _renderRequested = true;
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"KPI yüklenemedi: {ex.GetBaseException().Message}");
+        }
+        finally { yukleniyor = false; }
+    }
+
+    private static int SeferSayisi(ServisTuru t) => t switch
+    {
+        ServisTuru.SabahAksam => 2,
+        _ => 1
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_renderRequested && !yukleniyor)
+        {
+            _renderRequested = false;
+            try
+            {
+                await JS.InvokeVoidAsync("filoKpiCharts.renderHakedisTip",
+                    "kpiHakedisTipChart",
+                    new[] { "Kurum (Gelir)", "Tedarikçi (Gider)", "Araç (İç)" },
+                    hakedisTipTutarlari);
+
+                await JS.InvokeVoidAsync("filoKpiCharts.renderSeferTrend",
+                    "kpiSeferTrendChart",
+                    trendGunler.Select(g => g.ToString("dd.MM")).ToArray(),
+                    trendSeferler.ToArray());
+            }
+            catch { /* JS henüz yüklü değilse sessizce geç */ }
+        }
+    }
+
+    private void Goto(string url) => Nav.NavigateTo(url);
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("filoKpiCharts.destroyAll"); } catch { }
+    }
+}
+

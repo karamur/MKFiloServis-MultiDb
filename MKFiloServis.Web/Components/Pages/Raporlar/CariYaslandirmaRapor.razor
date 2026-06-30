@@ -1,0 +1,473 @@
+@page "/raporlar/cari-yaslandirma"
+@using MKFiloServis.Web.Models
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Shared.Entities
+@inject IRaporService RaporService
+@inject ICariService CariService
+@inject IExcelService ExcelService
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Cari Bakiye Yaşlandırma Raporu - Koa Filo Servis</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-calendar2-week me-2"></i>Cari Bakiye Yaşlandırma Raporu</h2>
+    </div>
+
+    <!-- Filtre Alanı -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label">Rapor Tarihi</label>
+                    <input type="date" class="form-control" @bind="raporTarihi" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Cari Tipi</label>
+                    <select class="form-select" @bind="seciliCariTipi">
+                        <option value="">-- Tüm Cariler --</option>
+                        <option value="1">Müşteri</option>
+                        <option value="2">Tedarikçi</option>
+                        <option value="3">Müşteri/Tedarikçi</option>
+                        <option value="4">Personel</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Cari Seçimi</label>
+                    <select class="form-select" @bind="seciliCariId">
+                        <option value="0">-- Tüm Cariler --</option>
+                        @foreach (var cari in cariler)
+                        {
+                            <option value="@cari.Id">@cari.CariKodu - @cari.Unvan</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-check mt-4">
+                        <input class="form-check-input" type="checkbox" @bind="sadeceBorcluCariler" id="chkBorclu">
+                        <label class="form-check-label" for="chkBorclu">
+                            Sadece Borçlu Cariler
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100" @onclick="RaporGetir">
+                        <i class="bi bi-search me-1"></i>Rapor Getir
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (yukleniyor)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+            <p class="mt-2">Rapor hazırlanıyor...</p>
+        </div>
+    }
+    else if (rapor != null)
+    {
+        <!-- Özet Kartları -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white h-100">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 opacity-75">Toplam Bakiye</h6>
+                        <h3 class="card-title mb-0">@rapor.ToplamBakiye.ToString("N2") ₺</h3>
+                        <small>@rapor.ToplamCariSayisi cari hesap</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white h-100">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 opacity-75">Güncel (0-30 Gün)</h6>
+                        <h3 class="card-title mb-0">@rapor.Guncel.ToString("N2") ₺</h3>
+                        <small>@(rapor.ToplamBakiye > 0 ? (rapor.Guncel / rapor.ToplamBakiye * 100).ToString("N1") : "0")%</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-dark h-100">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 opacity-75">Vadesi Geçmiş (31-90 Gün)</h6>
+                        <h3 class="card-title mb-0">@((rapor.Vadesi30_60 + rapor.Vadesi60_90).ToString("N2")) ₺</h3>
+                        <small>@(rapor.ToplamBakiye > 0 ? ((rapor.Vadesi30_60 + rapor.Vadesi60_90) / rapor.ToplamBakiye * 100).ToString("N1") : "0")%</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-danger text-white h-100">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 opacity-75">Kritik (90+ Gün)</h6>
+                        <h3 class="card-title mb-0">@rapor.Vadesi90Plus.ToString("N2") ₺</h3>
+                        <small>@(rapor.ToplamBakiye > 0 ? (rapor.Vadesi90Plus / rapor.ToplamBakiye * 100).ToString("N1") : "0")%</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Yaşlandırma Grafikleri -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <i class="bi bi-pie-chart me-2"></i>Yaşlandırma Dağılımı
+                    </div>
+                    <div class="card-body">
+                        <canvas id="yaslandirmaPieChart" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <i class="bi bi-bar-chart me-2"></i>Yaşlandırma Bantları
+                    </div>
+                    <div class="card-body">
+                        <canvas id="yaslandirmaBarChart" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Yaşlandırma Bantları Özet Tablosu -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-table me-2"></i>Yaşlandırma Bantları Özeti
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Bant</th>
+                                <th class="text-end">Tutar</th>
+                                <th class="text-center">Fatura Sayısı</th>
+                                <th class="text-center">Cari Sayısı</th>
+                                <th class="text-end">Oran</th>
+                                <th style="width: 200px;">Dağılım</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var bant in rapor.YaslandirmaBantlari)
+                            {
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-@bant.Renk">@bant.BantAdi</span>
+                                    </td>
+                                    <td class="text-end fw-bold">@bant.Tutar.ToString("N2") ₺</td>
+                                    <td class="text-center">@bant.FaturaSayisi</td>
+                                    <td class="text-center">@bant.CariSayisi</td>
+                                    <td class="text-end">%@bant.Oran.ToString("N1")</td>
+                                    <td>
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar bg-@bant.Renk" 
+                                                 role="progressbar" 
+                                                 style="width: @bant.Oran.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)%"
+                                                 aria-valuenow="@bant.Oran" 
+                                                 aria-valuemin="0" 
+                                                 aria-valuemax="100">
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-light fw-bold">
+                            <tr>
+                                <td>Toplam</td>
+                                <td class="text-end">@rapor.ToplamBakiye.ToString("N2") ₺</td>
+                                <td class="text-center">@rapor.YaslandirmaBantlari.Sum(b => b.FaturaSayisi)</td>
+                                <td class="text-center">@rapor.ToplamCariSayisi</td>
+                                <td class="text-end">%100</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cari Bazlı Detay Tablosu -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-people me-2"></i>Cari Bazlı Yaşlandırma Detayı</span>
+                <button class="btn btn-success btn-sm" @onclick="ExcelExport">
+                    <i class="bi bi-file-earmark-excel me-1"></i>Excel İndir
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover table-sm">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Cari Kodu</th>
+                                <th>Ünvan</th>
+                                <th>Cari Tipi</th>
+                                <th class="text-end">Toplam Bakiye</th>
+                                <th class="text-end text-success">Güncel</th>
+                                <th class="text-end text-warning">31-60 Gün</th>
+                                <th class="text-end" style="color: orange;">61-90 Gün</th>
+                                <th class="text-end text-danger">90+ Gün</th>
+                                <th class="text-center">Risk</th>
+                                <th class="text-center">İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var cari in rapor.Cariler)
+                            {
+                                <tr class="@(cari.RiskSeviyesi == "Yüksek" ? "table-danger" : cari.RiskSeviyesi == "Orta" ? "table-warning" : "")">
+                                    <td><code>@cari.CariKodu</code></td>
+                                    <td>@cari.Unvan</td>
+                                    <td><span class="badge bg-secondary">@cari.CariTipi</span></td>
+                                    <td class="text-end fw-bold">@cari.ToplamBakiye.ToString("N2") ₺</td>
+                                    <td class="text-end text-success">@cari.Guncel.ToString("N2") ₺</td>
+                                    <td class="text-end text-warning">@cari.Vadesi30_60.ToString("N2") ₺</td>
+                                    <td class="text-end" style="color: orange;">@cari.Vadesi60_90.ToString("N2") ₺</td>
+                                    <td class="text-end text-danger">@cari.Vadesi90Plus.ToString("N2") ₺</td>
+                                    <td class="text-center">
+                                        <span class="badge bg-@cari.RiskRengi">@cari.RiskSeviyesi</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <button class="btn btn-sm btn-outline-primary" 
+                                                @onclick="() => DetayGoster(cari.CariId)"
+                                                title="Fatura Detayı">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Fatura Detay Modal -->
+<div class="modal fade" id="faturaDetayModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-receipt me-2"></i>
+                    @(seciliCariDetay?.Unvan ?? "") - Fatura Yaşlandırma Detayı
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body">
+                @if (seciliCariDetay != null)
+                {
+                    <!-- Cari Özet -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <small class="text-muted">Toplam Bakiye</small>
+                                    <h4 class="mb-0">@seciliCariDetay.ToplamBakiye.ToString("N2") ₺</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <small class="text-muted">Fatura Sayısı</small>
+                                    <h4 class="mb-0">@seciliCariDetay.ToplamFaturaSayisi</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <small class="text-muted">Vadesi Geçmiş</small>
+                                    <h4 class="mb-0 text-danger">@seciliCariDetay.VadesiGecmisFaturaSayisi</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <small class="text-muted">Risk Seviyesi</small>
+                                    <h4 class="mb-0"><span class="badge bg-@seciliCariDetay.RiskRengi">@seciliCariDetay.RiskSeviyesi</span></h4>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fatura Tablosu -->
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover table-sm">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Fatura No</th>
+                                    <th>Fatura Tarihi</th>
+                                    <th>Vade Tarihi</th>
+                                    <th class="text-end">Genel Toplam</th>
+                                    <th class="text-end">Ödenen</th>
+                                    <th class="text-end">Kalan</th>
+                                    <th class="text-center">Gecikme</th>
+                                    <th class="text-center">Bant</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var fatura in seciliCariDetay.FaturaDetaylari)
+                                {
+                                    <tr>
+                                        <td><code>@fatura.FaturaNo</code></td>
+                                        <td>@fatura.FaturaTarihi.ToString("dd.MM.yyyy")</td>
+                                        <td>@(fatura.VadeTarihi?.ToString("dd.MM.yyyy") ?? "-")</td>
+                                        <td class="text-end">@fatura.GenelToplam.ToString("N2") ₺</td>
+                                        <td class="text-end text-success">@fatura.OdenenTutar.ToString("N2") ₺</td>
+                                        <td class="text-end fw-bold">@fatura.KalanTutar.ToString("N2") ₺</td>
+                                        <td class="text-center">
+                                            @if (fatura.VadesiGecmisMi)
+                                            {
+                                                <span class="text-danger">@fatura.GecikmeGunSayisi gün</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-success">Güncel</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge bg-@fatura.BantRengi">@fatura.YaslandirmaBandi</span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private DateTime raporTarihi = DateTime.Today;
+    private string seciliCariTipi = "";
+    private int seciliCariId = 0;
+    private bool sadeceBorcluCariler = true;
+    private bool yukleniyor = false;
+
+    private List<Cari> cariler = [];
+    private MKFiloServis.Web.Models.CariYaslandirmaRapor? rapor;
+    private MKFiloServis.Web.Models.CariYaslandirmaOzet? seciliCariDetay;
+
+    protected override async Task OnInitializedAsync()
+    {
+        cariler = await CariService.GetAllAsync();
+        await RaporGetir();
+    }
+
+    private async Task RaporGetir()
+    {
+        yukleniyor = true;
+        StateHasChanged();
+
+        try
+        {
+            CariTipi? cariTipi = string.IsNullOrEmpty(seciliCariTipi) 
+                ? null 
+                : (CariTipi)int.Parse(seciliCariTipi);
+
+            rapor = await RaporService.GetCariYaslandirmaAsync(
+                raporTarihi,
+                seciliCariId > 0 ? seciliCariId : null,
+                cariTipi,
+                sadeceBorcluCariler);
+        }
+        finally
+        {
+            yukleniyor = false;
+            StateHasChanged();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (rapor != null && rapor.YaslandirmaBantlari.Count > 0)
+        {
+            await GrafikleriOlustur();
+        }
+    }
+
+    private async Task GrafikleriOlustur()
+    {
+        try
+        {
+            // Pie Chart - Yaşlandırma Dağılımı
+            var pieLabels = rapor!.YaslandirmaBantlari.Select(b => b.BantAdi).ToArray();
+            var pieData = rapor.YaslandirmaBantlari.Select(b => (double)b.Tutar).ToArray();
+            var pieColors = new[] { "#198754", "#ffc107", "#fd7e14", "#dc3545" };
+
+            await JS.InvokeVoidAsync("createPieChart", "yaslandirmaPieChart", pieLabels, pieData, pieColors);
+
+            // Bar Chart - Yaşlandırma Bantları
+            var barLabels = rapor.YaslandirmaBantlari.Select(b => b.BantAdi).ToArray();
+            var barData = rapor.YaslandirmaBantlari.Select(b => (double)b.Tutar).ToArray();
+            var barColors = rapor.YaslandirmaBantlari.Select(b => b.Renk switch
+            {
+                "success" => "#198754",
+                "warning" => "#ffc107",
+                "orange" => "#fd7e14",
+                "danger" => "#dc3545",
+                _ => "#0d6efd"
+            }).ToArray();
+
+            await JS.InvokeVoidAsync("createYaslandirmaBarChart", "yaslandirmaBarChart", barLabels, barData, barColors);
+        }
+        catch
+        {
+            // Grafik oluşturma hatası - sessizce devam et
+        }
+    }
+
+    private async Task DetayGoster(int cariId)
+    {
+        seciliCariDetay = await RaporService.GetCariYaslandirmaDetayAsync(cariId, raporTarihi);
+        StateHasChanged();
+        await JS.InvokeVoidAsync("eval", "new bootstrap.Modal(document.getElementById('faturaDetayModal')).show()");
+    }
+
+    private async Task ExcelExport()
+    {
+        if (rapor == null || rapor.Cariler.Count == 0)
+            return;
+
+        var excelData = rapor.Cariler.Select(c => new Dictionary<string, object>
+        {
+            ["Cari Kodu"] = c.CariKodu,
+            ["Ünvan"] = c.Unvan,
+            ["Cari Tipi"] = c.CariTipi,
+            ["Toplam Bakiye"] = c.ToplamBakiye,
+            ["Güncel (0-30 Gün)"] = c.Guncel,
+            ["31-60 Gün"] = c.Vadesi30_60,
+            ["61-90 Gün"] = c.Vadesi60_90,
+            ["90+ Gün"] = c.Vadesi90Plus,
+            ["Vadesi Geçmiş Bakiye"] = c.VadesiGecmisBakiye,
+            ["Vadesi Geçmiş Oran (%)"] = c.VadesiGecmisOran,
+            ["Risk Seviyesi"] = c.RiskSeviyesi,
+            ["Fatura Sayısı"] = c.ToplamFaturaSayisi,
+            ["Vadesi Geçmiş Fatura"] = c.VadesiGecmisFaturaSayisi,
+            ["Telefon"] = c.Telefon ?? "",
+            ["E-posta"] = c.Email ?? ""
+        }).ToList();
+
+        var fileName = $"CariYaslandirma_{raporTarihi:yyyyMMdd}.xlsx";
+        var excelBytes = ExcelService.ExportToExcel(excelData, "Cari Yaşlandırma");
+        
+        await JS.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(excelBytes), 
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+}
+

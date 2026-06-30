@@ -1,0 +1,264 @@
+@page "/setup/lisans"
+@layout EmptyLayout
+@attribute [AllowAnonymous]
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using Microsoft.AspNetCore.Authorization
+@inject LicenseService LicenseService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Lisans Kurulumu - KOA Filo Servis</PageTitle>
+
+<div class="lisans-setup-container">
+    <div class="setup-background">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+    </div>
+
+    <div class="lisans-setup-card">
+        <!-- Header -->
+        <div class="setup-header">
+            <div class="logo-container">
+                <i class="bi bi-shield-lock"></i>
+            </div>
+            <h1>Lisans Aktivasyonu</h1>
+            <p>KOA Filo Servis lisans anahtarınızı girin</p>
+        </div>
+
+        <!-- Mesajlar -->
+        @if (!string.IsNullOrEmpty(hataMesaji))
+        {
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>@hataMesaji
+            </div>
+        }
+        @if (lisansAktif)
+        {
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle-fill me-2"></i>Lisans başarıyla aktive edildi! Giriş sayfasına yönlendiriliyorsunuz...
+            </div>
+        }
+
+        <!-- Mevcut Lisans Durumu -->
+        @if (mevcutLisans != null)
+        {
+            var gecerli = !LicenseService.IsDemoExpired(mevcutLisans) && DateTime.UtcNow <= mevcutLisans.ExpireDate;
+            var kalanGun = LicenseService.GetRemainingDays(mevcutLisans);
+            <div class="lisans-durum-kutu @(gecerli ? "gecerli" : "suresi-dolmus") mb-3">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <i class="bi @(gecerli ? "bi-shield-check text-success" : "bi-shield-x text-danger") fs-5"></i>
+                    <strong>Mevcut Lisans: @(mevcutLisans.IsDemo ? "Demo" : "Aktif")</strong>
+                    <span class="badge @(gecerli ? "bg-success" : "bg-danger") ms-auto">
+                        @(gecerli ? "Geçerli" : "Süresi Dolmuş")
+                    </span>
+                </div>
+                <div class="lisans-detay-satir">
+                    <span class="text-muted">Firma:</span>
+                    <span>@mevcutLisans.FirmaKodu</span>
+                </div>
+                <div class="lisans-detay-satir">
+                    <span class="text-muted">Bitiş:</span>
+                    <span class="@(gecerli ? "" : "text-danger fw-bold")">
+                        @mevcutLisans.ExpireDate.ToString("dd.MM.yyyy")
+                    </span>
+                </div>
+                <div class="lisans-detay-satir">
+                    <span class="text-muted">Kalan Gün:</span>
+                    <span class="@(kalanGun <= 7 ? "text-warning fw-bold" : "")">
+                        @kalanGun gün
+                    </span>
+                </div>
+            </div>
+        }
+
+        <!-- Makine Kodu -->
+        <div class="makine-kodu-kutu mb-3">
+            <label class="form-label fw-semibold mb-1">
+                <i class="bi bi-cpu me-1"></i>Bu Bilgisayarın Makine Kodu
+            </label>
+            @if (makineKoduYukleniyor)
+            {
+                <div class="d-flex align-items-center gap-2 text-muted">
+                    <span class="spinner-border spinner-border-sm"></span>
+                    <small>Hesaplanıyor...</small>
+                </div>
+            }
+            else
+            {
+                <div class="input-group">
+                    <input type="text" class="form-control form-control-sm font-monospace text-center"
+                           value="@makineKodu" readonly />
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="MakineKoduKopyalaAsync"
+                            title="Kopyala">
+                        <i class="bi @(kopyalandi ? "bi-check text-success" : "bi-clipboard")"></i>
+                    </button>
+                </div>
+                <small class="text-muted d-block mt-1">
+                    <i class="bi bi-info-circle me-1"></i>Bu kodu KOA'ya ileterek lisans anahtarı alınız.
+                </small>
+            }
+        </div>
+
+        <!-- Lisans Anahtarı Girişi -->
+        <div class="mb-3">
+            <label class="form-label fw-semibold">
+                <i class="bi bi-key me-1"></i>Lisans Anahtarı
+            </label>
+            <textarea class="form-control font-monospace"
+                      rows="5"
+                      placeholder="Lisans anahtarınızı buraya yapıştırın..."
+                      @bind="lisansAnahtari"
+                      @bind:event="oninput"
+                      disabled="@islemDevamEdiyor"></textarea>
+            <small class="text-muted">Lisans anahtarı KOA tarafından e-posta ile iletilir.</small>
+        </div>
+
+        <!-- Butonlar -->
+        <div class="d-grid gap-2">
+            <button class="btn btn-primary btn-lg" @onclick="LisansAktiveEtAsync"
+                    disabled="@(islemDevamEdiyor || string.IsNullOrWhiteSpace(lisansAnahtari))">
+                @if (islemDevamEdiyor)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                    <span>Aktive ediliyor...</span>
+                }
+                else
+                {
+                    <i class="bi bi-shield-check me-2"></i>
+                    <span>Lisansı Aktive Et</span>
+                }
+            </button>
+            <button class="btn btn-outline-secondary" @onclick="AtlaGirisYap">
+                <i class="bi bi-skip-forward me-1"></i>Deneme Sürümü ile Devam Et
+            </button>
+        </div>
+    </div>
+</div>
+
+@* Styles aynı kaldı *@
+<style>
+    .lisans-setup-container {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+        position: relative;
+        overflow: hidden;
+        padding: 2rem 1rem;
+    }
+    .setup-background { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+    .shape { position: absolute; border-radius: 50%; background: rgba(255,255,255,0.05); }
+    .shape-1 { width: 350px; height: 350px; top: -80px; right: -60px; }
+    .shape-2 { width: 200px; height: 200px; bottom: -40px; left: -40px; }
+    .shape-3 { width: 120px; height: 120px; top: 40%; left: 8%; }
+    .lisans-setup-card {
+        background: #fff; border-radius: 1.5rem; padding: 2.5rem 2rem;
+        width: 100%; max-width: 520px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+        position: relative; z-index: 10;
+    }
+    .setup-header { text-align: center; margin-bottom: 1.5rem; }
+    .logo-container {
+        width: 70px; height: 70px; background: linear-gradient(135deg, #1a1a2e, #0f3460);
+        border-radius: 50%; display: flex; align-items: center; justify-content: center;
+        margin: 0 auto 1rem;
+    }
+    .logo-container i { font-size: 2rem; color: #e0c46c; }
+    .setup-header h1 { font-size: 1.5rem; font-weight: 700; color: #1a1a2e; margin-bottom: 0.25rem; }
+    .setup-header p { color: #6c757d; font-size: 0.9rem; }
+    .lisans-durum-kutu {
+        border-radius: 0.75rem; padding: 0.875rem 1rem; border: 1.5px solid #dee2e6;
+        background: #f8f9fa; font-size: 0.875rem;
+    }
+    .lisans-durum-kutu.gecerli { border-color: #198754; background: #f0fff4; }
+    .lisans-durum-kutu.suresi-dolmus { border-color: #dc3545; background: #fff5f5; }
+    .lisans-detay-satir { display: flex; justify-content: space-between; padding: 2px 0; }
+    .makine-kodu-kutu { background: #f8f9fa; border-radius: 0.75rem; padding: 0.875rem 1rem; border: 1px solid #dee2e6; }
+</style>
+
+@code {
+    private string lisansAnahtari = string.Empty;
+    private string hataMesaji = string.Empty;
+    private bool islemDevamEdiyor = false;
+    private bool lisansAktif = false;
+    private bool kopyalandi = false;
+    private bool makineKoduYukleniyor = true;
+    private string makineKodu = string.Empty;
+    private LicenseInfo? mevcutLisans;
+
+    protected override async Task OnInitializedAsync()
+    {
+        mevcutLisans = await LicenseService.GetCurrentLicenseAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                makineKodu = LicenseService.GetMachineId();
+            }
+            catch
+            {
+                makineKodu = "Makine kodu alınamadı";
+            }
+            finally
+            {
+                makineKoduYukleniyor = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task LisansAktiveEtAsync()
+    {
+        hataMesaji = string.Empty;
+        lisansAktif = false;
+
+        if (string.IsNullOrWhiteSpace(lisansAnahtari))
+        {
+            hataMesaji = "Lütfen lisans anahtarını girin.";
+            return;
+        }
+
+        islemDevamEdiyor = true;
+        try
+        {
+            var lisans = await LicenseService.ActivateFromKeyAsync(lisansAnahtari.Trim()); // Yeni format: Base64 JSON (LisansDesktop uyumlu)
+            mevcutLisans = lisans;
+            lisansAktif = true;
+            lisansAnahtari = string.Empty;
+            await Task.Delay(2000);
+            Navigation.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = ex.Message;
+        }
+        finally
+        {
+            islemDevamEdiyor = false;
+        }
+    }
+
+    private async Task MakineKoduKopyalaAsync()
+    {
+        if (string.IsNullOrEmpty(makineKodu)) return;
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", makineKodu);
+            kopyalandi = true;
+            StateHasChanged();
+            await Task.Delay(2000);
+            kopyalandi = false;
+            StateHasChanged();
+        }
+        catch { /* Clipboard erişimi reddedildi */ }
+    }
+
+    private void AtlaGirisYap() => Navigation.NavigateTo("/login");
+}
+

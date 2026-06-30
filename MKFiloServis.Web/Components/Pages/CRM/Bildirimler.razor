@@ -1,0 +1,240 @@
+@page "/crm/bildirimler"
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Shared.Entities
+@inject ICRMService CRMService
+@inject AppAuthenticationStateProvider AuthProvider
+@inject IToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>Bildirimler - CRM</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="mb-0"><i class="bi bi-bell-fill me-2 text-warning"></i>Bildirimler</h3>
+            <small class="text-muted">Sistem bildirimleri ve uyarıları</small>
+        </div>
+        <div>
+            @if (bildirimler.Any(b => !b.Okundu))
+            {
+                <button class="btn btn-outline-primary btn-sm me-2" @onclick="TumunuOkunduIsaretle">
+                    <i class="bi bi-check-all me-1"></i>Tümünü Okundu İşaretle
+                </button>
+            }
+            <div class="btn-group">
+                <button class="btn btn-sm @(filtre == "tumu" ? "btn-primary" : "btn-outline-primary")" @onclick="FiltreTumu">
+                    Tümü
+                </button>
+                <button class="btn btn-sm @(filtre == "okunmamis" ? "btn-primary" : "btn-outline-primary")" @onclick="FiltreOkunmamis">
+                    Okunmamış (@okunmamisSayisi)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="d-flex justify-content-center p-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+        </div>
+    }
+    else if (!bildirimler.Any())
+    {
+        <div class="card shadow-sm">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-bell-slash text-muted" style="font-size: 4rem;"></i>
+                <h5 class="mt-3 text-muted">Bildirim Yok</h5>
+                <p class="text-muted">Henüz bildiriminiz bulunmuyor.</p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card shadow-sm">
+            <div class="list-group list-group-flush">
+                @foreach (var bildirim in filtreliBildirimler)
+                {
+                    <div class="list-group-item list-group-item-action @(!bildirim.Okundu ? "bg-light" : "")" 
+                         style="cursor: pointer;"
+                         @onclick="() => BildirimTikla(bildirim)">
+                        <div class="d-flex w-100 justify-content-between align-items-start">
+                            <div class="d-flex align-items-start">
+                                <div class="me-3">
+                                    <span class="@GetBildirimIconClass(bildirim.Tip)" style="font-size: 1.5rem;">
+                                        <i class="bi @GetBildirimIcon(bildirim.Tip)"></i>
+                                    </span>
+                                </div>
+                                <div>
+                                    <h6 class="mb-1 @(!bildirim.Okundu ? "fw-bold" : "")">
+                                        @bildirim.Baslik
+                                        @if (!bildirim.Okundu)
+                                        {
+                                            <span class="badge bg-primary ms-2">Yeni</span>
+                                        }
+                                    </h6>
+                                    <p class="mb-1 text-muted small">@bildirim.Icerik</p>
+                                    <small class="text-muted">
+                                        <i class="bi bi-clock me-1"></i>@FormatTarih(bildirim.CreatedAt)
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                @if (bildirim.Oncelik == BildirimOncelik.Kritik)
+                                {
+                                    <span class="badge bg-danger me-2">Kritik</span>
+                                }
+                                else if (bildirim.Oncelik == BildirimOncelik.Yuksek)
+                                {
+                                    <span class="badge bg-warning text-dark me-2">Yüksek</span>
+                                }
+                                <button class="btn btn-sm btn-outline-danger" @onclick:stopPropagation="true" @onclick="() => BildirimSil(bildirim.Id)">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool isLoading = true;
+    private List<Bildirim> bildirimler = new();
+    private int okunmamisSayisi = 0;
+    private string filtre = "tumu";
+    private int? aktifKullaniciId;
+
+    private List<Bildirim> filtreliBildirimler => filtre == "okunmamis" 
+        ? bildirimler.Where(b => !b.Okundu).ToList() 
+        : bildirimler;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var kullanici = AuthProvider.GetAktifKullanici();
+        if (kullanici != null)
+        {
+            aktifKullaniciId = kullanici.Id;
+            await LoadBildirimler();
+        }
+    }
+
+    private async Task LoadBildirimler()
+    {
+        isLoading = true;
+        try
+        {
+            if (aktifKullaniciId.HasValue)
+            {
+                bildirimler = await CRMService.GetBildirimlerAsync(aktifKullaniciId.Value);
+                okunmamisSayisi = await CRMService.GetOkunmamisBildirimSayisiAsync(aktifKullaniciId.Value);
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Bildirimler Yüklenirken hata: " + ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void FiltreUygula(string yeniFiltre)
+    {
+        filtre = yeniFiltre;
+    }
+    
+    private void FiltreTumu() => filtre = "tumu";
+    private void FiltreOkunmamis() => filtre = "okunmamis";
+
+    private async Task BildirimTikla(Bildirim bildirim)
+    {
+        if (!bildirim.Okundu)
+        {
+            await CRMService.BildirimOkunduIsaretle(bildirim.Id);
+            bildirim.Okundu = true;
+            bildirim.OkunmaTarihi = DateTime.UtcNow;
+            okunmamisSayisi = Math.Max(0, okunmamisSayisi - 1);
+        }
+
+        // Link varsa yönlendir
+        if (!string.IsNullOrEmpty(bildirim.Link))
+        {
+            // NavigationManager ile yönlendirme yapılabilir
+        }
+    }
+
+    private async Task TumunuOkunduIsaretle()
+    {
+        if (aktifKullaniciId.HasValue)
+        {
+            await CRMService.TumBildirimleriOkunduIsaretle(aktifKullaniciId.Value);
+            foreach (var b in bildirimler)
+            {
+                b.Okundu = true;
+                b.OkunmaTarihi = DateTime.UtcNow;
+            }
+            okunmamisSayisi = 0;
+            ToastService.ShowSuccess("tüm bildirimler okundu olarak işaretlendi.");
+        }
+    }
+
+    private async Task BildirimSil(int id)
+    {
+        await CRMService.DeleteBildirimAsync(id);
+        bildirimler.RemoveAll(b => b.Id == id);
+        ToastService.ShowSuccess("Bildirim silindi.");
+    }
+
+    private string GetBildirimIcon(BildirimTipi tip) => tip switch
+    {
+        BildirimTipi.Bilgi => "bi-info-circle-fill",
+        BildirimTipi.Uyari => "bi-exclamation-triangle-fill",
+        BildirimTipi.Hata => "bi-x-circle-fill",
+        BildirimTipi.Basari => "bi-check-circle-fill",
+        BildirimTipi.BelgeSuresi => "bi-file-earmark-x-fill",
+        BildirimTipi.OdemeBildirimi => "bi-credit-card-fill",
+        BildirimTipi.Hatirlatici => "bi-alarm-fill",
+        BildirimTipi.Mesaj => "bi-chat-dots-fill",
+        _ => "bi-bell-fill"
+    };
+
+    private string GetBildirimIconClass(BildirimTipi tip) => tip switch
+    {
+        BildirimTipi.Bilgi => "text-info",
+        BildirimTipi.Uyari => "text-warning",
+        BildirimTipi.Hata => "text-danger",
+        BildirimTipi.Basari => "text-success",
+        BildirimTipi.BelgeSuresi => "text-danger",
+        BildirimTipi.OdemeBildirimi => "text-primary",
+        BildirimTipi.Hatirlatici => "text-warning",
+        BildirimTipi.Mesaj => "text-primary",
+        _ => "text-secondary"
+    };
+
+    private string FormatTarih(DateTime tarih)
+    {
+        var fark = DateTime.UtcNow - tarih;
+
+        if (fark.TotalMinutes < 1) return "Az önce";
+        if (fark.TotalMinutes < 60) return $"{(int)fark.TotalMinutes} dakika önce";
+        if (fark.TotalHours < 24) return $"{(int)fark.TotalHours} saat önce";
+        if (fark.TotalDays < 7) return $"{(int)fark.TotalDays} Gün önce";
+
+        return tarih.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+    }
+}
+
+
+
+
+
+
+
+
+
+

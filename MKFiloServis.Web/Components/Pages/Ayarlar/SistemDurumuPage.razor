@@ -1,0 +1,332 @@
+@page "/sistem-durumu"
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Data
+@using Microsoft.EntityFrameworkCore
+@inject IAktiviteLogService AktiviteLogService
+@inject IBackupService BackupService
+@inject ApplicationDbContext DbContext
+@inject IWebHostEnvironment Environment
+@inject IToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>Sistem Durumu</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="bi bi-heart-pulse me-2"></i>Sistem Durumu</h3>
+        <button class="btn btn-outline-primary" @onclick="YenileAsync">
+            <i class="bi bi-arrow-clockwise me-1"></i>Yenile
+        </button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else
+    {
+        <!-- Durum Kartları -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card h-100 @(sistemDurumu.VeritabaniDurum ? "border-success" : "border-danger")">
+                    <div class="card-body text-center">
+                        <i class="bi @(sistemDurumu.VeritabaniDurum ? "bi-database-check text-success" : "bi-database-x text-danger")" style="font-size: 2.5rem;"></i>
+                        <h6 class="mt-2">Veritabanı</h6>
+                        <span class="badge @(sistemDurumu.VeritabaniDurum ? "bg-success" : "bg-danger")">
+                            @(sistemDurumu.VeritabaniDurum ? "Çalışıyor" : "Hata")
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card h-100 border-success">
+                    <div class="card-body text-center">
+                        <i class="bi bi-hdd text-primary" style="font-size: 2.5rem;"></i>
+                        <h6 class="mt-2">Veritabanı Boyutu</h6>
+                        <strong>@sistemDurumu.VeritabaniBoyutu</strong>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card h-100 @(sistemDurumu.SonYedekGunu <= 1 ? "border-success" : sistemDurumu.SonYedekGunu <= 7 ? "border-warning" : "border-danger")">
+                    <div class="card-body text-center">
+                        <i class="bi bi-cloud-arrow-up @(sistemDurumu.SonYedekGunu <= 1 ? "text-success" : sistemDurumu.SonYedekGunu <= 7 ? "text-warning" : "text-danger")" style="font-size: 2.5rem;"></i>
+                        <h6 class="mt-2">Son Yedekleme</h6>
+                        <strong>@(sistemDurumu.SonYedekTarihi?.ToString("dd.MM.yyyy HH:mm") ?? "Hiç")</strong>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card h-100 border-info">
+                    <div class="card-body text-center">
+                        <i class="bi bi-clock-history text-info" style="font-size: 2.5rem;"></i>
+                        <h6 class="mt-2">Sistem Çalışma Süresi</h6>
+                        <strong>@sistemDurumu.CalismaSuresi</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <!-- Veritabanı İstatistikleri -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-bar-chart me-2"></i>Veritabanı İstatistikleri</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm mb-0">
+                            <tbody>
+                                @foreach (var stat in dbIstatistikleri)
+                                {
+                                    <tr>
+                                        <td><i class="bi @stat.Icon me-2 text-primary"></i>@stat.TabloAdi</td>
+                                        <td class="text-end"><strong>@stat.KayitSayisi.ToString("N0")</strong></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Aktivite Özeti -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="bi bi-activity me-2"></i>Aktivite Özeti (Son 7 Gün)</h6>
+                        <a href="/aktivite-log" class="btn btn-outline-primary btn-sm">Tümünü Gör</a>
+                    </div>
+                    <div class="card-body">
+                        @if (aktiviteOzet != null)
+                        {
+                            <div class="row text-center mb-3">
+                                <div class="col-3">
+                                    <h4 class="mb-0 text-primary">@aktiviteOzet.ToplamLog</h4>
+                                    <small class="text-muted">Toplam</small>
+                                </div>
+                                <div class="col-3">
+                                    <h4 class="mb-0 text-success">@aktiviteOzet.EklemeAdet</h4>
+                                    <small class="text-muted">Ekleme</small>
+                                </div>
+                                <div class="col-3">
+                                    <h4 class="mb-0 text-info">@aktiviteOzet.GuncellemeAdet</h4>
+                                    <small class="text-muted">Güncelleme</small>
+                                </div>
+                                <div class="col-3">
+                                    <h4 class="mb-0 text-danger">@aktiviteOzet.HataAdet</h4>
+                                    <small class="text-muted">Hata</small>
+                                </div>
+                            </div>
+                            <hr />
+                            <h6 class="small text-muted">Modül Aktiviteleri</h6>
+                            @foreach (var m in aktiviteOzet.ModulAktiviteleri.Take(5))
+                            {
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="small">@m.Modul</span>
+                                    <span class="badge bg-secondary">@m.Adet</span>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Son Aktiviteler -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Son Aktiviteler</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 150px;">Zaman</th>
+                                <th style="width: 100px;">İşlem</th>
+                                <th>Modül</th>
+                                <th>Açıklama</th>
+                                <th style="width: 100px;">Seviye</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var log in sonAktiviteler)
+                            {
+                                <tr>
+                                    <td>
+                                        <small>@log.IslemZamani.ToString("dd.MM.yyyy")</small><br />
+                                        <small class="text-muted">@log.IslemZamani.ToString("HH:mm:ss")</small>
+                                    </td>
+                                    <td>
+                                        <i class="bi @log.IslemTipiIcon me-1"></i>
+                                        <span class="small">@log.IslemTipi</span>
+                                    </td>
+                                    <td><strong>@log.Modul</strong></td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(log.EntityAdi))
+                                        {
+                                            <span class="badge bg-light text-dark me-1">@log.EntityAdi</span>
+                                        }
+                                        @log.Aciklama
+                                    </td>
+                                    <td><span class="badge @log.SeviyeClass">@log.Seviye</span></td>
+                                </tr>
+                            }
+                            @if (!sonAktiviteler.Any())
+                            {
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">
+                                        Henüz aktivite kaydı bulunmuyor
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool isLoading = true;
+    private SistemDurumu sistemDurumu = new();
+    private List<DbIstatistik> dbIstatistikleri = new();
+    private AktiviteLogOzet? aktiviteOzet;
+    private List<AktiviteLogItem> sonAktiviteler = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await YenileAsync();
+    }
+
+    private async Task YenileAsync()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            // Sistem durumu
+            sistemDurumu = await GetSistemDurumuAsync();
+
+            // Veritabanı istatistikleri
+            dbIstatistikleri = await GetDbIstatistikleriAsync();
+
+            // Aktivite Özeti
+            aktiviteOzet = await AktiviteLogService.GetOzetAsync(7);
+
+            // Son aktiviteler
+            sonAktiviteler = await AktiviteLogService.GetLogsAsync(new AktiviteLogFilter { SayfaBoyutu = 10 });
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Veri Yükleme hatası: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<SistemDurumu> GetSistemDurumuAsync()
+    {
+        var durum = new SistemDurumu();
+
+        // Veritabanı durumu
+        try
+        {
+            await DbContext.Database.CanConnectAsync();
+            durum.VeritabaniDurum = true;
+        }
+        catch
+        {
+            durum.VeritabaniDurum = false;
+        }
+
+        // Veritabanı boyutu
+        try
+        {
+            var dbPath = Path.Combine(Environment.ContentRootPath, "MKFiloServis.db");
+            if (File.Exists(dbPath))
+            {
+                var fileInfo = new FileInfo(dbPath);
+                durum.VeritabaniBoyutu = FormatSize(fileInfo.Length);
+            }
+        }
+        catch { }
+
+        // Son yedekleme
+        try
+        {
+            var backupSettings = BackupService.GetSettings();
+            durum.SonYedekTarihi = backupSettings.LastBackupTime;
+            if (backupSettings.LastBackupTime.HasValue)
+            {
+                durum.SonYedekGunu = (int)(DateTime.Now - backupSettings.LastBackupTime.Value).TotalDays;
+            }
+            else
+            {
+                durum.SonYedekGunu = 999;
+            }
+        }
+        catch { }
+
+        // Çalışma Süresi
+        var uptime = DateTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime;
+        durum.CalismaSuresi = $"{(int)uptime.TotalDays}g {uptime.Hours}s {uptime.Minutes}dk";
+
+        return durum;
+    }
+
+    private async Task<List<DbIstatistik>> GetDbIstatistikleriAsync()
+    {
+        var stats = new List<DbIstatistik>
+        {
+            new() { TabloAdi = "Cariler", Icon = "bi-people", KayitSayisi = await DbContext.Cariler.CountAsync() },
+            new() { TabloAdi = "Araçlar", Icon = "bi-truck", KayitSayisi = await DbContext.Araclar.CountAsync() },
+            new() { TabloAdi = "Personel", Icon = "bi-person-badge", KayitSayisi = await DbContext.Soforler.CountAsync() },
+            new() { TabloAdi = "Güzergahlar", Icon = "bi-signpost-split", KayitSayisi = await DbContext.Guzergahlar.CountAsync() },
+            new() { TabloAdi = "Servis Çalışmaları", Icon = "bi-calendar-check", KayitSayisi = await DbContext.ServisCalismalari.CountAsync() },
+            new() { TabloAdi = "Faturalar", Icon = "bi-receipt", KayitSayisi = await DbContext.Faturalar.CountAsync() },
+            new() { TabloAdi = "Banka Hareketleri", Icon = "bi-arrow-left-right", KayitSayisi = await DbContext.BankaKasaHareketleri.CountAsync() },
+            new() { TabloAdi = "Bütçe Ödemeleri", Icon = "bi-wallet2", KayitSayisi = await DbContext.BudgetOdemeler.CountAsync() }
+        };
+
+        return stats;
+    }
+
+    private string FormatSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F2} MB";
+    }
+
+    private class SistemDurumu
+    {
+        public bool VeritabaniDurum { get; set; }
+        public string VeritabaniBoyutu { get; set; } = "N/A";
+        public DateTime? SonYedekTarihi { get; set; }
+        public int SonYedekGunu { get; set; }
+        public string CalismaSuresi { get; set; } = "N/A";
+    }
+
+    private class DbIstatistik
+    {
+        public string TabloAdi { get; set; } = string.Empty;
+        public string Icon { get; set; } = "bi-table";
+        public int KayitSayisi { get; set; }
+    }
+}
+
+
+
+
+
+
+

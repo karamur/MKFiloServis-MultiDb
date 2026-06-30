@@ -1,0 +1,201 @@
+@page "/finans/dashboard"
+@using MKFiloServis.Web.Services
+@inject FinansDashboardService DashboardService
+@inject IAktifFirmaProvider AktifFirmaProvider
+@rendermode InteractiveServer
+
+<PageTitle>Finans Dashboard</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="bi bi-graph-up me-2"></i>Finans Dashboard</h3>
+        <div class="d-flex gap-2">
+            <select class="form-select form-select-sm" style="width: 120px;" @bind="secilenYil" @bind:after="Yukle">
+                @for (int y = DateTime.Today.Year; y >= DateTime.Today.Year - 3; y--)
+                {
+                    <option value="@y">@y</option>
+                }
+            </select>
+            <select class="form-select form-select-sm" style="width: 150px;" @bind="secilenAy" @bind:after="Yukle">
+                @for (int m = 1; m <= 12; m++)
+                {
+                    <option value="@m">@(new DateTime(2024, m, 1).ToString("MMMM"))</option>
+                }
+            </select>
+            <button class="btn btn-outline-secondary btn-sm" @onclick="Yukle" disabled="@isLoading">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+    }
+    else if (data == null)
+    {
+        <div class="alert alert-warning">Veri yüklenemedi.</div>
+    }
+    else
+    {
+        <!-- Durum Rozetleri -->
+        <div class="mb-3">
+            @if (data.SnapshotVar && data.SnapshotKilitli)
+            {
+                <span class="badge bg-success me-1"><i class="bi bi-lock-fill me-1"></i>Kilitli</span>
+            }
+            else if (data.SnapshotVar)
+            {
+                <span class="badge bg-warning text-dark me-1"><i class="bi bi-unlock-fill me-1"></i>Açık</span>
+            }
+            else
+            {
+                <span class="badge bg-secondary me-1"><i class="bi bi-exclamation-triangle me-1"></i>Snapshot Yok</span>
+            }
+            @if (data.FisVar)
+            {
+                <span class="badge bg-info me-1"><i class="bi bi-receipt me-1"></i>Fiş Kesildi</span>
+            }
+        </div>
+
+        <!-- KPI Kartları -->
+        <div class="row mb-4 g-3">
+            <div class="col-md-4">
+                <div class="card border-danger h-100">
+                    <div class="card-body text-center">
+                        <small class="text-muted text-uppercase">Toplam Maaş Gideri</small>
+                        <h2 class="text-danger mb-0">@FormatPara(data.ToplamMaas)</h2>
+                        <small class="text-muted">@data.PersonelSayisi personel</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-success h-100">
+                    <div class="card-body text-center">
+                        <small class="text-muted text-uppercase">Toplam Hakediş Geliri</small>
+                        <h2 class="text-success mb-0">@FormatPara(data.ToplamHakedisGelir)</h2>
+                        <small class="text-muted">@data.ToplamSefer sefer</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-primary h-100">
+                    <div class="card-body text-center">
+                        <small class="text-muted text-uppercase">Net Kar / Zarar</small>
+                        <h2 class="mb-0 @(data.NetKar >= 0 ? "text-success" : "text-danger")">@FormatPara(data.NetKar)</h2>
+                        <small class="text-muted">Gelir - Maaş - Hakediş Gider</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- İkinci Sıra -->
+        <div class="row g-3">
+            <!-- Tablo: Detay -->
+            <div class="col-md-8">
+                <div class="card h-100">
+                    <div class="card-header bg-white">
+                        <h6 class="mb-0"><i class="bi bi-table me-2"></i>@(new DateTime(data.Yil, data.Ay, 1).ToString("MMMM yyyy")) Özet</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm table-hover mb-0">
+                            <tbody>
+                                <tr>
+                                    <td><i class="bi bi-cash-stack text-danger me-2"></i>Maaş Gideri</td>
+                                    <td class="text-end fw-bold text-danger">@FormatPara(data.ToplamMaas)</td>
+                                </tr>
+                                <tr>
+                                    <td><i class="bi bi-receipt text-success me-2"></i>Hakediş Geliri</td>
+                                    <td class="text-end fw-bold text-success">@FormatPara(data.ToplamHakedisGelir)</td>
+                                </tr>
+                                <tr>
+                                    <td><i class="bi bi-truck text-warning me-2"></i>Hakediş Gideri (Tedarikçi)</td>
+                                    <td class="text-end fw-bold text-warning">@FormatPara(data.ToplamHakedisGider)</td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <i class="bi bi-calculator text-info me-2"></i>
+                                        Muhasebe 770 Toplam
+                                        @if (data.SnapshotKullaniliyorMu)
+                                        {
+                                            <span class="badge bg-success ms-1" title="Snapshot kilitli + fiş kesildi → muhasebe doğrulama verisi">
+                                                <i class="bi bi-check-circle me-1"></i>Doğrulandı
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-warning text-dark ms-1" title="Snapshot yok veya kilitli değil → muhasebe bağımsız veri">
+                                                <i class="bi bi-exclamation-triangle me-1"></i>Bağımsız
+                                            </span>
+                                        }
+                                    </td>
+                                    <td class="text-end fw-bold text-info">@FormatPara(data.Muhasebe770Toplam)</td>
+                                </tr>
+                                <tr class="table-light">
+                                    <td><strong><i class="bi bi-graph-up me-2"></i>Net Sonuç</strong></td>
+                                    <td class="text-end fw-bold @(data.NetKar >= 0 ? "text-success" : "text-danger")">
+                                        @FormatPara(data.NetKar)
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Kenar Bilgiler -->
+            <div class="col-md-4">
+                <div class="card bg-light h-100">
+                    <div class="card-body text-center">
+                        <i class="bi bi-speedometer2 fs-1 text-primary"></i>
+                        <h4>@data.ToplamSefer</h4>
+                        <p class="text-muted mb-0">Toplam Sefer</p>
+                        <hr />
+                        <h4>@data.PersonelSayisi</h4>
+                        <p class="text-muted mb-0">Aktif Personel</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private int secilenYil = DateTime.Today.Year;
+    private int secilenAy = DateTime.Today.Month;
+    private bool isLoading;
+    private FinansDashboardDto? data;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Yukle();
+    }
+
+    private async Task Yukle()
+    {
+        isLoading = true;
+        try
+        {
+            var firmaId = AktifFirmaProvider.AktifFirmaId ?? 0;
+            data = await DashboardService.GetAsync(secilenYil, secilenAy, firmaId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[FinansDashboard] Hata: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private static string FormatPara(decimal value)
+    {
+        if (Math.Abs(value) >= 1_000_000)
+            return $"{value / 1_000_000:N1}M ₺";
+        if (Math.Abs(value) >= 1_000)
+            return $"{value / 1_000:N1}K ₺";
+        return $"{value:N2} ₺";
+    }
+}
+

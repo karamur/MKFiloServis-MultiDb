@@ -70,7 +70,7 @@ PuantajEngineJob.Execute
 ### Correlation Context
 
 ```csharp
-// KOAFiloServis.Web/Telemetry/CorrelationContext.cs
+// MKFiloServis.Web/Telemetry/CorrelationContext.cs
 public sealed class CorrelationContext
 {
     public string JobRunId { get; init set; } = Guid.NewGuid().ToString("N")[..8];
@@ -142,10 +142,10 @@ public sealed class CorrelationContext
 ### ActivitySource Setup
 
 ```csharp
-// KOAFiloServis.Web/Telemetry/PuantajActivitySource.cs
+// MKFiloServis.Web/Telemetry/PuantajActivitySource.cs
 public static class PuantajActivitySource
 {
-    public const string Name = "KOAFiloServis.Puantaj";
+    public const string Name = "MKFiloServis.Puantaj";
     public static readonly ActivitySource Source = new(Name, "1.0.0");
 
     // Span name constants — cardinality control
@@ -216,7 +216,7 @@ public async Task<PuantajJobExecution> ProcessAllTenantsAsync(
   "Engine.ElapsedMs": 3200,
   "Mutex.LatencyMs": 8.5,
   "Retry.Attempt": 0,
-  "SourceContext": "KOAFiloServis.Web.Services.PuantajJobService",
+  "SourceContext": "MKFiloServis.Web.Services.PuantajJobService",
   "RequestPath": "/_blazor",
   "ConnectionId": "0HNA8FTE0P0TR"
 }
@@ -234,7 +234,7 @@ builder.Host.UseSerilog((ctx, services, config) =>
         .Enrich.FromLogContext()
         .Enrich.WithMachineName()
         .Enrich.WithThreadId()
-        .Enrich.WithProperty("Application", "KOAFiloServis")
+        .Enrich.WithProperty("Application", "MKFiloServis")
         .Enrich.WithProperty("Environment", ctx.HostingEnvironment.EnvironmentName)
         .Filter.ByExcluding(logEvent =>
             logEvent.Properties.GetValueOrDefault("RequestPath")?.ToString()
@@ -245,7 +245,7 @@ builder.Host.UseSerilog((ctx, services, config) =>
             opt.Endpoint = ctx.Configuration["Otlp:Endpoint"] ?? "http://localhost:4317";
             opt.ResourceAttributes = new Dictionary<string, object>
             {
-                ["service.name"] = "KOAFiloServis",
+                ["service.name"] = "MKFiloServis",
                 ["service.version"] = "1.0.0",
                 ["deployment.environment"] = ctx.HostingEnvironment.EnvironmentName
             };
@@ -272,10 +272,10 @@ builder.Host.UseSerilog((ctx, services, config) =>
 ### Metric Catalog
 
 ```csharp
-// KOAFiloServis.Web/Telemetry/PuantajMetrics.cs
+// MKFiloServis.Web/Telemetry/PuantajMetrics.cs
 public static class PuantajMetricDefinitions
 {
-    public const string MeterName = "KOAFiloServis.Puantaj";
+    public const string MeterName = "MKFiloServis.Puantaj";
 
     // ── COUNTERS (monotonically increasing) ──────────────────────
 
@@ -358,7 +358,7 @@ public sealed record MetricDef(
 ### Meter Implementation
 
 ```csharp
-// KOAFiloServis.Web/Telemetry/PuantajMeter.cs
+// MKFiloServis.Web/Telemetry/PuantajMeter.cs
 public sealed class PuantajMeter : IDisposable
 {
     private readonly Meter _meter;
@@ -413,7 +413,7 @@ public sealed class PuantajMeter : IDisposable
 
 ## 5. Grafana Dashboard Plan
 
-### Dashboard: `KOAFiloServis Puantaj Jobs`
+### Dashboard: `MKFiloServis Puantaj Jobs`
 
 **Row 1: Overview (stat panels)**
 
@@ -735,7 +735,7 @@ builder.Services.AddOpenTelemetry()
 ### Slow Query Detection (Tempo)
 
 ```tempo-ql
-{span.db.system="postgresql" && resource.service.name="KOAFiloServis"}
+{span.db.system="postgresql" && resource.service.name="MKFiloServis"}
 | span.duration > 1000ms
 | select(span.db.query.truncated, span.duration)
 ```
@@ -878,7 +878,7 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
 var otelResource = ResourceBuilder.CreateDefault()
-    .AddService("KOAFiloServis",
+    .AddService("MKFiloServis",
         serviceVersion: "1.0.0",
         serviceInstanceId: Environment.MachineName)
     .AddAttributes(new Dictionary<string, object>
@@ -974,7 +974,7 @@ public sealed class EfCoreDiagnosticObserver : IObserver<KeyValuePair<string, ob
 ```json
 {
   "dashboard": {
-    "title": "KOAFiloServis - Puantaj Jobs",
+    "title": "MKFiloServis - Puantaj Jobs",
     "uid": "koa-puantaj-jobs",
     "panels": [
       {
@@ -1263,3 +1263,4 @@ Technical explanation...
 | Incident runbook | - | ✅ | - | ✅ |
 | Dead letter handling | - | - | ✅ | ✅ |
 | Synthetic monitoring | - | - | - | Backlog |
+

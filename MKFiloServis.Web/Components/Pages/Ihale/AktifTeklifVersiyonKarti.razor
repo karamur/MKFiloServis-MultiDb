@@ -1,0 +1,71 @@
+@using MKFiloServis.Shared.Entities
+
+@if (AktifVersiyon != null)
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card border-primary">
+                <div class="card-body py-2 text-center">
+                    <small class="text-muted">Aktif Versiyon</small><br />
+                    <strong class="text-primary">@AktifVersiyon.RevizyonKodu</strong>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-danger">
+                <div class="card-body py-2 text-center">
+                    <small class="text-muted">Snapshot Maliyet</small><br />
+                    <strong class="text-danger">@AktifVersiyon.ToplamMaliyet.ToString("N0") ₺</strong>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-success">
+                <div class="card-body py-2 text-center">
+                    <small class="text-muted">Snapshot Teklif</small><br />
+                    <strong class="text-success">@AktifVersiyon.TeklifTutari.ToString("N0") ₺</strong>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-warning">
+                <div class="card-body py-2 text-center">
+                    <small class="text-muted">Kâr Marjı</small><br />
+                    <strong class="text-warning">%@AktifVersiyon.KarMarjiOrani.ToString("N1")</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-6">
+            <div class="card bg-light">
+                <div class="card-body py-2 text-center">
+                    <small class="text-muted">Hazırlayan</small><br />
+                    <strong>@(AktifVersiyon.HazirlayanKullanici?.AdSoyad ?? "-")</strong>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card bg-light">
+                <div class="card-body py-2 text-center">
+                    <small class="text-muted">Onay Bilgisi</small><br />
+                    @if (AktifVersiyon.OnayTarihi.HasValue)
+                    {
+                        <strong>@(AktifVersiyon.OnaylayanKullanici?.AdSoyad ?? "-")</strong>
+                        <div class="small text-muted">@AktifVersiyon.OnayTarihi.Value.ToString("dd.MM.yyyy HH:mm")</div>
+                    }
+                    else
+                    {
+                        <strong>-</strong>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public IhaleTeklifVersiyon? AktifVersiyon { get; set; }
+}
+

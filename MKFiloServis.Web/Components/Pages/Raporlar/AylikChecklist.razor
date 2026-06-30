@@ -1,0 +1,274 @@
+@page "/rapor/checklist"
+@using MKFiloServis.Web.Services
+@using Models = MKFiloServis.Web.Models
+@inject IMaliAnalizService MaliAnalizService
+@rendermode InteractiveServer
+
+<PageTitle>Aylık Checklist</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="bi bi-clipboard-check me-2"></i>Aylık Checklist</h3>
+        <div class="d-flex gap-2">
+            <select class="form-select" style="width: 120px;" @bind="secilenYil" @bind:after="YenileData">
+                @for (int y = DateTime.Today.Year; y >= DateTime.Today.Year - 3; y--)
+                {
+                    <option value="@y">@y</option>
+                }
+            </select>
+            <select class="form-select" style="width: 150px;" @bind="secilenAy" @bind:after="YenileData">
+                @for (int m = 1; m <= 12; m++)
+                {
+                    <option value="@m">@(new DateTime(2024, m, 1).ToString("MMMM"))</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+        </div>
+    }
+    else if (ozet != null)
+    {
+        <!-- Özet Kartları -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card border-danger">
+                    <div class="card-body text-center">
+                        <h1 class="text-danger">@ozet.ToplamKritik</h1>
+                        <h6 class="text-muted">Kritik Uyarı</h6>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-warning">
+                    <div class="card-body text-center">
+                        <h1 class="text-warning">@ozet.ToplamUyari</h1>
+                        <h6 class="text-muted">Uyarı</h6>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-success">
+                    <div class="card-body text-center">
+                        <h1 class="text-success">
+                            @(ozet.SoforChecklists.Count + ozet.AracChecklists.Count + ozet.GuzergahChecklists.Count - ozet.ToplamKritik - ozet.ToplamUyari)
+                        </h1>
+                        <h6 class="text-muted">Sorunsuz</h6>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Şoför Checklist -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-person-badge me-2"></i>Şoför Checklist</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Şoför</th>
+                                <th class="text-center">Ehliyet</th>
+                                <th class="text-center">SRC</th>
+                                <th class="text-center">Psikoteknik</th>
+                                <th class="text-center">Sa©l©k</th>
+                                <th class="text-center">Durum</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var sofor in ozet.SoforChecklists)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>@sofor.AdSoyad</strong>
+                                        <br /><small class="text-muted">@sofor.SoforKodu</small>
+                                    </td>
+                                    <td class="text-center">@GetDurumBadge(sofor.EhliyetDurum)</td>
+                                    <td class="text-center">@GetDurumBadge(sofor.SrcDurum)</td>
+                                    <td class="text-center">@GetDurumBadge(sofor.PsikoteknikDurum)</td>
+                                    <td class="text-center">@GetDurumBadge(sofor.SaglikDurum)</td>
+                                    <td class="text-center">@GetDurumBadge(sofor.GenelDurum)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Araç Checklist -->
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-truck me-2"></i>Araç Checklist</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Araç</th>
+                                <th class="text-center">Muayene</th>
+                                <th class="text-center">Sigorta</th>
+                                <th class="text-center">Kasko</th>
+                                <th class="text-center">Bakım</th>
+                                <th class="text-center">Durum</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var arac in ozet.AracChecklists)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>@arac.Plaka</strong>
+                                        <br /><small class="text-muted">@arac.MarkaModel</small>
+                                    </td>
+                                    <td class="text-center">
+                                        @GetDurumBadge(arac.MuayeneDurum)
+                                        @if (arac.MuayeneBitisTarihi.HasValue)
+                                        {
+                                            <br /><small class="text-muted">@arac.MuayeneBitisTarihi.Value.ToString("dd.MM.yyyy")</small>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        @GetDurumBadge(arac.SigortaDurum)
+                                        @if (arac.SigortaBitisTarihi.HasValue)
+                                        {
+                                            <br /><small class="text-muted">@arac.SigortaBitisTarihi.Value.ToString("dd.MM.yyyy")</small>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        @GetDurumBadge(arac.KaskoDurum)
+                                        @if (arac.KaskoBitisTarihi.HasValue)
+                                        {
+                                            <br /><small class="text-muted">@arac.KaskoBitisTarihi.Value.ToString("dd.MM.yyyy")</small>
+                                        }
+                                    </td>
+                                    <td class="text-center">@GetDurumBadge(arac.BakimDurum)</td>
+                                    <td class="text-center">@GetDurumBadge(arac.GenelDurum)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Güzergah Checklist -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-signpost me-2"></i>Güzergah Checklist</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Güzergah</th>
+                                <th>Müşteri</th>
+                                <th class="text-center">S©zle©me</th>
+                                <th class="text-center">Fiyat</th>
+                                <th class="text-center">Sefer</th>
+                                <th class="text-center">Ödeme</th>
+                                <th class="text-center">Durum</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var guzergah in ozet.GuzergahChecklists)
+                            {
+                                <tr>
+                                    <td><strong>@guzergah.GuzergahAdi</strong></td>
+                                    <td>@guzergah.MusteriUnvan</td>
+                                    <td class="text-center">@GetDurumBadge(guzergah.SozlesmeDurum)</td>
+                                    <td class="text-center">@GetDurumBadge(guzergah.FiyatDurum)</td>
+                                    <td class="text-center">
+                                        @GetDurumBadge(guzergah.SeferDurum)
+                                        <br /><small class="text-muted">@guzergah.GerceklesenSefer/@guzergah.PlanlananSefer</small>
+                                    </td>
+                                    <td class="text-center">
+                                        @GetDurumBadge(guzergah.OdemeDurum)
+                                        @if (guzergah.BekleyenOdeme > 0)
+                                        {
+                                            <br /><small class="text-danger">@guzergah.BekleyenOdeme.ToString("N0") ?</small>
+                                        }
+                                    </td>
+                                    <td class="text-center">@GetDurumBadge(guzergah.GenelDurum)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Açıklama -->
+        <div class="card">
+            <div class="card-body">
+                <h6>Durum Açıklamalar©</h6>
+                <div class="d-flex gap-4">
+                    <span>@GetDurumBadge("Tamam") Sorun Yok</span>
+                    <span>@GetDurumBadge("Uyari") 30 Gün ©©inde süresi Dolacak</span>
+                    <span>@GetDurumBadge("Kritik") süresi Ge©mi© / Acil Aksiyon Gerekli</span>
+                    <span>@GetDurumBadge("Bekliyor") Kontrol Edilmedi</span>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private int secilenYil = DateTime.Today.Year;
+    private int secilenAy = DateTime.Today.Month;
+    private Models.ChecklistOzet? ozet;
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await YenileData();
+    }
+
+    private async Task YenileData()
+    {
+        isLoading = true;
+        try
+        {
+            ozet = await MaliAnalizService.GetChecklistOzetAsync(secilenYil, secilenAy);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private MarkupString GetDurumBadge(string durum)
+    {
+        var (renk, ikon) = durum switch
+        {
+            "Tamam" => ("success", "check-circle-fill"),
+            "Uyari" => ("warning", "exclamation-triangle-fill"),
+            "Kritik" => ("danger", "x-circle-fill"),
+            _ => ("secondary", "circle")
+        };
+
+        return new MarkupString($"<span class=\"badge bg-{renk}\"><i class=\"bi bi-{ikon} me-1\"></i>{durum}</span>");
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,10 +1,10 @@
-Test run for C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\bin\Debug\net10.0\KOAFiloServis.Tests.dll (.NETCoreApp,Version=v10.0)
+Test run for C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\bin\Debug\net10.0\MKFiloServis.Tests.dll (.NETCoreApp,Version=v10.0)
 A total of 1 test files matched the specified pattern.
-[xUnit.net 00:00:00.33]     KOAFiloServis.Tests.Services.PuantajJobServiceTests.DuplicateMutex_EngineNotCalled [FAIL]
-[xUnit.net 00:00:00.34]     KOAFiloServis.Tests.Services.PuantajJobServiceTests.ProcessAllTenants_FirmEnumerationError_ReturnsFailed [FAIL]
-  Failed KOAFiloServis.Tests.Services.PuantajJobServiceTests.DuplicateMutex_EngineNotCalled [18 ms]
+[xUnit.net 00:00:00.33]     MKFiloServis.Tests.Services.PuantajJobServiceTests.DuplicateMutex_EngineNotCalled [FAIL]
+[xUnit.net 00:00:00.34]     MKFiloServis.Tests.Services.PuantajJobServiceTests.ProcessAllTenants_FirmEnumerationError_ReturnsFailed [FAIL]
+  Failed MKFiloServis.Tests.Services.PuantajJobServiceTests.DuplicateMutex_EngineNotCalled [18 ms]
   Error Message:
-   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.Extensions.Configuration.IConfiguration' while attempting to activate 'KOAFiloServis.Web.Services.PuantajJobService'.
+   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.Extensions.Configuration.IConfiguration' while attempting to activate 'MKFiloServis.Web.Services.PuantajJobService'.
   Stack Trace:
      at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateArgumentCallSites(ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain, ParameterInfo[] parameters, Boolean throwIfCallSiteNotFound)
    at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateConstructorCallSite(ResultCache lifetime, ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain)
@@ -18,12 +18,12 @@ A total of 1 test files matched the specified pattern.
    at Microsoft.Extensions.DependencyInjection.ServiceProvider.GetService(Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(IServiceProvider provider, Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService[T](IServiceProvider provider)
-   at KOAFiloServis.Tests.Services.PuantajJobServiceTests.BuildSut() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\PuantajJobServiceTests.cs:line 40
-   at KOAFiloServis.Tests.Services.PuantajJobServiceTests.DuplicateMutex_EngineNotCalled() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\PuantajJobServiceTests.cs:line 52
+   at MKFiloServis.Tests.Services.PuantajJobServiceTests.BuildSut() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\PuantajJobServiceTests.cs:line 40
+   at MKFiloServis.Tests.Services.PuantajJobServiceTests.DuplicateMutex_EngineNotCalled() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\PuantajJobServiceTests.cs:line 52
 --- End of stack trace from previous location ---
-  Failed KOAFiloServis.Tests.Services.PuantajJobServiceTests.ProcessAllTenants_FirmEnumerationError_ReturnsFailed [< 1 ms]
+  Failed MKFiloServis.Tests.Services.PuantajJobServiceTests.ProcessAllTenants_FirmEnumerationError_ReturnsFailed [< 1 ms]
   Error Message:
-   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.Extensions.Configuration.IConfiguration' while attempting to activate 'KOAFiloServis.Web.Services.PuantajJobService'.
+   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.Extensions.Configuration.IConfiguration' while attempting to activate 'MKFiloServis.Web.Services.PuantajJobService'.
   Stack Trace:
      at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateArgumentCallSites(ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain, ParameterInfo[] parameters, Boolean throwIfCallSiteNotFound)
    at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateConstructorCallSite(ResultCache lifetime, ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain)
@@ -37,19 +37,19 @@ A total of 1 test files matched the specified pattern.
    at Microsoft.Extensions.DependencyInjection.ServiceProvider.GetService(Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(IServiceProvider provider, Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService[T](IServiceProvider provider)
-   at KOAFiloServis.Tests.Services.PuantajJobServiceTests.BuildSut() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\PuantajJobServiceTests.cs:line 40
-   at KOAFiloServis.Tests.Services.PuantajJobServiceTests.ProcessAllTenants_FirmEnumerationError_ReturnsFailed() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\PuantajJobServiceTests.cs:line 71
+   at MKFiloServis.Tests.Services.PuantajJobServiceTests.BuildSut() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\PuantajJobServiceTests.cs:line 40
+   at MKFiloServis.Tests.Services.PuantajJobServiceTests.ProcessAllTenants_FirmEnumerationError_ReturnsFailed() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\PuantajJobServiceTests.cs:line 71
 --- End of stack trace from previous location ---
-[xUnit.net 00:00:03.57]     KOAFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_GetActiveSeferler_ReturnsOnly2 [FAIL]
-[xUnit.net 00:00:03.60]     KOAFiloServis.Tests.Services.EvrakDownloadChainTests.PersonelEvrak_FullChain_AllLinksVerified [FAIL]
-[xUnit.net 00:00:03.71]     KOAFiloServis.Tests.Services.EvrakDownloadChainTests.AracEvrak_FullChain_AllLinksVerified [FAIL]
-[xUnit.net 00:00:03.72]     KOAFiloServis.Tests.Services.FinalVerificationTests.Verify_Id45_State_AfterCleanup [FAIL]
-  Failed KOAFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_GetActiveSeferler_ReturnsOnly2 [3 s]
+[xUnit.net 00:00:03.57]     MKFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_GetActiveSeferler_ReturnsOnly2 [FAIL]
+[xUnit.net 00:00:03.60]     MKFiloServis.Tests.Services.EvrakDownloadChainTests.PersonelEvrak_FullChain_AllLinksVerified [FAIL]
+[xUnit.net 00:00:03.71]     MKFiloServis.Tests.Services.EvrakDownloadChainTests.AracEvrak_FullChain_AllLinksVerified [FAIL]
+[xUnit.net 00:00:03.72]     MKFiloServis.Tests.Services.FinalVerificationTests.Verify_Id45_State_AfterCleanup [FAIL]
+  Failed MKFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_GetActiveSeferler_ReturnsOnly2 [3 s]
   Error Message:
    Expected loaded.Count to be 2 because 18 silinmi┼ş + 2 aktif ÔåÆ UI sadece 2 g├Ârmeli, but found 1.
   Stack Trace:
      at FluentAssertions.Numeric.NumericAssertionsBase`3.Be(T expected, String because, Object[] becauseArgs)
-   at KOAFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_GetActiveSeferler_ReturnsOnly2() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\Guzergah18Plus2Tests.cs:line 63
+   at MKFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_GetActiveSeferler_ReturnsOnly2() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\Guzergah18Plus2Tests.cs:line 63
 --- End of stack trace from previous location ---
   Standard Output Messages:
  Id=45 GetByGuzergahIdAsync d├Ând├╝: 1 sefer
@@ -57,28 +57,28 @@ A total of 1 test files matched the specified pattern.
  Hepsi IsDeleted=false: True
 
 
-  Failed KOAFiloServis.Tests.Services.EvrakDownloadChainTests.PersonelEvrak_FullChain_AllLinksVerified [3 s]
+  Failed MKFiloServis.Tests.Services.EvrakDownloadChainTests.PersonelEvrak_FullChain_AllLinksVerified [3 s]
   Error Message:
-   Expected System.IO.File.Exists(diskPath) to be True because Personel evrak diskte bulunmal─▒: C:\KOAFiloServis_yedekleme\uploads\Arsiv\Sifreli\Personeller\deneme deneme - USTUN GRUP SEYAHAT\denemedenemeDiplomaFotokopisi_20260621_113216_20260621083216214_d76e2eec6da04c12898935a365f4968a.pdf.enc, but found False.
+   Expected System.IO.File.Exists(diskPath) to be True because Personel evrak diskte bulunmal─▒: C:\MKFiloServis_yedekleme\uploads\Arsiv\Sifreli\Personeller\deneme deneme - USTUN GRUP SEYAHAT\denemedenemeDiplomaFotokopisi_20260621_113216_20260621083216214_d76e2eec6da04c12898935a365f4968a.pdf.enc, but found False.
   Stack Trace:
      at FluentAssertions.Primitives.BooleanAssertions`1.BeTrue(String because, Object[] becauseArgs)
-   at KOAFiloServis.Tests.Services.EvrakDownloadChainTests.PersonelEvrak_FullChain_AllLinksVerified() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\EvrakDownloadChainTests.cs:line 131
-   at KOAFiloServis.Tests.Services.EvrakDownloadChainTests.PersonelEvrak_FullChain_AllLinksVerified() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\EvrakDownloadChainTests.cs:line 139
+   at MKFiloServis.Tests.Services.EvrakDownloadChainTests.PersonelEvrak_FullChain_AllLinksVerified() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\EvrakDownloadChainTests.cs:line 131
+   at MKFiloServis.Tests.Services.EvrakDownloadChainTests.PersonelEvrak_FullChain_AllLinksVerified() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\EvrakDownloadChainTests.cs:line 139
 --- End of stack trace from previous location ---
-  Failed KOAFiloServis.Tests.Services.EvrakDownloadChainTests.AracEvrak_FullChain_AllLinksVerified [112 ms]
+  Failed MKFiloServis.Tests.Services.EvrakDownloadChainTests.AracEvrak_FullChain_AllLinksVerified [112 ms]
   Error Message:
-   Expected System.IO.File.Exists(diskPath) to be True because Dosya diskte bulunmal─▒: C:\KOAFiloServis_yedekleme\uploads\Arsiv\Sifreli\Araclar\06C2276 - USTUN GRUP SEYAHAT\06C2276Kasko_20260429_080324.pdf.enc, but found False.
+   Expected System.IO.File.Exists(diskPath) to be True because Dosya diskte bulunmal─▒: C:\MKFiloServis_yedekleme\uploads\Arsiv\Sifreli\Araclar\06C2276 - USTUN GRUP SEYAHAT\06C2276Kasko_20260429_080324.pdf.enc, but found False.
   Stack Trace:
      at FluentAssertions.Primitives.BooleanAssertions`1.BeTrue(String because, Object[] becauseArgs)
-   at KOAFiloServis.Tests.Services.EvrakDownloadChainTests.AracEvrak_FullChain_AllLinksVerified() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\EvrakDownloadChainTests.cs:line 89
-   at KOAFiloServis.Tests.Services.EvrakDownloadChainTests.AracEvrak_FullChain_AllLinksVerified() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\EvrakDownloadChainTests.cs:line 106
+   at MKFiloServis.Tests.Services.EvrakDownloadChainTests.AracEvrak_FullChain_AllLinksVerified() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\EvrakDownloadChainTests.cs:line 89
+   at MKFiloServis.Tests.Services.EvrakDownloadChainTests.AracEvrak_FullChain_AllLinksVerified() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\EvrakDownloadChainTests.cs:line 106
 --- End of stack trace from previous location ---
-  Failed KOAFiloServis.Tests.Services.FinalVerificationTests.Verify_Id45_State_AfterCleanup [357 ms]
+  Failed MKFiloServis.Tests.Services.FinalVerificationTests.Verify_Id45_State_AfterCleanup [357 ms]
   Error Message:
    Aktif sefer 2 olmal─▒, ger├ğek: 1
   Stack Trace:
-     at KOAFiloServis.Tests.Services.FinalVerificationTests.Verify_Id45_State_AfterCleanup() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\FinalVerificationTests.cs:line 58
-   at KOAFiloServis.Tests.Services.FinalVerificationTests.Verify_Id45_State_AfterCleanup() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\FinalVerificationTests.cs:line 60
+     at MKFiloServis.Tests.Services.FinalVerificationTests.Verify_Id45_State_AfterCleanup() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\FinalVerificationTests.cs:line 58
+   at MKFiloServis.Tests.Services.FinalVerificationTests.Verify_Id45_State_AfterCleanup() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\FinalVerificationTests.cs:line 60
 --- End of stack trace from previous location ---
   Standard Output Messages:
  ÔòÉÔòÉÔòÉ Id=45 /H.SEMT S─░NCAN FAT─░H ÔòÉÔòÉÔòÉ
@@ -92,24 +92,24 @@ A total of 1 test files matched the specified pattern.
  Ô£à Duplicate YOK
 
 
-[xUnit.net 00:00:03.74]     KOAFiloServis.Tests.Services.EvrakDownloadChainTests.AllAracEvrakFiles_ExistOnDisk [FAIL]
-  Failed KOAFiloServis.Tests.Services.EvrakDownloadChainTests.AllAracEvrakFiles_ExistOnDisk [26 ms]
+[xUnit.net 00:00:03.74]     MKFiloServis.Tests.Services.EvrakDownloadChainTests.AllAracEvrakFiles_ExistOnDisk [FAIL]
+  Failed MKFiloServis.Tests.Services.EvrakDownloadChainTests.AllAracEvrakFiles_ExistOnDisk [26 ms]
   Error Message:
-   Expected missing to be empty because T├╝m ara├ğ evrak dosyalar─▒ diskte bulunmal─▒. Eksik: 87, but found at least one item {"Id=2 DosyaAdi=06C5082Ruhsat_20260428_142625.pdf.enc Yol=C:\KOAFiloServis_yedekleme\uploads\Arsiv\Sifreli\Araclar\06C5082 - USTUN GRUP SEYAHAT\06C5082Ruhsat_20260428_142625.pdf.enc"}.
+   Expected missing to be empty because T├╝m ara├ğ evrak dosyalar─▒ diskte bulunmal─▒. Eksik: 87, but found at least one item {"Id=2 DosyaAdi=06C5082Ruhsat_20260428_142625.pdf.enc Yol=C:\MKFiloServis_yedekleme\uploads\Arsiv\Sifreli\Araclar\06C5082 - USTUN GRUP SEYAHAT\06C5082Ruhsat_20260428_142625.pdf.enc"}.
   Stack Trace:
      at FluentAssertions.Collections.GenericCollectionAssertions`3.<>c__DisplayClass10_0.<BeEmpty>b__0(AssertionChain chain)
    at FluentAssertions.Collections.GenericCollectionAssertions`3.BeEmpty(String because, Object[] becauseArgs)
-   at KOAFiloServis.Tests.Services.EvrakDownloadChainTests.AllAracEvrakFiles_ExistOnDisk() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\EvrakDownloadChainTests.cs:line 170
-   at KOAFiloServis.Tests.Services.EvrakDownloadChainTests.AllAracEvrakFiles_ExistOnDisk() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\EvrakDownloadChainTests.cs:line 170
+   at MKFiloServis.Tests.Services.EvrakDownloadChainTests.AllAracEvrakFiles_ExistOnDisk() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\EvrakDownloadChainTests.cs:line 170
+   at MKFiloServis.Tests.Services.EvrakDownloadChainTests.AllAracEvrakFiles_ExistOnDisk() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\EvrakDownloadChainTests.cs:line 170
 --- End of stack trace from previous location ---
-[xUnit.net 00:00:03.77]     KOAFiloServis.Tests.Services.FixDuplicateSeferler.Fix_Guzergah45_DuplicateSeferler [FAIL]
-  Failed KOAFiloServis.Tests.Services.FixDuplicateSeferler.Fix_Guzergah45_DuplicateSeferler [3 s]
+[xUnit.net 00:00:03.77]     MKFiloServis.Tests.Services.FixDuplicateSeferler.Fix_Guzergah45_DuplicateSeferler [FAIL]
+  Failed MKFiloServis.Tests.Services.FixDuplicateSeferler.Fix_Guzergah45_DuplicateSeferler [3 s]
   Error Message:
    Expected after.Count to be 2 because Sadece 2 aktif sefer kalmal─▒ (1 ve 2), but found 1.
   Stack Trace:
      at FluentAssertions.Numeric.NumericAssertionsBase`3.Be(T expected, String because, Object[] becauseArgs)
-   at KOAFiloServis.Tests.Services.FixDuplicateSeferler.Fix_Guzergah45_DuplicateSeferler() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\FixDuplicateSeferler.cs:line 69
-   at KOAFiloServis.Tests.Services.FixDuplicateSeferler.Fix_Guzergah45_DuplicateSeferler() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\FixDuplicateSeferler.cs:line 69
+   at MKFiloServis.Tests.Services.FixDuplicateSeferler.Fix_Guzergah45_DuplicateSeferler() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\FixDuplicateSeferler.cs:line 69
+   at MKFiloServis.Tests.Services.FixDuplicateSeferler.Fix_Guzergah45_DuplicateSeferler() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\FixDuplicateSeferler.cs:line 69
 --- End of stack trace from previous location ---
   Standard Output Messages:
  Id=45 aktif sefer: 1
@@ -120,21 +120,21 @@ A total of 1 test files matched the specified pattern.
  SiraNo'lar: 1
 
 
-[xUnit.net 00:00:03.78]     KOAFiloServis.Tests.Services.EvrakDownloadChainTests.AllPersonelEvrakFiles_ExistOnDisk [FAIL]
-  Failed KOAFiloServis.Tests.Services.EvrakDownloadChainTests.AllPersonelEvrakFiles_ExistOnDisk [27 ms]
+[xUnit.net 00:00:03.78]     MKFiloServis.Tests.Services.EvrakDownloadChainTests.AllPersonelEvrakFiles_ExistOnDisk [FAIL]
+  Failed MKFiloServis.Tests.Services.EvrakDownloadChainTests.AllPersonelEvrakFiles_ExistOnDisk [27 ms]
   Error Message:
-   Expected missing to be empty because T├╝m personel evrak dosyalar─▒ diskte bulunmal─▒. Eksik: 86, but found at least one item {"Id=8 SoforId=6 Yol=C:\KOAFiloServis_yedekleme\uploads\Arsiv\Sifreli\Personeller\RECEP USTUN - USTUN GRUP SEYAHAT\RECEPUSTUNEhliyetFotokopisi_20260430_152230.pdf.enc"}.
+   Expected missing to be empty because T├╝m personel evrak dosyalar─▒ diskte bulunmal─▒. Eksik: 86, but found at least one item {"Id=8 SoforId=6 Yol=C:\MKFiloServis_yedekleme\uploads\Arsiv\Sifreli\Personeller\RECEP USTUN - USTUN GRUP SEYAHAT\RECEPUSTUNEhliyetFotokopisi_20260430_152230.pdf.enc"}.
   Stack Trace:
      at FluentAssertions.Collections.GenericCollectionAssertions`3.<>c__DisplayClass10_0.<BeEmpty>b__0(AssertionChain chain)
    at FluentAssertions.Collections.GenericCollectionAssertions`3.BeEmpty(String because, Object[] becauseArgs)
-   at KOAFiloServis.Tests.Services.EvrakDownloadChainTests.AllPersonelEvrakFiles_ExistOnDisk() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\EvrakDownloadChainTests.cs:line 202
-   at KOAFiloServis.Tests.Services.EvrakDownloadChainTests.AllPersonelEvrakFiles_ExistOnDisk() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\EvrakDownloadChainTests.cs:line 202
+   at MKFiloServis.Tests.Services.EvrakDownloadChainTests.AllPersonelEvrakFiles_ExistOnDisk() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\EvrakDownloadChainTests.cs:line 202
+   at MKFiloServis.Tests.Services.EvrakDownloadChainTests.AllPersonelEvrakFiles_ExistOnDisk() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\EvrakDownloadChainTests.cs:line 202
 --- End of stack trace from previous location ---
-[xUnit.net 00:00:03.88]     KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.Test1_MutexNotAcquired_EngineNeverCalled [FAIL]
-[xUnit.net 00:00:03.88]     KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.Test2_MutexCollision_EngineNotCalled [FAIL]
-  Failed KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.Test1_MutexNotAcquired_EngineNeverCalled [4 ms]
+[xUnit.net 00:00:03.88]     MKFiloServis.Tests.Services.PuantajProductionSimulationTests.Test1_MutexNotAcquired_EngineNeverCalled [FAIL]
+[xUnit.net 00:00:03.88]     MKFiloServis.Tests.Services.PuantajProductionSimulationTests.Test2_MutexCollision_EngineNotCalled [FAIL]
+  Failed MKFiloServis.Tests.Services.PuantajProductionSimulationTests.Test1_MutexNotAcquired_EngineNeverCalled [4 ms]
   Error Message:
-   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.Extensions.Configuration.IConfiguration' while attempting to activate 'KOAFiloServis.Web.Services.PuantajJobService'.
+   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.Extensions.Configuration.IConfiguration' while attempting to activate 'MKFiloServis.Web.Services.PuantajJobService'.
   Stack Trace:
      at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateArgumentCallSites(ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain, ParameterInfo[] parameters, Boolean throwIfCallSiteNotFound)
    at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateConstructorCallSite(ResultCache lifetime, ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain)
@@ -148,12 +148,12 @@ A total of 1 test files matched the specified pattern.
    at Microsoft.Extensions.DependencyInjection.ServiceProvider.GetService(Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(IServiceProvider provider, Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService[T](IServiceProvider provider)
-   at KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.BuildSut() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 43
-   at KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.Test1_MutexNotAcquired_EngineNeverCalled() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 59
+   at MKFiloServis.Tests.Services.PuantajProductionSimulationTests.BuildSut() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 43
+   at MKFiloServis.Tests.Services.PuantajProductionSimulationTests.Test1_MutexNotAcquired_EngineNeverCalled() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 59
 --- End of stack trace from previous location ---
-  Failed KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.Test2_MutexCollision_EngineNotCalled [1 ms]
+  Failed MKFiloServis.Tests.Services.PuantajProductionSimulationTests.Test2_MutexCollision_EngineNotCalled [1 ms]
   Error Message:
-   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.Extensions.Configuration.IConfiguration' while attempting to activate 'KOAFiloServis.Web.Services.PuantajJobService'.
+   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.Extensions.Configuration.IConfiguration' while attempting to activate 'MKFiloServis.Web.Services.PuantajJobService'.
   Stack Trace:
      at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateArgumentCallSites(ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain, ParameterInfo[] parameters, Boolean throwIfCallSiteNotFound)
    at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateConstructorCallSite(ResultCache lifetime, ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain)
@@ -167,14 +167,14 @@ A total of 1 test files matched the specified pattern.
    at Microsoft.Extensions.DependencyInjection.ServiceProvider.GetService(Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(IServiceProvider provider, Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService[T](IServiceProvider provider)
-   at KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.BuildSut() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 43
-   at KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.Test2_MutexCollision_EngineNotCalled() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 78
+   at MKFiloServis.Tests.Services.PuantajProductionSimulationTests.BuildSut() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 43
+   at MKFiloServis.Tests.Services.PuantajProductionSimulationTests.Test2_MutexCollision_EngineNotCalled() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 78
 --- End of stack trace from previous location ---
-[xUnit.net 00:00:03.89]     KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.Test6_Cancellation_Propagates_FromProcessAllTenants [FAIL]
-[xUnit.net 00:00:03.90]     KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.Test4_FatalException_NoRetry [FAIL]
-  Failed KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.Test6_Cancellation_Propagates_FromProcessAllTenants [3 ms]
+[xUnit.net 00:00:03.89]     MKFiloServis.Tests.Services.PuantajProductionSimulationTests.Test6_Cancellation_Propagates_FromProcessAllTenants [FAIL]
+[xUnit.net 00:00:03.90]     MKFiloServis.Tests.Services.PuantajProductionSimulationTests.Test4_FatalException_NoRetry [FAIL]
+  Failed MKFiloServis.Tests.Services.PuantajProductionSimulationTests.Test6_Cancellation_Propagates_FromProcessAllTenants [3 ms]
   Error Message:
-   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.Extensions.Configuration.IConfiguration' while attempting to activate 'KOAFiloServis.Web.Services.PuantajJobService'.
+   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.Extensions.Configuration.IConfiguration' while attempting to activate 'MKFiloServis.Web.Services.PuantajJobService'.
   Stack Trace:
      at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateArgumentCallSites(ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain, ParameterInfo[] parameters, Boolean throwIfCallSiteNotFound)
    at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateConstructorCallSite(ResultCache lifetime, ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain)
@@ -188,12 +188,12 @@ A total of 1 test files matched the specified pattern.
    at Microsoft.Extensions.DependencyInjection.ServiceProvider.GetService(Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(IServiceProvider provider, Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService[T](IServiceProvider provider)
-   at KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.BuildSut() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 43
-   at KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.Test6_Cancellation_Propagates_FromProcessAllTenants() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 151
+   at MKFiloServis.Tests.Services.PuantajProductionSimulationTests.BuildSut() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 43
+   at MKFiloServis.Tests.Services.PuantajProductionSimulationTests.Test6_Cancellation_Propagates_FromProcessAllTenants() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 151
 --- End of stack trace from previous location ---
-  Failed KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.Test4_FatalException_NoRetry [2 ms]
+  Failed MKFiloServis.Tests.Services.PuantajProductionSimulationTests.Test4_FatalException_NoRetry [2 ms]
   Error Message:
-   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.Extensions.Configuration.IConfiguration' while attempting to activate 'KOAFiloServis.Web.Services.PuantajJobService'.
+   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.Extensions.Configuration.IConfiguration' while attempting to activate 'MKFiloServis.Web.Services.PuantajJobService'.
   Stack Trace:
      at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateArgumentCallSites(ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain, ParameterInfo[] parameters, Boolean throwIfCallSiteNotFound)
    at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateConstructorCallSite(ResultCache lifetime, ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain)
@@ -207,13 +207,13 @@ A total of 1 test files matched the specified pattern.
    at Microsoft.Extensions.DependencyInjection.ServiceProvider.GetService(Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(IServiceProvider provider, Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService[T](IServiceProvider provider)
-   at KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.BuildSut() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 43
-   at KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.Test4_FatalException_NoRetry() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 116
+   at MKFiloServis.Tests.Services.PuantajProductionSimulationTests.BuildSut() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 43
+   at MKFiloServis.Tests.Services.PuantajProductionSimulationTests.Test4_FatalException_NoRetry() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 116
 --- End of stack trace from previous location ---
-[xUnit.net 00:00:03.95]     KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.Test10_50Tenants_Sequential_Performance [FAIL]
-  Failed KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.Test10_50Tenants_Sequential_Performance [3 ms]
+[xUnit.net 00:00:03.95]     MKFiloServis.Tests.Services.PuantajProductionSimulationTests.Test10_50Tenants_Sequential_Performance [FAIL]
+  Failed MKFiloServis.Tests.Services.PuantajProductionSimulationTests.Test10_50Tenants_Sequential_Performance [3 ms]
   Error Message:
-   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.Extensions.Configuration.IConfiguration' while attempting to activate 'KOAFiloServis.Web.Services.PuantajJobService'.
+   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.Extensions.Configuration.IConfiguration' while attempting to activate 'MKFiloServis.Web.Services.PuantajJobService'.
   Stack Trace:
      at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateArgumentCallSites(ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain, ParameterInfo[] parameters, Boolean throwIfCallSiteNotFound)
    at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateConstructorCallSite(ResultCache lifetime, ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain)
@@ -227,15 +227,15 @@ A total of 1 test files matched the specified pattern.
    at Microsoft.Extensions.DependencyInjection.ServiceProvider.GetService(Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(IServiceProvider provider, Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService[T](IServiceProvider provider)
-   at KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.BuildSut() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 43
-   at KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.Test10_50Tenants_Sequential_Performance() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 251
+   at MKFiloServis.Tests.Services.PuantajProductionSimulationTests.BuildSut() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 43
+   at MKFiloServis.Tests.Services.PuantajProductionSimulationTests.Test10_50Tenants_Sequential_Performance() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 251
 --- End of stack trace from previous location ---
-[xUnit.net 00:00:03.96]     KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.Test7_Reconciliation_ServiceArchitecture [FAIL]
-[xUnit.net 00:00:03.96]     KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.Test9a_Chaos_DBConnectionDrop_MutexNotAcquired [FAIL]
-[xUnit.net 00:00:04.45]     KOAFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_SaveThenReload_Still2 [FAIL]
-  Failed KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.Test7_Reconciliation_ServiceArchitecture [4 ms]
+[xUnit.net 00:00:03.96]     MKFiloServis.Tests.Services.PuantajProductionSimulationTests.Test7_Reconciliation_ServiceArchitecture [FAIL]
+[xUnit.net 00:00:03.96]     MKFiloServis.Tests.Services.PuantajProductionSimulationTests.Test9a_Chaos_DBConnectionDrop_MutexNotAcquired [FAIL]
+[xUnit.net 00:00:04.45]     MKFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_SaveThenReload_Still2 [FAIL]
+  Failed MKFiloServis.Tests.Services.PuantajProductionSimulationTests.Test7_Reconciliation_ServiceArchitecture [4 ms]
   Error Message:
-   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.EntityFrameworkCore.IDbContextFactory`1[KOAFiloServis.Web.Data.ApplicationDbContext]' while attempting to activate 'KOAFiloServis.Web.Services.PuantajReconciliationService'.
+   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.EntityFrameworkCore.IDbContextFactory`1[MKFiloServis.Web.Data.ApplicationDbContext]' while attempting to activate 'MKFiloServis.Web.Services.PuantajReconciliationService'.
   Stack Trace:
      at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateArgumentCallSites(ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain, ParameterInfo[] parameters, Boolean throwIfCallSiteNotFound)
    at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateConstructorCallSite(ResultCache lifetime, ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain)
@@ -249,12 +249,12 @@ A total of 1 test files matched the specified pattern.
    at Microsoft.Extensions.DependencyInjection.ServiceProvider.GetService(Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(IServiceProvider provider, Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService[T](IServiceProvider provider)
-   at KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.Test7_Reconciliation_ServiceArchitecture() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 171
+   at MKFiloServis.Tests.Services.PuantajProductionSimulationTests.Test7_Reconciliation_ServiceArchitecture() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 171
    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
    at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
-  Failed KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.Test9a_Chaos_DBConnectionDrop_MutexNotAcquired [1 ms]
+  Failed MKFiloServis.Tests.Services.PuantajProductionSimulationTests.Test9a_Chaos_DBConnectionDrop_MutexNotAcquired [1 ms]
   Error Message:
-   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.Extensions.Configuration.IConfiguration' while attempting to activate 'KOAFiloServis.Web.Services.PuantajJobService'.
+   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.Extensions.Configuration.IConfiguration' while attempting to activate 'MKFiloServis.Web.Services.PuantajJobService'.
   Stack Trace:
      at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateArgumentCallSites(ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain, ParameterInfo[] parameters, Boolean throwIfCallSiteNotFound)
    at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateConstructorCallSite(ResultCache lifetime, ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain)
@@ -268,29 +268,29 @@ A total of 1 test files matched the specified pattern.
    at Microsoft.Extensions.DependencyInjection.ServiceProvider.GetService(Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(IServiceProvider provider, Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService[T](IServiceProvider provider)
-   at KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.BuildSut() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 43
-   at KOAFiloServis.Tests.Services.PuantajProductionSimulationTests.Test9a_Chaos_DBConnectionDrop_MutexNotAcquired() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 222
+   at MKFiloServis.Tests.Services.PuantajProductionSimulationTests.BuildSut() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 43
+   at MKFiloServis.Tests.Services.PuantajProductionSimulationTests.Test9a_Chaos_DBConnectionDrop_MutexNotAcquired() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\PuantajProductionSimulationTests.cs:line 222
 --- End of stack trace from previous location ---
-  Failed KOAFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_SaveThenReload_Still2 [878 ms]
+  Failed MKFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_SaveThenReload_Still2 [878 ms]
   Error Message:
    Expected after.Count to be 2, but found 1.
   Stack Trace:
      at FluentAssertions.Numeric.NumericAssertionsBase`3.Be(T expected, String because, Object[] becauseArgs)
-   at KOAFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_SaveThenReload_Still2() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\Guzergah18Plus2Tests.cs:line 98
+   at MKFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_SaveThenReload_Still2() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\Guzergah18Plus2Tests.cs:line 98
 --- End of stack trace from previous location ---
   Standard Output Messages:
  Save ├Âncesi UI load: 1 sefer
  Save sonras─▒ UI load: 1 sefer
 
 
-[xUnit.net 00:00:04.66]     KOAFiloServis.Tests.Services.ArchiveMigrationExecuteTests.Execute_MigrateAllEvrak [FAIL]
-  Failed KOAFiloServis.Tests.Services.ArchiveMigrationExecuteTests.Execute_MigrateAllEvrak [3 s]
+[xUnit.net 00:00:04.66]     MKFiloServis.Tests.Services.ArchiveMigrationExecuteTests.Execute_MigrateAllEvrak [FAIL]
+  Failed MKFiloServis.Tests.Services.ArchiveMigrationExecuteTests.Execute_MigrateAllEvrak [3 s]
   Error Message:
    Assert.Equal() Failure: Values differ
 Expected: 90
 Actual:   98
   Stack Trace:
-     at KOAFiloServis.Tests.Services.ArchiveMigrationExecuteTests.Execute_MigrateAllEvrak() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\ArchiveMigrationExecuteTests.cs:line 335
+     at MKFiloServis.Tests.Services.ArchiveMigrationExecuteTests.Execute_MigrateAllEvrak() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\ArchiveMigrationExecuteTests.cs:line 335
 --- End of stack trace from previous location ---
   Standard Output Messages:
  ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
@@ -317,36 +317,37 @@ Actual:   98
  Ara├ğ:     Kopyalanan=0 Atlanan=87 Ba┼şar─▒s─▒z=0
  Toplam kopyalanan: 0
  Yeni dizinler: 0
- Hedef k├Âk: C:\KOAFiloServis_yedekleme\Arsiv\Sifreli\
+ Hedef k├Âk: C:\MKFiloServis_yedekleme\Arsiv\Sifreli\
  
  ÔöÇÔöÇÔöÇ HATALAR ÔöÇÔöÇÔöÇ
    Personel Id=112: Kaynak bulunamad─▒: Arsiv/Sifreli/Personeller/MURAT KARAKAS - USTUN GRUP SEYAHAT/MURATKARAKASNufusKayitOrnegi_20260618_150751_20260618120751748_ebfc3fd72b9e437c8c6ef8f6f4f31f51.jpeg.enc
    Personel Id=116: Kaynak bulunamad─▒: Arsiv/Sifreli/Personeller/deneme deneme - USTUN GRUP SEYAHAT/denemedenemeDiplomaFotokopisi_20260621_113216_20260621083216214_d76e2eec6da04c12898935a365f4968a.pdf.enc
 
 
-[xUnit.net 00:00:04.98]     KOAFiloServis.Tests.Services.Guzergah2to1Tests.ReplaceAll_Id45_DropTo1_Works [FAIL]
-  Failed KOAFiloServis.Tests.Services.Guzergah2to1Tests.ReplaceAll_Id45_DropTo1_Works [107 ms]
+[xUnit.net 00:00:04.98]     MKFiloServis.Tests.Services.Guzergah2to1Tests.ReplaceAll_Id45_DropTo1_Works [FAIL]
+  Failed MKFiloServis.Tests.Services.Guzergah2to1Tests.ReplaceAll_Id45_DropTo1_Works [107 ms]
   Error Message:
    Expected active to be 1 because Hedef=1 ama DB_Aktif=2, but found 2.
   Stack Trace:
      at FluentAssertions.Numeric.NumericAssertionsBase`3.Be(T expected, String because, Object[] becauseArgs)
-   at KOAFiloServis.Tests.Services.Guzergah2to1Tests.ReplaceAll_Id45_DropTo1_Works() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\Guzergah2to1Tests.cs:line 140
+   at MKFiloServis.Tests.Services.Guzergah2to1Tests.ReplaceAll_Id45_DropTo1_Works() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\Guzergah2to1Tests.cs:line 140
 --- End of stack trace from previous location ---
   Standard Output Messages:
  Id=45 before: 0 active sefer
  Id=45 after drop to 1: Total=97 Active=2 Deleted=95
 
 
-[xUnit.net 00:00:05.25]     KOAFiloServis.Tests.Services.Guzergah18Plus2Tests.AllGuzergah_GetActive_OnlyReturnsNonDeleted [FAIL]
-  Failed KOAFiloServis.Tests.Services.Guzergah18Plus2Tests.AllGuzergah_GetActive_OnlyReturnsNonDeleted [796 ms]
+[xUnit.net 00:00:05.25]     MKFiloServis.Tests.Services.Guzergah18Plus2Tests.AllGuzergah_GetActive_OnlyReturnsNonDeleted [FAIL]
+  Failed MKFiloServis.Tests.Services.Guzergah18Plus2Tests.AllGuzergah_GetActive_OnlyReturnsNonDeleted [796 ms]
   Error Message:
    System.InvalidOperationException : G├╝zergah bulunamad─▒. Id=367
   Stack Trace:
-     at KOAFiloServis.Web.Services.GuzergahSeferService.VerifyGuzergahAccessAsync(ApplicationDbContext context, Int32 guzergahId) in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Web\Services\GuzergahSeferService.cs:line 176
-   at KOAFiloServis.Web.Services.GuzergahSeferService.GetByGuzergahIdAsync(Int32 guzergahId) in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Web\Services\GuzergahSeferService.cs:line 28
-   at KOAFiloServis.Web.Services.GuzergahSeferService.GetByGuzergahIdAsync(Int32 guzergahId) in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Web\Services\GuzergahSeferService.cs:line 30
-   at KOAFiloServis.Tests.Services.Guzergah18Plus2Tests.AllGuzergah_GetActive_OnlyReturnsNonDeleted() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\Guzergah18Plus2Tests.cs:line 178
-   at KOAFiloServis.Tests.Services.Guzergah18Plus2Tests.AllGuzergah_GetActive_OnlyReturnsNonDeleted() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\Guzergah18Plus2Tests.cs:line 188
+     at MKFiloServis.Web.Services.GuzergahSeferService.VerifyGuzergahAccessAsync(ApplicationDbContext context, Int32 guzergahId) in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Web\Services\GuzergahSeferService.cs:line 176
+   at MKFiloServis.Web.Services.GuzergahSeferService.GetByGuzergahIdAsync(Int32 guzergahId) in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Web\Services\GuzergahSeferService.cs:line 28
+   at MKFiloServis.Web.Services.GuzergahSeferService.GetByGuzergahIdAsync(Int32 guzergahId) in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Web\Services\GuzergahSeferService.cs:line 30
+   at MKFiloServis.Tests.Services.Guzergah18Plus2Tests.AllGuzergah_GetActive_OnlyReturnsNonDeleted() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\Guzergah18Plus2Tests.cs:line 178
+   at MKFiloServis.Tests.Services.Guzergah18Plus2Tests.AllGuzergah_GetActive_OnlyReturnsNonDeleted() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\Guzergah18Plus2Tests.cs:line 188
 --- End of stack trace from previous location ---
 
-Failed!  - Failed:    20, Passed:   513, Skipped:     0, Total:   533, Duration: 10 s - KOAFiloServis.Tests.dll (net10.0)
+Failed!  - Failed:    20, Passed:   513, Skipped:     0, Total:   533, Duration: 10 s - MKFiloServis.Tests.dll (net10.0)
+

@@ -1,5 +1,5 @@
-﻿# ============================================================
-# 🐳 KOAFiloServis — Docker Compose (Production-ready local stack)
+# ============================================================
+# 🐳 MKFiloServis — Docker Compose (Production-ready local stack)
 # ------------------------------------------------------------
 # Kullanım:
 #   docker compose up -d --build
@@ -7,7 +7,7 @@
 #   docker compose down
 # ============================================================
 
-name: koafiloservis
+name: MKFiloServis
 
 services:
   # ──────────────────────────────────────────────────────────
@@ -19,8 +19,8 @@ services:
       dockerfile: Dockerfile
       args:
         BUILD_CONFIGURATION: Release
-    image: koafiloservis/web:latest
-    container_name: koafiloservis-web
+    image: MKFiloServis/web:latest
+    container_name: MKFiloServis-web
     restart: unless-stopped
     depends_on:
       postgres:
@@ -30,11 +30,11 @@ services:
       ASPNETCORE_URLS: http://+:8080
       TZ: Europe/Istanbul
       # Bağlantı dizesi — appsettings'te ConnectionStrings__DefaultConnection olarak okunur
-      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-koafiloservis};Username=${POSTGRES_USER:-koafilo};Password=${POSTGRES_PASSWORD:-ChangeMe!2025}"
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-MKFiloServis};Username=${POSTGRES_USER:-koafilo};Password=${POSTGRES_PASSWORD:-ChangeMe!2025}"
       # JWT — .env'den gelmeli; default sadece local geliştirme için
       Jwt__Secret: "${JWT_SECRET:-local-dev-secret-please-change-in-production-32chars-minimum}"
-      Jwt__Issuer: "${JWT_ISSUER:-KOAFiloServis}"
-      Jwt__Audience: "${JWT_AUDIENCE:-KOAFiloServis-Users}"
+      Jwt__Issuer: "${JWT_ISSUER:-MKFiloServis}"
+      Jwt__Audience: "${JWT_AUDIENCE:-MKFiloServis-Users}"
       # Ollama (opsiyonel AI servisi)
       Ollama__BaseUrl: "http://ollama:11434"
     ports:
@@ -59,10 +59,10 @@ services:
   # ──────────────────────────────────────────────────────────
   postgres:
     image: postgres:17-alpine
-    container_name: koafiloservis-postgres
+    container_name: MKFiloServis-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-koafiloservis}
+      POSTGRES_DB: ${POSTGRES_DB:-MKFiloServis}
       POSTGRES_USER: ${POSTGRES_USER:-koafilo}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ChangeMe!2025}
       TZ: Europe/Istanbul
@@ -74,7 +74,7 @@ services:
     networks:
       - koafilo-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-koafilo} -d ${POSTGRES_DB:-koafiloservis}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-koafilo} -d ${POSTGRES_DB:-MKFiloServis}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -85,7 +85,7 @@ services:
   # ──────────────────────────────────────────────────────────
   ollama:
     image: ollama/ollama:latest
-    container_name: koafiloservis-ollama
+    container_name: MKFiloServis-ollama
     restart: unless-stopped
     profiles: ["ai"]
     ports:
@@ -116,3 +116,4 @@ volumes:
   web_keys:
   postgres_data:
   ollama_data:
+

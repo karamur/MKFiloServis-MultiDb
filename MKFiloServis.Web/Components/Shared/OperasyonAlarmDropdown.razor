@@ -1,0 +1,266 @@
+@implements IAsyncDisposable
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+@using Microsoft.Extensions.Logging
+@inject IBelgeUyariService BelgeUyariService
+@inject IFaturaService FaturaService
+@inject ITasimaTedarikciService TedarikciService
+@inject IKiralikPlakaTakipService KiralikService
+@inject NavigationManager Navigation
+@inject ILogger<OperasyonAlarmDropdown> Logger
+
+<div class="dropdown">
+    <button class="btn btn-light btn-sm border position-relative" type="button" data-bs-toggle="dropdown" title="Operasyonel Alarmlar">
+        <i class="bi bi-exclamation-triangle-fill @(kritikSayisi > 0 ? "text-danger" : acilSayisi > 0 ? "text-warning" : "text-muted")"></i>
+        @if (toplamKritikAcil > 0)
+        {
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill @(kritikSayisi > 0 ? "bg-danger" : "bg-warning text-dark")">
+                @(toplamKritikAcil > 99 ? "99+" : toplamKritikAcil.ToString())
+            </span>
+        }
+    </button>
+
+    <div class="dropdown-menu dropdown-menu-end p-0 shadow-sm" style="width: 380px; max-width: 95vw;">
+        <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom bg-light">
+            <div>
+                <strong><i class="bi bi-shield-exclamation me-1"></i>Operasyonel Alarmlar</strong>
+                <div>
+                    <small>
+                        @if (kritikSayisi > 0)
+                        {
+                            <span class="text-danger fw-bold">@kritikSayisi kritik</span>
+                        }
+                        @if (kritikSayisi > 0 && acilSayisi > 0)
+                        {
+                            <span class="text-muted"> • </span>
+                        }
+                        @if (acilSayisi > 0)
+                        {
+                            <span class="text-warning fw-bold">@acilSayisi acil</span>
+                        }
+                        @if (toplamKritikAcil == 0 && !isLoading)
+                        {
+                            <span class="text-success">Tüm sistemler iyi durumda</span>
+                        }
+                    </small>
+                </div>
+            </div>
+            <button class="btn btn-link btn-sm text-decoration-none p-0" @onclick="YenileAsync" disabled="@isLoading" title="Yenile">
+                <i class="bi @(isLoading ? "bi-arrow-clockwise spin" : "bi-arrow-clockwise")"></i>
+            </button>
+        </div>
+
+        @if (isLoading && !alarmlar.Any())
+        {
+            <div class="text-center p-3">
+                <div class="spinner-border spinner-border-sm text-warning"></div>
+            </div>
+        }
+        else if (!alarmlar.Any())
+        {
+            <div class="text-center text-muted p-4">
+                <i class="bi bi-shield-check text-success" style="font-size: 1.75rem;"></i>
+                <div class="mt-2 small">Aktif alarm yok 🎉</div>
+            </div>
+        }
+        else
+        {
+            <div style="max-height: 380px; overflow-y: auto;">
+                @foreach (var a in alarmlar)
+                {
+                    <button class="dropdown-item border-bottom py-2"
+                            @onclick="() => Git(a.DetayUrl)">
+                        <div class="d-flex align-items-start gap-2 text-start">
+                            <i class="bi @SeviyeIcon(a.Seviye) @SeviyeRenk(a.Seviye) mt-1" style="font-size:1.1rem"></i>
+                            <div class="flex-grow-1">
+                                <div class="fw-semibold small">@a.Baslik</div>
+                                @if (!string.IsNullOrWhiteSpace(a.Detay))
+                                {
+                                    <div class="small text-muted">@a.Detay</div>
+                                }
+                                <div class="small mt-1">
+                                    <span class="badge bg-secondary">@a.Kategori</span>
+                                    @if (a.KalanGun.HasValue)
+                                    {
+                                        @if (a.KalanGun.Value < 0)
+                                        {
+                                            <span class="text-danger fw-bold ms-1">@(-a.KalanGun.Value) gün geçti</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-warning fw-bold ms-1">@a.KalanGun.Value gün kaldı</span>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </button>
+                }
+            </div>
+        }
+
+        <div class="border-top p-2 text-center bg-light">
+            <a class="btn btn-sm btn-outline-warning w-100" href="/raporlar/bildirim-merkezi">
+                <i class="bi bi-bell-fill me-1"></i>Bildirim Merkezi'ni Aç
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+    .spin { animation: spin 1s linear infinite; }
+    @@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+</style>
+
+@code {
+    private readonly CancellationTokenSource cts = new();
+    private List<AlarmItem> alarmlar = new();
+    private int kritikSayisi;
+    private int acilSayisi;
+    private int toplamKritikAcil => kritikSayisi + acilSayisi;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await YenileAsync();
+        _ = IzlemeDongusuAsync(cts.Token);
+    }
+
+    private async Task IzlemeDongusuAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromMinutes(2));
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                await InvokeAsync(YenileAsync);
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "OperasyonAlarmDropdown izleme dongusunde hata");
+        }
+    }
+
+    private async Task YenileAsync()
+    {
+        isLoading = true;
+        StateHasChanged();
+        try
+        {
+            var bugun = DateTime.Today;
+            var liste = new List<AlarmItem>();
+
+            // Belge uyarıları
+            try
+            {
+                var belge = await BelgeUyariService.GetBelgeUyarilarAsync(30);
+                foreach (var u in belge.TumUyarilar.Where(x => x.KalanGun <= 30))
+                {
+                    var sev = u.KalanGun < 0 ? "Kritik" : u.KalanGun <= 7 ? "Acil" : "Uyari";
+                    var kategori = u.Kaynak == "TasimaTedarikci" || u.Kaynak == "KiralikPlaka" ? "Sözleşme" : "Belge";
+                    liste.Add(new AlarmItem
+                    {
+                        Kategori = kategori,
+                        Seviye = sev,
+                        Baslik = u.Baslik,
+                        Detay = u.BelgeTuru,
+                        KalanGun = u.KalanGun,
+                        DetayUrl = string.IsNullOrEmpty(u.DetayUrl) ? "/raporlar/bildirim-merkezi" : u.DetayUrl
+                    });
+                }
+            }
+            catch { }
+
+            // Vade fatura
+            try
+            {
+                var faturalar = await FaturaService.GetOdenmemisFaturalarAsync();
+                foreach (var f in faturalar.Where(x => x.VadeTarihi.HasValue))
+                {
+                    var kalan = (f.VadeTarihi!.Value.Date - bugun).Days;
+                    if (kalan > 7) continue;
+                    var sev = kalan < 0 ? "Kritik" : "Acil";
+                    var tutar = f.KalanTutar > 0 ? f.KalanTutar : f.GenelToplam;
+                    liste.Add(new AlarmItem
+                    {
+                        Kategori = "Fatura",
+                        Seviye = sev,
+                        Baslik = $"Vade: {(string.IsNullOrEmpty(f.FaturaNo) ? f.Id.ToString() : f.FaturaNo)} — {f.Cari?.Unvan ?? f.Firma?.FirmaAdi ?? "-"}",
+                        Detay = $"{tutar:N2} ₺",
+                        KalanGun = kalan,
+                        DetayUrl = "/finans/faturalar"
+                    });
+                }
+            }
+            catch { }
+
+            // En kritik 10 tanesi
+            alarmlar = liste
+                .OrderBy(x => SeviyeSira(x.Seviye))
+                .ThenBy(x => x.KalanGun ?? int.MaxValue)
+                .Take(10)
+                .ToList();
+
+            kritikSayisi = liste.Count(x => x.Seviye == "Kritik");
+            acilSayisi = liste.Count(x => x.Seviye == "Acil");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "OperasyonAlarmDropdown alarmlar yuklenirken hata");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void Git(string? url)
+    {
+        Navigation.NavigateTo(string.IsNullOrEmpty(url) ? "/raporlar/bildirim-merkezi" : url);
+    }
+
+    private static int SeviyeSira(string s) => s switch
+    {
+        "Kritik" => 0,
+        "Acil" => 1,
+        "Uyari" => 2,
+        _ => 3
+    };
+
+    private static string SeviyeIcon(string s) => s switch
+    {
+        "Kritik" => "bi-exclamation-octagon-fill",
+        "Acil" => "bi-exclamation-triangle-fill",
+        "Uyari" => "bi-info-circle-fill",
+        _ => "bi-info-circle"
+    };
+
+    private static string SeviyeRenk(string s) => s switch
+    {
+        "Kritik" => "text-danger",
+        "Acil" => "text-warning",
+        "Uyari" => "text-info",
+        _ => "text-muted"
+    };
+
+    public ValueTask DisposeAsync()
+    {
+        cts.Cancel();
+        cts.Dispose();
+        return ValueTask.CompletedTask;
+    }
+
+    private class AlarmItem
+    {
+        public string Kategori { get; set; } = "";
+        public string Seviye { get; set; } = "Bilgi";
+        public string Baslik { get; set; } = "";
+        public string? Detay { get; set; }
+        public int? KalanGun { get; set; }
+        public string? DetayUrl { get; set; }
+    }
+}
+

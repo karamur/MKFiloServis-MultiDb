@@ -1,0 +1,297 @@
+@page "/muhasebe/raporlar/kdv-beyan"
+@using MKFiloServis.Web.Services
+@inject IMuhasebeService MuhasebeService
+@inject IToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>KDV Beyanname Raporu</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="bi bi-file-earmark-ruled me-2"></i>KDV Beyanname Raporu</h3>
+        <div class="d-flex gap-2">
+            <select class="form-select" style="width: 100px;" @bind="secilenYil" @bind:after="LoadRapor">
+                @for (int y = DateTime.Now.Year; y >= DateTime.Now.Year - 5; y--)
+                {
+                    <option value="@y">@y</option>
+                }
+            </select>
+            <select class="form-select" style="width: 130px;" @bind="secilenAy" @bind:after="LoadRapor">
+                <option value="1">Ocak</option>
+                <option value="2">Şubat</option>
+                <option value="3">Mart</option>
+                <option value="4">Nisan</option>
+                <option value="5">Mayıs</option>
+                <option value="6">Haziran</option>
+                <option value="7">Temmuz</option>
+                <option value="8">Ağustos</option>
+                <option value="9">Eylül</option>
+                <option value="10">Ekim</option>
+                <option value="11">Kasım</option>
+                <option value="12">Aralık</option>
+            </select>
+            <button class="btn btn-outline-primary" @onclick="LoadRapor">
+                <i class="bi bi-arrow-clockwise me-1"></i>Yenile
+            </button>
+            <button class="btn btn-success" @onclick="ExportPdf">
+                <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+            </button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else if (rapor != null)
+    {
+        <div class="row">
+            <!-- HESAPLANAN KDV -->
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-danger text-white">
+                        <h5 class="mb-0"><i class="bi bi-arrow-up-circle me-2"></i>Hesaplanan KDV (Satış)</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>KDV Oranı</th>
+                                    <th class="text-end">Matrah</th>
+                                    <th class="text-end">KDV</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var detay in rapor.HesaplananKdvDetay)
+                                {
+                                    <tr>
+                                        <td>%@detay.KdvOrani</td>
+                                        <td class="text-end">@detay.Matrah.ToString("N2") ₺</td>
+                                        <td class="text-end">@detay.KdvTutar.ToString("N2") ₺</td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot class="table-danger">
+                                <tr>
+                                    <th>TOPLAM</th>
+                                    <th class="text-end">@rapor.SatisTutari.ToString("N2") ₺</th>
+                                    <th class="text-end">@rapor.HesaplananKdv.ToString("N2") ₺</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+
+                        @if (rapor.TevkifatliSatisKdv > 0)
+                        {
+                            <div class="alert alert-warning mt-2 mb-0">
+                                <small><i class="bi bi-info-circle me-1"></i>Tevkifatlı Satış KDV: @rapor.TevkifatliSatisKdv.ToString("N2") ₺</small>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- İNDİRİLECEK KDV -->
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="bi bi-arrow-down-circle me-2"></i>İndirilecek KDV (Alış)</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>KDV Oranı</th>
+                                    <th class="text-end">Matrah</th>
+                                    <th class="text-end">KDV</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var detay in rapor.IndirilecekKdvDetay)
+                                {
+                                    <tr>
+                                        <td>%@detay.KdvOrani</td>
+                                        <td class="text-end">@detay.Matrah.ToString("N2") ₺</td>
+                                        <td class="text-end">@detay.KdvTutar.ToString("N2") ₺</td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot class="table-success">
+                                <tr>
+                                    <th>TOPLAM</th>
+                                    <th class="text-end">@rapor.AlisTutari.ToString("N2") ₺</th>
+                                    <th class="text-end">@rapor.IndirilecekKdv.ToString("N2") ₺</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+
+                        @if (rapor.TevkifatKdv > 0)
+                        {
+                            <div class="alert alert-info mt-2 mb-0">
+                                <small><i class="bi bi-info-circle me-1"></i>Tevkifat KDV (İndirilecek): @rapor.TevkifatKdv.ToString("N2") ₺</small>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- KDV HESAPLAMA -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-calculator me-2"></i>KDV Hesaplaması</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-borderless">
+                            <tbody>
+                                <tr>
+                                    <td>Hesaplanan KDV</td>
+                                    <td class="text-end fw-bold text-danger">@rapor.HesaplananKdv.ToString("N2") ₺</td>
+                                </tr>
+                                <tr>
+                                    <td>(-) İndirilecek KDV</td>
+                                    <td class="text-end fw-bold text-success">@rapor.IndirilecekKdv.ToString("N2") ₺</td>
+                                </tr>
+                                @if (rapor.DevredenKdv > 0)
+                                {
+                                    <tr>
+                                        <td>(-) Önceki Dönemden Devreden</td>
+                                        <td class="text-end">@rapor.DevredenKdv.ToString("N2") ₺</td>
+                                    </tr>
+                                }
+                                @if (rapor.TevkifatKdv > 0)
+                                {
+                                    <tr>
+                                        <td>(-) Tevkifat KDV</td>
+                                        <td class="text-end">@rapor.TevkifatKdv.ToString("N2") ₺</td>
+                                    </tr>
+                                }
+                                <tr class="border-top">
+                                    <td><strong>Toplam İndirimler</strong></td>
+                                    <td class="text-end"><strong>@rapor.ToplamIndirimler.ToString("N2") ₺</strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card @(rapor.OdenecekKdv > 0 ? "bg-danger" : "bg-info") text-white h-100">
+                            <div class="card-body text-center d-flex flex-column justify-content-center">
+                                @if (rapor.OdenecekKdv > 0)
+                                {
+                                    <h6>ÖDENECEK KDV</h6>
+                                    <h2 class="mb-0">@rapor.OdenecekKdv.ToString("N2") ₺</h2>
+                                    <small>Son ödeme: @(new DateTime(secilenYil, secilenAy, 1).AddMonths(1).AddDays(25).ToString("dd.MM.yyyy"))</small>
+                                }
+                                else
+                                {
+                                    <h6>DEVREDEN KDV</h6>
+                                    <h2 class="mb-0">@rapor.SonrakiAyaDevredenKdv.ToString("N2") ₺</h2>
+                                    <small>Sonraki aya devredilecek</small>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- YILLIK ÖZET -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>@secilenYil Yılı KDV Özeti</h5>
+            </div>
+            <div class="card-body p-0">
+                @if (yillikOzet != null)
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Ay</th>
+                                    <th class="text-end">Hesaplanan</th>
+                                    <th class="text-end">İndirilecek</th>
+                                    <th class="text-end">Tevkifat</th>
+                                    <th class="text-end">Devreden</th>
+                                    <th class="text-end">Ödenecek</th>
+                                    <th class="text-end">Sonraki Aya</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var ay in yillikOzet)
+                                {
+                                    <tr class="@(ay.Ay == secilenAy ? "table-primary" : "")">
+                                        <td><strong>@ay.AyAdi</strong></td>
+                                        <td class="text-end text-danger">@ay.HesaplananKdv.ToString("N2")</td>
+                                        <td class="text-end text-success">@ay.IndirilecekKdv.ToString("N2")</td>
+                                        <td class="text-end">@ay.TevkifatKdv.ToString("N2")</td>
+                                        <td class="text-end">@ay.DevredenKdv.ToString("N2")</td>
+                                        <td class="text-end fw-bold @(ay.OdenecekKdv > 0 ? "text-danger" : "")">
+                                            @ay.OdenecekKdv.ToString("N2")
+                                        </td>
+                                        <td class="text-end @(ay.SonrakiAyaDevreden > 0 ? "text-info" : "")">
+                                            @ay.SonrakiAyaDevreden.ToString("N2")
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot class="table-secondary">
+                                <tr>
+                                    <th>TOPLAM</th>
+                                    <th class="text-end">@yillikOzet.Sum(x => x.HesaplananKdv).ToString("N2")</th>
+                                    <th class="text-end">@yillikOzet.Sum(x => x.IndirilecekKdv).ToString("N2")</th>
+                                    <th class="text-end">@yillikOzet.Sum(x => x.TevkifatKdv).ToString("N2")</th>
+                                    <th class="text-end">-</th>
+                                    <th class="text-end">@yillikOzet.Sum(x => x.OdenecekKdv).ToString("N2")</th>
+                                    <th class="text-end">-</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool isLoading = true;
+    private int secilenYil = DateTime.Now.Year;
+    private int secilenAy = DateTime.Now.Month;
+    
+    private KdvBeyanRapor? rapor;
+    private List<KdvAylikOzet>? yillikOzet;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRapor();
+    }
+
+    private async Task LoadRapor()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            rapor = await MuhasebeService.GetKdvBeyanRaporuAsync(secilenYil, secilenAy);
+            yillikOzet = await MuhasebeService.GetYillikKdvOzetiAsync(secilenYil);
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Rapor yüklenirken hata: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ExportPdf()
+    {
+        ToastService.ShowInfo("PDF export özelliği yakında eklenecek");
+    }
+}
+

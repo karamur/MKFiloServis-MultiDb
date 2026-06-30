@@ -1,0 +1,433 @@
+@page "/personel/finans/ayarlar"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+@inject IPersonelFinansService FinansService
+@inject IFirmaService FirmaService
+@inject IMuhasebeService MuhasebeService
+@inject IToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>Personel Finans Ayarları</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h3><i class="bi bi-gear me-2"></i>Personel Finans Ayarları</h3>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="/personel/finans">Personel Finans</a></li>
+                    <li class="breadcrumb-item active">Ayarlar</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else if (ayar != null)
+    {
+        <div class="row">
+            <div class="col-lg-8">
+                <!-- Muhasebe Hesap Eşleştirme -->
+                <div class="card mb-3">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="bi bi-link-45deg me-2"></i>Muhasebe Hesap Kodları Eşleştirme</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info py-2 mb-3">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Personel avans ve borç işlemlerinin muhasebe kayıtlarına otomatik aktarılması için hesap kodlarını eşleştirin.
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Firma</label>
+                            <select class="form-select" @bind="ayar.FirmaId" @bind:after="FirmaDegisti">
+                                <option value="">Genel (Tüm Firmalar)</option>
+                                @if (firmalar != null)
+                                {
+                                    @foreach (var f in firmalar)
+                                    {
+                                        <option value="@f.Id">@f.FirmaAdi</option>
+                                    }
+                                }
+                            </select>
+                            <small class="text-muted">Firma seçilmezse tüm firmalar için geçerli olur</small>
+                        </div>
+
+                        <hr />
+
+                        <h6 class="text-primary mb-3"><i class="bi bi-cash-coin me-1"></i>Personel Avansları</h6>
+
+                        <div class="mb-3">
+                            <label class="form-label">195 - Personel Avansları Hesabı *</label>
+                            <select class="form-select" @bind="ayar.PersonelAvanslariHesapId">
+                                <option value="">Hesap Seçin...</option>
+                                @if (muhasebeHesaplari != null)
+                                {
+                                    @foreach (var hesap in muhasebeHesaplari.Where(h => h.HesapKodu.StartsWith("195") || h.HesapKodu.StartsWith("19")))
+                                    {
+                                        <option value="@hesap.Id">@hesap.HesapKodu - @hesap.HesapAdi</option>
+                                    }
+                                }
+                            </select>
+                            <small class="text-muted">Avans verildiğinde bu hesap borçlandırılır</small>
+                        </div>
+
+                        <hr />
+
+                        <h6 class="text-danger mb-3"><i class="bi bi-credit-card me-1"></i>Personele Borçlar</h6>
+
+                        <div class="mb-3">
+                            <label class="form-label">335 - Personele Borçlar Hesabı *</label>
+                            <select class="form-select" @bind="ayar.PersoneleBorclarHesapId">
+                                <option value="">Hesap Seçin...</option>
+                                @if (muhasebeHesaplari != null)
+                                {
+                                    @foreach (var hesap in muhasebeHesaplari.Where(h => h.HesapKodu.StartsWith("335") || h.HesapKodu.StartsWith("33")))
+                                    {
+                                        <option value="@hesap.Id">@hesap.HesapKodu - @hesap.HesapAdi</option>
+                                    }
+                                }
+                            </select>
+                            <small class="text-muted">Personele borç oluştuğunda bu hesap alacaklandırılır</small>
+                        </div>
+
+                        <hr />
+
+                        <h6 class="text-success mb-3"><i class="bi bi-wallet2 me-1"></i>Kasa ve Banka Hesapları</h6>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">100 - Kasa Hesabı</label>
+                                    <select class="form-select" @bind="ayar.KasaHesapId">
+                                        <option value="">Hesap Seçin...</option>
+                                        @if (muhasebeHesaplari != null)
+                                        {
+                                            @foreach (var hesap in muhasebeHesaplari.Where(h => h.HesapKodu.StartsWith("100")))
+                                            {
+                                                <option value="@hesap.Id">@hesap.HesapKodu - @hesap.HesapAdi</option>
+                                            }
+                                        }
+                                    </select>
+                                    <small class="text-muted">Nakit ödemelerde kullanılır</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">102 - Banka Hesabı</label>
+                                    <select class="form-select" @bind="ayar.BankaHesapId">
+                                        <option value="">Hesap Seçin...</option>
+                                        @if (muhasebeHesaplari != null)
+                                        {
+                                            @foreach (var hesap in muhasebeHesaplari.Where(h => h.HesapKodu.StartsWith("102")))
+                                            {
+                                                <option value="@hesap.Id">@hesap.HesapKodu - @hesap.HesapAdi</option>
+                                            }
+                                        }
+                                    </select>
+                                    <small class="text-muted">Banka transferlerinde kullanılır</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr />
+
+                        <h6 class="text-info mb-3"><i class="bi bi-receipt-cutoff me-1"></i>Bordro Muhasebe Hesapları</h6>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">360 - Ödenecek Vergi ve Fonlar</label>
+                                    <select class="form-select" @bind="ayar.OdenecekVergiHesapId">
+                                        <option value="">Hesap Seçin...</option>
+                                        @if (muhasebeHesaplari != null)
+                                        {
+                                            @foreach (var hesap in muhasebeHesaplari.Where(h => h.HesapKodu.StartsWith("360") || h.HesapKodu.StartsWith("36")))
+                                            {
+                                                <option value="@hesap.Id">@hesap.HesapKodu - @hesap.HesapAdi</option>
+                                            }
+                                        }
+                                    </select>
+                                    <small class="text-muted">Gelir vergisi, damga vergisi tahakkuku</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">361 - Ödenecek SGK Primleri</label>
+                                    <select class="form-select" @bind="ayar.OdenecekSgkHesapId">
+                                        <option value="">Hesap Seçin...</option>
+                                        @if (muhasebeHesaplari != null)
+                                        {
+                                            @foreach (var hesap in muhasebeHesaplari.Where(h => h.HesapKodu.StartsWith("361") || h.HesapKodu.StartsWith("36")))
+                                            {
+                                                <option value="@hesap.Id">@hesap.HesapKodu - @hesap.HesapAdi</option>
+                                            }
+                                        }
+                                    </select>
+                                    <small class="text-muted">SGK işçi + işveren primi tahakkuku</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">770 - Genel Yönetim Giderleri</label>
+                                    <select class="form-select" @bind="ayar.PersonelGiderHesapId">
+                                        <option value="">Hesap Seçin...</option>
+                                        @if (muhasebeHesaplari != null)
+                                        {
+                                            @foreach (var hesap in muhasebeHesaplari.Where(h => h.HesapKodu.StartsWith("770") || h.HesapKodu.StartsWith("77")))
+                                            {
+                                                <option value="@hesap.Id">@hesap.HesapKodu - @hesap.HesapAdi</option>
+                                            }
+                                        }
+                                    </select>
+                                    <small class="text-muted">Personel brüt maaş gider kaydı</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">368 - Ödenecek Diğer Yükümlülükler</label>
+                                    <select class="form-select" @bind="ayar.DigerYukumlulukHesapId">
+                                        <option value="">Hesap Seçin...</option>
+                                        @if (muhasebeHesaplari != null)
+                                        {
+                                            @foreach (var hesap in muhasebeHesaplari.Where(h => h.HesapKodu.StartsWith("368") || h.HesapKodu.StartsWith("36")))
+                                            {
+                                                <option value="@hesap.Id">@hesap.HesapKodu - @hesap.HesapAdi</option>
+                                            }
+                                        }
+                                    </select>
+                                    <small class="text-muted">İcra, sendika, BES gibi özel kesintiler</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Otomatik Fiş Oluşturma Ayarları -->
+                <div class="card mb-3">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="bi bi-robot me-2"></i>Otomatik Muhasebe Kaydı Ayarları</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="otomatikFis" @bind="ayar.OtomatikFisOlustur" />
+                            <label class="form-check-label" for="otomatikFis">
+                                <strong>Otomatik Muhasebe Fişi Oluştur</strong>
+                                <br />
+                                <small class="text-muted">Etkinleştirildiğinde her işlem için otomatik muhasebe fişi oluşturulur</small>
+                            </label>
+                        </div>
+
+                        @if (ayar.OtomatikFisOlustur)
+                        {
+                            <div class="ms-4">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="avansFis" @bind="ayar.AvansVerildigindeFisOlustur" />
+                                    <label class="form-check-label" for="avansFis">
+                                        Avans verildiğinde fiş oluştur
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="mahsupFis" @bind="ayar.AvansMahsupFisOlustur" />
+                                    <label class="form-check-label" for="mahsupFis">
+                                        Avans mahsup edildiğinde fiş oluştur
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="borcOdemeFis" @bind="ayar.BorcOdendigindeFisOlustur" />
+                                    <label class="form-check-label" for="borcOdemeFis">
+                                        Borç ödendiğinde fiş oluştur
+                                    </label>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Kaydet Butonu -->
+                <div class="d-grid gap-2">
+                    <button class="btn btn-primary btn-lg" @onclick="Kaydet" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check-lg me-2"></i>
+                        }
+                        Ayarları Kaydet
+                    </button>
+                </div>
+            </div>
+
+            <!-- Yardım Paneli -->
+            <div class="col-lg-4">
+                <div class="card bg-light">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-question-circle me-2"></i>Yardım</h6>
+                    </div>
+                    <div class="card-body">
+                        <h6 class="text-primary">Muhasebe Entegrasyonu</h6>
+                        <p class="small">
+                            Personel avans ve borç işlemleriniz, belirlediğiniz hesap kodları üzerinden 
+                            otomatik olarak muhasebe kayıtlarına aktarılır.
+                        </p>
+
+                        <h6 class="text-primary mt-3">Hesap Planı Önerileri</h6>
+                        <ul class="small">
+                            <li><strong>195</strong> - Personel Avansları (Alacak Hesabı)</li>
+                            <li><strong>335</strong> - Personele Borçlar (Borç Hesabı)</li>
+                            <li><strong>100</strong> - Kasa</li>
+                            <li><strong>102</strong> - Bankalar</li>
+                            <li><strong>360</strong> - Ödenecek Vergi ve Fonlar</li>
+                            <li><strong>361</strong> - Ödenecek SGK Primleri</li>
+                            <li><strong>368</strong> - Ödenecek Diğer Yükümlülükler</li>
+                            <li><strong>770</strong> - Genel Yönetim Giderleri</li>
+                        </ul>
+
+                        <h6 class="text-primary mt-3">Fiş Oluşturma Mantığı</h6>
+                        <div class="small">
+                            <p><strong>Avans Verildiğinde:</strong></p>
+                            <ul class="mb-2">
+                                <li>Borç: 195 Personel Avansları</li>
+                                <li>Alacak: 100 Kasa / 102 Banka</li>
+                            </ul>
+
+                            <p><strong>Personele Borç Oluştuğunda:</strong></p>
+                            <ul class="mb-2">
+                                <li>Borç: İlgili Gider Hesabı</li>
+                                <li>Alacak: 335 Personele Borçlar</li>
+                            </ul>
+
+                            <p><strong>Borç Ödendiğinde:</strong></p>
+                            <ul class="mb-2">
+                                <li>Borç: 335 Personele Borçlar</li>
+                                <li>Alacak: 100 Kasa / 102 Banka</li>
+                            </ul>
+                        </div>
+
+                        <div class="alert alert-warning py-2 mt-3">
+                            <small>
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                <strong>Önemli:</strong> Hesap kodlarını değiştirmeden önce muhasebecinizle görüşün.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Özet Bilgi -->
+                <div class="card mt-3 bg-info text-white">
+                    <div class="card-body">
+                        <h6><i class="bi bi-info-circle me-2"></i>Durum</h6>
+                        @if (ayar.PersonelAvanslariHesapId.HasValue && ayar.PersoneleBorclarHesapId.HasValue)
+                        {
+                            <div class="alert alert-success py-2 mb-0">
+                                <i class="bi bi-check-circle me-1"></i>
+                                Muhasebe entegrasyonu aktif
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-warning py-2 mb-0">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                Muhasebe hesapları eksik
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private PersonelFinansAyar? ayar;
+    private List<Firma>? firmalar;
+    private List<MuhasebeHesap>? muhasebeHesaplari = [];
+    private bool isLoading = true;
+    private bool isSaving = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            firmalar = await FirmaService.GetAktifFirmalarAsync();
+            // muhasebeHesaplari = await MuhasebeService.GetAktifHesaplarAsync(); // TODO: Metod eklenecek
+
+            ayar = await FinansService.GetAyarlarAsync(null);
+            
+            if (ayar == null)
+            {
+                ayar = new PersonelFinansAyar
+                {
+                    OtomatikFisOlustur = true,
+                    AvansVerildigindeFisOlustur = true,
+                    AvansMahsupFisOlustur = true,
+                    BorcOdendigindeFisOlustur = true
+                };
+            }
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task FirmaDegisti()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            ayar = await FinansService.GetAyarlarAsync(ayar?.FirmaId);
+            
+            if (ayar == null)
+            {
+                ayar = new PersonelFinansAyar
+                {
+                    OtomatikFisOlustur = true,
+                    AvansVerildigindeFisOlustur = true,
+                    AvansMahsupFisOlustur = true,
+                    BorcOdendigindeFisOlustur = true
+                };
+            }
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task Kaydet()
+    {
+        if (ayar == null)
+            return;
+
+        isSaving = true;
+        try
+        {
+            await FinansService.SaveAyarlarAsync(ayar);
+            ToastService.ShowSuccess("Ayarlar kaydedildi!");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}
+

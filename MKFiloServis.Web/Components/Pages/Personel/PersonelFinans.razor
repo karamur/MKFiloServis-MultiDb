@@ -1,0 +1,389 @@
+@page "/personel/finans"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+@inject IPersonelFinansService FinansService
+@inject ISoforService SoforService
+@inject IFirmaService FirmaService
+@inject IToastService ToastService
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Personel Finans Yönetimi</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h3><i class="bi bi-wallet2 me-2 text-primary"></i>Personel Finans Yönetimi</h3>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0 small">
+                    <li class="breadcrumb-item"><a href="/dashboard">Ana Sayfa</a></li>
+                    <li class="breadcrumb-item"><a href="/personel">Personel</a></li>
+                    <li class="breadcrumb-item active">Finans Yönetimi</li>
+                </ol>
+            </nav>
+        </div>
+        <div class="d-flex gap-2">
+            <select class="form-select form-select-sm" style="width: 200px;" @bind="secilenFirmaId" @bind:after="YenileData">
+                <option value="0">Tüm Firmalar</option>
+                @if (firmalar != null)
+                {
+                    @foreach (var firma in firmalar)
+                    {
+                        <option value="@firma.Id">@firma.FirmaAdi</option>
+                    }
+                }
+            </select>
+            <div class="btn-group">
+                <a href="/personel/finans/avanslar" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-cash-coin me-1"></i>Avanslar
+                </a>
+                <a href="/personel/finans/borclar" class="btn btn-outline-danger btn-sm">
+                    <i class="bi bi-credit-card me-1"></i>Borçlar
+                </a>
+                <a href="/personel/finans/ayarlar" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-gear me-1"></i>Ayarlar
+                </a>
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else
+    {
+        <!-- Özet Kartlar -->
+        <div class="row mb-4 g-3">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-0 opacity-75">Toplam Avans</h6>
+                                <h3 class="mb-0 mt-2">@FormatPara(toplamAvans)</h3>
+                                <small class="opacity-75">@toplamAvansSayisi personel</small>
+                            </div>
+                            <i class="bi bi-cash-stack" style="font-size: 3rem; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-0 opacity-75">Mahsup Edilen</h6>
+                                <h3 class="mb-0 mt-2">@FormatPara(mahsupEdilenAvans)</h3>
+                                <small class="opacity-75">Kapatılan avanslar</small>
+                            </div>
+                            <i class="bi bi-check-circle" style="font-size: 3rem; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-danger text-white h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-0 opacity-75">Toplam Borç</h6>
+                                <h3 class="mb-0 mt-2">@FormatPara(toplamBorc)</h3>
+                                <small class="opacity-75">@toplamBorcSayisi personel</small>
+                            </div>
+                            <i class="bi bi-credit-card" style="font-size: 3rem; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-dark h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-0 opacity-75">Kalan Bakiye</h6>
+                                <h3 class="mb-0 mt-2">@FormatPara(kalanAvans - kalanBorc)</h3>
+                                <small class="opacity-75">@(kalanAvans > kalanBorc ? "Personelden Alacak" : "Personele Borç")</small>
+                            </div>
+                            <i class="bi bi-wallet2" style="font-size: 3rem; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Personel Listesi -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center py-2">
+                <h5 class="mb-0"><i class="bi bi-people me-2"></i>Personel Finans Özeti</h5>
+                <div class="d-flex gap-2">
+                    <input type="text" class="form-control form-control-sm" style="width: 250px;" 
+                           placeholder="Personel ara..." @bind="aramaMetni" @bind:after="FiltrelePersoneller" />
+                    <button class="btn btn-outline-success btn-sm" @onclick="ExcelAktar">
+                        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>Personel</th>
+                                <th>Departman</th>
+                                <th class="text-end">Toplam Avans</th>
+                                <th class="text-end">Mahsup Edilen</th>
+                                <th class="text-end">Kalan Avans</th>
+                                <th class="text-end">Toplam Borç</th>
+                                <th class="text-end">Ödenen</th>
+                                <th class="text-end">Kalan Borç</th>
+                                <th class="text-end">Net Durum</th>
+                                <th class="text-center">İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (filtreliOzetler != null && filtreliOzetler.Any())
+                            {
+                                @foreach (var ozet in filtreliOzetler)
+                                {
+                                    var netDurumClass = ozet.NetDurum > 0 ? "text-danger" : ozet.NetDurum < 0 ? "text-success" : "text-muted";
+                                    <tr>
+                                        <td>
+                                            <strong>@ozet.PersonelAdSoyad</strong>
+                                            <br /><small class="text-muted">@ozet.PersonelKodu</small>
+                                        </td>
+                                        <td>@(ozet.Departman ?? "-")</td>
+                                        <td class="text-end">
+                                            @if (ozet.ToplamAvans > 0)
+                                            {
+                                                <span>@FormatPara(ozet.ToplamAvans)</span>
+                                                <br /><small class="text-muted">@ozet.ToplamAvansSayisi kayıt</small>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            @if (ozet.MahsupEdilenAvans > 0)
+                                            {
+                                                <span class="text-success">@FormatPara(ozet.MahsupEdilenAvans)</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            @if (ozet.KalanAvans > 0)
+                                            {
+                                                <span class="text-primary fw-bold">@FormatPara(ozet.KalanAvans)</span>
+                                                <br /><small class="text-muted">@ozet.AcikAvansSayisi açık</small>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            @if (ozet.ToplamBorc > 0)
+                                            {
+                                                <span>@FormatPara(ozet.ToplamBorc)</span>
+                                                <br /><small class="text-muted">@ozet.ToplamBorcSayisi kayıt</small>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            @if (ozet.OdenenBorc > 0)
+                                            {
+                                                <span class="text-success">@FormatPara(ozet.OdenenBorc)</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            @if (ozet.KalanBorc > 0)
+                                            {
+                                                <span class="text-danger fw-bold">@FormatPara(ozet.KalanBorc)</span>
+                                                <br /><small class="text-muted">@ozet.OdenmemişBorcSayisi açık</small>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <strong class="@netDurumClass">@FormatPara(Math.Abs(ozet.NetDurum))</strong>
+                                            <br /><small class="@netDurumClass">@ozet.NetDurumAciklama</small>
+                                        </td>
+                                        <td class="text-center">
+                                            <div class="btn-group btn-group-sm">
+                                                <a href="/personel/finans/avanslar?personelId=@ozet.PersonelId" class="btn btn-outline-primary" title="Avanslar">
+                                                    <i class="bi bi-cash"></i>
+                                                </a>
+                                                <a href="/personel/finans/borclar?personelId=@ozet.PersonelId" class="btn btn-outline-danger" title="Borçlar">
+                                                    <i class="bi bi-credit-card"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="10" class="text-center text-muted py-4">
+                                        <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                                        <p class="mt-2 mb-0">Kayıt bulunamadı</p>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                        @if (filtreliOzetler != null && filtreliOzetler.Any())
+                        {
+                            <tfoot class="table-light fw-bold">
+                                <tr>
+                                    <td colspan="2" class="text-end">TOPLAM:</td>
+                                    <td class="text-end">@FormatPara(filtreliOzetler.Sum(o => o.ToplamAvans))</td>
+                                    <td class="text-end">@FormatPara(filtreliOzetler.Sum(o => o.MahsupEdilenAvans))</td>
+                                    <td class="text-end">@FormatPara(filtreliOzetler.Sum(o => o.KalanAvans))</td>
+                                    <td class="text-end">@FormatPara(filtreliOzetler.Sum(o => o.ToplamBorc))</td>
+                                    <td class="text-end">@FormatPara(filtreliOzetler.Sum(o => o.OdenenBorc))</td>
+                                    <td class="text-end">@FormatPara(filtreliOzetler.Sum(o => o.KalanBorc))</td>
+                                    <td class="text-end">@FormatPara(filtreliOzetler.Sum(o => o.NetDurum))</td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        }
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Firma>? firmalar;
+    private List<PersonelFinansOzet>? ozetler;
+    private List<PersonelFinansOzet>? filtreliOzetler;
+    
+    private int secilenFirmaId = 0;
+    private string aramaMetni = string.Empty;
+    private bool isLoading = true;
+
+    // Özet değerler
+    private decimal toplamAvans = 0;
+    private decimal mahsupEdilenAvans = 0;
+    private decimal kalanAvans = 0;
+    private int toplamAvansSayisi = 0;
+    
+    private decimal toplamBorc = 0;
+    private decimal odenenBorc = 0;
+    private decimal kalanBorc = 0;
+    private int toplamBorcSayisi = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        firmalar = await FirmaService.GetAktifFirmalarAsync();
+        var aktifFirma = FirmaService.GetAktifFirma();
+        if (!aktifFirma.TumFirmalar && aktifFirma.FirmaId > 0)
+            secilenFirmaId = aktifFirma.FirmaId;
+
+        await YenileData();
+    }
+
+    private async Task YenileData()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            ozetler = await FinansService.GetTumPersonelFinansOzetAsync(secilenFirmaId > 0 ? secilenFirmaId : null);
+            FiltrelePersoneller();
+            HesaplaOzetler();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void FiltrelePersoneller()
+    {
+        if (ozetler == null)
+        {
+            filtreliOzetler = new List<PersonelFinansOzet>();
+            return;
+        }
+
+        filtreliOzetler = ozetler;
+
+        if (!string.IsNullOrWhiteSpace(aramaMetni))
+        {
+            var arama = aramaMetni.ToLowerInvariant();
+            filtreliOzetler = ozetler.Where(o =>
+                o.PersonelAdSoyad.ToLowerInvariant().Contains(arama) ||
+                o.PersonelKodu.ToLowerInvariant().Contains(arama) ||
+                (o.Departman?.ToLowerInvariant().Contains(arama) ?? false)
+            ).ToList();
+        }
+
+        StateHasChanged();
+    }
+
+    private void HesaplaOzetler()
+    {
+        if (filtreliOzetler == null || !filtreliOzetler.Any())
+        {
+            toplamAvans = mahsupEdilenAvans = kalanAvans = 0;
+            toplamBorc = odenenBorc = kalanBorc = 0;
+            toplamAvansSayisi = toplamBorcSayisi = 0;
+            return;
+        }
+
+        toplamAvans = filtreliOzetler.Sum(o => o.ToplamAvans);
+        mahsupEdilenAvans = filtreliOzetler.Sum(o => o.MahsupEdilenAvans);
+        kalanAvans = filtreliOzetler.Sum(o => o.KalanAvans);
+        toplamAvansSayisi = filtreliOzetler.Count(o => o.AcikAvansSayisi > 0);
+
+        toplamBorc = filtreliOzetler.Sum(o => o.ToplamBorc);
+        odenenBorc = filtreliOzetler.Sum(o => o.OdenenBorc);
+        kalanBorc = filtreliOzetler.Sum(o => o.KalanBorc);
+        toplamBorcSayisi = filtreliOzetler.Count(o => o.OdenmemişBorcSayisi > 0);
+    }
+
+    private async Task ExcelAktar()
+    {
+        if (filtreliOzetler == null || !filtreliOzetler.Any())
+        {
+            ToastService.ShowWarning("Aktarılacak veri yok!");
+            return;
+        }
+
+        try
+        {
+            var bytes = await FinansService.ExportPersonelOzetRaporAsync(filtreliOzetler);
+            var fileName = $"PersonelFinansOzet_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+            await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, Convert.ToBase64String(bytes));
+            ToastService.ShowSuccess("Excel dosyası indirildi!");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+    }
+
+    private string FormatPara(decimal tutar) => tutar.ToString("N2", new System.Globalization.CultureInfo("tr-TR")) + " ₺";
+}
+

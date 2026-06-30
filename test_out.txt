@@ -1,31 +1,31 @@
   Determining projects to restore...
-C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\KOAFiloServis.Tests.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.slnx]
+C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\MKFiloServis.Tests.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.slnx]
   All projects are up-to-date for restore.
-C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\KOAFiloServis.Tests.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q
-  KOAFiloServis.Shared -> C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Shared\bin\Debug\net10.0\KOAFiloServis.Shared.dll
-  KOAFiloServis.Web -> C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Web\bin\Debug\net10.0\KOAFiloServis.Web.dll
-C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\ArchiveMigrationVerifyTests.cs(69,57): warning CS8602: Dereference of a possibly null reference. [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\KOAFiloServis.Tests.csproj]
-C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\ArchiveMigrationVerifyTests.cs(69,82): warning CS8602: Dereference of a possibly null reference. [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\KOAFiloServis.Tests.csproj]
-C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\ArchiveMigrationExecuteTests.cs(214,61): warning CS8602: Dereference of a possibly null reference. [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\KOAFiloServis.Tests.csproj]
-C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\ArchiveMigrationExecuteTests.cs(214,86): warning CS8602: Dereference of a possibly null reference. [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\KOAFiloServis.Tests.csproj]
-C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\ArchiveMigrationDryRunTests.cs(197,57): warning CS8602: Dereference of a possibly null reference. [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\KOAFiloServis.Tests.csproj]
-C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\ArchiveMigrationDryRunTests.cs(197,82): warning CS8602: Dereference of a possibly null reference. [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\KOAFiloServis.Tests.csproj]
-C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\GuzergahUpdateAllFieldsTests.cs(208,69): warning CS8602: Dereference of a possibly null reference. [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\KOAFiloServis.Tests.csproj]
-C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\GuzergahUpdateAllFieldsTests.cs(33,30): warning CS0067: The event 'GuzergahUpdateAllFieldsTests.TestFirma.AktifFirmaDegisti' is never used [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\KOAFiloServis.Tests.csproj]
-C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\KurumPuantajEndToEndTests.cs(101,30): warning CS0067: The event 'KurumPuantajEndToEndTests.TestFirma.AktifFirmaDegisti' is never used [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\KOAFiloServis.Tests.csproj]
-C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\Guzergah18Plus2Tests.cs(36,30): warning CS0067: The event 'Guzergah18Plus2Tests.TestFirma.AktifFirmaDegisti' is never used [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\KOAFiloServis.Tests.csproj]
-C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\GuzergahFullCycleTests.cs(34,30): warning CS0067: The event 'GuzergahFullCycleTests.TestFirma.AktifFirmaDegisti' is never used [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\KOAFiloServis.Tests.csproj]
-C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\Guzergah2to1Tests.cs(34,30): warning CS0067: The event 'Guzergah2to1Tests.TestFirma.AktifFirmaDegisti' is never used [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\KOAFiloServis.Tests.csproj]
-C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\GuzergahSeferIsolationTests.cs(35,30): warning CS0067: The event 'GuzergahSeferIsolationTests.TestFirma.AktifFirmaDegisti' is never used [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\KOAFiloServis.Tests.csproj]
-C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\Guzergah18Plus2Tests.cs(25,36): warning CS0414: The field 'Guzergah18Plus2Tests.StorageRoot' is assigned but its value is never used [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\KOAFiloServis.Tests.csproj]
-  KOAFiloServis.Tests -> C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\bin\Debug\net10.0\KOAFiloServis.Tests.dll
-Test run for C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\bin\Debug\net10.0\KOAFiloServis.Tests.dll (.NETCoreApp,Version=v10.0)
+C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\MKFiloServis.Tests.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q
+  MKFiloServis.Shared -> C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Shared\bin\Debug\net10.0\MKFiloServis.Shared.dll
+  MKFiloServis.Web -> C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Web\bin\Debug\net10.0\MKFiloServis.Web.dll
+C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\ArchiveMigrationVerifyTests.cs(69,57): warning CS8602: Dereference of a possibly null reference. [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\MKFiloServis.Tests.csproj]
+C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\ArchiveMigrationVerifyTests.cs(69,82): warning CS8602: Dereference of a possibly null reference. [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\MKFiloServis.Tests.csproj]
+C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\ArchiveMigrationExecuteTests.cs(214,61): warning CS8602: Dereference of a possibly null reference. [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\MKFiloServis.Tests.csproj]
+C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\ArchiveMigrationExecuteTests.cs(214,86): warning CS8602: Dereference of a possibly null reference. [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\MKFiloServis.Tests.csproj]
+C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\ArchiveMigrationDryRunTests.cs(197,57): warning CS8602: Dereference of a possibly null reference. [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\MKFiloServis.Tests.csproj]
+C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\ArchiveMigrationDryRunTests.cs(197,82): warning CS8602: Dereference of a possibly null reference. [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\MKFiloServis.Tests.csproj]
+C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\GuzergahUpdateAllFieldsTests.cs(208,69): warning CS8602: Dereference of a possibly null reference. [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\MKFiloServis.Tests.csproj]
+C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\GuzergahUpdateAllFieldsTests.cs(33,30): warning CS0067: The event 'GuzergahUpdateAllFieldsTests.TestFirma.AktifFirmaDegisti' is never used [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\MKFiloServis.Tests.csproj]
+C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\KurumPuantajEndToEndTests.cs(101,30): warning CS0067: The event 'KurumPuantajEndToEndTests.TestFirma.AktifFirmaDegisti' is never used [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\MKFiloServis.Tests.csproj]
+C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\Guzergah18Plus2Tests.cs(36,30): warning CS0067: The event 'Guzergah18Plus2Tests.TestFirma.AktifFirmaDegisti' is never used [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\MKFiloServis.Tests.csproj]
+C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\GuzergahFullCycleTests.cs(34,30): warning CS0067: The event 'GuzergahFullCycleTests.TestFirma.AktifFirmaDegisti' is never used [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\MKFiloServis.Tests.csproj]
+C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\Guzergah2to1Tests.cs(34,30): warning CS0067: The event 'Guzergah2to1Tests.TestFirma.AktifFirmaDegisti' is never used [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\MKFiloServis.Tests.csproj]
+C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\GuzergahSeferIsolationTests.cs(35,30): warning CS0067: The event 'GuzergahSeferIsolationTests.TestFirma.AktifFirmaDegisti' is never used [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\MKFiloServis.Tests.csproj]
+C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\Guzergah18Plus2Tests.cs(25,36): warning CS0414: The field 'Guzergah18Plus2Tests.StorageRoot' is assigned but its value is never used [C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\MKFiloServis.Tests.csproj]
+  MKFiloServis.Tests -> C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\bin\Debug\net10.0\MKFiloServis.Tests.dll
+Test run for C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\bin\Debug\net10.0\MKFiloServis.Tests.dll (.NETCoreApp,Version=v10.0)
 A total of 1 test files matched the specified pattern.
-[xUnit.net 00:00:00.30]     KOAFiloServis.Tests.Services.PuantajJobServiceTests.DuplicateMutex_EngineNotCalled [FAIL]
-[xUnit.net 00:00:00.32]     KOAFiloServis.Tests.Services.PuantajJobServiceTests.ProcessAllTenants_FirmEnumerationError_ReturnsFailed [FAIL]
-  Failed KOAFiloServis.Tests.Services.PuantajJobServiceTests.DuplicateMutex_EngineNotCalled [3 ms]
+[xUnit.net 00:00:00.30]     MKFiloServis.Tests.Services.PuantajJobServiceTests.DuplicateMutex_EngineNotCalled [FAIL]
+[xUnit.net 00:00:00.32]     MKFiloServis.Tests.Services.PuantajJobServiceTests.ProcessAllTenants_FirmEnumerationError_ReturnsFailed [FAIL]
+  Failed MKFiloServis.Tests.Services.PuantajJobServiceTests.DuplicateMutex_EngineNotCalled [3 ms]
   Error Message:
-   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.Extensions.Configuration.IConfiguration' while attempting to activate 'KOAFiloServis.Web.Services.PuantajJobService'.
+   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.Extensions.Configuration.IConfiguration' while attempting to activate 'MKFiloServis.Web.Services.PuantajJobService'.
   Stack Trace:
      at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateArgumentCallSites(ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain, ParameterInfo[] parameters, Boolean throwIfCallSiteNotFound)
    at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateConstructorCallSite(ResultCache lifetime, ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain)
@@ -39,12 +39,12 @@ A total of 1 test files matched the specified pattern.
    at Microsoft.Extensions.DependencyInjection.ServiceProvider.GetService(Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(IServiceProvider provider, Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService[T](IServiceProvider provider)
-   at KOAFiloServis.Tests.Services.PuantajJobServiceTests.BuildSut() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\PuantajJobServiceTests.cs:line 40
-   at KOAFiloServis.Tests.Services.PuantajJobServiceTests.DuplicateMutex_EngineNotCalled() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\PuantajJobServiceTests.cs:line 52
+   at MKFiloServis.Tests.Services.PuantajJobServiceTests.BuildSut() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\PuantajJobServiceTests.cs:line 40
+   at MKFiloServis.Tests.Services.PuantajJobServiceTests.DuplicateMutex_EngineNotCalled() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\PuantajJobServiceTests.cs:line 52
 --- End of stack trace from previous location ---
-  Failed KOAFiloServis.Tests.Services.PuantajJobServiceTests.ProcessAllTenants_FirmEnumerationError_ReturnsFailed [< 1 ms]
+  Failed MKFiloServis.Tests.Services.PuantajJobServiceTests.ProcessAllTenants_FirmEnumerationError_ReturnsFailed [< 1 ms]
   Error Message:
-   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.Extensions.Configuration.IConfiguration' while attempting to activate 'KOAFiloServis.Web.Services.PuantajJobService'.
+   System.InvalidOperationException : Unable to resolve service for type 'Microsoft.Extensions.Configuration.IConfiguration' while attempting to activate 'MKFiloServis.Web.Services.PuantajJobService'.
   Stack Trace:
      at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateArgumentCallSites(ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain, ParameterInfo[] parameters, Boolean throwIfCallSiteNotFound)
    at Microsoft.Extensions.DependencyInjection.ServiceLookup.CallSiteFactory.CreateConstructorCallSite(ResultCache lifetime, ServiceIdentifier serviceIdentifier, Type implementationType, CallSiteChain callSiteChain)
@@ -58,16 +58,16 @@ A total of 1 test files matched the specified pattern.
    at Microsoft.Extensions.DependencyInjection.ServiceProvider.GetService(Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(IServiceProvider provider, Type serviceType)
    at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService[T](IServiceProvider provider)
-   at KOAFiloServis.Tests.Services.PuantajJobServiceTests.BuildSut() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\PuantajJobServiceTests.cs:line 40
-   at KOAFiloServis.Tests.Services.PuantajJobServiceTests.ProcessAllTenants_FirmEnumerationError_ReturnsFailed() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\PuantajJobServiceTests.cs:line 71
+   at MKFiloServis.Tests.Services.PuantajJobServiceTests.BuildSut() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\PuantajJobServiceTests.cs:line 40
+   at MKFiloServis.Tests.Services.PuantajJobServiceTests.ProcessAllTenants_FirmEnumerationError_ReturnsFailed() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\PuantajJobServiceTests.cs:line 71
 --- End of stack trace from previous location ---
-[xUnit.net 00:00:03.68]     KOAFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_GetActiveSeferler_ReturnsOnly2 [FAIL]
-  Failed KOAFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_GetActiveSeferler_ReturnsOnly2 [3 s]
+[xUnit.net 00:00:03.68]     MKFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_GetActiveSeferler_ReturnsOnly2 [FAIL]
+  Failed MKFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_GetActiveSeferler_ReturnsOnly2 [3 s]
   Error Message:
    Expected loaded.Count to be 2 because 18 silinmi┼ş + 2 aktif ÔåÆ UI sadece 2 g├Ârmeli, but found 1.
   Stack Trace:
      at FluentAssertions.Numeric.NumericAssertionsBase`3.Be(T expected, String because, Object[] becauseArgs)
-   at KOAFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_GetActiveSeferler_ReturnsOnly2() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\Guzergah18Plus2Tests.cs:line 70
+   at MKFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_GetActiveSeferler_ReturnsOnly2() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\Guzergah18Plus2Tests.cs:line 70
 --- End of stack trace from previous location ---
   Standard Output Messages:
  Id=45 GetByGuzergahIdAsync d├Ând├╝: 1 sefer
@@ -75,14 +75,14 @@ A total of 1 test files matched the specified pattern.
  Hepsi IsDeleted=false: True
 
 
-[xUnit.net 00:00:03.75]     KOAFiloServis.Tests.Services.FixDuplicateSeferler.Fix_Guzergah45_DuplicateSeferler [FAIL]
-  Failed KOAFiloServis.Tests.Services.FixDuplicateSeferler.Fix_Guzergah45_DuplicateSeferler [31 ms]
+[xUnit.net 00:00:03.75]     MKFiloServis.Tests.Services.FixDuplicateSeferler.Fix_Guzergah45_DuplicateSeferler [FAIL]
+  Failed MKFiloServis.Tests.Services.FixDuplicateSeferler.Fix_Guzergah45_DuplicateSeferler [31 ms]
   Error Message:
    Expected after.Count to be 2 because Sadece 2 aktif sefer kalmal─▒ (1 ve 2), but found 0 (difference of -2).
   Stack Trace:
      at FluentAssertions.Numeric.NumericAssertionsBase`3.Be(T expected, String because, Object[] becauseArgs)
-   at KOAFiloServis.Tests.Services.FixDuplicateSeferler.Fix_Guzergah45_DuplicateSeferler() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\FixDuplicateSeferler.cs:line 69
-   at KOAFiloServis.Tests.Services.FixDuplicateSeferler.Fix_Guzergah45_DuplicateSeferler() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\FixDuplicateSeferler.cs:line 69
+   at MKFiloServis.Tests.Services.FixDuplicateSeferler.Fix_Guzergah45_DuplicateSeferler() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\FixDuplicateSeferler.cs:line 69
+   at MKFiloServis.Tests.Services.FixDuplicateSeferler.Fix_Guzergah45_DuplicateSeferler() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\FixDuplicateSeferler.cs:line 69
 --- End of stack trace from previous location ---
   Standard Output Messages:
  Id=45 aktif sefer: 0
@@ -93,52 +93,52 @@ A total of 1 test files matched the specified pattern.
  SiraNo'lar: 
 
 
-[xUnit.net 00:00:04.03]     KOAFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_SaveThenReload_Still2 [FAIL]
-  Failed KOAFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_SaveThenReload_Still2 [343 ms]
+[xUnit.net 00:00:04.03]     MKFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_SaveThenReload_Still2 [FAIL]
+  Failed MKFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_SaveThenReload_Still2 [343 ms]
   Error Message:
    Expected after.Count to be 2, but found 3.
   Stack Trace:
      at FluentAssertions.Numeric.NumericAssertionsBase`3.Be(T expected, String because, Object[] becauseArgs)
-   at KOAFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_SaveThenReload_Still2() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\Guzergah18Plus2Tests.cs:line 112
+   at MKFiloServis.Tests.Services.Guzergah18Plus2Tests.Id45_SaveThenReload_Still2() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\Guzergah18Plus2Tests.cs:line 112
 --- End of stack trace from previous location ---
   Standard Output Messages:
  Save ├Âncesi UI load: 1 sefer
  Save sonras─▒ UI load: 3 sefer
 
 
-[xUnit.net 00:00:04.05]     KOAFiloServis.Tests.Services.Guzergah2to1Tests.ReplaceAll_Id45_DropTo1_Works [FAIL]
-  Failed KOAFiloServis.Tests.Services.Guzergah2to1Tests.ReplaceAll_Id45_DropTo1_Works [1 s]
+[xUnit.net 00:00:04.05]     MKFiloServis.Tests.Services.Guzergah2to1Tests.ReplaceAll_Id45_DropTo1_Works [FAIL]
+  Failed MKFiloServis.Tests.Services.Guzergah2to1Tests.ReplaceAll_Id45_DropTo1_Works [1 s]
   Error Message:
    System.InvalidOperationException : Soft-delete BA┼ŞARISIZ! GuzergahId=45, KalanAktif=3, Kalanlar=Id=2019,Sira=1,IsDeleted=False | Id=2020,Sira=1,IsDeleted=False | Id=2021,Sira=2,IsDeleted=False
   Stack Trace:
-     at KOAFiloServis.Web.Services.GuzergahSeferService.ReplaceAllInCurrentDbAsync(ApplicationDbContext context, Int32 guzergahId, List`1 seferler, DateTime now) in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Web\Services\GuzergahSeferService.cs:line 97
-   at KOAFiloServis.Web.Services.GuzergahSeferService.<>c__DisplayClass9_0.<<ReplaceAllAsync>b__0>d.MoveNext() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Web\Services\GuzergahSeferService.cs:line 157
+     at MKFiloServis.Web.Services.GuzergahSeferService.ReplaceAllInCurrentDbAsync(ApplicationDbContext context, Int32 guzergahId, List`1 seferler, DateTime now) in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Web\Services\GuzergahSeferService.cs:line 97
+   at MKFiloServis.Web.Services.GuzergahSeferService.<>c__DisplayClass9_0.<<ReplaceAllAsync>b__0>d.MoveNext() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Web\Services\GuzergahSeferService.cs:line 157
 --- End of stack trace from previous location ---
-   at KOAFiloServis.Web.Services.GuzergahSeferService.<>c__DisplayClass9_0.<<ReplaceAllAsync>b__0>d.MoveNext() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Web\Services\GuzergahSeferService.cs:line 163
+   at MKFiloServis.Web.Services.GuzergahSeferService.<>c__DisplayClass9_0.<<ReplaceAllAsync>b__0>d.MoveNext() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Web\Services\GuzergahSeferService.cs:line 163
 --- End of stack trace from previous location ---
-   at KOAFiloServis.Web.Services.GuzergahSeferService.<>c__DisplayClass9_0.<<ReplaceAllAsync>b__0>d.MoveNext() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Web\Services\GuzergahSeferService.cs:line 164
+   at MKFiloServis.Web.Services.GuzergahSeferService.<>c__DisplayClass9_0.<<ReplaceAllAsync>b__0>d.MoveNext() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Web\Services\GuzergahSeferService.cs:line 164
 --- End of stack trace from previous location ---
-   at KOAFiloServis.Web.Services.GuzergahSeferService.<>c__DisplayClass9_0.<<ReplaceAllAsync>b__0>d.MoveNext() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Web\Services\GuzergahSeferService.cs:line 164
+   at MKFiloServis.Web.Services.GuzergahSeferService.<>c__DisplayClass9_0.<<ReplaceAllAsync>b__0>d.MoveNext() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Web\Services\GuzergahSeferService.cs:line 164
 --- End of stack trace from previous location ---
    at Microsoft.EntityFrameworkCore.ExecutionStrategyExtensions.<>c.<<ExecuteAsync>b__3_0>d.MoveNext()
 --- End of stack trace from previous location ---
    at Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.NpgsqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
-   at KOAFiloServis.Web.Services.GuzergahSeferService.ReplaceAllAsync(Int32 guzergahId, List`1 seferler) in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Web\Services\GuzergahSeferService.cs:line 150
-   at KOAFiloServis.Web.Services.GuzergahSeferService.ReplaceAllAsync(Int32 guzergahId, List`1 seferler) in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Web\Services\GuzergahSeferService.cs:line 150
-   at KOAFiloServis.Tests.Services.Guzergah2to1Tests.ReplaceAll_Id45_DropTo1_Works() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\Guzergah2to1Tests.cs:line 134
+   at MKFiloServis.Web.Services.GuzergahSeferService.ReplaceAllAsync(Int32 guzergahId, List`1 seferler) in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Web\Services\GuzergahSeferService.cs:line 150
+   at MKFiloServis.Web.Services.GuzergahSeferService.ReplaceAllAsync(Int32 guzergahId, List`1 seferler) in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Web\Services\GuzergahSeferService.cs:line 150
+   at MKFiloServis.Tests.Services.Guzergah2to1Tests.ReplaceAll_Id45_DropTo1_Works() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\Guzergah2to1Tests.cs:line 134
 --- End of stack trace from previous location ---
   Standard Output Messages:
  Id=45 before: 1 active sefer
 
 
-[xUnit.net 00:00:04.24]     KOAFiloServis.Tests.Services.ArchiveMigrationExecuteTests.Execute_MigrateAllEvrak [FAIL]
-  Failed KOAFiloServis.Tests.Services.ArchiveMigrationExecuteTests.Execute_MigrateAllEvrak [273 ms]
+[xUnit.net 00:00:04.24]     MKFiloServis.Tests.Services.ArchiveMigrationExecuteTests.Execute_MigrateAllEvrak [FAIL]
+  Failed MKFiloServis.Tests.Services.ArchiveMigrationExecuteTests.Execute_MigrateAllEvrak [273 ms]
   Error Message:
    Assert.True() Failure
 Expected: True
 Actual:   False
   Stack Trace:
-     at KOAFiloServis.Tests.Services.ArchiveMigrationExecuteTests.Execute_MigrateAllEvrak() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\KOAFiloServis.Tests\Services\ArchiveMigrationExecuteTests.cs:line 340
+     at MKFiloServis.Tests.Services.ArchiveMigrationExecuteTests.Execute_MigrateAllEvrak() in C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\Services\ArchiveMigrationExecuteTests.cs:line 340
 --- End of stack trace from previous location ---
   Standard Output Messages:
  ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
@@ -165,7 +165,7 @@ Actual:   False
  Ara├ğ:     Kopyalanan=0 Atlanan=87 Ba┼şar─▒s─▒z=0
  Toplam kopyalanan: 0
  Yeni dizinler: 0
- Hedef k├Âk: C:\KOAFiloServis_yedekleme\Arsiv\Sifreli\
+ Hedef k├Âk: C:\MKFiloServis_yedekleme\Arsiv\Sifreli\
  
  ÔöÇÔöÇÔöÇ HATALAR ÔöÇÔöÇÔöÇ
    Personel Id=112: Kaynak bulunamad─▒: Arsiv/Sifreli/Personeller/MURAT KARAKAS - USTUN GRUP SEYAHAT/MURATKARAKASNufusKayitOrnegi_20260618_150751_20260618120751748_ebfc3fd72b9e437c8c6ef8f6f4f31f51.jpeg.enc
@@ -173,4 +173,5 @@ Actual:   False
 
 
 
-Failed!  - Failed:     7, Passed:   526, Skipped:     0, Total:   533, Duration: 11 s - KOAFiloServis.Tests.dll (net10.0)
+Failed!  - Failed:     7, Passed:   526, Skipped:     0, Total:   533, Duration: 11 s - MKFiloServis.Tests.dll (net10.0)
+

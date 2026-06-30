@@ -1,0 +1,523 @@
+@page "/ayarlar/piyasa-kaynaklari"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using System.Text.Json
+@inject IPiyasaKaynakService KaynakService
+@inject IToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>Piyasa Araştırma Kaynakları</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="mb-1"><i class="bi bi-globe me-2"></i>Piyasa Araştırma Kaynakları</h3>
+            <small class="text-muted">Araç piyasa Araştırmasında kullanılacak web sitelerini yönetin</small>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary" @onclick="VarsayilanlariYukle" disabled="@isLoading">
+                <i class="bi bi-arrow-clockwise me-1"></i>Varsayılanları Yükle
+            </button>
+            <button class="btn btn-primary" @onclick="YeniKaynakEkle">
+                <i class="bi bi-plus-lg me-1"></i>Yeni Kaynak Ekle
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            @errorMessage
+            <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+            <p class="mt-2">Yükleniyor...</p>
+        </div>
+    }
+    else
+    {
+        <!-- Kaynak Tipleri Tabs -->
+        <ul class="nav nav-tabs mb-4">
+            <li class="nav-item">
+                <button class="nav-link @(activeTab == "tumu" ? "active" : "")" @onclick='() => activeTab = "tumu"'>
+                    <i class="bi bi-list me-1"></i>Tümü <span class="badge bg-secondary ms-1">@kaynaklar.Count</span>
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(activeTab == "Genel" ? "active" : "")" @onclick='() => activeTab = "Genel"'>
+                    <i class="bi bi-globe me-1"></i>Genel <span class="badge bg-primary ms-1">@kaynaklar.Count(x => x.KaynakTipi == "Genel")</span>
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(activeTab == "YetkiliBayi" ? "active" : "")" @onclick='() => activeTab = "YetkiliBayi"'>
+                    <i class="bi bi-building me-1"></i>Yetkili Bayi <span class="badge bg-success ms-1">@kaynaklar.Count(x => x.KaynakTipi == "YetkiliBayi")</span>
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(activeTab == "Galeri" ? "active" : "")" @onclick='() => activeTab = "Galeri"'>
+                    <i class="bi bi-shop me-1"></i>Galeri <span class="badge bg-info ms-1">@kaynaklar.Count(x => x.KaynakTipi == "Galeri")</span>
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(activeTab == "Sifir" ? "active" : "")" @onclick='() => activeTab = "Sifir"'>
+                    <i class="bi bi-car-front me-1"></i>Sıfır Araç <span class="badge bg-warning text-dark ms-1">@kaynaklar.Count(x => x.KaynakTipi == "Sifir")</span>
+                </button>
+            </li>
+        </ul>
+
+        <!-- Kaynaklar Listesi -->
+        <div class="row g-3">
+            @foreach (var kaynak in FiltrelenenKaynaklar)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100 shadow-sm @(kaynak.Aktif ? "" : "bg-light")">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge @GetKaynakTipiBadge(kaynak.KaynakTipi)">@kaynak.KaynakTipi</span>
+                                <span class="badge bg-secondary">Sıra: @kaynak.Sira</span>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" checked="@kaynak.Aktif" 
+                                       @onchange="() => AktiflikDegistir(kaynak)" />
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <h5 class="card-title d-flex align-items-center gap-2">
+                                <img src="https://www.google.com/s2/favicons?domain=@(new Uri(kaynak.BaseUrl).Host)&sz=32" 
+                                     alt="" class="rounded" style="width: 24px; height: 24px;"
+                                     onerror="this.style.display='none'" />
+                                @kaynak.Ad
+                            </h5>
+                            <p class="card-text mb-2">
+                                <a href="@kaynak.BaseUrl" target="_blank" class="text-decoration-none">
+                                    <i class="bi bi-link-45deg me-1"></i>@kaynak.BaseUrl
+                                </a>
+                            </p>
+                            @if (!string.IsNullOrEmpty(kaynak.DesteklenenMarkalar))
+                            {
+                                <p class="card-text mb-2">
+                                    <small class="text-muted">
+                                        <i class="bi bi-car-front me-1"></i>Markalar: @kaynak.DesteklenenMarkalar
+                                    </small>
+                                </p>
+                            }
+                            <p class="card-text">
+                                <small class="text-muted">
+                                    <i class="bi bi-code-slash me-1"></i>Kod: <code>@kaynak.Kod</code>
+                                </small>
+                            </p>
+                        </div>
+                        <div class="card-footer bg-transparent d-flex justify-content-between">
+                            <small class="text-muted">
+                                @if (kaynak.GuncellemeTarihi.HasValue)
+                                {
+                                    <span>Güncelleme: @kaynak.GuncellemeTarihi.Value.ToString("dd.MM.yyyy")</span>
+                                }
+                                else
+                                {
+                                    <span>Ekleme: @kaynak.OlusturmaTarihi.ToString("dd.MM.yyyy")</span>
+                                }
+                            </small>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary" @onclick="() => KaynakDuzenle(kaynak)" title="Düzenle">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="btn btn-outline-danger" @onclick="() => KaynakSil(kaynak)" title="Sil">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        @if (!FiltrelenenKaynaklar.Any())
+        {
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-inbox display-1"></i>
+                <p class="mt-2">Bu kategoride kaynak bulunamadı.</p>
+            </div>
+        }
+    }
+</div>
+
+<!-- Kaynak Ekleme/Düzenleme Modal -->
+@if (showModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-globe me-2"></i>
+                        @(editingKaynak.Id == 0 ? "Yeni Kaynak Ekle" : "Kaynağı Düzenle")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="ModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Kaynak Adı <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" @bind="editingKaynak.Ad" placeholder="Örn: Sahibinden.com" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Kod <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" @bind="editingKaynak.Kod" placeholder="Örn: sahibinden" />
+                            <small class="text-muted">Küçük harf, boşluksuz</small>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Web Sitesi URL <span class="text-danger">*</span></label>
+                            <input type="url" class="form-control" @bind="editingKaynak.BaseUrl" placeholder="https://www.example.com" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Arama URL (Opsiyonel)</label>
+                            <input type="text" class="form-control" @bind="editingKaynak.AramaUrl" placeholder="/ikinci-el-arac veya /arac-listesi" />
+                            <small class="text-muted">BaseUrl'e eklenecek arama path'i</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Kaynak Tipi</label>
+                            <select class="form-select" @bind="editingKaynak.KaynakTipi">
+                                <option value="Genel">Genel (Pazaryeri)</option>
+                                <option value="YetkiliBayi">Yetkili Bayi</option>
+                                <option value="Galeri">Galeri</option>
+                                <option value="Sifir">Sıfır Araç</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Sıra</label>
+                            <input type="number" class="form-control" @bind="editingKaynak.Sira" min="1" max="100" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Desteklenen Markalar (Opsiyonel)</label>
+                            <input type="text" class="form-control" @bind="editingKaynak.DesteklenenMarkalar" 
+                                   placeholder="BMW,Mercedes,Audi (virgülle ayırın)" />
+                            <small class="text-muted">Boş bırakılırsa tüm markalar için çalışır</small>
+                        </div>
+
+                        <!-- Gelişmiş Ayarlar -->
+                        <div class="col-12">
+                            <div class="accordion" id="advancedSettings">
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed" type="button" 
+                                                data-bs-toggle="collapse" data-bs-target="#selectorsCollapse">
+                                            <i class="bi bi-code-slash me-2"></i>Gelişmiş Ayarlar (CSS Selectors)
+                                        </button>
+                                    </h2>
+                                    <div id="selectorsCollapse" class="accordion-collapse collapse">
+                                        <div class="accordion-body">
+                                            <div class="row g-3">
+                                                <div class="col-md-6">
+                                                    <label class="form-label">İlan Listesi Selector</label>
+                                                    <input type="text" class="form-control form-control-sm" 
+                                                           @bind="editingSelector.IlanListesi" 
+                                                           placeholder=".car-card, .listing-item" />
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label">İlan Link Selector</label>
+                                                    <input type="text" class="form-control form-control-sm" 
+                                                           @bind="editingSelector.IlanLink" 
+                                                           placeholder="a[href*='/ilan']" />
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label">Başlık Selector</label>
+                                                    <input type="text" class="form-control form-control-sm" 
+                                                           @bind="editingSelector.IlanBaslik" 
+                                                           placeholder="h3, .title" />
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label">Fiyat Selector</label>
+                                                    <input type="text" class="form-control form-control-sm" 
+                                                           @bind="editingSelector.Fiyat" 
+                                                           placeholder="[class*='price']" />
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label">Resim Selector</label>
+                                                    <input type="text" class="form-control form-control-sm" 
+                                                           @bind="editingSelector.Resim" 
+                                                           placeholder="img" />
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label">Cookie Kabul Selector</label>
+                                                    <input type="text" class="form-control form-control-sm" 
+                                                           @bind="editingSelector.CookieKabul" 
+                                                           placeholder="#accept-cookies" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" @bind="editingKaynak.Aktif" id="aktifSwitch" />
+                                <label class="form-check-label" for="aktifSwitch">
+                                    Aktif (Piyasa Araştırmasında kullanılsın)
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="ModalKapat">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="KaynakKaydet" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-check-lg me-1"></i>Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Silme Onay Modal -->
+@if (showDeleteModal && deletingKaynak != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>Kaynağı Sil</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => showDeleteModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p><strong>@deletingKaynak.Ad</strong> kaynağını silmek istediğinize emin misiniz?</p>
+                    <p class="text-muted mb-0">Bu işlem geri alınamaz.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showDeleteModal = false">İptal</button>
+                    <button type="button" class="btn btn-danger" @onclick="SilmeOnayla">
+                        <i class="bi bi-trash me-1"></i>Sil
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<PiyasaKaynak> kaynaklar = new();
+    private PiyasaKaynak editingKaynak = new();
+    private PiyasaKaynakSelector editingSelector = new();
+    private PiyasaKaynak? deletingKaynak;
+
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private bool showModal = false;
+    private bool showDeleteModal = false;
+    private string activeTab = "tumu";
+    private string? errorMessage;
+
+    private List<PiyasaKaynak> FiltrelenenKaynaklar => activeTab == "tumu" 
+        ? kaynaklar 
+        : kaynaklar.Where(x => x.KaynakTipi == activeTab).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await KaynaklariYukle();
+        
+        // Eğer kaynak yoksa otomatik olarak Varsayılanları Yükle
+        if (!kaynaklar.Any())
+        {
+            await VarsayilanlariYukle();
+        }
+    }
+
+    private async Task KaynaklariYukle()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            kaynaklar = await KaynakService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Kaynaklar Yüklenemedi: {ex.Message}";
+            ToastService.ShowError(errorMessage);
+            kaynaklar = new List<PiyasaKaynak>();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task VarsayilanlariYukle()
+    {
+        try
+        {
+            await KaynakService.SeedDefaultKaynaklarAsync();
+            await KaynaklariYukle();
+            ToastService.ShowSuccess("Varsayİlan kaynaklar Yüklendi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+    }
+
+    private void YeniKaynakEkle()
+    {
+        editingKaynak = new PiyasaKaynak { Aktif = true, Sira = kaynaklar.Count + 1 };
+        editingSelector = new PiyasaKaynakSelector();
+        showModal = true;
+    }
+
+    private void KaynakDuzenle(PiyasaKaynak kaynak)
+    {
+        editingKaynak = new PiyasaKaynak
+        {
+            Id = kaynak.Id,
+            Ad = kaynak.Ad,
+            Kod = kaynak.Kod,
+            BaseUrl = kaynak.BaseUrl,
+            AramaUrl = kaynak.AramaUrl,
+            KaynakTipi = kaynak.KaynakTipi,
+            DesteklenenMarkalar = kaynak.DesteklenenMarkalar,
+            Sira = kaynak.Sira,
+            Aktif = kaynak.Aktif,
+            Selectors = kaynak.Selectors
+        };
+
+        // Selector'ları parse et
+        if (!string.IsNullOrEmpty(kaynak.Selectors))
+        {
+            try
+            {
+                editingSelector = JsonSerializer.Deserialize<PiyasaKaynakSelector>(kaynak.Selectors) ?? new();
+            }
+            catch
+            {
+                editingSelector = new PiyasaKaynakSelector();
+            }
+        }
+        else
+        {
+            editingSelector = new PiyasaKaynakSelector();
+        }
+
+        showModal = true;
+    }
+
+    private async Task KaynakKaydet()
+    {
+        if (string.IsNullOrWhiteSpace(editingKaynak.Ad))
+        {
+            ToastService.ShowWarning("Kaynak Adı gerekli.");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(editingKaynak.Kod))
+        {
+            ToastService.ShowWarning("Kod gerekli.");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(editingKaynak.BaseUrl))
+        {
+            ToastService.ShowWarning("URL gerekli.");
+            return;
+        }
+
+        // Kod kontrolü
+        if (await KaynakService.KodVarMiAsync(editingKaynak.Kod, editingKaynak.Id == 0 ? null : editingKaynak.Id))
+        {
+            ToastService.ShowWarning("Bu kod zaten kullanılıyor.");
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            // Selector'ları JSON'a çevir
+            editingKaynak.Selectors = JsonSerializer.Serialize(editingSelector);
+
+            if (editingKaynak.Id == 0)
+            {
+                await KaynakService.CreateAsync(editingKaynak);
+                ToastService.ShowSuccess("Kaynak eklendi.");
+            }
+            else
+            {
+                await KaynakService.UpdateAsync(editingKaynak);
+                ToastService.ShowSuccess("Kaynak güncellendi.");
+            }
+
+            await KaynaklariYukle();
+            showModal = false;
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void KaynakSil(PiyasaKaynak kaynak)
+    {
+        deletingKaynak = kaynak;
+        showDeleteModal = true;
+    }
+
+    private async Task SilmeOnayla()
+    {
+        if (deletingKaynak == null) return;
+
+        try
+        {
+            await KaynakService.DeleteAsync(deletingKaynak.Id);
+            await KaynaklariYukle();
+            ToastService.ShowSuccess("Kaynak silindi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Hata: {ex.Message}");
+        }
+        finally
+        {
+            showDeleteModal = false;
+            deletingKaynak = null;
+        }
+    }
+
+    private async Task AktiflikDegistir(PiyasaKaynak kaynak)
+    {
+        kaynak.Aktif = !kaynak.Aktif;
+        await KaynakService.UpdateAsync(kaynak);
+        ToastService.ShowInfo(kaynak.Aktif ? $"{kaynak.Ad} aktifleştirildi." : $"{kaynak.Ad} devre dışı bırakıldı.");
+    }
+
+    private void ModalKapat()
+    {
+        showModal = false;
+        editingKaynak = new();
+        editingSelector = new();
+    }
+
+    private string GetKaynakTipiBadge(string tip) => tip switch
+    {
+        "Genel" => "bg-primary",
+        "YetkiliBayi" => "bg-success",
+        "Galeri" => "bg-info",
+        "Sifir" => "bg-warning text-dark",
+        _ => "bg-secondary"
+    };
+}
+
+
+
+

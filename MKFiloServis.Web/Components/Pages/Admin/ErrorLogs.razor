@@ -1,0 +1,165 @@
+@page "/admin/errors"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Data
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@attribute [Authorize(Roles = "Admin,HoldingYoneticisi")]
+@rendermode InteractiveServer
+
+<PageTitle>Hata Logları</PageTitle>
+
+<div class="container-fluid px-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="mb-0"><i class="bi bi-exclamation-triangle me-2 text-danger"></i>Hata Logları</h4>
+            <small class="text-muted">Yakalanmayan exception'lar ve kritik hatalar</small>
+        </div>
+        <button class="btn btn-primary btn-sm" @onclick="Yenile">
+            <i class="bi bi-arrow-repeat me-1"></i>Yenile
+        </button>
+    </div>
+
+    @* Filtreler *@
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-end">
+                <div class="col-auto">
+                    <label class="form-label small mb-1">Seviye</label>
+                    <select class="form-select form-select-sm" @bind="_filtreSeverity">
+                        <option value="">Hepsi</option>
+                        <option value="Critical">Kritik</option>
+                        <option value="Error">Hata</option>
+                        <option value="Warning">Uyarı</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <label class="form-label small mb-1">Tarih</label>
+                    <select class="form-select form-select-sm" @bind="_filtreGun">
+                        <option value="1">Son 24 saat</option>
+                        <option value="7">Son 7 gün</option>
+                        <option value="30">Son 30 gün</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-outline-danger btn-sm" @onclick="Temizle">
+                        <i class="bi bi-trash me-1"></i>Tümünü Temizle
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (_yukleniyor)
+    {
+        <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+    }
+    else if (!_errors.Any())
+    {
+        <div class="text-center py-4 text-muted">
+            <i class="bi bi-check-circle display-4 text-success d-block mb-2"></i>
+            Hata kaydı bulunamadı.
+        </div>
+    }
+    else
+    {
+        <div class="row g-2 mb-3">
+            <div class="col-auto">
+                <div class="border rounded px-3 py-1 text-center">
+                    <small class="text-muted">Toplam Hata</small>
+                    <div class="fw-bold fs-5 text-danger">@_errors.Count</div>
+                </div>
+            </div>
+            <div class="col-auto">
+                <div class="border rounded px-3 py-1 text-center">
+                    <small class="text-muted">Kritik</small>
+                    <div class="fw-bold fs-5 text-danger">@_errors.Count(e => e.Severity == "Critical")</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-sm table-hover small">
+                <thead class="table-light">
+                    <tr>
+                        <th>Tarih</th>
+                        <th>Seviye</th>
+                        <th>Kullanıcı</th>
+                        <th>Mesaj</th>
+                        <th>Endpoint</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var err in _errors)
+                    {
+                        <tr class="@(err.Severity == "Critical" ? "table-danger" : "")">
+                            <td style="white-space:nowrap">@err.CreatedAt.ToString("dd.MM HH:mm")</td>
+                            <td>
+                                <span class="badge @(err.Severity switch {
+                                    "Critical" => "bg-danger",
+                                    "Error" => "bg-warning text-dark",
+                                    _ => "bg-secondary" })">
+                                    @err.Severity
+                                </span>
+                            </td>
+                            <td class="text-muted">@(err.UserId ?? "-")</td>
+                            <td>
+                                <span class="text-truncate d-inline-block" style="max-width:300px">@err.Message</span>
+                            </td>
+                            <td><code class="small">@err.Path</code></td>
+                            <td>
+                                <button class="btn btn-outline-secondary btn-sm py-0"
+                                        @onclick="() => DetayGoster(err)">
+                                    <i class="bi bi-zoom-in"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@* Detay Modal *@
+@if (_selectedError != null)
+{
+    <div class="modal fade show d-block" style="background:rgba(0,0,0,.5)" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white py-2">
+                    <h6 class="modal-title"><i class="bi bi-bug me-2"></i>Hata Detayı</h6>
+                    <button class="btn-close btn-close-white" @onclick="() => _selectedError = null"></button>
+                </div>
+                <div class="modal-body">
+                    <dl class="row small mb-0">
+                        <dt class="col-2">Tarih</dt>
+                        <dd class="col-10">@_selectedError.CreatedAt.ToString("dd.MM.yyyy HH:mm:ss")</dd>
+                        <dt class="col-2">Seviye</dt>
+                        <dd class="col-10"><span class="badge bg-danger">@_selectedError.Severity</span></dd>
+                        <dt class="col-2">Kullanıcı</dt>
+                        <dd class="col-10">@(_selectedError.UserId ?? "-")</dd>
+                        <dt class="col-2">Endpoint</dt>
+                        <dd class="col-10"><code>@_selectedError.Path</code></dd>
+                        <dt class="col-2">Mesaj</dt>
+                        <dd class="col-10 text-danger fw-bold">@_selectedError.Message</dd>
+                    </dl>
+                    @if (!string.IsNullOrEmpty(_selectedError.StackTrace))
+                    {
+                        <hr />
+                        <strong class="small">Stack Trace:</strong>
+                        <pre class="bg-dark text-light p-2 rounded small mt-1" style="max-height:300px;overflow:auto;font-size:0.7rem;">@_selectedError.StackTrace</pre>
+                    }
+                </div>
+                <div class="modal-footer py-2">
+                    <button class="btn btn-success btn-sm" @onclick="() => Coz(_selectedError)">
+                        <i class="bi bi-check me-1"></i>Çözüldü
+                    </button>
+                    <button class="btn btn-secondary btn-sm" @onclick="() => _selectedError = null">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+

@@ -1,0 +1,772 @@
+@page "/muhasebe/raporlar"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IMuhasebeService MuhasebeService
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Muhasebe Raporlari</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="bi bi-file-earmark-bar-graph me-2"></i>Muhasebe Raporlari</h3>
+        <button class="btn btn-outline-primary" @onclick='() => Navigation.NavigateTo("/muhasebe/resmi-raporlar")'>
+            <i class="bi bi-journal-richtext me-1"></i>Resmi Raporlar
+        </button>
+    </div>
+
+    <div class="row g-4">
+        <!-- Muavin -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-file-text me-2"></i>Muavin (Kebir) Raporu</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Secilen hesabin belirli tarih araligindaki tum hareketlerini gosterir.</p>
+                    <div class="mb-3">
+                        <label class="form-label">Hesap Kodu</label>
+                        <input type="text" class="form-control" @bind="muavinHesapKodu" placeholder="Ornek: 100, 120, 320" />
+                    </div>
+                    <div class="row">
+                        <div class="col-6">
+                            <label class="form-label">Baslangic</label>
+                            <input type="date" class="form-control" @bind="muavinBaslangic" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Bitis</label>
+                            <input type="date" class="form-control" @bind="muavinBitis" />
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button class="btn btn-primary w-100" @onclick="MuavinRaporuOlustur">
+                        <i class="bi bi-file-earmark-text me-1"></i>Rapor Olustur
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Yevmiye -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-journal-text me-2"></i>Yevmiye Defteri</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Tum muhasebe fislerinin kronolojik listesi.</p>
+                    <div class="row">
+                        <div class="col-6">
+                            <label class="form-label">Baslangic</label>
+                            <input type="date" class="form-control" @bind="yevmiyeBaslangic" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Bitis</label>
+                            <input type="date" class="form-control" @bind="yevmiyeBitis" />
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="btn-group w-100">
+                        <button class="btn btn-success" @onclick="YevmiyeRaporuOlustur">
+                            <i class="bi bi-journal me-1"></i>Rapor
+                        </button>
+                        <button class="btn btn-outline-success" @onclick="YevmiyeYazdir" title="Yazdir">
+                            <i class="bi bi-printer"></i>
+                        </button>
+                        <button class="btn btn-outline-success" @onclick="YevmiyeExcelExport" title="Excel Aktar">
+                            <i class="bi bi-file-earmark-excel"></i>
+                        </button>
+                        <button class="btn btn-outline-primary" @onclick="ZirveExcelExport" title="Zirve Formatı (Muhasebe Programı)">
+                            <i class="bi bi-building"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mizan -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-table me-2"></i>Mizan</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Tum hesaplarin borc/alacak ve bakiye ozeti.</p>
+                    <div class="row">
+                        <div class="col-6">
+                            <label class="form-label">Baslangic</label>
+                            <input type="date" class="form-control" @bind="mizanBaslangic" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Bitis</label>
+                            <input type="date" class="form-control" @bind="mizanBitis" />
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button class="btn btn-info w-100" @onclick="MizanRaporuOlustur">
+                        <i class="bi bi-table me-1"></i>Rapor Olustur
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gelir/Gider -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>Gelir/Gider Raporu</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Gelir ve gider hesaplarinin ozeti.</p>
+                    <div class="row">
+                        <div class="col-6">
+                            <label class="form-label">Yil</label>
+                            <select class="form-select" @bind="gelirGiderYil">
+                                @for (int y = DateTime.Today.Year; y >= DateTime.Today.Year - 5; y--)
+                                {
+                                    <option value="@y">@y</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Ay</label>
+                            <select class="form-select" @bind="gelirGiderAy">
+                                <option value="0">Tum Yil</option>
+                                @for (int m = 1; m <= 12; m++)
+                                {
+                                    <option value="@m">@GetAyAdi(m)</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button class="btn btn-warning w-100" @onclick="GelirGiderRaporuOlustur">
+                        <i class="bi bi-bar-chart me-1"></i>Rapor Olustur
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bilanco -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="bi bi-layout-split me-2"></i>Bilanco</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Aktif ve pasif hesaplarin durumu.</p>
+                    <div class="mb-3">
+                        <label class="form-label">Tarih</label>
+                        <input type="date" class="form-control" @bind="bilancoTarih" />
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button class="btn btn-danger w-100" @onclick="BilancoRaporuOlustur">
+                        <i class="bi bi-layout-split me-1"></i>Rapor Olustur
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- KDV Beyanname -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="bi bi-file-earmark-ruled me-2"></i>KDV Beyanname</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Aylık KDV beyanname hesaplaması ve özeti.</p>
+                    <ul class="list-unstyled small">
+                        <li><i class="bi bi-check text-success me-1"></i>Hesaplanan KDV</li>
+                        <li><i class="bi bi-check text-success me-1"></i>İndirilecek KDV</li>
+                        <li><i class="bi bi-check text-success me-1"></i>Tevkifat hesaplama</li>
+                    </ul>
+                </div>
+                <div class="card-footer">
+                    <button class="btn btn-secondary w-100" @onclick='() => Navigation.NavigateTo("/muhasebe/raporlar/kdv-beyan")'>
+                        <i class="bi bi-file-earmark-ruled me-1"></i>KDV Raporu
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Nakit Akış -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="bi bi-cash-stack me-2"></i>Nakit Akışı</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Kasa ve banka hareketlerinin analizi.</p>
+                    <ul class="list-unstyled small">
+                        <li><i class="bi bi-check text-success me-1"></i>Dönem başı/sonu bakiye</li>
+                        <li><i class="bi bi-check text-success me-1"></i>Giriş/çıkış analizi</li>
+                        <li><i class="bi bi-check text-success me-1"></i>Aylık trend</li>
+                    </ul>
+                </div>
+                <div class="card-footer">
+                    <button class="btn btn-dark w-100" @onclick='() => Navigation.NavigateTo("/muhasebe/raporlar/nakit-akis")'>
+                        <i class="bi bi-cash-stack me-1"></i>Nakit Akış Raporu
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Zirve Muhasebe Export -->
+        <div class="col-md-4">
+            <div class="card h-100 border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-building me-2"></i>Zirve Muhasebe Export</h5>
+                    <small class="opacity-75">🆕 YENİ</small>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Muhasebe fişlerini Zirve programına aktarın.</p>
+                    <ul class="list-unstyled small">
+                        <li><i class="bi bi-check text-success me-1"></i>Zirve uyumlu format</li>
+                        <li><i class="bi bi-check text-success me-1"></i>Kontrol listesi</li>
+                        <li><i class="bi bi-check text-success me-1"></i>Borç/Alacak doğrulama</li>
+                    </ul>
+                    <div class="row">
+                        <div class="col-6">
+                            <label class="form-label small">Başlangıç</label>
+                            <input type="date" class="form-control form-control-sm" @bind="zirveBaslangic" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small">Bitiş</label>
+                            <input type="date" class="form-control form-control-sm" @bind="zirveBitis" />
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="btn-group w-100">
+                        <button class="btn btn-primary" @onclick="ZirveFormatExport" title="Zirve Formatında Excel">
+                            <i class="bi bi-building me-1"></i>Zirve Excel
+                        </button>
+                        <button class="btn btn-outline-primary" @onclick="MuhasebeKontrolListesi" title="Kontrol Listesi">
+                            <i class="bi bi-list-check me-1"></i>Kontrol
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Muavin Rapor Modal -->
+@if (showMuavinModal && muavinRapor != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Muavin Raporu: @muavinRapor.HesapKodu - @muavinRapor.HesapAdi</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="ModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center py-2">
+                                    <small>Devir Borc</small>
+                                    <h5 class="mb-0">@FormatPara(muavinRapor.DevirBorc)</h5>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center py-2">
+                                    <small>Devir Alacak</small>
+                                    <h5 class="mb-0">@FormatPara(muavinRapor.DevirAlacak)</h5>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-primary text-white">
+                                <div class="card-body text-center py-2">
+                                    <small>Toplam Borc</small>
+                                    <h5 class="mb-0">@FormatPara(muavinRapor.ToplamBorc)</h5>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card @(muavinRapor.Bakiye >= 0 ? "bg-success" : "bg-danger") text-white">
+                                <div class="card-body text-center py-2">
+                                    <small>Bakiye</small>
+                                    <h5 class="mb-0">@FormatPara(muavinRapor.Bakiye)</h5>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-responsive" style="max-height: 400px;">
+                        <table class="table table-sm table-striped">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th>Tarih</th>
+                                    <th>Fis No</th>
+                                    <th>Aciklama</th>
+                                    <th class="text-end">Borc</th>
+                                    <th class="text-end">Alacak</th>
+                                    <th class="text-end">Bakiye</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var satir in muavinRapor.Satirlar)
+                                {
+                                    <tr>
+                                        <td>@satir.Tarih.ToString("dd.MM.yyyy")</td>
+                                        <td>@satir.FisNo</td>
+                                        <td>@satir.Aciklama</td>
+                                        <td class="text-end">@(satir.Borc > 0 ? FormatPara(satir.Borc) : "")</td>
+                                        <td class="text-end">@(satir.Alacak > 0 ? FormatPara(satir.Alacak) : "")</td>
+                                        <td class="text-end fw-bold">@FormatPara(satir.Bakiye)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="ModalKapat">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Mizan Rapor Modal -->
+@if (showMizanModal && mizanRapor != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">Mizan: @mizanRapor.BaslangicTarihi.ToString("dd.MM.yyyy") - @mizanRapor.BitisTarihi.ToString("dd.MM.yyyy")</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="ModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive" style="max-height: 500px;">
+                        <table class="table table-sm table-striped">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th>Hesap Kodu</th>
+                                    <th>Hesap Adi</th>
+                                    <th class="text-end">Borc</th>
+                                    <th class="text-end">Alacak</th>
+                                    <th class="text-end">Borc Bakiye</th>
+                                    <th class="text-end">Alacak Bakiye</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var satir in mizanRapor.Satirlar)
+                                {
+                                    <tr>
+                                        <td>@satir.HesapKodu</td>
+                                        <td>@satir.HesapAdi</td>
+                                        <td class="text-end">@FormatPara(satir.Borc)</td>
+                                        <td class="text-end">@FormatPara(satir.Alacak)</td>
+                                        <td class="text-end text-primary fw-bold">@(satir.BorcBakiye > 0 ? FormatPara(satir.BorcBakiye) : "")</td>
+                                        <td class="text-end text-danger fw-bold">@(satir.AlacakBakiye > 0 ? FormatPara(satir.AlacakBakiye) : "")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot class="table-warning fw-bold">
+                                <tr>
+                                    <td colspan="2">TOPLAM</td>
+                                    <td class="text-end">@FormatPara(mizanRapor.ToplamBorc)</td>
+                                    <td class="text-end">@FormatPara(mizanRapor.ToplamAlacak)</td>
+                                    <td class="text-end">@FormatPara(mizanRapor.ToplamBorcBakiye)</td>
+                                    <td class="text-end">@FormatPara(mizanRapor.ToplamAlacakBakiye)</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="ModalKapat">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Gelir/Gider Rapor Modal -->
+@if (showGelirGiderModal && gelirGiderRapor != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title">Gelir/Gider Raporu: @gelirGiderRapor.Yil @(gelirGiderRapor.Ay.HasValue ? GetAyAdi(gelirGiderRapor.Ay.Value) : "Tum Yil")</h5>
+                    <button type="button" class="btn-close" @onclick="ModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="card bg-success text-white">
+                                <div class="card-body text-center">
+                                    <h6>Toplam Gelir</h6>
+                                    <h3>@FormatPara(gelirGiderRapor.ToplamGelir)</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-danger text-white">
+                                <div class="card-body text-center">
+                                    <h6>Toplam Gider</h6>
+                                    <h3>@FormatPara(gelirGiderRapor.ToplamGider)</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card @(gelirGiderRapor.NetKar >= 0 ? "bg-primary" : "bg-dark") text-white">
+                                <div class="card-body text-center">
+                                    <h6>Net Kar/Zarar</h6>
+                                    <h3>@FormatPara(gelirGiderRapor.NetKar)</h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-success"><i class="bi bi-arrow-up-circle me-1"></i>Gelirler</h6>
+                            <table class="table table-sm">
+                                <tbody>
+                                    @foreach (var gelir in gelirGiderRapor.Gelirler)
+                                    {
+                                        <tr>
+                                            <td>@gelir.HesapKodu - @gelir.HesapAdi</td>
+                                            <td class="text-end">@FormatPara(gelir.Tutar)</td>
+                                            <td class="text-end"><small>%@gelir.Yuzde</small></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-danger"><i class="bi bi-arrow-down-circle me-1"></i>Giderler</h6>
+                            <table class="table table-sm">
+                                <tbody>
+                                    @foreach (var gider in gelirGiderRapor.Giderler)
+                                    {
+                                        <tr>
+                                            <td>@gider.HesapKodu - @gider.HesapAdi</td>
+                                            <td class="text-end">@FormatPara(gider.Tutar)</td>
+                                            <td class="text-end"><small>%@gider.Yuzde</small></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="ModalKapat">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Bilanco Modal -->
+@if (showBilancoModal && bilancoRapor != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Bilanco: @bilancoRapor.Tarih.ToString("dd.MM.yyyy")</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="ModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <!-- AKTIF -->
+                        <div class="col-md-6">
+                            <h5 class="text-primary border-bottom pb-2">AKTIF (VARLIKLAR)</h5>
+
+                            <h6 class="mt-3">I. DONEN VARLIKLAR</h6>
+                            <table class="table table-sm">
+                                <tbody>
+                                    @foreach (var kalem in bilancoRapor.DonenVarliklar)
+                                    {
+                                        <tr>
+                                            <td>@kalem.HesapKodu - @kalem.HesapAdi</td>
+                                            <td class="text-end">@FormatPara(kalem.Tutar)</td>
+                                        </tr>
+                                    }
+                                    <tr class="table-primary fw-bold">
+                                        <td>DONEN VARLIKLAR TOPLAMI</td>
+                                        <td class="text-end">@FormatPara(bilancoRapor.DonenVarliklar.Sum(k => k.Tutar))</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <h6 class="mt-3">II. DURAN VARLIKLAR</h6>
+                            <table class="table table-sm">
+                                <tbody>
+                                    @foreach (var kalem in bilancoRapor.DuranVarliklar)
+                                    {
+                                        <tr>
+                                            <td>@kalem.HesapKodu - @kalem.HesapAdi</td>
+                                            <td class="text-end">@FormatPara(kalem.Tutar)</td>
+                                        </tr>
+                                    }
+                                    <tr class="table-primary fw-bold">
+                                        <td>DURAN VARLIKLAR TOPLAMI</td>
+                                        <td class="text-end">@FormatPara(bilancoRapor.DuranVarliklar.Sum(k => k.Tutar))</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <div class="card bg-primary text-white mt-3">
+                                <div class="card-body py-2 d-flex justify-content-between">
+                                    <strong>AKTIF TOPLAMI</strong>
+                                    <strong>@FormatPara(bilancoRapor.ToplamAktif)</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- PASIF -->
+                        <div class="col-md-6">
+                            <h5 class="text-danger border-bottom pb-2">PASIF (KAYNAKLAR)</h5>
+
+                            <h6 class="mt-3">I. KISA VADELI YABANCI KAYNAKLAR</h6>
+                            <table class="table table-sm">
+                                <tbody>
+                                    @foreach (var kalem in bilancoRapor.KisaVadeliYabanciKaynaklar)
+                                    {
+                                        <tr>
+                                            <td>@kalem.HesapKodu - @kalem.HesapAdi</td>
+                                            <td class="text-end">@FormatPara(kalem.Tutar)</td>
+                                        </tr>
+                                    }
+                                    <tr class="table-danger fw-bold">
+                                        <td>KISA VADELI TOPLAM</td>
+                                        <td class="text-end">@FormatPara(bilancoRapor.KisaVadeliYabanciKaynaklar.Sum(k => k.Tutar))</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <h6 class="mt-3">II. OZKAYNAKLAR</h6>
+                            <table class="table table-sm">
+                                <tbody>
+                                    @foreach (var kalem in bilancoRapor.Ozkaynaklar)
+                                    {
+                                        <tr>
+                                            <td>@kalem.HesapKodu - @kalem.HesapAdi</td>
+                                            <td class="text-end">@FormatPara(kalem.Tutar)</td>
+                                        </tr>
+                                    }
+                                    <tr class="table-success fw-bold">
+                                        <td>OZKAYNAKLAR TOPLAMI</td>
+                                        <td class="text-end">@FormatPara(bilancoRapor.Ozkaynaklar.Sum(k => k.Tutar))</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <div class="card bg-danger text-white mt-3">
+                                <div class="card-body py-2 d-flex justify-content-between">
+                                    <strong>PASIF TOPLAMI</strong>
+                                    <strong>@FormatPara(bilancoRapor.ToplamPasif)</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="ModalKapat">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    // Muavin
+    private string muavinHesapKodu = "100";
+    private DateTime muavinBaslangic = new DateTime(DateTime.Today.Year, 1, 1);
+    private DateTime muavinBitis = DateTime.Today;
+    private MuavinRapor? muavinRapor;
+    private bool showMuavinModal = false;
+
+    // Yevmiye
+    private DateTime yevmiyeBaslangic = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime yevmiyeBitis = DateTime.Today;
+
+    // Mizan
+    private DateTime mizanBaslangic = new DateTime(DateTime.Today.Year, 1, 1);
+    private DateTime mizanBitis = DateTime.Today;
+    private MizanRapor? mizanRapor;
+    private bool showMizanModal = false;
+
+    // Gelir/Gider
+    private int gelirGiderYil = DateTime.Today.Year;
+    private int gelirGiderAy = 0;
+    private GelirGiderRapor? gelirGiderRapor;
+    private bool showGelirGiderModal = false;
+
+    // Bilanco
+    private DateTime bilancoTarih = DateTime.Today;
+    private BilancoRapor? bilancoRapor;
+    private bool showBilancoModal = false;
+
+    // Zirve Muhasebe Export
+    private DateTime zirveBaslangic = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime zirveBitis = DateTime.Today;
+
+    private async Task MuavinRaporuOlustur()
+    {
+        if (string.IsNullOrWhiteSpace(muavinHesapKodu))
+        {
+            ToastService.ShowWarning("Hesap kodu girin!");
+            return;
+        }
+
+        try
+        {
+            muavinRapor = await MuhasebeService.GetMuavinRaporuAsync(muavinHesapKodu, muavinBaslangic, muavinBitis);
+            showMuavinModal = true;
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
+        }
+    }
+
+    private void YevmiyeRaporuOlustur()
+    {
+        Navigation.NavigateTo($"/muhasebe/raporlar/yevmiye?baslangic={yevmiyeBaslangic:yyyy-MM-dd}&bitis={yevmiyeBitis:yyyy-MM-dd}");
+    }
+
+    private async Task YevmiyeYazdir()
+    {
+        Navigation.NavigateTo($"/muhasebe/raporlar/yevmiye?baslangic={yevmiyeBaslangic:yyyy-MM-dd}&bitis={yevmiyeBitis:yyyy-MM-dd}&yazdir=true");
+    }
+
+    private async Task YevmiyeExcelExport()
+    {
+        try
+        {
+            var excelBytes = await MuhasebeService.ExportYevmiyeToExcelAsync(yevmiyeBaslangic, yevmiyeBitis);
+            var fileName = $"Yevmiye_{yevmiyeBaslangic:yyyyMMdd}_{yevmiyeBitis:yyyyMMdd}.xlsx";
+
+            await JS.InvokeVoidAsync("downloadFileFromBytes", fileName, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", excelBytes);
+            ToastService.ShowSuccess("Excel dosyası indirildi!");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
+        }
+    }
+
+    private async Task MizanRaporuOlustur()
+    {
+        try
+        {
+            mizanRapor = await MuhasebeService.GetMizanRaporuAsync(mizanBaslangic, mizanBitis);
+            showMizanModal = true;
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
+        }
+    }
+
+    private async Task GelirGiderRaporuOlustur()
+    {
+        try
+        {
+            gelirGiderRapor = await MuhasebeService.GetGelirGiderRaporuAsync(gelirGiderYil, gelirGiderAy > 0 ? gelirGiderAy : null);
+            showGelirGiderModal = true;
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
+        }
+    }
+
+    private async Task BilancoRaporuOlustur()
+    {
+        try
+        {
+            bilancoRapor = await MuhasebeService.GetBilancoRaporuAsync(bilancoTarih);
+            showBilancoModal = true;
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
+        }
+    }
+
+    private void ModalKapat()
+    {
+        showMuavinModal = false;
+        showMizanModal = false;
+        showGelirGiderModal = false;
+        showBilancoModal = false;
+    }
+
+    private string GetAyAdi(int ay) => ay switch
+    {
+        1 => "Ocak", 2 => "Subat", 3 => "Mart", 4 => "Nisan",
+        5 => "Mayis", 6 => "Haziran", 7 => "Temmuz", 8 => "Agustos",
+        9 => "Eylul", 10 => "Ekim", 11 => "Kasim", 12 => "Aralik",
+        _ => ""
+    };
+
+    private string FormatPara(decimal tutar) => tutar.ToString("N2") + " TL";
+
+    // Zirve Muhasebe Export Metodları
+    private async Task ZirveExcelExport()
+    {
+        try
+        {
+            var excelBytes = await MuhasebeService.ExportZirveFormatAsync(yevmiyeBaslangic, yevmiyeBitis);
+            var fileName = $"Zirve_Import_{yevmiyeBaslangic:yyyyMMdd}_{yevmiyeBitis:yyyyMMdd}.xlsx";
+
+            await JS.InvokeVoidAsync("downloadFileFromBytes", fileName, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", excelBytes);
+            ToastService.ShowSuccess("Zirve formatında Excel dosyası indirildi!");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
+        }
+    }
+
+    private async Task ZirveFormatExport()
+    {
+        try
+        {
+            var excelBytes = await MuhasebeService.ExportZirveFormatAsync(zirveBaslangic, zirveBitis);
+            var fileName = $"Zirve_Import_{zirveBaslangic:yyyyMMdd}_{zirveBitis:yyyyMMdd}.xlsx";
+
+            await JS.InvokeVoidAsync("downloadFileFromBytes", fileName, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", excelBytes);
+            ToastService.ShowSuccess("Zirve formatında Excel dosyası indirildi! Kontrol bilgisi ikinci sayfada.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
+        }
+    }
+
+    private async Task MuhasebeKontrolListesi()
+    {
+        try
+        {
+            var excelBytes = await MuhasebeService.ExportMuhasebeKontrolListesiAsync(zirveBaslangic, zirveBitis);
+            var fileName = $"Muhasebe_Kontrol_{zirveBaslangic:yyyyMMdd}_{zirveBitis:yyyyMMdd}.xlsx";
+
+            await JS.InvokeVoidAsync("downloadFileFromBytes", fileName, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", excelBytes);
+            ToastService.ShowSuccess("Muhasebe kontrol listesi indirildi!");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
+        }
+    }
+}
+

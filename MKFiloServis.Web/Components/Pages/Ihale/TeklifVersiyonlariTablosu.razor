@@ -1,0 +1,578 @@
+@using MKFiloServis.Shared.Entities
+@inject IJSRuntime JS
+
+@{
+    var gorunenVersiyonlar = FiltrelenmisVersiyonlar.ToList();
+    var gorunenToplamMaliyet = gorunenVersiyonlar.Sum(x => x.ToplamMaliyet);
+    var gorunenToplamTeklif = gorunenVersiyonlar.Sum(x => x.TeklifTutari);
+    var gorunenToplamKar = gorunenVersiyonlar.Sum(x => x.KarMarjiTutari);
+    var gorunenOrtalamaKarOrani = gorunenVersiyonlar.Any() ? gorunenVersiyonlar.Average(x => x.KarMarjiOrani) : 0;
+}
+
+<div class="border rounded p-2 mb-3 bg-light-subtle">
+    <div class="d-flex flex-wrap gap-2 align-items-end">
+        <div>
+            <label class="form-label form-label-sm mb-1">Durum</label>
+            <select class="form-select form-select-sm" style="min-width: 150px;" @bind="durumFiltresi" @bind:after="FiltreDurumuDegistiAsync">
+                <option value="">Tümü</option>
+                @foreach (var durum in Enum.GetValues<IhaleTeklifVersiyonDurum>())
+                {
+                    <option value="@durum">@GetTeklifDurumMetni(durum)</option>
+                }
+            </select>
+        </div>
+        <div class="flex-grow-1" style="min-width: 260px;">
+            <label class="form-label form-label-sm mb-1">Hızlı Arama</label>
+            <div class="input-group input-group-sm">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" @bind="aramaMetni" @bind:event="oninput" @bind:after="FiltreDurumuDegistiAsync" placeholder="Revizyon, hazırlayan, onaylayan veya not ara" />
+                <button type="button" class="btn btn-outline-secondary" @onclick="AramayiTemizle" disabled="@string.IsNullOrWhiteSpace(aramaMetni)" title="Aramayı temizle">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+        </div>
+        <div class="form-check ms-1 mb-2">
+            <input class="form-check-input" type="checkbox" id="sadeceAktifVersiyonlar" @bind="sadeceAktiflariGoster" @bind:after="FiltreDurumuDegistiAsync" />
+            <label class="form-check-label" for="sadeceAktifVersiyonlar">
+                Sadece aktif
+            </label>
+        </div>
+        <div>
+            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="FiltreleriTemizle" disabled="@(!FiltreVarMi)">
+                <i class="bi bi-x-circle me-1"></i>Temizle
+            </button>
+        </div>
+    </div>
+</div>
+
+@if (FiltreVarMi || !VarsayilanSiralamaMi)
+{
+    <div class="d-flex flex-wrap gap-2 align-items-center mb-2 small">
+        <span class="text-muted">Aktif seçimler:</span>
+        @if (!string.IsNullOrWhiteSpace(durumFiltresi))
+        {
+            <button type="button" class="btn btn-sm btn-secondary py-0 px-2" @onclick="DurumFiltresiniTemizle" title="Durum filtresini kaldır">
+                Durum: @(SeciliDurumFiltresi.HasValue ? GetTeklifDurumMetni(SeciliDurumFiltresi.Value) : durumFiltresi)
+                <i class="bi bi-x ms-1"></i>
+            </button>
+        }
+        @if (sadeceAktiflariGoster)
+        {
+            <button type="button" class="btn btn-sm btn-primary py-0 px-2" @onclick="AktifFiltresiniTemizle" title="Sadece aktif filtresini kaldır">
+                Sadece aktif
+                <i class="bi bi-x ms-1"></i>
+            </button>
+        }
+        @if (!string.IsNullOrWhiteSpace(aramaMetni))
+        {
+            <button type="button" class="btn btn-sm btn-info py-0 px-2" @onclick="AramaFiltresiniTemizle" title="Arama filtresini kaldır">
+                Arama: @aramaMetni
+                <i class="bi bi-x ms-1"></i>
+            </button>
+        }
+        @if (!VarsayilanSiralamaMi)
+        {
+            <button type="button" class="btn btn-sm btn-dark py-0 px-2" @onclick="SiralamayiSifirla" title="Sıralamayı varsayılana döndür">
+                Sıralama: @GetSiralamaMetni()
+                <i class="bi bi-x ms-1"></i>
+            </button>
+        }
+    </div>
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-2 small text-muted">
+    <div>
+        Toplam: <strong>@ToplamKayitSayisi</strong>
+        <span class="mx-1">|</span>
+        Görünen: <strong>@gorunenVersiyonlar.Count()</strong>
+    </div>
+    <div>
+        Sıralama: <strong>@GetSiralamaMetni()</strong>
+    </div>
+</div>
+
+<div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
+    <table class="table table-sm table-hover align-middle mb-0">
+        <thead class="table-light sticky-top" style="z-index: 1;">
+            <tr>
+                <th>
+                    <button type="button" class="btn btn-link btn-sm text-decoration-none p-0 text-dark fw-semibold" @onclick='() => Sirala("Versiyon")'>
+                        Versiyon <i class="bi @GetSortIconClass("Versiyon") ms-1 small"></i>
+                    </button>
+                </th>
+                <th>
+                    <button type="button" class="btn btn-link btn-sm text-decoration-none p-0 text-dark fw-semibold" @onclick='() => Sirala("Durum")'>
+                        Durum <i class="bi @GetSortIconClass("Durum") ms-1 small"></i>
+                    </button>
+                </th>
+                <th>
+                    <button type="button" class="btn btn-link btn-sm text-decoration-none p-0 text-dark fw-semibold" @onclick='() => Sirala("Hazirlayan")'>
+                        Hazırlayan <i class="bi @GetSortIconClass("Hazirlayan") ms-1 small"></i>
+                    </button>
+                </th>
+                <th class="d-none d-lg-table-cell">
+                    <button type="button" class="btn btn-link btn-sm text-decoration-none p-0 text-dark fw-semibold" @onclick='() => Sirala("Hazirlama")'>
+                        Hazırlama <i class="bi @GetSortIconClass("Hazirlama") ms-1 small"></i>
+                    </button>
+                </th>
+                <th class="d-none d-lg-table-cell">
+                    <button type="button" class="btn btn-link btn-sm text-decoration-none p-0 text-dark fw-semibold" @onclick='() => Sirala("Onaylayan")'>
+                        Onaylayan <i class="bi @GetSortIconClass("Onaylayan") ms-1 small"></i>
+                    </button>
+                </th>
+                <th class="d-none d-lg-table-cell">
+                    <button type="button" class="btn btn-link btn-sm text-decoration-none p-0 text-dark fw-semibold" @onclick='() => Sirala("Onay")'>
+                        Onay <i class="bi @GetSortIconClass("Onay") ms-1 small"></i>
+                    </button>
+                </th>
+                <th class="text-end">
+                    <button type="button" class="btn btn-link btn-sm text-decoration-none p-0 text-dark fw-semibold" @onclick='() => Sirala("Maliyet")'>
+                        Maliyet <i class="bi @GetSortIconClass("Maliyet") ms-1 small"></i>
+                    </button>
+                </th>
+                <th class="text-end">
+                    <button type="button" class="btn btn-link btn-sm text-decoration-none p-0 text-dark fw-semibold" @onclick='() => Sirala("Teklif")'>
+                        Teklif <i class="bi @GetSortIconClass("Teklif") ms-1 small"></i>
+                    </button>
+                </th>
+                <th class="text-end d-none d-md-table-cell">
+                    <button type="button" class="btn btn-link btn-sm text-decoration-none p-0 text-dark fw-semibold" @onclick='() => Sirala("Kar")'>
+                        Kâr <i class="bi @GetSortIconClass("Kar") ms-1 small"></i>
+                    </button>
+                </th>
+                <th class="text-end">
+                    <button type="button" class="btn btn-link btn-sm text-decoration-none p-0 text-dark fw-semibold" @onclick='() => Sirala("KarOrani")'>
+                        Kâr % <i class="bi @GetSortIconClass("KarOrani") ms-1 small"></i>
+                    </button>
+                </th>
+                <th class="text-end">Aksiyon</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (gorunenVersiyonlar.Any())
+            {
+                @foreach (var versiyon in gorunenVersiyonlar)
+                {
+                    <tr class="@GetTeklifSatirClass(versiyon.Durum)">
+                        <td>
+                            <div class="fw-semibold">@versiyon.RevizyonKodu</div>
+                            <small class="text-muted">V.No: @versiyon.VersiyonNo</small>
+                            @if (versiyon.AktifVersiyon)
+                            {
+                                <span class="badge bg-primary ms-2">Aktif</span>
+                            }
+                            @if (versiyon.Durum == IhaleTeklifVersiyonDurum.Reddedildi && !string.IsNullOrWhiteSpace(versiyon.KararNotu))
+                            {
+                                <div class="mt-1">
+                                    <span class="badge bg-danger-subtle text-danger border">Karar Notu Var</span>
+                                </div>
+                            }
+                            @if (versiyon.Durum == IhaleTeklifVersiyonDurum.Onaylandi && !string.IsNullOrWhiteSpace(versiyon.KararNotu))
+                            {
+                                <div class="mt-1">
+                                    <span class="badge bg-success-subtle text-success border">Onay Notu Var</span>
+                                </div>
+                            }
+                        <div class="d-lg-none small text-muted mt-1">
+                            <div>Hazırlayan: @(versiyon.HazirlayanKullanici?.AdSoyad ?? "-")</div>
+                            <div>Hazırlama: @versiyon.HazirlamaTarihi.ToString("dd.MM.yyyy HH:mm")</div>
+                            @if (versiyon.OnayTarihi.HasValue || versiyon.OnaylayanKullanici != null)
+                            {
+                                <div>Onay: @(versiyon.OnaylayanKullanici?.AdSoyad ?? "-") / @(versiyon.OnayTarihi?.ToString("dd.MM.yyyy HH:mm") ?? "-")</div>
+                            }
+                        </div>
+                        </td>
+                        <td>
+                            <span class="badge @GetTeklifDurumBadge(versiyon.Durum)">@GetTeklifDurumMetni(versiyon.Durum)</span>
+                        </td>
+                    <td>@(versiyon.HazirlayanKullanici?.AdSoyad ?? "-")</td>
+                    <td class="d-none d-lg-table-cell">@versiyon.HazirlamaTarihi.ToString("dd.MM.yyyy HH:mm")</td>
+                    <td class="d-none d-lg-table-cell">@(versiyon.OnaylayanKullanici?.AdSoyad ?? "-")</td>
+                    <td class="d-none d-lg-table-cell">@(versiyon.OnayTarihi?.ToString("dd.MM.yyyy HH:mm") ?? "-")</td>
+                        <td class="text-end">@versiyon.ToplamMaliyet.ToString("N0")</td>
+                        <td class="text-end">@versiyon.TeklifTutari.ToString("N0")</td>
+                    <td class="text-end d-none d-md-table-cell">@versiyon.KarMarjiTutari.ToString("N0")</td>
+                        <td class="text-end">%@versiyon.KarMarjiOrani.ToString("N1")</td>
+                        <td class="text-end">
+                            <div class="btn-group btn-group-sm flex-wrap justify-content-end">
+                                @if (!versiyon.AktifVersiyon && CanManageDraft)
+                                {
+                                <button class="btn btn-outline-primary" title="Bu versiyonu aktif teklif olarak seç" @onclick="() => OnSetActive.InvokeAsync(versiyon.Id)">
+                                    <i class="bi bi-check2-circle d-md-none"></i><span class="d-none d-md-inline">Aktif Yap</span>
+                                </button>
+                                }
+                                @if (versiyon.Durum == IhaleTeklifVersiyonDurum.Taslak && CanManageDraft)
+                                {
+                                <button class="btn btn-outline-warning" title="Teklifi yönetici incelemesine gönder" @onclick="() => OnSendToReview.InvokeAsync(versiyon.Id)">
+                                    <i class="bi bi-send d-md-none"></i><span class="d-none d-md-inline">İncelemeye Gönder</span>
+                                </button>
+                                }
+                                @if (CanApprove(versiyon))
+                                {
+                                <button class="btn btn-outline-success" title="Teklifi onayla" @onclick="() => OnApprove.InvokeAsync(versiyon.Id)">
+                                    <i class="bi bi-check-lg d-md-none"></i><span class="d-none d-md-inline">Onayla</span>
+                                </button>
+                                <button class="btn btn-outline-danger" title="Teklifi karar notuyla reddet" @onclick="() => OnReject.InvokeAsync(versiyon.Id)">
+                                    <i class="bi bi-x-lg d-md-none"></i><span class="d-none d-md-inline">Reddet</span>
+                                </button>
+                                }
+                                @if (CanExport(versiyon))
+                                {
+                                <button class="btn btn-outline-secondary" title="PDF olarak indir" @onclick="() => OnPdfExport.InvokeAsync(versiyon.Id)">
+                                    <i class="bi bi-filetype-pdf d-md-none"></i><span class="d-none d-md-inline">PDF</span>
+                                </button>
+                                <button class="btn btn-outline-secondary" title="Excel olarak indir" @onclick="() => OnExcelExport.InvokeAsync(versiyon.Id)">
+                                    <i class="bi bi-file-earmark-spreadsheet d-md-none"></i><span class="d-none d-md-inline">Excel</span>
+                                </button>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+
+                    @if (HasKararNotu(versiyon))
+                    {
+                        <tr class="@GetTeklifSatirClass(versiyon.Durum)">
+                            <td colspan="11" class="pt-0 border-top-0">
+                                <div class="small px-2 pb-2">
+                                    <div class="border rounded px-3 py-2 @GetKararNotuContainerClass(versiyon.Durum)">
+                                        <strong>@GetKararNotuBaslik(versiyon.Durum):</strong>
+                                        <span class="ms-2">@versiyon.KararNotu</span>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+            }
+            else
+            {
+                <tr>
+                    <td colspan="11" class="text-center py-4 text-muted">
+                        <div class="mb-2">
+                            <i class="bi @GetBosDurumIconClass() me-2"></i>@GetBosDurumMesaji()
+                        </div>
+                        @if (FiltreVarMi)
+                        {
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="FiltreleriTemizle">
+                                <i class="bi bi-x-circle me-1"></i>Filtreleri Temizle
+                            </button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+        @if (gorunenVersiyonlar.Any())
+        {
+            <tfoot class="table-light fw-semibold sticky-bottom" style="z-index: 1;">
+                <tr>
+                    <td colspan="6" class="d-none d-lg-table-cell">Görünen Kayıt Özeti</td>
+                    <td colspan="3" class="d-lg-none">Özet</td>
+                    <td class="text-end">@gorunenToplamMaliyet.ToString("N0")</td>
+                    <td class="text-end">@gorunenToplamTeklif.ToString("N0")</td>
+                    <td class="text-end d-none d-md-table-cell">@gorunenToplamKar.ToString("N0")</td>
+                    <td class="text-end">%@gorunenOrtalamaKarOrani.ToString("N1")</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        }
+    </table>
+</div>
+
+@code {
+    [Parameter] public List<IhaleTeklifVersiyon> Versiyonlar { get; set; } = [];
+    [Parameter] public bool CanManageDraft { get; set; }
+    [Parameter] public Func<IhaleTeklifVersiyon, bool>? CanApprovePredicate { get; set; }
+    [Parameter] public Func<IhaleTeklifVersiyon, bool>? CanExportPredicate { get; set; }
+    [Parameter] public EventCallback<int> OnSetActive { get; set; }
+    [Parameter] public EventCallback<int> OnSendToReview { get; set; }
+    [Parameter] public EventCallback<int> OnApprove { get; set; }
+    [Parameter] public EventCallback<int> OnReject { get; set; }
+    [Parameter] public EventCallback<int> OnPdfExport { get; set; }
+    [Parameter] public EventCallback<int> OnExcelExport { get; set; }
+
+    private string? durumFiltresi;
+    private bool sadeceAktiflariGoster;
+    private string? aramaMetni;
+    private string siralamaAlani = "Versiyon";
+    private bool siralamaArtan;
+    private const string TableStateStorageKey = "ihale-teklif-versiyonlari-tablosu-state";
+    private IhaleTeklifVersiyonDurum? SeciliDurumFiltresi => Enum.TryParse<IhaleTeklifVersiyonDurum>(durumFiltresi, out var durum) ? durum : null;
+    private bool FiltreVarMi => !string.IsNullOrWhiteSpace(durumFiltresi) || sadeceAktiflariGoster || !string.IsNullOrWhiteSpace(aramaMetni);
+    private bool VarsayilanSiralamaMi => siralamaAlani == "Versiyon" && !siralamaArtan;
+    private int ToplamKayitSayisi => Versiyonlar.Count;
+
+    private IEnumerable<IhaleTeklifVersiyon> FiltrelenmisVersiyonlar
+    {
+        get
+        {
+            var filtrelenmis = Versiyonlar
+                .Where(v => string.IsNullOrWhiteSpace(durumFiltresi) || string.Equals(v.Durum.ToString(), durumFiltresi, StringComparison.OrdinalIgnoreCase))
+                .Where(AramaEslesiyor)
+                .Where(v => !sadeceAktiflariGoster || v.AktifVersiyon);
+
+            return SiralaListe(filtrelenmis);
+        }
+    }
+
+    private bool CanApprove(IhaleTeklifVersiyon versiyon) => CanApprovePredicate?.Invoke(versiyon) ?? false;
+    private bool CanExport(IhaleTeklifVersiyon versiyon) => CanExportPredicate?.Invoke(versiyon) ?? false;
+    private static bool HasKararNotu(IhaleTeklifVersiyon versiyon) => !string.IsNullOrWhiteSpace(versiyon.KararNotu);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        try
+        {
+            var stateJson = await JS.InvokeAsync<string?>("getLocalStorageItem", TableStateStorageKey);
+            if (string.IsNullOrWhiteSpace(stateJson))
+                return;
+
+            var state = System.Text.Json.JsonSerializer.Deserialize<TeklifVersiyonTabloState>(stateJson);
+            if (state == null)
+                return;
+
+            durumFiltresi = state.DurumFiltresi;
+            sadeceAktiflariGoster = state.SadeceAktiflariGoster;
+            aramaMetni = state.AramaMetni;
+            siralamaAlani = string.IsNullOrWhiteSpace(state.SiralamaAlani) ? "Versiyon" : state.SiralamaAlani;
+            siralamaArtan = state.SiralamaArtan;
+
+            StateHasChanged();
+        }
+        catch
+        {
+        }
+    }
+
+    private void FiltreleriTemizle()
+    {
+        durumFiltresi = null;
+        sadeceAktiflariGoster = false;
+        aramaMetni = null;
+        _ = KaydetStateAsync();
+    }
+
+    private void DurumFiltresiniTemizle()
+    {
+        if (string.IsNullOrWhiteSpace(durumFiltresi))
+            return;
+
+        durumFiltresi = null;
+        _ = KaydetStateAsync();
+    }
+
+    private void AktifFiltresiniTemizle()
+    {
+        if (!sadeceAktiflariGoster)
+            return;
+
+        sadeceAktiflariGoster = false;
+        _ = KaydetStateAsync();
+    }
+
+    private void AramaFiltresiniTemizle()
+    {
+        if (string.IsNullOrWhiteSpace(aramaMetni))
+            return;
+
+        aramaMetni = null;
+        _ = KaydetStateAsync();
+    }
+
+    private void SiralamayiSifirla()
+    {
+        if (VarsayilanSiralamaMi)
+            return;
+
+        siralamaAlani = "Versiyon";
+        siralamaArtan = false;
+        _ = KaydetStateAsync();
+    }
+
+    private void AramayiTemizle()
+    {
+        if (string.IsNullOrWhiteSpace(aramaMetni))
+            return;
+
+        aramaMetni = null;
+        _ = KaydetStateAsync();
+    }
+
+    private Task FiltreDurumuDegistiAsync()
+    {
+        return KaydetStateAsync();
+    }
+
+    private bool AramaEslesiyor(IhaleTeklifVersiyon versiyon)
+    {
+        if (string.IsNullOrWhiteSpace(aramaMetni))
+            return true;
+
+        var aranan = aramaMetni.Trim();
+
+        return (versiyon.RevizyonKodu?.Contains(aranan, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (versiyon.HazirlayanKullanici?.AdSoyad?.Contains(aranan, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (versiyon.OnaylayanKullanici?.AdSoyad?.Contains(aranan, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (versiyon.KararNotu?.Contains(aranan, StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+
+    private void Sirala(string alan)
+    {
+        if (siralamaAlani == alan)
+        {
+            siralamaArtan = !siralamaArtan;
+            _ = KaydetStateAsync();
+            return;
+        }
+
+        siralamaAlani = alan;
+        siralamaArtan = alan is "Versiyon" ? false : true;
+        _ = KaydetStateAsync();
+    }
+
+    private IEnumerable<IhaleTeklifVersiyon> SiralaListe(IEnumerable<IhaleTeklifVersiyon> kaynak)
+    {
+        return siralamaAlani switch
+        {
+            "Durum" => siralamaArtan ? kaynak.OrderBy(x => x.Durum) : kaynak.OrderByDescending(x => x.Durum),
+            "Hazirlayan" => siralamaArtan ? kaynak.OrderBy(x => x.HazirlayanKullanici?.AdSoyad ?? string.Empty) : kaynak.OrderByDescending(x => x.HazirlayanKullanici?.AdSoyad ?? string.Empty),
+            "Hazirlama" => siralamaArtan ? kaynak.OrderBy(x => x.HazirlamaTarihi) : kaynak.OrderByDescending(x => x.HazirlamaTarihi),
+            "Onaylayan" => siralamaArtan ? kaynak.OrderBy(x => x.OnaylayanKullanici?.AdSoyad ?? string.Empty) : kaynak.OrderByDescending(x => x.OnaylayanKullanici?.AdSoyad ?? string.Empty),
+            "Onay" => siralamaArtan ? kaynak.OrderBy(x => x.OnayTarihi) : kaynak.OrderByDescending(x => x.OnayTarihi),
+            "Maliyet" => siralamaArtan ? kaynak.OrderBy(x => x.ToplamMaliyet) : kaynak.OrderByDescending(x => x.ToplamMaliyet),
+            "Teklif" => siralamaArtan ? kaynak.OrderBy(x => x.TeklifTutari) : kaynak.OrderByDescending(x => x.TeklifTutari),
+            "Kar" => siralamaArtan ? kaynak.OrderBy(x => x.KarMarjiTutari) : kaynak.OrderByDescending(x => x.KarMarjiTutari),
+            "KarOrani" => siralamaArtan ? kaynak.OrderBy(x => x.KarMarjiOrani) : kaynak.OrderByDescending(x => x.KarMarjiOrani),
+            _ => siralamaArtan ? kaynak.OrderBy(x => x.VersiyonNo) : kaynak.OrderByDescending(x => x.VersiyonNo)
+        };
+    }
+
+    private string GetSortIconClass(string alan)
+    {
+        if (siralamaAlani != alan)
+            return "bi-arrow-down-up text-muted";
+
+        return siralamaArtan ? "bi-sort-down-alt" : "bi-sort-down";
+    }
+
+    private string GetSiralamaMetni()
+    {
+        var alan = siralamaAlani switch
+        {
+            "Versiyon" => "Versiyon No",
+            "Durum" => "Durum",
+            "Hazirlayan" => "Hazırlayan",
+            "Hazirlama" => "Hazırlama Tarihi",
+            "Onaylayan" => "Onaylayan",
+            "Onay" => "Onay Tarihi",
+            "Maliyet" => "Maliyet",
+            "Teklif" => "Teklif",
+            "Kar" => "Kâr",
+            "KarOrani" => "Kâr Oranı",
+            _ => siralamaAlani
+        };
+
+        return $"{alan} ({(siralamaArtan ? "artan" : "azalan")})";
+    }
+
+    private static string GetTeklifDurumMetni(IhaleTeklifVersiyonDurum durum)
+    {
+        return durum switch
+        {
+            IhaleTeklifVersiyonDurum.Taslak => "Taslak",
+            IhaleTeklifVersiyonDurum.Incelemede => "İncelemede",
+            IhaleTeklifVersiyonDurum.Onaylandi => "Onaylandı",
+            IhaleTeklifVersiyonDurum.Reddedildi => "Reddedildi",
+            _ => "-"
+        };
+    }
+
+    private static string GetTeklifDurumBadge(IhaleTeklifVersiyonDurum durum)
+    {
+        return durum switch
+        {
+            IhaleTeklifVersiyonDurum.Taslak => "bg-secondary",
+            IhaleTeklifVersiyonDurum.Incelemede => "bg-warning text-dark",
+            IhaleTeklifVersiyonDurum.Onaylandi => "bg-success",
+            IhaleTeklifVersiyonDurum.Reddedildi => "bg-danger",
+            _ => "bg-light text-dark"
+        };
+    }
+
+    private static string GetTeklifSatirClass(IhaleTeklifVersiyonDurum durum)
+    {
+        return durum switch
+        {
+            IhaleTeklifVersiyonDurum.Onaylandi => "table-success",
+            IhaleTeklifVersiyonDurum.Reddedildi => "table-danger",
+            IhaleTeklifVersiyonDurum.Incelemede => "table-warning",
+            _ => string.Empty
+        };
+    }
+
+    private static string GetKararNotuBaslik(IhaleTeklifVersiyonDurum durum)
+    {
+        return durum switch
+        {
+            IhaleTeklifVersiyonDurum.Onaylandi => "Onay Notu",
+            IhaleTeklifVersiyonDurum.Reddedildi => "Red Notu",
+            _ => "Karar Notu"
+        };
+    }
+
+    private static string GetKararNotuContainerClass(IhaleTeklifVersiyonDurum durum)
+    {
+        return durum switch
+        {
+            IhaleTeklifVersiyonDurum.Onaylandi => "bg-success-subtle text-success-emphasis border-success-subtle",
+            IhaleTeklifVersiyonDurum.Reddedildi => "bg-danger-subtle text-danger-emphasis border-danger-subtle",
+            _ => "bg-light text-dark"
+        };
+    }
+
+    private string GetBosDurumMesaji()
+    {
+        return FiltreVarMi
+            ? "Filtrelere uygun teklif versiyonu bulunamadı."
+            : "Gösterilecek teklif versiyonu bulunamadı.";
+    }
+
+    private string GetBosDurumIconClass()
+    {
+        return FiltreVarMi ? "bi-search" : "bi-inbox";
+    }
+
+    private async Task KaydetStateAsync()
+    {
+        try
+        {
+            var state = new TeklifVersiyonTabloState
+            {
+                DurumFiltresi = durumFiltresi,
+                SadeceAktiflariGoster = sadeceAktiflariGoster,
+                AramaMetni = aramaMetni,
+                SiralamaAlani = siralamaAlani,
+                SiralamaArtan = siralamaArtan
+            };
+
+            var stateJson = System.Text.Json.JsonSerializer.Serialize(state);
+            await JS.InvokeVoidAsync("setLocalStorageItem", TableStateStorageKey, stateJson);
+        }
+        catch
+        {
+        }
+    }
+
+    private sealed class TeklifVersiyonTabloState
+    {
+        public string? DurumFiltresi { get; set; }
+        public bool SadeceAktiflariGoster { get; set; }
+        public string? AramaMetni { get; set; }
+        public string SiralamaAlani { get; set; } = "Versiyon";
+        public bool SiralamaArtan { get; set; }
+    }
+
+}
+

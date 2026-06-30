@@ -1,0 +1,877 @@
+@page "/guzergahlar"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Components.Shared
+@using Microsoft.AspNetCore.Components.Forms
+@inject IGuzergahService GuzergahService
+@inject IKurumService KurumService
+@inject IKapasiteService KapasiteService
+@inject IAktifFirmaProvider AktifFirma
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Güzergahlar</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="bi bi-signpost me-2"></i>Güzergahlar</h3>
+        <div class="d-flex gap-2">
+            <div class="btn-group" role="group">
+                <button type="button" class="btn @(gorunumModu == "liste" ? "btn-primary" : "btn-outline-primary")" 
+                        @onclick="@(() => GorunumDegistir("liste"))" title="Liste Görünümü">
+                    <i class="bi bi-list-ul"></i>
+                </button>
+                <button type="button" class="btn @(gorunumModu == "harita" ? "btn-primary" : "btn-outline-primary")" 
+                        @onclick="@(() => GorunumDegistir("harita"))" title="Harita Görünümü">
+                    <i class="bi bi-map"></i>
+                </button>
+            </div>
+            <button class="btn btn-outline-success" @onclick="ExportCsv">
+                <i class="bi bi-file-earmark-excel me-1"></i>Excel
+            </button>
+            <button class="btn btn-outline-info" @onclick="ImportModalAc">
+                <i class="bi bi-file-earmark-arrow-up me-1"></i>Excel'den İçe Aktar
+            </button>
+            <button class="btn btn-primary" @onclick="YeniGuzergah">
+                <i class="bi bi-plus-lg me-1"></i>Yeni Güzergah
+            </button>
+        </div>
+    </div>
+
+    @if (guzergahlar != null && guzergahlar.Any())
+    {
+        var aktif = guzergahlar.Count(g => g.Aktif);
+        var pasif = guzergahlar.Count(g => !g.Aktif);
+        <div class="row g-2 mb-3">
+            <div class="col-auto">
+                <div class="card border-primary bg-primary bg-opacity-10"><div class="card-body py-2 px-3 text-center"><small class="text-muted">Toplam</small><h5 class="mb-0">@guzergahlar.Count</h5></div></div>
+            </div>
+            <div class="col-auto">
+                <div class="card border-success bg-success bg-opacity-10"><div class="card-body py-2 px-3 text-center"><small class="text-muted">Aktif</small><h5 class="mb-0 text-success">@aktif</h5></div></div>
+            </div>
+            <div class="col-auto">
+                <div class="card border-secondary bg-secondary bg-opacity-10"><div class="card-body py-2 px-3 text-center"><small class="text-muted">Pasif</small><h5 class="mb-0 text-secondary">@pasif</h5></div></div>
+            </div>
+        </div>
+    }
+
+    @if (guzergahlar == null)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+        </div>
+    }
+    else if (!guzergahlar.Any())
+    {
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>Henüz güzergah kaydı bulunmamaktadır.
+        </div>
+    }
+    else
+    {
+        @* Harita Görünümü *@
+        @if (gorunumModu == "harita")
+        {
+            <div class="card mb-3">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-map me-2"></i>Güzergah Haritası
+                    <span class="badge bg-light text-dark ms-2">@guzergahlarWithCoords.Count() güzergah</span>
+                </div>
+                <div class="card-body p-0">
+                    @if (!guzergahlarWithCoords.Any())
+                    {
+                        <div class="alert alert-warning m-3">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            Koordinat bilgisi olan güzergah bulunmamaktadır. 
+                            Güzergahları düzenleyerek koordinat ekleyebilirsiniz.
+                        </div>
+                    }
+                    else
+                    {
+                        <HaritaGosterici @ref="harita" 
+                                        Style="height: 500px; width: 100%;" 
+                                        CenterLatitude="39.9208" 
+                                        CenterLongitude="32.8541" 
+                                        Zoom="6" />
+                    }
+                </div>
+            </div>
+
+            @* Harita altında kısa liste *@
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-list me-2"></i>Güzergah Listesi
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        @foreach (var guzergah in guzergahlar)
+                        {
+                            <div class="col-md-4 col-lg-3 mb-3">
+                                <div class="card h-100 @(guzergah.Aktif ? "" : "border-danger")">
+                                    <div class="card-body p-2">
+                                        <h6 class="card-title mb-1">
+                                            <span class="badge me-1" style="background-color: @(guzergah.RotaRengi ?? "#3388ff")">
+                                                @guzergah.GuzergahKodu
+                                            </span>
+                                        </h6>
+                                        <p class="card-text small mb-1">@guzergah.GuzergahAdi</p>
+                                        <p class="card-text small text-muted mb-0">
+                                            <i class="bi bi-geo-alt-fill text-success"></i> @(guzergah.BaslangicNoktasi ?? "-")
+                                            <br/>
+                                            <i class="bi bi-geo-alt text-danger"></i> @(guzergah.BitisNoktasi ?? "-")
+                                        </p>
+                                        @if (guzergah.BaslangicLatitude.HasValue && guzergah.BitisLatitude.HasValue)
+                                        {
+                                            <span class="badge bg-success mt-1"><i class="bi bi-pin-map"></i> Konumlu</span>
+                                        }
+                                    </div>
+                                    <div class="card-footer p-1">
+                                        <button class="btn btn-sm btn-outline-primary" @onclick="() => Duzenle(guzergah.Id)">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            @* Liste Görünümü (Mevcut Tablo) *@
+            <div class="card mb-3">
+                <div class="card-body py-2">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label small mb-1">Kurum / Müşteri Kartı</label>
+                            <select class="form-select form-select-sm" @bind="filtreKurumId">
+                                <option value="0">Tümü</option>
+                                @foreach (var k in kurumlar)
+                                {
+                                    <option value="@k.Id">@k.KurumAdi</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small mb-1">Cari</label>
+                            <select class="form-select form-select-sm" @bind="filtreCariId">
+                                <option value="0">Tümü</option>
+                                @foreach (var c in CariSecenekleri)
+                                {
+                                    <option value="@c.Id">@c.Unvan</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small mb-1">Sefer Tipi</label>
+                            <select class="form-select form-select-sm" @bind="filtreSeferTipi">
+                                <option value="">Tümü</option>
+                                <option value="Sabah">Sabah</option>
+                                <option value="Aksam">Akşam</option>
+                                <option value="SabahAksam">Sabah-Akşam</option>
+                                <option value="Saatlik">Saatlik</option>
+                            </select>
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label small mb-1">Durum</label>
+                            <select class="form-select form-select-sm" @bind="filtreDurum">
+                                <option value="aktif">Aktif</option>
+                                <option value="pasif">Pasif</option>
+                                <option value="hepsi">Hepsi</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small mb-1">Arama (Kod / Ad / Plaka / Şoför)</label>
+                            <input type="text" class="form-control form-control-sm" @bind="filtreArama" @bind:event="oninput" placeholder="Yazmaya başlayın..." />
+                        </div>
+                    </div>
+                    <div class="mt-2 small text-muted">
+                        Toplam: <strong>@filtreliToplam</strong> kayıt (@guzergahlar.Count toplam)
+                        <button class="btn btn-link btn-sm py-0" @onclick="FiltreleriTemizle">Filtreleri Temizle</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th style="cursor:pointer" @onclick='() => SiralamaYap("Kod")'>Kod @SiralamaIkonu("Kod")</th>
+                                    <th style="cursor:pointer" @onclick='() => SiralamaYap("Ad")'>Güzergah Adı @SiralamaIkonu("Ad")</th>
+                                    <th>Kurum / Müşteri</th>
+                                    <th>Cari</th>
+                                    <th class="text-center">Kapasite Adı</th>
+                                    <th class="text-end" style="cursor:pointer" @onclick='() => SiralamaYap("Gelir")'>Gelir ₺ @SiralamaIkonu("Gelir")</th>
+                                    <th class="text-end" style="cursor:pointer" @onclick='() => SiralamaYap("Gider")'>Gider ₺ @SiralamaIkonu("Gider")</th>
+                                    <th class="text-center" style="cursor:pointer" @onclick='() => SiralamaYap("Carpan")'>Carpan @SiralamaIkonu("Carpan")</th>
+                                    <th class="text-center">Konum</th>
+                                    <th class="text-center">Durum</th>
+                                    <th style="width: 180px;">İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var guzergah in SiralanmisGuzergahlar)
+                                {
+                                    <tr>
+                                        <td><strong>@guzergah.GuzergahKodu</strong></td>
+                                        <td>@guzergah.GuzergahAdi</td>
+                                        <td>@(guzergah.Kurum?.KurumAdi ?? KurumAdiBul(guzergah.CariId) ?? "-")</td>
+                                        <td>@(guzergah.Cari?.Unvan ?? "-")</td>
+                                        <td class="text-center">@(KapasiteAdiBul(guzergah) ?? guzergah.PersonelSayisi.ToString())</td>
+                                        <td class="text-end"><strong class="text-success">@guzergah.GelirFiyat.ToString("N2")</strong></td>
+                                        <td class="text-end"><strong class="text-danger">@guzergah.GiderFiyat.ToString("N2")</strong></td>
+                                        <td class="text-center"><span class="badge bg-info">@guzergah.PuantajCarpani.ToString("0.##")</span></td>
+                                        <td class="text-center">
+                                            @if (guzergah.BaslangicLatitude.HasValue && guzergah.BitisLatitude.HasValue)
+                                            {
+                                                <span class="badge bg-success" title="Koordinatlar tanımlı"><i class="bi bi-pin-map-fill"></i></span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary" title="Koordinat yok"><i class="bi bi-pin-map"></i></span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (guzergah.Aktif)
+                                            {
+                                                <span class="badge bg-success">Aktif</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-danger">Pasif</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => Duzenle(guzergah.Id)" title="Düzenle">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-info me-1" @onclick="() => Kopyala(guzergah.Id)" title="Kopyala">
+                                                <i class="bi bi-copy"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => SilOnay(guzergah)" title="Sil">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (toplamSayfa > 1)
+                    {
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <small class="text-muted">Sayfa @sayfaNo / @toplamSayfa</small>
+                            <nav>
+                                <ul class="pagination pagination-sm mb-0">
+                                    <li class="page-item @(sayfaNo <= 1 ? "disabled" : "")">
+                                        <button class="page-link" @onclick="() => SayfayaGit(1)">««</button>
+                                    </li>
+                                    <li class="page-item @(sayfaNo <= 1 ? "disabled" : "")">
+                                        <button class="page-link" @onclick="() => SayfayaGit(sayfaNo - 1)">«</button>
+                                    </li>
+                                    @foreach (var s in SayfaNumaralari())
+                                    {
+                                        <li class="page-item @(s == sayfaNo ? "active" : "")">
+                                            <button class="page-link" @onclick="() => SayfayaGit(s)">@s</button>
+                                        </li>
+                                    }
+                                    <li class="page-item @(sayfaNo >= toplamSayfa ? "disabled" : "")">
+                                        <button class="page-link" @onclick="() => SayfayaGit(sayfaNo + 1)">»</button>
+                                    </li>
+                                    <li class="page-item @(sayfaNo >= toplamSayfa ? "disabled" : "")">
+                                        <button class="page-link" @onclick="() => SayfayaGit(toplamSayfa)">»»</button>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@if (showDeleteModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Silme Onayı</h5>
+                    <button type="button" class="btn-close" @onclick="() => showDeleteModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p><strong>@silinecekGuzergah?.GuzergahAdi</strong> güzergahını silmek istediğinize emin misiniz?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showDeleteModal = false">İptal</button>
+                    <button type="button" class="btn btn-danger" @onclick="Sil">Sil</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Excel Import Modal *@
+@if (showImportModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title"><i class="bi bi-file-earmark-excel me-2"></i>Excel'den Güzergah İçe Aktar</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="ImportModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!importYapildi)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Excel Dosyası Seçin (.xlsx)</label>
+                            <InputFile OnChange="ImportDosyaSecildi" accept=".xlsx,.xls"
+                                       class="form-control" disabled="@importEdiliyor" />
+                            <div class="form-text">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Kolonlar: <strong>Kod, Güzergah Adı*, CariId*, BirimFiyat, GiderFiyat, SeferTipi, KurumId, Başlangıç, Bitiş, PersonelSayısı, Mesafe, Süre(dk), Notlar, Aktif</strong>
+                                <br><small class="text-muted">* zorunlu alanlar. İlk satır başlık olarak atlanır.</small>
+                            </div>
+                        </div>
+
+                        @if (importDosyaAdi != null)
+                        {
+                            <div class="alert alert-secondary">
+                                <i class="bi bi-file-earmark-check me-1"></i>
+                                <strong>@importDosyaAdi</strong> (@importDosyaBoyutu.ToString("N0") byte)
+                            </div>
+                        }
+
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-info" @onclick="ImportCalistir"
+                                    disabled="@(importDosyaAdi == null || importEdiliyor)">
+                                @if (importEdiliyor)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                    <span>İçe Aktarılıyor...</span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-upload me-1"></i>
+                                    <span>İçe Aktar</span>
+                                }
+                            </button>
+                            <a href="/api/guzergahlar/sablon/guzergah-import-sablonu.xlsx"
+                               class="btn btn-outline-secondary" target="_blank"
+                               @onclick:preventDefault @onclick="SablonIndir">
+                                <i class="bi bi-download me-1"></i>Şablon İndir
+                            </a>
+                        </div>
+                    }
+                    else
+                    {
+                        @* Sonuç gösterimi *@
+                        <div class="row g-2 mb-3">
+                            <div class="col-3">
+                                <div class="card border-primary bg-primary bg-opacity-10 text-center">
+                                    <div class="card-body py-2"><small>Toplam Satır</small><h5>@importSonuc?.ToplamSatir</h5></div>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="card border-success bg-success bg-opacity-10 text-center">
+                                    <div class="card-body py-2"><small>Başarılı</small><h5 class="text-success">@importSonuc?.Basarili</h5></div>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="card border-warning bg-warning bg-opacity-10 text-center">
+                                    <div class="card-body py-2"><small>Atlandı (Tekrar)</small><h5 class="text-warning">@importSonuc?.Atlandi</h5></div>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="card border-danger bg-danger bg-opacity-10 text-center">
+                                    <div class="card-body py-2"><small>Hatalı</small><h5 class="text-danger">@importSonuc?.Hatali</h5></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (importSonuc?.Satirlar.Any() == true)
+                        {
+                            <div class="table-responsive" style="max-height: 300px;">
+                                <table class="table table-sm table-striped small mb-0">
+                                    <thead class="table-dark sticky-top">
+                                        <tr><th>#</th><th>Kod</th><th>Güzergah Adı</th><th>Durum</th><th>Mesaj</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var s in importSonuc.Satirlar)
+                                        {
+                                            <tr class="@(s.Basarili ? "table-success" : "table-danger")">
+                                                <td>@s.SatirNo</td>
+                                                <td>@s.GuzergahKodu</td>
+                                                <td>@s.GuzergahAdi</td>
+                                                <td>@(s.Basarili ? "✅" : "❌")</td>
+                                                <td>@s.Mesaj</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="ImportModalKapat">
+                        @(importYapildi ? "Kapat" : "İptal")
+                    </button>
+                    @if (importYapildi && importSonuc?.Basarili > 0)
+                    {
+                        <button type="button" class="btn btn-primary" @onclick="ImportVeYenile">
+                            <i class="bi bi-arrow-repeat me-1"></i>Kapat ve Listeyi Yenile
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Guzergah>? guzergahlar;
+    private List<Kurum> kurumlar = new();
+    private List<Kapasite> tumKapasiteler = new();
+    private bool showDeleteModal = false;
+    private bool showImportModal = false;
+    private Guzergah? silinecekGuzergah;
+    private string gorunumModu = "liste";
+    private HaritaGosterici? harita;
+
+    // Excel import state
+    private IBrowserFile? importDosya;
+    private string? importDosyaAdi;
+    private long importDosyaBoyutu;
+    private bool importEdiliyor;
+    private bool importYapildi;
+    private GuzergahImportSonuc? importSonuc;
+
+    // Filtreler
+    private int filtreKurumId;
+    private int filtreCariId;
+    private string filtreSeferTipi = string.Empty;
+    private string filtreDurum = "aktif";
+    private string filtreArama = string.Empty;
+
+    private IEnumerable<Guzergah> guzergahlarWithCoords =>
+        guzergahlar?.Where(g => g.BaslangicLatitude.HasValue && g.BaslangicLongitude.HasValue
+            && g.BitisLatitude.HasValue && g.BitisLongitude.HasValue) ?? Enumerable.Empty<Guzergah>();
+
+    private IEnumerable<Cari> CariSecenekleri =>
+        guzergahlar?
+            .Where(g => g.Cari != null)
+            .Select(g => g.Cari!)
+            .GroupBy(c => c.Id)
+            .Select(g => g.First())
+            .OrderBy(c => c.Unvan)
+            ?? Enumerable.Empty<Cari>();
+
+    private IEnumerable<Guzergah> FiltrelenmisGuzergahlar
+    {
+        get
+        {
+            if (guzergahlar == null) return Enumerable.Empty<Guzergah>();
+            IEnumerable<Guzergah> q = guzergahlar;
+
+            if (filtreDurum == "aktif") q = q.Where(g => g.Aktif);
+            else if (filtreDurum == "pasif") q = q.Where(g => !g.Aktif);
+
+            if (filtreKurumId > 0)
+            {
+                q = q.Where(g => g.KurumId == filtreKurumId
+                    || (g.KurumId == null && kurumlar.Any(k => k.Id == filtreKurumId && k.CariId == g.CariId)));
+            }
+
+            if (filtreCariId > 0)
+                q = q.Where(g => g.CariId == filtreCariId);
+
+            if (!string.IsNullOrWhiteSpace(filtreSeferTipi)
+                && Enum.TryParse<SeferTipi>(filtreSeferTipi, out var st))
+                q = q.Where(g => g.SeferTipi == st);
+
+            if (!string.IsNullOrWhiteSpace(filtreArama))
+            {
+                var ara = filtreArama.Trim();
+                q = q.Where(g =>
+                    (g.GuzergahKodu ?? "").Contains(ara, StringComparison.OrdinalIgnoreCase)
+                    || (g.GuzergahAdi ?? "").Contains(ara, StringComparison.OrdinalIgnoreCase)
+                    || (g.BaslangicNoktasi ?? "").Contains(ara, StringComparison.OrdinalIgnoreCase)
+                    || (g.BitisNoktasi ?? "").Contains(ara, StringComparison.OrdinalIgnoreCase)
+                    || (g.Cari != null && (g.Cari.Unvan ?? "").Contains(ara, StringComparison.OrdinalIgnoreCase))
+                );
+            }
+
+            return q;
+        }
+    }
+
+    private string? KurumAdiBul(int cariId)
+    {
+        if (cariId <= 0) return null;
+        return kurumlar.FirstOrDefault(k => k.CariId == cariId)?.KurumAdi;
+    }
+
+    private int sayfaNo = 1;
+    private int sayfaBoyutu = 25;
+    private int filtreliToplam => FiltrelenmisGuzergahlar.Count();
+    private int toplamSayfa => Math.Max(1, (int)Math.Ceiling((double)filtreliToplam / sayfaBoyutu));
+
+    private string siralamaAlani = "Ad";
+    private bool siralamaArtan = true;
+
+    private void SiralamaYap(string alan)
+    {
+        if (siralamaAlani == alan)
+            siralamaArtan = !siralamaArtan;
+        else { siralamaAlani = alan; siralamaArtan = true; }
+        sayfaNo = 1;
+    }
+
+    private string SiralamaIkonu(string alan) =>
+        siralamaAlani == alan ? (siralamaArtan ? "▲" : "▼") : "";
+
+    private IOrderedEnumerable<Guzergah> SiralanmisFiltreliler
+    {
+        get
+        {
+            var q = FiltrelenmisGuzergahlar;
+            return siralamaAlani switch
+            {
+                "Kod" => siralamaArtan ? q.OrderBy(g => g.GuzergahKodu) : q.OrderByDescending(g => g.GuzergahKodu),
+                "Ad" => siralamaArtan ? q.OrderBy(g => g.GuzergahAdi) : q.OrderByDescending(g => g.GuzergahAdi),
+                "Gelir" => siralamaArtan ? q.OrderBy(g => g.GelirFiyat) : q.OrderByDescending(g => g.GelirFiyat),
+                "Gider" => siralamaArtan ? q.OrderBy(g => g.GiderFiyat) : q.OrderByDescending(g => g.GiderFiyat),
+                "Carpan" => siralamaArtan ? q.OrderBy(g => g.PuantajCarpani) : q.OrderByDescending(g => g.PuantajCarpani),
+                _ => q.OrderBy(g => g.GuzergahAdi)
+            };
+        }
+    }
+
+    private IEnumerable<Guzergah> SiralanmisGuzergahlar =>
+        SiralanmisFiltreliler.Skip((sayfaNo - 1) * sayfaBoyutu).Take(sayfaBoyutu);
+
+    private void SayfayaGit(int sayfa)
+    {
+        sayfaNo = Math.Clamp(sayfa, 1, toplamSayfa);
+    }
+
+    private List<int> SayfaNumaralari()
+    {
+        var sayfalar = new List<int>();
+        var bas = Math.Max(1, sayfaNo - 2);
+        var son = Math.Min(toplamSayfa, sayfaNo + 2);
+        for (int i = bas; i <= son; i++) sayfalar.Add(i);
+        return sayfalar;
+    }
+
+    private async Task ExportCsv()
+    {
+        var data = FiltrelenmisGuzergahlar.ToList();
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Kod,Guzergah Adi,Kurum,Cari,Kapasite,Gelir,Gider,Carpan,SeferTipi,Durum");
+        foreach (var g in data)
+        {
+            var kurum = g.Kurum?.KurumAdi ?? KurumAdiBul(g.CariId) ?? "";
+            sb.AppendLine($"\"{g.GuzergahKodu}\",\"{g.GuzergahAdi}\",\"{kurum}\",\"{g.Cari?.Unvan ?? ""}\",\"{KapasiteAdiBul(g) ?? ""}\",{g.GelirFiyat},{g.GiderFiyat},{g.PuantajCarpani},{g.SeferTipi},{(g.Aktif ? "Aktif" : "Pasif")}");
+        }
+
+        var bytes = System.Text.Encoding.UTF8.GetPreamble().Concat(System.Text.Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
+        var base64 = Convert.ToBase64String(bytes);
+        await JS.InvokeVoidAsync("downloadFile", "guzergahlar.csv", "data:text/csv;charset=utf-8;base64," + base64);
+    }
+
+    private void FiltreleriTemizle()
+    {
+        filtreKurumId = 0;
+        filtreCariId = 0;
+        filtreSeferTipi = string.Empty;
+        filtreDurum = "aktif";
+        filtreArama = string.Empty;
+        sayfaNo = 1;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (gorunumModu == "harita" && harita != null && guzergahlarWithCoords.Any())
+        {
+            await LoadMapData();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        guzergahlar = await GuzergahService.GetAllAsync();
+        kurumlar = await KurumService.GetAktifAsync();
+        try
+        {
+            // Önce aktif olanları, eksikse tümünü dene (pasif edilmiş eski kapasiteler için)
+            tumKapasiteler = await KapasiteService.GetActiveAsync() ?? new();
+            try
+            {
+                var hepsi = await KapasiteService.GetAllAsync() ?? new();
+                foreach (var k in hepsi)
+                {
+                    if (!tumKapasiteler.Any(x => x.Id == k.Id))
+                        tumKapasiteler.Add(k);
+                }
+            }
+            catch { /* GetAllAsync yoksa sorun değil */ }
+        }
+        catch { tumKapasiteler = new(); }
+    }
+
+    private async Task LoadMapData()
+    {
+        if (harita == null) return;
+
+        await harita.ClearMapAsync();
+
+        var haritaDtoList = guzergahlarWithCoords.Select(g => new HaritaGosterici.GuzergahHaritaDto
+        {
+            BaslangicLatitude = g.BaslangicLatitude,
+            BaslangicLongitude = g.BaslangicLongitude,
+            BitisLatitude = g.BitisLatitude,
+            BitisLongitude = g.BitisLongitude,
+            GuzergahAdi = g.GuzergahAdi,
+            BaslangicNoktasi = g.BaslangicNoktasi,
+            BitisNoktasi = g.BitisNoktasi,
+            RotaRengi = g.RotaRengi
+        }).ToList();
+
+        await harita.AddMultipleGuzergahlarAsync(haritaDtoList);
+    }
+
+    private async Task GorunumDegistir(string mod)
+    {
+        gorunumModu = mod;
+        StateHasChanged();
+
+        if (mod == "harita")
+        {
+            await Task.Delay(100); // DOM render için bekle
+            if (harita != null)
+            {
+                await harita.InvalidateSizeAsync();
+                // Tüm koordinatlı güzergahları haritaya ekle
+                var guzergahlarKoor = guzergahlarWithCoords.ToList();
+                if (guzergahlarKoor.Any())
+                {
+                    await harita.ClearMapAsync();
+                    await harita.AddMultipleGuzergahlarAsync(guzergahlarKoor.Select(g => new HaritaGosterici.GuzergahHaritaDto
+                    {
+                        BaslangicLatitude = g.BaslangicLatitude,
+                        BaslangicLongitude = g.BaslangicLongitude,
+                        BitisLatitude = g.BitisLatitude,
+                        BitisLongitude = g.BitisLongitude,
+                        GuzergahAdi = g.GuzergahAdi,
+                        BaslangicNoktasi = g.BaslangicNoktasi,
+                        BitisNoktasi = g.BitisNoktasi,
+                        RotaRengi = g.RotaRengi
+                    }));
+                    await harita.FitBoundsAsync();
+                }
+            }
+        }
+    }
+
+    private void YeniGuzergah()
+    {
+        Navigation.NavigateTo("/guzergahlar/yeni");
+    }
+
+    private void Duzenle(int id)
+    {
+        Navigation.NavigateTo($"/guzergahlar/{id}");
+    }
+
+    private void Kopyala(int id)
+    {
+        Navigation.NavigateTo($"/guzergahlar/yeni?kopyala={id}");
+    }
+
+    private void SilOnay(Guzergah guzergah)
+    {
+        silinecekGuzergah = guzergah;
+        showDeleteModal = true;
+    }
+
+    private async Task Sil()
+    {
+        if (silinecekGuzergah != null)
+        {
+            await GuzergahService.DeleteAsync(silinecekGuzergah.Id);
+            await LoadData();
+        }
+        showDeleteModal = false;
+        silinecekGuzergah = null;
+    }
+
+    private string? KapasiteAdiBul(Guzergah g)
+    {
+        // 0) Öncelik: güzergahın kendi kayıtlı KapasiteAdi alanı
+        if (!string.IsNullOrWhiteSpace(g.KapasiteAdi))
+            return g.KapasiteAdi.Trim();
+
+        if (g.PersonelSayisi <= 0) return null;
+
+        var hedef = g.PersonelSayisi;
+        var hedefStr = hedef.ToString();
+
+        // 1) Birleştirilmiş rakam eşleşmesi (öncelik): "16+1" -> 161
+        foreach (var k in tumKapasiteler)
+        {
+            var ad = (k.KapasiteAdi ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(ad)) continue;
+            var rakam = new string(ad.Where(char.IsDigit).ToArray());
+            if (rakam == hedefStr) return ad;
+        }
+
+        // 2) Tam eşleşme: KapasiteAdi'ndaki ilk sayı bloğu PersonelSayisi'ye eşitse
+        foreach (var k in tumKapasiteler)
+        {
+            var ad = (k.KapasiteAdi ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(ad)) continue;
+            if (IlkSayiyiAl(ad) == hedef) return ad;
+        }
+
+        // 3) Toplam eşleşme: Sayıların toplamı PersonelSayisi'ye eşitse
+        foreach (var k in tumKapasiteler)
+        {
+            var ad = (k.KapasiteAdi ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(ad)) continue;
+            if (SayiToplamiAl(ad) == hedef) return ad;
+        }
+
+        // 4) Sayısal eşitlik (parse edilebilir tüm sayılar)
+        foreach (var k in tumKapasiteler)
+        {
+            var ad = (k.KapasiteAdi ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(ad)) continue;
+            if (int.TryParse(ad, out var n) && n == hedef) return ad;
+        }
+
+        return hedef.ToString();
+    }
+
+    private static int IlkSayiyiAl(string s)
+    {
+        int i = 0;
+        while (i < s.Length && !char.IsDigit(s[i])) i++;
+        int basla = i;
+        while (i < s.Length && char.IsDigit(s[i])) i++;
+        return basla < i && int.TryParse(s.AsSpan(basla, i - basla), out var n) ? n : -1;
+    }
+
+    private static int SayiToplamiAl(string s)
+    {
+        int toplam = 0; int i = 0; bool varMi = false;
+        while (i < s.Length)
+        {
+            if (char.IsDigit(s[i]))
+            {
+                int basla = i;
+                while (i < s.Length && char.IsDigit(s[i])) i++;
+                if (int.TryParse(s.AsSpan(basla, i - basla), out var n)) { toplam += n; varMi = true; }
+            }
+            else i++;
+        }
+        return varMi ? toplam : -1;
+    }
+
+    // ── Excel Import ──────────────────────────────────────────
+
+    private void ImportModalAc()
+    {
+        importDosya = null;
+        importDosyaAdi = null;
+        importDosyaBoyutu = 0;
+        importEdiliyor = false;
+        importYapildi = false;
+        importSonuc = null;
+        showImportModal = true;
+    }
+
+    private void ImportModalKapat()
+    {
+        showImportModal = false;
+        importDosya = null;
+        importDosyaAdi = null;
+    }
+
+    private async Task ImportVeYenile()
+    {
+        showImportModal = false;
+        importDosya = null;
+        await LoadData();
+        StateHasChanged();
+    }
+
+    private async Task ImportDosyaSecildi(InputFileChangeEventArgs e)
+    {
+        importDosya = e.File;
+        importDosyaAdi = e.File.Name;
+        importDosyaBoyutu = e.File.Size;
+        importYapildi = false;
+        importSonuc = null;
+        await Task.CompletedTask;
+    }
+
+    private async Task ImportCalistir()
+    {
+        if (importDosya == null) return;
+
+        importEdiliyor = true;
+        importYapildi = false;
+        importSonuc = null;
+        StateHasChanged();
+
+        try
+        {
+            var firmaId = AktifFirma.AktifFirmaId ?? 1;
+            await using var stream = importDosya.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            importSonuc = await GuzergahService.ImportFromExcelAsync(stream, firmaId);
+            importYapildi = true;
+        }
+        catch (Exception ex)
+        {
+            importSonuc = new GuzergahImportSonuc
+            {
+                Hatali = 1,
+                Satirlar = { new GuzergahImportSatir { SatirNo = 0, Basarili = false, Mesaj = $"Dosya okuma hatası: {ex.Message}" } }
+            };
+            importYapildi = true;
+        }
+        finally
+        {
+            importEdiliyor = false;
+        }
+    }
+
+    private async Task SablonIndir()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Kod,Güzergah Adı,CariId,BirimFiyat (Gelir),GiderFiyat,SeferTipi,KurumId,Başlangıç Noktası,Bitiş Noktası,Personel Sayısı,Mesafe (km),Süre (dk),Notlar,Aktif");
+        sb.AppendLine("GZR-001,Örnek Güzergah,608,1500.00,800.00,3,,Ankara,İstanbul,16,450,480,Örnek not,Evet");
+        sb.AppendLine(",İkinci Güzergah,610,2000.00,1000.00,SabahAksam,,İzmir,Bursa,27,350,360,,Evet");
+
+        var bytes = System.Text.Encoding.UTF8.GetPreamble().Concat(System.Text.Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
+        var base64 = Convert.ToBase64String(bytes);
+        await JS.InvokeVoidAsync("downloadFile", "guzergah-import-sablonu.csv", "data:text/csv;charset=utf-8;base64," + base64);
+    }
+
+}
+

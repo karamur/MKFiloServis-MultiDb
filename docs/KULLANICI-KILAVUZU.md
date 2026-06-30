@@ -1,10 +1,10 @@
-    # 🚀 KOAFiloServis Programı Çalıştırma Talimatı
+    # 🚀 MKFiloServis Programı Çalıştırma Talimatı
 
 ---
 
 ## 🔴 1. KURULUM
 
-1. Size gönderilen **KOAFiloServisKurulum.exe** dosyasını çalıştırın
+1. Size gönderilen **MKFiloServisKurulum.exe** dosyasını çalıştırın
 2. Kurulum tamamlanana kadar **İleri → İleri → Kur** adımlarını takip edin
 3. Kurulum sonrası program otomatik açılacaktır
 
@@ -17,7 +17,7 @@ Eğer otomatik açılmazsa:
 👉 Masaüstünden veya Başlat menüsünden:
 
 ```
-KOAFiloServis
+MKFiloServis
 ```
 
 ikonuna çift tıklayın
@@ -61,7 +61,7 @@ Program ilk açıldığında aşağıdaki ekran gelir:
 Programı tekrar açmak için:
 
 ```text
-Masaüstü → KOAFiloServis → Çift tık
+Masaüstü → MKFiloServis → Çift tık
 ```
 
 ---
@@ -109,3 +109,4 @@ Makine Kodunu göndererek destek isteyin
 ```text
 Kur → Aç → Lisans Gir → Kullan
 ```
+

@@ -1,0 +1,186 @@
+@page "/ayarlar/grup-sablonlari"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services.Interfaces
+@rendermode InteractiveServer
+@inject IFaturaGrupSablonuService SablonService
+@inject IFirmaService FirmaService
+
+<PageTitle>Grup Şablonları</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4><i class="bi bi-collection me-2"></i>Puantaj Grup Şablonları</h4>
+        <button class="btn btn-primary btn-sm" @onclick="YeniSablon">
+            <i class="bi bi-plus-lg me-1"></i>Yeni Şablon
+        </button>
+    </div>
+
+    @if (_hata != null) { <div class="alert alert-danger">@_hata</div> }
+    @if (_bilgi != null) { <div class="alert alert-success">@_bilgi</div> }
+
+    @if (_yukleniyor) { <div class="text-center py-5"><div class="spinner-border"></div></div> }
+    else if (_sablonlar.Any())
+    {
+        <table class="table table-hover table-sm">
+            <thead class="table-dark">
+                <tr>
+                    <th>Ad</th><th>Ağaç Yapısı</th><th>Varsayılan</th><th>Kullanıcı</th><th>İşlem</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var s in _sablonlar)
+                {
+                    <tr>
+                        <td>@s.Ad</td>
+                        <td><span class="badge bg-info">@s.AgacYapisi</span></td>
+                        <td>@(s.VarsayilanMi ? "✅" : "")</td>
+                        <td class="text-muted small">@(s.KullaniciId?.ToString() ?? "Firma Geneli")</td>
+                        <td>
+                            <div class="d-flex gap-1">
+                                @if (!s.VarsayilanMi)
+                                {
+                                    <button class="btn btn-outline-success btn-sm" @onclick="() => VarsayilanYapAsync(s.Id)" title="Varsayılan yap">
+                                        <i class="bi bi-star"></i>
+                                    </button>
+                                }
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="() => Duzenle(s)" title="Düzenle">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm" @onclick="() => SilAsync(s.Id)" title="Sil">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <div class="alert alert-info">Henüz grup şablonu yok. "Yeni Şablon" butonuna tıklayın.</div>
+    }
+</div>
+
+@if (_formGosteriliyor)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h6 class="modal-title">@(_duzenlemeId == null ? "Yeni Şablon" : "Şablon Düzenle")</h6>
+                    <button class="btn-close" @onclick="() => _formGosteriliyor = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label small">Şablon Adı</label>
+                        <input type="text" class="form-control form-control-sm" @bind="_formAd" placeholder="örn: Üstün Grup Aylık" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">Ağaç Yapısı</label>
+                        <select class="form-select form-select-sm" @bind="_formAgac">
+                            @foreach (var agac in Enum.GetValues<PuantajFaturaAgacYapisi>())
+                            {
+                                <option value="@agac">@agac</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input type="checkbox" class="form-check-input" @bind="_formVarsayilan" id="varsayilanCheck" />
+                        <label class="form-check-label small" for="varsayilanCheck">Varsayılan şablon</label>
+                    </div>
+                    <div class="d-flex gap-2 mt-3">
+                        <button class="btn btn-primary btn-sm" @onclick="KaydetAsync">
+                            @(_duzenlemeId == null ? "Ekle" : "Güncelle")
+                        </button>
+                        <button class="btn btn-secondary btn-sm" @onclick="() => _formGosteriliyor = false">İptal</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<FaturaGrupSablonu> _sablonlar = new();
+    private string? _hata, _bilgi;
+    private bool _yukleniyor, _formGosteriliyor;
+    private int? _duzenlemeId;
+    private string _formAd = "";
+    private PuantajFaturaAgacYapisi _formAgac = PuantajFaturaAgacYapisi.CariAracGuzergah;
+    private bool _formVarsayilan;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await YukleAsync();
+    }
+
+    private async Task YukleAsync()
+    {
+        _yukleniyor = true;
+        try
+        {
+            var firmaId = FirmaService.GetAktifFirma().FirmaId;
+            _sablonlar = await SablonService.GetByFirmaAsync(firmaId);
+        }
+        catch (Exception ex) { _hata = ex.Message; }
+        finally { _yukleniyor = false; }
+    }
+
+    private void YeniSablon()
+    {
+        _duzenlemeId = null;
+        _formAd = ""; _formAgac = PuantajFaturaAgacYapisi.CariAracGuzergah; _formVarsayilan = false;
+        _formGosteriliyor = true;
+    }
+
+    private void Duzenle(FaturaGrupSablonu s)
+    {
+        _duzenlemeId = s.Id;
+        _formAd = s.Ad; _formAgac = s.AgacYapisi; _formVarsayilan = s.VarsayilanMi;
+        _formGosteriliyor = true;
+    }
+
+    private async Task KaydetAsync()
+    {
+        _hata = null;
+        try
+        {
+            var firmaId = FirmaService.GetAktifFirma().FirmaId;
+            if (_duzenlemeId == null)
+            {
+                var yeni = new FaturaGrupSablonu { FirmaId = firmaId, Ad = _formAd, AgacYapisi = _formAgac, VarsayilanMi = _formVarsayilan };
+                await SablonService.CreateAsync(yeni);
+                _bilgi = "Şablon eklendi.";
+            }
+            else
+            {
+                var mevcut = await SablonService.GetByIdAsync(_duzenlemeId.Value);
+                if (mevcut != null)
+                {
+                    mevcut.Ad = _formAd; mevcut.AgacYapisi = _formAgac; mevcut.VarsayilanMi = _formVarsayilan;
+                    await SablonService.UpdateAsync(mevcut);
+                    _bilgi = "Şablon güncellendi.";
+                }
+            }
+            _formGosteriliyor = false;
+            await YukleAsync();
+        }
+        catch (Exception ex) { _hata = ex.Message; }
+    }
+
+    private async Task SilAsync(int id)
+    {
+        _hata = null;
+        try { await SablonService.DeleteAsync(id); _bilgi = "Şablon silindi."; await YukleAsync(); }
+        catch (Exception ex) { _hata = ex.Message; }
+    }
+
+    private async Task VarsayilanYapAsync(int id)
+    {
+        _hata = null;
+        try { await SablonService.SetVarsayilanAsync(id); _bilgi = "Varsayılan şablon değiştirildi."; await YukleAsync(); }
+        catch (Exception ex) { _hata = ex.Message; }
+    }
+}
+

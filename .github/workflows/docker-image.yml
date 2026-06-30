@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 🐳 Docker Image — Build & Push to GitHub Container Registry
 # ------------------------------------------------------------
 # Tamamen ücretsiz (GHCR public image limitsiz).
@@ -18,16 +18,16 @@ on:
       - "Dockerfile"
       - ".dockerignore"
       - "docker-compose.yml"
-      - "KOAFiloServis.Web/**"
-      - "KOAFiloServis.Shared/**"
+      - "MKFiloServis.Web/**"
+      - "MKFiloServis.Shared/**"
       - ".github/workflows/docker-image.yml"
   pull_request:
     branches: [main]
     paths:
       - "Dockerfile"
       - ".dockerignore"
-      - "KOAFiloServis.Web/**"
-      - "KOAFiloServis.Shared/**"
+      - "MKFiloServis.Web/**"
+      - "MKFiloServis.Shared/**"
   workflow_dispatch:
 
 env:
@@ -80,7 +80,7 @@ jobs:
             type=sha,prefix=sha-,format=short
             type=raw,value=latest,enable={{is_default_branch}}
           labels: |
-            org.opencontainers.image.title=KOAFiloServis.Web
+            org.opencontainers.image.title=MKFiloServis.Web
             org.opencontainers.image.description=KOA Filo Servis - Blazor Server (.NET 10)
             org.opencontainers.image.vendor=Allbatros Global Teknoloji
             org.opencontainers.image.licenses=Proprietary
@@ -164,3 +164,4 @@ jobs:
         with:
           sarif_file: trivy-results.sarif
           category: trivy-docker
+

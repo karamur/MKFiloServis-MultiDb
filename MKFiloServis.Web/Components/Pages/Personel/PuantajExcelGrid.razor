@@ -1,0 +1,345 @@
+@page "/personel/puantaj-grid"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Data
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Calculation
+@using MKFiloServis.Web.Models
+@using Microsoft.EntityFrameworkCore
+@using System.Globalization
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IJSRuntime JS
+@inject MKFiloServis.Web.Services.Interfaces.IPuantajHakedisSyncService SyncService
+@inject MKFiloServis.Web.Services.AI.AnomalyDetectionService AIService
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@rendermode InteractiveServer
+
+<PageTitle>Puantaj Grid</PageTitle>
+
+<div class="container-fluid px-2">
+    @* ── Başlık ──────────────────────────────────────────────────── *@
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <div>
+            <h5 class="mb-0"><i class="bi bi-grid-3x3-gap me-2 text-primary"></i>Puantaj Çalışma Grid'i</h5>
+            <small class="text-muted">Excel gibi: hücreye tıkla → yaz → Enter/Tab ile ilerle</small>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+            <span class="badge bg-secondary">@satirlar.Count satır × @_gunSayisi gün</span>
+            <span id="_selectionInfo" class="small text-muted"></span>
+            @if (_degisiklikVar)
+            {
+                <button class="btn btn-success btn-sm" @onclick="Kaydet" disabled="@_kaydediliyor">
+                    <i class="bi bi-save me-1"></i>Değişiklikleri Kaydet
+                </button>
+            }
+            <button class="btn btn-outline-secondary btn-sm" @onclick="Undo" disabled="@(!_undoStack.Any())" title="Ctrl+Z — Geri Al">
+                <i class="bi bi-arrow-counterclockwise"></i>
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" @onclick="Redo" disabled="@(!_redoStack.Any())" title="Ctrl+Y — İleri Al">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+        </div>
+    </div>
+
+    @* ── Filtreler ───────────────────────────────────────────────── *@
+    <div class="card mb-2">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-end">
+                <div class="col-auto">
+                    <label class="form-label small mb-1">Firma</label>
+                    <select class="form-select form-select-sm" @bind="_firmaId" @bind:after="Yukle">
+                        @foreach (var f in _firmalar)
+                        {
+                            <option value="@f.Id">@f.FirmaAdi</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <label class="form-label small mb-1">Yıl</label>
+                    <select class="form-select form-select-sm" @bind="_yil" @bind:after="Yukle">
+                        @for (int y = DateTime.Today.Year - 1; y <= DateTime.Today.Year + 1; y++)
+                        {
+                            <option value="@y">@y</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <label class="form-label small mb-1">Ay</label>
+                    <select class="form-select form-select-sm" @bind="_ay" @bind:after="Yukle">
+                        @for (int m = 1; m <= 12; m++)
+                        {
+                            <option value="@m">@(new DateTime(2000, m, 1).ToString("MMMM", new CultureInfo("tr-TR")))</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-primary btn-sm" @onclick="Yukle" disabled="@_yukleniyor">
+                        <i class="bi bi-arrow-repeat me-1"></i>Yükle
+                    </button>
+                </div>
+                <div class="col-auto ms-auto d-flex gap-2">
+                    @* Toplu satır işlemleri — sadece seçili satıra uygulanır *@
+                    <div class="dropdown">
+                        <button class="btn btn-outline-warning btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown"
+                                disabled="@(!satirlar.Any() || _satirModalIdx < 0)">
+                            <i class="bi bi-lightning-charge me-1"></i>
+                            @(_satirModalIdx >= 0 && _satirModalIdx < satirlar.Count
+                                ? $"Toplu: {satirlar[_satirModalIdx].SoforAdi}"
+                                : "Satır seçin")
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end small">
+                            <li><button class="dropdown-item" @onclick='() => TopluSatirUygula("haftaici_calisir")'>Hafta içi → 1 (Çalıştı)</button></li>
+                            <li><button class="dropdown-item" @onclick='() => TopluSatirUygula("tum_calisir")'>Tüm ay → 1 (Çalıştı)</button></li>
+                            <li><hr class="dropdown-divider" /></li>
+                            <li><button class="dropdown-item" @onclick='() => TopluSatirUygula("haftaici_izin")'>Hafta içi → 0 (İzin)</button></li>
+                            <li><button class="dropdown-item" @onclick='() => TopluSatirUygula("tum_izin")'>Tüm ay → 0 (Temizle)</button></li>
+                        </ul>
+                    </div>
+                    @* Seçili hücrelere toplu değer *@
+                    <button class="btn btn-outline-success btn-sm" @onclick='() => SeciliHuclereSet(1)' title="Seçili hücrelere 1 ata">Seçili → 1</button>
+                    <button class="btn btn-outline-info btn-sm" @onclick='() => SeciliHuclereSet(2)' title="Seçili hücrelere 2 ata">Seçili → 2</button>
+                    <button class="btn btn-outline-danger btn-sm" @onclick='() => SeciliHuclereSet(0)' title="Seçili hücreleri temizle">Seçili → 0</button>
+                    <button class="btn btn-outline-info btn-sm" @onclick="EngineHesapla" disabled="@(!satirlar.Any())" title="Auto hücreleri engine ile yeniden hesapla">
+                        <i class="bi bi-calculator me-1"></i>Engine
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ── Hata / Bilgi ────────────────────────────────────────────── *@
+    @if (!string.IsNullOrEmpty(_mesaj))
+    {
+        <div class="alert @(_mesajHata ? "alert-danger" : "alert-success") py-2 mb-2 alert-dismissible fade show" role="alert">
+            @_mesaj
+            <button type="button" class="btn-close btn-sm" @onclick="() => _mesaj = null"></button>
+        </div>
+    }
+
+    @* ── Yükleniyor ──────────────────────────────────────────────── *@
+    @if (_yukleniyor)
+    {
+        <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+    }
+    else if (!satirlar.Any())
+    {
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-inbox display-4 d-block mb-2"></i>
+            Bu dönem için puantaj kaydı bulunamadı.
+        </div>
+    }
+    else
+    {
+        @* ── Özet Kartlar ─────────────────────────────────────────── *@
+        <div class="row g-2 mb-2">
+            <div class="col-auto">
+                <div class="border rounded px-3 py-1 text-center">
+                    <small class="text-muted">Toplam Sefer</small>
+                    <div class="fw-bold fs-5">@satirlar.Sum(s => s.ToplamSefer)</div>
+                </div>
+            </div>
+            <div class="col-auto">
+                <div class="border rounded px-3 py-1 text-center">
+                    <small class="text-muted">Toplam Tutar</small>
+                    <div class="fw-bold fs-5 text-success">@satirlar.Sum(s => s.ToplamTutar).ToString("N2") ₺</div>
+                </div>
+            </div>
+            <div class="col-auto">
+                <div class="border rounded px-3 py-1 text-center">
+                    <small class="text-muted">Net</small>
+                    <div class="fw-bold fs-5 text-primary">@satirlar.Sum(s => s.Net).ToString("N2") ₺</div>
+                </div>
+            </div>
+            <div class="col-auto d-flex align-items-center gap-2 ms-2">
+                <span class="badge rounded-pill" style="background:#fff3cd;color:#856404;border:1px solid #ffc107">Manual</span>
+                <span class="badge rounded-pill" style="background:#f1f1f1;color:#666;border:1px solid #ccc">Auto</span>
+            </div>
+        </div>
+
+        @* ── Klavye Kısayolları ───────────────────────────────────── *@
+        <div class="small text-muted mb-1 d-flex flex-wrap gap-3">
+            <span><kbd>←↑↓→</kbd> gezin</span>
+            <span><kbd>0/1/2</kbd> değer gir</span>
+            <span><kbd>Enter</kbd> aşağı</span>
+            <span><kbd>Tab</kbd> sağa</span>
+            <span><kbd>Shift+Click</kbd> aralık seç</span>
+            <span><kbd>Ctrl+A</kbd> tümünü seç</span>
+            <span><kbd>Ctrl+C</kbd> kopyala</span>
+            <span><kbd>Ctrl+V</kbd> yapıştır</span>
+            <span><kbd>Ctrl+Z</kbd> geri al</span>
+            <span><kbd>Delete</kbd> temizle</span>
+            <span class="ms-2">Aktif: <strong>@(_aktifSatirIdx >= 0 && _aktifGun >= 1 ? $"Satır {_aktifSatirIdx + 1}, Gün {_aktifGun}" : "—")</strong></span>
+        </div>
+
+        @* ── GRİD ─────────────────────────────────────────────────── *@
+        <div class="puantaj-grid table-responsive" style="max-height:60vh; overflow:auto; outline:none;"
+             @onkeydown="HandleKeyDown" @onkeydown:preventDefault="true" tabindex="0"
+             @ref="_gridContainer">
+            <table class="table table-sm table-bordered mb-0">
+                <thead class="table-light sticky-top">
+                    <tr>
+                        <th class="sticky-corner" style="min-width:25px; text-align:center;">
+                            <input type="checkbox" @onchange="TumSatirlariSecToggle" title="Tüm satırları seç" />
+                        </th>
+                        <th class="sticky-corner" style="min-width:185px;">
+                            Personel / Güzergah
+                            <button class="btn btn-outline-secondary btn-sm py-0 px-1 float-end" style="font-size:0.55rem;"
+                                    @onclick="TumunuSec" title="Tüm hücreleri seç (Ctrl+A)">
+                                <i class="bi bi-check-all"></i>
+                            </button>
+                        </th>
+                        @for (int gun = 1; gun <= _gunSayisi; gun++)
+                        {
+                            var g = gun;
+                            var tarih = new DateTime(_yil, _ay, g);
+                            var haftaSonu = tarih.DayOfWeek == DayOfWeek.Saturday || tarih.DayOfWeek == DayOfWeek.Sunday;
+                            var pazar = tarih.DayOfWeek == DayOfWeek.Sunday;
+                            <th class="text-center @(pazar ? "table-danger" : haftaSonu ? "table-warning" : "")"
+                                style="cursor:pointer; min-width:38px; font-size:0.65rem;"
+                                title="Tüm sütunu toplu doldur — @tarih.ToString("dd MMMM dddd", new CultureInfo("tr-TR"))"
+                                @onclick="() => SutunTopluDoldur(g)"
+                                @onclick:stopPropagation="true">
+                                @g<br /><span class="fw-normal">@tarih.ToString("ddd", new CultureInfo("tr-TR"))</span>
+                            </th>
+                        }
+                        <th class="text-center bg-light" style="min-width:45px;" title="Toplam Sefer">Σ</th>
+                        <th class="text-center bg-light" style="min-width:70px;" title="Toplam Tutar">₺</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (int si = 0; si < satirlar.Count; si++)
+                    {
+                        var satir = satirlar[si];
+                        var siCaptured = si;
+                        <tr>
+                            @* Sticky satır başlığı — sağ tık ile toplu satır işlem *@
+                            <td class="sticky-start fw-medium" style="font-size:0.7rem; cursor:context-menu;"
+                                @onclick="() => SatirTopluAc(siCaptured)"
+                                title="Tıkla: satır toplu işlem">
+                                <div>@satir.SoforAdi</div>
+                                @if (!string.IsNullOrEmpty(satir.GuzergahAdi))
+                                {
+                                    <small class="text-muted">@satir.GuzergahAdi</small>
+                                }
+                                @if (!string.IsNullOrEmpty(satir.Plaka))
+                                {
+                                    <small class="text-muted d-block">@satir.Plaka</small>
+                                }
+                            </td>
+                            @* Gün hücreleri — EDİTABLE INPUT *@
+                            @for (int gun = 1; gun <= _gunSayisi; gun++)
+                            {
+                                var gi = gun - 1;
+                                var hucre = satir.Hucreler[gi];
+                                var gunCaptured = gun;
+                                var tarih = new DateTime(_yil, _ay, gun);
+                                var haftaSonu = tarih.DayOfWeek == DayOfWeek.Saturday || tarih.DayOfWeek == DayOfWeek.Sunday;
+                                var pazar = tarih.DayOfWeek == DayOfWeek.Sunday;
+                                var isActive = _aktifSatirIdx == siCaptured && _aktifGun == gunCaptured;
+
+                                <td class="text-center p-0
+                                    @GetHucreClass(hucre)
+                                    @(isActive ? "cell-focused" : "")
+                                    @(pazar ? "col-sunday" : haftaSonu ? "col-weekend" : "")"
+                                    style="cursor:cell;"
+                                    @onclick="() => HucreTikla(siCaptured, gunCaptured, true)"
+                                    @onclick:stopPropagation="true">
+                                    <input type="text"
+                                           class="cell-input @(hucre.Secili ? "cell-is-selected" : "")"
+                                           value="@(hucre.Deger > 0 ? hucre.Deger.ToString() : "")"
+                                           data-row="@siCaptured"
+                                           data-gun="@gunCaptured"
+                                           @onfocus="(e) => HucreFocus(siCaptured, gunCaptured)"
+                                           @oninput="(e) => HucreInput(siCaptured, gunCaptured, e)"
+                                           @onblur="(e) => HucreBlur(siCaptured, gunCaptured, e)"
+                                           @onkeydown="(e) => HucreKeyDown(siCaptured, gunCaptured, e)"
+                                           maxlength="1"
+                                           inputmode="numeric"
+                                           autocomplete="off" />
+                                </td>
+                            }
+                            @* Toplamlar *@
+                            <td class="text-center row-total">@satir.ToplamSefer</td>
+                            <td class="text-center row-total text-success" style="font-size:0.7rem;">@satir.ToplamTutar.ToString("N0")</td>
+                        </tr>
+                    }
+                </tbody>
+                @* Sütun toplamları *@
+                <tfoot class="table-light">
+                    <tr>
+                        <td class="sticky-start fw-bold" style="background:#f8f9fa;">Günlük Çalışan</td>
+                        @for (int gun = 1; gun <= _gunSayisi; gun++)
+                        {
+                            var calisan = satirlar.Count(s => s.Hucreler[gun - 1].Deger > 0);
+                            <td class="text-center" style="font-size:0.65rem;">@(calisan > 0 ? calisan.ToString() : "")</td>
+                        }
+                        <td class="text-center fw-bold">@satirlar.Sum(s => s.ToplamSefer)</td>
+                        <td class="text-center fw-bold text-success">@satirlar.Sum(s => s.ToplamTutar).ToString("N0")</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    }
+</div>
+
+@* ── Toplu Sütun Doldurma Modal ──────────────────────────────────── *@
+@if (_showSutunModal)
+{
+    <div class="modal fade show d-block" style="background:rgba(0,0,0,.5)" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white py-2">
+                    <h6 class="modal-title">Gün @_sutunGun — @(new DateTime(_yil, _ay, _sutunGun).ToString("dd MMMM dddd", new CultureInfo("tr-TR")))</h6>
+                    <button class="btn-close btn-close-white" @onclick="() => _showSutunModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-2">Tüm satırlar için bu günü ayarla:</p>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-success btn-sm" @onclick='() => SutunTopluSet(1)'>Tümü → 1 (Tek Sefer)</button>
+                        <button class="btn btn-outline-info btn-sm" @onclick='() => SutunTopluSet(2)'>Tümü → 2 (S-A / Çift)</button>
+                        <button class="btn btn-outline-secondary btn-sm" @onclick='() => SutunTopluSet(0)'>Tümünü Temizle</button>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button class="btn btn-secondary btn-sm" @onclick="() => _showSutunModal = false">İptal</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── Toplu Satır Doldurma Modal ──────────────────────────────────── *@
+@if (_showSatirModal)
+{
+    var satirAdi = _satirModalIdx >= 0 && _satirModalIdx < satirlar.Count ? satirlar[_satirModalIdx].SoforAdi : "";
+    <div class="modal fade show d-block" style="background:rgba(0,0,0,.5)" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content">
+                <div class="modal-header bg-warning py-2">
+                    <h6 class="modal-title"><i class="bi bi-lightning-charge me-2"></i>@satirAdi</h6>
+                    <button class="btn-close" @onclick="() => _showSatirModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-2">@GetAyAdi() ayının tüm günleri için:</p>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-success btn-sm" @onclick='() => { TopluSatirUygula("haftaici_calisir"); _showSatirModal = false; }'>
+                            <i class="bi bi-calendar-check me-2"></i>Hafta içi → Çalıştı (1)
+                        </button>
+                        <button class="btn btn-success btn-sm" @onclick='() => { TopluSatirUygula("tum_calisir"); _showSatirModal = false; }'>
+                            <i class="bi bi-check-all me-2"></i>Tüm ay → Çalıştı (1)
+                        </button>
+                        <button class="btn btn-outline-warning btn-sm" @onclick='() => { TopluSatirUygula("haftaici_izin"); _showSatirModal = false; }'>
+                            <i class="bi bi-calendar-x me-2"></i>Hafta içi → İzin (0)
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm" @onclick='() => { TopluSatirUygula("tum_izin"); _showSatirModal = false; }'>
+                            <i class="bi bi-eraser me-2"></i>Tümünü Temizle (0)
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button class="btn btn-secondary btn-sm" @onclick="() => _showSatirModal = false">İptal</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+

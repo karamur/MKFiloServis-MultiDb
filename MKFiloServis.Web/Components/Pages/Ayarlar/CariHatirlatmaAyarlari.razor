@@ -1,0 +1,509 @@
+@page "/ayarlar/cari-hatirlatma"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+@inject ICariHatirlatmaService HatirlatmaService
+@inject IToastService ToastService
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Cari Hatırlatma Ayarları</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="mb-0"><i class="bi bi-bell-fill me-2 text-warning"></i>Cari Hatırlatma Ayarları</h3>
+            <small class="text-muted">Otomatik hatırlatma ve bildirim yapılandırması</small>
+        </div>
+        <div>
+            <button class="btn btn-outline-primary me-2" @onclick="ManuelKontrol" disabled="@isKontrolEdiliyor">
+                @if (isKontrolEdiliyor)
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                }
+                else
+                {
+                    <i class="bi bi-play-fill me-1"></i>
+                }
+                Manuel Kontrol Yap
+            </button>
+            <button class="btn btn-primary" @onclick="KaydetAsync" disabled="@isKaydediliyor">
+                @if (isKaydediliyor)
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                }
+                else
+                {
+                    <i class="bi bi-check-lg me-1"></i>
+                }
+                Kaydet
+            </button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="d-flex justify-content-center p-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- Özet Kartları -->
+        @if (ozet != null)
+        {
+            <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-danger text-white h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6 class="card-subtitle mb-2 opacity-75">Vadesi Geçmiş</h6>
+                                    <h3 class="mb-0">@ozet.VadeGecmisFaturaSayisi</h3>
+                                    <small>@ozet.VadeGecmisTutar.ToString("N2") ₺</small>
+                                </div>
+                                <i class="bi bi-exclamation-triangle-fill fs-1 opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-dark h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6 class="card-subtitle mb-2 opacity-75">Vadesi Yaklaşan</h6>
+                                    <h3 class="mb-0">@ozet.VadeYaklasanFaturaSayisi</h3>
+                                    <small>@ozet.VadeYaklasanTutar.ToString("N2") ₺</small>
+                                </div>
+                                <i class="bi bi-clock-fill fs-1 opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6 class="card-subtitle mb-2 opacity-75">Eşik Aşımı</h6>
+                                    <h3 class="mb-0">@(ozet.BorcEsikAsilanCariSayisi + ozet.AlacakEsikAsilanCariSayisi)</h3>
+                                    <small>Cari hesap</small>
+                                </div>
+                                <i class="bi bi-graph-up-arrow fs-1 opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6 class="card-subtitle mb-2 opacity-75">Bu Hafta Gönderilen</h6>
+                                    <h3 class="mb-0">@ozet.BuHaftaGonderilenHatirlatmaSayisi</h3>
+                                    <small>Hatırlatma</small>
+                                </div>
+                                <i class="bi bi-send-check-fill fs-1 opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="row">
+            <!-- Ana Ayarlar -->
+            <div class="col-lg-6">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <i class="bi bi-gear-fill me-2"></i>Genel Ayarlar
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="hatirlatmaAktif" @bind="ayarlar.HatirlatmaAktif">
+                            <label class="form-check-label fw-bold" for="hatirlatmaAktif">
+                                Otomatik Hatırlatma Aktif
+                            </label>
+                            <div class="form-text">Aktif olduğunda sistem belirlenen saatte otomatik kontrol yapar</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Günlük Kontrol Saati</label>
+                            <select class="form-select" @bind="ayarlar.KontrolSaati" disabled="@(!ayarlar.HatirlatmaAktif)">
+                                @for (int i = 6; i <= 20; i++)
+                                {
+                                    <option value="@i">@($"{i:00}:00")</option>
+                                }
+                            </select>
+                            <div class="form-text">Her gün bu saatte otomatik kontrol yapılır</div>
+                        </div>
+
+                        @if (ayarlar.SonKontrolTarihi.HasValue)
+                        {
+                            <div class="alert alert-info mb-0">
+                                <i class="bi bi-info-circle me-2"></i>
+                                Son Kontrol: @ayarlar.SonKontrolTarihi.Value.ToString("dd.MM.yyyy HH:mm")
+                                (@ayarlar.SonKontrolUyariSayisi uyarı)
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Vade Hatırlatmaları -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-warning text-dark">
+                        <i class="bi bi-calendar-event me-2"></i>Vade Hatırlatmaları
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="vadeYaklasan" @bind="ayarlar.VadeYaklasanHatirlatma">
+                            <label class="form-check-label" for="vadeYaklasan">Vadesi Yaklaşan Faturalar</label>
+                        </div>
+                        
+                        @if (ayarlar.VadeYaklasanHatirlatma)
+                        {
+                            <div class="mb-3 ps-4">
+                                <label class="form-label small">Kaç gün önce hatırlat (virgülle ayır)</label>
+                                <input type="text" class="form-control" @bind="vadeYaklasanGunleriStr" placeholder="7, 3, 1">
+                            </div>
+                        }
+
+                        <hr />
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="vadeGecmis" @bind="ayarlar.VadeGecmisHatirlatma">
+                            <label class="form-check-label" for="vadeGecmis">Vadesi Geçmiş Faturalar</label>
+                        </div>
+
+                        @if (ayarlar.VadeGecmisHatirlatma)
+                        {
+                            <div class="mb-3 ps-4">
+                                <label class="form-label small">Kaç gün sonra hatırlat (virgülle ayır)</label>
+                                <input type="text" class="form-control" @bind="vadeGecmisGunleriStr" placeholder="1, 3, 7, 15, 30">
+                            </div>
+                            <div class="mb-3 ps-4">
+                                <label class="form-label small">Minimum Tutar (₺)</label>
+                                <input type="number" class="form-control" @bind="ayarlar.VadeGecmisMinTutar" min="0" step="100">
+                                <div class="form-text">Bu tutarın altındaki faturalar için hatırlatma yapılmaz</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <!-- Eşik Hatırlatmaları -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-danger text-white">
+                        <i class="bi bi-graph-up me-2"></i>Bakiye Eşik Uyarıları
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="borcEsik" @bind="ayarlar.BorcEsikHatirlatma">
+                            <label class="form-check-label" for="borcEsik">Borç Eşik Aşımı Uyarısı</label>
+                        </div>
+
+                        @if (ayarlar.BorcEsikHatirlatma)
+                        {
+                            <div class="mb-3 ps-4">
+                                <label class="form-label small">Borç Eşik Tutarı (₺)</label>
+                                <input type="number" class="form-control" @bind="ayarlar.BorcEsikTutar" min="0" step="1000">
+                            </div>
+                        }
+
+                        <hr />
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="alacakEsik" @bind="ayarlar.AlacakEsikHatirlatma">
+                            <label class="form-check-label" for="alacakEsik">Alacak Eşik Aşımı Uyarısı</label>
+                        </div>
+
+                        @if (ayarlar.AlacakEsikHatirlatma)
+                        {
+                            <div class="mb-3 ps-4">
+                                <label class="form-label small">Alacak Eşik Tutarı (₺)</label>
+                                <input type="number" class="form-control" @bind="ayarlar.AlacakEsikTutar" min="0" step="1000">
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Diğer Hatırlatmalar -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-secondary text-white">
+                        <i class="bi bi-three-dots me-2"></i>Diğer Hatırlatmalar
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="tahsilatHatirlatma" @bind="ayarlar.TahsilatHatirlatma">
+                            <label class="form-check-label" for="tahsilatHatirlatma">Aylık Tahsilat Özeti</label>
+                        </div>
+
+                        @if (ayarlar.TahsilatHatirlatma)
+                        {
+                            <div class="mb-3 ps-4">
+                                <label class="form-label small">Ayın Hangi Günü</label>
+                                <select class="form-select" @bind="ayarlar.TahsilatHatirlatmaGunu">
+                                    @for (int i = 1; i <= 28; i++)
+                                    {
+                                        <option value="@i">@i</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+
+                        <hr />
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="hareketsizCari" @bind="ayarlar.HareketsizCariHatirlatma">
+                            <label class="form-check-label" for="hareketsizCari">Hareketsiz Cari Uyarısı</label>
+                        </div>
+
+                        @if (ayarlar.HareketsizCariHatirlatma)
+                        {
+                            <div class="mb-3 ps-4">
+                                <label class="form-label small">Kaç Gün Hareketsiz</label>
+                                <input type="number" class="form-control" @bind="ayarlar.HareketsizCariGunSayisi" min="30" max="365">
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Bildirim Ayarları -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-info text-white">
+                        <i class="bi bi-envelope me-2"></i>Bildirim Ayarları
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="sistemBildirimi" @bind="ayarlar.SistemBildirimiOlustur">
+                            <label class="form-check-label" for="sistemBildirimi">Sistem Bildirimi Oluştur</label>
+                            <div class="form-text">Uygulama içi bildirim oluşturur</div>
+                        </div>
+
+                        <hr />
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="emailGonder" @bind="ayarlar.EmailGonder">
+                            <label class="form-check-label" for="emailGonder">E-posta Gönder</label>
+                        </div>
+
+                        @if (ayarlar.EmailGonder)
+                        {
+                            <div class="form-check mb-3 ps-4">
+                                <input class="form-check-input" type="checkbox" id="adminlereGonder" @bind="ayarlar.AdminlereGonder">
+                                <label class="form-check-label" for="adminlereGonder">Admin kullanıcılara gönder</label>
+                            </div>
+
+                            <div class="mb-3 ps-4">
+                                <label class="form-label small">Ek E-posta Adresleri</label>
+                                <input type="text" class="form-control" @bind="ayarlar.EkEmailAdresleri" placeholder="email1@firma.com, email2@firma.com">
+                                <div class="form-text">Virgülle ayırarak birden fazla adres girilebilir</div>
+                            </div>
+
+                            <hr />
+
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="musteriyeEmail" @bind="ayarlar.MusteriyeEmailGonder">
+                                <label class="form-check-label" for="musteriyeEmail">Müşteriye Direkt E-posta</label>
+                                <div class="form-text text-warning">⚠️ Dikkatli kullanın - müşterilere otomatik hatırlatma e-postası gönderir</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Son Kontrol Raporu -->
+        @if (sonRapor != null && sonRapor.Detaylar.Any())
+        {
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-file-text me-2"></i>Son Kontrol Raporu (@sonRapor.RaporTarihi.ToString("dd.MM.yyyy HH:mm"))</span>
+                    <span class="badge bg-light text-dark">@sonRapor.ToplamUyariSayisi Uyarı</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table table-hover table-striped mb-0">
+                            <thead class="sticky-top bg-light">
+                                <tr>
+                                    <th>Tip</th>
+                                    <th>Cari</th>
+                                    <th>Açıklama</th>
+                                    <th>Fatura No</th>
+                                    <th class="text-end">Tutar</th>
+                                    <th>Öncelik</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var detay in sonRapor.Detaylar.Take(50))
+                                {
+                                    <tr>
+                                        <td>
+                                            <span class="badge @GetTipBadgeClass(detay.Tip)">
+                                                @GetTipAdi(detay.Tip)
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <strong>@detay.CariUnvan</strong>
+                                            <br /><small class="text-muted">@detay.CariKodu</small>
+                                        </td>
+                                        <td>@detay.Aciklama</td>
+                                        <td>@(detay.FaturaNo ?? "-")</td>
+                                        <td class="text-end">
+                                            @if (detay.Tutar.HasValue)
+                                            {
+                                                <strong>@detay.Tutar.Value.ToString("N2") ₺</strong>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="badge @GetOncelikBadgeClass(detay.Oncelik)">
+                                                @detay.Oncelik
+                                            </span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private bool isLoading = true;
+    private bool isKaydediliyor = false;
+    private bool isKontrolEdiliyor = false;
+    private CariHatirlatmaSettings ayarlar = new();
+    private CariHatirlatmaOzet? ozet;
+    private CariHatirlatmaRapor? sonRapor;
+
+    // String bindingleri (int[] <-> string dönüşümü)
+    private string vadeYaklasanGunleriStr
+    {
+        get => string.Join(", ", ayarlar.VadeYaklasanGunleri);
+        set => ayarlar.VadeYaklasanGunleri = ParseIntArray(value);
+    }
+
+    private string vadeGecmisGunleriStr
+    {
+        get => string.Join(", ", ayarlar.VadeGecmisGunleri);
+        set => ayarlar.VadeGecmisGunleri = ParseIntArray(value);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        try
+        {
+            ayarlar = await HatirlatmaService.GetAyarlarAsync();
+            ozet = await HatirlatmaService.GetHatirlatmaOzetiAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Yükleme hatası: " + ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task KaydetAsync()
+    {
+        isKaydediliyor = true;
+        try
+        {
+            await HatirlatmaService.SaveAyarlarAsync(ayarlar);
+            ToastService.ShowSuccess("Ayarlar kaydedildi");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Kayıt hatası: " + ex.Message);
+        }
+        finally
+        {
+            isKaydediliyor = false;
+        }
+    }
+
+    private async Task ManuelKontrol()
+    {
+        isKontrolEdiliyor = true;
+        StateHasChanged();
+
+        try
+        {
+            sonRapor = await HatirlatmaService.HatirlatmaKontroluYapAsync(
+                emailGonder: ayarlar.EmailGonder,
+                bildirimOlustur: ayarlar.SistemBildirimiOlustur);
+
+            ayarlar = await HatirlatmaService.GetAyarlarAsync();
+            ozet = await HatirlatmaService.GetHatirlatmaOzetiAsync();
+
+            ToastService.ShowSuccess($"Kontrol tamamlandı: {sonRapor.ToplamUyariSayisi} uyarı tespit edildi");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Kontrol hatası: " + ex.Message);
+        }
+        finally
+        {
+            isKontrolEdiliyor = false;
+        }
+    }
+
+    private int[] ParseIntArray(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return [];
+
+        return value
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => int.TryParse(s.Trim(), out var n) ? n : 0)
+            .Where(n => n > 0)
+            .OrderBy(n => n)
+            .ToArray();
+    }
+
+    private string GetTipAdi(CariHatirlatmaTipi tip) => tip switch
+    {
+        CariHatirlatmaTipi.VadeYaklasan => "Vade Yaklaşıyor",
+        CariHatirlatmaTipi.VadeGecmis => "Vade Geçmiş",
+        CariHatirlatmaTipi.BorcEsikAsildi => "Borç Eşik",
+        CariHatirlatmaTipi.AlacakEsikAsildi => "Alacak Eşik",
+        CariHatirlatmaTipi.TahsilatHatirlatma => "Tahsilat",
+        CariHatirlatmaTipi.HareketsizCari => "Hareketsiz",
+        _ => tip.ToString()
+    };
+
+    private string GetTipBadgeClass(CariHatirlatmaTipi tip) => tip switch
+    {
+        CariHatirlatmaTipi.VadeGecmis => "bg-danger",
+        CariHatirlatmaTipi.VadeYaklasan => "bg-warning text-dark",
+        CariHatirlatmaTipi.BorcEsikAsildi => "bg-danger",
+        CariHatirlatmaTipi.AlacakEsikAsildi => "bg-info",
+        CariHatirlatmaTipi.HareketsizCari => "bg-secondary",
+        _ => "bg-primary"
+    };
+
+    private string GetOncelikBadgeClass(BildirimOncelik oncelik) => oncelik switch
+    {
+        BildirimOncelik.Kritik => "bg-danger",
+        BildirimOncelik.Yuksek => "bg-warning text-dark",
+        BildirimOncelik.Normal => "bg-info",
+        BildirimOncelik.Dusuk => "bg-secondary",
+        _ => "bg-light text-dark"
+    };
+}
+

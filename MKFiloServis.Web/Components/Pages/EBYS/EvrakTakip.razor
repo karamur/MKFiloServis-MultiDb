@@ -1,0 +1,326 @@
+@page "/ebys/takip"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IEbysEvrakService EvrakService
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Evrak Takip - EBYS</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h3 class="mb-0"><i class="bi bi-kanban me-2 text-primary"></i>Evrak Takip Paneli</h3>
+            <small class="text-muted">Tüm evrakların durumunu takip edin</small>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="/ebys/gelen" class="btn btn-outline-primary">
+                <i class="bi bi-inbox me-1"></i>Gelen Evraklar
+            </a>
+            <a href="/ebys/giden" class="btn btn-outline-success">
+                <i class="bi bi-send me-1"></i>Giden Evraklar
+            </a>
+        </div>
+    </div>
+
+    @* Özet Kartları *@
+    <div class="row g-3 mb-4">
+        <div class="col-md-2">
+            <div class="card border-0 bg-primary bg-opacity-10 h-100">
+                <div class="card-body text-center">
+                    <i class="bi bi-inbox fs-1 text-primary"></i>
+                    <h2 class="mb-0 mt-2">@istatistik.ToplamGelen</h2>
+                    <small class="text-muted">Gelen Evrak</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-0 bg-success bg-opacity-10 h-100">
+                <div class="card-body text-center">
+                    <i class="bi bi-send fs-1 text-success"></i>
+                    <h2 class="mb-0 mt-2">@istatistik.ToplamGiden</h2>
+                    <small class="text-muted">Giden Evrak</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-0 bg-warning bg-opacity-10 h-100">
+                <div class="card-body text-center">
+                    <i class="bi bi-hourglass-split fs-1 text-warning"></i>
+                    <h2 class="mb-0 mt-2">@(istatistik.BekleyenGelen + istatistik.BekleyenGiden)</h2>
+                    <small class="text-muted">Bekleyen</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-0 bg-danger bg-opacity-10 h-100">
+                <div class="card-body text-center">
+                    <i class="bi bi-reply fs-1 text-danger"></i>
+                    <h2 class="mb-0 mt-2">@istatistik.CevapBekleyen</h2>
+                    <small class="text-muted">Cevap Bekleyen</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-0 bg-danger bg-opacity-25 h-100">
+                <div class="card-body text-center">
+                    <i class="bi bi-exclamation-triangle fs-1 text-danger"></i>
+                    <h2 class="mb-0 mt-2">@istatistik.GecikmisCevap</h2>
+                    <small class="text-muted">Gecikmiş</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-0 bg-info bg-opacity-10 h-100">
+                <div class="card-body text-center">
+                    <i class="bi bi-calendar-check fs-1 text-info"></i>
+                    <h2 class="mb-0 mt-2">@(istatistik.BugunGelenSayisi + istatistik.BugunGidenSayisi)</h2>
+                    <small class="text-muted">Bugün İşlem</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        @* Kanban Tarzı Kolonlar *@
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-warning text-dark">
+                    <h6 class="mb-0">
+                        <i class="bi bi-hourglass-split me-2"></i>Beklemede
+                        <span class="badge bg-dark ms-2">@bekleyenEvraklar.Count</span>
+                    </h6>
+                </div>
+                <div class="card-body p-2" style="max-height:500px; overflow-y:auto;">
+                    @foreach (var evrak in bekleyenEvraklar.Take(10))
+                    {
+                        <div class="card mb-2 border-start border-4 @(evrak.Yon == EvrakYonu.Gelen ? "border-primary" : "border-success")">
+                            <div class="card-body py-2 px-3">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <a href="/ebys/evrak/@evrak.Id" class="text-decoration-none">
+                                            <strong class="d-block">@evrak.EvrakNo</strong>
+                                        </a>
+                                        <small class="text-muted d-block text-truncate" style="max-width:200px">@evrak.Konu</small>
+                                        <small class="text-muted">@evrak.EvrakTarihi.ToString("dd.MM.yyyy")</small>
+                                    </div>
+                                    <span class="badge @OncelikRenk(evrak.Oncelik)">@OncelikAdi(evrak.Oncelik)</span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    @if (bekleyenEvraklar.Count > 10)
+                    {
+                        <div class="text-center">
+                            <a href="/ebys/gelen" class="btn btn-sm btn-link">+@(bekleyenEvraklar.Count - 10) daha</a>
+                        </div>
+                    }
+                    @if (!bekleyenEvraklar.Any())
+                    {
+                        <p class="text-muted text-center py-3">Bekleyen evrak yok</p>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0">
+                        <i class="bi bi-gear me-2"></i>İşlemde
+                        <span class="badge bg-dark ms-2">@islemdeEvraklar.Count</span>
+                    </h6>
+                </div>
+                <div class="card-body p-2" style="max-height:500px; overflow-y:auto;">
+                    @foreach (var evrak in islemdeEvraklar.Take(10))
+                    {
+                        <div class="card mb-2 border-start border-4 @(evrak.Yon == EvrakYonu.Gelen ? "border-primary" : "border-success")">
+                            <div class="card-body py-2 px-3">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <a href="/ebys/evrak/@evrak.Id" class="text-decoration-none">
+                                            <strong class="d-block">@evrak.EvrakNo</strong>
+                                        </a>
+                                        <small class="text-muted d-block text-truncate" style="max-width:200px">@evrak.Konu</small>
+                                        @if (evrak.AtananKullanici != null)
+                                        {
+                                            <small class="text-primary"><i class="bi bi-person"></i> @evrak.AtananKullanici.AdSoyad</small>
+                                        }
+                                    </div>
+                                    @if (evrak.CevapGerekli)
+                                    {
+                                        <i class="bi bi-reply-fill text-warning" title="Cevap gerekli"></i>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    @if (!islemdeEvraklar.Any())
+                    {
+                        <p class="text-muted text-center py-3">İşlemde evrak yok</p>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-danger text-white">
+                    <h6 class="mb-0">
+                        <i class="bi bi-exclamation-triangle me-2"></i>Cevap Bekleyen / Gecikmiş
+                        <span class="badge bg-dark ms-2">@cevapBekleyenEvraklar.Count</span>
+                    </h6>
+                </div>
+                <div class="card-body p-2" style="max-height:500px; overflow-y:auto;">
+                    @foreach (var evrak in cevapBekleyenEvraklar.Take(10))
+                    {
+                        var gecikmisMi = evrak.CevapSuresi.HasValue && evrak.CevapSuresi.Value < DateTime.Now;
+                        <div class="card mb-2 border-start border-4 @(gecikmisMi ? "border-danger" : "border-warning")">
+                            <div class="card-body py-2 px-3">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <a href="/ebys/evrak/@evrak.Id" class="text-decoration-none">
+                                            <strong class="d-block">@evrak.EvrakNo</strong>
+                                        </a>
+                                        <small class="text-muted d-block text-truncate" style="max-width:180px">@evrak.Konu</small>
+                                        @if (evrak.CevapSuresi.HasValue)
+                                        {
+                                            <small class="@(gecikmisMi ? "text-danger" : "text-warning")">
+                                                <i class="bi bi-clock"></i> @evrak.CevapSuresi.Value.ToString("dd.MM.yyyy")
+                                                @if (gecikmisMi)
+                                                {
+                                                    <span class="badge bg-danger ms-1">GECİKMİŞ</span>
+                                                }
+                                            </small>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    @if (!cevapBekleyenEvraklar.Any())
+                    {
+                        <p class="text-muted text-center py-3">Cevap bekleyen evrak yok</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Durum ve Kategori Dağılımı *@
+    <div class="row g-3 mt-3">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><i class="bi bi-pie-chart me-2"></i>Durum Dağılımı</h6>
+                </div>
+                <div class="card-body">
+                    @if (istatistik.DurumBazindaDagilim.Any())
+                    {
+                        @foreach (var item in istatistik.DurumBazindaDagilim)
+                        {
+                            var yuzde = toplamEvrak > 0 ? (item.Value * 100.0 / toplamEvrak) : 0;
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between small">
+                                    <span>@item.Key</span>
+                                    <span>@item.Value (@yuzde.ToString("0.0")%)</span>
+                                </div>
+                                <div class="progress" style="height:8px;">
+                                    <div class="progress-bar" style="width:@yuzde%"></div>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <p class="text-muted text-center mb-0">Veri yok</p>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><i class="bi bi-folder me-2"></i>Kategori Dağılımı</h6>
+                </div>
+                <div class="card-body">
+                    @if (istatistik.KategoriBazindaDagilim.Any())
+                    {
+                        @foreach (var item in istatistik.KategoriBazindaDagilim.OrderByDescending(x => x.Value).Take(8))
+                        {
+                            var yuzde = toplamEvrak > 0 ? (item.Value * 100.0 / toplamEvrak) : 0;
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between small">
+                                    <span>@item.Key</span>
+                                    <span>@item.Value</span>
+                                </div>
+                                <div class="progress" style="height:8px;">
+                                    <div class="progress-bar bg-success" style="width:@yuzde%"></div>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <p class="text-muted text-center mb-0">Kategori tanımlı evrak yok</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private EbysEvrakIstatistik istatistik = new();
+    private List<EbysEvrak> bekleyenEvraklar = new();
+    private List<EbysEvrak> islemdeEvraklar = new();
+    private List<EbysEvrak> cevapBekleyenEvraklar = new();
+    private int toplamEvrak => istatistik.ToplamGelen + istatistik.ToplamGiden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        istatistik = await EvrakService.GetIstatistiklerAsync();
+
+        // Bekleyenler
+        bekleyenEvraklar = await EvrakService.GetEvraklarAsync(new EbysEvrakFiltre
+        {
+            Durum = EbysEvrakDurum.Beklemede
+        });
+
+        // İşlemde olanlar
+        var islemde1 = await EvrakService.GetEvraklarAsync(new EbysEvrakFiltre { Durum = EbysEvrakDurum.Isleniyor });
+        var islemde2 = await EvrakService.GetEvraklarAsync(new EbysEvrakFiltre { Durum = EbysEvrakDurum.AtamaBekliyor });
+        islemdeEvraklar = islemde1.Concat(islemde2).OrderByDescending(e => e.CreatedAt).ToList();
+
+        // Cevap bekleyenler
+        cevapBekleyenEvraklar = await EvrakService.GetEvraklarAsync(new EbysEvrakFiltre
+        {
+            SadeceCevapBekleyenler = true
+        });
+    }
+
+    private static string OncelikRenk(EvrakOncelik o) => o switch
+    {
+        EvrakOncelik.Dusuk => "bg-secondary",
+        EvrakOncelik.Normal => "bg-info",
+        EvrakOncelik.Yuksek => "bg-warning",
+        EvrakOncelik.Acil => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private static string OncelikAdi(EvrakOncelik o) => o switch
+    {
+        EvrakOncelik.Dusuk => "Düşük",
+        EvrakOncelik.Normal => "Normal",
+        EvrakOncelik.Yuksek => "Yüksek",
+        EvrakOncelik.Acil => "Acil",
+        _ => ""
+    };
+}
+

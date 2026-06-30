@@ -1,0 +1,1493 @@
+@page "/guzergahlar/yeni"
+@page "/guzergahlar/{Id:int}"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Components.Shared
+@using MKFiloServis.Web.Data
+@using Microsoft.EntityFrameworkCore
+@inject IGuzergahService GuzergahService
+@inject IGuzergahSeferService GuzergahSeferService
+@inject ICariService CariService
+@inject IKurumService KurumService
+@inject IAracService AracService
+@inject ISoforService SoforService
+@inject IKapasiteService KapasiteService
+@inject IDbContextFactory<ApplicationDbContext> DbContextFactory
+@inject IAktifFirmaProvider AktifFirmaProvider
+@inject IFirmaService FirmaService
+@inject FirmaTransferService FirmaTransferService
+@inject GuzergahDegisiklikUyariService DegisiklikUyari
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>@(IsEdit ? "Güzergah Düzenle" : "Yeni Güzergah")</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="bi bi-signpost me-2"></i>@(IsEdit ? "Güzergah Düzenle" : (Kopyala.HasValue ? "Güzergah Kopyala" : "Yeni Güzergah"))</h3>
+        <div class="d-flex gap-2">
+            @if (IsEdit)
+            {
+                <button type="button" class="btn btn-outline-success btn-sm"
+                        @onclick="PlanlamadaGor">
+                    <i class="bi bi-calendar-check me-1"></i>Planlamada Gor
+                </button>
+            }
+            <button class="btn btn-secondary" @onclick="Geri">
+                <i class="bi bi-arrow-left me-1"></i>Geri
+            </button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <EditForm Model="guzergah" OnValidSubmit="Kaydet">
+                <DataAnnotationsValidator />
+
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">Güzergah Kodu *</label>
+                            <InputText @bind-Value="guzergah.GuzergahKodu" class="form-control" readonly="@IsEdit" />
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="mb-3">
+                            <label class="form-label">Güzergah Adı *</label>
+                            <InputText @bind-Value="guzergah.GuzergahAdi" class="form-control" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3 position-relative">
+                    <label class="form-label">Kurum / Müşteri Kartı *</label>
+                    <input type="text" class="form-control" placeholder="Kurum adı yazın..." value="@kurumArama" @oninput="KurumAramaGuncelle" @onfocus="KurumAramaFocus" autocomplete="off" />
+                    @if (kurumOnerileri.Any() && secilenKurumId == 0)
+                    {
+                        <div class="list-group position-absolute w-100 shadow-sm" style="z-index:1050; max-height:240px; overflow:auto;">
+                            @foreach (var k in kurumOnerileri)
+                            {
+                                <button type="button" class="list-group-item list-group-item-action py-1" @onclick="() => KurumSec(k)">
+                                    <strong>@k.KurumAdi</strong>
+                                    @if (!string.IsNullOrWhiteSpace(k.UnvanTam) && !string.Equals(k.UnvanTam, k.KurumAdi, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <small class="text-muted ms-2">@k.UnvanTam</small>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    }
+                    @if (secilenKurumId > 0)
+                    {
+                        <div class="mt-1">
+                            <span class="badge bg-success"><i class="bi bi-check2 me-1"></i>Seçildi</span>
+                            <button type="button" class="btn btn-link btn-sm p-0 ms-2" @onclick="KurumTemizle">Temizle</button>
+                        </div>
+                    }
+                </div>
+
+                @* Cari Kartı (Kurumdan bağımsız ayrı seçim) *@
+                <div class="mb-3 position-relative">
+                    <label class="form-label">Cari Kartı *</label>
+                    <input type="text" class="form-control" placeholder="Cari unvanı veya kodu yazın..." value="@cariArama" @oninput="CariAramaGuncelle" @onfocus="CariAramaFocus" autocomplete="off" />
+                    @if (cariOnerileri.Any() && guzergah.CariId == 0)
+                    {
+                        <div class="list-group position-absolute w-100 shadow-sm" style="z-index:1050; max-height:240px; overflow:auto;">
+                            @foreach (var c in cariOnerileri)
+                            {
+                                <button type="button" class="list-group-item list-group-item-action py-1" @onclick="() => CariSec(c)">
+                                    <strong>@c.Unvan</strong>
+                                    <small class="text-muted ms-2">@c.CariKodu</small>
+                                </button>
+                            }
+                        </div>
+                    }
+                    @if (guzergah.CariId > 0)
+                    {
+                        <div class="mt-1">
+                            <span class="badge bg-success"><i class="bi bi-check2 me-1"></i>Seçildi</span>
+                            <button type="button" class="btn btn-link btn-sm p-0 ms-2" @onclick="CariTemizle">Temizle</button>
+                            @if (secilenKurumId > 0 && kurumlar.FirstOrDefault(k => k.Id == secilenKurumId)?.CariId != guzergah.CariId)
+                            {
+                                <small class="text-muted ms-2"><i class="bi bi-info-circle"></i> Bu cari, seçili kurumun varsayılan carisi değil. Güzergah ile cari arasında bağ kurulacak.</small>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <small class="text-muted">Güzergah ile cari arasında bağ bu seçimden kurulur.</small>
+                    }
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Başlangıç Noktası</label>
+                            <InputText @bind-Value="guzergah.BaslangicNoktasi" class="form-control" />
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Bitiş Noktası</label>
+                            <InputText @bind-Value="guzergah.BitisNoktasi" class="form-control" />
+                        </div>
+                    </div>
+                </div>
+
+                @* Harita ile Koordinat Seçimi *@
+                <div class="card mb-3">
+                    <div class="card-header bg-light">
+                        <i class="bi bi-map me-2"></i>Harita Koordinatları
+                        <button type="button" class="btn btn-sm btn-outline-primary float-end" @onclick="ToggleHarita">
+                            <i class="bi @(haritaAcik ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                            @(haritaAcik ? "Gizle" : "Göster")
+                        </button>
+                    </div>
+                    @if (haritaAcik)
+                    {
+                        <div class="card-body">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <div class="card border-success">
+                                        <div class="card-header bg-success text-white py-1">
+                                            <i class="bi bi-geo-alt-fill me-1"></i>Başlangıç Koordinatları
+                                        </div>
+                                        <div class="card-body py-2">
+                                            <div class="row">
+                                                <div class="col-6">
+                                                    <label class="form-label small">Enlem (Lat)</label>
+                                                    <InputNumber @bind-Value="guzergah.BaslangicLatitude" class="form-control form-control-sm" step="0.000001" />
+                                                </div>
+                                                <div class="col-6">
+                                                    <label class="form-label small">Boylam (Lng)</label>
+                                                    <InputNumber @bind-Value="guzergah.BaslangicLongitude" class="form-control form-control-sm" step="0.000001" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card border-danger">
+                                        <div class="card-header bg-danger text-white py-1">
+                                            <i class="bi bi-geo-alt me-1"></i>Bitiş Koordinatları
+                                        </div>
+                                        <div class="card-body py-2">
+                                            <div class="row">
+                                                <div class="col-6">
+                                                    <label class="form-label small">Enlem (Lat)</label>
+                                                    <InputNumber @bind-Value="guzergah.BitisLatitude" class="form-control form-control-sm" step="0.000001" />
+                                                </div>
+                                                <div class="col-6">
+                                                    <label class="form-label small">Boylam (Lng)</label>
+                                                    <InputNumber @bind-Value="guzergah.BitisLongitude" class="form-control form-control-sm" step="0.000001" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-2">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <input type="radio" class="btn-check" name="koordinatModu" id="modBaslangic" 
+                                           checked="@(koordinatSecimModu == "baslangic")" @onchange="@(() => koordinatSecimModu = "baslangic")">
+                                    <label class="btn btn-outline-success" for="modBaslangic">
+                                        <i class="bi bi-geo-alt-fill me-1"></i>Başlangıç Seç
+                                    </label>
+
+                                    <input type="radio" class="btn-check" name="koordinatModu" id="modBitis"
+                                           checked="@(koordinatSecimModu == "bitis")" @onchange="@(() => koordinatSecimModu = "bitis")">
+                                    <label class="btn btn-outline-danger" for="modBitis">
+                                        <i class="bi bi-geo-alt me-1"></i>Bitiş Seç
+                                    </label>
+                                </div>
+                                <span class="text-muted ms-2 small">
+                                    <i class="bi bi-info-circle"></i> Haritaya tıklayarak @(koordinatSecimModu == "baslangic" ? "başlangıç" : "bitiş") noktası seçin
+                                </span>
+                            </div>
+
+                            <HaritaGosterici @ref="harita" 
+                                            Style="height: 350px; width: 100%; border-radius: 0.25rem;"
+                                            CenterLatitude="39.9208" 
+                                            CenterLongitude="32.8541" 
+                                            Zoom="6"
+                                            EnableClickToSelect="true"
+                                            OnCoordinateSelected="OnKoordinatSecildi" />
+
+                            <div class="row mt-2">
+                                <div class="col-md-3">
+                                    <label class="form-label small">Rota Rengi</label>
+                                    <input type="color" @bind="guzergah.RotaRengi" class="form-control form-control-sm form-control-color" style="width: 100%;" />
+                                </div>
+                                <div class="col-md-9 d-flex align-items-end">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary me-2" @onclick="KoordinatlariTemizle">
+                                        <i class="bi bi-trash me-1"></i>Koordinatları Temizle
+                                    </button>
+                                    @if (guzergah.BaslangicLatitude.HasValue && guzergah.BitisLatitude.HasValue)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-info" @onclick="RotayiGoster">
+                                            <i class="bi bi-signpost me-1"></i>Rotayı Göster
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label class="form-label">Sefer Tipi</label>
+                            <InputSelect @bind-Value="guzergah.SeferTipi" @bind-Value:after="SeferTipiDegistiAsync" class="form-select">
+                                @foreach (var tip in Enum.GetValues<SeferTipi>())
+                                {
+                                    <option value="@tip">@tip</option>
+                                }
+                            </InputSelect>
+                            @if (seferTipiDegistiUyarisi)
+                            {
+                                <small class="text-info d-block"><i class="bi bi-info-circle me-1"></i>Sefer tipi değişti. Birim fiyatları manuel güncellemelisiniz.</small>
+                            }
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label class="form-label">Kapasite</label>
+                            <select class="form-select" value="@(guzergah.KapasiteAdi ?? "")" @onchange="KapasiteSecildi">
+                                <option value="">-- Seçiniz --</option>
+                                @foreach (var k in kapasiteSecenekleri)
+                                {
+                                    <option value="@k.Label">@k.Label</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label class="form-label">Varsayılan Araç</label>
+                            <InputSelect @bind-Value="guzergah.VarsayilanAracId" @bind-Value:after="AracSecimiDegistiAsync" class="form-select">
+                                <option value="">-- Araç Seçiniz --</option>
+                                @foreach (var arac in araclar)
+                                {
+                                    <option value="@arac.Id">@arac.Plaka</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label class="form-label">Varsayılan Şoför</label>
+                            <InputSelect @bind-Value="guzergah.VarsayilanSoforId" @bind-Value:after="SoforDegistiAsync" class="form-select">
+                                <option value="">-- Şoför Seçiniz --</option>
+                                @foreach (var sofor in soforler)
+                                {
+                                    <option value="@sofor.Id">@sofor.Ad @sofor.Soyad</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(secilenSoforBilgisi) || !string.IsNullOrWhiteSpace(secilenAracTedarikci) || !string.IsNullOrWhiteSpace(secilenAracPlakaBilgi))
+                {
+                    <div class="alert alert-info py-2">
+                        @if (!string.IsNullOrWhiteSpace(secilenAracTedarikci))
+                        {
+                            <div class="row g-1 mb-1">
+                                <div class="col-md-4"><strong>Tedarikçi Araç (Plaka):</strong> @(string.IsNullOrWhiteSpace(secilenAracPlakaBilgi) ? "-" : secilenAracPlakaBilgi)</div>
+                                <div class="col-md-4"><strong>Tedarikçi Araç Sahibi:</strong> @secilenAracTedarikci</div>
+                                <div class="col-md-4"><strong>Sahibi Telefon:</strong> @(string.IsNullOrWhiteSpace(secilenAracTedarikciTelefon) ? "-" : secilenAracTedarikciTelefon)</div>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(secilenSoforBilgisi))
+                        {
+                            <div class="row g-1">
+                                <div class="col-md-4"><strong>@(string.IsNullOrWhiteSpace(secilenAracTedarikci) ? "Şoför" : "Tedarikçi Araç Şoförü"):</strong> @secilenSoforBilgisi</div>
+                                <div class="col-md-4"><strong>Şoför Telefon:</strong> @(string.IsNullOrWhiteSpace(secilenSoforTelefon) ? "-" : secilenSoforTelefon)</div>
+                                <div class="col-md-4"><strong>Firma:</strong> @(string.IsNullOrWhiteSpace(secilenSoforFirma) ? "-" : secilenSoforFirma)</div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Güzergahın Bağlı Olduğu Firma</label>
+                        <select class="form-select" value="@(guzergah.FirmaId?.ToString() ?? "")"
+                                @onchange="e => guzergah.FirmaId = int.TryParse(e.Value?.ToString(), out var fid) && fid > 0 ? fid : (int?)null">
+                            <option value="">-- Varsayılan (Aktif Firma) --</option>
+                            @foreach (var f in firmalar)
+                            {
+                                <option value="@f.Id">@f.FirmaAdi</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label text-success fw-semibold">Gelir Fiyatı *</label>
+                            <InputNumber @bind-Value="guzergah.GelirFiyat" class="form-control" />
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label text-danger fw-semibold">Gider Fiyatı *</label>
+                            <InputNumber @bind-Value="guzergah.GiderFiyat" class="form-control" />
+                            @if (guzergah.GiderFiyat > 0 && guzergah.GelirFiyat > 0 && guzergah.GiderFiyat > guzergah.GelirFiyat)
+                            {
+                                <small class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Gider geliri aşıyor - zarar!</small>
+                            }
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">Mesafe (km)</label>
+                            <InputNumber @bind-Value="guzergah.Mesafe" class="form-control" />
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">Tahmini Süre (dk)</label>
+                            <InputNumber @bind-Value="guzergah.TahminiSure" class="form-control" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label text-info fw-semibold">Puantaj Çarpanı</label>
+                            <InputNumber @bind-Value="guzergah.PuantajCarpani" class="form-control" min="0.1" max="10" step="0.1" />
+                            <small class="text-muted">1.0 = tam, 0.5 = yarım, max 10</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <InputCheckbox @bind-Value="guzergah.Aktif" class="form-check-input" id="aktif" />
+                                <label class="form-check-label" for="aktif">Aktif</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Notlar</label>
+                    <InputTextArea @bind-Value="guzergah.Notlar" class="form-control" rows="2" />
+                </div>
+
+                @* ── Seferler ── *@
+                <hr class="my-3" />
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0"><i class="bi bi-calendar2-week me-1"></i>Seferler</h6>
+                </div>
+
+                <div class="row g-2 align-items-end mb-2">
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Sefer Sayısı</label>
+                        <input type="number" min="1" max="50" class="form-control form-control-sm"
+                               value="@seferKalemleri.Count"
+                               @onchange="e => { if (int.TryParse(e.Value?.ToString(), out var n)) SeferSayisiDegistir(n); }" />
+                    </div>
+                    <div class="col-md-4">
+                        <button type="button" class="btn btn-sm btn-outline-primary"
+                                @onclick="TumSeferlereUygula">
+                            <i class="bi bi-arrow-down-square me-1"></i>1. Seferi Tum Seferlere Uygula
+                        </button>
+                    </div>
+                </div>
+
+                @if (seferKalemleri.Count > 0)
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered align-middle mb-2">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Sefer Tipi</th>
+                                    <th>Slot</th>
+                                    <th>Kapasite</th>
+                                    <th>Arac Plakasi</th>
+                                    <th>Sofor Ad</th>
+                                    <th>Sofor Telefon</th>
+                                    <th>Firma / Tedarikci</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (int si = 0; si < seferKalemleri.Count; si++)
+                                {
+                                    var kalem = seferKalemleri[si];
+                                    var siraNo = si + 1;
+                                    <tr>
+                                        <td class="text-center">@siraNo</td>
+                                        <td>
+                                            <select class="form-select form-select-sm" value="@kalem.SeferTipi.ToString()"
+                                                    @onchange="e => kalem.SeferTipi = Enum.Parse<SeferTipi>(e.Value!.ToString()!)">
+                                                @foreach (var tip in Enum.GetValues<SeferTipi>())
+                                                {
+                                                    <option value="@tip">@tip</option>
+                                                }
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <select class="form-select form-select-sm" value="@kalem.Slot.ToString()"
+                                                    @onchange="e => kalem.Slot = Enum.Parse<SeferSlot>(e.Value!.ToString()!)">
+                                                @foreach (var s in Enum.GetValues<SeferSlot>())
+                                                { <option value="@s">@s</option> }
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <select class="form-select form-select-sm" value="@(kalem.KapasiteAdi ?? "")"
+                                                    @onchange="e => kalem.KapasiteAdi = string.IsNullOrWhiteSpace(e.Value?.ToString()) ? null : e.Value.ToString()">
+                                                <option value="">-- Seciniz --</option>
+                                                @foreach (var k in kapasiteSecenekleri)
+                                                {
+                                                    <option value="@k.Label">@k.Label</option>
+                                                }
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <select class="form-select form-select-sm" value="@(kalem.AracId?.ToString() ?? "")"
+                                                    @onchange="async e => await SeferAracDegisti(kalem, int.TryParse(e.Value?.ToString(), out var aid) ? aid : (int?)null)">
+                                                <option value="">-- Seciniz --</option>
+                                                @foreach (var arac in araclar.OrderBy(a => a.AktifPlaka))
+                                                {
+                                                    if (!string.IsNullOrWhiteSpace(arac.AktifPlaka))
+                                                    {
+                                                        var ek = arac.SahiplikTipi == AracSahiplikTipi.Tedarikci ? " [T]" : "";
+                                                        <option value="@arac.Id">@(arac.AktifPlaka)@ek</option>
+                                                    }
+                                                }
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <input type="text" class="form-control form-control-sm" value="@kalem.SoforAd"
+                                                   @onchange="e => kalem.SoforAd = e.Value?.ToString()" />
+                                        </td>
+                                        <td>
+                                            <input type="text" class="form-control form-control-sm" value="@kalem.SoforTelefon"
+                                                   @onchange="e => kalem.SoforTelefon = e.Value?.ToString()" />
+                                        </td>
+                                        <td>
+                                            <input type="text" class="form-control form-control-sm" value="@kalem.Firma"
+                                                   @onchange="e => kalem.Firma = e.Value?.ToString()" />
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(kayitHataMesaji))
+                {
+                    <div class="alert alert-danger py-2">
+                        <i class="bi bi-exclamation-triangle me-1"></i>@kayitHataMesaji
+                    </div>
+                }
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary" disabled="@kaydediliyor">
+                        <i class="bi bi-check-lg me-1"></i>@(kaydediliyor ? "Kaydediliyor..." : "Kaydet")
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="Geri" disabled="@kaydediliyor">
+                        <i class="bi bi-x-lg me-1"></i>İptal
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@if (showFirmaDegisiklikModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title"><i class="bi bi-building-exclamation me-2"></i>Firma Değişikliği</h5>
+                    <button type="button" class="btn-close" @onclick="FirmaDegisiklikIptal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Güzergah başka bir firmaya taşınıyor.</p>
+
+                    @if (transferItems == null)
+                    {
+                        <div class="d-grid gap-2">
+                            <button type="button" class="btn btn-primary" @onclick="FirmaTransferListele">
+                                <i class="bi bi-list-check me-1"></i>Taşınacak Verileri Listele
+                            </button>
+                        </div>
+                    }
+                    else if (!transferItems.Any())
+                    {
+                        <p class="text-muted">Taşınacak ek veri bulunamadı. Sadece güzergah kaydı taşınacak.</p>
+                        <div class="d-grid gap-2">
+                            <button type="button" class="btn btn-primary" @onclick="FirmaTasinsinOnay">
+                                <i class="bi bi-check-lg me-1"></i>Onayla ve Taşı
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="fw-bold">Taşınacak veriler (seçiniz):</p>
+                        @foreach (var item in transferItems)
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" checked="@item.Selected"
+                                       @onchange="e => item.Selected = (bool)(e.Value ?? false)" id="@item.Key" />
+                                <label class="form-check-label" for="@item.Key">@item.Label</label>
+                            </div>
+                        }
+                        <div class="d-flex gap-2 mt-3">
+                            <button type="button" class="btn btn-primary" @onclick="FirmaTasinsinOnay">
+                                <i class="bi bi-check-lg me-1"></i>Seçilenleri Taşı
+                            </button>
+                            <button type="button" class="btn btn-outline-primary" @onclick="FirmaKopyalansinOnay">
+                                <i class="bi bi-calendar-check me-1"></i>Bugünden Sonra Kopyala
+                            </button>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="FirmaDegisiklikIptal">İptal</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int? Id { get; set; }
+
+    [SupplyParameterFromQuery]
+    public int? Kopyala { get; set; }
+
+    private Guzergah guzergah = new();
+    private List<Cari> cariler = new();
+    private List<Kurum> kurumlar = new();
+    private List<Arac> araclar = new();
+    private List<Sofor> soforler = new();
+    private List<MKFiloServis.Shared.Entities.Firma> firmalar = new();
+    private Dictionary<int, PersonelAracInfo> aktifAracSoforMap = new();
+    private string? kayitHataMesaji;
+    private bool kaydediliyor;
+    private int? orijinalFirmaId;
+    private bool showFirmaDegisiklikModal;
+    private List<TransferableItem>? transferItems;
+    private string? secilenSoforBilgisi;
+    private string? secilenSoforTelefon;
+    private string? secilenSoforFirma;
+    private string? secilenAracTedarikci;
+    private string? secilenAracTedarikciTelefon;
+    private string? secilenAracPlakaBilgi;
+    private bool seferTipiDegistiUyarisi;
+    private int secilenKurumId;
+    private List<SeferKalem> seferKalemleri = new();
+    private bool secilenKurumCariYok;
+    private string kurumArama = string.Empty;
+    private List<Kurum> kurumOnerileri = new();
+    private List<(int Value, string Label)> kapasiteSecenekleri = new();
+
+    private async Task YukleKapasitelerAsync()
+    {
+        try
+        {
+            var aktifKapasiteler = await KapasiteService.GetActiveAsync();
+            kapasiteSecenekleri = aktifKapasiteler
+                .Select(k =>
+                {
+                    var ad = (k.KapasiteAdi ?? string.Empty).Trim();
+                    var rakam = new string(ad.Where(char.IsDigit).ToArray());
+                    int.TryParse(rakam, out var v);
+                    return (Value: v, Label: ad);
+                })
+                .Where(x => x.Value > 0)
+                .GroupBy(x => x.Value)
+                .Select(g => g.First())
+                .OrderBy(x => x.Value)
+                .ToList();
+        }
+        catch
+        {
+            kapasiteSecenekleri = new();
+        }
+    }
+
+    private void KapasiteSecildi(ChangeEventArgs e)
+    {
+        var ad = e.Value?.ToString();
+        guzergah.KapasiteAdi = string.IsNullOrWhiteSpace(ad) ? null : ad;
+        // Geriye dönük uyumluluk: PersonelSayisi'yı seçilen kapasite adının ilk sayısından türet
+        if (!string.IsNullOrWhiteSpace(ad))
+        {
+            var secim = kapasiteSecenekleri.FirstOrDefault(x => x.Label == ad);
+            guzergah.PersonelSayisi = secim.Value > 0 ? secim.Value : guzergah.PersonelSayisi;
+        }
+        else
+        {
+            guzergah.PersonelSayisi = 0;
+        }
+    }
+
+    // Cari seçimi (kurumdan bağımsız)
+    private string cariArama = string.Empty;
+    private List<Cari> cariOnerileri = new();
+    private bool IsEdit => Id.HasValue;
+
+    // Harita değişkenleri
+    private HaritaGosterici? harita;
+    private bool haritaAcik = false;
+    private string koordinatSecimModu = "baslangic";
+
+    protected override async Task OnInitializedAsync()
+    {
+        cariler = await CariService.GetAllAsync();
+        kurumlar = await KurumService.GetAktifAsync();
+        araclar = await AracService.GetActiveAsync();
+        soforler = await SoforService.GetActiveAsync();
+        firmalar = await FirmaService.GetAktifFirmalarAsync();
+        await YukleKapasitelerAsync();
+        await YukleAktifAracSoforMapAsync();
+
+        if (IsEdit)
+        {
+            var existing = await GuzergahService.GetByIdAsync(Id!.Value);
+            if (existing != null)
+            {
+                guzergah = existing;
+                orijinalFirmaId = existing.FirmaId;
+                // Koordinatlar varsa haritayı aç
+                if (guzergah.BaslangicLatitude.HasValue || guzergah.BitisLatitude.HasValue)
+                {
+                    haritaAcik = true;
+                }
+            }
+            else
+            {
+                Navigation.NavigateTo("/guzergahlar");
+            }
+        }
+        else if (Kopyala.HasValue && Kopyala.Value > 0)
+        {
+            // Kopyalama: mevcut guzergah verilerini yeni kayda kopyala
+            var kaynak = await GuzergahService.GetByIdAsync(Kopyala.Value);
+            if (kaynak != null)
+            {
+                guzergah = kaynak;
+                guzergah.Id = 0; // Yeni kayit olustur
+                guzergah.CreatedAt = DateTime.UtcNow;
+                guzergah.UpdatedAt = null;
+                var firmaId = AktifFirmaProvider.Mevcut.FirmaId;
+                guzergah.GuzergahKodu = firmaId > 0
+                    ? await GuzergahService.GenerateGuzergahKoduAsync(firmaId)
+                    : await GuzergahService.GenerateNextKodAsync();
+            }
+            else
+            {
+                Navigation.NavigateTo("/guzergahlar");
+            }
+        }
+        else
+        {
+            var firmaId = AktifFirmaProvider.Mevcut.FirmaId;
+            guzergah.GuzergahKodu = firmaId > 0
+                ? await GuzergahService.GenerateGuzergahKoduAsync(firmaId)
+                : await GuzergahService.GenerateNextKodAsync();
+            guzergah.Aktif = true;
+            guzergah.RotaRengi = "#3388ff";
+        }
+
+        // Edit/kopyalama modunda secili degerlerin listede oldugundan emin ol
+        if (guzergah.VarsayilanAracId.HasValue && !araclar.Any(a => a.Id == guzergah.VarsayilanAracId.Value))
+        {
+            if (guzergah.VarsayilanArac != null) araclar.Add(guzergah.VarsayilanArac);
+        }
+        if (guzergah.VarsayilanSoforId.HasValue && !soforler.Any(s => s.Id == guzergah.VarsayilanSoforId.Value))
+        {
+            if (guzergah.VarsayilanSofor != null) soforler.Add(guzergah.VarsayilanSofor);
+        }
+
+        // Edit modunda mevcut değerleri KORU, üzerine yazma.
+        // AracSecimiDegistiAsync sadece kullanıcı select değiştirdiğinde çağrılır.
+        if (!IsEdit)
+        {
+            await AracSecimiDegistiAsync();
+        }
+        await SoforDegistiAsync();
+
+        // Mevcut sefer verisini yükle (edit modunda)
+        if (IsEdit)
+        {
+            var mevcutSeferler = await GuzergahSeferService.GetByGuzergahIdAsync(Id!.Value);
+            if (mevcutSeferler.Any())
+            {
+                seferKalemleri = mevcutSeferler.Select(s => new SeferKalem
+                {
+                    SeferTipi = s.SeferTipi,
+                    Slot = s.Slot,
+                    KapasiteAdi = s.KapasiteAdi,
+                    AracId = s.AracId,
+                    SoforAd = s.SoforAd,
+                    SoforTelefon = s.SoforTelefon,
+                    Firma = s.FirmaAdiSerbest
+                }).ToList();
+
+                // Eğer ana form alanları NULL ise, 1. seferden UI önerisi doldur
+                // (DB'deki ana alanı ezmez, sadece boşsa önerir)
+                var ilkSefer = seferKalemleri.First();
+                if (string.IsNullOrWhiteSpace(guzergah.KapasiteAdi) && !string.IsNullOrWhiteSpace(ilkSefer.KapasiteAdi))
+                {
+                    guzergah.KapasiteAdi = ilkSefer.KapasiteAdi;
+                    // PersonelSayisi'yi de kapasiteden türet
+                    var secim = kapasiteSecenekleri.FirstOrDefault(x => x.Label == ilkSefer.KapasiteAdi);
+                    if (secim.Value > 0) guzergah.PersonelSayisi = secim.Value;
+                }
+                if (!guzergah.VarsayilanAracId.HasValue && ilkSefer.AracId.HasValue)
+                {
+                    guzergah.VarsayilanAracId = ilkSefer.AracId.Value;
+                }
+                if (!guzergah.VarsayilanSoforId.HasValue && !string.IsNullOrWhiteSpace(ilkSefer.SoforAd))
+                {
+                    // Şoför adına göre eşleştir
+                    var eslesenSofor = soforler.FirstOrDefault(s =>
+                        string.Equals(s.TamAd, ilkSefer.SoforAd, StringComparison.OrdinalIgnoreCase));
+                    if (eslesenSofor != null)
+                    {
+                        guzergah.VarsayilanSoforId = eslesenSofor.Id;
+                    }
+                }
+            }
+            else
+            {
+                SeferleriniVarsayilanOlustur();
+            }
+        }
+        else
+        {
+            SeferleriniVarsayilanOlustur();
+        }
+
+        // Mevcut güzergahın KurumId/CariId'sinden kurumu/cariyi UI'da göster (edit modunda)
+        if (IsEdit)
+        {
+            // Kurum: önce KurumId, yoksa Cari bağı üzerinden bul
+            Kurum? mevcutKurum = null;
+            if (guzergah.KurumId.HasValue && guzergah.KurumId.Value > 0)
+            {
+                mevcutKurum = kurumlar.FirstOrDefault(k => k.Id == guzergah.KurumId.Value);
+                if (mevcutKurum == null)
+                {
+                    mevcutKurum = await KurumService.GetByIdAsync(guzergah.KurumId.Value);
+                    if (mevcutKurum != null && !kurumlar.Any(k => k.Id == mevcutKurum.Id))
+                    {
+                        kurumlar.Add(mevcutKurum);
+                    }
+                }
+            }
+            if (mevcutKurum == null && guzergah.CariId > 0)
+            {
+                mevcutKurum = kurumlar.FirstOrDefault(k => k.CariId == guzergah.CariId);
+            }
+            if (mevcutKurum != null)
+            {
+                secilenKurumId = mevcutKurum.Id;
+                kurumArama = mevcutKurum.KurumAdi;
+                guzergah.KurumId = mevcutKurum.Id;
+            }
+
+            if (guzergah.CariId > 0)
+            {
+                var mevcutCari = cariler.FirstOrDefault(c => c.Id == guzergah.CariId);
+                if (mevcutCari != null)
+                {
+                    cariArama = mevcutCari.Unvan;
+                }
+                else
+                {
+                    var dbCari = await CariService.GetByIdAsync(guzergah.CariId);
+                    if (dbCari != null)
+                    {
+                        cariArama = dbCari.Unvan;
+                        if (!cariler.Any(c => c.Id == dbCari.Id))
+                        {
+                            cariler.Add(dbCari);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private void KurumAramaGuncelle(ChangeEventArgs e)
+    {
+        kurumArama = e?.Value?.ToString() ?? string.Empty;
+        secilenKurumId = 0;
+        guzergah.KurumId = null;
+        secilenKurumCariYok = false;
+
+        if (string.IsNullOrWhiteSpace(kurumArama))
+        {
+            kurumOnerileri = new();
+            return;
+        }
+
+        kurumOnerileri = kurumlar
+            .Where(k => (k.KurumAdi ?? string.Empty).Contains(kurumArama, StringComparison.OrdinalIgnoreCase)
+                     || (k.UnvanTam ?? string.Empty).Contains(kurumArama, StringComparison.OrdinalIgnoreCase))
+            .Take(15)
+            .ToList();
+    }
+
+    private void KurumAramaFocus()
+    {
+        if (secilenKurumId == 0 && !kurumOnerileri.Any())
+        {
+            kurumOnerileri = kurumlar.Take(15).ToList();
+        }
+    }
+
+    private void KurumSec(Kurum kurum)
+    {
+        secilenKurumId = kurum.Id;
+        guzergah.KurumId = kurum.Id;
+        kurumArama = kurum.KurumAdi;
+        kurumOnerileri = new();
+        secilenKurumCariYok = !(kurum.CariId.HasValue && kurum.CariId.Value > 0);
+
+        // Kullanıcı henüz bir cari seçmediyse, kuruma bağlı varsayılan cariyi öneri olarak doldur
+        if (guzergah.CariId == 0 && kurum.CariId.HasValue && kurum.CariId.Value > 0)
+        {
+            var bagli = cariler.FirstOrDefault(c => c.Id == kurum.CariId.Value);
+            if (bagli != null)
+            {
+                guzergah.CariId = bagli.Id;
+                cariArama = bagli.Unvan;
+            }
+        }
+    }
+
+    private void KurumTemizle()
+    {
+        secilenKurumId = 0;
+        guzergah.KurumId = null;
+        secilenKurumCariYok = false;
+        kurumArama = string.Empty;
+        kurumOnerileri = new();
+    }
+
+    private void CariAramaGuncelle(ChangeEventArgs e)
+    {
+        cariArama = e?.Value?.ToString() ?? string.Empty;
+        guzergah.CariId = 0;
+
+        if (string.IsNullOrWhiteSpace(cariArama))
+        {
+            cariOnerileri = new();
+            return;
+        }
+
+        cariOnerileri = cariler
+            .Where(c => (c.Unvan ?? string.Empty).Contains(cariArama, StringComparison.OrdinalIgnoreCase)
+                     || (c.CariKodu ?? string.Empty).Contains(cariArama, StringComparison.OrdinalIgnoreCase))
+            .Take(15)
+            .ToList();
+    }
+
+    private void CariAramaFocus()
+    {
+        if (guzergah.CariId == 0 && !cariOnerileri.Any())
+        {
+            cariOnerileri = cariler.Take(15).ToList();
+        }
+    }
+
+    private void CariSec(Cari cari)
+    {
+        guzergah.CariId = cari.Id;
+        cariArama = cari.Unvan;
+        cariOnerileri = new();
+    }
+
+    private void CariTemizle()
+    {
+        guzergah.CariId = 0;
+        cariArama = string.Empty;
+        cariOnerileri = new();
+    }
+
+    private Task KurumDegistiAsync()
+    {
+        secilenKurumCariYok = false;
+        if (secilenKurumId <= 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        var kurum = kurumlar.FirstOrDefault(k => k.Id == secilenKurumId);
+        if (kurum == null) return Task.CompletedTask;
+
+        if (!(kurum.CariId.HasValue && kurum.CariId.Value > 0))
+        {
+            secilenKurumCariYok = true;
+        }
+        return Task.CompletedTask;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (haritaAcik && harita != null && IsEdit)
+        {
+            await GosterMevcutKoordinatlar();
+        }
+    }
+
+    private async Task ToggleHarita()
+    {
+        haritaAcik = !haritaAcik;
+        StateHasChanged();
+
+        if (haritaAcik && harita != null)
+        {
+            await Task.Delay(100);
+            await harita.InvalidateSizeAsync();
+            await GosterMevcutKoordinatlar();
+        }
+    }
+
+    private async Task OnKoordinatSecildi((double Lat, double Lng) koordinat)
+    {
+        if (koordinatSecimModu == "baslangic")
+        {
+            guzergah.BaslangicLatitude = koordinat.Lat;
+            guzergah.BaslangicLongitude = koordinat.Lng;
+            if (harita != null)
+            {
+                await harita.ShowSelectionMarkerAsync(koordinat.Lat, koordinat.Lng, true);
+            }
+            // Otomatik olarak bitiş seçimine geç
+            koordinatSecimModu = "bitis";
+        }
+        else
+        {
+            guzergah.BitisLatitude = koordinat.Lat;
+            guzergah.BitisLongitude = koordinat.Lng;
+            if (harita != null)
+            {
+                await harita.ShowSelectionMarkerAsync(koordinat.Lat, koordinat.Lng, false);
+            }
+        }
+
+        StateHasChanged();
+
+        // Her iki koordinat da seçildiyse rotayı göster
+        if (guzergah.BaslangicLatitude.HasValue && guzergah.BitisLatitude.HasValue)
+        {
+            await RotayiGoster();
+        }
+    }
+
+    private async Task GosterMevcutKoordinatlar()
+    {
+        if (harita == null) return;
+
+        await harita.ClearMapAsync();
+
+        if (guzergah.BaslangicLatitude.HasValue && guzergah.BaslangicLongitude.HasValue)
+        {
+            await harita.AddStartMarkerAsync(
+                guzergah.BaslangicLatitude.Value, 
+                guzergah.BaslangicLongitude.Value, 
+                guzergah.BaslangicNoktasi ?? "Başlangıç");
+        }
+
+        if (guzergah.BitisLatitude.HasValue && guzergah.BitisLongitude.HasValue)
+        {
+            await harita.AddEndMarkerAsync(
+                guzergah.BitisLatitude.Value, 
+                guzergah.BitisLongitude.Value, 
+                guzergah.BitisNoktasi ?? "Bitiş");
+        }
+
+        if (guzergah.BaslangicLatitude.HasValue && guzergah.BitisLatitude.HasValue)
+        {
+            await harita.AddRouteAsync(
+                guzergah.BaslangicLatitude.Value,
+                guzergah.BaslangicLongitude!.Value,
+                guzergah.BitisLatitude.Value,
+                guzergah.BitisLongitude!.Value,
+                guzergah.RotaRengi);
+
+            await harita.FitBoundsAsync();
+        }
+    }
+
+    private async Task RotayiGoster()
+    {
+        if (harita == null) return;
+        await GosterMevcutKoordinatlar();
+    }
+
+    private async Task KoordinatlariTemizle()
+    {
+        guzergah.BaslangicLatitude = null;
+        guzergah.BaslangicLongitude = null;
+        guzergah.BitisLatitude = null;
+        guzergah.BitisLongitude = null;
+        koordinatSecimModu = "baslangic";
+
+        if (harita != null)
+        {
+            await harita.ClearMapAsync();
+        }
+
+        StateHasChanged();
+    }
+
+    private bool _kaydetGuard;
+
+    private async Task Kaydet()
+    {
+        // Double-submit guard
+        if (_kaydetGuard) return;
+        _kaydetGuard = true;
+
+        try
+        {
+            await KaydetCore();
+        }
+        finally
+        {
+            _kaydetGuard = false;
+        }
+    }
+
+    private async Task KaydetCore()
+    {
+        kayitHataMesaji = null;
+
+        if (string.IsNullOrWhiteSpace(guzergah.GuzergahAdi))
+        {
+            kayitHataMesaji = "Güzergah Adı zorunludur.";
+            return;
+        }
+        var kurumId = guzergah.KurumId > 0 ? guzergah.KurumId : (secilenKurumId > 0 ? secilenKurumId : (int?)null);
+        if (!kurumId.HasValue)
+        {
+            kayitHataMesaji = "Kurum / Müşteri Kartı seçimi zorunludur. Lütfen listeden bir kurum seçin.";
+            return;
+        }
+        guzergah.KurumId = kurumId.Value;
+        secilenKurumId = kurumId.Value;
+
+        if (guzergah.CariId == 0)
+        {
+            kayitHataMesaji = "Cari Kartı seçimi zorunludur. Lütfen listeden bir cari seçin.";
+            return;
+        }
+        if (guzergah.GelirFiyat < 0 || guzergah.GiderFiyat < 0)
+        {
+            kayitHataMesaji = "Gelir/Gider fiyatı negatif olamaz.";
+            return;
+        }
+        if (guzergah.PuantajCarpani <= 0 || guzergah.PuantajCarpani > 10)
+        {
+            kayitHataMesaji = "Puantaj çarpanı 0'dan büyük ve 10'dan küçük veya eşit olmalıdır.";
+            return;
+        }
+
+        // Firma görünürlüğü için kayıt öncesi kesin firma ataması
+        if (!guzergah.FirmaId.HasValue || guzergah.FirmaId.Value <= 0)
+        {
+            var aktifFirmaId = AktifFirmaProvider.AktifFirmaId ?? AktifFirmaProvider.Mevcut.FirmaId;
+            if (aktifFirmaId > 0)
+            {
+                guzergah.FirmaId = aktifFirmaId;
+            }
+        }
+
+        if (!guzergah.FirmaId.HasValue || guzergah.FirmaId.Value <= 0)
+        {
+            kayitHataMesaji = "Aktif firma bulunamadı. Lütfen önce firma seçimi yapıp tekrar deneyin.";
+            return;
+        }
+
+        // Koordinat validasyonu (enlem: -90..90, boylam: -180..180)
+        if (guzergah.BaslangicLatitude.HasValue && (guzergah.BaslangicLatitude < -90 || guzergah.BaslangicLatitude > 90))
+        {
+            kayitHataMesaji = "Başlangıç enlemi -90 ile 90 arasında olmalıdır.";
+            return;
+        }
+        if (guzergah.BaslangicLongitude.HasValue && (guzergah.BaslangicLongitude < -180 || guzergah.BaslangicLongitude > 180))
+        {
+            kayitHataMesaji = "Başlangıç boylamı -180 ile 180 arasında olmalıdır.";
+            return;
+        }
+        if (guzergah.BitisLatitude.HasValue && (guzergah.BitisLatitude < -90 || guzergah.BitisLatitude > 90))
+        {
+            kayitHataMesaji = "Bitiş enlemi -90 ile 90 arasında olmalıdır.";
+            return;
+        }
+        if (guzergah.BitisLongitude.HasValue && (guzergah.BitisLongitude < -180 || guzergah.BitisLongitude > 180))
+        {
+            kayitHataMesaji = "Bitiş boylamı -180 ile 180 arasında olmalıdır.";
+            return;
+        }
+
+        // Firma degisti mi?
+        if (IsEdit && orijinalFirmaId.HasValue && guzergah.FirmaId != orijinalFirmaId)
+        {
+            showFirmaDegisiklikModal = true;
+            return;
+        }
+
+        // ── Pre-save guard: UI sefer sayısı tutarlılığı ──
+        if (seferKalemleri.Count != seferKalemleri.Distinct().Count())
+        {
+            kayitHataMesaji = $"Sefer listesinde duplicate kayıt var! Liste={seferKalemleri.Count}, Unique={seferKalemleri.Distinct().Count()}";
+            return;
+        }
+
+        try
+        {
+            kaydediliyor = true;
+            SeferSlotlariGuncelle();
+
+            var firmaId = guzergah.FirmaId > 0 ? guzergah.FirmaId : AktifFirmaProvider.AktifFirmaId;
+            var seferEntities = seferKalemleri.Select(k => new GuzergahSefer
+            {
+                GuzergahId = guzergah.Id,
+                FirmaId = firmaId,
+                SeferTipi = k.SeferTipi,
+                Slot = k.Slot,
+                KapasiteAdi = k.KapasiteAdi,
+                AracId = k.AracId,
+                SoforAd = k.SoforAd,
+                SoforTelefon = k.SoforTelefon,
+                FirmaAdiSerbest = k.Firma
+            }).ToList();
+
+            if (IsEdit)
+            {
+                // TEK TRANSACTION: ana kayıt + seferler birlikte
+                await GuzergahService.UpdateWithSeferlerAsync(guzergah, seferEntities);
+            }
+            else
+            {
+                await GuzergahService.CreateAsync(guzergah);
+                await GuzergahSeferService.ReplaceAllAsync(guzergah.Id, seferEntities);
+            }
+
+            // Degisiklik uyarisi: Planlama ve Puantaj modullerinde guncelleme hatirlatmasi
+            DegisiklikUyari.DegisiklikKaydet(guzergah.Id);
+
+            Navigation.NavigateTo("/guzergahlar");
+        }
+        catch (Exception ex)
+        {
+            var innerMsg = ex.InnerException?.Message ?? ex.Message;
+            kayitHataMesaji = $"Kayit sirasinda hata: {innerMsg}";
+        }
+        finally
+        {
+            kaydediliyor = false;
+        }
+    }
+
+    private async Task FirmaTransferListele()
+    {
+        transferItems = await FirmaTransferService.GetGuzergahTransferItemsAsync(guzergah.Id);
+    }
+
+    private void FirmaDegisiklikIptal()
+    {
+        showFirmaDegisiklikModal = false;
+        guzergah.FirmaId = orijinalFirmaId;
+        transferItems = null;
+    }
+
+    private async Task FirmaTasinsinOnay()
+    {
+        var selectedKeys = transferItems?.Where(t => t.Selected).Select(t => t.Key).ToList() ?? new List<string>();
+        var (moved, errors) = await FirmaTransferService.MoveGuzergahToFirmaAsync(guzergah.Id, guzergah.FirmaId!.Value, selectedKeys);
+        showFirmaDegisiklikModal = false;
+        transferItems = null;
+        if (errors.Any())
+            kayitHataMesaji = $"Taşıma sırasında hata: {string.Join("; ", errors)}";
+        else
+            Navigation.NavigateTo("/guzergahlar");
+    }
+
+    private async Task FirmaKopyalansinOnay()
+    {
+        var selectedKeys = transferItems?.Where(t => t.Selected).Select(t => t.Key).ToList() ?? new List<string>();
+        var (moved, errors) = await FirmaTransferService.MoveGuzergahToFirmaAsync(guzergah.Id, guzergah.FirmaId!.Value, selectedKeys);
+        showFirmaDegisiklikModal = false;
+        transferItems = null;
+        if (errors.Any())
+            kayitHataMesaji = $"Kopyalama sırasında hata: {string.Join("; ", errors)}";
+        else
+            Navigation.NavigateTo("/guzergahlar");
+    }
+
+    private async Task KaydetInternal()
+    {
+        try
+        {
+            kaydediliyor = true;
+            if (IsEdit)
+                await GuzergahService.UpdateAsync(guzergah);
+            else
+                await GuzergahService.CreateAsync(guzergah);
+
+            var firmaId = guzergah.FirmaId > 0 ? guzergah.FirmaId : AktifFirmaProvider.AktifFirmaId;
+            var seferEntities = seferKalemleri.Select(k => new GuzergahSefer
+            {
+                GuzergahId = guzergah.Id,
+                FirmaId = firmaId,
+                SeferTipi = k.SeferTipi,
+                Slot = k.Slot,
+                KapasiteAdi = k.KapasiteAdi,
+                AracId = k.AracId,
+                SoforAd = k.SoforAd,
+                SoforTelefon = k.SoforTelefon,
+                FirmaAdiSerbest = k.Firma
+            }).ToList();
+            await GuzergahSeferService.ReplaceAllAsync(guzergah.Id, seferEntities);
+
+            DegisiklikUyari.DegisiklikKaydet(guzergah.Id);
+            Navigation.NavigateTo("/guzergahlar");
+        }
+        catch (Exception ex)
+        {
+            kayitHataMesaji = $"Kayit sirasinda hata: {ex.InnerException?.Message ?? ex.Message}";
+        }
+        finally { kaydediliyor = false; }
+    }
+
+    private void PlanlamadaGor()
+    {
+        if (!IsEdit || Id == null || Id <= 0) return;
+        Navigation.NavigateTo($"/filo-gunluk-puantaj");
+    }
+
+    private void Geri()
+    {
+        Navigation.NavigateTo("/guzergahlar");
+    }
+
+    private async Task YukleAktifAracSoforMapAsync()
+    {
+        await using var context = await DbContextFactory.CreateDbContextAsync();
+
+        var atamalar = await context.PersonelAracAtamalari
+            .AsNoTracking()
+            .Where(a => !a.IsDeleted && a.Aktif)
+            .Where(a => a.BitisTarihi == null || a.BitisTarihi >= DateTime.Today)
+            .Include(a => a.Sofor)
+                .ThenInclude(s => s.Firma)
+            .OrderByDescending(a => a.BaslangicTarihi)
+            .ToListAsync();
+
+        aktifAracSoforMap = atamalar
+            .GroupBy(a => a.AracId)
+            .Select(g => g.First())
+            .ToDictionary(
+                a => a.AracId,
+                a => new PersonelAracInfo(
+                    a.SoforId,
+                    a.Sofor.TamAd,
+                    a.Sofor.Telefon,
+                    a.Sofor.Firma?.FirmaAdi));
+    }
+
+    private async Task AracSecimiDegistiAsync()
+    {
+        secilenAracTedarikci = null;
+        secilenAracTedarikciTelefon = null;
+        secilenAracPlakaBilgi = null;
+
+        if (!guzergah.VarsayilanAracId.HasValue)
+        {
+            return;
+        }
+
+        var arac = araclar.FirstOrDefault(a => a.Id == guzergah.VarsayilanAracId.Value);
+        if (arac != null && arac.SahiplikTipi == AracSahiplikTipi.Tedarikci && arac.TasimaTedarikciId.HasValue)
+        {
+            secilenAracPlakaBilgi = arac.Plaka;
+            await using var ctx = await DbContextFactory.CreateDbContextAsync();
+            var tedarikci = await ctx.TasimaTedarikciler.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == arac.TasimaTedarikciId.Value);
+            if (tedarikci != null)
+            {
+                secilenAracTedarikci = string.IsNullOrWhiteSpace(tedarikci.YetkiliKisi)
+                    ? tedarikci.Unvan
+                    : $"{tedarikci.Unvan} ({tedarikci.YetkiliKisi})";
+                secilenAracTedarikciTelefon = tedarikci.Telefon ?? tedarikci.Telefon2;
+            }
+        }
+
+        if (aktifAracSoforMap.TryGetValue(guzergah.VarsayilanAracId.Value, out var info))
+        {
+            guzergah.VarsayilanSoforId = info.SoforId;
+            secilenSoforBilgisi = info.AdSoyad;
+            secilenSoforTelefon = info.Telefon;
+            secilenSoforFirma = info.FirmaAdi;
+        }
+    }
+
+
+
+    private Task SoforDegistiAsync()
+    {
+        var secilen = soforler.FirstOrDefault(s => s.Id == guzergah.VarsayilanSoforId);
+        secilenSoforBilgisi = secilen?.TamAd;
+        secilenSoforTelefon = secilen?.Telefon;
+        secilenSoforFirma = secilen?.Firma?.FirmaAdi;
+        return Task.CompletedTask;
+    }
+
+    private Task SeferTipiDegistiAsync()
+    {
+        // SeferTipi bilgi mesaji (fiyat otomatik guncellenmez, kullanici manuel girer)
+        seferTipiDegistiUyarisi = true;
+        // SeferTipi değişince slot dağılımını yeniden hesapla
+        SeferSlotlariGuncelle();
+        return Task.CompletedTask;
+    }
+
+    private sealed record PersonelAracInfo(int SoforId, string AdSoyad, string? Telefon, string? FirmaAdi);
+
+    // ── Sefer yonetimi ────────────────────────────────────────────
+    private void SeferleriniVarsayilanOlustur()
+    {
+        seferKalemleri = new List<SeferKalem>
+        {
+            YeniSeferKalem(0),
+            YeniSeferKalem(1)
+        };
+    }
+
+    private SeferKalem YeniSeferKalem(int siraIndeks)
+    {
+        var siraNo = siraIndeks + 1;
+        return new SeferKalem
+        {
+            SeferTipi = guzergah.SeferTipi,
+            Slot = HesaplaSlot(guzergah.SeferTipi, siraNo),
+            KapasiteAdi = kapasiteSecenekleri.FirstOrDefault(k => k.Value == guzergah.PersonelSayisi).Label,
+            AracId = guzergah.VarsayilanAracId,
+            SoforAd = guzergah.VarsayilanSofor?.TamAd,
+            SoforTelefon = guzergah.VarsayilanSofor?.Telefon
+        };
+    }
+
+    private static SeferSlot HesaplaSlot(SeferTipi seferTipi, int siraNo)
+    {
+        return seferTipi switch
+        {
+            SeferTipi.Sabah => SeferSlot.Sabah,
+            SeferTipi.Aksam => SeferSlot.Aksam,
+            SeferTipi.SabahAksam => siraNo % 2 == 1 ? SeferSlot.Sabah : SeferSlot.Aksam,
+            _ => siraNo % 2 == 1 ? SeferSlot.Sabah : SeferSlot.Aksam
+        };
+    }
+
+    private void SeferSlotlariGuncelle()
+    {
+        for (int i = 0; i < seferKalemleri.Count; i++)
+        {
+            seferKalemleri[i].Slot = HesaplaSlot(guzergah.SeferTipi, i + 1);
+        }
+    }
+
+    private void SeferSayisiDegistir(int yeniSayi)
+    {
+        if (yeniSayi < 1) yeniSayi = 1;
+        if (yeniSayi > 50) yeniSayi = 50;
+        while (seferKalemleri.Count < yeniSayi)
+            seferKalemleri.Add(YeniSeferKalem(seferKalemleri.Count));
+        while (seferKalemleri.Count > yeniSayi)
+            seferKalemleri.RemoveAt(seferKalemleri.Count - 1);
+        SeferSlotlariGuncelle();
+    }
+
+    private void TumSeferlereUygula()
+    {
+        if (seferKalemleri.Count == 0) return;
+        var ilk = seferKalemleri[0];
+        for (int i = 1; i < seferKalemleri.Count; i++)
+        {
+            seferKalemleri[i] = new SeferKalem
+            {
+                SeferTipi = ilk.SeferTipi,
+                KapasiteAdi = ilk.KapasiteAdi,
+                AracId = ilk.AracId,
+                SoforAd = ilk.SoforAd,
+                SoforTelefon = ilk.SoforTelefon,
+                Firma = ilk.Firma
+            };
+        }
+        // Slot'ları SeferTipi'ne göre yeniden hesapla — kopyalanmamalı!
+        SeferSlotlariGuncelle();
+    }
+
+    private async Task SeferAracDegisti(SeferKalem kalem, int? aracId)
+    {
+        kalem.AracId = aracId;
+        kalem.SoforAd = null;
+        kalem.SoforTelefon = null;
+        kalem.Firma = null;
+        if (!aracId.HasValue) return;
+        try
+        {
+            await using var ctx = await DbContextFactory.CreateDbContextAsync();
+            var arac = await ctx.Araclar.AsNoTracking()
+                .Include(a => a.KiralikCari)
+                .Include(a => a.KomisyoncuCari)
+                .FirstOrDefaultAsync(a => a.Id == aracId.Value);
+            if (arac == null) return;
+            if (arac.SahiplikTipi == AracSahiplikTipi.Tedarikci)
+            {
+                kalem.Firma = arac.KiralikCari?.Unvan ?? arac.KomisyoncuCari?.Unvan;
+                var eslesme = await ctx.Set<FiloGuzergahEslestirme>()
+                    .AsNoTracking()
+                    .Where(e => e.AracId == aracId.Value && !e.IsDeleted)
+                    .OrderByDescending(e => e.Id)
+                    .FirstOrDefaultAsync();
+                if (eslesme != null)
+                {
+                    var sofor = await ctx.Soforler.AsNoTracking().FirstOrDefaultAsync(s => s.Id == eslesme.SoforId);
+                    if (sofor != null) { kalem.SoforAd = sofor.TamAd; kalem.SoforTelefon = sofor.Telefon; }
+                }
+            }
+            else if (aktifAracSoforMap.TryGetValue(aracId.Value, out var info))
+            {
+                kalem.SoforAd = info.AdSoyad;
+                kalem.SoforTelefon = info.Telefon;
+            }
+        }
+        catch { }
+        StateHasChanged();
+    }
+
+    private class SeferKalem
+    {
+        public SeferTipi SeferTipi { get; set; } = SeferTipi.SabahAksam;
+        public SeferSlot Slot { get; set; } = SeferSlot.Sabah;
+        public string? KapasiteAdi { get; set; }
+        public int? AracId { get; set; }
+        public string? SoforAd { get; set; }
+        public string? SoforTelefon { get; set; }
+        public string? Firma { get; set; }
+    }
+}
+

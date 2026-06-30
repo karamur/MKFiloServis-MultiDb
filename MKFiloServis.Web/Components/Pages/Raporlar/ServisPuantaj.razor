@@ -1,0 +1,290 @@
+@page "/rapor/servis-puantaj"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IServisCalismaService ServisCalismaService
+@inject IToastService ToastService
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@rendermode InteractiveServer
+
+<PageTitle>Servis Araç Puantaj Listesi</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h3 class="mb-0"><i class="bi bi-calendar-grid-3x3 me-2 text-primary"></i>Aylık Servis Puantaj Listesi</h3>
+            <small class="text-muted">Toplu çalışma girişindeki araç, şoför ve güzergah kayıtlarından otomatik puantaj matrisi</small>
+        </div>
+        <button class="btn btn-secondary btn-sm" @onclick="Yenile" disabled="@isLoading">
+            <i class="bi bi-arrow-clockwise me-1"></i>Yenile
+        </button>
+    </div>
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-body py-2 bg-light">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small mb-1 fw-bold">Yıl</label>
+                    <select class="form-select form-select-sm" @bind="secilenYil">
+                        @for (int i = DateTime.Today.Year - 1; i <= DateTime.Today.Year + 1; i++)
+                        {
+                            <option value="@i">@i</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1 fw-bold">Ay</label>
+                    <select class="form-select form-select-sm" @bind="secilenAy">
+                        @for (int m = 1; m <= 12; m++)
+                        {
+                            <option value="@m">@m.ToString("D2")</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1 fw-bold">Vardiya Türü</label>
+                    <select class="form-select form-select-sm" @bind="secilenServisTuru">
+                        <option value="">Tümü</option>
+                        <option value="@((int)ServisTuru.Sabah)">Sabah</option>
+                        <option value="@((int)ServisTuru.Aksam)">Akşam</option>
+                        <option value="@((int)ServisTuru.SabahAksam)">Sabah + Akşam</option>
+                        <option value="@((int)ServisTuru.Ozel)">Özel</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small mb-1 fw-bold">Arama</label>
+                    <input type="text" class="form-control form-control-sm" @bind="aramaMetni" placeholder="Plaka, şoför, güzergah veya kurum..." />
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary btn-sm w-100" @onclick="Yenile" disabled="@isLoading">
+                        <i class="bi bi-search me-1"></i>Listele
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="card shadow-sm">
+            <div class="card-body text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+                <div class="mt-2 text-muted">Puantaj verileri yükleniyor...</div>
+            </div>
+        </div>
+    }
+    else if (!puantajSatirlari.Any())
+    {
+        <div class="alert alert-info shadow-sm">
+            Seçilen ay için puantaj verisi bulunamadı. Önce `Toplu Servis Çalışması Girişi` ekranından kayıt oluşturun.
+        </div>
+    }
+    else
+    {
+        var gunSayisi = DateTime.DaysInMonth(secilenYil, secilenAy);
+
+        <div class="card shadow-sm">
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 60vh;">
+                    <table class="table table-bordered table-hover table-sm text-center mb-0 align-middle">
+                        <thead class="table-dark sticky-top">
+                            <tr>
+                                <th class="align-middle text-start" style="min-width: 140px; position: sticky; left: 0; z-index: 2; background-color: #212529;">Araç Plakası</th>
+                                <th class="align-middle text-start" style="min-width: 260px; position: sticky; left: 140px; z-index: 2; background-color: #212529;">Şoför / Güzergah / Kurum</th>
+
+                                @for (int gun = 1; gun <= gunSayisi; gun++)
+                                {
+                                    var date = new DateTime(secilenYil, secilenAy, gun);
+                                    var isWeekend = date.DayOfWeek == DayOfWeek.Saturday || date.DayOfWeek == DayOfWeek.Sunday;
+                                    <th style="width: 35px; @(isWeekend ? "background-color: #c79595; color: white;" : "")" title="@date.ToString("dd MMMM dddd")">
+                                        @gun<br /><small style="font-size:10px;">@date.ToString("ddd").Substring(0, 2)</small>
+                                    </th>
+                                }
+                                <th class="align-middle bg-primary text-white" style="min-width: 70px;">Toplam Gün</th>
+                                <th class="align-middle bg-success text-white" style="min-width: 110px;">Hakediş</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var satir in puantajSatirlari)
+                            {
+                                <tr>
+                                    <td class="text-start fw-bold" style="position: sticky; left: 0; background-color: white; z-index: 1;">@satir.Plaka</td>
+                                    <td class="text-start" style="position: sticky; left: 140px; background-color: white; z-index: 1;">
+                                        <div class="fw-semibold">@satir.SoforAdi</div>
+                                        <small class="text-muted d-block">@satir.GuzergahAdi</small>
+                                        <small class="text-primary d-block">@satir.KurumAdi - @GetServisTuruText(satir.ServisTuru)</small>
+                                    </td>
+
+                                    @for (int gun = 1; gun <= gunSayisi; gun++)
+                                    {
+                                        var date = new DateTime(secilenYil, secilenAy, gun);
+                                        var isWeekend = date.DayOfWeek == DayOfWeek.Saturday || date.DayOfWeek == DayOfWeek.Sunday;
+                                        var hucreMetni = GetHucreMetni(satir, gun);
+
+                                        <td class="fw-bold" style="background-color: @(isWeekend ? "#fdf2f2" : "transparent");" title="@GetHucreAciklamasi(satir, gun)">
+                                            @hucreMetni
+                                        </td>
+                                    }
+
+                                    <td class="fw-bold fs-6 text-primary">@satir.CalisilanGun</td>
+                                    <td class="text-success fw-bold text-end pe-2" style="font-size: 13px;">@satir.Hakedis.ToString("N2")</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-light fw-bold">
+                            <tr>
+                                <td colspan="@(gunSayisi + 2)" class="text-end">GENEL TOPLAM</td>
+                                <td class="text-primary">@puantajSatirlari.Sum(x => x.CalisilanGun)</td>
+                                <td class="text-success text-end pe-2">@puantajSatirlari.Sum(x => x.Hakedis).ToString("N2")</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <div class="card-footer bg-light p-2 d-flex justify-content-between align-items-center">
+                    <small class="text-muted"><i class="bi bi-info-circle me-1"></i><strong>X</strong>=çalıştı, <strong>2+</strong>=aynı gün birden fazla kayıt var</small>
+                    <small class="text-muted">Toplam satır: <strong>@puantajSatirlari.Count</strong></small>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private int secilenYil = DateTime.Today.Year;
+    private int secilenAy = DateTime.Today.Month;
+    private string secilenServisTuru = string.Empty;
+    private string aramaMetni = string.Empty;
+    private bool isLoading;
+    private List<PuantajSatiri> puantajSatirlari = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Yenile();
+    }
+
+    private async Task Yenile()
+    {
+        isLoading = true;
+
+        try
+        {
+            var baslangic = new DateTime(secilenYil, secilenAy, 1);
+            var bitis = baslangic.AddMonths(1).AddDays(-1);
+
+            var kayitlar = await ServisCalismaService.FilterAsync(baslangic, bitis);
+
+            puantajSatirlari = kayitlar
+                .Where(x => x.Durum != CalismaDurum.IptalEdildi)
+                .Where(ServisTuruFiltrele)
+                .Where(AramaFiltrele)
+                .GroupBy(x => new { x.AracId, x.SoforId, x.GuzergahId, x.ServisTuru })
+                .Select(g => new PuantajSatiri
+                {
+                    Plaka = GetPlaka(g.First()),
+                    SoforAdi = g.First().Sofor?.TamAd ?? "-",
+                    GuzergahAdi = g.First().Guzergah?.GuzergahAdi ?? "-",
+                    KurumAdi = g.First().Guzergah?.Cari?.Unvan ?? "-",
+                    ServisTuru = g.Key.ServisTuru,
+                    CalisilanGun = g.Select(x => x.CalismaTarihi.Date).Distinct().Count(),
+                    Hakedis = g.Sum(GetKayitTutari),
+                    GunlukKayitlar = g
+                        .GroupBy(x => x.CalismaTarihi.Day)
+                        .ToDictionary(x => x.Key, x => x.OrderBy(y => y.CalismaTarihi).ToList())
+                })
+                .OrderBy(x => x.Plaka)
+                .ThenBy(x => x.SoforAdi)
+                .ThenBy(x => x.KurumAdi)
+                .ThenBy(x => x.GuzergahAdi)
+                .ToList();
+        }
+        catch
+        {
+            puantajSatirlari.Clear();
+            ToastService.ShowError("Servis puantajı yüklenirken hata oluştu.");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private bool ServisTuruFiltrele(ServisCalisma kayit)
+    {
+        if (string.IsNullOrWhiteSpace(secilenServisTuru))
+        {
+            return true;
+        }
+
+        return int.TryParse(secilenServisTuru, out var servisTuru)
+            && kayit.ServisTuru == (ServisTuru)servisTuru;
+    }
+
+    private bool AramaFiltrele(ServisCalisma kayit)
+    {
+        if (string.IsNullOrWhiteSpace(aramaMetni))
+        {
+            return true;
+        }
+
+        var aranan = aramaMetni.Trim();
+
+        return Iceriyor(GetPlaka(kayit), aranan)
+            || Iceriyor(kayit.Sofor?.TamAd, aranan)
+            || Iceriyor(kayit.Guzergah?.GuzergahAdi, aranan)
+            || Iceriyor(kayit.Guzergah?.Cari?.Unvan, aranan);
+    }
+
+    private static bool Iceriyor(string? kaynak, string aranan)
+        => !string.IsNullOrWhiteSpace(kaynak) && kaynak.Contains(aranan, StringComparison.CurrentCultureIgnoreCase);
+
+    private static string GetPlaka(ServisCalisma kayit)
+        => kayit.Arac?.AktifPlaka
+            ?? kayit.Arac?.AktifPlakaKaydi?.Plaka
+            ?? $"Araç #{kayit.AracId}";
+
+    private static decimal GetKayitTutari(ServisCalisma kayit)
+        => kayit.Fiyat ?? kayit.Guzergah?.BirimFiyat ?? 0m;
+
+    private static string GetHucreMetni(PuantajSatiri satir, int gun)
+    {
+        if (!satir.GunlukKayitlar.TryGetValue(gun, out var kayitlar) || !kayitlar.Any())
+        {
+            return string.Empty;
+        }
+
+        return kayitlar.Count > 1 ? kayitlar.Count.ToString() : "X";
+    }
+
+    private static string GetHucreAciklamasi(PuantajSatiri satir, int gun)
+    {
+        if (!satir.GunlukKayitlar.TryGetValue(gun, out var kayitlar) || !kayitlar.Any())
+        {
+            return string.Empty;
+        }
+
+        return string.Join(" | ", kayitlar.Select(k =>
+            $"{k.CalismaTarihi:dd.MM.yyyy} - {GetServisTuruText(k.ServisTuru)} - {(string.IsNullOrWhiteSpace(k.Notlar) ? "Çalıştı" : k.Notlar)}"));
+    }
+
+    private static string GetServisTuruText(ServisTuru servisTuru) => servisTuru switch
+    {
+        ServisTuru.Sabah => "Sabah",
+        ServisTuru.Aksam => "Akşam",
+        ServisTuru.SabahAksam => "Sabah + Akşam",
+        ServisTuru.Ozel => "Özel",
+        _ => servisTuru.ToString()
+    };
+
+    private sealed class PuantajSatiri
+    {
+        public string Plaka { get; set; } = string.Empty;
+        public string SoforAdi { get; set; } = string.Empty;
+        public string GuzergahAdi { get; set; } = string.Empty;
+        public string KurumAdi { get; set; } = string.Empty;
+        public ServisTuru ServisTuru { get; set; }
+        public int CalisilanGun { get; set; }
+        public decimal Hakedis { get; set; }
+        public Dictionary<int, List<ServisCalisma>> GunlukKayitlar { get; set; } = new();
+    }
+}
+

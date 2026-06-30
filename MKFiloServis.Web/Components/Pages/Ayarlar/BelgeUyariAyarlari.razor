@@ -1,0 +1,370 @@
+@page "/ayarlar/belge-uyari"
+@rendermode InteractiveServer
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+@inject BelgeUyariAyarlariService AyarlariService
+@inject BelgeUyariBackgroundService BelgeUyariService
+@inject IWhatsAppService WhatsAppService
+@inject IToastService ToastService
+
+<PageTitle>Belge Uyarı Ayarları - Koa Filo Servis</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="mb-0"><i class="bi bi-shield-exclamation me-2 text-warning"></i>Belge Süresi Uyarı Ayarları</h3>
+            <small class="text-muted">E-posta ve WhatsApp ile otomatik belge yenileme hatırlatmaları</small>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-success" @onclick="ManuelCalistirAsync" disabled="@isManuelCalistiyor">
+                @if (isManuelCalistiyor)
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                }
+                else
+                {
+                    <i class="bi bi-play-fill me-1"></i>
+                }
+                Şimdi Çalıştır
+            </button>
+            <button class="btn btn-primary" @onclick="KaydetAsync" disabled="@isKaydediliyor">
+                @if (isKaydediliyor)
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                }
+                else
+                {
+                    <i class="bi bi-check-lg me-1"></i>
+                }
+                Kaydet
+            </button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="d-flex justify-content-center p-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+        </div>
+    }
+    else if (ayarlar != null)
+    {
+        <div class="row g-4">
+
+            <!-- Sol kolon: Ayarlar -->
+            <div class="col-lg-5">
+
+                <!-- E-posta Ayarları -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <i class="bi bi-envelope-fill me-2"></i>E-posta Bildirimleri
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="emailEnabled" @bind="ayarlar.EmailEnabled">
+                            <label class="form-check-label fw-semibold" for="emailEnabled">
+                                E-posta ile belge uyarısı gönder
+                            </label>
+                        </div>
+                        @if (ayarlar.EmailEnabled)
+                        {
+                            <div class="alert alert-info py-2 small">
+                                <i class="bi bi-info-circle me-1"></i>
+                                E-postalar sistemdeki <strong>Admin</strong> ve <strong>Yönetici</strong> rolündeki kullanıcılara gönderilir.
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- WhatsApp Ayarları -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-success text-white">
+                        <i class="bi bi-whatsapp me-2"></i>WhatsApp Bildirimleri
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="whatsappEnabled" @bind="ayarlar.WhatsAppEnabled">
+                            <label class="form-check-label fw-semibold" for="whatsappEnabled">
+                                WhatsApp ile belge uyarısı gönder
+                            </label>
+                        </div>
+
+                        @if (ayarlar.WhatsAppEnabled)
+                        {
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold">Mesaj Grubu</label>
+                                <select class="form-select form-select-sm" @bind="ayarlar.WhatsAppGrupId">
+                                    <option value="0">— Gruba gönderme —</option>
+                                    @foreach (var g in whatsappGruplar)
+                                    {
+                                        <option value="@g.Id">@g.GrupAdi (@g.Uyeler.Count kişi)</option>
+                                    }
+                                </select>
+                                <div class="form-text">Grup seçiliyse kişi ayarı göz ardı edilir.</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold">Kişiye Gönder</label>
+                                <select class="form-select form-select-sm" @bind="ayarlar.WhatsAppKisiId" disabled="@(ayarlar.WhatsAppGrupId > 0)">
+                                    <option value="0">— Kişiye gönderme —</option>
+                                    @foreach (var k in whatsappKisiler)
+                                    {
+                                        <option value="@k.Id">@k.AdSoyad (@k.Telefon)</option>
+                                    }
+                                </select>
+                            </div>
+
+                            @if (ayarlar.WhatsAppGrupId == 0 && ayarlar.WhatsAppKisiId == 0)
+                            {
+                                <div class="alert alert-warning py-2 small">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>
+                                    WhatsApp aktif ama hedef seçilmedi; bildirim gönderilemez.
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+
+                <!-- Uyarı Günleri -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-warning text-dark">
+                        <i class="bi bi-calendar-check me-2"></i>Uyarı Günleri
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted mb-3">
+                            Belge süresi dolmadan kaç gün önce uyarı gönderilsin? Virgülle ayırın.
+                        </p>
+                        <input type="text" class="form-control form-control-sm"
+                               value="@uyariGunleriMetin"
+                               @onchange="UyariGunleriDegisti"
+                               placeholder="örn: 30, 15, 7, 3, 1" />
+                        <div class="mt-2 d-flex flex-wrap gap-1">
+                            @foreach (var g in ayarlar.UyariGunleri.OrderByDescending(x => x))
+                            {
+                                <span class="badge bg-secondary">@g gün</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Son Çalışma Bilgisi -->
+                @if (ayarlar.SonCalisma.HasValue)
+                {
+                    <div class="card shadow-sm border-info">
+                        <div class="card-body py-2">
+                            <small class="text-muted">
+                                <i class="bi bi-clock-history me-1 text-info"></i>
+                                Son çalışma: <strong>@ayarlar.SonCalisma.Value.ToString("dd.MM.yyyy HH:mm")</strong>
+                                — @ayarlar.SonCalismaUyariSayisi uyarı tespit edildi
+                            </small>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Sağ kolon: Önizleme -->
+            <div class="col-lg-7">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                        <span>
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            Yaklaşan Belge Süreleri
+                            @if (yaklasanBelgeler.Any())
+                            {
+                                <span class="badge bg-light text-danger ms-2">@yaklasanBelgeler.Count</span>
+                            }
+                        </span>
+                        <button class="btn btn-light btn-sm" @onclick="YenileOnizlemeAsync">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (isOnizlemeYukleniyor)
+                        {
+                            <div class="text-center p-4">
+                                <div class="spinner-border spinner-border-sm text-danger"></div>
+                                <span class="ms-2 text-muted small">Yükleniyor...</span>
+                            </div>
+                        }
+                        else if (!yaklasanBelgeler.Any())
+                        {
+                            <div class="text-center p-4 text-muted">
+                                <i class="bi bi-check-circle-fill text-success display-6 d-block mb-2"></i>
+                                <span>Son @(ayarlar.UyariGunleri.Length > 0 ? ayarlar.UyariGunleri.Max() : 30) gün içinde süre dolacak belge yok.</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive" style="max-height: 520px; overflow-y: auto;">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th>Tip</th>
+                                            <th>Ad</th>
+                                            <th>Belge</th>
+                                            <th class="text-center">Bitiş</th>
+                                            <th class="text-center">Kalan</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var b in yaklasanBelgeler)
+                                        {
+                                            <tr class="@GetSatirClass(b.KalanGun)">
+                                                <td>
+                                                    <span class="badge @(b.EntityTipi == "Araç" ? "bg-primary" : "bg-success") bg-opacity-75">
+                                                        @b.EntityTipi
+                                                    </span>
+                                                </td>
+                                                <td>@b.EntityAdi</td>
+                                                <td><small>@b.BelgeTipi</small></td>
+                                                <td class="text-center"><small>@b.BitisTarihi.ToString("dd.MM.yyyy")</small></td>
+                                                <td class="text-center">
+                                                    <span class="badge @GetKalanGunBadgeClass(b.KalanGun)">
+                                                        @(b.KalanGun <= 0 ? "SÜRESİ GEÇTİ" : $"{b.KalanGun} gün")
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private BelgeUyariAyarlar? ayarlar;
+    private List<BelgeUyariItem> yaklasanBelgeler = [];
+    private List<WhatsAppGrup> whatsappGruplar = [];
+    private List<WhatsAppKisi> whatsappKisiler = [];
+    private string uyariGunleriMetin = "";
+    private bool isLoading = true;
+    private bool isKaydediliyor = false;
+    private bool isManuelCalistiyor = false;
+    private bool isOnizlemeYukleniyor = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        ayarlar = await AyarlariService.GetAyarlarAsync();
+        uyariGunleriMetin = string.Join(", ", ayarlar.UyariGunleri.OrderByDescending(x => x));
+
+        await Task.WhenAll(
+            YenileOnizlemeAsync(),
+            YukleWhatsAppListeleriAsync()
+        );
+
+        isLoading = false;
+    }
+
+    private async Task YukleWhatsAppListeleriAsync()
+    {
+        try
+        {
+            whatsappGruplar = await WhatsAppService.GetGruplarAsync();
+            whatsappKisiler = await WhatsAppService.GetKisilerAsync();
+        }
+        catch { /* WhatsApp servisi yapılandırılmamış olabilir */ }
+    }
+
+    private async Task YenileOnizlemeAsync()
+    {
+        if (ayarlar == null) return;
+        isOnizlemeYukleniyor = true;
+        StateHasChanged();
+        try
+        {
+            var gunler = ayarlar.UyariGunleri.Length > 0 ? ayarlar.UyariGunleri : [30, 15, 7, 3, 1];
+            yaklasanBelgeler = await AyarlariService.GetYaklasanBelgelerAsync(gunler);
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Önizleme yüklenemedi: " + ex.Message);
+        }
+        finally
+        {
+            isOnizlemeYukleniyor = false;
+        }
+    }
+
+    private void UyariGunleriDegisti(ChangeEventArgs e)
+    {
+        if (ayarlar == null) return;
+        uyariGunleriMetin = e.Value?.ToString() ?? "";
+        try
+        {
+            ayarlar.UyariGunleri = uyariGunleriMetin
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => int.TryParse(s.Trim(), out var n) ? n : -1)
+                .Where(n => n > 0 && n <= 365)
+                .Distinct()
+                .OrderDescending()
+                .ToArray();
+        }
+        catch { }
+    }
+
+    private async Task KaydetAsync()
+    {
+        if (ayarlar == null) return;
+        isKaydediliyor = true;
+        try
+        {
+            await AyarlariService.SaveAyarlarAsync(ayarlar);
+            ToastService.ShowSuccess("Ayarlar kaydedildi");
+            await YenileOnizlemeAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Kayıt hatası: " + ex.Message);
+        }
+        finally
+        {
+            isKaydediliyor = false;
+        }
+    }
+
+    private async Task ManuelCalistirAsync()
+    {
+        isManuelCalistiyor = true;
+        StateHasChanged();
+        try
+        {
+            await BelgeUyariService.RunOnceAsync();
+            ayarlar = await AyarlariService.GetAyarlarAsync();
+            ToastService.ShowSuccess("Belge uyarı kontrolü tamamlandı. Bildirimler gönderildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Çalıştırma hatası: " + ex.Message);
+        }
+        finally
+        {
+            isManuelCalistiyor = false;
+        }
+    }
+
+    private static string GetSatirClass(int kalanGun) => kalanGun switch
+    {
+        <= 0 => "table-danger",
+        <= 3 => "table-warning",
+        <= 7 => "table-warning bg-opacity-50",
+        _ => ""
+    };
+
+    private static string GetKalanGunBadgeClass(int kalanGun) => kalanGun switch
+    {
+        <= 0 => "bg-danger",
+        <= 3 => "bg-danger bg-opacity-75",
+        <= 7 => "bg-warning text-dark",
+        <= 15 => "bg-info",
+        _ => "bg-secondary"
+    };
+}
+

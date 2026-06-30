@@ -1,0 +1,109 @@
+@page "/kapasiteler/yeni"
+@page "/kapasiteler/{Id:int}"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IKapasiteService KapasiteService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>@(IsEdit ? "Kapasite Düzenle" : "Yeni Kapasite")</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="bi bi-layers me-2"></i>@(IsEdit ? "Kapasite Düzenle" : "Yeni Kapasite")</h3>
+        <button class="btn btn-secondary" @onclick="Geri">
+            <i class="bi bi-arrow-left me-1"></i>Geri
+        </button>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <EditForm Model="kapasite" OnValidSubmit="Kaydet">
+                <DataAnnotationsValidator />
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Kapasite Adı *</label>
+                            <InputText @bind-Value="kapasite.KapasiteAdi" class="form-control" />
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label class="form-label">Çarpan *</label>
+                            <InputNumber @bind-Value="kapasite.Carpan" class="form-control" step="0.01" />
+                        </div>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <div class="form-check mb-3">
+                            <InputCheckbox @bind-Value="kapasite.Aktif" class="form-check-input" id="aktif" />
+                            <label class="form-check-label" for="aktif">Aktif</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Açıklama</label>
+                    <InputTextArea @bind-Value="kapasite.Aciklama" class="form-control" rows="3" />
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg me-1"></i>Kaydet
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="Geri">
+                        <i class="bi bi-x-lg me-1"></i>İptal
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public int? Id { get; set; }
+
+    private Kapasite kapasite = new();
+    private bool IsEdit => Id.HasValue;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (IsEdit)
+        {
+            var existing = await KapasiteService.GetByIdAsync(Id!.Value);
+            if (existing != null)
+            {
+                kapasite = existing;
+            }
+            else
+            {
+                Navigation.NavigateTo("/kapasiteler");
+            }
+        }
+        else
+        {
+            kapasite.Aktif = true;
+            kapasite.Carpan = 1m;
+        }
+    }
+
+    private async Task Kaydet()
+    {
+        if (string.IsNullOrWhiteSpace(kapasite.KapasiteAdi))
+            return;
+
+        if (IsEdit)
+        {
+            await KapasiteService.UpdateAsync(kapasite);
+        }
+        else
+        {
+            await KapasiteService.CreateAsync(kapasite);
+        }
+
+        Navigation.NavigateTo("/kapasiteler");
+    }
+
+    private void Geri() => Navigation.NavigateTo("/kapasiteler");
+}

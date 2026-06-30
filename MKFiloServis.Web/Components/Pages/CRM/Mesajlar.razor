@@ -1,0 +1,436 @@
+@page "/crm/mesajlar"
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Helpers
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Data
+@using Microsoft.EntityFrameworkCore
+@inject ICRMService CRMService
+@inject ApplicationDbContext DbContext
+@inject AppAuthenticationStateProvider AuthProvider
+@inject IToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>Mesajlar - CRM</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <!-- Sol Panel - Mesaj Listesi -->
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="bi bi-chat-dots-fill me-2 text-primary"></i>Mesajlar</h6>
+                    <button class="btn btn-primary btn-sm" @onclick="YeniMesajBaslat">
+                        <i class="bi bi-plus-lg me-1"></i>Yeni
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <!-- Tab Başlıkları -->
+                    <ul class="nav nav-tabs nav-fill">
+                        <li class="nav-item">
+                            <button class="nav-link @(aktifTab == "gelen" ? "active" : "")" @onclick="TabGelen">
+                                <i class="bi bi-inbox me-1"></i>Gelen
+                                @if (okunmamisSayisi > 0)
+                                {
+                                    <span class="badge bg-danger">@okunmamisSayisi</span>
+                                }
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link @(aktifTab == "giden" ? "active" : "")" @onclick="TabGiden">
+                                <i class="bi bi-send me-1"></i>Gönderilen
+                            </button>
+                        </li>
+                    </ul>
+
+                    <!-- Mesaj Listesi -->
+                    <div class="list-group list-group-flush" style="max-height: 500px; overflow-y: auto;">
+                        @if (isLoading)
+                        {
+                            <div class="text-center p-3">
+                                <div class="spinner-border spinner-border-sm text-primary"></div>
+                            </div>
+                        }
+                        else if (!aktifMesajlar.Any())
+                        {
+                            <div class="text-center p-4 text-muted">
+                                <i class="bi bi-chat-left-text" style="font-size: 2rem;"></i>
+                                <p class="mt-2 mb-0">Mesaj yok</p>
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var mesaj in aktifMesajlar)
+                            {
+                                <button class="list-group-item list-group-item-action @(!mesaj.Okundu && aktifTab == "gelen" ? "bg-light" : "") @(seciliMesaj?.Id == mesaj.Id ? "active" : "")"
+                                        @onclick="() => MesajSec(mesaj)">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div class="me-2" style="min-width: 0;">
+                                            <div class="fw-bold text-truncate @(!mesaj.Okundu && aktifTab == "gelen" ? "" : "fw-normal")">
+                                                @if (aktifTab == "gelen")
+                                                {
+                                                    @(mesaj.Gonderen?.AdSoyad ?? "Sistem")
+                                                }
+                                                else
+                                                {
+                                                    @(mesaj.Alici?.AdSoyad ?? "Tüm Kullanıcılar")
+                                                }
+                                            </div>
+                                            <div class="text-truncate small @(seciliMesaj?.Id == mesaj.Id ? "text-white-50" : "text-muted")">
+                                                @mesaj.Konu
+                                            </div>
+                                        </div>
+                                        <div class="text-end">
+                                            <small class="@(seciliMesaj?.Id == mesaj.Id ? "text-white-50" : "text-muted")">
+                                                @FormatTarih(mesaj.CreatedAt)
+                                            </small>
+                                            @if (!mesaj.Okundu && aktifTab == "gelen")
+                                            {
+                                                <span class="badge bg-primary d-block mt-1">Yeni</span>
+                                            }
+                                        </div>
+                                    </div>
+                                </button>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sağ Panel - Mesaj Detay / Yeni Mesaj -->
+        <div class="col-md-8">
+            @if (yeniMesajModu)
+            {
+                <!-- Yeni Mesaj Formu -->
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="bi bi-pencil-square me-2"></i>Yeni Mesaj</h6>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="YeniMesajIptal">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Alıcı</label>
+                            <select class="form-select" @bind="yeniMesaj.AliciId">
+                                <option value="">Tüm Kullanıcılar</option>
+                                @foreach (var secenek in aliciSecenekleri)
+                                {
+                                    <option value="@secenek.KullaniciId">@secenek.GorunenAd</option>
+                                }
+                            </select>
+                            <small class="text-muted">Cari ve kullanıcı eşleşmişse yalnız cari hesap gösterilir.</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Konu *</label>
+                            <input type="text" class="form-control" @bind="yeniMesaj.Konu" placeholder="Mesaj konusu" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Mesaj *</label>
+                            <textarea class="form-control" rows="6" @bind="yeniMesaj.Icerik" placeholder="Mesajınızı yazın..."></textarea>
+                        </div>
+                        <div class="text-end">
+                            <button class="btn btn-secondary me-2" @onclick="YeniMesajIptal">İptal</button>
+                            <button class="btn btn-primary" @onclick="MesajGonder" disabled="@isSending">
+                                @if (isSending)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                <i class="bi bi-send me-1"></i>Gönder
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (seciliMesaj != null)
+            {
+                <!-- Mesaj Detay -->
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h5 class="mb-1">@seciliMesaj.Konu</h5>
+                                <small class="text-muted">
+                                    @if (aktifTab == "gelen")
+                                    {
+                                        <span>Gönderen: <strong>@(seciliMesaj.Gonderen?.AdSoyad ?? "Sistem")</strong></span>
+                                    }
+                                    else
+                                    {
+                                        <span>Alıcı: <strong>@(seciliMesaj.Alici?.AdSoyad ?? "Tüm Kullanıcılar")</strong></span>
+                                    }
+                                    <span class="ms-3"><i class="bi bi-clock me-1"></i>@seciliMesaj.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
+                                </small>
+                            </div>
+                            <div>
+                                @if (aktifTab == "gelen")
+                                {
+                                    <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => YanitlaBaslat(seciliMesaj)">
+                                        <i class="bi bi-reply me-1"></i>Yanıtla
+                                    </button>
+                                }
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => MesajSil(seciliMesaj.Id)">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="border rounded p-3 bg-light">
+                            @((MarkupString)HtmlSanitizerHelper.Sanitize(seciliMesaj.Icerik?.Replace("\n", "<br/>") ?? ""))
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <!-- Boş Durum -->
+                <div class="card shadow-sm">
+                    <div class="card-body text-center py-5">
+                        <i class="bi bi-chat-left-text text-muted" style="font-size: 4rem;"></i>
+                        <h5 class="mt-3 text-muted">Mesaj Seçin</h5>
+                        <p class="text-muted">Görüntülemek için sol taraftan bir mesaj seçin veya yeni mesaj oluşturun.</p>
+                        <button class="btn btn-primary" @onclick="YeniMesajBaslat">
+                            <i class="bi bi-plus-lg me-1"></i>Yeni Mesaj
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool isLoading = true;
+    private bool isSending = false;
+    private string aktifTab = "gelen";
+    private List<Mesaj> gelenMesajlar = new();
+    private List<Mesaj> gidenMesajlar = new();
+    private List<Kullanici> kullanicilar = new();
+    private List<MesajAliciSecenegi> aliciSecenekleri = new();
+    private Mesaj? seciliMesaj;
+    private int okunmamisSayisi = 0;
+    private int? aktifKullaniciId;
+
+    // Yeni mesaj
+    private bool yeniMesajModu = false;
+    private Mesaj yeniMesaj = new();
+
+    private List<Mesaj> aktifMesajlar => aktifTab == "gelen" ? gelenMesajlar : gidenMesajlar;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var kullanici = AuthProvider.GetAktifKullanici();
+        if (kullanici != null)
+        {
+            aktifKullaniciId = kullanici.Id;
+            await LoadData();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            if (aktifKullaniciId.HasValue)
+            {
+                gelenMesajlar = await CRMService.GetGelenMesajlarAsync(aktifKullaniciId.Value);
+                gidenMesajlar = await CRMService.GetGonderilenMesajlarAsync(aktifKullaniciId.Value);
+                okunmamisSayisi = await CRMService.GetOkunmamisMesajSayisiAsync(aktifKullaniciId.Value);
+                kullanicilar = await DbContext.Kullanicilar
+                    .Include(k => k.Sofor)
+                    .Where(k => k.Aktif)
+                    .ToListAsync();
+                await AliciSecenekleriniYukle();
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Veriler yüklenirken hata: " + ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void TabDegistir(string tab)
+    {
+        aktifTab = tab;
+        seciliMesaj = null;
+        yeniMesajModu = false;
+    }
+    
+    private void TabGelen() => TabDegistir("gelen");
+    private void TabGiden() => TabDegistir("giden");
+
+    private async Task MesajSec(Mesaj mesaj)
+    {
+        seciliMesaj = mesaj;
+        yeniMesajModu = false;
+
+        if (!mesaj.Okundu && aktifTab == "gelen")
+        {
+            await CRMService.MesajOkunduIsaretle(mesaj.Id);
+            mesaj.Okundu = true;
+            okunmamisSayisi = Math.Max(0, okunmamisSayisi - 1);
+        }
+    }
+
+    private void YeniMesajBaslat()
+    {
+        yeniMesajModu = true;
+        seciliMesaj = null;
+        yeniMesaj = new Mesaj
+        {
+            GonderenId = aktifKullaniciId ?? 0,
+            Tip = MesajTipi.Dahili
+        };
+    }
+
+    private void YeniMesajIptal()
+    {
+        yeniMesajModu = false;
+        yeniMesaj = new();
+    }
+
+    private void YanitlaBaslat(Mesaj mesaj)
+    {
+        yeniMesajModu = true;
+        yeniMesaj = new Mesaj
+        {
+            GonderenId = aktifKullaniciId ?? 0,
+            AliciId = mesaj.GonderenId,
+            Konu = mesaj.Konu.StartsWith("Re: ") ? mesaj.Konu : $"Re: {mesaj.Konu}",
+            UstMesajId = mesaj.Id,
+            Tip = MesajTipi.Dahili
+        };
+    }
+
+    private async Task MesajGonder()
+    {
+        if (string.IsNullOrWhiteSpace(yeniMesaj.Konu))
+        {
+            ToastService.ShowWarning("Konu alanı zorunludur.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(yeniMesaj.Icerik))
+        {
+            ToastService.ShowWarning("Mesaj içeriği zorunludur.");
+            return;
+        }
+
+        isSending = true;
+        try
+        {
+            await CRMService.SendMesajAsync(yeniMesaj);
+            ToastService.ShowSuccess("Mesaj gönderildi.");
+            yeniMesajModu = false;
+            yeniMesaj = new();
+            await LoadData();
+            aktifTab = "giden";
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Mesaj gönderilemedi: " + ex.Message);
+        }
+        finally
+        {
+            isSending = false;
+        }
+    }
+
+    private async Task MesajSil(int id)
+    {
+        await CRMService.DeleteMesajAsync(id);
+        gelenMesajlar.RemoveAll(m => m.Id == id);
+        gidenMesajlar.RemoveAll(m => m.Id == id);
+        seciliMesaj = null;
+        ToastService.ShowSuccess("Mesaj silindi.");
+    }
+
+    private async Task AliciSecenekleriniYukle()
+    {
+        if (!aktifKullaniciId.HasValue)
+        {
+            aliciSecenekleri.Clear();
+            return;
+        }
+
+        var aktifKullanicilar = kullanicilar
+            .Where(k => k.Id != aktifKullaniciId.Value)
+            .OrderBy(k => k.AdSoyad)
+            .ToList();
+
+        var kullaniciIdleri = aktifKullanicilar.Select(k => k.Id).ToList();
+        var eslestirmeler = await DbContext.KullaniciCariler
+            .Include(x => x.Cari)
+            .Where(x => kullaniciIdleri.Contains(x.KullaniciId) && x.Cari.Aktif)
+            .OrderBy(x => x.Cari.Unvan)
+            .ToListAsync();
+
+        var secenekler = new List<MesajAliciSecenegi>();
+        var gizlenenKullanicilar = new HashSet<int>();
+
+        foreach (var kullanici in aktifKullanicilar)
+        {
+            var kullaniciCarileri = eslestirmeler
+                .Where(x => x.KullaniciId == kullanici.Id)
+                .Select(x => x.Cari)
+                .DistinctBy(x => x.Id)
+                .ToList();
+
+            if (kullaniciCarileri.Any())
+            {
+                gizlenenKullanicilar.Add(kullanici.Id);
+                secenekler.AddRange(kullaniciCarileri.Select(cari => new MesajAliciSecenegi
+                {
+                    KullaniciId = kullanici.Id,
+                    GorunenAd = $"{cari.Unvan} (Cari)"
+                }));
+                continue;
+            }
+
+            if (kullanici.SoforId.HasValue && kullanici.Sofor?.Aktif == true)
+            {
+                gizlenenKullanicilar.Add(kullanici.Id);
+                secenekler.Add(new MesajAliciSecenegi
+                {
+                    KullaniciId = kullanici.Id,
+                    GorunenAd = $"{kullanici.Sofor.TamAd} (Personel)"
+                });
+            }
+        }
+
+        secenekler.AddRange(aktifKullanicilar
+            .Where(k => !gizlenenKullanicilar.Contains(k.Id))
+            .Select(k => new MesajAliciSecenegi
+            {
+                KullaniciId = k.Id,
+                GorunenAd = $"{k.AdSoyad} (Kullanıcı)"
+            }));
+
+        aliciSecenekleri = secenekler
+            .OrderBy(x => x.GorunenAd)
+            .ToList();
+    }
+
+    private sealed class MesajAliciSecenegi
+    {
+        public int KullaniciId { get; set; }
+        public string GorunenAd { get; set; } = string.Empty;
+    }
+
+    private string FormatTarih(DateTime tarih)
+    {
+        var fark = DateTime.UtcNow - tarih;
+
+        if (fark.TotalDays < 1) return tarih.ToLocalTime().ToString("HH:mm");
+        if (fark.TotalDays < 7) return tarih.ToLocalTime().ToString("ddd");
+
+        return tarih.ToLocalTime().ToString("dd.MM");
+    }
+}
+

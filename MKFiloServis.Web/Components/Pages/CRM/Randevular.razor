@@ -1,0 +1,636 @@
+@page "/crm/randevular"
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Shared.Entities
+@inject ICRMService CRMService
+@inject ICariService CariService
+@inject AppAuthenticationStateProvider AuthProvider
+@inject IToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>Randevu ve Hatırlatıcılar - CRM</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="mb-0"><i class="bi bi-calendar-event-fill me-2 text-danger"></i>Randevu ve Hatırlatıcılar</h3>
+            <small class="text-muted">Takvim, görevler ve hatırlatıcılar</small>
+        </div>
+        <button class="btn btn-primary" @onclick="YeniHatirlaticiBaslat">
+            <i class="bi bi-plus-lg me-1"></i>Yeni Ekle
+        </button>
+    </div>
+
+    <div class="row">
+        <!-- Sol Panel - Bugünkü Hatırlatıcılar -->
+        <div class="col-md-4">
+            <div class="card shadow-sm mb-3">
+                <div class="card-header bg-danger text-white">
+                    <h6 class="mb-0"><i class="bi bi-alarm me-2"></i>Bugün (@DateTime.Now.ToString("dd MMMM"))</h6>
+                </div>
+                <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
+                    @if (!bugunkuHatirlaticilar.Any())
+                    {
+                        <div class="text-center p-3 text-muted">
+                            <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
+                            <p class="mt-2 mb-0">Bugün için hatırlatıcı yok</p>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var h in bugunkuHatirlaticilar)
+                        {
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="fw-bold">
+                                        <i class="bi @GetHatirlaticiIcon(h.Tip) me-1" style="color: @h.Renk"></i>
+                                        @h.Baslik
+                                    </div>
+                                    <small class="text-muted">@h.BaslangicTarihi.ToLocalTime().ToString("HH:mm")</small>
+                                </div>
+                                <button class="btn btn-sm btn-success" @onclick="() => HatirlaticiTamamla(h.Id)">
+                                    <i class="bi bi-check"></i>
+                                </button>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+
+            <!-- Mini Takvim -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="OncekiAy">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    <span class="fw-bold">@secilenTarih.ToString("MMMM yyyy")</span>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="SonrakiAy">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+                <div class="card-body p-2">
+                    <table class="table table-sm table-bordered mb-0 text-center">
+                        <thead>
+                            <tr>
+                                <th>Pzt</th>
+                                <th>Sal</th>
+                                <th>Çar</th>
+                                <th>Per</th>
+                                <th>Cum</th>
+                                <th>Cmt</th>
+                                <th>Paz</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var hafta in GetTakvimHaftalari())
+                            {
+                                <tr>
+                                    @foreach (var gun in hafta)
+                                    {
+                                        var hatirlaticiVar = hatirlaticilar.Any(h => h.BaslangicTarihi.Date == gun.Date);
+                                        <td class="@(gun.Month != secilenTarih.Month ? "text-muted" : "") @(gun.Date == DateTime.Today ? "bg-primary text-white" : "") @(gun.Date == secilenTarih.Date ? "bg-info text-white" : "")"
+                                            style="cursor: pointer; position: relative;"
+                                            @onclick="() => GunSec(gun)">
+                                            @gun.Day
+                                            @if (hatirlaticiVar)
+                                            {
+                                                <span class="position-absolute top-0 end-0 badge bg-danger rounded-circle" style="font-size: 0.5rem; padding: 2px 4px;">•</span>
+                                            }
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sağ Panel - Hatırlatıcı Listesi -->
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="bi bi-list-task me-2"></i>
+                        @secilenTarih.ToString("dd MMMM yyyy") Hatırlatıcıları
+                    </h6>
+                    <div class="btn-group btn-group-sm">
+                        @foreach (var tip in Enum.GetValues<HatirlaticiTip>())
+                        {
+                            <button class="btn @(filtreliTip == tip ? "btn-primary" : "btn-outline-primary")" 
+                                    @onclick="() => TipFiltrele(tip)">
+                                <i class="bi @GetHatirlaticiIcon(tip)"></i>
+                            </button>
+                        }
+                        <button class="btn @(filtreliTip == null ? "btn-primary" : "btn-outline-primary")" 
+                                @onclick="() => filtreliTip = null">
+                            Tümü
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    @if (isLoading)
+                    {
+                        <div class="text-center p-4">
+                            <div class="spinner-border text-primary"></div>
+                        </div>
+                    }
+                    else if (!filtreliHatirlaticilar.Any())
+                    {
+                        <div class="text-center p-5 text-muted">
+                            <i class="bi bi-calendar-x" style="font-size: 3rem;"></i>
+                            <p class="mt-2">Bu tarih için hatırlatıcı yok</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Saat</th>
+                                        <th>Başlık</th>
+                                        <th>Tip</th>
+                                        <th>Cari</th>
+                                        <th>Durum</th>
+                                        <th class="text-end">İşlem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var h in filtreliHatirlaticilar.OrderBy(x => x.BaslangicTarihi))
+                                    {
+                                        <tr>
+                                            <td>
+                                                @if (h.TumGun)
+                                                {
+                                                    <span class="badge bg-secondary">Tüm Gün</span>
+                                                }
+                                                else
+                                                {
+                                                    @h.BaslangicTarihi.ToLocalTime().ToString("HH:mm")
+                                                    @if (h.BitisTarihi.HasValue)
+                                                    {
+                                                        <span> - @h.BitisTarihi.Value.ToLocalTime().ToString("HH:mm")</span>
+                                                    }
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <span class="me-2" style="color: @h.Renk;">?</span>
+                                                    <div>
+                                                        <strong>@h.Baslik</strong>
+                                                        @if (!string.IsNullOrEmpty(h.Aciklama))
+                                                        {
+                                                            <br/><small class="text-muted">@h.Aciklama</small>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-light text-dark">
+                                                    <i class="bi @GetHatirlaticiIcon(h.Tip) me-1"></i>
+                                                    @GetHatirlaticiTipAdi(h.Tip)
+                                                </span>
+                                            </td>
+                                            <td>@(h.Cari?.Unvan ?? "-")</td>
+                                            <td>
+                                                <span class="badge @GetDurumBadge(h.Durum)">
+                                                    @GetDurumAdi(h.Durum)
+                                                </span>
+                                            </td>
+                                            <td class="text-end">
+                                                @if (h.Durum == HatirlaticiDurum.Bekliyor)
+                                                {
+                                                    <button class="btn btn-sm btn-success me-1" @onclick="() => HatirlaticiTamamla(h.Id)" title="Tamamla">
+                                                        <i class="bi bi-check"></i>
+                                                    </button>
+                                                }
+                                                <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => HatirlaticiDuzenle(h)" title="Düzenle">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => HatirlaticiSil(h.Id)" title="Sil">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hatırlatıcı Modal -->
+@if (showModal)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-calendar-plus me-2"></i>
+                        @(editingHatirlatici?.Id > 0 ? "Hatırlatıcı Düzenle" : "Yeni Hatırlatıcı")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="ModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label class="form-label">Başlık *</label>
+                                <input type="text" class="form-control" @bind="editingHatirlatici!.Baslik" />
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Tip</label>
+                                <select class="form-select" @bind="editingHatirlatici.Tip">
+                                    @foreach (var tip in Enum.GetValues<HatirlaticiTip>())
+                                    {
+                                        <option value="@tip">@GetHatirlaticiTipAdi(tip)</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Açıklama</label>
+                        <textarea class="form-control" rows="2" @bind="editingHatirlatici.Aciklama"></textarea>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Tarih *</label>
+                                <input type="date" class="form-control" @bind="baslangicTarihi" />
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <div class="form-check mt-4">
+                                    <input class="form-check-input" type="checkbox" @bind="editingHatirlatici.TumGun" />
+                                    <label class="form-check-label">Tüm Gün</label>
+                                </div>
+                            </div>
+                        </div>
+                        @if (!editingHatirlatici.TumGun)
+                        {
+                            <div class="col-md-2">
+                                <div class="mb-3">
+                                    <label class="form-label">Başlangıç</label>
+                                    <input type="text" class="form-control" @bind="baslangicSaatStr" placeholder="09:00" />
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="mb-3">
+                                    <label class="form-label">Bitiş</label>
+                                    <input type="text" class="form-control" @bind="bitisSaatStr" placeholder="10:00" />
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">İlişkili Cari</label>
+                                <select class="form-select" @bind="editingHatirlatici.CariId">
+                                    <option value="">Seçiniz</option>
+                                    @foreach (var cari in cariler)
+                                    {
+                                        <option value="@cari.Id">@cari.Unvan</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label class="form-label">Renk</label>
+                                <input type="color" class="form-control form-control-color w-100" @bind="editingHatirlatici.Renk" />
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label class="form-label">Bildirim (dk önce)</label>
+                                <input type="number" class="form-control" @bind="editingHatirlatici.BildirimDakikaOnce" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Tekrar</label>
+                                <select class="form-select" @bind="editingHatirlatici.TekrarTipi">
+                                    @foreach (var tip in Enum.GetValues<TekrarTipi>())
+                                    {
+                                        <option value="@tip">@GetTekrarTipAdi(tip)</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        @if (editingHatirlatici.TekrarTipi != TekrarTipi.Yok)
+                        {
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label">Tekrar Aralığı</label>
+                                    <input type="number" class="form-control" @bind="editingHatirlatici.TekrarAraligi" min="1" />
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label">Tekrar Bitiş</label>
+                                    <input type="date" class="form-control" @bind="editingHatirlatici.TekrarBitisTarihi" />
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="ModalKapat">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="HatirlaticiKaydet" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-check-lg me-1"></i>Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private bool showModal = false;
+    private DateTime secilenTarih = DateTime.Today;
+    private List<Hatirlatici> hatirlaticilar = new();
+    private List<Hatirlatici> bugunkuHatirlaticilar = new();
+    private List<Cari> cariler = new();
+    private int? aktifKullaniciId;
+    private HatirlaticiTip? filtreliTip;
+
+    // Modal
+    private Hatirlatici? editingHatirlatici;
+    private DateTime baslangicTarihi = DateTime.Today;
+    private string baslangicSaatStr = "09:00";
+    private string bitisSaatStr = "10:00";
+
+    private List<Hatirlatici> filtreliHatirlaticilar => hatirlaticilar
+        .Where(h => h.BaslangicTarihi.Date == secilenTarih.Date)
+        .Where(h => filtreliTip == null || h.Tip == filtreliTip)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var kullanici = AuthProvider.GetAktifKullanici();
+        if (kullanici != null)
+        {
+            aktifKullaniciId = kullanici.Id;
+            await LoadData();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            if (aktifKullaniciId.HasValue)
+            {
+                var ayBasi = DateTime.SpecifyKind(new DateTime(secilenTarih.Year, secilenTarih.Month, 1), DateTimeKind.Utc);
+                var aySonu = DateTime.SpecifyKind(ayBasi.AddMonths(1).AddDays(-1).AddHours(23).AddMinutes(59).AddSeconds(59), DateTimeKind.Utc);
+
+                hatirlaticilar = await CRMService.GetHatirlaticilarAsync(aktifKullaniciId.Value, ayBasi, aySonu);
+                bugunkuHatirlaticilar = await CRMService.GetBugunkuHatirlaticilarAsync(aktifKullaniciId.Value);
+                cariler = await CariService.GetAllAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Veriler yüklenirken hata: " + ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void GunSec(DateTime gun)
+    {
+        secilenTarih = gun;
+    }
+
+    private async Task OncekiAy()
+    {
+        secilenTarih = secilenTarih.AddMonths(-1);
+        await LoadData();
+    }
+
+    private async Task SonrakiAy()
+    {
+        secilenTarih = secilenTarih.AddMonths(1);
+        await LoadData();
+    }
+
+    private void TipFiltrele(HatirlaticiTip tip)
+    {
+        filtreliTip = filtreliTip == tip ? null : tip;
+    }
+
+    private List<List<DateTime>> GetTakvimHaftalari()
+    {
+        var haftalar = new List<List<DateTime>>();
+        var ayBasi = new DateTime(secilenTarih.Year, secilenTarih.Month, 1);
+        var aySonu = ayBasi.AddMonths(1).AddDays(-1);
+
+        // Ayın ilk gününün haftanın hangi günü olduğunu bul
+        var ilkGunHaftaGunu = (int)ayBasi.DayOfWeek;
+        if (ilkGunHaftaGunu == 0) ilkGunHaftaGunu = 7; // Pazar = 7
+        ilkGunHaftaGunu--; // 0-indexed yap
+
+        var baslangic = ayBasi.AddDays(-ilkGunHaftaGunu);
+
+        for (int i = 0; i < 6; i++)
+        {
+            var hafta = new List<DateTime>();
+            for (int j = 0; j < 7; j++)
+            {
+                hafta.Add(baslangic.AddDays(i * 7 + j));
+            }
+            haftalar.Add(hafta);
+
+            if (hafta[0].Month > secilenTarih.Month || (hafta[0].Month == 1 && secilenTarih.Month == 12))
+                break;
+        }
+
+        return haftalar;
+    }
+
+    private void YeniHatirlaticiBaslat()
+    {
+        editingHatirlatici = new Hatirlatici
+        {
+            KullaniciId = aktifKullaniciId ?? 0,
+            Renk = "#0d6efd",
+            BildirimDakikaOnce = 15,
+            TekrarTipi = TekrarTipi.Yok,
+            TekrarAraligi = 1
+        };
+        baslangicTarihi = secilenTarih;
+        baslangicSaatStr = "09:00";
+        bitisSaatStr = "10:00";
+        showModal = true;
+    }
+
+    private void HatirlaticiDuzenle(Hatirlatici h)
+    {
+        editingHatirlatici = new Hatirlatici
+        {
+            Id = h.Id,
+            KullaniciId = h.KullaniciId,
+            Baslik = h.Baslik,
+            Aciklama = h.Aciklama,
+            Tip = h.Tip,
+            TumGun = h.TumGun,
+            CariId = h.CariId,
+            Renk = h.Renk,
+            BildirimDakikaOnce = h.BildirimDakikaOnce,
+            TekrarTipi = h.TekrarTipi,
+            TekrarAraligi = h.TekrarAraligi,
+            TekrarBitisTarihi = h.TekrarBitisTarihi
+        };
+        baslangicTarihi = h.BaslangicTarihi.Date;
+        baslangicSaatStr = h.BaslangicTarihi.TimeOfDay.ToString(@"hh\:mm");
+        bitisSaatStr = h.BitisTarihi?.TimeOfDay.ToString(@"hh\:mm") ?? h.BaslangicTarihi.AddHours(1).TimeOfDay.ToString(@"hh\:mm");
+        showModal = true;
+    }
+
+    private void ModalKapat()
+    {
+        showModal = false;
+        editingHatirlatici = null;
+    }
+
+    private async Task HatirlaticiKaydet()
+    {
+        if (editingHatirlatici == null || string.IsNullOrWhiteSpace(editingHatirlatici.Baslik))
+        {
+            ToastService.ShowWarning("Başlık zorunludur.");
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            var baslangicDateTime = baslangicTarihi.Add(editingHatirlatici.TumGun ? TimeSpan.Zero : TimeSpan.Parse(baslangicSaatStr));
+            editingHatirlatici.BaslangicTarihi = DateTime.SpecifyKind(baslangicDateTime, DateTimeKind.Utc);
+
+            if (!editingHatirlatici.TumGun)
+            {
+                var bitisDateTime = baslangicTarihi.Add(TimeSpan.Parse(bitisSaatStr));
+                editingHatirlatici.BitisTarihi = DateTime.SpecifyKind(bitisDateTime, DateTimeKind.Utc);
+            }
+            
+            if (editingHatirlatici.TekrarBitisTarihi.HasValue)
+            {
+                editingHatirlatici.TekrarBitisTarihi = DateTime.SpecifyKind(editingHatirlatici.TekrarBitisTarihi.Value, DateTimeKind.Utc);
+            }
+
+            if (editingHatirlatici.Id == 0)
+            {
+                await CRMService.CreateHatirlaticiAsync(editingHatirlatici);
+                ToastService.ShowSuccess("Hatırlatıcı oluşturuldu.");
+            }
+            else
+            {
+                await CRMService.UpdateHatirlaticiAsync(editingHatirlatici);
+                ToastService.ShowSuccess("Hatırlatıcı güncellendi.");
+            }
+
+            ModalKapat();
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task HatirlaticiTamamla(int id)
+    {
+        await CRMService.HatirlaticiTamamlaAsync(id);
+        var h = hatirlaticilar.FirstOrDefault(x => x.Id == id);
+        if (h != null) h.Durum = HatirlaticiDurum.Tamamlandi;
+        bugunkuHatirlaticilar.RemoveAll(x => x.Id == id);
+        ToastService.ShowSuccess("Hatırlatıcı tamamlandı.");
+    }
+
+    private async Task HatirlaticiSil(int id)
+    {
+        await CRMService.DeleteHatirlaticiAsync(id);
+        hatirlaticilar.RemoveAll(x => x.Id == id);
+        ToastService.ShowSuccess("Hatırlatıcı silindi.");
+    }
+
+    private string GetHatirlaticiIcon(HatirlaticiTip tip) => tip switch
+    {
+        HatirlaticiTip.Hatirlatici => "bi-alarm",
+        HatirlaticiTip.Randevu => "bi-calendar-event",
+        HatirlaticiTip.Toplanti => "bi-people",
+        HatirlaticiTip.Gorev => "bi-check2-square",
+        HatirlaticiTip.Arama => "bi-telephone",
+        HatirlaticiTip.Ziyaret => "bi-geo-alt",
+        _ => "bi-bell"
+    };
+
+    private string GetHatirlaticiTipAdi(HatirlaticiTip tip) => tip switch
+    {
+        HatirlaticiTip.Hatirlatici => "Hatırlatıcı",
+        HatirlaticiTip.Randevu => "Randevu",
+        HatirlaticiTip.Toplanti => "Toplantı",
+        HatirlaticiTip.Gorev => "Görev",
+        HatirlaticiTip.Arama => "Arama",
+        HatirlaticiTip.Ziyaret => "Ziyaret",
+        _ => "Diğer"
+    };
+
+    private string GetTekrarTipAdi(TekrarTipi tip) => tip switch
+    {
+        TekrarTipi.Yok => "Tekrar Yok",
+        TekrarTipi.Gunluk => "Günlük",
+        TekrarTipi.Haftalik => "Haftalık",
+        TekrarTipi.Aylik => "Aylık",
+        TekrarTipi.Yillik => "Yıllık",
+        _ => "Bilinmiyor"
+    };
+
+    private string GetDurumAdi(HatirlaticiDurum durum) => durum switch
+    {
+        HatirlaticiDurum.Bekliyor => "Bekliyor",
+        HatirlaticiDurum.Tamamlandi => "Tamamlandı",
+        HatirlaticiDurum.Iptal => "İptal",
+        HatirlaticiDurum.Ertelendi => "Ertelendi",
+        _ => "Bilinmiyor"
+    };
+
+    private string GetDurumBadge(HatirlaticiDurum durum) => durum switch
+    {
+        HatirlaticiDurum.Bekliyor => "bg-warning text-dark",
+        HatirlaticiDurum.Tamamlandi => "bg-success",
+        HatirlaticiDurum.Iptal => "bg-secondary",
+        HatirlaticiDurum.Ertelendi => "bg-info",
+        _ => "bg-light text-dark"
+    };
+}
+

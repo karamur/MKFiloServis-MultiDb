@@ -1,0 +1,200 @@
+@page "/destek-talepleri/ayarlar"
+@rendermode InteractiveServer
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IDestekTalebiService DestekService
+@inject IToastService ToastService
+
+<PageTitle>Destek Ayarları</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0"><i class="bi bi-gear me-2"></i>Destek Ayarları</h4>
+        <div class="d-flex gap-2">
+            <a href="/destek-talepleri" class="btn btn-outline-primary">
+                <i class="bi bi-ticket-detailed me-1"></i>Talepler
+            </a>
+            <a href="/destek-talepleri/bilgi-bankasi" class="btn btn-outline-info">
+                <i class="bi bi-book me-1"></i>Bilgi Bankası
+            </a>
+            <button class="btn btn-primary" @onclick="Kaydet" disabled="@isSaving">
+                @if (isSaving)
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                }
+                <i class="bi bi-check-lg me-1"></i>Kaydet
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(loadError))
+    {
+        <div class="alert alert-warning d-flex justify-content-between align-items-start mb-3">
+            <div>
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>Destek ayarları yüklenirken sorun oluştu.</strong>
+                <div class="small mt-1">@loadError</div>
+            </div>
+            <button class="btn btn-outline-warning btn-sm" @onclick="SayfayiYenile">
+                <i class="bi bi-arrow-clockwise me-1"></i>Tekrar Dene
+            </button>
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2">Yükleniyor...</p>
+        </div>
+    }
+    else
+    {
+        <div class="row g-3">
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header bg-white">
+                        <strong>Genel Ayarlar</strong>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Destek E-posta Adresi</label>
+                            <input type="email" class="form-control" @bind="destekEmail" placeholder="destek@firma.com" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Varsayılan Departman</label>
+                            <select class="form-select" @bind="varsayilanDepartmanId">
+                                <option value="">Seçiniz...</option>
+                                @foreach (var departman in departmanlar)
+                                {
+                                    <option value="@departman.Id">@departman.Ad</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="emailAktif" @bind="emailBildirimAktif" />
+                            <label class="form-check-label" for="emailAktif">E-posta bildirimleri aktif</label>
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="slaKontrol" @bind="otomatikSlaKontrolu" />
+                            <label class="form-check-label" for="slaKontrol">Otomatik SLA kontrolü aktif</label>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="bilgiBankasiAcik" @bind="bilgiBankasiAcik" />
+                            <label class="form-check-label" for="bilgiBankasiAcik">Bilgi bankası aktif</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header bg-white">
+                        <strong>Bilgi</strong>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-success mb-3">
+                            <i class="bi bi-envelope-check me-1"></i>
+                            <strong>E-posta entegrasyonu aktif.</strong> Bildirimler için yukarıdaki "E-posta bildirimleri aktif" seçeneğini açın.
+                        </div>
+                        <div class="alert alert-info mb-0">
+                            <ul class="mb-0 ps-3">
+                                <li>Bu sayfa destek modülü için temel sistem ayarlarını saklar.</li>
+                                <li>Ayarlar <code>DestekAyar</code> tablosunda tutulur.</li>
+                                <li><strong>E-posta bildirimleri aktifken</strong> şu olaylarda otomatik e-posta gönderilir:
+                                    <ul class="mt-1">
+                                        <li>Yeni talep oluşturulduğunda → müşteriye onay</li>
+                                        <li>Temsilci yanıt eklediğinde → müşteriye bildirim</li>
+                                        <li>Talep durumu değiştiğinde → müşteriye bildirim</li>
+                                        <li>Talep atandığında → temsilciye bildirim</li>
+                                    </ul>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<DestekDepartman> departmanlar = new();
+    private bool isLoading = true;
+    private bool isSaving;
+    private string? loadError;
+
+    private string destekEmail = string.Empty;
+    private int? varsayilanDepartmanId;
+    private bool emailBildirimAktif;
+    private bool otomatikSlaKontrolu = true;
+    private bool bilgiBankasiAcik = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await SayfayiYenile();
+    }
+
+    private async Task SayfayiYenile()
+    {
+        loadError = null;
+        await Yukle();
+    }
+
+    private async Task Yukle()
+    {
+        isLoading = true;
+        try
+        {
+            departmanlar = await DestekService.GetDepartmanlarAsync();
+            var ayarlar = await DestekService.GetAyarlarByGrupAsync("Destek");
+
+            destekEmail = ayarlar.GetValueOrDefault("DestekEmail") ?? string.Empty;
+            varsayilanDepartmanId = int.TryParse(ayarlar.GetValueOrDefault("VarsayilanDepartmanId"), out var departmanId)
+                ? departmanId
+                : null;
+            emailBildirimAktif = bool.TryParse(ayarlar.GetValueOrDefault("EmailBildirimAktif"), out var emailAktif) && emailAktif;
+            otomatikSlaKontrolu = !bool.TryParse(ayarlar.GetValueOrDefault("OtomatikSlaKontrolu"), out var slaKontrol) || slaKontrol;
+            bilgiBankasiAcik = !bool.TryParse(ayarlar.GetValueOrDefault("BilgiBankasiAcik"), out var bilgiBankasi) || bilgiBankasi;
+        }
+        catch (Exception ex)
+        {
+            departmanlar = new();
+            destekEmail = string.Empty;
+            varsayilanDepartmanId = null;
+            emailBildirimAktif = false;
+            otomatikSlaKontrolu = true;
+            bilgiBankasiAcik = true;
+            loadError = ex.GetBaseException().Message;
+            ToastService.ShowError($"Destek ayarları yüklenemedi: {ex.GetBaseException().Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task Kaydet()
+    {
+        isSaving = true;
+        try
+        {
+            await DestekService.SetAyarAsync("DestekEmail", destekEmail ?? string.Empty, "Destek modülü e-posta adresi", "Destek");
+            await DestekService.SetAyarAsync("VarsayilanDepartmanId", varsayilanDepartmanId?.ToString() ?? string.Empty, "Varsayılan destek departmanı", "Destek");
+            await DestekService.SetAyarAsync("EmailBildirimAktif", emailBildirimAktif.ToString(), "Destek modülü e-posta bildirimleri aktif mi", "Destek");
+            await DestekService.SetAyarAsync("OtomatikSlaKontrolu", otomatikSlaKontrolu.ToString(), "SLA kontrolü otomatik çalışsın mı", "Destek");
+            await DestekService.SetAyarAsync("BilgiBankasiAcik", bilgiBankasiAcik.ToString(), "Bilgi bankası aktif mi", "Destek");
+
+            ToastService.ShowSuccess("Destek ayarları kaydedildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Destek ayarları kaydedilemedi: {ex.GetBaseException().Message}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}
+

@@ -1,0 +1,363 @@
+@page "/muhasebe/resmi-raporlar/yillik-izin"
+@using ClosedXML.Excel
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IPersonelMaasIzinService PersonelMaasIzinService
+@inject IToastService ToastService
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Yıllık İzin Takip Raporu</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3><i class="bi bi-calendar2-week me-2"></i>Yıllık İzin Takip Raporu</h3>
+            <small class="text-muted">Personel bazlı yıllık izin hakkı, kullanılan ve kalan izin günleri</small>
+        </div>
+        <a href="/muhasebe/resmi-raporlar" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Resmi Raporlara Dön
+        </a>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label">Yıl</label>
+                    <select class="form-select" @bind="secilenYil">
+                        @for (int yil = DateTime.Today.Year; yil >= DateTime.Today.Year - 5; yil--)
+                        {
+                            <option value="@yil">@yil</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Personel Ara</label>
+                    <input class="form-control" @bind="aramaMetni" @bind:event="oninput" placeholder="Ad soyad ara..." />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">İzin Durumu</label>
+                    <select class="form-select" @bind="filtreDurumu">
+                        <option value="Tumu">Tümü</option>
+                        <option value="KalanVar">Kalan İzin Var</option>
+                        <option value="Kritik">Kritik (5 gün ve altı)</option>
+                        <option value="Sifir">Kalan İzin Yok</option>
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex gap-2">
+                    <button class="btn btn-primary flex-grow-1" @onclick="RaporYukle">
+                        <i class="bi bi-search me-1"></i>Listele
+                    </button>
+                    <button class="btn btn-outline-success" @onclick="ExcelIndir" disabled="@(!FiltrelenmisDetaylar.Any())">
+                        <i class="bi bi-file-earmark-excel"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else if (rapor != null)
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body text-center py-3">
+                        <h3 class="mb-0">@rapor.ToplamPersonel</h3>
+                        <small>Toplam Personel</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-dark">
+                    <div class="card-body text-center py-3">
+                        <h3 class="mb-0">@rapor.ToplamKullanilanIzin</h3>
+                        <small>Kullanılan İzin</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body text-center py-3">
+                        <h3 class="mb-0">@rapor.ToplamKalanIzin</h3>
+                        <small>Kalan İzin</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-danger text-white">
+                    <div class="card-body text-center py-3">
+                        <h3 class="mb-0">@rapor.Detaylar.Count(x => x.KalanIzin <= 5)</h3>
+                        <small>Kritik Bakiye</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (rapor.TipBazliOzet.Any())
+        {
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <strong><i class="bi bi-pie-chart me-2"></i>İzin Türü Özeti</strong>
+                </div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        @foreach (var item in rapor.TipBazliOzet.OrderByDescending(x => x.ToplamGun))
+                        {
+                            <div class="col-md-3">
+                                <div class="border rounded p-2 h-100">
+                                    <div class="fw-semibold">@item.IzinTipiAdi</div>
+                                    <small class="text-muted">@item.Adet kayıt</small>
+                                    <div class="mt-1"><span class="badge bg-info">@item.ToplamGun gün</span></div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (!FiltrelenmisDetaylar.Any())
+        {
+            <div class="alert alert-info">Filtreye uygun personel bulunamadı.</div>
+        }
+        else
+        {
+            <div class="card">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped mb-0 align-middle">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Personel</th>
+                                    <th class="text-center">Yıllık Hak</th>
+                                    <th class="text-center">Devreden</th>
+                                    <th class="text-center">Kullanılan</th>
+                                    <th class="text-center">Kalan</th>
+                                    <th class="text-center">İzin Kaydı</th>
+                                    <th class="text-center">İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var detay in FiltrelenmisDetaylar)
+                                {
+                                    <tr>
+                                        <td><strong>@detay.SoforAdSoyad</strong></td>
+                                        <td class="text-center">@detay.YillikHak</td>
+                                        <td class="text-center">@detay.DevirenIzin</td>
+                                        <td class="text-center"><span class="badge bg-warning text-dark">@detay.KullanilanIzin</span></td>
+                                        <td class="text-center">
+                                            <span class="badge @GetKalanBadge(detay.KalanIzin)">@detay.KalanIzin</span>
+                                        </td>
+                                        <td class="text-center">@detay.IzinKayitlari.Count</td>
+                                        <td class="text-center">
+                                            <button class="btn btn-sm btn-outline-primary" @onclick="() => DetayAc(detay)">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@if (showDetayModal && seciliDetay != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title"><i class="bi bi-calendar-event me-2"></i>@seciliDetay.SoforAdSoyad - İzin Geçmişi</h5>
+                    <button type="button" class="btn-close" @onclick="DetayKapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3"><div class="border rounded p-2 text-center"><small class="d-block text-muted">Hak</small><strong>@seciliDetay.YillikHak</strong></div></div>
+                        <div class="col-md-3"><div class="border rounded p-2 text-center"><small class="d-block text-muted">Devreden</small><strong>@seciliDetay.DevirenIzin</strong></div></div>
+                        <div class="col-md-3"><div class="border rounded p-2 text-center"><small class="d-block text-muted">Kullanılan</small><strong>@seciliDetay.KullanilanIzin</strong></div></div>
+                        <div class="col-md-3"><div class="border rounded p-2 text-center"><small class="d-block text-muted">Kalan</small><strong>@seciliDetay.KalanIzin</strong></div></div>
+                    </div>
+
+                    @if (!seciliDetay.IzinKayitlari.Any())
+                    {
+                        <div class="alert alert-info mb-0">Bu yıl için izin kaydı bulunmuyor.</div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Tür</th>
+                                        <th>Başlangıç</th>
+                                        <th>Bitiş</th>
+                                        <th class="text-center">Gün</th>
+                                        <th>Durum</th>
+                                        <th>Açıklama</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var izin in seciliDetay.IzinKayitlari.OrderByDescending(x => x.BaslangicTarihi))
+                                    {
+                                        <tr>
+                                            <td>@GetIzinTipiAdi(izin.IzinTipi)</td>
+                                            <td>@izin.BaslangicTarihi.ToString("dd.MM.yyyy")</td>
+                                            <td>@izin.BitisTarihi.ToString("dd.MM.yyyy")</td>
+                                            <td class="text-center">@izin.ToplamGun</td>
+                                            <td>@GetIzinDurumAdi(izin.Durum)</td>
+                                            <td>@(string.IsNullOrWhiteSpace(izin.Aciklama) ? "-" : izin.Aciklama)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="DetayKapat">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private int secilenYil = DateTime.Today.Year;
+    private string aramaMetni = string.Empty;
+    private string filtreDurumu = "Tumu";
+    private bool isLoading = true;
+    private IzinRaporOzet? rapor;
+    private bool showDetayModal;
+    private IzinDetay? seciliDetay;
+
+    private IEnumerable<IzinDetay> FiltrelenmisDetaylar => (rapor?.Detaylar ?? new List<IzinDetay>())
+        .Where(x => string.IsNullOrWhiteSpace(aramaMetni) || x.SoforAdSoyad.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase))
+        .Where(x => filtreDurumu switch
+        {
+            "KalanVar" => x.KalanIzin > 0,
+            "Kritik" => x.KalanIzin <= 5,
+            "Sifir" => x.KalanIzin <= 0,
+            _ => true
+        })
+        .OrderBy(x => x.SoforAdSoyad);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RaporYukle();
+    }
+
+    private async Task RaporYukle()
+    {
+        isLoading = true;
+        try
+        {
+            rapor = await PersonelMaasIzinService.GetIzinRaporuAsync(secilenYil);
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Yıllık izin raporu yüklenemedi: {ex.GetBaseException().Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void DetayAc(IzinDetay detay)
+    {
+        seciliDetay = detay;
+        showDetayModal = true;
+    }
+
+    private void DetayKapat()
+    {
+        showDetayModal = false;
+        seciliDetay = null;
+    }
+
+    private async Task ExcelIndir()
+    {
+        try
+        {
+            using var workbook = new XLWorkbook();
+            var ws = workbook.Worksheets.Add("YillikIzin");
+
+            ws.Cell(1, 1).Value = $"YILLIK İZİN TAKİP RAPORU - {secilenYil}";
+            ws.Cell(1, 1).Style.Font.Bold = true;
+            ws.Cell(1, 1).Style.Font.FontSize = 14;
+            ws.Range(1, 1, 1, 6).Merge();
+
+            var basliklar = new[] { "Personel", "Yıllık Hak", "Devreden", "Kullanılan", "Kalan", "İzin Kaydı" };
+            for (int i = 0; i < basliklar.Length; i++)
+            {
+                ws.Cell(3, i + 1).Value = basliklar[i];
+                ws.Cell(3, i + 1).Style.Font.Bold = true;
+                ws.Cell(3, i + 1).Style.Fill.BackgroundColor = XLColor.LightSteelBlue;
+            }
+
+            var row = 4;
+            foreach (var detay in FiltrelenmisDetaylar)
+            {
+                ws.Cell(row, 1).Value = detay.SoforAdSoyad;
+                ws.Cell(row, 2).Value = detay.YillikHak;
+                ws.Cell(row, 3).Value = detay.DevirenIzin;
+                ws.Cell(row, 4).Value = detay.KullanilanIzin;
+                ws.Cell(row, 5).Value = detay.KalanIzin;
+                ws.Cell(row, 6).Value = detay.IzinKayitlari.Count;
+                row++;
+            }
+
+            ws.Columns().AdjustToContents();
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            await JS.InvokeVoidAsync("downloadFileFromBase64", $"yillik_izin_raporu_{secilenYil}.xlsx", Convert.ToBase64String(stream.ToArray()));
+            ToastService.ShowSuccess("Excel indirildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Excel indirilemedi: {ex.GetBaseException().Message}");
+        }
+    }
+
+    private static string GetKalanBadge(int kalanIzin) => kalanIzin switch
+    {
+        <= 0 => "bg-danger",
+        <= 5 => "bg-warning text-dark",
+        _ => "bg-success"
+    };
+
+    private static string GetIzinTipiAdi(IzinTipi tip) => tip switch
+    {
+        IzinTipi.YillikIzin => "Yıllık İzin",
+        IzinTipi.UcretsizIzin => "Ücretsiz İzin",
+        IzinTipi.RaporluIzin => "Raporlu İzin",
+        IzinTipi.MazeretIzni => "Mazeret İzni",
+        IzinTipi.EvlilikIzni => "Evlilik İzni",
+        IzinTipi.DogumIzni => "Doğum İzni",
+        IzinTipi.OlumIzni => "Ölüm İzni",
+        IzinTipi.IdariIzin => "İdari İzin",
+        _ => tip.ToString()
+    };
+
+    private static string GetIzinDurumAdi(IzinDurum durum) => durum switch
+    {
+        IzinDurum.Beklemede => "Beklemede",
+        IzinDurum.Onaylandi => "Onaylandı",
+        IzinDurum.Reddedildi => "Reddedildi",
+        IzinDurum.IptalEdildi => "İptal Edildi",
+        _ => durum.ToString()
+    };
+}
+

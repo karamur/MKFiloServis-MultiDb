@@ -1,0 +1,371 @@
+@page "/proforma-fatura/{Id:int}"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IProformaFaturaService ProformaService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Proforma Detay - Koa Filo Servis</PageTitle>
+
+<div class="container-fluid">
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+        </div>
+    }
+    else if (proforma == null)
+    {
+        <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle me-2"></i>Proforma fatura bulunamadı.
+        </div>
+    }
+    else
+    {
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h3 class="mb-0">
+                    <i class="bi bi-file-earmark-text me-2"></i>@proforma.ProformaNo
+                </h3>
+                <small class="text-muted">@proforma.Cari?.Unvan</small>
+            </div>
+            <div class="d-flex gap-2">
+                @if (!proforma.FaturayaDonusturuldu)
+                {
+                    <a href="/proforma-fatura/@Id/duzenle" class="btn btn-outline-primary">
+                        <i class="bi bi-pencil me-1"></i>Düzenle
+                    </a>
+                    
+                    @if (proforma.Durum == ProformaDurum.Taslak)
+                    {
+                        <button class="btn btn-info" @onclick="() => DurumDegistirAsync(ProformaDurum.Gonderildi)">
+                            <i class="bi bi-send me-1"></i>Gönderildi İşaretle
+                        </button>
+                    }
+                    @if (proforma.Durum == ProformaDurum.Gonderildi)
+                    {
+                        <button class="btn btn-success" @onclick="() => DurumDegistirAsync(ProformaDurum.Onaylandi)">
+                            <i class="bi bi-check-lg me-1"></i>Onaylandı
+                        </button>
+                        <button class="btn btn-danger" @onclick="() => DurumDegistirAsync(ProformaDurum.Reddedildi)">
+                            <i class="bi bi-x-lg me-1"></i>Reddedildi
+                        </button>
+                    }
+                    @if (proforma.Durum == ProformaDurum.Onaylandi)
+                    {
+                        <button class="btn btn-primary" @onclick="FaturayaDonusturAsync">
+                            <i class="bi bi-receipt me-1"></i>Faturaya Dönüştür
+                        </button>
+                    }
+                }
+                else
+                {
+                    <a href="/fatura/@proforma.FaturaId" class="btn btn-success">
+                        <i class="bi bi-receipt me-1"></i>Faturayı Görüntüle
+                    </a>
+                }
+                <button class="btn btn-outline-dark" @onclick="YazdirAc">
+                    <i class="bi bi-printer me-1"></i>Yazdır / PDF
+                </button>
+                <a href="/proforma-faturalar" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i>Geri
+                </a>
+            </div>
+        </div>
+
+        <div class="row">
+            @* Sol Panel - Bilgiler *@
+            <div class="col-lg-4">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <i class="bi bi-info-circle me-2"></i>Proforma Bilgileri
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm table-borderless mb-0">
+                            <tr>
+                                <td class="text-muted">Durum:</td>
+                                <td>
+                                    <span class="badge @DurumRengiGetir(proforma.Durum)">
+                                        @DurumAdiGetir(proforma.Durum)
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Tarih:</td>
+                                <td>@proforma.ProformaTarihi.ToString("dd.MM.yyyy")</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Geçerlilik:</td>
+                                <td>
+                                    @proforma.GecerlilikTarihi.ToString("dd.MM.yyyy")
+                                    @if (proforma.GecerlilikTarihi < DateTime.Now && !proforma.FaturayaDonusturuldu)
+                                    {
+                                        <span class="badge bg-danger ms-1">Süresi Doldu</span>
+                                    }
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Ödeme Koşulu:</td>
+                                <td>@(proforma.OdemeKosulu ?? "-")</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Vade:</td>
+                                <td>@(proforma.VadeGun?.ToString() ?? "-") gün</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Teslim Koşulu:</td>
+                                <td>@(proforma.TeslimKosulu ?? "-")</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <i class="bi bi-building me-2"></i>Cari Bilgileri
+                    </div>
+                    <div class="card-body">
+                        @if (proforma.Cari != null)
+                        {
+                            <h6 class="mb-2">@proforma.Cari.Unvan</h6>
+                            <p class="mb-1 small text-muted">@proforma.Cari.Adres</p>
+                            @if (!string.IsNullOrEmpty(proforma.Cari.Telefon))
+                            {
+                                <p class="mb-1 small"><i class="bi bi-telephone me-1"></i>@proforma.Cari.Telefon</p>
+                            }
+                            @if (!string.IsNullOrEmpty(proforma.Cari.Email))
+                            {
+                                <p class="mb-1 small"><i class="bi bi-envelope me-1"></i>@proforma.Cari.Email</p>
+                            }
+                        }
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(proforma.IlgiliKisi) || !string.IsNullOrEmpty(proforma.Telefon) || !string.IsNullOrEmpty(proforma.Email))
+                {
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <i class="bi bi-person me-2"></i>İletişim Bilgileri
+                        </div>
+                        <div class="card-body">
+                            @if (!string.IsNullOrEmpty(proforma.IlgiliKisi))
+                            {
+                                <p class="mb-1"><strong>@proforma.IlgiliKisi</strong></p>
+                            }
+                            @if (!string.IsNullOrEmpty(proforma.Telefon))
+                            {
+                                <p class="mb-1 small"><i class="bi bi-telephone me-1"></i>@proforma.Telefon</p>
+                            }
+                            @if (!string.IsNullOrEmpty(proforma.Email))
+                            {
+                                <p class="mb-1 small"><i class="bi bi-envelope me-1"></i>@proforma.Email</p>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (proforma.FaturayaDonusturuldu && proforma.Fatura != null)
+                {
+                    <div class="card mb-4 border-success">
+                        <div class="card-header bg-success text-white">
+                            <i class="bi bi-check-circle me-2"></i>Faturaya Dönüştürüldü
+                        </div>
+                        <div class="card-body">
+                            <p class="mb-1"><strong>Fatura No:</strong> @proforma.Fatura.FaturaNo</p>
+                            <p class="mb-1"><strong>Tarih:</strong> @proforma.FaturaDonusumTarihi?.ToString("dd.MM.yyyy HH:mm")</p>
+                            <a href="/fatura/@proforma.FaturaId" class="btn btn-sm btn-success mt-2">
+                                <i class="bi bi-arrow-right me-1"></i>Faturayı Görüntüle
+                            </a>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @* Sağ Panel - Kalemler ve Özet *@
+            <div class="col-lg-8">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <i class="bi bi-list-ul me-2"></i>Kalemler
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 40px;">#</th>
+                                        <th>Ürün/Hizmet</th>
+                                        <th class="text-end">Miktar</th>
+                                        <th>Birim</th>
+                                        <th class="text-end">Birim Fiyat</th>
+                                        <th class="text-end">İskonto</th>
+                                        <th class="text-end">KDV</th>
+                                        <th class="text-end">Tutar</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var kalem in proforma.Kalemler.Where(k => !k.IsDeleted).OrderBy(k => k.SiraNo))
+                                    {
+                                        <tr>
+                                            <td>@kalem.SiraNo</td>
+                                            <td>
+                                                <div>@kalem.UrunAdi</div>
+                                                @if (!string.IsNullOrEmpty(kalem.UrunKodu))
+                                                {
+                                                    <small class="text-muted">@kalem.UrunKodu</small>
+                                                }
+                                                @if (!string.IsNullOrEmpty(kalem.Aciklama))
+                                                {
+                                                    <small class="text-muted d-block">@kalem.Aciklama</small>
+                                                }
+                                            </td>
+                                            <td class="text-end">@kalem.Miktar.ToString("N2")</td>
+                                            <td>@kalem.Birim</td>
+                                            <td class="text-end">@kalem.BirimFiyat.ToString("N2") ₺</td>
+                                            <td class="text-end text-danger">
+                                                @if (kalem.IskontoTutar > 0)
+                                                {
+                                                    <span>-@kalem.IskontoTutar.ToString("N2") ₺</span>
+                                                    <small class="d-block">(%@kalem.IskontoOrani)</small>
+                                                }
+                                            </td>
+                                            <td class="text-end">
+                                                @kalem.KdvTutar.ToString("N2") ₺
+                                                <small class="d-block">(%@kalem.KdvOrani)</small>
+                                            </td>
+                                            <td class="text-end fw-bold">@kalem.ToplamTutar.ToString("N2") ₺</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                @* Tutar Özeti *@
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                @if (!string.IsNullOrEmpty(proforma.Aciklama))
+                                {
+                                    <div class="mb-3">
+                                        <label class="form-label text-muted">Açıklama</label>
+                                        <p class="mb-0">@proforma.Aciklama</p>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(proforma.OzelNotlar))
+                                {
+                                    <div class="mb-3">
+                                        <label class="form-label text-muted">Dahili Notlar</label>
+                                        <p class="mb-0 fst-italic">@proforma.OzelNotlar</p>
+                                    </div>
+                                }
+                            </div>
+                            <div class="col-md-6">
+                                <table class="table table-sm">
+                                    <tr>
+                                        <td class="text-muted">Ara Toplam:</td>
+                                        <td class="text-end">@proforma.AraToplam.ToString("N2") ₺</td>
+                                    </tr>
+                                    @if (proforma.IskontoTutar > 0)
+                                    {
+                                        <tr>
+                                            <td class="text-muted">İskonto:</td>
+                                            <td class="text-end text-danger">-@proforma.IskontoTutar.ToString("N2") ₺</td>
+                                        </tr>
+                                    }
+                                    <tr>
+                                        <td class="text-muted">KDV (%@proforma.KdvOrani):</td>
+                                        <td class="text-end">@proforma.KdvTutar.ToString("N2") ₺</td>
+                                    </tr>
+                                    <tr class="table-primary">
+                                        <td class="fw-bold fs-5">Genel Toplam:</td>
+                                        <td class="text-end fw-bold fs-4">@proforma.GenelToplam.ToString("N2") ₺</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private ProformaFatura? proforma;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await YukleAsync();
+    }
+
+    private async Task YukleAsync()
+    {
+        isLoading = true;
+        proforma = await ProformaService.GetByIdWithKalemlerAsync(Id);
+        isLoading = false;
+    }
+
+    private async Task DurumDegistirAsync(ProformaDurum yeniDurum)
+    {
+        try
+        {
+            await ProformaService.DurumDegistirAsync(Id, yeniDurum);
+            await YukleAsync();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Hata: {ex.Message}");
+        }
+    }
+
+    private async Task FaturayaDonusturAsync()
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Bu proforma faturaya dönüştürülecek. Onaylıyor musunuz?");
+        if (!confirmed) return;
+
+        try
+        {
+            var fatura = await ProformaService.FaturayaDonusturAsync(Id);
+            Navigation.NavigateTo($"/fatura/{fatura.Id}");
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Hata: {ex.Message}");
+        }
+    }
+
+    private async Task YazdirAc()
+    {
+        await JS.InvokeVoidAsync("eval", $"window.open('/proforma-fatura/{Id}/yazdir', '_blank', 'width=900,height=750')");
+    }
+
+    private string DurumAdiGetir(ProformaDurum durum) => durum switch
+    {
+        ProformaDurum.Taslak => "Taslak",
+        ProformaDurum.Gonderildi => "Gönderildi",
+        ProformaDurum.Onaylandi => "Onaylandı",
+        ProformaDurum.Reddedildi => "Reddedildi",
+        ProformaDurum.FaturayaDonusturuldu => "Faturaya Dönüştürüldü",
+        ProformaDurum.SuresiDoldu => "Süresi Doldu",
+        _ => durum.ToString()
+    };
+
+    private string DurumRengiGetir(ProformaDurum durum) => durum switch
+    {
+        ProformaDurum.Taslak => "bg-secondary",
+        ProformaDurum.Gonderildi => "bg-info",
+        ProformaDurum.Onaylandi => "bg-success",
+        ProformaDurum.Reddedildi => "bg-danger",
+        ProformaDurum.FaturayaDonusturuldu => "bg-primary",
+        ProformaDurum.SuresiDoldu => "bg-warning text-dark",
+        _ => "bg-secondary"
+    };
+}
+

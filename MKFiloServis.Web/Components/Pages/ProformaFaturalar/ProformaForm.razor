@@ -1,0 +1,511 @@
+@page "/proforma-fatura/yeni"
+@page "/proforma-fatura/{Id:int}/duzenle"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IProformaFaturaService ProformaService
+@inject ICariService CariService
+@inject IStokService StokService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>@(Id.HasValue ? "Proforma Düzenle" : "Yeni Proforma") - Koa Filo Servis</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3>
+            <i class="bi bi-file-earmark-text me-2"></i>
+            @(Id.HasValue ? $"Proforma Düzenle: {proforma.ProformaNo}" : "Yeni Proforma Fatura")
+        </h3>
+        <a href="/proforma-faturalar" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Geri
+        </a>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            @* Sol Panel - Temel Bilgiler *@
+            <div class="col-lg-4">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <i class="bi bi-info-circle me-2"></i>Temel Bilgiler
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Proforma No</label>
+                            <input type="text" class="form-control" @bind="proforma.ProformaNo" readonly />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Proforma Tarihi <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" @bind="proforma.ProformaTarihi" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Geçerlilik Tarihi <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" @bind="proforma.GecerlilikTarihi" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Cari <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <select class="form-select" @bind="proforma.CariId">
+                                    <option value="0">-- Seçiniz --</option>
+                                    @foreach (var cari in cariler)
+                                    {
+                                        <option value="@cari.Id">@cari.Unvan</option>
+                                    }
+                                </select>
+                                <button class="btn btn-outline-success" type="button" title="Yeni Cari Ekle"
+                                        @onclick="YeniCariModalAc">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">KDV Oranı (%)</label>
+                            <input type="number" class="form-control" @bind="proforma.KdvOrani" step="0.01" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <i class="bi bi-truck me-2"></i>Ödeme ve Teslimat
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Ödeme Koşulu</label>
+                            <select class="form-select" @bind="proforma.OdemeKosulu">
+                                <option value="">-- Seçiniz --</option>
+                                <option value="Peşin">Peşin</option>
+                                <option value="15 Gün Vadeli">15 Gün Vadeli</option>
+                                <option value="30 Gün Vadeli">30 Gün Vadeli</option>
+                                <option value="45 Gün Vadeli">45 Gün Vadeli</option>
+                                <option value="60 Gün Vadeli">60 Gün Vadeli</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Vade Gün</label>
+                            <input type="number" class="form-control" @bind="proforma.VadeGun" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Teslim Koşulu</label>
+                            <input type="text" class="form-control" @bind="proforma.TeslimKosulu" placeholder="Fabrika teslim, Kapıda teslim..." />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <i class="bi bi-person me-2"></i>İletişim Bilgileri
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">İlgili Kişi</label>
+                            <input type="text" class="form-control" @bind="proforma.IlgiliKisi" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Telefon</label>
+                            <input type="tel" class="form-control" @bind="proforma.Telefon" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">E-posta</label>
+                            <input type="email" class="form-control" @bind="proforma.Email" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @* Sağ Panel - Kalemler ve Özet *@
+            <div class="col-lg-8">
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-list-ul me-2"></i>Kalemler</span>
+                        <button class="btn btn-sm btn-primary" @onclick="YeniKalemEkle">
+                            <i class="bi bi-plus-lg me-1"></i>Kalem Ekle
+                        </button>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (kalemler.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width: 40px;">#</th>
+                                            <th>Ürün/Hizmet</th>
+                                            <th style="width: 80px;">Miktar</th>
+                                            <th style="width: 80px;">Birim</th>
+                                            <th style="width: 100px;">Birim Fiyat</th>
+                                            <th style="width: 80px;">İsk. %</th>
+                                            <th style="width: 100px;" class="text-end">Tutar</th>
+                                            <th style="width: 60px;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var (kalem, index) in kalemler.Select((k, i) => (k, i)))
+                                        {
+                                            <tr>
+                                                <td>@(index + 1)</td>
+                                                <td>
+                                                    <input type="text" class="form-control form-control-sm" 
+                                                           @bind="kalem.UrunAdi" placeholder="Ürün/Hizmet adı" />
+                                                </td>
+                                                <td>
+                                                    <input type="number" class="form-control form-control-sm" 
+                                                           @bind="kalem.Miktar" step="0.01" @bind:after="() => KalemHesapla(kalem)" />
+                                                </td>
+                                                <td>
+                                                    <select class="form-select form-select-sm" @bind="kalem.Birim">
+                                                        <option value="Adet">Adet</option>
+                                                        <option value="Sefer">Sefer</option>
+                                                        <option value="Saat">Saat</option>
+                                                        <option value="Gün">Gün</option>
+                                                        <option value="Ay">Ay</option>
+                                                        <option value="Km">Km</option>
+                                                    </select>
+                                                </td>
+                                                <td>
+                                                    <input type="number" class="form-control form-control-sm" 
+                                                           @bind="kalem.BirimFiyat" step="0.01" @bind:after="() => KalemHesapla(kalem)" />
+                                                </td>
+                                                <td>
+                                                    <input type="number" class="form-control form-control-sm" 
+                                                           @bind="kalem.IskontoOrani" step="0.01" @bind:after="() => KalemHesapla(kalem)" />
+                                                </td>
+                                                <td class="text-end fw-bold">
+                                                    @kalem.ToplamTutar.ToString("N2")
+                                                </td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => KalemSil(index)">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                Henüz kalem eklenmedi
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                @* Özet *@
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <i class="bi bi-calculator me-2"></i>Tutar Özeti
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Açıklama</label>
+                                    <textarea class="form-control" rows="3" @bind="proforma.Aciklama" 
+                                              placeholder="Müşteriye gösterilecek açıklama..."></textarea>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Dahili Notlar</label>
+                                    <textarea class="form-control" rows="2" @bind="proforma.OzelNotlar" 
+                                              placeholder="Sadece dahili kullanım için..."></textarea>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <table class="table table-sm">
+                                    <tr>
+                                        <td>Ara Toplam:</td>
+                                        <td class="text-end">@proforma.AraToplam.ToString("N2") ₺</td>
+                                    </tr>
+                                    <tr>
+                                        <td>İskonto:</td>
+                                        <td class="text-end text-danger">-@proforma.IskontoTutar.ToString("N2") ₺</td>
+                                    </tr>
+                                    <tr>
+                                        <td>KDV (%@proforma.KdvOrani):</td>
+                                        <td class="text-end">@proforma.KdvTutar.ToString("N2") ₺</td>
+                                    </tr>
+                                    <tr class="table-primary">
+                                        <td class="fw-bold">Genel Toplam:</td>
+                                        <td class="text-end fw-bold fs-5">@proforma.GenelToplam.ToString("N2") ₺</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @* Butonlar *@
+                <div class="d-flex justify-content-end gap-2">
+                    <a href="/proforma-faturalar" class="btn btn-outline-secondary">
+                        <i class="bi bi-x-lg me-1"></i>İptal
+                    </a>
+                    <button class="btn btn-primary" @onclick="KaydetAsync" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check-lg me-1"></i>
+                        }
+                        Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    private ProformaFatura proforma = new()
+    {
+        ProformaTarihi = DateTime.Now,
+        GecerlilikTarihi = DateTime.Now.AddDays(15),
+        KdvOrani = 20,
+        VadeGun = 30
+    };
+    private List<ProformaFaturaKalem> kalemler = new();
+    private List<Cari> cariler = new();
+    private bool isLoading = true;
+    private bool isSaving = false;
+
+    // Hızlı Cari Modal
+    private bool cariModalAcik = false;
+    private bool cariKaydediliyor = false;
+    private string cariModalHata = string.Empty;
+    private Cari yeniCari = new() { CariTipi = CariTipi.Musteri, Aktif = true };
+
+    protected override async Task OnInitializedAsync()
+    {
+        cariler = await CariService.GetAllAsync();
+
+        if (Id.HasValue)
+        {
+            var existing = await ProformaService.GetByIdWithKalemlerAsync(Id.Value);
+            if (existing != null)
+            {
+                proforma = existing;
+                kalemler = existing.Kalemler.Where(k => !k.IsDeleted).ToList();
+            }
+        }
+        else
+        {
+            proforma.ProformaNo = await ProformaService.GenerateNextProformaNoAsync();
+        }
+
+        isLoading = false;
+    }
+
+    private void YeniKalemEkle()
+    {
+        kalemler.Add(new ProformaFaturaKalem
+        {
+            SiraNo = kalemler.Count + 1,
+            Miktar = 1,
+            Birim = "Adet",
+            KdvOrani = proforma.KdvOrani
+        });
+    }
+
+    private void KalemSil(int index)
+    {
+        if (index >= 0 && index < kalemler.Count)
+        {
+            kalemler.RemoveAt(index);
+            ToplamHesapla();
+        }
+    }
+
+    private void KalemHesapla(ProformaFaturaKalem kalem)
+    {
+        kalem.AraToplam = kalem.Miktar * kalem.BirimFiyat;
+        kalem.IskontoTutar = kalem.AraToplam * (kalem.IskontoOrani / 100);
+        kalem.NetTutar = kalem.AraToplam - kalem.IskontoTutar;
+        kalem.KdvTutar = kalem.NetTutar * (kalem.KdvOrani / 100);
+        kalem.ToplamTutar = kalem.NetTutar + kalem.KdvTutar;
+        ToplamHesapla();
+    }
+
+    private void ToplamHesapla()
+    {
+        proforma.AraToplam = kalemler.Sum(k => k.AraToplam);
+        proforma.IskontoTutar = kalemler.Sum(k => k.IskontoTutar);
+        var netTutar = proforma.AraToplam - proforma.IskontoTutar;
+        proforma.KdvTutar = netTutar * (proforma.KdvOrani / 100);
+        proforma.GenelToplam = netTutar + proforma.KdvTutar;
+    }
+
+    private async Task KaydetAsync()
+    {
+        if (proforma.CariId == 0)
+        {
+            await JS.InvokeVoidAsync("alert", "Lütfen cari seçiniz.");
+            return;
+        }
+
+        if (!kalemler.Any())
+        {
+            await JS.InvokeVoidAsync("alert", "En az bir kalem eklemelisiniz.");
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            ToplamHesapla();
+
+            if (Id.HasValue)
+            {
+                // Güncelleme
+                await ProformaService.UpdateAsync(proforma);
+                
+                // Kalemler için ayrı işlem gerekebilir
+                // Şimdilik basit tutuyoruz
+            }
+            else
+            {
+                // Yeni oluşturma
+                proforma.Kalemler = kalemler;
+                proforma = await ProformaService.CreateAsync(proforma);
+            }
+
+            Navigation.NavigateTo($"/proforma-fatura/{proforma.Id}");
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Hata: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void YeniCariModalAc()
+    {
+        yeniCari = new Cari { CariTipi = CariTipi.Musteri, Aktif = true };
+        cariModalHata = string.Empty;
+        cariModalAcik = true;
+    }
+
+    private void CariModalKapat()
+    {
+        cariModalAcik = false;
+        cariModalHata = string.Empty;
+    }
+
+    private async Task YeniCariKaydetAsync()
+    {
+        if (string.IsNullOrWhiteSpace(yeniCari.Unvan))
+        {
+            cariModalHata = "Ünvan alanı zorunludur.";
+            return;
+        }
+
+        cariKaydediliyor = true;
+        cariModalHata = string.Empty;
+        try
+        {
+            yeniCari.CariKodu = await CariService.GenerateNextKodAsync();
+            var kaydedilenCari = await CariService.CreateAsync(yeniCari);
+            cariler = await CariService.GetAllAsync();
+            proforma.CariId = kaydedilenCari.Id;
+            cariModalAcik = false;
+        }
+        catch (Exception ex)
+        {
+            cariModalHata = $"Kayıt sırasında hata oluştu: {ex.Message}";
+        }
+        finally
+        {
+            cariKaydediliyor = false;
+        }
+    }
+}
+
+@* Hızlı Cari Kayıt Modalı *@
+@if (cariModalAcik)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-person-plus me-2"></i>Yeni Cari Ekle
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CariModalKapat"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrEmpty(cariModalHata))
+                    {
+                        <div class="alert alert-danger py-2">
+                            <i class="bi bi-exclamation-triangle me-1"></i>@cariModalHata
+                        </div>
+                    }
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label">Ünvan / Ad Soyad <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" @bind="yeniCari.Unvan"
+                                   placeholder="Firma unvanı veya kişi adı" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Cari Tipi <span class="text-danger">*</span></label>
+                            <select class="form-select" @bind="yeniCari.CariTipi">
+                                <option value="@CariTipi.Musteri">Müşteri</option>
+                                <option value="@CariTipi.Tedarikci">Tedarikçi</option>
+                                <option value="@CariTipi.MusteriTedarikci">Müşteri/Tedarikçi</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Telefon</label>
+                            <input type="tel" class="form-control" @bind="yeniCari.Telefon" placeholder="0xxx xxx xx xx" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">E-posta</label>
+                            <input type="email" class="form-control" @bind="yeniCari.Email" placeholder="ornek@firma.com" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Vergi No / TC Kimlik</label>
+                            <input type="text" class="form-control" @bind="yeniCari.VergiNo" placeholder="Opsiyonel" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Vergi Dairesi</label>
+                            <input type="text" class="form-control" @bind="yeniCari.VergiDairesi" placeholder="Opsiyonel" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" @onclick="CariModalKapat">
+                        <i class="bi bi-x-lg me-1"></i>İptal
+                    </button>
+                    <button type="button" class="btn btn-success" @onclick="YeniCariKaydetAsync" disabled="@cariKaydediliyor">
+                        @if (cariKaydediliyor)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check-lg me-1"></i>
+                        }
+                        Cari Kaydet &amp; Seç
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+

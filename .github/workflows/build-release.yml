@@ -1,4 +1,4 @@
-﻿name: Build Setup EXEs and Release
+name: Build Setup EXEs and Release
 
 on:
   push:
@@ -97,7 +97,7 @@ jobs:
       - name: Artifact yukle
         uses: actions/upload-artifact@v4
         with:
-          name: KOAFiloServis-Setup-v${{ steps.version.outputs.VERSION }}
+          name: MKFiloServis-Setup-v${{ steps.version.outputs.VERSION }}
           path: |
             ${{ steps.artifacts.outputs.OUT_DIR }}/*.exe
             ${{ steps.artifacts.outputs.OUT_DIR }}/*.sha256
@@ -109,7 +109,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', steps.version.outputs.VERSION) }}
-          name: KOAFiloServis v${{ steps.version.outputs.VERSION }}
+          name: MKFiloServis v${{ steps.version.outputs.VERSION }}
           draft: ${{ github.event_name == 'workflow_dispatch' }}
           prerelease: ${{ github.event.inputs.prerelease == 'true' }}
           generate_release_notes: true
@@ -118,7 +118,7 @@ jobs:
             ${{ steps.artifacts.outputs.OUT_DIR }}/*.exe
             ${{ steps.artifacts.outputs.OUT_DIR }}/*.sha256
           body: |
-            ## KOAFiloServis v${{ steps.version.outputs.VERSION }}
+            ## MKFiloServis v${{ steps.version.outputs.VERSION }}
 
             Windows icin imzasiz kurulum paketleri (Inno Setup 6 ile uretildi).
 
@@ -126,15 +126,15 @@ jobs:
 
             | Dosya | Aciklama |
             |---|---|
-            | `KOAFiloServisKurulum-${{ steps.version.outputs.VERSION }}.exe` | **Tam kurulum** - Web (IIS) + Lisans + DataSync |
-            | `KOAFiloServisGuncelle-${{ steps.version.outputs.VERSION }}.exe` | Mevcut kurulum uzerine guncelleme |
-            | `KOAFiloServisKurulumMusteri-${{ steps.version.outputs.VERSION }}.exe` | Musteri dagitim paketi |
+            | `MKFiloServisKurulum-${{ steps.version.outputs.VERSION }}.exe` | **Tam kurulum** - Web (IIS) + Lisans + DataSync |
+            | `MKFiloServisGuncelle-${{ steps.version.outputs.VERSION }}.exe` | Mevcut kurulum uzerine guncelleme |
+            | `MKFiloServisKurulumMusteri-${{ steps.version.outputs.VERSION }}.exe` | Musteri dagitim paketi |
             | `KOALisansArac-${{ steps.version.outputs.VERSION }}.exe` | Bagimsiz lisans yonetim araci |
             | `*.sha256` | Ilgili EXE icin SHA256 saglama dosyasi |
 
             ### Hizli Kurulum
 
-            1. `KOAFiloServisKurulum-${{ steps.version.outputs.VERSION }}.exe` dosyasini indirin
+            1. `MKFiloServisKurulum-${{ steps.version.outputs.VERSION }}.exe` dosyasini indirin
             2. Sag tiklayip **Yonetici olarak calistir** secin
             3. "On Hazirlik" adiminda IIS / .NET Hosting Bundle eksikse otomatik kurulum secenegini isaretleyin
             4. Kurulum bitince `http://localhost:5190` adresinden acin
@@ -148,7 +148,8 @@ jobs:
             ### SHA256 Dogrulama
 
             ```powershell
-            Get-FileHash KOAFiloServisKurulum-${{ steps.version.outputs.VERSION }}.exe -Algorithm SHA256
+            Get-FileHash MKFiloServisKurulum-${{ steps.version.outputs.VERSION }}.exe -Algorithm SHA256
             ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

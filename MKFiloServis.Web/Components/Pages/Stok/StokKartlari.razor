@@ -1,0 +1,457 @@
+@page "/stok/kartlar"
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@inject IStokService StokService
+@inject ICariService CariService
+@inject NavigationManager Navigation
+@inject IToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>Stok Kartları</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="mb-0">
+            <i class="bi bi-box-seam me-2"></i>Stok Kartları
+        </h3>
+        <div>
+            <button class="btn btn-outline-secondary me-2" @onclick='() => Navigation.NavigateTo("/stok")'>
+                <i class="bi bi-arrow-left me-1"></i>Geri
+            </button>
+            <button class="btn btn-success" @onclick="YeniKart">
+                <i class="bi bi-plus-lg me-1"></i>Yeni Stok Kartı
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtreler -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Stok Tipi</label>
+                    <select class="form-select" @bind="filtreStokTipi" @bind:after="LoadDataAsync">
+                        <option value="">Tümü</option>
+                        @foreach (var tip in Enum.GetValues<StokTipi>())
+                        {
+                            <option value="@tip">@GetStokTipiAdi(tip)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Kategori</label>
+                    <select class="form-select" @bind="filtreKategoriId" @bind:after="LoadDataAsync">
+                        <option value="">Tümü</option>
+                        @foreach (var kat in kategoriler)
+                        {
+                            <option value="@kat.Id">@kat.KategoriAdi</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Durum</label>
+                    <select class="form-select" @bind="filtreAktif" @bind:after="LoadDataAsync">
+                        <option value="">Tümü</option>
+                        <option value="true">Aktif</option>
+                        <option value="false">Pasif</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Arama</label>
+                    <input type="text" class="form-control" placeholder="Kod veya ad ara..." 
+                           @bind="aramaMetni" @bind:event="oninput" @bind:after="LoadDataAsync" />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="d-flex justify-content-center my-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Stok Kodu</th>
+                                <th>Stok Adı</th>
+                                <th>Tip</th>
+                                <th>Kategori</th>
+                                <th>Birim</th>
+                                <th class="text-end">Mevcut Stok</th>
+                                <th class="text-end">Alış Fiyatı</th>
+                                <th class="text-end">Satış Fiyatı</th>
+                                <th class="text-center">Durum</th>
+                                <th class="text-center">İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (filtrelenmisKartlar.Any())
+                            {
+                                @foreach (var stok in filtrelenmisKartlar)
+                                {
+                                    var dusukStok = stok.StokTakibiYapilsin && stok.MevcutStok <= stok.MinStokMiktari;
+                                    <tr class="@(dusukStok ? "table-warning" : "")">
+                                        <td><code>@stok.StokKodu</code></td>
+                                        <td>
+                                            @stok.StokAdi
+                                            @if (dusukStok)
+                                            {
+                                                <i class="bi bi-exclamation-triangle text-warning ms-1" title="Düşük stok"></i>
+                                            }
+                                        </td>
+                                        <td><span class="badge bg-secondary">@GetStokTipiAdi(stok.StokTipi)</span></td>
+                                        <td>@(stok.Kategori?.KategoriAdi ?? "-")</td>
+                                        <td>@stok.Birim</td>
+                                        <td class="text-end @(dusukStok ? "text-danger fw-bold" : "")">
+                                            @stok.MevcutStok.ToString("N2")
+                                        </td>
+                                        <td class="text-end">@stok.AlisFiyati.ToString("N2") ₺</td>
+                                        <td class="text-end">@stok.SatisFiyati.ToString("N2") ₺</td>
+                                        <td class="text-center">
+                                            @if (stok.Aktif)
+                                            {
+                                                <span class="badge bg-success">Aktif</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary">Pasif</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => DuzenleKart(stok)" title="Düzenle">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-info me-1" @onclick="() => StokHareketleri(stok)" title="Hareketler">
+                                                <i class="bi bi-list-ul"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => SilKart(stok)" title="Sil">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="10" class="text-center text-muted py-4">
+                                        <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                                        <p class="mb-0 mt-2">Kayıt bulunamadı</p>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Stok Kartı Modal -->
+@if (showModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-box-seam me-2"></i>
+                        @(editingKart?.Id > 0 ? "Stok Kartı Düzenle" : "Yeni Stok Kartı")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="editingKart" OnValidSubmit="SaveKart">
+                        <DataAnnotationsValidator />
+                        
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Stok Kodu</label>
+                                <InputText class="form-control" @bind-Value="editingKart!.StokKodu" readonly="@(editingKart?.Id > 0)" />
+                                <small class="text-muted">Otomatik oluşturulur</small>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Stok Tipi</label>
+                                <InputSelect class="form-select" @bind-Value="editingKart.StokTipi">
+                                    @foreach (var tip in Enum.GetValues<StokTipi>())
+                                    {
+                                        <option value="@tip">@GetStokTipiAdi(tip)</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Kategori</label>
+                                <InputSelect class="form-select" @bind-Value="editingKart.KategoriId">
+                                    <option value="">Seçiniz</option>
+                                    @foreach (var kat in kategoriler)
+                                    {
+                                        <option value="@kat.Id">@kat.KategoriAdi</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                            
+                            <div class="col-12">
+                                <label class="form-label">Stok Adı *</label>
+                                <InputText class="form-control" @bind-Value="editingKart.StokAdi" />
+                                <ValidationMessage For="() => editingKart.StokAdi" />
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label">Barkod</label>
+                                <InputText class="form-control" @bind-Value="editingKart.Barkod" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Birim</label>
+                                <InputText class="form-control" @bind-Value="editingKart.Birim" />
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <label class="form-label">Alış Fiyatı</label>
+                                <InputNumber class="form-control" @bind-Value="editingKart.AlisFiyati" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Satış Fiyatı</label>
+                                <InputNumber class="form-control" @bind-Value="editingKart.SatisFiyati" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">KDV Oranı (%)</label>
+                                <InputNumber class="form-control" @bind-Value="editingKart.KdvOrani" />
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="form-check mt-4">
+                                    <InputCheckbox class="form-check-input" @bind-Value="editingKart.StokTakibiYapilsin" id="stokTakibi" />
+                                    <label class="form-check-label" for="stokTakibi">Stok Takibi Yapılsın</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Min Stok Miktarı</label>
+                                <InputNumber class="form-control" @bind-Value="editingKart.MinStokMiktari" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Maks Stok Miktarı</label>
+                                <InputNumber class="form-control" @bind-Value="editingKart.MaksStokMiktari" />
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label">Varsayılan Tedarikçi</label>
+                                <InputSelect class="form-select" @bind-Value="editingKart.VarsayilanTedarikciId">
+                                    <option value="">Seçiniz</option>
+                                    @foreach (var cari in tedarikciler)
+                                    {
+                                        <option value="@cari.Id">@cari.Unvan</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check mt-4">
+                                    <InputCheckbox class="form-check-input" @bind-Value="editingKart.Aktif" id="aktif" />
+                                    <label class="form-check-label" for="aktif">Aktif</label>
+                                </div>
+                            </div>
+                            
+                            <div class="col-12">
+                                <label class="form-label">Açıklama</label>
+                                <InputTextArea class="form-control" @bind-Value="editingKart.Aciklama" rows="2" />
+                            </div>
+                            
+                            <div class="col-12">
+                                <label class="form-label">Notlar</label>
+                                <InputTextArea class="form-control" @bind-Value="editingKart.Notlar" rows="2" />
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4 d-flex justify-content-end">
+                            <button type="button" class="btn btn-secondary me-2" @onclick="CloseModal">İptal</button>
+                            <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                                @if (isSaving)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                Kaydet
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private bool showModal = false;
+    private bool isSaving = false;
+    
+    private List<StokKarti> stokKartlari = new();
+    private List<StokKategori> kategoriler = new();
+    private List<Cari> tedarikciler = new();
+    private StokKarti? editingKart;
+    
+    // Filtreler
+    private StokTipi? filtreStokTipi;
+    private int? filtreKategoriId;
+    private bool? filtreAktif = true;
+    private string aramaMetni = "";
+
+    private IEnumerable<StokKarti> filtrelenmisKartlar => stokKartlari
+        .Where(s => string.IsNullOrEmpty(aramaMetni) || 
+                    s.StokKodu.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase) ||
+                    s.StokAdi.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+            
+            // Sıralı çağrılar - DbContext threading sorunu önlenir
+            kategoriler = await StokService.GetKategorilerAsync();
+            tedarikciler = await CariService.GetAllAsync();
+            stokKartlari = await StokService.GetStokKartlariAsync(filtreStokTipi, filtreKategoriId, filtreAktif);
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Veri yüklenirken hata: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void YeniKart()
+    {
+        editingKart = new StokKarti
+        {
+            Birim = "Adet",
+            KdvOrani = 20,
+            StokTakibiYapilsin = true,
+            Aktif = true
+        };
+        showModal = true;
+    }
+
+    private void DuzenleKart(StokKarti stok)
+    {
+        editingKart = new StokKarti
+        {
+            Id = stok.Id,
+            StokKodu = stok.StokKodu,
+            StokAdi = stok.StokAdi,
+            Aciklama = stok.Aciklama,
+            Barkod = stok.Barkod,
+            StokTipi = stok.StokTipi,
+            AltTipi = stok.AltTipi,
+            KategoriId = stok.KategoriId,
+            Birim = stok.Birim,
+            AlisFiyati = stok.AlisFiyati,
+            SatisFiyati = stok.SatisFiyati,
+            KdvOrani = stok.KdvOrani,
+            StokTakibiYapilsin = stok.StokTakibiYapilsin,
+            MinStokMiktari = stok.MinStokMiktari,
+            MaksStokMiktari = stok.MaksStokMiktari,
+            VarsayilanTedarikciId = stok.VarsayilanTedarikciId,
+            Aktif = stok.Aktif,
+            Notlar = stok.Notlar
+        };
+        showModal = true;
+    }
+
+    private async Task SaveKart()
+    {
+        if (editingKart == null || isSaving) return;
+        
+        try
+        {
+            isSaving = true;
+            StateHasChanged();
+            
+            if (editingKart.Id > 0)
+            {
+                await StokService.UpdateStokKartiAsync(editingKart);
+                ToastService.ShowSuccess("Stok kartı güncellendi");
+            }
+            else
+            {
+                await StokService.CreateStokKartiAsync(editingKart);
+                ToastService.ShowSuccess("Stok kartı oluşturuldu");
+            }
+            
+            showModal = false;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Kayıt hatası: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SilKart(StokKarti stok)
+    {
+        if (isLoading) return;
+        
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+            
+            await StokService.DeleteStokKartiAsync(stok.Id);
+            ToastService.ShowSuccess("Stok kartı silindi");
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Silme hatası: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void StokHareketleri(StokKarti stok)
+    {
+        Navigation.NavigateTo($"/stok/hareketler?stokId={stok.Id}");
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        editingKart = null;
+    }
+
+    private string GetStokTipiAdi(StokTipi tip) => tip switch
+    {
+        StokTipi.Mal => "Mal",
+        StokTipi.Hizmet => "Hizmet",
+        StokTipi.Arac => "Araç",
+        StokTipi.YedekParca => "Yedek Parça",
+        StokTipi.SarfMalzeme => "Sarf Malzeme",
+        StokTipi.Demirbas => "Demirbaş",
+        _ => "Diğer"
+    };
+}
+

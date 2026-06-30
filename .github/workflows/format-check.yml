@@ -1,4 +1,4 @@
-﻿name: 🎨 Format Check
+name: 🎨 Format Check
 
 on:
   pull_request:
@@ -39,3 +39,4 @@ jobs:
         run: |
           dotnet format --verify-no-changes --severity warn --verbosity diagnostic \
             || (echo "::error::Kod formatı .editorconfig ile uyumlu değil. Lokal olarak 'dotnet format' çalıştırıp commit'leyin." && exit 1)
+
