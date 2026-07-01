@@ -1,15 +1,15 @@
 ﻿<#
 .SYNOPSIS
-    KOAFiloServis-MultiDb kurulum paketleri uretir.
+    MKFiloServis-MultiDb kurulum paketleri uretir.
 
 .DESCRIPTION
-    1) KOAFiloServis.Web           -> publish (framework-dependent, IIS)
-    2) KOAFiloServis.LisansDesktop -> publish (self-contained, win-x64, SingleFile)
-    3) KOAFiloServis.DataSync      -> publish (self-contained, win-x64, SingleFile)
-    4) Inno Setup - Setup.iss      -> KOAFiloServisKurulum-<version>.exe (tam paket)
-    5) Inno Setup - GuncelleSetup.iss-> KOAFiloServisGuncelle-<version>.exe
-    6) Inno Setup - MusteriSetup.iss-> KOAFiloServisKurulumMusteri-<version>.exe
-    7) Inno Setup - LisansSetup.iss-> KOALisansArac-<version>.exe
+    1) MKFiloServis.Web           -> publish (framework-dependent, IIS)
+    2) MKFiloServis.LisansDesktop -> publish (self-contained, win-x64, SingleFile)
+    3) MKFiloServis.DataSync      -> publish (self-contained, win-x64, SingleFile)
+    4) Inno Setup - Setup.iss      -> MKFiloServisKurulum-<version>.exe (tam paket)
+    5) Inno Setup - GuncelleSetup.iss-> MKFiloServisGuncelle-<version>.exe
+    6) Inno Setup - MusteriSetup.iss-> MKFiloServisKurulumMusteri-<version>.exe
+    7) Inno Setup - LisansSetup.iss-> MKLisansArac-<version>.exe
 
 .PARAMETER Version
     Paket versiyon numarasi. Varsayilan 1.0.25
@@ -39,9 +39,9 @@ $RepoRoot  = Split-Path -Parent $Root
 $Payload   = Join-Path $Root 'payload'
 $Output    = Join-Path $Root "output\v$Version"
 
-$Web       = Join-Path $RepoRoot 'KOAFiloServis.Web\KOAFiloServis.Web.csproj'
-$Lisans    = Join-Path $RepoRoot 'KOAFiloServis.LisansDesktop\KOAFiloServis.LisansDesktop.csproj'
-$DataSync  = Join-Path $RepoRoot 'KOAFiloServis.DataSync\KOAFiloServis.DataSync.csproj'
+$Web       = Join-Path $RepoRoot 'MKFiloServis.Web\MKFiloServis.Web.csproj'
+$Lisans    = Join-Path $RepoRoot 'MKFiloServis.LisansDesktop\MKFiloServis.LisansDesktop.csproj'
+$DataSync  = Join-Path $RepoRoot 'MKFiloServis.DataSync\MKFiloServis.DataSync.csproj'
 
 $IsccExe = @(
     "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
@@ -54,7 +54,7 @@ if (-not $IsccExe) {
 }
 
 Write-Host "==================================================" -ForegroundColor Cyan
-Write-Host "KOAFiloServis-MultiDb Paket Uretim - v$Version" -ForegroundColor Cyan
+Write-Host "MKFiloServis-MultiDb Paket Uretim - v$Version" -ForegroundColor Cyan
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host "Kaynak  : $RepoRoot"
 Write-Host "Payload : $Payload"
@@ -87,7 +87,7 @@ if (-not $SkipPublish) {
             }
         }
 
-        $dbSettingsSrc = Join-Path $RepoRoot 'KOAFiloServis.Web\dbsettings.json'
+        $dbSettingsSrc = Join-Path $RepoRoot 'MKFiloServis.Web\dbsettings.json'
         if (Test-Path $dbSettingsSrc) {
             Copy-Item $dbSettingsSrc "$Payload\Web\dbsettings.json" -Force
             Write-Host "       dbsettings.json payload'a kopyalandi" -ForegroundColor DarkGray
@@ -116,7 +116,7 @@ Write-Host "Output klasoru : $Output" -ForegroundColor DarkGray
 
 if (-not $LisansOnly) {
     Write-Host "[4/7] Inno Setup - Ana paket..." -ForegroundColor Green
-    & $IsccExe "/DMyAppVersion=$Version" "/DOutputDir=$Output" "/DMyInstallDirBase=C:\KOAFiloServis_ustun" "/DMyBackupDirBase=C:\KOAFiloServis_yedekleme_ustun" (Join-Path $Root 'Setup.iss')
+    & $IsccExe "/DMyAppVersion=$Version" "/DOutputDir=$Output" "/DMyInstallDirBase=C:\MKFiloServis_ustun" "/DMyBackupDirBase=C:\MKFiloServis_yedekleme_ustun" (Join-Path $Root 'Setup.iss')
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup (Setup.iss) basarisiz." }
 
     Write-Host "[5/7] Inno Setup - Guncelleme paketi..." -ForegroundColor Green
@@ -124,7 +124,7 @@ if (-not $LisansOnly) {
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup (GuncelleSetup.iss) basarisiz." }
 
     Write-Host "[6/7] Inno Setup - Musteri paketi..." -ForegroundColor Green
-    & $IsccExe "/DMyAppVersion=$Version" "/DOutputDir=$Output" "/DMyInstallDirBase=C:\KOAFiloServis_ustun" (Join-Path $Root 'MusteriSetup.iss')
+    & $IsccExe "/DMyAppVersion=$Version" "/DOutputDir=$Output" "/DMyInstallDirBase=C:\MKFiloServis_ustun" (Join-Path $Root 'MusteriSetup.iss')
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup (MusteriSetup.iss) basarisiz." }
 }
 
@@ -134,14 +134,14 @@ if ($LASTEXITCODE -ne 0) { throw "Inno Setup (LisansSetup.iss) basarisiz." }
 
 $sonuclar = @()
 if (-not $LisansOnly) {
-    $p1 = Join-Path $Output "KOAFiloServisKurulum-$Version.exe"
+    $p1 = Join-Path $Output "MKFiloServisKurulum-$Version.exe"
     if (Test-Path $p1) { $s = [math]::Round((Get-Item $p1).Length/1MB,2); $sonuclar += "  Ana paket : $p1 ($s MB)" }
-    $p2 = Join-Path $Output "KOAFiloServisGuncelle-$Version.exe"
+    $p2 = Join-Path $Output "MKFiloServisGuncelle-$Version.exe"
     if (Test-Path $p2) { $s = [math]::Round((Get-Item $p2).Length/1MB,2); $sonuclar += "  Guncelleme: $p2 ($s MB)" }
-    $p3 = Join-Path $Output "KOAFiloServisKurulumMusteri-$Version.exe"
+    $p3 = Join-Path $Output "MKFiloServisKurulumMusteri-$Version.exe"
     if (Test-Path $p3) { $s = [math]::Round((Get-Item $p3).Length/1MB,2); $sonuclar += "  Musteri    : $p3 ($s MB)" }
 }
-$p4 = Join-Path $Output "KOALisansArac-$Version.exe"
+$p4 = Join-Path $Output "MKLisansArac-$Version.exe"
 if (Test-Path $p4) { $s = [math]::Round((Get-Item $p4).Length/1MB,2); $sonuclar += "  Lisans     : $p4 ($s MB)" }
 
 Write-Host ""

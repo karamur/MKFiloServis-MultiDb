@@ -1,10 +1,10 @@
 ﻿# ============================================
-# Koa Filo Servis - Windows Kurulum Script'i
+# MK Filo Servis - Windows Kurulum Script'i
 # ============================================
 
 param(
-    [string]$InstallPath = "C:\Apps\CRMFiloServis",
-    [string]$ServiceName = "CRMFiloServis",
+    [string]$InstallPath = "C:\Apps\MKFiloServis",
+    [string]$ServiceName = "MKFiloServis",
     [int]$HttpPort = 5000,
     [int]$HttpsPort = 5001,
     [switch]$InstallService,
@@ -14,7 +14,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  Koa Filo Servis Kurulum Aracı" -ForegroundColor Cyan
+Write-Host "  MK Filo Servis Kurulum Aracı" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -40,7 +40,7 @@ if (!(Test-Path $InstallPath)) {
 # Dosyaları kopyalama
 Write-Host "[3/6] Uygulama dosyaları kopyalanıyor..." -ForegroundColor Yellow
 $sourcePath = Split-Path -Parent $MyInvocation.MyCommand.Path
-if (Test-Path "$sourcePath\CRMFiloServis.Web.dll") {
+if (Test-Path "$sourcePath\MKFiloServis.Web.dll") {
     Copy-Item -Path "$sourcePath\*" -Destination $InstallPath -Recurse -Force
     Write-Host "  ✓ Dosyalar kopyalandı" -ForegroundColor Green
 } else {
@@ -60,17 +60,17 @@ if (Test-Path $configFile) {
 # Firewall kuralları
 Write-Host "[5/6] Firewall kuralları ekleniyor..." -ForegroundColor Yellow
 try {
-    $existingHttp = Get-NetFirewallRule -DisplayName "CRMFiloServis HTTP" -ErrorAction SilentlyContinue
+    $existingHttp = Get-NetFirewallRule -DisplayName "MKFiloServis HTTP" -ErrorAction SilentlyContinue
     if (!$existingHttp) {
-        New-NetFirewallRule -DisplayName "CRMFiloServis HTTP" -Direction Inbound -Action Allow -Protocol TCP -LocalPort $HttpPort | Out-Null
+        New-NetFirewallRule -DisplayName "MKFiloServis HTTP" -Direction Inbound -Action Allow -Protocol TCP -LocalPort $HttpPort | Out-Null
         Write-Host "  ✓ HTTP port $HttpPort açıldı" -ForegroundColor Green
     } else {
         Write-Host "  ✓ HTTP kuralı mevcut" -ForegroundColor Green
     }
     
-    $existingHttps = Get-NetFirewallRule -DisplayName "CRMFiloServis HTTPS" -ErrorAction SilentlyContinue
+    $existingHttps = Get-NetFirewallRule -DisplayName "MKFiloServis HTTPS" -ErrorAction SilentlyContinue
     if (!$existingHttps) {
-        New-NetFirewallRule -DisplayName "CRMFiloServis HTTPS" -Direction Inbound -Action Allow -Protocol TCP -LocalPort $HttpsPort | Out-Null
+        New-NetFirewallRule -DisplayName "MKFiloServis HTTPS" -Direction Inbound -Action Allow -Protocol TCP -LocalPort $HttpsPort | Out-Null
         Write-Host "  ✓ HTTPS port $HttpsPort açıldı" -ForegroundColor Green
     } else {
         Write-Host "  ✓ HTTPS kuralı mevcut" -ForegroundColor Green
@@ -82,8 +82,8 @@ try {
 # Windows Servis kurulumu
 if ($InstallService) {
     Write-Host "[6/6] Windows Servisi kuruluyor..." -ForegroundColor Yellow
-    
-    $exePath = "$InstallPath\CRMFiloServis.Web.exe"
+
+    $exePath = "$InstallPath\MKFiloServis.Web.exe"
     
     # Mevcut servisi kontrol et
     $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
@@ -96,7 +96,7 @@ if ($InstallService) {
     
     # Yeni servis oluştur
     sc.exe create $ServiceName binPath="$exePath" start=auto | Out-Null
-    sc.exe description $ServiceName "Koa Filo Servis Yönetim Sistemi" | Out-Null
+    sc.exe description $ServiceName "MK Filo Servis Yönetim Sistemi" | Out-Null
     Write-Host "  ✓ Servis oluşturuldu: $ServiceName" -ForegroundColor Green
     
     if ($StartService) {
@@ -117,7 +117,7 @@ Write-Host "  1. appsettings.json dosyasını düzenleyin (veritabanı bağlant�
 Write-Host "  2. PostgreSQL veritabanını oluşturun" -ForegroundColor White
 Write-Host "  3. Uygulamayı başlatın:" -ForegroundColor White
 Write-Host "     cd $InstallPath" -ForegroundColor Gray
-Write-Host "     dotnet CRMFiloServis.Web.dll" -ForegroundColor Gray
+Write-Host "     dotnet MKFiloServis.Web.dll" -ForegroundColor Gray
 Write-Host ""
 Write-Host "Web Adresi: http://localhost:$HttpPort" -ForegroundColor Cyan
 Write-Host ""

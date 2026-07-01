@@ -1,4 +1,4 @@
-﻿$servicesRoot = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\MKFiloServis.Web\Services"
+﻿$servicesRoot = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Web\Services"
 $subfolders = @("Calculation", "Common", "Security")
 
 $totalFixed = 0

@@ -1,9 +1,9 @@
-namespace MKFiloServis.Web.Helpers;
+﻿namespace MKFiloServis.Web.Helpers;
 
 public static class AppStoragePaths
 {
-    public const string DefaultInstallRoot = @"C:\KOAFiloServis";
-    public const string DefaultStorageRoot = @"C:\KOAFiloServis_yedekleme";
+    public const string DefaultInstallRoot = @"C:\MKFiloServis";
+    public const string DefaultStorageRoot = @"C:\MKFiloServis_yedekleme";
 
     /// <summary>
     /// Personel evrakları için arşiv dizin yolu: Arsiv/Sifreli/Personeller

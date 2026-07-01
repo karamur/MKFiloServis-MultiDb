@@ -1,12 +1,12 @@
-; ============================================================
-; KOAFiloServis - Lisans Yonetim Araci (Bagimsiz Installer)
+﻿; ============================================================
+; MKFiloServis - Lisans Yonetim Araci (Bagimsiz Installer)
 ; ============================================================
 
-#define LisansAppName   "KOA Lisans Yonetimi"
-#define LisansPublisher "KOA Yazilim"
-#define LisansURL       "https://github.com/karamur/KOAFiloServis-MultiDb"
-#define LisansExe       "KOAFiloServisLisans.exe"
-#define LisansInstallDir "C:\KOALisans"
+#define LisansAppName   "MK Lisans Yonetimi"
+#define LisansPublisher "MK Yazilim"
+#define LisansURL       "https://github.com/karamur/MKFiloServis-MultiDb"
+#define LisansExe       "MKFiloServisLisans.exe"
+#define LisansInstallDir "C:\MKLisans"
 
 #ifndef LisansAppVersion
 #define LisansAppVersion "1.0.26"
@@ -22,7 +22,7 @@ AppPublisherURL={#LisansURL}
 DefaultDirName={#LisansInstallDir}
 DisableDirPage=no
 DefaultGroupName={#LisansAppName}
-OutputBaseFilename=KOALisansArac-{#LisansAppVersion}
+OutputBaseFilename=MKLisansArac-{#LisansAppVersion}
 #ifdef OutputDir
 OutputDir={#OutputDir}
 #else

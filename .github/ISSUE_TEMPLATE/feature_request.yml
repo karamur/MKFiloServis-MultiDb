@@ -14,7 +14,7 @@ body:
     attributes:
       label: ✅ Ön Kontroller
       options:
-        - label: Mevcut [issue'lar](https://github.com/karamur/KOAFiloServis/issues) ve [Discussions](https://github.com/karamur/KOAFiloServis/discussions) içinde benzer öneri yok.
+        - label: Mevcut [issue'lar](https://github.com/karamur/MKFiloServis-MultiDb/issues) ve [Discussions](https://github.com/karamur/MKFiloServis-MultiDb/discussions) içinde benzer öneri yok.
           required: true
         - label: Bu istek genel bir kullanıcı kitlesine fayda sağlayabilir (kişisel kullanım dışı).
           required: true

@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Services;
 
 namespace MKFiloServis.Web.Components.Pages.Admin;
@@ -41,7 +41,7 @@ public partial class LicensePage
             await LicenseService.SaveLicenseAsync(lic);
             _license = lic;
             _validationIsValid = true;
-            KOAFiloServis.Shared.AppMode.ExitDemoMode(); // Lisans yüklendi → FULL MODE
+            MKFiloServis.Shared.AppMode.ExitDemoMode(); // Lisans yüklendi → FULL MODE
         }
         finally { _calisiyor = false; StateHasChanged(); }
     }

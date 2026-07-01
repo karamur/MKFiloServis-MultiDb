@@ -8,7 +8,7 @@
 )
 
 foreach ($file in $files) {
-    $path = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\$file"
+    $path = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\$file"
     if (Test-Path $path) {
         $content = Get-Content -Path $path -Raw
         $newContent = $content -replace "namespace KOAFiloServis\.Web\.Components", "namespace MKFiloServis.Web.Components"

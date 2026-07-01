@@ -1,11 +1,11 @@
-using MKFiloServis.Web.Data;
+﻿using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
 namespace MKFiloServis.Web.Services;
 
 /// <summary>
-/// DestekCRMServisBlazorDb → KOAFiloServis veri aktarım servisi.
+/// Legacy veritabanından MKFiloServis veritabanına veri aktarım servisi.
 /// Talimat Bölüm 16-23: Legacy DB READ ONLY, FirmaId=1 varsayılan.
 /// </summary>
 public class LegacyDataTransferService
@@ -18,14 +18,54 @@ public class LegacyDataTransferService
         IConfiguration configuration,
         ILogger<LegacyDataTransferService> logger)
     {
-        _targetConnStr = configuration.GetConnectionString("DefaultConnection")!;
-        _sourceConnStr = _targetConnStr.Replace("Database=KOAFiloServis", "Database=DestekCRMServisBlazorDb");
         _logger = logger;
+        _targetConnStr = configuration.GetConnectionString("DefaultConnection")!;
+
+        // Öncelik: appsettings'te açıkça verilen LegacySourceConnection.
+        // Yoksa DefaultConnection'dan türet: MKFiloServis -> KOAFiloServis.
+        _sourceConnStr = configuration.GetConnectionString("LegacySourceConnection")
+            ?? BuildLegacySourceConnectionString(_targetConnStr);
+
+        if (IsSameDatabase(_sourceConnStr, _targetConnStr))
+        {
+            _logger.LogWarning("LegacyDataTransfer: kaynak ve hedef veritabani ayni gorunuyor. Aktarim atlanacak.");
+        }
+    }
+
+    private static string BuildLegacySourceConnectionString(string targetConnStr)
+    {
+        var builder = new NpgsqlConnectionStringBuilder(targetConnStr);
+        var targetDb = builder.Database ?? string.Empty;
+
+        if (targetDb.Contains("MKFiloServis", StringComparison.OrdinalIgnoreCase))
+        {
+            builder.Database = targetDb.Replace("MKFiloServis", "KOAFiloServis", StringComparison.OrdinalIgnoreCase);
+        }
+        else
+        {
+            // Fallback: hedef adı MK pattern'i taşımıyorsa yine de legacy varsayılan DB adına dön.
+            builder.Database = "KOAFiloServis";
+        }
+
+        return builder.ConnectionString;
+    }
+
+    private static bool IsSameDatabase(string sourceConnStr, string targetConnStr)
+    {
+        var source = new NpgsqlConnectionStringBuilder(sourceConnStr);
+        var target = new NpgsqlConnectionStringBuilder(targetConnStr);
+
+        return string.Equals(source.Host, target.Host, StringComparison.OrdinalIgnoreCase)
+               && source.Port == target.Port
+               && string.Equals(source.Database, target.Database, StringComparison.OrdinalIgnoreCase)
+               && string.Equals(source.Username, target.Username, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
-    /// KOAFiloServis veritabanını mevcut model snapshot'ından oluşturur (EnsureCreated).
-    /// Migration zincirini bypass eder.
+    /// Hedef veritabanı şemasını hazırlar.
+    /// 1) Pending migration'ları uygular
+    /// 2) Migrations history kirli olsa bile model create script'inden eksik tabloları tamamlamayı dener
+    /// 3) Son olarak EnsureCreated fallback'i çalıştırır
     /// </summary>
     public async Task EnsureSchemaAsync()
     {
@@ -33,9 +73,83 @@ public class LegacyDataTransferService
         optionsBuilder.UseNpgsql(_targetConnStr);
         using var ctx = new ApplicationDbContext(optionsBuilder.Options);
 
+        try
+        {
+            var pending = (await ctx.Database.GetPendingMigrationsAsync()).ToList();
+            if (pending.Count > 0)
+            {
+                _logger.LogInformation("Schema hazirlik: {Count} pending migration uygulanıyor...", pending.Count);
+                await ctx.Database.MigrateAsync();
+                _logger.LogInformation("Schema hazirlik: migration uygulamasi tamamlandi.");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Schema hazirlik: migration adımı hata verdi, model script fallback denenecek.");
+        }
+
+        await EnsureSchemaFromModelScriptAsync(ctx);
+
         _logger.LogInformation("EnsureCreated basliyor...");
         await ctx.Database.EnsureCreatedAsync();
         _logger.LogInformation("EnsureCreated tamamlandi.");
+    }
+
+    private async Task EnsureSchemaFromModelScriptAsync(ApplicationDbContext ctx)
+    {
+        try
+        {
+            var script = ctx.Database.GenerateCreateScript();
+            if (string.IsNullOrWhiteSpace(script))
+                return;
+
+            // PostgreSQL'de idempotent hale getir
+            script = script
+                .Replace("CREATE TABLE ", "CREATE TABLE IF NOT EXISTS ", StringComparison.OrdinalIgnoreCase)
+                .Replace("CREATE INDEX ", "CREATE INDEX IF NOT EXISTS ", StringComparison.OrdinalIgnoreCase)
+                .Replace("CREATE UNIQUE INDEX ", "CREATE UNIQUE INDEX IF NOT EXISTS ", StringComparison.OrdinalIgnoreCase);
+
+            var commands = script.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var executed = 0;
+
+            foreach (var cmdText in commands)
+            {
+                if (string.IsNullOrWhiteSpace(cmdText))
+                    continue;
+
+                // Model create script'indeki seed INSERT'leri FK ihlali üretebilir.
+                // Burada yalnızca şema (DDL) komutlarını çalıştırıyoruz.
+                var normalized = cmdText.TrimStart();
+                if (!(normalized.StartsWith("CREATE TABLE", StringComparison.OrdinalIgnoreCase)
+                      || normalized.StartsWith("CREATE INDEX", StringComparison.OrdinalIgnoreCase)
+                      || normalized.StartsWith("CREATE UNIQUE INDEX", StringComparison.OrdinalIgnoreCase)
+                      || normalized.StartsWith("ALTER TABLE", StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    await ctx.Database.ExecuteSqlRawAsync(cmdText + ";");
+                    executed++;
+                }
+                catch (PostgresException ex) when (
+                    ex.SqlState == "42P07" || // duplicate_table
+                    ex.SqlState == "42710" || // duplicate_object
+                    ex.SqlState == "42701" || // duplicate_column
+                    ex.SqlState == "23505" || // unique_violation
+                    ex.SqlState == "23503")   // foreign_key_violation (fallback'te constraint validate hataları)
+                {
+                    // idempotent/uyumluluk çakışmalarını geç
+                }
+            }
+
+            _logger.LogInformation("Schema hazirlik: model script DDL komutlari calistirildi ({Count}).", executed);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Schema hazirlik: model script fallback adimi basarisiz.");
+        }
     }
 
     /// <summary>
@@ -47,7 +161,15 @@ public class LegacyDataTransferService
         var result = new TransferResult();
         var firmaIdVarsayilan = 1;
 
+        if (IsSameDatabase(_sourceConnStr, _targetConnStr))
+        {
+            _logger.LogWarning("LegacyDataTransfer: kaynak ve hedef ayni oldugu icin veri aktarimi yapilmadi.");
+            return result;
+        }
+
         _logger.LogInformation("=== Veri aktarimi basladi ===");
+        _logger.LogInformation("LegacyDataTransfer source DB: {SourceDb}", new NpgsqlConnectionStringBuilder(_sourceConnStr).Database);
+        _logger.LogInformation("LegacyDataTransfer target DB: {TargetDb}", new NpgsqlConnectionStringBuilder(_targetConnStr).Database);
 
         async Task<TransferResult> SafeTransferAsync(Func<Task<TransferResult>> transfer, string name)
         {

@@ -1,4 +1,4 @@
-﻿# KOA Filo Servis — 2. PC Kurulum Talimatı
+﻿# MK Filo Servis — 2. PC Kurulum Talimatı
 
 > **Hazırlayan:** Otomatik oluşturuldu (`03-pc2-publish.ps1`)  
 > **Versiyon:** .NET 10 · PostgreSQL 16 · IIS (in-process)
@@ -21,9 +21,9 @@
 
 1. 1. PC'de oluşturulan ZIP paketini 2. PC'ye kopyalayın:
    ```
-   KOAFiloServis-PC2-YYYYMMDD_HHmm.zip
+   MKFiloServis-PC2-YYYYMMDD_HHmm.zip
    ```
-2. ZIP'i `C:\KOAFiloServis\IIS` klasörüne **çıkartın**.
+2. ZIP'i `C:\MKFiloServis\IIS` klasörüne **çıkartın**.
 
 ---
 
@@ -33,9 +33,9 @@
 
    | Kaynak (1. PC) | Hedef (2. PC) |
    |---|---|
-   | `C:\KOAFiloServis_yedekleme\uploads\` | `C:\KOAFiloServis_yedekleme\uploads\` |
-   | `C:\KOAFiloServis_yedekleme\keys\key-*.xml` | `C:\KOAFiloServis_yedekleme\keys\` |
-   | `C:\KOAFiloServis_yedekleme\keys\master.key` | `C:\KOAFiloServis_yedekleme\keys\` |
+   | `C:\MKFiloServis_yedekleme\uploads\` | `C:\MKFiloServis_yedekleme\uploads\` |
+   | `C:\MKFiloServis_yedekleme\keys\key-*.xml` | `C:\MKFiloServis_yedekleme\keys\` |
+   | `C:\MKFiloServis_yedekleme\keys\master.key` | `C:\MKFiloServis_yedekleme\keys\` |
 
 > **ÖNEMLİ:** Data protection `key-*.xml` dosyaları **şifreli evrakları çözmek için zorunludur**.  
 > Bu dosyalar olmadan arşivdeki belgeler **açılamaz**.
@@ -48,33 +48,33 @@
 
 ```powershell
 # Paket içindeki veya 1. PC'den kopyalanan script:
-pwsh -ExecutionPolicy Bypass -File "C:\KOAFiloServis\IIS\01-db-restore.ps1" `
+pwsh -ExecutionPolicy Bypass -File "C:\MKFiloServis\IIS\01-db-restore.ps1" `
     -BackupFile   "BACKUP_DOSYASI_YOLU.backup" `
     -PgHost       "localhost" `
     -PgPort       "5432" `
     -PgUser       "postgres" `
     -PgPassword   "SİFRENİZ" `
-    -NewDbName    "KOAFiloServis"
+    -NewDbName    "MKFiloServis"
 ```
 
-**Backup dosyası:** 1. PC'de `C:\KOAFiloServis_yedekleme\database\` altındaki en güncel `.backup` dosyası.
+**Backup dosyası:** 1. PC'de `C:\MKFiloServis_yedekleme\database\` altındaki en güncel `.backup` dosyası.
 
 ---
 
 ## ADIM 4 — appsettings Yapılandırması
 
-`C:\KOAFiloServis\IIS\appsettings.PC2.json` dosyasını açın ve düzenleyin:
+`C:\MKFiloServis\IIS\appsettings.PC2.json` dosyasını açın ve düzenleyin:
 
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Host=localhost;Port=5432;Database=KOAFiloServis;Username=postgres;Password=SIFRESINIZ;"
+    "DefaultConnection": "Host=localhost;Port=5432;Database=MKFiloServis;Username=postgres;Password=SIFRESINIZ;"
   },
   "Jwt": {
     "Secret": "EN_AZ_32_KARAKTER_GIZLI_ANAHTAR_YAZIN_BURAYA"
   },
   "Backup": {
-    "Path": "C:\\KOAFiloServis_yedekleme\\database"
+    "Path": "C:\\MKFiloServis_yedekleme\\database"
   }
 }
 ```
@@ -88,12 +88,12 @@ Sonra **`appsettings.Production.json`** olarak kaydedin (varsa üzerine yazın).
 IIS'de yeni site oluşturmak için **Yönetici olarak** çalıştırın:
 
 ```batch
-C:\KOAFiloServis\IIS\kur.bat "C:\KOAFiloServis\IIS" "C:\KOAFiloServis_yedekleme\deploy" "" "Install"
+C:\MKFiloServis\IIS\kur.bat "C:\MKFiloServis\IIS" "C:\MKFiloServis_yedekleme\deploy" "" "Install"
 ```
 
 veya IIS Manager'dan:
-- **Site Adı:** KOAFiloServis
-- **Fiziksel Yol:** `C:\KOAFiloServis\IIS`
+- **Site Adı:** MKFiloServis
+- **Fiziksel Yol:** `C:\MKFiloServis\IIS`
 - **Port:** 80 (veya boş 443 + sertifika)
 - **Uygulama Havuzu:** `No Managed Code`, 64-bit
 
@@ -105,7 +105,7 @@ veya IIS Manager'dan:
 2. Lisans ekranında lisans anahtarınızı girin.
 3. **Bu PC için yeni bir makine kodu oluşur** — lisansınız bu koda bağlıdır.
 
-> Her PC için ayrı lisans anahtarı gerekebilir. `Lisans/KOAFiloServisLisans.exe` uygulamasını kullanarak makine kodunu alın ve yeni anahtar oluşturun.
+> Her PC için ayrı lisans anahtarı gerekebilir. `Lisans/MKFiloServisLisans.exe` uygulamasını kullanarak makine kodunu alın ve yeni anahtar oluşturun.
 
 ---
 
@@ -124,15 +124,15 @@ veya IIS Manager'dan:
 ## Sorun Giderme
 
 ### Evraklar açılmıyor / şifre çözme hatası
-- `C:\KOAFiloServis_yedekleme\keys\key-*.xml` dosyalarının mevcut olduğunu kontrol edin.
-- Dosya izinleri: IIS uygulama havuzu kullanıcısı (`IIS AppPool\KOAFiloServis` veya `NETWORK SERVICE`) bu klasörü okuyabilmeli.
+- `C:\MKFiloServis_yedekleme\keys\key-*.xml` dosyalarının mevcut olduğunu kontrol edin.
+- Dosya izinleri: IIS uygulama havuzu kullanıcısı (`IIS AppPool\MKFiloServis` veya `NETWORK SERVICE`) bu klasörü okuyabilmeli.
 
 ### Veritabanı bağlantı hatası
 - PostgreSQL servisinin çalıştığını kontrol edin: `Get-Service postgresql*`
 - `appsettings.Production.json` dosyasındaki şifreyi kontrol edin.
 
 ### Lisans makine kodu uyuşmuyor
-- 2. PC için `Lisans/KOAFiloServisLisans.exe` ile yeni makine kodunu alın.
+- 2. PC için `Lisans/MKFiloServisLisans.exe` ile yeni makine kodunu alın.
 - Mevcut lisans anahtarı başka PC'ye bağlıysa yeni anahtar üretmeniz gerekir.
 
 ---
@@ -141,14 +141,14 @@ veya IIS Manager'dan:
 
 ```
 C:\
-├── KOAFiloServis\
+├── MKFiloServis\
 │   └── IIS\                       ← Uygulama dosyaları (kur.bat ile kurulur)
-│       ├── KOAFiloServis.Web.dll
+│       ├── MKFiloServis.Web.dll
 │       ├── appsettings.json
 │       ├── appsettings.Production.json  ← Siz düzenlediniz
 │       └── web.config
 │
-└── KOAFiloServis_yedekleme\
+└── MKFiloServis_yedekleme\
     ├── uploads\                    ← Şifreli evraklar (1. PC'den kopyalandı)
     │   ├── evraklar\{id}\*.enc
     │   └── personel-ozluk\{id}\*.enc

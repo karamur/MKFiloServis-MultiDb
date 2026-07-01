@@ -1,11 +1,11 @@
 ﻿blank_issues_enabled: false
 contact_links:
   - name: 💬 Soru & Tartışma
-    url: https://github.com/karamur/KOAFiloServis/discussions
+    url: https://github.com/karamur/MKFiloServis-MultiDb/discussions
     about: Genel sorular, fikir paylaşımı veya kullanım yardımı için Discussions kullanın.
   - name: 🔐 Güvenlik Açığı Bildirimi
-    url: https://github.com/karamur/KOAFiloServis/security/advisories/new
+    url: https://github.com/karamur/MKFiloServis-MultiDb/security/advisories/new
     about: Güvenlik açıkları için ASLA public issue açmayın — özel bildirim formunu kullanın.
   - name: 📚 Dokümantasyon
-    url: https://github.com/karamur/KOAFiloServis#readme
+    url: https://github.com/karamur/MKFiloServis-MultiDb#readme
     about: Kurulum, yapılandırma ve kullanım için README'ye bakın.

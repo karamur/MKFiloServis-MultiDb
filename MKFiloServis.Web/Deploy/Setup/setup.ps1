@@ -6,7 +6,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$project = Join-Path $PSScriptRoot "..\..\KOAFiloServis.Web.csproj"
+$project = Join-Path $PSScriptRoot "..\..\MKFiloServis.Web.csproj"
 $publishDir = Join-Path $OutputRoot "publish"
 $packageDir = Join-Path $OutputRoot "package"
 

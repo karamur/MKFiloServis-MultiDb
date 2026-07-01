@@ -1,16 +1,16 @@
 ﻿# =============================================================================
 # 01-db-restore.ps1
-# Eski "DestekCRMServisBlazorDb" yedeğini yeni "KOAFiloServis" adıyla restore eder.
+# Eski "DestekCRMServisBlazorDb" yedeğini yeni "MKFiloServis" adıyla restore eder.
 # KULLANIM: pwsh -ExecutionPolicy Bypass -File 01-db-restore.ps1
 # =============================================================================
 
 param(
-    [string]$BackupFile  = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\ustunfiloservis_yedekler\KOAFiloServis_yedekleme\database\2026\06\KOAFiloServis_PostgreSQL_20260626_164011.backup",
+    [string]$BackupFile  = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\ustunfiloservis_yedekler\MKFiloServis_yedekleme\database\2026\06\MKFiloServis_PostgreSQL_20260626_164011.backup",
     [string]$PgHost      = "localhost",
     [string]$PgPort      = "5432",
     [string]$PgUser      = "postgres",
     [string]$PgPassword  = "Fast123",
-    [string]$NewDbName   = "KOAFiloServis"
+    [string]$NewDbName   = "MKFiloServis"
 )
 
 $ErrorActionPreference = "Stop"

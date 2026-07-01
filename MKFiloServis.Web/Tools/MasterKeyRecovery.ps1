@@ -7,8 +7,8 @@
 #>
 
 param(
-    [string]$MasterKeyPath = "C:\KOAFiloServis_yedekleme\keys\master.key",
-    [string]$EncryptedFilesDir = "C:\KOAFiloServis_yedekleme\Arsiv\Sifreli\Araclar"
+    [string]$MasterKeyPath = "C:\MKFiloServis_yedekleme\keys\master.key",
+    [string]$EncryptedFilesDir = "C:\MKFiloServis_yedekleme\Arsiv\Sifreli\Araclar"
 )
 
 Write-Host "🔐 DPAPI Master Key Recovery Diagnostic" -ForegroundColor Cyan
@@ -86,6 +86,6 @@ Write-Host "  - Eski şifreli dosyaları: Move-Item '$EncryptedFilesDir' '$Encry
 Write-Host "  - Yeni dosyalar normal şekilde şifrele"
 Write-Host ""
 Write-Host "OPSIYON 3: Environment Variable ile Key Sağla"
-Write-Host "  - Production: \$env:KOA_MASTER_KEY_HEX or \$env:KOA_MASTER_KEY_BASE64"
+Write-Host "  - Production: \$env:MK_MASTER_KEY_HEX or \$env:MK_MASTER_KEY_BASE64"
 Write-Host "  - Code: check DpapiMasterKeyProvider alternatifleri"
 Write-Host ""

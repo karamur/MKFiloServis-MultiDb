@@ -1,4 +1,4 @@
-﻿$servicesDir = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\MKFiloServis.Web\Services"
+﻿$servicesDir = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Web\Services"
 
 Get-ChildItem -Path $servicesDir -Filter "*Service.cs" -Depth 0 | ForEach-Object {
     $file = $_

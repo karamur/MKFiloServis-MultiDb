@@ -1,12 +1,12 @@
 ﻿param(
-    [string]$TargetDir = 'C:\KOAFiloServis\IIS',
-    [string]$BackupRoot = 'C:\KOAFiloServis_yedekleme\deploy',
+    [string]$TargetDir = 'C:\MKFiloServis\IIS',
+    [string]$BackupRoot = 'C:\MKFiloServis_yedekleme\deploy',
     [string]$SiteName = '',
     [ValidateSet('Install','Update')]
     [string]$Mode = 'Update'
 )
 
-Write-Host "[KOA] Calisma modu: $Mode" -ForegroundColor Yellow
+Write-Host "[MK] Calisma modu: $Mode" -ForegroundColor Yellow
 
 $ErrorActionPreference = 'Stop'
 
@@ -17,7 +17,7 @@ $LatestBackupRoot = Join-Path $BackupRoot 'latest'
 $AppOfflinePath = Join-Path $TargetDir 'app_offline.htm'
 
 function Write-Step([string]$Message) {
-    Write-Host "[KOA] $Message" -ForegroundColor Cyan
+    Write-Host "[MK] $Message" -ForegroundColor Cyan
 }
 
 function Invoke-Robocopy([string]$Source, [string]$Destination, [string[]]$ExtraArgs) {
@@ -137,7 +137,7 @@ if ($dbSettingsForBackup) {
 }
 
 Write-Step 'Uygulama çevrimdışı dosyası oluşturuluyor.'
-Set-Content -Path $AppOfflinePath -Value '<html><body><h2>KOA Filo Servis guncelleniyor...</h2></body></html>' -Encoding UTF8
+Set-Content -Path $AppOfflinePath -Value '<html><body><h2>MK Filo Servis guncelleniyor...</h2></body></html>' -Encoding UTF8
 
 try {
     Write-Step 'Paket dosyaları hedef klasöre kopyalanıyor.'

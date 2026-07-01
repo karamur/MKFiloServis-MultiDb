@@ -1,5 +1,5 @@
 ﻿<#
-    KOAFiloServis — IIS otomatik yapilandirma (v1.0.2)
+    MKFiloServis — IIS otomatik yapilandirma (v1.0.2)
     - IIS site + AppPool olusturur/gunceller (idempotent)
     - ACL: IIS AppPool\<SiteName> -> Modify (data/uploads/logs/Backups)
     - iisreset (AspNetCoreModule cache yenilemesi icin)
@@ -115,7 +115,7 @@ function Test-Site {
 }
 
 try {
-    Write-Host "=== KOAFiloServis IIS yapilandirma ==="
+    Write-Host "=== MKFiloServis IIS yapilandirma ==="
     Write-Host "Klasor : $InstallPath"
     Write-Host "Site   : $SiteName"
     Write-Host "Port   : $Port (istenen)"

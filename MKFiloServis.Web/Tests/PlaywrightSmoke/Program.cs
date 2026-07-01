@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using Microsoft.Playwright;
@@ -274,7 +274,7 @@ internal sealed class LocalWebAppHost(string baseUrl) : IDisposable
         var current = new DirectoryInfo(AppContext.BaseDirectory);
         while (current is not null)
         {
-            var candidate = Path.Combine(current.FullName, "KOAFiloServis.Web", "KOAFiloServis.Web.csproj");
+            var candidate = Path.Combine(current.FullName, "MKFiloServis.Web", "MKFiloServis.Web.csproj");
             if (File.Exists(candidate))
             {
                 return candidate;
@@ -283,7 +283,7 @@ internal sealed class LocalWebAppHost(string baseUrl) : IDisposable
             current = current.Parent;
         }
 
-        throw new FileNotFoundException("KOAFiloServis.Web.csproj bulunamadı.");
+        throw new FileNotFoundException("MKFiloServis.Web.csproj bulunamadı.");
     }
 }
 

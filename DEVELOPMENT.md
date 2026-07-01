@@ -1,7 +1,7 @@
-# DEVELOPMENT
+﻿# DEVELOPMENT
 
 ## Proje Adı
-`Koa Filo Servis`
+`MK Filo Servis`
 
 ## Amaç
 Filo yönetimi, muhasebe, bütçe, e-fatura, cari yönetimi, operasyon puantajı ve yardımcı CRM süreçlerini tek uygulamada toplamak.
@@ -1152,7 +1152,7 @@ CREATE TABLE "Sirketler" (Id, SirketKodu, Unvan, KisaAd, VergiDairesi, VergiNo,
                           LogoUrl, Aktif, ParaBirimi, AyarlarJson, LisansBitisTarihi,
                           MaxKullaniciSayisi, CreatedAt, UpdatedAt, IsDeleted);
 ALTER TABLE "Kullanicilar" ADD COLUMN "SirketId" INTEGER REFERENCES "Sirketler"("Id");
-INSERT INTO "Sirketler" (...) VALUES ('KOA', 'Koa Filo Servis A.S.', ...);
+INSERT INTO "Sirketler" (...) VALUES ('KOA', 'MK Filo Servis A.S.', ...);
 ```
 
 **4. Fatura XML+PDF Import Fix:**
@@ -4753,10 +4753,10 @@ Taslak → Gönderildi → İşlemde → Bitti → Onaylandı
 **Durum:** Tamamlandı
 
 ### Kayıt 019 - Marka adı görünür metin taraması
-**Talep:** Proje genelinde görünür marka adlarının taranması ve `Koa Filo Servis` ile tutarlı hale getirilmesi.
+**Talep:** Proje genelinde görünür marka adlarının taranması ve `MK Filo Servis` ile tutarlı hale getirilmesi.
 
 **Yapılanlar:**
-- `Login.razor`: footer içindeki GitHub bağlantı etiketi `Koa Filo Servis` olarak güncellendi
+- `Login.razor`: footer içindeki GitHub bağlantı etiketi `MK Filo Servis` olarak güncellendi
 - `README.md`: ilgili projeler tablosundaki eski marka adı güncellendi
 - `ROADMAP.md`: doküman başlığındaki eski marka adı güncellendi
 
@@ -4999,14 +4999,14 @@ BudgetAnaliz → OdemeTipi.CariMahsup seç → OdemeYapAsync
 **Talep:** Görünür ekranlar ve dokümantasyonda eski marka adlarının taranıp güncellenmesi.
 
 **Yapılanlar:**
-- login ekranı `Koa Filo Servis` olarak güncellendi
+- login ekranı `MK Filo Servis` olarak güncellendi
 - sol menü marka adı güncellendi
 - `README.md` başlığı güncellendi
 - `KURULUM.md` başlığı güncellendi
 - deploy dokümantasyonu ve build script başlıkları güncellendi
 - lisans masaüstü uygulama başlıkları güncellendi
 - lisans kodu ön eki `KOA-` olarak güncellendi
-- login footer GitHub etiketi `Koa Filo Servis` olarak güncellendi
+- login footer GitHub etiketi `MK Filo Servis` olarak güncellendi
 - `README.md` proje tablosundaki eski marka adı güncellendi
 - `ROADMAP.md` başlığı güncellendi
 
@@ -5082,7 +5082,7 @@ BudgetAnaliz → OdemeTipi.CariMahsup seç → OdemeYapAsync
 **Durum:** Tamamlandı
 
 ### Kayıt 008 - Marka adı güncellemesi
-**Talep:** Proje görünen adının `Koa Filo Servis` olarak düzenlenmesi.
+**Talep:** Proje görünen adının `MK Filo Servis` olarak düzenlenmesi.
 
 **Yapılanlar:**
 - login ekranı başlığı güncellendi
@@ -5165,10 +5165,10 @@ Aşağıdaki ana modüller projede mevcut durumda:
 - “beni hatırla” yaklaşımı üzerinde düzenleme yapıldı
 - login route tekrarları temizlendi
 - login sayfası birkaç kez sadeleştirilip yeniden düzenlendi
-- marka adı giriş ekranında `Koa Filo Servis` olarak güncellendi
+- marka adı giriş ekranında `MK Filo Servis` olarak güncellendi
 
 ### Marka / Görünüm
-- giriş ekranı başlığı `Koa Filo Servis` yapıldı
+- giriş ekranı başlığı `MK Filo Servis` yapıldı
 - sol menü üst marka adı güncellendi
 - giriş ekranı daha kurumsal görünecek şekilde elden geçirildi
 
@@ -5281,7 +5281,7 @@ Yakın dönemde eklenen migrationlar:
 ## Son Commitlerden Özet
 - login ekranı yeniden yazıldı
 - login route düzeltildi
-- marka adı `Koa Filo Servis` olarak güncellendi
+- marka adı `MK Filo Servis` olarak güncellendi
 - mahsup işlemleri eklendi
 - muhasebe eşleştirme kodları eklendi
 - bütçe kesinti alanları eklendi

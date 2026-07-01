@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using MKFiloServis.Web.Services;
 using MKFiloServis.Web.Services.Interfaces;
@@ -125,8 +125,8 @@ public class AuthController : ControllerBase
                 "JWT Secret yapılandırılmamış veya geçersiz. " +
                 "appsettings.Production.json → Jwt:Secret alanına en az 32 karakterli güçlü bir değer girin.");
         }
-        var jwtIssuer = _configuration["Jwt:Issuer"] ?? "KOAFiloServis";
-        var jwtAudience = _configuration["Jwt:Audience"] ?? "KOAFiloServis-API";
+        var jwtIssuer = _configuration["Jwt:Issuer"] ?? "MKFiloServis";
+        var jwtAudience = _configuration["Jwt:Audience"] ?? "MKFiloServis-API";
 
         var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret));
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);

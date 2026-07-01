@@ -1,5 +1,5 @@
-<#
-    KOAFiloServis - IIS 500.30 tanilama raporu
+﻿<#
+    MKFiloServis - IIS 500.30 tanilama raporu
     - IIS, AppPool, Site, web.config aspNetCore ayarlari
     - Hosting Bundle / ANCM (AspNetCoreModuleV2)
     - dotnet bilgisi
@@ -8,8 +8,8 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $InstallPath = "C:\KOAFiloServis\IIS",
-    [string] $SiteName = "KOAFiloServis",
+    [string] $InstallPath = "C:\MKFiloServis\IIS",
+    [string] $SiteName = "MKFiloServis",
     [int] $StdoutTail = 200,
     [int] $EventCount = 30,
     [string] $OutputPath
@@ -47,7 +47,7 @@ try {
     }
 
     $script:ReportPath = $OutputPath
-    Set-Content -Path $script:ReportPath -Value "KOAFiloServis IIS Diagnostic Report" -Encoding UTF8
+    Set-Content -Path $script:ReportPath -Value "MKFiloServis IIS Diagnostic Report" -Encoding UTF8
     Add-Content -Path $script:ReportPath -Value ("Generated: " + (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))
 
     Add-Section -Title 'SYSTEM INFO' -Body {
@@ -190,7 +190,7 @@ try {
         } -ErrorAction SilentlyContinue |
             Where-Object {
                 ($providers -contains $_.ProviderName) -or
-                ($_.Message -match '500\\.30|ANCM|AspNetCore|Failed to start|KOAFiloServis')
+                ($_.Message -match '500\\.30|ANCM|AspNetCore|Failed to start|MKFiloServis|KOAFiloServis')
             } |
             Select-Object -First $EventCount TimeCreated, Id, LevelDisplayName, ProviderName, Message
 

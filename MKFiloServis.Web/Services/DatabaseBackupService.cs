@@ -1,4 +1,4 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Web.Data;
 using Npgsql;
@@ -96,7 +96,7 @@ public class DatabaseBackupService : IHostedService, IDisposable
         {
             var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             var fileName = string.IsNullOrEmpty(customName) 
-                ? $"KOAFiloServis_Backup_{timestamp}" 
+                ? $"MKFiloServis_Backup_{timestamp}" 
                 : $"{customName}_{timestamp}";
 
             var backupDir = Path.Combine(_backupPath, fileName);

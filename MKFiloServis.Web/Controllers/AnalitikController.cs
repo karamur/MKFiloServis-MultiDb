@@ -1,4 +1,4 @@
-using MKFiloServis.Web.Data;
+﻿using MKFiloServis.Web.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -144,14 +144,14 @@ public class AnalitikController : ControllerBase
         var aracSayisi = await ctx.Araclar.CountAsync(a => !a.IsDeleted);
         var soforSayisi = await ctx.Soforler.CountAsync(s => !s.IsDeleted);
         var vadesiGecmis = await ctx.Faturalar.CountAsync(f => !f.IsDeleted &&
-            f.VadeTarihi < bugun && f.Durum != KOAFiloServis.Shared.Entities.FaturaDurum.Odendi);
+            f.VadeTarihi < bugun && f.Durum != MKFiloServis.Shared.Entities.FaturaDurum.Odendi);
 
         var buAyGelir = await ctx.BankaKasaHareketleri
-            .Where(h => !h.IsDeleted && h.IslemTarihi >= ayBasi && h.HareketTipi == KOAFiloServis.Shared.Entities.HareketTipi.Giris)
+            .Where(h => !h.IsDeleted && h.IslemTarihi >= ayBasi && h.HareketTipi == MKFiloServis.Shared.Entities.HareketTipi.Giris)
             .SumAsync(h => (decimal?)h.Tutar) ?? 0;
 
         var buAyGider = await ctx.BankaKasaHareketleri
-            .Where(h => !h.IsDeleted && h.IslemTarihi >= ayBasi && h.HareketTipi == KOAFiloServis.Shared.Entities.HareketTipi.Cikis)
+            .Where(h => !h.IsDeleted && h.IslemTarihi >= ayBasi && h.HareketTipi == MKFiloServis.Shared.Entities.HareketTipi.Cikis)
             .SumAsync(h => (decimal?)h.Tutar) ?? 0;
 
         return Ok(new[]
@@ -184,7 +184,7 @@ public class AnalitikController : ControllerBase
         var aracSayisi = await ctx.Araclar.CountAsync(a => !a.IsDeleted);
         var soforSayisi = await ctx.Soforler.CountAsync(s => !s.IsDeleted);
         var vadesiGecmis = await ctx.Faturalar.CountAsync(f => !f.IsDeleted &&
-            f.VadeTarihi < bugun && f.Durum != KOAFiloServis.Shared.Entities.FaturaDurum.Odendi);
+            f.VadeTarihi < bugun && f.Durum != MKFiloServis.Shared.Entities.FaturaDurum.Odendi);
 
         var metin = $@"# HELP koa_fatura_toplam Toplam fatura sayisi
 # TYPE koa_fatura_toplam gauge
@@ -220,7 +220,7 @@ koa_fatura_vadesi_gecmis {vadesiGecmis}
         var ayBasi = new DateTime(bugun.Year, bugun.Month, 1);
 
         var vadesiGecmisFaturalar = await ctx.Faturalar
-            .Where(f => !f.IsDeleted && f.VadeTarihi < bugun && f.Durum != KOAFiloServis.Shared.Entities.FaturaDurum.Odendi)
+            .Where(f => !f.IsDeleted && f.VadeTarihi < bugun && f.Durum != MKFiloServis.Shared.Entities.FaturaDurum.Odendi)
             .Select(f => new { f.Id, f.FaturaNo, f.VadeTarihi, Tutar = f.GenelToplam, CariAdi = f.Cari != null ? f.Cari.Unvan : null })
             .Take(50)
             .ToListAsync();

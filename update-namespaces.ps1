@@ -1,5 +1,5 @@
 ﻿
-$root = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb"
+$root = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb"
 $replacements = @(
     "namespace KOAFiloServis.Web.Services;",
     "namespace KOAFiloServis.Web.Jobs;",

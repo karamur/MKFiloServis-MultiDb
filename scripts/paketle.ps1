@@ -1,8 +1,8 @@
 ﻿# =====================================================================
-# KOA Filo Servis - IIS paketi olusturma scripti
+# MK Filo Servis - IIS paketi olusturma scripti
 # Cikti (OutputDir altinda):
 #   <OutputDir>\IIS\                                                    (publish ciktisi)
-#   <OutputDir>\KOAFiloServis_IIS_<Mode>_<Version>_<stamp>.zip          (kurulum zip)
+#   <OutputDir>\MKFiloServis_IIS_<Mode>_<Version>_<stamp>.zip          (kurulum zip)
 #
 # Modlar:
 #   Update  : Guncelleme. Mevcut dbsettings.json korunur.
@@ -22,7 +22,7 @@ param(
     [Parameter(Mandatory=$true)]
     [string]$Version,
     [string]$Configuration = 'Release',
-    [string]$Project       = 'KOAFiloServis.Web\KOAFiloServis.Web.csproj',
+    [string]$Project       = 'MKFiloServis.Web\MKFiloServis.Web.csproj',
     [string]$OutputDir,
     [string]$PublishDir,
     [switch]$SkipBuild
@@ -65,7 +65,7 @@ if ($Mode -eq 'All') {
 
     Write-Host ""
     Write-Host "--- TUM PAKETLER (v$Version) ---" -ForegroundColor Green
-    Get-ChildItem $OutputDir -File | Where-Object { $_.Name -like 'KOAFiloServis_IIS_*' } |
+    Get-ChildItem $OutputDir -File | Where-Object { $_.Name -like 'MKFiloServis_IIS_*' } |
         Sort-Object LastWriteTime -Descending |
         Select-Object Name, @{n='MB';e={[math]::Round($_.Length/1MB,2)}}, LastWriteTime |
         Format-Table -AutoSize
@@ -73,7 +73,7 @@ if ($Mode -eq 'All') {
 }
 
 $ModeLabel = if ($Mode -eq 'Install') { 'Kurulum' } else { 'Guncelleme' }
-$ModeTitle = if ($Mode -eq 'Install') { "KOA Filo Servis IIS YENI KURULUM v$Version" } else { "KOA Filo Servis IIS GUNCELLEME v$Version" }
+$ModeTitle = if ($Mode -eq 'Install') { "MK Filo Servis IIS YENI KURULUM v$Version" } else { "MK Filo Servis IIS GUNCELLEME v$Version" }
 Step "MOD     : $Mode ($ModeLabel)"
 Step "VERSION : $Version"
 Step "OUTPUT  : $OutputDir"
@@ -103,7 +103,7 @@ $VersionInfo = [pscustomobject]@{
     BuildDate   = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
     BuildNumber = $Stamp
     Framework   = 'net10.0'
-    Description = "KOA Filo Servis IIS paketi ($ModeLabel) - v$Version"
+    Description = "MK Filo Servis IIS paketi ($ModeLabel) - v$Version"
 }
 $VersionJson = $VersionInfo | ConvertTo-Json -Depth 5
 $ArtifactsInPublish = Join-Path $PublishDir 'artifacts'
@@ -112,7 +112,7 @@ New-Item -ItemType Directory -Force -Path $ArtifactsInPublish | Out-Null
 [System.IO.File]::WriteAllText((Join-Path $OutputDir 'version.json'),         $VersionJson, [System.Text.UTF8Encoding]::new($false))
 
 # 2) Manuel kurulum icin zip
-$ZipName = "KOAFiloServis_IIS_${ModeLabel}_${Version}_$Stamp.zip"
+$ZipName = "MKFiloServis_IIS_${ModeLabel}_${Version}_$Stamp.zip"
 $ZipPath = Join-Path $OutputDir $ZipName
 Step "Zip olusturuluyor: $ZipPath"
 if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
@@ -127,7 +127,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 # Ozet
 Write-Host ""
 Write-Host "--- Olusturulan paketler ($ModeLabel v$Version) ---" -ForegroundColor Green
-Get-ChildItem $OutputDir -File | Where-Object { $_.Name -like 'KOAFiloServis_IIS_*' } |
+Get-ChildItem $OutputDir -File | Where-Object { $_.Name -like 'MKFiloServis_IIS_*' } |
     Sort-Object LastWriteTime -Descending |
     Select-Object Name, @{n='MB';e={[math]::Round($_.Length/1MB,2)}}, LastWriteTime |
     Format-Table -AutoSize

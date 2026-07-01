@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    KOAFiloServis surum paketleme yardimcisi.
+    MKFiloServis surum paketleme yardimcisi.
 
 .DESCRIPTION
     - Paket dosyasinin SHA256'sini hesaplar
@@ -22,13 +22,13 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $SetupDir
-$pkgPath  = Join-Path $SetupDir "output\v$Version\KOAFiloServisKurulum-$Version.exe"
+$pkgPath  = Join-Path $SetupDir "output\v$Version\MKFiloServisKurulum-$Version.exe"
 $notesSrc = Join-Path $SetupDir "RELEASE-NOTES-v$Version.md"
 
 if (-not (Test-Path $pkgPath))  { throw "Paket bulunamadi: $pkgPath (once .\build.ps1 -Version $Version ile olustur)" }
 if (-not (Test-Path $notesSrc)) { throw "Release notes bulunamadi: $notesSrc" }
 
-Write-Host "=== KOAFiloServis v$Version release ===" -ForegroundColor Cyan
+Write-Host "=== MKFiloServis v$Version release ===" -ForegroundColor Cyan
 $pkgInfo = Get-Item $pkgPath
 Write-Host ("Paket : {0}" -f $pkgInfo.FullName)
 Write-Host ("Boyut : {0:N2} MB" -f ($pkgInfo.Length / 1MB))
@@ -80,7 +80,7 @@ if ($gh) {
 } else {
     Write-Host ""
     Write-Host "       gh CLI yok - manuel adimlar:" -ForegroundColor Yellow
-    Write-Host "       1) https://github.com/karamur/KOAFiloServis/releases/new?tag=v$Version" -ForegroundColor White
+    Write-Host "       1) https://github.com/karamur/MKFiloServis-MultiDb/releases/new?tag=v$Version" -ForegroundColor White
     Write-Host "       2) 'Release title' = v$Version" -ForegroundColor White
     Write-Host "       3) Description = $notesFinal icerigi" -ForegroundColor White
     Write-Host "       4) 'Attach binaries' = $pkgPath" -ForegroundColor White

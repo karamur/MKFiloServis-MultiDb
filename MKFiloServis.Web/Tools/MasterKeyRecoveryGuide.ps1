@@ -4,7 +4,7 @@
     DPAPI Master Key Recovery & Migration Guide
 
 .DESCRIPTION
-    KOAFiloServis'te eski master key ile şifreli dosyaları kurtarma prosedürü.
+    MKFiloServis'te eski master key ile şifreli dosyaları kurtarma prosedürü.
     Master key değiştiğinde çalıştırılacak adımlar ve tanı bilgileri.
 
 .NOTES
@@ -16,7 +16,7 @@
 #>
 
 Write-Host "=" * 80
-Write-Host "🔐 KOAFiloServis - DPAPI Master Key Recovery Guide" -ForegroundColor Cyan
+Write-Host "🔐 MKFiloServis - DPAPI Master Key Recovery Guide" -ForegroundColor Cyan
 Write-Host "=" * 80
 Write-Host ""
 
@@ -43,11 +43,11 @@ Write-Host ""
 Write-Host "Eğer eski master.key yedeklemesi varsa:"
 Write-Host ""
 Write-Host "  a) Mevcut (bozuk) master key'i yedekle:"
-Write-Host "     > Copy-Item 'C:\KOAFiloServis_yedekleme\keys\master.key' " +
-            "'C:\KOAFiloServis_yedekleme\keys\master.key.broken'"
+Write-Host "     > Copy-Item 'C:\MKFiloServis_yedekleme\keys\master.key' " +
+            "'C:\MKFiloServis_yedekleme\keys\master.key.broken'"
 Write-Host ""
 Write-Host "  b) Eski yedekten restore et:"
-Write-Host "     > Copy-Item '<BACKUP_PATH>\master.key' 'C:\KOAFiloServis_yedekleme\keys\master.key' -Force"
+Write-Host "     > Copy-Item '<BACKUP_PATH>\master.key' 'C:\MKFiloServis_yedekleme\keys\master.key' -Force"
 Write-Host ""
 Write-Host "  c) Uygulamayı yeniden başlat:"
 Write-Host "     > iisreset  (veya Blazor uygulaması restart)"
@@ -63,8 +63,8 @@ Write-Host ""
 Write-Host "⚠️  ESKİ KEY KURTARILAMADIYSALı (master.key permanent kayıp):"
 Write-Host ""
 Write-Host "  a) Eski şifreli dosyaları quarantine'e taşı:"
-Write-Host "     > Move-Item 'C:\KOAFiloServis_yedekleme\Arsiv\Sifreli\*' " +
-            "'C:\KOAFiloServis_yedekleme\Arsiv\Sifreli_BACKUP_$(Get-Date -f yyyyMMdd_HHmmss)' -Force"
+Write-Host "     > Move-Item 'C:\MKFiloServis_yedekleme\Arsiv\Sifreli\*' " +
+            "'C:\MKFiloServis_yedekleme\Arsiv\Sifreli_BACKUP_$(Get-Date -f yyyyMMdd_HHmmss)' -Force"
 Write-Host ""
 Write-Host "  b) Sistem artık yeni (current) master key ile çalışacak:"
 Write-Host "     ✓ Yeni dosyalar normal şekilde şifrelenir"
@@ -83,8 +83,8 @@ Write-Host ""
 Write-Host "Master key sorunlarından kaçınmak için:"
 Write-Host ""
 Write-Host "✅ MASTER KEY YEDEĞI:"
-Write-Host "   • Haftada 1x: Copy-Item 'C:\KOAFiloServis_yedekleme\keys\master.key' " +
-            "'\\BACKUP_SERVER\KOA_Backups\keys\master.key.$(Get-Date -f yyyyMMdd)'"
+Write-Host "   • Haftada 1x: Copy-Item 'C:\MKFiloServis_yedekleme\keys\master.key' " +
+            "'\\BACKUP_SERVER\MK_Backups\keys\master.key.$(Get-Date -f yyyyMMdd)'"
 Write-Host "   • Secure offline storage'da sakla (şifreli USB, vault)"
 Write-Host ""
 Write-Host "✅ MASTER KEY ROTASİON (Yıllık):"
@@ -135,5 +135,5 @@ Write-Host ""
 
 Write-Host ""
 Write-Host "=" * 80
-Write-Host "📞 Daha fazla yardım: Check 'KOA' Development Team / IT Support"
+Write-Host "📞 Daha fazla yardım: Check 'MK' Development Team / IT Support"
 Write-Host "=" * 80

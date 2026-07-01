@@ -9,6 +9,6 @@
 *.xml text eol=crlf
 *.yml text eol=crlf
 *.yaml text eol=crlf
-publish/full/CRMFiloServisKurulum.exe filter=lfs diff=lfs merge=lfs -text
-publish/full/CRMFiloServisLisans.exe filter=lfs diff=lfs merge=lfs -text
-publish/LisansDesktop/CRMFiloServisLisans.exe filter=lfs diff=lfs merge=lfs -text
+publish/full/MKFiloServisKurulum.exe filter=lfs diff=lfs merge=lfs -text
+publish/full/MKFiloServisLisans.exe filter=lfs diff=lfs merge=lfs -text
+publish/LisansDesktop/MKFiloServisLisans.exe filter=lfs diff=lfs merge=lfs -text

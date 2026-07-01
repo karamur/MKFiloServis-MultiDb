@@ -3,4 +3,16 @@
     <!-- Visual Studio sürümünde resmi olarak desteklenmeyen .NET 10 uyarısını gizle -->
     <NoWarn>$(NoWarn);NETSDK1233</NoWarn>
   </PropertyGroup>
+
+  <!--
+    Proje konisi içinde 'obj'/'bin' dışında kalan standart-dışı derleme
+    çıktısı klasörlerini (objbuildtest, artifacts, _tmpbuild) MSBuild
+    varsayılan öğe globbing'inden dışla. Bu klasörlerde kalan eski
+    (KOAFiloServis*) staticwebassets manifest ve scoped-CSS dosyaları
+    aksi halde derlemeye girip static web asset manifestini bozarak
+    sayfaların stilsiz görünmesine yol açar.
+  -->
+  <PropertyGroup>
+    <DefaultItemExcludes>$(DefaultItemExcludes);objbuildtest\**;artifacts\**;_tmpbuild\**</DefaultItemExcludes>
+  </PropertyGroup>
 </Project>

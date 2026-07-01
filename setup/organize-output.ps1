@@ -3,9 +3,9 @@
     Mevcut output klasöründeki setup dosyalarını versiyonlu alt klasörlere taşır.
 
 .DESCRIPTION
-    output\KOAFiloServisKurulum-1.0.3.exe  →  output\v1.0.3\KOAFiloServisKurulum-1.0.3.exe
+    output\MKFiloServisKurulum-1.0.3.exe  →  output\v1.0.3\MKFiloServisKurulum-1.0.3.exe
 
-    Desen: output\<OyunAdi>-<Major>.<Minor>.<Patch>.exe
+    Desen: output\<UrunAdi>-<Major>.<Minor>.<Patch>.exe
 
 .PARAMETER Move
     Varsayilan: sadece kopyalar. Bu parametre ile taşır (orijinali siler).

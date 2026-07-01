@@ -1,14 +1,14 @@
 {
   "LandingPageEnabled": false,
-  "CompanyName": "Allbatros Global Teknoloji",
-  "SupportEmail": "info@allglb.com",
+  "CompanyName": "MK Teknoloji",
+  "SupportEmail": "info@mkteknoloji.com",
   "SupportPhone": "0850 000 00 00",
-  "SupportLocation": "Ankara/ T\u00FCrkiye",
+  "SupportLocation": "\u0130stanbul / T\u00FCrkiye",
   "TopbarMessage": "Kurumsal dan\u0131\u015Fmanl\u0131k, bordro ve dijital d\u00F6n\u00FC\u015F\u00FCm",
   "HeroTitle": "\u0130\u015F s\u00FCre\u00E7lerinizi tek merkezden y\u00F6netin",
   "HeroSubtitle": "Profesyonel \u00FCr\u00FCn giri\u015F ekran\u0131 \u00FCzerinden projenizi se\u00E7in, ard\u0131ndan g\u00FCvenli \u015Fekilde sisteme devam edin.",
   "Content": {
-    "BrowserTitle": "Portal - Koa Teknoloji",
+    "BrowserTitle": "Portal - MK Teknoloji",
     "BrandTagline": "Kurumsal \u00E7\u00F6z\u00FCm portal\u0131",
     "Navigation": {
       "AboutText": "Hakk\u0131m\u0131zda",
@@ -64,7 +64,7 @@
     "About": {
       "Tag": "Hakk\u0131m\u0131zda",
       "Title": "Mali s\u00FCre\u00E7leri, bordroyu ve kurumsal operasyonu tek \u00E7at\u0131 alt\u0131nda topluyoruz",
-      "Description": "Koa Teknoloji; mali dan\u0131\u015Fmanl\u0131k, personel s\u00FCre\u00E7leri, bordro operasyonlar\u0131 ve y\u00F6netim raporlar\u0131n\u0131 dijitalle\u015Ftiren \u00E7\u00F6z\u00FCmler \u00FCretir. Public tan\u0131t\u0131m sayfas\u0131 ile kurumsal uygulama giri\u015Fini ayn\u0131 yap\u0131da birle\u015Ftirerek marka b\u00FCt\u00FCnl\u00FC\u011F\u00FC sa\u011Flar.",
+      "Description": "MK Teknoloji; mali dan\u0131\u015Fmanl\u0131k, personel s\u00FCre\u00E7leri, bordro operasyonlar\u0131 ve y\u00F6netim raporlar\u0131n\u0131 dijitalle\u015Ftiren \u00E7\u00F6z\u00FCmler \u00FCretir. Public tan\u0131t\u0131m sayfas\u0131 ile kurumsal uygulama giri\u015Fini ayn\u0131 yap\u0131da birle\u015Ftirerek marka b\u00FCt\u00FCnl\u00FC\u011F\u00FC sa\u011Flar.",
       "PanelTitle": "Neler sa\u011Fl\u0131yoruz?",
       "Cards": [
         {
@@ -154,7 +154,7 @@
       "Members": [
         {
           "Initials": "KT",
-          "Name": "Koa Teknoloji Ekibi",
+          "Name": "MK Teknoloji Ekibi",
           "Role": "\u00DCr\u00FCn Y\u00F6netimi",
           "Description": "Kurumsal ihtiya\u00E7lar\u0131 yaz\u0131l\u0131m mimarisi ve kullan\u0131m senaryolar\u0131na d\u00F6n\u00FC\u015Ft\u00FCr\u00FCr."
         },
@@ -184,7 +184,7 @@
       "Description": "\u0130ster sadece public tan\u0131t\u0131m ekran\u0131, ister login ba\u011Flant\u0131l\u0131 tam kurumsal portal kurgusu isteyin; ayn\u0131 proje i\u00E7inde y\u00F6netilebilir bir yap\u0131 sunuyoruz.",
       "PrimaryButtonText": "Login Ak\u0131\u015F\u0131n\u0131 A\u00E7",
       "SecondaryButtonText": "E-posta G\u00F6nder",
-      "SecondaryButtonUrl": "mailto:info@allglb.com",
+      "SecondaryButtonUrl": "mailto:info@mkteknoloji.com",
       "Cards": [
         {
           "Icon": "bi bi-layout-text-window",
@@ -211,9 +211,9 @@
   },
   "Projects": [
     {
-      "Slug": "http://allglb.com/",
-      "Name": "Koa Filo Servis",
-      "BrandHighlight": "Koa Filo Servis",
+      "Slug": "mk-filo-servis",
+      "Name": "MK Filo Servis",
+      "BrandHighlight": "MK Filo Servis",
       "Category": "Filo Y\u00F6netimi",
       "Subtitle": "Filo operasyonu, muhasebe ve servis s\u00FCre\u00E7leri tek panelde.",
       "Description": "Ara\u00E7, s\u00FCr\u00FCc\u00FC, cari, muhasebe ve servis operasyonlar\u0131n\u0131 kurumsal bir ak\u0131\u015Fla y\u00F6netin.",

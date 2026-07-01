@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Data;
@@ -87,47 +87,47 @@ public class BackupService : IBackupService
             switch (dbProvider.ToUpperInvariant())
             {
                 case "POSTGRESQL":
-                    backupFileName = $"KOAFiloServis_PostgreSQL_{timestamp}.backup";
+                    backupFileName = $"MKFiloServis_PostgreSQL_{timestamp}.backup";
                     backupFilePath = Path.Combine(backupFolder, backupFileName);
                     result = await CreatePostgreSqlBackupAsync(backupFilePath);
                     break;
 
                 case "MSSQL":
                 case "SQLSERVER":
-                    backupFileName = $"KOAFiloServis_MSSQL_{timestamp}.bak";
+                    backupFileName = $"MKFiloServis_MSSQL_{timestamp}.bak";
                     backupFilePath = Path.Combine(backupFolder, backupFileName);
                     result = await CreateMsSqlBackupAsync(backupFilePath);
                     break;
 
                 case "MYSQL":
-                    backupFileName = $"KOAFiloServis_MySQL_{timestamp}.sql";
+                    backupFileName = $"MKFiloServis_MySQL_{timestamp}.sql";
                     backupFilePath = Path.Combine(backupFolder, backupFileName);
                     result = await CreateMySqlBackupAsync(backupFilePath);
                     break;
 
                 case "MONGO":
                 case "MONGODB":
-                    backupFileName = $"KOAFiloServis_Mongo_{timestamp}.json";
+                    backupFileName = $"MKFiloServis_Mongo_{timestamp}.json";
                     backupFilePath = Path.Combine(backupFolder, backupFileName);
                     await CreateJsonBackupAsync(backupFilePath);
                     result = CreateSuccessResult(backupFilePath);
                     break;
 
                 case "EXCEL":
-                    backupFileName = $"KOAFiloServis_Excel_{timestamp}.json";
+                    backupFileName = $"MKFiloServis_Excel_{timestamp}.json";
                     backupFilePath = Path.Combine(backupFolder, backupFileName);
                     await CreateJsonBackupAsync(backupFilePath);
                     result = CreateSuccessResult(backupFilePath);
                     break;
 
                 case "SQLITE":
-                    backupFileName = $"KOAFiloServis_SQLite_{timestamp}.db";
+                    backupFileName = $"MKFiloServis_SQLite_{timestamp}.db";
                     backupFilePath = Path.Combine(backupFolder, backupFileName);
                     result = await CreateSqliteBackupAsync(backupFilePath);
                     break;
 
                 default:
-                    backupFileName = $"KOAFiloServis_{dbProvider}_{timestamp}.json";
+                    backupFileName = $"MKFiloServis_{dbProvider}_{timestamp}.json";
                     backupFilePath = Path.Combine(backupFolder, backupFileName);
                     await CreateJsonBackupAsync(backupFilePath);
                     result = CreateSuccessResult(backupFilePath);
@@ -167,9 +167,9 @@ public class BackupService : IBackupService
             if (string.IsNullOrWhiteSpace(connStr)) return;
 
             var parts = ParseConnectionString(connStr);
-            var dbName = parts.GetValueOrDefault("Database", "KOAFiloServis");
+            var dbName = parts.GetValueOrDefault("Database", "MKFiloServis");
             var safeDbName = SanitizeFileName(dbName);
-            var backupPath = Path.Combine(backupFolder, $"KOAFiloServis_{safeDbName}_{timestamp}.backup");
+            var backupPath = Path.Combine(backupFolder, $"MKFiloServis_{safeDbName}_{timestamp}.backup");
 
             await RunPgDumpForDatabaseAsync(connStr, backupPath, dbName);
 
@@ -338,7 +338,7 @@ public class BackupService : IBackupService
             using var scope = _serviceProvider.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             var dbName = context.Database.GetDbConnection().Database;
-            var backupSql = $"BACKUP DATABASE [{dbName}] TO DISK = N'{backupFilePath}' WITH FORMAT, INIT, NAME = N'KOAFiloServis Backup'";
+            var backupSql = $"BACKUP DATABASE [{dbName}] TO DISK = N'{backupFilePath}' WITH FORMAT, INIT, NAME = N'MKFiloServis Backup'";
 
             await context.Database.ExecuteSqlRawAsync(backupSql);
 
@@ -745,8 +745,8 @@ public class BackupService : IBackupService
 
         if (Directory.Exists(backupFolder))
         {
-            // KOAFiloServis_ ile baslayan dosyalar
-            var crmFiles = Directory.GetFiles(backupFolder, "KOAFiloServis_*.*", SearchOption.AllDirectories)
+            // MKFiloServis_ ile baslayan dosyalar
+            var crmFiles = Directory.GetFiles(backupFolder, "MKFiloServis_*.*", SearchOption.AllDirectories)
                 .Where(f => f.EndsWith(".sql") || f.EndsWith(".json") || f.EndsWith(".db") || f.EndsWith(".bak") || f.EndsWith(".backup"));
 
             // uploaded_ ile baslayan dosyalar (disaridan yuklenen)
@@ -755,7 +755,7 @@ public class BackupService : IBackupService
 
             // Diger yedek dosyalari
             var otherFiles = Directory.GetFiles(backupFolder, "*.*", SearchOption.AllDirectories)
-                .Where(f => !Path.GetFileName(f).StartsWith("KOAFiloServis_") && 
+                .Where(f => !Path.GetFileName(f).StartsWith("MKFiloServis_") && 
                             !Path.GetFileName(f).StartsWith("uploaded_") &&
                             (f.EndsWith(".sql") || f.EndsWith(".db") || f.EndsWith(".bak") || f.EndsWith(".backup")));
 
@@ -1161,7 +1161,7 @@ public class BackupService : IBackupService
             if (!Directory.Exists(backupFolder))
                 return;
 
-            var files = Directory.GetFiles(backupFolder, "KOAFiloServis_*.*", SearchOption.AllDirectories)
+            var files = Directory.GetFiles(backupFolder, "MKFiloServis_*.*", SearchOption.AllDirectories)
                 .Where(f => f.EndsWith(".sql") || f.EndsWith(".json") || f.EndsWith(".db") || f.EndsWith(".bak") || f.EndsWith(".backup"))
                 .OrderByDescending(f => new FileInfo(f).CreationTime)
                 .Skip(keepCount)

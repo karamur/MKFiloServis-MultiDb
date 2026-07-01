@@ -2,17 +2,17 @@
 setlocal
 
 set "TARGET_DIR=%~1"
-if "%TARGET_DIR%"=="" set "TARGET_DIR=C:\KOAFiloServis\IIS"
+if "%TARGET_DIR%"=="" set "TARGET_DIR=C:\MKFiloServis\IIS"
 
 set "BACKUP_ROOT=%~2"
-if "%BACKUP_ROOT%"=="" set "BACKUP_ROOT=C:\KOAFiloServis_yedekleme\deploy"
+if "%BACKUP_ROOT%"=="" set "BACKUP_ROOT=C:\MKFiloServis_yedekleme\deploy"
 
 set "SITE_NAME=%~3"
 
 set "MODE=%~4"
 if "%MODE%"=="" set "MODE=Update"
 
-echo KOA Filo Servis IIS kurulum/guncelleme baslatiliyor...
+echo MK Filo Servis IIS kurulum/guncelleme baslatiliyor...
 echo Mod          : %MODE%
 echo Hedef klasor : %TARGET_DIR%
 echo Yedek klasoru: %BACKUP_ROOT%

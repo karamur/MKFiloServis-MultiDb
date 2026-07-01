@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using Microsoft.EntityFrameworkCore;
@@ -112,7 +112,7 @@ public class AppAuthenticationStateProvider : AuthenticationStateProvider
         if (!string.IsNullOrEmpty(kullanici.Email))
             claims.Add(new Claim(ClaimTypes.Email, kullanici.Email));
 
-        var identity = new ClaimsIdentity(claims, "KOAFiloServisAuth");
+        var identity = new ClaimsIdentity(claims, "MKFiloServisAuth");
         _currentUser = new ClaimsPrincipal(identity);
 
         _logger.LogInformation("Kullanici giris yapti: {KullaniciAdi}, Rol: {Rol}, SessionId: {SessionId}", 

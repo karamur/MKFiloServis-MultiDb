@@ -1,4 +1,4 @@
-using MKFiloServis.Web.Data;
+﻿using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -51,7 +51,7 @@ public class ZamanliRaporService
             var html = $@"
 <html><body style='font-family:Segoe UI,Arial;max-width:600px;margin:auto;'>
 <div style='background:#1e3c72;color:white;padding:20px;border-radius:8px 8px 0 0;'>
-  <h2 style='margin:0;'>KOA Filo Servis - Günlük Rapor</h2>
+  <h2 style='margin:0;'>MK Filo Servis - Günlük Rapor</h2>
   <p style='margin:4px 0 0;opacity:.8;'>{bugun:dd MMMM yyyy, dddd}</p>
 </div>
 <div style='background:#f8fafc;padding:20px;'>
@@ -81,13 +81,13 @@ public class ZamanliRaporService
   </table>
 </div>
 <div style='background:#f1f5f9;padding:12px 20px;border-radius:0 0 8px 8px;text-align:center;'>
-  <small style='color:#94a3b8;'>Bu rapor KOA Filo Servis tarafından otomatik gönderilmiştir.</small>
+  <small style='color:#94a3b8;'>Bu rapor MK Filo Servis tarafından otomatik gönderilmiştir.</small>
 </div>
 </body></html>";
 
             foreach (var alici in alicilar)
             {
-                await _emailService.SendEmailAsync(alici, $"KOA Filo Servis - Günlük Rapor ({bugun:dd.MM.yyyy})", html);
+                await _emailService.SendEmailAsync(alici, $"MK Filo Servis - Günlük Rapor ({bugun:dd.MM.yyyy})", html);
             }
 
             _logger.LogInformation("Zamanli rapor {Count} alıcıya gönderildi.", alicilar.Length);

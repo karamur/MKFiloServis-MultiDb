@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using MKFiloServis.Web.Services.Interfaces;
 
@@ -52,7 +52,7 @@ public class SlackBildirimService : ISlackBildirimService
     }
 
     public async Task<bool> TestBaglantisiAsync()
-        => await GonderAsync("KOA Filo Servis bağlantı testi başarılı.", emoji: ":white_check_mark:");
+        => await GonderAsync("MK Filo Servis bağlantı testi başarılı.", emoji: ":white_check_mark:");
 }
 
 

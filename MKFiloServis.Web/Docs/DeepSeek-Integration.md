@@ -2,7 +2,7 @@
 
 ### Genel Bakış
 
-KOAFiloServis artık **DeepSeek V3** AI modelini desteklemektedir. DeepSeek V3, son derece güçlü reasoning (düşünme) yeteneklerine sahip açık kaynak bir modeldir.
+MKFiloServis artık **DeepSeek V3** AI modelini desteklemektedir. DeepSeek V3, son derece güçlü reasoning (düşünme) yeteneklerine sahip açık kaynak bir modeldir.
 
 ### İki Kullanım Yöntemi
 
@@ -16,7 +16,7 @@ OpenRouter birden fazla AI modelini tek bir API üzerinden sunar. DeepSeek V3'ü
   "ApiKey": "YOUR_OPENROUTER_API_KEY",
   "Model": "deepseek/deepseek-chat",
   "SiteUrl": "http://localhost:5000",
-  "SiteName": "KOAFiloServis"
+  "SiteName": "MKFiloServis"
 }
 ```
 
@@ -216,7 +216,7 @@ catch (HttpRequestException ex)
 
 ```bash
 # Build
-dotnet build KOAFiloServis.Web
+dotnet build MKFiloServis.Web
 
 # Test (varsa AI testleri)
 dotnet test --filter "Category=AI"
@@ -241,4 +241,4 @@ dotnet test --filter "Category=AI"
 
 - DeepSeek Docs: https://platform.deepseek.com/api-docs/
 - OpenRouter DeepSeek: https://openrouter.ai/models/deepseek/deepseek-chat
-- Code: `KOAFiloServis.Web/Services/DeepSeekService.cs`
+- Code: `MKFiloServis.Web/Services/DeepSeekService.cs`

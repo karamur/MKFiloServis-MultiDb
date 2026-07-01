@@ -1,4 +1,4 @@
-# 🚀 Koa Filo Servis - Kurulum Kılavuzu
+﻿# 🚀 MK Filo Servis - Kurulum Kılavuzu
 
 ## 📋 Sistem Gereksinimleri
 
@@ -50,10 +50,10 @@ GRANT ALL PRIVILEGES ON DATABASE crm_filo_servis TO crm_user;
 
 ```powershell
 # 1. Release dosyasını indirin ve çıkarın
-Expand-Archive -Path CRMFiloServis-Release.zip -DestinationPath C:\Apps\CRMFiloServis
+Expand-Archive -Path MKFiloServis-Release.zip -DestinationPath C:\Apps\MKFiloServis
 
 # 2. Uygulama dizinine gidin
-cd C:\Apps\CRMFiloServis
+cd C:\Apps\MKFiloServis
 
 # 3. appsettings.json dosyasını düzenleyin
 ```
@@ -87,14 +87,14 @@ cd C:\Apps\CRMFiloServis
 ```powershell
 # İlk çalıştırmada otomatik migration yapılır
 # Veya manuel olarak:
-dotnet CRMFiloServis.Web.dll --migrate
+dotnet MKFiloServis.Web.dll --migrate
 ```
 
 ### 7. Uygulamayı Başlatma
 
 ```powershell
 # Doğrudan çalıştırma
-dotnet CRMFiloServis.Web.dll
+dotnet MKFiloServis.Web.dll
 
 # Veya kurulum script'i ile
 .\install.ps1
@@ -112,21 +112,21 @@ dotnet CRMFiloServis.Web.dll
 choco install nssm
 
 # Servis oluşturma
-nssm install CRMFiloServis "C:\Apps\CRMFiloServis\CRMFiloServis.Web.exe"
-nssm set CRMFiloServis AppDirectory "C:\Apps\CRMFiloServis"
-nssm set CRMFiloServis Description "Koa Filo Servis Yönetim Sistemi"
-nssm set CRMFiloServis Start SERVICE_AUTO_START
+nssm install MKFiloServis "C:\Apps\MKFiloServis\MKFiloServis.Web.exe"
+nssm set MKFiloServis AppDirectory "C:\Apps\MKFiloServis"
+nssm set MKFiloServis Description "MK Filo Servis Yönetim Sistemi"
+nssm set MKFiloServis Start SERVICE_AUTO_START
 
 # Servisi başlatma
-nssm start CRMFiloServis
+nssm start MKFiloServis
 ```
 
 ### sc.exe ile Servis Oluşturma
 
 ```powershell
-sc.exe create CRMFiloServis binPath="C:\Apps\CRMFiloServis\CRMFiloServis.Web.exe" start=auto
-sc.exe description CRMFiloServis "Koa Filo Servis Yönetim Sistemi"
-sc.exe start CRMFiloServis
+sc.exe create MKFiloServis binPath="C:\Apps\MKFiloServis\MKFiloServis.Web.exe" start=auto
+sc.exe description MKFiloServis "MK Filo Servis Yönetim Sistemi"
+sc.exe start MKFiloServis
 ```
 
 ---
@@ -180,10 +180,10 @@ certbot certonly --standalone -d yourdomain.com
 
 ```powershell
 # HTTP port
-netsh advfirewall firewall add rule name="CRMFiloServis HTTP" dir=in action=allow protocol=TCP localport=5000
+netsh advfirewall firewall add rule name="MKFiloServis HTTP" dir=in action=allow protocol=TCP localport=5000
 
 # HTTPS port
-netsh advfirewall firewall add rule name="CRMFiloServis HTTPS" dir=in action=allow protocol=TCP localport=5001
+netsh advfirewall firewall add rule name="MKFiloServis HTTPS" dir=in action=allow protocol=TCP localport=5001
 ```
 
 ---
@@ -208,7 +208,7 @@ netsh advfirewall firewall add rule name="CRMFiloServis HTTPS" dir=in action=all
 netstat -ano | findstr :5000
 
 # Alternatif port kullanın
-dotnet CRMFiloServis.Web.dll --urls "http://0.0.0.0:8080"
+dotnet MKFiloServis.Web.dll --urls "http://0.0.0.0:8080"
 ```
 
 ### Veritabanı Bağlantı Hatası
@@ -224,7 +224,7 @@ psql -h localhost -U crm_user -d crm_filo_servis
 ### Log Dosyaları
 
 ```
-C:\Apps\CRMFiloServis\logs\
+C:\Apps\MKFiloServis\logs\
 ├── app-{date}.log
 ├── error-{date}.log
 └── access-{date}.log
@@ -249,7 +249,7 @@ C:\MKFiloServis\IIS\logs\diag-YYYYMMDD-HHMMSS.txt
 
 ## 📞 Destek
 
-- **GitHub Issues:** https://github.com/karamur/CRMFiloServis/issues
+- **GitHub Issues:** https://github.com/karamur/MKFiloServis-MultiDb/issues
 - **Dokümantasyon:** DEVELOPMENT.md, ROADMAP.md dosyalarına bakın
 
 ---

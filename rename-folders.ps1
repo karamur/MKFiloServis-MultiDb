@@ -1,4 +1,4 @@
-﻿$root = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb"
+﻿$root = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb"
 
 # Proje klasörlerini yeniden adlandır
 $folders = @(

@@ -1,4 +1,4 @@
-using System.Net.Http.Headers;
+﻿using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -30,7 +30,7 @@ public class OpenRouterService : IOpenRouterService
         
         // OpenRouter recommended headers
         var siteUrl = _configuration["OpenRouter:SiteUrl"] ?? "http://localhost:5000";
-        var siteName = _configuration["OpenRouter:SiteName"] ?? "KOAFiloServis";
+        var siteName = _configuration["OpenRouter:SiteName"] ?? "MKFiloServis";
         
         _httpClient.DefaultRequestHeaders.Add("HTTP-Referer", siteUrl);
         _httpClient.DefaultRequestHeaders.Add("X-Title", siteName);

@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using MKFiloServis.Web.Services.Interfaces;
 
@@ -70,7 +70,7 @@ public class TeamsBildirimService : ITeamsBildirimService
     }
 
     public async Task<bool> TestBaglantisiAsync()
-        => await GonderAsync("KOA Filo Servis", "Bağlantı testi başarılı.", "Good");
+        => await GonderAsync("MK Filo Servis", "Bağlantı testi başarılı.", "Good");
 }
 
 

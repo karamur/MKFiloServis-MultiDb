@@ -10,6 +10,8 @@ temp/
 [Dd]ebug/
 [Rr]elease/
 objbuildtest/
+_tmpbuild/
+*.csproj.lscache
 x64/
 x86/
 bld/
@@ -74,12 +76,12 @@ appsettings.Production.json
 
 # Artifacts
 [Aa]rtifacts/
-CRMFiloServis.Web/Backups/**
-!CRMFiloServis.Web/Backups/.gitkeep
+MKFiloServis.Web/Backups/**
+!MKFiloServis.Web/Backups/.gitkeep
 
 # Runtime uploads / generated user files
-CRMFiloServis.Web/wwwroot/uploads/**
-!CRMFiloServis.Web/wwwroot/uploads/.gitkeep
+MKFiloServis.Web/wwwroot/uploads/**
+!MKFiloServis.Web/wwwroot/uploads/.gitkeep
 deploy/Backups/**
 !deploy/Backups/.gitkeep
 deploy/Logs/**
@@ -87,13 +89,9 @@ deploy/Logs/**
 deploy/Uploads/**
 !deploy/Uploads/.gitkeep
 publish/
-CRMFiloServis-Release.zip
-KOAFiloServis.Installer/Payload/koafiloservis-package.zip
-KOAFiloServisKurulum.exe
-
-# KOAFiloServis backups
-KOAFiloServis.Web/Backups/**
-!KOAFiloServis.Web/Backups/.gitkeep
+MKFiloServis-Release.zip
+MKFiloServis.Installer/Payload/mkfiloservis-package.zip
+MKFiloServisKurulum.exe
 
 # Claude Code
 .codex/

@@ -1,12 +1,12 @@
-﻿$root = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb"
+﻿$root = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb"
 
-# .csproj dosyalarını yeniden adlandır
+# .csproj dosyalarını kontrol et
 $csprojFiles = @(
-    "MKFiloServis.DataSync\KOAFiloServis.DataSync.csproj",
-    "MKFiloServis.Infrastructure\KOAFiloServis.Infrastructure.csproj",
-    "MKFiloServis.LisansDesktop\KOAFiloServis.LisansDesktop.csproj",
-    "MKFiloServis.Shared\KOAFiloServis.Shared.csproj",
-    "MKFiloServis.Web\KOAFiloServis.Web.csproj"
+    "MKFiloServis.DataSync\MKFiloServis.DataSync.csproj",
+    "MKFiloServis.Infrastructure\MKFiloServis.Infrastructure.csproj",
+    "MKFiloServis.LisansDesktop\MKFiloServis.LisansDesktop.csproj",
+    "MKFiloServis.Shared\MKFiloServis.Shared.csproj",
+    "MKFiloServis.Web\MKFiloServis.Web.csproj"
 )
 
 foreach ($csproj in $csprojFiles) {

@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using System.Data;
@@ -2347,8 +2347,8 @@ WHERE IsDeleted = 0;");
             {
                 var ayarlar = new List<DestekAyar>
                 {
-                    new() { Anahtar = "SirketAdi", Deger = "Koa Filo Servis", Grup = "Genel", Aciklama = "Şirket adı", CreatedAt = DateTime.UtcNow },
-                    new() { Anahtar = "DestekEmail", Deger = "destek@koafiloservis.com", Grup = "Genel", Aciklama = "Destek e-posta adresi", CreatedAt = DateTime.UtcNow },
+                    new() { Anahtar = "SirketAdi", Deger = "MK Filo Servis", Grup = "Genel", Aciklama = "Şirket adı", CreatedAt = DateTime.UtcNow },
+                    new() { Anahtar = "DestekEmail", Deger = "destek@mkfiloservis.com", Grup = "Genel", Aciklama = "Destek e-posta adresi", CreatedAt = DateTime.UtcNow },
                     new() { Anahtar = "OtomatikAtama", Deger = "false", Grup = "Atama", Aciklama = "Yeni talepleri otomatik ata", CreatedAt = DateTime.UtcNow },
                     new() { Anahtar = "MusteriPortaliAktif", Deger = "false", Grup = "Portal", Aciklama = "Müşteri self-servis portalı aktif mi", CreatedAt = DateTime.UtcNow },
                     new() { Anahtar = "MemnuniyetAnketiAktif", Deger = "true", Grup = "Anket", Aciklama = "Talep kapatıldığında memnuniyet anketi gönder", CreatedAt = DateTime.UtcNow },

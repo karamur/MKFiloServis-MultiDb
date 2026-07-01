@@ -1,4 +1,4 @@
-# 📒 MKFiloServis — Kayıt Defteri
+﻿# 📒 MKFiloServis — Kayıt Defteri
 
 > Bu dosya, geliştirme sürecinde alınan kararları, yapılan tartışmaları ve hazırlanan raporları
 > kronolojik olarak kayıt altına alır. Her oturum sonunda güncellenir.
@@ -806,7 +806,7 @@ feat(multi-db): Faz 1 altyapi - Database-Per-Firma hybrid mimari kurulumu
 | `dotnet run` — uygulama başlatma | ✅ `Now listening on: http://0.0.0.0:5190` |
 | Startup görevleri (Seed, Quartz, GPS) | ✅ Tümü başarılı |
 | Uygulama log'larında hata/exception | ✅ **0 hata** |
-| `GET /` — giriş sayfası | ✅ HTTP 200, "Giris - Koa Filo Servis" |
+| `GET /` — giriş sayfası | ✅ HTTP 200, "Giris - MK Filo Servis" |
 | `GET /login` — login sayfası | ✅ HTTP 200 |
 
 **Sonuç:** ✅ Uygulama sorunsuz başlıyor, login sayfası açılıyor, hiçbir hata yok.

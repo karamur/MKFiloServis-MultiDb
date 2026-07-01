@@ -1,5 +1,5 @@
 ﻿<#
-    KOAFiloServis — IIS site ve app pool kaldirma (uninstall adimi)
+    MKFiloServis — IIS site ve app pool kaldirma (uninstall adimi)
     Kullanici verilerine (db, uploads, logs, Backups) DOKUNMAZ.
 #>
 [CmdletBinding()]

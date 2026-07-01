@@ -8,7 +8,7 @@
 
 ## 1. Sahiplik Modeli (mevcut, korunuyor)
 
-`AracSahiplikTipi` (KOAFiloServis.Shared/Entities/Arac.cs):
+`AracSahiplikTipi` (MKFiloServis.Shared/Entities/Arac.cs):
 
 | Tip | Anlam | Plaka | Araç | Şoför / Personel | Masraf Sahibi |
 |---|---|---|---|---|---|

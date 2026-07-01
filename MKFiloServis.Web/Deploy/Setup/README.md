@@ -1,4 +1,4 @@
-﻿# KOAFiloServis Setup
+﻿# MKFiloServis Setup
 
 Bu klasör, uygulamanın publish edilip kurulum paket klasörüne hazırlanması için kullanılır.
 

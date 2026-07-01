@@ -39,7 +39,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-set "WORK_DIR=%TEMP%\KOAFiloServisSFX_%RANDOM%%RANDOM%"
+set "WORK_DIR=%TEMP%\MKFiloServisSFX_%RANDOM%%RANDOM%"
 mkdir "%WORK_DIR%" >nul 2>&1
 if errorlevel 1 (
     echo [HATA] Gecici klasor olusturulamadi: %WORK_DIR%

@@ -1,6 +1,6 @@
-@echo off
+﻿@echo off
 REM ============================================================
-REM  KOAFiloServis-MultiDb - Setup EXE Uretici
+REM  MKFiloServis-MultiDb - Setup EXE Uretici
 REM ============================================================
 setlocal enabledelayedexpansion
 
@@ -18,7 +18,7 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo ============================================================
-echo  KOAFiloServis-MultiDb Setup Builder
+echo  MKFiloServis-MultiDb Setup Builder
 echo  Surum  : %VERSION%
 echo  Klasor : %SCRIPT_DIR%
 echo ============================================================

@@ -6,10 +6,10 @@
 
 param(
     # Eski kurulumun yedekleme kökü (içinde uploads/ ve keys/ olan yer)
-    [string]$EskiYedekKok   = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\ustunfiloservis_yedekler\KOAFiloServis_yedekleme",
+    [string]$EskiYedekKok   = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\ustunfiloservis_yedekler\MKFiloServis_yedekleme",
 
     # Yeni sistemin depolama kökü (AppStoragePaths.DefaultStorageRoot)
-    [string]$YeniDepolamaKok = "C:\KOAFiloServis_yedekleme"
+    [string]$YeniDepolamaKok = "C:\MKFiloServis_yedekleme"
 )
 
 $ErrorActionPreference = "Stop"

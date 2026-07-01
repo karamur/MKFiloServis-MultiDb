@@ -1,6 +1,6 @@
-# Puantaj ve Fatura Kılavuzu Görselleri
+﻿# Puantaj ve Fatura Kılavuzu Görselleri
 
-Bu klasör, `KOAFiloServis.Web/wwwroot/docs/puantaj-ve-fatura-kilavuzu.md` dosyasında kullanılan görselleri içerir.
+Bu klasör, `MKFiloServis.Web/wwwroot/docs/puantaj-ve-fatura-kilavuzu.md` dosyasında kullanılan görselleri içerir.
 
 Beklenen dosyalar:
 

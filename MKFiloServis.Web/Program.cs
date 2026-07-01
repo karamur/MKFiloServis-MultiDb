@@ -1,4 +1,4 @@
-using MKFiloServis.Web.Components;
+﻿using MKFiloServis.Web.Components;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Helpers;
 using MKFiloServis.Web.Jobs;
@@ -102,7 +102,7 @@ if (!hasExplicitUrls && !isIisHosted)
     var baslangicPortu = 5191;
     var secilenPort = UygunPortSec(baslangicPortu, 20);
     builder.WebHost.UseUrls($"http://0.0.0.0:{secilenPort}");
-    Environment.SetEnvironmentVariable("KOAFILOSERVIS_ACTIVE_PORT", secilenPort.ToString());
+    Environment.SetEnvironmentVariable("MKFILOSERVIS_ACTIVE_PORT", secilenPort.ToString());
 }
 
 // Add services to the container.
@@ -680,11 +680,11 @@ await RunScopedSafeAsync(app, "SchemaSync", async services =>
     await MKFiloServis.Web.Data.Migrations.SchemaSyncHelper.EnsureAllColumnsExistAsync(context);
     // 2) FisNoCounters: eski 2-kolon PK → 3-kolon unique index geçişi (42P10 hatasını önler)
     await MKFiloServis.Web.Data.Migrations.SchemaSyncHelper.EnsureFisNoCountersSchemaAsync(context);
-    // 3) Schema uyumlu hale geldi — bekleyen migration'ları "uygulandı" olarak işaretle
-    await MKFiloServis.Web.Data.Migrations.SchemaSyncHelper.MarkAllPendingMigrationsAsAppliedAsync(context);
+    // Not: Pending migration'ları otomatik "uygulandı" işaretlemek bazı ortamlarda tablo oluşturmayı engelleyip
+    // runtime'da relation does not exist hatalarına yol açabiliyor. Migration yönetimi DbInitializer tarafında yapılır.
 });
 
-// Legacy veri aktarımı (Talimat Bölüm 16-23): DestekCRMServisBlazorDb → MKFiloServis
+// Legacy veri aktarımı (Talimat Bölüm 16-23): LegacySourceConnection (örn. eski kaynak DB) → MKFiloServis
 await RunScopedSafeAsync(app, "LegacyDataTransfer", async services =>
 {
     var transferService = services.GetRequiredService<LegacyDataTransferService>();

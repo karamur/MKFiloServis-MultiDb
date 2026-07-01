@@ -1,4 +1,4 @@
-using System.Net.Http.Headers;
+﻿using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -126,7 +126,7 @@ public class WebhookService : IWebhookService
         {
             test = true,
             timestamp = DateTime.Now,
-            message = "Koa Filo Servis webhook test mesajı"
+            message = "MK Filo Servis webhook test mesajı"
         };
 
         try

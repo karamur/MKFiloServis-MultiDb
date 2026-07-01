@@ -1,4 +1,4 @@
-using System.Net.Http.Headers;
+﻿using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using MKFiloServis.Web.Services.Interfaces;
@@ -32,7 +32,7 @@ public class S3ObjectStorageService : IObjectStorageService
 
         _accessKey = configuration["Storage:S3:AccessKey"] ?? string.Empty;
         _secretKey = configuration["Storage:S3:SecretKey"] ?? string.Empty;
-        _bucket = configuration["Storage:S3:BucketName"] ?? "koa-filo-servis";
+        _bucket = configuration["Storage:S3:BucketName"] ?? "mk-filo-servis";
         _region = configuration["Storage:S3:Region"] ?? "eu-central-1";
         _serviceUrl = configuration["Storage:S3:ServiceUrl"] ?? $"https://s3.{_region}.amazonaws.com";
     }

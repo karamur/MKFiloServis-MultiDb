@@ -1,13 +1,13 @@
-; ============================================================
-; KOAFiloServis — Guncelleme Paketi (sadece dosyalar)
+﻿; ============================================================
+; MKFiloServis — Guncelleme Paketi (sadece dosyalar)
 ; Mevcut kurulum ZORUNLUDUR.
 ; ============================================================
 
-#define MyAppName     "KOAFiloServis"
-#define MyAppExeName  "KOAFiloServis.Web.exe"
-#define MyInstallDir  "C:\KOAFiloServis"
-#define MyLisansExe   "KOAFiloServisLisans.exe"
-#define MyDataSyncExe "KOAFiloServis.DataSync.exe"
+#define MyAppName     "MKFiloServis"
+#define MyAppExeName  "MKFiloServis.Web.exe"
+#define MyInstallDir  "C:\MKFiloServis"
+#define MyLisansExe   "MKFiloServisLisans.exe"
+#define MyDataSyncExe "MKFiloServis.DataSync.exe"
 
 #ifndef MyAppVersion
 #define MyAppVersion "1.0.26"
@@ -18,11 +18,11 @@ AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
 AppName={#MyAppName} Guncelleme
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
-AppPublisher=KOA Yazilim
+AppPublisher=MK Yazilim
 DefaultDirName={#MyInstallDir}
 DisableDirPage=yes
 DisableProgramGroupPage=yes
-OutputBaseFilename=KOAFiloServisGuncelle-{#MyAppVersion}
+OutputBaseFilename=MKFiloServisGuncelle-{#MyAppVersion}
 #ifdef OutputDir
 OutputDir={#OutputDir}
 #else

@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # 🐳 Docker Image — Build & Push to GitHub Container Registry
 # ------------------------------------------------------------
 # Tamamen ücretsiz (GHCR public image limitsiz).
@@ -81,7 +81,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
           labels: |
             org.opencontainers.image.title=MKFiloServis.Web
-            org.opencontainers.image.description=KOA Filo Servis - Blazor Server (.NET 10)
+            org.opencontainers.image.description=MK Filo Servis - Blazor Server (.NET 10)
             org.opencontainers.image.vendor=Allbatros Global Teknoloji
             org.opencontainers.image.licenses=Proprietary
 

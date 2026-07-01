@@ -1,4 +1,4 @@
-using MKFiloServis.Web.Data;
+﻿using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Npgsql;
@@ -232,6 +232,51 @@ public static class SchemaSyncHelper
             var pendingMigrations = (await context.Database.GetPendingMigrationsAsync()).ToList();
             if (!pendingMigrations.Any()) return;
 
+            // Güvenlik kontrolü:
+            // Modelde beklenen tabloların bir kısmı DB'de yoksa migration geçmişini yapay olarak doldurma.
+            // Aksi halde tablolar hiç oluşmadan startup devam eder ve runtime'da 42P01 hataları patlar.
+            var modelTables = context.Model.GetEntityTypes()
+                .Select(e => e.GetTableName())
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .Cast<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var existingTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using var tableCmd = context.Database.GetDbConnection().CreateCommand();
+            tableCmd.CommandText = @"
+                SELECT table_name
+                FROM information_schema.tables
+                WHERE table_schema = 'public'";
+            tableCmd.CommandType = System.Data.CommandType.Text;
+
+            var wasOpen = tableCmd.Connection!.State == System.Data.ConnectionState.Open;
+            if (!wasOpen) await tableCmd.Connection.OpenAsync();
+
+            try
+            {
+                await using var tableReader = await tableCmd.ExecuteReaderAsync();
+                while (await tableReader.ReadAsync())
+                {
+                    existingTables.Add(tableReader.GetString(0));
+                }
+            }
+            finally
+            {
+                if (!wasOpen) await tableCmd.Connection.CloseAsync();
+            }
+
+            var missingModelTables = modelTables
+                .Where(t => !existingTables.Contains(t))
+                .OrderBy(t => t)
+                .ToList();
+
+            if (missingModelTables.Count > 0)
+            {
+                Console.WriteLine($"[SchemaSync] {missingModelTables.Count} model tablosu DB'de eksik. Pending migration'lar history'e yazilmadi.");
+                return;
+            }
+
             // __EFMigrationsHistory tablosu var mı kontrol et
             await using var cmd = context.Database.GetDbConnection().CreateCommand();
             cmd.CommandText = @"
@@ -241,7 +286,7 @@ public static class SchemaSyncHelper
                 )";
             cmd.CommandType = System.Data.CommandType.Text;
 
-            var wasOpen = cmd.Connection!.State == System.Data.ConnectionState.Open;
+            wasOpen = cmd.Connection!.State == System.Data.ConnectionState.Open;
             if (!wasOpen) await cmd.Connection.OpenAsync();
 
             var historyExists = false;

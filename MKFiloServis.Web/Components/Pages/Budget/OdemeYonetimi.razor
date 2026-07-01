@@ -1,4 +1,4 @@
-@page "/butce/odemeler"
+﻿@page "/butce/odemeler"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
 @using MKFiloServis.Web.Services.Interfaces
@@ -1397,7 +1397,7 @@
         taksitListesi.Clear();
     }
 
-    private void OdemeTipiDegisti(MKFiloServis.Shared.Entities.OdemeTipi tip)
+    private void OdemeTipiDegisti(BudgetOdemeTipi tip)
     {
         odemeYapRequest.OdemeTipi = tip;
         odemeYapRequest.BankaHesapId = null;

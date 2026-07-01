@@ -1,4 +1,6 @@
-namespace MKFiloServis.Web.Services;
+﻿namespace MKFiloServis.Web.Services;
+
+using MKFiloServis.Web.Services.Interfaces;
 
 public class AutoBackupService : BackgroundService
 {

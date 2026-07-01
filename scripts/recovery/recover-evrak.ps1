@@ -1,5 +1,5 @@
-# =============================================================================
-# KOAFiloServis - Evrak Kurtarma ve Re-Encrypt Aracı (MEVCUT PC)
+﻿# =============================================================================
+# MKFiloServis - Evrak Kurtarma ve Re-Encrypt Aracı (MEVCUT PC)
 # =============================================================================
 # Bu script mevcut PC'de (canlı sistem) çalıştırılır.
 # Diğer PC'den alınan raw key ile eski evrakları decrypt eder,
@@ -13,8 +13,8 @@
 # Parametreler:
 #   -OldKeyHex       : Diğer PC'den alınan raw key (HEX string, 64 karakter)
 #   -OldKeyFile      : raw-key.txt dosyasının yolu
-#   -UploadsRoot     : Uploads kök dizini (varsayılan: C:\KOAFiloServis_yedekleme\uploads)
-#   -KeysDir         : Keys dizini (varsayılan: C:\KOAFiloServis_yedekleme\keys)
+#   -UploadsRoot     : Uploads kök dizini (varsayılan: C:\MKFiloServis_yedekleme\uploads)
+#   -KeysDir         : Keys dizini (varsayılan: C:\MKFiloServis_yedekleme\keys)
 #   -WhatIf          : Sadece simülasyon yap, dosyaları değiştirme
 #   -DryRun          : Sadece decrypt testi yap, dosya başına ilk 1KB'yi göster
 # =============================================================================
@@ -22,8 +22,8 @@
 param(
     [string]$OldKeyHex,
     [string]$OldKeyFile,
-    [string]$UploadsRoot = "C:\KOAFiloServis_yedekleme\uploads",
-    [string]$KeysDir = "C:\KOAFiloServis_yedekleme\keys",
+    [string]$UploadsRoot = "C:\MKFiloServis_yedekleme\uploads",
+    [string]$KeysDir = "C:\MKFiloServis_yedekleme\keys",
     [switch]$WhatIf,
     [switch]$DryRun
 )
@@ -31,7 +31,7 @@ param(
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Security
 
-Write-Host "=== KOAFiloServis Evrak Kurtarma Aracı (Mevcut PC) ===" -ForegroundColor Cyan
+Write-Host "=== MKFiloServis Evrak Kurtarma Aracı (Mevcut PC) ===" -ForegroundColor Cyan
 Write-Host ""
 
 # ---------------------------------------------------------------------------

@@ -1,13 +1,13 @@
 ﻿; ============================================================
-; KOAFiloServis — Musteri Kurulumu (Web + DataSync, Lisans Yok)
+; MKFiloServis — Musteri Kurulumu (Web + DataSync, Lisans Yok)
 ; ============================================================
 
-#define MyAppName        "KOAFiloServis"
-#define MyAppPublisher   "KOA Yazilim"
-#define MyAppURL         "https://github.com/karamur/KOAFiloServis-MultiDb"
-#define MyAppExeName     "KOAFiloServis.Web.exe"
-#define MyInstallDirBase "C:\KOAFiloServis_ustun"
-#define MyDataSyncExe    "KOAFiloServis.DataSync.exe"
+#define MyAppName        "MKFiloServis"
+#define MyAppPublisher   "MK Yazilim"
+#define MyAppURL         "https://github.com/karamur/MKFiloServis-MultiDb"
+#define MyAppExeName     "MKFiloServis.Web.exe"
+#define MyInstallDirBase "C:\MKFiloServis"
+#define MyDataSyncExe    "MKFiloServis.DataSync.exe"
 
 #ifndef MyAppVersion
 #define MyAppVersion "1.0.26"
@@ -15,7 +15,7 @@
 
 #define MyVersionToken StringChange(MyAppVersion, ".", "_")
 #define MyInstallDir MyInstallDirBase
-#define MyBackupDir "C:\KOAFiloServis_yedekleme_ustun"
+#define MyBackupDir "C:\MKFiloServis_yedekleme"
 #define MyAppId "A1B2C3D4-E5F6-7890-ABCD-EF1234567890-MUSTERI-USTUN"
 #define MyShortcutName MyAppName + " Musteri Ustun"
 
@@ -30,7 +30,7 @@ AppSupportURL={#MyAppURL}
 DefaultDirName={#MyInstallDir}
 DisableDirPage=yes
 DefaultGroupName={#MyAppName}
-OutputBaseFilename=KOAFiloServisKurulumMusteri-{#MyAppVersion}
+OutputBaseFilename=MKFiloServisKurulumMusteri-{#MyAppVersion}
 #ifdef OutputDir
 OutputDir={#OutputDir}
 #else
@@ -57,7 +57,7 @@ Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
 Name: "full"; Description: "Tam Kurulum"
 
 [Components]
-Name: "web"; Description: "KOAFiloServis Web"; Types: full; Flags: fixed
+Name: "web"; Description: "MKFiloServis Web"; Types: full; Flags: fixed
 Name: "datasync"; Description: "Veri Aktarim Araci"; Types: full
 
 [Files]

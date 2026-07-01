@@ -1,7 +1,7 @@
 ﻿# =============================================================================
 # 00-aktar-baslat.ps1  —  ANA TRANSFER SCRIPTİ
 # Eski "DestekCRMServisBlazorDb" veritabanını ve şifreli evrak arşivini
-# yeni "KOAFiloServis" sistemine taşır.
+# yeni "MKFiloServis" sistemine taşır.
 #
 # KULLANIM:
 #   pwsh -ExecutionPolicy Bypass -File 00-aktar-baslat.ps1
@@ -20,10 +20,10 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 # ---------------------------------------------------------------------------
 $cfg = @{
     # Eski yedeklerin bulunduğu kök klasör (içinde database/, uploads/, keys/ var)
-    EskiYedekKok   = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\ustunfiloservis_yedekler\KOAFiloServis_yedekleme"
+    EskiYedekKok   = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\ustunfiloservis_yedekler\MKFiloServis_yedekleme"
 
     # Restore edilecek en son backup dosyası
-    BackupFile     = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\ustunfiloservis_yedekler\KOAFiloServis_yedekleme\database\2026\06\KOAFiloServis_PostgreSQL_20260626_164011.backup"
+    BackupFile     = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\ustunfiloservis_yedekler\MKFiloServis_yedekleme\database\2026\06\MKFiloServis_PostgreSQL_20260626_164011.backup"
 
     # PostgreSQL bağlantı bilgileri
     PgHost         = "localhost"
@@ -32,10 +32,10 @@ $cfg = @{
     PgPassword     = "Fast123"
 
     # Yeni veritabanı adı
-    NewDbName      = "KOAFiloServis"
+    NewDbName      = "MKFiloServis"
 
     # Yeni sistemin depolama kökü
-    YeniDepolamaKok = "C:\KOAFiloServis_yedekleme"
+    YeniDepolamaKok = "C:\MKFiloServis_yedekleme"
 }
 # ---------------------------------------------------------------------------
 
@@ -54,7 +54,7 @@ function Write-Err([string]$msg)  { Write-Host "[HATA] $msg" -ForegroundColor Re
 # Süre takibi
 $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
-Write-Banner "KOA FİLO SERVİS — VERİ AKTARIM BAŞLADI"
+Write-Banner "MK FİLO SERVİS — VERİ AKTARIM BAŞLADI"
 Write-Host "  Tarih/Saat : $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')" -ForegroundColor White
 Write-Host "  Bu PC      : $($env:COMPUTERNAME)" -ForegroundColor White
 Write-Host ""

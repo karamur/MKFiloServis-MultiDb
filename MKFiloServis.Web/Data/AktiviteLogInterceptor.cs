@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Text.Json;
 using MKFiloServis.Shared.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -234,7 +234,7 @@ public sealed class AktiviteLogInterceptor : SaveChangesInterceptor
         try
         {
             using var scope = _scopeFactory.CreateScope();
-            var userAccessor = scope.ServiceProvider.GetService<KOAFiloServis.Web.Services.ICurrentUserAccessor>();
+            var userAccessor = scope.ServiceProvider.GetService<MKFiloServis.Web.Services.ICurrentUserAccessor>();
             var blazorUser = userAccessor?.GetCurrentUserName();
             if (!string.IsNullOrWhiteSpace(blazorUser))
                 return blazorUser;

@@ -1,14 +1,14 @@
-<#
+﻿<#
 .SYNOPSIS
-    KOAFiloServis SQLite veritabani yedeği alir.
+    MKFiloServis SQLite veritabani yedeği alir.
 
 .DESCRIPTION
-    InstallPath altindaki KOAFiloServis (SQLite) dosyasini
+    InstallPath altindaki MKFiloServis (SQLite) dosyasini
     Backups\db-YYYYMMDD-HHMMSS klasorune kopyalar.
     Inno Setup [Code] blogunun disinda da (manuel veya zamanlanmis gorev) calistirilabilir.
 
 .PARAMETER InstallPath
-    Uygulama kurulu dizin. Varsayilan: C:\KOAFiloServis
+    Uygulama kurulu dizin. Varsayilan: C:\MKFiloServis
 
 .PARAMETER BackupRoot
     Yedek klasoru ana dizini. Varsayilan: <InstallPath>\Backups
@@ -18,11 +18,11 @@
 
 .EXAMPLE
     .\backup-db.ps1
-    .\backup-db.ps1 -InstallPath "D:\KOAFiloServis" -MaxYedekSayisi 14
+    .\backup-db.ps1 -InstallPath "D:\MKFiloServis" -MaxYedekSayisi 14
 #>
 [CmdletBinding()]
 param(
-    [string] $InstallPath    = 'C:\KOAFiloServis',
+    [string] $InstallPath    = 'C:\MKFiloServis',
     [string] $BackupRoot     = '',
     [int]    $MaxYedekSayisi = 30
 )
@@ -33,9 +33,9 @@ if (-not $BackupRoot) {
     $BackupRoot = Join-Path $InstallPath 'Backups'
 }
 
-$DbFile  = Join-Path $InstallPath 'KOAFiloServis'
-$ShmFile = Join-Path $InstallPath 'KOAFiloServis-shm'
-$WalFile = Join-Path $InstallPath 'KOAFiloServis-wal'
+$DbFile  = Join-Path $InstallPath 'MKFiloServis'
+$ShmFile = Join-Path $InstallPath 'MKFiloServis-shm'
+$WalFile = Join-Path $InstallPath 'MKFiloServis-wal'
 
 if (-not (Test-Path $DbFile)) {
     Write-Host "UYARI: Veritabani dosyasi bulunamadi: $DbFile" -ForegroundColor Yellow
@@ -49,19 +49,19 @@ $BackupDir = Join-Path $BackupRoot "db-$stamp"
 New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null
 
 # Kopyala
-Copy-Item -Path $DbFile  -Destination (Join-Path $BackupDir 'KOAFiloServis') -Force
-Write-Host "Yedeklendi: $DbFile -> $BackupDir\KOAFiloServis"
+Copy-Item -Path $DbFile  -Destination (Join-Path $BackupDir 'MKFiloServis') -Force
+Write-Host "Yedeklendi: $DbFile -> $BackupDir\MKFiloServis"
 
 if (Test-Path $ShmFile) {
-    Copy-Item -Path $ShmFile -Destination (Join-Path $BackupDir 'KOAFiloServis-shm') -Force
-    Write-Host "Yedeklendi: KOAFiloServis-shm"
+    Copy-Item -Path $ShmFile -Destination (Join-Path $BackupDir 'MKFiloServis-shm') -Force
+    Write-Host "Yedeklendi: MKFiloServis-shm"
 }
 if (Test-Path $WalFile) {
-    Copy-Item -Path $WalFile -Destination (Join-Path $BackupDir 'KOAFiloServis-wal') -Force
-    Write-Host "Yedeklendi: KOAFiloServis-wal"
+    Copy-Item -Path $WalFile -Destination (Join-Path $BackupDir 'MKFiloServis-wal') -Force
+    Write-Host "Yedeklendi: MKFiloServis-wal"
 }
 
-$boyut = [math]::Round((Get-Item (Join-Path $BackupDir 'KOAFiloServis')).Length / 1KB, 1)
+$boyut = [math]::Round((Get-Item (Join-Path $BackupDir 'MKFiloServis')).Length / 1KB, 1)
 Write-Host "OK: Yedek alindi -> $BackupDir  ($boyut KB)" -ForegroundColor Green
 
 # Eski yedekleri temizle (sadece db-* klasorleri)

@@ -1,5 +1,5 @@
 ﻿<#
-    KOAFiloServis — Kurulum oncesi gereksinim kontrolu (v1.0.2)
+    MKFiloServis — Kurulum oncesi gereksinim kontrolu (v1.0.2)
     - IIS yuklu mu?
     - ASP.NET Core 10 Hosting Bundle yuklu mu (AspNetCoreModuleV2)?
     Eksik varsa KURULUMU DURDURUR (exit 1).

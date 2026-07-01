@@ -19,7 +19,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ProjectFile = Join-Path $ScriptDir "..\..\KOAFiloServis.Web.csproj"
+$ProjectFile = Join-Path $ScriptDir "..\..\MKFiloServis.Web.csproj"
 $DeployIis   = Join-Path $ScriptDir "..\IIS"
 
 function Write-Step([string]$msg) { Write-Host "[PUBLISH] $msg" -ForegroundColor Cyan }
@@ -33,11 +33,11 @@ if (-not (Test-Path $ProjectFile)) {
 
 $publishDir = Join-Path $OutputRoot "publish"
 $packageDir = Join-Path $OutputRoot "package"
-$zipPath    = Join-Path $OutputRoot "KOAFiloServis-$PC2Adi-$(Get-Date -Format 'yyyyMMdd_HHmm').zip"
+$zipPath    = Join-Path $OutputRoot "MKFiloServis-$PC2Adi-$(Get-Date -Format 'yyyyMMdd_HHmm').zip"
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Magenta
-Write-Host "  KOA FİLO SERVİS — 2. PC PAKET HAZIRLIĞI" -ForegroundColor Magenta
+Write-Host "  MK FİLO SERVİS — 2. PC PAKET HAZIRLIĞI" -ForegroundColor Magenta
 Write-Host "============================================================" -ForegroundColor Magenta
 Write-Host "  Konfigürasyon : $Configuration" -ForegroundColor White
 Write-Host "  Runtime       : $Runtime" -ForegroundColor White
@@ -91,17 +91,17 @@ $pc2AppSettings = @'
 {
   "DatabaseProvider": "PostgreSQL",
   "ConnectionStrings": {
-    "DefaultConnection": "Host=localhost;Port=5432;Database=KOAFiloServis;Username=postgres;Password=BURAYA_SIFRE;Pooling=true;MinPoolSize=2;MaxPoolSize=50;"
+    "DefaultConnection": "Host=localhost;Port=5432;Database=MKFiloServis;Username=postgres;Password=BURAYA_SIFRE;Pooling=true;MinPoolSize=2;MaxPoolSize=50;"
   },
   "Jwt": {
     "Secret": "BURAYA_MIN_32_KARAKTER_GIZLI_ANAHTAR_YAZIN",
-    "Issuer": "KOAFiloServis",
-    "Audience": "KOAFiloServis-API",
+    "Issuer": "MKFiloServis",
+    "Audience": "MKFiloServis-API",
     "ExpirationHours": 8
   },
   "Backup": {
     "Enabled": true,
-    "Path": "C:\\KOAFiloServis_yedekleme\\database",
+    "Path": "C:\\MKFiloServis_yedekleme\\database",
     "RetentionDays": 30,
     "ScheduleHour": 3
   },
@@ -151,9 +151,9 @@ Write-Host ""
 Write-Host "2. PC'de yapılacaklar:" -ForegroundColor Yellow
 Write-Host "  1. PostgreSQL 16 kur (henüz kurulu değilse)" -ForegroundColor White
 Write-Host "  2. .NET 10 Hosting Bundle kur (aka.ms/dotnet/download)" -ForegroundColor White
-Write-Host "  3. Paketi C:\KOAFiloServis\IIS klasörüne çıkar" -ForegroundColor White
-Write-Host "  4. Şifreli evrakları C:\KOAFiloServis_yedekleme\uploads klasörüne kopyala" -ForegroundColor White
-Write-Host "  5. Data protection key'leri C:\KOAFiloServis_yedekleme\keys klasörüne kopyala" -ForegroundColor White
+Write-Host "  3. Paketi C:\MKFiloServis\IIS klasörüne çıkar" -ForegroundColor White
+Write-Host "  4. Şifreli evrakları C:\MKFiloServis_yedekleme\uploads klasörüne kopyala" -ForegroundColor White
+Write-Host "  5. Data protection key'leri C:\MKFiloServis_yedekleme\keys klasörüne kopyala" -ForegroundColor White
 Write-Host "  6. DB restore: 01-db-restore.ps1 ile PostgreSQL'e aktar" -ForegroundColor White
 Write-Host "  7. appsettings.PC2.json içeriğini appsettings.Production.json olarak kaydet" -ForegroundColor White
 Write-Host "  8. IIS'de site ekle → kur.bat ile kur (Mode=Install)" -ForegroundColor White

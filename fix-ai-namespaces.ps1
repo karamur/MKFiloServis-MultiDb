@@ -1,4 +1,4 @@
-﻿$root = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\KOAFiloServis-MultiDb\MKFiloServis.Web\Services\AI"
+﻿$root = "C:\Users\muratk\Desktop\d yedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Web\Services\AI"
 
 Get-ChildItem -Path $root -Filter "*.cs" | ForEach-Object {
     $file = $_

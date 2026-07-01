@@ -1,4 +1,4 @@
-@implements IAsyncDisposable
+﻿@implements IAsyncDisposable
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
 @using Microsoft.Extensions.Logging
@@ -87,9 +87,15 @@
     private int oncekiOkunmamisSayisi;
     private bool isLoading = true;
     private bool ilkYuklemeTamamlandi;
+    private bool disposed;
 
     protected override async Task OnInitializedAsync()
     {
+        if (disposed)
+        {
+            return;
+        }
+
         var kullanici = AuthProvider.GetAktifKullanici();
         aktifKullaniciId = kullanici?.Id;
 
@@ -99,8 +105,24 @@
             return;
         }
 
+        CancellationToken token;
+        try
+        {
+            token = cts.Token;
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
+
         await BildirimleriYukleAsync(false);
-        _ = BildirimIzlemeDongusuAsync(cts.Token);
+
+        if (disposed || token.IsCancellationRequested)
+        {
+            return;
+        }
+
+        _ = BildirimIzlemeDongusuAsync(token);
     }
 
     private async Task BildirimIzlemeDongusuAsync(CancellationToken cancellationToken)
@@ -153,7 +175,10 @@
         finally
         {
             isLoading = false;
-            StateHasChanged();
+            if (!disposed)
+            {
+                StateHasChanged();
+            }
         }
     }
 
@@ -228,7 +253,21 @@
 
     public ValueTask DisposeAsync()
     {
-        cts.Cancel();
+        if (disposed)
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        disposed = true;
+
+        try
+        {
+            cts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+
         cts.Dispose();
         return ValueTask.CompletedTask;
     }

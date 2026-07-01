@@ -1,4 +1,4 @@
-# KOAFiloServis-MultiDb — Setup / Kurulum Paketleri
+﻿# MKFiloServis-MultiDb — Setup / Kurulum Paketleri
 
 ## Gereksinimler
 
@@ -23,10 +23,10 @@ veya PowerShell ile:
 
 | Dosya | Aciklama |
 |-------|----------|
-| `KOAFiloServisKurulum-1.0.22.exe` | Tam kurulum (Web + Lisans + DataSync) |
-| `KOAFiloServisGuncelle-1.0.22.exe` | Guncelleme paketi (sadece dosya degistirir) |
-| `KOAFiloServisKurulumMusteri-1.0.22.exe` | Musteri paketi (Lisans araci haric) |
-| `KOALisansArac-1.0.22.exe` | Bagimsiz lisans yonetim araci |
+| `MKFiloServisKurulum-1.0.22.exe` | Tam kurulum (Web + Lisans + DataSync) |
+| `MKFiloServisGuncelle-1.0.22.exe` | Guncelleme paketi (sadece dosya degistirir) |
+| `MKFiloServisKurulumMusteri-1.0.22.exe` | Musteri paketi (Lisans araci haric) |
+| `MKLisansArac-1.0.22.exe` | Bagimsiz lisans yonetim araci |
 
 ## Parametreler
 
@@ -55,8 +55,8 @@ setup/
 ## MultiDb Notlari
 
 Bu surum **Database-Per-Firma** mimarisini kullanir:
-- `KOAFiloServis_Master` — Kullanici, lisans, firma katalogu
-- `Koa_[FirmaKodu]_[ID]` — Her firma icin ayri tenant DB
-- `KOAFiloServis_Holding` — Konsolidasyon raporlari
+- `MKFiloServis_Master` — Kullanici, lisans, firma katalogu
+- `MK_[FirmaKodu]_[ID]` — Her firma icin ayri tenant DB
+- `MKFiloServis_Holding` — Konsolidasyon raporlari
 
 Kurulum sonrasi PostgreSQL baglantisi `dbsettings.json` uzerinden yapilandirilir.

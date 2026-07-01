@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Components.Forms;
+﻿using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.Logging;
 
 namespace MKFiloServis.Web.Services;
@@ -9,7 +9,7 @@ namespace MKFiloServis.Web.Services;
 /// </summary>
 public class FileService
 {
-    private const string UploadRoot = @"C:\KOAFiloServis\uploads";
+    private const string UploadRoot = @"C:\MKFiloServis\uploads";
     private readonly ILogger<FileService> _logger;
 
     public FileService(ILogger<FileService> logger)

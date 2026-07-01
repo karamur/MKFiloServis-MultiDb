@@ -1,6 +1,6 @@
-<#
+﻿<#
 .SYNOPSIS
-    KOAFiloServis - IIS yerel test sunucusuna deploy scripti.
+    MKFiloServis - IIS yerel test sunucusuna deploy scripti.
     Git pre-push hook tarafindan otomatik cagirilir.
 
 .DESCRIPTION
@@ -29,13 +29,13 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 }
 
 $RepoRoot   = Split-Path $PSScriptRoot -Parent
-$WebProject = Join-Path $RepoRoot "KOAFiloServis.Web\KOAFiloServis.Web.csproj"
-$PublishDir = Join-Path $RepoRoot "KOAFiloServis.Web\bin\publish"
+$WebProject = Join-Path $RepoRoot "MKFiloServis.Web\MKFiloServis.Web.csproj"
+$PublishDir = Join-Path $RepoRoot "MKFiloServis.Web\bin\publish"
 $IISTarget  = "C:\inetpub\wwwroot\UstunFilo"
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  KOAFiloServis - IIS Lokal Deploy" -ForegroundColor Cyan
+Write-Host "  MKFiloServis - IIS Lokal Deploy" -ForegroundColor Cyan
 Write-Host "  $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""

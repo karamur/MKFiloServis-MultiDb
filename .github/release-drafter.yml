@@ -96,13 +96,13 @@ autolabeler:
       - '/BREAKING[ -]CHANGE/'
 
 template: |
-  ## 🎉 KOAFiloServis $RESOLVED_VERSION
+  ## 🎉 MKFiloServis-MultiDb $RESOLVED_VERSION
 
   $CHANGES
 
   ---
 
-  **📦 İndirme:** [Releases sayfası](https://github.com/karamur/KOAFiloServis/releases/tag/v$RESOLVED_VERSION)
-  **📋 Tam Changelog:** [v$PREVIOUS_TAG...v$RESOLVED_VERSION](https://github.com/karamur/KOAFiloServis/compare/v$PREVIOUS_TAG...v$RESOLVED_VERSION)
+  **📦 İndirme:** [Releases sayfası](https://github.com/karamur/MKFiloServis-MultiDb/releases/tag/v$RESOLVED_VERSION)
+  **📋 Tam Changelog:** [v$PREVIOUS_TAG...v$RESOLVED_VERSION](https://github.com/karamur/MKFiloServis-MultiDb/compare/v$PREVIOUS_TAG...v$RESOLVED_VERSION)
 
-  > 💡 Kurulum, güncelleme ve katkı bilgileri için [README](https://github.com/karamur/KOAFiloServis#readme) ve [CONTRIBUTING.md](https://github.com/karamur/KOAFiloServis/blob/main/CONTRIBUTING.md)'yi inceleyin.
+  > 💡 Kurulum, güncelleme ve katkı bilgileri için [README](https://github.com/karamur/MKFiloServis-MultiDb#readme) ve [CONTRIBUTING.md](https://github.com/karamur/MKFiloServis-MultiDb/blob/main/CONTRIBUTING.md)'yi inceleyin.

@@ -1,5 +1,5 @@
-# =============================================================================
-# KOAFiloServis - Diğer PC'den Master Key Çıkarma Aracı
+﻿# =============================================================================
+# MKFiloServis - Diğer PC'den Master Key Çıkarma Aracı
 # =============================================================================
 # BU SCRIPT DİĞER PC'DE (evrakların açıldığı PC) ÇALIŞTIRILMALIDIR!
 #
@@ -13,10 +13,10 @@
 # =============================================================================
 
 param(
-    [string]$UploadsRoot = "C:\KOAFiloServis_yedekleme\uploads",
-    [string]$KeysDir = "C:\KOAFiloServis_yedekleme\keys",
+    [string]$UploadsRoot = "C:\MKFiloServis_yedekleme\uploads",
+    [string]$KeysDir = "C:\MKFiloServis_yedekleme\keys",
     [switch]$DecryptAll,
-    [string]$OutputDir = "C:\KOAFiloServis_yedekleme\RecoveredPlain"
+    [string]$OutputDir = "C:\MKFiloServis_yedekleme\RecoveredPlain"
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,6 +30,9 @@ $masterKeyPath = Join-Path $KeysDir "master.key"
 if (-not (Test-Path $masterKeyPath)) {
     # Alternatif path'leri dene
     $altPaths = @(
+        "C:\MKFiloServis_yedekleme\keys\master.key",
+        "C:\ProgramData\MKFiloServis\keys\master.key",
+        "$env:ProgramData\MKFiloServis\keys\master.key",
         "C:\KOAFiloServis_yedekleme\keys\master.key",
         "C:\ProgramData\KOAFiloServis\keys\master.key",
         "$env:ProgramData\KOAFiloServis\keys\master.key"
@@ -49,7 +52,7 @@ if (-not (Test-Path $masterKeyPath)) {
     }
 }
 
-Write-Host "=== KOAFiloServis Master Key Çıkarma Aracı ===" -ForegroundColor Cyan
+Write-Host "=== MKFiloServis Master Key Çıkarma Aracı ===" -ForegroundColor Cyan
 Write-Host "Master key path: $masterKeyPath"
 Write-Host ""
 

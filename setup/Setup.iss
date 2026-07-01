@@ -1,16 +1,16 @@
 ﻿; ============================================================
-; KOAFiloServis — Simplified Direct-EXE Installer
+; MKFiloServis — Simplified Direct-EXE Installer
 ; No IIS, no firewall, just run the self-contained EXE.
 ; ============================================================
 
-#define MyAppName        "KOAFiloServis"
-#define MyAppPublisher   "KOA Yazilim"
-#define MyAppURL         "https://github.com/karamur/KOAFiloServis-MultiDb"
-#define MyAppExeName     "KOAFiloServis.Web.exe"
-#define MyInstallDirBase "C:\KOAFiloServis_ustun"
-#define MyBackupDirBase  "C:\KOAFiloServis_yedekleme_ustun"
-#define MyLisansExe      "KOAFiloServisLisans.exe"
-#define MyDataSyncExe    "KOAFiloServis.DataSync.exe"
+#define MyAppName        "MKFiloServis"
+#define MyAppPublisher   "MK Yazilim"
+#define MyAppURL         "https://github.com/karamur/MKFiloServis-MultiDb"
+#define MyAppExeName     "MKFiloServis.Web.exe"
+#define MyInstallDirBase "C:\MKFiloServis"
+#define MyBackupDirBase  "C:\MKFiloServis_yedekleme"
+#define MyLisansExe      "MKFiloServisLisans.exe"
+#define MyDataSyncExe    "MKFiloServis.DataSync.exe"
 
 #ifndef MyAppVersion
 #define MyAppVersion "1.0.26"
@@ -33,7 +33,7 @@ AppSupportURL={#MyAppURL}
 DefaultDirName={#MyInstallDir}
 DisableDirPage=yes
 DefaultGroupName={#MyAppName}
-OutputBaseFilename=KOAFiloServisKurulum-{#MyAppVersion}
+OutputBaseFilename=MKFiloServisKurulum-{#MyAppVersion}
 #ifdef OutputDir
 OutputDir={#OutputDir}
 #else

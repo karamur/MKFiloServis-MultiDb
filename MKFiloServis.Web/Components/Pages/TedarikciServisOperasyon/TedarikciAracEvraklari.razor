@@ -1,4 +1,4 @@
-@page "/tedarikci-servis/arac-evraklari"
+﻿@page "/tedarikci-servis/arac-evraklari"
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
 @using MKFiloServis.Shared.Entities
@@ -596,7 +596,7 @@
                         col.Item().Background(Colors.Blue.Darken3).Padding(10).Column(c =>
                         {
                             c.Item().Text("TEDARİKÇİ ARAÇ EVRAK RAPORU").Bold().FontSize(16).FontColor(Colors.White);
-                            c.Item().Text("KOA Filo Servis").FontSize(9).FontColor(Colors.Grey.Lighten2);
+                            c.Item().Text("MK Filo Servis").FontSize(9).FontColor(Colors.Grey.Lighten2);
                         });
                         col.Item().PaddingTop(4).Row(row =>
                         {

@@ -1,10 +1,10 @@
-using MKFiloServis.Web.Data;
+﻿using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace MKFiloServis.Web.Data.Migrations;
 
 /// <summary>
-/// Tenant Aşama C2: <see cref="KOAFiloServis.Shared.Entities.IFirmaTenant"/> entity'lerinin
+/// Tenant Aşama C2: <see cref="MKFiloServis.Shared.Entities.IFirmaTenant"/> entity'lerinin
 /// tablolarındaki NULL <c>FirmaId</c> satırlarını varsayılan firma ile doldurur.
 /// <para>
 /// Sıra (K9): nullable kolon ekle (Aşama C1) → bu helper ile doldur → sonraki aşamada

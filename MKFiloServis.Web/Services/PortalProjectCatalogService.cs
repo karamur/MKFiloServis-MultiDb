@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using MKFiloServis.Web.Services.Interfaces;
 
 namespace MKFiloServis.Web.Services;
@@ -78,8 +78,8 @@ public sealed class PortalProjectCatalogService : IPortalProjectCatalogService
 
     private static void EnsureDefaults(PortalProjectCatalogOptions options)
     {
-        options.CompanyName = Normalize(options.CompanyName, "Koa Teknoloji");
-        options.SupportEmail = Normalize(options.SupportEmail, "info@koateknoloji.com");
+        options.CompanyName = Normalize(options.CompanyName, "MK Teknoloji");
+        options.SupportEmail = Normalize(options.SupportEmail, "info@mkteknoloji.com");
         options.SupportPhone = Normalize(options.SupportPhone, "0850 000 00 00");
         options.SupportLocation = Normalize(options.SupportLocation, "İstanbul / Türkiye");
         options.TopbarMessage = Normalize(options.TopbarMessage, "Kurumsal danışmanlık, bordro ve dijital dönüşüm");
@@ -151,7 +151,7 @@ public sealed class PortalProjectCatalogService : IPortalProjectCatalogService
         content.About ??= new PortalAboutContent();
         content.About.Tag = Normalize(content.About.Tag, "Hakkımızda");
         content.About.Title = Normalize(content.About.Title, "Mali süreçleri, bordroyu ve kurumsal operasyonu tek çatı altında topluyoruz");
-        content.About.Description = Normalize(content.About.Description, "Koa Teknoloji; mali danışmanlık, personel süreçleri, bordro operasyonları ve yönetim raporlarını dijitalleştiren çözümler üretir. Public tanıtım sayfası ile kurumsal uygulama girişini aynı yapıda birleştirerek marka bütünlüğü sağlar.");
+        content.About.Description = Normalize(content.About.Description, "MK Teknoloji; mali danışmanlık, personel süreçleri, bordro operasyonları ve yönetim raporlarını dijitalleştiren çözümler üretir. Public tanıtım sayfası ile kurumsal uygulama girişini aynı yapıda birleştirerek marka bütünlüğü sağlar.");
         content.About.PanelTitle = Normalize(content.About.PanelTitle, "Neler sağlıyoruz?");
         content.About.Cards = NormalizeTextCards(content.About.Cards,
         [
@@ -210,7 +210,7 @@ public sealed class PortalProjectCatalogService : IPortalProjectCatalogService
         content.Team.Description = Normalize(content.Team.Description, "Yazılım, bordro, mali süreçler ve operasyon yönetimini birlikte ele alan disiplinler arası yapı.");
         content.Team.Members = NormalizeTeamMembers(content.Team.Members,
         [
-            new PortalTeamMember { Initials = "KT", Name = "Koa Teknoloji Ekibi", Role = "Ürün Yönetimi", Description = "Kurumsal ihtiyaçları yazılım mimarisi ve kullanım senaryolarına dönüştürür." },
+            new PortalTeamMember { Initials = "KT", Name = "MK Teknoloji Ekibi", Role = "Ürün Yönetimi", Description = "Kurumsal ihtiyaçları yazılım mimarisi ve kullanım senaryolarına dönüştürür." },
             new PortalTeamMember { Initials = "MY", Name = "Mali Operasyon", Role = "Mali Süreçler", Description = "Muhasebe, bordro ve raporlama ihtiyaçlarının uygulama tarafına doğru yansımasını sağlar." },
             new PortalTeamMember { Initials = "PY", Name = "Portal Yönetimi", Role = "Kullanıcı Deneyimi", Description = "Public sayfa, giriş ekranı ve yönetim paneli arasındaki akışı sadeleştirir." },
             new PortalTeamMember { Initials = "QA", Name = "Test Ekibi", Role = "Kalite Güvencesi", Description = "Playwright senaryoları ile kritik kullanıcı yolculuklarını otomatik doğrular." }
@@ -374,9 +374,9 @@ public sealed class PortalProjectCatalogService : IPortalProjectCatalogService
     {
         return new PortalProjectDefinition
         {
-            Slug = "koa-filo-servis",
-            Name = "Koa Filo Servis",
-            BrandHighlight = "Koa Filo Servis",
+            Slug = "mk-filo-servis",
+            Name = "MK Filo Servis",
+            BrandHighlight = "MK Filo Servis",
             Category = "Filo Yönetimi",
             Subtitle = "Filo operasyonu, muhasebe ve servis süreçleri tek panelde.",
             Description = "Araç, sürücü, cari ve muhasebe operasyonlarını tek portal üzerinden yönetin.",
@@ -396,8 +396,8 @@ public sealed class PortalProjectCatalogService : IPortalProjectCatalogService
 public sealed class PortalProjectCatalogOptions
 {
     public bool LandingPageEnabled { get; set; } = true;
-    public string CompanyName { get; set; } = "Koa Teknoloji";
-    public string SupportEmail { get; set; } = "info@koateknoloji.com";
+    public string CompanyName { get; set; } = "MK Teknoloji";
+    public string SupportEmail { get; set; } = "info@mkteknoloji.com";
     public string SupportPhone { get; set; } = "0850 000 00 00";
     public string SupportLocation { get; set; } = "İstanbul / Türkiye";
     public string TopbarMessage { get; set; } = "Kurumsal danışmanlık, bordro ve dijital dönüşüm";
@@ -409,7 +409,7 @@ public sealed class PortalProjectCatalogOptions
 
 public sealed class PortalLandingContent
 {
-    public string BrowserTitle { get; set; } = "Portal - Koa Teknoloji";
+    public string BrowserTitle { get; set; } = "Portal - MK Teknoloji";
     public string BrandTagline { get; set; } = "Kurumsal çözüm portalı";
     public PortalNavigationContent Navigation { get; set; } = new();
     public PortalHeroContent Hero { get; set; } = new();

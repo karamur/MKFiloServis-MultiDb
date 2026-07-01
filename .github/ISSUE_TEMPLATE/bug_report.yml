@@ -14,7 +14,7 @@ body:
     attributes:
       label: ✅ Ön Kontroller
       options:
-        - label: Mevcut [issue'ları](https://github.com/karamur/KOAFiloServis/issues) aradım, aynı hata bildirilmemiş.
+        - label: Mevcut [issue'ları](https://github.com/karamur/MKFiloServis-MultiDb/issues) aradım, aynı hata bildirilmemiş.
           required: true
         - label: Son sürümü kullanıyorum.
           required: true

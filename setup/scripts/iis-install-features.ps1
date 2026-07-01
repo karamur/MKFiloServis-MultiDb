@@ -1,5 +1,5 @@
 ﻿<#
-    KOAFiloServis - IIS rolu/ozelliklerini otomatik yukler (idempotent)
+    MKFiloServis - IIS rolu/ozelliklerini otomatik yukler (idempotent)
     Sunucu (Windows Server) ve istemci (Windows 10/11) icin ayri yollar denenir.
     Ek olarak ASP.NET Core 10 Hosting Bundle yoksa indirip sessizce kurar.
 

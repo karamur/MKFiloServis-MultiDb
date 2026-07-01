@@ -1,6 +1,6 @@
-<#
+﻿<#
 .SYNOPSIS
-    KOAFiloServis sunucu guncelleme scripti (ZIP tabanli, IIS).
+    MKFiloServis sunucu guncelleme scripti (ZIP tabanli, IIS).
 
 .DESCRIPTION
     Yayinlanan Web publish ZIP'ini mevcut IIS kurulumunun uzerine uygular.
@@ -18,10 +18,10 @@
     (build.ps1 -ZipOutput ile olusturulur veya manuel publish ZIP'i)
 
 .PARAMETER InstallPath
-    Uygulama kurulu dizin. Varsayilan: C:\KOAFiloServis
+    Uygulama kurulu dizin. Varsayilan: C:\MKFiloServis
 
 .PARAMETER SiteName
-    IIS site ve AppPool adi. Varsayilan: KOAFiloServis
+    IIS site ve AppPool adi. Varsayilan: MKFiloServis
 
 .PARAMETER Port
     Smoke test icin port. Varsayilan: 5190
@@ -33,14 +33,14 @@
     HTTP smoke testini atla.
 
 .EXAMPLE
-    .\update-server.ps1 -ZipPath "C:\dist\KOAFiloServisWeb-1.0.4.zip"
-    .\update-server.ps1 -ZipPath "...\web.zip" -InstallPath "D:\KOAFiloServis"
+    .\update-server.ps1 -ZipPath "C:\dist\MKFiloServisWeb-1.0.4.zip"
+    .\update-server.ps1 -ZipPath "...\web.zip" -InstallPath "D:\MKFiloServis"
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)] [string] $ZipPath,
-    [string] $InstallPath = 'C:\KOAFiloServis',
-    [string] $SiteName    = 'KOAFiloServis',
+    [string] $InstallPath = 'C:\MKFiloServis',
+    [string] $SiteName    = 'MKFiloServis',
     [int]    $Port        = 5190,
     [switch] $NoBackup,
     [switch] $NoSmokeTest
@@ -53,7 +53,7 @@ $stamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
 
 Write-Host ""
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "  KOAFiloServis — Sunucu Guncelleme" -ForegroundColor Cyan
+Write-Host "  MKFiloServis — Sunucu Guncelleme" -ForegroundColor Cyan
 Write-Host "  $stamp" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host ""
@@ -69,7 +69,7 @@ Write-Host "      OK: $ZipPath ($zipBoyut MB)" -ForegroundColor Green
 
 if (-not (Test-Path $InstallPath)) {
     Write-Host "HATA: Kurulum dizini bulunamadi: $InstallPath" -ForegroundColor Red
-    Write-Host "      Once ana kurulum paketini (KOAFiloServisKurulum-*.exe) calistirin." -ForegroundColor Red
+    Write-Host "      Once ana kurulum paketini (MKFiloServisKurulum-*.exe) calistirin." -ForegroundColor Red
     exit 1
 }
 
@@ -82,12 +82,12 @@ if (-not $NoBackup) {
             -InstallPath $InstallPath
     } else {
         # Script yoksa manuel yedekle
-        $DbFile = Join-Path $InstallPath 'KOAFiloServis'
+        $DbFile = Join-Path $InstallPath 'MKFiloServis'
         if (Test-Path $DbFile) {
             $BackupDir = Join-Path $InstallPath "Backups\db-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
             New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null
-            Copy-Item $DbFile (Join-Path $BackupDir 'KOAFiloServis') -Force
-            @('KOAFiloServis-shm', 'KOAFiloServis-wal') | ForEach-Object {
+            Copy-Item $DbFile (Join-Path $BackupDir 'MKFiloServis') -Force
+            @('MKFiloServis-shm', 'MKFiloServis-wal') | ForEach-Object {
                 $f = Join-Path $InstallPath $_
                 if (Test-Path $f) { Copy-Item $f (Join-Path $BackupDir $_) -Force }
             }
@@ -127,7 +127,7 @@ try {
 
 # ---- 4) ZIP'i gecici klasore ac ----
 Write-Host "[4/7] Guncelleme paketi aciliyor..." -ForegroundColor Yellow
-$tempDir = Join-Path $env:TEMP "KOAFiloServis_update_$(Get-Date -Format 'yyyyMMddHHmmss')"
+$tempDir = Join-Path $env:TEMP "MKFiloServis_update_$(Get-Date -Format 'yyyyMMddHHmmss')"
 Expand-Archive -Path $ZipPath -DestinationPath $tempDir -Force
 Write-Host "      Acildi: $tempDir" -ForegroundColor Green
 
@@ -139,9 +139,9 @@ $korunanlar = @(
     'appsettings.Development.json',
     'portalsettings.json',
     'backup_settings.json',
-    'KOAFiloServis',      # SQLite DB
-    'KOAFiloServis-shm',
-    'KOAFiloServis-wal',
+    'MKFiloServis',      # SQLite DB
+    'MKFiloServis-shm',
+    'MKFiloServis-wal',
     'logs',
     'uploads',
     'Backups',

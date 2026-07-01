@@ -1,4 +1,4 @@
-# 🚍 MKFiloServis
+﻿# 🚍 MKFiloServis
 
 <div align="center">
 
@@ -421,7 +421,7 @@ Commit konvansiyonu: `<tip>(<modul>): <aciklama>` — `feat`, `fix`, `refactor`,
 
 <div align="center">
 
-**KOA Filo Servis** — Operasyondan muhasebeye, filodan hakedişe tek panel.
+**MK Filo Servis** — Operasyondan muhasebeye, filodan hakedişe tek panel.
 
 <sub>.NET 10 · Blazor · PostgreSQL · Quartz · SignalR · DPAPI Encryption</sub>
 
