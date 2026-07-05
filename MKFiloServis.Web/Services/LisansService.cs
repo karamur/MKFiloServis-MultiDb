@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
@@ -100,12 +100,12 @@ public class LisansService : ILisansService
     {
         try
         {
-            // Windows için System.Management ile donanım bilgilerini al
+            // Tek kaynak: Web tarafındaki lisans makine kimliği
             if (OperatingSystem.IsWindows())
             {
-                return Task.FromResult(MKFiloServis.Shared.LisansHelper.GetMachineCode());
+                return Task.FromResult(LicenseService.GetMachineId());
             }
-            
+
             // Diğer platformlar için basit kod
             var machineName = Environment.MachineName;
             var userName = Environment.UserName;
@@ -207,7 +207,7 @@ public class LisansService : ILisansService
             var lisansMakineKoduRaw = lisansBilgi.MakineKodu;
             var currentMakineKodu = NormalizeMachineCodeSafe(currentMakineKoduRaw);
             var lisansMakineKodu = NormalizeMachineCodeSafe(lisansMakineKoduRaw);
-            if (!string.Equals(lisansMakineKodu, currentMakineKodu, StringComparison.Ordinal))
+            if (!IsSameMachineBinding(lisansMakineKodu, currentMakineKodu))
             {
                 throw new Exception($"Bu lisans başka bir bilgisayar için oluşturulmuş!\n\nLisans Makine Kodu: {lisansBilgi.MakineKodu}\nBu PC Makine Kodu: {currentMakineKodu}");
             }
@@ -249,6 +249,36 @@ public class LisansService : ILisansService
         {
             throw new Exception($"Lisans aktive edilemedi: {ex.Message}");
         }
+    }
+
+    private static bool IsSameMachineBinding(string? licenseMachineId, string? currentMachineId)
+    {
+        if (string.Equals(
+            NormalizeMachineCodeSafe(licenseMachineId),
+            NormalizeMachineCodeSafe(currentMachineId),
+            StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        var licensedPrefix = GetMachineBindingPrefix(licenseMachineId);
+        var currentPrefix = GetMachineBindingPrefix(currentMachineId);
+
+        return !string.IsNullOrWhiteSpace(licensedPrefix)
+               && !string.IsNullOrWhiteSpace(currentPrefix)
+               && string.Equals(licensedPrefix, currentPrefix, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetMachineBindingPrefix(string? machineCode)
+    {
+        if (string.IsNullOrWhiteSpace(machineCode))
+            return string.Empty;
+
+        var parts = machineCode.Split('_', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0]}_{parts[1]}";
+
+        return machineCode.Trim();
     }
 
     private static string NormalizeMachineCodeSafe(string? machineCode)

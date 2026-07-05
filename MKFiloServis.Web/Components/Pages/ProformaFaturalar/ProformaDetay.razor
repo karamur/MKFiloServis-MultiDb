@@ -205,37 +205,40 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var kalem in proforma.Kalemler.Where(k => !k.IsDeleted).OrderBy(k => k.SiraNo))
+                                    @if (proforma.Kalemler != null)
                                     {
-                                        <tr>
-                                            <td>@kalem.SiraNo</td>
-                                            <td>
-                                                <div>@kalem.UrunAdi</div>
-                                                @if (!string.IsNullOrEmpty(kalem.UrunKodu))
-                                                {
-                                                    <small class="text-muted">@kalem.UrunKodu</small>
-                                                }
-                                                @if (!string.IsNullOrEmpty(kalem.Aciklama))
-                                                {
-                                                    <small class="text-muted d-block">@kalem.Aciklama</small>
-                                                }
-                                            </td>
-                                            <td class="text-end">@kalem.Miktar.ToString("N2")</td>
-                                            <td>@kalem.Birim</td>
-                                            <td class="text-end">@kalem.BirimFiyat.ToString("N2") ₺</td>
-                                            <td class="text-end text-danger">
-                                                @if (kalem.IskontoTutar > 0)
-                                                {
-                                                    <span>-@kalem.IskontoTutar.ToString("N2") ₺</span>
-                                                    <small class="d-block">(%@kalem.IskontoOrani)</small>
-                                                }
-                                            </td>
-                                            <td class="text-end">
-                                                @kalem.KdvTutar.ToString("N2") ₺
-                                                <small class="d-block">(%@kalem.KdvOrani)</small>
-                                            </td>
-                                            <td class="text-end fw-bold">@kalem.ToplamTutar.ToString("N2") ₺</td>
-                                        </tr>
+                                        @foreach (var kalem in proforma.Kalemler.Where(k => !k.IsDeleted).OrderBy(k => k.SiraNo))
+                                        {
+                                            <tr>
+                                                <td>@kalem.SiraNo</td>
+                                                <td>
+                                                    <div>@kalem.UrunAdi</div>
+                                                    @if (!string.IsNullOrEmpty(kalem.UrunKodu))
+                                                    {
+                                                        <small class="text-muted">@kalem.UrunKodu</small>
+                                                    }
+                                                    @if (!string.IsNullOrEmpty(kalem.Aciklama))
+                                                    {
+                                                        <small class="text-muted d-block">@kalem.Aciklama</small>
+                                                    }
+                                                </td>
+                                                <td class="text-end">@kalem.Miktar.ToString("N2")</td>
+                                                <td>@kalem.Birim</td>
+                                                <td class="text-end">@kalem.BirimFiyat.ToString("N2") ₺</td>
+                                                <td class="text-end text-danger">
+                                                    @if (kalem.IskontoTutar > 0)
+                                                    {
+                                                        <span>-@kalem.IskontoTutar.ToString("N2") ₺</span>
+                                                        <small class="d-block">(%@kalem.IskontoOrani)</small>
+                                                    }
+                                                </td>
+                                                <td class="text-end">
+                                                    @kalem.KdvTutar.ToString("N2") ₺
+                                                    <small class="d-block">(%@kalem.KdvOrani)</small>
+                                                </td>
+                                                <td class="text-end fw-bold">@kalem.ToplamTutar.ToString("N2") ₺</td>
+                                            </tr>
+                                        }
                                     }
                                 </tbody>
                             </table>

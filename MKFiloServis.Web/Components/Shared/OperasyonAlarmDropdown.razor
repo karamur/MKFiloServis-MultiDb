@@ -1,4 +1,4 @@
-@implements IAsyncDisposable
+﻿@implements IAsyncDisposable
 @using MKFiloServis.Web.Services
 @using MKFiloServis.Web.Services.Interfaces
 @using Microsoft.Extensions.Logging
@@ -113,7 +113,9 @@
 </style>
 
 @code {
-    private readonly CancellationTokenSource cts = new();
+    private CancellationTokenSource? cts = new();
+    private readonly object _ctsLock = new();
+    private bool _disposed;
     private List<AlarmItem> alarmlar = new();
     private int kritikSayisi;
     private int acilSayisi;
@@ -123,7 +125,20 @@
     protected override async Task OnInitializedAsync()
     {
         await YenileAsync();
-        _ = IzlemeDongusuAsync(cts.Token);
+
+        CancellationToken token;
+        lock (_ctsLock)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            cts ??= new CancellationTokenSource();
+            token = cts.Token;
+        }
+
+        _ = IzlemeDongusuAsync(token);
     }
 
     private async Task IzlemeDongusuAsync(CancellationToken ct)
@@ -248,8 +263,37 @@
 
     public ValueTask DisposeAsync()
     {
-        cts.Cancel();
-        cts.Dispose();
+        CancellationTokenSource? localCts;
+
+        lock (_ctsLock)
+        {
+            if (_disposed)
+            {
+                return ValueTask.CompletedTask;
+            }
+
+            _disposed = true;
+            localCts = cts;
+            cts = null;
+        }
+
+        if (localCts is null)
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        try
+        {
+            if (!localCts.IsCancellationRequested)
+            {
+                localCts.Cancel();
+            }
+        }
+        catch (ObjectDisposedException)
+        {
+            // Component kapanış yarışında CTS daha önce dispose edilmiş olabilir.
+        }
+
         return ValueTask.CompletedTask;
     }
 

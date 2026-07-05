@@ -1,7 +1,6 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Helpers;
-using MKFiloServis.Web.Services.Security;
 using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Web.Services.Interfaces;
 
@@ -23,25 +22,19 @@ public sealed class EvrakArsivBackfillService : IEvrakArsivBackfillService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly ISecureFileService _secureFileService;
-    private readonly IFileProtector _fileProtector;
     private readonly IEvrakArsivService _evrakArsivService;
     private readonly ILogger<EvrakArsivBackfillService> _logger;
-    private readonly string _storageRoot;
 
     public EvrakArsivBackfillService(
         IDbContextFactory<ApplicationDbContext> contextFactory,
         ISecureFileService secureFileService,
-        IFileProtector fileProtector,
         IEvrakArsivService evrakArsivService,
-        IWebHostEnvironment environment,
         ILogger<EvrakArsivBackfillService> logger)
     {
         _contextFactory = contextFactory;
         _secureFileService = secureFileService;
-        _fileProtector = fileProtector;
         _evrakArsivService = evrakArsivService;
         _logger = logger;
-        _storageRoot = AppStoragePaths.GetStorageRoot(environment.ContentRootPath);
     }
 
     public async Task<EvrakArsivBackfillRaporu> DryRunAsync(CancellationToken cancellationToken = default)
@@ -76,6 +69,7 @@ public sealed class EvrakArsivBackfillService : IEvrakArsivBackfillService
             .IgnoreQueryFilters() // Admin backfill: tenant filtresini aş
             .Include(d => d.AracEvrak)
                 .ThenInclude(e => e!.Arac)
+                .ThenInclude(a => a!.Firma)
             .Where(d => !d.IsDeleted
                 && !string.IsNullOrEmpty(d.DosyaYolu)
                 && !d.DosyaYolu.StartsWith("Arsiv/")) // Zaten arşivlenmiş olanları atla
@@ -126,62 +120,29 @@ public sealed class EvrakArsivBackfillService : IEvrakArsivBackfillService
                     continue;
                 }
 
-                // Arşiv zamanı: CreatedAt > dosya LastWriteTime > Now
-                var arsivZamani = dosya.CreatedAt != default ? dosya.CreatedAt : DateTime.Now;
-                var tarihSaat = arsivZamani.ToString("yyyyMMdd-HHmmss");
-
                 var uzanti = FileNameHelper.NormalizeExtension(dosya.DosyaTipi ?? ".pdf");
+                var firmaAdi = arac.Firma?.FirmaAdi ?? "FIRMA";
+                var hedefKlasor = AppStoragePaths.BuildAracArsivKlasoru(plaka, firmaAdi);
+                var hedefDosyaBase = AppStoragePaths.NormalizeFolderName(evrakNiteligi ?? "EVRAK")
+                    .Replace(" ", string.Empty)
+                    .Replace("-", string.Empty);
 
-                // Yeni pathleri hesapla
-                var plakaNorm = FileNameHelper.NormalizeFileName(plaka, $"ARAC-{arac.Id}");
-                var sasiNorm = FileNameHelper.NormalizeFileName(sasiNo, "SASIYOK");
-                var evrakNorm = FileNameHelper.NormalizeFileName(evrakNiteligi, "EVRAK");
-                var baseName = $"{plakaNorm}-{sasiNorm}-{evrakNorm}-{tarihSaat}";
-
-                var yeniSifreliRelativePath = $"Arsiv/Sifreli/Araclar/{baseName}/{baseName}{uzanti}.enc";
-                var sifreliFullDir = Path.Combine(_storageRoot, "Arsiv", "Sifreli", "Araclar", baseName);
-                var sifresizFullDir = Path.Combine(_storageRoot, "Arsiv", "Sifresiz", "Araclar", baseName);
-                var sifreliFullPath = Path.Combine(sifreliFullDir, $"{baseName}{uzanti}.enc");
-                var sifresizFullPath = Path.Combine(sifresizFullDir, $"{baseName}{uzanti}");
-
-                satir.YeniSifreliPath = yeniSifreliRelativePath;
-                satir.YeniSifresizPath = sifresizFullPath;
+                satir.YeniSifreliPath = $"Arsiv/Sifreli/Araclar/{hedefKlasor}/{hedefDosyaBase}{uzanti}.enc";
+                satir.YeniSifresizPath = $"Arsiv/Sifresiz/Araclar/{hedefKlasor}/{hedefDosyaBase}{uzanti}";
 
                 if (!dryRun)
                 {
-                    // Hedef varsa ve overwrite false ise suffix ekle
-                    if (!overwriteExisting && File.Exists(sifreliFullPath))
-                    {
-                        var v = 2;
-                        while (File.Exists(sifreliFullPath))
-                        {
-                            baseName = $"{plakaNorm}-{sasiNorm}-{evrakNorm}-{tarihSaat}-V{v}";
-                            yeniSifreliRelativePath = $"Arsiv/Sifreli/Araclar/{baseName}/{baseName}{uzanti}.enc";
-                            sifreliFullDir = Path.Combine(_storageRoot, "Arsiv", "Sifreli", "Araclar", baseName);
-                            sifresizFullDir = Path.Combine(_storageRoot, "Arsiv", "Sifresiz", "Araclar", baseName);
-                            sifreliFullPath = Path.Combine(sifreliFullDir, $"{baseName}{uzanti}.enc");
-                            sifresizFullPath = Path.Combine(sifresizFullDir, $"{baseName}{uzanti}");
-                            v++;
-                        }
-                    }
+                    var yeniSifreliRelativePath = await _evrakArsivService.ArsivleAracEvrakAsync(
+                        plaka,
+                        firmaAdi,
+                        evrakNiteligi,
+                        plainBytes,
+                        uzanti,
+                        cancellationToken);
 
-                    // 1) Şifresiz arşiv
-                    Directory.CreateDirectory(sifresizFullDir);
-                    await File.WriteAllBytesAsync(sifresizFullPath, plainBytes, cancellationToken);
-                    if (!File.Exists(sifresizFullPath) || new FileInfo(sifresizFullPath).Length <= 0)
-                        throw new InvalidOperationException("Şifresiz arşiv dosyası yazılamadı veya boş.");
+                    satir.YeniSifreliPath = yeniSifreliRelativePath;
+                    satir.YeniSifresizPath = yeniSifreliRelativePath.Replace("Arsiv/Sifreli/", "Arsiv/Sifresiz/").Replace(".enc", string.Empty);
 
-                    // 2) Şifreli arşiv (KOA1)
-                    Directory.CreateDirectory(sifreliFullDir);
-                    var encrypted = _fileProtector.Protect(plainBytes); // KOA1 format
-                    await File.WriteAllBytesAsync(sifreliFullPath, encrypted, cancellationToken);
-
-                    // 3) Doğrula: şifreli dosyayı decrypt et
-                    var verifyBytes = _fileProtector.Unprotect(await File.ReadAllBytesAsync(sifreliFullPath, cancellationToken));
-                    if (!verifyBytes.SequenceEqual(plainBytes))
-                        throw new InvalidOperationException("Şifreli arşiv doğrulaması başarısız: decrypt sonucu orijinal ile aynı değil.");
-
-                    // 4) DB güncelleme
                     if (updateDatabase)
                     {
                         await context.AracEvrakDosyalari
@@ -189,21 +150,10 @@ public sealed class EvrakArsivBackfillService : IEvrakArsivBackfillService
                             .Where(x => x.Id == dosya.Id)
                             .ExecuteUpdateAsync(setters => setters
                                 .SetProperty(x => x.DosyaYolu, yeniSifreliRelativePath)
-                                .SetProperty(x => x.DosyaAdi, $"{baseName}{uzanti}.enc")
+                                .SetProperty(x => x.DosyaAdi, Path.GetFileName(yeniSifreliRelativePath))
                                 .SetProperty(x => x.DosyaTipi, uzanti.TrimStart('.'))
                                 .SetProperty(x => x.UpdatedAt, DateTime.UtcNow),
                                 cancellationToken);
-                    }
-                }
-                else
-                {
-                    // Dry-run: sadece eski dosya var mı kontrol et
-                    if (string.IsNullOrEmpty(dosya.DosyaYolu))
-                    {
-                        satir.Hata = "Eski DosyaYolu boş";
-                        rapor.AracBasarisiz++;
-                        rapor.Satirlar.Add(satir);
-                        continue;
                     }
                 }
 
@@ -224,6 +174,7 @@ public sealed class EvrakArsivBackfillService : IEvrakArsivBackfillService
         var personelEvraklar = await context.PersonelOzlukEvraklar
             .IgnoreQueryFilters() // Admin backfill: tenant filtresini aş
             .Include(e => e.Sofor)
+                .ThenInclude(s => s.Firma)
             .Include(e => e.EvrakTanim)
             .Where(e => !e.IsDeleted
                 && !string.IsNullOrEmpty(e.DosyaYolu)
@@ -272,60 +223,29 @@ public sealed class EvrakArsivBackfillService : IEvrakArsivBackfillService
                     continue;
                 }
 
-                // Arşiv zamanı
-                var arsivZamani = evrak.CreatedAt != default ? evrak.CreatedAt : DateTime.Now;
-                var tarihSaat = arsivZamani.ToString("yyyyMMdd-HHmmss");
-
                 var uzanti = FileNameHelper.NormalizeExtension(evrak.DosyaTipi ?? ".pdf");
+                var firmaAdi = personel?.Firma?.FirmaAdi ?? "FIRMA";
+                var hedefKlasor = AppStoragePaths.BuildPersonelArsivKlasoru(personel?.Ad ?? "PERSONEL", personel?.Soyad ?? evrak.SoforId.ToString(), firmaAdi);
+                var hedefDosyaBase = AppStoragePaths.NormalizeFolderName(evrakNiteligi ?? "EVRAK")
+                    .Replace(" ", string.Empty)
+                    .Replace("-", string.Empty);
 
-                // Yeni pathleri hesapla
-                var adSoyadNorm = FileNameHelper.NormalizeFileName(adSoyad, $"PERSONEL-{evrak.SoforId}");
-                var evrakNorm = FileNameHelper.NormalizeFileName(evrakNiteligi, "EVRAK");
-                var baseName = $"{adSoyadNorm}-{evrakNorm}-{tarihSaat}";
-
-                var yeniSifreliRelativePath = $"Arsiv/Sifreli/Personeller/{baseName}/{baseName}{uzanti}.enc";
-                var sifreliFullDir = Path.Combine(_storageRoot, "Arsiv", "Sifreli", "Personeller", baseName);
-                var sifresizFullDir = Path.Combine(_storageRoot, "Arsiv", "Sifresiz", "Personeller", baseName);
-                var sifreliFullPath = Path.Combine(sifreliFullDir, $"{baseName}{uzanti}.enc");
-                var sifresizFullPath = Path.Combine(sifresizFullDir, $"{baseName}{uzanti}");
-
-                satir.YeniSifreliPath = yeniSifreliRelativePath;
-                satir.YeniSifresizPath = sifresizFullPath;
+                satir.YeniSifreliPath = $"Arsiv/Sifreli/Personeller/{hedefKlasor}/{hedefDosyaBase}{uzanti}.enc";
+                satir.YeniSifresizPath = $"Arsiv/Sifresiz/Personeller/{hedefKlasor}/{hedefDosyaBase}{uzanti}";
 
                 if (!dryRun)
                 {
-                    if (!overwriteExisting && File.Exists(sifreliFullPath))
-                    {
-                        var v = 2;
-                        while (File.Exists(sifreliFullPath))
-                        {
-                            baseName = $"{adSoyadNorm}-{evrakNorm}-{tarihSaat}-V{v}";
-                            yeniSifreliRelativePath = $"Arsiv/Sifreli/Personeller/{baseName}/{baseName}{uzanti}.enc";
-                            sifreliFullDir = Path.Combine(_storageRoot, "Arsiv", "Sifreli", "Personeller", baseName);
-                            sifresizFullDir = Path.Combine(_storageRoot, "Arsiv", "Sifresiz", "Personeller", baseName);
-                            sifreliFullPath = Path.Combine(sifreliFullDir, $"{baseName}{uzanti}.enc");
-                            sifresizFullPath = Path.Combine(sifresizFullDir, $"{baseName}{uzanti}");
-                            v++;
-                        }
-                    }
+                    var yeniSifreliRelativePath = await _evrakArsivService.ArsivlePersonelEvrakAsync(
+                        adSoyad,
+                        firmaAdi,
+                        evrakNiteligi,
+                        plainBytes,
+                        uzanti,
+                        cancellationToken);
 
-                    // 1) Şifresiz
-                    Directory.CreateDirectory(sifresizFullDir);
-                    await File.WriteAllBytesAsync(sifresizFullPath, plainBytes, cancellationToken);
-                    if (!File.Exists(sifresizFullPath) || new FileInfo(sifresizFullPath).Length <= 0)
-                        throw new InvalidOperationException("Şifresiz arşiv dosyası yazılamadı veya boş.");
+                    satir.YeniSifreliPath = yeniSifreliRelativePath;
+                    satir.YeniSifresizPath = yeniSifreliRelativePath.Replace("Arsiv/Sifreli/", "Arsiv/Sifresiz/").Replace(".enc", string.Empty);
 
-                    // 2) Şifreli (KOA1)
-                    Directory.CreateDirectory(sifreliFullDir);
-                    var encrypted = _fileProtector.Protect(plainBytes);
-                    await File.WriteAllBytesAsync(sifreliFullPath, encrypted, cancellationToken);
-
-                    // 3) Doğrula
-                    var verifyBytes = _fileProtector.Unprotect(await File.ReadAllBytesAsync(sifreliFullPath, cancellationToken));
-                    if (!verifyBytes.SequenceEqual(plainBytes))
-                        throw new InvalidOperationException("Şifreli arşiv doğrulaması başarısız.");
-
-                    // 4) DB güncelleme
                     if (updateDatabase)
                     {
                         await context.PersonelOzlukEvraklar
@@ -333,20 +253,10 @@ public sealed class EvrakArsivBackfillService : IEvrakArsivBackfillService
                             .Where(x => x.Id == evrak.Id)
                             .ExecuteUpdateAsync(setters => setters
                                 .SetProperty(x => x.DosyaYolu, yeniSifreliRelativePath)
-                                .SetProperty(x => x.DosyaAdi, $"{baseName}{uzanti}.enc")
+                                .SetProperty(x => x.DosyaAdi, Path.GetFileName(yeniSifreliRelativePath))
                                 .SetProperty(x => x.DosyaTipi, uzanti.TrimStart('.'))
                                 .SetProperty(x => x.UpdatedAt, DateTime.UtcNow),
                                 cancellationToken);
-                    }
-                }
-                else
-                {
-                    if (string.IsNullOrEmpty(evrak.DosyaYolu))
-                    {
-                        satir.Hata = "Eski DosyaYolu boş";
-                        rapor.PersonelBasarisiz++;
-                        rapor.Satirlar.Add(satir);
-                        continue;
                     }
                 }
 

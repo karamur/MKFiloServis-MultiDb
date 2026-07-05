@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Fluent;
@@ -255,6 +255,18 @@ public class PersonelOzlukService : IPersonelOzlukService
         var evrakTanimlari = await GetGecerliEvrakTanimlariAsync(context, personel.Gorev);
         var personelEvraklari = await GetPersonelEvraklariAsync(soforId);
 
+        // Aynı EvrakTanimId için birden fazla aktif kayıt oluşmuş olabilir (eski veri/bug kalıntısı).
+        // Rastgele FirstOrDefault yerine en güncel kaydı seçerek UI'ın eski dosyaya dönmesini engelle.
+        var personelEvrakMap = personelEvraklari
+            .GroupBy(e => e.EvrakTanimId)
+            .ToDictionary(
+                g => g.Key,
+                g => g
+                    .OrderByDescending(e => e.UpdatedAt ?? e.CreatedAt)
+                    .ThenByDescending(e => e.TamamlanmaTarihi ?? DateTime.MinValue)
+                    .ThenByDescending(e => e.Id)
+                    .First());
+
         var durum = new PersonelOzlukEvrakDurum
         {
             SoforId = soforId,
@@ -267,7 +279,7 @@ public class PersonelOzlukService : IPersonelOzlukService
 
         foreach (var tanim in evrakTanimlari)
         {
-            var personelEvrak = personelEvraklari.FirstOrDefault(e => e.EvrakTanimId == tanim.Id);
+            personelEvrakMap.TryGetValue(tanim.Id, out var personelEvrak);
 
             durum.Evraklar.Add(new OzlukEvrakDetay
             {

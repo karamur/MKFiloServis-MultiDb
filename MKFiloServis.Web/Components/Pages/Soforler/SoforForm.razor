@@ -1,4 +1,4 @@
-@page "/soforler/yeni"
+﻿@page "/soforler/yeni"
 @page "/soforler/{Id:int}"
 @page "/personel/yeni"
 @page "/personel/{Id:int}"
@@ -977,10 +977,19 @@
                             <strong>Zorunluluk:</strong> @(seciliDetayEvrak.Zorunlu ? "Zorunlu" : "Opsiyonel")
                         </div>
                     </div>
+                    @{
+                        var guncelDetayDosya = seciliDetayDosyalari.FirstOrDefault(d => d.GuncelKayit) ?? seciliDetayDosyalari.FirstOrDefault();
+                        var detaydaDosyaVar = guncelDetayDosya != null || !string.IsNullOrWhiteSpace(seciliDetayEvrak.DosyaYolu);
+                        var detayDosyaAdi = guncelDetayDosya != null
+                            ? EncExtensionTemizle(guncelDetayDosya.DosyaAdi)
+                            : (string.IsNullOrWhiteSpace(seciliDetayEvrak.DosyaYolu)
+                                ? "Yok"
+                                : EncExtensionTemizle(Path.GetFileName(seciliDetayEvrak.DosyaYolu)));
+                    }
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <strong>Durum:</strong>
-                            @if (seciliDetayEvrak.Tamamlandi)
+                            @if (seciliDetayEvrak.Tamamlandi || detaydaDosyaVar)
                             {
                                 <span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Tamam</span>
                             }
@@ -998,7 +1007,7 @@
                             <strong>Geçerlilik Bitiş:</strong> @(seciliDetayEvrak.GecerlilikBitisTarihi?.ToString("dd.MM.yyyy") ?? "-")
                         </div>
                         <div class="col-md-6">
-                            <strong>Dosya:</strong> @(string.IsNullOrWhiteSpace(seciliDetayEvrak.DosyaYolu) ? "Yok" : EncExtensionTemizle(Path.GetFileName(seciliDetayEvrak.DosyaYolu)))
+                            <strong>Dosya:</strong> @detayDosyaAdi
                         </div>
                     </div>
                     @if (!string.IsNullOrWhiteSpace(seciliDetayEvrak.Aciklama))
@@ -2045,39 +2054,23 @@
             var uzanti = Path.GetExtension(secilenEvrakDosya.Name);
 
             // Personel arşiv klasörünü oluştur: {Ad Soyad} - {FirmaAdi}
-            var personelKlasoru = AppStoragePaths.BuildPersonelArsivKlasoru(
-                sofor?.Ad ?? "PERSONEL",
-                sofor?.Soyad ?? Id?.ToString() ?? "PERSONEL",
-                sofor?.Firma?.FirmaAdi);
+            // Tek arşiv sistemi: C:\MKFiloServis_yedekleme\Arsiv\Sifreli/Sifresiz\Personeller\{AD SOYAD - FIRMA}
+            // ve evrak tipi bazında tekil dosya adı.
+            var adSoyad = sofor?.TamAd ?? Id?.ToString() ?? "PERSONEL";
+            var firmaAdi = sofor?.Firma?.FirmaAdi ?? "FIRMA_YOK";
 
-            // Dosya adı: {PERSONELADSOYAD}{EvrakTipi}_{yyyyMMdd_HHmmss}.uzanti  (boşluksuz, Türkçe karakter normalize)
-            var normAd = AppStoragePaths.NormalizeFolderName(sofor?.Ad ?? "PERSONEL");
-            var normSoyad = AppStoragePaths.NormalizeFolderName(sofor?.Soyad ?? Id?.ToString() ?? "PERSONEL");
-            var normEvrakAdi = AppStoragePaths.NormalizeFolderName(seciliEvrakDetay.EvrakAdi).Replace(" ", "").Replace("-", "");
-            var benzersizEk = Guid.NewGuid().ToString("N")[..6];
-            var arsivDosyaAdi = $"{normAd}{normSoyad}{normEvrakAdi}_{DateTime.Now:yyyyMMdd_HHmmss_fff}_{benzersizEk}{uzanti}";
-
-            yeniRelativePath = await SecureFileService.SaveEncryptedAsync(
-                $"{AppStoragePaths.PersonelEvrakRelativeRoot}/{personelKlasoru}",
-                arsivDosyaAdi,
-                icerik);
+            yeniRelativePath = await EvrakArsivService.ArsivlePersonelEvrakAsync(
+                adSoyad,
+                firmaAdi,
+                seciliEvrakDetay.EvrakAdi,
+                icerik,
+                uzanti);
 
             // Yeni yazılan dosya gerçekten okunabiliyor mu? (şifreleme/anahtar/path doğrulaması)
             var yeniDosyaDogrulama = await SecureFileService.ReadDecryptedAsync(yeniRelativePath);
             if (yeniDosyaDogrulama == null || yeniDosyaDogrulama.Length == 0)
             {
                 throw new InvalidOperationException("Yüklenen dosya doğrulanamadı. Kayıt geri alındı.");
-            }
-
-            // Arşiv kopyaları (şifreli + şifresiz)
-            var adSoyad = sofor?.TamAd ?? Id?.ToString() ?? "PERSONEL";
-            try
-            {
-                await EvrakArsivService.ArsivlePersonelEvrakAsync(adSoyad, seciliEvrakDetay.EvrakAdi, icerik, uzanti);
-            }
-            catch
-            {
-                // Arşiv hatası ana upload'ı engellememeli (EvrakArsivService içinde loglanır)
             }
 
             var dosyaTipi = string.IsNullOrWhiteSpace(secilenEvrakDosya.ContentType)

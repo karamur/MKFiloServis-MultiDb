@@ -1,4 +1,4 @@
-using MKFiloServis.Web.Helpers;
+﻿using MKFiloServis.Web.Helpers;
 using MKFiloServis.Web.Services.Security;
 using MKFiloServis.Web.Services.Interfaces;
 
@@ -34,8 +34,9 @@ public sealed class EvrakArsivService : IEvrakArsivService
     }
 
     /// <inheritdoc />
-    public async Task ArsivlePersonelEvrakAsync(
+    public async Task<string> ArsivlePersonelEvrakAsync(
         string adSoyad,
+        string firmaAdi,
         string evrakNiteligi,
         byte[] icerik,
         string uzanti,
@@ -43,20 +44,20 @@ public sealed class EvrakArsivService : IEvrakArsivService
     {
         ArgumentNullException.ThrowIfNull(icerik);
 
-        var evrakNiteligiNorm = FileNameHelper.NormalizeFileName(evrakNiteligi, fallback: "EVRAK");
-        var adSoyadNorm = FileNameHelper.NormalizeFileName(adSoyad, fallback: "PERSONEL");
-        var tarihSaat = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+        var normalizedAdSoyad = AppStoragePaths.NormalizeFolderName(adSoyad);
+        var splitIndex = normalizedAdSoyad.LastIndexOf(' ');
+        var ad = splitIndex > 0 ? normalizedAdSoyad[..splitIndex] : normalizedAdSoyad;
+        var soyad = splitIndex > 0 ? normalizedAdSoyad[(splitIndex + 1)..] : string.Empty;
+        var klasor = AppStoragePaths.BuildPersonelArsivKlasoru(ad, soyad, firmaAdi);
+        var dosyaAdiBase = BuildTekilDosyaAdi(evrakNiteligi);
 
-        var dizinAdi = $"{adSoyadNorm}-{evrakNiteligiNorm}-{tarihSaat}";
-        var dosyaAdiBase = dizinAdi; // aynı format
-
-        await ArsivleAsync("Personeller", dizinAdi, dosyaAdiBase, icerik, uzanti, cancellationToken);
+        return await ArsivleAsync("Personeller", klasor, dosyaAdiBase, icerik, uzanti, cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task ArsivleAracEvrakAsync(
+    public async Task<string> ArsivleAracEvrakAsync(
         string plaka,
-        string sasiNo,
+        string firmaAdi,
         string evrakNiteligi,
         byte[] icerik,
         string uzanti,
@@ -64,20 +65,15 @@ public sealed class EvrakArsivService : IEvrakArsivService
     {
         ArgumentNullException.ThrowIfNull(icerik);
 
-        var evrakNiteligiNorm = FileNameHelper.NormalizeFileName(evrakNiteligi, fallback: "EVRAK");
-        var plakaNorm = FileNameHelper.NormalizeFileName(plaka, fallback: "PLAKA");
-        var sasiNoNorm = FileNameHelper.NormalizeFileName(sasiNo, fallback: "SASI");
+        var klasor = AppStoragePaths.BuildAracArsivKlasoru(plaka, firmaAdi);
+        var dosyaAdiBase = BuildTekilDosyaAdi(evrakNiteligi);
 
-        var tarihSaat = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-        var dizinAdi = $"{plakaNorm}-{sasiNoNorm}-{evrakNiteligiNorm}-{tarihSaat}";
-        var dosyaAdiBase = dizinAdi; // aynı format
-
-        await ArsivleAsync("Araclar", dizinAdi, dosyaAdiBase, icerik, uzanti, cancellationToken);
+        return await ArsivleAsync("Araclar", klasor, dosyaAdiBase, icerik, uzanti, cancellationToken);
     }
 
-    private async Task ArsivleAsync(
+    private async Task<string> ArsivleAsync(
         string kategori,
-        string dizinAdi,
+        string klasor,
         string dosyaAdiBase,
         byte[] icerik,
         string uzanti,
@@ -85,20 +81,30 @@ public sealed class EvrakArsivService : IEvrakArsivService
     {
         var ext = FileNameHelper.NormalizeExtension(uzanti);
 
-        // 1) Şifreli kopya — KOA1 formatında, uygulamanın ReadDecryptedAsync ile açabileceği
-        var sifreliDir = Path.Combine(_arsivRoot, "Sifreli", kategori, dizinAdi);
+        // 1) Şifreli kopya — tekil (overwrite)
+        var sifreliDir = Path.Combine(_arsivRoot, "Sifreli", kategori, klasor);
         Directory.CreateDirectory(sifreliDir);
-        var encrypted = _fileProtector.Protect(icerik); // KOA1 + VER + NONCE + TAG + CIPHER
-        var sifreliPath = Path.Combine(sifreliDir, $"{dosyaAdiBase}{ext}.enc");
+        var encrypted = _fileProtector.Protect(icerik);
+        var sifreliFileName = $"{dosyaAdiBase}{ext}.enc";
+        var sifreliPath = Path.Combine(sifreliDir, sifreliFileName);
         await File.WriteAllBytesAsync(sifreliPath, encrypted, cancellationToken);
         _logger.LogDebug("Arsiv sifreli (KOA1): {Path}", sifreliPath);
 
-        // 2) Şifresiz kopya — wwwroot dışında
-        var sifresizDir = Path.Combine(_arsivRoot, "Sifresiz", kategori, dizinAdi);
+        // 2) Şifresiz kopya — tekil (overwrite)
+        var sifresizDir = Path.Combine(_arsivRoot, "Sifresiz", kategori, klasor);
         Directory.CreateDirectory(sifresizDir);
         var sifresizPath = Path.Combine(sifresizDir, $"{dosyaAdiBase}{ext}");
         await File.WriteAllBytesAsync(sifresizPath, icerik, cancellationToken);
         _logger.LogDebug("Arsiv sifresiz: {Path}", sifresizPath);
+
+        // DB'de tutulacak relative path: Arsiv/Sifreli/{kategori}/{klasor}/{dosya}
+        return Path.Combine("Arsiv", "Sifreli", kategori, klasor, sifreliFileName).Replace('\\', '/');
+    }
+
+    private static string BuildTekilDosyaAdi(string evrakNiteligi)
+    {
+        var normalized = AppStoragePaths.NormalizeFolderName(evrakNiteligi ?? "EVRAK");
+        return normalized.Replace(" ", "").Replace("-", "");
     }
 }
 

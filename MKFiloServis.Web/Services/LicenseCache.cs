@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 
 namespace MKFiloServis.Web.Services;
 
@@ -22,6 +22,12 @@ public class LicenseCache
     public void Set(LicenseInfo lic)
     {
         lock (_lock) _cachedLicense = lic;
+    }
+
+    /// <summary>Cache'i temizle (uygulama başlangıcında DB'den yeniden doğrulamak için).</summary>
+    public void Clear()
+    {
+        lock (_lock) _cachedLicense = null;
     }
 
     /// <summary>Geçerli lisans var mı? DB sorgusu yapmaz, sadece cache'e bakar.</summary>

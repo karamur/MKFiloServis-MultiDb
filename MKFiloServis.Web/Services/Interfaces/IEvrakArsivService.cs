@@ -1,4 +1,4 @@
-namespace MKFiloServis.Web.Services.Interfaces;
+﻿namespace MKFiloServis.Web.Services.Interfaces;
 
 /// <summary>
 /// Evrak arşivleme servisi: Yüklenen evrakların şifreli ve şifresiz
@@ -7,23 +7,28 @@ namespace MKFiloServis.Web.Services.Interfaces;
 public interface IEvrakArsivService
 {
     /// <summary>
-    /// Personel evrakını arşivler. Klasör/dosya adı:
-    /// <c>{AD-SOYAD}-{EVRAK_NITELIGI}-{yyyyMMdd-HHmmss}</c>
+    /// Personel evrakını tekil arşiv düzenine kaydeder.
+    /// Şifreli kopya:  Arsiv\Sifreli\Personeller\{AD SOYAD - FIRMA}\{EVRAK_NITELIGI}.ext.enc
+    /// Şifresiz kopya: Arsiv\Sifresiz\Personeller\{AD SOYAD - FIRMA}\{EVRAK_NITELIGI}.ext
+    /// Dönüş: şifreli relative path (DB DosyaYolu alanına yazılır).
     /// </summary>
-    Task ArsivlePersonelEvrakAsync(
+    Task<string> ArsivlePersonelEvrakAsync(
         string adSoyad,
+        string firmaAdi,
         string evrakNiteligi,
         byte[] icerik,
         string uzanti,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Araç evrakını arşivler. Klasör/dosya adı:
-    /// <c>{PLAKA}-{SASI_NO}-{EVRAK_NITELIGI}-{yyyyMMdd-HHmmss}</c>
+    /// Araç evrakını tekil arşiv düzenine kaydeder.
+    /// Şifreli kopya:  Arsiv\Sifreli\Araclar\{PLAKA - FIRMA}\{EVRAK_NITELIGI}.ext.enc
+    /// Şifresiz kopya: Arsiv\Sifresiz\Araclar\{PLAKA - FIRMA}\{EVRAK_NITELIGI}.ext
+    /// Dönüş: şifreli relative path (DB DosyaYolu alanına yazılır).
     /// </summary>
-    Task ArsivleAracEvrakAsync(
+    Task<string> ArsivleAracEvrakAsync(
         string plaka,
-        string sasiNo,
+        string firmaAdi,
         string evrakNiteligi,
         byte[] icerik,
         string uzanti,

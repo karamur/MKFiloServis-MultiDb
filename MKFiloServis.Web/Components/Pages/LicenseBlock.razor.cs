@@ -1,4 +1,5 @@
-using MKFiloServis.Web.Services;
+﻿using MKFiloServis.Web.Services;
+using Microsoft.JSInterop;
 
 namespace MKFiloServis.Web.Components.Pages;
 
@@ -10,9 +11,13 @@ public partial class LicenseBlock
     private string? _licenseKey;
     private string? _uploadError;
     private bool _isActivating;
+    private bool _isDemoInstalling;
+    private string _machineCode = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
+        _machineCode = LicenseService.GetMachineId();
+
         var lic = await LicenseService.GetCurrentLicenseAsync();
         if (lic != null)
         {
@@ -24,7 +29,7 @@ public partial class LicenseBlock
         }
         else
         {
-            _message = "Henuz lisans yuklenmemis.";
+            _message = "Henuz lisans yuklenmemis. Isterseniz 15 gunluk demo modunu kullanabilirsiniz.";
         }
     }
 
@@ -43,7 +48,6 @@ public partial class LicenseBlock
 
         try
         {
-            // Auto-trim
             _licenseKey = _licenseKey.Trim().Replace("\r", "").Replace("\n", "").Replace(" ", "");
 
             await LicenseService.ActivateFromKeyAsync(_licenseKey);
@@ -56,6 +60,43 @@ public partial class LicenseBlock
         finally
         {
             _isActivating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DemoModunuYukle()
+    {
+        _uploadError = null;
+        _isDemoInstalling = true;
+        StateHasChanged();
+
+        try
+        {
+            await LicenseService.InstallDemoLicenseAsync();
+            Nav.NavigateTo("/", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            _uploadError = ex.Message;
+        }
+        finally
+        {
+            _isDemoInstalling = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task MakineKodunuKopyala()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _machineCode);
+            _message = "Makine kodu panoya kopyalandı.";
+            StateHasChanged();
+        }
+        catch
+        {
+            _message = $"Makine kodu: {_machineCode}";
             StateHasChanged();
         }
     }

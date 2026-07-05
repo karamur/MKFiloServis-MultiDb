@@ -1,4 +1,4 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Helpers;
@@ -772,38 +772,25 @@ public class BelgeUyariService : IBelgeUyariService
             await context.SaveChangesAsync();
         }
 
-        // Araç arşiv klasörü: {Plaka} - {FirmaAdi}
+        // Tek arşiv sistemi: C:\MKFiloServis_yedekleme\Arsiv\Sifreli/Sifresiz\Araclar\{PLAKA - FIRMA}
+        // ve evrak tipi bazında tekil dosya adı.
         var uzanti = Path.GetExtension(dosyaAdi);
         var plaka = arac.AktifPlaka ?? arac.SaseNo ?? aracId.ToString();
-        var aracKlasoru = AppStoragePaths.BuildAracArsivKlasoru(plaka, arac.Firma?.FirmaAdi);
-
-        // Dosya adı: {PLAKA}{BelgeTipi}_{yyyyMMdd_HHmmss}.uzanti (boşluksuz)
-        var normPlaka = AppStoragePaths.NormalizeFolderName(plaka).Replace(" ", "").Replace("-", "");
-        var normBelge = AppStoragePaths.NormalizeFolderName(belgeAlani).Replace(" ", "").Replace("-", "");
-        var arsivDosyaAdi = $"{normPlaka}{normBelge}_{DateTime.Now:yyyyMMdd_HHmmss}{uzanti}";
+        var firmaAdi = arac.Firma?.FirmaAdi ?? "FIRMA_YOK";
         string? storedPath = null;
         try
         {
-            storedPath = await _secureFileService.SaveEncryptedAsync(
-                $"{AppStoragePaths.AracEvrakRelativeRoot}/{aracKlasoru}",
-                arsivDosyaAdi,
-                icerik);
-
-            // Arşiv kopyaları (şifreli + şifresiz)
-            var sasiNo = arac.SaseNo ?? aracId.ToString();
-            try
-            {
-                await _evrakArsivService.ArsivleAracEvrakAsync(plaka, sasiNo, belgeAlani, icerik, uzanti);
-            }
-            catch
-            {
-                // Arşiv hatası ana upload'ı engellememeli (EvrakArsivService içinde loglanır)
-            }
+            storedPath = await _evrakArsivService.ArsivleAracEvrakAsync(
+                plaka,
+                firmaAdi,
+                belgeAlani,
+                icerik,
+                uzanti);
 
             var evrakDosya = new AracEvrakDosya
             {
                 AracEvrakId = evrak.Id,
-                DosyaAdi = arsivDosyaAdi,
+                DosyaAdi = Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(storedPath)),
                 DosyaYolu = storedPath,
                 DosyaTipi = uzanti.TrimStart('.').ToLowerInvariant(),
                 DosyaBoyutu = icerik.LongLength,

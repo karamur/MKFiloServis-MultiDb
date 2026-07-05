@@ -1,4 +1,4 @@
-@page "/login"
+﻿@page "/login"
 @layout EmptyLayout
 @attribute [AllowAnonymous]
 @using MKFiloServis.Web.Services
@@ -569,8 +569,9 @@
             ?? PortalProjectCatalogService.GetDefaultProject();
 
         // Lisans gecerlilik kontrolu
+        // Kural: Demo lisans durumunda kullanıcı lisans anahtarı girmek zorunda.
         makineKodu = LicenseService.GetMachineId();
-        if (lisans == null || (lisans.IsDemo && LicenseService.IsDemoExpired(lisans)))
+        if (lisans == null || lisans.IsDemo || LicenseService.IsDemoExpired(lisans))
         {
             lisansSuresiDoldu = true;
             return;

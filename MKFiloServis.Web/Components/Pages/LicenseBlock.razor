@@ -1,8 +1,9 @@
-@page "/license-block"
+﻿@page "/license-block"
 @rendermode InteractiveServer
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 @inject MKFiloServis.Web.Services.LicenseService LicenseService
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Lisans Yükleme</PageTitle>
 
@@ -30,12 +31,29 @@
             }
         </div>
 
+        <div class="card bg-white border mb-4">
+            <div class="card-body py-3">
+                <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                    <div>
+                        <strong class="d-block mb-1"><i class="bi bi-cpu me-1"></i>Makine Kodu</strong>
+                        <span class="text-muted small">Bu kodu lisans sağlayıcınıza iletebilir veya demo modunu kullanabilirsiniz.</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <input class="form-control font-monospace" style="min-width: 240px; max-width: 320px;" readonly value="@_machineCode" />
+                        <button type="button" class="btn btn-outline-secondary" @onclick="MakineKodunuKopyala">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         @* 3 Adım *@
         <div class="card bg-white border mb-4">
             <div class="card-body py-3">
                 <div class="d-flex align-items-start gap-2 mb-2">
                     <span class="badge bg-primary rounded-pill mt-1">1</span>
-                    <span>Makine kodunu <strong>kopyalayın</strong></span>
+                    <span>Makine kodunu <strong>görüntüleyin ve kopyalayın</strong></span>
                 </div>
                 <div class="d-flex align-items-start gap-2 mb-2">
                     <span class="badge bg-primary rounded-pill mt-1">2</span>
@@ -80,19 +98,35 @@
                     </div>
                 }
 
-                <button class="btn btn-success btn-lg w-100" @onclick="LisansAktiveEt"
-                        disabled="@(string.IsNullOrWhiteSpace(_licenseKey) || _isActivating)">
-                    @if (_isActivating)
-                    {
-                        <span class="spinner-border spinner-border-sm me-2"></span>
-                        <span>Doğrulanıyor...</span>
-                    }
-                    else
-                    {
-                        <i class="bi bi-rocket-takeoff me-2"></i>
-                        <span>Lisansı Aktif Et ve Devam Et</span>
-                    }
-                </button>
+                <div class="d-grid gap-2">
+                    <button class="btn btn-success btn-lg" @onclick="LisansAktiveEt"
+                            disabled="@(string.IsNullOrWhiteSpace(_licenseKey) || _isActivating || _isDemoInstalling)">
+                        @if (_isActivating)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            <span>Doğrulanıyor...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-rocket-takeoff me-2"></i>
+                            <span>Lisansı Aktif Et ve Devam Et</span>
+                        }
+                    </button>
+
+                    <button class="btn btn-warning btn-lg text-white" @onclick="DemoModunuYukle"
+                            disabled="@(_isActivating || _isDemoInstalling)">
+                        @if (_isDemoInstalling)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            <span>Demo yükleniyor...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-play-circle me-2"></i>
+                            <span>Demo Modunda Kullan (15 Gün)</span>
+                        }
+                    </button>
+                </div>
             </div>
         </div>
 

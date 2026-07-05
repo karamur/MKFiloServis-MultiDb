@@ -1,11 +1,13 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using MKFiloServis.Shared.Entities;
+using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Services;
 using MKFiloServis.Web.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace MKFiloServis.Web.Controllers;
 
@@ -19,11 +21,16 @@ namespace MKFiloServis.Web.Controllers;
 public class LicenseController : ControllerBase
 {
     private readonly LicenseService _licenseService;
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
     private readonly ILogger<LicenseController> _logger;
 
-    public LicenseController(LicenseService licenseService, ILogger<LicenseController> logger)
+    public LicenseController(
+        LicenseService licenseService,
+        IDbContextFactory<ApplicationDbContext> dbFactory,
+        ILogger<LicenseController> logger)
     {
         _licenseService = licenseService;
+        _dbFactory = dbFactory;
         _logger = logger;
     }
 
@@ -42,6 +49,15 @@ public class LicenseController : ControllerBase
 
         try
         {
+            // FirmaKodu'ndan FirmaId'yi bul
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            var firma = await db.Firmalar.FirstOrDefaultAsync(f => f.FirmaKodu == request.FirmaKodu && !f.IsDeleted);
+            if (firma == null)
+            {
+                _logger.LogWarning("Firma bulunamadı: {FirmaKodu}", request.FirmaKodu);
+                return BadRequest(new { error = $"Firma bulunamadı: {request.FirmaKodu}" });
+            }
+
             var expire = request.ExpireDate ?? DateTime.UtcNow.AddYears(1);
             var created = DateTime.UtcNow; // 🔥 CRITICAL: UTC
             const string allowedVersion = "1.0.99";
@@ -71,6 +87,7 @@ public class LicenseController : ControllerBase
             // DB'ye kaydet (istege bagli — log olarak)
             var lic = new LicenseInfo
             {
+                FirmaId = firma.Id,  // 🔑 KRITIK: FirmaId set et
                 FirmaKodu = request.FirmaKodu,
                 MachineId = request.MachineId,
                 ExpireDate = expire,
@@ -101,8 +118,8 @@ public class LicenseController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Lisans uretme hatasi (API)");
-            return StatusCode(500, new { error = $"Lisans uretilemedi: {ex.Message}" });
+            _logger.LogError(ex, "Lisans uretme hatasi (API). InnerException: {InnerException}", ex.InnerException?.Message);
+            return StatusCode(500, new { error = $"Lisans uretilemedi: {ex.Message}", detail = ex.InnerException?.Message });
         }
     }
 }

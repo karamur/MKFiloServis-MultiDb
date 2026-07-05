@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -30,10 +30,11 @@ public class LicenseService
     private readonly IConfiguration _config;
     private readonly ILogger<LicenseService> _logger;
     private readonly LicenseCache _cache; // Singleton cache — request'ler arası yaşar
-    private const string SecretKey = "KOAFiloServis-LCNS-2026-SECURE-KEY-X9mK2pL5vR8w";
+    private const string SecretKey = "MKFiloServis-LCNS-2026-SECURE-KEY-X9mK2pL5vR8w";
     private const string RegistryPath = @"SOFTWARE\KOAFiloServis";
     private const string DemoUsedValueName = "DemoUsed";
     private const int DemoMaxDays = 30;
+    private const int DemoButtonDays = 15;
 
     public LicenseService(IDbContextFactory<ApplicationDbContext> dbFactory, IConfiguration config, ILogger<LicenseService> logger, LicenseCache cache)
     {
@@ -81,8 +82,8 @@ public class LicenseService
     }
 
     // ══════════════════════════════════════════════
-    // PART 2: MACHINE ID — HARDENED
-    // MachineName + UserName + DriveVolumeSerial
+    // PART 2: MACHINE ID — STABLE
+    // MachineName + UserName + StableHardwareFingerprint
     // ══════════════════════════════════════════════
 
     public static string GetMachineId()
@@ -91,30 +92,23 @@ public class LicenseService
         {
             var machine = Environment.MachineName;
             var user = Environment.UserName;
-            var driveSerial = "";
+            var stableHardwareCode = "UNKNOWN";
 
             try
             {
-                var drives = System.IO.DriveInfo.GetDrives();
-                var systemDrive = drives.FirstOrDefault(d =>
-                    d.IsReady && d.Name.StartsWith("C", StringComparison.OrdinalIgnoreCase))
-                    ?? drives.FirstOrDefault(d => d.IsReady);
-
-                if (systemDrive != null)
-                {
-                    driveSerial = systemDrive.VolumeLabel?.GetHashCode().ToString("X8") ?? "NOSERIAL";
-                }
+                // Tek kaynak: paylaşılan donanım tabanlı kod
+                stableHardwareCode = MKFiloServis.Shared.LisansHelper.GetMachineCode();
             }
             catch
             {
-                driveSerial = "NOSERIAL";
+                stableHardwareCode = "UNKNOWN";
             }
 
-            return $"{machine}_{user}_{driveSerial}";
+            return $"{machine}_{user}_{stableHardwareCode}";
         }
         catch
         {
-            return $"{Environment.MachineName}_{Environment.UserName}";
+            return $"{Environment.MachineName}_{Environment.UserName}_UNKNOWN";
         }
     }
 
@@ -272,17 +266,15 @@ public class LicenseService
 
     /// <summary>
     /// Developer override aktif mi?
-    /// SART: (Development ortami VEYA override key) VE developer makinesi.
+    /// SART: SADECE explicit override key VE developer makinesi.
+    /// Not: Development ortamı artık otomatik lisans bypass etmez.
     /// </summary>
     private static bool IsDeveloperOverride(string? overrideKey = null)
     {
         // Makine kontrolü OLMADAN override çalışmaz
         if (!IsDeveloperMachine()) return false;
 
-        // Development ortamında otomatik bypass
-        if (IsDevelopment()) return true;
-
-        // Veya secret key ile bypass
+        // Sadece secret key ile explicit bypass
         if (overrideKey == DevOverrideKey) return true;
 
         return false;
@@ -317,8 +309,15 @@ public class LicenseService
         try
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
-            var lic = await db.LicenseInfos.FirstOrDefaultAsync(l => l.IsActive && !l.IsDeleted);
-            var hasAnyLicense = await db.LicenseInfos.AnyAsync();
+            var lic = await db.LicenseInfos
+                .IgnoreQueryFilters()
+                .Where(l => l.IsActive && !l.IsDeleted)
+                .OrderByDescending(l => l.UpdatedAt ?? l.CreatedAt)
+                .ThenByDescending(l => l.Id)
+                .FirstOrDefaultAsync();
+            var hasAnyLicense = await db.LicenseInfos
+                .IgnoreQueryFilters()
+                .AnyAsync(l => !l.IsDeleted);
 
             // ── Lisans yok → Demo kontrolu ──
             if (lic == null)
@@ -362,9 +361,22 @@ public class LicenseService
 
             // ── PART 2: Machine lock ──
             var currentMachineId = GetMachineId();
-            if (!string.Equals(lic.MachineId, currentMachineId, StringComparison.Ordinal))
+            if (!IsSameMachineBinding(lic.MachineId, currentMachineId))
+            {
+                // Veritabanı farklı bilgisayara taşındıysa mevcut aktif lisansı pasife al.
+                // Böylece sistem yeni PC'de yeniden lisans aktivasyonu ister.
+                await db.LicenseInfos
+                    .IgnoreQueryFilters()
+                    .Where(l => l.IsActive)
+                    .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(l => l.IsActive, false)
+                        .SetProperty(l => l.UpdatedAt, DateTime.UtcNow));
+
+                _cache.Clear();
+
                 return LicenseValidationResult.Fail(
-                    $"🛑 Bu lisans bu makineye ait degil. Lisans makinesi: {lic.MachineId}, Bu makine: {currentMachineId}");
+                    $"🛑 Lisans bu bilgisayara ait degil. Veritabani baska bir bilgisayara tasinmis olabilir. Lutfen bu makine icin yeni lisans anahtari girin. Lisans makinesi: {lic.MachineId}, Bu makine: {currentMachineId}");
+            }
 
             // ── PART 4.1: CreatedAt tabanli (demo icin mutlak 30 gun) ──
             if (lic.IsDemo)
@@ -424,23 +436,24 @@ public class LicenseService
     // TRIAL LICENSE OLUSTURMA
     // ══════════════════════════════════════════════
 
-    private async Task<LicenseInfo> CreateTrialLicenseAsync(ApplicationDbContext db)
+    private async Task<LicenseInfo> CreateTrialLicenseAsync(ApplicationDbContext db, int durationDays = DemoMaxDays)
     {
         var firmaKodu = _config["FirmaKodu"] ?? "DEMO";
         var machineId = GetMachineId();
         var now = DateTime.UtcNow;
-        var expireDate = now.AddDays(DemoMaxDays);
+        var expireDate = now.AddDays(durationDays);
         var allowedVersion = GetAppVersion().ToString();
         var isDemo = true;
 
         var signature = GenerateSignature(firmaKodu, machineId, expireDate,
-            isDemo, allowedVersion, now);
+            isDemo, allowedVersion, now, durationDays);
 
         var lic = new LicenseInfo
         {
             FirmaKodu = firmaKodu,
             MachineId = machineId,
             ExpireDate = expireDate,
+            DurationDays = durationDays,
             Signature = signature,
             IsDemo = true,
             IsActive = true,
@@ -450,6 +463,31 @@ public class LicenseService
 
         db.LicenseInfos.Add(lic);
         await db.SaveChangesAsync();
+        return lic;
+    }
+
+    public async Task<LicenseInfo> InstallDemoLicenseAsync()
+    {
+        if (HasDemoBeenUsed())
+            throw new InvalidOperationException("Demo hakki zaten kullanildi. Lisans anahtarini girin.");
+
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        await db.LicenseInfos
+            .IgnoreQueryFilters()
+            .Where(l => l.IsActive)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(l => l.IsActive, false)
+                .SetProperty(l => l.UpdatedAt, DateTime.UtcNow));
+
+        var lic = await CreateTrialLicenseAsync(db, DemoButtonDays);
+        MarkDemoUsed();
+        WriteLicenseHash(lic);
+        _cache.Set(lic);
+        MKFiloServis.Shared.AppMode.ExitDemoMode();
+
+        _logger.LogInformation("✅ Demo lisans kurulumu tamamlandi: {FirmaKodu}, Bitis: {ExpireDate}, Makine: {MachineId}, Gun: {Days}",
+            lic.FirmaKodu, lic.ExpireDate, lic.MachineId, lic.DurationDays);
+
         return lic;
     }
 
@@ -466,9 +504,12 @@ public class LicenseService
         await using var db = await _dbFactory.CreateDbContextAsync();
 
         // Mevcut tum lisanslari pasif yap
-        var mevcutLisanslar = await db.LicenseInfos.Where(l => l.IsActive).ToListAsync();
-        foreach (var ml in mevcutLisanslar)
-            ml.IsActive = false;
+        await db.LicenseInfos
+            .IgnoreQueryFilters()
+            .Where(l => l.IsActive)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(l => l.IsActive, false)
+                .SetProperty(l => l.UpdatedAt, DateTime.UtcNow));
 
         var now = DateTime.UtcNow;
         var machineId = GetMachineId();
@@ -554,8 +595,8 @@ public class LicenseService
         if (lic.Signature != expectedSig)
             throw new Exception("Lisans imzasi gecersiz. Anahtar degistirilmis olabilir.");
 
-        // Machine lock
-        if (lic.MachineId != GetMachineId())
+        // Machine lock (Windows yeniden kurulum toleransi)
+        if (!IsSameMachineBinding(lic.MachineId, GetMachineId()))
             throw new Exception("Bu lisans anahtari bu bilgisayar icin gecerli degil.");
 
         // ExpireDate kontrolu
@@ -576,9 +617,23 @@ public class LicenseService
 
         // DB'ye kaydet — eski lisanslari pasif yap
         await using var db = await _dbFactory.CreateDbContextAsync();
-        var activeLicenses = await db.LicenseInfos.Where(l => l.IsActive).ToListAsync();
-        foreach (var al in activeLicenses)
-            al.IsActive = false;
+
+        // FirmaKodu'ndan FirmaId'yi bul
+        var firma = await db.Firmalar
+            .FirstOrDefaultAsync(f => f.FirmaKodu == lic.FirmaKodu && !f.IsDeleted);
+
+        if (firma == null)
+            throw new Exception($"Firma bulunamadı: {lic.FirmaKodu}");
+
+        // FirmaId'yi set et
+        lic.FirmaId = firma.Id;
+
+        await db.LicenseInfos
+            .IgnoreQueryFilters()
+            .Where(l => l.IsActive)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(l => l.IsActive, false)
+                .SetProperty(l => l.UpdatedAt, DateTime.UtcNow));
 
         lic.IsActive = true;
         lic.LastValidatedAt = DateTime.UtcNow;
@@ -616,10 +671,7 @@ public class LicenseService
             {
                 var lisansMakineKodu = mk.GetString() ?? "";
                 var currentMakineKodu = GetMachineId();
-                if (!string.Equals(
-                    NormalizeMachineCodeSafe(lisansMakineKodu),
-                    NormalizeMachineCodeSafe(currentMakineKodu),
-                    StringComparison.Ordinal))
+                if (!IsSameMachineBinding(lisansMakineKodu, currentMakineKodu))
                 {
                     throw new Exception("Bu lisans baska bir bilgisayar icin olusturulmus!");
                 }
@@ -647,6 +699,39 @@ public class LicenseService
         {
             throw new Exception($"Lisans aktive edilemedi: {ex.Message}");
         }
+    }
+
+    private static bool IsSameMachineBinding(string? licenseMachineId, string? currentMachineId)
+    {
+        // Önce tam normalize eşitlik dene (en güvenli yol)
+        if (string.Equals(
+            NormalizeMachineCodeSafe(licenseMachineId),
+            NormalizeMachineCodeSafe(currentMachineId),
+            StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // DESKTOP-XXX_user_hash formatında Windows yeniden kurulumunda hash parçası değişebilir.
+        // Bu durumda machine+user prefix eşleşmesi yeterli kabul edilir.
+        var licensedPrefix = GetMachineBindingPrefix(licenseMachineId);
+        var currentPrefix = GetMachineBindingPrefix(currentMachineId);
+
+        return !string.IsNullOrWhiteSpace(licensedPrefix)
+               && !string.IsNullOrWhiteSpace(currentPrefix)
+               && string.Equals(licensedPrefix, currentPrefix, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetMachineBindingPrefix(string? machineCode)
+    {
+        if (string.IsNullOrWhiteSpace(machineCode))
+            return string.Empty;
+
+        var parts = machineCode.Split('_', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0]}_{parts[1]}";
+
+        return machineCode.Trim();
     }
 
     private static string NormalizeMachineCodeSafe(string? machineCode)
@@ -697,11 +782,20 @@ public class LicenseService
     /// </summary>
     public async Task SaveGeneratedLogAsync(LicenseInfo lic)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync();
-        db.LicenseInfos.Add(lic);
-        await db.SaveChangesAsync();
-        _logger.LogInformation("Lisans uretildi (log): {FirmaKodu}, {MachineId}, {ExpireDate}",
-            lic.FirmaKodu, lic.MachineId, lic.ExpireDate);
+        try
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            db.LicenseInfos.Add(lic);
+            await db.SaveChangesAsync();
+            _logger.LogInformation("Lisans uretildi (log): {FirmaKodu}, {MachineId}, {ExpireDate}",
+                lic.FirmaKodu, lic.MachineId, lic.ExpireDate);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Lisans kaydetme hatası. FirmaKodu={FirmaKodu}, MachineId={MachineId}, InnerException={InnerException}",
+                lic.FirmaKodu, lic.MachineId, ex.InnerException?.Message);
+            throw;
+        }
     }
 
     // ══════════════════════════════════════════════
@@ -716,7 +810,12 @@ public class LicenseService
             return cached;
 
         await using var db = await _dbFactory.CreateDbContextAsync();
-        var lic = await db.LicenseInfos.FirstOrDefaultAsync(l => l.IsActive && !l.IsDeleted);
+        var lic = await db.LicenseInfos
+            .IgnoreQueryFilters()
+            .Where(l => l.IsActive && !l.IsDeleted)
+            .OrderByDescending(l => l.UpdatedAt ?? l.CreatedAt)
+            .ThenByDescending(l => l.Id)
+            .FirstOrDefaultAsync();
         if (lic != null)
             _cache.Set(lic);
         return lic;
@@ -736,12 +835,15 @@ public class LicenseService
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
 
-        var activeLicenses = await db.LicenseInfos.Where(l => l.IsActive).ToListAsync();
-        foreach (var al in activeLicenses)
-            al.IsActive = false;
+        await db.LicenseInfos
+            .IgnoreQueryFilters()
+            .Where(l => l.IsActive)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(l => l.IsActive, false)
+                .SetProperty(l => l.UpdatedAt, DateTime.UtcNow));
 
         var expectedSig = GenerateSignature(lic.FirmaKodu, lic.MachineId, lic.ExpireDate,
-            lic.IsDemo, lic.AllowedVersion, lic.CreatedAt,
+            lic.IsDemo, lic.AllowedVersion, lic.CreatedAt, 
             lic.DurationDays, lic.ContactPhone);
 
         if (lic.Signature != expectedSig)

@@ -1,4 +1,4 @@
-@page "/personel/ozluk-evrak"
+﻿@page "/personel/ozluk-evrak"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Data
 @using MKFiloServis.Web.Helpers
@@ -132,7 +132,7 @@
                                 <th class="text-center">Tamam</th>
                                 <th class="text-center">Eksik</th>
                                 <th class="text-center">Durum</th>
-                                <th class="text-center" style="width: 150px;">İşlem</th>
+                                <th class="text-center" style="width: 200px;">İşlem</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -176,6 +176,10 @@
                                                 title="Detay Görüntüle">
                                             <i class="bi bi-eye"></i>
                                         </button>
+                                        <a class="btn btn-sm btn-outline-info me-1" href="/personel/@durum.SoforId"
+                                           title="Dosya Kartına Git">
+                                            <i class="bi bi-box-arrow-up-right"></i>
+                                        </a>
                                         <button class="btn btn-sm btn-outline-dark me-1" @onclick="() => PersonelDosyasiIndir(durum.SoforId)"
                                                 title="Dosya Hazırla">
                                             <i class="bi bi-file-earmark-text"></i>
@@ -921,47 +925,26 @@
             var icerik = memoryStream.ToArray();
             var uzanti = Path.GetExtension(file.Name);
 
-            // Personel arşiv klasörünü oluştur: {Ad Soyad} - {FirmaAdi}
-            string personelKlasoru;
-            string normAd, normSoyad;
+            // Tek arşiv sistemi: C:\MKFiloServis_yedekleme\Arsiv\Sifreli/Sifresiz\Personeller\{AD SOYAD - FIRMA}
+            // ve evrak tipi bazında tekil dosya adı.
+            var adSoyad = seciliDurum?.PersonelAdi ?? soforId.ToString();
+            string firmaAdi;
             try
             {
                 var sofor = await SoforService.GetByIdAsync(soforId);
-                var firmaAdi = sofor?.Firma?.FirmaAdi;
-                normAd = AppStoragePaths.NormalizeFolderName(sofor?.Ad ?? "PERSONEL");
-                normSoyad = AppStoragePaths.NormalizeFolderName(sofor?.Soyad ?? soforId.ToString());
-                personelKlasoru = AppStoragePaths.BuildPersonelArsivKlasoru(
-                    sofor?.Ad ?? "PERSONEL",
-                    sofor?.Soyad ?? soforId.ToString(),
-                    firmaAdi);
+                firmaAdi = sofor?.Firma?.FirmaAdi ?? "FIRMA_YOK";
             }
             catch
             {
-                var fallbackAdSoyad = seciliDurum?.PersonelAdi ?? soforId.ToString();
-                normAd = AppStoragePaths.NormalizeFolderName(fallbackAdSoyad);
-                normSoyad = "";
-                personelKlasoru = AppStoragePaths.NormalizeFolderName(fallbackAdSoyad);
+                firmaAdi = "FIRMA_YOK";
             }
 
-            // Dosya adı: {PERSONELADSOYAD}{EvrakTipi}_{yyyyMMdd_HHmmss}.uzanti
-            var normEvrakAdi = AppStoragePaths.NormalizeFolderName(evrak.EvrakAdi).Replace(" ", "").Replace("-", "");
-            var arsivDosyaAdi = $"{normAd}{normSoyad}{normEvrakAdi}_{DateTime.Now:yyyyMMdd_HHmmss}{uzanti}";
-
-            yeniDosyaYolu = await SecureFileService.SaveEncryptedAsync(
-                $"{AppStoragePaths.PersonelEvrakRelativeRoot}/{personelKlasoru}",
-                arsivDosyaAdi,
-                icerik);
-
-            // Arşiv kopyaları
-            var adSoyad = seciliDurum?.PersonelAdi ?? soforId.ToString();
-            try
-            {
-                await EvrakArsivService.ArsivlePersonelEvrakAsync(adSoyad, evrak.EvrakAdi, icerik, uzanti);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Personel evrak arşivleme başarısız oldu. PersonelId={PersonelId}, Evrak={Evrak}", soforId, evrak.EvrakAdi);
-            }
+            yeniDosyaYolu = await EvrakArsivService.ArsivlePersonelEvrakAsync(
+                adSoyad,
+                firmaAdi,
+                evrak.EvrakAdi,
+                icerik,
+                uzanti);
 
             await OzlukService.EvrakDosyaYukle(soforId, evrak.EvrakTanimId, yeniDosyaYolu);
             await PersonelBelgeTarihiniGuncelleAsync(soforId, evrak);

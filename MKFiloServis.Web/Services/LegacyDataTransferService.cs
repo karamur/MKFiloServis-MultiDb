@@ -26,10 +26,7 @@ public class LegacyDataTransferService
         _sourceConnStr = configuration.GetConnectionString("LegacySourceConnection")
             ?? BuildLegacySourceConnectionString(_targetConnStr);
 
-        if (IsSameDatabase(_sourceConnStr, _targetConnStr))
-        {
-            _logger.LogWarning("LegacyDataTransfer: kaynak ve hedef veritabani ayni gorunuyor. Aktarim atlanacak.");
-        }
+        // Kaynak ve hedef aynıysa aktarım metotları sessizce atlanır; burada log üretilmez.
     }
 
     private static string BuildLegacySourceConnectionString(string targetConnStr)
@@ -163,7 +160,6 @@ public class LegacyDataTransferService
 
         if (IsSameDatabase(_sourceConnStr, _targetConnStr))
         {
-            _logger.LogWarning("LegacyDataTransfer: kaynak ve hedef ayni oldugu icin veri aktarimi yapilmadi.");
             return result;
         }
 

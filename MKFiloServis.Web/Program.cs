@@ -374,6 +374,7 @@ builder.Services.AddScoped<IBildirimService, BildirimService>(); // Bildirim Sis
 builder.Services.AddScoped<ISmsService, SmsService>(); // SMS Gönderim Servisi
 builder.Services.AddScoped<IWebhookService, WebhookService>(); // Webhook Sistemi Servisi
 builder.Services.AddScoped<TestDataSeeder>(); // Test/Demo Veri Oluşturma Servisi
+builder.Services.AddScoped<DemoDataService>(); // Demo Veri Yönetim Servisi (Reset/Seed/Remove)
 builder.Services.AddScoped<IAracTakipService, AracTakipService>(); // Araç GPS Takip Servisi
 builder.Services.AddScoped<IAracTakipBildirimService, AracTakipBildirimService>(); // SignalR Araç Takip Bildirim Servisi
 builder.Services.AddScoped<IAuditLogService, AuditLogService>(); // Audit Log (Tüm İşlem Takibi) Servisi
@@ -1201,6 +1202,36 @@ Directory.CreateDirectory(externalUploadsPath);
 // SecureFileService üzerinden Blazor auth devresinde erişilebilir.
 // Doğrudan URL erişimi yasak (Kural 16: Dosya Güvenliği).
 
+// Setup otomasyon: publish klasorundeki license.auto.key varsa ilk acilista otomatik uygula.
+using (var scope = app.Services.CreateScope())
+{
+    var licSvc = scope.ServiceProvider.GetRequiredService<LicenseService>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+    try
+    {
+        var autoLicensePath = Path.Combine(app.Environment.ContentRootPath, "license.auto.key");
+        if (File.Exists(autoLicensePath))
+        {
+            var autoKey = await File.ReadAllTextAsync(autoLicensePath);
+            if (!string.IsNullOrWhiteSpace(autoKey))
+            {
+                await licSvc.ActivateFromKeyAsync(autoKey.Trim());
+                File.Delete(autoLicensePath);
+                logger.LogInformation("✅ Auto lisans aktivasyonu tamamlandi: {Path}", autoLicensePath);
+            }
+            else
+            {
+                logger.LogWarning("⚠️ Auto lisans dosyasi bos: {Path}", autoLicensePath);
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "⚠️ Auto lisans aktivasyonu basarisiz oldu.");
+    }
+}
+
 // ══════════════════════════════════════════════
 // LISANS KONTROL — DEMO MODE (block YOK)
 // Lisans yoksa uygulama AÇILIR, demo modda çalışır.
@@ -1209,9 +1240,13 @@ Directory.CreateDirectory(externalUploadsPath);
 using (var scope = app.Services.CreateScope())
 {
     var licSvc = scope.ServiceProvider.GetRequiredService<LicenseService>();
+    var licCache = scope.ServiceProvider.GetRequiredService<LicenseCache>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
     var overrideKey = config["DevSettings:OverrideKey"];
+
+    // Her uygulama başlangıcında cache temizlenir ve lisans DB üzerinden yeniden doğrulanır.
+    licCache.Clear();
 
     try
     {
@@ -1224,7 +1259,7 @@ using (var scope = app.Services.CreateScope())
         else
         {
             MKFiloServis.Shared.AppMode.ExitDemoMode();
-            logger.LogInformation("✅ FULL MODE: Lisans geçerli.");
+            logger.LogInformation("✅ FULL MODE: Lisans geçerli (DB doğrulandı).");
         }
     }
     catch (Exception ex)

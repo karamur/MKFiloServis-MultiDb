@@ -1,6 +1,11 @@
-@page "/admin/test"
+﻿@page "/admin/test"
 @using Microsoft.AspNetCore.Authorization
+@using MKFiloServis.Shared.Entities
+@using Microsoft.EntityFrameworkCore
 @inject MKFiloServis.Web.Services.TestSessionService TestService
+@inject MKFiloServis.Web.Data.DemoDataService DemoService
+@inject IDbContextFactory<MKFiloServis.Web.Data.ApplicationDbContext> DbFactory
+@inject ILogger<TestMode> Logger
 @attribute [Authorize(Roles = "Admin")]
 @rendermode InteractiveServer
 
@@ -70,6 +75,109 @@
         </div>
     </div>
 
+    <div class="row g-3 mt-3">
+        <div class="col-md-6">
+            <div class="card border-primary">
+                <div class="card-header bg-primary bg-opacity-10 py-2">
+                    <strong>Demo Veriler Ekle</strong>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small">Veri tabanini sifrla ve demo veriler ekle.</p>
+                    <p class="small text-warning fw-bold">DIKKAT: Tum tablolar temizlenecek ve demo veriler eklenecek.</p>
+                    <button class="btn btn-primary w-100" @onclick="DemoVerilerEkle" disabled="@_calisiyor">
+                        @if (_calisiyor) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Veri Tabanini Sifirla + Demo Ekle
+                    </button>
+                    @if (_demoEkleSonuc != null)
+                    {
+                        <div class="mt-2 small @(_demoEkleSonuc.Basarili ? "text-success" : "text-danger")">
+                            @_demoEkleSonuc.Mesaj
+                            @if (_demoEkleSonuc.SeedCount > 0)
+                            {
+                                <div class="small mt-1">@_demoEkleSonuc.SeedCount adet kayit eklendi</div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card border-warning">
+                <div class="card-header bg-warning bg-opacity-10 py-2">
+                    <strong>Demo Veriler Kaldır</strong>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small">Sadece [TEST] markerli demo verileri kaldır.</p>
+                    <p class="small text-info fw-bold">Not: Sadece ozel olarak isaretlenen test verileri silinir.</p>
+                    <button class="btn btn-warning w-100" @onclick="DemoVerilerKaldir" disabled="@_calisiyor">
+                        @if (_calisiyor) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Demo Veriler Kaldir
+                    </button>
+                    @if (_demoKaldirSonuc != null)
+                    {
+                        <div class="mt-2 small @(_demoKaldirSonuc.Basarili ? "text-success" : "text-danger")">
+                            @_demoKaldirSonuc.Mesaj
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mt-3">
+        <div class="col-md-12">
+            <div class="card border-secondary">
+                <div class="card-header bg-secondary bg-opacity-10 py-2">
+                    <strong>Firma Verilerini Temizle</strong>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small">Seçilen firmanın TÜM verilerini sil (Cariler, Araçlar, Soförler, Faturalar, vb).</p>
+                    <p class="small text-danger fw-bold">DİKKAT: Bu işlem kalıcıdır ve geri alınamaz!</p>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label small">Firma Seç</label>
+                            <select class="form-select form-select-sm" @bind="_secilenFirmaId">
+                                @foreach (var firma in _firmalar)
+                                {
+                                    <option value="@firma.Id">@firma.FirmaAdi</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-end">
+                            <button class="btn btn-danger w-100" @onclick="FirmaVerileriniTemizle" disabled="@(_calisiyor || _secilenFirmaId <= 0)">
+                                @if (_calisiyor) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                                Firma Verilerini Temizle
+                            </button>
+                        </div>
+                    </div>
+                    @if (_firmaTemizlenmeSonuc != null)
+                    {
+                        <div class="mt-2 small @(_firmaTemizlenmeSonuc.Basarili ? "text-success" : "text-danger")">
+                            @_firmaTemizlenmeSonuc.Mesaj
+                            @if (_firmaTemizlenmeSonuc.TruncatedTables.Count > 0)
+                            {
+                                <div class="small mt-2">
+                                    <strong>Silinen tablolar:</strong>
+                                    <ul class="mb-0 mt-1">
+                                        @foreach (var table in _firmaTemizlenmeSonuc.TruncatedTables.Take(10))
+                                        {
+                                            <li>@table</li>
+                                        }
+                                        @if (_firmaTemizlenmeSonuc.TruncatedTables.Count > 10)
+                                        {
+                                            <li>... ve @(_firmaTemizlenmeSonuc.TruncatedTables.Count - 10) tablo daha</li>
+                                        }
+                                    </ul>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="card mt-3">
         <div class="card-header py-2"><strong>Test Akisi</strong></div>
         <div class="card-body py-2">
@@ -81,6 +189,9 @@
                 <li>Denetim calistir</li>
                 <li>Rebuild test et</li>
                 <li><strong>Testi Geri Al</strong> - SQL restore, sistem eski haline doner</li>
+                <li><strong>Alternatif:</strong> Demo Veriler Ekle - Tum veri tabanini sifrla</li>
+                <li><strong>Alternatif:</strong> Demo Veriler Kaldir - Sadece test verilerini sil</li>
+                <li><strong>Firma Yönetimi:</strong> Firma Verilerini Temizle - Seçilen firmanın TÜM verilerini sil</li>
             </ol>
         </div>
     </div>

@@ -1,4 +1,4 @@
-@page "/personel/banka-odeme-listesi"
+﻿@page "/personel/banka-odeme-listesi"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
 @using MKFiloServis.Web.Services.Interfaces
@@ -46,6 +46,10 @@
                 <option value="true">SGK Bordrolu</option>
                 <option value="false">SGK Bordrosuz</option>
             </select>
+            <div class="form-check form-switch d-flex align-items-center px-2" title="Aktifken SGK'lı ve SGK'sız personeller raporda ayrı başlıklarla listelenir">
+                <input class="form-check-input" type="checkbox" id="sgkAyriListe" @bind="sgkAyriListedeGoster" />
+                <label class="form-check-label small ms-2" for="sgkAyriListe">SGK ayrı liste</label>
+            </div>
             <select class="form-select form-select-sm" style="width: 180px;" @bind="secilenGorev" @bind:after="YenileData">
                 <option value="">Tüm Görevler</option>
                 @foreach (PersonelGorev gorev in Enum.GetValues(typeof(PersonelGorev)))
@@ -100,73 +104,110 @@
                     <table class="table table-bordered table-hover mb-0" id="bankaOdemeTablosu">
                         <thead class="table-light sticky-top">
                             <tr>
-                                <th style="width: 40px;" class="text-center">Sıra</th>
-                                <th>Ad Soyad</th>
-                                <th>Görev</th>
-                                <th>Banka / IBAN</th>
-                                <th>Araç Plaka</th>
-                                <th class="text-end bg-info bg-opacity-10" style="width: 150px;" title="Banka hesabına yatırılacak resmi net maaş">Bankaya Yatan</th>
+                                <th style="width: 40px;" class="text-center">S.NO</th>
+                                <th>PLAKA</th>
+                                <th>AD SOYAD</th>
+                                <th>TELEFON</th>
+                                <th>ADRES</th>
+                                <th class="text-end">GERÇEK MAAŞ</th>
+                                <th class="text-end bg-info bg-opacity-10" style="width: 150px;" title="Banka hesabına yatırılacak resmi net maaş">BANKAYA YATAN</th>
+                                <th class="text-end">AVANS (-)</th>
+                                <th class="text-end">KESİNTİ (-)</th>
+                                <th class="text-end">HARCAMASI (+)</th>
+                                <th class="text-end">FARK / ÖDENECEK</th>
+                                <th>FİRMA</th>
+                                <th>SGK</th>
+                                <th>İŞE GİRİŞ</th>
+                                <th>İŞTEN ÇIKIŞ</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            @{ int siraNo = 0; }
-                            @foreach (var item in personelListesi)
-                            {
-                                siraNo++;
-                                <tr>
-                                    <td class="text-center">@(item.SiralamaNo > 0 ? item.SiralamaNo : siraNo)</td>
-                                    <td>
-                                        <strong>@item.Personel.TamAd</strong>
-                                        <br />
-                                        <small class="text-muted">@item.Personel.SoforKodu</small>
-                                    </td>
-                                    <td>
-                                        <span class="badge @GetGorevBadgeClass(item.Personel.Gorev)">
-                                            @GetGorevAdi(item.Personel.Gorev)
-                                        </span>
-                                    </td>
-                                    <td>
-                                        @if (!string.IsNullOrWhiteSpace(item.Personel.BankaAdi) || !string.IsNullOrWhiteSpace(item.Personel.IBAN))
-                                        {
-                                            <small>@(item.Personel.BankaAdi ?? "")</small>
-                                            <br />
-                                            <small class="text-muted font-monospace">@FormatIBAN(item.Personel.IBAN)</small>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">-</span>
-                                        }
-                                    </td>
-                                    <td>
-                                        @if (!string.IsNullOrWhiteSpace(item.AracPlakasi))
-                                        {
-                                            <span class="badge bg-secondary font-monospace">@item.AracPlakasi</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">-</span>
-                                        }
-                                    </td>
-                                    <td class="text-end bg-info bg-opacity-10" style="width:160px;">
-                                        <div class="form-control form-control-sm text-end fw-bold">
-                                            <span class="card-text"></span>
-
-@* burasında input yerine direkt span ile gösterelim, banka yatana müdahale edilmesin. Değişiklik yapmak isteyen muhasebe personeli personel kartından yapar, oraya da kaydet butonu ekleyelim. Böylece yanlışlıkla değişiklik yapılmasının da önüne geçmiş oluruz.
-                                            <input type="number" class="form-control form-control-sm text-end fw-bold"
-                                                   step="0.01" min="0" placeholder="0.00"
-                                                   value="@item.BankayaYatan.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)"
-                                                   @onchange="(e) => BankayaYatanDegisti(item, e)" disabled="@(!item.Personel.Aktif)" />*@
-
-                                            <span class="input-group-text">₺@item.BankayaYatan.ToString("0,000.##", System.Globalization.CultureInfo.InvariantCulture)</span>
-                                        </div>
-                                    </td>
+                        @if (sgkAyriListedeGoster)
+                        {
+                            <tbody>
+                                <tr class="table-secondary fw-bold">
+                                    <td colspan="15">SGK'lı Personeller (@sgkliPersonelListesi.Count kişi)</td>
                                 </tr>
-                            }
-                        </tbody>
-                            <tfoot class="table-dark">
+                                @foreach (var item in sgkliPersonelListesi)
+                                {
+                                    <tr>
+                                        <td class="text-center">@(item.SiralamaNo > 0 ? item.SiralamaNo : (sgkliPersonelListesi.IndexOf(item) + 1))</td>
+                                        <td><span class="badge bg-secondary font-monospace">@(string.IsNullOrWhiteSpace(item.AracPlakasi) ? "-" : item.AracPlakasi)</span></td>
+                                        <td><strong>@item.Personel.TamAd</strong></td>
+                                        <td>@(string.IsNullOrWhiteSpace(item.Personel.Telefon) ? "-" : item.Personel.Telefon)</td>
+                                        <td><small>@(string.IsNullOrWhiteSpace(item.Personel.Adres) ? "-" : item.Personel.Adres)</small></td>
+                                        <td class="text-end">@FormatPara(item.GercekMaas)</td>
+                                        <td class="text-end bg-info bg-opacity-10"><strong>@FormatPara(item.BankayaYatan)</strong></td>
+                                        <td class="text-end">@FormatPara(item.Avans)</td>
+                                        <td class="text-end">@FormatPara(item.Kesinti)</td>
+                                        <td class="text-end">@FormatPara(item.PersonelHarcamasi)</td>
+                                        <td class="text-end fw-bold">@FormatPara(item.EldenOdenecek)</td>
+                                        <td>@(item.Personel.Firma?.FirmaAdi ?? "-")</td>
+                                        <td>SGK'lı</td>
+                                        <td>@(item.Personel.IseBaslamaTarihi?.ToString("dd.MM.yyyy") ?? "-")</td>
+                                        <td>@(item.Personel.IstenAyrilmaTarihi?.ToString("dd.MM.yyyy") ?? "-")</td>
+                                    </tr>
+                                }
+
+                                <tr class="table-secondary fw-bold">
+                                    <td colspan="15">SGK'sız Personeller (@sgksizPersonelListesi.Count kişi)</td>
+                                </tr>
+                                @foreach (var item in sgksizPersonelListesi)
+                                {
+                                    <tr>
+                                        <td class="text-center">@(item.SiralamaNo > 0 ? item.SiralamaNo : (sgksizPersonelListesi.IndexOf(item) + 1))</td>
+                                        <td><span class="badge bg-secondary font-monospace">@(string.IsNullOrWhiteSpace(item.AracPlakasi) ? "-" : item.AracPlakasi)</span></td>
+                                        <td><strong>@item.Personel.TamAd</strong></td>
+                                        <td>@(string.IsNullOrWhiteSpace(item.Personel.Telefon) ? "-" : item.Personel.Telefon)</td>
+                                        <td><small>@(string.IsNullOrWhiteSpace(item.Personel.Adres) ? "-" : item.Personel.Adres)</small></td>
+                                        <td class="text-end">@FormatPara(item.GercekMaas)</td>
+                                        <td class="text-end bg-info bg-opacity-10"><strong>@FormatPara(item.BankayaYatan)</strong></td>
+                                        <td class="text-end">@FormatPara(item.Avans)</td>
+                                        <td class="text-end">@FormatPara(item.Kesinti)</td>
+                                        <td class="text-end">@FormatPara(item.PersonelHarcamasi)</td>
+                                        <td class="text-end fw-bold">@FormatPara(item.EldenOdenecek)</td>
+                                        <td>@(item.Personel.Firma?.FirmaAdi ?? "-")</td>
+                                        <td>SGK'sız</td>
+                                        <td>@(item.Personel.IseBaslamaTarihi?.ToString("dd.MM.yyyy") ?? "-")</td>
+                                        <td>@(item.Personel.IstenAyrilmaTarihi?.ToString("dd.MM.yyyy") ?? "-")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        }
+                        else
+                        {
+                            <tbody>
+                                @foreach (var item in personelListesi)
+                                {
+                                    <tr>
+                                        <td class="text-center">@(item.SiralamaNo > 0 ? item.SiralamaNo : (personelListesi.IndexOf(item) + 1))</td>
+                                        <td><span class="badge bg-secondary font-monospace">@(string.IsNullOrWhiteSpace(item.AracPlakasi) ? "-" : item.AracPlakasi)</span></td>
+                                        <td><strong>@item.Personel.TamAd</strong></td>
+                                        <td>@(string.IsNullOrWhiteSpace(item.Personel.Telefon) ? "-" : item.Personel.Telefon)</td>
+                                        <td><small>@(string.IsNullOrWhiteSpace(item.Personel.Adres) ? "-" : item.Personel.Adres)</small></td>
+                                        <td class="text-end">@FormatPara(item.GercekMaas)</td>
+                                        <td class="text-end bg-info bg-opacity-10"><strong>@FormatPara(item.BankayaYatan)</strong></td>
+                                        <td class="text-end">@FormatPara(item.Avans)</td>
+                                        <td class="text-end">@FormatPara(item.Kesinti)</td>
+                                        <td class="text-end">@FormatPara(item.PersonelHarcamasi)</td>
+                                        <td class="text-end fw-bold">@FormatPara(item.EldenOdenecek)</td>
+                                        <td>@(item.Personel.Firma?.FirmaAdi ?? "-")</td>
+                                        <td>@(item.Personel.SGKBordroDahilMi ? "SGK'lı" : "SGK'sız")</td>
+                                        <td>@(item.Personel.IseBaslamaTarihi?.ToString("dd.MM.yyyy") ?? "-")</td>
+                                        <td>@(item.Personel.IstenAyrilmaTarihi?.ToString("dd.MM.yyyy") ?? "-")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        }
+                        <tfoot class="table-dark">
                             <tr>
                                 <td colspan="5" class="text-end"><strong>GENEL TOPLAM</strong></td>
+                                <td class="text-end"><strong>@FormatPara(personelListesi.Sum(p => p.GercekMaas))</strong></td>
                                 <td class="text-end bg-info"><strong>@FormatPara(personelListesi.Sum(p => p.BankayaYatan))</strong></td>
+                                <td class="text-end"><strong>@FormatPara(personelListesi.Sum(p => p.Avans))</strong></td>
+                                <td class="text-end"><strong>@FormatPara(personelListesi.Sum(p => p.Kesinti))</strong></td>
+                                <td class="text-end"><strong>@FormatPara(personelListesi.Sum(p => p.PersonelHarcamasi))</strong></td>
+                                <td class="text-end"><strong>@FormatPara(personelListesi.Sum(p => p.EldenOdenecek))</strong></td>
+                                <td colspan="4"></td>
                             </tr>
                         </tfoot>
                     </table>
@@ -447,11 +488,14 @@
     private int secilenAy = DateTime.Now.Month;
     private string secilenGorev = "";
     private string sgkBordroFiltre = "";
+    private bool sgkAyriListedeGoster = false;
     private bool isLoading = false;
     private bool isProcessing = false;
 
     private List<PersonelOdemeKalemi>? personelListesi;
     private List<GorevOzet> gorevOzetleri = new();
+    private List<PersonelOdemeKalemi> sgkliPersonelListesi => personelListesi?.Where(p => p.Personel.SGKBordroDahilMi).ToList() ?? new();
+    private List<PersonelOdemeKalemi> sgksizPersonelListesi => personelListesi?.Where(p => !p.Personel.SGKBordroDahilMi).ToList() ?? new();
 
     // Toplu Tahakkuk Modal
     private bool showTahakkukModal = false;
@@ -622,56 +666,22 @@
         try
         {
             using var workbook = new ClosedXML.Excel.XLWorkbook();
-            var worksheet = workbook.Worksheets.Add("Banka Ödeme Listesi");
 
-            // Başlık
-            worksheet.Cell("A1").Value = $"Personel Banka Ödeme Listesi - {new DateTime(secilenYil, secilenAy, 1):MMMM yyyy}";
-            worksheet.Range("A1:F1").Merge().Style.Font.Bold = true;
-            worksheet.Range("A1:F1").Style.Font.FontSize = 14;
-
-            // Sütun başlıkları
-            var header = worksheet.Row(3);
-            header.Cell(1).Value = "Sıra";
-            header.Cell(2).Value = "Personel Adı Soyadı";
-            header.Cell(3).Value = "TC Kimlik No";
-            header.Cell(4).Value = "IBAN";
-            header.Cell(5).Value = "Araç Plaka";
-            header.Cell(6).Value = "Personel Bankaya Yatan";
-            header.Style.Font.Bold = true;
-            header.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
-            header.Cell(6).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGreen;
-
-            // Veriler
-            int row = 4;
-            int sira = 0;
-            foreach (var item in personelListesi!)
+            if (sgkAyriListedeGoster)
             {
-                sira++;
-                worksheet.Cell(row, 1).Value = item.SiralamaNo > 0 ? item.SiralamaNo : sira;
-                worksheet.Cell(row, 2).Value = item.Personel.TamAd;
-                worksheet.Cell(row, 3).Value = item.Personel.TcKimlikNo ?? "";
-                worksheet.Cell(row, 4).Value = (item.Personel.IBAN ?? "").Replace(" ", "").Trim().ToUpper();
-                worksheet.Cell(row, 5).Value = item.AracPlakasi ?? "";
-                worksheet.Cell(row, 6).Value = item.BankayaYatan;
-                row++;
+                ExcelSayfaDoldur(workbook.Worksheets.Add("SGK'lı"), sgkliPersonelListesi, "SGK'lı Personel Ödeme Listesi");
+                ExcelSayfaDoldur(workbook.Worksheets.Add("SGK'sız"), sgksizPersonelListesi, "SGK'sız Personel Ödeme Listesi");
             }
-
-            // Toplam satırı
-            worksheet.Cell(row, 5).Value = "TOPLAM:";
-            worksheet.Cell(row, 6).Value = personelListesi.Sum(p => p.BankayaYatan);
-            worksheet.Range(row, 5, row, 6).Style.Font.Bold = true;
-            worksheet.Range(row, 5, row, 6).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightYellow;
-
-            // Para formatı
-            worksheet.Range(4, 6, row, 6).Style.NumberFormat.Format = "#,##0.00 ₺";
-
-            worksheet.Columns().AdjustToContents();
+            else
+            {
+                ExcelSayfaDoldur(workbook.Worksheets.Add("Banka Ödeme Listesi"), personelListesi ?? new List<PersonelOdemeKalemi>(), "Personel Ödeme Listesi");
+            }
 
             using var stream = new MemoryStream();
             workbook.SaveAs(stream);
             var bytes = stream.ToArray();
 
-            var dosyaAdi = $"banka_odeme_listesi_{secilenYil}_{secilenAy:00}.xlsx";
+            var dosyaAdi = $"maas_odeme_raporu_{secilenYil}_{secilenAy:00}.xlsx";
             await JS.InvokeVoidAsync("downloadFileFromBase64", dosyaAdi, Convert.ToBase64String(bytes));
             ToastService.ShowSuccess("Excel dosyası indirildi.");
         }
@@ -679,6 +689,69 @@
         {
             ToastService.ShowError($"Excel oluşturulurken hata: {ex.Message}");
         }
+    }
+
+    private void ExcelSayfaDoldur(ClosedXML.Excel.IXLWorksheet worksheet, List<PersonelOdemeKalemi> liste, string raporBaslik)
+    {
+        worksheet.Cell("A1").Value = $"{raporBaslik} - {new DateTime(secilenYil, secilenAy, 1):MMMM yyyy}";
+        worksheet.Range("A1:O1").Merge().Style.Font.Bold = true;
+        worksheet.Range("A1:O1").Style.Font.FontSize = 14;
+
+        var header = worksheet.Row(3);
+        header.Cell(1).Value = "S.NO";
+        header.Cell(2).Value = "PLAKA";
+        header.Cell(3).Value = "AD SOYAD";
+        header.Cell(4).Value = "TELEFON";
+        header.Cell(5).Value = "ADRES";
+        header.Cell(6).Value = "GERÇEK MAAŞ";
+        header.Cell(7).Value = "BANKAYA YATAN";
+        header.Cell(8).Value = "AVANS (-)";
+        header.Cell(9).Value = "KESİNTİ (-)";
+        header.Cell(10).Value = "HARCAMASI (+)";
+        header.Cell(11).Value = "FARK / ÖDENECEK";
+        header.Cell(12).Value = "FİRMA";
+        header.Cell(13).Value = "SGK";
+        header.Cell(14).Value = "İŞE GİRİŞ";
+        header.Cell(15).Value = "İŞTEN ÇIKIŞ";
+        header.Style.Font.Bold = true;
+        header.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+        header.Cell(7).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGreen;
+
+        int row = 4;
+        int sira = 0;
+        foreach (var item in liste)
+        {
+            sira++;
+            worksheet.Cell(row, 1).Value = item.SiralamaNo > 0 ? item.SiralamaNo : sira;
+            worksheet.Cell(row, 2).Value = item.AracPlakasi ?? "-";
+            worksheet.Cell(row, 3).Value = item.Personel.TamAd;
+            worksheet.Cell(row, 4).Value = item.Personel.Telefon ?? "-";
+            worksheet.Cell(row, 5).Value = item.Personel.Adres ?? "-";
+            worksheet.Cell(row, 6).Value = item.GercekMaas;
+            worksheet.Cell(row, 7).Value = item.BankayaYatan;
+            worksheet.Cell(row, 8).Value = item.Avans;
+            worksheet.Cell(row, 9).Value = item.Kesinti;
+            worksheet.Cell(row, 10).Value = item.PersonelHarcamasi;
+            worksheet.Cell(row, 11).Value = item.EldenOdenecek;
+            worksheet.Cell(row, 12).Value = item.Personel.Firma?.FirmaAdi ?? "-";
+            worksheet.Cell(row, 13).Value = item.Personel.SGKBordroDahilMi ? "SGK'lı" : "SGK'sız";
+            worksheet.Cell(row, 14).Value = item.Personel.IseBaslamaTarihi?.ToString("dd.MM.yyyy") ?? "-";
+            worksheet.Cell(row, 15).Value = item.Personel.IstenAyrilmaTarihi?.ToString("dd.MM.yyyy") ?? "-";
+            row++;
+        }
+
+        worksheet.Cell(row, 5).Value = "TOPLAM:";
+        worksheet.Cell(row, 6).Value = liste.Sum(p => p.GercekMaas);
+        worksheet.Cell(row, 7).Value = liste.Sum(p => p.BankayaYatan);
+        worksheet.Cell(row, 8).Value = liste.Sum(p => p.Avans);
+        worksheet.Cell(row, 9).Value = liste.Sum(p => p.Kesinti);
+        worksheet.Cell(row, 10).Value = liste.Sum(p => p.PersonelHarcamasi);
+        worksheet.Cell(row, 11).Value = liste.Sum(p => p.EldenOdenecek);
+        worksheet.Range(row, 5, row, 11).Style.Font.Bold = true;
+        worksheet.Range(row, 5, row, 11).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightYellow;
+
+        worksheet.Range(4, 6, row, 11).Style.NumberFormat.Format = "#,##0.00 ₺";
+        worksheet.Columns().AdjustToContents();
     }
 
     private async Task Yazdir()

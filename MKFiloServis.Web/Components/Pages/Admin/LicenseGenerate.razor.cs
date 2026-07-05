@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
@@ -62,6 +62,17 @@ public partial class LicenseGenerate : ComponentBase
 
         try
         {
+            // FirmaKodu'ndan FirmaId'yi bul
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var firma = await db.Firmalar.FirstOrDefaultAsync(f => f.FirmaKodu == firmaKodu && !f.IsDeleted);
+            if (firma == null)
+            {
+                hataMesaji = $"Firma bulunamadı: {firmaKodu}";
+                calisiyor = false;
+                StateHasChanged();
+                return;
+            }
+
             var created = DateTime.UtcNow; // 🔥 CRITICAL: UTC
             const string allowedVersion = "1.0.99";
 
@@ -90,6 +101,7 @@ public partial class LicenseGenerate : ComponentBase
             // Part 5: Log — DB'ye kaydet
             var lic = new LicenseInfo
             {
+                FirmaId = firma.Id,  // 🔑 KRITIK: FirmaId set et
                 FirmaKodu = firmaKodu,
                 MachineId = machineId,
                 ExpireDate = expireDate,
@@ -107,7 +119,8 @@ public partial class LicenseGenerate : ComponentBase
         }
         catch (Exception ex)
         {
-            hataMesaji = $"Lisans üretilemedi: {ex.Message}";
+            var innerMsg = ex.InnerException?.Message ?? "Bilinmeyen hata";
+            hataMesaji = $"Lisans üretilemedi: {ex.Message}\n\nDetay: {innerMsg}";
         }
         finally
         {

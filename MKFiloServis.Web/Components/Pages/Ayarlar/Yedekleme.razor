@@ -1,4 +1,4 @@
-@page "/ayarlar/yedekleme"
+﻿@page "/ayarlar/yedekleme"
 @using MKFiloServis.Web.Helpers
 @using MKFiloServis.Web.Services
 @using System.Globalization
@@ -127,6 +127,10 @@
                                     <span class="text-muted">Planlı değil</span>
                                 }
                             </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Yedekleme Yolu:</strong></td>
+                            <td><code class="small text-break">@GetResolvedBackupFolderPath()</code></td>
                         </tr>
                     </table>
                 </div>
@@ -906,6 +910,18 @@
     }
 
     private DateTime? GetNextBackupTime() => settings.GetNextBackupTime();
+
+    private string GetResolvedBackupFolderPath()
+    {
+        var backupFolder = settings.BackupFolder;
+        if (string.IsNullOrWhiteSpace(backupFolder))
+            backupFolder = "database";
+
+        if (!Path.IsPathRooted(backupFolder))
+            backupFolder = Path.Combine(AppStoragePaths.GetStorageRoot(Environment.ContentRootPath), backupFolder);
+
+        return backupFolder;
+    }
 
     private string GetScheduleSummary()
     {
