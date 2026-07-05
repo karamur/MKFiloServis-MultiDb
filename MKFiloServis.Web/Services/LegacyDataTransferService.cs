@@ -167,6 +167,12 @@ public class LegacyDataTransferService
         _logger.LogInformation("LegacyDataTransfer source DB: {SourceDb}", new NpgsqlConnectionStringBuilder(_sourceConnStr).Database);
         _logger.LogInformation("LegacyDataTransfer target DB: {TargetDb}", new NpgsqlConnectionStringBuilder(_targetConnStr).Database);
 
+        if (!await SourceDatabaseExistsAsync())
+        {
+            _logger.LogInformation("LegacyDataTransfer source DB bulunamadi, aktarim atlandi.");
+            return result;
+        }
+
         async Task<TransferResult> SafeTransferAsync(Func<Task<TransferResult>> transfer, string name)
         {
             try { return await transfer(); }
@@ -555,6 +561,34 @@ public class LegacyDataTransferService
     }
 
     // ── Yardımcılar ──────────────────────────────────────────────────
+
+    private async Task<bool> SourceDatabaseExistsAsync()
+    {
+        try
+        {
+            var sourceBuilder = new NpgsqlConnectionStringBuilder(_sourceConnStr);
+            var probeBuilder = new NpgsqlConnectionStringBuilder(_sourceConnStr)
+            {
+                Database = string.IsNullOrWhiteSpace(sourceBuilder.Database) ? "postgres" : "postgres"
+            };
+
+            await using var conn = new NpgsqlConnection(probeBuilder.ConnectionString);
+            await conn.OpenAsync();
+
+            await using var cmd = new NpgsqlCommand("SELECT 1 FROM pg_database WHERE datname = @db", conn);
+            cmd.Parameters.AddWithValue("@db", sourceBuilder.Database ?? string.Empty);
+            return await cmd.ExecuteScalarAsync() != null;
+        }
+        catch (PostgresException ex) when (ex.SqlState == "3D000")
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "LegacyDataTransfer source DB kontrolu basarisiz oldu.");
+            return false;
+        }
+    }
 
     private async Task<NpgsqlConnection> OpenSourceAsync()
     {

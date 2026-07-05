@@ -1,9 +1,10 @@
-@page "/ayarlar/firmalar"
+﻿@page "/ayarlar/firmalar"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
 @using Microsoft.AspNetCore.Components.Forms
 @inject IFirmaService FirmaService
 @inject ICariService CariService
+@inject BrandingService BrandingService
 
 @inject IToastService ToastService
 @* No functional change. *@
@@ -18,6 +19,52 @@
             <button class="btn btn-primary" @onclick="YeniFirmaAc">
                 <i class="bi bi-plus-lg me-1"></i>Yeni Firma
             </button>
+        </div>
+    </div>
+
+    <div class="card mb-3 border-primary-subtle">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <div>
+                    <h5 class="mb-1"><i class="bi bi-images me-2"></i>Login ve Menü Markalama</h5>
+                    <div class="text-muted small">Kullanıcıdan alınan amblem ve yazı logosunu burada güncelleyip uygulamanın login ve menü alanında kullanabilirsiniz.</div>
+                </div>
+                <button class="btn btn-primary" @onclick="BrandingKaydetAsync" disabled="@brandingKaydediliyor">
+                    @if (brandingKaydediliyor)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    <i class="bi bi-save me-1"></i>Branding Kaydet
+                </button>
+            </div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Amblem / Sembol</label>
+                    <InputFile OnChange="BrandingAmblemYukleAsync" accept="image/*" class="form-control" />
+                    <div class="form-text">PNG, JPG, SVG veya WebP. Maks 2 MB.</div>
+                    <div class="mt-2 border rounded bg-light p-3 text-center">
+                        @if (HasBrandingPreview(brandingIconLogo))
+                        {
+                            <img src="@brandingIconLogo" alt="Amblem" style="max-height:90px;max-width:100%;object-fit:contain;" />
+                        }
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Yazı Logosu</label>
+                    <InputFile OnChange="BrandingYaziLogosuYukleAsync" accept="image/*" class="form-control" />
+                    <div class="form-text">Login ekranında ve menüde kullanılacak yatay logo.</div>
+                    <div class="mt-2 border rounded bg-light p-3 text-center">
+                        @if (HasBrandingPreview(brandingTextLogo))
+                        {
+                            <img src="@brandingTextLogo" alt="Yazı Logosu" style="max-height:90px;max-width:100%;object-fit:contain;" />
+                        }
+                    </div>
+                </div>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(brandingHata))
+            {
+                <div class="alert alert-warning py-2 small mt-3 mb-0">@brandingHata</div>
+            }
         </div>
     </div>
 
@@ -367,6 +414,10 @@
     private string aramaMetni = string.Empty;
     private string durumFiltre = string.Empty;
     private string cariFiltre = string.Empty;
+    private string? brandingIconLogo;
+    private string? brandingTextLogo;
+    private string? brandingHata;
+    private bool brandingKaydediliyor;
 
     private List<Firma> FiltreliFirmalar => firmalar
         .Where(f => string.IsNullOrWhiteSpace(aramaMetni)
@@ -527,6 +578,7 @@
     protected override async Task OnInitializedAsync()
     {
         await YenileAsync();
+        await BrandingYukleAsync();
     }
 
     private async Task YenileAsync()
@@ -555,10 +607,21 @@
 
     private void YeniFirmaAc()
     {
-        var nextCode = firmalar.Any() ? $"F{firmalar.Count + 1:000}" : "F001";
+        var nextNumber = 1;
+        foreach (var code in firmalar.Select(f => f.FirmaKodu))
+        {
+            if (string.IsNullOrWhiteSpace(code) || !code.StartsWith("F", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (int.TryParse(code[1..], out var parsed) && parsed >= nextNumber)
+            {
+                nextNumber = parsed + 1;
+            }
+        }
+
         editFirma = new Firma
         {
-            FirmaKodu = nextCode,
+            FirmaKodu = $"F{nextNumber:000}",
             Aktif = true,
             VarsayilanFirma = !firmalar.Any()
         };
@@ -648,6 +711,79 @@
             ToastService.ShowError("Hata: " + ex.Message);
         }
     }
+
+    private async Task BrandingYukleAsync()
+    {
+        var branding = await BrandingService.GetAsync();
+        brandingIconLogo = branding.IconLogo;
+        brandingTextLogo = branding.TextLogo;
+    }
+
+    private async Task BrandingAmblemYukleAsync(InputFileChangeEventArgs e)
+    {
+        var yeniGorsel = await ReadBrandingImageAsync(e.File);
+        if (yeniGorsel != null)
+        {
+            brandingIconLogo = yeniGorsel;
+        }
+    }
+
+    private async Task BrandingYaziLogosuYukleAsync(InputFileChangeEventArgs e)
+    {
+        var yeniGorsel = await ReadBrandingImageAsync(e.File);
+        if (yeniGorsel != null)
+        {
+            brandingTextLogo = yeniGorsel;
+        }
+    }
+
+    private async Task<string?> ReadBrandingImageAsync(IBrowserFile? file)
+    {
+        brandingHata = null;
+        if (file == null)
+            return null;
+
+        if (file.Size > 2 * 1024 * 1024)
+        {
+            brandingHata = "Gorsel dosyasi 2 MB'dan buyuk olamaz.";
+            return null;
+        }
+
+        var izinliTipler = new[] { "image/png", "image/jpeg", "image/jpg", "image/svg+xml", "image/webp" };
+        if (!izinliTipler.Contains(file.ContentType))
+        {
+            brandingHata = "Sadece PNG, JPG, SVG veya WebP yukleyebilirsiniz.";
+            return null;
+        }
+
+        using var stream = file.OpenReadStream(maxAllowedSize: 2 * 1024 * 1024);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        return $"data:{file.ContentType};base64,{Convert.ToBase64String(ms.ToArray())}";
+    }
+
+    private async Task BrandingKaydetAsync()
+    {
+        try
+        {
+            brandingKaydediliyor = true;
+            brandingHata = null;
+            await BrandingService.SaveAsync(brandingIconLogo, brandingTextLogo);
+            ToastService.ShowSuccess("Login ve menü branding gorselleri kaydedildi.");
+        }
+        catch (Exception ex)
+        {
+            brandingHata = ex.Message;
+            ToastService.ShowError("Branding kaydedilemedi: " + ex.Message);
+        }
+        finally
+        {
+            brandingKaydediliyor = false;
+        }
+    }
+
+    private static bool HasBrandingPreview(string? currentValue)
+        => !string.IsNullOrWhiteSpace(currentValue);
 
     private void ModalKapat()
     {

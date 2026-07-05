@@ -6,12 +6,13 @@
 @inject AppAuthenticationStateProvider AuthProvider
 @inject IAktifFirmaProvider AktifFirmaProvider
 @inject ILogger<NavMenu> Logger
+@inject BrandingService BrandingService
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="dashboard">
-            <img src="images/logo.png" alt="Logo" class="nav-logo-img" />
-            <img src="images/YaziLogo.png" alt="Ustun Grup Filo" class="nav-logo-text" />
+            <img src="@brandingIconSrc" alt="Logo" class="nav-logo-img" />
+            <img src="@brandingTextSrc" alt="Marka" class="nav-logo-text" />
         </a>
     </div>
 </div>
@@ -1378,13 +1379,19 @@
     private bool yetkilerYuklendi = false;
     private bool isAdmin = false;
     private bool isSuperAdmin = false;
+    private bool disposed = false;
     private readonly SemaphoreSlim yetkiYukleGate = new(1, 1);
+    private string brandingIconSrc = BrandingService.DefaultIconPath;
+    private string brandingTextSrc = BrandingService.DefaultTextLogoPath;
 
     protected override async Task OnInitializedAsync()
     {
         // Once subscribe ol, sonra ilk yuklemeyi yap. Aksi halde yukleme sirasinda
         // gerceklesen AuthenticationStateChanged olaylari kacirilir.
         AuthProvider.AuthenticationStateChanged += OnAuthStateChanged;
+        var branding = await BrandingService.GetAsync();
+        brandingIconSrc = branding.ResolvedIconLogo;
+        brandingTextSrc = branding.ResolvedTextLogo;
         await YetkileriYukle();
     }
 
@@ -1395,10 +1402,16 @@
 
     private async Task HandleAuthStateChangedAsync()
     {
+        if (disposed)
+            return;
+
         try
         {
             await YetkileriYukle();
-            await InvokeAsync(StateHasChanged);
+            if (!disposed)
+            {
+                await InvokeAsync(StateHasChanged);
+            }
         }
         catch (ObjectDisposedException)
         {
@@ -1412,16 +1425,22 @@
 
     public void Dispose()
     {
+        disposed = true;
         AuthProvider.AuthenticationStateChanged -= OnAuthStateChanged;
-        yetkiYukleGate.Dispose();
     }
 
     private async Task YetkileriYukle()
     {
+        if (disposed)
+            return;
+
         // Es zamanli auth state degisikliklerinde koleksiyonlarda race olusmamasi icin serialize et
         await yetkiYukleGate.WaitAsync();
         try
         {
+            if (disposed)
+                return;
+
             var aktifKullanici = AuthProvider.GetAktifKullanici();
             if (aktifKullanici != null)
             {
@@ -1466,7 +1485,10 @@
         }
         finally
         {
-            yetkiYukleGate.Release();
+            if (!disposed)
+            {
+                yetkiYukleGate.Release();
+            }
         }
     }
 

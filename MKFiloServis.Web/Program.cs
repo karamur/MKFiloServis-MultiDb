@@ -257,6 +257,7 @@ builder.Services.AddScoped<IDataExportService, DataExportService>();
 builder.Services.AddScoped<IGlobalSearchService, GlobalSearchService>();
 builder.Services.AddScoped<IToastService, ToastService>();
 builder.Services.AddScoped<AppIssueStateService>();
+builder.Services.AddScoped<BrandingService>();
 builder.Services.AddScoped<IPdfService, PdfService>();
 builder.Services.AddScoped<IBudgetService, BudgetService>();
 builder.Services.AddScoped<NumaraSerisiService>(); // Kural 15: Firma bazlı numara serisi

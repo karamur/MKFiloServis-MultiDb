@@ -16,45 +16,59 @@ public class MainForm : Form
     private const string AllowedVersion = "1.0.99";
     private readonly string _dbPath;
 
-    private Label lblFirma = new() { Text = "Firma Kodu:", AutoSize = true };
-    private TextBox txtFirma = new() { PlaceholderText = "orn: USTUN" };
-    private Label lblMachine = new() { Text = "Machine ID:", AutoSize = true };
-    private TextBox txtMachine = new() { PlaceholderText = "Web'den kopyalayip yapistirin", Multiline = true, Height = 40 };
+    private Panel pnlHeader = new() { Height = 88, BackColor = Color.FromArgb(19, 33, 68) };
+    private Label lblTitle = new() { Text = "MKFiloServis Lisans Yonetim Merkezi", AutoSize = true, Font = new Font("Segoe UI Semibold", 19, FontStyle.Bold), ForeColor = Color.White };
+    private Label lblSubtitle = new() { Text = "Lisans, yenileme ve paketleme islemlerini tek ekrandan, tutarli ve hizli sekilde yonetin.", AutoSize = true, Font = new Font("Segoe UI", 9.5f), ForeColor = Color.FromArgb(208, 220, 255) };
+    private Label lblStatusBadge = new() { Text = "WEB UYUMLU", AutoSize = true, Font = new Font("Segoe UI", 9, FontStyle.Bold), ForeColor = Color.White, BackColor = Color.FromArgb(34, 145, 92), Padding = new Padding(10, 6, 10, 6) };
 
-    private Label lblDays = new() { Text = "Lisans Suresi (Gun):", AutoSize = true };
+    private GroupBox grpLicenseEditor = new() { Text = "Lisans Olusturma" };
+    private GroupBox grpOutput = new() { Text = "Anahtar Ciktisi" };
+    private GroupBox grpPackaging = new() { Text = "Kurulum / Guncelleme Paketleri" };
+    private GroupBox grpHistory = new() { Text = "Lisans Gecmisi" };
+    private Panel pnlQuickInfo = new() { BorderStyle = BorderStyle.FixedSingle, BackColor = Color.FromArgb(245, 248, 255) };
+    private Label lblQuickInfoTitle = new() { Text = "Hizli Bilgi", AutoSize = true, Font = new Font("Segoe UI", 9, FontStyle.Bold), ForeColor = Color.FromArgb(19, 33, 68) };
+    private Label lblQuickInfo = new() { Text = "Firma kodu, machine ID ve iletisim telefonu dogruysa uretilen anahtar web uygulamasinda dogrudan aktive edilir.", AutoSize = false, ForeColor = Color.FromArgb(58, 68, 88) };
+    private Label lblHistoryHint = new() { Text = "Arama, filtreleme ve yenileme gecmisini buradan yonetin.", AutoSize = true, ForeColor = Color.FromArgb(85, 96, 122) };
+    private Label lblFirma = new() { Text = "Firma Kodu", AutoSize = true };
+    private TextBox txtFirma = new() { PlaceholderText = "orn: USTUN" };
+    private Label lblMachine = new() { Text = "Machine ID", AutoSize = true };
+    private TextBox txtMachine = new() { PlaceholderText = "Web'den kopyalayip yapistirin", Multiline = true, Height = 52, ScrollBars = ScrollBars.Vertical };
+
+    private Label lblDays = new() { Text = "Lisans Suresi (Gun)", AutoSize = true };
     private NumericUpDown txtDays = new() { Minimum = 1, Maximum = 3650, Value = 365, Width = 100 };
-    private Label lblExpire = new() { Text = "Bitis Tarihi:", AutoSize = true };
+    private Label lblExpire = new() { Text = "Bitis Tarihi", AutoSize = true };
     private DateTimePicker dtExpire = new() { Format = DateTimePickerFormat.Short, Width = 150 };
 
-    private Label lblSaleDate = new() { Text = "Satis Tarihi:", AutoSize = true };
+    private Label lblSaleDate = new() { Text = "Satis Tarihi", AutoSize = true };
     private DateTimePicker dtSaleDate = new() { Format = DateTimePickerFormat.Short, Width = 150 };
-    private Label lblAmount = new() { Text = "Satis Tutari:", AutoSize = true };
+    private Label lblAmount = new() { Text = "Satis Tutari", AutoSize = true };
     private NumericUpDown numAmount = new() { DecimalPlaces = 2, Minimum = 0.01m, Maximum = 1_000_000m, Value = 1m, Width = 150, ThousandsSeparator = true };
 
-    private Label lblPhone = new() { Text = "Iletisim Telefonu:", AutoSize = true };
+    private Label lblPhone = new() { Text = "Iletisim Telefonu", AutoSize = true };
     private TextBox txtPhone = new() { PlaceholderText = "orn: 0555xxxxxxx" };
 
-    private Button btnUret = new() { Text = "Lisans Olustur (Satis)", Height = 38 };
-    private Button btnUpdateSale = new() { Text = "Secili Satisi Guncelle", Height = 34 };
-    private Button btnDeleteSale = new() { Text = "Secili Satisi Sil", Height = 34 };
-    private Button btnRenewRemaining = new() { Text = "Secili Satisin Kalan Gunune Lisans Uret", Height = 34 };
+    private Button btnUret = new() { Text = "Yeni Satis Lisansi Olustur", Height = 42 };
+    private Button btnUpdateSale = new() { Text = "Secili Kaydi Guncelle", Height = 36 };
+    private Button btnDeleteSale = new() { Text = "Secili Kaydi Sil", Height = 36 };
+    private Button btnRenewRemaining = new() { Text = "Secili Kayittan Yenileme Uret", Height = 36 };
 
-    private Label lblKey = new() { Text = "Uretilen Lisans Anahtari:", AutoSize = true, Font = new Font("Segoe UI", 9, FontStyle.Bold) };
+    private Label lblKey = new() { Text = "Uretilen Lisans Anahtari", AutoSize = true, Font = new Font("Segoe UI", 9, FontStyle.Bold) };
     private TextBox txtKey = new()
     {
         ReadOnly = true,
         Multiline = true,
-        Height = 80,
-        BackColor = Color.LightYellow,
+        Height = 94,
+        BackColor = Color.FromArgb(255, 252, 227),
         Font = new Font("Consolas", 9),
         Text = "Henuz lisans uretilmedi."
     };
-    private Button btnCopy = new() { Text = "Panoya Kopyala", Enabled = false, Height = 35 };
+    private Button btnCopy = new() { Text = "Anahtari Panoya Kopyala", Enabled = false, Height = 35 };
 
-    private Label lblHistory = new() { Text = "Lisans Gecmisi:", AutoSize = true, Font = new Font("Segoe UI", 9, FontStyle.Bold) };
-    private Label lblSearch = new() { Text = "Arama:", AutoSize = true };
+    private Label lblHistory = new() { Text = "Lisans Listesi", AutoSize = true, Font = new Font("Segoe UI", 9, FontStyle.Bold) };
+    private Label lblSearch = new() { Text = "Arama", AutoSize = true };
     private TextBox txtSearch = new() { PlaceholderText = "Firma, Makine veya Telefon ara..." };
     private ComboBox cmbOperationFilter = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private Button btnExportReport = new() { Text = "CSV Disa Aktar", Width = 150, Height = 32 };
 
     private DataGridView grid = new()
     {
@@ -64,31 +78,29 @@ public class MainForm : Form
         ReadOnly = true,
         SelectionMode = DataGridViewSelectionMode.FullRowSelect,
         MultiSelect = false,
-        RowHeadersVisible = false
+        RowHeadersVisible = false,
+        BackgroundColor = Color.White,
+        BorderStyle = BorderStyle.None
     };
 
-    private Label lblRenewalHistory = new() { Text = "Yenileme Gecmisi (Secili Kayit):", AutoSize = true, Font = new Font("Segoe UI", 9, FontStyle.Bold) };
-    private ListBox lstRenewals = new() { Height = 90 };
+    private readonly ContextMenuStrip gridContextMenu = new();
 
-    private Label lblUpdateZip = new() { Text = "Guncelleme ZIP Uretimi:", AutoSize = true, Font = new Font("Segoe UI", 9, FontStyle.Bold) };
+    private Label lblRenewalHistory = new() { Text = "Secili Kaydin Yenileme Gecmisi", AutoSize = true, Font = new Font("Segoe UI", 9, FontStyle.Bold) };
+    private ListBox lstRenewals = new() { Height = 96 };
+
+    private Label lblUpdateZip = new() { Text = "Kurulum / Guncelleme Paketleme", AutoSize = true, Font = new Font("Segoe UI", 9, FontStyle.Bold) };
     private TextBox txtUpdateSourceFolder = new() { PlaceholderText = "Publish klasorunu secin", ReadOnly = true };
-    private Button btnSelectUpdateSource = new() { Text = "Kaynak Klasor Sec", Height = 30 };
+    private Button btnSelectUpdateSource = new() { Text = "Kaynak Klasor", Height = 32 };
     private TextBox txtUpdateVersion = new() { PlaceholderText = "Versiyon (orn: 1.0.25)" };
     private TextBox txtUpdateOutputFolder = new() { PlaceholderText = "Cikis klasoru", ReadOnly = true };
-    private Button btnSelectUpdateOutput = new() { Text = "Cikis Klasor Sec", Height = 30 };
-    private Button btnCreateUpdateZip = new() { Text = "Guncelleme Paketi ZIP Olustur", Height = 34 };
-    private Button btnPrepareCustomerSetup = new() { Text = "Musteri Kurulum Dosyalarini Hazirla (Otomatik)", Height = 34 };
-
-    private GroupBox grpReport = new() { Text = "Satis Raporu", Height = 130 };
-    private Button btnExportReport = new() { Text = "Satis Dokumu Al (CSV)", Width = 160, Height = 30 };
-    private Label lblTotalSales = new() { AutoSize = true };
-    private Label lblSaleCount = new() { AutoSize = true };
-    private Label lblRenewCount = new() { AutoSize = true };
-    private Label lblMonthSales = new() { AutoSize = true };
-    private Button btnRefreshReport = new() { Text = "Raporu Yenile", Width = 120, Height = 30 };
+    private Button btnSelectUpdateOutput = new() { Text = "Cikis Klasor", Height = 32 };
+    private Button btnCreateUpdateZip = new() { Text = "Guncelleme Paketi ZIP Olustur", Height = 36 };
+    private Button btnPrepareCustomerSetup = new() { Text = "Musteri Kurulum Paketini Hazirla", Height = 36 };
 
     private bool _syncing;
     private int? _selectedSaleId;
+    private bool _isLoadingSelection;
+    private bool _suppressHistoryRefresh;
 
     public MainForm()
     {
@@ -97,21 +109,26 @@ public class MainForm : Form
         Directory.CreateDirectory(dbDir);
         _dbPath = Path.Combine(dbDir, "licenses.db");
 
-        Text = "MKFiloServis Lisans Uretim ve Takip Araci";
-        Width = 1240;
-        Height = 840;
+        Text = "MKFiloServis Lisans Yonetim Merkezi";
+        Width = 1420;
+        Height = 920;
+        MinimumSize = new Size(1340, 860);
+        BackColor = Color.FromArgb(236, 240, 248);
+        Font = new Font("Segoe UI", 9f);
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = true;
         StartPosition = FormStartPosition.CenterScreen;
+        AutoScaleMode = AutoScaleMode.Dpi;
+        DoubleBuffered = true;
 
         InitializeLayout();
+        ApplyProfessionalTheme();
 
         btnUret.Click += (s, e) => UretSatisLisansi();
         btnUpdateSale.Click += (s, e) => SeciliSatisiGuncelle();
         btnDeleteSale.Click += (s, e) => SeciliSatisiSil();
         btnRenewRemaining.Click += (s, e) => YenileKalanGunle();
         btnCopy.Click += (s, e) => CopyKey();
-        btnRefreshReport.Click += (s, e) => LoadReport();
         btnExportReport.Click += (s, e) => SatisDokumunuDisaAktar();
         btnSelectUpdateSource.Click += (s, e) => SelectUpdateSourceFolder();
         btnSelectUpdateOutput.Click += (s, e) => SelectUpdateOutputFolder();
@@ -120,173 +137,192 @@ public class MainForm : Form
         txtSearch.TextChanged += (s, e) => LoadData();
         cmbOperationFilter.SelectedIndexChanged += (s, e) => LoadData();
         grid.CellFormatting += Grid_CellFormatting;
+        grid.KeyDown += Grid_KeyDown;
+        grid.MouseDown += Grid_MouseDown;
+        KeyPreview = true;
+        KeyDown += MainForm_KeyDown;
+        ConfigureGridContextMenu();
         grid.SelectionChanged += (s, e) =>
         {
+            if (_isLoadingSelection)
+                return;
+
             LoadSelectedSaleToForm();
             LoadRenewalHistoryForSelected();
+            UpdateActionButtons();
         };
 
         InitDatabase();
+        UpdateHistorySummary();
+        UpdateActionButtons();
         LoadData();
-        LoadReport();
     }
 
     private void InitializeLayout()
     {
-        int leftMargin = 15;
-        int inputWidth = 440;
-        int y = 10;
+        SuspendLayout();
 
-        lblFirma.Location = new Point(leftMargin, y);
-        txtFirma.Location = new Point(leftMargin, y + 20);
-        txtFirma.Width = inputWidth;
-        y += 55;
+        pnlHeader.Dock = DockStyle.Top;
+        pnlHeader.Padding = new Padding(22, 16, 22, 14);
+        Controls.Add(pnlHeader);
 
-        lblMachine.Location = new Point(leftMargin, y);
-        txtMachine.Location = new Point(leftMargin, y + 20);
-        txtMachine.Width = inputWidth;
-        y += 65;
+        lblTitle.Location = new Point(18, 10);
+        lblSubtitle.Location = new Point(20, 46);
+        lblStatusBadge.Location = new Point(1120, 24);
+        lblStatusBadge.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        pnlHeader.Controls.AddRange(new Control[] { lblTitle, lblSubtitle, lblStatusBadge });
 
-        lblDays.Location = new Point(leftMargin, y);
-        txtDays.Location = new Point(leftMargin, y + 20);
-        lblExpire.Location = new Point(leftMargin + 160, y);
-        dtExpire.Location = new Point(leftMargin + 160, y + 20);
-        y += 55;
+        pnlQuickInfo.Padding = new Padding(2);
+        grpLicenseEditor.Padding = new Padding(12, 18, 12, 12);
+        grpOutput.Padding = new Padding(12, 18, 12, 12);
+        grpPackaging.Padding = new Padding(12, 18, 12, 12);
+        grpHistory.Padding = new Padding(12, 18, 12, 12);
+        grpLicenseEditor.FlatStyle = FlatStyle.Standard;
+        grpOutput.FlatStyle = FlatStyle.Standard;
+        grpPackaging.FlatStyle = FlatStyle.Standard;
+        grpHistory.FlatStyle = FlatStyle.Standard;
 
-        lblSaleDate.Location = new Point(leftMargin, y);
-        dtSaleDate.Location = new Point(leftMargin, y + 20);
-        lblAmount.Location = new Point(leftMargin + 160, y);
-        numAmount.Location = new Point(leftMargin + 160, y + 20);
-        y += 55;
+        grpLicenseEditor.Location = new Point(16, 104);
+        grpLicenseEditor.Size = new Size(480, 408);
+        grpLicenseEditor.Anchor = AnchorStyles.Top | AnchorStyles.Left;
 
-        lblPhone.Location = new Point(leftMargin, y);
-        txtPhone.Location = new Point(leftMargin, y + 20);
-        txtPhone.Width = 260;
-        y += 55;
+        grpOutput.Location = new Point(16, 514);
+        grpOutput.Size = new Size(480, 146);
+        grpOutput.Anchor = AnchorStyles.Top | AnchorStyles.Left;
 
-        btnUret.Location = new Point(leftMargin, y);
-        btnUret.Width = inputWidth;
-        btnUret.BackColor = Color.SteelBlue;
-        btnUret.ForeColor = Color.White;
-        btnUret.FlatStyle = FlatStyle.Flat;
-        y += 42;
+        grpPackaging.Location = new Point(16, 670);
+        grpPackaging.Size = new Size(480, 210);
+        grpPackaging.Anchor = AnchorStyles.Left | AnchorStyles.Bottom;
 
-        btnUpdateSale.Location = new Point(leftMargin, y);
-        btnUpdateSale.Width = inputWidth;
-        btnUpdateSale.BackColor = Color.DarkOrange;
-        btnUpdateSale.ForeColor = Color.White;
-        btnUpdateSale.FlatStyle = FlatStyle.Flat;
-        y += 38;
+        grpHistory.Location = new Point(510, 104);
+        grpHistory.Size = new Size(890, 774);
+        grpHistory.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
 
-        btnDeleteSale.Location = new Point(leftMargin, y);
-        btnDeleteSale.Width = inputWidth;
-        btnDeleteSale.BackColor = Color.Firebrick;
-        btnDeleteSale.ForeColor = Color.White;
-        btnDeleteSale.FlatStyle = FlatStyle.Flat;
-        y += 38;
+        pnlQuickInfo.Location = new Point(20, 28);
+        pnlQuickInfo.Size = new Size(438, 62);
+        lblQuickInfoTitle.Location = new Point(14, 10);
+        lblQuickInfo.Location = new Point(14, 28);
+        lblQuickInfo.Size = new Size(408, 24);
+        pnlQuickInfo.Controls.AddRange(new Control[] { lblQuickInfoTitle, lblQuickInfo });
 
-        btnRenewRemaining.Location = new Point(leftMargin, y);
-        btnRenewRemaining.Width = inputWidth;
-        btnRenewRemaining.BackColor = Color.SeaGreen;
-        btnRenewRemaining.ForeColor = Color.White;
-        btnRenewRemaining.FlatStyle = FlatStyle.Flat;
-        y += 42;
+        lblFirma.Location = new Point(20, 106);
+        txtFirma.Location = new Point(20, 126);
+        txtFirma.Width = 205;
 
-        lblKey.Location = new Point(leftMargin, y);
-        y += 22;
-        txtKey.Location = new Point(leftMargin, y);
-        txtKey.Width = inputWidth;
-        y += 90;
+        lblPhone.Location = new Point(246, 106);
+        txtPhone.Location = new Point(246, 126);
+        txtPhone.Width = 212;
 
-        btnCopy.Location = new Point(leftMargin, y);
-        btnCopy.Width = inputWidth;
-        y += 48;
+        lblMachine.Location = new Point(20, 164);
+        txtMachine.Location = new Point(20, 184);
+        txtMachine.Width = 438;
 
-        lblRenewalHistory.Location = new Point(leftMargin, y);
-        y += 22;
-        lstRenewals.Location = new Point(leftMargin, y);
-        lstRenewals.Width = inputWidth;
-        y += 96;
+        lblDays.Location = new Point(20, 248);
+        txtDays.Location = new Point(20, 268);
 
-        lblUpdateZip.Location = new Point(leftMargin, y);
-        y += 22;
+        lblExpire.Location = new Point(156, 248);
+        dtExpire.Location = new Point(156, 268);
 
-        txtUpdateSourceFolder.Location = new Point(leftMargin, y);
-        txtUpdateSourceFolder.Width = inputWidth - 140;
-        btnSelectUpdateSource.Location = new Point(leftMargin + inputWidth - 130, y - 1);
-        btnSelectUpdateSource.Width = 130;
-        y += 34;
+        lblSaleDate.Location = new Point(20, 308);
+        dtSaleDate.Location = new Point(20, 328);
 
-        txtUpdateVersion.Location = new Point(leftMargin, y);
-        txtUpdateVersion.Width = inputWidth;
-        y += 34;
+        lblAmount.Location = new Point(156, 308);
+        numAmount.Location = new Point(156, 328);
 
-        txtUpdateOutputFolder.Location = new Point(leftMargin, y);
-        txtUpdateOutputFolder.Width = inputWidth - 140;
-        btnSelectUpdateOutput.Location = new Point(leftMargin + inputWidth - 130, y - 1);
-        btnSelectUpdateOutput.Width = 130;
-        y += 34;
+        btnUret.Location = new Point(20, 360);
+        btnUret.Width = 438;
 
-        btnCreateUpdateZip.Location = new Point(leftMargin, y);
-        btnCreateUpdateZip.Width = inputWidth;
-        btnCreateUpdateZip.BackColor = Color.MediumSlateBlue;
-        btnCreateUpdateZip.ForeColor = Color.White;
-        btnCreateUpdateZip.FlatStyle = FlatStyle.Flat;
-        y += 40;
+        btnUpdateSale.Location = new Point(20, 408);
+        btnUpdateSale.Width = 208;
 
-        btnPrepareCustomerSetup.Location = new Point(leftMargin, y);
-        btnPrepareCustomerSetup.Width = inputWidth;
-        btnPrepareCustomerSetup.BackColor = Color.DarkSlateBlue;
-        btnPrepareCustomerSetup.ForeColor = Color.White;
-        btnPrepareCustomerSetup.FlatStyle = FlatStyle.Flat;
+        btnDeleteSale.Location = new Point(250, 408);
+        btnDeleteSale.Width = 208;
 
-        var rightX = 480;
-        lblHistory.Location = new Point(rightX, 10);
+        btnRenewRemaining.Location = new Point(20, 452);
+        btnRenewRemaining.Width = 438;
 
-        lblSearch.Location = new Point(rightX, 35);
-        txtSearch.Location = new Point(rightX + 45, 32);
-        txtSearch.Width = 310;
-        cmbOperationFilter.Location = new Point(rightX + 362, 32);
-        cmbOperationFilter.Width = 170;
-        cmbOperationFilter.Items.AddRange(new object[] { "Sadece Satislar", "Tum Islemler" });
-        cmbOperationFilter.SelectedIndex = 0;
-
-        grid.Location = new Point(rightX, 62);
-        grid.Width = 730;
-        grid.Height = 520;
-        grid.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-
-        grpReport.Location = new Point(rightX, 592);
-        grpReport.Width = 730;
-        grpReport.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
-
-        lblTotalSales.Location = new Point(15, 26);
-        lblSaleCount.Location = new Point(15, 48);
-        lblRenewCount.Location = new Point(15, 70);
-        lblMonthSales.Location = new Point(15, 92);
-        btnRefreshReport.Location = new Point(560, 20);
-        btnExportReport.Location = new Point(560, 58);
-
-        grpReport.Controls.AddRange(new Control[]
+        grpLicenseEditor.Controls.AddRange(new Control[]
         {
-            lblTotalSales, lblSaleCount, lblRenewCount, lblMonthSales, btnRefreshReport, btnExportReport
-        });
-
-        Controls.AddRange(new Control[]
-        {
+            pnlQuickInfo,
             lblFirma, txtFirma,
+            lblPhone, txtPhone,
             lblMachine, txtMachine,
             lblDays, txtDays,
             lblExpire, dtExpire,
             lblSaleDate, dtSaleDate,
             lblAmount, numAmount,
-            lblPhone, txtPhone,
-            btnUret, btnUpdateSale, btnDeleteSale, btnRenewRemaining,
-            lblKey, txtKey, btnCopy,
-            lblRenewalHistory, lstRenewals,
-            lblUpdateZip, txtUpdateSourceFolder, btnSelectUpdateSource, txtUpdateVersion, txtUpdateOutputFolder, btnSelectUpdateOutput, btnCreateUpdateZip, btnPrepareCustomerSetup,
-            lblHistory, lblSearch, txtSearch, cmbOperationFilter, grid,
-            grpReport
+            btnUret, btnUpdateSale, btnDeleteSale, btnRenewRemaining
+        });
+
+        lblKey.Location = new Point(20, 34);
+        txtKey.Location = new Point(20, 56);
+        txtKey.Width = 438;
+        btnCopy.Location = new Point(20, 120);
+        btnCopy.Width = 438;
+        grpOutput.Controls.AddRange(new Control[] { lblKey, txtKey, btnCopy });
+
+        lblUpdateZip.Location = new Point(20, 26);
+        txtUpdateSourceFolder.Location = new Point(20, 52);
+        txtUpdateSourceFolder.Width = 316;
+        btnSelectUpdateSource.Location = new Point(344, 50);
+        btnSelectUpdateSource.Width = 114;
+
+        txtUpdateVersion.Location = new Point(20, 88);
+        txtUpdateVersion.Width = 438;
+
+        txtUpdateOutputFolder.Location = new Point(20, 124);
+        txtUpdateOutputFolder.Width = 316;
+        btnSelectUpdateOutput.Location = new Point(344, 122);
+        btnSelectUpdateOutput.Width = 114;
+
+        btnCreateUpdateZip.Location = new Point(20, 164);
+        btnCreateUpdateZip.Width = 214;
+
+        btnPrepareCustomerSetup.Location = new Point(244, 164);
+        btnPrepareCustomerSetup.Width = 214;
+
+        grpPackaging.Controls.AddRange(new Control[]
+        {
+            lblUpdateZip,
+            txtUpdateSourceFolder, btnSelectUpdateSource,
+            txtUpdateVersion,
+            txtUpdateOutputFolder, btnSelectUpdateOutput,
+            btnCreateUpdateZip, btnPrepareCustomerSetup
+        });
+
+        lblHistory.Location = new Point(18, 28);
+        lblSearch.Location = new Point(18, 60);
+        txtSearch.Location = new Point(18, 80);
+        txtSearch.Width = 330;
+
+        cmbOperationFilter.Location = new Point(360, 80);
+        cmbOperationFilter.Width = 190;
+        cmbOperationFilter.Items.AddRange(new object[] { "Sadece Satislar", "Tum Islemler" });
+        cmbOperationFilter.SelectedIndex = 0;
+
+        btnExportReport.Location = new Point(714, 78);
+        btnExportReport.Width = 150;
+        btnExportReport.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+
+        grid.Location = new Point(18, 122);
+        grid.Size = new Size(854, 500);
+        grid.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+
+        lblRenewalHistory.Location = new Point(18, 636);
+        lstRenewals.Location = new Point(18, 660);
+        lstRenewals.Size = new Size(854, 92);
+        lstRenewals.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
+
+        lblHistoryHint.Location = new Point(18, 48);
+
+        grpHistory.Controls.AddRange(new Control[]
+        {
+            lblHistory, lblHistoryHint, lblSearch, txtSearch, cmbOperationFilter, btnExportReport, grid, lblRenewalHistory, lstRenewals
+        });
+
+        Controls.AddRange(new Control[]
+        {
+            grpLicenseEditor, grpOutput, grpPackaging, grpHistory
         });
 
         dtExpire.Value = DateTime.Now.AddDays((int)txtDays.Value);
@@ -310,6 +346,65 @@ public class MainForm : Form
             txtDays.Value = Math.Min(days, 3650);
             _syncing = false;
         };
+
+        ResumeLayout(false);
+    }
+
+    private void ApplyProfessionalTheme()
+    {
+        foreach (var box in new[] { grpLicenseEditor, grpOutput, grpPackaging, grpHistory })
+        {
+            box.Font = new Font("Segoe UI Semibold", 9.5f, FontStyle.Bold);
+            box.ForeColor = Color.FromArgb(27, 40, 67);
+            box.BackColor = Color.White;
+        }
+
+        foreach (var input in new Control[] { txtFirma, txtMachine, txtPhone, txtKey, txtSearch, txtUpdateSourceFolder, txtUpdateVersion, txtUpdateOutputFolder, txtDays, dtExpire, dtSaleDate, numAmount, cmbOperationFilter })
+        {
+            input.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
+        }
+
+        foreach (var button in new[] { btnUret, btnUpdateSale, btnDeleteSale, btnRenewRemaining, btnCopy, btnExportReport, btnSelectUpdateSource, btnSelectUpdateOutput, btnCreateUpdateZip, btnPrepareCustomerSetup })
+        {
+            button.FlatStyle = FlatStyle.Flat;
+            button.FlatAppearance.BorderSize = 0;
+            button.Cursor = Cursors.Hand;
+            button.Font = new Font("Segoe UI Semibold", 9f, FontStyle.Bold);
+        }
+
+        btnUret.BackColor = Color.FromArgb(33, 115, 70);
+        btnUret.ForeColor = Color.White;
+        btnUpdateSale.BackColor = Color.FromArgb(218, 140, 20);
+        btnUpdateSale.ForeColor = Color.White;
+        btnDeleteSale.BackColor = Color.FromArgb(181, 53, 53);
+        btnDeleteSale.ForeColor = Color.White;
+        btnRenewRemaining.BackColor = Color.FromArgb(28, 125, 152);
+        btnRenewRemaining.ForeColor = Color.White;
+        btnCopy.BackColor = Color.FromArgb(36, 80, 180);
+        btnCopy.ForeColor = Color.White;
+        btnExportReport.BackColor = Color.FromArgb(72, 84, 112);
+        btnExportReport.ForeColor = Color.White;
+        btnSelectUpdateSource.BackColor = Color.FromArgb(223, 229, 242);
+        btnSelectUpdateSource.ForeColor = Color.FromArgb(22, 36, 67);
+        btnSelectUpdateOutput.BackColor = Color.FromArgb(223, 229, 242);
+        btnSelectUpdateOutput.ForeColor = Color.FromArgb(22, 36, 67);
+        btnCreateUpdateZip.BackColor = Color.FromArgb(93, 71, 195);
+        btnCreateUpdateZip.ForeColor = Color.White;
+        btnPrepareCustomerSetup.BackColor = Color.FromArgb(53, 64, 126);
+        btnPrepareCustomerSetup.ForeColor = Color.White;
+
+        lstRenewals.BorderStyle = BorderStyle.FixedSingle;
+        lstRenewals.Font = new Font("Segoe UI", 9f);
+
+        grid.EnableHeadersVisualStyles = false;
+        grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(31, 54, 98);
+        grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+        grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 9f, FontStyle.Bold);
+        grid.ColumnHeadersHeight = 34;
+        grid.RowTemplate.Height = 30;
+        grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(214, 230, 255);
+        grid.DefaultCellStyle.SelectionForeColor = Color.FromArgb(22, 36, 67);
+        grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(247, 249, 253);
     }
 
     private void InitDatabase()
@@ -400,7 +495,7 @@ public class MainForm : Form
         cmd.Parameters.AddWithValue("$c", created.ToString("yyyy-MM-dd HH:mm"));
         cmd.Parameters.AddWithValue("$v", allowedVersion);
         cmd.Parameters.AddWithValue("$d", durationDays);
-        cmd.Parameters.AddWithValue("$p", contactPhone);
+        cmd.Parameters.AddWithValue("$p", NormalizePhone(contactPhone));
         cmd.Parameters.AddWithValue("$sd", saleDate.ToString("yyyy-MM-dd"));
         cmd.Parameters.AddWithValue("$sa", saleAmount);
         cmd.Parameters.AddWithValue("$ot", operationType);
@@ -420,7 +515,7 @@ public class MainForm : Form
             using var cmd = con.CreateCommand();
 
             var search = txtSearch.Text.Trim();
-            var onlySales = (cmbOperationFilter.SelectedItem?.ToString() ?? "Sadece Satislar") == "Sadece Satislar";
+            var onlySales = string.Equals(cmbOperationFilter.SelectedItem?.ToString(), "Sadece Satislar", StringComparison.OrdinalIgnoreCase);
 
             cmd.CommandText = @"
                 SELECT
@@ -473,6 +568,7 @@ public class MainForm : Form
 
             LoadSelectedSaleToForm();
             LoadRenewalHistoryForSelected();
+            UpdateActionButtons();
         }
         catch (Exception ex)
         {
@@ -556,9 +652,9 @@ public class MainForm : Form
 
         try
         {
-            var firma = txtFirma.Text.Trim();
-            var machine = txtMachine.Text.Trim();
-            var phone = txtPhone.Text.Trim();
+            var firma = NormalizeFirmaKodu(txtFirma.Text);
+            var machine = NormalizeMachineId(txtMachine.Text);
+            var phone = NormalizePhone(txtPhone.Text);
             var created = DateTime.UtcNow;
             var expire = dtExpire.Value.Date;
             var durationDays = (int)txtDays.Value;
@@ -592,7 +688,7 @@ public class MainForm : Form
 
     private void YenileKalanGunle()
     {
-        if (grid.CurrentRow?.DataBoundItem is not DataRowView rowView)
+        if (GetSelectedGridRow() is not DataGridViewRow selectedGridRow || selectedGridRow.DataBoundItem is not DataRowView rowView)
         {
             MessageBox.Show("Lutfen yenilemek icin bir lisans secin.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
@@ -603,13 +699,9 @@ public class MainForm : Form
 
         var selected = rowView.Row;
         var operationType = selected["OperationType"]?.ToString() ?? "Sale";
-        if (!string.Equals(operationType, "Sale", StringComparison.OrdinalIgnoreCase))
-        {
-            MessageBox.Show("Kalan güne lisans üretmek için ana satış kaydı seçin.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-
         var parentId = Convert.ToInt32(selected["Id"], CultureInfo.InvariantCulture);
+        if (string.Equals(operationType, "Renewal", StringComparison.OrdinalIgnoreCase) && selected["ParentLicenseId"] != DBNull.Value)
+            parentId = Convert.ToInt32(selected["ParentLicenseId"], CultureInfo.InvariantCulture);
 
         if (!DateTime.TryParse(selected["ExpireDate"]?.ToString(), out var originalExpire))
         {
@@ -628,9 +720,9 @@ public class MainForm : Form
         {
             var created = DateTime.UtcNow;
             var expire = DateTime.Now.Date.AddDays(remainingDays);
-            var firma = txtFirma.Text.Trim();
-            var machine = txtMachine.Text.Trim();
-            var phone = txtPhone.Text.Trim();
+            var firma = NormalizeFirmaKodu(txtFirma.Text);
+            var machine = NormalizeMachineId(txtMachine.Text);
+            var phone = NormalizePhone(txtPhone.Text);
 
             var key = BuildLicenseKey(firma, machine, expire, remainingDays, phone, created);
             var newId = SaveLicense(
@@ -664,7 +756,7 @@ public class MainForm : Form
     {
         if (string.IsNullOrWhiteSpace(txtFirma.Text))
         {
-            MessageBox.Show("Firma kodu zorunlu.", "Eksik Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show("Firma kodu zorunlu. Web uygulamasindaki firma kodu ile ayni degeri girin (orn: F001).", "Eksik Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return false;
         }
 
@@ -672,6 +764,17 @@ public class MainForm : Form
         {
             MessageBox.Show("Machine ID zorunlu.", "Eksik Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return false;
+        }
+
+        var normalizedMachine = NormalizeMachineId(txtMachine.Text);
+        if (!normalizedMachine.Contains('_'))
+        {
+            var devam = MessageBox.Show(
+                "Machine ID beklenen formatta gorunmuyor (MAKINE_KULLANICI_KOD).\nWeb uygulamasindaki makine kodunu birebir kopyaladiginizdan emin olun.\n\nYine de devam edilsin mi?",
+                "Machine ID Kontrolu", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+            if (devam != DialogResult.Yes)
+                return false;
         }
 
         if (string.IsNullOrWhiteSpace(txtPhone.Text))
@@ -695,9 +798,31 @@ public class MainForm : Form
         return true;
     }
 
+    /// <summary>Firma kodunu web'deki LicenseService ile ayni sekilde normalize eder.</summary>
+    private static string NormalizeFirmaKodu(string? value)
+        => (value ?? string.Empty).Trim().ToUpperInvariant();
+
+    /// <summary>
+    /// Machine ID icindeki TUM whitespace karakterlerini (satir sonu, tab, bosluk) temizler.
+    /// Multiline kutuya yapistirilan makine kodlarindaki gizli satir sonlari lisans imzasini bozuyordu.
+    /// </summary>
+    private static string NormalizeMachineId(string? value)
+        => string.Concat((value ?? string.Empty).Where(c => !char.IsWhiteSpace(c)));
+
+    /// <summary>
+    /// Telefon alanindaki whitespace karakterlerini temizler.
+    /// Format karakterlerini korur, sadece yapistirma kaynakli gizli bosluklari atar.
+    /// </summary>
+    private static string NormalizePhone(string? value)
+        => string.Concat((value ?? string.Empty).Where(c => !char.IsWhiteSpace(c)));
+
     private static string BuildLicenseKey(string firma, string machine, DateTime expire, int durationDays, string phone, DateTime created)
     {
         const bool isDemo = false;
+        firma = NormalizeFirmaKodu(firma);
+        machine = NormalizeMachineId(machine);
+        phone = NormalizePhone(phone);
+
         var raw = $"{firma}|{machine}|{expire:yyyy-MM-dd}|{durationDays}|{isDemo}|{AllowedVersion}|{created:yyyy-MM-dd}|{phone}|{SECRET}";
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
         var signature = Convert.ToBase64String(hash);
@@ -724,8 +849,8 @@ public class MainForm : Form
         txtKey.SelectAll();
         btnCopy.Enabled = true;
         Clipboard.SetText(key);
+        UpdateHistorySummary();
         LoadData();
-        LoadReport();
     }
 
     private void CopyKey()
@@ -926,9 +1051,9 @@ public class MainForm : Form
             Directory.CreateDirectory(outputRoot);
             Directory.CreateDirectory(versionFolder);
 
-            var firma = txtFirma.Text.Trim();
-            var machine = txtMachine.Text.Trim();
-            var phone = txtPhone.Text.Trim();
+            var firma = NormalizeFirmaKodu(txtFirma.Text);
+            var machine = NormalizeMachineId(txtMachine.Text);
+            var phone = NormalizePhone(txtPhone.Text);
             var created = DateTime.UtcNow;
             var expire = dtExpire.Value.Date;
             var durationDays = (int)txtDays.Value;
@@ -985,14 +1110,10 @@ public class MainForm : Form
     {
         _selectedSaleId = null;
 
-        if (grid.CurrentRow?.DataBoundItem is not DataRowView rowView)
+        if (GetSelectedGridRow()?.DataBoundItem is not DataRowView rowView)
             return;
 
         var row = rowView.Row;
-        var operationType = row["OperationType"]?.ToString() ?? "Sale";
-        if (!string.Equals(operationType, "Sale", StringComparison.OrdinalIgnoreCase))
-            return;
-
         _selectedSaleId = Convert.ToInt32(row["Id"], CultureInfo.InvariantCulture);
 
         txtFirma.Text = row["FirmaKodu"]?.ToString() ?? string.Empty;
@@ -1016,7 +1137,14 @@ public class MainForm : Form
     {
         if (_selectedSaleId is null)
         {
-            MessageBox.Show("Guncellemek icin listeden bir satis secin.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show("Guncellemek icin listeden bir kayit secin.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var selectedRow = GetSelectedGridRow();
+        if (selectedRow?.DataBoundItem is not DataRowView)
+        {
+            MessageBox.Show("Guncellemek icin gecerli bir kayit secin.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
@@ -1035,13 +1163,13 @@ public class MainForm : Form
                 ContactPhone = $p,
                 SaleDate = $sd,
                 SaleAmount = $sa
-            WHERE Id = $id AND OperationType = 'Sale'";
+            WHERE Id = $id";
 
-        cmd.Parameters.AddWithValue("$f", txtFirma.Text.Trim());
-        cmd.Parameters.AddWithValue("$m", txtMachine.Text.Trim());
+        cmd.Parameters.AddWithValue("$f", NormalizeFirmaKodu(txtFirma.Text));
+        cmd.Parameters.AddWithValue("$m", NormalizeMachineId(txtMachine.Text));
         cmd.Parameters.AddWithValue("$e", dtExpire.Value.Date.ToString("yyyy-MM-dd"));
         cmd.Parameters.AddWithValue("$d", (int)txtDays.Value);
-        cmd.Parameters.AddWithValue("$p", txtPhone.Text.Trim());
+        cmd.Parameters.AddWithValue("$p", NormalizePhone(txtPhone.Text));
         cmd.Parameters.AddWithValue("$sd", dtSaleDate.Value.Date.ToString("yyyy-MM-dd"));
         cmd.Parameters.AddWithValue("$sa", numAmount.Value);
         cmd.Parameters.AddWithValue("$id", _selectedSaleId.Value);
@@ -1049,28 +1177,40 @@ public class MainForm : Form
         var affected = cmd.ExecuteNonQuery();
         if (affected <= 0)
         {
-            MessageBox.Show("Satis kaydi guncellenemedi.", "Uyari", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show("Kayit guncellenemedi.", "Uyari", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
+        UpdateHistorySummary();
         LoadData();
-        LoadReport();
         SelectGridRowById(_selectedSaleId.Value);
-        MessageBox.Show("Secili satis kaydi guncellendi.", "Basarili", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        UpdateActionButtons();
+        MessageBox.Show("Secili lisans kaydi guncellendi.", "Basarili", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private void SeciliSatisiSil()
     {
         if (_selectedSaleId is null)
         {
-            MessageBox.Show("Silmek icin listeden bir satis secin.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show("Silmek icin listeden bir kayit secin.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
-        var confirm = MessageBox.Show(
-            "Secili satis ve bu satisa bagli yenileme kayitlari silinecek. Devam etmek istiyor musunuz?",
-            "Satis Sil", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        var selectedRow = GetSelectedGridRow();
+        if (selectedRow?.DataBoundItem is not DataRowView)
+        {
+            MessageBox.Show("Silmek icin gecerli bir kayit secin.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
 
+        var operationType = selectedRow.Cells["OperationType"].Value?.ToString() ?? string.Empty;
+        var isSale = string.Equals(operationType, "Sale", StringComparison.OrdinalIgnoreCase);
+
+        var confirmMessage = isSale
+            ? "Secili ana lisans ve bagli yenileme kayitlari silinecek. Devam etmek istiyor musunuz?"
+            : "Secili yenileme kaydi silinecek. Devam etmek istiyor musunuz?";
+
+        var confirm = MessageBox.Show(confirmMessage, "Kayit Sil", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
         if (confirm != DialogResult.Yes)
             return;
 
@@ -1078,91 +1218,38 @@ public class MainForm : Form
         con.Open();
         using var tx = con.BeginTransaction();
 
-        using (var renewDelete = con.CreateCommand())
+        if (isSale)
         {
+            using var renewDelete = con.CreateCommand();
             renewDelete.Transaction = tx;
             renewDelete.CommandText = "DELETE FROM Licenses WHERE ParentLicenseId = $id";
             renewDelete.Parameters.AddWithValue("$id", _selectedSaleId.Value);
             renewDelete.ExecuteNonQuery();
         }
 
-        using (var saleDelete = con.CreateCommand())
+        using (var deleteCmd = con.CreateCommand())
         {
-            saleDelete.Transaction = tx;
-            saleDelete.CommandText = "DELETE FROM Licenses WHERE Id = $id AND OperationType = 'Sale'";
-            saleDelete.Parameters.AddWithValue("$id", _selectedSaleId.Value);
-            saleDelete.ExecuteNonQuery();
+            deleteCmd.Transaction = tx;
+            deleteCmd.CommandText = "DELETE FROM Licenses WHERE Id = $id";
+            deleteCmd.Parameters.AddWithValue("$id", _selectedSaleId.Value);
+            deleteCmd.ExecuteNonQuery();
         }
 
         tx.Commit();
         _selectedSaleId = null;
+        UpdateHistorySummary();
         LoadData();
-        LoadReport();
         lstRenewals.Items.Clear();
+        UpdateActionButtons();
 
-        MessageBox.Show("Satis kaydi silindi.", "Basarili", MessageBoxButtons.OK, MessageBoxIcon.Information);
-    }
-
-    private void SatisDokumunuDisaAktar()
-    {
-        using var dialog = new SaveFileDialog
-        {
-            Filter = "CSV Dosyasi (*.csv)|*.csv",
-            FileName = $"satis-dokumu-{DateTime.Now:yyyyMMdd-HHmm}.csv"
-        };
-
-        if (dialog.ShowDialog() != DialogResult.OK)
-            return;
-
-        using var con = new SqliteConnection($"Data Source={_dbPath}");
-        con.Open();
-        using var cmd = con.CreateCommand();
-        cmd.CommandText = @"
-            SELECT
-                s.Id,
-                s.FirmaKodu,
-                s.MachineId,
-                s.SaleDate,
-                s.SaleAmount,
-                s.ExpireDate,
-                s.DurationDays,
-                s.ContactPhone,
-                COUNT(r.Id) AS RenewalCount
-            FROM Licenses s
-            LEFT JOIN Licenses r ON r.ParentLicenseId = s.Id AND r.OperationType = 'Renewal'
-            WHERE s.OperationType = 'Sale'
-            GROUP BY s.Id, s.FirmaKodu, s.MachineId, s.SaleDate, s.SaleAmount, s.ExpireDate, s.DurationDays, s.ContactPhone
-            ORDER BY s.Id DESC";
-
-        using var reader = cmd.ExecuteReader();
-        var sb = new StringBuilder();
-        sb.AppendLine("No;Firma;Makine;SatisTarihi;Tutar;Bitis;SureGun;Telefon;YenilemeAdedi");
-
-        while (reader.Read())
-        {
-            sb.AppendLine(string.Join(";", new[]
-            {
-                reader[0]?.ToString() ?? string.Empty,
-                reader[1]?.ToString() ?? string.Empty,
-                reader[2]?.ToString() ?? string.Empty,
-                reader[3]?.ToString() ?? string.Empty,
-                reader[4]?.ToString() ?? string.Empty,
-                reader[5]?.ToString() ?? string.Empty,
-                reader[6]?.ToString() ?? string.Empty,
-                reader[7]?.ToString() ?? string.Empty,
-                reader[8]?.ToString() ?? "0"
-            }));
-        }
-
-        File.WriteAllText(dialog.FileName, sb.ToString(), Encoding.UTF8);
-        MessageBox.Show("Satis dokumu disa aktarildi.", "Basarili", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        MessageBox.Show(isSale ? "Ana lisans kaydi ve bagli yenilemeler silindi." : "Lisans kaydi silindi.", "Basarili", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private void LoadRenewalHistoryForSelected()
     {
         lstRenewals.Items.Clear();
 
-        if (grid.CurrentRow?.DataBoundItem is not DataRowView rowView)
+        if (GetSelectedGridRow()?.DataBoundItem is not DataRowView rowView)
             return;
 
         var selected = rowView.Row;
@@ -1199,7 +1286,81 @@ public class MainForm : Form
             lstRenewals.Items.Add("Bu kayit icin yenileme gecmisi bulunamadi.");
     }
 
-    private void LoadReport()
+    private void UpdateActionButtons()
+    {
+        var hasSelection = _selectedSaleId.HasValue;
+        btnUpdateSale.Enabled = hasSelection;
+        btnDeleteSale.Enabled = hasSelection;
+        btnRenewRemaining.Enabled = hasSelection;
+    }
+
+    private void ConfigureGridContextMenu()
+    {
+        gridContextMenu.Items.Clear();
+        gridContextMenu.Items.Add(new ToolStripMenuItem("Seçili Kaydı Düzenle", null, (s, e) => SeciliSatisiGuncelle()));
+        gridContextMenu.Items.Add(new ToolStripMenuItem("Seçili Kayıttan Yenileme Üret", null, (s, e) => YenileKalanGunle()));
+        gridContextMenu.Items.Add(new ToolStripSeparator());
+        gridContextMenu.Items.Add(new ToolStripMenuItem("Seçili Kaydı Sil", null, (s, e) => SeciliSatisiSil()));
+        grid.ContextMenuStrip = gridContextMenu;
+    }
+
+    private void MainForm_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyCode == Keys.Delete && btnDeleteSale.Enabled)
+        {
+            SeciliSatisiSil();
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            return;
+        }
+
+        if (e.KeyCode == Keys.F2 && btnUpdateSale.Enabled)
+        {
+            SeciliSatisiGuncelle();
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+        }
+    }
+
+    private void Grid_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyCode == Keys.Delete && btnDeleteSale.Enabled)
+        {
+            SeciliSatisiSil();
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            return;
+        }
+
+        if (e.KeyCode == Keys.F2 && btnUpdateSale.Enabled)
+        {
+            SeciliSatisiGuncelle();
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+        }
+    }
+
+    private void Grid_MouseDown(object? sender, MouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Right)
+            return;
+
+        var hit = grid.HitTest(e.X, e.Y);
+        if (hit.RowIndex < 0 || hit.RowIndex >= grid.Rows.Count)
+            return;
+
+        grid.ClearSelection();
+        var row = grid.Rows[hit.RowIndex];
+        row.Selected = true;
+        if (row.Cells["Id"].Visible)
+            grid.CurrentCell = row.Cells["Id"];
+
+        LoadSelectedSaleToForm();
+        LoadRenewalHistoryForSelected();
+        UpdateActionButtons();
+    }
+
+    private void UpdateHistorySummary()
     {
         try
         {
@@ -1226,19 +1387,22 @@ public class MainForm : Form
                 var renewCount = reader.IsDBNull(2) ? 0 : reader.GetInt32(2);
                 var monthSales = reader.IsDBNull(3) ? 0m : Convert.ToDecimal(reader.GetDouble(3));
 
-                lblTotalSales.Text = $"Toplam Satis Tutari: {totalSales:N2}";
-                lblSaleCount.Text = $"Toplam Ilk Satis Lisansi: {saleCount}";
-                lblRenewCount.Text = $"Toplam Yenileme Lisansi: {renewCount}";
-                lblMonthSales.Text = $"Bu Ay Satis Tutari: {monthSales:N2}";
+                lblQuickInfo.Text = $"Toplam satis: {totalSales:N2} TL | Ilk satis: {saleCount} | Yenileme: {renewCount} | Bu ay: {monthSales:N2} TL";
             }
         }
         catch (Exception ex)
         {
-            lblTotalSales.Text = "Toplam Satis Tutari: -";
-            lblSaleCount.Text = "Toplam Ilk Satis Lisansi: -";
-            lblRenewCount.Text = "Toplam Yenileme Lisansi: -";
-            lblMonthSales.Text = $"Rapor hatasi: {ex.Message}";
+            lblQuickInfo.Text = $"Ozet yuklenemedi: {ex.Message}";
         }
+    }
+
+    private DataGridViewRow? GetSelectedGridRow()
+    {
+        return grid.CurrentRow is { IsNewRow: false } currentRow
+            ? currentRow
+            : grid.SelectedRows.Count > 0
+                ? grid.SelectedRows[0]
+                : null;
     }
 
     private void SelectGridRowById(int id)

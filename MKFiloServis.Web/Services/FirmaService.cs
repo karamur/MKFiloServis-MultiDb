@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Web.Services.Interfaces;
@@ -65,7 +65,26 @@ public class FirmaService : IFirmaService
     public async Task<Firma> CreateAsync(Firma firma)
     {
         using var context = await _contextFactory.CreateDbContextAsync();
+
+        firma.FirmaKodu = await ResolveUniqueFirmaCodeAsync(context, firma.FirmaKodu);
+        firma.FirmaAdi = firma.FirmaAdi.Trim();
+        firma.UnvanTam = NormalizeOptional(firma.UnvanTam);
+        firma.VergiNo = NormalizeOptional(firma.VergiNo);
+        firma.VergiDairesi = NormalizeOptional(firma.VergiDairesi);
+        firma.Adres = NormalizeOptional(firma.Adres);
+        firma.Il = NormalizeOptional(firma.Il);
+        firma.Ilce = NormalizeOptional(firma.Ilce);
+        firma.Telefon = NormalizeOptional(firma.Telefon);
+        firma.Email = NormalizeOptional(firma.Email);
+        firma.WebSite = NormalizeOptional(firma.WebSite);
+        firma.OrganizasyonId = await EnsureOrganizasyonIdAsync(context, firma.OrganizasyonId);
         firma.CreatedAt = DateTime.UtcNow;
+
+        if (!await context.Firmalar.IgnoreQueryFilters().AnyAsync(f => !f.IsDeleted))
+        {
+            firma.VarsayilanFirma = true;
+        }
+
         context.Firmalar.Add(firma);
         await context.SaveChangesAsync();
         return firma;
@@ -218,6 +237,88 @@ public class FirmaService : IFirmaService
             }
         }
     }
+
+    private async Task<int> EnsureOrganizasyonIdAsync(ApplicationDbContext context, int organizasyonId)
+    {
+        if (organizasyonId > 0)
+        {
+            var mevcutOrganizasyon = await context.Organizasyonlar
+                .IgnoreQueryFilters()
+                .AnyAsync(o => o.Id == organizasyonId && !o.IsDeleted);
+
+            if (mevcutOrganizasyon)
+                return organizasyonId;
+        }
+
+        var varsayilanOrganizasyon = await context.Organizasyonlar
+            .IgnoreQueryFilters()
+            .Where(o => !o.IsDeleted)
+            .OrderBy(o => o.Id)
+            .FirstOrDefaultAsync();
+
+        if (varsayilanOrganizasyon != null)
+            return varsayilanOrganizasyon.Id;
+
+        var yeniOrganizasyon = new Organizasyon
+        {
+            Adi = "Ustun Holding",
+            Kod = "USTUNHOLDING",
+            Aciklama = "Otomatik olusturulan varsayilan organizasyon",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        context.Organizasyonlar.Add(yeniOrganizasyon);
+        await context.SaveChangesAsync();
+        return yeniOrganizasyon.Id;
+    }
+
+    private async Task<string> ResolveUniqueFirmaCodeAsync(ApplicationDbContext context, string? requestedCode)
+    {
+        var normalizedCode = NormalizeFirmaCode(requestedCode);
+        var codeExists = await context.Firmalar
+            .IgnoreQueryFilters()
+            .AnyAsync(f => f.FirmaKodu == normalizedCode);
+
+        if (!codeExists)
+            return normalizedCode;
+
+        var nextNumber = 1;
+        var existingNumbers = await context.Firmalar
+            .IgnoreQueryFilters()
+            .Select(f => f.FirmaKodu)
+            .ToListAsync();
+
+        foreach (var code in existingNumbers)
+        {
+            if (string.IsNullOrWhiteSpace(code) || !code.StartsWith("F", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (int.TryParse(code[1..], out var parsed) && parsed >= nextNumber)
+            {
+                nextNumber = parsed + 1;
+            }
+        }
+
+        var candidate = $"F{nextNumber:000}";
+        while (existingNumbers.Contains(candidate, StringComparer.OrdinalIgnoreCase))
+        {
+            nextNumber++;
+            candidate = $"F{nextNumber:000}";
+        }
+
+        return candidate;
+    }
+
+    private static string NormalizeFirmaCode(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+            return "F001";
+
+        return code.Trim().ToUpperInvariant();
+    }
+
+    private static string? NormalizeOptional(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     #endregion
 

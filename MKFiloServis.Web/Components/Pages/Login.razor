@@ -13,6 +13,7 @@
 @inject ProtectedLocalStorage LocalStorage
 @inject IJSRuntime JSRuntime
 @inject ILogger<Login> Logger
+@inject BrandingService BrandingService
 
 <PageTitle>Giris - @(selectedProject?.Name ?? "ÜSTÜN GRUP FİLO")</PageTitle>
 
@@ -26,8 +27,8 @@
     <div class="login-card">
         <div class="login-header">
             <div class="logo-container">
-                <img src="images/logo.png" alt="Logo" class="logo-img" />
-                <img src="images/YaziLogo.png" alt="USTUN GRUP FILO" class="logo-text-img" />
+                <img src="@brandingIconSrc" alt="Logo" class="logo-img" />
+                <img src="@brandingTextSrc" alt="@(selectedProject?.Name ?? "MK Filo Servis")" class="logo-text-img" />
             </div>
             @if (selectedProject is not null)
             {
@@ -551,6 +552,8 @@
     private string forgotPasswordInput = "";
     private MKFiloServis.Shared.Entities.LicenseInfo? lisans;
     private PortalProjectDefinition? selectedProject;
+    private string brandingIconSrc = BrandingService.DefaultIconPath;
+    private string brandingTextSrc = BrandingService.DefaultTextLogoPath;
 
     // Lisans kontrol alanlari
     private bool lisansSuresiDoldu = false;
@@ -564,23 +567,30 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var branding = await BrandingService.GetAsync();
+        brandingIconSrc = branding.ResolvedIconLogo;
+        brandingTextSrc = branding.ResolvedTextLogo;
+
         lisans = await LicenseSvc.GetCurrentLicenseAsync();
         selectedProject = PortalProjectCatalogService.GetProjectBySlug(Project)
             ?? PortalProjectCatalogService.GetDefaultProject();
 
         // Lisans gecerlilik kontrolu
-        // Kural: Demo lisans durumunda kullanıcı lisans anahtarı girmek zorunda.
+        // Gecerli demo lisansi da normal giris akisina izin verir.
         makineKodu = LicenseService.GetMachineId();
-        if (lisans == null || lisans.IsDemo || LicenseService.IsDemoExpired(lisans))
+        if (lisans == null)
         {
             lisansSuresiDoldu = true;
             return;
         }
-        if (DateTime.UtcNow > lisans.ExpireDate)
+
+        if (LicenseService.IsDemoExpired(lisans) || DateTime.UtcNow > lisans.ExpireDate)
         {
             lisansSuresiDoldu = true;
             return;
         }
+
+        lisansSuresiDoldu = false;
 
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         if (authState.User.Identity?.IsAuthenticated == true)
@@ -912,9 +922,10 @@
             // Sayfayi yeniden yukle — lisans kontrolu tekrar calissin, FULL MODE acilsin
             Navigation.NavigateTo("/", forceLoad: true);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            lisansHataMesaji = "Girilen lisans anahtarı geçersiz görünüyor. Lütfen doğru anahtarı kullandığınızdan emin olun.";
+            lisansHataMesaji = ex.Message;
+            Logger.LogWarning(ex, "Lisans aktivasyonu basarisiz oldu. MakineKodu: {MakineKodu}", makineKodu);
         }
         finally
         {

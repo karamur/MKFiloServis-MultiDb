@@ -7,6 +7,7 @@
 @inject LicenseService LicenseService
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
+@inject BrandingService BrandingService
 
 <PageTitle>Lisans Kurulumu - MK Filo Servis</PageTitle>
 
@@ -20,8 +21,9 @@
     <div class="lisans-setup-card">
         <!-- Header -->
         <div class="setup-header">
-            <div class="logo-container">
-                <i class="bi bi-shield-lock"></i>
+            <div class="logo-container logo-branding-preview">
+                <img src="@brandingIconSrc" alt="Amblem" class="setup-logo-icon" />
+                <img src="@brandingTextSrc" alt="Yazı Logo" class="setup-logo-text" />
             </div>
             <h1>Lisans Aktivasyonu</h1>
             <p>MK Filo Servis lisans anahtarınızı girin</p>
@@ -165,7 +167,28 @@
         border-radius: 50%; display: flex; align-items: center; justify-content: center;
         margin: 0 auto 1rem;
     }
-    .logo-container i { font-size: 2rem; color: #e0c46c; }
+    .logo-branding-preview {
+        width: auto;
+        height: auto;
+        padding: 0.75rem 1rem;
+        border-radius: 20px;
+        background: #fff;
+        display: inline-flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        box-shadow: 0 8px 25px rgba(15, 23, 42, 0.08);
+    }
+    .setup-logo-icon {
+        width: 88px;
+        height: 88px;
+        object-fit: contain;
+        margin: 0 auto;
+    }
+    .setup-logo-text {
+        max-width: 240px;
+        max-height: 72px;
+        object-fit: contain;
+    }
     .setup-header h1 { font-size: 1.5rem; font-weight: 700; color: #1a1a2e; margin-bottom: 0.25rem; }
     .setup-header p { color: #6c757d; font-size: 0.9rem; }
     .lisans-durum-kutu {
@@ -187,9 +210,14 @@
     private bool makineKoduYukleniyor = true;
     private string makineKodu = string.Empty;
     private LicenseInfo? mevcutLisans;
+    private string brandingIconSrc = BrandingService.DefaultIconPath;
+    private string brandingTextSrc = BrandingService.DefaultTextLogoPath;
 
     protected override async Task OnInitializedAsync()
     {
+        var branding = await BrandingService.GetAsync();
+        brandingIconSrc = branding.ResolvedIconLogo;
+        brandingTextSrc = branding.ResolvedTextLogo;
         mevcutLisans = await LicenseService.GetCurrentLicenseAsync();
     }
 

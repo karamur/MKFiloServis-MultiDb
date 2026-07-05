@@ -6,6 +6,7 @@ using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Win32;
+using System.Globalization;
 
 namespace MKFiloServis.Web.Services;
 
@@ -619,13 +620,15 @@ public class LicenseService
         await using var db = await _dbFactory.CreateDbContextAsync();
 
         // FirmaKodu'ndan FirmaId'yi bul
-        var firma = await db.Firmalar
-            .FirstOrDefaultAsync(f => f.FirmaKodu == lic.FirmaKodu && !f.IsDeleted);
+        var firma = await ResolveFirmaForLicenseAsync(db, lic.FirmaKodu);
 
         if (firma == null)
-            throw new Exception($"Firma bulunamadı: {lic.FirmaKodu}");
+            throw new Exception($"Firma bulunamadi: '{lic.FirmaKodu}'. Lisans uretirken sistemdeki firma kodunu kullanin. Tek firma kullaniyorsaniz firma kodu yerine firma adi/unvan da yazabilirsiniz.");
 
-        // FirmaId'yi set et
+        // 🔥 KRİTİK: FirmaKodu'nu DEGISTIRME! Signature, anahtar icindeki orijinal
+        // FirmaKodu ile uretildi. Degistirirsek sonraki ValidateAsync/VerifySignature
+        // dongusunde imza uyusmaz ve lisans "gecersiz" olarak reddedilir.
+        // Sadece FirmaId iliskisini kur.
         lic.FirmaId = firma.Id;
 
         await db.LicenseInfos
@@ -651,6 +654,53 @@ public class LicenseService
             lic.FirmaKodu, lic.ExpireDate);
 
         return lic;
+    }
+
+    private async Task<Firma?> ResolveFirmaForLicenseAsync(ApplicationDbContext db, string? licenseFirmaValue)
+    {
+        var firmalar = await db.Firmalar
+            .IgnoreQueryFilters()
+            .Where(f => !f.IsDeleted)
+            .OrderBy(f => f.Id)
+            .ToListAsync();
+
+        if (firmalar.Count == 0)
+            return null;
+
+        var normalizedLicenseValue = NormalizeFirmaMatchValue(licenseFirmaValue);
+        if (!string.IsNullOrWhiteSpace(normalizedLicenseValue))
+        {
+            var exactMatch = firmalar.FirstOrDefault(f =>
+                NormalizeFirmaMatchValue(f.FirmaKodu) == normalizedLicenseValue ||
+                NormalizeFirmaMatchValue(f.FirmaAdi) == normalizedLicenseValue ||
+                NormalizeFirmaMatchValue(f.UnvanTam) == normalizedLicenseValue);
+
+            if (exactMatch != null)
+                return exactMatch;
+        }
+
+        if (firmalar.Count == 1)
+            return firmalar[0];
+
+        return null;
+    }
+
+    private static string NormalizeFirmaMatchValue(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var normalized = value.Trim().ToUpperInvariant().Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder(normalized.Length);
+        foreach (var c in normalized)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark && char.IsLetterOrDigit(c))
+            {
+                sb.Append(c);
+            }
+        }
+
+        return sb.ToString();
     }
 
     private static (string FirmaKodu, string LisansTipi, DateTime BaslangicTarihi, DateTime BitisTarihi)

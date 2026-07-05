@@ -4,12 +4,14 @@
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Data
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<ApplicationDbContext> DbContextFactory
 @inject IPasswordHasher<Kullanici> PasswordHasher
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
+@inject BrandingService BrandingService
 
 <PageTitle>Kurulum - MK Filo Servis</PageTitle>
 
@@ -23,8 +25,9 @@
     <div class="setup-card">
         <!-- Header -->
         <div class="setup-header">
-            <div class="logo-container">
-                <i class="bi bi-truck"></i>
+            <div class="logo-container logo-branding-preview">
+                <img src="@setupIconSrc" alt="Amblem" class="setup-logo-icon" />
+                <img src="@setupTextLogoSrc" alt="Yazı Logo" class="setup-logo-text" />
             </div>
             <h1>MK Filo Servis</h1>
             <p>İlk Kurulum Sihirbazı</p>
@@ -96,6 +99,41 @@
                     <label class="form-label">Adres</label>
                     <textarea class="form-control" rows="2" placeholder="Firma adresi..."
                               @bind="firmaAdres" @bind:event="oninput"></textarea>
+                </div>
+
+                <div class="card border-0 bg-light mb-3">
+                    <div class="card-body">
+                        <h6 class="fw-bold mb-3"><i class="bi bi-images me-2"></i>Login ve uygulama markalama</h6>
+                        <p class="text-muted small mb-3">Giriş ekranı ve menüde kullanılacak amblem ile yazı logosunu kullanıcıdan isteyip burada yükleyin. Yüklemezseniz varsayılan görseller kullanılır.</p>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Amblem / Sembol</label>
+                                <InputFile OnChange="BrandingAmblemYukle" accept="image/*" class="form-control" />
+                                <div class="form-text">PNG, JPG, SVG veya WebP. Maks 2 MB.</div>
+                                <div class="mt-2 border rounded bg-white p-2 text-center" style="min-height:60px;">
+                                    @if (HasBrandingPreview(brandingIconLogo))
+                                    {
+                                        <img src="@brandingIconLogo" alt="Amblem" style="max-height:80px;max-width:100%;object-fit:contain;" />
+                                    }
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Yazı Logosu</label>
+                                <InputFile OnChange="BrandingYaziLogosuYukle" accept="image/*" class="form-control" />
+                                <div class="form-text">Firma adı veya yatay logo görseli yükleyin.</div>
+                                <div class="mt-2 border rounded bg-white p-2 text-center" style="min-height:60px;">
+                                    @if (HasBrandingPreview(brandingTextLogo))
+                                    {
+                                        <img src="@brandingTextLogo" alt="Yazı Logosu" style="max-height:80px;max-width:100%;object-fit:contain;" />
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(brandingHataMesaji))
+                        {
+                            <div class="alert alert-warning py-2 small mt-3 mb-0">@brandingHataMesaji</div>
+                        }
+                    </div>
                 </div>
 
                 <button class="btn btn-primary w-100 mt-2" @onclick="Adim1IleriAsync" disabled="@islemDevamEdiyor">
@@ -249,7 +287,30 @@
         margin: 0 auto 1rem;
     }
 
-    .logo-container i { font-size: 2rem; color: #fff; }
+    .logo-branding-preview {
+        width: auto;
+        height: auto;
+        padding: 0.75rem 1rem;
+        border-radius: 20px;
+        background: #fff;
+        display: inline-flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        box-shadow: 0 8px 25px rgba(15, 23, 42, 0.08);
+    }
+
+    .setup-logo-icon {
+        width: 88px;
+        height: 88px;
+        object-fit: contain;
+        margin: 0 auto;
+    }
+
+    .setup-logo-text {
+        max-width: 240px;
+        max-height: 72px;
+        object-fit: contain;
+    }
 
     .setup-header h1 {
         font-size: 1.6rem;
@@ -328,6 +389,8 @@
     private int aktifAdim = 1;
     private bool islemDevamEdiyor = false;
     private string hataMesaji = string.Empty;
+    private string setupIconSrc = BrandingService.DefaultIconPath;
+    private string setupTextLogoSrc = BrandingService.DefaultTextLogoPath;
 
     // Adım 1 - Firma
     private string firmaAdi = string.Empty;
@@ -336,6 +399,9 @@
     private string firmaTelefon = string.Empty;
     private string firmaEmail = string.Empty;
     private string firmaAdres = string.Empty;
+    private string? brandingIconLogo;
+    private string? brandingTextLogo;
+    private string? brandingHataMesaji;
 
     // Adım 2 - Admin
     private string adminAdSoyad = string.Empty;
@@ -349,6 +415,10 @@
     {
         try
         {
+            var branding = await BrandingService.GetAsync();
+            setupIconSrc = branding.ResolvedIconLogo;
+            setupTextLogoSrc = branding.ResolvedTextLogo;
+
             using var ctx = await DbContextFactory.CreateDbContextAsync();
             if (await ctx.Firmalar.IgnoreQueryFilters().AnyAsync())
             {
@@ -389,13 +459,14 @@
             // 1. Firma
             var firma = new Firma
             {
-                FirmaKodu = "FIRMA001",
+                FirmaKodu = await GenerateSetupFirmaCodeAsync(ctx),
                 FirmaAdi = firmaAdi.Trim(),
                 VergiNo = string.IsNullOrWhiteSpace(firmaVergiNo) ? null : firmaVergiNo.Trim(),
                 VergiDairesi = string.IsNullOrWhiteSpace(firmaVergiDairesi) ? null : firmaVergiDairesi.Trim(),
                 Telefon = string.IsNullOrWhiteSpace(firmaTelefon) ? null : firmaTelefon.Trim(),
                 Email = string.IsNullOrWhiteSpace(firmaEmail) ? null : firmaEmail.Trim(),
                 Adres = string.IsNullOrWhiteSpace(firmaAdres) ? null : firmaAdres.Trim(),
+                OrganizasyonId = await EnsureSetupOrganizasyonIdAsync(ctx),
                 VarsayilanFirma = true,
                 Aktif = true,
                 AktifDonemYil = DateTime.Today.Year,
@@ -429,6 +500,7 @@
             });
             await ctx.SaveChangesAsync();
 
+            await BrandingService.SaveAsync(brandingIconLogo, brandingTextLogo);
             aktifAdim = 3;
         }
         catch (Exception ex)
@@ -440,6 +512,105 @@
             islemDevamEdiyor = false;
         }
     }
+
+    private async Task<int> EnsureSetupOrganizasyonIdAsync(ApplicationDbContext ctx)
+    {
+        var organizasyon = await ctx.Organizasyonlar
+            .IgnoreQueryFilters()
+            .Where(o => !o.IsDeleted)
+            .OrderBy(o => o.Id)
+            .FirstOrDefaultAsync();
+
+        if (organizasyon != null)
+            return organizasyon.Id;
+
+        organizasyon = new Organizasyon
+        {
+            Adi = "Ustun Holding",
+            Kod = "USTUNHOLDING",
+            Aciklama = "Kurulum sirasinda otomatik olusturuldu",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        ctx.Organizasyonlar.Add(organizasyon);
+        await ctx.SaveChangesAsync();
+        return organizasyon.Id;
+    }
+
+    private static async Task<string> GenerateSetupFirmaCodeAsync(ApplicationDbContext ctx)
+    {
+        var existingCodes = await ctx.Firmalar
+            .IgnoreQueryFilters()
+            .Select(f => f.FirmaKodu)
+            .ToListAsync();
+
+        var nextNumber = 1;
+        foreach (var code in existingCodes)
+        {
+            if (string.IsNullOrWhiteSpace(code) || !code.StartsWith("F", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (int.TryParse(code[1..], out var parsed) && parsed >= nextNumber)
+            {
+                nextNumber = parsed + 1;
+            }
+        }
+
+        var candidate = $"F{nextNumber:000}";
+        while (existingCodes.Contains(candidate, StringComparer.OrdinalIgnoreCase))
+        {
+            nextNumber++;
+            candidate = $"F{nextNumber:000}";
+        }
+
+        return candidate;
+    }
+
+    private async Task BrandingAmblemYukle(InputFileChangeEventArgs e)
+    {
+        var yeniGorsel = await ReadImageAsDataUrlAsync(e.File);
+        if (yeniGorsel != null)
+        {
+            brandingIconLogo = yeniGorsel;
+        }
+    }
+
+    private async Task BrandingYaziLogosuYukle(InputFileChangeEventArgs e)
+    {
+        var yeniGorsel = await ReadImageAsDataUrlAsync(e.File);
+        if (yeniGorsel != null)
+        {
+            brandingTextLogo = yeniGorsel;
+        }
+    }
+
+    private async Task<string?> ReadImageAsDataUrlAsync(IBrowserFile? file)
+    {
+        brandingHataMesaji = null;
+        if (file == null)
+            return null;
+
+        if (file.Size > 2 * 1024 * 1024)
+        {
+            brandingHataMesaji = "Gorsel dosyasi 2 MB'dan buyuk olamaz.";
+            return null;
+        }
+
+        var izinliTipler = new[] { "image/png", "image/jpeg", "image/jpg", "image/svg+xml", "image/webp" };
+        if (!izinliTipler.Contains(file.ContentType))
+        {
+            brandingHataMesaji = "Sadece PNG, JPG, SVG veya WebP yukleyebilirsiniz.";
+            return null;
+        }
+
+        using var stream = file.OpenReadStream(maxAllowedSize: 2 * 1024 * 1024);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        return $"data:{file.ContentType};base64,{Convert.ToBase64String(ms.ToArray())}";
+    }
+
+    private static bool HasBrandingPreview(string? currentValue)
+        => !string.IsNullOrWhiteSpace(currentValue);
 
     private void LisansSetupGit() => Navigation.NavigateTo("/setup/lisans");
     private void GirisYap()       => Navigation.NavigateTo("/login");

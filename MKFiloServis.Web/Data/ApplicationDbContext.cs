@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Services;
 using MKFiloServis.Web.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -3340,12 +3340,9 @@ public class ApplicationDbContext : DbContext
             // Skip logging for system/identity entities if needed, e.g.
             if (entityType.Name.Contains("AktiviteLog") || entityType.Name.Contains("Log")) continue;
 
-            // Kural 14: FirmaId'yi entity'den veya aktif firmadan al
-            int? firmaId = null;
-            if (entry.Entity is IFirmaTenant tenantEntity)
-                firmaId = tenantEntity.FirmaId;
-            if (firmaId == null || firmaId == 0)
-                firmaId = ResolveAktifFirmaProvider()?.AktifFirmaId;
+            var firmaId = ResolveAuditFirmaId(entry.Entity);
+            if (firmaId is null or <= 0)
+                continue;
 
             var log = new AktiviteLog
             {
@@ -3397,6 +3394,31 @@ public class ApplicationDbContext : DbContext
                 AktiviteLoglar.Add(log);
             }
             catch { /* Ignore logging errors */ }
+        }
+    }
+
+    private int? ResolveAuditFirmaId(object entity)
+    {
+        if (entity is IFirmaTenant tenantEntity && tenantEntity.FirmaId is > 0)
+            return tenantEntity.FirmaId;
+
+        var aktifFirmaId = ResolveAktifFirmaProvider()?.AktifFirmaId;
+        if (aktifFirmaId is > 0)
+            return aktifFirmaId;
+
+        try
+        {
+            return Firmalar
+                .IgnoreQueryFilters()
+                .Where(f => !f.IsDeleted)
+                .OrderByDescending(f => f.VarsayilanFirma)
+                .ThenBy(f => f.Id)
+                .Select(f => (int?)f.Id)
+                .FirstOrDefault();
+        }
+        catch
+        {
+            return null;
         }
     }
 
