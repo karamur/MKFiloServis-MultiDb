@@ -1245,6 +1245,61 @@ public class MainForm : Form
         MessageBox.Show(isSale ? "Ana lisans kaydi ve bagli yenilemeler silindi." : "Lisans kaydi silindi.", "Basarili", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
+    private void SatisDokumunuDisaAktar()
+    {
+        using var dialog = new SaveFileDialog
+        {
+            Filter = "CSV Dosyasi (*.csv)|*.csv",
+            FileName = $"satis-dokumu-{DateTime.Now:yyyyMMdd-HHmm}.csv"
+        };
+
+        if (dialog.ShowDialog() != DialogResult.OK)
+            return;
+
+        using var con = new SqliteConnection($"Data Source={_dbPath}");
+        con.Open();
+        using var cmd = con.CreateCommand();
+        cmd.CommandText = @"
+            SELECT
+                s.Id,
+                s.FirmaKodu,
+                s.MachineId,
+                s.SaleDate,
+                s.SaleAmount,
+                s.ExpireDate,
+                s.DurationDays,
+                s.ContactPhone,
+                COUNT(r.Id) AS RenewalCount
+            FROM Licenses s
+            LEFT JOIN Licenses r ON r.ParentLicenseId = s.Id AND r.OperationType = 'Renewal'
+            WHERE s.OperationType = 'Sale'
+            GROUP BY s.Id, s.FirmaKodu, s.MachineId, s.SaleDate, s.SaleAmount, s.ExpireDate, s.DurationDays, s.ContactPhone
+            ORDER BY s.Id DESC";
+
+        using var reader = cmd.ExecuteReader();
+        var sb = new StringBuilder();
+        sb.AppendLine("No;Firma;Makine;SatisTarihi;Tutar;Bitis;SureGun;Telefon;YenilemeAdedi");
+
+        while (reader.Read())
+        {
+            sb.AppendLine(string.Join(";", new[]
+            {
+                reader[0]?.ToString() ?? string.Empty,
+                reader[1]?.ToString() ?? string.Empty,
+                reader[2]?.ToString() ?? string.Empty,
+                reader[3]?.ToString() ?? string.Empty,
+                reader[4]?.ToString() ?? string.Empty,
+                reader[5]?.ToString() ?? string.Empty,
+                reader[6]?.ToString() ?? string.Empty,
+                reader[7]?.ToString() ?? string.Empty,
+                reader[8]?.ToString() ?? "0"
+            }));
+        }
+
+        File.WriteAllText(dialog.FileName, sb.ToString(), Encoding.UTF8);
+        MessageBox.Show("Satis dokumu disa aktarildi.", "Basarili", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
     private void LoadRenewalHistoryForSelected()
     {
         lstRenewals.Items.Clear();

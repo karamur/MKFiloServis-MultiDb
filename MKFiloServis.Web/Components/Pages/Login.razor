@@ -27,7 +27,6 @@
     <div class="login-card">
         <div class="login-header">
             <div class="logo-container">
-                <img src="@brandingIconSrc" alt="Logo" class="logo-img" />
                 <img src="@brandingTextSrc" alt="@(selectedProject?.Name ?? "MK Filo Servis")" class="logo-text-img" />
             </div>
             @if (selectedProject is not null)
@@ -552,7 +551,6 @@
     private string forgotPasswordInput = "";
     private MKFiloServis.Shared.Entities.LicenseInfo? lisans;
     private PortalProjectDefinition? selectedProject;
-    private string brandingIconSrc = BrandingService.DefaultIconPath;
     private string brandingTextSrc = BrandingService.DefaultTextLogoPath;
 
     // Lisans kontrol alanlari
@@ -568,7 +566,6 @@
     protected override async Task OnInitializedAsync()
     {
         var branding = await BrandingService.GetAsync();
-        brandingIconSrc = branding.ResolvedIconLogo;
         brandingTextSrc = branding.ResolvedTextLogo;
 
         lisans = await LicenseSvc.GetCurrentLicenseAsync();

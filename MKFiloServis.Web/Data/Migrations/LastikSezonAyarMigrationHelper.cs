@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,7 +18,6 @@ CREATE TABLE IF NOT EXISTS ""LastikSezonAyarlari"" (
     ""CreatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     ""UpdatedAt"" TIMESTAMP WITH TIME ZONE NULL,
     ""IsDeleted"" BOOLEAN NOT NULL DEFAULT FALSE,
-    ""SirketId"" INTEGER NULL,
     ""Ad"" VARCHAR(200) NOT NULL,
     ""SezonTipi"" INTEGER NOT NULL,
     ""BaslangicAyi"" INTEGER NOT NULL,
@@ -30,19 +29,7 @@ CREATE TABLE IF NOT EXISTS ""LastikSezonAyarlari"" (
     ""Aktif"" BOOLEAN NOT NULL DEFAULT TRUE
 );
 
-CREATE INDEX IF NOT EXISTS ""IX_LastikSezonAyarlari_SirketId"" ON ""LastikSezonAyarlari"" (""SirketId"");
 CREATE INDEX IF NOT EXISTS ""IX_LastikSezonAyarlari_IsDeleted"" ON ""LastikSezonAyarlari"" (""IsDeleted"");
-
-DO $$ BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint 
-        WHERE conname = 'FK_LastikSezonAyarlari_Sirketler_SirketId'
-    ) THEN
-        ALTER TABLE ""LastikSezonAyarlari"" 
-        ADD CONSTRAINT ""FK_LastikSezonAyarlari_Sirketler_SirketId"" 
-        FOREIGN KEY (""SirketId"") REFERENCES ""Sirketler"" (""Id"") ON DELETE RESTRICT;
-    END IF;
-END $$;
 ";
 
                 await context.Database.ExecuteSqlRawAsync(sql);
@@ -56,7 +43,6 @@ CREATE TABLE IF NOT EXISTS ""LastikSezonAyarlari"" (
     ""CreatedAt"" TEXT NOT NULL,
     ""UpdatedAt"" TEXT NULL,
     ""IsDeleted"" INTEGER NOT NULL DEFAULT 0,
-    ""SirketId"" INTEGER NULL,
     ""Ad"" TEXT NOT NULL,
     ""SezonTipi"" INTEGER NOT NULL,
     ""BaslangicAyi"" INTEGER NOT NULL,
@@ -65,11 +51,9 @@ CREATE TABLE IF NOT EXISTS ""LastikSezonAyarlari"" (
     ""BitisGunu"" INTEGER NOT NULL,
     ""UyariOncesiGun"" INTEGER NOT NULL DEFAULT 14,
     ""Notlar"" TEXT NULL,
-    ""Aktif"" INTEGER NOT NULL DEFAULT 1,
-    CONSTRAINT ""FK_LastikSezonAyarlari_Sirketler_SirketId"" FOREIGN KEY (""SirketId"") REFERENCES ""Sirketler"" (""Id"") ON DELETE RESTRICT
+    ""Aktif"" INTEGER NOT NULL DEFAULT 1
 );
 
-CREATE INDEX IF NOT EXISTS ""IX_LastikSezonAyarlari_SirketId"" ON ""LastikSezonAyarlari"" (""SirketId"");
 CREATE INDEX IF NOT EXISTS ""IX_LastikSezonAyarlari_IsDeleted"" ON ""LastikSezonAyarlari"" (""IsDeleted"");
 ";
 

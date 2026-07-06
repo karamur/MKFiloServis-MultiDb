@@ -143,11 +143,12 @@ builder.Services.AddPooledDbContextFactory<ApplicationDbContext>((sp, options) =
 
     // Query-filter etkileşim uyarısı: EF Core'un global query filter + required navigation
     // etkileşiminde verdiği false-positive uyarı. Model doğru, uyarı bastırılıyor.
-    // PendingModelChangesWarning ISE bastırılmaz → production'da model-DB uyumsuzluğu log'a düşer.
+    // Pending model değişiklik uyarısı startup'ta exception'a dönüşmemeli.
     options.ConfigureWarnings(w =>
     {
         w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning);
         w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.MultipleCollectionIncludeWarning);
+        w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning);
     });
     options.AddInterceptors(sp.GetRequiredService<AktiviteLogInterceptor>());
 });

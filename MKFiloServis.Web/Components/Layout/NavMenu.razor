@@ -11,7 +11,6 @@
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="dashboard">
-            <img src="@brandingIconSrc" alt="Logo" class="nav-logo-img" />
             <img src="@brandingTextSrc" alt="Marka" class="nav-logo-text" />
         </a>
     </div>
@@ -415,26 +414,6 @@
                                     <i class="bi bi-shield-check me-2 text-info"></i> Finans Denetim
                                 </NavLink>
                             </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="admin/recovery">
-                                    <i class="bi bi-tools me-2 text-warning"></i> Recovery
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="admin/errors">
-                                    <i class="bi bi-bug me-2 text-danger"></i> Hata Logları
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="admin/license-generate">
-                                    <i class="bi bi-key-fill me-2 text-warning"></i> Lisans Üret
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="admin/test">
-                                    <i class="bi bi-shield-shaded me-2 text-info"></i> Test Modu
-                                </NavLink>
-                            </div>
                         }
                     </div>
                 }
@@ -767,7 +746,7 @@
         <!-- CHECKLIST -->
 
         <!-- RAPORLAR -->
-        @if (HasMenuYetki("menu.raporlar"))
+@*         @if (HasMenuYetki("menu.raporlar"))
         {
             <div class="nav-section">
                 <div class="nav-section-header" @onclick="() => ToggleSection(NavSection.Raporlar)" style="cursor: pointer;">
@@ -777,210 +756,10 @@
                 @if (IsExpanded(NavSection.Raporlar))
                 {
                     <div class="nav-section-content">
-                        @* === PERSONEL RAPORLARI === *@
-                        @if (HasAnyYetki("maas.oku", "personel.oku"))
-                        {
-                            <div class="nav-item px-3 text-muted small">
-                                <span><i class="bi bi-people me-2"></i>Personel Raporları</span>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="personel/bordro/normal">
-                                    <i class="bi bi-receipt-cutoff me-2 text-primary"></i> Normal Bordro
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="personel/bordro/arge">
-                                    <i class="bi bi-receipt-cutoff me-2 text-warning"></i> AR-GE Bordro
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="personel/bordro/hesap-pusulasi">
-                                    <i class="bi bi-file-earmark-text me-2 text-info"></i> Hesap Pusulası
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="personel/bordro/icmal">
-                                    <i class="bi bi-table me-2 text-secondary"></i> Bordro İcmali
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="personel/bordro/netten-brute">
-                                    <i class="bi bi-calculator me-2 text-success"></i> Netten Brüte
-                                </NavLink>
-                            </div>
-                        }
-
-                        @* === FİLO RAPORLARI === *@
-                        <div class="nav-item px-3 mt-2 pt-2 border-top text-muted small">
-                            <span><i class="bi bi-truck me-2"></i>Filo Raporları</span>
-                        </div>
-                        @if (HasYetki("raporozmal.oku"))
-                        {
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="rapor/ozmal-arac">
-                                    <i class="bi bi-truck me-2 text-primary"></i> Özmal Araç Raporu
-                                </NavLink>
-                            </div>
-                        }
-                        @if (HasYetki("raporkirala.oku"))
-                        {
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="rapor/kiralik-arac">
-                                    <i class="bi bi-building me-2 text-info"></i> Kiralık Araç Raporu
-                                </NavLink>
-                            </div>
-                        }
-                        @if (HasYetki("raporservis.oku"))
-                        {
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="rapor/sofor-performans">
-                                    <i class="bi bi-person-badge me-2 text-success"></i> Şoför Performans
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="raporlar/arac-karlilik">
-                                    <i class="bi bi-graph-up-arrow me-2 text-primary"></i> Araç Karlılık
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="karlilik-raporu">
-                                    <i class="bi bi-graph-up-arrow me-2 text-success"></i> Karlılık Raporu (Yeni)
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="raporlar/operasyon-kar">
-                                    <i class="bi bi-cash-stack me-2 text-info"></i> Operasyon Kar Raporu
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="raporlar/haftalik-puantaj">
-                                    <i class="bi bi-calendar-week me-2 text-info"></i> Haftalık Puantaj Matrisi
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="raporlar/sofor-aylik-hakedis">
-                                    <i class="bi bi-cash-coin me-2 text-success"></i> Şoför Aylık Hakediş
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="raporlar/kurum-aylik-hakedis">
-                                    <i class="bi bi-building-fill-check me-2 text-primary"></i> Kurum Aylık Hakediş
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="raporlar/kurum-yillik-trend">
-                                    <i class="bi bi-graph-up me-2 text-primary"></i> Kurum Yıllık Trend
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="raporlar/arac-yillik-karlilik">
-                                    <i class="bi bi-graph-up-arrow me-2 text-success"></i> Araç Yıllık Karlılık
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="raporlar/arac-maliyet-gelir">
-                                    <i class="bi bi-fuel-pump-diesel me-2 text-primary"></i> Araç Maliyet vs Gelir
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="raporlar/vade-risk-merkezi">
-                                    <i class="bi bi-shield-exclamation me-2 text-danger"></i> <strong>Vade Risk Merkezi</strong>
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="raporlar/arac-km-yakit">
-                                    <i class="bi bi-fuel-pump-fill me-2 text-warning"></i> Araç KM & Yakıt
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="raporlar/filo-kpi">
-                                    <i class="bi bi-speedometer2 me-2 text-danger"></i> <strong>Filo KPI Dashboard</strong>
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="raporlar/sofor-performans-360">
-                                    <i class="bi bi-person-badge-fill me-2 text-primary"></i> <strong>Şoför Performans 360°</strong>
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="raporlar/gunluk-brifing">
-                                    <i class="bi bi-clipboard-data-fill me-2 text-success"></i> <strong>Günlük Brifing</strong>
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="raporlar/tedarikci-performans-karnesi">
-                                    <i class="bi bi-award-fill me-2 text-warning"></i> <strong>Tedarikçi Karnesi</strong>
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="raporlar/aylik-kapanis-asistani">
-                                    <i class="bi bi-check2-square me-2 text-primary"></i> <strong>Aylık Kapanış Asistanı</strong>
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="raporlar/sozlesme-yenileme-takvimi">
-                                    <i class="bi bi-calendar-event-fill me-2 text-info"></i> <strong>Sözleşme Takvimi</strong>
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="raporlar/komuta-merkezi">
-                                    <i class="bi bi-grid-3x3-gap-fill me-2 text-danger"></i> <strong>Komuta Merkezi</strong>
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="raporlar/bildirim-merkezi">
-                                    <i class="bi bi-bell-fill me-2 text-warning"></i> <strong>Bildirim Merkezi</strong>
-                                </NavLink>
-                            </div>
-                        }
-                        @if (HasYetki("rapormasraf.oku"))
-                        {
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="rapor/arac-masraf">
-                                    <i class="bi bi-file-earmark-spreadsheet me-2 text-secondary"></i> Araç Masraf
-                                </NavLink>
-                            </div>
-                        }
-
-                        @* === CARİ / FİNANS RAPORLARI === *@
-                        <div class="nav-item px-3 mt-2 pt-2 border-top text-muted small">
-                            <span><i class="bi bi-cash-coin me-2"></i>Cari / Finans Raporları</span>
-                        </div>
-                        <div class="nav-item px-3">
-                            <NavLink class="nav-link" href="raporlar/nakit-akis">
-                                <i class="bi bi-cash-coin me-2 text-success"></i> Nakit Akış Dashboard
-                            </NavLink>
-                        </div>
-                        <div class="nav-item px-3">
-                            <NavLink class="nav-link" href="raporlar/butce-vs-gerceklesen">
-                                <i class="bi bi-bar-chart-line me-2 text-primary"></i> Bütçe vs Gerçekleşen
-                            </NavLink>
-                        </div>
-                        @if (HasYetki("raporekstre.oku"))
-                        {
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="raporlar/cari-yaslandirma">
-                                    <i class="bi bi-calendar2-week me-2 text-warning"></i> Cari Yaşlandırma
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="raporlar/cari-ekstre">
-                                    <i class="bi bi-file-earmark-ruled me-2 text-dark"></i> Cari Ekstre
-                                </NavLink>
-                            </div>
-                        }
-                        @if (HasYetki("raporfatura.oku"))
-                        {
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="rapor/fatura-odeme">
-                                    <i class="bi bi-file-earmark-text me-2 text-danger"></i> Fatura Ödeme
-                                </NavLink>
-                            </div>
-                        }
                     </div>
                 }
             </div>
-        }
+        } *@
 
         <!-- AYARLAR -->
         @if (HasMenuYetki("menu.ayarlar"))
@@ -1173,6 +952,14 @@
                             <div class="nav-item px-3">
                                 <NavLink class="nav-link" href="ayarlar/demo-veri">
                                     <i class="bi bi-database-fill-gear me-2 text-warning"></i> Demo Veri
+                                </NavLink>
+                            </div>
+                        }
+                        @if (HasMenuYetki("menu.admin"))
+                        {
+                            <div class="nav-item px-3">
+                                <NavLink class="nav-link" href="admin/test">
+                                    <i class="bi bi-shield-shaded me-2 text-info"></i> Test Modu
                                 </NavLink>
                             </div>
                         }
@@ -1381,7 +1168,6 @@
     private bool isSuperAdmin = false;
     private bool disposed = false;
     private readonly SemaphoreSlim yetkiYukleGate = new(1, 1);
-    private string brandingIconSrc = BrandingService.DefaultIconPath;
     private string brandingTextSrc = BrandingService.DefaultTextLogoPath;
 
     protected override async Task OnInitializedAsync()
@@ -1390,7 +1176,6 @@
         // gerceklesen AuthenticationStateChanged olaylari kacirilir.
         AuthProvider.AuthenticationStateChanged += OnAuthStateChanged;
         var branding = await BrandingService.GetAsync();
-        brandingIconSrc = branding.ResolvedIconLogo;
         brandingTextSrc = branding.ResolvedTextLogo;
         await YetkileriYukle();
     }

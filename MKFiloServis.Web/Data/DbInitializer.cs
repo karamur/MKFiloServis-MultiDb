@@ -16,6 +16,8 @@ public static class DbInitializer
     private const string AddLastikSezonAyarMigrationId = "20260507144644_AddLastikSezonAyar";
     private const string AddHakedisVeAracMaliyetSnapshotMigrationId = "20260512072224_AddHakedisVeAracMaliyetSnapshot";
     private const string AddResimUrlToPiyasaIlanMigrationId = "20260325200834_AddResimUrlToPiyasaIlan";
+    private const string AddPiyasaArastirmaModuleMigrationId = "20260324195453_AddPiyasaArastirmaModule";
+    private const string CRMModuluMigrationId = "20260326204037_CRMModulu";
     private const string TekrarlayanOdemeMigrationId = "20260326090740_TekrarlayanOdeme";
 
     public static async Task EnsureMasterDatabaseAsync(IConfiguration configuration)
@@ -281,16 +283,24 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
             {
                 Console.WriteLine($"Bekleyen migration sayisi: {pendingMigrations.Count()}");
 
-                // AylikOdemeGerceklesenler tablosu olmayan eski tenant DB'lerinde
-                // bu migration DropForeignKey ile baslar ve 42P01 hatasina neden olur.
-                // Tablo fiziksel olarak yoksa migration'i gecmise kaydet, EF Core'un hata loglamasini onle.
+                // AylikOdemeGerceklesenler tablosu/FK'leri olmayan eski tenant DB'lerinde
+                // bu migration DropForeignKey ile baslar ve 42P01 / 42704 hatasina neden olur.
+                // Legacy yapi migration'in bekledigi eski FK'leri icermiyorsa migration'i gecmise kaydet.
                 if (context.Database.IsNpgsql()
-                    && pendingMigrations.Contains(AddResimUrlToPiyasaIlanMigrationId)
-                    && !await PostgreSqlTableExistsAsync(context, configuration, "AylikOdemeGerceklesenler"))
+                    && pendingMigrations.Contains(AddResimUrlToPiyasaIlanMigrationId))
                 {
-                    await EnsurePostgreSqlMigrationHistoryEntryAsync(context, configuration, AddResimUrlToPiyasaIlanMigrationId);
-                    Console.WriteLine($"AylikOdemeGerceklesenler tablosu yok; migration atlandi: {AddResimUrlToPiyasaIlanMigrationId}");
-                    pendingMigrations = (await context.Database.GetPendingMigrationsAsync()).ToList();
+                    var aylikOdemeGerceklesenlerExists = await PostgreSqlTableExistsAsync(context, configuration, "AylikOdemeGerceklesenler");
+                    var aylikOdemePlanlariFkExists = aylikOdemeGerceklesenlerExists
+                        && await PostgreSqlConstraintExistsAsync(context, configuration, "AylikOdemeGerceklesenler", "FK_AylikOdemeGerceklesenler_AylikOdemePlanlari_AylikOdemePlaniId");
+                    var bankaKasaHareketFkExists = aylikOdemeGerceklesenlerExists
+                        && await PostgreSqlConstraintExistsAsync(context, configuration, "AylikOdemeGerceklesenler", "FK_AylikOdemeGerceklesenler_BankaKasaHareketleri_BankaKasaHareketId");
+
+                    if (!aylikOdemeGerceklesenlerExists || !aylikOdemePlanlariFkExists || !bankaKasaHareketFkExists)
+                    {
+                        await EnsurePostgreSqlMigrationHistoryEntryAsync(context, configuration, AddResimUrlToPiyasaIlanMigrationId);
+                        Console.WriteLine($"AylikOdemeGerceklesenler legacy FK yapisi migration ile uyumlu degil; migration atlandi: {AddResimUrlToPiyasaIlanMigrationId}");
+                        pendingMigrations = (await context.Database.GetPendingMigrationsAsync()).ToList();
+                    }
                 }
 
                 if (pendingMigrations.Any())
@@ -334,7 +344,10 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
                 {
                     var recoverableDuplicateColumnMigrations = pendingMigrations
                         .Where(migrationId => migrationId == PersonelBordroGuncellemeMigrationId
-                            || migrationId == AddLastikTakipModuluMigrationId)
+                            || migrationId == AddLastikTakipModuluMigrationId
+                            || (migrationId == CRMModuluMigrationId
+                                && pgEx.MessageText.Contains("column \"Renk\"", StringComparison.OrdinalIgnoreCase)
+                                && pgEx.MessageText.Contains("relation \"Roller\"", StringComparison.OrdinalIgnoreCase)))
                         .ToList();
 
                     if (recoverableDuplicateColumnMigrations.Any())
@@ -382,6 +395,14 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
                         && await PostgreSqlColumnExistsAsync(context, configuration, "LastikStoklar", "YedekMi"))
                     {
                         recoverableMigrations.Add(LastikStokBireyselTakipMigrationId);
+                    }
+
+                    if (pendingMigrations.Contains(AddPiyasaArastirmaModuleMigrationId)
+                        && await PostgreSqlTableExistsAsync(context, configuration, "AracMarkaModeller")
+                        && await PostgreSqlTableExistsAsync(context, configuration, "PiyasaArastirmalar")
+                        && await PostgreSqlTableExistsAsync(context, configuration, "PiyasaArastirmaIlanlar"))
+                    {
+                        recoverableMigrations.Add(AddPiyasaArastirmaModuleMigrationId);
                     }
 
                     if (pendingMigrations.Contains(AddLastikSezonAyarMigrationId)
@@ -547,6 +568,27 @@ SELECT EXISTS (
         await using var cmd = new NpgsqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("tableName", tableName);
         cmd.Parameters.AddWithValue("columnName", columnName);
+        return (bool)(await cmd.ExecuteScalarAsync() ?? false);
+    }
+
+    private static async Task<bool> PostgreSqlConstraintExistsAsync(ApplicationDbContext context, IConfiguration configuration, string tableName, string constraintName)
+    {
+        var connectionString = GetDefaultConnectionString(context, configuration);
+        await using var conn = new NpgsqlConnection(connectionString);
+        await conn.OpenAsync();
+
+        const string sql = @"
+SELECT EXISTS (
+    SELECT 1
+    FROM information_schema.table_constraints
+    WHERE constraint_schema = current_schema()
+      AND table_name = @tableName
+      AND constraint_name = @constraintName
+);";
+
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("tableName", tableName);
+        cmd.Parameters.AddWithValue("constraintName", constraintName);
         return (bool)(await cmd.ExecuteScalarAsync() ?? false);
     }
 

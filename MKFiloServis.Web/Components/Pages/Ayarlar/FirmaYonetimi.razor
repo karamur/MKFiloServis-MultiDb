@@ -27,7 +27,7 @@
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                 <div>
                     <h5 class="mb-1"><i class="bi bi-images me-2"></i>Login ve Menü Markalama</h5>
-                    <div class="text-muted small">Kullanıcıdan alınan amblem ve yazı logosunu burada güncelleyip uygulamanın login ve menü alanında kullanabilirsiniz.</div>
+                    <div class="text-muted small">Yazı logosunu burada güncelleyip uygulamanın login ve menü alanında kullanabilirsiniz.</div>
                 </div>
                 <button class="btn btn-primary" @onclick="BrandingKaydetAsync" disabled="@brandingKaydediliyor">
                     @if (brandingKaydediliyor)
@@ -38,18 +38,7 @@
                 </button>
             </div>
             <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label">Amblem / Sembol</label>
-                    <InputFile OnChange="BrandingAmblemYukleAsync" accept="image/*" class="form-control" />
-                    <div class="form-text">PNG, JPG, SVG veya WebP. Maks 2 MB.</div>
-                    <div class="mt-2 border rounded bg-light p-3 text-center">
-                        @if (HasBrandingPreview(brandingIconLogo))
-                        {
-                            <img src="@brandingIconLogo" alt="Amblem" style="max-height:90px;max-width:100%;object-fit:contain;" />
-                        }
-                    </div>
-                </div>
-                <div class="col-md-6">
+                <div class="col-md-12">
                     <label class="form-label">Yazı Logosu</label>
                     <InputFile OnChange="BrandingYaziLogosuYukleAsync" accept="image/*" class="form-control" />
                     <div class="form-text">Login ekranında ve menüde kullanılacak yatay logo.</div>
@@ -414,7 +403,6 @@
     private string aramaMetni = string.Empty;
     private string durumFiltre = string.Empty;
     private string cariFiltre = string.Empty;
-    private string? brandingIconLogo;
     private string? brandingTextLogo;
     private string? brandingHata;
     private bool brandingKaydediliyor;
@@ -715,17 +703,7 @@
     private async Task BrandingYukleAsync()
     {
         var branding = await BrandingService.GetAsync();
-        brandingIconLogo = branding.IconLogo;
         brandingTextLogo = branding.TextLogo;
-    }
-
-    private async Task BrandingAmblemYukleAsync(InputFileChangeEventArgs e)
-    {
-        var yeniGorsel = await ReadBrandingImageAsync(e.File);
-        if (yeniGorsel != null)
-        {
-            brandingIconLogo = yeniGorsel;
-        }
     }
 
     private async Task BrandingYaziLogosuYukleAsync(InputFileChangeEventArgs e)
@@ -768,8 +746,8 @@
         {
             brandingKaydediliyor = true;
             brandingHata = null;
-            await BrandingService.SaveAsync(brandingIconLogo, brandingTextLogo);
-            ToastService.ShowSuccess("Login ve menü branding gorselleri kaydedildi.");
+            await BrandingService.SaveAsync(brandingTextLogo);
+            ToastService.ShowSuccess("Branding kaydedildi. Degisiklikleri gormek icin sayfayi yenileyin.");
         }
         catch (Exception ex)
         {

@@ -22,7 +22,6 @@
         <!-- Header -->
         <div class="setup-header">
             <div class="logo-container logo-branding-preview">
-                <img src="@brandingIconSrc" alt="Amblem" class="setup-logo-icon" />
                 <img src="@brandingTextSrc" alt="Yazı Logo" class="setup-logo-text" />
             </div>
             <h1>Lisans Aktivasyonu</h1>
@@ -210,13 +209,11 @@
     private bool makineKoduYukleniyor = true;
     private string makineKodu = string.Empty;
     private LicenseInfo? mevcutLisans;
-    private string brandingIconSrc = BrandingService.DefaultIconPath;
     private string brandingTextSrc = BrandingService.DefaultTextLogoPath;
 
     protected override async Task OnInitializedAsync()
     {
         var branding = await BrandingService.GetAsync();
-        brandingIconSrc = branding.ResolvedIconLogo;
         brandingTextSrc = branding.ResolvedTextLogo;
         mevcutLisans = await LicenseService.GetCurrentLicenseAsync();
     }

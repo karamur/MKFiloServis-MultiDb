@@ -26,7 +26,6 @@
         <!-- Header -->
         <div class="setup-header">
             <div class="logo-container logo-branding-preview">
-                <img src="@setupIconSrc" alt="Amblem" class="setup-logo-icon" />
                 <img src="@setupTextLogoSrc" alt="Yazı Logo" class="setup-logo-text" />
             </div>
             <h1>MK Filo Servis</h1>
@@ -104,20 +103,9 @@
                 <div class="card border-0 bg-light mb-3">
                     <div class="card-body">
                         <h6 class="fw-bold mb-3"><i class="bi bi-images me-2"></i>Login ve uygulama markalama</h6>
-                        <p class="text-muted small mb-3">Giriş ekranı ve menüde kullanılacak amblem ile yazı logosunu kullanıcıdan isteyip burada yükleyin. Yüklemezseniz varsayılan görseller kullanılır.</p>
+                        <p class="text-muted small mb-3">Giriş ekranı ve menüde kullanılacak yazı logosunu burada yükleyin. Yüklemezseniz varsayılan görsel kullanılır.</p>
                         <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label">Amblem / Sembol</label>
-                                <InputFile OnChange="BrandingAmblemYukle" accept="image/*" class="form-control" />
-                                <div class="form-text">PNG, JPG, SVG veya WebP. Maks 2 MB.</div>
-                                <div class="mt-2 border rounded bg-white p-2 text-center" style="min-height:60px;">
-                                    @if (HasBrandingPreview(brandingIconLogo))
-                                    {
-                                        <img src="@brandingIconLogo" alt="Amblem" style="max-height:80px;max-width:100%;object-fit:contain;" />
-                                    }
-                                </div>
-                            </div>
-                            <div class="col-md-6">
+                            <div class="col-md-12">
                                 <label class="form-label">Yazı Logosu</label>
                                 <InputFile OnChange="BrandingYaziLogosuYukle" accept="image/*" class="form-control" />
                                 <div class="form-text">Firma adı veya yatay logo görseli yükleyin.</div>
@@ -389,7 +377,6 @@
     private int aktifAdim = 1;
     private bool islemDevamEdiyor = false;
     private string hataMesaji = string.Empty;
-    private string setupIconSrc = BrandingService.DefaultIconPath;
     private string setupTextLogoSrc = BrandingService.DefaultTextLogoPath;
 
     // Adım 1 - Firma
@@ -399,7 +386,6 @@
     private string firmaTelefon = string.Empty;
     private string firmaEmail = string.Empty;
     private string firmaAdres = string.Empty;
-    private string? brandingIconLogo;
     private string? brandingTextLogo;
     private string? brandingHataMesaji;
 
@@ -416,7 +402,6 @@
         try
         {
             var branding = await BrandingService.GetAsync();
-            setupIconSrc = branding.ResolvedIconLogo;
             setupTextLogoSrc = branding.ResolvedTextLogo;
 
             using var ctx = await DbContextFactory.CreateDbContextAsync();
@@ -500,7 +485,7 @@
             });
             await ctx.SaveChangesAsync();
 
-            await BrandingService.SaveAsync(brandingIconLogo, brandingTextLogo);
+            await BrandingService.SaveAsync(brandingTextLogo);
             aktifAdim = 3;
         }
         catch (Exception ex)
@@ -564,15 +549,6 @@
         }
 
         return candidate;
-    }
-
-    private async Task BrandingAmblemYukle(InputFileChangeEventArgs e)
-    {
-        var yeniGorsel = await ReadImageAsDataUrlAsync(e.File);
-        if (yeniGorsel != null)
-        {
-            brandingIconLogo = yeniGorsel;
-        }
     }
 
     private async Task BrandingYaziLogosuYukle(InputFileChangeEventArgs e)

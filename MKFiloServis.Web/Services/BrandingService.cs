@@ -6,7 +6,6 @@ namespace MKFiloServis.Web.Services;
 
 public sealed class BrandingService
 {
-    public const string DefaultIconPath = "images/logo.png";
     public const string DefaultTextLogoPath = "images/YaziLogo.png";
 
     private const string IconKey = "Branding.IconLogo";
@@ -30,24 +29,40 @@ public sealed class BrandingService
 
         return new BrandingSettings
         {
-            IconLogo = settings.FirstOrDefault(x => x.Anahtar == IconKey)?.Deger,
-            TextLogo = settings.FirstOrDefault(x => x.Anahtar == TextLogoKey)?.Deger
+            TextLogo = settings
+                .Where(x => x.Anahtar == TextLogoKey)
+                .OrderByDescending(x => x.GuncellenmeTarihi)
+                .Select(x => x.Deger)
+                .FirstOrDefault()
+                ?? settings
+                    .Where(x => x.Anahtar == IconKey)
+                    .OrderByDescending(x => x.GuncellenmeTarihi)
+                    .Select(x => x.Deger)
+                    .FirstOrDefault()
         };
     }
 
-    public async Task SaveAsync(string? iconLogo, string? textLogo)
+    public async Task SaveAsync(string? textLogo)
     {
         using var context = await _contextFactory.CreateDbContextAsync();
 
-        await UpsertAsync(context, IconKey, Normalize(iconLogo), "Giris ve menu icin amblem/logo");
-        await UpsertAsync(context, TextLogoKey, Normalize(textLogo), "Giris ve menu icin yazi logosu");
+        var normalizedLogo = Normalize(textLogo);
+        await UpsertAsync(context, IconKey, normalizedLogo, "Giris ve menu icin amblem/logo");
+        await UpsertAsync(context, TextLogoKey, normalizedLogo, "Giris ve menu icin yazi logosu");
 
         await context.SaveChangesAsync();
     }
 
     private static async Task UpsertAsync(ApplicationDbContext context, string key, string? value, string description)
     {
-        var existing = await context.AppAyarlari.FirstOrDefaultAsync(x => x.Anahtar == key);
+        var existingEntries = await context.AppAyarlari
+            .AsTracking()
+            .Where(x => x.Anahtar == key)
+            .OrderByDescending(x => x.GuncellenmeTarihi)
+            .ThenByDescending(x => x.Id)
+            .ToListAsync();
+
+        var existing = existingEntries.FirstOrDefault();
         if (existing == null)
         {
             context.AppAyarlari.Add(new AppAyarlari
@@ -65,6 +80,11 @@ public sealed class BrandingService
         existing.Aciklama = description;
         existing.Kategori = "Branding";
         existing.GuncellenmeTarihi = DateTime.UtcNow;
+
+        if (existingEntries.Count > 1)
+        {
+            context.AppAyarlari.RemoveRange(existingEntries.Skip(1));
+        }
     }
 
     private static string? Normalize(string? value)
@@ -73,12 +93,7 @@ public sealed class BrandingService
 
 public sealed class BrandingSettings
 {
-    public string? IconLogo { get; set; }
     public string? TextLogo { get; set; }
-
-    public string ResolvedIconLogo => string.IsNullOrWhiteSpace(IconLogo)
-        ? BrandingService.DefaultIconPath
-        : IconLogo;
 
     public string ResolvedTextLogo => string.IsNullOrWhiteSpace(TextLogo)
         ? BrandingService.DefaultTextLogoPath

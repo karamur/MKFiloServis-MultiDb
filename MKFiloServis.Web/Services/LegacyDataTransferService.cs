@@ -60,30 +60,14 @@ public class LegacyDataTransferService
 
     /// <summary>
     /// Hedef veritabanı şemasını hazırlar.
-    /// 1) Pending migration'ları uygular
-    /// 2) Migrations history kirli olsa bile model create script'inden eksik tabloları tamamlamayı dener
-    /// 3) Son olarak EnsureCreated fallback'i çalıştırır
+    /// 1) Model create script'inden eksik tabloları tamamlamayı dener
+    /// 2) Son olarak EnsureCreated fallback'i çalıştırır
     /// </summary>
     public async Task EnsureSchemaAsync()
     {
         var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
         optionsBuilder.UseNpgsql(_targetConnStr);
         using var ctx = new ApplicationDbContext(optionsBuilder.Options);
-
-        try
-        {
-            var pending = (await ctx.Database.GetPendingMigrationsAsync()).ToList();
-            if (pending.Count > 0)
-            {
-                _logger.LogInformation("Schema hazirlik: {Count} pending migration uygulanıyor...", pending.Count);
-                await ctx.Database.MigrateAsync();
-                _logger.LogInformation("Schema hazirlik: migration uygulamasi tamamlandi.");
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Schema hazirlik: migration adımı hata verdi, model script fallback denenecek.");
-        }
 
         await EnsureSchemaFromModelScriptAsync(ctx);
 
