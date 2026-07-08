@@ -147,10 +147,10 @@
                                                                             <button type="button" class="btn btn-outline-primary" @onclick="() => AylikDuzenlemeAc(e.Id, aylik)">
                                                                                 <i class="bi bi-pencil"></i>
                                                                             </button>
-                                                                            <button type="button" class="btn btn-outline-success" @onclick="() => KaydetOlusanPuantajGridAsync(e.Id, aylik.Yil, aylik.Ay)">
+                                                                            <button type="button" class="btn btn-outline-success" @onclick="() => KaydetOlusanPuantajGridAsync(e.Id, aylik.GunMap.Values.Select(x => x.Id).ToList())">
                                                                                 <i class="bi bi-save"></i>
                                                                             </button>
-                                                                            <button type="button" class="btn btn-outline-danger" @onclick="() => SilOlusanPuantajAylikAsync(e.Id, aylik.Yil, aylik.Ay)">
+                                                                            <button type="button" class="btn btn-outline-danger" @onclick="() => SilOlusanPuantajAylikAsync(e.Id, aylik.Yil, aylik.Ay, aylik.GunMap.Values.Select(x => x.Id).ToList())">
                                                                                 <i class="bi bi-trash"></i>
                                                                             </button>
                                                                         </div>
@@ -1115,16 +1115,19 @@
     private void AylikDuzenlemeAc(int eslestirmeId, AylikPuantajGridModel aylik)
         => aylikDuzenlemeAnahtarlari.Add(AylikDuzenlemeKey(eslestirmeId, aylik.Yil, aylik.Ay));
 
-    private async Task KaydetOlusanPuantajGridAsync(int eslestirmeId, int? yil = null, int? ay = null)
+    private async Task KaydetOlusanPuantajGridAsync(int eslestirmeId, List<int>? hedefPuantajIds = null)
     {
         if (!olusanPuantajlarByEslestirme.TryGetValue(eslestirmeId, out var puantajlar) || !puantajlar.Any())
             return;
 
         try
         {
+            var hedefIdSet = hedefPuantajIds is { Count: > 0 }
+                ? hedefPuantajIds.Distinct().ToHashSet()
+                : null;
+
             var guncellenecekler = puantajlar
-                .Where(p => p.Id > 0)
-                .Where(p => !yil.HasValue || (p.Tarih.Year == yil.Value && p.Tarih.Month == ay))
+                .Where(p => p.Id > 0 && (hedefIdSet == null || hedefIdSet.Contains(p.Id)))
                 .ToList();
 
             if (!guncellenecekler.Any())
@@ -1135,10 +1138,13 @@
 
             await FiloKomisyonService.UpdateGunlukPuantajlarAsync(guncellenecekler);
 
-            if (yil.HasValue && ay.HasValue)
-                aylikDuzenlemeAnahtarlari.Remove(AylikDuzenlemeKey(eslestirmeId, yil.Value, ay.Value));
+            if (guncellenecekler.Any())
+            {
+                var first = guncellenecekler.First();
+                aylikDuzenlemeAnahtarlari.Remove(AylikDuzenlemeKey(eslestirmeId, first.Tarih.Year, first.Tarih.Month));
+            }
 
-            ToastService.ShowSuccess("Gün bazlı puantaj değişiklikleri kaydedildi.");
+            ToastService.ShowSuccess($"Gün bazlı puantaj değişiklikleri kaydedildi ({guncellenecekler.Count} kayıt).");
             await ListeYenile();
         }
         catch (Exception ex)
@@ -1147,13 +1153,18 @@
         }
     }
 
-    private async Task SilOlusanPuantajAylikAsync(int eslestirmeId, int yil, int ay)
+    private async Task SilOlusanPuantajAylikAsync(int eslestirmeId, int yil, int ay, List<int>? hedefPuantajIds = null)
     {
         if (!olusanPuantajlarByEslestirme.TryGetValue(eslestirmeId, out var puantajlar) || !puantajlar.Any())
             return;
 
+        var hedefIdSet = hedefPuantajIds is { Count: > 0 }
+            ? hedefPuantajIds.Distinct().ToHashSet()
+            : null;
+
         var silinecekIds = puantajlar
             .Where(p => p.Id > 0 && p.Tarih.Year == yil && p.Tarih.Month == ay)
+            .Where(p => hedefIdSet == null || hedefIdSet.Contains(p.Id))
             .Select(p => p.Id)
             .Distinct()
             .ToList();
@@ -1166,9 +1177,16 @@
 
         try
         {
-            await FiloKomisyonService.DeleteGunlukPuantajlarAsync(silinecekIds);
+            var etkilenen = await FiloKomisyonService.DeleteGunlukPuantajlarAsync(silinecekIds);
             aylikDuzenlemeAnahtarlari.Remove(AylikDuzenlemeKey(eslestirmeId, yil, ay));
-            ToastService.ShowSuccess("Aylık puantaj satırı silindi.");
+
+            if (etkilenen <= 0)
+            {
+                ToastService.ShowWarning("Silme işlemi veritabanına yansımadı.");
+                return;
+            }
+
+            ToastService.ShowSuccess($"Aylık puantaj satırı silindi ({etkilenen} kayıt).");
             await ListeYenile();
         }
         catch (Exception ex)

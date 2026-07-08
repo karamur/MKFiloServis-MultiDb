@@ -261,10 +261,10 @@ public class FiloKomisyonService : IFiloKomisyonService
         await context.SaveChangesAsync();
     }
 
-    public async Task DeleteGunlukPuantajlarAsync(List<int> puantajIds)
+    public async Task<int> DeleteGunlukPuantajlarAsync(List<int> puantajIds)
     {
         if (puantajIds is null || puantajIds.Count == 0)
-            return;
+            return 0;
 
         await using var context = await _contextFactory.CreateDbContextAsync();
 
@@ -278,7 +278,7 @@ public class FiloKomisyonService : IFiloKomisyonService
             kayit.UpdatedAt = DateTime.UtcNow;
         }
 
-        await context.SaveChangesAsync();
+        return await context.SaveChangesAsync();
     }
 
     public async Task KurumFaturalastirAsync(List<int> puantajIds)

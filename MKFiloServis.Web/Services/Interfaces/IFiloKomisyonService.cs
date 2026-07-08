@@ -34,7 +34,7 @@ public interface IFiloKomisyonService
     Task<FiloGunlukPuantaj> CreatePuantajAsync(FiloGunlukPuantaj puantaj);
     Task<FiloGunlukPuantaj> UpdateGunlukPuantajAsync(FiloGunlukPuantaj puantaj);
     Task UpdateGunlukPuantajlarAsync(List<FiloGunlukPuantaj> puantajlar);
-    Task DeleteGunlukPuantajlarAsync(List<int> puantajIds);
+    Task<int> DeleteGunlukPuantajlarAsync(List<int> puantajIds);
 
     /// <summary>
     /// Ekrandan Fatura Kes / Tahsil Et (Toplu İşlem)
