@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Services.Calculation;
@@ -93,13 +93,14 @@ public class PuantajExcelService
         var soforler = await context.Soforler.AsNoTracking().Where(s => !s.IsDeleted).ToListAsync();
         var araclar = await context.Araclar.AsNoTracking().Where(a => !a.IsDeleted).ToListAsync();
 
-        // Mükerrer engelleme: mevcut hakediş kayıtları
-        var mevcutHakedisler = await context.HakedisPuantajlar.AsNoTracking()
-            .Where(h => h.Yil == yil && h.Ay == ay && h.FirmaId == firmaId && !h.IsDeleted)
-            .Select(h => new { h.GuzergahId, h.SoforId })
+        // Mükerrer engelleme: aynı dönem/kurum için mevcut yeni model hakediş kayıtları
+        var mevcutReferanslar = await context.Hakedisler.AsNoTracking()
+            .Where(h => h.Yil == yil && h.Ay == ay && h.FirmaId == firmaId && h.Tip == HakedisTipi.Kurum && !h.IsDeleted)
+            .Select(h => h.ReferansId)
             .ToListAsync();
 
-        var yeniler = new List<HakedisPuantaj>();
+        var mevcutReferansSet = mevcutReferanslar.ToHashSet();
+        var yenilerByReferans = new Dictionary<int, Hakedis>();
 
         for (int i = 1; i < rows.Count; i++)
         {
@@ -114,36 +115,52 @@ public class PuantajExcelService
 
                 if (guzergah == null) { sonuc.Hatalar.Add($"Satır {i + 1}: Güzergah bulunamadı '{input.Guzergah}'"); sonuc.Hata++; continue; }
                 if (sofor == null) { sonuc.Hatalar.Add($"Satır {i + 1}: Şoför bulunamadı '{input.Sofor}'"); sonuc.Hata++; continue; }
+                if (cari == null) { sonuc.Hatalar.Add($"Satır {i + 1}: Kurum cari eşleşmesi bulunamadı '{input.Kurum}'"); sonuc.Hata++; continue; }
 
-                // Duplicate kontrol: aynı güzergah+şoför bu ay zaten kayıtlı mı?
-                if (mevcutHakedisler.Any(h => h.GuzergahId == guzergah.Id && h.SoforId == sofor.Id))
-                { sonuc.Atlanan++; continue; }
-
-                var hakedis = new HakedisPuantaj
+                // Duplicate kontrol: aynı kurum için bu ay zaten yeni model hakediş varsa satırı atla
+                if (mevcutReferansSet.Contains(cari.Id))
                 {
-                    FirmaId = firmaId, Yil = yil, Ay = ay,
-                    GuzergahId = guzergah.Id, SoforId = sofor.Id, AracId = arac?.Id ?? 0,
-                    CariId = cari?.Id ?? 0,
-                    GunlukSeferSayisi = engineSonuc.Sefer,
-                    ToplamSefer = engineSonuc.Sefer,
-                    BirimFiyat = engineSonuc.BirimFiyat,
-                    GelirBirimFiyat = engineSonuc.BirimFiyat,
-                    GiderBirimFiyat = engineSonuc.BirimFiyat,
-                    GelirToplam = engineSonuc.Toplam,
-                    GiderToplam = engineSonuc.Toplam,
-                    ToplamKesinti = engineSonuc.Kesinti,
-                    OdenecekTutar = engineSonuc.Net,
-                    TahsilEdilecekTutar = engineSonuc.Toplam,
-                    CreatedAt = DateTime.UtcNow
-                };
-                yeniler.Add(hakedis);
+                    sonuc.Atlanan++;
+                    continue;
+                }
+
+                if (!yenilerByReferans.TryGetValue(cari.Id, out var hakedis))
+                {
+                    hakedis = new Hakedis
+                    {
+                        FirmaId = firmaId,
+                        Yil = yil,
+                        Ay = ay,
+                        Tip = HakedisTipi.Kurum,
+                        ReferansId = cari.Id,
+                        Durum = HakedisDurum.Taslak,
+                        ToplamSeferSayisi = 0,
+                        BirimFiyat = 0,
+                        Tutar = 0,
+                        KdvOran = 20,
+                        KdvTutar = 0,
+                        GenelToplam = 0,
+                        CreatedAt = DateTime.UtcNow,
+                        GenerationParams = "{\"Kaynak\":\"PuantajExcelImport\"}"
+                    };
+                    yenilerByReferans[cari.Id] = hakedis;
+                }
+
+                hakedis.ToplamSeferSayisi += engineSonuc.Sefer;
+                hakedis.Tutar += engineSonuc.Toplam;
+                hakedis.BirimFiyat = hakedis.ToplamSeferSayisi > 0
+                    ? hakedis.Tutar / hakedis.ToplamSeferSayisi
+                    : engineSonuc.BirimFiyat;
+                hakedis.KdvTutar = hakedis.Tutar * hakedis.KdvOran / 100m;
+                hakedis.GenelToplam = hakedis.Tutar + hakedis.KdvTutar;
             }
             catch (Exception ex) { sonuc.Hatalar.Add($"Satır {i + 1}: {ex.Message}"); sonuc.Hata++; }
         }
 
-        if (yeniler.Any())
+        if (yenilerByReferans.Any())
         {
-            context.HakedisPuantajlar.AddRange(yeniler);
+            var yeniler = yenilerByReferans.Values.ToList();
+            context.Hakedisler.AddRange(yeniler);
             await context.SaveChangesAsync();
             sonuc.Kaydedilen = yeniler.Count;
             sonuc.Basarili = true;

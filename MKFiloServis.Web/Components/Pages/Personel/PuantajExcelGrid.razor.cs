@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Models;
@@ -575,19 +575,25 @@ public partial class PuantajExcelGrid
                 _mesaj = $"AI uyarısı: {anomaliCount} satırda anormal pattern tespit edildi. Lütfen kontrol edin.";
             // AI block etmez, sadece uyarır
 
-            // Faz 4: Grid → HakedisPuantaj senkronizasyonu
+            // Faz 4: Grid → Hakedis (yeni model) senkronizasyonu
             try
             {
                 await SyncService.SyncFromGridAsync(_firmaId, _yil, _ay, satirlar);
 
-                // 🔴 Backend validation: Grid toplamı == HakedisPuantaj toplamı mı?
+                // 🔴 Backend validation: Grid toplamı == HakedisDetay toplamı mı?
                 var gridToplam = satirlar.Sum(s => s.ToplamSefer);
-                var hakedisToplam = await context.HakedisPuantajlar
-                    .Where(h => h.FirmaId == _firmaId && h.Yil == _yil && h.Ay == _ay && !h.IsDeleted)
-                    .SumAsync(h => h.ToplamSefer);
+                var hakedisToplam = await context.HakedisDetaylari
+                    .Where(d => d.FirmaId == _firmaId
+                        && d.Hakedis != null
+                        && d.Hakedis.Yil == _yil
+                        && d.Hakedis.Ay == _ay
+                        && d.Hakedis.Tip == HakedisTipi.Kurum
+                        && !d.IsDeleted
+                        && !d.Hakedis.IsDeleted)
+                    .SumAsync(d => d.SeferSayisi);
                 if (gridToplam != hakedisToplam)
                 {
-                    _mesaj = $"UYARI: Grid toplamı ({gridToplam}) ≠ Hakedis toplamı ({hakedisToplam}). Lütfen denetim çalıştırın.";
+                    _mesaj = $"UYARI: Grid toplamı ({gridToplam}) ≠ HakedisDetay toplamı ({hakedisToplam}). Lütfen denetim çalıştırın.";
                     _mesajHata = true;
                 }
             }

@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -22,7 +22,7 @@ public class DenetimService
         await using var db = await _dbFactory.CreateDbContextAsync();
         var rapor = new DenetimRaporu { FirmaId = firmaId, Yil = yil, Ay = ay };
 
-        var hakedisler = await db.HakedisPuantajlar
+        var hakedisler = await db.Hakedisler
             .Where(h => h.FirmaId == firmaId && h.Yil == yil && h.Ay == ay && !h.IsDeleted)
             .ToListAsync();
 
@@ -31,18 +31,26 @@ public class DenetimService
             .ToListAsync();
 
         var snapshotTx = await db.SnapshotTransactions
-            .Where(t => t.FirmaId == firmaId && t.Yil == yil && t.Ay == ay && !t.IsDeleted)
+            .Where(t => t.FirmaId == firmaId
+                && t.Yil == yil
+                && t.Ay == ay
+                && !t.IsDeleted
+                && t.IslemTipi.StartsWith("HakedisFinans"))
             .ToListAsync();
 
-        // Kontrol 1: HakedisPuantaj toplamı == Snapshot
-        var hakedisGelir = hakedisler.Sum(h => h.TahsilEdilecekTutar);
-        var hakedisGider = hakedisler.Sum(h => h.OdenecekTutar);
+        // Kontrol 1: Hakedis toplamı == Snapshot
+        var hakedisGelir = hakedisler
+            .Where(h => h.Tip == HakedisTipi.Kurum)
+            .Sum(h => h.GenelToplam > 0 ? h.GenelToplam : h.Tutar);
+        var hakedisGider = hakedisler
+            .Where(h => h.Tip == HakedisTipi.Tedarikci)
+            .Sum(h => h.GenelToplam > 0 ? h.GenelToplam : h.Tutar);
         var snapshotGelir = snapshot.Sum(s => s.HakedisGelir);
         var snapshotGider = snapshot.Sum(s => s.HakedisGider);
 
         rapor.Kontroller.Add(new DenetimKontrol
         {
-            Ad = "Hakedis Gelir == Snapshot HakedisGelir",
+            Ad = "Hakedis (Kurum) Gelir == Snapshot HakedisGelir",
             Gecti = hakedisGelir == snapshotGelir,
             Beklenen = hakedisGelir,
             Gerceklesen = snapshotGelir,
@@ -50,7 +58,7 @@ public class DenetimService
         });
         rapor.Kontroller.Add(new DenetimKontrol
         {
-            Ad = "Hakedis Gider == Snapshot HakedisGider",
+            Ad = "Hakedis (Tedarikçi) Gider == Snapshot HakedisGider",
             Gecti = hakedisGider == snapshotGider,
             Beklenen = hakedisGider,
             Gerceklesen = snapshotGider,
@@ -77,8 +85,13 @@ public class DenetimService
             Fark = snapshotGider - txGider
         });
 
-        // Kontrol 3: Yarım zincir (Hakedis var ama fatura yok)
-        var yarimZincir = hakedisler.Where(h => h.GelirFaturaId == null && h.GiderFaturaId == null).ToList();
+        // Kontrol 3: Yarım zincir (faturalanabilir hakediş var ama fatura yok)
+        var yarimZincir = hakedisler
+            .Where(h => h.Tip != HakedisTipi.Arac
+                && h.Durum != HakedisDurum.Taslak
+                && h.Durum != HakedisDurum.Iptal
+                && h.FaturaId == null)
+            .ToList();
         rapor.Kontroller.Add(new DenetimKontrol
         {
             Ad = "Yarım zincir (faturasız hakedis)",
@@ -86,7 +99,7 @@ public class DenetimService
             Beklenen = 0,
             Gerceklesen = yarimZincir.Count,
             Fark = yarimZincir.Count,
-            Detay = yarimZincir.Any() ? string.Join(", ", yarimZincir.Select(h => $"#{h.Id}")) : null
+            Detay = yarimZincir.Any() ? string.Join(", ", yarimZincir.Select(h => $"#{h.Id} ({h.Tip})")) : null
         });
 
         // Kontrol 4: Eksik muhasebe fişi (Fatura var, Muhasebe yok)
@@ -104,14 +117,15 @@ public class DenetimService
             Detay = eksikMuhasebe.Any() ? string.Join(", ", eksikMuhasebe.Select(f => $"#{f.Id} {f.FaturaNo}")) : null
         });
 
-        // Kontrol 5: Yetim fatura (HakedisPuantaj silinmiş ama fatura duruyor)
+        // Kontrol 5: Yetim fatura (Hakedis bağlantısı kopuk)
         var hakedisFaturaIds = hakedisler
-            .SelectMany(h => new[] { h.GelirFaturaId, h.GiderFaturaId })
-            .Where(id => id.HasValue).Select(id => id!.Value).ToHashSet();
+            .Where(h => h.FaturaId.HasValue)
+            .Select(h => h.FaturaId!.Value)
+            .ToHashSet();
         var yetimFaturalar = faturalar.Where(f => !hakedisFaturaIds.Contains(f.Id)).ToList();
         rapor.Kontroller.Add(new DenetimKontrol
         {
-            Ad = "Yetim fatura (HakedisPuantaj bağlantısı kopuk)",
+            Ad = "Yetim fatura (Hakedis bağlantısı kopuk)",
             Gecti = !yetimFaturalar.Any(),
             Beklenen = 0,
             Gerceklesen = yetimFaturalar.Count,
@@ -129,16 +143,22 @@ public class DenetimService
             Gerceklesen = gelirFark + giderFark,
             Fark = gelirFark + giderFark
         });
-        var islenmisler = hakedisler.Where(h => h.GelirFaturaId != null || h.GiderFaturaId != null).ToList();
-        var txHakedisIds = snapshotTx.Select(t => t.HakedisPuantajId).ToHashSet();
-        var eksikTx = islenmisler.Where(h => !txHakedisIds.Contains(h.Id)).ToList();
+        var islenmisler = hakedisler.Where(h => h.FaturaId != null).ToList();
+        var txFaturaIds = snapshotTx
+            .Where(t => t.FaturaId.HasValue)
+            .Select(t => t.FaturaId!.Value)
+            .ToHashSet();
+        var eksikTx = islenmisler
+            .Where(h => h.FaturaId.HasValue && !txFaturaIds.Contains(h.FaturaId.Value))
+            .ToList();
         rapor.Kontroller.Add(new DenetimKontrol
         {
-            Ad = "Her işlenmiş hakediş için SnapshotTransaction var",
+            Ad = "Her işlenmiş hakediş (faturalı) için SnapshotTransaction var",
             Gecti = !eksikTx.Any(),
             Beklenen = islenmisler.Count,
             Gerceklesen = islenmisler.Count - eksikTx.Count,
-            Fark = eksikTx.Count
+            Fark = eksikTx.Count,
+            Detay = eksikTx.Any() ? string.Join(", ", eksikTx.Select(h => $"#{h.Id} (Fatura:{h.FaturaId})")) : null
         });
 
         rapor.GecenKontrol = rapor.Kontroller.Count(k => k.Gecti);

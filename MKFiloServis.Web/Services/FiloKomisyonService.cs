@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -218,23 +218,35 @@ public class FiloKomisyonService : IFiloKomisyonService
         var existing = await context.FiloGunlukPuantajlar.FindAsync(puantaj.Id);
         if(existing != null)
         {
-            existing.Durum = puantaj.Durum;
-            existing.PuantajCarpani = puantaj.PuantajCarpani;
-            existing.TahakkukEdenKurumUcreti = puantaj.TahakkukEdenKurumUcreti;
-            existing.TahakkukEdenTaseronUcreti = puantaj.TahakkukEdenTaseronUcreti;
-            existing.TaksiKullanildiMi = puantaj.TaksiKullanildiMi;
-            existing.TaksiFisTutari = puantaj.TaksiFisTutari;
-            existing.TaksiFisAciklama = puantaj.TaksiFisAciklama;
-            existing.ArizaYaptiMi = puantaj.ArizaYaptiMi;
-            existing.ArizaAciklamasi = puantaj.ArizaAciklamasi;
-            existing.Notlar = puantaj.Notlar;
-
-            await UygulaPuantajKurallariAsync(context, existing);
-            existing.UpdatedAt = DateTime.UtcNow;
-
+            await MapAndApplyRulesAsync(context, existing, puantaj);
             await context.SaveChangesAsync();
         }
         return existing ?? puantaj;
+    }
+
+    public async Task UpdateGunlukPuantajlarAsync(List<FiloGunlukPuantaj> puantajlar)
+    {
+        if (puantajlar is null || puantajlar.Count == 0)
+            return;
+
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var ids = puantajlar.Select(x => x.Id).Distinct().ToList();
+        var mevcutlar = await context.FiloGunlukPuantajlar
+            .Where(x => ids.Contains(x.Id) && !x.IsDeleted)
+            .ToListAsync();
+
+        var mevcutById = mevcutlar.ToDictionary(x => x.Id);
+
+        foreach (var gelen in puantajlar)
+        {
+            if (!mevcutById.TryGetValue(gelen.Id, out var existing))
+                continue;
+
+            await MapAndApplyRulesAsync(context, existing, gelen);
+        }
+
+        await context.SaveChangesAsync();
     }
 
     public async Task KurumFaturalastirAsync(List<int> puantajIds)
@@ -319,6 +331,24 @@ public class FiloKomisyonService : IFiloKomisyonService
             .ToListAsync();
     }
 
+    private async Task MapAndApplyRulesAsync(ApplicationDbContext context, FiloGunlukPuantaj existing, FiloGunlukPuantaj source)
+    {
+        existing.Durum = source.Durum;
+        existing.PuantajCarpani = source.PuantajCarpani;
+        existing.SeferSayisi = source.SeferSayisi;
+        existing.TahakkukEdenKurumUcreti = source.TahakkukEdenKurumUcreti;
+        existing.TahakkukEdenTaseronUcreti = source.TahakkukEdenTaseronUcreti;
+        existing.TaksiKullanildiMi = source.TaksiKullanildiMi;
+        existing.TaksiFisTutari = source.TaksiFisTutari;
+        existing.TaksiFisAciklama = source.TaksiFisAciklama;
+        existing.ArizaYaptiMi = source.ArizaYaptiMi;
+        existing.ArizaAciklamasi = source.ArizaAciklamasi;
+        existing.Notlar = source.Notlar;
+
+        await UygulaPuantajKurallariAsync(context, existing);
+        existing.UpdatedAt = DateTime.UtcNow;
+    }
+
     private async Task UygulaSahiplikKurallariAsync(ApplicationDbContext context, FiloGuzergahEslestirme eslestirme)
     {
         var arac = await context.Araclar
@@ -353,12 +383,35 @@ public class FiloKomisyonService : IFiloKomisyonService
         }
 
         var puantajCarpani = puantaj.PuantajCarpani < 0 ? 0 : puantaj.PuantajCarpani;
+        var seferSayisi = puantaj.SeferSayisi < 0 ? 0 : puantaj.SeferSayisi;
         var servisCarpani = GetServisTuruCarpani(puantaj.ServisTuru);
-        puantaj.TahakkukEdenKurumUcreti = Math.Round(eslestirme.KurumaKesilecekUcret * puantajCarpani * servisCarpani, 2, MidpointRounding.AwayFromZero);
 
-        puantaj.TahakkukEdenTaseronUcreti = eslestirme.Arac.SahiplikTipi == AracSahiplikTipi.Komisyon
-            ? Math.Round(eslestirme.TaseronaOdenenUcret * puantajCarpani * servisCarpani, 2, MidpointRounding.AwayFromZero)
+        puantaj.TahakkukEdenKurumUcreti = Math.Round(
+            eslestirme.KurumaKesilecekUcret * seferSayisi * puantajCarpani * servisCarpani,
+            2,
+            MidpointRounding.AwayFromZero);
+
+        puantaj.TahakkukEdenTaseronUcreti = eslestirme.Arac.SahiplikTipi is AracSahiplikTipi.Komisyon or AracSahiplikTipi.Tedarikci
+            ? Math.Round(eslestirme.TaseronaOdenenUcret * seferSayisi * puantajCarpani * servisCarpani, 2, MidpointRounding.AwayFromZero)
             : 0;
+
+        // Özmal / Kiralık araçlarda, ilgili dönem snapshot varsa sefer başı maliyeti puantaja yansıt.
+        if (eslestirme.Arac.SahiplikTipi is AracSahiplikTipi.Ozmal or AracSahiplikTipi.Kiralik)
+        {
+            var snap = await context.AracMaliyetSnapshotlari
+                .AsNoTracking()
+                .Where(s => s.AracId == puantaj.AracId && s.Yil == puantaj.Tarih.Year && s.Ay == puantaj.Tarih.Month)
+                .Select(s => new { s.ToplamSefer, ToplamMaliyet = s.ToplamMaliyet })
+                .FirstOrDefaultAsync();
+
+            puantaj.MaliyetOzmalKiralik = snap != null && snap.ToplamSefer > 0
+                ? Math.Round(snap.ToplamMaliyet / snap.ToplamSefer, 2, MidpointRounding.AwayFromZero)
+                : null;
+        }
+        else
+        {
+            puantaj.MaliyetOzmalKiralik = null;
+        }
     }
 
     private static decimal GetServisTuruCarpani(ServisTuru servisTuru)

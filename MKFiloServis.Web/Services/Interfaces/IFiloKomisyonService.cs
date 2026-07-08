@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using MKFiloServis.Shared.Entities;
@@ -33,6 +33,7 @@ public interface IFiloKomisyonService
 
     Task<FiloGunlukPuantaj> CreatePuantajAsync(FiloGunlukPuantaj puantaj);
     Task<FiloGunlukPuantaj> UpdateGunlukPuantajAsync(FiloGunlukPuantaj puantaj);
+    Task UpdateGunlukPuantajlarAsync(List<FiloGunlukPuantaj> puantajlar);
 
     /// <summary>
     /// Ekrandan Fatura Kes / Tahsil Et (Toplu İşlem)

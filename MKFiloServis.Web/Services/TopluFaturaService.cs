@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Models;
 using Microsoft.EntityFrameworkCore;
@@ -349,7 +349,7 @@ public class TopluFaturaService : ITopluFaturaService
             throw new InvalidOperationException(
                 "TopluFatura devre dışı bırakıldı. " +
                 "Fatura oluşturmak için lütfen PuantajExcelGrid (/personel/puantaj-grid) üzerinden puantaj girin, " +
-                "kaydedin ve HakedisPuantaj → PuantajFinansService.IsleAsync zincirini kullanın.");
+                "kaydedin ve Hakedis → PuantajFinansService.IsleAsync zincirini kullanın.");
         }
         catch (Exception ex)
         {

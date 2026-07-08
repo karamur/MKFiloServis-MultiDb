@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,7 +29,7 @@ public class FinansDashboardService
         // Snapshot güvenilir mi? (kilitli + fiş var)
         var snapshotKullaniliyor = snapshot.Any() && snapshot.All(x => x.Kilitli) && snapshot.Any(x => x.MuhasebeFisId != null);
 
-        // Hakediş verisi: Snapshot varsa oradan, yoksa canlı HakedisPuantaj'dan
+        // Hakediş verisi: Snapshot varsa oradan, yoksa canlı Hakedis'ten (yeni operasyonel model)
         decimal toplamHakedisGelir, toplamHakedisGider;
         int toplamSefer;
 
@@ -42,23 +42,26 @@ public class FinansDashboardService
         }
         else
         {
-            // Fallback: Snapshot yoksa canlı HakedisPuantaj'dan oku (geçiş dönemi)
-            var hakedisler = await context.HakedisPuantajlar
+            // Fallback: Snapshot yoksa canlı Hakedis tablosundan oku (yeni operasyonel model)
+            var hakedisler = await context.Hakedisler
                 .AsNoTracking()
                 .Where(x => x.Yil == yil && x.Ay == ay && x.FirmaId == firmaId && !x.IsDeleted)
                 .ToListAsync();
-            toplamHakedisGelir = hakedisler.Sum(x => x.TahsilEdilecekTutar);
-            toplamHakedisGider = hakedisler.Sum(x => x.OdenecekTutar);
 
-            // Operasyon kayıtları (sefer sayısı — sadece fallback'te)
-            var donemBaslangic = new DateTime(yil, ay, 1);
-            var donemBitis = donemBaslangic.AddMonths(1);
-            var operasyonlar = await context.OperasyonKayitlari
-                .AsNoTracking()
-                .Where(x => x.FirmaId == firmaId && !x.IsDeleted
-                         && x.Tarih >= donemBaslangic && x.Tarih < donemBitis)
-                .ToListAsync();
-            toplamSefer = operasyonlar.Sum(x => x.SeferSayisi);
+            toplamHakedisGelir = hakedisler
+                .Where(x => x.Tip == HakedisTipi.Kurum)
+                .Sum(x => x.GenelToplam > 0 ? x.GenelToplam : x.Tutar);
+
+            toplamHakedisGider = hakedisler
+                .Where(x => x.Tip == HakedisTipi.Tedarikci)
+                .Sum(x => x.GenelToplam > 0 ? x.GenelToplam : x.Tutar);
+
+            // Sefer sayısında çift sayımı önlemek için kurum hakedişleri baz alınır.
+            toplamSefer = (int)Math.Round(
+                hakedisler
+                    .Where(x => x.Tip == HakedisTipi.Kurum)
+                    .Sum(x => x.ToplamSeferSayisi),
+                MidpointRounding.AwayFromZero);
         }
 
         // Muhasebe fişleri — YIL + AY + FİRMA + ONAYLI (770 gider)

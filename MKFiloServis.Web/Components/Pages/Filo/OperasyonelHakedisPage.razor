@@ -1,0 +1,585 @@
+﻿@page "/operasyonel-hakedis"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services.Interfaces
+@using Microsoft.JSInterop
+@inject IOperasyonelHakedisService HakedisService
+@inject IFirmaService FirmaService
+@inject ITasimaTedarikciService TedarikciService
+@inject IAracService AracService
+@inject IPdfService PdfService
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Operasyonel Hakediş</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="bi bi-receipt-cutoff me-2"></i>Operasyonel Hakediş</h3>
+        <button class="btn btn-outline-secondary" @onclick="YukleAsync" disabled="@isBusy">
+            <i class="bi bi-arrow-clockwise me-1"></i>Yenile
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(hataMesaji))
+    {
+        <div class="alert alert-danger">@hataMesaji</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(bilgiMesaji))
+    {
+        <div class="alert alert-success">@bilgiMesaji</div>
+    }
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Yıl</label>
+                    <InputNumber class="form-control" @bind-Value="yil" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Ay</label>
+                    <InputNumber class="form-control" @bind-Value="ay" min="1" max="12" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Tip</label>
+                    <InputSelect class="form-select" @bind-Value="seciliTip">
+                        <option value="@HakedisTipi.Kurum">Kurum</option>
+                        <option value="@HakedisTipi.Tedarikci">Tedarikçi</option>
+                        <option value="@HakedisTipi.Arac">Araç</option>
+                    </InputSelect>
+                </div>
+                <div class="col-md-5 d-flex gap-2 justify-content-end">
+                    <button class="btn btn-primary" @onclick="TopluUretAsync" disabled="@isBusy">
+                        <i class="bi bi-magic me-1"></i>Toplu Hakediş Üret
+                    </button>
+                    <button class="btn btn-outline-primary" @onclick="YukleAsync" disabled="@isBusy">
+                        <i class="bi bi-list-ul me-1"></i>Listele
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card border-0 bg-primary text-white shadow-sm">
+                <div class="card-body py-2">
+                    <div class="small opacity-75">Toplam</div>
+                    <div class="fs-4 fw-bold">@hakedisler.Count</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 bg-success text-white shadow-sm">
+                <div class="card-body py-2">
+                    <div class="small opacity-75">Taslak</div>
+                    <div class="fs-4 fw-bold">@hakedisler.Count(x => x.Durum == HakedisDurum.Taslak)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 bg-warning text-dark shadow-sm">
+                <div class="card-body py-2">
+                    <div class="small">Onaylı</div>
+                    <div class="fs-4 fw-bold">@hakedisler.Count(x => x.Durum == HakedisDurum.Onaylandi)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 bg-secondary text-white shadow-sm">
+                <div class="card-body py-2">
+                    <div class="small opacity-75">Faturalı</div>
+                    <div class="fs-4 fw-bold">@hakedisler.Count(x => x.Durum == HakedisDurum.Faturalandi)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (isBusy)
+    {
+        <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+    }
+    else
+    {
+        <div class="card shadow-sm">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <strong>@yil/@ay Dönemi - @GetTipText(seciliTip) Hakedişleri</strong>
+                <small class="text-muted">Seçilen satırlar için toplu işlem yapılabilir.</small>
+            </div>
+            <div class="card-body border-bottom">
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="TumunuSecKaldir" disabled="@isBusy || !hakedisler.Any()">
+                        <i class="bi bi-check2-square me-1"></i>
+                        @(TumSeciliMi ? "Seçimi Temizle" : "Tümünü Seç")
+                    </button>
+                    <button class="btn btn-sm btn-outline-success" @onclick="TopluOnaylaSecilenAsync" disabled="@isBusy || !SeciliTaslakIdler.Any()">
+                        <i class="bi bi-check2-circle me-1"></i>Toplu Onayla (@SeciliTaslakIdler.Count)
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary" @onclick="TopluFaturalaSecilenAsync" disabled="@isBusy || !SeciliFaturalanabilirIdler.Any()">
+                        <i class="bi bi-receipt me-1"></i>Toplu Faturala (@SeciliFaturalanabilirIdler.Count)
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" @onclick="TopluSilSecilenAsync" disabled="@isBusy || !SeciliSilinebilirIdler.Any()">
+                        <i class="bi bi-trash me-1"></i>Toplu Sil (@SeciliSilinebilirIdler.Count)
+                    </button>
+                    <span class="text-muted small ms-auto">Seçili: <strong>@seciliHakedisIds.Count</strong></span>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:40px">
+                                    <input type="checkbox" class="form-check-input" checked="@TumSeciliMi" @onchange="_ => TumunuSecKaldir()" disabled="@isBusy || !hakedisler.Any()" />
+                                </th>
+                                <th>#</th>
+                                <th>Tip</th>
+                                <th>Referans</th>
+                                <th class="text-end">Toplam Sefer</th>
+                                <th class="text-end">Tutar</th>
+                                <th class="text-end">KDV</th>
+                                <th class="text-end">Genel Toplam</th>
+                                <th>Durum</th>
+                                <th class="text-end">İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!hakedisler.Any())
+                            {
+                                <tr><td colspan="10" class="text-center text-muted p-4">Kayıt bulunamadı</td></tr>
+                            }
+                            else
+                            {
+                                @foreach (var h in hakedisler.OrderByDescending(x => x.Id))
+                                {
+                                    <tr>
+                                        <td>
+                                            <input type="checkbox" class="form-check-input" checked="@seciliHakedisIds.Contains(h.Id)" @onchange="_ => SecimiDegistir(h.Id)" disabled="@isBusy" />
+                                        </td>
+                                        <td>@h.Id</td>
+                                        <td><span class="badge @GetTipBadge(h.Tip)">@GetTipText(h.Tip)</span></td>
+                                        <td>@GetReferansAd(h)</td>
+                                        <td class="text-end">@h.ToplamSeferSayisi.ToString("N2")</td>
+                                        <td class="text-end">@h.Tutar.ToString("N2")</td>
+                                        <td class="text-end">@h.KdvTutar.ToString("N2")</td>
+                                        <td class="text-end fw-semibold">@h.GenelToplam.ToString("N2")</td>
+                                        <td><span class="badge @GetDurumBadge(h.Durum)">@h.Durum</span></td>
+                                        <td class="text-end" style="white-space:nowrap">
+                                            <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => PdfIndirAsync(h.Id)" disabled="@isBusy" title="PDF indir">
+                                                <i class="bi bi-filetype-pdf"></i>
+                                            </button>
+                                            @if (h.Durum == HakedisDurum.Taslak)
+                                            {
+                                                <button class="btn btn-sm btn-outline-success me-1" @onclick="() => OnaylaAsync(h.Id)" disabled="@isBusy">
+                                                    <i class="bi bi-check2-circle"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => SilAsync(h.Id)" disabled="@isBusy">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            }
+                                            else if (h.Durum == HakedisDurum.Onaylandi)
+                                            {
+                                                <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => FaturalaAsync(h.Id)" disabled="@isBusy || h.Tip == HakedisTipi.Arac">
+                                                    <i class="bi bi-receipt"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-warning" @onclick="() => IptalAsync(h.Id)" disabled="@isBusy">
+                                                    <i class="bi bi-x-circle"></i>
+                                                </button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool isBusy;
+    private string? hataMesaji;
+    private string? bilgiMesaji;
+
+    private int yil = DateTime.Today.Year;
+    private int ay = DateTime.Today.Month;
+    private HakedisTipi seciliTip = HakedisTipi.Kurum;
+
+    private readonly Dictionary<int, string> kurumAdlari = new();
+    private readonly Dictionary<int, string> tedarikciAdlari = new();
+    private readonly Dictionary<int, string> aracAdlari = new();
+    private readonly HashSet<int> seciliHakedisIds = new();
+
+    private List<Hakedis> hakedisler = new();
+    private bool TumSeciliMi => hakedisler.Any() && hakedisler.All(h => seciliHakedisIds.Contains(h.Id));
+    private List<int> SeciliTaslakIdler => hakedisler.Where(h => seciliHakedisIds.Contains(h.Id) && h.Durum == HakedisDurum.Taslak).Select(h => h.Id).ToList();
+    private List<int> SeciliFaturalanabilirIdler => hakedisler.Where(h => seciliHakedisIds.Contains(h.Id) && h.Durum == HakedisDurum.Onaylandi && h.Tip != HakedisTipi.Arac).Select(h => h.Id).ToList();
+    private List<int> SeciliSilinebilirIdler => hakedisler.Where(h => seciliHakedisIds.Contains(h.Id) && h.Durum is not (HakedisDurum.Faturalandi or HakedisDurum.TahsilEdildi or HakedisDurum.Odendi)).Select(h => h.Id).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await YukleAsync();
+    }
+
+    private async Task YukleAsync()
+    {
+        hataMesaji = null;
+        bilgiMesaji = null;
+
+        if (yil < 2000 || ay < 1 || ay > 12)
+        {
+            hataMesaji = "Geçersiz dönem seçimi.";
+            return;
+        }
+
+        isBusy = true;
+        try
+        {
+            hakedisler = await HakedisService.GetHakedislerAsync(yil, ay, seciliTip);
+            await ReferansAdlariniYukleAsync();
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = ex.GetBaseException().Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task TopluUretAsync()
+    {
+        hataMesaji = null;
+        bilgiMesaji = null;
+
+        isBusy = true;
+        try
+        {
+            var sonuc = await HakedisService.TopluUretAsync(seciliTip, yil, ay);
+            bilgiMesaji = $"Toplu üretim tamamlandı. Üretilen: {sonuc.UretilenAdet}, Atlanan: {sonuc.AtlananAdet}, Hatalı: {sonuc.HataliAdet}";
+            hakedisler = await HakedisService.GetHakedislerAsync(yil, ay, seciliTip);
+            await ReferansAdlariniYukleAsync();
+            seciliHakedisIds.Clear();
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = ex.GetBaseException().Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task OnaylaAsync(int hakedisId)
+    {
+        hataMesaji = null;
+        bilgiMesaji = null;
+
+        isBusy = true;
+        try
+        {
+            await HakedisService.OnaylaAsync(hakedisId, "Operasyon");
+            bilgiMesaji = "Hakediş onaylandı.";
+            hakedisler = await HakedisService.GetHakedislerAsync(yil, ay, seciliTip);
+            await ReferansAdlariniYukleAsync();
+            seciliHakedisIds.Remove(hakedisId);
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = ex.GetBaseException().Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task IptalAsync(int hakedisId)
+    {
+        hataMesaji = null;
+        bilgiMesaji = null;
+
+        isBusy = true;
+        try
+        {
+            await HakedisService.IptalEtAsync(hakedisId, "UI üzerinden iptal");
+            bilgiMesaji = "Hakediş iptal edildi.";
+            hakedisler = await HakedisService.GetHakedislerAsync(yil, ay, seciliTip);
+            await ReferansAdlariniYukleAsync();
+            seciliHakedisIds.Remove(hakedisId);
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = ex.GetBaseException().Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task FaturalaAsync(int hakedisId)
+    {
+        hataMesaji = null;
+        bilgiMesaji = null;
+
+        isBusy = true;
+        try
+        {
+            var fatura = await HakedisService.FaturayaDonustureAsync(hakedisId, DateTime.Today);
+            bilgiMesaji = $"Hakediş faturaya dönüştürüldü. Fatura No: {fatura.FaturaNo}";
+            hakedisler = await HakedisService.GetHakedislerAsync(yil, ay, seciliTip);
+            await ReferansAdlariniYukleAsync();
+            seciliHakedisIds.Remove(hakedisId);
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = ex.GetBaseException().Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task SilAsync(int hakedisId)
+    {
+        hataMesaji = null;
+        bilgiMesaji = null;
+
+        isBusy = true;
+        try
+        {
+            await HakedisService.SilAsync(hakedisId);
+            bilgiMesaji = "Hakediş silindi.";
+            hakedisler = await HakedisService.GetHakedislerAsync(yil, ay, seciliTip);
+            await ReferansAdlariniYukleAsync();
+            seciliHakedisIds.Remove(hakedisId);
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = ex.GetBaseException().Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task PdfIndirAsync(int hakedisId)
+    {
+        hataMesaji = null;
+        bilgiMesaji = null;
+
+        isBusy = true;
+        try
+        {
+            var hakedis = await HakedisService.GetByIdAsync(hakedisId)
+                ?? throw new InvalidOperationException("Hakediş bulunamadı.");
+
+            var listedeki = hakedisler.FirstOrDefault(x => x.Id == hakedisId);
+            var referansAd = listedeki is null ? null : GetReferansAd(listedeki);
+            var bytes = PdfService.GenerateHakedisPdf(hakedis, referansAd);
+
+            var dosyaAdi = $"Hakedis_{GetTipText(hakedis.Tip)}_{hakedis.Yil}{hakedis.Ay:D2}_{hakedis.Id}.pdf";
+            await JS.InvokeVoidAsync("downloadFileFromBytes", dosyaAdi, "application/pdf", bytes);
+            bilgiMesaji = "Hakediş PDF indirildi.";
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = ex.GetBaseException().Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void SecimiDegistir(int hakedisId)
+    {
+        if (!seciliHakedisIds.Add(hakedisId))
+            seciliHakedisIds.Remove(hakedisId);
+    }
+
+    private void TumunuSecKaldir()
+    {
+        if (TumSeciliMi)
+            seciliHakedisIds.Clear();
+        else
+            seciliHakedisIds.UnionWith(hakedisler.Select(h => h.Id));
+    }
+
+    private async Task TopluOnaylaSecilenAsync()
+    {
+        var ids = SeciliTaslakIdler;
+        if (!ids.Any())
+        {
+            bilgiMesaji = "Toplu onay için uygun (Taslak) seçili kayıt yok.";
+            return;
+        }
+
+        hataMesaji = null;
+        bilgiMesaji = null;
+        isBusy = true;
+        try
+        {
+            var sonuc = await HakedisService.TopluOnaylaAsync(ids, "Operasyon");
+            bilgiMesaji = $"Toplu onay tamamlandı. Başarılı: {sonuc.BasariliAdet}, Atlanan: {sonuc.AtlananAdet}, Hatalı: {sonuc.HataliAdet}";
+            hakedisler = await HakedisService.GetHakedislerAsync(yil, ay, seciliTip);
+            await ReferansAdlariniYukleAsync();
+            seciliHakedisIds.Clear();
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = ex.GetBaseException().Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task TopluFaturalaSecilenAsync()
+    {
+        var ids = SeciliFaturalanabilirIdler;
+        if (!ids.Any())
+        {
+            bilgiMesaji = "Toplu faturalama için uygun (Onaylı ve Araç dışı) seçili kayıt yok.";
+            return;
+        }
+
+        hataMesaji = null;
+        bilgiMesaji = null;
+        isBusy = true;
+        try
+        {
+            var sonuc = await HakedisService.TopluFaturalaAsync(ids, DateTime.Today);
+            bilgiMesaji = $"Toplu faturalama tamamlandı. Başarılı: {sonuc.BasariliAdet}, Atlanan: {sonuc.AtlananAdet}, Hatalı: {sonuc.HataliAdet}";
+            hakedisler = await HakedisService.GetHakedislerAsync(yil, ay, seciliTip);
+            await ReferansAdlariniYukleAsync();
+            seciliHakedisIds.Clear();
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = ex.GetBaseException().Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task TopluSilSecilenAsync()
+    {
+        var ids = SeciliSilinebilirIdler;
+        if (!ids.Any())
+        {
+            bilgiMesaji = "Toplu silme için uygun seçili kayıt yok.";
+            return;
+        }
+
+        hataMesaji = null;
+        bilgiMesaji = null;
+        isBusy = true;
+        try
+        {
+            var sonuc = await HakedisService.TopluSilAsync(ids);
+            bilgiMesaji = $"Toplu silme tamamlandı. Başarılı: {sonuc.BasariliAdet}, Atlanan: {sonuc.AtlananAdet}, Hatalı: {sonuc.HataliAdet}";
+            hakedisler = await HakedisService.GetHakedislerAsync(yil, ay, seciliTip);
+            await ReferansAdlariniYukleAsync();
+            seciliHakedisIds.Clear();
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = ex.GetBaseException().Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task ReferansAdlariniYukleAsync()
+    {
+        var referansIdler = hakedisler
+            .Select(h => h.ReferansId)
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
+
+        if (!referansIdler.Any())
+            return;
+
+        switch (seciliTip)
+        {
+            case HakedisTipi.Kurum:
+                var firmalar = await FirmaService.GetAllAsync();
+                kurumAdlari.Clear();
+                foreach (var f in firmalar.Where(f => referansIdler.Contains(f.Id)))
+                    kurumAdlari[f.Id] = f.FirmaAdi;
+                break;
+
+            case HakedisTipi.Tedarikci:
+                var tedarikciler = await TedarikciService.GetAllAsync(false);
+                tedarikciAdlari.Clear();
+                foreach (var t in tedarikciler.Where(t => referansIdler.Contains(t.Id)))
+                    tedarikciAdlari[t.Id] = t.Unvan;
+                break;
+
+            case HakedisTipi.Arac:
+                var araclar = await AracService.GetAllAsync();
+                aracAdlari.Clear();
+                foreach (var a in araclar.Where(a => referansIdler.Contains(a.Id)))
+                    aracAdlari[a.Id] = !string.IsNullOrWhiteSpace(a.AktifPlaka) ? a.AktifPlaka : a.Plaka;
+                break;
+        }
+    }
+
+    private string GetReferansAd(Hakedis h) => h.Tip switch
+    {
+        HakedisTipi.Kurum => kurumAdlari.TryGetValue(h.ReferansId, out var kurumAd)
+            ? kurumAd
+            : $"Kurum #{h.ReferansId}",
+        HakedisTipi.Tedarikci => tedarikciAdlari.TryGetValue(h.ReferansId, out var tedarikciAd)
+            ? tedarikciAd
+            : $"Tedarikçi #{h.ReferansId}",
+        HakedisTipi.Arac => aracAdlari.TryGetValue(h.ReferansId, out var aracAd)
+            ? aracAd
+            : $"Araç #{h.ReferansId}",
+        _ => h.ReferansId.ToString()
+    };
+
+    private static string GetTipText(HakedisTipi tip) => tip switch
+    {
+        HakedisTipi.Kurum => "Kurum",
+        HakedisTipi.Tedarikci => "Tedarikçi",
+        HakedisTipi.Arac => "Araç",
+        _ => tip.ToString()
+    };
+
+    private static string GetTipBadge(HakedisTipi tip) => tip switch
+    {
+        HakedisTipi.Kurum => "bg-primary",
+        HakedisTipi.Tedarikci => "bg-success",
+        HakedisTipi.Arac => "bg-info text-dark",
+        _ => "bg-secondary"
+    };
+
+    private static string GetDurumBadge(HakedisDurum durum) => durum switch
+    {
+        HakedisDurum.Taslak => "bg-secondary",
+        HakedisDurum.Onaylandi => "bg-warning text-dark",
+        HakedisDurum.Faturalandi => "bg-primary",
+        HakedisDurum.TahsilEdildi => "bg-success",
+        HakedisDurum.Odendi => "bg-success",
+        HakedisDurum.Iptal => "bg-danger",
+        _ => "bg-light text-dark"
+    };
+}

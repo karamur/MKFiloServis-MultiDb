@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -212,125 +212,140 @@ public sealed class PuantajFinansService : IPuantajFinansService
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // YENİ: HakedisPuantaj → Tam Finans Zinciri
+    // Operasyonel Hakedis → Tam Finans Zinciri
     // ═══════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// HakedisPuantaj'dan: Gelir + Gider → Fatura → Muhasebe → Snapshot.
-    /// Araç tipine göre gider faturası oluşturur (Özmal: yok, Kiralık/Tedarikçi: var).
+    /// Yeni operasyonel hakediş modelinden finans zinciri üretir.
+    /// Kurum => Giden fatura (gelir), Tedarikçi => Gelen fatura (gider), Araç => finans dışı.
     /// </summary>
-    public async Task<PuantajFinansSonuc> IsleAsync(HakedisPuantaj puantaj)
+    public async Task<PuantajFinansSonuc> IsleAsync(Hakedis hakedis)
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
 
-        var mevcut = await db.HakedisPuantajlar.AsNoTracking()
-            .AnyAsync(x => x.Id == puantaj.Id && (x.GelirFaturaId != null || x.GiderFaturaId != null));
-        if (mevcut)
-            return new PuantajFinansSonuc { Mesaj = "Bu puantaj zaten işlenmiş." };
+        var kayit = await db.Hakedisler
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == hakedis.Id && !x.IsDeleted);
 
-        var arac = await db.Araclar.AsNoTracking().FirstOrDefaultAsync(a => a.Id == puantaj.AracId);
-        var guzergah = await db.Guzergahlar.AsNoTracking().FirstOrDefaultAsync(g => g.Id == puantaj.GuzergahId);
-        var kurumCari = await db.Cariler.AsNoTracking().FirstOrDefaultAsync(c => c.Id == puantaj.CariId);
-        if (arac == null || guzergah == null) throw new InvalidOperationException("Araç veya Güzergah bulunamadı.");
+        if (kayit == null)
+            return new PuantajFinansSonuc { Mesaj = "Hakediş kaydı bulunamadı." };
 
-        var sonuc = new PuantajFinansSonuc();
-        var firmaId = puantaj.FirmaId ?? 0;
-        var kdvOrani = puantaj.KdvOrani > 0 ? puantaj.KdvOrani : 20;
+        if (kayit.FaturaId != null)
+            return new PuantajFinansSonuc { Mesaj = "Bu hakediş zaten işlenmiş." };
 
-        // ── 1. GELİR → Giden Fatura (Kurum) ──
-        var gelir = puantaj.GelirToplam > 0 ? puantaj.GelirToplam : puantaj.ToplamSefer * guzergah.BirimFiyat;
-        if (kurumCari != null && gelir > 0)
-        {
-            var giden = await FaturaOlusturHizliAsync(kurumCari, gelir, FaturaYonu.Giden, kdvOrani, firmaId,
-                $"Puantaj Gelir: {guzergah.GuzergahAdi} / {puantaj.Yil}-{puantaj.Ay:D2}");
-            await db.HakedisPuantajlar.Where(x => x.Id == puantaj.Id)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.GelirFaturaId, giden.Id));
-            sonuc.GelirFaturaId = giden.Id; sonuc.GelirTutar = gelir;
-        }
+        if (kayit.Tip == HakedisTipi.Arac)
+            return new PuantajFinansSonuc { Mesaj = "Araç tipi hakedişler faturalanmaz (iç raporlama kaydı)." };
 
-        // ── 2. GİDER → Gelen Fatura (Araç tipine göre) ──
-        var sahiplikTipi = arac.SahiplikTipi;
-        decimal gider = 0; int? giderFaturaId = null;
+        var cari = await ResolveCariForHakedisAsync(db, kayit);
+        if (cari == null)
+            return new PuantajFinansSonuc { Mesaj = "Hakediş için cari eşleşmesi bulunamadı." };
 
-        if (sahiplikTipi == AracSahiplikTipi.Ozmal)
-        {
-            gider = puantaj.GiderToplam > 0 ? puantaj.GiderToplam : puantaj.ToplamSefer * (guzergah.GiderFiyat > 0 ? guzergah.GiderFiyat : guzergah.BirimFiyat);
-        }
-        else if (sahiplikTipi == AracSahiplikTipi.Kiralik)
-        {
-            gider = puantaj.GiderToplam > 0 ? puantaj.GiderToplam : puantaj.ToplamSefer * ((arac.GunlukKiraBedeli ?? 0) > 0 ? (arac.GunlukKiraBedeli ?? 0) : guzergah.GiderFiyat);
-            var kiralikCari = await db.Cariler.AsNoTracking().FirstOrDefaultAsync(c => c.Id == arac.KiralikCariId);
-            if (kiralikCari != null && gider > 0)
-            {
-                var gelen = await FaturaOlusturHizliAsync(kiralikCari, gider, FaturaYonu.Gelen, kdvOrani, firmaId,
-                    $"Puantaj Gider (Kiralık): {arac.AktifPlaka} / {puantaj.Yil}-{puantaj.Ay:D2}");
-                giderFaturaId = gelen.Id;
-            }
-        }
-        else if (sahiplikTipi == AracSahiplikTipi.Tedarikci)
-        {
-            gider = puantaj.GiderToplam > 0 ? puantaj.GiderToplam : puantaj.ToplamSefer * (guzergah.GiderFiyat > 0 ? guzergah.GiderFiyat : guzergah.BirimFiyat);
-            var tedarikciCari = await db.Cariler.AsNoTracking().FirstOrDefaultAsync(c => c.SoforId == puantaj.SoforId);
-            tedarikciCari ??= await db.Cariler.AsNoTracking().FirstOrDefaultAsync(c => c.Unvan != null && c.CariTipi == CariTipi.Tedarikci);
-            if (tedarikciCari != null && gider > 0)
-            {
-                var gelen = await FaturaOlusturHizliAsync(tedarikciCari, gider, FaturaYonu.Gelen, kdvOrani, firmaId,
-                    $"Puantaj Gider (Tedarikçi): {arac.AktifPlaka} / {puantaj.Yil}-{puantaj.Ay:D2}");
-                giderFaturaId = gelen.Id;
-            }
-        }
+        var firmaId = kayit.FirmaId ?? 0;
+        var araToplam = kayit.Tutar > 0 ? kayit.Tutar : kayit.GenelToplam;
+        if (araToplam <= 0)
+            return new PuantajFinansSonuc { Mesaj = "Hakediş tutarı sıfır veya negatif olduğu için işlenemedi." };
 
-        if (giderFaturaId.HasValue)
-            await db.HakedisPuantajlar.Where(x => x.Id == puantaj.Id)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.GiderFaturaId, giderFaturaId.Value));
+        var kdvOrani = (int)(kayit.KdvOran > 0 ? kayit.KdvOran : 20m);
+        var yon = kayit.Tip == HakedisTipi.Kurum ? FaturaYonu.Giden : FaturaYonu.Gelen;
+        var fatura = await FaturaOlusturHizliAsync(
+            cari,
+            araToplam,
+            yon,
+            kdvOrani,
+            firmaId,
+            $"Hakediş {kayit.Tip}: {kayit.Yil}-{kayit.Ay:D2} / #{kayit.Id}");
 
-        sonuc.GiderFaturaId = giderFaturaId; sonuc.GiderTutar = gider;
-        sonuc.Kar = gelir - gider; sonuc.Basarili = true;
+        await db.Hakedisler
+            .Where(x => x.Id == kayit.Id)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.FaturaId, fatura.Id)
+                .SetProperty(x => x.Durum, HakedisDurum.Faturalandi)
+                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow));
 
-        // Faz 6: IsleAsync → Snapshot HakedisGelir/HakedisGider güncelle
         try
         {
-            await SnapshotHakedisGuncelleAsync(puantaj);
+            await SnapshotHakedisGuncelleAsync(kayit, fatura.Id);
         }
-        catch { /* Non-critical: snapshot update failure doesn't block the finans chain */ }
+        catch
+        {
+            // Non-critical: snapshot update failure doesn't block the finans chain
+        }
 
-        // İşlendi
-        return sonuc;
+        var gelir = kayit.Tip == HakedisTipi.Kurum ? araToplam : 0m;
+        var gider = kayit.Tip == HakedisTipi.Tedarikci ? araToplam : 0m;
+
+        return new PuantajFinansSonuc
+        {
+            Basarili = true,
+            GelirTutar = gelir,
+            GiderTutar = gider,
+            Kar = gelir - gider,
+            GelirFaturaId = yon == FaturaYonu.Giden ? fatura.Id : null,
+            GiderFaturaId = yon == FaturaYonu.Gelen ? fatura.Id : null
+        };
     }
 
-    private async Task SnapshotHakedisGuncelleAsync(HakedisPuantaj puantaj)
+    private static async Task<Cari?> ResolveCariForHakedisAsync(ApplicationDbContext db, Hakedis hakedis)
+    {
+        if (hakedis.Tip == HakedisTipi.Kurum)
+        {
+            return await db.Cariler.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == hakedis.ReferansId && !c.IsDeleted);
+        }
+
+        if (hakedis.Tip == HakedisTipi.Tedarikci)
+        {
+            var tedarikci = await db.TasimaTedarikciler.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == hakedis.ReferansId && !t.IsDeleted);
+
+            if (tedarikci?.CariId is int cariId && cariId > 0)
+            {
+                var cariById = await db.Cariler.AsNoTracking()
+                    .FirstOrDefaultAsync(c => c.Id == cariId && !c.IsDeleted);
+                if (cariById != null) return cariById;
+            }
+
+            if (!string.IsNullOrWhiteSpace(tedarikci?.Unvan))
+            {
+                return await db.Cariler.AsNoTracking()
+                    .FirstOrDefaultAsync(c => !c.IsDeleted
+                        && c.CariTipi == CariTipi.Tedarikci
+                        && c.Unvan == tedarikci.Unvan);
+            }
+        }
+
+        return null;
+    }
+
+
+    private async Task SnapshotHakedisGuncelleAsync(Hakedis hakedis, int? faturaId = null)
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
-        var firmaId = puantaj.FirmaId ?? 0;
+        var firmaId = hakedis.FirmaId ?? 0;
 
-        // Idempotency: Deterministic IslemId (aynı hakediş için hep aynı)
-        var islemId = DeterministicGuid(puantaj.Id, "HakedisFinans");
-
-        // Zaten işlenmiş mi?
+        var islemId = DeterministicGuid(hakedis.Id, "HakedisFinansV2");
         var exists = await db.SnapshotTransactions
             .AnyAsync(t => t.IslemId == islemId && !t.IsDeleted);
         if (exists) return;
 
-        // Delta = BU hakedişin gelir/gider'i (toplam değil, sadece kendi katkısı)
-        var deltaGelir = puantaj.TahsilEdilecekTutar;
-        var deltaGider = puantaj.OdenecekTutar;
+        var hakedisTutar = hakedis.GenelToplam > 0 ? hakedis.GenelToplam : hakedis.Tutar;
+        var deltaGelir = hakedis.Tip == HakedisTipi.Kurum ? hakedisTutar : 0m;
+        var deltaGider = hakedis.Tip == HakedisTipi.Tedarikci ? hakedisTutar : 0m;
 
-        // SnapshotTransaction kaydı oluştur (idempotency garantisi)
         db.SnapshotTransactions.Add(new SnapshotTransaction
         {
             FirmaId = firmaId,
             IslemId = islemId,
-            Yil = puantaj.Yil,
-            Ay = puantaj.Ay,
-            IslemTipi = "HakedisFinans",
+            Yil = hakedis.Yil,
+            Ay = hakedis.Ay,
+            IslemTipi = "HakedisFinansV2",
             GelirDelta = deltaGelir,
             GiderDelta = deltaGider,
-            HakedisPuantajId = puantaj.Id,
-            Aciklama = $"HakedisPuantaj #{puantaj.Id} finans işlemi",
+            FaturaId = faturaId,
+            Aciklama = $"Hakedis #{hakedis.Id} finans işlemi",
             CreatedAt = DateTime.UtcNow
         });
 
-        // 🔴 Atomic SQL: += işlemi DB seviyesinde atomik (çakışma olmaz)
         await db.Database.ExecuteSqlRawAsync(@"
             UPDATE ""MaasOdemeSnapshotlar""
             SET ""HakedisGelir"" = ""HakedisGelir"" + {0},
@@ -338,22 +353,20 @@ public sealed class PuantajFinansService : IPuantajFinansService
                 ""UpdatedAt"" = NOW()
             WHERE ""FirmaId"" = {2} AND ""Yil"" = {3} AND ""Ay"" = {4}
               AND ""IsDeleted"" = false AND ""Kilitli"" = false",
-            deltaGelir, deltaGider, firmaId, puantaj.Yil, puantaj.Ay);
+            deltaGelir, deltaGider, firmaId, hakedis.Yil, hakedis.Ay);
 
-        // 🔴 Snapshot consistency: Negatif değer olmamalı
         var negatifVar = await db.MaasOdemeSnapshotlar
-            .AnyAsync(s => s.FirmaId == firmaId && s.Yil == puantaj.Yil && s.Ay == puantaj.Ay
+            .AnyAsync(s => s.FirmaId == firmaId && s.Yil == hakedis.Yil && s.Ay == hakedis.Ay
                 && !s.IsDeleted && (s.HakedisGelir < 0 || s.HakedisGider < 0));
         if (negatifVar)
         {
-            _logger.LogCritical("Snapshot NEGATİF değer tespit edildi! Firma={FirmaId} Yil={Yil} Ay={Ay}", firmaId, puantaj.Yil, puantaj.Ay);
-            // Auto-düzelt: negatif değerleri 0'la
+            _logger.LogCritical("Snapshot NEGATİF değer tespit edildi! Firma={FirmaId} Yil={Yil} Ay={Ay}", firmaId, hakedis.Yil, hakedis.Ay);
             await db.Database.ExecuteSqlRawAsync(@"
                 UPDATE ""MaasOdemeSnapshotlar""
                 SET ""HakedisGelir"" = GREATEST(""HakedisGelir"", 0),
                     ""HakedisGider"" = GREATEST(""HakedisGider"", 0)
                 WHERE ""FirmaId"" = {0} AND ""Yil"" = {1} AND ""Ay"" = {2} AND ""IsDeleted"" = false",
-                firmaId, puantaj.Yil, puantaj.Ay);
+                firmaId, hakedis.Yil, hakedis.Ay);
         }
 
         await db.SaveChangesAsync();

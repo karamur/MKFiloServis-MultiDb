@@ -1,4 +1,4 @@
-using MKFiloServis.Web.Components;
+﻿using MKFiloServis.Web.Components;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Helpers;
 using MKFiloServis.Web.Jobs;
@@ -313,7 +313,6 @@ builder.Services.AddSingleton<GuzergahDegisiklikUyariService>();
 builder.Services.AddScoped<FirmaTransferService>();
 builder.Services.AddScoped<IKurumService, KurumService>();
 builder.Services.AddScoped<IPuantajService, PuantajService>();
-builder.Services.AddScoped<IHakedisPuantajService, HakedisPuantajService>(); // Operasyonel Hakediş Puantajı
 builder.Services.AddScoped<IPuantajHakedisSyncService, PuantajHakedisSyncService>(); // Grid → Hakedis köprüsü
 builder.Services.AddScoped<IFaturaGrupSablonuService, FaturaGrupSablonuService>(); // YENI: Agac gruplama şablonu CRUD
 builder.Services.AddScoped<IPuantajIstisnaService, PuantajIstisnaService>(); // YENI: Puantaj istisna yönetimi
