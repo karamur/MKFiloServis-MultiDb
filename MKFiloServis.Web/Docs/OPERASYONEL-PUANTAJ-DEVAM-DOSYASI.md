@@ -78,7 +78,7 @@ Kurum (Müşteri Firma/Kurum)
 
 ## 3. KRİTİK SORUNLAR VE ÇÖZÜM DURUMLARI
 
-### 3.1 🔴 ÜÇ PARALEL HAKEDİŞ SİSTEMİ ÇAKIŞMASI (ÇÖZÜLMEZ)
+### 3.1 🔴 ÜÇ PARALEL HAKEDİŞ SİSTEMİ ÇAKIŞMASI
 
 Projede **üç ayrı hakediş yolu** var, bunlar tam entegre değil:
 
@@ -86,22 +86,26 @@ Projede **üç ayrı hakediş yolu** var, bunlar tam entegre değil:
 YOL A — Klasik kontrat bazlı:
 ServisKontrat → ServisPuantaj → HakedisPuantaj (tablo: HakedisPuantajlar)
 Servis: HakedisPuantajService (505 satır)
-Sayfa: FiloHakedisPage.razor (eski tablo)
+Sayfa: HİÇBİR sayfada kullanılmıyor — Program.cs'de kayıtlı ama inject yok
 
-YOL B — Operasyonel (YENİ, ÖNERİLEN):
+YOL B — Operasyonel (YENİ, DOĞRU YOL):
 FiloGunlukPuantaj → Hakedis + HakedisDetay (tablo: Hakedisler)
 Servis: OperasyonelHakedisService (632 satır) ✅ ÇALIŞIYOR
-Sayfa: FiloHakedisPage.razor henüz BAĞLANMADI
+Kullanıldığı yerler: KarlilikRaporu, FiloKpiDashboard, AylikKapanisAsistani,
+                    BildirimMerkezi, KomutaMerkezi, OperasyonelOzetBandi
 
 YOL C — PuantajEngine:
 OperasyonKaydi → PuantajKayit → (hakediş yok, sadece sync)
 ```
 
-**Kök neden:** `FiloHakedisPage.razor` hâlâ `HakedisPuantajService` (Yol A) kullanıyor.
-`OperasyonelHakedisService` (Yol B) hazır ama sayfaya bağlanmamış.
+**Gerçek durum (Temmuz 2026 analizi):**
+`FiloHakedisPage.razor` — adı "Hakediş" ama aslında `FiloGuzergahEslestirme`
+listesini gösteriyor. Hakediş üretmiyor, sadece eşleştirme tablosu + puantaj
+sayfasına link. Ne `IHakedisPuantajService` ne `IOperasyonelHakedisService`
+inject edilmiş.
 
-**Çözüm yolu:** Sayfa `IOperasyonelHakedisService` kullanacak şekilde güncellenmeli.
-`HakedisPuantaj` → `Hakedis` tablosuna migre edilebilir veya eski tablo silinebilir.
+**Sonuç:** Yol A tamamen ölü kod. Yol B rapor sayfalarında aktif kullanılıyor.
+Bir hakediş yönetim sayfası sıfırdan yazılmalı.
 
 ### 3.2 🔴 OPERASYONEL PUANTAJ SAYFASI YETERSİZ
 
@@ -142,6 +146,32 @@ Bu eksiklik maliyet snapshot'unun şoför maaş payını içermemesine neden olu
 
 ---
 
+### 3.7 🔴 UI SAYFALARI MENÜDE YOK, DOSYADA DURUYOR
+
+NavMenu incelemesi sonucu:
+- `FiloGunlukPuantajPage.razor` → navmenüde **link yok**
+- `FiloHakedisPage.razor` → navmenüde **link yok**
+- `FiloPuantaj.razor` → navmenüde **link yok**
+
+Kullanıcı bunlara doğrudan URL yazarak erişebiliyor ama menüde görünmüyor.
+Sayfalar build'e giriyor, gereksiz derleme yükü oluşturuyor.
+
+**Karar (Temmuz 2026):** Seçenek 3 — Tam Kaldır uygulanacak.
+Entity / Servis / Migration / DB tablolarına DOKUNULMAYACAK.
+Sadece 3 UI sayfası dosyası silinecek, ileride sıfırdan temiz yazılacak.
+
+Silinecek dosyalar:
+- `MKFiloServis.Web/Components/Pages/Filo/FiloGunlukPuantajPage.razor`
+- `MKFiloServis.Web/Components/Pages/Filo/FiloHakedisPage.razor`
+- `MKFiloServis.Web/Components/Pages/Filo/FiloPuantaj.razor`
+
+NavMenu'de `menu.filoservis` yetki tanımındaki `filo-gunluk-puantaj` string'i
+de temizlenecek (sadece string, sayfanın kendisi değil).
+
+> ⚠️ Bu işlem yapılmadı. Bir sonraki oturumda başlanacak.
+
+---
+
 ## 4. MİMARİ KARAR KAYITLARI
 
 | # | Karar | Gerekçe | Tarih |
@@ -152,12 +182,26 @@ Bu eksiklik maliyet snapshot'unun şoför maaş payını içermemesine neden olu
 | K4 | `AracMaliyetSnapshot` korunacak ve Araç hakediş için kaynak olacak | `FullpetFaturaDagitAsync` dahil tam çalışıyor | Önceki oturum |
 | K5 | Yeni alanlar `Required` yapılmayacak | Eski kayıtlar geçerli kalsın | Tasarım dokümanı |
 | K6 | `ServisKontratTip` ile `AracSahiplikTipi` farkı korunacak | Kontrat tipi ≠ araç tipi (aynı araç farklı kontratta farklı tip olabilir) | Temmuz 2026 analizi |
+| K7 | Mevcut 3 puantaj UI sayfası silinecek, sıfırdan yazılacak | Sayfalar menüde yok, 1887+568+? satır bakımsız kod, temiz başlamak daha iyi | Temmuz 2026 analizi |
+| K8 | `HakedisPuantajService` ve `HakedisPuantaj` tablosu ölü kod | Hiçbir sayfada inject edilmemiş, Yol B (`OperasyonelHakedisService`) aktif kullanılıyor | Temmuz 2026 analizi |
 
 ---
 
 ## 5. ÖNERİLEN UYGULAMA SIRALAMASI
 
-### FAZ 1 — Operasyonel Puantaj Sayfası Güçlendirmesi (ÖNCE BURADA)
+### FAZ 0 — Temizlik (YAPILACAK İLK İŞ)
+
+**Hedef:** Eski UI sayfalarını sil, build temiz kalsın, yeni sayfa için alan aç.
+
+#### Adım 0.1 — 3 UI sayfasını sil (bkz. §3.7)
+#### Adım 0.2 — NavMenu'deki `filo-gunluk-puantaj` string'ini temizle
+#### Adım 0.3 — Build doğrula: 0 warning, 0 error
+
+> ⚠️ Bu faz yapılmadı. Bir sonraki oturumda başlanacak.
+
+---
+
+### FAZ 1 — Yeni Operasyonel Puantaj Sayfası (SIFIRDAN)
 
 **Hedef:** Operatör günde 5 dakikada tüm güzergah satırlarını işleyebilsin.
 
@@ -246,12 +290,16 @@ if (snapshot.FirstOrDefault() is { } s && s.ToplamSefer > 0)
 
 "Devam edelim" dediğinde şu konudan başlayacağız:
 
-> **FAZ 1 — Adım 1.1:** `FiloGunlukPuantajPage.razor`'a "Bugün için satır oluştur" butonu ekleme.
-> Bu buton; seçilen tarih için aktif `ServisKontrat`'ları çekip her kontrat için
-> `FiloGunlukPuantaj` taslak kaydı oluşturur.
-> Tahakkuk tutarları kontrat birim fiyatından otomatik hesaplanır.
-
-**Sorar mısın:** Önce satır oluşturma mı (1.1), yoksa hakediş sayfası bağlama mı (2.1) yapalım?
+> **FAZ 0 — Temizlik:**
+> 1. `FiloGunlukPuantajPage.razor` sil
+> 2. `FiloHakedisPage.razor` sil
+> 3. `FiloPuantaj.razor` sil
+> 4. NavMenu `filo-gunluk-puantaj` string temizle
+> 5. Build doğrula
+>
+> Ardından **FAZ 1** ile yeni operasyonel puantaj sayfasını sıfırdan yazmaya başlarız.
+> Sayfa adı: `OperasyonelPuantajPage.razor` — rota: `/operasyon/puantaj`
+> Veri kaynağı: `ServisKontrat` → `FiloGunlukPuantaj` (mevcut entity'ler korunuyor)
 
 ---
 
