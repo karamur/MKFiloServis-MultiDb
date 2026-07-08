@@ -441,3 +441,15 @@ if (snapshot.FirstOrDefault() is { } s && s.ToplamSefer > 0)
 - ⏳ Sonraki adım: gerçek fixture/marker (örn. test run id) alanı ile doğrudan etiketleme yapıp ID kıyasına ek olarak marker-bazlı filtre doğrulaması eklemek
 
 **Başarı ölçütü:** Yukarıdaki test seti yeşil olmadan `HakedisPuantaj` tablo katmanında fiziksel kaldırma yapılmaz.
+
+---
+
+## 10. Son Uygulama Notu (Eşleştirme Havuzu — Gün Yatay Grid)
+
+- Dosya: `MKFiloServis.Web/Components/Pages/Filo/EslestirmeTanimlari.razor`
+- Güncelleme:
+  - `Araç, Şoför ve Güzergah Eşleme Havuzu` ekranında, kayıt satırının altında açılan puantaj görünümü **günler yan yana** (1..ayın günleri) olacak şekilde değiştirildi.
+  - Aynı blokta `Güzergah > Plaka > Şoför` bilgisi korunarak gün hücreleri input yapısına alındı ve `SeferSayisi` düzenlenebilir hale getirildi.
+  - `Günleri Kaydet` aksiyonu ile satır altındaki gün bazlı değişiklikler toplu olarak kaydedilir.
+  - Liste yenilemede yıl bazlı mevcut puantaj kayıtları eşleştirme bazında yüklenir; ekran yeniden açıldığında değişiklikler görüntülenir.
+

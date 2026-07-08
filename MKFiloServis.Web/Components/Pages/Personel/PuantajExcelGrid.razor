@@ -201,8 +201,17 @@
 
             @if (_importWarnings.Any())
             {
-                <div class="small text-muted mt-2">
-                    Uyarılar: @string.Join(" | ", _importWarnings.Take(3).Select(w => $"{w.ErrorCode}: {w.Message}"))
+                <div class="mt-2">
+                    <div class="small text-muted mb-1">Uyarı Özeti</div>
+                    <div class="d-flex flex-wrap gap-1">
+                        @foreach (var item in GetWarningCodeSummary().Take(6))
+                        {
+                            <span class="badge text-bg-light border">@item.Code: @item.Count</span>
+                        }
+                    </div>
+                    <div class="small text-muted mt-1">
+                        @string.Join(" | ", _importWarnings.Take(3).Select(w => $"{w.ErrorCode}: {w.Message}"))
+                    </div>
                 </div>
             }
         </div>

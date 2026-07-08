@@ -75,23 +75,35 @@ public class PuantajExcelService
     public async Task<PuantajImportSonuc> PreviewAsync(byte[] fileBytes, int firmaId)
     {
         var sonuc = new PuantajImportSonuc();
-        var rows = ReadExcelRows(fileBytes);
+        var rawRows = ReadExcelRows(fileBytes);
+        var rows = BuildCanonicalRows(rawRows);
         sonuc.ToplamSatir = Math.Max(rows.Count - 1, 0);
 
-        if (!TryValidateRequiredColumns(rows, sonuc))
+        if (rows.Count < 2)
         {
+            AddError(sonuc, null, "HEADER", "EMPTY_FILE", "Dosya boş veya sadece başlık satırı var.", null, "Şablona uygun en az bir veri satırı ekleyin.");
             FinalizePreviewSummary(sonuc);
             return sonuc;
         }
 
         await using var context = await _factory.CreateDbContextAsync();
         var cariler = await context.Cariler.AsNoTracking().Where(c => c.FirmaId == firmaId && !c.IsDeleted).ToListAsync();
+        var guzergahlar = await context.Guzergahlar.AsNoTracking().Where(g => g.FirmaId == firmaId && !g.IsDeleted).ToListAsync();
 
         for (int i = 1; i < Math.Min(rows.Count, 6); i++) // ilk 5 veri satırı
         {
             try
             {
                 var input = ParsePuantajRow(rows[i]);
+                var guzergah = EsleGuzergah(guzergahlar, input.Guzergah);
+
+                if (string.IsNullOrWhiteSpace(input.Yon))
+                    input.Yon = InferYonFromGuzergah(guzergah);
+                input.Yon = NormalizeYonLabel(input.Yon);
+
+                if (input.BirimFiyat <= 0 && guzergah != null)
+                    input.BirimFiyat = guzergah.GelirFiyat > 0 ? guzergah.GelirFiyat : guzergah.GiderFiyat;
+
                 var engineSonuc = PuantajEngine.Hesapla(input);
                 var (cari, tip) = EsleCari(cariler, input.Kurum);
 
@@ -102,6 +114,17 @@ public class PuantajExcelService
                 else if (cari == null)
                 {
                     AddWarning(sonuc, i + 1, "Kurum", "CARI_NOT_FOUND_PREVIEW", $"Kurum için eşleşen cari bulunamadı: '{input.Kurum}'", input.Kurum, "Import öncesi cari eşleşmesini kontrol edin.");
+                }
+
+                if (string.IsNullOrWhiteSpace(input.Yon))
+                {
+                    AddWarning(sonuc, i + 1, "YON", "YON_DERIVE_FAILED", "YÖN alanı belirlenemedi, 'Ek Sefer' olarak işaretlendi.", null, "YÖN bilgisini doğrulayın.");
+                    input.Yon = "Ek Sefer";
+                }
+
+                if (input.BirimFiyat <= 0)
+                {
+                    AddWarning(sonuc, i + 1, "BIRIMFIYAT", "PRICE_DERIVE_FAILED", "Birim fiyat belirlenemedi veya 0 kaldı.", null, "Güzergah fiyatlarını kontrol edin.");
                 }
 
                 sonuc.Onizleme.Add(new PuantajOnizlemeSatir
@@ -127,14 +150,9 @@ public class PuantajExcelService
     public async Task<PuantajImportSonuc> ImportAsync(byte[] fileBytes, int yil, int ay, int firmaId)
     {
         var sonuc = new PuantajImportSonuc();
-        var rows = ReadExcelRows(fileBytes);
+        var rawRows = ReadExcelRows(fileBytes);
+        var rows = BuildCanonicalRows(rawRows);
         sonuc.ToplamSatir = Math.Max(rows.Count - 1, 0);
-
-        if (!TryValidateRequiredColumns(rows, sonuc))
-        {
-            FinalizeImportSummary(sonuc);
-            return sonuc;
-        }
 
         if (rows.Count < 2)
         {
@@ -163,11 +181,21 @@ public class PuantajExcelService
             try
             {
                 var input = ParsePuantajRow(rows[i]);
-                var engineSonuc = PuantajEngine.Hesapla(input);
                 var (cari, _) = EsleCari(cariler, input.Kurum);
                 var guzergah = EsleGuzergah(guzergahlar, input.Guzergah);
                 var sofor = EsleSofor(soforler, input.Sofor);
-                var arac = EsleArac(araclar, input.Plaka);
+
+                if (string.IsNullOrWhiteSpace(input.Yon))
+                    input.Yon = InferYonFromGuzergah(guzergah);
+                input.Yon = NormalizeYonLabel(input.Yon);
+                if (string.IsNullOrWhiteSpace(input.Yon))
+                    input.Yon = "Ek Sefer";
+
+                if (input.BirimFiyat <= 0 && guzergah != null)
+                    input.BirimFiyat = guzergah.GelirFiyat > 0 ? guzergah.GelirFiyat : guzergah.GiderFiyat;
+
+                _ = EsleArac(araclar, input.Plaka);
+                var engineSonuc = PuantajEngine.Hesapla(input);
 
                 if (guzergah == null)
                 {
@@ -245,35 +273,105 @@ public class PuantajExcelService
 
     #region Private Helpers
 
-    private static readonly (string DisplayName, string[] Aliases)[] RequiredColumns =
+    private static readonly Dictionary<string, string[]> CanonicalAliases = new(StringComparer.OrdinalIgnoreCase)
     {
-        ("KURUM", new[] { "kurum", "musteri", "müşteri" }),
-        ("GÜZERGAH", new[] { "guzergah", "güzergah", "route" }),
-        ("YÖN", new[] { "yon", "yön", "istikamet" }),
-        ("ŞOFÖR", new[] { "sofor", "şoför", "surucu", "sürücü" }),
-        ("PLAKA", new[] { "plaka", "aracplaka", "araçplaka", "arac plaka", "araç plaka" }),
-        ("BIRIMFIYAT", new[] { "birimfiyat", "birim fiyat", "fiyat" })
+        ["KURUM"] = new[] { "kurum", "firma", "musteri", "müşteri" },
+        ["GUZERGAH"] = new[] { "guzergah", "güzergah", "route" },
+        ["YON"] = new[] { "yon", "yön", "istikamet" },
+        ["SOFOR"] = new[] { "sofor", "şoför", "surucu", "sürücü" },
+        ["PLAKA"] = new[] { "plaka", "aracplaka", "araçplaka", "arac plaka", "araç plaka" },
+        ["BIRIMFIYAT"] = new[] { "birimfiyat", "birim fiyat", "fiyat", "gelir", "ucret", "ücret" },
+        ["KESINTI"] = new[] { "kesinti", "kersinti", "kesi̇nti̇" }
     };
 
-    private static bool TryValidateRequiredColumns(List<List<string>> rows, PuantajImportSonuc sonuc)
+    private static List<List<string>> BuildCanonicalRows(List<List<string>> sourceRows)
     {
-        if (rows.Count == 0)
+        if (sourceRows.Count == 0)
+            return sourceRows;
+
+        var header = sourceRows[0];
+        var normalizedHeaderMap = header
+            .Select((value, index) => new { Key = NormalizeHeader(value), Index = index })
+            .Where(x => !string.IsNullOrWhiteSpace(x.Key))
+            .GroupBy(x => x.Key)
+            .ToDictionary(g => g.Key, g => g.First().Index, StringComparer.OrdinalIgnoreCase);
+
+        var dayColumns = header
+            .Select((value, index) => new { Raw = value?.Trim(), Index = index })
+            .Select(x => new { x.Index, Day = int.TryParse(x.Raw, out var day) ? day : 0 })
+            .Where(x => x.Day is >= 1 and <= 31)
+            .OrderBy(x => x.Day)
+            .ToList();
+
+        var canonical = new List<List<string>>
         {
-            AddError(sonuc, null, "HEADER", "MISSING_REQUIRED_COLUMN", "Zorunlu kolon eksik: Başlık satırı bulunamadı.", null, "Excel dosyasının ilk satırına başlıkları ekleyin.");
-            return false;
+            new()
+            {
+                "KURUM", "GÜZERGAH", "YÖN", "ŞOFÖR", "PLAKA", "BIRIMFIYAT",
+                "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31",
+                "KESINTI"
+            }
+        };
+
+        for (var rowIndex = 1; rowIndex < sourceRows.Count; rowIndex++)
+        {
+            var row = sourceRows[rowIndex];
+            var kurum = GetCellByAliases(row, normalizedHeaderMap, CanonicalAliases["KURUM"]);
+            var guzergah = GetCellByAliases(row, normalizedHeaderMap, CanonicalAliases["GUZERGAH"]);
+            var yon = GetCellByAliases(row, normalizedHeaderMap, CanonicalAliases["YON"]);
+            var sofor = GetCellByAliases(row, normalizedHeaderMap, CanonicalAliases["SOFOR"]);
+            var plaka = GetCellByAliases(row, normalizedHeaderMap, CanonicalAliases["PLAKA"]);
+            var birimFiyat = GetCellByAliases(row, normalizedHeaderMap, CanonicalAliases["BIRIMFIYAT"]);
+            var kesinti = GetCellByAliases(row, normalizedHeaderMap, CanonicalAliases["KESINTI"]);
+
+            var dayValues = new string[31];
+            foreach (var dayColumn in dayColumns)
+            {
+                var value = dayColumn.Index < row.Count ? row[dayColumn.Index] : string.Empty;
+                dayValues[dayColumn.Day - 1] = value?.Trim() ?? string.Empty;
+            }
+
+            var hasMeaningfulValue =
+                !string.IsNullOrWhiteSpace(kurum) ||
+                !string.IsNullOrWhiteSpace(guzergah) ||
+                !string.IsNullOrWhiteSpace(sofor) ||
+                !string.IsNullOrWhiteSpace(plaka) ||
+                !string.IsNullOrWhiteSpace(birimFiyat) ||
+                dayValues.Any(v => !string.IsNullOrWhiteSpace(v));
+
+            if (!hasMeaningfulValue)
+                continue;
+
+            canonical.Add(new List<string>
+            {
+                kurum,
+                guzergah,
+                yon,
+                sofor,
+                plaka,
+                birimFiyat,
+                dayValues[0], dayValues[1], dayValues[2], dayValues[3], dayValues[4], dayValues[5], dayValues[6], dayValues[7], dayValues[8], dayValues[9],
+                dayValues[10], dayValues[11], dayValues[12], dayValues[13], dayValues[14], dayValues[15], dayValues[16], dayValues[17], dayValues[18], dayValues[19],
+                dayValues[20], dayValues[21], dayValues[22], dayValues[23], dayValues[24], dayValues[25], dayValues[26], dayValues[27], dayValues[28], dayValues[29], dayValues[30],
+                kesinti
+            });
         }
 
-        var missingColumns = ValidateRequiredColumns(rows[0]);
-        if (missingColumns.Count == 0)
-            return true;
+        return canonical;
+    }
 
-        foreach (var missingColumn in missingColumns)
+    private static string GetCellByAliases(IReadOnlyList<string> row, IReadOnlyDictionary<string, int> headerMap, IEnumerable<string> aliases)
+    {
+        foreach (var alias in aliases)
         {
-            AddError(sonuc, null, missingColumn, "MISSING_REQUIRED_COLUMN", $"Zorunlu kolon eksik: {missingColumn}", null, "Şablon dosyadaki başlık adlarını kullanın.");
+            if (!headerMap.TryGetValue(NormalizeHeader(alias), out var index))
+                continue;
+
+            if (index < row.Count)
+                return row[index]?.Trim() ?? string.Empty;
         }
 
-        sonuc.Basarili = false;
-        return false;
+        return string.Empty;
     }
 
     private static void AddError(PuantajImportSonuc sonuc, int? rowNumber, string columnName, string errorCode, string message, string? rawValue, string? suggestedAction)
@@ -302,24 +400,6 @@ public class PuantajExcelService
             RawValue = rawValue,
             SuggestedAction = suggestedAction
         });
-    }
-
-    private static List<string> ValidateRequiredColumns(IReadOnlyList<string> headerColumns)
-    {
-        var normalizedHeaders = headerColumns
-            .Select(NormalizeHeader)
-            .Where(h => !string.IsNullOrWhiteSpace(h))
-            .ToHashSet();
-
-        var missing = new List<string>();
-        foreach (var column in RequiredColumns)
-        {
-            var hasColumn = column.Aliases.Any(alias => normalizedHeaders.Contains(NormalizeHeader(alias)));
-            if (!hasColumn)
-                missing.Add(column.DisplayName);
-        }
-
-        return missing;
     }
 
     public static string BuildErrorsCsv(IEnumerable<PuantajDogrulamaMesaji> messages)
@@ -393,22 +473,81 @@ public class PuantajExcelService
     private static PuantajInput ParsePuantajRow(List<string> cols)
     {
         var gunler = new List<string>();
-        // Excel kolonları: KURUM, GÜZERGAH, YÖN, ŞOFÖR, PLAKA, BIRIMFIYAT, 1,2,3...31, KESINTI
-        // Gün kolonları 6'dan başlar (index 5), 31 gün
-        int gunStart = 5;
-        for (int d = gunStart; d < gunStart + 31 && d < cols.Count; d++)
+        // Kanonik kolonlar: KURUM, GÜZERGAH, YÖN, ŞOFÖR, PLAKA, BIRIMFIYAT, 1..31, KESINTI
+        const int gunStart = 6;
+        const int gunCount = 31;
+
+        for (var d = gunStart; d < gunStart + gunCount && d < cols.Count; d++)
             gunler.Add(cols[d]);
 
-        decimal birimFiyat = 0, kesinti = 0;
-        int fiyatIdx = gunStart + 31;
-        if (cols.Count > fiyatIdx) decimal.TryParse(cols[fiyatIdx], NumberStyles.Any, CultureInfo.InvariantCulture, out birimFiyat);
-        if (cols.Count > fiyatIdx + 1) decimal.TryParse(cols[fiyatIdx + 1], NumberStyles.Any, CultureInfo.InvariantCulture, out kesinti);
+        var birimFiyat = ParseDecimalSmart(cols.ElementAtOrDefault(5));
+        var kesinti = ParseDecimalSmart(cols.ElementAtOrDefault(gunStart + gunCount));
 
         return new PuantajInput
         {
-            Kurum = cols.ElementAtOrDefault(0), Guzergah = cols.ElementAtOrDefault(1),
-            Yon = cols.ElementAtOrDefault(2), Sofor = cols.ElementAtOrDefault(3),
-            Plaka = cols.ElementAtOrDefault(4), BirimFiyat = birimFiyat, Kesinti = kesinti, Gunler = gunler
+            Kurum = cols.ElementAtOrDefault(0),
+            Guzergah = cols.ElementAtOrDefault(1),
+            Yon = cols.ElementAtOrDefault(2),
+            Sofor = cols.ElementAtOrDefault(3),
+            Plaka = cols.ElementAtOrDefault(4),
+            BirimFiyat = birimFiyat,
+            Kesinti = kesinti,
+            Gunler = gunler
+        };
+    }
+
+    private static decimal ParseDecimalSmart(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return 0;
+
+        var text = value.Trim();
+
+        if (decimal.TryParse(text, NumberStyles.Any, new CultureInfo("tr-TR"), out var trResult))
+            return trResult;
+
+        if (decimal.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var invResult))
+            return invResult;
+
+        var normalized = text.Replace(".", string.Empty).Replace(',', '.');
+        return decimal.TryParse(normalized, NumberStyles.Any, CultureInfo.InvariantCulture, out var normalizedResult)
+            ? normalizedResult
+            : 0;
+    }
+
+    private static string NormalizeYonLabel(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var raw = value.Trim();
+        var normalized = NormalizeHeader(raw);
+
+        return normalized switch
+        {
+            "s" or "sabah" => "Sabah",
+            "a" or "aksam" => "Akşam",
+            "sa" or "as" or "sabahaksam" or "gidisdonus" => "Sabah+Akşam",
+            "m" or "mesai" => "Mesai",
+            "e" or "eksefer" => "Ek Sefer",
+            _ => raw.Equals("S-A", StringComparison.OrdinalIgnoreCase) || raw.Equals("A-S", StringComparison.OrdinalIgnoreCase)
+                ? "Sabah+Akşam"
+                : "Ek Sefer"
+        };
+    }
+
+    private static string InferYonFromGuzergah(Guzergah? guzergah)
+    {
+        if (guzergah == null)
+            return string.Empty;
+
+        return guzergah.SeferTipi switch
+        {
+            SeferTipi.Sabah => "Sabah",
+            SeferTipi.Aksam => "Akşam",
+            SeferTipi.SabahAksam => "Sabah+Akşam",
+            SeferTipi.Mesai => "Mesai",
+            _ => "Ek Sefer"
         };
     }
 

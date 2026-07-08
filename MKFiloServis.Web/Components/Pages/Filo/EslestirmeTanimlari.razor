@@ -100,28 +100,54 @@
                                         <tr class="table-light">
                                             <td></td>
                                             <td colspan="8">
-                                                <div class="small text-muted mb-1">Oluşturulan puantaj kayıtları</div>
-                                                <table class="table table-sm mb-0">
-                                                    <thead>
-                                                        <tr>
-                                                            <th style="width: 180px;">Gün</th>
-                                                            <th style="width: 120px;">Sefer Sayısı</th>
-                                                            <th style="width: 220px;">Kapasite</th>
-                                                            <th>Not</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        @foreach (var puantaj in olusanPuantajlar.OrderByDescending(p => p.Tarih))
-                                                        {
-                                                            <tr>
-                                                                <td>@puantaj.Tarih.ToString("dd.MM.yyyy")</td>
-                                                                <td>@puantaj.SeferSayisi.ToString("N2")</td>
-                                                                <td>@GetKapasiteMetni(puantaj.Notlar)</td>
-                                                                <td>@(string.IsNullOrWhiteSpace(puantaj.Notlar) ? "-" : puantaj.Notlar)</td>
-                                                            </tr>
-                                                        }
-                                                    </tbody>
-                                                </table>
+                                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                                    <div class="small text-muted">Oluşturulan puantaj kayıtları (gün bazlı düzenlenebilir)</div>
+                                                    <button class="btn btn-sm btn-outline-success" @onclick="() => KaydetOlusanPuantajGridAsync(e.Id)">
+                                                        <i class="bi bi-save me-1"></i>Günleri Kaydet
+                                                    </button>
+                                                </div>
+
+                                                @foreach (var aylik in BuildAylikGrid(olusanPuantajlar))
+                                                {
+                                                    <div class="small fw-semibold text-primary mb-1">@aylik.AyEtiket</div>
+                                                    <div class="table-responsive mb-2">
+                                                        <table class="table table-sm table-bordered align-middle mb-0">
+                                                            <thead class="table-light">
+                                                                <tr>
+                                                                    <th style="min-width:220px;">Güzergah</th>
+                                                                    <th style="min-width:110px;">Plaka</th>
+                                                                    <th style="min-width:150px;">Şoför</th>
+                                                                    @for (var day = 1; day <= aylik.GunSayisi; day++)
+                                                                    {
+                                                                        <th class="text-center" style="min-width:58px;">@day</th>
+                                                                    }
+                                                                    <th class="text-center" style="min-width:85px;">Toplam</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                <tr>
+                                                                    <td>@(e.Guzergah?.GuzergahAdi ?? "-")</td>
+                                                                    <td>@(e.Arac?.AktifPlaka ?? e.Arac?.AktifPlakaKaydi?.Plaka ?? "-")</td>
+                                                                    <td>@(e.Sofor?.TamAd ?? "-")</td>
+                                                                    @for (var day = 1; day <= aylik.GunSayisi; day++)
+                                                                    {
+                                                                        if (aylik.GunMap.TryGetValue(day, out var p))
+                                                                        {
+                                                                            <td>
+                                                                                <input type="number" min="0" step="0.5" class="form-control form-control-sm text-center" @bind="p.SeferSayisi" />
+                                                                            </td>
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <td class="bg-light"></td>
+                                                                        }
+                                                                    }
+                                                                    <td class="fw-semibold text-center">@aylik.ToplamSefer.ToString("N1")</td>
+                                                                </tr>
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                }
                                             </td>
                                         </tr>
                                     }
@@ -266,11 +292,11 @@
                         {
                             <div class="col-md-2">
                                 <label class="form-label">Yıl</label>
-                                <input type="number" class="form-control" @bind="puantajYil" min="2000" max="2100" />
+                                <input type="number" class="form-control" @bind="puantajYil" @bind:after="DonemTipiDegisti" min="2000" max="2100" />
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">Ay</label>
-                                <select class="form-select" @bind="puantajAy">
+                                <select class="form-select" @bind="puantajAy" @bind:after="DonemTipiDegisti">
                                     @for (int m = 1; m <= 12; m++)
                                     {
                                         var ay = m;
@@ -288,14 +314,41 @@
                                 }
                                 else if (donemTipi == "Haftalik")
                                 {
-                                    <span>Başlangıç–Bitiş arasındaki her gün için eşleştirme başına birer satır oluşturulur. (@((puantajBitisTarihi - puantajBaslangicTarihi).Days + 1) gün)</span>
+                                    <span>Başlangıç–Bitiş arasındaki seçili haftalık günlerde eşleştirme başına satır oluşturulur.</span>
                                 }
                                 else
                                 {
-                                    <span>@puantajYil/@puantajAy ayındaki her gün için eşleştirme başına birer satır oluşturulur. (@DateTime.DaysInMonth(puantajYil, puantajAy) gün)</span>
+                                    <span>@puantajYil/@puantajAy ayındaki seçili çalışma günlerinde eşleştirme başına satır oluşturulur.</span>
                                 }
                             </div>
                         </div>
+
+                        <div class="col-12">
+                            <label class="form-label mb-1">Çalışılan Hafta Günleri</label>
+                            <div class="d-flex flex-wrap gap-3 small">
+                                <div class="form-check"><input class="form-check-input" type="checkbox" id="gunPzt" @bind="calismaPazartesi" @bind:after="GunFiltreleriDegisti" /><label class="form-check-label" for="gunPzt">Pzt</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" id="gunSal" @bind="calismaSali" @bind:after="GunFiltreleriDegisti" /><label class="form-check-label" for="gunSal">Sal</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" id="gunCar" @bind="calismaCarsamba" @bind:after="GunFiltreleriDegisti" /><label class="form-check-label" for="gunCar">Çar</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" id="gunPer" @bind="calismaPersembe" @bind:after="GunFiltreleriDegisti" /><label class="form-check-label" for="gunPer">Per</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" id="gunCum" @bind="calismaCuma" @bind:after="GunFiltreleriDegisti" /><label class="form-check-label" for="gunCum">Cum</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" id="gunCmt" @bind="calismaCumartesi" @bind:after="GunFiltreleriDegisti" /><label class="form-check-label" for="gunCmt">Cmt</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" id="gunPaz" @bind="calismaPazar" @bind:after="GunFiltreleriDegisti" /><label class="form-check-label" for="gunPaz">Paz</label></div>
+                            </div>
+                            <div class="mt-2 d-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="SecHaftaIci">Hafta İçi</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="SecTumGunler">Tüm Günler</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="SecHaftaSonuHaric">Hafta Sonu Hariç</button>
+                            </div>
+                        </div>
+
+                        @if (donemTipi == "Aylik")
+                        {
+                            <div class="col-12">
+                                <label class="form-label">Hariç Tutulacak Gün Numaraları (opsiyonel)</label>
+                                <input class="form-control" @bind="haricGunNumaralariText" @bind:after="GunFiltreleriDegisti" placeholder="Örn: 5,12,19" />
+                                <small class="text-muted">Ay içinde çalışılmayan günleri virgülle yazın.</small>
+                            </div>
+                        }
                     </div>
 
                     @if (seciliPuantajKurumFirmaId > 0)
@@ -307,7 +360,6 @@
                                         <th style="width: 45px;">
                                             <input type="checkbox" class="form-check-input" checked="@tumSatirlarSecili" @onchange="TumSatirlariSec" />
                                         </th>
-                                        <th>Kurum</th>
                                         <th>Güzergah</th>
                                         <th>Araç</th>
                                         <th>Şoför</th>
@@ -315,44 +367,63 @@
                                         <th>Gelir/Sefer</th>
                                         <th>Gider/Sefer</th>
                                         <th style="min-width: 170px;">Kapasite</th>
-                                        <th style="min-width: 130px;">Sefer Sayısı</th>
+                                        @foreach (var gun in puantajGunKolonlari)
+                                        {
+                                            <th class="text-center" style="min-width: 72px;">
+                                                <div>@gun.ToString("dd")</div>
+                                                <small class="text-muted">@gun.ToString("ddd", new System.Globalization.CultureInfo("tr-TR"))</small>
+                                            </th>
+                                        }
+                                        <th class="text-center" style="min-width: 90px;">Toplam</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @if (!puantajSatirlari.Any())
                                     {
                                         <tr>
-                                            <td colspan="10" class="text-center py-3 text-muted">Seçilen kurum için aktif eşleştirme bulunamadı.</td>
+                                            <td colspan="@(9 + puantajGunKolonlari.Count)" class="text-center py-3 text-muted">Seçilen kurum için aktif eşleştirme bulunamadı.</td>
                                         </tr>
                                     }
                                     else
                                     {
-                                        @foreach (var satir in puantajSatirlari)
+                                        @foreach (var grup in GetPuantajGruplari())
                                         {
-                                            <tr>
-                                                <td>
-                                                    <input type="checkbox" class="form-check-input" @bind="satir.Secili" />
-                                                </td>
-                                                <td>@satir.KurumAdi</td>
-                                                <td>@satir.GuzergahAdi</td>
-                                                <td>@satir.AracPlaka</td>
-                                                <td>@satir.SoforAdi</td>
-                                                <td>@satir.FirmaAdi</td>
-                                                <td class="text-success fw-semibold">@satir.GelirFiyati.ToString("N2")</td>
-                                                <td class="text-danger fw-semibold">@satir.GiderFiyati.ToString("N2")</td>
-                                                <td>
-                                                    <select class="form-select form-select-sm" @bind="satir.KapasiteId">
-                                                        <option value="">-- Kapasite --</option>
-                                                        @foreach (var kapasite in kapasiteListesi)
-                                                        {
-                                                            <option value="@kapasite.Id">@kapasite.KapasiteAdi</option>
-                                                        }
-                                                    </select>
-                                                </td>
-                                                <td>
-                                                    <input type="number" min="0.01" step="0.5" class="form-control form-control-sm" @bind="satir.SeferSayisi" />
-                                                </td>
-                                            </tr>
+                                            var grupSatirlari = grup.ToList();
+                                            for (var i = 0; i < grupSatirlari.Count; i++)
+                                            {
+                                                var satir = grupSatirlari[i];
+                                                <tr>
+                                                    <td>
+                                                        <input type="checkbox" class="form-check-input" @bind="satir.Secili" />
+                                                    </td>
+                                                    @if (i == 0)
+                                                    {
+                                                        <td rowspan="@grupSatirlari.Count" class="fw-semibold bg-light">@satir.GuzergahAdi</td>
+                                                    }
+                                                    <td>@satir.AracPlaka</td>
+                                                    <td>@satir.SoforAdi</td>
+                                                    <td>@satir.FirmaAdi</td>
+                                                    <td class="text-success fw-semibold">@satir.GelirFiyati.ToString("N2")</td>
+                                                    <td class="text-danger fw-semibold">@satir.GiderFiyati.ToString("N2")</td>
+                                                    <td>
+                                                        <select class="form-select form-select-sm" @bind="satir.KapasiteId">
+                                                            <option value="">-- Kapasite --</option>
+                                                            @foreach (var kapasite in kapasiteListesi)
+                                                            {
+                                                                <option value="@kapasite.Id">@kapasite.KapasiteAdi</option>
+                                                            }
+                                                        </select>
+                                                    </td>
+                                                    @foreach (var gun in puantajGunKolonlari)
+                                                    {
+                                                        var hucre = GetOrCreateGunHucre(satir, gun);
+                                                        <td>
+                                                            <input type="number" min="0" step="0.5" class="form-control form-control-sm text-center" @bind="hucre.SeferSayisi" />
+                                                        </td>
+                                                    }
+                                                    <td class="fw-semibold text-center">@satir.GunlukHucreler.Sum(h => h.SeferSayisi).ToString("N1")</td>
+                                                </tr>
+                                            }
                                         }
                                     }
                                 </tbody>
@@ -390,6 +461,7 @@
     private int seciliPuantajKurumFirmaId;
     private bool tumSatirlarSecili = true;
     private List<PuantajSatirModel> puantajSatirlari = new();
+    private List<DateTime> puantajGunKolonlari = new();
     private readonly Dictionary<int, List<FiloGunlukPuantaj>> olusanPuantajlarByEslestirme = new();
 
     // Puantaj modalı dönem seçimi
@@ -398,6 +470,15 @@
     private DateTime puantajBitisTarihi = DateTime.Today;
     private int puantajAy = DateTime.Today.Month;
     private int puantajYil = DateTime.Today.Year;
+
+    private bool calismaPazartesi = true;
+    private bool calismaSali = true;
+    private bool calismaCarsamba = true;
+    private bool calismaPersembe = true;
+    private bool calismaCuma = true;
+    private bool calismaCumartesi;
+    private bool calismaPazar;
+    private string haricGunNumaralariText = string.Empty;
 
     private FiloGuzergahEslestirme model = new();
 
@@ -431,6 +512,21 @@
         try
         {
             eslestirmeler = await FiloKomisyonService.GetEslestirmelerAsync(aktifFirmaId, sadeceAktifler: false);
+
+            olusanPuantajlarByEslestirme.Clear();
+            if (aktifFirmaId > 0)
+            {
+                var baslangic = new DateTime(DateTime.Today.Year, 1, 1);
+                var bitis = baslangic.AddYears(1).AddDays(-1);
+                var tumPuantajlar = await FiloKomisyonService.GetPuantajlarByTarihAraligiAsync(aktifFirmaId, baslangic, bitis);
+
+                foreach (var grup in tumPuantajlar
+                    .Where(p => p.FiloGuzergahEslestirmeId.HasValue)
+                    .GroupBy(p => p.FiloGuzergahEslestirmeId!.Value))
+                {
+                    olusanPuantajlarByEslestirme[grup.Key] = grup.OrderBy(p => p.Tarih).ToList();
+                }
+            }
         }
         catch
         {
@@ -475,6 +571,7 @@
 
         seciliPuantajKurumFirmaId = 0;
         puantajSatirlari.Clear();
+        puantajGunKolonlari = HesaplaHedefGunler(true);
         tumSatirlarSecili = true;
         isPuantajModalOpen = true;
     }
@@ -517,12 +614,13 @@
                     GelirFiyati = e.KurumaKesilecekUcret,
                     GiderFiyati = e.TaseronaOdenenUcret,
                     ServisTuru = e.ServisTuru,
-                    SeferSayisi = varsayilanSefer
+                    VarsayilanSeferSayisi = varsayilanSefer
                 };
             })
             .ToList();
 
         tumSatirlarSecili = puantajSatirlari.Any();
+        PuantajGunKolonlariniHazirla();
         return Task.CompletedTask;
     }
 
@@ -537,7 +635,143 @@
             if (puantajBitisTarihi < puantajBaslangicTarihi)
                 puantajBitisTarihi = puantajBaslangicTarihi.AddDays(6);
         }
+
+        PuantajGunKolonlariniHazirla();
         return Task.CompletedTask;
+    }
+
+    private Task GunFiltreleriDegisti()
+    {
+        PuantajGunKolonlariniHazirla();
+        return Task.CompletedTask;
+    }
+
+    private void SecHaftaIci()
+    {
+        calismaPazartesi = true;
+        calismaSali = true;
+        calismaCarsamba = true;
+        calismaPersembe = true;
+        calismaCuma = true;
+        calismaCumartesi = false;
+        calismaPazar = false;
+        PuantajGunKolonlariniHazirla();
+    }
+
+    private void SecTumGunler()
+    {
+        calismaPazartesi = true;
+        calismaSali = true;
+        calismaCarsamba = true;
+        calismaPersembe = true;
+        calismaCuma = true;
+        calismaCumartesi = true;
+        calismaPazar = true;
+        PuantajGunKolonlariniHazirla();
+    }
+
+    private void SecHaftaSonuHaric() => SecHaftaIci();
+
+    private bool IsCalismaGunu(DayOfWeek dayOfWeek)
+    {
+        return dayOfWeek switch
+        {
+            DayOfWeek.Monday => calismaPazartesi,
+            DayOfWeek.Tuesday => calismaSali,
+            DayOfWeek.Wednesday => calismaCarsamba,
+            DayOfWeek.Thursday => calismaPersembe,
+            DayOfWeek.Friday => calismaCuma,
+            DayOfWeek.Saturday => calismaCumartesi,
+            DayOfWeek.Sunday => calismaPazar,
+            _ => false
+        };
+    }
+
+    private HashSet<int> ParseHaricGunNumaralari()
+    {
+        if (string.IsNullOrWhiteSpace(haricGunNumaralariText))
+            return new HashSet<int>();
+
+        return haricGunNumaralariText
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(x => int.TryParse(x, out var day) ? day : 0)
+            .Where(day => day is >= 1 and <= 31)
+            .ToHashSet();
+    }
+
+    private List<DateTime> HesaplaHedefGunler(bool filtreUygula)
+    {
+        List<DateTime> hedefGunler;
+        if (donemTipi == "Aylik")
+        {
+            var gunSayisi = DateTime.DaysInMonth(puantajYil, puantajAy);
+            hedefGunler = Enumerable.Range(1, gunSayisi)
+                .Select(d => new DateTime(puantajYil, puantajAy, d))
+                .ToList();
+        }
+        else if (donemTipi == "Haftalik")
+        {
+            var bas = puantajBaslangicTarihi.Date;
+            var bit = puantajBitisTarihi.Date;
+            if (bit < bas) bit = bas;
+            hedefGunler = Enumerable.Range(0, (bit - bas).Days + 1)
+                .Select(i => bas.AddDays(i))
+                .ToList();
+        }
+        else
+        {
+            hedefGunler = new List<DateTime> { puantajBaslangicTarihi.Date };
+        }
+
+        if (!filtreUygula)
+            return hedefGunler;
+
+        var haricGunler = ParseHaricGunNumaralari();
+        return hedefGunler
+            .Where(g => IsCalismaGunu(g.DayOfWeek))
+            .Where(g => donemTipi != "Aylik" || !haricGunler.Contains(g.Day))
+            .Distinct()
+            .OrderBy(g => g)
+            .ToList();
+    }
+
+    private void PuantajGunKolonlariniHazirla()
+    {
+        puantajGunKolonlari = HesaplaHedefGunler(true);
+
+        foreach (var satir in puantajSatirlari)
+        {
+            var mevcutMap = satir.GunlukHucreler.ToDictionary(h => h.Tarih.Date, h => h.SeferSayisi);
+            satir.GunlukHucreler = puantajGunKolonlari
+                .Select(g => new PuantajGunHucreModel
+                {
+                    Tarih = g,
+                    SeferSayisi = mevcutMap.TryGetValue(g.Date, out var mevcut)
+                        ? mevcut
+                        : satir.VarsayilanSeferSayisi
+                })
+                .ToList();
+        }
+    }
+
+    private IEnumerable<IGrouping<int, PuantajSatirModel>> GetPuantajGruplari()
+    {
+        return puantajSatirlari
+            .OrderBy(s => s.GuzergahAdi)
+            .ThenBy(s => s.AracPlaka)
+            .ThenBy(s => s.SoforAdi)
+            .GroupBy(s => s.GuzergahId);
+    }
+
+    private PuantajGunHucreModel GetOrCreateGunHucre(PuantajSatirModel satir, DateTime gun)
+    {
+        var hucre = satir.GunlukHucreler.FirstOrDefault(h => h.Tarih.Date == gun.Date);
+        if (hucre is not null)
+            return hucre;
+
+        hucre = new PuantajGunHucreModel { Tarih = gun, SeferSayisi = satir.VarsayilanSeferSayisi };
+        satir.GunlukHucreler.Add(hucre);
+        return hucre;
     }
 
     private void TumSatirlariSec(ChangeEventArgs args)
@@ -572,27 +806,16 @@
             return;
         }
 
-        // Dönem aralığı hesapla
-        List<DateTime> hedefGunler;
-        if (donemTipi == "Aylik")
+        PuantajGunKolonlariniHazirla();
+        var hedefGunler = puantajGunKolonlari
+            .Distinct()
+            .OrderBy(g => g)
+            .ToList();
+
+        if (!hedefGunler.Any())
         {
-            var gunSayisi = DateTime.DaysInMonth(puantajYil, puantajAy);
-            hedefGunler = Enumerable.Range(1, gunSayisi)
-                .Select(d => new DateTime(puantajYil, puantajAy, d))
-                .ToList();
-        }
-        else if (donemTipi == "Haftalik")
-        {
-            var bas = puantajBaslangicTarihi.Date;
-            var bit = puantajBitisTarihi.Date;
-            if (bit < bas) bit = bas;
-            hedefGunler = Enumerable.Range(0, (bit - bas).Days + 1)
-                .Select(i => bas.AddDays(i))
-                .ToList();
-        }
-        else
-        {
-            hedefGunler = new List<DateTime> { puantajBaslangicTarihi.Date };
+            ToastService.ShowWarning("Seçilen dönem/çalışma günü filtrelerine göre üretilecek gün bulunamadı.");
+            return;
         }
 
         try
@@ -621,6 +844,14 @@
                         continue;
                     }
 
+                    var hucre = satir.GunlukHucreler.FirstOrDefault(h => h.Tarih.Date == gun.Date);
+                    var seferSayisi = hucre?.SeferSayisi ?? satir.VarsayilanSeferSayisi;
+                    if (seferSayisi <= 0)
+                    {
+                        atlanan++;
+                        continue;
+                    }
+
                     var kapasiteAdi = satir.KapasiteId.HasValue
                         ? kapasiteListesi.FirstOrDefault(k => k.Id == satir.KapasiteId.Value)?.KapasiteAdi
                         : null;
@@ -636,7 +867,7 @@
                         SoforId = satir.SoforId,
                         Durum = OperasyonDurumu.Gitti,
                         ServisTuru = satir.ServisTuru,
-                        SeferSayisi = satir.SeferSayisi <= 0 ? 1m : satir.SeferSayisi,
+                        SeferSayisi = seferSayisi,
                         PuantajCarpani = 1m,
                         Notlar = string.IsNullOrWhiteSpace(kapasiteAdi) ? null : $"Kapasite: {kapasiteAdi}"
                     };
@@ -833,6 +1064,48 @@
             : "-";
     }
 
+    private static List<AylikPuantajGridModel> BuildAylikGrid(List<FiloGunlukPuantaj> puantajlar)
+    {
+        return puantajlar
+            .GroupBy(p => new { p.Tarih.Year, p.Tarih.Month })
+            .OrderByDescending(g => g.Key.Year)
+            .ThenByDescending(g => g.Key.Month)
+            .Select(g =>
+            {
+                var gunMap = g
+                    .GroupBy(x => x.Tarih.Day)
+                    .ToDictionary(x => x.Key, x => x.OrderByDescending(i => i.UpdatedAt ?? i.CreatedAt).First());
+
+                return new AylikPuantajGridModel
+                {
+                    Yil = g.Key.Year,
+                    Ay = g.Key.Month,
+                    GunSayisi = DateTime.DaysInMonth(g.Key.Year, g.Key.Month),
+                    GunMap = gunMap,
+                    ToplamSefer = gunMap.Values.Sum(x => x.SeferSayisi)
+                };
+            })
+            .ToList();
+    }
+
+    private async Task KaydetOlusanPuantajGridAsync(int eslestirmeId)
+    {
+        if (!olusanPuantajlarByEslestirme.TryGetValue(eslestirmeId, out var puantajlar) || !puantajlar.Any())
+            return;
+
+        try
+        {
+            var guncellenecekler = puantajlar.Where(p => p.Id > 0).ToList();
+            await FiloKomisyonService.UpdateGunlukPuantajlarAsync(guncellenecekler);
+            ToastService.ShowSuccess("Gün bazlı puantaj değişiklikleri kaydedildi.");
+            await ListeYenile();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Gün bazlı puantaj kaydı sırasında hata oluştu: " + ex.GetBaseException().Message);
+        }
+    }
+
     private sealed class PuantajSatirModel
     {
         public bool Secili { get; set; }
@@ -849,9 +1122,25 @@
         public decimal GelirFiyati { get; set; }
         public decimal GiderFiyati { get; set; }
         public int? KapasiteId { get; set; }
+        public decimal VarsayilanSeferSayisi { get; set; }
+        public List<PuantajGunHucreModel> GunlukHucreler { get; set; } = new();
+        public ServisTuru ServisTuru { get; set; }
+    }
+
+    private sealed class PuantajGunHucreModel
+    {
         public DateTime Tarih { get; set; }
         public decimal SeferSayisi { get; set; }
-        public ServisTuru ServisTuru { get; set; }
+    }
+
+    private sealed class AylikPuantajGridModel
+    {
+        public int Yil { get; set; }
+        public int Ay { get; set; }
+        public int GunSayisi { get; set; }
+        public decimal ToplamSefer { get; set; }
+        public Dictionary<int, FiloGunlukPuantaj> GunMap { get; set; } = new();
+        public string AyEtiket => new DateTime(Yil, Ay, 1).ToString("MMMM yyyy", new System.Globalization.CultureInfo("tr-TR"));
     }
 }
 

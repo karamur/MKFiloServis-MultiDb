@@ -789,6 +789,16 @@ public partial class PuantajExcelGrid
             _importWarnings.AddRange(warnings);
     }
 
+    private IReadOnlyList<(string Code, int Count)> GetWarningCodeSummary()
+    {
+        return _importWarnings
+            .Where(w => !string.IsNullOrWhiteSpace(w.ErrorCode))
+            .GroupBy(w => w.ErrorCode)
+            .Select(g => (Code: g.Key, Count: g.Count()))
+            .OrderByDescending(x => x.Count)
+            .ToList();
+    }
+
     private void ImportValidationStateTemizle()
     {
         _importErrors.Clear();

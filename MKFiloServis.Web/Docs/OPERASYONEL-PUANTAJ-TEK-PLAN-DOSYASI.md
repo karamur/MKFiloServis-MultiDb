@@ -82,14 +82,37 @@ Amaç:
 
 ### 3.1 Excel Kolon Eşleme Standardı
 
-Minimum kolonlar:
+Kanonik (hedef) kolonlar:
 - Tarih
 - Güzergah
+- YÖN
 - Araç/Plaka
 - Şoför (varsa)
 - Servis Türü
 - Sefer Sayısı
+- Birim Fiyat
 - Not (opsiyonel)
+
+Kural:
+- Bu kolonlardan biri Excel’de yoksa import pipeline’ında **türetilerek eklenir** (auto-add).
+- Dosya matris formatındaysa (1..31 gün kolonları) wide→long dönüşüm zorunludur.
+
+Türetme/ekleme kuralları:
+1. `Tarih` yoksa: `Ay/Yıl parametresi + gün kolonu (1..31)` ile üretilir.
+2. `Sefer Sayısı` yoksa: ilgili gün hücresindeki değerden üretilir.
+3. `YÖN` yoksa: güzergahın sefer tanımı ve slot bilgisine göre üretilir.
+4. `Servis Türü` yoksa: güzergah sefer tipinden (`SeferTipi`) türetilir.
+5. `Birim Fiyat` yoksa: güzergah + yön + sefer tipine bağlı fiyat kuralından hesaplanır.
+
+YÖN sözlüğü (kabul edilen değerler):
+- `Sabah+Akşam`
+- `Sabah`
+- `Akşam`
+- `Mesai`
+- `Ek Sefer`
+
+Not:
+- `Ek Sefer` değeri iç modelde ayrı karşılık yoksa geçici olarak "Diger" sınıfına map edilip audit log'a yazılır.
 
 ### 3.2 Eşleştirme Anahtarı
 
@@ -233,12 +256,15 @@ Devam edenler:
 
 ## 11) Net Sonraki Adımlar (Uygulanabilir Checklist)
 
-1. Excel import şablonunu sabitle (`zorunlu kolon + örnek dosya`)
-2. Preview ekranında eşleşmeyen referansları kullanıcıya indirilebilir raporla sun
-3. Upsert anahtarını teknik olarak tekilleştir (firma+tarih+güzergah+araç/şoför+servis türü)
-4. Onaylı/faturalı dönem güncellemelerinde "fark raporu + onay" zorunluluğunu aktive et
-5. Güncelleme sonrası etkilenen hakediş taslakları için otomatik yeniden senkron kuralını çalıştır
-6. Aylık kapanış öncesi uygunluk raporunu zorunlu kontrol adımı yap
+1. Excel import şablonunu sabitle (`kanonik kolonlar + örnek dosya + YÖN sözlüğü`)
+2. Eksik kolonlar için auto-add/türetme katmanını devreye al (`Tarih`, `YÖN`, `Servis Türü`, `Sefer Sayısı`, `Birim Fiyat`)
+3. Matris format (1..31 gün) dosyalar için wide→long dönüşümünü standartlaştır
+4. Preview ekranında eşleşmeyen referansları ve `YÖN/fiyat` türetme sonuçlarını indirilebilir raporla sun
+5. Upsert anahtarını teknik olarak tekilleştir (firma+tarih+güzergah+araç/şoför+servis türü)
+6. Güzergah sefer tanımına göre yön/fiyat kuralını uygula (`SeferTipi` + `SeferSlot` bazlı)
+7. Onaylı/faturalı dönem güncellemelerinde "fark raporu + onay" zorunluluğunu aktive et
+8. Güncelleme sonrası etkilenen hakediş taslakları için otomatik yeniden senkron kuralını çalıştır
+9. Aylık kapanış öncesi uygunluk raporunu zorunlu kontrol adımı yap
 
 ---
 
@@ -282,8 +308,13 @@ Devam edenler:
 ### 13.2 Servis
 - `MKFiloServis.Web/Services/PuantajExcelService.cs`
   - Zorunlu kolon doğrulama metodu
+  - Eksik kolon auto-add/türetme (`Tarih`, `YÖN`, `Servis Türü`, `Sefer Sayısı`, `Birim Fiyat`)
+  - Matris format (1..31) için wide→long dönüşüm
   - Upsert anahtarını tekilleştiren eşleştirme metodu
   - Preview diff çıktısı (`eski değer / yeni değer / durum`)
+- `MKFiloServis.Web/Components/Pages/Guzergahlar/GuzergahForm.razor`
+  - Sefer (`SeferTipi`) + slot (`SeferSlot`) bilgisinden yön/fiyat türetme kural referansı
+  - Yön değerleri: `Sabah+Akşam`, `Sabah`, `Akşam`, `Mesai`, `Ek Sefer`
 - `MKFiloServis.Web/Services/PuantajHakedisSyncService.cs`
   - Güncelleme sonrası etkilenen taslak hakedişleri yeniden senkron kuralı
 
@@ -298,21 +329,23 @@ Devam edenler:
 ## 14) Kabul Kriterleri (Definition of Done)
 
 Sprint A tamamlandı sayılması için:
-1. Eksik kolonlu Excel dosyasında import başlamadan anlaşılır hata listesi gösterilir.
-2. Preview ekranında eşleşmeyen referanslar indirilebilir rapor olarak alınabilir.
-3. Aynı satır ikinci kez yüklendiğinde mükerrer satır açılmadan update davranışı doğrulanır.
-4. Tekil günlük güncellemeden sonra etkilenen taslak hakediş sayısı kullanıcıya gösterilir.
+1. Eksik kolonlu Excel dosyasında zorunlu alanlar auto-add/türetme ile tamamlanır; türetilemeyenlerde anlaşılır hata listesi gösterilir.
+2. `YÖN` kolonu için kabul edilen değerler (`Sabah+Akşam`, `Sabah`, `Akşam`, `Mesai`, `Ek Sefer`) preview'de normalize edilir.
+3. Güzergah sefer tanımına göre (`SeferTipi` + `SeferSlot`) yön/fiyat türetme sonucu preview raporunda görülebilir.
+4. Aynı satır ikinci kez yüklendiğinde mükerrer satır açılmadan update davranışı doğrulanır.
+5. Tekil günlük güncellemeden sonra etkilenen taslak hakediş sayısı kullanıcıya gösterilir.
 
 ---
 
 ## 15) Hemen Uygulanacak Sıra (Devam Planı)
 
-1. Excel şablon sözleşmesini dokümante et (zorunlu kolonlar + örnek format)
-2. `PuantajExcelService` preview/doğrulama çıktısını genişlet
-3. UI tarafına hata raporu indirme aksiyonunu ekle
-4. Upsert tekilleştirme testlerini yaz
-5. Taslak hakediş yeniden senkron tetikleyicisini devreye al
-6. Smoke testte Excel yükleme + tekrar yükleme senaryosunu doğrula
+1. Excel şablon sözleşmesini dokümante et (kanonik kolonlar + YÖN sözlüğü + örnek format)
+2. `PuantajExcelService` içinde eksik kolon auto-add/türetme ve matris→satır dönüşümünü tanımla
+3. Güzergah sefer tanımından (`SeferTipi` + `SeferSlot`) yön/fiyat türetme kuralını finalize et
+4. UI tarafına türetme sonuçları + hata raporu indirme aksiyonunu ekle
+5. Upsert tekilleştirme testlerini yaz
+6. Taslak hakediş yeniden senkron tetikleyicisini devreye al
+7. Smoke testte Excel yükleme + tekrar yükleme + YÖN normalizasyon senaryosunu doğrula
 
 ---
 
