@@ -114,7 +114,6 @@
                                                         <table class="table table-sm table-bordered align-middle mb-0">
                                                             <thead class="table-light">
                                                                 <tr>
-                                                                    <th style="min-width:220px;">Güzergah</th>
                                                                     <th style="min-width:110px;">Plaka</th>
                                                                     <th style="min-width:150px;">Şoför</th>
                                                                     @for (var day = 1; day <= aylik.GunSayisi; day++)
@@ -122,11 +121,11 @@
                                                                         <th class="text-center" style="min-width:58px;">@day</th>
                                                                     }
                                                                     <th class="text-center" style="min-width:85px;">Toplam</th>
+                                                                    <th class="text-center" style="min-width:210px;">İşlem</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody>
                                                                 <tr>
-                                                                    <td>@(e.Guzergah?.GuzergahAdi ?? "-")</td>
                                                                     <td>@(e.Arac?.AktifPlaka ?? e.Arac?.AktifPlakaKaydi?.Plaka ?? "-")</td>
                                                                     <td>@(e.Sofor?.TamAd ?? "-")</td>
                                                                     @for (var day = 1; day <= aylik.GunSayisi; day++)
@@ -134,7 +133,7 @@
                                                                         if (aylik.GunMap.TryGetValue(day, out var p))
                                                                         {
                                                                             <td>
-                                                                                <input type="number" min="0" step="0.5" class="form-control form-control-sm text-center" @bind="p.SeferSayisi" />
+                                                                                <input type="number" min="0" step="0.5" class="form-control form-control-sm text-center" @bind="p.SeferSayisi" readonly="@(!IsAylikDuzenlemede(e.Id, aylik))" />
                                                                             </td>
                                                                         }
                                                                         else
@@ -142,7 +141,20 @@
                                                                             <td class="bg-light"></td>
                                                                         }
                                                                     }
-                                                                    <td class="fw-semibold text-center">@aylik.ToplamSefer.ToString("N1")</td>
+                                                                    <td class="fw-semibold text-center">@aylik.GunMap.Values.Sum(x => x.SeferSayisi).ToString("N1")</td>
+                                                                    <td class="text-center">
+                                                                        <div class="btn-group btn-group-sm" role="group">
+                                                                            <button type="button" class="btn btn-outline-primary" @onclick="() => AylikDuzenlemeAc(e.Id, aylik)">
+                                                                                <i class="bi bi-pencil"></i>
+                                                                            </button>
+                                                                            <button type="button" class="btn btn-outline-success" @onclick="() => KaydetOlusanPuantajGridAsync(e.Id, aylik.Yil, aylik.Ay)">
+                                                                                <i class="bi bi-save"></i>
+                                                                            </button>
+                                                                            <button type="button" class="btn btn-outline-danger" @onclick="() => SilOlusanPuantajAylikAsync(e.Id, aylik.Yil, aylik.Ay)">
+                                                                                <i class="bi bi-trash"></i>
+                                                                            </button>
+                                                                        </div>
+                                                                    </td>
                                                                 </tr>
                                                             </tbody>
                                                         </table>
@@ -463,6 +475,7 @@
     private List<PuantajSatirModel> puantajSatirlari = new();
     private List<DateTime> puantajGunKolonlari = new();
     private readonly Dictionary<int, List<FiloGunlukPuantaj>> olusanPuantajlarByEslestirme = new();
+    private readonly HashSet<string> aylikDuzenlemeAnahtarlari = new();
 
     // Puantaj modalı dönem seçimi
     private string donemTipi = "Gunluk"; // Gunluk | Haftalik | Aylik
@@ -935,8 +948,14 @@
 
     private async Task SilModalAc(FiloGuzergahEslestirme esleme)
     {
-        await FiloKomisyonService.DeleteEslestirmeAsync(esleme.Id);
-        ToastService.ShowSuccess("Kayıt Silindi.");
+        var silindi = await FiloKomisyonService.DeleteEslestirmeAsync(esleme.Id);
+        if (!silindi)
+        {
+            ToastService.ShowWarning("Kayıt silinemedi veya zaten silinmiş.");
+            return;
+        }
+
+        ToastService.ShowSuccess("Kayıt silindi ve bağlı puantajlar pasife alındı.");
         await ListeYenile();
     }
 
@@ -1088,21 +1107,73 @@
             .ToList();
     }
 
-    private async Task KaydetOlusanPuantajGridAsync(int eslestirmeId)
+    private static string AylikDuzenlemeKey(int eslestirmeId, int yil, int ay) => $"{eslestirmeId}:{yil}:{ay}";
+
+    private bool IsAylikDuzenlemede(int eslestirmeId, AylikPuantajGridModel aylik)
+        => aylikDuzenlemeAnahtarlari.Contains(AylikDuzenlemeKey(eslestirmeId, aylik.Yil, aylik.Ay));
+
+    private void AylikDuzenlemeAc(int eslestirmeId, AylikPuantajGridModel aylik)
+        => aylikDuzenlemeAnahtarlari.Add(AylikDuzenlemeKey(eslestirmeId, aylik.Yil, aylik.Ay));
+
+    private async Task KaydetOlusanPuantajGridAsync(int eslestirmeId, int? yil = null, int? ay = null)
     {
         if (!olusanPuantajlarByEslestirme.TryGetValue(eslestirmeId, out var puantajlar) || !puantajlar.Any())
             return;
 
         try
         {
-            var guncellenecekler = puantajlar.Where(p => p.Id > 0).ToList();
+            var guncellenecekler = puantajlar
+                .Where(p => p.Id > 0)
+                .Where(p => !yil.HasValue || (p.Tarih.Year == yil.Value && p.Tarih.Month == ay))
+                .ToList();
+
+            if (!guncellenecekler.Any())
+            {
+                ToastService.ShowWarning("Kaydedilecek kayıt bulunamadı.");
+                return;
+            }
+
             await FiloKomisyonService.UpdateGunlukPuantajlarAsync(guncellenecekler);
+
+            if (yil.HasValue && ay.HasValue)
+                aylikDuzenlemeAnahtarlari.Remove(AylikDuzenlemeKey(eslestirmeId, yil.Value, ay.Value));
+
             ToastService.ShowSuccess("Gün bazlı puantaj değişiklikleri kaydedildi.");
             await ListeYenile();
         }
         catch (Exception ex)
         {
             ToastService.ShowError("Gün bazlı puantaj kaydı sırasında hata oluştu: " + ex.GetBaseException().Message);
+        }
+    }
+
+    private async Task SilOlusanPuantajAylikAsync(int eslestirmeId, int yil, int ay)
+    {
+        if (!olusanPuantajlarByEslestirme.TryGetValue(eslestirmeId, out var puantajlar) || !puantajlar.Any())
+            return;
+
+        var silinecekIds = puantajlar
+            .Where(p => p.Id > 0 && p.Tarih.Year == yil && p.Tarih.Month == ay)
+            .Select(p => p.Id)
+            .Distinct()
+            .ToList();
+
+        if (!silinecekIds.Any())
+        {
+            ToastService.ShowWarning("Silinecek kayıt bulunamadı.");
+            return;
+        }
+
+        try
+        {
+            await FiloKomisyonService.DeleteGunlukPuantajlarAsync(silinecekIds);
+            aylikDuzenlemeAnahtarlari.Remove(AylikDuzenlemeKey(eslestirmeId, yil, ay));
+            ToastService.ShowSuccess("Aylık puantaj satırı silindi.");
+            await ListeYenile();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Aylık puantaj silinirken hata oluştu: " + ex.GetBaseException().Message);
         }
     }
 

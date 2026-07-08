@@ -449,7 +449,9 @@ if (snapshot.FirstOrDefault() is { } s && s.ToplamSefer > 0)
 - Dosya: `MKFiloServis.Web/Components/Pages/Filo/EslestirmeTanimlari.razor`
 - Güncelleme:
   - `Araç, Şoför ve Güzergah Eşleme Havuzu` ekranında, kayıt satırının altında açılan puantaj görünümü **günler yan yana** (1..ayın günleri) olacak şekilde değiştirildi.
-  - Aynı blokta `Güzergah > Plaka > Şoför` bilgisi korunarak gün hücreleri input yapısına alındı ve `SeferSayisi` düzenlenebilir hale getirildi.
-  - `Günleri Kaydet` aksiyonu ile satır altındaki gün bazlı değişiklikler toplu olarak kaydedilir.
+  - Alt gridde `Plaka` ve `Şoför` sütunları bırakıldı; `Plaka` solundaki `Güzergah` sütunu kaldırıldı.
+  - Gün satırına `Düzenle / Kaydet / Sil` aksiyonları eklendi. Düzenle açılmadan gün hücreleri readonly kalır.
+  - `Kaydet` ilgili ay satırını, `Sil` ilgili ay satırındaki günlük puantaj kayıtlarını soft-delete eder.
+  - Eşleştirme silme akışında servis katmanı güncellendi: yalnız toast değil, DB etkisi doğrulanır ve bağlı günlük puantajlar da soft-delete edilir.
   - Liste yenilemede yıl bazlı mevcut puantaj kayıtları eşleştirme bazında yüklenir; ekran yeniden açıldığında değişiklikler görüntülenir.
 

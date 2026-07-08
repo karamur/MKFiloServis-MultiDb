@@ -95,16 +95,28 @@ public class FiloKomisyonService : IFiloKomisyonService
         return existing ?? eslestirme;
     }
 
-    public async Task DeleteEslestirmeAsync(int id)
+    public async Task<bool> DeleteEslestirmeAsync(int id)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var existing = await context.FiloGuzergahEslestirmeleri.FindAsync(id);
-        if (existing != null)
+        if (existing == null || existing.IsDeleted)
+            return false;
+
+        existing.IsDeleted = true;
+        existing.UpdatedAt = DateTime.UtcNow;
+
+        var bagliPuantajlar = await context.FiloGunlukPuantajlar
+            .Where(p => p.FiloGuzergahEslestirmeId == id && !p.IsDeleted)
+            .ToListAsync();
+
+        foreach (var p in bagliPuantajlar)
         {
-            existing.IsDeleted = true;
-            existing.UpdatedAt = DateTime.UtcNow;
-            await context.SaveChangesAsync();
+            p.IsDeleted = true;
+            p.UpdatedAt = DateTime.UtcNow;
         }
+
+        var etkilenen = await context.SaveChangesAsync();
+        return etkilenen > 0;
     }
 
     public async Task TopluPuantajUretAsync(int firmaId, int yil, int ay)
@@ -244,6 +256,26 @@ public class FiloKomisyonService : IFiloKomisyonService
                 continue;
 
             await MapAndApplyRulesAsync(context, existing, gelen);
+        }
+
+        await context.SaveChangesAsync();
+    }
+
+    public async Task DeleteGunlukPuantajlarAsync(List<int> puantajIds)
+    {
+        if (puantajIds is null || puantajIds.Count == 0)
+            return;
+
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var kayitlar = await context.FiloGunlukPuantajlar
+            .Where(p => puantajIds.Contains(p.Id) && !p.IsDeleted)
+            .ToListAsync();
+
+        foreach (var kayit in kayitlar)
+        {
+            kayit.IsDeleted = true;
+            kayit.UpdatedAt = DateTime.UtcNow;
         }
 
         await context.SaveChangesAsync();
