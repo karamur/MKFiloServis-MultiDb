@@ -1,4 +1,4 @@
-using MKFiloServis.Web.Data;
+﻿using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -167,18 +167,22 @@ public static class PuantajSlotMigrationHelper
 
     private static async Task<HashSet<string>> GetColumnNamesAsync(ApplicationDbContext context, string tableName)
     {
+        var isSqlite = context.Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true;
         var conn = context.Database.GetDbConnection();
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = $"""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_name = '{tableName}'
-            """;
+        if (isSqlite)
+            cmd.CommandText = $"PRAGMA table_info(\"{tableName}\")";
+        else
+            cmd.CommandText = $"""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = '{tableName}'
+                """;
         if (conn.State != System.Data.ConnectionState.Open)
             await conn.OpenAsync();
         await using var reader = await cmd.ExecuteReaderAsync();
-        var cols = new HashSet<string>();
+        var cols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         while (await reader.ReadAsync())
-            cols.Add(reader.GetString(0));
+            cols.Add(isSqlite ? reader.GetString(1) : reader.GetString(0));
         return cols;
     }
 
@@ -208,6 +212,10 @@ public static class PuantajSlotMigrationHelper
         string refTable, string refColumn, string onDeleteAction,
         ILogger? logger)
     {
+        // SQLite'da ALTER TABLE ADD CONSTRAINT desteklenmez
+        if (context.Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true)
+            return;
+
         try
         {
             // Önce hedef tablo var mı kontrol et
@@ -240,21 +248,32 @@ public static class PuantajSlotMigrationHelper
 
     private static async Task<bool> TableExistsAsync(ApplicationDbContext context, string tableName)
     {
+        var isSqlite = context.Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true;
         var conn = context.Database.GetDbConnection();
         if (conn.State != System.Data.ConnectionState.Open)
             await conn.OpenAsync();
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables
-                WHERE table_name = @tableName
-            )
-            """;
+        if (isSqlite)
+        {
+            cmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=@tableName";
+        }
+        else
+        {
+            cmd.CommandText = """
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = @tableName
+                )
+                """;
+        }
         var p = cmd.CreateParameter();
         p.ParameterName = "tableName";
         p.Value = tableName;
         cmd.Parameters.Add(p);
-        return (bool)(await cmd.ExecuteScalarAsync())!;
+        var result = await cmd.ExecuteScalarAsync();
+        if (isSqlite)
+            return Convert.ToInt64(result) > 0;
+        return (bool)result!;
     }
 }
 

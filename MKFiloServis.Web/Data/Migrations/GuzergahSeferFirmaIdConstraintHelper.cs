@@ -1,4 +1,4 @@
-using MKFiloServis.Web.Data;
+﻿using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -12,6 +12,13 @@ public static class GuzergahSeferFirmaIdConstraintHelper
 {
     public static async Task ApplyAsync(ApplicationDbContext context, ILogger? logger = null)
     {
+        // SQLite'da DROP CONSTRAINT by name desteklenmez — atla
+        if (context.Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            logger?.LogInformation("GuzergahSeferFirmaIdConstraint: SQLite provider, FK constraint kaldirma islemi atlandi.");
+            return;
+        }
+
         var constraints = new[] {
             ("GuzergahSeferleri", "FK_GuzergahSeferleri_Firmalar_FirmaId"),
             ("Guzergahlar", "FK_Guzergahlar_Firmalar_FirmaId")

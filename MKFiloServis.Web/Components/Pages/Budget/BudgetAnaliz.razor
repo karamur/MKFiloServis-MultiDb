@@ -8,7 +8,6 @@
 @inject IFirmaService FirmaService
 @inject IToastService ToastService
 @inject IJSRuntime JS
-@inject IOllamaService OllamaService
 @rendermode InteractiveServer
 
 <PageTitle>Butce Analiz</PageTitle>
@@ -630,89 +629,10 @@
             </div>
         </div>
 
-        <!-- AI Rapor Yorumlama -->
-        <div class="row mt-3">
-            <div class="col-12">
-                <div class="card shadow-sm border-info">
-                    <div class="card-header py-2 d-flex justify-content-between align-items-center bg-info bg-opacity-10">
-                        <h6 class="mb-0">
-                            <i class="bi bi-robot me-2 text-info"></i>AI Bütçe Analizi
-                            <span class="badge bg-secondary ms-1" style="font-size: 0.65rem;">Ollama - @ollamaModelAdi</span>
-                            @if (ollamaBagli)
-                            {
-                                <span class="badge bg-success ms-1" style="font-size: 0.6rem;">● Bağlı</span>
-                            }
-                            else
-                            {
-                                <span class="badge bg-danger ms-1" style="font-size: 0.6rem;">● Bağlantı Yok</span>
-                            }
-                        </h6>
-                        <div class="d-flex gap-1">
-                            <select class="form-select form-select-sm" style="width: 160px;" @bind="aiAnalizTuru">
-                                <option value="genel">Genel Bütçe Analizi</option>
-                                <option value="kategori">Kategori Analizi</option>
-                                <option value="trend">Trend Analizi</option>
-                                <option value="tasarruf">Tasarruf Önerileri</option>
-                                <option value="anomali">Anomali Tespiti</option>
-                            </select>
-                            <button class="btn btn-info btn-sm" @onclick="AiAnalizBaslat" disabled="@(aiYukleniyor || !ollamaBagli)">
-                                @if (aiYukleniyor)
-                                {
-                                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                                    <span>Analiz ediliyor...</span>
-                                }
-                                else
-                                {
-                                    <i class="bi bi-lightning-charge me-1"></i>
-                                    <span>Analiz Et</span>
-                                }
-                            </button>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        @if (!ollamaBagli)
-                        {
-                            <div class="alert alert-warning mb-0">
-                                <i class="bi bi-exclamation-triangle me-2"></i>
-                                <strong>Ollama bağlantısı kurulamadı.</strong>
-                                <br /><small>
-                                    AI analiz için Ollama'nın bilgisayarınızda çalışıyor olması gerekir.
-                                    <br />Kurulum: <code>curl -fsSL https://ollama.com/install.sh | sh</code>
-                                    <br />Model indirme: <code>ollama pull @ollamaModelAdi</code>
-                                    <br />Başlatma: <code>ollama serve</code>
-                                </small>
-                            </div>
-                        }
-                        else if (string.IsNullOrEmpty(aiSonuc))
-                        {
-                            <div class="text-center text-muted py-3">
-                                <i class="bi bi-robot" style="font-size: 2.5rem;"></i>
-                                <p class="mb-0 mt-2">Analiz türünü seçip <strong>"Analiz Et"</strong> butonuna tıklayın.</p>
-                                <small>Verileriniz cihazınızda işlenir, internete gönderilmez.</small>
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="ai-sonuc">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <small class="text-muted">
-                                        <i class="bi bi-clock me-1"></i>@aiAnalizSuresi
-                                    </small>
-                                    <button class="btn btn-outline-secondary btn-sm py-0" @onclick="AiSonucTemizle">
-                                        <i class="bi bi-x-lg me-1"></i>Temizle
-                                    </button>
-                                </div>
-                                <div class="border rounded p-3 bg-light" style="white-space: pre-wrap; font-size: 0.9rem; line-height: 1.6; max-height: 400px; overflow-y: auto;">@aiSonuc</div>
-                            </div>
-                        }
-                    </div>
-                </div>
-            </div>
-        </div>
     }
 </div>
 
-<!-- Odeme Yap Modal -->
+        <!-- Odeme Yap Modal -->
 @if (showOdemeYapModal && odemeYapilacak != null)
 {
     <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
@@ -1835,15 +1755,7 @@
     private List<BudgetTrendData> trendData = new();
     private HedefGerceklesenOzet hedefGerceklesen = new();
 
-    // AI Ollama
-    private bool ollamaBagli = false;
-    private string ollamaModelAdi = "";
-    private string aiAnalizTuru = "genel";
-    private string aiSonuc = "";
-    private string aiAnalizSuresi = "";
-    private bool aiYukleniyor = false;
-
-    private static readonly string[] AyAdlari = { "", "Ocak", "Subat", "Mart", "Nisan", "Mayis", "Haziran", 
+    private static readonly string[] AyAdlari = { "", "Ocak", "Subat", "Mart", "Nisan", "Mayis", "Haziran",
                                                    "Temmuz", "Agustos", "Eylul", "Ekim", "Kasim", "Aralik" };
 
     private List<BudgetOdeme> AktifRaporOdemeleri => aktifListeRaporTuru == "devir" ? devirBekleyenOdemeler : bekleyenOdemeler;
@@ -1875,14 +1787,6 @@
         // Kategori ve trend verilerini yükle
         await KategoriAnalizYukle();
         await TrendAnalizYukle();
-
-        // Ollama bağlantı kontrolü (arka planda)
-        ollamaModelAdi = OllamaService.ModelAdi;
-        _ = Task.Run(async () =>
-        {
-            ollamaBagli = await OllamaService.BaglantiKontrolAsync();
-            await InvokeAsync(StateHasChanged);
-        });
     }
 
     private async Task YenileDataAsync()
@@ -2932,117 +2836,6 @@
         {
             ToastService.ShowError("Trend analiz hatası: " + ex.Message);
         }
-    }
-
-    // AI Ollama Analiz
-    private async Task AiAnalizBaslat()
-    {
-        if (!ollamaBagli) return;
-
-        aiYukleniyor = true;
-        aiSonuc = "";
-        StateHasChanged();
-
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-
-        try
-        {
-            var prompt = OlusturAiPrompt();
-            aiSonuc = await OllamaService.RaporYorumlaAsync(prompt);
-        }
-        catch (Exception ex)
-        {
-            aiSonuc = $"AI analiz hatası: {ex.Message}";
-        }
-        finally
-        {
-            sw.Stop();
-            aiAnalizSuresi = sw.Elapsed.TotalSeconds < 60
-                ? $"{sw.Elapsed.TotalSeconds:N1} saniye"
-                : $"{sw.Elapsed.TotalMinutes:N1} dakika";
-            aiYukleniyor = false;
-            StateHasChanged();
-        }
-    }
-
-    private void AiSonucTemizle()
-    {
-        aiSonuc = "";
-        aiAnalizSuresi = "";
-    }
-
-    private string OlusturAiPrompt()
-    {
-        var sb = new System.Text.StringBuilder();
-
-        // Dönem bilgisi
-        var donem = secilenAy > 0
-            ? $"{GetAyAdi(secilenAy)} {secilenYil}"
-            : $"{secilenYil} Yılı";
-
-        sb.AppendLine($"DÖNEM: {donem}");
-        sb.AppendLine();
-
-        // Özet bilgiler
-        if (ozet != null)
-        {
-            sb.AppendLine("BÜTÇE ÖZETİ:");
-            sb.AppendLine($"- Toplam Harcama: {ozet.ToplamOdeme:N2} TL ({ozet.ToplamKayit} kayıt)");
-            sb.AppendLine($"- Ödenen: {ozet.OdenenToplam:N2} TL ({ozet.OdenenKayit} kayıt)");
-            sb.AppendLine($"- Bekleyen: {ozet.BekleyenToplam:N2} TL ({ozet.BekleyenKayit} kayıt)");
-            if (ozet.ToplamOdeme > 0)
-                sb.AppendLine($"- Ödeme Oranı: %{(ozet.OdenenToplam / ozet.ToplamOdeme * 100):N1}");
-            sb.AppendLine();
-        }
-
-        // Kategori verileri
-        if (kategoriOzetleri.Count > 0)
-        {
-            sb.AppendLine("KATEGORİ DAĞILIMI:");
-            foreach (var kat in kategoriOzetleri.OrderByDescending(k => k.Toplam).Take(15))
-            {
-                sb.AppendLine($"- {kat.MasrafKalemi}: {kat.Toplam:N2} TL (%{kat.Yuzde:N1}, {kat.Adet} adet)");
-            }
-            sb.AppendLine();
-        }
-
-        // Trend verileri
-        if (trendData.Count > 0)
-        {
-            sb.AppendLine("AYLIK TREND:");
-            foreach (var trend in trendData)
-            {
-                sb.AppendLine($"- {trend.Etiket}: Toplam {trend.Toplam:N2} TL, Ödenen {trend.Odenen:N2} TL, Bekleyen {trend.Bekleyen:N2} TL ({trend.OdemeSayisi} adet)");
-            }
-            sb.AppendLine();
-        }
-
-        // Kredi/taksit bilgisi
-        if (krediTaksitAdet > 0)
-        {
-            sb.AppendLine($"KREDİ/TAKSİT: {krediTaksitAdet} adet bekleyen taksit, toplam {krediTaksitToplam:N2} TL");
-            sb.AppendLine();
-        }
-
-        // Devir ödenmeyenler
-        if (devirBekleyenOdemeler.Count > 0)
-        {
-            sb.AppendLine($"GECİKMİŞ ÖDEMELER: {devirBekleyenOdemeler.Count} adet önceki dönemlerden devir, toplam {devirBekleyenOdemeler.Sum(GetBekleyenTutar):N2} TL");
-            sb.AppendLine();
-        }
-
-        // Analiz türüne göre talimat
-        sb.AppendLine("---");
-        sb.AppendLine(aiAnalizTuru switch
-        {
-            "kategori" => "Yukarıdaki kategori dağılımını analiz et. En yüksek harcama kalemlerini belirle, oransal dağılımı değerlendir, anormal yüksek kalemler varsa uyar. Optimizasyon önerileri sun.",
-            "trend" => "Aylık harcama trendini analiz et. Artış/azalış eğilimlerini belirle, mevsimsel örüntüleri tespit et, gelecek aylar için tahmin yap. Ödeme oranlarını değerlendir.",
-            "tasarruf" => "Bu bütçe verilerine göre tasarruf önerileri sun. Gereksiz olabilecek harcamaları belirle, alternatif çözümler öner, toplam tasarruf potansiyelini hesapla.",
-            "anomali" => "Bu verilerde anomali veya olağandışı durumları tespit et. Normalden sapan harcamaları, gecikmiş ödemeleri, düzensiz kalıpları belirle. Risk değerlendirmesi yap.",
-            _ => "Bu bütçe verilerinin genel bir analizini yap. Güçlü ve zayıf yönleri belirle, riskleri değerlendir, iyileştirme önerileri sun. Özet bir mali durum raporu hazırla."
-        });
-
-        return sb.ToString();
     }
 }
 

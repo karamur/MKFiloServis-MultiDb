@@ -1,0 +1,10 @@
+{
+  "createdAtUtc": "2026-07-06T10:49:52.6754024Z",
+  "canonicalProvider": "PostgreSQL",
+  "previousProvider": "SQLite",
+  "nextProvider": "PostgreSQL",
+  "previousConnectionString": "Data Source=MKFiloServis.db;",
+  "nextConnectionString": "Host=localhost;Port=5432;Database=MKFiloServis;Username=postgres;Password=Fast123;Pooling=true;MinPoolSize=1;MaxPoolSize=20;",
+  "strategy": "snapshot-and-convert",
+  "note": "Provider gecislerinde migration replay yerine bu manifest ve veri snapshot/export akisi kullanilmalidir."
+}

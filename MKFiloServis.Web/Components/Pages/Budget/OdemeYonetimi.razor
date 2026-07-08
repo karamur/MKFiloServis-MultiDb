@@ -880,6 +880,56 @@
     </div>
 }
 
+@if (showGeriAlOnayModal && _onayOdeme != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-arrow-counterclockwise me-2"></i>Ödeme Geri Al</h5>
+                    <button type="button" class="btn-close" @onclick="OdemeGeriAlIptal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>'<strong>@_onayOdeme.MasrafKalemi</strong>' ödemesini geri almak istediğinize emin misiniz? İlişkili kasa/banka hareketi de silinecektir.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" @onclick="OdemeGeriAlOnayla">
+                        <i class="bi bi-check-lg me-1"></i>Tamam
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="OdemeGeriAlIptal">
+                        <i class="bi bi-x-lg me-1"></i>İptal
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showSilOnayModal && _onayOdeme != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="bi bi-trash me-2"></i>Ödeme Sil</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="OdemeSilIptal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>'<strong>@_onayOdeme.MasrafKalemi</strong>' ödemesini silmek istediğinize emin misiniz?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" @onclick="OdemeSilOnayla">
+                        <i class="bi bi-trash me-1"></i>Sil
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="OdemeSilIptal">
+                        <i class="bi bi-x-lg me-1"></i>İptal
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [SupplyParameterFromQuery(Name = "odemeId")]
     public int? VurguOdemeId { get; set; }
@@ -955,6 +1005,9 @@
     private bool showOdemeModal = false;
     private bool showOdemeYapModal = false;
     private bool showTaksitModal = false;
+    private bool showGeriAlOnayModal = false;
+    private bool showSilOnayModal = false;
+    private BudgetOdeme? _onayOdeme;
     private BudgetOdeme editOdeme = new();
     private BudgetOdeme? odemeYapilacak;
     private OdemeYapRequest odemeYapRequest = new();
@@ -1308,40 +1361,64 @@
         }
     }
 
-    private async Task OdemeGeriAl(BudgetOdeme odeme)
+    private void OdemeGeriAl(BudgetOdeme odeme)
     {
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"'{odeme.MasrafKalemi}' odemesini geri almak istediginize emin misiniz? İlişkili kasa/banka hareketi de silinecektir.");
-        if (confirmed)
+        _onayOdeme = odeme;
+        showGeriAlOnayModal = true;
+    }
+
+    private async Task OdemeGeriAlOnayla()
+    {
+        showGeriAlOnayModal = false;
+        if (_onayOdeme == null) return;
+        var odeme = _onayOdeme;
+        _onayOdeme = null;
+        try
         {
-            try
-            {
-                await BudgetService.OdemeGeriAlAsync(odeme.Id);
-                ToastService.ShowSuccess("Odeme geri alindi ve hareket silindi.");
-                await LoadDataAsync();
-            }
-            catch (Exception ex)
-            {
-                ToastService.ShowError("Hata: " + ex.Message);
-            }
+            await BudgetService.OdemeGeriAlAsync(odeme.Id);
+            ToastService.ShowSuccess("Odeme geri alindi ve hareket silindi.");
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Hata: " + ex.Message);
         }
     }
 
-    private async Task OdemeSilOnay(BudgetOdeme odeme)
+    private void OdemeGeriAlIptal()
     {
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"'{odeme.MasrafKalemi}' odemesini silmek istediginize emin misiniz?");
-        if (confirmed)
+        showGeriAlOnayModal = false;
+        _onayOdeme = null;
+    }
+
+    private void OdemeSilOnay(BudgetOdeme odeme)
+    {
+        _onayOdeme = odeme;
+        showSilOnayModal = true;
+    }
+
+    private async Task OdemeSilOnayla()
+    {
+        showSilOnayModal = false;
+        if (_onayOdeme == null) return;
+        var odeme = _onayOdeme;
+        _onayOdeme = null;
+        try
         {
-            try
-            {
-                await BudgetService.DeleteOdemeAsync(odeme.Id);
-                ToastService.ShowSuccess("Odeme silindi.");
-                await LoadDataAsync();
-            }
-            catch (Exception ex)
-            {
-                ToastService.ShowError("Silme hatasi: " + ex.Message);
-            }
+            await BudgetService.DeleteOdemeAsync(odeme.Id);
+            ToastService.ShowSuccess("Odeme silindi.");
+            await LoadDataAsync();
         }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Silme hatasi: " + ex.Message);
+        }
+    }
+
+    private void OdemeSilIptal()
+    {
+        showSilOnayModal = false;
+        _onayOdeme = null;
     }
 
     private void TaksitliOdemeAc()
@@ -1394,6 +1471,9 @@
         showOdemeModal = false;
         showOdemeYapModal = false;
         showTaksitModal = false;
+        showGeriAlOnayModal = false;
+        showSilOnayModal = false;
+        _onayOdeme = null;
         taksitListesi.Clear();
     }
 

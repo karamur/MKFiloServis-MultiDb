@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -494,7 +494,7 @@ public class BudgetService : IBudgetService
     public async Task<BudgetOdeme> OdemeGeriAlAsync(int odemeId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var odeme = await context.BudgetOdemeler.FindAsync(odemeId);
+        var odeme = await context.BudgetOdemeler.AsNoTracking().FirstOrDefaultAsync(o => o.Id == odemeId);
         if (odeme == null)
             throw new Exception("Odeme bulunamadi");
 
@@ -513,10 +513,27 @@ public class BudgetService : IBudgetService
                     context.OdemeEslestirmeleri.RemoveRange(hareket.OdemeEslestirmeleri);
                 }
                 context.BankaKasaHareketleri.Remove(hareket); // Hard delete
+                await context.SaveChangesAsync();
             }
         }
 
-        // Ödeme durumunu geri al
+        // Ödeme durumunu ExecuteUpdateAsync ile doğrudan güncelle (tracking bypass)
+        var updatedAt = DateTime.UtcNow;
+        await context.BudgetOdemeler
+            .Where(o => o.Id == odemeId)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(o => o.Durum, OdemeDurum.Bekliyor)
+                .SetProperty(o => o.GercekOdemeTarihi, (DateTime?)null)
+                .SetProperty(o => o.OdenenTutar, (decimal?)null)
+                .SetProperty(o => o.BankaKasaHareketId, (int?)null)
+                .SetProperty(o => o.OdemeYapildigiHesapId, (int?)null)
+                .SetProperty(o => o.OdemeNotu, (string?)null)
+                .SetProperty(o => o.MasrafKesintisi, 0m)
+                .SetProperty(o => o.CezaKesintisi, 0m)
+                .SetProperty(o => o.DigerKesinti, 0m)
+                .SetProperty(o => o.KesintiAciklamasi, (string?)null)
+                .SetProperty(o => o.UpdatedAt, updatedAt));
+
         odeme.Durum = OdemeDurum.Bekliyor;
         odeme.GercekOdemeTarihi = null;
         odeme.OdenenTutar = null;
@@ -527,9 +544,7 @@ public class BudgetService : IBudgetService
         odeme.CezaKesintisi = 0;
         odeme.DigerKesinti = 0;
         odeme.KesintiAciklamasi = null;
-        odeme.UpdatedAt = DateTime.UtcNow;
-
-        await context.SaveChangesAsync();
+        odeme.UpdatedAt = updatedAt;
         return odeme;
     }
 

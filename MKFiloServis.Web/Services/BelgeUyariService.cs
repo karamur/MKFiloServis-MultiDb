@@ -772,7 +772,7 @@ public class BelgeUyariService : IBelgeUyariService
             await context.SaveChangesAsync();
         }
 
-        // Tek arşiv sistemi: C:\MKFiloServis_yedekleme\Arsiv\Sifreli/Sifresiz\Araclar\{PLAKA - FIRMA}
+        // Tek arşiv sistemi: C:\MKFiloServis_yedekleme\Arsiv\Sifreli\Araclar\{PLAKA - FIRMA}
         // ve evrak tipi bazında tekil dosya adı.
         var uzanti = Path.GetExtension(dosyaAdi);
         var plaka = arac.AktifPlaka ?? arac.SaseNo ?? aracId.ToString();

@@ -6,7 +6,7 @@ namespace MKFiloServis.Web.Services;
 
 public sealed class BrandingService
 {
-    public const string DefaultTextLogoPath = "images/YaziLogo.png";
+    public static readonly string DefaultTextLogoPath = "images/default-branding.png";
 
     private const string IconKey = "Branding.IconLogo";
     private const string TextLogoKey = "Branding.TextLogo";

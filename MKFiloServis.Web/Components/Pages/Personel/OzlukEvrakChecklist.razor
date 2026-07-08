@@ -412,6 +412,36 @@
 }
 
 <!-- Önizleme Modal -->
+@if (showBozukDosyaOnayModal && _bozukDosyaEvrak != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>Bozuk Dosya Kaydı
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="BozukDosyaOnayIptal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>
+                        <strong>'@_bozukDosyaEvrak.EvrakAdi'</strong> dosyası bulunamadı veya boş.
+                        Bozuk dosya kaydını temizleyip yeniden yüklemek ister misiniz?
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" @onclick="BozukDosyaOnayTamam">
+                        <i class="bi bi-check-lg me-1"></i>Tamam
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="BozukDosyaOnayIptal">
+                        <i class="bi bi-x-lg me-1"></i>İptal
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @if (onizlemeModalAcik)
 {
     <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,.5);">
@@ -733,6 +763,8 @@
     private bool showTanimDuzenleModal;
     private bool showEksikListeModal;
     private bool showCokluAdayModal; // Sertifika gibi çoklu OzlukEvrakTanim adayı için seçim modalı
+    private bool showBozukDosyaOnayModal;
+    private OzlukEvrakDetay? _bozukDosyaEvrak;
     private List<EvrakDosya> _yeniEvraklar = new(); // YENI sistem — EvrakDosya tablosu
     /// <summary>
     /// Eski sistemden (PersonelOzlukEvrak) tamamlanmış evrakların canonical kategorileri.
@@ -925,7 +957,7 @@
             var icerik = memoryStream.ToArray();
             var uzanti = Path.GetExtension(file.Name);
 
-            // Tek arşiv sistemi: C:\MKFiloServis_yedekleme\Arsiv\Sifreli/Sifresiz\Personeller\{AD SOYAD - FIRMA}
+            // Tek arşiv sistemi: C:\MKFiloServis_yedekleme\Arsiv\Sifreli\Personeller\{AD SOYAD - FIRMA}
             // ve evrak tipi bazında tekil dosya adı.
             var adSoyad = seciliDurum?.PersonelAdi ?? soforId.ToString();
             string firmaAdi;
@@ -1703,19 +1735,8 @@
             var bytes = await SecureFileService.ReadDecryptedAsync(evrak.DosyaYolu);
             if (bytes == null || bytes.Length == 0)
             {
-                var onay = await JS.InvokeAsync<bool>(
-                    "confirm",
-                    $"'{evrak.EvrakAdi}' dosyası bulunamadı veya boş. Bozuk dosya kaydını temizleyip yeniden yüklemek ister misiniz?");
-
-                if (onay && seciliDurum != null)
-                {
-                    await TemizleBozukEvrakReferansiAsync(seciliDurum.SoforId, evrak);
-                }
-                else
-                {
-                    ToastService.ShowWarning("Dosya bulunamadı veya boş.");
-                }
-
+                _bozukDosyaEvrak = evrak;
+                showBozukDosyaOnayModal = true;
                 return;
             }
 
@@ -1746,6 +1767,23 @@
                 evrak.EvrakAdi, evrak.DosyaYolu);
             ToastService.ShowError("Evrak önizlenemedi. Dosya şifresi çözülemedi veya dosya bulunamadı.");
         }
+    }
+
+    private async Task BozukDosyaOnayTamam()
+    {
+        showBozukDosyaOnayModal = false;
+        if (_bozukDosyaEvrak != null && seciliDurum != null)
+        {
+            await TemizleBozukEvrakReferansiAsync(seciliDurum.SoforId, _bozukDosyaEvrak);
+        }
+        _bozukDosyaEvrak = null;
+    }
+
+    private void BozukDosyaOnayIptal()
+    {
+        showBozukDosyaOnayModal = false;
+        _bozukDosyaEvrak = null;
+        ToastService.ShowWarning("Dosya bulunamadı veya boş.");
     }
 
     private async Task TemizleBozukEvrakReferansiAsync(int soforId, OzlukEvrakDetay evrak)

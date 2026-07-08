@@ -1,4 +1,4 @@
-namespace MKFiloServis.Web.Services.Interfaces;
+﻿namespace MKFiloServis.Web.Services.Interfaces;
 
 public interface IBackupService
 {
@@ -11,7 +11,7 @@ public interface IBackupService
     BackupSettings GetSettings();
     Task SaveSettingsAsync(BackupSettings settings);
     Task<bool> ApplyMigrationsAsync();
-    Task<bool> ConvertAndRestoreAsync(string backupFileName, string sourceProvider, string targetProvider);
+    Task<ConversionResult> ConvertAndRestoreAsync(string backupFileName, string sourceProvider, string targetProvider);
 
     // ── Dosya / Veri Yedeği ─────────────────────────────────────────
     Task<BackupResult> CreateFileBackupAsync(CancellationToken cancellationToken = default);
@@ -44,6 +44,12 @@ public class BackupInfo
         < 1024 * 1024 => $"{FileSizeBytes / 1024.0:F1} KB",
         _ => $"{FileSizeBytes / (1024.0 * 1024.0):F2} MB"
     };
+}
+
+public class ConversionResult
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
 }
 
 public class BackupSettings

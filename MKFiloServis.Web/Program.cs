@@ -1,4 +1,4 @@
-﻿using MKFiloServis.Web.Components;
+using MKFiloServis.Web.Components;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Helpers;
 using MKFiloServis.Web.Jobs;
@@ -35,33 +35,9 @@ var builder = WebApplication.CreateBuilder(args);
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 // Database Provider Secimi (dbsettings.json varsa onu oncele)
-var dbProvider = builder.Configuration.GetValue<string>("DatabaseProvider") ?? "PostgreSQL";
-var defaultConnectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? string.Empty;
-var dbSettingsPath = Path.Combine(builder.Environment.ContentRootPath, "dbsettings.json");
-
-if (File.Exists(dbSettingsPath))
-{
-    try
-    {
-        var dbSettingsJson = await File.ReadAllTextAsync(dbSettingsPath);
-        var dbSettings = JsonSerializer.Deserialize<DatabaseSettings>(dbSettingsJson);
-        if (dbSettings != null)
-        {
-            dbProvider = dbSettings.Provider switch
-            {
-                DatabaseProvider.PostgreSQL => "PostgreSQL",
-                DatabaseProvider.MySQL => "MySQL",
-                DatabaseProvider.SQLServer => "SQLServer",
-                _ => "SQLite"
-            };
-            defaultConnectionString = dbSettings.GetConnectionString();
-        }
-    }
-    catch
-    {
-        // dbsettings.json okunamazsa appsettings ile devam et
-    }
-}
+var databaseRuntime = await DatabaseRuntimeResolver.ResolveAsync(builder.Configuration, builder.Environment);
+var dbProvider = databaseRuntime.Provider.ToString();
+var defaultConnectionString = databaseRuntime.ConnectionString;
 
 // URL baglama: IIS tarafi zaten adres/port yonetir; burada zorlama yapma.
 // Explicit URL verilmediyse development ve self-hosted production icin cakismayan port sec.
@@ -112,7 +88,7 @@ builder.Services.AddRazorComponents()
 builder.Services.AddSingleton<AktiviteLogInterceptor>();
 builder.Services.AddSingleton<ICurrentUserAccessor, CurrentUserAccessor>();
 
-// Database - Tek PostgreSQL veritabanı (Nihai Mimari 2026)
+// Database - Kanonik migration otoritesi PostgreSQL, desteklenen runtime: PostgreSQL + SQLite + SQL Server + MySQL
 builder.Services.AddPooledDbContextFactory<ApplicationDbContext>((sp, options) =>
 {
     var enableSensitiveDataLogging = builder.Environment.IsDevelopment() &&
@@ -122,19 +98,54 @@ builder.Services.AddPooledDbContextFactory<ApplicationDbContext>((sp, options) =
     // CRUD işlemleri .AsTracking() ile explicit tracking kullanır.
     options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
 
-    // PostgreSQL-only mimari (Nihai 2026). SQLite provider kaldırıldı.
-    // dbProvider ayarı sadece bilgi amaçlı; her durumda Npgsql kullanılır.
-    options.UseNpgsql(defaultConnectionString, npgsqlOptions =>
+    switch (databaseRuntime.Provider)
     {
-        npgsqlOptions.EnableRetryOnFailure(
-            maxRetryCount: 3,
-            maxRetryDelay: TimeSpan.FromSeconds(5),
-            errorCodesToAdd: null);
-        // Birden fazla collection Include/projection içeren sorgularda kartesyen çoğalmayı azaltır.
-        npgsqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
-        npgsqlOptions.CommandTimeout(30);
-        npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "public");
-    });
+        case DatabaseProvider.SQLite:
+            options.UseSqlite(defaultConnectionString, sqliteOptions =>
+            {
+                sqliteOptions.CommandTimeout(30);
+                sqliteOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+            });
+            break;
+
+        case DatabaseProvider.SQLServer:
+            options.UseSqlServer(defaultConnectionString, sqlServerOptions =>
+            {
+                sqlServerOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorNumbersToAdd: null);
+                sqlServerOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+                sqlServerOptions.CommandTimeout(30);
+            });
+            break;
+
+        case DatabaseProvider.MySQL:
+            options.UseMySQL(defaultConnectionString, mySqlOptions =>
+            {
+                mySqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorNumbersToAdd: null);
+                mySqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+                mySqlOptions.CommandTimeout(30);
+            });
+            break;
+
+        default:
+            options.UseNpgsql(defaultConnectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorCodesToAdd: null);
+                // Birden fazla collection Include/projection içeren sorgularda kartesyen çoğalmayı azaltır.
+                npgsqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+                npgsqlOptions.CommandTimeout(30);
+                npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "public");
+            });
+            break;
+    }
 
     if (enableSensitiveDataLogging)
     {
@@ -934,7 +945,10 @@ await RunScopedSafeAsync(app, "ApplyMigrations", async services =>
     var ctx = services.GetRequiredService<ApplicationDbContext>();
     var logger = services.GetRequiredService<ILogger<Program>>();
 
-    await MKFiloServis.Web.Data.Migrations.GuzergahKoordinatMigrationHelper.ApplyGuzergahKoordinatMigrationPostgresAsync(ctx);
+    if (databaseRuntime.IsSqlite)
+        await MKFiloServis.Web.Data.Migrations.GuzergahKoordinatMigrationHelper.ApplyGuzergahKoordinatMigrationAsync(ctx);
+    else
+        await MKFiloServis.Web.Data.Migrations.GuzergahKoordinatMigrationHelper.ApplyGuzergahKoordinatMigrationPostgresAsync(ctx);
     await MKFiloServis.Web.Data.Migrations.PuantajSlotMigrationHelper.ApplyAsync(ctx, logger);
     await MKFiloServis.Web.Data.Migrations.KiralikPlakaFaturaMigrationHelper.ApplyAsync(ctx, logger);
     await MKFiloServis.Web.Data.Migrations.KiralikPlakaTakipFaturaPlanMigrationHelper.ApplyAsync(ctx, logger);
@@ -945,6 +959,10 @@ await RunScopedSafeAsync(app, "ApplyMigrations", async services =>
     await MKFiloServis.Web.Data.Migrations.BudgetOdemeKalanMigrationHelper.EnsureBudgetOdemeKalanColumnAsync(ctx);
     await MKFiloServis.Web.Data.Migrations.BudgetHedefMigrationHelper.EnsureBudgetHedefTableAsync(ctx);
 
+    // Aşağıdaki raw SQL blokları PostgreSQL'e özgü (DO $$ ... $$, ADD COLUMN IF NOT EXISTS)
+    // SQLite için bu bloklar atlanır — EF migrations ve yukarıdaki helper'lar gerekli sütunları yönetir
+    if (dbProvider == "PostgreSQL")
+    {
     // Kural 14: AktiviteLog'a FirmaId + KullaniciId (idempotent)
     await ctx.Database.ExecuteSqlRawAsync(@"
         DO $$ BEGIN
@@ -1069,6 +1087,8 @@ await RunScopedSafeAsync(app, "ApplyMigrations", async services =>
         UPDATE ""ChecklistKalemleri"" ck SET ""FirmaId"" = ac.""FirmaId""
         FROM ""AylikChecklistler"" ac WHERE ck.""AylikChecklistId"" = ac.""Id"" AND ck.""FirmaId"" IS NULL AND ac.""FirmaId"" IS NOT NULL;
     ");
+
+    } // if (dbProvider == "PostgreSQL")
 
     // Kural 15: FisNoCounters schema sync → SchemaSyncHelper.EnsureFisNoCountersSchemaAsync (yukarıda çağrıldı)
 

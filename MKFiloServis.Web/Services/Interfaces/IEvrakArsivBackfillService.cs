@@ -1,4 +1,4 @@
-namespace MKFiloServis.Web.Services.Interfaces;
+﻿namespace MKFiloServis.Web.Services.Interfaces;
 
 /// <summary>
 /// Mevcut evrak kayıtlarını yeni arşiv yapısına taşıyan backfill servisi.
@@ -49,7 +49,6 @@ public sealed class EvrakArsivBackfillSatir
     public string EvrakNiteligi { get; set; } = "";
     public string EskiDosyaYolu { get; set; } = "";
     public string YeniSifreliPath { get; set; } = "";
-    public string YeniSifresizPath { get; set; } = "";
     public bool Basarili { get; set; }
     public string? Hata { get; set; }
 }

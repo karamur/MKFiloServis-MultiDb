@@ -1,4 +1,4 @@
-@page "/arac-maliyet-snapshot"
+﻿@page "/arac-maliyet-snapshot"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
 @using MKFiloServis.Web.Services.Interfaces
@@ -6,7 +6,6 @@
 @inject IAracMaliyetService MaliyetService
 @inject IAracService AracService
 @inject IToastService ToastService
-@inject IJSRuntime JS
 @attribute [Authorize]
 
 <PageTitle>Araç Maliyet Snapshot</PageTitle>
@@ -17,11 +16,14 @@
             <h2 class="mb-1"><i class="bi bi-fuel-pump me-2"></i>Araç Maliyet Snapshot</h2>
             <p class="text-muted mb-0">Özmal / Kiralık araçların aylık maliyet ve karlılık özeti (Tedarikçi araçları hariç)</p>
         </div>
-        <div class="btn-group">
+        <div class="d-flex gap-2 flex-wrap justify-content-end">
+            <button class="btn btn-outline-warning" @onclick="FullpetModalAc">
+                <i class="bi bi-fuel-pump-fill me-1"></i> Fullpet Fatura Dağıt
+            </button>
             <button class="btn btn-outline-primary" @onclick="TekAracModalAc">
                 <i class="bi bi-plus-lg me-1"></i> Tek Araç Üret
             </button>
-            <button class="btn btn-primary" @onclick="TumAraclarUret" disabled="@isleniyor">
+            <button class="btn btn-primary" @onclick="TumAraclarUretOnay" disabled="@isleniyor">
                 @if (isleniyor)
                 {
                     <span class="spinner-border spinner-border-sm me-1"></span>
@@ -124,7 +126,7 @@
             {
                 <div class="p-4 text-center text-muted">
                     <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                    Bu kriterlere uygun snapshot bulunamadı. Üst sağdaki butonlardan üretebilirsiniz.
+                    Bu kriterlere uygun snapshot bulunamadı. Üstteki butonlardan üretebilirsiniz.
                 </div>
             }
             else
@@ -149,7 +151,7 @@
                                 <th class="text-end">Sefer/₺</th>
                                 <th class="text-end">Gelir</th>
                                 <th class="text-end">Kar/Zarar</th>
-                                <th class="text-center" style="width:120px;">İşlem</th>
+                                <th class="text-center" style="width:100px;">İşlem</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -174,10 +176,10 @@
                                     <td class="text-end fw-semibold @(s.KarZarar >= 0 ? "text-success" : "text-danger")">@s.KarZarar.ToString("N2")</td>
                                     <td class="text-center">
                                         <div class="btn-group btn-group-sm">
-                                            <button class="btn btn-outline-primary" title="Yeniden Üret" @onclick="() => YenidenUret(s)">
+                                            <button class="btn btn-outline-primary" title="Yeniden Üret" @onclick="() => YenidenUretOnay(s)">
                                                 <i class="bi bi-arrow-clockwise"></i>
                                             </button>
-                                            <button class="btn btn-outline-danger" title="Sil" @onclick="() => Sil(s)">
+                                            <button class="btn btn-outline-danger" title="Sil" @onclick="() => SilOnay(s)">
                                                 <i class="bi bi-trash"></i>
                                             </button>
                                         </div>
@@ -192,7 +194,30 @@
     </div>
 </div>
 
-<!-- Tek Araç Modal -->
+<!-- ========== ONAY MODAL ========== -->
+@if (onayModalAcik)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-question-circle me-2 text-warning"></i>Onay</h5>
+                    <button type="button" class="btn-close" @onclick="OnayIptal"></button>
+                </div>
+                <div class="modal-body">@onayMesaji</div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary btn-sm" @onclick="OnayIptal">İptal</button>
+                    <button class="btn btn-primary btn-sm" @onclick="OnayOnayla" disabled="@isleniyor">
+                        @if (isleniyor) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Evet, Devam Et
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ========== TEK ARAÇ MODAL ========== -->
 @if (tekAracModalAcik)
 {
     <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5);">
@@ -238,11 +263,146 @@
                 <div class="modal-footer">
                     <button class="btn btn-secondary btn-sm" @onclick="() => tekAracModalAcik = false">İptal</button>
                     <button class="btn btn-primary btn-sm" @onclick="TekAracUret" disabled="@(uretAracId <= 0 || isleniyor)">
-                        @if (isleniyor)
-                        {
-                            <span class="spinner-border spinner-border-sm me-1"></span>
-                        }
+                        @if (isleniyor) { <span class="spinner-border spinner-border-sm me-1"></span> }
                         Üret
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ========== FULLPET FATURA DAĞIT MODAL ========== -->
+@if (fullpetModalAcik)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-warning bg-opacity-10">
+                    <h5 class="modal-title"><i class="bi bi-fuel-pump-fill me-2 text-warning"></i>Fullpet Fatura Dağılımı</h5>
+                    <button type="button" class="btn-close" @onclick="() => fullpetModalAcik = false"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Fatura bilgileri -->
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold">Fatura Tarihi <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control form-control-sm"
+                                   value="@fp_tarih.ToString("yyyy-MM-dd")"
+                                   @onchange="e => fp_tarih = DateTime.Parse(e.Value!.ToString()!)" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold">Fatura No</label>
+                            <input type="text" class="form-control form-control-sm" placeholder="FT-2026-001"
+                                   @bind="fp_faturaNo" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold">Toplam Tutar (₺) <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control form-control-sm" step="0.01" min="0"
+                                   @bind="fp_toplamTutar" @bind:after="FpTutarDegisti" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold">Açıklama</label>
+                            <input type="text" class="form-control form-control-sm" placeholder="Fullpet Mart 2026..."
+                                   @bind="fp_aciklama" />
+                        </div>
+                    </div>
+
+                    <!-- Dağılım yöntemi -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Dağılım Yöntemi</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="dagYon" id="dagEsit"
+                                       checked="@(fp_dagitimYontemi == "esit")"
+                                       @onchange="FpYontemEsitSec" />
+                                <label class="form-check-label" for="dagEsit">Eşit Dağıt</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="dagYon" id="dagManuel"
+                                       checked="@(fp_dagitimYontemi == "manuel")"
+                                       @onchange="FpYontemManuelSec" />
+                                <label class="form-check-label" for="dagManuel">Manuel Giriş</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Araç listesi -->
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-semibold small">Araçlar</span>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="FpTumunuSec">Tümünü Seç</button>
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="FpTumunuKaldir">Tümünü Kaldır</button>
+                        </div>
+                    </div>
+                    <div class="table-responsive" style="max-height:320px;overflow-y:auto;">
+                        <table class="table table-sm table-bordered align-middle mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th style="width:40px;" class="text-center">#</th>
+                                    <th>Plaka</th>
+                                    <th>Sahiplik</th>
+                                    <th class="text-end" style="width:160px;">Tutar (₺)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var satir in fp_satirlar)
+                                {
+                                    <tr class="@(satir.Secili ? "" : "table-secondary text-muted")">
+                                        <td class="text-center">
+                                            <input type="checkbox" class="form-check-input"
+                                                   checked="@satir.Secili"
+                                                   @onchange="e => FpSecimDegisti(satir, (bool)e.Value!)" />
+                                        </td>
+                                        <td><strong>@satir.Plaka</strong></td>
+                                        <td><span class="badge @SahiplikBadge(satir.SahiplikTipi)">@satir.SahiplikTipi</span></td>
+                                        <td class="text-end">
+                                            @if (fp_dagitimYontemi == "manuel" && satir.Secili)
+                                            {
+                                                <input type="number" class="form-control form-control-sm text-end"
+                                                       step="0.01" min="0"
+                                                       value="@satir.Tutar"
+                                                       @onchange="e => FpSatirTutarDegisti(satir, e.Value!.ToString()!)" />
+                                            }
+                                            else
+                                            {
+                                                <span class="@(satir.Secili ? "text-dark" : "")">@satir.Tutar.ToString("N2")</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot class="table-light fw-bold">
+                                <tr>
+                                    <td colspan="3" class="text-end">Seçili Araç Tutarı:</td>
+                                    <td class="text-end @(Math.Abs(fp_satirlar.Where(s => s.Secili).Sum(s => s.Tutar) - fp_toplamTutar) > 0.05m ? "text-danger" : "text-success")">
+                                        @fp_satirlar.Where(s => s.Secili).Sum(s => s.Tutar).ToString("N2") ₺
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    @{
+                        var fark = fp_satirlar.Where(s => s.Secili).Sum(s => s.Tutar) - fp_toplamTutar;
+                    }
+                    @if (fp_dagitimYontemi == "manuel" && Math.Abs(fark) > 0.05m)
+                    {
+                        <div class="alert alert-warning mt-2 py-1 small mb-0">
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+                            Araç tutarları toplamı ile fatura tutarı arasında <strong>@Math.Abs(fark).ToString("N2") ₺</strong> fark var.
+                            @(fark > 0 ? "Araç tutarları fazla." : "Araç tutarları eksik.")
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <div class="text-muted small me-auto">
+                        @fp_satirlar.Count(s => s.Secili) araç seçili
+                    </div>
+                    <button class="btn btn-secondary btn-sm" @onclick="() => fullpetModalAcik = false">İptal</button>
+                    <button class="btn btn-warning btn-sm" @onclick="FullpetKaydet"
+                            disabled="@(fp_toplamTutar <= 0 || !fp_satirlar.Any(s => s.Secili) || isleniyor)">
+                        @if (isleniyor) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        <i class="bi bi-check-lg me-1"></i>Dağılımı Kaydet
                     </button>
                 </div>
             </div>
@@ -254,14 +414,30 @@
     private bool yukleniyor = true;
     private bool isleniyor = false;
     private bool tekAracModalAcik = false;
+    private bool fullpetModalAcik = false;
 
+    // --- Onay modal ---
+    private bool onayModalAcik = false;
+    private string onayMesaji = "";
+    private Func<Task>? onayEylemi;
+
+    // --- Filtre ---
     private int filtreYil = DateTime.Now.Year;
     private int filtreAy = DateTime.Now.Month;
     private int filtreAracId = 0;
 
+    // --- Tek araç üretim ---
     private int uretYil = DateTime.Now.Year;
     private int uretAy = DateTime.Now.Month;
     private int uretAracId = 0;
+
+    // --- Fullpet modal alanları ---
+    private DateTime fp_tarih = DateTime.Today;
+    private string? fp_faturaNo;
+    private string? fp_aciklama;
+    private decimal fp_toplamTutar = 0m;
+    private string fp_dagitimYontemi = "esit";  // "esit" | "manuel"
+    private List<FullpetSatir> fp_satirlar = new();
 
     private List<AracMaliyetSnapshot> snapshotlar = new();
     private List<Arac> araclar = new();
@@ -297,6 +473,29 @@
         await LoadAsync();
     }
 
+    // ===== Onay Modal =====
+    private void OnayGoster(string mesaj, Func<Task> eylem)
+    {
+        onayMesaji = mesaj;
+        onayEylemi = eylem;
+        onayModalAcik = true;
+    }
+
+    private void OnayIptal()
+    {
+        onayModalAcik = false;
+        onayEylemi = null;
+    }
+
+    private async Task OnayOnayla()
+    {
+        onayModalAcik = false;
+        if (onayEylemi != null)
+            await onayEylemi();
+        onayEylemi = null;
+    }
+
+    // ===== Tek Araç =====
     private void TekAracModalAc()
     {
         uretYil = filtreYil;
@@ -321,9 +520,16 @@
         finally { isleniyor = false; }
     }
 
+    // ===== Tüm Araçlar =====
+    private void TumAraclarUretOnay()
+    {
+        OnayGoster(
+            $"{filtreYil}/{filtreAy:D2} dönemi için tüm özmal+kiralık araçlar üretilsin mi?",
+            TumAraclarUret);
+    }
+
     private async Task TumAraclarUret()
     {
-        if (!await JS.InvokeAsync<bool>("confirm", $"{filtreYil}/{filtreAy:D2} dönemi için tüm özmal+kiralık araçlar üretilsin mi?")) return;
         isleniyor = true;
         try
         {
@@ -335,32 +541,156 @@
         finally { isleniyor = false; }
     }
 
-    private async Task YenidenUret(AracMaliyetSnapshot s)
+    // ===== Yeniden Üret / Sil =====
+    private void YenidenUretOnay(AracMaliyetSnapshot s)
     {
-        if (!await JS.InvokeAsync<bool>("confirm", $"{s.Arac?.Plaka} {s.Yil}/{s.Ay:D2} snapshot'u yeniden hesaplansın mı?")) return;
+        OnayGoster(
+            $"{s.Arac?.Plaka} {s.Yil}/{s.Ay:D2} snapshot'u yeniden hesaplansın mı?",
+            async () =>
+            {
+                isleniyor = true;
+                try
+                {
+                    await MaliyetService.SnapshotUretAsync(s.AracId, s.Yil, s.Ay);
+                    ToastService.ShowSuccess("Snapshot güncellendi.");
+                    await LoadAsync();
+                }
+                catch (Exception ex) { ToastService.ShowError(ex.Message); }
+                finally { isleniyor = false; }
+            });
+    }
+
+    private void SilOnay(AracMaliyetSnapshot s)
+    {
+        OnayGoster(
+            $"{s.Arac?.Plaka} {s.Yil}/{s.Ay:D2} snapshot'u silinsin mi?",
+            async () =>
+            {
+                try
+                {
+                    await MaliyetService.SilAsync(s.Id);
+                    ToastService.ShowSuccess("Snapshot silindi.");
+                    await LoadAsync();
+                }
+                catch (Exception ex) { ToastService.ShowError(ex.Message); }
+            });
+    }
+
+    // ===== FULLPET =====
+    private void FullpetModalAc()
+    {
+        fp_tarih = new DateTime(filtreYil, filtreAy, 1);
+        fp_faturaNo = null;
+        fp_aciklama = null;
+        fp_toplamTutar = 0m;
+        fp_dagitimYontemi = "esit";
+
+        // Sadece özmal + kiralık araçlar
+        var hedefAraclar = araclar
+            .Where(a => a.SahiplikTipi != AracSahiplikTipi.Tedarikci)
+            .ToList();
+
+        fp_satirlar = hedefAraclar.Select(a => new FullpetSatir
+        {
+            AracId = a.Id,
+            Plaka = a.Plaka,
+            SahiplikTipi = a.SahiplikTipi,
+            Secili = true,
+            Tutar = 0m
+        }).ToList();
+
+        fullpetModalAcik = true;
+    }
+
+    private void FpYontemDegisti(string yontem)
+    {
+        fp_dagitimYontemi = yontem;
+        FpTutarDagit();
+    }
+
+    private void FpYontemEsitSec(ChangeEventArgs _) => FpYontemDegisti("esit");
+    private void FpYontemManuelSec(ChangeEventArgs _) => FpYontemDegisti("manuel");
+
+    private void FpTutarDegisti()
+    {
+        FpTutarDagit();
+    }
+
+    private void FpTutarDagit()
+    {
+        if (fp_dagitimYontemi == "esit")
+        {
+            var seciliSatirlar = fp_satirlar.Where(s => s.Secili).ToList();
+            if (!seciliSatirlar.Any() || fp_toplamTutar <= 0) return;
+            decimal birim = Math.Round(fp_toplamTutar / seciliSatirlar.Count, 2);
+            for (int i = 0; i < seciliSatirlar.Count; i++)
+            {
+                seciliSatirlar[i].Tutar = (i < seciliSatirlar.Count - 1)
+                    ? birim
+                    : fp_toplamTutar - birim * (seciliSatirlar.Count - 1);
+            }
+            // seçili olmayan sıfırla
+            foreach (var s in fp_satirlar.Where(s => !s.Secili))
+                s.Tutar = 0m;
+        }
+    }
+
+    private void FpSecimDegisti(FullpetSatir satir, bool secili)
+    {
+        satir.Secili = secili;
+        if (!secili) satir.Tutar = 0m;
+        FpTutarDagit();
+    }
+
+    private void FpSatirTutarDegisti(FullpetSatir satir, string deger)
+    {
+        if (decimal.TryParse(deger.Replace(',', '.'),
+            System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out decimal tutar))
+            satir.Tutar = tutar;
+    }
+
+    private void FpTumunuSec()
+    {
+        foreach (var s in fp_satirlar) s.Secili = true;
+        FpTutarDagit();
+    }
+
+    private void FpTumunuKaldir()
+    {
+        foreach (var s in fp_satirlar) { s.Secili = false; s.Tutar = 0m; }
+    }
+
+    private async Task FullpetKaydet()
+    {
+        var seciliSatirlar = fp_satirlar.Where(s => s.Secili && s.Tutar > 0).ToList();
+        if (!seciliSatirlar.Any())
+        {
+            ToastService.ShowWarning("En az bir araç için tutar girilmeli.");
+            return;
+        }
+
         isleniyor = true;
         try
         {
-            await MaliyetService.SnapshotUretAsync(s.AracId, s.Yil, s.Ay);
-            ToastService.ShowSuccess("Snapshot güncellendi.");
-            await LoadAsync();
+            var aracIdler = seciliSatirlar.Select(s => s.AracId).ToList();
+            var esit = fp_dagitimYontemi == "esit";
+            Dictionary<int, decimal>? aracTutarlari = esit
+                ? null
+                : seciliSatirlar.ToDictionary(s => s.AracId, s => s.Tutar);
+
+            int kayit = await MaliyetService.FullpetFaturaDagitAsync(
+                fp_tarih, fp_faturaNo, fp_aciklama,
+                aracIdler, fp_toplamTutar, esit, aracTutarlari);
+
+            ToastService.ShowSuccess($"Fullpet dağılımı kaydedildi: {kayit} araç, {fp_toplamTutar:N2} ₺");
+            fullpetModalAcik = false;
         }
         catch (Exception ex) { ToastService.ShowError(ex.Message); }
         finally { isleniyor = false; }
     }
 
-    private async Task Sil(AracMaliyetSnapshot s)
-    {
-        if (!await JS.InvokeAsync<bool>("confirm", "Snapshot silinsin mi?")) return;
-        try
-        {
-            await MaliyetService.SilAsync(s.Id);
-            ToastService.ShowSuccess("Snapshot silindi.");
-            await LoadAsync();
-        }
-        catch (Exception ex) { ToastService.ShowError(ex.Message); }
-    }
-
+    // ===== Yardımcılar =====
     private string AyAdi(int a) => a switch
     {
         1 => "Ocak", 2 => "Şubat", 3 => "Mart", 4 => "Nisan",
@@ -370,5 +700,14 @@
     };
 
     private string SahiplikBadge(AracSahiplikTipi t) => SahiplikHelper.GetBadgeClass(t);
+
+    private class FullpetSatir
+    {
+        public int AracId { get; set; }
+        public string Plaka { get; set; } = "";
+        public AracSahiplikTipi SahiplikTipi { get; set; }
+        public bool Secili { get; set; } = true;
+        public decimal Tutar { get; set; }
+    }
 }
 

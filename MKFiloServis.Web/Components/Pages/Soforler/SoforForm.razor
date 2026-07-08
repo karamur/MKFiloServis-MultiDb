@@ -2054,7 +2054,7 @@
             var uzanti = Path.GetExtension(secilenEvrakDosya.Name);
 
             // Personel arşiv klasörünü oluştur: {Ad Soyad} - {FirmaAdi}
-            // Tek arşiv sistemi: C:\MKFiloServis_yedekleme\Arsiv\Sifreli/Sifresiz\Personeller\{AD SOYAD - FIRMA}
+            // Tek arşiv sistemi: C:\MKFiloServis_yedekleme\Arsiv\Sifreli\Personeller\{AD SOYAD - FIRMA}
             // ve evrak tipi bazında tekil dosya adı.
             var adSoyad = sofor?.TamAd ?? Id?.ToString() ?? "PERSONEL";
             var firmaAdi = sofor?.Firma?.FirmaAdi ?? "FIRMA_YOK";

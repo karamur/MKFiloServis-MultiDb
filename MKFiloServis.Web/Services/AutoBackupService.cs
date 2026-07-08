@@ -80,7 +80,7 @@ public class AutoBackupService : BackgroundService
             }
             else
             {
-                _logger.LogError("Otomatik yedekleme basarisiz: {Error}", result.ErrorMessage);
+                _logger.LogWarning("Otomatik yedekleme tamamlanamadi: {Error}", result.ErrorMessage);
             }
         }
     }

@@ -1,7 +1,9 @@
-@page "/ayarlar/veritabani"
+﻿@page "/ayarlar/veritabani"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
 @inject IDatabaseSettingsService DbSettingsService
+@inject IBackupService BackupService
 @inject IToastService ToastService
 @inject NavigationManager Navigation
 @rendermode InteractiveServer
@@ -30,9 +32,9 @@
                     <div class="card-body">
                         <div class="row mb-4">
                             <div class="col-12">
-                                <label class="form-label fw-bold">Veritabani Tipi</label>
+                                <label class="form-label fw-bold">Calisma Veritabani</label>
                                 <div class="btn-group w-100" role="group">
-                                    <input type="radio" class="btn-check" name="dbProvider" id="btnPostgreSQL" 
+                                    <input type="radio" class="btn-check" name="dbProvider" id="btnPostgreSQL"
                                            checked="@(settings.Provider == DatabaseProvider.PostgreSQL)"
                                            @onchange="() => ProviderDegistir(DatabaseProvider.PostgreSQL)">
                                     <label class="btn btn-outline-primary" for="btnPostgreSQL">
@@ -42,15 +44,15 @@
                                     <input type="radio" class="btn-check" name="dbProvider" id="btnSQLServer"
                                            checked="@(settings.Provider == DatabaseProvider.SQLServer)"
                                            @onchange="() => ProviderDegistir(DatabaseProvider.SQLServer)">
-                                    <label class="btn btn-outline-danger" for="btnSQLServer">
-                                        <i class="bi bi-microsoft me-1"></i>SQL Server
+                                    <label class="btn btn-outline-secondary" for="btnSQLServer">
+                                        <i class="bi bi-server me-1"></i>SQL Server
                                     </label>
 
                                     <input type="radio" class="btn-check" name="dbProvider" id="btnMySQL"
                                            checked="@(settings.Provider == DatabaseProvider.MySQL)"
                                            @onchange="() => ProviderDegistir(DatabaseProvider.MySQL)">
                                     <label class="btn btn-outline-warning" for="btnMySQL">
-                                        <i class="bi bi-database-fill me-1"></i>MySQL
+                                        <i class="bi bi-hdd-network me-1"></i>MySQL
                                     </label>
 
                                     <input type="radio" class="btn-check" name="dbProvider" id="btnSQLite"
@@ -60,7 +62,14 @@
                                         <i class="bi bi-file-earmark-binary me-1"></i>SQLite
                                     </label>
                                 </div>
+                                <small class="text-muted d-block mt-2">Kanonik migration ve veri modeli kaynagi her zaman PostgreSQL olarak korunur.</small>
                             </div>
+                        </div>
+
+                        <div class="alert alert-secondary py-2">
+                            <strong>Kanonik Veritabani:</strong> PostgreSQL
+                            <br />
+                            <small>SQLite secildiginde dahi migration replay yerine gecis manifesti ve veri donusum akisi kullanilir.</small>
                         </div>
 
                         @if (settings.Provider != DatabaseProvider.SQLite)
@@ -81,11 +90,8 @@
                             <label class="form-label">Veritabani Adi</label>
                             @if (settings.Provider == DatabaseProvider.SQLite)
                             {
-                                <div class="input-group">
-                                    <input type="text" class="form-control" @bind="settings.DatabaseName" placeholder="veritabani.db" />
-                                    <span class="input-group-text">.db</span>
-                                </div>
-                                <small class="text-muted">SQLite icin dosya adi girin. Dosya otomatik olusturulur.</small>
+                                <input type="text" class="form-control" @bind="settings.DatabaseName" placeholder="MKFiloServis.db" />
+                                <small class="text-muted">SQLite icin dosya adi girin. Manifest ve sonraki gecis bilgileri App_Data/db-transitions altinda saklanir.</small>
                             }
                             else
                             {
@@ -99,20 +105,20 @@
                             {
                                 <div class="mb-3">
                                     <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" @bind="settings.UseIntegratedSecurity" id="integratedSecurity">
-                                        <label class="form-check-label" for="integratedSecurity">
-                                            Windows Authentication (Integrated Security) Kullan
+                                        <input class="form-check-input" type="checkbox" @bind="settings.UseIntegratedSecurity" id="useIntegratedSecurity" />
+                                        <label class="form-check-label" for="useIntegratedSecurity">
+                                            Windows Authentication kullan
                                         </label>
                                     </div>
                                 </div>
                             }
 
-                            @if (!settings.UseIntegratedSecurity || settings.Provider != DatabaseProvider.SQLServer)
+                            @if (settings.Provider != DatabaseProvider.SQLServer || !settings.UseIntegratedSecurity)
                             {
                                 <div class="row mb-3">
                                     <div class="col-md-6">
                                         <label class="form-label">Kullanici Adi</label>
-                                        <input type="text" class="form-control" @bind="settings.Username" placeholder="postgres / sa / root" />
+                                        <input type="text" class="form-control" @bind="settings.Username" placeholder="@(settings.Provider == DatabaseProvider.MySQL ? "root" : settings.Provider == DatabaseProvider.SQLServer ? "sa" : "postgres")" />
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label">Sifre</label>
@@ -174,7 +180,6 @@
             </div>
 
             <div class="col-md-4">
-                <!-- Hizli Ayarlar -->
                 <div class="card mb-3">
                     <div class="card-header">
                         <h6 class="mb-0"><i class="bi bi-lightning me-2"></i>Hizli Ayarlar</h6>
@@ -182,31 +187,92 @@
                     <div class="card-body">
                         <div class="d-grid gap-2">
                             <button class="btn btn-outline-primary" @onclick="() => HizliAyar(DatabaseProvider.PostgreSQL)">
-                                <i class="bi bi-database me-2"></i>PostgreSQL (Varsayilan)
+                                <i class="bi bi-database me-2"></i>PostgreSQL (Kanonik)
+                            </button>
+                            <button class="btn btn-outline-secondary" @onclick="() => HizliAyar(DatabaseProvider.SQLServer)">
+                                <i class="bi bi-server me-2"></i>SQL Server
+                            </button>
+                            <button class="btn btn-outline-warning" @onclick="() => HizliAyar(DatabaseProvider.MySQL)">
+                                <i class="bi bi-hdd-network me-2"></i>MySQL
                             </button>
                             <button class="btn btn-outline-info" @onclick="() => HizliAyar(DatabaseProvider.SQLite)">
-                                <i class="bi bi-file-earmark-binary me-2"></i>SQLite (Yerel)
-                            </button>
-                            <button class="btn btn-outline-danger" @onclick="() => HizliAyar(DatabaseProvider.SQLServer)">
-                                <i class="bi bi-microsoft me-2"></i>SQL Server Express
+                                <i class="bi bi-file-earmark-binary me-2"></i>SQLite (Yerel Calisma)
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Bilgi -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i>Gecis Kurali</h6>
+                    </div>
+                    <div class="card-body">
+                        <small class="text-muted">
+                            Saglayici degisikliklerinde dogrudan migration replay yapilmaz.
+                            Sistem once gecis manifesti olusturur; veri snapshot/export akisi bunun uzerinden yonetilir.
+                        </small>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-box-arrow-in-down me-2"></i>PostgreSQL Yedegini SQLite'a Aktar</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <label class="form-label">Yedek Dosyasi</label>
+                            <select class="form-select" @bind="selectedPostgreSqlBackupFile">
+                                <option value="">Yedek secin</option>
+                                @foreach (var backup in postgreSqlBackups)
+                                {
+                                    <option value="@backup.FileName">@backup.FileName</option>
+                                }
+                            </select>
+                            <small class="text-muted">.backup veya .sql PostgreSQL yedekleri listelenir ve aktif SQLite veritabanina aktarilir.</small>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="sqliteImportConfirm" @bind="sqliteImportConfirm" />
+                            <label class="form-check-label" for="sqliteImportConfirm">
+                                Mevcut SQLite verisinin silinip secilen yedekten yeniden olusturulacagini onayliyorum.
+                            </label>
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-outline-info" @onclick="LoadPostgreSqlBackups" disabled="@isImportingBackup">
+                                <i class="bi bi-arrow-clockwise me-1"></i>Yedekleri Yenile
+                            </button>
+                            <button class="btn btn-primary" @onclick="ImportPostgreSqlBackupToSqlite" disabled="@(!CanImportPostgreSqlBackup)">
+                                @if (isImportingBackup)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-database-down me-1"></i>
+                                }
+                                SQLite'a Aktar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card">
                     <div class="card-header">
                         <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Bilgi</h6>
                     </div>
                     <div class="card-body">
-                        <h6>Varsayilan Portlar:</h6>
+                        <h6>Desteklenen Runtime Sağlayıcılar:</h6>
                         <ul class="list-unstyled mb-3">
-                            <li><strong>PostgreSQL:</strong> 5432</li>
-                            <li><strong>SQL Server:</strong> 1433</li>
-                            <li><strong>MySQL:</strong> 3306</li>
-                            <li><strong>SQLite:</strong> Port yok (dosya)</li>
+                            <li><strong>PostgreSQL:</strong> Kanonik ve önerilen</li>
+                            <li><strong>SQL Server:</strong> Sunucu tabanlı çalışma modu</li>
+                            <li><strong>MySQL:</strong> Sunucu tabanlı çalışma modu</li>
+                            <li><strong>SQLite:</strong> Yerel/tek dosya çalışma modu</li>
                         </ul>
+                        @if (!string.IsNullOrWhiteSpace(settings.TransitionManifestPath))
+                        {
+                            <div class="alert alert-info py-2">
+                                <small><i class="bi bi-file-earmark-code me-1"></i>Son gecis manifesti: @settings.TransitionManifestPath</small>
+                            </div>
+                        }
                         <div class="alert alert-warning py-2 mb-0">
                             <small><i class="bi bi-exclamation-triangle me-1"></i>Ayarlar kaydedildikten sonra uygulamayi yeniden baslatmaniz gerekir.</small>
                         </div>
@@ -225,61 +291,90 @@
     private bool showPassword = false;
     private string testMessage = "";
     private bool testSuccess = false;
+    private bool isImportingBackup = false;
+    private bool sqliteImportConfirm = false;
+    private string selectedPostgreSqlBackupFile = string.Empty;
+    private List<BackupInfo> postgreSqlBackups = new();
+    private bool CanImportPostgreSqlBackup =>
+        settings.Provider == DatabaseProvider.SQLite &&
+        !string.IsNullOrWhiteSpace(selectedPostgreSqlBackupFile) &&
+        sqliteImportConfirm &&
+        !isImportingBackup;
 
     protected override async Task OnInitializedAsync()
     {
         settings = await DbSettingsService.GetSettingsAsync();
+        await LoadPostgreSqlBackups();
         isLoading = false;
     }
 
     private void ProviderDegistir(DatabaseProvider provider)
     {
-        settings.Provider = provider;
+        settings.Provider = DatabaseSettings.NormalizeRuntimeProvider(provider);
+        settings.CanonicalProvider = DatabaseProvider.PostgreSQL;
         settings.Port = settings.GetDefaultPort();
         testMessage = "";
 
-        // Varsayilan degerler
-        switch (provider)
+        switch (settings.Provider)
         {
             case DatabaseProvider.PostgreSQL:
                 settings.Host = "localhost";
+                settings.DatabaseName = string.IsNullOrWhiteSpace(settings.DatabaseName) || settings.DatabaseName.EndsWith(".db", StringComparison.OrdinalIgnoreCase)
+                    ? "MKFiloServis"
+                    : settings.DatabaseName;
                 settings.Username = "postgres";
+                settings.UseIntegratedSecurity = false;
                 break;
             case DatabaseProvider.SQLServer:
                 settings.Host = "localhost";
+                settings.DatabaseName = "MKFiloServis";
                 settings.Username = "sa";
+                settings.UseIntegratedSecurity = false;
                 break;
             case DatabaseProvider.MySQL:
                 settings.Host = "localhost";
+                settings.DatabaseName = "MKFiloServis";
                 settings.Username = "root";
+                settings.UseIntegratedSecurity = false;
                 break;
             case DatabaseProvider.SQLite:
-                settings.DatabaseName = "MKFiloServis";
+                settings.DatabaseName = "MKFiloServis.db";
                 break;
         }
     }
 
     private void HizliAyar(DatabaseProvider provider)
     {
-        settings.Provider = provider;
+        settings.Provider = DatabaseSettings.NormalizeRuntimeProvider(provider);
+        settings.CanonicalProvider = DatabaseProvider.PostgreSQL;
         settings.Port = settings.GetDefaultPort();
         testMessage = "";
 
-        switch (provider)
+        switch (settings.Provider)
         {
             case DatabaseProvider.PostgreSQL:
                 settings.Host = "localhost";
                 settings.DatabaseName = "MKFiloServis";
                 settings.Username = "postgres";
                 settings.Password = "";
-                break;
-            case DatabaseProvider.SQLite:
-                settings.DatabaseName = "MKFiloServis";
+                settings.UseIntegratedSecurity = false;
                 break;
             case DatabaseProvider.SQLServer:
-                settings.Host = "localhost\\SQLEXPRESS";
-                settings.DatabaseName = "MKFiloServisDb";
+                settings.Host = "localhost";
+                settings.DatabaseName = "MKFiloServis";
+                settings.Username = "sa";
+                settings.Password = "";
                 settings.UseIntegratedSecurity = true;
+                break;
+            case DatabaseProvider.MySQL:
+                settings.Host = "localhost";
+                settings.DatabaseName = "MKFiloServis";
+                settings.Username = "root";
+                settings.Password = "";
+                settings.UseIntegratedSecurity = false;
+                break;
+            case DatabaseProvider.SQLite:
+                settings.DatabaseName = "MKFiloServis.db";
                 break;
         }
     }
@@ -328,6 +423,52 @@
         finally
         {
             isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadPostgreSqlBackups()
+    {
+        var backups = await BackupService.GetBackupListAsync();
+        postgreSqlBackups = backups
+            .Where(x => x.FileName.Contains("PostgreSQL", StringComparison.OrdinalIgnoreCase)
+                || x.FileName.EndsWith(".backup", StringComparison.OrdinalIgnoreCase)
+                || x.FileName.EndsWith(".sql", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(x => x.CreatedAt)
+            .ToList();
+    }
+
+    private async Task ImportPostgreSqlBackupToSqlite()
+    {
+        if (!CanImportPostgreSqlBackup)
+        {
+            return;
+        }
+
+        isImportingBackup = true;
+        StateHasChanged();
+
+        try
+        {
+            await DbSettingsService.SaveSettingsAsync(settings);
+            var result = await BackupService.ConvertAndRestoreAsync(selectedPostgreSqlBackupFile, "PostgreSQL", "SQLite");
+            if (result.Success)
+            {
+                sqliteImportConfirm = false;
+                ToastService.ShowSuccess($"{result.Message}. Uygulamayi yeniden baslatin veya baglantiyi tekrar test edin.");
+            }
+            else
+            {
+                ToastService.ShowError($"PostgreSQL yedegi SQLite veritabanina aktarilamadi: {result.Message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Aktarim hatasi: {ex.Message}");
+        }
+        finally
+        {
+            isImportingBackup = false;
             StateHasChanged();
         }
     }

@@ -11,10 +11,9 @@ namespace MKFiloServis.Web.Services;
 ///
 /// İşlem sırası (her evrak için):
 /// 1. Eski dosyayı decrypt et
-/// 2. Yeni şifresiz arşive yaz
-/// 3. Yeni şifreli arşive KOA1 formatında yaz
-/// 4. Şifreli arşivi tekrar decrypt edip doğrula
-/// 5. DB DosyaYolu'nu güncelle
+/// 2. Yeni şifreli arşive KOA1 formatında yaz
+/// 3. Şifreli arşivi tekrar decrypt edip doğrula
+/// 4. DB DosyaYolu'nu güncelle
 ///
 /// Eski dosyalar silinmez.
 /// </summary>
@@ -103,7 +102,7 @@ public sealed class EvrakArsivBackfillService : IEvrakArsivBackfillService
 
                 var plaka = arac.AktifPlaka ?? arac.SaseNo ?? $"ARAC-{arac.Id}";
                 var sasiNo = arac.SaseNo ?? "SASIYOK";
-                var evrakNiteligi = dosya.AracEvrak?.EvrakAdi
+                string evrakNiteligi = dosya.AracEvrak?.EvrakAdi
                     ?? dosya.AracEvrak?.EvrakKategorisi
                     ?? "EVRAK";
 
@@ -128,20 +127,18 @@ public sealed class EvrakArsivBackfillService : IEvrakArsivBackfillService
                     .Replace("-", string.Empty);
 
                 satir.YeniSifreliPath = $"Arsiv/Sifreli/Araclar/{hedefKlasor}/{hedefDosyaBase}{uzanti}.enc";
-                satir.YeniSifresizPath = $"Arsiv/Sifresiz/Araclar/{hedefKlasor}/{hedefDosyaBase}{uzanti}";
 
                 if (!dryRun)
                 {
                     var yeniSifreliRelativePath = await _evrakArsivService.ArsivleAracEvrakAsync(
                         plaka,
                         firmaAdi,
-                        evrakNiteligi,
+                        evrakNiteligi ?? "EVRAK",
                         plainBytes,
                         uzanti,
                         cancellationToken);
 
                     satir.YeniSifreliPath = yeniSifreliRelativePath;
-                    satir.YeniSifresizPath = yeniSifreliRelativePath.Replace("Arsiv/Sifreli/", "Arsiv/Sifresiz/").Replace(".enc", string.Empty);
 
                     if (updateDatabase)
                     {
@@ -200,7 +197,7 @@ public sealed class EvrakArsivBackfillService : IEvrakArsivBackfillService
             {
                 var personel = evrak.Sofor;
                 var adSoyad = personel?.TamAd ?? $"PERSONEL-{evrak.SoforId}";
-                var evrakNiteligi = evrak.EvrakTanim?.EvrakAdi ?? "EVRAK";
+                string evrakNiteligi = evrak.EvrakTanim?.EvrakAdi ?? "EVRAK";
 
                 satir.Sahip = adSoyad;
                 satir.EvrakNiteligi = evrakNiteligi;
@@ -231,20 +228,18 @@ public sealed class EvrakArsivBackfillService : IEvrakArsivBackfillService
                     .Replace("-", string.Empty);
 
                 satir.YeniSifreliPath = $"Arsiv/Sifreli/Personeller/{hedefKlasor}/{hedefDosyaBase}{uzanti}.enc";
-                satir.YeniSifresizPath = $"Arsiv/Sifresiz/Personeller/{hedefKlasor}/{hedefDosyaBase}{uzanti}";
 
                 if (!dryRun)
                 {
                     var yeniSifreliRelativePath = await _evrakArsivService.ArsivlePersonelEvrakAsync(
                         adSoyad,
                         firmaAdi,
-                        evrakNiteligi,
+                        evrakNiteligi ?? "EVRAK",
                         plainBytes,
                         uzanti,
                         cancellationToken);
 
                     satir.YeniSifreliPath = yeniSifreliRelativePath;
-                    satir.YeniSifresizPath = yeniSifreliRelativePath.Replace("Arsiv/Sifreli/", "Arsiv/Sifresiz/").Replace(".enc", string.Empty);
 
                     if (updateDatabase)
                     {

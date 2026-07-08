@@ -38,32 +38,40 @@ public class BackupService : IBackupService
         var dbSettings = ReadDatabaseSettings();
         if (dbSettings != null)
         {
-            return dbSettings.Provider switch
+            // Provider, CanonicalProvider ile eşleşmiyorsa (geçiş sonrası kalıntı) düzelt
+            if (dbSettings.Provider == DatabaseProvider.SQLite &&
+                dbSettings.CanonicalProvider == DatabaseProvider.PostgreSQL)
             {
-                DatabaseProvider.PostgreSQL => "PostgreSQL",
-                DatabaseProvider.SQLServer => "MSSQL",
-                DatabaseProvider.MySQL => "MySQL",
-                DatabaseProvider.SQLite => "SQLite",
-                _ => "SQLite"
-            };
+                _logger.LogDebug(
+                    "dbsettings.json Provider=SQLite ama CanonicalProvider=PostgreSQL; PostgreSQL-only modda devam ediliyor.");
+                return "PostgreSQL";
+            }
+            return dbSettings.GetProviderDisplayName();
         }
 
         var configuredProvider = _configuration.GetValue<string>("DatabaseProvider");
         if (!string.IsNullOrWhiteSpace(configuredProvider))
-            return configuredProvider;
+        {
+            return DatabaseSettings.ParseProvider(configuredProvider) switch
+            {
+                DatabaseProvider.SQLServer => "SQLServer",
+                DatabaseProvider.MySQL => "MySQL",
+                _ => "PostgreSQL"
+            };
+        }
 
         var defaultConnection = _configuration.GetConnectionString("DefaultConnection");
         if (!string.IsNullOrWhiteSpace(defaultConnection))
+        {
             return GetProviderFromConnectionString(defaultConnection) switch
             {
-                "POSTGRESQL" => "PostgreSQL",
-                "SQLSERVER" => "MSSQL",
+                "SQLSERVER" => "SQLServer",
                 "MYSQL" => "MySQL",
-                "SQLITE" => "SQLite",
-                _ => "SQLite"
+                _ => "PostgreSQL"
             };
+        }
 
-        return "SQLite";
+        return "PostgreSQL";
     }
 
     public async Task<BackupResult> CreateBackupAsync(string? customBackupFolder = null)
@@ -118,12 +126,6 @@ public class BackupService : IBackupService
                     backupFilePath = Path.Combine(backupFolder, backupFileName);
                     await CreateJsonBackupAsync(backupFilePath);
                     result = CreateSuccessResult(backupFilePath);
-                    break;
-
-                case "SQLITE":
-                    backupFileName = $"MKFiloServis_SQLite_{timestamp}.db";
-                    backupFilePath = Path.Combine(backupFolder, backupFileName);
-                    result = await CreateSqliteBackupAsync(backupFilePath);
                     break;
 
                 default:
@@ -692,9 +694,10 @@ public class BackupService : IBackupService
         if (connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase) &&
             connectionString.Contains("Database=", StringComparison.OrdinalIgnoreCase))
         {
-            return connectionString.Contains("User", StringComparison.OrdinalIgnoreCase)
-                ? "MYSQL"
-                : "SQLSERVER";
+            return connectionString.Contains("User Id=", StringComparison.OrdinalIgnoreCase) ||
+                   connectionString.Contains("Integrated Security=", StringComparison.OrdinalIgnoreCase)
+                ? "SQLSERVER"
+                : "MYSQL";
         }
 
         return string.Empty;
@@ -859,11 +862,40 @@ public class BackupService : IBackupService
         }
     }
 
-    /// <summary>SQLite restore devre disi — proje PostgreSQL-only. MKFiloServis.SqliteTool kullanin.</summary>
-    private Task<bool> RestoreSqliteAsync(string backupFilePath)
+    private async Task<bool> RestoreSqliteAsync(string backupFilePath)
     {
-        _logger.LogWarning("SQLite restore desteklenmiyor: {Path}. Proje PostgreSQL-only.", backupFilePath);
-        return Task.FromResult(false);
+        try
+        {
+            var dbSettings = ReadDatabaseSettings();
+            if (dbSettings == null)
+            {
+                _logger.LogError("SQLite restore icin dbsettings.json bulunamadi.");
+                return false;
+            }
+
+            var sqliteSettings = new DatabaseSettings
+            {
+                Provider = DatabaseProvider.SQLite,
+                CanonicalProvider = DatabaseProvider.PostgreSQL,
+                DatabaseName = dbSettings.GetNormalizedSqliteDatabaseName()
+            };
+
+            var targetPath = sqliteSettings.GetNormalizedSqliteDatabaseName();
+            if (!Path.IsPathRooted(targetPath))
+            {
+                targetPath = Path.Combine(_environment.ContentRootPath, targetPath);
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(targetPath) ?? _environment.ContentRootPath);
+            File.Copy(backupFilePath, targetPath, overwrite: true);
+            _logger.LogInformation("SQLite yedegi hedef veritabanina geri yuklendi: {Path}", targetPath);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "SQLite restore hatasi");
+            return false;
+        }
     }
 
     private async Task<bool> RestorePostgreSqlAsync(string backupFilePath)
@@ -1268,7 +1300,7 @@ public class BackupService : IBackupService
         }
     }
 
-    public async Task<bool> ConvertAndRestoreAsync(string backupFileName, string sourceProvider, string targetProvider)
+    public async Task<ConversionResult> ConvertAndRestoreAsync(string backupFileName, string sourceProvider, string targetProvider)
     {
         try
         {
@@ -1278,63 +1310,159 @@ public class BackupService : IBackupService
 
             if (string.IsNullOrWhiteSpace(backupFilePath) || !File.Exists(backupFilePath))
             {
-                _logger.LogError("Yedek dosyasi bulunamadi: {FileName}", backupFileName);
-                return false;
+                var message = $"Yedek dosyasi bulunamadi: {backupFileName}";
+                _logger.LogError("{Message}", message);
+                return new ConversionResult { Success = false, Message = message };
             }
 
             _logger.LogInformation("Veritabani donusumu baslatiliyor: {Source} -> {Target}", sourceProvider, targetProvider);
 
             if (sourceProvider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase) &&
-                targetProvider.Equals("SQLite", StringComparison.OrdinalIgnoreCase) &&
-                backupFilePath.EndsWith(".sql", StringComparison.OrdinalIgnoreCase))
+                targetProvider.Equals("SQLite", StringComparison.OrdinalIgnoreCase))
             {
-                return await ImportPostgreSqlDumpToSqliteAsync(backupFilePath);
+                if (backupFilePath.EndsWith(".sql", StringComparison.OrdinalIgnoreCase))
+                {
+                    return await ImportPostgreSqlDumpToSqliteAsync(backupFilePath);
+                }
+
+                if (backupFilePath.EndsWith(".backup", StringComparison.OrdinalIgnoreCase))
+                {
+                    return await ImportPostgreSqlCustomBackupToSqliteAsync(backupFilePath);
+                }
             }
 
-            // Kaynak veritabanından JSON olarak oku
             var jsonData = await ReadBackupToJsonAsync(backupFilePath, sourceProvider);
             if (jsonData == null)
             {
-                _logger.LogError("Yedek dosyasi okunamadi");
-                return false;
+                const string message = "Yedek dosyasi okunamadi veya desteklenmeyen formatta.";
+                _logger.LogError(message);
+                return new ConversionResult { Success = false, Message = message };
             }
 
-            // Hedef veritabanına yaz
             var result = await WriteJsonToTargetDatabaseAsync(jsonData, targetProvider);
-
             if (result)
             {
                 _logger.LogInformation("Veritabani donusumu basarili: {Source} -> {Target}", sourceProvider, targetProvider);
+                return new ConversionResult { Success = true, Message = $"Veritabani donusumu basarili: {sourceProvider} -> {targetProvider}" };
             }
 
-            return result;
+            return new ConversionResult { Success = false, Message = "Veritabani donusumu tamamlanamadi." };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Veritabani donusum hatasi");
-            return false;
+            return new ConversionResult { Success = false, Message = ex.GetBaseException().Message };
         }
     }
 
-    private async Task<bool> ImportPostgreSqlDumpToSqliteAsync(string backupFilePath)
+    private async Task<ConversionResult> ImportPostgreSqlCustomBackupToSqliteAsync(string backupFilePath)
+    {
+        var tempSqlPath = Path.Combine(Path.GetTempPath(), $"mkfiloservis_pgsql_to_sqlite_{Guid.NewGuid():N}.sql");
+
+        try
+        {
+            var pgRestorePath = FindPgRestore();
+            if (string.IsNullOrWhiteSpace(pgRestorePath))
+            {
+                const string message = "pg_restore bulunamadi. PostgreSQL custom backup dosyasi SQLite'a aktarılamaz.";
+                _logger.LogError(message);
+                return new ConversionResult { Success = false, Message = message };
+            }
+
+            var processInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = pgRestorePath,
+                Arguments = $"--no-owner --no-privileges --data-only --format=custom --file \"{tempSqlPath}\" \"{backupFilePath}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = System.Diagnostics.Process.Start(processInfo);
+            if (process == null)
+            {
+                const string message = "pg_restore islemi baslatilamadi.";
+                _logger.LogError(message);
+                return new ConversionResult { Success = false, Message = message };
+            }
+
+            var errorOutput = await process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            if (process.ExitCode != 0)
+            {
+                var message = $"pg_restore SQL donusum hatasi: {errorOutput}";
+                _logger.LogError("{Message}", message);
+                return new ConversionResult { Success = false, Message = message };
+            }
+
+            return await ImportPostgreSqlDumpToSqliteAsync(tempSqlPath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "PostgreSQL custom backup SQLite aktarim hatasi");
+            return new ConversionResult { Success = false, Message = ex.GetBaseException().Message };
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(tempSqlPath))
+                {
+                    File.Delete(tempSqlPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Gecici SQL donusum dosyasi silinemedi: {Path}", tempSqlPath);
+            }
+        }
+    }
+
+    private async Task<ConversionResult> ImportPostgreSqlDumpToSqliteAsync(string backupFilePath)
     {
         try
         {
             var copyBlocks = await ParsePostgreSqlCopyBlocksAsync(backupFilePath);
             if (copyBlocks.Count == 0)
             {
-                _logger.LogError("PostgreSQL dump icinde aktarilacak COPY blogu bulunamadi: {Path}", backupFilePath);
-                return false;
+                var message = $"PostgreSQL dump icinde aktarilacak COPY blogu bulunamadi: {backupFilePath}";
+                _logger.LogError("{Message}", message);
+                return new ConversionResult { Success = false, Message = message };
             }
 
             using var scope = _serviceProvider.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-            if (!context.Database.IsSqlite())
+            var sqliteSettings = ReadDatabaseSettings();
+            if (sqliteSettings == null)
             {
-                _logger.LogError("PostgreSQL -> SQLite donusumu sadece SQLite hedef veritabani icin destekleniyor.");
-                return false;
+                const string message = "SQLite hedef ayarlari bulunamadi. dbsettings.json okunamadi.";
+                _logger.LogError(message);
+                return new ConversionResult { Success = false, Message = message };
             }
+
+            sqliteSettings.Provider = DatabaseProvider.SQLite;
+            sqliteSettings.DatabaseName = sqliteSettings.GetNormalizedSqliteDatabaseName();
+
+            var sqlitePath = sqliteSettings.GetNormalizedSqliteDatabaseName();
+            if (!Path.IsPathRooted(sqlitePath))
+            {
+                sqlitePath = Path.Combine(_environment.ContentRootPath, sqlitePath);
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(sqlitePath) ?? _environment.ContentRootPath);
+            var sqliteConnectionString = $"Data Source={sqlitePath}";
+
+            var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
+            optionsBuilder.UseSqlite(sqliteConnectionString, sqliteOptions =>
+            {
+                sqliteOptions.CommandTimeout(30);
+                sqliteOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+            });
+
+            await using var context = new ApplicationDbContext(optionsBuilder.Options);
+            context.SetServiceProvider(scope.ServiceProvider);
+            await context.Database.EnsureCreatedAsync();
 
             await context.Database.OpenConnectionAsync();
             await SetSqliteForeignKeysAsync(context, enabled: false);
@@ -1373,13 +1501,17 @@ public class BackupService : IBackupService
             await SetSqliteForeignKeysAsync(context, enabled: true);
             await context.Database.CloseConnectionAsync();
             if (result)
-                _logger.LogInformation("PostgreSQL dump SQLite veritabanina basariyla aktarildi: {Path}", backupFilePath);
-            return result;
+            {
+                _logger.LogInformation("PostgreSQL dump SQLite veritabanina basariyla aktarildi: {Path} -> {SqlitePath}", backupFilePath, sqlitePath);
+                return new ConversionResult { Success = true, Message = $"PostgreSQL yedegi SQLite veritabanina aktarildi: {sqlitePath}" };
+            }
+
+            return new ConversionResult { Success = false, Message = "PostgreSQL dump SQLite veritabanina yazilamadi." };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "PostgreSQL dump SQLite aktarim hatasi");
-            return false;
+            return new ConversionResult { Success = false, Message = ex.GetBaseException().Message };
         }
     }
 
@@ -1543,6 +1675,7 @@ public class BackupService : IBackupService
             return;
         }
 
+        var firmaIdFallback = await ResolveSqliteFirmaIdFallbackAsync(context, block.TableName, targetColumns);
         var columnList = string.Join(", ", mappedColumns.Select(x => EscapeSqliteIdentifier(x.columnName)));
         var parameterList = string.Join(", ", Enumerable.Range(0, mappedColumns.Count).Select(i => $"@p{i}"));
         var insertSql = $"INSERT INTO {EscapeSqliteIdentifier(block.TableName)} ({columnList}) VALUES ({parameterList});";
@@ -1561,12 +1694,55 @@ public class BackupService : IBackupService
 
                 var valueIndex = mappedColumns[i].index;
                 var value = valueIndex < row.Count ? row[valueIndex] : null;
+                value = NormalizeSqliteInsertValue(block.TableName, mappedColumns[i].columnName, value, firmaIdFallback);
                 parameter.Value = value ?? DBNull.Value;
                 command.Parameters.Add(parameter);
             }
 
             await command.ExecuteNonQueryAsync();
         }
+    }
+
+    private async Task<int?> ResolveSqliteFirmaIdFallbackAsync(ApplicationDbContext context, string tableName, HashSet<string> targetColumns)
+    {
+        if (!targetColumns.Contains("FirmaId"))
+            return null;
+
+        await using var command = context.Database.GetDbConnection().CreateCommand();
+        command.Transaction = context.Database.CurrentTransaction?.GetDbTransaction();
+        command.CommandText = "SELECT \"Id\" FROM \"Firmalar\" WHERE COALESCE(\"IsDeleted\", 0) = 0 ORDER BY \"Id\" LIMIT 1;";
+
+        var scalar = await command.ExecuteScalarAsync();
+        if (scalar == null || scalar == DBNull.Value)
+            return 1;
+
+        return Convert.ToInt32(scalar);
+    }
+
+    private static object? NormalizeSqliteInsertValue(string tableName, string columnName, object? value, int? firmaIdFallback)
+    {
+        if (!columnName.Equals("FirmaId", StringComparison.OrdinalIgnoreCase))
+            return value;
+
+        if (value is int intValue)
+            return intValue > 0 ? intValue : firmaIdFallback ?? 1;
+
+        if (value is long longValue)
+            return longValue > 0 ? longValue : firmaIdFallback ?? 1;
+
+        if (value is string stringValue)
+        {
+            if (int.TryParse(stringValue, out var parsedValue) && parsedValue > 0)
+                return parsedValue;
+
+            if (string.IsNullOrWhiteSpace(stringValue) || stringValue == "0")
+                return firmaIdFallback ?? 1;
+        }
+
+        if (value == null || value == DBNull.Value)
+            return firmaIdFallback ?? 1;
+
+        return value;
     }
 
     private static object? ParsePostgreSqlCopyValue(string rawValue)

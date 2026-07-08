@@ -21,6 +21,10 @@ public static class SchemaSyncHelper
     /// </summary>
     public static async Task EnsureAllColumnsExistAsync(ApplicationDbContext context)
     {
+        // SQLite için bu helper atlanır — EF migrations şemayı yönetir; information_schema mevcut değil
+        if (context.Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true)
+            return;
+
         // 1) Veritabanında mevcut olan tüm kolonları tek sorguda al
         var existingColumns = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         await using var cmd = context.Database.GetDbConnection().CreateCommand();
@@ -145,11 +149,50 @@ public static class SchemaSyncHelper
     /// </summary>
     public static async Task EnsureFisNoCountersSchemaAsync(ApplicationDbContext context)
     {
+        var isSqlite = context.Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true;
         var previousTimeout = context.Database.GetCommandTimeout();
         try
         {
             // Bu migration bazı ortamlarda lock beklemesi nedeniyle 30sn varsayılan timeout'u aşabiliyor.
             context.Database.SetCommandTimeout(180);
+
+            if (isSqlite)
+            {
+                // SQLite: tablo oluştur ve FirmaId kolonu ekle (idempotent)
+                await context.Database.ExecuteSqlRawAsync(@"
+                    CREATE TABLE IF NOT EXISTS ""FisNoCounters"" (
+                        ""Prefix""  TEXT NOT NULL,
+                        ""FirmaId"" INTEGER NOT NULL DEFAULT 0,
+                        ""YilAy""   TEXT NOT NULL,
+                        ""SonNo""   INTEGER NOT NULL DEFAULT 0,
+                        PRIMARY KEY (""Prefix"", ""FirmaId"", ""YilAy"")
+                    );
+                ");
+                // FirmaId kolonunu ekle (eski şema için) — kolon yoksa ekle, varsa atla
+                var firmaIdExists = false;
+                try
+                {
+                    await using var checkConn = context.Database.GetDbConnection();
+                    if (checkConn.State != System.Data.ConnectionState.Open)
+                        await checkConn.OpenAsync();
+                    await using var checkCmd = checkConn.CreateCommand();
+                    checkCmd.CommandText = "SELECT COUNT(*) FROM pragma_table_info('FisNoCounters') WHERE name='FirmaId'";
+                    firmaIdExists = Convert.ToInt32(await checkCmd.ExecuteScalarAsync()) > 0;
+                }
+                catch { /* kontrol başarısız olursa eklemeyi dene */ }
+
+                if (!firmaIdExists)
+                {
+                    await context.Database.ExecuteSqlRawAsync(@"
+                        ALTER TABLE ""FisNoCounters"" ADD COLUMN ""FirmaId"" INTEGER NOT NULL DEFAULT 0;
+                    ");
+                }
+                // NULL FirmaId'leri düzelt
+                await context.Database.ExecuteSqlRawAsync(@"
+                    UPDATE ""FisNoCounters"" SET ""FirmaId"" = 0 WHERE ""FirmaId"" IS NULL;
+                ");
+                return;
+            }
 
             await context.Database.ExecuteSqlRawAsync(@"
                 -- Tablo yoksa doğru şemayla oluştur

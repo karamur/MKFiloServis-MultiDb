@@ -1,4 +1,4 @@
-using MKFiloServis.Web.Data;
+﻿using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -44,18 +44,22 @@ public static class KiralikPlakaFaturaMigrationHelper
 
     private static async Task<HashSet<string>> GetColumnNamesAsync(ApplicationDbContext context)
     {
+        var isSqlite = context.Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true;
         var conn = context.Database.GetDbConnection();
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
-            SELECT column_name FROM information_schema.columns
-            WHERE table_name = 'KiralikPlakaTakipler'
-            """;
+        if (isSqlite)
+            cmd.CommandText = "PRAGMA table_info(\"KiralikPlakaTakipler\")";
+        else
+            cmd.CommandText = """
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'KiralikPlakaTakipler'
+                """;
         if (conn.State != System.Data.ConnectionState.Open)
             await conn.OpenAsync();
         await using var reader = await cmd.ExecuteReaderAsync();
-        var cols = new HashSet<string>();
+        var cols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         while (await reader.ReadAsync())
-            cols.Add(reader.GetString(0));
+            cols.Add(isSqlite ? reader.GetString(1) : reader.GetString(0));
         return cols;
     }
 }

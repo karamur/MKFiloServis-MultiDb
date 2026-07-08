@@ -745,7 +745,7 @@ public class AracService : IAracService
         var icerik = memoryStream.ToArray();
         var uzanti = Path.GetExtension(file.Name);
 
-        // Tek arşiv sistemi: C:\MKFiloServis_yedekleme\Arsiv\Sifreli/Sifresiz\Araclar\{PLAKA - FIRMA}
+        // Tek arşiv sistemi: C:\MKFiloServis_yedekleme\Arsiv\Sifreli\Araclar\{PLAKA - FIRMA}
         // ve evrak tipi bazında tekil dosya adı.
         var plaka = evrak.Arac?.AktifPlaka ?? evrak.Arac?.SaseNo ?? evrak.AracId.ToString();
         var firmaAdi = evrak.Arac?.Firma?.FirmaAdi ?? "FIRMA_YOK";

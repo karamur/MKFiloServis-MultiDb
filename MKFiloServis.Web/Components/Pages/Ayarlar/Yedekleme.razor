@@ -478,7 +478,7 @@
 @code {
     private List<BackupInfo> backups = new();
     private BackupSettings settings = new();
-    private string dbProvider = "SQLite";
+    private string dbProvider = "PostgreSQL";
     private bool isLoading = true;
     private bool isBackingUp = false;
     private bool isFileBackup = false;
@@ -494,7 +494,7 @@
     private bool showDonusumModal = false;
     private bool migrationOnay = false;
     private bool donusumOnay = false;
-    private string donusumKaynakTip = "SQLite";
+    private string donusumKaynakTip = "PostgreSQL";
     private BackupInfo? silinecekYedek;
     private BackupInfo? yuklenecekYedek;
     private BackupInfo? donusumYedek;
@@ -739,7 +739,7 @@
         if (fileName.EndsWith(".sql") && fileName.Contains("PostgreSQL")) return "PostgreSQL";
         if (fileName.EndsWith(".sql") && fileName.Contains("MySQL")) return "MySQL";
         if (fileName.EndsWith(".sql")) return "SQL";
-        if (fileName.EndsWith(".bak")) return "MSSQL";
+        if (fileName.EndsWith(".bak")) return "SQLServer";
         if (fileName.EndsWith(".backup")) return "Backup";
         if (fileName.EndsWith(".json")) return "JSON";
         return "Bilinmiyor";
@@ -842,13 +842,19 @@
         donusumYedek = backup;
         donusumOnay = false;
 
-        // Dosya uzantısına göre kaynak tipi belirle
+        // Dosya uzantısı ve adından kaynak tipi belirle
         if (backup.FileName.EndsWith(".db", StringComparison.OrdinalIgnoreCase))
             donusumKaynakTip = "SQLite";
+        else if (backup.FileName.EndsWith(".bak", StringComparison.OrdinalIgnoreCase))
+            donusumKaynakTip = "SQLServer";
+        else if (backup.FileName.EndsWith(".backup", StringComparison.OrdinalIgnoreCase))
+            donusumKaynakTip = "PostgreSQL";
+        else if (backup.FileName.EndsWith(".sql", StringComparison.OrdinalIgnoreCase) && backup.FileName.Contains("MySQL", StringComparison.OrdinalIgnoreCase))
+            donusumKaynakTip = "MySQL";
         else if (backup.FileName.EndsWith(".sql", StringComparison.OrdinalIgnoreCase))
             donusumKaynakTip = "PostgreSQL";
         else
-            donusumKaynakTip = "SQLite";
+            donusumKaynakTip = dbProvider;
 
         showDonusumModal = true;
     }
@@ -863,13 +869,13 @@
         try
         {
             var result = await BackupService.ConvertAndRestoreAsync(donusumYedek.FileName, donusumKaynakTip, dbProvider);
-            if (result)
+            if (result.Success)
             {
-                ToastService.ShowSuccess($"Veritabani donusumu basarili! {donusumKaynakTip} -> {dbProvider}");
+                ToastService.ShowSuccess(result.Message);
             }
             else
             {
-                ToastService.ShowError("Veritabani donusumu basarisiz.");
+                ToastService.ShowError($"Veritabani donusumu basarisiz: {result.Message}");
             }
             showDonusumModal = false;
             donusumOnay = false;
@@ -903,10 +909,13 @@
 
     private static bool CanConvert(string fileName)
     {
-        // SQLite ve PostgreSQL SQL dosyaları dönüştürülebilir
         return fileName.EndsWith(".db", StringComparison.OrdinalIgnoreCase) ||
-               (fileName.EndsWith(".sql", StringComparison.OrdinalIgnoreCase) && 
-                (fileName.Contains("PostgreSQL") || fileName.Contains("SQLite")));
+               fileName.EndsWith(".bak", StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith(".backup", StringComparison.OrdinalIgnoreCase) ||
+               (fileName.EndsWith(".sql", StringComparison.OrdinalIgnoreCase) &&
+                (fileName.Contains("PostgreSQL", StringComparison.OrdinalIgnoreCase) ||
+                 fileName.Contains("SQLite", StringComparison.OrdinalIgnoreCase) ||
+                 fileName.Contains("MySQL", StringComparison.OrdinalIgnoreCase)));
     }
 
     private DateTime? GetNextBackupTime() => settings.GetNextBackupTime();

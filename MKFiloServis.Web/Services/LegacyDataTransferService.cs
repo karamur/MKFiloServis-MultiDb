@@ -29,8 +29,17 @@ public class LegacyDataTransferService
         // Kaynak ve hedef aynıysa aktarım metotları sessizce atlanır; burada log üretilmez.
     }
 
+    private static bool IsPostgresConnectionString(string connStr) =>
+        connStr.Contains("Host=", StringComparison.OrdinalIgnoreCase) ||
+        connStr.Contains("Server=", StringComparison.OrdinalIgnoreCase) ||
+        connStr.Contains("Port=", StringComparison.OrdinalIgnoreCase);
+
     private static string BuildLegacySourceConnectionString(string targetConnStr)
     {
+        // SQLite veya diğer non-PostgreSQL: kaynak = hedef → transfer metodları sessizce atlanır
+        if (!IsPostgresConnectionString(targetConnStr))
+            return targetConnStr;
+
         var builder = new NpgsqlConnectionStringBuilder(targetConnStr);
         var targetDb = builder.Database ?? string.Empty;
 
@@ -49,6 +58,10 @@ public class LegacyDataTransferService
 
     private static bool IsSameDatabase(string sourceConnStr, string targetConnStr)
     {
+        // Non-PostgreSQL: string karşılaştırması
+        if (!IsPostgresConnectionString(sourceConnStr) || !IsPostgresConnectionString(targetConnStr))
+            return string.Equals(sourceConnStr, targetConnStr, StringComparison.OrdinalIgnoreCase);
+
         var source = new NpgsqlConnectionStringBuilder(sourceConnStr);
         var target = new NpgsqlConnectionStringBuilder(targetConnStr);
 
@@ -65,6 +78,14 @@ public class LegacyDataTransferService
     /// </summary>
     public async Task EnsureSchemaAsync()
     {
+        // SQLite (veya kaynak = hedef) ise EnsureCreated/script işlemi gerekmiyor;
+        // EF migration'lar zaten ana startup akışında çalıştı.
+        if (!IsPostgresConnectionString(_targetConnStr))
+        {
+            _logger.LogInformation("EnsureSchemaAsync: SQLite provider, islem atlandi.");
+            return;
+        }
+
         var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
         optionsBuilder.UseNpgsql(_targetConnStr);
         using var ctx = new ApplicationDbContext(optionsBuilder.Options);
@@ -111,7 +132,8 @@ public class LegacyDataTransferService
 
                 try
                 {
-                    await ctx.Database.ExecuteSqlRawAsync(cmdText + ";");
+                    var ddlCommand = normalized.EndsWith(';') ? normalized : normalized + ";";
+                    await ctx.Database.ExecuteSqlRawAsync(ddlCommand);
                     executed++;
                 }
                 catch (PostgresException ex) when (

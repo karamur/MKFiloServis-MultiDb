@@ -26,8 +26,14 @@ public static class DbInitializer
             ?? configuration.GetConnectionString("DefaultConnection");
         if (string.IsNullOrWhiteSpace(masterConnStr)) return;
 
+        // SQLite veya PostgreSQL olmayan bağlantı dizileri için atla
+        if (!masterConnStr.Contains("Host=", StringComparison.OrdinalIgnoreCase) &&
+            !masterConnStr.Contains("Server=", StringComparison.OrdinalIgnoreCase) &&
+            !masterConnStr.Contains("Port=", StringComparison.OrdinalIgnoreCase))
+            return;
+
         var masterBuilder = new NpgsqlConnectionStringBuilder(masterConnStr);
-        var masterDbName = masterBuilder.Database ?? "KOAFiloServis_Master";
+        var masterDbName = masterBuilder.Database ?? "MKFiloServis";
 
         // Master DB'yi olustur (postgres DB'sine baglanarak)
         var serverConnStr = new NpgsqlConnectionStringBuilder(masterConnStr)
@@ -254,7 +260,7 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
             ? "PostgreSQL"
             : context.Database.IsSqlite()
                 ? "SQLite"
-                : configuration.GetValue<string>("DatabaseProvider") ?? "SQLite";
+                : configuration.GetValue<string>("DatabaseProvider") ?? context.Database.ProviderName ?? "PostgreSQL";
         var migrationRecovered = false;
         List<string> pendingMigrations = new();
         

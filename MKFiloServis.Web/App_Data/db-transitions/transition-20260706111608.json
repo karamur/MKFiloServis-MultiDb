@@ -1,0 +1,10 @@
+{
+  "createdAtUtc": "2026-07-06T11:16:08.7727332Z",
+  "canonicalProvider": "PostgreSQL",
+  "previousProvider": "SQLite",
+  "nextProvider": "SQLite",
+  "previousConnectionString": "Data Source=MKFiloServis.db;",
+  "nextConnectionString": "Data Source=MKFiloServis.db;",
+  "strategy": "in-place-update",
+  "note": "Provider gecislerinde migration replay yerine bu manifest ve veri snapshot/export akisi kullanilmalidir."
+}

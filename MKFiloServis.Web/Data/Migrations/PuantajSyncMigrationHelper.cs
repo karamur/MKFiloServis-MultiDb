@@ -14,6 +14,14 @@ public static class PuantajSyncMigrationHelper
     {
         logger?.LogInformation("PuantajSyncMigration: basliyor...");
 
+        // OperasyonKayitlari tablosu SyncPuantajSchemaMigrationHelper tarafından yönetilir;
+        // SQLite'ta o helper erken return yapar dolayısıyla tablo yoktur — burada da atlıyoruz.
+        if (context.Database.IsSqlite())
+        {
+            logger?.LogInformation("PuantajSyncMigration: SQLite için atlanıyor.");
+            return;
+        }
+
         var cols = await GetColumnNamesAsync(context, "OperasyonKayitlari");
 
         // ── KaynakPuantajId ────────────────────────────────────────────────
@@ -62,15 +70,19 @@ public static class PuantajSyncMigrationHelper
     private static async Task<HashSet<string>> GetColumnNamesAsync(ApplicationDbContext context, string tableName)
     {
         var conn = context.Database.GetDbConnection();
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = $"""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_name = '{tableName}'
-            """;
         if (conn.State != System.Data.ConnectionState.Open)
             await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        if (context.Database.IsSqlite())
+        {
+            cmd.CommandText = $"SELECT name FROM pragma_table_info('{tableName}')";
+        }
+        else
+        {
+            cmd.CommandText = $"SELECT column_name FROM information_schema.columns WHERE table_name = '{tableName}'";
+        }
         await using var reader = await cmd.ExecuteReaderAsync();
-        var cols = new HashSet<string>();
+        var cols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         while (await reader.ReadAsync())
             cols.Add(reader.GetString(0));
         return cols;

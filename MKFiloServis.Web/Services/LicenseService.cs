@@ -97,8 +97,11 @@ public class LicenseService
 
             try
             {
-                // Tek kaynak: paylaşılan donanım tabanlı kod
-                stableHardwareCode = MKFiloServis.Shared.LisansHelper.GetMachineCode();
+                if (OperatingSystem.IsWindows())
+                {
+                    // Tek kaynak: paylaşılan donanım tabanlı kod
+                    stableHardwareCode = MKFiloServis.Shared.LisansHelper.GetMachineCode();
+                }
             }
             catch
             {
@@ -558,31 +561,13 @@ public class LicenseService
     /// </summary>
     public async Task<LicenseInfo> ActivateFromKeyAsync(string key)
     {
-        // Trim + temizle
         key = key.Trim().Replace("\r", "").Replace("\n", "").Replace(" ", "");
 
-        // Base64 decode → JSON
-        string json;
-        try
+        var lic = TryParseJsonLicenseKey(key);
+        if (lic == null)
         {
-            var bytes = Convert.FromBase64String(key);
-            json = Encoding.UTF8.GetString(bytes);
-        }
-        catch (FormatException)
-        {
-            throw new Exception("Lisans anahtari gecersiz formatta. Lutfen kopyaladiginiz kodu kontrol edin.");
-        }
-
-        // JSON → LicenseInfo
-        LicenseInfo lic;
-        try
-        {
-            lic = JsonSerializer.Deserialize<LicenseInfo>(json)
-                  ?? throw new Exception("Lisans verisi okunamadi.");
-        }
-        catch (JsonException)
-        {
-            throw new Exception("Lisans anahtari gecersiz. Lutfen dogru kodu yapistirdiginizdan emin olun.");
+            lic = TryParseLegacyEncryptedLicenseKey(key)
+                  ?? throw new Exception("Lisans anahtari gecersiz. Yeni Base64 lisans veya eski sifreli lisans formati bekleniyor.");
         }
 
         if (string.IsNullOrWhiteSpace(lic.FirmaKodu) || string.IsNullOrWhiteSpace(lic.Signature))
@@ -619,11 +604,9 @@ public class LicenseService
         // DB'ye kaydet — eski lisanslari pasif yap
         await using var db = await _dbFactory.CreateDbContextAsync();
 
-        // FirmaKodu'ndan FirmaId'yi bul
-        var firma = await ResolveFirmaForLicenseAsync(db, lic.FirmaKodu);
-
-        if (firma == null)
-            throw new Exception($"Firma bulunamadi: '{lic.FirmaKodu}'. Lisans uretirken sistemdeki firma kodunu kullanin. Tek firma kullaniyorsaniz firma kodu yerine firma adi/unvan da yazabilirsiniz.");
+        // FirmaKodu'ndan FirmaId'yi bul veya yoksa lisansa gore firma olustur
+        var firma = await ResolveFirmaForLicenseAsync(db, lic.FirmaKodu)
+                    ?? await CreateFirmaFromLicenseAsync(db, lic);
 
         // 🔥 KRİTİK: FirmaKodu'nu DEGISTIRME! Signature, anahtar icindeki orijinal
         // FirmaKodu ile uretildi. Degistirirsek sonraki ValidateAsync/VerifySignature
@@ -679,11 +662,125 @@ public class LicenseService
                 return exactMatch;
         }
 
-        if (firmalar.Count == 1)
-            return firmalar[0];
+        var varsayilanFirma = firmalar.FirstOrDefault(f => f.VarsayilanFirma && f.Aktif)
+                              ?? firmalar.FirstOrDefault(f => f.Aktif)
+                              ?? firmalar.FirstOrDefault();
+
+        if (varsayilanFirma != null)
+        {
+            _logger.LogWarning("Lisans firma esi bulunamadi. Fallback firma secildi. LisansDegeri={LicenseFirmaValue}, FirmaId={FirmaId}, FirmaKodu={FirmaKodu}",
+                licenseFirmaValue, varsayilanFirma.Id, varsayilanFirma.FirmaKodu);
+            return varsayilanFirma;
+        }
 
         return null;
     }
+
+    private async Task<Firma> CreateFirmaFromLicenseAsync(ApplicationDbContext db, LicenseInfo lic)
+    {
+        var firmaKodu = NormalizeFirmaCode(lic.FirmaKodu);
+        var firmaAdi = string.IsNullOrWhiteSpace(lic.FirmaKodu) ? "Lisans Firmasi" : lic.FirmaKodu.Trim();
+        var normalizedName = NormalizeOptionalText(firmaAdi) ?? "Lisans Firmasi";
+
+        var existingWithCode = await db.Firmalar
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(f => !f.IsDeleted && f.FirmaKodu == firmaKodu);
+        if (existingWithCode != null)
+            return existingWithCode;
+
+        var organizationId = await EnsureOrganizasyonIdAsync(db);
+        var isFirstFirma = !await db.Firmalar.IgnoreQueryFilters().AnyAsync(f => !f.IsDeleted);
+
+        var firma = new Firma
+        {
+            FirmaKodu = await ResolveUniqueFirmaCodeAsync(db, firmaKodu),
+            FirmaAdi = normalizedName,
+            UnvanTam = normalizedName,
+            Aktif = true,
+            VarsayilanFirma = isFirstFirma,
+            OrganizasyonId = organizationId,
+            AktifDonemYil = DateTime.Today.Year,
+            AktifDonemAy = DateTime.Today.Month,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        db.Firmalar.Add(firma);
+        await db.SaveChangesAsync();
+
+        _logger.LogWarning("Lisans aktivasyonu sirasinda yeni firma olusturuldu. LisansDegeri={LicenseFirmaValue}, FirmaId={FirmaId}, FirmaKodu={FirmaKodu}",
+            lic.FirmaKodu, firma.Id, firma.FirmaKodu);
+
+        return firma;
+    }
+
+    private async Task<int> EnsureOrganizasyonIdAsync(ApplicationDbContext db)
+    {
+        var mevcut = await db.Organizasyonlar
+            .IgnoreQueryFilters()
+            .OrderBy(o => o.Id)
+            .FirstOrDefaultAsync();
+
+        if (mevcut != null)
+            return mevcut.Id;
+
+        var organizasyon = new Organizasyon
+        {
+            Adi = "Ustun Holding",
+            Kod = "USTUNHOLDING",
+            Aciklama = "Lisans aktivasyonu sirasinda otomatik olusturulan organizasyon",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        db.Organizasyonlar.Add(organizasyon);
+        await db.SaveChangesAsync();
+        return organizasyon.Id;
+    }
+
+    private async Task<string> ResolveUniqueFirmaCodeAsync(ApplicationDbContext db, string? requestedCode)
+    {
+        var normalizedCode = NormalizeFirmaCode(requestedCode);
+        var codeExists = await db.Firmalar
+            .IgnoreQueryFilters()
+            .AnyAsync(f => f.FirmaKodu == normalizedCode);
+
+        if (!codeExists)
+            return normalizedCode;
+
+        var nextNumber = 1;
+        var existingCodes = await db.Firmalar
+            .IgnoreQueryFilters()
+            .Select(f => f.FirmaKodu)
+            .ToListAsync();
+
+        foreach (var code in existingCodes)
+        {
+            if (string.IsNullOrWhiteSpace(code) || !code.StartsWith("F", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (int.TryParse(code[1..], out var parsed) && parsed >= nextNumber)
+                nextNumber = parsed + 1;
+        }
+
+        var candidate = $"F{nextNumber:000}";
+        while (existingCodes.Contains(candidate, StringComparer.OrdinalIgnoreCase))
+        {
+            nextNumber++;
+            candidate = $"F{nextNumber:000}";
+        }
+
+        return candidate;
+    }
+
+    private static string NormalizeFirmaCode(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+            return "F001";
+
+        return code.Trim().ToUpperInvariant();
+    }
+
+    private static string? NormalizeOptionalText(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static string NormalizeFirmaMatchValue(string? value)
     {
@@ -820,6 +917,52 @@ public class LicenseService
         using var srDecrypt = new StreamReader(csDecrypt);
 
         return srDecrypt.ReadToEnd();
+    }
+
+    private static LicenseInfo? TryParseJsonLicenseKey(string key)
+    {
+        try
+        {
+            var bytes = Convert.FromBase64String(key);
+            var json = Encoding.UTF8.GetString(bytes);
+            return JsonSerializer.Deserialize<LicenseInfo>(json);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private LicenseInfo? TryParseLegacyEncryptedLicenseKey(string key)
+    {
+        try
+        {
+            var (firmaKodu, lisansTipi, baslangicTarihi, bitisTarihi) = ParseLicenseKey(key);
+            var machineId = GetMachineId();
+            var durationDays = Math.Max(1, (bitisTarihi.Date - baslangicTarihi.Date).Days);
+            var allowedVersion = "1.0.99";
+            var contactPhone = string.Empty;
+            var isDemo = string.Equals(lisansTipi, "trial", StringComparison.OrdinalIgnoreCase);
+            var createdAt = baslangicTarihi == default ? DateTime.UtcNow : baslangicTarihi;
+            var signature = GenerateSignature(firmaKodu, machineId, bitisTarihi, isDemo, allowedVersion, createdAt, durationDays, contactPhone);
+
+            return new LicenseInfo
+            {
+                FirmaKodu = firmaKodu,
+                MachineId = machineId,
+                ExpireDate = bitisTarihi,
+                DurationDays = durationDays,
+                AllowedVersion = allowedVersion,
+                IsDemo = isDemo,
+                CreatedAt = createdAt,
+                ContactPhone = contactPhone,
+                Signature = signature
+            };
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     // ══════════════════════════════════════════════

@@ -1,4 +1,4 @@
-using MKFiloServis.Web.Data;
+﻿using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -12,6 +12,27 @@ public static class PuantajCarpaniMigrationHelper
 {
     public static async Task ApplyAsync(DbContext context, ILogger logger)
     {
+        if (context.Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            // SQLite: PRAGMA ile kolon kontrolü
+            var conn = context.Database.GetDbConnection();
+            if (conn.State != System.Data.ConnectionState.Open)
+                await conn.OpenAsync();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "PRAGMA table_info(\"Guzergahlar\")";
+            var cols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using (var reader = await cmd.ExecuteReaderAsync())
+                while (await reader.ReadAsync()) cols.Add(reader.GetString(1));
+            if (!cols.Contains("PuantajCarpani"))
+            {
+                using var addCmd = conn.CreateCommand();
+                addCmd.CommandText = "ALTER TABLE \"Guzergahlar\" ADD COLUMN \"PuantajCarpani\" NUMERIC NOT NULL DEFAULT 1.0";
+                await addCmd.ExecuteNonQueryAsync();
+            }
+            logger.LogInformation("PuantajCarpaniMigrationHelper: Guzergahlar.PuantajCarpani kolonu kontrol edildi/eklendi (SQLite)");
+            return;
+        }
+
         var sql = @"
             DO $$
             BEGIN

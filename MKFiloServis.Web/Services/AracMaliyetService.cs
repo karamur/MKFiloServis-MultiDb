@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -80,6 +80,16 @@ public class AracMaliyetService : IAracMaliyetService
             }
         }
 
+        // ServisKaydi (bakım-onarım) — AracMasrafId null olanları ekle (bağlı olanlar zaten AracMasraflari'nda sayıldı)
+        var servisBakim = await context.ServisKayitlari
+            .Where(sk => sk.AracId == aracId
+                      && sk.ServisTarihi >= donemBas
+                      && sk.ServisTarihi < donemSon
+                      && sk.AracMasrafId == null
+                      && sk.Durum != ServisDurum.IptalEdildi)
+            .SumAsync(sk => (decimal?)sk.ToplamTutar) ?? 0m;
+        bakim += servisBakim;
+
         // LastikDegisim ücretlerini ekle (ayrı bir kalem)
         var lastikDegisimUcret = await context.LastikDegisimler
             .Where(l => l.AracId == aracId
@@ -89,16 +99,30 @@ public class AracMaliyetService : IAracMaliyetService
             .SumAsync(l => (decimal?)l.Ucret) ?? 0m;
         lastik += lastikDegisimUcret;
 
-        // Kiralık plaka kirası (kiralık araç için)
+        // Kiralık plaka kirası (kiralık araç için) - sadece ilgili dönem (yil/ay)
         decimal plakaKirasi = 0m;
         if (arac.SahiplikTipi == AracSahiplikTipi.Kiralik)
         {
-            // KiralikPlakaTakip dönem aylık kayıtları (FaturaOdemesi + EkTutar)
-            var kiraKayitlari = await context.KiralikPlakaTakipler
-                .Where(k => k.AracId == aracId)
-                .ToListAsync();
-            // Basit: AylikVeyaYillikTutar bilgisini direkt kullan (detay alanlar UI tarafında zenginleştirilebilir)
-            plakaKirasi = kiraKayitlari.Sum(k => k.FaturaOdemesi + k.EkTutar);
+            // Fatura detay planından döneme ait (Yil+Ay) tutarı al
+            var donemFaturaToplam = await context.KiralikPlakaTakipFaturalar
+                .Where(f => f.KiralikPlakaTakip!.AracId == aracId
+                          && f.Yil == yil
+                          && f.Ay == ay)
+                .SumAsync(f => (decimal?)(f.FaturaTutari > 0 ? f.FaturaTutari : f.PlanTutari)) ?? 0m;
+
+            if (donemFaturaToplam > 0m)
+            {
+                plakaKirasi = donemFaturaToplam;
+            }
+            else
+            {
+                // Fatura detayı yoksa sözleşme dönemi içindeki kayıtlardan aylık sabit kira al
+                plakaKirasi = await context.KiralikPlakaTakipler
+                    .Where(k => k.AracId == aracId
+                              && k.BaslamaTarihi <= donemSon
+                              && k.BitisTarihi >= donemBas)
+                    .SumAsync(k => (decimal?)k.FaturaOdemesi) ?? 0m;
+            }
         }
 
         // FiloGunlukPuantaj'tan toplam sefer ve tahmini km
@@ -185,6 +209,78 @@ public class AracMaliyetService : IAracMaliyetService
         context.AracMaliyetSnapshotlari.Remove(s);
         await context.SaveChangesAsync();
         return true;
+    }
+
+    /// <summary>
+    /// Fullpet gibi tek fatura / çok araç yakıt dağılımını plakalara kaydeder.
+    /// Her araca ayrı bir AracMasraf kaydı oluşturur.
+    /// Eğer <paramref name="esitDagit"/> true ise tutarı araç sayısına böler;
+    /// false ise <paramref name="aracTutarlari"/> dict'indeki bireysel tutarları kullanır.
+    /// </summary>
+    public async Task<int> FullpetFaturaDagitAsync(
+        DateTime faturaTarihi,
+        string? faturaNo,
+        string? aciklama,
+        List<int> aracIdler,
+        decimal toplamTutar,
+        bool esitDagit,
+        Dictionary<int, decimal>? aracTutarlari,
+        int? firmaId = null)
+    {
+        if (!aracIdler.Any() || toplamTutar <= 0)
+            throw new ArgumentException("Araç listesi boş veya tutar sıfır olamaz.");
+
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        // Yakıt kategorili masraf kalemi bul (önce firmaya özel, yoksa genel)
+        var yakitKalemi = await context.MasrafKalemleri
+            .Where(k => k.Kategori == MasrafKategori.Yakit && k.Aktif
+                     && (firmaId == null || k.FirmaId == firmaId || k.FirmaId == null))
+            .OrderBy(k => k.FirmaId == null ? 1 : 0) // firma özelini önce al
+            .ThenBy(k => k.Id)
+            .FirstOrDefaultAsync()
+            ?? throw new InvalidOperationException("Sistemde aktif bir Yakıt masraf kalemi bulunamadı.");
+
+        int kayitSayisi = 0;
+        for (int i = 0; i < aracIdler.Count; i++)
+        {
+            int aracId = aracIdler[i];
+            decimal araçTutari;
+
+            if (esitDagit)
+            {
+                // Son araca kalan kuruşu ver (yuvarlama farkını önlemek için)
+                if (i < aracIdler.Count - 1)
+                    araçTutari = Math.Round(toplamTutar / aracIdler.Count, 2);
+                else
+                    araçTutari = toplamTutar - Math.Round(toplamTutar / aracIdler.Count, 2) * (aracIdler.Count - 1);
+            }
+            else
+            {
+                if (aracTutarlari == null || !aracTutarlari.TryGetValue(aracId, out araçTutari) || araçTutari <= 0)
+                    continue; // tutarı olmayan veya 0 olan araçları atla
+            }
+
+            var masraf = new AracMasraf
+            {
+                AracId = aracId,
+                MasrafKalemiId = yakitKalemi.Id,
+                MasrafTarihi = faturaTarihi,
+                Tutar = araçTutari,
+                BelgeNo = faturaNo,
+                Aciklama = string.IsNullOrWhiteSpace(aciklama)
+                    ? $"Fullpet fatura dağılımı{(faturaNo != null ? $" ({faturaNo})" : "")}"
+                    : aciklama,
+                OdemeKaynak = MasrafOdemeKaynak.Kasa,
+                FirmaId = firmaId,
+                CreatedAt = DateTime.UtcNow
+            };
+            context.AracMasraflari.Add(masraf);
+            kayitSayisi++;
+        }
+
+        await context.SaveChangesAsync();
+        return kayitSayisi;
     }
 }
 

@@ -6,9 +6,8 @@ namespace MKFiloServis.Web.Services;
 
 /// <summary>
 /// Evrak arşivleme servisi implementasyonu.
-/// Yüklenen her evrak için iki kopya oluşturur:
-/// 1) <c>Arsiv\Sifreli\...</c> — AES-256-GCM (KOA1) ile şifreli, uygulama tarafından açılabilir
-/// 2) <c>Arsiv\Sifresiz\...</c> — Plain (orijinal içerik), wwwroot dışında
+/// Yüklenen her evrak için yalnızca tek kopya oluşturur:
+/// <c>Arsiv\Sifreli\...</c> — AES-256-GCM (KOA1) ile şifreli, uygulama tarafından açılabilir.
 ///
 /// Klasör/dosya adlandırması:
 ///   Personel: {AD-SOYAD}-{EVRAK_NITELIGI}-{yyyyMMdd-HHmmss}
@@ -81,7 +80,6 @@ public sealed class EvrakArsivService : IEvrakArsivService
     {
         var ext = FileNameHelper.NormalizeExtension(uzanti);
 
-        // 1) Şifreli kopya — tekil (overwrite)
         var sifreliDir = Path.Combine(_arsivRoot, "Sifreli", kategori, klasor);
         Directory.CreateDirectory(sifreliDir);
         var encrypted = _fileProtector.Protect(icerik);
@@ -90,14 +88,6 @@ public sealed class EvrakArsivService : IEvrakArsivService
         await File.WriteAllBytesAsync(sifreliPath, encrypted, cancellationToken);
         _logger.LogDebug("Arsiv sifreli (KOA1): {Path}", sifreliPath);
 
-        // 2) Şifresiz kopya — tekil (overwrite)
-        var sifresizDir = Path.Combine(_arsivRoot, "Sifresiz", kategori, klasor);
-        Directory.CreateDirectory(sifresizDir);
-        var sifresizPath = Path.Combine(sifresizDir, $"{dosyaAdiBase}{ext}");
-        await File.WriteAllBytesAsync(sifresizPath, icerik, cancellationToken);
-        _logger.LogDebug("Arsiv sifresiz: {Path}", sifresizPath);
-
-        // DB'de tutulacak relative path: Arsiv/Sifreli/{kategori}/{klasor}/{dosya}
         return Path.Combine("Arsiv", "Sifreli", kategori, klasor, sifreliFileName).Replace('\\', '/');
     }
 

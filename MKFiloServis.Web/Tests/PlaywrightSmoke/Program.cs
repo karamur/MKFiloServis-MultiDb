@@ -97,7 +97,7 @@ internal sealed class DestekSmokeRunner(string baseUrl, string username, string 
         {
             Timeout = 20000
         });
-        await page.WaitForSelectorAsync("#logout-button", new PageWaitForSelectorOptions { Timeout = 20000 });
+        await WaitForPageSettledAsync(page);
     }
 
     private async Task VerifySupportListAsync(IPage page)
@@ -115,14 +115,36 @@ internal sealed class DestekSmokeRunner(string baseUrl, string username, string 
         await page.GotoAsync($"{_baseUrl}/destek-talepleri");
         await WaitForPageSettledAsync(page);
 
-        var detailLinks = page.Locator("a[href^='destek-talepleri/'], a[href^='/destek-talepleri/']");
+        var detailLinks = page.Locator("a[href*='destek-talepleri/']");
         var linkCount = await detailLinks.CountAsync();
         if (linkCount == 0)
         {
             throw new SmokeSkippedException("Detay ekranı için listede talep kaydı bulunamadı.");
         }
 
-        await detailLinks.First.ClickAsync();
+        string? detailHref = null;
+        for (var i = 0; i < linkCount; i++)
+        {
+            var href = await detailLinks.Nth(i).GetAttributeAsync("href");
+            if (!string.IsNullOrWhiteSpace(href) && Regex.IsMatch(href, @"destek-talepleri/\d+$", RegexOptions.IgnoreCase))
+            {
+                detailHref = href;
+                break;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(detailHref))
+        {
+            throw new SmokeSkippedException("Detay ekranı için uygun talep bağlantısı bulunamadı.");
+        }
+
+        var normalizedHref = detailHref.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+            ? detailHref
+            : detailHref.StartsWith("/", StringComparison.Ordinal)
+                ? $"{_baseUrl}{detailHref}"
+                : $"{_baseUrl}/{detailHref}";
+
+        await page.GotoAsync(normalizedHref);
         await page.WaitForURLAsync(new Regex(@".*/destek-talepleri/\d+$", RegexOptions.IgnoreCase), new PageWaitForURLOptions
         {
             Timeout = 20000

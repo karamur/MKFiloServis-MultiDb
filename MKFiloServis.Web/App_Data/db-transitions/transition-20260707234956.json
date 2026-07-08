@@ -1,0 +1,10 @@
+{
+  "createdAtUtc": "2026-07-07T23:49:56.4952264Z",
+  "canonicalProvider": "PostgreSQL",
+  "previousProvider": "PostgreSQL",
+  "nextProvider": "PostgreSQL",
+  "previousConnectionString": "Host=localhost;Port=5432;Database=MKFiloServis;Username=postgres;Password=Fast123;Pooling=true;MinPoolSize=1;MaxPoolSize=20;",
+  "nextConnectionString": "Host=localhost;Port=5432;Database=MKFiloServis;Username=postgres;Password=Fast123;Pooling=true;MinPoolSize=1;MaxPoolSize=20;",
+  "strategy": "in-place-update",
+  "note": "Provider gecislerinde migration replay yerine bu manifest ve veri snapshot/export akisi kullanilmalidir."
+}

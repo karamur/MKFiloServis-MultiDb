@@ -1,4 +1,4 @@
-using MKFiloServis.Web.Data;
+﻿using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -39,7 +39,7 @@ public static class PersonelBelgeTarihleriMigrationHelper
                             ? $"ALTER TABLE \"Personeller\" ADD COLUMN \"{column}\" boolean NOT NULL DEFAULT false"
                             : $"ALTER TABLE \"Personeller\" ADD COLUMN \"{column}\" timestamp without time zone NULL")
                         : (column == "YayginEgitimSertifikasiVarMi"
-                            ? $"ALTER TABLE Personeller ADD COLUMN {column} BIT NOT NULL DEFAULT 0"
+                            ? $"ALTER TABLE Personeller ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0"
                             : $"ALTER TABLE Personeller ADD COLUMN {column} DATETIME NULL");
 
                     using var alterCmd = connection.CreateCommand();

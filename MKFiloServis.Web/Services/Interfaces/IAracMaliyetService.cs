@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 
 namespace MKFiloServis.Web.Services.Interfaces;
 
@@ -21,6 +21,29 @@ public interface IAracMaliyetService
     Task<AracMaliyetSnapshot?> GetByIdAsync(int id);
 
     Task<bool> SilAsync(int snapshotId);
+
+    /// <summary>
+    /// Fullpet gibi tek fatura / çok araç yakıt dağılımını plakalara kaydeder.
+    /// Her araca ayrı AracMasraf (Yakıt) kaydı oluşturur.
+    /// </summary>
+    /// <param name="faturaTarihi">Fatura tarihi</param>
+    /// <param name="faturaNo">Fatura numarası (opsiyonel)</param>
+    /// <param name="aciklama">Açıklama (opsiyonel)</param>
+    /// <param name="aracIdler">Dağıtım yapılacak araç ID listesi</param>
+    /// <param name="toplamTutar">Toplam fatura tutarı</param>
+    /// <param name="esitDagit">true → tutarı araç sayısına böl; false → aracTutarlari dict kullan</param>
+    /// <param name="aracTutarlari">esitDagit=false ise her araç için bireysel tutar (aracId → tutar)</param>
+    /// <param name="firmaId">Firma ID (opsiyonel, null ise aktif firma kullanılır)</param>
+    /// <returns>Oluşturulan kayıt sayısı</returns>
+    Task<int> FullpetFaturaDagitAsync(
+        DateTime faturaTarihi,
+        string? faturaNo,
+        string? aciklama,
+        List<int> aracIdler,
+        decimal toplamTutar,
+        bool esitDagit,
+        Dictionary<int, decimal>? aracTutarlari,
+        int? firmaId = null);
 }
 
 
