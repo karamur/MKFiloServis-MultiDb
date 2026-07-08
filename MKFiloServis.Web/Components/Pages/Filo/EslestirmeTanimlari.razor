@@ -452,6 +452,8 @@
             return;
         }
 
+        // Her açılışta hem eşleştirmeleri hem lookup listelerini taze çek
+        await LoadLookups();
         await ListeYenile();
 
         var aktifKurumIdSet = eslestirmeler
@@ -467,7 +469,7 @@
 
         if (!puantajKurumListesi.Any())
         {
-            ToastService.ShowInfo("Aktif eşleştirme bulunan kurum yok. Önce aktif eşleştirme kaydı oluşturunuz.");
+            ToastService.ShowWarning("Aktif eşleştirme bulunan kurum yok. Önce 'Yeni Eşleşme Ekle' ile eşleştirme tanımlayınız.");
             return;
         }
 
