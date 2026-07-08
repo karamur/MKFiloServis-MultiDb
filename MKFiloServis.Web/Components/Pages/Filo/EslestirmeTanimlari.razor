@@ -1,10 +1,11 @@
-﻿@page "/filo/komisyon-eslestirme"
+@page "/filo/komisyon-eslestirme"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services.Interfaces
 @using MKFiloServis.Web.Services
 @inject IFiloKomisyonService FiloKomisyonService
 @inject IGuzergahService GuzergahService
 @inject IKapasiteService KapasiteService
+
 @inject IFirmaService FirmaService
 @inject IKullaniciService KullaniciService
 @inject IToastService ToastService
@@ -72,7 +73,7 @@
                                         <td>
                                             @if(e.IsActive) { <span class="badge bg-success">Aktif</span> } else { <span class="badge bg-secondary">Pasif</span> }
                                         </td>
-                                        <td class="fw-bold text-primary">@e.KurumFirma?.KurumAdi</td>
+                                        <td class="fw-bold text-primary">@e.MusteriCari?.Unvan</td>
                                         <td>@e.Guzergah?.GuzergahAdi</td>
                                         <td class="fw-bold">@(e.Arac?.AktifPlaka ?? e.Arac?.AktifPlakaKaydi?.Plaka)</td>
                                         <td>
@@ -150,7 +151,7 @@
                             <select class="form-select" @bind="model.KurumFirmaId" @bind:after="KurumSecimiDegistiAsync">
                                 <option value="0">-- Kurum Seçin --</option>
                                 @foreach(var k in kurumFirmaListesi) {
-                                    <option value="@k.Id">@k.KurumAdi</option>
+                                    <option value="@k.Id">@k.Unvan</option>
                                 }
                             </select>
                         </div>
@@ -231,7 +232,7 @@
                                 <option value="0">-- Önce Kurum Seçin --</option>
                                 @foreach (var kurum in puantajKurumListesi)
                                 {
-                                    <option value="@kurum.Id">@kurum.KurumAdi</option>
+                                    <option value="@kurum.Id">@kurum.Unvan</option>
                                 }
                             </select>
                         </div>
@@ -379,13 +380,13 @@
     private Kullanici? aktifKullanici;
 
     // Lookups
-    private List<Kurum> kurumFirmaListesi = new();   // KurumFirmaId → Kurum.Id FK eşleşmesi
+    private List<Cari> kurumFirmaListesi = new();   // KurumFirmaId -> Cari.Id (musteri cari)
     private List<Guzergah> guzergahListesi = new();
     private List<Arac> aracListesi = new();
     private List<Sofor> soforListesi = new();
     private List<Kapasite> kapasiteListesi = new();
 
-    private List<Kurum> puantajKurumListesi = new();
+    private List<Cari> puantajKurumListesi = new();
     private int seciliPuantajKurumFirmaId;
     private bool tumSatirlarSecili = true;
     private List<PuantajSatirModel> puantajSatirlari = new();
@@ -416,8 +417,8 @@
 
     private async Task LoadLookups()
     {
-        // KurumFirmaId → Kurum.Id FK: kurum listesi Kurumlar tablosundan alınır
-        kurumFirmaListesi = await KurumService.GetAktifAsync();
+        // KurumFirmaId -> Cari.Id: musteri carileri (Musteri/MusteriTedarikci)
+        kurumFirmaListesi = await FiloKomisyonService.GetKurumlarAsync(aktifFirmaId);
         aracListesi = await FiloKomisyonService.GetAraclarAsync(aktifFirmaId);
         guzergahListesi = await FiloKomisyonService.GetGuzergahlarAsync();
         soforListesi = await FiloKomisyonService.GetSoforlerAsync();
@@ -454,10 +455,10 @@
         await ListeYenile();
 
         puantajKurumListesi = eslestirmeler
-            .Where(e => e.IsActive && e.KurumFirma is not null)
-            .Select(e => e.KurumFirma!)
+            .Where(e => e.IsActive && e.MusteriCari is not null)
+            .Select(e => e.MusteriCari!)
             .DistinctBy(k => k.Id)
-            .OrderBy(k => k.KurumAdi)
+            .OrderBy(k => k.Unvan)
             .ToList();
 
         if (!puantajKurumListesi.Any())
@@ -495,7 +496,7 @@
                     Secili = true,
                     EslestirmeId = e.Id,
                     KurumFirmaId = e.KurumFirmaId,
-                    KurumAdi = e.KurumFirma?.KurumAdi ?? "-",
+                    KurumAdi = e.MusteriCari?.Unvan ?? "-",
                     GuzergahId = e.GuzergahId,
                     GuzergahAdi = e.Guzergah?.GuzergahAdi ?? "-",
                     AracId = e.AracId,

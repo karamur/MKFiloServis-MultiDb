@@ -1,4 +1,4 @@
-﻿@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services.Interfaces
 @using MKFiloServis.Web.Services
 @using MKFiloServis.Web.Data
@@ -130,7 +130,7 @@
                                     <tr>
                                         <td><strong>@(e.Guzergah?.GuzergahKodu ?? "-")</strong></td>
                                         <td>@(e.Guzergah?.GuzergahAdi ?? "-")</td>
-                                        <td>@(e.KurumFirma?.KurumAdi ?? "-")</td>
+                                        <td>@(e.MusteriCari?.Unvan ?? "-")</td>
                                         <td>@GetFirmaAdi(e)</td>
                                         <td class="fw-bold">@GetAracPlaka(e.Arac)</td>
                                         <td>@(e.Sofor?.TamAd ?? "-")</td>
@@ -295,7 +295,7 @@
     private IEnumerable<FiloGuzergahEslestirme> FiltrelenmisEslestirmeler => eslestirmeler
         .Where(e => string.IsNullOrWhiteSpace(filtre.GuzergahKodu) || (e.Guzergah?.GuzergahKodu?.Contains(filtre.GuzergahKodu, StringComparison.OrdinalIgnoreCase) ?? false))
         .Where(e => string.IsNullOrWhiteSpace(filtre.GuzergahAdi) || (e.Guzergah?.GuzergahAdi?.Contains(filtre.GuzergahAdi, StringComparison.OrdinalIgnoreCase) ?? false))
-        .Where(e => string.IsNullOrWhiteSpace(filtre.KurumAdi) || (e.KurumFirma?.KurumAdi?.Contains(filtre.KurumAdi, StringComparison.OrdinalIgnoreCase) ?? false))
+        .Where(e => string.IsNullOrWhiteSpace(filtre.KurumAdi) || (e.MusteriCari?.Unvan?.Contains(filtre.KurumAdi, StringComparison.OrdinalIgnoreCase) ?? false))
         .Where(e => string.IsNullOrWhiteSpace(filtre.FirmaAdi) || GetFirmaAdi(e).Contains(filtre.FirmaAdi, StringComparison.OrdinalIgnoreCase))
         .Where(e => string.IsNullOrWhiteSpace(filtre.AracPlaka) || GetAracPlaka(e.Arac).Contains(filtre.AracPlaka, StringComparison.OrdinalIgnoreCase))
         .Where(e => string.IsNullOrWhiteSpace(filtre.SoforAdi) || (e.Sofor?.TamAd?.Contains(filtre.SoforAdi, StringComparison.OrdinalIgnoreCase) ?? false))
@@ -306,7 +306,7 @@
         .Where(e => !filtre.KullaniciId.HasValue || e.KullaniciId == filtre.KullaniciId)
         .OrderBy(e => e.Guzergah?.GuzergahKodu)
         .ThenBy(e => e.Guzergah?.GuzergahAdi)
-        .ThenBy(e => e.KurumFirma?.KurumAdi);
+        .ThenBy(e => e.MusteriCari?.Unvan);
 
     protected override async Task OnInitializedAsync()
     {

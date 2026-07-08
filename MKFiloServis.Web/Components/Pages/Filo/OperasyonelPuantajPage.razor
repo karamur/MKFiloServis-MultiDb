@@ -34,7 +34,6 @@
             <div class="row g-2 align-items-end">
                 <div class="col-md-3">
                     <label class="form-label small mb-1">Tarih</label>
-                    <input type="date" class="form-control" @bind="seciliTarih" @bind:after="YukleGunlukPuantajlarAsync" />
                 </div>
                 <div class="col-md-3 d-flex gap-2">
                     <button class="btn btn-primary" @onclick="EksikKayitlariOlusturAsync" disabled="@isBusy">
@@ -176,7 +175,7 @@
                                         <div class="fw-semibold small">@item.Guzergah?.GuzergahKodu</div>
                                         <div class="text-muted" style="font-size:.75rem">@item.Guzergah?.GuzergahAdi</div>
                                     </td>
-                                    <td class="small">@item.KurumFirma?.KurumAdi</td>
+                                    <td class="small">@(item.MusteriCari?.Unvan ?? "-")</td>
                                     <td class="small">@item.Arac?.AktifPlaka</td>
                                     <td class="small">@item.Sofor?.Ad @item.Sofor?.Soyad</td>
                                     <td class="small">@item.ServisTuru</td>
@@ -245,7 +244,6 @@
         var firmaId = GetFirmaId();
         if (firmaId <= 0)
         {
-            Navigation.NavigateTo("/firma-sec?returnUrl=%2Foperasyon%2Fpuantaj", forceLoad: false);
             return;
         }
 
@@ -254,8 +252,6 @@
         {
             var eslestirmeler = await FiloKomisyonService.GetEslestirmelerAsync(firmaId, true);
             aktifEslestirmeSayisi = eslestirmeler.Count;
-            gunlukPuantajlar = await FiloKomisyonService.GetGunlukPuantajlarSiraliAsync(firmaId, seciliTarih);
-            seciliPuantajIds.IntersectWith(gunlukPuantajlar.Select(x => x.Id));
         }
         catch (Exception ex)
         {
@@ -343,16 +339,12 @@
                 };
 
                 await FiloKomisyonService.CreatePuantajAsync(yeni);
-                    olusturulan++;
-                }
+                olusturulan++;
+            }
 
-                // Listeyi güncelle (isBusy bloğu içinde, ayrı metot çağrısından kaçın)
-                gunlukPuantajlar = await FiloKomisyonService.GetGunlukPuantajlarSiraliAsync(firmaId, seciliTarih);
-                seciliPuantajIds.IntersectWith(gunlukPuantajlar.Select(x => x.Id));
-
-                bilgiMesaji = olusturulan > 0
-                    ? $"{olusturulan} adet eksik günlük puantaj satırı oluşturuldu."
-                    : "Eksik satır yok. Tüm aktif eşleştirmeler için kayıt zaten mevcut.";
+            bilgiMesaji = olusturulan > 0
+                ? $"{olusturulan} adet eksik günlük puantaj satırı oluşturuldu."
+                : "Eksik satır yok. Tüm aktif eşleştirmeler için kayıt zaten mevcut.";
         }
         catch (Exception ex)
         {
@@ -447,7 +439,6 @@
             }
 
             await FiloKomisyonService.UpdateGunlukPuantajlarAsync(secilenler);
-            seciliPuantajIds.Clear();
             bilgiMesaji = $"{secilenler.Count} satır kaydedildi.";
             await YukleGunlukPuantajlarAsync();
         }
@@ -463,7 +454,6 @@
 
     private int GetFirmaId()
     {
-        // TumFirmalar modunda AktifFirmaId null döner; Mevcut.FirmaId'yi oku
         if (AktifFirmaProvider.AktifFirmaId.HasValue && AktifFirmaProvider.AktifFirmaId.Value > 0)
             return AktifFirmaProvider.AktifFirmaId.Value;
 
@@ -497,7 +487,7 @@
 
         return (item.Guzergah?.GuzergahAdi?.Contains(metin, StringComparison.OrdinalIgnoreCase) ?? false)
             || (item.Guzergah?.GuzergahKodu?.Contains(metin, StringComparison.OrdinalIgnoreCase) ?? false)
-            || (item.KurumFirma?.KurumAdi?.Contains(metin, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (item.MusteriCari?.Unvan?.Contains(metin, StringComparison.OrdinalIgnoreCase) ?? false)
             || (item.Arac?.AktifPlaka?.Contains(metin, StringComparison.OrdinalIgnoreCase) ?? false)
             || sofor.Contains(metin, StringComparison.OrdinalIgnoreCase);
     }

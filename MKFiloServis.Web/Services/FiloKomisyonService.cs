@@ -294,10 +294,11 @@ public class FiloKomisyonService : IFiloKomisyonService
     public async Task<List<Cari>> GetKurumlarAsync(int firmaId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.Cariler
-            .Where(c => !c.IsDeleted && (c.CariTipi == CariTipi.Musteri || c.CariTipi == CariTipi.MusteriTedarikci))
-            .OrderBy(c => c.Unvan)
-            .ToListAsync();
+        var query = context.Cariler
+            .Where(c => !c.IsDeleted && (c.CariTipi == CariTipi.Musteri || c.CariTipi == CariTipi.MusteriTedarikci));
+        if (firmaId > 0)
+            query = query.Where(c => c.FirmaId == firmaId);
+        return await query.OrderBy(c => c.Unvan).ToListAsync();
     }
 
     public async Task<List<Sofor>> GetSoforlerAsync()
