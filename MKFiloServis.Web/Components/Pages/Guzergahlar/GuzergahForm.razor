@@ -1,4 +1,4 @@
-@page "/guzergahlar/yeni"
+﻿@page "/guzergahlar/yeni"
 @page "/guzergahlar/{Id:int}"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
@@ -26,13 +26,6 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h3><i class="bi bi-signpost me-2"></i>@(IsEdit ? "Güzergah Düzenle" : (Kopyala.HasValue ? "Güzergah Kopyala" : "Yeni Güzergah"))</h3>
         <div class="d-flex gap-2">
-            @if (IsEdit)
-            {
-                <button type="button" class="btn btn-outline-success btn-sm"
-                        @onclick="PlanlamadaGor">
-                    <i class="bi bi-calendar-check me-1"></i>Planlamada Gor
-                </button>
-            }
             <button class="btn btn-secondary" @onclick="Geri">
                 <i class="bi bi-arrow-left me-1"></i>Geri
             </button>
@@ -1270,12 +1263,6 @@
             kayitHataMesaji = $"Kayit sirasinda hata: {ex.InnerException?.Message ?? ex.Message}";
         }
         finally { kaydediliyor = false; }
-    }
-
-    private void PlanlamadaGor()
-    {
-        if (!IsEdit || Id == null || Id <= 0) return;
-        Navigation.NavigateTo($"/filo-gunluk-puantaj");
     }
 
     private void Geri()

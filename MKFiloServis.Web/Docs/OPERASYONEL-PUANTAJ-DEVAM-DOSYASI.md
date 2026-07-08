@@ -65,9 +65,9 @@ Kurum (Müşteri Firma/Kurum)
 
 | Sayfa | Rota | Satır | Durum | Notlar |
 |-------|------|-------|-------|--------|
-| `FiloGunlukPuantajPage.razor` | `/operasyon/filo-gunluk-puantaj` | 1887 | ✅ Aktif | Günlük operasyon girişi (toplu puantaj + yeni kayıt) |
-| `FiloHakedisPage.razor` | `/filo-hakedis` | 568 | ✅ Aktif | Hakediş listesi — **eski `HakedisPuantaj` tablosunu kullanıyor** |
-| `FiloPuantaj.razor` | `/filo/puantaj` | ? | ✅ Var | Eski puantaj sayfası |
+| `FiloGunlukPuantajPage.razor` | `/operasyon/filo-gunluk-puantaj` | 1887 | ❌ Silindi | FAZ 0 Adım 0.1 kapsamında kaldırıldı |
+| `FiloHakedisPage.razor` | `/filo-hakedis` | 568 | ❌ Silindi | FAZ 0 Adım 0.1 kapsamında kaldırıldı |
+| `FiloPuantaj.razor` | `/filo/puantaj` | ? | ❌ Silindi | FAZ 0 Adım 0.1 kapsamında kaldırıldı |
 | `PuantajDetay.razor` | `/servis-operasyon/puantaj/{id}` | 681 | ✅ Aktif | Kontrat bazlı detay, onay, fatura taslağı |
 | `KontratList.razor` | `/servis-operasyon/kontratlar` | ? | ✅ Aktif | ServisKontrat listesi |
 | `KontratForm.razor` | `/servis-operasyon/kontrat-form` | ? | ✅ Aktif | Kontrat oluşturma/düzenleme |
@@ -285,9 +285,10 @@ if (snapshot.FirstOrDefault() is { } s && s.ToplamSefer > 0)
 - `MKFiloServis.Web/Services/ServisKontratService.cs` → Kontrat ve birim fiyat
 
 ### Sayfalar
-- `MKFiloServis.Web/Components/Pages/Filo/FiloGunlukPuantajPage.razor` → ANA İŞLEM SAYFASI (1887 satır)
-- `MKFiloServis.Web/Components/Pages/Filo/FiloHakedisPage.razor` → YENİ SİSTEME BAĞLANACAK (568 satır)
-- `MKFiloServis.Web/Components/Pages/ServisOperasyon/PuantajDetay.razor` → Detay/onay/fatura
+- `MKFiloServis.Web/Components/Pages/Filo/FiloGunlukPuantajPage.razor` → ❌ FAZ 0 Adım 0.1'de silindi
+- `MKFiloServis.Web/Components/Pages/Filo/FiloHakedisPage.razor` → ❌ FAZ 0 Adım 0.1'de silindi
+- `MKFiloServis.Web/Components/Pages/Filo/FiloPuantaj.razor` → ❌ FAZ 0 Adım 0.1'de silindi
+- `MKFiloServis.Web/Components/Pages/ServisOperasyon/PuantajDetay.razor` → Detay/onay/fatura (aktif)
 
 ### Dokümanlar
 - `MKFiloServis.Web/Docs/Puantaj-Hakedis-Tasarim.md` → Orijinal tasarım dokümanı
@@ -303,10 +304,10 @@ if (snapshot.FirstOrDefault() is { } s && s.ToplamSefer > 0)
 > 1. ✅ `FiloGunlukPuantajPage.razor` silindi
 > 2. ✅ `FiloHakedisPage.razor` silindi
 > 3. ✅ `FiloPuantaj.razor` silindi
-> 4. ⏳ `GuzergahForm.razor` NavigateTo referansı kaldır
-> 5. ⏳ `FiloKpiDashboard.razor` filo/puantaj linki kaldır
-> 6. ⏳ `NavMenu.razor` `"filo-gunluk-puantaj"` string temizle
-> 7. ⏳ Build doğrula (0 warning, 0 error)
+> 4. ✅ `GuzergahForm.razor` NavigateTo referansı kaldırıldı
+> 5. ✅ `FiloKpiDashboard.razor` filo/puantaj linki kaldırıldı
+> 6. ✅ `NavMenu.razor` `"filo-gunluk-puantaj"` string temizlendi
+> 7. ✅ Build doğrulandı (başarılı)
 >
 > Ardından **FAZ 1** ile yeni operasyonel puantaj sayfasını sıfırdan yazmaya başlarız.
 > Sayfa adı: `OperasyonelPuantajPage.razor` — rota: `/operasyon/puantaj`
