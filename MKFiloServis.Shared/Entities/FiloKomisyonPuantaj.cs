@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace MKFiloServis.Shared.Entities;
@@ -51,7 +51,7 @@ public class FiloGuzergahEslestirme : BaseEntity, IFirmaTenant
 
     // Navigation Properties
     [ForeignKey(nameof(KurumFirmaId))]
-    public virtual Firma? KurumFirma { get; set; }
+    public virtual Cari? MusteriCari { get; set; }
     [ForeignKey(nameof(FirmaId))]
     public virtual Firma? Firma { get; set; }
     public virtual Guzergah? Guzergah { get; set; }
@@ -155,7 +155,7 @@ public class FiloGunlukPuantaj : BaseEntity, IFirmaTenant
 
     // Navigation
     [ForeignKey(nameof(KurumFirmaId))]
-    public virtual Firma? KurumFirma { get; set; }
+    public virtual Cari? MusteriCari { get; set; }
     [ForeignKey(nameof(FirmaId))]
     public virtual Firma? Firma { get; set; }
     public virtual Guzergah? Guzergah { get; set; }

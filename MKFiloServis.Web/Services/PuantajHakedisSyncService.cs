@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Models;
 using MKFiloServis.Web.Services.Interfaces;
@@ -7,11 +7,12 @@ using Microsoft.EntityFrameworkCore;
 namespace MKFiloServis.Web.Services;
 
 /// <summary>
-/// PuantajKayit → HakedisPuantaj senkronizasyon motoru.
-/// Grid'deki günlük sefer değerlerini HakedisPuantaj + HakedisPuantajDetay'a dönüştürür.
+/// PuantajKayit → Hakedis (yeni model) senkronizasyon motoru.
+/// Grid'deki günlük sefer değerlerini Hakedis + HakedisDetay'a dönüştürür.
 /// </summary>
 public class PuantajHakedisSyncService : IPuantajHakedisSyncService
 {
+    private const string SyncSourceTag = "PuantajSyncV2";
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
 
     public PuantajHakedisSyncService(IDbContextFactory<ApplicationDbContext> contextFactory)
@@ -23,147 +24,13 @@ public class PuantajHakedisSyncService : IPuantajHakedisSyncService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
 
-        // Grid'deki tüm aktif PuantajKayit'ları oku
         var puantajKayitlar = await context.PuantajKayitlar
             .Where(p => p.IsverenFirmaId == firmaId && p.Yil == yil && p.Ay == ay && !p.IsDeleted)
             .ToListAsync();
 
         if (!puantajKayitlar.Any()) return;
 
-        // Mevcut HakedisPuantaj'ları oku (key = GuzergahId, AracId, SoforId)
-        var mevcutHakedisler = await context.HakedisPuantajlar
-            .Include(h => h.Detaylar)
-            .Include(h => h.Kesintiler)
-            .Where(h => h.FirmaId == firmaId && h.Yil == yil && h.Ay == ay && !h.IsDeleted)
-            .ToListAsync();
-
-        var mevcutMap = mevcutHakedisler.ToDictionary(
-            h => (GuzergahId: h.GuzergahId, AracId: h.AracId, SoforId: h.SoforId),
-            h => h);
-
-        int olusturulan = 0, guncellenen = 0;
-
-        foreach (var kayit in puantajKayitlar)
-        {
-            var key = (GuzergahId: kayit.GuzergahId ?? 0, AracId: kayit.AracId ?? 0, SoforId: kayit.SoforId ?? 0);
-
-            if (key.GuzergahId == 0 || key.SoforId == 0)
-                continue; // Güzergah ve Şoför zorunlu
-
-            if (mevcutMap.TryGetValue(key, out var existing))
-            {
-                // SADECE Taslak durumdakileri güncelle
-                if (existing.Durum != HakedisDurumu.Taslak) continue;
-
-                MapKayitToHakedis(kayit, existing, yil, ay);
-                guncellenen++;
-            }
-            else
-            {
-                var hakedis = new HakedisPuantaj
-                {
-                    FirmaId = firmaId,
-                    Yil = yil, Ay = ay,
-                    CreatedAt = DateTime.UtcNow
-                };
-                MapKayitToHakedis(kayit, hakedis, yil, ay);
-                context.HakedisPuantajlar.Add(hakedis);
-                olusturulan++;
-            }
-        }
-
-        await context.SaveChangesAsync();
-    }
-
-    private static void MapKayitToHakedis(PuantajKayit kayit, HakedisPuantaj hakedis, int yil, int ay)
-    {
-        // Temel alanlar
-        hakedis.GuzergahId = kayit.GuzergahId ?? 0;
-        hakedis.AracId = kayit.AracId ?? 0;
-        hakedis.SoforId = kayit.SoforId ?? 0;
-        hakedis.CariId = kayit.KurumCariId ?? kayit.OdemeYapilacakCariId ?? 0;
-
-        // Yön tipi dönüşümü
-        hakedis.YonTipi = kayit.Yon switch
-        {
-            PuantajYon.Sabah => YonTipi.Sabah,
-            PuantajYon.Aksam => YonTipi.Aksam,
-            PuantajYon.SabahAksam => YonTipi.SabahAksam,
-            _ => YonTipi.SabahAksam
-        };
-
-        // 🔴 Yön = sadece label, hesaplamaya ETKİ ETMEZ. Grid hücre değeri tek gerçek.
-        hakedis.GunlukSeferSayisi = 1;
-
-        // Fiyatlandırma
-        hakedis.GelirBirimFiyat = kayit.BirimGelir > 0 ? kayit.BirimGelir : kayit.BirimGider;
-        hakedis.GiderBirimFiyat = kayit.BirimGider > 0 ? kayit.BirimGider : kayit.BirimGelir;
-        hakedis.KdvOrani = kayit.GelirKdvOrani > 0 ? kayit.GelirKdvOrani : 20;
-
-        // Günlük detayları sync et
-        SyncDetaylar(kayit, hakedis, yil, ay);
-
-        // Kesinti varsa ekle
-        SyncKesintiler(kayit, hakedis);
-
-        // Toplamları yeniden hesapla
-        hakedis.Hesapla();
-
-        hakedis.UpdatedAt = DateTime.UtcNow;
-    }
-
-    private static void SyncDetaylar(PuantajKayit kayit, HakedisPuantaj hakedis, int yil, int ay)
-    {
-        int gunSayisi = DateTime.DaysInMonth(yil, ay);
-
-        // Mevcut detayları eşle (varsa)
-        var mevcutDetayMap = hakedis.Detaylar.ToDictionary(d => d.Gun, d => d);
-
-        for (int gun = 1; gun <= gunSayisi; gun++)
-        {
-            var seferDeger = kayit.GetGunDeger(gun);
-
-            if (mevcutDetayMap.TryGetValue(gun, out var detay))
-            {
-                detay.SeferSayisi = seferDeger;
-                detay.UpdatedAt = DateTime.UtcNow;
-            }
-            else
-            {
-                hakedis.Detaylar.Add(new HakedisPuantajDetay
-                {
-                    Gun = gun,
-                    SeferSayisi = seferDeger,
-                    FiyatCarpani = 1,
-                    CreatedAt = DateTime.UtcNow
-                });
-            }
-        }
-    }
-
-    private static void SyncKesintiler(PuantajKayit kayit, HakedisPuantaj hakedis)
-    {
-        // Gelir kesintisi
-        if (kayit.GelirKesinti > 0)
-        {
-            var mevcut = hakedis.Kesintiler.FirstOrDefault(k => k.KesintiAdi == "GelirKesinti");
-            if (mevcut != null) mevcut.Tutar = kayit.GelirKesinti;
-            else hakedis.Kesintiler.Add(new HakedisKesinti
-            {
-                KesintiAdi = "GelirKesinti", Tutar = kayit.GelirKesinti, CreatedAt = DateTime.UtcNow
-            });
-        }
-
-        // Gider kesintisi
-        if (kayit.GiderKesinti > 0)
-        {
-            var mevcut = hakedis.Kesintiler.FirstOrDefault(k => k.KesintiAdi == "GiderKesinti");
-            if (mevcut != null) mevcut.Tutar = kayit.GiderKesinti;
-            else hakedis.Kesintiler.Add(new HakedisKesinti
-            {
-                KesintiAdi = "GiderKesinti", Tutar = kayit.GiderKesinti, CreatedAt = DateTime.UtcNow
-            });
-        }
+        await SyncAsync(context, firmaId, yil, ay, puantajKayitlar, null);
     }
 
     /// <summary>
@@ -176,72 +43,154 @@ public class PuantajHakedisSyncService : IPuantajHakedisSyncService
 
         if (!satirlar.Any()) return;
 
-        var mevcutHakedisler = await context.HakedisPuantajlar
-            .Include(h => h.Detaylar)
-            .Include(h => h.Kesintiler)
-            .Where(h => h.FirmaId == firmaId && h.Yil == yil && h.Ay == ay && !h.IsDeleted)
+        var satirMap = satirlar.ToDictionary(s => s.KayitId, s => s);
+        var kayitIdler = satirMap.Keys.ToList();
+
+        var puantajKayitlar = await context.PuantajKayitlar
+            .Where(p => p.IsverenFirmaId == firmaId && p.Yil == yil && p.Ay == ay && !p.IsDeleted && kayitIdler.Contains(p.Id))
             .ToListAsync();
 
-        var mevcutMap = mevcutHakedisler.ToDictionary(
-            h => (GuzergahId: h.GuzergahId, AracId: h.AracId, SoforId: h.SoforId), h => h);
+        if (!puantajKayitlar.Any()) return;
 
-        foreach (var satir in satirlar)
+        await SyncAsync(context, firmaId, yil, ay, puantajKayitlar, satirMap);
+    }
+
+    private static async Task SyncAsync(
+        ApplicationDbContext context,
+        int firmaId,
+        int yil,
+        int ay,
+        List<PuantajKayit> kayitlar,
+        Dictionary<int, PuantajGridSatir>? satirMap)
+    {
+        var mevcutHakedisler = await context.Hakedisler
+            .Include(h => h.Detaylar)
+            .Where(h => h.FirmaId == firmaId
+                && h.Yil == yil
+                && h.Ay == ay
+                && h.Tip == HakedisTipi.Kurum
+                && h.GenerationParams == SyncSourceTag
+                && !h.IsDeleted)
+            .ToListAsync();
+
+        var mevcutMap = mevcutHakedisler.ToDictionary(h => h.ReferansId, h => h);
+        var aktifReferanslar = new HashSet<int>();
+
+        var gruplar = kayitlar
+            .Where(k => (k.KurumCariId ?? 0) > 0)
+            .GroupBy(k => k.KurumCariId!.Value)
+            .ToList();
+
+        foreach (var grup in gruplar)
         {
-            var kayit = await context.PuantajKayitlar.FindAsync(satir.KayitId);
-            if (kayit == null) continue;
+            var referansId = grup.Key;
+            aktifReferanslar.Add(referansId);
 
-            var key = (GuzergahId: kayit.GuzergahId ?? 0, AracId: kayit.AracId ?? 0, SoforId: kayit.SoforId ?? 0);
-            if (key.GuzergahId == 0 || key.SoforId == 0) continue;
-
-            if (mevcutMap.TryGetValue(key, out var existing))
+            if (!mevcutMap.TryGetValue(referansId, out var hakedis))
             {
-                if (existing.Durum != HakedisDurumu.Taslak) continue;
-                MapKayitToHakedis(kayit, existing, yil, ay);
-                SyncDetaylarFromGrid(satir, existing, yil, ay);
+                hakedis = new Hakedis
+                {
+                    FirmaId = firmaId,
+                    Yil = yil,
+                    Ay = ay,
+                    Tip = HakedisTipi.Kurum,
+                    ReferansId = referansId,
+                    Durum = HakedisDurum.Taslak,
+                    GenerationParams = SyncSourceTag,
+                    CreatedAt = DateTime.UtcNow
+                };
+                context.Hakedisler.Add(hakedis);
+                mevcutMap[referansId] = hakedis;
             }
-            else
+
+            if (hakedis.Durum != HakedisDurum.Taslak)
+                continue;
+
+            if (hakedis.Detaylar.Any())
+                context.HakedisDetaylari.RemoveRange(hakedis.Detaylar.Where(d => !d.IsDeleted));
+
+            decimal toplamSefer = 0m;
+            decimal toplamTutar = 0m;
+            decimal kdvOran = 20m;
+
+            foreach (var kayit in grup)
             {
-                var hakedis = new HakedisPuantaj { FirmaId = firmaId, Yil = yil, Ay = ay, CreatedAt = DateTime.UtcNow };
-                MapKayitToHakedis(kayit, hakedis, yil, ay);
-                SyncDetaylarFromGrid(satir, hakedis, yil, ay);
-                context.HakedisPuantajlar.Add(hakedis);
+                var birimFiyat = ResolveBirimFiyat(kayit);
+                if (kayit.GelirKdvOrani > 0) kdvOran = kayit.GelirKdvOrani;
+
+                var gunSayisi = DateTime.DaysInMonth(yil, ay);
+                for (var gun = 1; gun <= gunSayisi; gun++)
+                {
+                    var sefer = GetGunSeferSayisi(kayit, gun, satirMap);
+                    if (sefer <= 0) continue;
+
+                    var tarih = new DateTime(yil, ay, gun, 0, 0, 0, DateTimeKind.Utc);
+                    var satirTutar = sefer * birimFiyat;
+
+                    hakedis.Detaylar.Add(new HakedisDetay
+                    {
+                        FirmaId = firmaId,
+                        Tarih = tarih,
+                        ServisTuru = MapServisTuru(kayit.Yon),
+                        AracId = kayit.AracId,
+                        SoforId = kayit.SoforId,
+                        GuzergahId = kayit.GuzergahId,
+                        SeferSayisi = sefer,
+                        BirimFiyat = birimFiyat,
+                        Tutar = satirTutar,
+                        Aciklama = "Puantaj grid sync",
+                        CreatedAt = DateTime.UtcNow
+                    });
+
+                    toplamSefer += sefer;
+                    toplamTutar += satirTutar;
+                }
+            }
+
+            hakedis.ToplamSeferSayisi = toplamSefer;
+            hakedis.Tutar = toplamTutar;
+            hakedis.BirimFiyat = toplamSefer > 0 ? toplamTutar / toplamSefer : 0;
+            hakedis.KdvOran = kdvOran;
+            hakedis.KdvTutar = hakedis.Tutar * hakedis.KdvOran / 100m;
+            hakedis.GenelToplam = hakedis.Tutar + hakedis.KdvTutar;
+            hakedis.UpdatedAt = DateTime.UtcNow;
+        }
+
+        foreach (var eski in mevcutHakedisler.Where(h => h.Durum == HakedisDurum.Taslak && !aktifReferanslar.Contains(h.ReferansId)))
+        {
+            eski.IsDeleted = true;
+            eski.DeletedAt = DateTime.UtcNow;
+            foreach (var detay in eski.Detaylar.Where(d => !d.IsDeleted))
+            {
+                detay.IsDeleted = true;
+                detay.DeletedAt = DateTime.UtcNow;
             }
         }
+
         await context.SaveChangesAsync();
     }
 
-    // 🔴 TEK DOĞRU: detay.SeferSayisi = Deger + Mesai + EkSefer. Yön etki ETMEZ.
-    private static void SyncDetaylarFromGrid(PuantajGridSatir satir, HakedisPuantaj hakedis, int yil, int ay)
+    private static int GetGunSeferSayisi(PuantajKayit kayit, int gun, Dictionary<int, PuantajGridSatir>? satirMap)
     {
-        int gunSayisi = DateTime.DaysInMonth(yil, ay);
-        var mevcutDetayMap = hakedis.Detaylar.ToDictionary(d => d.Gun, d => d);
-
-        foreach (var hucre in satir.Hucreler)
+        if (satirMap != null && satirMap.TryGetValue(kayit.Id, out var satir))
         {
-            if (hucre.Gun > gunSayisi) continue;
-
-            if (mevcutDetayMap.TryGetValue(hucre.Gun, out var detay))
-            {
-                detay.SeferSayisi = hucre.ToplamSefer;
-                detay.MesaiMi = hucre.Mesai > 0;
-                detay.EkSeferMi = hucre.EkSefer > 0;
-                detay.FiyatCarpani = hucre.FiyatCarpani;
-                detay.UpdatedAt = DateTime.UtcNow;
-            }
-            else
-            {
-                hakedis.Detaylar.Add(new HakedisPuantajDetay
-                {
-                    Gun = hucre.Gun,
-                    SeferSayisi = hucre.ToplamSefer,
-                    MesaiMi = hucre.Mesai > 0,
-                    EkSeferMi = hucre.EkSefer > 0,
-                    FiyatCarpani = hucre.FiyatCarpani,
-                    CreatedAt = DateTime.UtcNow
-                });
-            }
+            var hucre = satir.Hucreler.FirstOrDefault(h => h.Gun == gun);
+            if (hucre != null) return hucre.ToplamSefer;
         }
+
+        return kayit.GetGunDeger(gun);
     }
+
+    private static decimal ResolveBirimFiyat(PuantajKayit kayit)
+        => kayit.BirimGelir > 0 ? kayit.BirimGelir : kayit.BirimGider;
+
+    private static ServisTuru MapServisTuru(PuantajYon yon)
+        => yon switch
+        {
+            PuantajYon.Sabah => ServisTuru.Sabah,
+            PuantajYon.Aksam => ServisTuru.Aksam,
+            _ => ServisTuru.SabahAksam
+        };
 }
 
 

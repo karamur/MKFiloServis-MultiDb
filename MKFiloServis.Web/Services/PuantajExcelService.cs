@@ -1,4 +1,5 @@
-using System.Globalization;
+﻿using System.Globalization;
+using System.Text;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Services.Calculation;
@@ -30,6 +31,9 @@ public class PuantajExcelService
         public int Hata { get; set; }
         public List<string> Hatalar { get; set; } = new();
         public List<PuantajOnizlemeSatir> Onizleme { get; set; } = new();
+        public List<PuantajDogrulamaMesaji> Errors { get; set; } = new();
+        public List<PuantajDogrulamaMesaji> Warnings { get; set; } = new();
+        public PuantajOnizlemeOzet Ozet { get; set; } = new();
     }
 
     public class PuantajOnizlemeSatir
@@ -46,6 +50,25 @@ public class PuantajExcelService
         public decimal Net { get; set; }
         public string? EslesenCari { get; set; }
         public string? EslesmeTipi { get; set; } // Tam / Lower / Fuzzy / Yeni
+        public string DiffStatus { get; set; } = "Yeni";
+    }
+
+    public class PuantajDogrulamaMesaji
+    {
+        public int? RowNumber { get; set; }
+        public string ColumnName { get; set; } = string.Empty;
+        public string ErrorCode { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public string? RawValue { get; set; }
+        public string? SuggestedAction { get; set; }
+    }
+
+    public class PuantajOnizlemeOzet
+    {
+        public int Toplam { get; set; }
+        public int Gecerli { get; set; }
+        public int Hatali { get; set; }
+        public int Uyarili { get; set; }
     }
 
     /// <summary>Excel dosyasını parse edip önizleme döndürür. Kayıt YAPMAZ.</summary>
@@ -53,7 +76,13 @@ public class PuantajExcelService
     {
         var sonuc = new PuantajImportSonuc();
         var rows = ReadExcelRows(fileBytes);
-        sonuc.ToplamSatir = rows.Count - 1;
+        sonuc.ToplamSatir = Math.Max(rows.Count - 1, 0);
+
+        if (!TryValidateRequiredColumns(rows, sonuc))
+        {
+            FinalizePreviewSummary(sonuc);
+            return sonuc;
+        }
 
         await using var context = await _factory.CreateDbContextAsync();
         var cariler = await context.Cariler.AsNoTracking().Where(c => c.FirmaId == firmaId && !c.IsDeleted).ToListAsync();
@@ -66,16 +95,31 @@ public class PuantajExcelService
                 var engineSonuc = PuantajEngine.Hesapla(input);
                 var (cari, tip) = EsleCari(cariler, input.Kurum);
 
+                if (tip.StartsWith("Fuzzy", StringComparison.OrdinalIgnoreCase))
+                {
+                    AddWarning(sonuc, i + 1, "Kurum", "FUZZY_MATCH", $"Kurum fuzzy eşleşti: '{input.Kurum}'", input.Kurum, "Kurum bilgisini kontrol edin.");
+                }
+                else if (cari == null)
+                {
+                    AddWarning(sonuc, i + 1, "Kurum", "CARI_NOT_FOUND_PREVIEW", $"Kurum için eşleşen cari bulunamadı: '{input.Kurum}'", input.Kurum, "Import öncesi cari eşleşmesini kontrol edin.");
+                }
+
                 sonuc.Onizleme.Add(new PuantajOnizlemeSatir
                 {
                     Kurum = input.Kurum, Guzergah = input.Guzergah, Yon = input.Yon, Sofor = input.Sofor, Plaka = input.Plaka,
                     BirimFiyat = input.BirimFiyat, Sefer = engineSonuc.Sefer, Toplam = engineSonuc.Toplam,
                     Kesinti = engineSonuc.Kesinti, Net = engineSonuc.Net,
-                    EslesenCari = cari?.Unvan, EslesmeTipi = tip
+                    EslesenCari = cari?.Unvan, EslesmeTipi = tip,
+                    DiffStatus = "Yeni"
                 });
             }
-            catch (Exception ex) { sonuc.Hatalar.Add($"Satır {i + 1}: {ex.Message}"); sonuc.Hata++; }
+            catch (Exception ex)
+            {
+                AddError(sonuc, i + 1, "Genel", "ROW_PARSE_ERROR", $"Satır işlenemedi: {ex.Message}", null, "İlgili satırdaki alanları kontrol ederek tekrar deneyin.");
+            }
         }
+
+        FinalizePreviewSummary(sonuc);
         return sonuc;
     }
 
@@ -84,8 +128,20 @@ public class PuantajExcelService
     {
         var sonuc = new PuantajImportSonuc();
         var rows = ReadExcelRows(fileBytes);
-        sonuc.ToplamSatir = rows.Count - 1;
-        if (rows.Count < 2) { sonuc.Hatalar.Add("Dosya boş veya sadece başlık var."); return sonuc; }
+        sonuc.ToplamSatir = Math.Max(rows.Count - 1, 0);
+
+        if (!TryValidateRequiredColumns(rows, sonuc))
+        {
+            FinalizeImportSummary(sonuc);
+            return sonuc;
+        }
+
+        if (rows.Count < 2)
+        {
+            AddError(sonuc, null, "HEADER", "EMPTY_FILE", "Dosya boş veya sadece başlık satırı var.", null, "Şablona uygun en az bir veri satırı ekleyin.");
+            FinalizeImportSummary(sonuc);
+            return sonuc;
+        }
 
         await using var context = await _factory.CreateDbContextAsync();
         var cariler = await context.Cariler.AsNoTracking().Where(c => c.FirmaId == firmaId && !c.IsDeleted).ToListAsync();
@@ -93,13 +149,14 @@ public class PuantajExcelService
         var soforler = await context.Soforler.AsNoTracking().Where(s => !s.IsDeleted).ToListAsync();
         var araclar = await context.Araclar.AsNoTracking().Where(a => !a.IsDeleted).ToListAsync();
 
-        // Mükerrer engelleme: mevcut hakediş kayıtları
-        var mevcutHakedisler = await context.HakedisPuantajlar.AsNoTracking()
-            .Where(h => h.Yil == yil && h.Ay == ay && h.FirmaId == firmaId && !h.IsDeleted)
-            .Select(h => new { h.GuzergahId, h.SoforId })
+        // Mükerrer engelleme: aynı dönem/kurum için mevcut yeni model hakediş kayıtları
+        var mevcutReferanslar = await context.Hakedisler.AsNoTracking()
+            .Where(h => h.Yil == yil && h.Ay == ay && h.FirmaId == firmaId && h.Tip == HakedisTipi.Kurum && !h.IsDeleted)
+            .Select(h => h.ReferansId)
             .ToListAsync();
 
-        var yeniler = new List<HakedisPuantaj>();
+        var mevcutReferansSet = mevcutReferanslar.ToHashSet();
+        var yenilerByReferans = new Dictionary<int, Hakedis>();
 
         for (int i = 1; i < rows.Count; i++)
         {
@@ -112,47 +169,218 @@ public class PuantajExcelService
                 var sofor = EsleSofor(soforler, input.Sofor);
                 var arac = EsleArac(araclar, input.Plaka);
 
-                if (guzergah == null) { sonuc.Hatalar.Add($"Satır {i + 1}: Güzergah bulunamadı '{input.Guzergah}'"); sonuc.Hata++; continue; }
-                if (sofor == null) { sonuc.Hatalar.Add($"Satır {i + 1}: Şoför bulunamadı '{input.Sofor}'"); sonuc.Hata++; continue; }
-
-                // Duplicate kontrol: aynı güzergah+şoför bu ay zaten kayıtlı mı?
-                if (mevcutHakedisler.Any(h => h.GuzergahId == guzergah.Id && h.SoforId == sofor.Id))
-                { sonuc.Atlanan++; continue; }
-
-                var hakedis = new HakedisPuantaj
+                if (guzergah == null)
                 {
-                    FirmaId = firmaId, Yil = yil, Ay = ay,
-                    GuzergahId = guzergah.Id, SoforId = sofor.Id, AracId = arac?.Id ?? 0,
-                    CariId = cari?.Id ?? 0,
-                    GunlukSeferSayisi = engineSonuc.Sefer,
-                    ToplamSefer = engineSonuc.Sefer,
-                    BirimFiyat = engineSonuc.BirimFiyat,
-                    GelirBirimFiyat = engineSonuc.BirimFiyat,
-                    GiderBirimFiyat = engineSonuc.BirimFiyat,
-                    GelirToplam = engineSonuc.Toplam,
-                    GiderToplam = engineSonuc.Toplam,
-                    ToplamKesinti = engineSonuc.Kesinti,
-                    OdenecekTutar = engineSonuc.Net,
-                    TahsilEdilecekTutar = engineSonuc.Toplam,
-                    CreatedAt = DateTime.UtcNow
-                };
-                yeniler.Add(hakedis);
+                    AddError(sonuc, i + 1, "Guzergah", "ROUTE_NOT_FOUND", $"Güzergah bulunamadı: '{input.Guzergah}'", input.Guzergah, "Güzergah adını kontrol edin.");
+                    continue;
+                }
+
+                if (sofor == null)
+                {
+                    AddError(sonuc, i + 1, "Sofor", "DRIVER_NOT_FOUND", $"Şoför bulunamadı: '{input.Sofor}'", input.Sofor, "Şoför bilgisini kontrol edin.");
+                    continue;
+                }
+
+                if (cari == null)
+                {
+                    AddError(sonuc, i + 1, "Kurum", "CARI_NOT_FOUND", $"Kurum cari eşleşmesi bulunamadı: '{input.Kurum}'", input.Kurum, "Kurum-cari eşleşmesini kontrol edin.");
+                    continue;
+                }
+
+                // Duplicate kontrol: aynı kurum için bu ay zaten yeni model hakediş varsa satırı atla
+                if (mevcutReferansSet.Contains(cari.Id))
+                {
+                    sonuc.Atlanan++;
+                    AddWarning(sonuc, i + 1, "Kurum", "DUPLICATE_REFERENCE_SKIPPED", $"Aynı dönem için kurum kaydı mevcut olduğundan satır atlandı: '{input.Kurum}'", input.Kurum, "Mükerrer kayıtları kontrol edin.");
+                    continue;
+                }
+
+                if (!yenilerByReferans.TryGetValue(cari.Id, out var hakedis))
+                {
+                    hakedis = new Hakedis
+                    {
+                        FirmaId = firmaId,
+                        Yil = yil,
+                        Ay = ay,
+                        Tip = HakedisTipi.Kurum,
+                        ReferansId = cari.Id,
+                        Durum = HakedisDurum.Taslak,
+                        ToplamSeferSayisi = 0,
+                        BirimFiyat = 0,
+                        Tutar = 0,
+                        KdvOran = 20,
+                        KdvTutar = 0,
+                        GenelToplam = 0,
+                        CreatedAt = DateTime.UtcNow,
+                        GenerationParams = "{\"Kaynak\":\"PuantajExcelImport\"}"
+                    };
+                    yenilerByReferans[cari.Id] = hakedis;
+                }
+
+                hakedis.ToplamSeferSayisi += engineSonuc.Sefer;
+                hakedis.Tutar += engineSonuc.Toplam;
+                hakedis.BirimFiyat = hakedis.ToplamSeferSayisi > 0
+                    ? hakedis.Tutar / hakedis.ToplamSeferSayisi
+                    : engineSonuc.BirimFiyat;
+                hakedis.KdvTutar = hakedis.Tutar * hakedis.KdvOran / 100m;
+                hakedis.GenelToplam = hakedis.Tutar + hakedis.KdvTutar;
             }
-            catch (Exception ex) { sonuc.Hatalar.Add($"Satır {i + 1}: {ex.Message}"); sonuc.Hata++; }
+            catch (Exception ex)
+            {
+                AddError(sonuc, i + 1, "Genel", "ROW_IMPORT_ERROR", $"Satır import edilemedi: {ex.Message}", null, "Satır verisini kontrol ederek tekrar deneyin.");
+            }
         }
 
-        if (yeniler.Any())
+        if (yenilerByReferans.Any())
         {
-            context.HakedisPuantajlar.AddRange(yeniler);
+            var yeniler = yenilerByReferans.Values.ToList();
+            context.Hakedisler.AddRange(yeniler);
             await context.SaveChangesAsync();
             sonuc.Kaydedilen = yeniler.Count;
-            sonuc.Basarili = true;
         }
 
+        FinalizeImportSummary(sonuc);
         return sonuc;
     }
 
     #region Private Helpers
+
+    private static readonly (string DisplayName, string[] Aliases)[] RequiredColumns =
+    {
+        ("KURUM", new[] { "kurum", "musteri", "müşteri" }),
+        ("GÜZERGAH", new[] { "guzergah", "güzergah", "route" }),
+        ("YÖN", new[] { "yon", "yön", "istikamet" }),
+        ("ŞOFÖR", new[] { "sofor", "şoför", "surucu", "sürücü" }),
+        ("PLAKA", new[] { "plaka", "aracplaka", "araçplaka", "arac plaka", "araç plaka" }),
+        ("BIRIMFIYAT", new[] { "birimfiyat", "birim fiyat", "fiyat" })
+    };
+
+    private static bool TryValidateRequiredColumns(List<List<string>> rows, PuantajImportSonuc sonuc)
+    {
+        if (rows.Count == 0)
+        {
+            AddError(sonuc, null, "HEADER", "MISSING_REQUIRED_COLUMN", "Zorunlu kolon eksik: Başlık satırı bulunamadı.", null, "Excel dosyasının ilk satırına başlıkları ekleyin.");
+            return false;
+        }
+
+        var missingColumns = ValidateRequiredColumns(rows[0]);
+        if (missingColumns.Count == 0)
+            return true;
+
+        foreach (var missingColumn in missingColumns)
+        {
+            AddError(sonuc, null, missingColumn, "MISSING_REQUIRED_COLUMN", $"Zorunlu kolon eksik: {missingColumn}", null, "Şablon dosyadaki başlık adlarını kullanın.");
+        }
+
+        sonuc.Basarili = false;
+        return false;
+    }
+
+    private static void AddError(PuantajImportSonuc sonuc, int? rowNumber, string columnName, string errorCode, string message, string? rawValue, string? suggestedAction)
+    {
+        sonuc.Hatalar.Add($"[{errorCode}] {message}");
+        sonuc.Errors.Add(new PuantajDogrulamaMesaji
+        {
+            RowNumber = rowNumber,
+            ColumnName = columnName,
+            ErrorCode = errorCode,
+            Message = message,
+            RawValue = rawValue,
+            SuggestedAction = suggestedAction
+        });
+        sonuc.Hata++;
+    }
+
+    private static void AddWarning(PuantajImportSonuc sonuc, int? rowNumber, string columnName, string errorCode, string message, string? rawValue, string? suggestedAction)
+    {
+        sonuc.Warnings.Add(new PuantajDogrulamaMesaji
+        {
+            RowNumber = rowNumber,
+            ColumnName = columnName,
+            ErrorCode = errorCode,
+            Message = message,
+            RawValue = rawValue,
+            SuggestedAction = suggestedAction
+        });
+    }
+
+    private static List<string> ValidateRequiredColumns(IReadOnlyList<string> headerColumns)
+    {
+        var normalizedHeaders = headerColumns
+            .Select(NormalizeHeader)
+            .Where(h => !string.IsNullOrWhiteSpace(h))
+            .ToHashSet();
+
+        var missing = new List<string>();
+        foreach (var column in RequiredColumns)
+        {
+            var hasColumn = column.Aliases.Any(alias => normalizedHeaders.Contains(NormalizeHeader(alias)));
+            if (!hasColumn)
+                missing.Add(column.DisplayName);
+        }
+
+        return missing;
+    }
+
+    public static string BuildErrorsCsv(IEnumerable<PuantajDogrulamaMesaji> messages)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("SatirNo,Alan,HataKodu,HataMesaji,Oneri");
+
+        foreach (var message in messages)
+        {
+            var row = message.RowNumber?.ToString() ?? string.Empty;
+            sb.AppendLine(string.Join(",",
+                EscapeCsv(row),
+                EscapeCsv(message.ColumnName),
+                EscapeCsv(message.ErrorCode),
+                EscapeCsv(message.Message),
+                EscapeCsv(message.SuggestedAction ?? string.Empty)));
+        }
+
+        return sb.ToString();
+    }
+
+    private static string EscapeCsv(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return string.Empty;
+
+        var escaped = value.Replace("\"", "\"\"");
+        return $"\"{escaped}\"";
+    }
+
+    private static void FinalizePreviewSummary(PuantajImportSonuc sonuc)
+    {
+        sonuc.Ozet.Toplam = sonuc.ToplamSatir;
+        sonuc.Ozet.Gecerli = sonuc.Onizleme.Count;
+        sonuc.Ozet.Hatali = sonuc.Hata;
+        sonuc.Ozet.Uyarili = sonuc.Warnings.Count;
+        sonuc.Basarili = sonuc.Hata == 0;
+    }
+
+    private static void FinalizeImportSummary(PuantajImportSonuc sonuc)
+    {
+        sonuc.Ozet.Toplam = sonuc.ToplamSatir;
+        sonuc.Ozet.Gecerli = Math.Max(sonuc.ToplamSatir - sonuc.Hata - sonuc.Atlanan, 0);
+        sonuc.Ozet.Hatali = sonuc.Hata;
+        sonuc.Ozet.Uyarili = sonuc.Warnings.Count;
+        sonuc.Basarili = sonuc.Hata == 0;
+    }
+
+    private static string NormalizeHeader(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var normalized = value.Trim().ToLowerInvariant();
+        var deaccented = string.Concat(
+            normalized
+                .Normalize(NormalizationForm.FormD)
+                .Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark));
+
+        return new string(deaccented.Where(char.IsLetterOrDigit).ToArray());
+    }
 
     private static List<List<string>> ReadExcelRows(byte[] fileBytes)
     {

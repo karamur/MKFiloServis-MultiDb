@@ -1,4 +1,4 @@
-using MKFiloServis.Shared;
+﻿using MKFiloServis.Shared;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
@@ -19,7 +19,8 @@ public class TestSessionService
     private static readonly string[] _backupTables = new[]
     {
         "MaasOdemeSnapshotlar",
-        "HakedisPuantajlar",
+        "Hakedisler",
+        "HakedisDetaylari",
         "Faturalar",
         "MuhasebeFisleri",
         "SnapshotTransactions"
@@ -249,8 +250,8 @@ public class TestSessionService
                 {
                     switch (log.EntityAdi)
                     {
-                        case "HakedisPuantaj":
-                            await db.HakedisPuantajlar.Where(h => h.Id == log.EntityId)
+                        case "Hakedis":
+                            await db.Hakedisler.Where(h => h.Id == log.EntityId)
                                 .ExecuteUpdateAsync(s => s
                                     .SetProperty(x => x.IsDeleted, true)
                                     .SetProperty(x => x.DeletedAt, DateTime.UtcNow));

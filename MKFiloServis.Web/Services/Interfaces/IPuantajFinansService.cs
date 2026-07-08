@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 
 namespace MKFiloServis.Web.Services.Interfaces;
 
@@ -17,8 +17,8 @@ public interface IPuantajFinansService
     Task<bool> FaturaUretilebilirMiAsync(int hesapDonemiId, CancellationToken ct = default);
     Task<bool> FinansalKayitOlusturulabilirMiAsync(int hesapDonemiId, CancellationToken ct = default);
 
-    // YENİ: HakedisPuantaj → Fatura → Muhasebe → Snapshot
-    Task<PuantajFinansSonuc> IsleAsync(HakedisPuantaj puantaj);
+    // Yeni operasyonel model: Hakedis → Fatura → Snapshot
+    Task<PuantajFinansSonuc> IsleAsync(Hakedis hakedis);
 }
 
 public class PuantajFinansSonuc

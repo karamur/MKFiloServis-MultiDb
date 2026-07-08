@@ -1,9 +1,12 @@
-using System.Globalization;
+﻿using System.Globalization;
+using System.Text;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Models;
+using MKFiloServis.Web.Services;
 using MKFiloServis.Web.Services.Calculation;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.JSInterop;
@@ -24,6 +27,12 @@ public partial class PuantajExcelGrid
     private bool _degisiklikVar;
     private string? _mesaj;
     private bool _mesajHata;
+    private readonly List<PuantajExcelService.PuantajDogrulamaMesaji> _importErrors = new();
+    private readonly List<PuantajExcelService.PuantajDogrulamaMesaji> _importWarnings = new();
+    private PuantajExcelService.PuantajOnizlemeOzet? _excelOnizlemeOzet;
+    private IBrowserFile? _excelDosya;
+    private string? _excelDosyaAdi;
+    private bool _excelIsleniyor;
 
     // Aktif hücre
     private int _aktifSatirIdx = -1;
@@ -65,6 +74,9 @@ public partial class PuantajExcelGrid
     {
         _yukleniyor = true;
         _mesaj = null;
+        _importErrors.Clear();
+        _importWarnings.Clear();
+        _excelOnizlemeOzet = null;
         StateHasChanged();
 
         try
@@ -575,19 +587,25 @@ public partial class PuantajExcelGrid
                 _mesaj = $"AI uyarısı: {anomaliCount} satırda anormal pattern tespit edildi. Lütfen kontrol edin.";
             // AI block etmez, sadece uyarır
 
-            // Faz 4: Grid → HakedisPuantaj senkronizasyonu
+            // Faz 4: Grid → Hakedis (yeni model) senkronizasyonu
             try
             {
                 await SyncService.SyncFromGridAsync(_firmaId, _yil, _ay, satirlar);
 
-                // 🔴 Backend validation: Grid toplamı == HakedisPuantaj toplamı mı?
+                // 🔴 Backend validation: Grid toplamı == HakedisDetay toplamı mı?
                 var gridToplam = satirlar.Sum(s => s.ToplamSefer);
-                var hakedisToplam = await context.HakedisPuantajlar
-                    .Where(h => h.FirmaId == _firmaId && h.Yil == _yil && h.Ay == _ay && !h.IsDeleted)
-                    .SumAsync(h => h.ToplamSefer);
+                var hakedisToplam = await context.HakedisDetaylari
+                    .Where(d => d.FirmaId == _firmaId
+                        && d.Hakedis != null
+                        && d.Hakedis.Yil == _yil
+                        && d.Hakedis.Ay == _ay
+                        && d.Hakedis.Tip == HakedisTipi.Kurum
+                        && !d.IsDeleted
+                        && !d.Hakedis.IsDeleted)
+                    .SumAsync(d => d.SeferSayisi);
                 if (gridToplam != hakedisToplam)
                 {
-                    _mesaj = $"UYARI: Grid toplamı ({gridToplam}) ≠ Hakedis toplamı ({hakedisToplam}). Lütfen denetim çalıştırın.";
+                    _mesaj = $"UYARI: Grid toplamı ({gridToplam}) ≠ HakedisDetay toplamı ({hakedisToplam}). Lütfen denetim çalıştırın.";
                     _mesajHata = true;
                 }
             }
@@ -637,6 +655,144 @@ public partial class PuantajExcelGrid
         _degisiklikVar = true;
         _mesaj = "Engine hesaplaması: Auto hücreler sıfırlandı, Manual hücreler korundu.";
         _mesajHata = false;
+        StateHasChanged();
+    }
+
+    private async Task HataCsvIndirAsync()
+    {
+        if (!_importErrors.Any())
+        {
+            _mesaj = "İndirilecek hata bulunamadı.";
+            _mesajHata = true;
+            return;
+        }
+
+        try
+        {
+            var csv = PuantajExcelService.BuildErrorsCsv(_importErrors);
+            var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(csv));
+            var fileName = $"puantaj-import-hatalari-{DateTime.Now:yyyyMMdd-HHmmss}.csv";
+            var script = $"(function(){{const a=document.createElement('a');a.href='data:text/csv;charset=utf-8;base64,{base64}';a.download='{fileName}';document.body.appendChild(a);a.click();a.remove();}})();";
+            await JS.InvokeVoidAsync("eval", script);
+            _mesaj = "Hata CSV dosyası indirildi.";
+            _mesajHata = false;
+        }
+        catch (Exception ex)
+        {
+            _mesaj = $"Hata CSV indirilemedi: {ex.Message}";
+            _mesajHata = true;
+        }
+    }
+
+    private async Task ExcelDosyaSecildi(InputFileChangeEventArgs e)
+    {
+        _excelDosya = e.File;
+        _excelDosyaAdi = _excelDosya?.Name;
+        _excelOnizlemeOzet = null;
+        ImportValidationStateTemizle();
+        await Task.CompletedTask;
+    }
+
+    private async Task ExcelOnizlemeYap()
+    {
+        if (_excelDosya is null)
+        {
+            _mesaj = "Önce bir Excel dosyası seçin.";
+            _mesajHata = true;
+            return;
+        }
+
+        _excelIsleniyor = true;
+        _mesaj = null;
+        StateHasChanged();
+
+        try
+        {
+            await using var ms = new MemoryStream();
+            await _excelDosya.OpenReadStream(20 * 1024 * 1024).CopyToAsync(ms);
+            var sonuc = await PuantajExcelSvc.PreviewAsync(ms.ToArray(), _firmaId);
+
+            SetImportValidationState(sonuc.Errors, sonuc.Warnings);
+            _excelOnizlemeOzet = sonuc.Ozet;
+
+            _mesaj = sonuc.Hata > 0
+                ? $"Excel önizleme tamamlandı. {sonuc.Hata} hata, {sonuc.Warnings.Count} uyarı bulundu."
+                : $"Excel önizleme başarılı. {sonuc.Onizleme.Count} satır önizlendi.";
+            _mesajHata = sonuc.Hata > 0;
+        }
+        catch (Exception ex)
+        {
+            _mesaj = $"Excel önizleme hatası: {ex.Message}";
+            _mesajHata = true;
+            _excelOnizlemeOzet = null;
+            ImportValidationStateTemizle();
+        }
+        finally
+        {
+            _excelIsleniyor = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ExcelImportYap()
+    {
+        if (_excelDosya is null)
+        {
+            _mesaj = "Önce bir Excel dosyası seçin.";
+            _mesajHata = true;
+            return;
+        }
+
+        _excelIsleniyor = true;
+        _mesaj = null;
+        StateHasChanged();
+
+        try
+        {
+            await using var ms = new MemoryStream();
+            await _excelDosya.OpenReadStream(20 * 1024 * 1024).CopyToAsync(ms);
+
+            var sonuc = await PuantajExcelSvc.ImportAsync(ms.ToArray(), _yil, _ay, _firmaId);
+            SetImportValidationState(sonuc.Errors, sonuc.Warnings);
+            _excelOnizlemeOzet = sonuc.Ozet;
+
+            _mesaj = sonuc.Hata > 0
+                ? $"Excel import tamamlandı. Kaydedilen: {sonuc.Kaydedilen}, Atlanan: {sonuc.Atlanan}, Hata: {sonuc.Hata}."
+                : $"Excel import başarılı. Kaydedilen: {sonuc.Kaydedilen}, Atlanan: {sonuc.Atlanan}.";
+            _mesajHata = sonuc.Hata > 0;
+
+            await Yukle();
+        }
+        catch (Exception ex)
+        {
+            _mesaj = $"Excel import hatası: {ex.Message}";
+            _mesajHata = true;
+        }
+        finally
+        {
+            _excelIsleniyor = false;
+            StateHasChanged();
+        }
+    }
+
+    // Geçici hazırlık: servis preview/import ekranı bağlandığında bu metod ile UI state beslenebilir.
+    private void SetImportValidationState(IEnumerable<PuantajExcelService.PuantajDogrulamaMesaji>? errors,
+                                          IEnumerable<PuantajExcelService.PuantajDogrulamaMesaji>? warnings)
+    {
+        _importErrors.Clear();
+        _importWarnings.Clear();
+
+        if (errors is not null)
+            _importErrors.AddRange(errors);
+
+        if (warnings is not null)
+            _importWarnings.AddRange(warnings);
+    }
+
+    private void ImportValidationStateTemizle()
+    {
+        _importErrors.Clear();
+        _importWarnings.Clear();
         StateHasChanged();
     }
 }

@@ -1,0 +1,516 @@
+﻿@page "/operasyon/puantaj"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+@inject IFiloKomisyonService FiloKomisyonService
+@inject IAktifFirmaProvider AktifFirmaProvider
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Operasyonel Puantaj</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="bi bi-calendar2-check me-2"></i>Operasyonel Puantaj</h3>
+        <button class="btn btn-outline-secondary" @onclick="YenileAsync" disabled="@isBusy">
+            <i class="bi bi-arrow-clockwise me-1"></i>Yenile
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(hataMesaji))
+    {
+        <div class="alert alert-danger">@hataMesaji</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(bilgiMesaji))
+    {
+        <div class="alert alert-success">@bilgiMesaji</div>
+    }
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Tarih</label>
+                    <input type="date" class="form-control" @bind="seciliTarih" @bind:after="YukleGunlukPuantajlarAsync" />
+                </div>
+                <div class="col-md-3 d-flex gap-2">
+                    <button class="btn btn-primary" @onclick="EksikKayitlariOlusturAsync" disabled="@isBusy">
+                        <i class="bi bi-magic me-1"></i>Bugün için satırları oluştur
+                    </button>
+                    <button class="btn btn-outline-primary" @onclick="YukleGunlukPuantajlarAsync" disabled="@isBusy">
+                        <i class="bi bi-list-ul me-1"></i>Listele
+                    </button>
+                </div>
+                <div class="col-md-6 text-end text-muted small">
+                    <div>Aktif eşleştirme: <strong>@aktifEslestirmeSayisi</strong></div>
+                    <div>Seçili gün kayıt: <strong>@gunlukPuantajlar.Count</strong></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card border-0 bg-success text-white shadow-sm">
+                <div class="card-body py-2">
+                    <div class="small opacity-75">Özmal</div>
+                    <div class="fs-4 fw-bold">@gunlukPuantajlar.Count(x => x.Arac?.SahiplikTipi == AracSahiplikTipi.Ozmal)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 bg-info text-white shadow-sm">
+                <div class="card-body py-2">
+                    <div class="small opacity-75">Kiralık</div>
+                    <div class="fs-4 fw-bold">@gunlukPuantajlar.Count(x => x.Arac?.SahiplikTipi == AracSahiplikTipi.Kiralik)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 bg-warning text-dark shadow-sm">
+                <div class="card-body py-2">
+                    <div class="small">Tedarikçi</div>
+                    <div class="fs-4 fw-bold">@gunlukPuantajlar.Count(x => x.Arac?.SahiplikTipi == AracSahiplikTipi.Tedarikci)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 bg-secondary text-white shadow-sm">
+                <div class="card-body py-2">
+                    <div class="small opacity-75">Komisyon</div>
+                    <div class="fs-4 fw-bold">@gunlukPuantajlar.Count(x => x.Arac?.SahiplikTipi == AracSahiplikTipi.Komisyon)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-light">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <strong>Seçili Gün Kayıtları (@seciliTarih.ToString("dd.MM.yyyy"))</strong>
+                <small class="text-muted">Tahakkuk değerleri servis kurallarına göre otomatik hesaplanır.</small>
+            </div>
+            <div class="row g-2 mt-1 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label small mb-1">Ara (Güzergah/Kurum/Araç/Şoför)</label>
+                    <input class="form-control form-control-sm" @bind="aramaMetni" placeholder="Arama yazın..." />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Araç Sahiplik</label>
+                    <select class="form-select form-select-sm" @bind="sahiplikFiltresi">
+                        <option value="">Tümü</option>
+                        <option value="Ozmal">Özmal</option>
+                        <option value="Kiralik">Kiralık</option>
+                        <option value="Tedarikci">Tedarikçi</option>
+                        <option value="Komisyon">Komisyon</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Servis Türü</label>
+                    <select class="form-select form-select-sm" @bind="servisTuruFiltresi">
+                        <option value="">Tümü</option>
+                        @foreach (var servis in Enum.GetValues<ServisTuru>())
+                        {
+                            <option value="@servis">@servis</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2 text-end">
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="FiltreleriTemizle" disabled="@isBusy">
+                        <i class="bi bi-funnel me-1"></i>Temizle
+                    </button>
+                </div>
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                <button class="btn btn-sm btn-outline-secondary" @onclick="TumunuSecKaldir" disabled="@isBusy || !FiltreliGunlukPuantajlar.Any()">
+                    <i class="bi bi-check2-square me-1"></i>@(TumSeciliMi ? "Seçimi Temizle" : "Tümünü Seç")
+                </button>
+                <InputNumber class="form-control form-control-sm" style="width:130px" @bind-Value="topluSeferSayisi" min="0" step="0.5" placeholder="Sefer" />
+                <button class="btn btn-sm btn-outline-primary" @onclick="TopluSeferUygula" disabled="@isBusy || !SeciliPuantajlar.Any() || topluSeferSayisi is null">
+                    <i class="bi bi-pencil-square me-1"></i>Toplu Sefer Uygula
+                </button>
+                <button class="btn btn-sm btn-primary" @onclick="SecilenleriKaydetAsync" disabled="@isBusy || !SeciliPuantajlar.Any()">
+                    <i class="bi bi-save me-1"></i>Seçilenleri Kaydet (@SeciliPuantajlar.Count)
+                </button>
+                <span class="ms-auto small text-muted">
+                    Toplam: <strong>@gunlukPuantajlar.Count</strong> | Filtreli: <strong>@FiltreliGunlukPuantajlar.Count</strong> | Seçili: <strong>@seciliPuantajIds.Count</strong>
+                </span>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:40px">
+                                <input type="checkbox" class="form-check-input" checked="@TumSeciliMi" @onchange="_ => TumunuSecKaldir()" disabled="@isBusy || !gunlukPuantajlar.Any()" />
+                            </th>
+                            <th>Güzergah</th>
+                            <th>Kurum</th>
+                            <th>Araç</th>
+                            <th>Şoför</th>
+                            <th>Servis Türü</th>
+                            <th class="text-end" style="width:120px">Sefer</th>
+                            <th class="text-end">Kurum Tahakkuk</th>
+                            <th class="text-end">Tedarikçi Tahakkuk</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!FiltreliGunlukPuantajlar.Any())
+                        {
+                            <tr><td colspan="10" class="text-center text-muted p-4">Filtreye uygun kayıt yok</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var item in FiltreliGunlukPuantajlar)
+                            {
+                                <tr class="@GetSatirSinifi(item)">
+                                    <td>
+                                        <input type="checkbox" class="form-check-input" checked="@seciliPuantajIds.Contains(item.Id)" @onchange="_ => SecimiDegistir(item.Id)" disabled="@isBusy" />
+                                    </td>
+                                    <td>
+                                        <div class="fw-semibold small">@item.Guzergah?.GuzergahKodu</div>
+                                        <div class="text-muted" style="font-size:.75rem">@item.Guzergah?.GuzergahAdi</div>
+                                    </td>
+                                    <td class="small">@item.KurumFirma?.KurumAdi</td>
+                                    <td class="small">@item.Arac?.AktifPlaka</td>
+                                    <td class="small">@item.Sofor?.Ad @item.Sofor?.Soyad</td>
+                                    <td class="small">@item.ServisTuru</td>
+                                    <td class="text-end">
+                                        <InputNumber class="form-control form-control-sm text-end"
+                                                     @bind-Value="item.SeferSayisi"
+                                                     step="0.5"
+                                                     min="0" />
+                                    </td>
+                                    <td class="text-end">@item.TahakkukEdenKurumUcreti.ToString("N2")</td>
+                                    <td class="text-end">@item.TahakkukEdenTaseronUcreti.ToString("N2")</td>
+                                    <td class="text-end" style="white-space:nowrap">
+                                        <button class="btn btn-sm btn-outline-primary"
+                                                @onclick="() => SatirKaydetAsync(item)"
+                                                disabled="@isBusy">
+                                            <i class="bi bi-save me-1"></i>Kaydet
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private DateTime seciliTarih = DateTime.Today;
+    private bool isBusy;
+    private string? hataMesaji;
+    private string? bilgiMesaji;
+    private int aktifEslestirmeSayisi;
+    private decimal? topluSeferSayisi;
+    private readonly HashSet<int> seciliPuantajIds = new();
+    private List<FiloGunlukPuantaj> gunlukPuantajlar = new();
+    private string aramaMetni = string.Empty;
+    private string sahiplikFiltresi = string.Empty;
+    private string servisTuruFiltresi = string.Empty;
+
+    private List<FiloGunlukPuantaj> FiltreliGunlukPuantajlar => gunlukPuantajlar
+        .Where(FiltreyeUyar)
+        .ToList();
+
+    private bool TumSeciliMi => FiltreliGunlukPuantajlar.Any() && FiltreliGunlukPuantajlar.All(x => seciliPuantajIds.Contains(x.Id));
+    private List<FiloGunlukPuantaj> SeciliPuantajlar => FiltreliGunlukPuantajlar.Where(x => seciliPuantajIds.Contains(x.Id)).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Firma seçili değilse /firma-sec'e yönlendir
+        if (!AktifFirmaProvider.HasAktifFirma)
+        {
+            Navigation.NavigateTo("/firma-sec?returnUrl=%2Foperasyon%2Fpuantaj", forceLoad: false);
+            return;
+        }
+
+        await YenileAsync();
+    }
+
+    private async Task YenileAsync()
+    {
+        hataMesaji = null;
+        bilgiMesaji = null;
+
+        var firmaId = GetFirmaId();
+        if (firmaId <= 0)
+        {
+            Navigation.NavigateTo("/firma-sec?returnUrl=%2Foperasyon%2Fpuantaj", forceLoad: false);
+            return;
+        }
+
+        isBusy = true;
+        try
+        {
+            var eslestirmeler = await FiloKomisyonService.GetEslestirmelerAsync(firmaId, true);
+            aktifEslestirmeSayisi = eslestirmeler.Count;
+            gunlukPuantajlar = await FiloKomisyonService.GetGunlukPuantajlarSiraliAsync(firmaId, seciliTarih);
+            seciliPuantajIds.IntersectWith(gunlukPuantajlar.Select(x => x.Id));
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task YukleGunlukPuantajlarAsync()
+    {
+        hataMesaji = null;
+        bilgiMesaji = null;
+
+        var firmaId = GetFirmaId();
+        if (firmaId <= 0)
+        {
+            hataMesaji = "Aktif firma bulunamadı. Lütfen önce firma seçiniz.";
+            return;
+        }
+
+        isBusy = true;
+        try
+        {
+            gunlukPuantajlar = await FiloKomisyonService.GetGunlukPuantajlarSiraliAsync(firmaId, seciliTarih);
+            seciliPuantajIds.IntersectWith(gunlukPuantajlar.Select(x => x.Id));
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task EksikKayitlariOlusturAsync()
+    {
+        hataMesaji = null;
+        bilgiMesaji = null;
+
+        var firmaId = GetFirmaId();
+        if (firmaId <= 0)
+        {
+            hataMesaji = "Aktif firma bulunamadı. Lütfen önce firma seçiniz.";
+            return;
+        }
+
+        isBusy = true;
+        try
+        {
+            var eslestirmeler = await FiloKomisyonService.GetEslestirmelerAsync(firmaId, true);
+            aktifEslestirmeSayisi = eslestirmeler.Count;
+
+            var mevcutKayitlar = await FiloKomisyonService.GetGunlukPuantajlarSiraliAsync(firmaId, seciliTarih);
+            var mevcutEslestirmeIdler = mevcutKayitlar
+                .Where(x => x.FiloGuzergahEslestirmeId.HasValue)
+                .Select(x => x.FiloGuzergahEslestirmeId!.Value)
+                .ToHashSet();
+
+            var eklenecekler = eslestirmeler
+                .Where(e => !mevcutEslestirmeIdler.Contains(e.Id))
+                .ToList();
+
+            var olusturulan = 0;
+            foreach (var e in eklenecekler)
+            {
+                var yeni = new FiloGunlukPuantaj
+                {
+                    FirmaId = firmaId,
+                    Tarih = seciliTarih.Date,
+                    FiloGuzergahEslestirmeId = e.Id,
+                    KurumFirmaId = e.KurumFirmaId,
+                    GuzergahId = e.GuzergahId,
+                    AracId = e.AracId,
+                    SoforId = e.SoforId,
+                    KullaniciId = e.KullaniciId,
+                    Durum = OperasyonDurumu.Gitti,
+                    ServisTuru = e.ServisTuru,
+                    SeferSayisi = 1m,
+                    PuantajCarpani = 1m
+                };
+
+                await FiloKomisyonService.CreatePuantajAsync(yeni);
+                    olusturulan++;
+                }
+
+                // Listeyi güncelle (isBusy bloğu içinde, ayrı metot çağrısından kaçın)
+                gunlukPuantajlar = await FiloKomisyonService.GetGunlukPuantajlarSiraliAsync(firmaId, seciliTarih);
+                seciliPuantajIds.IntersectWith(gunlukPuantajlar.Select(x => x.Id));
+
+                bilgiMesaji = olusturulan > 0
+                    ? $"{olusturulan} adet eksik günlük puantaj satırı oluşturuldu."
+                    : "Eksik satır yok. Tüm aktif eşleştirmeler için kayıt zaten mevcut.";
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task SatirKaydetAsync(FiloGunlukPuantaj item)
+    {
+        hataMesaji = null;
+        bilgiMesaji = null;
+
+        isBusy = true;
+        try
+        {
+            if (item.SeferSayisi < 0)
+                item.SeferSayisi = 0;
+
+            await FiloKomisyonService.UpdateGunlukPuantajAsync(item);
+            bilgiMesaji = "Satır kaydedildi.";
+            await YukleGunlukPuantajlarAsync();
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void SecimiDegistir(int puantajId)
+    {
+        if (!seciliPuantajIds.Add(puantajId))
+            seciliPuantajIds.Remove(puantajId);
+    }
+
+    private void TumunuSecKaldir()
+    {
+        if (TumSeciliMi)
+        {
+            seciliPuantajIds.Clear();
+            return;
+        }
+
+        seciliPuantajIds.Clear();
+        foreach (var id in FiltreliGunlukPuantajlar.Select(x => x.Id))
+            seciliPuantajIds.Add(id);
+    }
+
+    private void FiltreleriTemizle()
+    {
+        aramaMetni = string.Empty;
+        sahiplikFiltresi = string.Empty;
+        servisTuruFiltresi = string.Empty;
+        seciliPuantajIds.Clear();
+    }
+
+    private void TopluSeferUygula()
+    {
+        if (topluSeferSayisi is null)
+            return;
+
+        var deger = topluSeferSayisi.Value < 0 ? 0 : topluSeferSayisi.Value;
+        foreach (var item in SeciliPuantajlar)
+            item.SeferSayisi = deger;
+
+        bilgiMesaji = $"{SeciliPuantajlar.Count} satıra toplu sefer değeri uygulandı.";
+    }
+
+    private async Task SecilenleriKaydetAsync()
+    {
+        hataMesaji = null;
+        bilgiMesaji = null;
+
+        var secilenler = SeciliPuantajlar;
+        if (!secilenler.Any())
+            return;
+
+        isBusy = true;
+        try
+        {
+            foreach (var item in secilenler)
+            {
+                if (item.SeferSayisi < 0)
+                    item.SeferSayisi = 0;
+            }
+
+            await FiloKomisyonService.UpdateGunlukPuantajlarAsync(secilenler);
+            seciliPuantajIds.Clear();
+            bilgiMesaji = $"{secilenler.Count} satır kaydedildi.";
+            await YukleGunlukPuantajlarAsync();
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private int GetFirmaId()
+    {
+        // TumFirmalar modunda AktifFirmaId null döner; Mevcut.FirmaId'yi oku
+        if (AktifFirmaProvider.AktifFirmaId.HasValue && AktifFirmaProvider.AktifFirmaId.Value > 0)
+            return AktifFirmaProvider.AktifFirmaId.Value;
+
+        if (AktifFirmaProvider.Mevcut?.FirmaId > 0)
+            return AktifFirmaProvider.Mevcut.FirmaId;
+
+        return 0;
+    }
+
+    private bool FiltreyeUyar(FiloGunlukPuantaj item)
+    {
+        if (!string.IsNullOrWhiteSpace(sahiplikFiltresi)
+            && Enum.TryParse<AracSahiplikTipi>(sahiplikFiltresi, out var sahiplik)
+            && item.Arac?.SahiplikTipi != sahiplik)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(servisTuruFiltresi)
+            && Enum.TryParse<ServisTuru>(servisTuruFiltresi, out var servis)
+            && item.ServisTuru != servis)
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(aramaMetni))
+            return true;
+
+        var metin = aramaMetni.Trim();
+        var sofor = $"{item.Sofor?.Ad} {item.Sofor?.Soyad}".Trim();
+
+        return (item.Guzergah?.GuzergahAdi?.Contains(metin, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (item.Guzergah?.GuzergahKodu?.Contains(metin, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (item.KurumFirma?.KurumAdi?.Contains(metin, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (item.Arac?.AktifPlaka?.Contains(metin, StringComparison.OrdinalIgnoreCase) ?? false)
+            || sofor.Contains(metin, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetSatirSinifi(FiloGunlukPuantaj item)
+    {
+        return item.Arac?.SahiplikTipi switch
+        {
+            AracSahiplikTipi.Ozmal => "table-success",
+            AracSahiplikTipi.Kiralik => "table-info",
+            AracSahiplikTipi.Tedarikci => "table-warning",
+            AracSahiplikTipi.Komisyon => "table-secondary",
+            _ => string.Empty
+        };
+    }
+}

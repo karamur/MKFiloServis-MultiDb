@@ -2209,15 +2209,15 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(e => e.FirmaId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            entity.HasOne(e => e.KurumFirma)
+            entity.HasOne(e => e.MusteriCari)
                 .WithMany()
                 .HasForeignKey(e => e.KurumFirmaId)
+                .IsRequired()
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasQueryFilter(e => !e.IsDeleted
                 && (e.Arac == null || !e.Arac.IsDeleted)
-                && (e.Firma == null || !e.Firma.IsDeleted)
-                && (e.KurumFirma == null || !e.KurumFirma.IsDeleted));
+                && (e.Firma == null || !e.Firma.IsDeleted));
         });
 
         modelBuilder.Entity<FiloGunlukPuantaj>(entity =>
@@ -2232,7 +2232,13 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(e => e.FirmaId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            entity.HasQueryFilter(e => !e.IsDeleted && (e.Arac == null || !e.Arac.IsDeleted) && (e.KurumFirma == null || !e.KurumFirma.IsDeleted));
+            entity.HasOne(e => e.MusteriCari)
+                .WithMany()
+                .HasForeignKey(e => e.KurumFirmaId)
+                .IsRequired()
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(e => !e.IsDeleted && (e.Arac == null || !e.Arac.IsDeleted));
         });
 
         // FirmaAracSoforEslestirme - Kurum+Araç+Şoför kalıcı eşleştirme

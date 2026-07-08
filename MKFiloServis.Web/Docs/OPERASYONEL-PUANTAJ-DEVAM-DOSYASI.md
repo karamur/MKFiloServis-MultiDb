@@ -40,7 +40,7 @@ Kurum (Müşteri Firma/Kurum)
 | `FiloGunlukPuantaj` | `FiloKomisyonPuantaj.cs` | ✅ Tam | `ServisTuru`, `SeferSayisi`, `TahakkukEdenKurumUcreti`, `TahakkukEdenTaseronUcreti`, `MaliyetOzmalKiralik`, `TaksiKullanildiMi` var |
 | `ServisKontrat` | `ServisKontrat.cs` | ✅ Tam | `ServisKontratTip` (Ozmal/Kiralik/Tedarikci), `GelirBirimFiyat`, `GiderBirimFiyat` |
 | `Hakedis` + `HakedisDetay` | Shared/Entities | ✅ Tam | `HakedisTipi` (Kurum/Tedarikci/Arac), `HakedisDurum`, migration var |
-| `HakedisPuantaj` | `HakedisPuantaj.cs` | ✅ Var | ESKİ hakediş modeli — yeni `Hakedis` ile AYRI (bkz. §3.1 Sorun) |
+| `HakedisPuantaj` | `HakedisPuantaj.cs` | ✅ Var (Legacy) | ESKİ hakediş modeli; aktif iş akışlarında kullanılmıyor, ağırlıklı DB/migration uyumluluğu için duruyor (bkz. §3.1 Sorun) |
 | `AracMaliyetSnapshot` | Shared/Entities | ✅ Tam | Migration eklendi (önceki oturum), servis çalışıyor |
 | `PersonelPuantaj` | `PersonelPuantaj.cs` | ✅ Tam | Maaş bazlı — operasyonel puantajdan AYRI |
 | `OperasyonKaydi` | `OperasyonKaydi.cs` | ✅ Var | PuantajEngine ile oluşturulan kayıt — `FiloGunlukPuantaj` ile FARKLI tablo |
@@ -52,9 +52,9 @@ Kurum (Müşteri Firma/Kurum)
 | Servis | Implementasyon | Durum | Notlar |
 |--------|---------------|-------|--------|
 | `OperasyonelHakedisService` | `OperasyonelHakedisService.cs` | ✅ **ÇALIŞIYOR** | 632 satır, `FiloGunlukPuantaj` → `Hakedis` üretimi tam |
-| `HakedisPuantajService` | `HakedisPuantajService.cs` | ✅ Var | 505 satır, eski `HakedisPuantaj` tablosu için — yeni sistemle çakışıyor |
-| `HakedisRaporService` | `HakedisRaporService.cs` | ✅ Var | Rapor üretimi |
-| `HakedisMuhasebeService` | `HakedisMuhasebeService.cs` | ✅ Var | Muhasebe entegrasyonu |
+| `HakedisPuantajService` | `HakedisPuantajService.cs` | ❌ Kaldırıldı | Legacy servis/interface dosyaları ve DI kaydı kaldırıldı; kalan legacy kullanım doğrudan tablo/sync modüllerinde |
+| `HakedisRaporService` | `HakedisRaporService.cs` | ✅ ÇALIŞIYOR | Yeni `Hakedis` modeli üzerinden raporlama |
+| `HakedisMuhasebeService` | `HakedisMuhasebeService.cs` | ✅ ÇALIŞIYOR | Yeni `Hakedis` modeli üzerinden muhasebe fişi entegrasyonu |
 | `AracMaliyetService` | `AracMaliyetService.cs` | ✅ **ÇALIŞIYOR** | `FullpetFaturaDagitAsync` dahil |
 | `PuantajEngineService` | `PuantajEngineService.cs` | ✅ Var | `OperasyonKaydi` → `PuantajKayit` dönüşümü |
 | `PuantajWorkflowService` | `PuantajWorkflowService.cs` | ✅ Var | Finans/Muhasebe/Kilit onay zinciri |
@@ -68,6 +68,8 @@ Kurum (Müşteri Firma/Kurum)
 | `FiloGunlukPuantajPage.razor` | `/operasyon/filo-gunluk-puantaj` | 1887 | ❌ Silindi | FAZ 0 Adım 0.1 kapsamında kaldırıldı |
 | `FiloHakedisPage.razor` | `/filo-hakedis` | 568 | ❌ Silindi | FAZ 0 Adım 0.1 kapsamında kaldırıldı |
 | `FiloPuantaj.razor` | `/filo/puantaj` | ? | ❌ Silindi | FAZ 0 Adım 0.1 kapsamında kaldırıldı |
+| `OperasyonelPuantajPage.razor` | `/operasyon/puantaj` | ~300 | ✅ Aktif | Yeni günlük operasyon puantaj ekranı (FAZ 1 başlangıç) |
+| `OperasyonelHakedisPage.razor` | `/operasyonel-hakedis` | ~330 | ✅ Aktif | Yeni hakediş yönetim ekranı (toplu üret/onay/faturalama) |
 | `PuantajDetay.razor` | `/servis-operasyon/puantaj/{id}` | 681 | ✅ Aktif | Kontrat bazlı detay, onay, fatura taslağı |
 | `KontratList.razor` | `/servis-operasyon/kontratlar` | ? | ✅ Aktif | ServisKontrat listesi |
 | `KontratForm.razor` | `/servis-operasyon/kontrat-form` | ? | ✅ Aktif | Kontrat oluşturma/düzenleme |
@@ -78,97 +80,124 @@ Kurum (Müşteri Firma/Kurum)
 
 ## 3. KRİTİK SORUNLAR VE ÇÖZÜM DURUMLARI
 
-### 3.1 🔴 ÜÇ PARALEL HAKEDİŞ SİSTEMİ ÇAKIŞMASI
+### 3.1 🟡 ÜÇ PARALEL HAKEDİŞ SİSTEMİ ÇAKIŞMASI (GEÇİŞ DARALDI)
 
 Projede **üç ayrı hakediş yolu** var, bunlar tam entegre değil:
 
 ```
 YOL A — Klasik kontrat bazlı:
 ServisKontrat → ServisPuantaj → HakedisPuantaj (tablo: HakedisPuantajlar)
-Servis: HakedisPuantajService (505 satır)
-Sayfa: HİÇBİR sayfada kullanılmıyor — Program.cs'de kayıtlı ama inject yok
+Servis: Legacy tablo varlığı (`HakedisPuantaj`) + çoğunlukla `ApplicationDbContext` / migration geçmişinde kalan referanslar
+Durum: Operasyonel yeni ekranlarda kullanılmıyor; ayrıca FinansDashboardService, DenetimService, HakedisRaporService ve HakedisMuhasebeService tarafında yeni Hakedis modeline geçiş yapıldı.
+Kalan kullanım alanları ağırlıklı legacy/yardımcı modüllerle sınırlı (DI kaydı ile servis/interface dosyaları kaldırıldı, kod tabanı referansları kademeli temizlenecek). `PuantajFinansService` tarafındaki legacy `HakedisPuantaj` işleme overload'u kaldırıldı; `RebuildService` zinciri yalnız yeni `Hakedis` modelini kullanıyor. `PuantajExcelService` import hattı ve `PuantajHakedisSyncService` + `PuantajExcelGrid` senkronizasyon/validasyon akışı yeni `Hakedis` modeline geçirildi. Denetim tarafında SnapshotTransaction eşlemesi `HakedisPuantajId` yerine `FaturaId` bazına çekildi; ayrıca yalnız `HakedisFinans*` transactionları denetlenerek ve taslak/iptal kayıtlar hariç tutularak false-positive riskleri azaltıldı. TestSession backup/rollback akışı ve TopluFatura yönlendirme metni de yeni `Hakedis` terminolojisine hizalandı.
 
-YOL B — Operasyonel (YENİ, DOĞRU YOL):
+YOL B — Operasyonel (YENİ AKTİF YOL):
 FiloGunlukPuantaj → Hakedis + HakedisDetay (tablo: Hakedisler)
-Servis: OperasyonelHakedisService (632 satır) ✅ ÇALIŞIYOR
-Kullanıldığı yerler: KarlilikRaporu, FiloKpiDashboard, AylikKapanisAsistani,
-                    BildirimMerkezi, KomutaMerkezi, OperasyonelOzetBandi
+Servis: OperasyonelHakedisService ✅ ÇALIŞIYOR
+Kullanıldığı yerler: OperasyonelHakedisPage, operasyonel hakediş akışları, ilgili yeni ekranlar
 
 YOL C — PuantajEngine:
 OperasyonKaydi → PuantajKayit → (hakediş yok, sadece sync)
 ```
 
-**Gerçek durum (Temmuz 2026 analizi):**
-`FiloHakedisPage.razor` — adı "Hakediş" ama aslında `FiloGuzergahEslestirme`
-listesini gösteriyor. Hakediş üretmiyor, sadece eşleştirme tablosu + puantaj
-sayfasına link. Ne `IHakedisPuantajService` ne `IOperasyonelHakedisService`
-inject edilmiş.
+**Gerçek durum (güncel):**
+`FiloHakedisPage.razor` kaldırıldı; operasyonel UI artık `OperasyonelHakedisPage.razor` üzerinden ilerliyor.
+Buna rağmen `HakedisPuantaj` hattı kod tabanında tamamen temizlenmiş değil; kalan kullanım alanları ağırlıklı `ApplicationDbContext` + migration geçmişi gibi legacy tablo katmanında sınırlıdır.
 
-**Sonuç:** Yol A tamamen ölü kod. Yol B rapor sayfalarında aktif kullanılıyor.
-Bir hakediş yönetim sayfası sıfırdan yazılmalı.
+**Sonuç:** Operasyon tarafında doğru yol Yol B'dir. FinansDashboard ve Denetim katmanı Yol B ile hizalanmıştır.
+Sistem genelinde Yol A için geçiş/temizlik tamamen bitmediği için çift model riski azaltılmış ama teknik borç olarak kısmen devam etmektedir.
 
-### 3.2 🔴 OPERASYONEL PUANTAJ SAYFASI YETERSİZ
+### 3.2 🟢 OPERASYONEL PUANTAJ SAYFASI (AKTİF VE İYİLEŞTİRİLMİŞ)
 
-`FiloGunlukPuantajPage.razor` (1887 satır) var ama:
-- Tek tablo görünümü var, özmal/kiralık/tedarikçi ayrımı UI'da görünmüyor
-- Kontrat şablonundan otomatik satır üretme akışı eksik (kontrat → günlük satır)
-- Tedarikçi satırı için TahakkukEdenTaseronUcreti otomatik hesaplanmıyor
-- `ServisKontrat.GiderBirimFiyat` → `TahakkukEdenTaseronUcreti` bağlantısı yok
-- Sayfa çok büyük, bölümlere ayrılmalı (component bazlı)
+Eski `FiloGunlukPuantajPage.razor` kaldırıldı. Yerine `OperasyonelPuantajPage.razor` eklendi.
 
-### 3.3 🟡 HAKEDİŞ SAYFASI YENİ SİSTEME BAĞLI DEĞİL
+Mevcut durum:
+- ✅ Kontrat/eşleştirme bazlı eksik günlük satır üretimi var
+- ✅ Özmal/kiralık/tedarikçi/komisyon satır ayrımı (renk kodu) var
+- ✅ Satır bazında `SeferSayisi` düzenleme + kaydet var
+- ✅ Tahakkuk hesaplama otomatik (serviste):
+  - `TahakkukEdenKurumUcreti` = `KurumaKesilecekUcret × SeferSayisi × PuantajCarpani × ServisCarpani`
+  - `TahakkukEdenTaseronUcreti` = (Komisyon/Tedarikçi) `TaseronaOdenenUcret × SeferSayisi × PuantajCarpani × ServisCarpani`
+- ✅ Maliyet snapshot (`MaliyetOzmalKiralik`) otomatik doldurma tamamlandı
+- ✅ Toplu satır düzenleme / toplu kaydet eklendi (seçim + toplu sefer uygula + seçilenleri kaydet)
+- ✅ Toplu kaydet servis tarafında batch güncelleme ile optimize edildi (`UpdateGunlukPuantajlarAsync`)
+- ✅ Operasyonel puantaj listesinde hızlı arama eklendi (güzergah/kurum/araç/şoför)
+- ✅ Araç sahiplik tipi ve servis türü filtreleri eklendi
+- ✅ Tablo, toplu seçim ve toplu kaydet akışı filtreli liste ile uyumlu hale getirildi
 
-`FiloHakedisPage.razor`:
-- `IOperasyonelHakedisService` inject edilmemiş
-- "Hakediş Üret" butonu yok (Kurum / Tedarikçi / Araç bazında)
-- Onay → Faturaya Dönüştür akışı eksik
-- PDF çıktısı yok
+Durum: ✅ **Çözüldü**
+
+### 3.3 🟢 HAKEDİŞ SAYFASI YENİ SİSTEME BAĞLI
+
+Eski `FiloHakedisPage.razor` kaldırıldı. Yerine `OperasyonelHakedisPage.razor` eklendi.
+
+Mevcut durum:
+- ✅ `IOperasyonelHakedisService` üzerinden listeleme var
+- ✅ Toplu Hakediş Üret (Kurum/Tedarikçi/Araç) var
+- ✅ Taslak → Onayla akışı var
+- ✅ Onaylı → Faturaya Dönüştür akışı var (Araç tipi hariç)
+- ✅ Taslak silme / Onaylı iptal var
+- ✅ Referans adı çözümleme tamamlandı (Kurum/Tedarikçi/Araç adı gösteriliyor)
+- ✅ Çoklu seçim + toplu onay/faturala/sil butonları eklendi
+- ✅ PDF çıktısı eklendi (satır bazlı PDF indir)
+
+Durum: ✅ **Çözüldü**
 
 ### 3.4 🟡 TAHAKKUK OTOMATİK HESAPLANMIYOR
 
-`FiloGunlukPuantaj` kaydedilirken:
-- `TahakkukEdenKurumUcreti` = `ServisKontrat.GelirBirimFiyat` × `SeferSayisi` → **MANUEL** giriliyor
-- `TahakkukEdenTaseronUcreti` = `ServisKontrat.GiderBirimFiyat` × `SeferSayisi` → **MANUEL** giriliyor, tedarikçi satırlarında hiç doldurulmuyor
+`FiloGunlukPuantaj` kaydedilirken tahakkuk artık servis tarafında otomatik hesaplanıyor (`FiloKomisyonService.UygulaPuantajKurallariAsync`).
 
-**Çözüm:** Kayıt kaydedilirken ServisKontrat'tan birim fiyat çekilip otomatik hesaplanmalı.
+Mevcut formül:
+- `TahakkukEdenKurumUcreti` = `KurumaKesilecekUcret × SeferSayisi × PuantajCarpani × ServisCarpani`
+- `TahakkukEdenTaseronUcreti` = (Komisyon/Tedarikçi) `TaseronaOdenenUcret × SeferSayisi × PuantajCarpani × ServisCarpani`
 
-### 3.5 🟡 MALİYET SNAPSHOT → PUANTAJ BAĞLANTISI ZAYİF
+Durum: ✅ **Çözüldü**
 
-`FiloGunlukPuantaj.MaliyetOzmalKiralik` alanı var (`decimal?`) ama:
-- Hiçbir yerde otomatik dolduruluyor
-- `AracMaliyetSnapshot.SeferBasiMaliyet` değeri buraya aktarılmıyor
-- Bu yüzden Araç bazlı Hakediş üretildiğinde (`HakedisTipi.Arac`) değer sıfır çıkıyor
+### 3.5 🟢 MALİYET SNAPSHOT → PUANTAJ BAĞLANTISI
 
-### 3.6 🟢 PERSONel PUANTAJ ENTEGRASYONU (DÜŞÜK ÖNCELİK)
+`FiloGunlukPuantaj.MaliyetOzmalKiralik` alanı artık puantaj kaydı sırasında otomatik dolduruluyor.
 
-`PersonelPuantaj` (maaş bazlı, aylık) → `AracMaliyetSnapshot.SoforMaasOran` aktarımı yok.
-Bu eksiklik maliyet snapshot'unun şoför maaş payını içermemesine neden oluyor.
+Mevcut davranış (`FiloKomisyonService.UygulaPuantajKurallariAsync`):
+- Araç sahiplik tipi **Özmal/Kiralık** ise,
+  ilgili araç + dönem (`AracId`, `Tarih.Year`, `Tarih.Month`) için `AracMaliyetSnapshot` okunur.
+- Snapshot'ta `ToplamSefer > 0` ise:
+  - `MaliyetOzmalKiralik = ToplamMaliyet / ToplamSefer` (2 hane yuvarlanmış)
+- Snapshot yoksa veya `ToplamSefer = 0` ise:
+  - `MaliyetOzmalKiralik = null`
+- Tedarikçi/Komisyon araçlarda:
+  - `MaliyetOzmalKiralik = null`
+
+Durum: ✅ **Çözüldü**
+
+### 3.6 🟢 PERSONEL PUANTAJ ENTEGRASYONU (ÇÖZÜLDÜ)
+
+`PersonelPuantaj` (maaş bazlı, aylık) verisi artık `AracMaliyetSnapshot.SoforMaasPayi` hesaplamasına dahil ediliyor.
+
+Mevcut davranış (`AracMaliyetService.SnapshotUretAsync`):
+- İlgili araç+dönem puantajından çalışan şoförler bulunur.
+- Şoförün aynı dönemde birden fazla araçta çalışması durumunda maaş, sefer oranına göre dağıtılır.
+- Maaş bazında öncelik: `NetOdeme`; `NetOdeme <= 0` ise `BrutMaas`.
+- Hesaplanan toplam, snapshot'a `SoforMaasPayi` olarak yazılır (2 hane yuvarlama).
+
+Durum: ✅ **Çözüldü**
 
 ---
 
-### 3.7 🔴 UI SAYFALARI MENÜDE YOK, DOSYADA DURUYOR
+### 3.7 🟢 ESKİ UI SAYFALARI KALDIRILDI, MENÜ TEMİZLENDİ
 
-NavMenu incelemesi sonucu:
-- `FiloGunlukPuantajPage.razor` → navmenüde **link yok**
-- `FiloHakedisPage.razor` → navmenüde **link yok**
-- `FiloPuantaj.razor` → navmenüde **link yok**
+NavMenu ve bağlı sayfa akışları güncellendi:
+- ✅ `FiloGunlukPuantajPage.razor` kaldırıldı
+- ✅ `FiloHakedisPage.razor` kaldırıldı
+- ✅ `FiloPuantaj.razor` kaldırıldı
+- ✅ `GuzergahForm.razor` içindeki eski puantaj yönlendirmesi kaldırıldı
+- ✅ `FiloKpiDashboard.razor` içindeki eski `filo/puantaj` linki kaldırıldı
+- ✅ `NavMenu.razor` içindeki `"filo-gunluk-puantaj"` string referansı temizlendi
 
-Kullanıcı bunlara doğrudan URL yazarak erişebiliyor ama menüde görünmüyor.
-Sayfalar build'e giriyor, gereksiz derleme yükü oluşturuyor.
+Durum: ✅ **Çözüldü**
 
-**Karar (Temmuz 2026):** Seçenek 3 — Tam Kaldır uygulanacak.
-Entity / Servis / Migration / DB tablolarına DOKUNULMAYACAK.
-Sadece 3 UI sayfası dosyası silinecek, ileride sıfırdan temiz yazılacak.
-
-Silinecek dosyalar:
-- `MKFiloServis.Web/Components/Pages/Filo/FiloGunlukPuantajPage.razor`
-- `MKFiloServis.Web/Components/Pages/Filo/FiloHakedisPage.razor`
-- `MKFiloServis.Web/Components/Pages/Filo/FiloPuantaj.razor`
-
-NavMenu'de `menu.filoservis` yetki tanımındaki `filo-gunluk-puantaj` string'i
-de temizlenecek (sadece string, sayfanın kendisi değil).
-
-> ⚠️ Bu işlem yapılmadı. Bir sonraki oturumda başlanacak.
+Not:
+- Entity / Servis / Migration / DB tablolarına dokunulmadı.
+- Eski sayfalar yerine yeni ekranlar (`/operasyon/puantaj`, `/operasyonel-hakedis`) aktif kullanımdadır.
 
 ---
 
@@ -183,13 +212,13 @@ de temizlenecek (sadece string, sayfanın kendisi değil).
 | K5 | Yeni alanlar `Required` yapılmayacak | Eski kayıtlar geçerli kalsın | Tasarım dokümanı |
 | K6 | `ServisKontratTip` ile `AracSahiplikTipi` farkı korunacak | Kontrat tipi ≠ araç tipi (aynı araç farklı kontratta farklı tip olabilir) | Temmuz 2026 analizi |
 | K7 | Mevcut 3 puantaj UI sayfası silinecek, sıfırdan yazılacak | Sayfalar menüde yok, 1887+568+? satır bakımsız kod, temiz başlamak daha iyi | Temmuz 2026 analizi |
-| K8 | `HakedisPuantajService` ve `HakedisPuantaj` tablosu ölü kod | Hiçbir sayfada inject edilmemiş, Yol B (`OperasyonelHakedisService`) aktif kullanılıyor | Temmuz 2026 analizi |
+| K8 | `HakedisPuantaj` hattı operasyonel UI için legacy kabul edilir | `HakedisPuantajService`/`IHakedisPuantajService` ve DI kaydı kaldırıldı; rapor/denetim/dashboard/muhasebe geçişleri büyük ölçüde yeni `Hakedis` modeline taşındı, kalan tablo/sync bağımlılıkları için kontrollü temizlik gerekir | Temmuz 2026 güncel analizi |
 
 ---
 
 ## 5. ÖNERİLEN UYGULAMA SIRALAMASI
 
-### FAZ 0 — Temizlik (DEVAM EDİYOR)
+### FAZ 0 — Temizlik (TAMAMLANDI)
 
 **Hedef:** Eski UI sayfalarını sil, build temiz kalsın, yeni sayfa için alan aç.
 
@@ -198,15 +227,15 @@ de temizlenecek (sadece string, sayfanın kendisi değil).
 - `FiloHakedisPage.razor` silindi
 - `FiloPuantaj.razor` silindi
 
-#### Adım 0.2 — Kalan referansları temizle ⏳ YAPILACAK
-- `GuzergahForm.razor` satır ~1278 → `NavigateTo("/filo-gunluk-puantaj")` kaldırılacak
-- `FiloKpiDashboard.razor` satır ~270 → `filo/puantaj` linki kaldırılacak
-- `NavMenu.razor` satır ~1340 → `"filo-gunluk-puantaj"` string'i kaldırılacak
+#### Adım 0.2 — Kalan referansları temizle ✅ TAMAMLANDI
+- `GuzergahForm.razor` eski `NavigateTo("/filo-gunluk-puantaj")` referansı kaldırıldı
+- `FiloKpiDashboard.razor` eski `filo/puantaj` linki kaldırıldı
+- `NavMenu.razor` içinden `"filo-gunluk-puantaj"` string'i kaldırıldı
 
-#### Adım 0.3 — Build doğrula ⏳ YAPILACAK
-- Hedef: 0 warning, 0 error
+#### Adım 0.3 — Build doğrula ✅ TAMAMLANDI
+- Son durum: Build başarılı
 
-> ⚠️ Adım 0.1 tamamlandı. Adım 0.2–0.3 bir sonraki oturumda yapılacak.
+> ✅ FAZ 0 tamamlandı. Sistem temiz durumla FAZ 1'e geçti.
 
 ---
 
@@ -279,7 +308,8 @@ if (snapshot.FirstOrDefault() is { } s && s.ToplamSefer > 0)
 
 ### Servisler
 - `MKFiloServis.Web/Services/OperasyonelHakedisService.cs` → YENİ, ÇALIŞIYOR (632 satır)
-- `MKFiloServis.Web/Services/HakedisPuantajService.cs` → ESKİ (505 satır, göz ardı edilecek)
+- `MKFiloServis.Web/Services/HakedisMuhasebeService.cs` → YENİ `Hakedis` modeliyle muhasebe fiş entegrasyonu
+- `MKFiloServis.Web/Services/PuantajHakedisSyncService.cs` → Legacy `HakedisPuantaj` sync hattı (kademeli temizlik adayı)
 - `MKFiloServis.Web/Services/FiloKomisyonService.cs` → `FiloGunlukPuantaj` CRUD
 - `MKFiloServis.Web/Services/AracMaliyetService.cs` → Snapshot ve Fullpet dağıtım
 - `MKFiloServis.Web/Services/ServisKontratService.cs` → Kontrat ve birim fiyat
@@ -300,18 +330,22 @@ if (snapshot.FirstOrDefault() is { } s && s.ToplamSefer > 0)
 
 "Devam edelim" dediğinde şu konudan başlayacağız:
 
-> **FAZ 0 devam — Kalan adımlar:**
-> 1. ✅ `FiloGunlukPuantajPage.razor` silindi
-> 2. ✅ `FiloHakedisPage.razor` silindi
-> 3. ✅ `FiloPuantaj.razor` silindi
-> 4. ✅ `GuzergahForm.razor` NavigateTo referansı kaldırıldı
-> 5. ✅ `FiloKpiDashboard.razor` filo/puantaj linki kaldırıldı
-> 6. ✅ `NavMenu.razor` `"filo-gunluk-puantaj"` string temizlendi
-> 7. ✅ Build doğrulandı (başarılı)
+> **FAZ 1 sonrası iyileştirme adımları:**
+> 1. ✅ `OperasyonelPuantajPage.razor` aktif ve günlük satır üretimi çalışıyor
+> 2. ✅ Satır bazlı ve toplu düzenleme/kaydet (batch) tamamlandı
+> 3. ✅ Tahakkuk ve maliyet snapshot entegrasyonu tamamlandı
+> 4. ✅ `OperasyonelHakedisPage.razor` aktif (toplu işlem + PDF)
 >
-> Ardından **FAZ 1** ile yeni operasyonel puantaj sayfasını sıfırdan yazmaya başlarız.
-> Sayfa adı: `OperasyonelPuantajPage.razor` — rota: `/operasyon/puantaj`
-> Veri kaynağı: `ServisKontrat` → `FiloGunlukPuantaj` (mevcut entity'ler korunuyor)
+> **Sonraki öncelik (öneri):**
+> 1. ✅ `PuantajFinansService` legacy `HakedisPuantaj` işleme overload'u kaldırıldı; `RebuildService` akışı yalnız `Hakedis` modeliyle çalışıyor.
+> 2. ✅ DenetimService içinde SnapshotTransaction eşlemesi yeni modele uygun şekilde `FaturaId` bazına geçirildi.
+> 3. ✅ `PuantajFinansService` + denetim/dashboard tarafında snapshot tutarlılık uç durumları sertleştirildi (`HakedisFinans*` filtreleme, taslak/iptal dışlama, `GenelToplam`→`Tutar` fallback).
+> 4. ✅ `PuantajExcelService` import hattı `HakedisPuantaj` bağımlılığından çıkarıldı (yeni `Hakedis` modeline geçirildi).
+> 5. ✅ `PuantajHakedisSyncService` ve `PuantajExcelGrid` senkronizasyon/validasyon akışı yeni `Hakedis` modeline taşındı.
+> 6. ✅ TestSession backup/rollback ve TopluFatura yönlendirme metni yeni `Hakedis` modeliyle hizalandı.
+> 7. ✅ Operasyonel puantaj ekranında arama + sahiplik/servis türü filtreleri eklendi; tablo, toplu seçim ve toplu kaydet akışı filtreli listeyle uyumlu hale getirildi.
+> 8. ▶ Yeni faz önerisi: `HakedisPuantaj` tablo katmanını arşivleme/kaldırma için migration planı çıkar (şema etkisi + geri dönüş stratejisi + veri saklama kararı).
+> 9. 🟡 Operasyonel puantaj/hakediş test fazı genişletildi: Playwright smoke kapsamında ekran açılışı, filtre temizleme, varsayılan pasif buton durumları, seçim sonrası buton aktifleşmeleri, click-to-result akışları ve opsiyonel state-transition (`CRMFILO_SMOKE_ALLOW_MUTATION=true`) kontrolleri eklendi (Program.cs). Sonraki adım: rebuild + dashboard + denetim tutarlılık senaryoları için servis/integration testleri.
 
 ---
 
@@ -323,8 +357,87 @@ if (snapshot.FirstOrDefault() is { } s && s.ToplamSefer > 0)
 | Kontrat tipi enum nerede? | `ServisKontrat.cs` → `ServisKontratTip` (Ozmal/Kiralik/Tedarikci) |
 | Araç tipi enum nerede? | `Arac.cs` → `AracSahiplikTipi` (Ozmal=1, Kiralik=2, Tedarikci=5) |
 | Çalışan hakediş servisi hangisi? | `OperasyonelHakedisService` (IOperasyonelHakedisService) |
-| Eski hakediş servisi hangisi? | `HakedisPuantajService` (IHakedisPuantajService) — göz ardı edilecek |
+| Eski hakediş servisi hangisi? | `HakedisPuantajService` (IHakedisPuantajService) kaldırıldı; legacy hat ağırlıklı `HakedisPuantaj` tabloları (`ApplicationDbContext` + migration geçmişi) üzerinden devam ediyor |
 | Maliyet snapshot nerede? | `AracMaliyetService` + `AracMaliyetSnapshot` entity |
 | DB provider? | PostgreSQL (Host=localhost, Port=5432, DB=MKFiloServis) |
-| Build durumu? | ✅ 0 warning, 0 error (Temmuz 2026) |
+| Build durumu? | ✅ Başarılı (Temmuz 2026 — son geçiş adımları + PlaywrightSmoke deterministik modda Toplu Hakediş Üret `Hatalı=0` metrik doğrulaması sonrası doğrulandı) |
 | Fullpet dağıtımı nasıl? | `IAracMaliyetService.FullpetFaturaDagitAsync(...)` |
+| Opsiyonel mutasyonlu smoke nasıl açılır? | `CRMFILO_SMOKE_ALLOW_MUTATION=true` **veya** CLI'da `--allow-mutation` (hakediş state-transition adımını SKIP yerine aktif çalıştırır) |
+| Demo veri hazırlıklı smoke nasıl açılır? | `CRMFILO_SMOKE_PREPARE_DEMO=true` **veya** CLI'da `--prepare-demo-data` (login sonrası `/admin/test` ekranında reset+seed adımı çalıştırılır; bu modda bazı hakediş kontrolleri SKIP yerine FAIL'e çevrilir ve dağılım ön-kontrolü yapılır) |
+| Deterministik hakediş filtresi nasıl verilir? | CLI: `--hakedis-year=2026 --hakedis-month=7 --hakedis-tip=Kurum` veya env: `CRMFILO_SMOKE_HAKEDIS_YEAR`, `CRMFILO_SMOKE_HAKEDIS_MONTH`, `CRMFILO_SMOKE_HAKEDIS_TIP` |
+
+---
+
+## 9. YENİ FAZ ÖNERİSİ — LEGACY TABLO ARŞİVLEME + ENTEGRASYON TESTLERİ
+
+### 9.1 `HakedisPuantaj` Tablo Katmanı için Güvenli Geçiş Planı
+
+**Hedef:** Aktif iş akışlarını bozmadan, legacy `HakedisPuantaj*` tablolarını üretim akışından çıkarıp arşiv/uyumluluk seviyesine almak.
+
+#### Aşama A — Envanter ve Donma
+1. `ApplicationDbContext` ve migration geçmişi dışında kalan tüm `HakedisPuantaj*` kod referanslarını tekrar tara.
+2. Yeni iş geliştirmelerinde `HakedisPuantaj*` kullanımını yasakla (yalnızca `Hakedis/HakedisDetay`).
+3. Dokümanda “legacy donma tarihi” notu ekle.
+
+#### Aşama B — Veri Saklama Kararı
+1. **Arşivle ve tut** (önerilen): tablolar DB’de kalsın, uygulama yazmasın.
+2. **Tam kaldır**: veri yedek/export sonrası migration ile drop.
+3. Karar öncesi zorunlu çıktı:
+   - Son 12 ay kayıt adedi
+   - Denetim/muhasebe bağımlılık teyidi
+   - Geri dönüş senaryosu (rollback)
+
+#### Aşama C — Migration Stratejisi
+1. `HakedisPuantaj*` tablolarına yazan kod yollarını kaldırdıktan sonra migration üret.
+2. Seçime göre:
+   - Arşiv modelinde: tablo kalır, DbSet kaldırılmazsa `[Obsolete]` notu + kullanım engeli.
+   - Kaldırma modelinde: FK sırasına dikkat ederek kontrollü drop migration.
+3. Migration sonrası smoke kontrol:
+   - Operasyonel puantaj liste/kaydet
+   - Operasyonel hakediş üret/onay/faturala
+   - Rebuild + Denetim + Finans dashboard
+
+### 9.2 Operasyonel Akış için Temel Entegrasyon Test Seti (Öneri)
+
+#### Senaryo Grubu 1 — Üretim Akışı
+- `FiloGunlukPuantaj` verisinden `Hakedis` üretimi
+- Kurum/Tedarikçi/Araç tip ayrımı
+- Toplam/GenelToplam fallback doğrulaması
+
+#### Senaryo Grubu 2 — Finans Zinciri
+- `PuantajFinansService.IsleAsync(Hakedis)` ile fatura oluşumu
+- SnapshotTransaction (`HakedisFinans*`) yazımı
+- Snapshot gelir/gider delta tutarlılığı
+
+#### Senaryo Grubu 3 — Rebuild/Denetim/Dashboard
+- Rebuild sonrası snapshot ve hakediş toplamlarının eşitliği
+- Denetim skorunun false-positive üretmemesi (taslak/iptal hariç)
+- Dashboard fallback’inde `GenelToplam -> Tutar` davranışı
+
+#### Senaryo Grubu 4 — UI Kritik Akışları (Blazor)
+- ✅ Playwright smoke: Operasyonel puantaj ekran açılışı (`/operasyon/puantaj`) doğrulandı
+- ✅ Playwright smoke: Operasyonel puantaj filtre temizleme aksiyonu doğrulandı (`Arama yazın...` + `Temizle`)
+- ✅ Playwright smoke: Operasyonel puantaj toplu aksiyon butonları başlangıçta pasif doğrulandı (`Toplu Sefer Uygula`, `Seçilenleri Kaydet`)
+- ✅ Playwright smoke: Operasyonel puantajda seçim + sefer değeri sonrası `Toplu Sefer Uygula` click-to-result akışı doğrulandı (uygun veri yoksa kontrollü SKIP)
+- ✅ Playwright smoke: Operasyonel puantajda satır seçimi sonrası `Seçilenleri Kaydet` butonu aktifleşmesi doğrulandı (uygun veri yoksa kontrollü SKIP)
+- ✅ Playwright smoke: Operasyonel hakediş ekran açılışı (`/operasyonel-hakedis`) doğrulandı
+- ✅ Playwright smoke: Operasyonel hakediş dönem validasyonu doğrulandı (`Ay=13` → `Geçersiz dönem seçimi.`)
+- ✅ Playwright smoke: Operasyonel hakediş toplu aksiyon butonları başlangıçta pasif doğrulandı (`Toplu Onayla`, `Toplu Faturala`, `Toplu Sil`)
+- ✅ Playwright smoke: Operasyonel hakedişte `Tümünü Seç` / `Seçimi Temizle` etkileşimi doğrulandı (kayıt yoksa kontrollü SKIP)
+- ✅ Playwright smoke: Operasyonel hakedişte satır seçimi sonrası en az bir toplu aksiyon butonu aktifleşmesi doğrulandı (duruma göre kontrollü SKIP)
+- ✅ Playwright smoke: Operasyonel hakedişte opsiyonel state-transition akışı eklendi (`CRMFILO_SMOKE_ALLOW_MUTATION=true` veya `--allow-mutation` ile toplu onay/faturalama/sil aksiyonlarından uygun olanı çalıştırıp sonuç mesajı doğrulanır; aksi durumda kontrollü SKIP)
+- ✅ Playwright smoke: Opsiyonel demo veri hazırlık adımı eklendi (`CRMFILO_SMOKE_PREPARE_DEMO=true` veya `--prepare-demo-data` ile login sonrası `/admin/test` üzerinden reset+seed çalıştırılır)
+- ✅ Playwright smoke: Deterministik veri beklenti kuralı eklendi (demo seed açıkken hakediş senaryolarındaki “kayıt yok/uygun aksiyon yok” durumları SKIP yerine FAIL olarak değerlendirilir)
+- ✅ Playwright smoke: Demo seed sonrası hakediş listesinde deterministik durum dağılımı ön-kontrolü eklendi (`Taslak`/`Onaylandi` varlığı doğrulanır)
+- ✅ Playwright smoke: Dağılım kontrolü metin taramadan çıkarılıp durum kolonu badge locator’ına (`td:nth-child(9) span.badge`) taşındı
+- ✅ Playwright smoke: Deterministik dağılım kontrolü dönem/tip filtreleriyle daraltıldı (Kurum + seçili ay/yıl + Listele)
+- ✅ Playwright smoke: Dağılım kontrolünden önce seçili dönem/tip için `Toplu Hakediş Üret` tetiklenerek test verisi daha deterministik hale getirildi
+- ✅ Playwright smoke: `Toplu Hakediş Üret` başarı mesajı parse edilerek `Üretilen` adedinin `> 0` olması zorunlu kılındı (aksi durumda FAIL)
+- ✅ Playwright smoke: `Toplu Hakediş Üret` özet metriklerinde `Hatalı=0` beklentisi eklendi (deterministik modda hata toleransı kaldırıldı; `Atlanan` metrikleri loglanır)
+- ✅ Playwright smoke: Deterministik dağılım filtresi parametrik hale getirildi (CLI/env ile yıl/ay/tip verilebilir)
+- ✅ Playwright smoke: Toplu üretim öncesi/sonrası hakediş ID kıyası eklendi (`Üretilen>0` iken yeni ID oluşumu zorunlu) ve run-bazlı izolasyon sinyali güçlendirildi
+- ✅ Playwright smoke: Deterministik modda bulk-action/state-transition adımları yeni üretilen hakedişleri (`ID > oncekiMaxId`) hedefleyecek şekilde ID-eşikli seçime taşındı
+- ✅ Playwright smoke: Hakediş bulk-action ve state-transition senaryoları da aynı deterministik dönem/tip filtresine bağlandı (demo seed modunda tek veri kümesi hedefleniyor)
+- ⏳ Sonraki adım: gerçek fixture/marker (örn. test run id) alanı ile doğrudan etiketleme yapıp ID kıyasına ek olarak marker-bazlı filtre doğrulaması eklemek
+
+**Başarı ölçütü:** Yukarıdaki test seti yeşil olmadan `HakedisPuantaj` tablo katmanında fiziksel kaldırma yapılmaz.

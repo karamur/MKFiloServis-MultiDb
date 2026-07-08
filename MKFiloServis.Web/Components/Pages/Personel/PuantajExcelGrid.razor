@@ -1,4 +1,4 @@
-@page "/personel/puantaj-grid"
+﻿@page "/personel/puantaj-grid"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Data
 @using MKFiloServis.Web.Services
@@ -10,6 +10,7 @@
 @inject IJSRuntime JS
 @inject MKFiloServis.Web.Services.Interfaces.IPuantajHakedisSyncService SyncService
 @inject MKFiloServis.Web.Services.AI.AnomalyDetectionService AIService
+@inject PuantajExcelService PuantajExcelSvc
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @rendermode InteractiveServer
 
@@ -76,7 +77,20 @@
                         <i class="bi bi-arrow-repeat me-1"></i>Yükle
                     </button>
                 </div>
-                <div class="col-auto ms-auto d-flex gap-2">
+                <div class="col-auto ms-auto d-flex gap-2 align-items-end flex-wrap justify-content-end">
+                    <div>
+                        <label class="form-label small mb-1">Excel Preview</label>
+                        <InputFile class="form-control form-control-sm" OnChange="ExcelDosyaSecildi" accept=".xlsx,.xls" />
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-primary btn-sm" @onclick="ExcelOnizlemeYap" disabled="@(_excelIsleniyor || _excelDosya is null)">
+                            <i class="bi bi-file-earmark-check me-1"></i>Önizleme
+                        </button>
+                        <button class="btn btn-outline-success btn-sm" @onclick="ExcelImportYap" disabled="@(_excelIsleniyor || _excelDosya is null)">
+                            <i class="bi bi-database-add me-1"></i>Import
+                        </button>
+                    </div>
+
                     @* Toplu satır işlemleri — sadece seçili satıra uygulanır *@
                     <div class="dropdown">
                         <button class="btn btn-outline-warning btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown"
@@ -112,6 +126,85 @@
         <div class="alert @(_mesajHata ? "alert-danger" : "alert-success") py-2 mb-2 alert-dismissible fade show" role="alert">
             @_mesaj
             <button type="button" class="btn-close btn-sm" @onclick="() => _mesaj = null"></button>
+        </div>
+    }
+
+    @if (_excelOnizlemeOzet is not null)
+    {
+        <div class="alert alert-info py-2 mb-2">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <strong>Excel Önizleme Özeti</strong>
+                    <div class="small text-muted">Dosya: @(_excelDosyaAdi ?? "-")</div>
+                </div>
+                <div class="small">
+                    Toplam: <strong>@_excelOnizlemeOzet.Toplam</strong> •
+                    Geçerli: <strong>@_excelOnizlemeOzet.Gecerli</strong> •
+                    Hatalı: <strong>@_excelOnizlemeOzet.Hatali</strong> •
+                    Uyarılı: <strong>@_excelOnizlemeOzet.Uyarili</strong>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_importErrors.Any() || _importWarnings.Any())
+    {
+        <div class="alert alert-warning py-2 mb-2">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <strong>Import Doğrulama Sonucu</strong>
+                    <div class="small text-muted">Hata: @_importErrors.Count • Uyarı: @_importWarnings.Count</div>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-danger btn-sm"
+                            @onclick="HataCsvIndirAsync"
+                            disabled="@(!_importErrors.Any())"
+                            title="Hataları CSV olarak indir">
+                        <i class="bi bi-download me-1"></i>Hata CSV İndir
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="ImportValidationStateTemizle">
+                        <i class="bi bi-x-circle me-1"></i>Temizle
+                    </button>
+                </div>
+            </div>
+
+            @if (_importErrors.Any())
+            {
+                <div class="table-responsive mt-2">
+                    <table class="table table-sm table-bordered mb-0 small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Satır</th>
+                                <th>Alan</th>
+                                <th>Kod</th>
+                                <th>Mesaj</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var err in _importErrors.Take(10))
+                            {
+                                <tr>
+                                    <td>@(err.RowNumber?.ToString() ?? "-")</td>
+                                    <td>@err.ColumnName</td>
+                                    <td><code>@err.ErrorCode</code></td>
+                                    <td>@err.Message</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (_importErrors.Count > 10)
+                {
+                    <div class="small text-muted mt-1">İlk 10 hata gösteriliyor. Tam liste için CSV indirin.</div>
+                }
+            }
+
+            @if (_importWarnings.Any())
+            {
+                <div class="small text-muted mt-2">
+                    Uyarılar: @string.Join(" | ", _importWarnings.Take(3).Select(w => $"{w.ErrorCode}: {w.Message}"))
+                </div>
+            }
         </div>
     }
 

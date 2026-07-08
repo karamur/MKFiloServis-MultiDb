@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -7,10 +7,8 @@ using MKFiloServis.Web.Services.Interfaces;
 namespace MKFiloServis.Web.Services;
 
 /// <summary>
-/// Hakediş → Muhasebe fişi entegrasyonu.
-/// Her hakediş için 2 AYRI fiş oluşturur: GELIR + GIDER.
-/// Bordro muhasebesinden BAĞIMSIZDIR.
-/// Transaction güvenliklidir.
+/// Yeni hakediş modeli (Hakedis) → Muhasebe fişi entegrasyonu.
+/// Kurum hakedişinde GELİR, Tedarikçi hakedişinde GİDER fişi oluşturur.
 /// </summary>
 public class HakedisMuhasebeService : IHakedisMuhasebeService
 {
@@ -34,20 +32,38 @@ public class HakedisMuhasebeService : IHakedisMuhasebeService
         {
             await using var context = await _cf.CreateDbContextAsync();
 
-            var hakedis = await context.HakedisPuantajlar
-                .Include(h => h.Cari)
-                .FirstOrDefaultAsync(h => h.Id == hakedisId && !h.IsDeleted);
+            var hakedis = await context.Hakedisler
+                .Include(h => h.Fatura)
+                .FirstOrDefaultAsync(h => h.Id == hakedisId && !h.IsDeleted)
+                ?? throw new InvalidOperationException("Hakediş bulunamadı.");
 
-            if (hakedis == null)
-                throw new InvalidOperationException("Hakediş bulunamadı.");
-            if (hakedis.Durum != HakedisDurumu.Onaylandi)
-                throw new InvalidOperationException("Sadece onaylanmış hakediş muhasebeye aktarılabilir.");
-            if (hakedis.MuhasebeyeAktarildiMi)
-                throw new InvalidOperationException("Bu hakediş zaten muhasebeye aktarılmış.");
+            if (hakedis.FirmaId is null or <= 0)
+                throw new InvalidOperationException("Hakediş için FirmaId zorunludur.");
 
-            _logger.LogInformation("Hakediş muhasebe aktarım başladı. HakedisId={HakedisId}", hakedisId);
+            if (hakedis.Durum is not (HakedisDurum.Onaylandi or HakedisDurum.Faturalandi))
+                throw new InvalidOperationException("Sadece onaylı veya faturalanmış hakediş muhasebeye aktarılabilir.");
 
-            // ── Ayarları DB'den al ──
+            if (hakedis.Tip == HakedisTipi.Arac)
+                throw new InvalidOperationException("Araç tipi hakediş muhasebeye aktarılmaz.");
+
+            var zatenVar = await context.MuhasebeFisleri
+                .AsNoTracking()
+                .AnyAsync(f => !f.IsDeleted && f.KaynakTip == "Hakedis" && f.KaynakId == hakedis.Id);
+
+            if (zatenVar)
+                throw new InvalidOperationException("Bu hakediş için muhasebe fişi zaten oluşturulmuş.");
+
+            var fatura = hakedis.FaturaId.HasValue
+                ? await context.Faturalar.FirstOrDefaultAsync(f => f.Id == hakedis.FaturaId.Value && !f.IsDeleted)
+                : null;
+
+            if (fatura != null && fatura.MuhasebeFisId.HasValue)
+                throw new InvalidOperationException("Bağlı fatura için muhasebe fişi zaten mevcut.");
+
+            var cariId = fatura?.CariId ?? await ResolveCariIdAsync(context, hakedis);
+
+            _logger.LogInformation("Hakediş muhasebe aktarım başladı. HakedisId={HakedisId}, Tip={Tip}", hakedisId, hakedis.Tip);
+
             var ayar = await context.MuhasebeAyarlari.FirstOrDefaultAsync();
             var gelirHesapKodu = !string.IsNullOrWhiteSpace(ayar?.SatisGelirHesabi) ? ayar!.SatisGelirHesabi : "600.01";
             var giderHesapKodu = !string.IsNullOrWhiteSpace(ayar?.AlisGiderHesabi) ? ayar!.AlisGiderHesabi : "740.01";
@@ -56,7 +72,6 @@ public class HakedisMuhasebeService : IHakedisMuhasebeService
             var hesaplananKdv = !string.IsNullOrWhiteSpace(ayar?.HesaplananKdvHesabi) ? ayar!.HesaplananKdvHesabi : "391.01";
             var indirilecekKdv = !string.IsNullOrWhiteSpace(ayar?.IndirilecekKdvHesabi) ? ayar!.IndirilecekKdvHesabi : "191.01";
 
-            // ── Hesapları bul ──
             var musteriHesap = await FindHesap(context, musteriPrefix);
             var tedarikciHesap = await FindHesap(context, tedarikciPrefix);
             var gelirHesap = await FindHesap(context, gelirHesapKodu);
@@ -64,80 +79,137 @@ public class HakedisMuhasebeService : IHakedisMuhasebeService
             var hkdvHesap = await FindHesap(context, hesaplananKdv);
             var ikdvHesap = await FindHesap(context, indirilecekKdv);
 
-            var fisTarihi = new DateTime(hakedis.Yil, hakedis.Ay, DateTime.DaysInMonth(hakedis.Yil, hakedis.Ay));
-            var donemAdi = $"{hakedis.Ay}/{hakedis.Yil}";
+            var fisTarihi = fatura?.FaturaTarihi.Date ?? new DateTime(hakedis.Yil, hakedis.Ay, DateTime.DaysInMonth(hakedis.Yil, hakedis.Ay));
+            var donemAdi = $"{hakedis.Ay:D2}/{hakedis.Yil}";
 
             await using var tx = await context.Database.BeginTransactionAsync();
 
             try
             {
-                // ═══════ GELİR FİŞİ ═══════
-                var gfNo = await _ms.GenerateNextFisNoAsync(FisTipi.Mahsup, hakedis.FirmaId ?? 0);
-                var gf = new MuhasebeFis
+                var fisNo = await _ms.GenerateNextFisNoAsync(FisTipi.Mahsup, hakedis.FirmaId.Value);
+                var gelirMi = hakedis.Tip == HakedisTipi.Kurum;
+
+                var fis = new MuhasebeFis
                 {
-                    FisNo = gfNo, FisTarihi = fisTarihi, FisTipi = FisTipi.Mahsup,
-                    Aciklama = $"Hakediş Gelir — {donemAdi} / {hakedis.Cari?.Unvan}",
-                    ToplamBorc = hakedis.TahsilEdilecekTutar,
-                    ToplamAlacak = hakedis.TahsilEdilecekTutar,
-                    Durum = FisDurum.Onaylandi, Kaynak = FisKaynak.Otomatik,
-                    KaynakTip = "HakedisGelir", KaynakId = hakedis.Id, CreatedAt = DateTime.UtcNow
+                    FisNo = fisNo,
+                    FisTarihi = fisTarihi,
+                    FisTipi = FisTipi.Mahsup,
+                    Aciklama = gelirMi
+                        ? $"Hakediş Gelir — {donemAdi} / Hakedis #{hakedis.Id}"
+                        : $"Hakediş Gider — {donemAdi} / Hakedis #{hakedis.Id}",
+                    ToplamBorc = hakedis.GenelToplam,
+                    ToplamAlacak = hakedis.GenelToplam,
+                    Durum = FisDurum.Onaylandi,
+                    Kaynak = FisKaynak.Otomatik,
+                    KaynakTip = "Hakedis",
+                    KaynakId = hakedis.Id,
+                    CreatedAt = DateTime.UtcNow
                 };
-                context.MuhasebeFisleri.Add(gf);
+
+                context.MuhasebeFisleri.Add(fis);
                 await context.SaveChangesAsync();
 
-                int s = 0;
-                // 120 BORÇ — Müşteriden alacak
-                context.MuhasebeFisKalemleri.Add(new MuhasebeFisKalem { FisId = gf.Id, HesapId = musteriHesap.Id, SiraNo = ++s, Borc = hakedis.TahsilEdilecekTutar, Alacak = 0, Tarih = fisTarihi, CariId = hakedis.CariId, Aciklama = "Hakediş tahsilat", CreatedAt = DateTime.UtcNow });
-                // 600 ALACAK — Gelir
-                context.MuhasebeFisKalemleri.Add(new MuhasebeFisKalem { FisId = gf.Id, HesapId = gelirHesap.Id, SiraNo = ++s, Borc = 0, Alacak = hakedis.GelirToplam, Tarih = fisTarihi, Aciklama = "Hakediş gelir", CreatedAt = DateTime.UtcNow });
-                // 391 ALACAK — Hesaplanan KDV
-                if (hakedis.GelirKdvTutari > 0)
-                    context.MuhasebeFisKalemleri.Add(new MuhasebeFisKalem { FisId = gf.Id, HesapId = hkdvHesap.Id, SiraNo = ++s, Borc = 0, Alacak = hakedis.GelirKdvTutari, Tarih = fisTarihi, Aciklama = "Hesaplanan KDV", CreatedAt = DateTime.UtcNow });
-
-                // ═══════ GİDER FİŞİ ═══════
-                var gf2No = await _ms.GenerateNextFisNoAsync(FisTipi.Mahsup, hakedis.FirmaId ?? 0);
-                var gf2 = new MuhasebeFis
+                var sira = 0;
+                if (gelirMi)
                 {
-                    FisNo = gf2No, FisTarihi = fisTarihi, FisTipi = FisTipi.Mahsup,
-                    Aciklama = $"Hakediş Gider — {donemAdi} / {hakedis.Cari?.Unvan}",
-                    ToplamBorc = hakedis.OdenecekTutar,
-                    ToplamAlacak = hakedis.OdenecekTutar,
-                    Durum = FisDurum.Onaylandi, Kaynak = FisKaynak.Otomatik,
-                    KaynakTip = "HakedisGider", KaynakId = hakedis.Id, CreatedAt = DateTime.UtcNow
-                };
-                context.MuhasebeFisleri.Add(gf2);
+                    context.MuhasebeFisKalemleri.Add(new MuhasebeFisKalem
+                    {
+                        FisId = fis.Id,
+                        HesapId = musteriHesap.Id,
+                        SiraNo = ++sira,
+                        Borc = hakedis.GenelToplam,
+                        Alacak = 0,
+                        Tarih = fisTarihi,
+                        CariId = cariId,
+                        Aciklama = "Hakediş tahsilat",
+                        CreatedAt = DateTime.UtcNow
+                    });
+
+                    context.MuhasebeFisKalemleri.Add(new MuhasebeFisKalem
+                    {
+                        FisId = fis.Id,
+                        HesapId = gelirHesap.Id,
+                        SiraNo = ++sira,
+                        Borc = 0,
+                        Alacak = hakedis.Tutar,
+                        Tarih = fisTarihi,
+                        Aciklama = "Hakediş gelir",
+                        CreatedAt = DateTime.UtcNow
+                    });
+
+                    if (hakedis.KdvTutar > 0)
+                    {
+                        context.MuhasebeFisKalemleri.Add(new MuhasebeFisKalem
+                        {
+                            FisId = fis.Id,
+                            HesapId = hkdvHesap.Id,
+                            SiraNo = ++sira,
+                            Borc = 0,
+                            Alacak = hakedis.KdvTutar,
+                            Tarih = fisTarihi,
+                            Aciklama = "Hesaplanan KDV",
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+                else
+                {
+                    context.MuhasebeFisKalemleri.Add(new MuhasebeFisKalem
+                    {
+                        FisId = fis.Id,
+                        HesapId = giderHesap.Id,
+                        SiraNo = ++sira,
+                        Borc = hakedis.Tutar,
+                        Alacak = 0,
+                        Tarih = fisTarihi,
+                        Aciklama = "Hakediş gider",
+                        CreatedAt = DateTime.UtcNow
+                    });
+
+                    if (hakedis.KdvTutar > 0)
+                    {
+                        context.MuhasebeFisKalemleri.Add(new MuhasebeFisKalem
+                        {
+                            FisId = fis.Id,
+                            HesapId = ikdvHesap.Id,
+                            SiraNo = ++sira,
+                            Borc = hakedis.KdvTutar,
+                            Alacak = 0,
+                            Tarih = fisTarihi,
+                            Aciklama = "İndirilecek KDV",
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+
+                    context.MuhasebeFisKalemleri.Add(new MuhasebeFisKalem
+                    {
+                        FisId = fis.Id,
+                        HesapId = tedarikciHesap.Id,
+                        SiraNo = ++sira,
+                        Borc = 0,
+                        Alacak = hakedis.GenelToplam,
+                        Tarih = fisTarihi,
+                        CariId = cariId,
+                        Aciklama = "Tedarikçiye borç",
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+
                 await context.SaveChangesAsync();
 
-                s = 0;
-                // 740 BORÇ — Hizmet gideri
-                context.MuhasebeFisKalemleri.Add(new MuhasebeFisKalem { FisId = gf2.Id, HesapId = giderHesap.Id, SiraNo = ++s, Borc = hakedis.GiderToplam, Alacak = 0, Tarih = fisTarihi, Aciklama = "Hakediş gider", CreatedAt = DateTime.UtcNow });
-                // 191 BORÇ — İndirilecek KDV
-                if (hakedis.KdvTutari > 0)
-                    context.MuhasebeFisKalemleri.Add(new MuhasebeFisKalem { FisId = gf2.Id, HesapId = ikdvHesap.Id, SiraNo = ++s, Borc = hakedis.KdvTutari, Alacak = 0, Tarih = fisTarihi, Aciklama = "İndirilecek KDV", CreatedAt = DateTime.UtcNow });
-                // 320 ALACAK — Tedarikçiye borç
-                context.MuhasebeFisKalemleri.Add(new MuhasebeFisKalem { FisId = gf2.Id, HesapId = tedarikciHesap.Id, SiraNo = ++s, Borc = 0, Alacak = hakedis.OdenecekTutar, Tarih = fisTarihi, CariId = hakedis.CariId, Aciklama = $"Ödenecek — {hakedis.Cari?.Unvan}", CreatedAt = DateTime.UtcNow });
+                if (fatura != null)
+                {
+                    fatura.MuhasebeFisiOlusturuldu = true;
+                    fatura.MuhasebeFisId = fis.Id;
+                    fatura.UpdatedAt = DateTime.UtcNow;
+                }
 
-                // ── Hakedişi güncelle ──
-                hakedis.GelirFisId = gf.Id;
-                hakedis.GiderFisId = gf2.Id;
-                hakedis.MuhasebeyeAktarildiMi = true;
                 hakedis.UpdatedAt = DateTime.UtcNow;
-                var affected = await context.SaveChangesAsync();
-
-                if (affected <= 0)
-                    throw new InvalidOperationException($"Hakediş muhasebe aktarım sonucu DB'ye yazılamadı. HakedisId={hakedisId}");
+                await context.SaveChangesAsync();
 
                 await tx.CommitAsync();
 
-                var kontrol = await context.HakedisPuantajlar
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(h => h.Id == hakedisId && !h.IsDeleted);
-
-                if (kontrol == null || !kontrol.MuhasebeyeAktarildiMi || !kontrol.GelirFisId.HasValue || !kontrol.GiderFisId.HasValue)
-                    throw new InvalidOperationException($"Muhasebe aktarım sonrası hakediş doğrulanamadı. HakedisId={hakedisId}");
-
-                _logger.LogInformation("Hakediş muhasebe aktarım tamamlandı. HakedisId={HakedisId}, GelirFisId={GelirFisId}, GiderFisId={GiderFisId}",
-                    hakedisId, kontrol.GelirFisId, kontrol.GiderFisId);
+                _logger.LogInformation("Hakediş muhasebe aktarım tamamlandı. HakedisId={HakedisId}, FisId={FisId}", hakedisId, fis.Id);
             }
             catch (Exception ex)
             {
@@ -148,6 +220,34 @@ public class HakedisMuhasebeService : IHakedisMuhasebeService
         });
     }
 
+    private static async Task<int> ResolveCariIdAsync(ApplicationDbContext context, Hakedis h)
+    {
+        if (h.Tip == HakedisTipi.Kurum)
+        {
+            var firma = await context.Firmalar.FirstOrDefaultAsync(f => f.Id == h.ReferansId)
+                        ?? throw new InvalidOperationException("Kurum (Firma) bulunamadı.");
+
+            if (firma.CariId.HasValue && firma.CariId.Value > 0)
+                return firma.CariId.Value;
+
+            var cari = await context.Cariler.FirstOrDefaultAsync(c => !c.IsDeleted && (c.Unvan == firma.FirmaAdi || c.Unvan == firma.UnvanTam));
+            return cari?.Id ?? throw new InvalidOperationException("Kurum için Cari kaydı bulunamadı.");
+        }
+
+        if (h.Tip == HakedisTipi.Tedarikci)
+        {
+            var t = await context.TasimaTedarikciler.FirstOrDefaultAsync(x => x.Id == h.ReferansId)
+                    ?? throw new InvalidOperationException("Tedarikçi bulunamadı.");
+
+            if (t.CariId is null or 0)
+                throw new InvalidOperationException("Tedarikçi için Cari kaydı bulunamadı.");
+
+            return t.CariId.Value;
+        }
+
+        throw new InvalidOperationException("Bu hakediş tipi için cari hesaplanamaz.");
+    }
+
     private static async Task<MuhasebeHesap> FindHesap(ApplicationDbContext ctx, string kod)
     {
         var h = await ctx.MuhasebeHesaplari
@@ -155,10 +255,6 @@ public class HakedisMuhasebeService : IHakedisMuhasebeService
             ?? await ctx.MuhasebeHesaplari
                 .FirstOrDefaultAsync(x => x.HesapKodu == kod && !x.IsDeleted);
 
-        return h ?? throw new InvalidOperationException(
-            $"Muhasebe hesabı bulunamadı: {kod}. Lütfen hesap planını kontrol edin.");
+        return h ?? throw new InvalidOperationException($"Muhasebe hesabı bulunamadı: {kod}. Lütfen hesap planını kontrol edin.");
     }
 }
-
-
-

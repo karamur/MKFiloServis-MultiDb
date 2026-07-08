@@ -125,14 +125,64 @@ public class AracMaliyetService : IAracMaliyetService
             }
         }
 
-        // FiloGunlukPuantaj'tan toplam sefer ve tahmini km
+        // FiloGunlukPuantaj'tan toplam sefer ve gelir
         var puantajlar = await context.FiloGunlukPuantajlar
             .Where(p => p.AracId == aracId
                      && p.Tarih >= donemBas
-                     && p.Tarih < donemSon)
+                     && p.Tarih < donemSon
+                     && !p.IsDeleted)
             .ToListAsync();
         decimal toplamSefer = puantajlar.Sum(p => p.SeferSayisi);
         decimal toplamGelir = puantajlar.Sum(p => p.TahakkukEdenKurumUcreti);
+
+        // Personel puantajdan (net ödeme) araca düşen şoför maaş payını hesapla.
+        // Aynı şoför birden fazla araçta çalıştıysa sefer oranına göre dağıtılır.
+        decimal soforMaasPayi = 0m;
+        var soforIds = puantajlar.Select(p => p.SoforId).Distinct().ToList();
+        if (soforIds.Count > 0)
+        {
+            var personelPuantajlar = await context.PersonelPuantajlar
+                .Where(pp => soforIds.Contains(pp.PersonelId)
+                          && pp.Yil == yil
+                          && pp.Ay == ay
+                          && !pp.IsDeleted)
+                .ToListAsync();
+
+            var soforAracSeferleri = await context.FiloGunlukPuantajlar
+                .Where(p => soforIds.Contains(p.SoforId)
+                         && p.Tarih >= donemBas
+                         && p.Tarih < donemSon
+                         && !p.IsDeleted)
+                .GroupBy(p => new { p.SoforId, p.AracId })
+                .Select(g => new
+                {
+                    g.Key.SoforId,
+                    g.Key.AracId,
+                    ToplamSefer = g.Sum(x => x.SeferSayisi)
+                })
+                .ToListAsync();
+
+            foreach (var pp in personelPuantajlar)
+            {
+                var soforAraclari = soforAracSeferleri.Where(x => x.SoforId == pp.PersonelId).ToList();
+                var soforToplamSefer = soforAraclari.Sum(x => x.ToplamSefer);
+                if (soforToplamSefer <= 0)
+                    continue;
+
+                var buAracSefer = soforAraclari
+                    .Where(x => x.AracId == aracId)
+                    .Sum(x => x.ToplamSefer);
+
+                if (buAracSefer <= 0)
+                    continue;
+
+                var maasBaz = pp.NetOdeme > 0 ? pp.NetOdeme : pp.BrutMaas;
+                if (maasBaz <= 0)
+                    continue;
+
+                soforMaasPayi += maasBaz * (buAracSefer / soforToplamSefer);
+            }
+        }
 
         snap.YakitMasraf = yakit;
         snap.BakimMasraf = bakim;
@@ -140,10 +190,10 @@ public class AracMaliyetService : IAracMaliyetService
         snap.SigortaMasraf = sigorta;
         snap.KaskoMasraf = kasko;
         snap.PlakaKirasi = plakaKirasi;
+        snap.SoforMaasPayi = Math.Round(soforMaasPayi, 2, MidpointRounding.AwayFromZero);
         snap.DigerMasraf = diger;
         snap.ToplamSefer = toplamSefer;
         snap.ToplamGelir = toplamGelir;
-        // SoforMaasPayi ve AmortismanPayi şu an 0 - ileride bordro entegrasyonu ile doldurulacak.
 
         await context.SaveChangesAsync();
 

@@ -1,14 +1,14 @@
-namespace MKFiloServis.Web.Services.Interfaces;
+﻿namespace MKFiloServis.Web.Services.Interfaces;
 
 /// <summary>
-/// PuantajKayit → HakedisPuantaj senkronizasyon servisi.
-/// Grid'de kaydedilen her PuantajKayit için HakedisPuantaj + Detay oluşturur.
+/// PuantajKayit → Hakedis (yeni model) senkronizasyon servisi.
+/// Grid'de kaydedilen her PuantajKayit için Hakedis + HakedisDetay oluşturur/günceller.
 /// Sadece Taslak durumdaki hakedişleri günceller, onaylılara dokunmaz.
 /// </summary>
 public interface IPuantajHakedisSyncService
 {
     /// <summary>
-    /// Belirtilen dönem ve firma için PuantajKayit'lardan HakedisPuantaj oluşturur/günceller.
+    /// Belirtilen dönem ve firma için PuantajKayit'lardan Hakedis oluşturur/günceller.
     /// </summary>
     Task SyncFromPuantajKayitAsync(int firmaId, int yil, int ay);
 

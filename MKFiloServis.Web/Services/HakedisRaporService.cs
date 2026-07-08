@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Web.Services.Interfaces;
@@ -6,8 +6,7 @@ using MKFiloServis.Web.Services.Interfaces;
 namespace MKFiloServis.Web.Services;
 
 /// <summary>
-/// Hakediş Puantaj Raporlama servisi.
-/// Tüm sorgular IQueryable + AsNoTracking + FirmaId filtreli.
+/// Hakediş raporlama servisi (yeni model: Hakedis + HakedisDetay).
 /// </summary>
 public class HakedisRaporService : IHakedisRaporService
 {
@@ -18,48 +17,57 @@ public class HakedisRaporService : IHakedisRaporService
         _contextFactory = contextFactory;
     }
 
-    private async Task<IQueryable<HakedisPuantaj>> BaseQuery(int? firmaId, int? yil, int? ay)
-    {
-        var context = await _contextFactory.CreateDbContextAsync();
-        var query = context.HakedisPuantajlar
-            .AsNoTracking()
-            .Where(h => !h.IsDeleted);
-
-        if (firmaId.HasValue) query = query.Where(h => h.FirmaId == firmaId.Value);
-        if (yil.HasValue) query = query.Where(h => h.Yil == yil.Value);
-        if (ay.HasValue) query = query.Where(h => h.Ay == ay.Value);
-
-        return query;
-    }
-
     #region 1. Araç Bazlı Rapor
 
     public async Task<List<AracRapor>> GetAracRaporuAsync(int? firmaId = null, int? yil = null, int? ay = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
 
-        var query = context.HakedisPuantajlar
+        var detaylar = await context.HakedisDetaylari
             .AsNoTracking()
-            .Include(h => h.Arac)
-            .Where(h => !h.IsDeleted);
-
-        if (firmaId.HasValue) query = query.Where(h => h.FirmaId == firmaId.Value);
-        if (yil.HasValue) query = query.Where(h => h.Yil == yil.Value);
-        if (ay.HasValue) query = query.Where(h => h.Ay == ay.Value);
-
-        return await query
-            .GroupBy(h => new { h.AracId, Plaka = h.Arac != null ? h.Arac.Plaka : h.AracId.ToString() })
-            .Select(g => new AracRapor
+            .Where(d => !d.IsDeleted
+                     && d.AracId.HasValue
+                     && !d.Hakedis!.IsDeleted
+                     && (!firmaId.HasValue || d.Hakedis.FirmaId == firmaId.Value)
+                     && (!yil.HasValue || d.Hakedis.Yil == yil.Value)
+                     && (!ay.HasValue || d.Hakedis.Ay == ay.Value))
+            .Select(d => new
             {
-                AracId = g.Key.AracId,
-                Plaka = g.Key.Plaka,
-                ToplamSefer = g.Sum(h => h.ToplamSefer),
-                GelirToplam = g.Sum(h => h.GelirToplam),
-                GiderToplam = g.Sum(h => h.GiderToplam),
-                KarTutar = g.Sum(h => h.TahsilEdilecekTutar - h.OdenecekTutar)
+                d.AracId,
+                d.SeferSayisi,
+                d.Tutar,
+                d.Hakedis!.Tip
+            })
+            .ToListAsync();
+
+        var aracIds = detaylar.Select(x => x.AracId!.Value).Distinct().ToList();
+        var plakaByAracId = await context.Araclar
+            .AsNoTracking()
+            .Where(a => aracIds.Contains(a.Id))
+            .ToDictionaryAsync(a => a.Id, a => a.AktifPlaka ?? a.Plaka ?? a.Id.ToString());
+
+        return detaylar
+            .GroupBy(x => x.AracId!.Value)
+            .Select(g =>
+            {
+                var gelir = g.Where(x => x.Tip == HakedisTipi.Kurum).Sum(x => x.Tutar);
+                var gider = g.Where(x => x.Tip == HakedisTipi.Tedarikci).Sum(x => x.Tutar);
+                var seferDec = g.Where(x => x.Tip == HakedisTipi.Kurum).Sum(x => x.SeferSayisi);
+                if (seferDec <= 0)
+                    seferDec = g.Where(x => x.Tip != HakedisTipi.Arac).Sum(x => x.SeferSayisi);
+
+                return new AracRapor
+                {
+                    AracId = g.Key,
+                    Plaka = plakaByAracId.TryGetValue(g.Key, out var plaka) ? plaka : g.Key.ToString(),
+                    ToplamSefer = (int)Math.Round(seferDec, MidpointRounding.AwayFromZero),
+                    GelirToplam = gelir,
+                    GiderToplam = gider,
+                    KarTutar = gelir - gider
+                };
             })
             .OrderByDescending(r => r.ToplamSefer)
-            .ToListAsync();
+            .ToList();
     }
 
     #endregion
@@ -70,26 +78,51 @@ public class HakedisRaporService : IHakedisRaporService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
 
-        var query = context.HakedisPuantajlar
+        var detaylar = await context.HakedisDetaylari
             .AsNoTracking()
-            .Include(h => h.Sofor)
-            .Where(h => !h.IsDeleted);
-
-        if (firmaId.HasValue) query = query.Where(h => h.FirmaId == firmaId.Value);
-        if (yil.HasValue) query = query.Where(h => h.Yil == yil.Value);
-        if (ay.HasValue) query = query.Where(h => h.Ay == ay.Value);
-
-        return await query
-            .GroupBy(h => new { h.SoforId, SoforAdi = h.Sofor != null ? h.Sofor.TamAd : h.SoforId.ToString() })
-            .Select(g => new SoforRapor
+            .Where(d => !d.IsDeleted
+                     && d.SoforId.HasValue
+                     && !d.Hakedis!.IsDeleted
+                     && (!firmaId.HasValue || d.Hakedis.FirmaId == firmaId.Value)
+                     && (!yil.HasValue || d.Hakedis.Yil == yil.Value)
+                     && (!ay.HasValue || d.Hakedis.Ay == ay.Value))
+            .Select(d => new
             {
-                SoforId = g.Key.SoforId,
-                SoforAdi = g.Key.SoforAdi,
-                ToplamSefer = g.Sum(h => h.ToplamSefer),
-                ToplamKazanc = g.Sum(h => h.OdenecekTutar)
+                d.SoforId,
+                d.SeferSayisi,
+                d.Tutar,
+                d.Hakedis!.Tip
+            })
+            .ToListAsync();
+
+        var soforIds = detaylar.Select(x => x.SoforId!.Value).Distinct().ToList();
+        var adBySoforId = await context.Soforler
+            .AsNoTracking()
+            .Where(s => soforIds.Contains(s.Id))
+            .ToDictionaryAsync(s => s.Id, s => s.TamAd);
+
+        return detaylar
+            .GroupBy(x => x.SoforId!.Value)
+            .Select(g =>
+            {
+                var seferDec = g.Where(x => x.Tip == HakedisTipi.Kurum).Sum(x => x.SeferSayisi);
+                if (seferDec <= 0)
+                    seferDec = g.Where(x => x.Tip != HakedisTipi.Arac).Sum(x => x.SeferSayisi);
+
+                var kazanc = g.Where(x => x.Tip == HakedisTipi.Tedarikci).Sum(x => x.Tutar);
+                if (kazanc <= 0)
+                    kazanc = g.Where(x => x.Tip == HakedisTipi.Kurum).Sum(x => x.Tutar);
+
+                return new SoforRapor
+                {
+                    SoforId = g.Key,
+                    SoforAdi = adBySoforId.TryGetValue(g.Key, out var ad) ? ad : g.Key.ToString(),
+                    ToplamSefer = (int)Math.Round(seferDec, MidpointRounding.AwayFromZero),
+                    ToplamKazanc = kazanc
+                };
             })
             .OrderByDescending(r => r.ToplamSefer)
-            .ToListAsync();
+            .ToList();
     }
 
     #endregion
@@ -100,37 +133,52 @@ public class HakedisRaporService : IHakedisRaporService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
 
-        var query = context.HakedisPuantajlar
+        var detaylar = await context.HakedisDetaylari
             .AsNoTracking()
-            .Include(h => h.Guzergah)
-            .Where(h => !h.IsDeleted);
-
-        if (firmaId.HasValue) query = query.Where(h => h.FirmaId == firmaId.Value);
-        if (yil.HasValue) query = query.Where(h => h.Yil == yil.Value);
-        if (ay.HasValue) query = query.Where(h => h.Ay == ay.Value);
-
-        var data = await query
-            .GroupBy(h => new { h.GuzergahId, GuzergahAdi = h.Guzergah != null ? h.Guzergah.GuzergahAdi : h.GuzergahId.ToString() })
-            .Select(g => new
+            .Where(d => !d.IsDeleted
+                     && d.GuzergahId.HasValue
+                     && !d.Hakedis!.IsDeleted
+                     && (!firmaId.HasValue || d.Hakedis.FirmaId == firmaId.Value)
+                     && (!yil.HasValue || d.Hakedis.Yil == yil.Value)
+                     && (!ay.HasValue || d.Hakedis.Ay == ay.Value))
+            .Select(d => new
             {
-                g.Key.GuzergahId,
-                g.Key.GuzergahAdi,
-                ToplamSefer = g.Sum(h => h.ToplamSefer),
-                ToplamGelir = g.Sum(h => h.GelirToplam),
-                ToplamGider = g.Sum(h => h.GiderToplam)
+                d.GuzergahId,
+                d.SeferSayisi,
+                d.Tutar,
+                d.Hakedis!.Tip
             })
             .ToListAsync();
 
-        return data.Select(g => new GuzergahRapor
-        {
-            GuzergahId = g.GuzergahId,
-            GuzergahAdi = g.GuzergahAdi,
-            ToplamSefer = g.ToplamSefer,
-            OrtalamaMaliyet = g.ToplamSefer > 0 ? g.ToplamGider / g.ToplamSefer : 0,
-            KarlilikOrani = g.ToplamGider > 0 ? (g.ToplamGelir - g.ToplamGider) / g.ToplamGider * 100 : 0
-        })
-        .OrderByDescending(r => r.ToplamSefer)
-        .ToList();
+        var guzergahIds = detaylar.Select(x => x.GuzergahId!.Value).Distinct().ToList();
+        var adByGuzergahId = await context.Guzergahlar
+            .AsNoTracking()
+            .Where(g => guzergahIds.Contains(g.Id))
+            .ToDictionaryAsync(g => g.Id, g => g.GuzergahAdi ?? g.GuzergahKodu ?? g.Id.ToString());
+
+        return detaylar
+            .GroupBy(x => x.GuzergahId!.Value)
+            .Select(g =>
+            {
+                var gelir = g.Where(x => x.Tip == HakedisTipi.Kurum).Sum(x => x.Tutar);
+                var gider = g.Where(x => x.Tip == HakedisTipi.Tedarikci).Sum(x => x.Tutar);
+                var seferDec = g.Where(x => x.Tip == HakedisTipi.Kurum).Sum(x => x.SeferSayisi);
+                if (seferDec <= 0)
+                    seferDec = g.Where(x => x.Tip != HakedisTipi.Arac).Sum(x => x.SeferSayisi);
+
+                var toplamSefer = (int)Math.Round(seferDec, MidpointRounding.AwayFromZero);
+
+                return new GuzergahRapor
+                {
+                    GuzergahId = g.Key,
+                    GuzergahAdi = adByGuzergahId.TryGetValue(g.Key, out var ad) ? ad : g.Key.ToString(),
+                    ToplamSefer = toplamSefer,
+                    OrtalamaMaliyet = toplamSefer > 0 ? gider / toplamSefer : 0,
+                    KarlilikOrani = gider > 0 ? (gelir - gider) / gider * 100 : 0
+                };
+            })
+            .OrderByDescending(r => r.ToplamSefer)
+            .ToList();
     }
 
     #endregion
@@ -141,26 +189,39 @@ public class HakedisRaporService : IHakedisRaporService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
 
-        var hakedisler = await context.HakedisPuantajlar
+        var detaylar = await context.HakedisDetaylari
             .AsNoTracking()
-            .Where(h => h.Yil == yil && h.Ay == ay && !h.IsDeleted)
-            .Where(h => !firmaId.HasValue || h.FirmaId == firmaId.Value)
-            .SelectMany(
-                h => h.Detaylar!.Where(d => !d.IsDeleted),
-                (h, d) => new { d.Gun, d.SeferSayisi, h.GelirSeferBirimFiyat, h.GiderSeferBirimFiyat, d.FiyatCarpani, d.EkSeferMi, d.MesaiMi }
-            )
+            .Where(d => !d.IsDeleted
+                     && d.Tarih.Year == yil
+                     && d.Tarih.Month == ay
+                     && !d.Hakedis!.IsDeleted
+                     && (!firmaId.HasValue || d.Hakedis.FirmaId == firmaId.Value))
+            .Select(d => new
+            {
+                Gun = d.Tarih.Day,
+                d.SeferSayisi,
+                d.Tutar,
+                d.Hakedis!.Tip
+            })
             .ToListAsync();
 
-        return hakedisler
+        return detaylar
             .GroupBy(x => x.Gun)
-            .Select(g => new GunlukRapor
+            .Select(g =>
             {
-                Gun = g.Key,
-                ToplamSefer = g.Sum(x => x.SeferSayisi),
-                GunlukGelir = g.Sum(x => x.SeferSayisi * x.GelirSeferBirimFiyat * x.FiyatCarpani),
-                GunlukGider = g.Sum(x => x.SeferSayisi * x.GiderSeferBirimFiyat * x.FiyatCarpani),
-                MesaiSefer = g.Count(x => x.MesaiMi),
-                EkSefer = g.Count(x => x.EkSeferMi)
+                var seferDec = g.Where(x => x.Tip == HakedisTipi.Kurum).Sum(x => x.SeferSayisi);
+                if (seferDec <= 0)
+                    seferDec = g.Where(x => x.Tip != HakedisTipi.Arac).Sum(x => x.SeferSayisi);
+
+                return new GunlukRapor
+                {
+                    Gun = g.Key,
+                    ToplamSefer = (int)Math.Round(seferDec, MidpointRounding.AwayFromZero),
+                    GunlukGelir = g.Where(x => x.Tip == HakedisTipi.Kurum).Sum(x => x.Tutar),
+                    GunlukGider = g.Where(x => x.Tip == HakedisTipi.Tedarikci).Sum(x => x.Tutar),
+                    MesaiSefer = 0,
+                    EkSefer = 0
+                };
             })
             .OrderBy(r => r.Gun)
             .ToList();
@@ -174,43 +235,52 @@ public class HakedisRaporService : IHakedisRaporService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
 
-        var query = context.HakedisPuantajlar
+        var hakedisler = await context.Hakedisler
             .AsNoTracking()
-            .Where(h => h.Yil == yil && h.Ay == ay && !h.IsDeleted);
-
-        if (firmaId.HasValue) query = query.Where(h => h.FirmaId == firmaId.Value);
-
-        var data = await query.ToListAsync();
-
-        var toplamSefer = data.Sum(h => h.ToplamSefer);
-        var toplamGelir = data.Sum(h => h.GelirToplam);
-        var toplamGider = data.Sum(h => h.GiderToplam);
-        var toplamKar = data.Sum(h => h.TahsilEdilecekTutar - h.OdenecekTutar);
-
-        // Günlük trend
-        var detaylar = await context.HakedisPuantajDetaylar
-            .AsNoTracking()
-            .Where(d => !d.IsDeleted && data.Select(h => h.Id).Contains(d.HakedisPuantajId))
+            .Where(h => h.Yil == yil && h.Ay == ay && !h.IsDeleted)
+            .Where(h => !firmaId.HasValue || h.FirmaId == firmaId.Value)
             .ToListAsync();
 
-        // Günlük gelir/gider hesabı için hakedisleri tekrar çek (sefer birim fiyat lazım)
-        var hakedisMap = data.ToDictionary(h => h.Id);
+        var toplamSeferDec = hakedisler.Where(h => h.Tip == HakedisTipi.Kurum).Sum(h => h.ToplamSeferSayisi);
+        if (toplamSeferDec <= 0)
+            toplamSeferDec = hakedisler.Where(h => h.Tip != HakedisTipi.Arac).Sum(h => h.ToplamSeferSayisi);
+
+        var toplamSefer = (int)Math.Round(toplamSeferDec, MidpointRounding.AwayFromZero);
+        var toplamGelir = hakedisler.Where(h => h.Tip == HakedisTipi.Kurum).Sum(h => h.GenelToplam);
+        var toplamGider = hakedisler.Where(h => h.Tip == HakedisTipi.Tedarikci).Sum(h => h.GenelToplam);
+        var toplamKar = toplamGelir - toplamGider;
+
+        var detaylar = await context.HakedisDetaylari
+            .AsNoTracking()
+            .Where(d => !d.IsDeleted
+                     && d.Tarih.Year == yil
+                     && d.Tarih.Month == ay
+                     && !d.Hakedis!.IsDeleted
+                     && (!firmaId.HasValue || d.Hakedis.FirmaId == firmaId.Value))
+            .Select(d => new
+            {
+                Gun = d.Tarih.Day,
+                d.SeferSayisi,
+                d.Tutar,
+                d.Hakedis!.Tip
+            })
+            .ToListAsync();
 
         var gunlukTrend = detaylar
             .GroupBy(d => d.Gun)
             .Select(g =>
             {
-                var sefer = g.Sum(d => d.SeferSayisi);
-                decimal gelir = 0, gider = 0;
-                foreach (var d in g)
+                var seferDec = g.Where(x => x.Tip == HakedisTipi.Kurum).Sum(x => x.SeferSayisi);
+                if (seferDec <= 0)
+                    seferDec = g.Where(x => x.Tip != HakedisTipi.Arac).Sum(x => x.SeferSayisi);
+
+                return new GunlukTrend
                 {
-                    if (hakedisMap.TryGetValue(d.HakedisPuantajId, out var h))
-                    {
-                        gelir += d.SeferSayisi * h.GelirSeferBirimFiyat * d.FiyatCarpani;
-                        gider += d.SeferSayisi * h.GiderSeferBirimFiyat * d.FiyatCarpani;
-                    }
-                }
-                return new GunlukTrend { Gun = g.Key, Sefer = sefer, Gelir = gelir, Gider = gider };
+                    Gun = g.Key,
+                    Sefer = (int)Math.Round(seferDec, MidpointRounding.AwayFromZero),
+                    Gelir = g.Where(x => x.Tip == HakedisTipi.Kurum).Sum(x => x.Tutar),
+                    Gider = g.Where(x => x.Tip == HakedisTipi.Tedarikci).Sum(x => x.Tutar)
+                };
             })
             .OrderBy(t => t.Gun)
             .ToList();
@@ -291,6 +361,3 @@ public class GunlukTrend
 }
 
 #endregion
-
-
-
