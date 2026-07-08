@@ -294,21 +294,44 @@ public class FiloKomisyonService : IFiloKomisyonService
     public async Task<List<Cari>> GetKurumlarAsync(int firmaId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
+
         var query = context.Cariler
             .Where(c => !c.IsDeleted && (c.CariTipi == CariTipi.Musteri || c.CariTipi == CariTipi.MusteriTedarikci));
+
         if (firmaId > 0)
+        {
             query = query.Where(c => c.FirmaId == firmaId);
-        return await query.OrderBy(c => c.Unvan).ToListAsync();
+        }
+
+        var sonuc = await query.OrderBy(c => c.Unvan).ToListAsync();
+
+        if (sonuc.Count == 0 && firmaId > 0)
+        {
+            sonuc = await context.Cariler
+                .Where(c => !c.IsDeleted && (c.CariTipi == CariTipi.Musteri || c.CariTipi == CariTipi.MusteriTedarikci))
+                .OrderBy(c => c.Unvan)
+                .ToListAsync();
+        }
+
+        return sonuc;
     }
 
-    public async Task<List<Sofor>> GetSoforlerAsync()
+    public async Task<List<Sofor>> GetSoforlerAsync(int firmaId = 0)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.Soforler
-            .Where(s => !s.IsDeleted && s.Aktif)
-            .OrderBy(s => s.Ad)
-            .ThenBy(s => s.Soyad)
-            .ToListAsync();
+        var query = context.Soforler
+            .Where(s => !s.IsDeleted && s.Aktif);
+        if (firmaId > 0)
+            query = query.Where(s => s.FirmaId == firmaId);
+        var sonuc = await query.OrderBy(s => s.Ad).ThenBy(s => s.Soyad).ToListAsync();
+        if (sonuc.Count == 0 && firmaId > 0)
+        {
+            sonuc = await context.Soforler
+                .Where(s => !s.IsDeleted && s.Aktif)
+                .OrderBy(s => s.Ad).ThenBy(s => s.Soyad)
+                .ToListAsync();
+        }
+        return sonuc;
     }
 
     public async Task<List<Guzergah>> GetGuzergahlarAsync()
@@ -354,10 +377,10 @@ public class FiloKomisyonService : IFiloKomisyonService
     {
         var arac = await context.Araclar
             .AsNoTracking()
-            .FirstOrDefaultAsync(a => a.Id == eslestirme.AracId && !a.IsDeleted);
+            .FirstOrDefaultAsync(a => a.Id == eslestirme.AracId);
 
         if (arac == null)
-            throw new InvalidOperationException("Eşleştirme için seçilen araç bulunamadı.");
+            return;
 
         if (arac.SahiplikTipi is AracSahiplikTipi.Ozmal or AracSahiplikTipi.Kiralik)
         {

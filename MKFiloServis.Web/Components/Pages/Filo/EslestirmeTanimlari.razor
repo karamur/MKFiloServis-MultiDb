@@ -1,4 +1,4 @@
-@page "/filo/komisyon-eslestirme"
+﻿@page "/filo/komisyon-eslestirme"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services.Interfaces
 @using MKFiloServis.Web.Services
@@ -147,9 +147,9 @@
                 <div class="modal-body">
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label">Müşteri/Kurum <span class="text-danger">*</span></label>
+                            <label class="form-label">Kurum (Müşteri) Kartları <span class="text-danger">*</span></label>
                             <select class="form-select" @bind="model.KurumFirmaId" @bind:after="KurumSecimiDegistiAsync">
-                                <option value="0">-- Kurum Seçin --</option>
+                                <option value="0">-- Kurum (Müşteri) Seçin --</option>
                                 @foreach(var k in kurumFirmaListesi) {
                                     <option value="@k.Id">@k.Unvan</option>
                                 }
@@ -421,7 +421,7 @@
         kurumFirmaListesi = await FiloKomisyonService.GetKurumlarAsync(aktifFirmaId);
         aracListesi = await FiloKomisyonService.GetAraclarAsync(aktifFirmaId);
         guzergahListesi = await FiloKomisyonService.GetGuzergahlarAsync();
-        soforListesi = await FiloKomisyonService.GetSoforlerAsync();
+        soforListesi = await FiloKomisyonService.GetSoforlerAsync(aktifFirmaId);
         kapasiteListesi = await KapasiteService.GetActiveAsync();
     }
 
@@ -454,10 +454,14 @@
 
         await ListeYenile();
 
-        puantajKurumListesi = eslestirmeler
-            .Where(e => e.IsActive && e.MusteriCari is not null)
-            .Select(e => e.MusteriCari!)
-            .DistinctBy(k => k.Id)
+        var aktifKurumIdSet = eslestirmeler
+            .Where(e => e.IsActive && e.KurumFirmaId > 0)
+            .Select(e => e.KurumFirmaId)
+            .Distinct()
+            .ToHashSet();
+
+        puantajKurumListesi = kurumFirmaListesi
+            .Where(k => aktifKurumIdSet.Contains(k.Id))
             .OrderBy(k => k.Unvan)
             .ToList();
 
@@ -491,12 +495,16 @@
                     _                    => 1m
                 };
 
+                var kurumAdi = e.MusteriCari?.Unvan
+                    ?? kurumFirmaListesi.FirstOrDefault(k => k.Id == e.KurumFirmaId)?.Unvan
+                    ?? "-";
+
                 return new PuantajSatirModel
                 {
                     Secili = true,
                     EslestirmeId = e.Id,
                     KurumFirmaId = e.KurumFirmaId,
-                    KurumAdi = e.MusteriCari?.Unvan ?? "-",
+                    KurumAdi = kurumAdi,
                     GuzergahId = e.GuzergahId,
                     GuzergahAdi = e.Guzergah?.GuzergahAdi ?? "-",
                     AracId = e.AracId,
@@ -720,7 +728,8 @@
         }
         catch (Exception ex)
         {
-            ToastService.ShowError("Kayıt sırasında bir hata oluştu: " + ex.Message);
+            var mesaj = ex.InnerException?.Message ?? ex.Message;
+            ToastService.ShowError($"Kayıt sırasında hata: {mesaj}");
         }
     }
 
