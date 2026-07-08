@@ -189,15 +189,24 @@ de temizlenecek (sadece string, sayfanın kendisi değil).
 
 ## 5. ÖNERİLEN UYGULAMA SIRALAMASI
 
-### FAZ 0 — Temizlik (YAPILACAK İLK İŞ)
+### FAZ 0 — Temizlik (DEVAM EDİYOR)
 
 **Hedef:** Eski UI sayfalarını sil, build temiz kalsın, yeni sayfa için alan aç.
 
-#### Adım 0.1 — 3 UI sayfasını sil (bkz. §3.7)
-#### Adım 0.2 — NavMenu'deki `filo-gunluk-puantaj` string'ini temizle
-#### Adım 0.3 — Build doğrula: 0 warning, 0 error
+#### Adım 0.1 — 3 UI sayfasını sil ✅ TAMAMLANDI
+- `FiloGunlukPuantajPage.razor` silindi
+- `FiloHakedisPage.razor` silindi
+- `FiloPuantaj.razor` silindi
 
-> ⚠️ Bu faz yapılmadı. Bir sonraki oturumda başlanacak.
+#### Adım 0.2 — Kalan referansları temizle ⏳ YAPILACAK
+- `GuzergahForm.razor` satır ~1278 → `NavigateTo("/filo-gunluk-puantaj")` kaldırılacak
+- `FiloKpiDashboard.razor` satır ~270 → `filo/puantaj` linki kaldırılacak
+- `NavMenu.razor` satır ~1340 → `"filo-gunluk-puantaj"` string'i kaldırılacak
+
+#### Adım 0.3 — Build doğrula ⏳ YAPILACAK
+- Hedef: 0 warning, 0 error
+
+> ⚠️ Adım 0.1 tamamlandı. Adım 0.2–0.3 bir sonraki oturumda yapılacak.
 
 ---
 
@@ -290,12 +299,14 @@ if (snapshot.FirstOrDefault() is { } s && s.ToplamSefer > 0)
 
 "Devam edelim" dediğinde şu konudan başlayacağız:
 
-> **FAZ 0 — Temizlik:**
-> 1. `FiloGunlukPuantajPage.razor` sil
-> 2. `FiloHakedisPage.razor` sil
-> 3. `FiloPuantaj.razor` sil
-> 4. NavMenu `filo-gunluk-puantaj` string temizle
-> 5. Build doğrula
+> **FAZ 0 devam — Kalan adımlar:**
+> 1. ✅ `FiloGunlukPuantajPage.razor` silindi
+> 2. ✅ `FiloHakedisPage.razor` silindi
+> 3. ✅ `FiloPuantaj.razor` silindi
+> 4. ⏳ `GuzergahForm.razor` NavigateTo referansı kaldır
+> 5. ⏳ `FiloKpiDashboard.razor` filo/puantaj linki kaldır
+> 6. ⏳ `NavMenu.razor` `"filo-gunluk-puantaj"` string temizle
+> 7. ⏳ Build doğrula (0 warning, 0 error)
 >
 > Ardından **FAZ 1** ile yeni operasyonel puantaj sayfasını sıfırdan yazmaya başlarız.
 > Sayfa adı: `OperasyonelPuantajPage.razor` — rota: `/operasyon/puantaj`
