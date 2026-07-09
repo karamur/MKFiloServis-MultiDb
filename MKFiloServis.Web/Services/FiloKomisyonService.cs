@@ -125,14 +125,17 @@ public class FiloKomisyonService : IFiloKomisyonService
         // 1. Ayın günlerini belirle
         var baslangic = new DateTime(yil, ay, 1);
         var bitis = baslangic.AddMonths(1).AddDays(-1);
+        Console.WriteLine($"TopluPuantajUretAsync: Firma={firmaId}, Tarih={baslangic:yyyy-MM-dd} ~ {bitis:yyyy-MM-dd}");
 
         // 2. Halihazırda var olan o aya ait puantaj kayıtlarını al (mükerrer kayıt oluşmaması için)
         var mevcutPuantajlar = await context.FiloGunlukPuantajlar
             .Where(p => p.FirmaId == firmaId && p.Tarih >= baslangic && p.Tarih <= bitis && !p.IsDeleted)
             .ToListAsync();
+        Console.WriteLine($"TopluPuantajUretAsync: Mevcut puantaj sayısı = {mevcutPuantajlar.Count}");
 
         // 3. Aktif eşleştirmeleri çek
         var aktifEslestirmeler = await GetEslestirmelerAsync(firmaId, sadeceAktifler: true);
+        Console.WriteLine($"TopluPuantajUretAsync: Aktif eslestirme sayısı = {aktifEslestirmeler.Count}");
 
         // 4. Yeni puantajları oluştur
         var yeniKavitlar = new List<FiloGunlukPuantaj>();
@@ -161,6 +164,7 @@ public class FiloKomisyonService : IFiloKomisyonService
                         KullaniciId = eslestirme.KullaniciId,
                         Durum = isWeekend ? OperasyonDurumu.Gitmedi_Mazeretli : OperasyonDurumu.Gitti,
                         ServisTuru = eslestirme.ServisTuru,
+                        SeferSayisi = 0m,
                         PuantajCarpani = isWeekend ? 0m : 1.0m,
                         TahakkukEdenKurumUcreti = 0m,
                         TahakkukEdenTaseronUcreti = 0m
@@ -174,23 +178,40 @@ public class FiloKomisyonService : IFiloKomisyonService
 
         if (yeniKavitlar.Any())
         {
+            Console.WriteLine($"TopluPuantajUretAsync: {yeniKavitlar.Count} yeni puantaj ekleniyor");
             await context.FiloGunlukPuantajlar.AddRangeAsync(yeniKavitlar);
-            await context.SaveChangesAsync();
+            var kayitlandi = await context.SaveChangesAsync();
+            Console.WriteLine($"TopluPuantajUretAsync: {kayitlandi} kayit veritabanina yazildi");
+        }
+        else
+        {
+            Console.WriteLine($"TopluPuantajUretAsync: Yeni puantaj eklenmedi");
         }
     }
 
     public async Task<List<FiloGunlukPuantaj>> GetGunlukPuantajlarSiraliAsync(int firmaId, DateTime tarih)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.FiloGunlukPuantajlar
+        var result = await context.FiloGunlukPuantajlar
             .Include(p => p.MusteriCari)
             .Include(p => p.Guzergah)
             .Include(p => p.Arac)
+                .ThenInclude(a => a!.KiralikCari)
+            .Include(p => p.Arac)
+                .ThenInclude(a => a!.KomisyoncuCari)
+            .Include(p => p.Arac)
+                .ThenInclude(a => a!.TasimaTedarikci)
             .Include(p => p.Sofor)
             .Where(p => p.FirmaId == firmaId && p.Tarih.Date == tarih.Date && !p.IsDeleted)
             .OrderBy(p => p.MusteriCari!.Unvan)
             .ThenBy(p => p.Guzergah!.GuzergahAdi)
             .ToListAsync();
+        Console.WriteLine($"GetGunlukPuantajlarSiraliAsync: Firma={firmaId}, Tarih={tarih:yyyy-MM-dd}, Toplam={result.Count} kayit");
+        foreach(var item in result)
+        {
+            Console.WriteLine($"  - Id={item.Id}, Eslestirme={item.FiloGuzergahEslestirmeId}, SeferSayisi={item.SeferSayisi}, Arac={item.Arac?.Plaka}");
+        }
+        return result;
     }
 
     public async Task<List<FiloGunlukPuantaj>> GetPuantajlarByTarihAraligiAsync(int? firmaId, DateTime baslangic, DateTime bitis, int? kurumId = null, int? aracId = null)
@@ -200,6 +221,11 @@ public class FiloKomisyonService : IFiloKomisyonService
             .Include(p => p.MusteriCari)
             .Include(p => p.Guzergah)
             .Include(p => p.Arac)
+                .ThenInclude(a => a!.KiralikCari)
+            .Include(p => p.Arac)
+                .ThenInclude(a => a!.KomisyoncuCari)
+            .Include(p => p.Arac)
+                .ThenInclude(a => a!.TasimaTedarikci)
             .Include(p => p.Sofor)
             .Where(p => p.Tarih >= baslangic && p.Tarih <= bitis && !p.IsDeleted);
 
@@ -212,7 +238,13 @@ public class FiloKomisyonService : IFiloKomisyonService
         if (aracId.HasValue && aracId.Value > 0)
             query = query.Where(p => p.AracId == aracId.Value);
 
-        return await query.OrderBy(p => p.Tarih).ThenBy(p => p.MusteriCari!.Unvan).ToListAsync();
+        var result = await query.OrderBy(p => p.Tarih).ThenBy(p => p.MusteriCari!.Unvan).ToListAsync();
+        Console.WriteLine($"GetPuantajlarByTarihAraligiAsync: Tarih={baslangic:yyyy-MM-dd} ~ {bitis:yyyy-MM-dd}, Firma={firmaId}, Toplam={result.Count} kayit");
+        foreach(var item in result.GroupBy(x => x.Tarih.Date).Take(3))
+        {
+            Console.WriteLine($"  - Tarih={item.Key:yyyy-MM-dd}: {item.Count()} kayit");
+        }
+        return result;
     }
 
     public async Task<FiloGunlukPuantaj> CreatePuantajAsync(FiloGunlukPuantaj puantaj)
@@ -231,7 +263,12 @@ public class FiloKomisyonService : IFiloKomisyonService
         if(existing != null)
         {
             await MapAndApplyRulesAsync(context, existing, puantaj);
-            await context.SaveChangesAsync();
+            // ChangeTracker'ı manuel set et
+            context.Entry(existing).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
+
+            Console.WriteLine($"UpdateGunlukPuantajAsync: {existing.Id} kayıt güncellenecek");
+            var etkilenen = await context.SaveChangesAsync();
+            Console.WriteLine($"UpdateGunlukPuantajAsync: SaveChangesAsync {etkilenen} satır etkiledi.");
         }
         return existing ?? puantaj;
     }
@@ -241,24 +278,48 @@ public class FiloKomisyonService : IFiloKomisyonService
         if (puantajlar is null || puantajlar.Count == 0)
             return;
 
-        await using var context = await _contextFactory.CreateDbContextAsync();
-
-        var ids = puantajlar.Select(x => x.Id).Distinct().ToList();
-        var mevcutlar = await context.FiloGunlukPuantajlar
-            .Where(x => ids.Contains(x.Id) && !x.IsDeleted)
-            .ToListAsync();
-
-        var mevcutById = mevcutlar.ToDictionary(x => x.Id);
-
-        foreach (var gelen in puantajlar)
+        Console.WriteLine($"UpdateGunlukPuantajlarAsync: {puantajlar.Count} kayit guncelleniyor");
+        foreach (var p in puantajlar)
         {
-            if (!mevcutById.TryGetValue(gelen.Id, out var existing))
-                continue;
-
-            await MapAndApplyRulesAsync(context, existing, gelen);
+            Console.WriteLine($"  - Id={p.Id}, SeferSayisi={p.SeferSayisi}, Tarih={p.Tarih:yyyy-MM-dd}");
         }
 
-        await context.SaveChangesAsync();
+        try
+        {
+            await using var context = await _contextFactory.CreateDbContextAsync();
+
+            var ids = puantajlar.Select(x => x.Id).Distinct().ToList();
+            var mevcutlar = await context.FiloGunlukPuantajlar
+                .Where(x => ids.Contains(x.Id) && !x.IsDeleted)
+                .ToListAsync();
+
+            Console.WriteLine($"UpdateGunlukPuantajlarAsync: {mevcutlar.Count} mevcut kayit bulundu");
+
+            if (!mevcutlar.Any())
+                return;
+
+            var mevcutById = mevcutlar.ToDictionary(x => x.Id);
+
+            foreach (var gelen in puantajlar)
+            {
+                if (!mevcutById.TryGetValue(gelen.Id, out var existing))
+                    continue;
+
+                Console.WriteLine($"UpdateGunlukPuantajlarAsync: Id={gelen.Id}, Eski SeferSayisi={existing.SeferSayisi} -> Yeni SeferSayisi={gelen.SeferSayisi}");
+                await MapAndApplyRulesAsync(context, existing, gelen);
+                // ChangeTracker'ı manuel set et - ToList() ile detach olabilir
+                context.Entry(existing).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
+            }
+
+            Console.WriteLine($"UpdateGunlukPuantajlarAsync: ChangeTracker entries: {context.ChangeTracker.Entries().Where(e => e.State == Microsoft.EntityFrameworkCore.EntityState.Modified).Count()} Modified");
+            var etkilenen = await context.SaveChangesAsync();
+            Console.WriteLine($"UpdateGunlukPuantajlarAsync: SaveChangesAsync {etkilenen} satır etkiledi.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"UpdateGunlukPuantajlarAsync hatası: {ex.Message}");
+            throw;
+        }
     }
 
     public async Task<int> DeleteGunlukPuantajlarAsync(List<int> puantajIds)
@@ -266,19 +327,40 @@ public class FiloKomisyonService : IFiloKomisyonService
         if (puantajIds is null || puantajIds.Count == 0)
             return 0;
 
-        await using var context = await _contextFactory.CreateDbContextAsync();
-
-        var kayitlar = await context.FiloGunlukPuantajlar
-            .Where(p => puantajIds.Contains(p.Id) && !p.IsDeleted)
-            .ToListAsync();
-
-        foreach (var kayit in kayitlar)
+        try
         {
-            kayit.IsDeleted = true;
-            kayit.UpdatedAt = DateTime.UtcNow;
-        }
+            await using var context = await _contextFactory.CreateDbContextAsync();
 
-        return await context.SaveChangesAsync();
+            var kayitlar = await context.FiloGunlukPuantajlar
+                .Where(p => puantajIds.Contains(p.Id) && !p.IsDeleted)
+                .ToListAsync();
+
+            if (!kayitlar.Any())
+            {
+                Console.WriteLine($"DeleteGunlukPuantajlarAsync: İstenilen IDs'lerin hiçbiri bulunamadı. IDs: {string.Join(",", puantajIds)}");
+                return 0;
+            }
+
+            Console.WriteLine($"DeleteGunlukPuantajlarAsync: {kayitlar.Count} kayıt siliniyor. IDs: {string.Join(",", kayitlar.Select(k => k.Id))}");
+
+            foreach (var kayit in kayitlar)
+            {
+                kayit.IsDeleted = true;
+                kayit.UpdatedAt = DateTime.UtcNow;
+                // ChangeTracker'ı manuel set et - ToList() ile detach olabilir
+                context.Entry(kayit).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
+            }
+
+            Console.WriteLine($"DeleteGunlukPuantajlarAsync: ChangeTracker entries: {context.ChangeTracker.Entries().Where(e => e.State == Microsoft.EntityFrameworkCore.EntityState.Modified).Count()} Modified");
+            var etkilenen = await context.SaveChangesAsync();
+            Console.WriteLine($"DeleteGunlukPuantajlarAsync: SaveChangesAsync {etkilenen} satır etkiledi.");
+            return etkilenen;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"DeleteGunlukPuantajlarAsync hatası: {ex.Message}");
+            throw;
+        }
     }
 
     public async Task KurumFaturalastirAsync(List<int> puantajIds)

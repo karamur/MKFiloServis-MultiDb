@@ -1,0 +1,330 @@
+﻿@page "/puantaj/cari-hiyerarsi"
+@using MKFiloServis.Shared.DTOs.Puantaj
+@using Microsoft.AspNetCore.Authorization
+@using MKFiloServis.Shared.Services.Contracts
+@using Microsoft.Extensions.Logging
+@attribute [Authorize]
+@inject ICariKurumPuantajService CariKurumService
+@inject ILogger<PuantajCariHiyerarsi> _logger
+
+<PageTitle>Puantaj Yönetimi - Cari Hiyerarşi</PageTitle>
+
+<div class="container-fluid pt-3">
+    <div class="row mb-3">
+        <div class="col-md-8">
+            <h2>
+                <i class="bi bi-diagram-3"></i> Puantaj Yönetimi - Cari/Kurum Hiyerarşesi
+            </h2>
+            <small class="text-muted">
+                Cariler → Kurumlar → Eşleştirmeler → Günlük Puantajlar
+            </small>
+        </div>
+        <div class="col-md-4 text-end">
+            <button class="btn btn-primary btn-sm" @onclick="YenileSorgusu">
+                <i class="bi bi-arrow-clockwise"></i> Yenile
+            </button>
+        </div>
+    </div>
+
+    @if (YuklenivorMu)
+    {
+        <div class="alert alert-info">
+            <i class="bi bi-hourglass-split"></i> Yükleniyor...
+        </div>
+    }
+    else if (HataVar)
+    {
+        <div class="alert alert-danger">
+            <i class="bi bi-exclamation-circle"></i> Hata: @HataMetni
+        </div>
+    }
+    else if (CariListesi == null || CariListesi.Count == 0)
+    {
+        <div class="alert alert-warning">
+            <i class="bi bi-info-circle"></i> Hiçbir Cari kaydı bulunamadı.
+        </div>
+    }
+    else
+    {
+        <!-- Cari Seçimi (TABS olarak) -->
+        <ul class="nav nav-tabs mb-3" role="tablist">
+            @foreach (var cari in CariListesi)
+            {
+                var isActive = SeciliCariId == cari.CariId;
+                <li class="nav-item" role="presentation">
+                    <button 
+                        class="nav-link @(isActive ? "active" : "")"
+                        @onclick="@(() => CariBasisEkraniniYukle(cari.CariId))"
+                        type="button">
+                        📊 @cari.CariTamAdi
+                        <span class="badge bg-secondary ms-2">@cari.Kurumlar.Count Kurum</span>
+                    </button>
+                </li>
+            }
+        </ul>
+
+        <!-- Seçili Cari Detayları -->
+        @if (SeciliCari != null)
+        {
+            <div class="tab-content">
+                <div class="tab-pane fade show active">
+                    <!-- Cari Özeti -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">
+                                Cari Özeti: <strong>@SeciliCari.CariTamAdi</strong>
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <strong>Cari Kodu:</strong> @SeciliCari.CariKodu
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Toplam Kurum:</strong> @SeciliCari.Kurumlar.Count
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Toplam Eşleştirme:</strong> @SeciliCari.Kurumlar.Sum(k => k.Eslestirmeler.Count)
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Cari Toplamı:</strong> 
+                                    <span class="text-success">₺ @SeciliCari.CariToplam.ToString("N2")</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Kurum Listesi (Accordion) -->
+                    <div class="accordion" id="kurumAccordion">
+                        @foreach (var kurum in SeciliCari.Kurumlar)
+                        {
+                            var kurumId = $"kurum-{kurum.KurumId}";
+                            <div class="accordion-item">
+                                <h2 class="accordion-header">
+                                    <button 
+                                        class="accordion-button" 
+                                        type="button" 
+                                        data-bs-toggle="collapse" 
+                                        data-bs-target="#@kurumId">
+                                        <i class="bi bi-buildings"></i>
+                                        <strong>@kurum.KurumAdi</strong>
+                                        <span class="badge bg-secondary ms-2">@kurum.Eslestirmeler.Count eşl.</span>
+                                        <span class="badge bg-success ms-2">₺ @kurum.KurumToplam.ToString("N2")</span>
+                                    </button>
+                                </h2>
+                                <div id="@kurumId" class="accordion-collapse collapse" data-bs-parent="#kurumAccordion">
+                                    <div class="accordion-body">
+                                        <!-- Harita yapısı: Eşleştirmeler tablosu -->
+                                        <h6 class="mb-3">
+                                            <i class="bi bi-diagram-2"></i> Eşleştirmeler (Araç + Şoför + Güzergah)
+                                        </h6>
+                                        @if (kurum.Eslestirmeler.Count == 0)
+                                        {
+                                            <div class="alert alert-warning">Hiçbir eşleştirme yok.</div>
+                                        }
+                                        else
+                                        {
+                                            <table class="table table-sm table-hover">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th>Araç Plakası</th>
+                                                        <th>Şoför Adı</th>
+                                                        <th>Güzergah</th>
+                                                        <th>Birim Fiyat</th>
+                                                        <th>Gider Fiyat</th>
+                                                        <th>Durum</th>
+                                                        <th>İşlem</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var eslestirme in kurum.Eslestirmeler)
+                                                    {
+                                                        <tr>
+                                                            <td><strong>@eslestirme.AracPlakasi</strong></td>
+                                                            <td>@eslestirme.SoforAdi</td>
+                                                            <td>@eslestirme.GuzergahAdi</td>
+                                                            <td>₺ @eslestirme.BirimFiyat.ToString("N2")</td>
+                                                            <td>₺ @eslestirme.GiderFiyat.ToString("N2")</td>
+                                                            <td>
+                                                                @if (eslestirme.AktifMi)
+                                                                {
+                                                                    <span class="badge bg-success">Aktif</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="badge bg-danger">Pasif</span>
+                                                                }
+                                                            </td>
+                                                            <td>
+                                                                <button 
+                                                                    class="btn btn-sm btn-outline-primary"
+                                                                    @onclick="@(() => AylikPuantajGoruntule(kurum.KurumId))">
+                                                                    <i class="bi bi-calendar-grid"></i> Puantaj
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        }
+
+                                        <!-- Kurum bazında Aylık Puantaj Grid (Collapse) -->
+                                        <hr />
+                                        <h6 class="mb-3">
+                                            <i class="bi bi-graph-up"></i> Aylık Puantaj Grid
+                                        </h6>
+
+                                        <div class="row mb-3">
+                                            <div class="col-md-4">
+                                                <label class="form-label">Yıl:</label>
+                                                <select class="form-select form-select-sm" @onchange="@((ChangeEventArgs e) => SeciliYil = int.Parse(e.Value?.ToString() ?? DateTime.Now.Year.ToString()))">
+                                                    @for (int y = DateTime.Now.Year - 1; y <= DateTime.Now.Year + 1; y++)
+                                                    {
+                                                        <option value="@y" selected="@(y == DateTime.Now.Year)">@y</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label">Ay:</label>
+                                                <select class="form-select form-select-sm" @onchange="@((ChangeEventArgs e) => SeciliAy = int.Parse(e.Value?.ToString() ?? DateTime.Now.Month.ToString()))">
+                                                    @for (int ay = 1; ay <= 12; ay++)
+                                                    {
+                                                        var ayAdi = new DateTime(DateTime.Now.Year, ay, 1).ToString("MMMM");
+                                                        <option value="@ay" selected="@(ay == DateTime.Now.Month)">@ayAdi</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label">&nbsp;</label>
+                                                <button 
+                                                    class="btn btn-primary form-control form-control-sm"
+                                                    @onclick="@(() => AylikPuantajYukle(kurum.KurumId))">
+                                                    <i class="bi bi-search"></i> Grid Yükle
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        @if (YuklenenAylikGrid != null && YuklenenAylikGrid.KurumId == kurum.KurumId)
+                                        {
+                                            <PuantajGunlukGrid AylikData="YuklenenAylikGrid" OnGunlukGuncelle="GunlukGuncellendi" />
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<CariKurumHiyerarsiDto>? CariListesi;
+    private CariKurumHiyerarsiDto? SeciliCari;
+    private int SeciliCariId = 0;
+    private KurumPuantajAylikDTO? YuklenenAylikGrid;
+
+    private int SeciliYil = DateTime.Now.Year;
+    private int SeciliAy = DateTime.Now.Month;
+
+    private bool YuklenivorMu = false;
+    private bool HataVar = false;
+    private string HataMetni = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await YenileSorgusu();
+    }
+
+    private async Task YenileSorgusu()
+    {
+        YuklenivorMu = true;
+        HataVar = false;
+
+        try
+        {
+            // Real service çağrısı - Tüm Cariler için özeti al, sonra ilk 5'ini göster
+            var ozetler = await CariKurumService.GetCarilarPuantajOzetiAsync(
+                DateTime.Now.AddMonths(-1), 
+                DateTime.Now.AddMonths(1)
+            );
+
+            CariListesi = new List<CariKurumHiyerarsiDto>();
+
+            // İlk Cari'yi ayrıntılı yükle
+            if (ozetler.Count > 0)
+            {
+                foreach (var ozet in ozetler.Take(3))  // İlk 3 Cari
+                {
+                    try
+                    {
+                        var hiyerarsi = await CariKurumService.GetCariKurumHiyerarsiAsync(ozet.CariId);
+                        CariListesi.Add(hiyerarsi);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning($"Cari {ozet.CariId} loading failed: {ex.Message}");
+                    }
+                }
+            }
+
+            if (CariListesi.Count == 0)
+            {
+                HataVar = true;
+                HataMetni = "Hiçbir Cari kaydı bulunamadı. Lütfen önce Cari verisi girin.";
+            }
+        }
+        catch (Exception ex)
+        {
+            HataVar = true;
+            HataMetni = $"Veri yükleme hatası: {ex.Message}";
+            _logger.LogError(ex, "YenileSorgusu hatası");
+        }
+        finally
+        {
+            YuklenivorMu = false;
+        }
+    }
+
+    private async Task CariBasisEkraniniYukle(int cariId)
+    {
+        SeciliCariId = cariId;
+        SeciliCari = CariListesi?.FirstOrDefault(c => c.CariId == cariId);
+        YuklenenAylikGrid = null;
+    }
+
+    private async Task AylikPuantajYukle(int kurumId)
+    {
+        YuklenivorMu = true;
+        HataVar = false;
+
+        try
+        {
+            YuklenenAylikGrid = await CariKurumService.GetKurumPuantajAylikAsync(kurumId, SeciliYil, SeciliAy);
+            _logger.LogInformation($"Kurum {kurumId} için {SeciliYil}/{SeciliAy} grid yüklendi: {YuklenenAylikGrid?.GunlukHucreler?.Count ?? 0} gün");
+        }
+        catch (Exception ex)
+        {
+            HataVar = true;
+            HataMetni = $"Grid yükleme hatası: {ex.Message}";
+            _logger.LogError(ex, $"AylikPuantajYukle error for kurumId={kurumId}");
+        }
+        finally
+        {
+            YuklenivorMu = false;
+        }
+    }
+
+    private async Task AylikPuantajGoruntule(int kurumId)
+    {
+        await AylikPuantajYukle(kurumId);
+    }
+
+    private async Task GunlukGuncellendi(GunlukHucreDTO gunlukHucre)
+    {
+        // İçerik: Günlük detay güncellendiğinde çalışır
+        // Şimdilik: Toast veya log
+        Console.WriteLine($"Gün güncellendi: {gunlukHucre.Tarih} → {gunlukHucre.Durum}");
+    }
+}

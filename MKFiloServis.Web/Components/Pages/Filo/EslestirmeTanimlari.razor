@@ -548,6 +548,7 @@
         finally
         {
             isLoading = false;
+            StateHasChanged();
         }
     }
 
@@ -1149,7 +1150,9 @@
         }
         catch (Exception ex)
         {
-            ToastService.ShowError("Gün bazlı puantaj kaydı sırasında hata oluştu: " + ex.GetBaseException().Message);
+            var detayliMesaj = ex.InnerException?.Message ?? ex.Message;
+            ToastService.ShowError($"Güncelleme hatası: {detayliMesaj}");
+            Console.WriteLine($"KaydetOlusanPuantajGridAsync: {ex}");
         }
     }
 
@@ -1177,12 +1180,14 @@
 
         try
         {
+            Console.WriteLine($"SilOlusanPuantajAylikAsync: {silinecekIds.Count} kayıt silinecek. IDs: {string.Join(",", silinecekIds)}");
             var etkilenen = await FiloKomisyonService.DeleteGunlukPuantajlarAsync(silinecekIds);
+            Console.WriteLine($"SilOlusanPuantajAylikAsync: Service {etkilenen} satır sildiğini döndürdü.");
             aylikDuzenlemeAnahtarlari.Remove(AylikDuzenlemeKey(eslestirmeId, yil, ay));
 
             if (etkilenen <= 0)
             {
-                ToastService.ShowWarning("Silme işlemi veritabanına yansımadı.");
+                ToastService.ShowWarning("Silme işlemi veritabanına yansımadı. Silinecek kayıt bulunamadı.");
                 return;
             }
 
@@ -1191,7 +1196,9 @@
         }
         catch (Exception ex)
         {
-            ToastService.ShowError("Aylık puantaj silinirken hata oluştu: " + ex.GetBaseException().Message);
+            var detayliMesaj = ex.InnerException?.Message ?? ex.Message;
+            ToastService.ShowError($"Silme hatası: {detayliMesaj}");
+            Console.WriteLine($"SilOlusanPuantajAylikAsync: {ex}");
         }
     }
 

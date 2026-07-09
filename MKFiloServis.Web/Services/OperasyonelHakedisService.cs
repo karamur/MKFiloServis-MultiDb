@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -90,6 +90,9 @@ public class OperasyonelHakedisService : IOperasyonelHakedisService
         }
 
         var puantajlar = await q.OrderBy(p => p.Tarih).ToListAsync();
+
+        // 🔧 FIX: Sefer sayısı 0 olan kayıtları filtrele (henüz doldurulmamış puantajlar)
+        puantajlar = puantajlar.Where(p => p.SeferSayisi > 0).ToList();
 
         // Mevcut taslak varsa üzerine yaz, yoksa yeni
         var hakedis = await context.Hakedisler

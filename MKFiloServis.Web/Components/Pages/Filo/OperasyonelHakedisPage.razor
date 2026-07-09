@@ -54,7 +54,14 @@
                         <option value="@HakedisTipi.Arac">Araç</option>
                     </InputSelect>
                 </div>
-                <div class="col-md-5 d-flex gap-2 justify-content-end">
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Gruplama</label>
+                    <select class="form-select form-select-sm" @bind="selectedGrouping">
+                        <option value="cari">Cari</option>
+                        <option value="referans">Referans</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex gap-2 justify-content-end">
                     <button class="btn btn-primary" @onclick="TopluUretAsync" disabled="@isBusy">
                         <i class="bi bi-magic me-1"></i>Toplu Hakediş Üret
                     </button>
@@ -156,44 +163,64 @@
                             }
                             else
                             {
-                                @foreach (var h in hakedisler.OrderByDescending(x => x.Id))
+                                @foreach (var group in GetGroupedData())
                                 {
-                                    <tr>
-                                        <td>
-                                            <input type="checkbox" class="form-check-input" checked="@seciliHakedisIds.Contains(h.Id)" @onchange="_ => SecimiDegistir(h.Id)" disabled="@isBusy" />
-                                        </td>
-                                        <td>@h.Id</td>
-                                        <td><span class="badge @GetTipBadge(h.Tip)">@GetTipText(h.Tip)</span></td>
-                                        <td>@GetReferansAd(h)</td>
-                                        <td class="text-end">@h.ToplamSeferSayisi.ToString("N2")</td>
-                                        <td class="text-end">@h.Tutar.ToString("N2")</td>
-                                        <td class="text-end">@h.KdvTutar.ToString("N2")</td>
-                                        <td class="text-end fw-semibold">@h.GenelToplam.ToString("N2")</td>
-                                        <td><span class="badge @GetDurumBadge(h.Durum)">@h.Durum</span></td>
-                                        <td class="text-end" style="white-space:nowrap">
-                                            <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => PdfIndirAsync(h.Id)" disabled="@isBusy" title="PDF indir">
-                                                <i class="bi bi-filetype-pdf"></i>
-                                            </button>
-                                            @if (h.Durum == HakedisDurum.Taslak)
-                                            {
-                                                <button class="btn btn-sm btn-outline-success me-1" @onclick="() => OnaylaAsync(h.Id)" disabled="@isBusy">
-                                                    <i class="bi bi-check2-circle"></i>
-                                                </button>
-                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => SilAsync(h.Id)" disabled="@isBusy">
-                                                    <i class="bi bi-trash"></i>
-                                                </button>
-                                            }
-                                            else if (h.Durum == HakedisDurum.Onaylandi)
-                                            {
-                                                <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => FaturalaAsync(h.Id)" disabled="@isBusy || h.Tip == HakedisTipi.Arac">
-                                                    <i class="bi bi-receipt"></i>
-                                                </button>
-                                                <button class="btn btn-sm btn-outline-warning" @onclick="() => IptalAsync(h.Id)" disabled="@isBusy">
-                                                    <i class="bi bi-x-circle"></i>
-                                                </button>
-                                            }
+                                    var isExpanded = expandedGroups.ContainsKey(group.Key) && expandedGroups[group.Key];
+                                    <tr style="background-color: #f8f9fa; cursor: pointer;" @onclick="() => ToggleGroup(group.Key)">
+                                        <td colspan="10">
+                                            <div class="d-flex align-items-center gap-2">
+                                                <i class="bi @(isExpanded ? "bi-chevron-down" : "bi-chevron-right")"></i>
+                                                <strong>@group.Key</strong>
+                                                <span class="badge bg-secondary">@group.Value.Count</span>
+                                                <span class="text-muted small ms-auto">
+                                                    Toplam: @group.Value.Sum(x => x.GenelToplam).ToString("N2") ₺
+                                                </span>
+                                            </div>
                                         </td>
                                     </tr>
+
+                                    @if (isExpanded)
+                                    {
+                                        @foreach (var h in group.Value.OrderByDescending(x => x.Id))
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <input type="checkbox" class="form-check-input" checked="@seciliHakedisIds.Contains(h.Id)" @onchange="_ => SecimiDegistir(h.Id)" disabled="@isBusy" />
+                                                </td>
+                                                <td>@h.Id</td>
+                                                <td><span class="badge @GetTipBadge(h.Tip)">@GetTipText(h.Tip)</span></td>
+                                                <td>@GetReferansAd(h)</td>
+                                                <td class="text-end">@h.ToplamSeferSayisi.ToString("N2")</td>
+                                                <td class="text-end">@h.Tutar.ToString("N2")</td>
+                                                <td class="text-end">@h.KdvTutar.ToString("N2")</td>
+                                                <td class="text-end fw-semibold">@h.GenelToplam.ToString("N2")</td>
+                                                <td><span class="badge @GetDurumBadge(h.Durum)">@h.Durum</span></td>
+                                                <td class="text-end" style="white-space:nowrap">
+                                                    <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => PdfIndirAsync(h.Id)" disabled="@isBusy" title="PDF indir">
+                                                        <i class="bi bi-filetype-pdf"></i>
+                                                    </button>
+                                                    @if (h.Durum == HakedisDurum.Taslak)
+                                                    {
+                                                        <button class="btn btn-sm btn-outline-success me-1" @onclick="() => OnaylaAsync(h.Id)" disabled="@isBusy">
+                                                            <i class="bi bi-check2-circle"></i>
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => SilAsync(h.Id)" disabled="@isBusy">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    }
+                                                    else if (h.Durum == HakedisDurum.Onaylandi)
+                                                    {
+                                                        <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => FaturalaAsync(h.Id)" disabled="@isBusy || h.Tip == HakedisTipi.Arac">
+                                                            <i class="bi bi-receipt"></i>
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-warning" @onclick="() => IptalAsync(h.Id)" disabled="@isBusy">
+                                                            <i class="bi bi-x-circle"></i>
+                                                        </button>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
                                 }
                             }
                         </tbody>
@@ -213,6 +240,22 @@
     private int ay = DateTime.Today.Month;
     private HakedisTipi seciliTip = HakedisTipi.Kurum;
 
+    private string _selectedGrouping = "cari";
+    private string selectedGrouping
+    {
+        get => _selectedGrouping;
+        set
+        {
+            if (_selectedGrouping != value)
+            {
+                _selectedGrouping = value;
+                expandedGroups.Clear();
+            }
+        }
+    }
+
+    private Dictionary<string, bool> expandedGroups = new();
+
     private readonly Dictionary<int, string> kurumAdlari = new();
     private readonly Dictionary<int, string> tedarikciAdlari = new();
     private readonly Dictionary<int, string> aracAdlari = new();
@@ -223,6 +266,32 @@
     private List<int> SeciliTaslakIdler => hakedisler.Where(h => seciliHakedisIds.Contains(h.Id) && h.Durum == HakedisDurum.Taslak).Select(h => h.Id).ToList();
     private List<int> SeciliFaturalanabilirIdler => hakedisler.Where(h => seciliHakedisIds.Contains(h.Id) && h.Durum == HakedisDurum.Onaylandi && h.Tip != HakedisTipi.Arac).Select(h => h.Id).ToList();
     private List<int> SeciliSilinebilirIdler => hakedisler.Where(h => seciliHakedisIds.Contains(h.Id) && h.Durum is not (HakedisDurum.Faturalandi or HakedisDurum.TahsilEdildi or HakedisDurum.Odendi)).Select(h => h.Id).ToList();
+
+    // Gruplama sonuçları
+    private Dictionary<string, List<Hakedis>> GetGroupedData()
+    {
+        return selectedGrouping switch
+        {
+            "referans" => hakedisler
+                .GroupBy(h => h.ReferansId.ToString())
+                .OrderBy(g => g.Key)
+                .ToDictionary(g => g.Key, g => g.ToList()),
+
+            _ => // "cari" (default)
+                hakedisler
+                    .GroupBy(h => h.Tip == HakedisTipi.Kurum ? $"Kurum #{h.ReferansId}" : h.Tip.ToString())
+                    .OrderBy(g => g.Key)
+                    .ToDictionary(g => g.Key, g => g.ToList()),
+        };
+    }
+
+    private void ToggleGroup(string groupKey)
+    {
+        if (!expandedGroups.ContainsKey(groupKey))
+            expandedGroups[groupKey] = true;
+        else
+            expandedGroups[groupKey] = !expandedGroups[groupKey];
+    }
 
     protected override async Task OnInitializedAsync()
     {

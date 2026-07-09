@@ -7,6 +7,8 @@ using MKFiloServis.Web.Services.Interfaces;
 using MKFiloServis.Web.Services.Security;
 using MKFiloServis.Web.Hubs;
 using MKFiloServis.Shared.Entities;
+using MKFiloServis.Shared.Services.Contracts;
+using MKFiloServis.Shared.Services.Implementations;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.Repositories;
@@ -237,7 +239,6 @@ builder.Services.AddScoped<IAktifFirmaProvider, AktifFirmaProvider>();
 builder.Services.AddScoped<IFirmaService, FirmaService>();
 builder.Services.AddScoped<IFirmalarArasiTransferService, FirmalarArasiTransferService>();
 builder.Services.AddScoped<IFirmaKopyalamaService, FirmaKopyalamaService>();
-// Eski ILisansService kaldirildi — yerine LicenseService kullaniliyor (anti-bypass hardened)
 builder.Services.AddScoped<IKullaniciService, KullaniciService>(); // Scoped - her circuit kendi oturumunu yonetir
 builder.Services.AddScoped<ICariService, CariService>();
 builder.Services.AddScoped<ISoforService, SoforService>();
@@ -245,6 +246,10 @@ builder.Services.AddScoped<IAracService, AracService>();
 builder.Services.AddScoped<IGuzergahService, GuzergahService>();
 builder.Services.AddScoped<IGuzergahSeferService, GuzergahSeferService>();
 builder.Services.AddScoped<GuzergahSeferService>(); // GuzergahService constructor concrete ihtiyacı
+
+// 🎯 PUANTAJ HİYERARŞİ SERVİSİ (YENİ - Cari-Kurum-Puantaj)
+builder.Services.AddScoped<ICariKurumPuantajService, CariKurumPuantajService>();
+
 builder.Services.AddScoped<IMasrafKalemiService, MasrafKalemiService>();
 builder.Services.AddScoped<IKapasiteService, KapasiteService>();
 builder.Services.AddScoped<IAracMasrafService, AracMasrafService>();

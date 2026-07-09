@@ -34,6 +34,7 @@
             <div class="row g-2 align-items-end">
                 <div class="col-md-3">
                     <label class="form-label small mb-1">Tarih</label>
+                    <InputDate class="form-control form-control-sm" @bind-Value="seciliTarih" />
                 </div>
                 <div class="col-md-3 d-flex gap-2">
                     <button class="btn btn-primary" @onclick="EksikKayitlariOlusturAsync" disabled="@isBusy">
@@ -107,7 +108,15 @@
                         <option value="Komisyon">Komisyon</option>
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Gruplama</label>
+                    <select class="form-select form-select-sm" @bind="selectedGrouping">
+                        <option value="cari">Cari</option>
+                        <option value="plaka">Plaka</option>
+                        <option value="kurum">Kurum</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
                     <label class="form-label small mb-1">Servis Türü</label>
                     <select class="form-select form-select-sm" @bind="servisTuruFiltresi">
                         <option value="">Tümü</option>
@@ -159,42 +168,69 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @if (!FiltreliGunlukPuantajlar.Any())
+                        @{
+                            var grouped = GetGroupedData();
+                        }
+                        @if (!grouped.Any())
                         {
                             <tr><td colspan="10" class="text-center text-muted p-4">Filtreye uygun kayıt yok</td></tr>
                         }
                         else
                         {
-                            @foreach (var item in FiltreliGunlukPuantajlar)
+                            @foreach (var group in grouped)
                             {
-                                <tr class="@GetSatirSinifi(item)">
-                                    <td>
-                                        <input type="checkbox" class="form-check-input" checked="@seciliPuantajIds.Contains(item.Id)" @onchange="_ => SecimiDegistir(item.Id)" disabled="@isBusy" />
-                                    </td>
-                                    <td>
-                                        <div class="fw-semibold small">@item.Guzergah?.GuzergahKodu</div>
-                                        <div class="text-muted" style="font-size:.75rem">@item.Guzergah?.GuzergahAdi</div>
-                                    </td>
-                                    <td class="small">@(item.MusteriCari?.Unvan ?? "-")</td>
-                                    <td class="small">@item.Arac?.AktifPlaka</td>
-                                    <td class="small">@item.Sofor?.Ad @item.Sofor?.Soyad</td>
-                                    <td class="small">@item.ServisTuru</td>
-                                    <td class="text-end">
-                                        <InputNumber class="form-control form-control-sm text-end"
-                                                     @bind-Value="item.SeferSayisi"
-                                                     step="0.5"
-                                                     min="0" />
-                                    </td>
-                                    <td class="text-end">@item.TahakkukEdenKurumUcreti.ToString("N2")</td>
-                                    <td class="text-end">@item.TahakkukEdenTaseronUcreti.ToString("N2")</td>
-                                    <td class="text-end" style="white-space:nowrap">
-                                        <button class="btn btn-sm btn-outline-primary"
-                                                @onclick="() => SatirKaydetAsync(item)"
-                                                disabled="@isBusy">
-                                            <i class="bi bi-save me-1"></i>Kaydet
-                                        </button>
+                                var isExpanded = expandedGroups.ContainsKey(group.Key) ? expandedGroups[group.Key] : true;
+                                <tr class="table-secondary" @onclick="() => ToggleGroup(group.Key)" style="cursor:pointer;">
+                                    <td colspan="10">
+                                        <i class="bi @(isExpanded ? "bi-chevron-down" : "bi-chevron-right") me-2"></i>
+                                        <strong>
+                                            @if (selectedGrouping == "plaka")
+                                            {
+                                                <span>Plaka: @group.Key</span>
+                                            }
+                                            else
+                                            {
+                                                <span>Cari: @group.Key</span>
+                                            }
+                                        </strong>
+                                        <span class="ms-2 small text-muted">(@group.Value.Count kayıt)</span>
                                     </td>
                                 </tr>
+
+                                @if (isExpanded)
+                                {
+                                    @foreach (var item in group.Value)
+                                    {
+                                        <tr class="@GetSatirSinifi(item)">
+                                            <td>
+                                                <input type="checkbox" class="form-check-input" checked="@seciliPuantajIds.Contains(item.Id)" @onchange="_ => SecimiDegistir(item.Id)" disabled="@isBusy" />
+                                            </td>
+                                            <td>
+                                                <div class="fw-semibold small">@item.Guzergah?.GuzergahKodu</div>
+                                                <div class="text-muted" style="font-size:.75rem">@item.Guzergah?.GuzergahAdi</div>
+                                            </td>
+                                            <td class="small">@(item.MusteriCari?.Unvan ?? "-")</td>
+                                            <td class="small">@item.Arac?.AktifPlaka</td>
+                                            <td class="small">@item.Sofor?.Ad @item.Sofor?.Soyad</td>
+                                            <td class="small">@item.ServisTuru</td>
+                                            <td class="text-end">
+                                                <InputNumber class="form-control form-control-sm text-end"
+                                                             @bind-Value="item.SeferSayisi"
+                                                             step="0.5"
+                                                             min="0" />
+                                            </td>
+                                            <td class="text-end">@item.TahakkukEdenKurumUcreti.ToString("N2")</td>
+                                            <td class="text-end">@item.TahakkukEdenTaseronUcreti.ToString("N2")</td>
+                                            <td class="text-end" style="white-space:nowrap">
+                                                <button class="btn btn-sm btn-outline-primary"
+                                                        @onclick="() => SatirKaydetAsync(item)"
+                                                        disabled="@isBusy">
+                                                    <i class="bi bi-save me-1"></i>Kaydet
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
                             }
                         }
                     </tbody>
@@ -205,7 +241,19 @@
 </div>
 
 @code {
-    private DateTime seciliTarih = DateTime.Today;
+    private DateTime _seciliTarih = DateTime.Today;
+    private DateTime seciliTarih 
+    { 
+        get => _seciliTarih; 
+        set 
+        { 
+            if (_seciliTarih != value) 
+            { 
+                _seciliTarih = value; 
+                _ = TarihDegisti();
+            }
+        } 
+    }
     private bool isBusy;
     private string? hataMesaji;
     private string? bilgiMesaji;
@@ -216,6 +264,8 @@
     private string aramaMetni = string.Empty;
     private string sahiplikFiltresi = string.Empty;
     private string servisTuruFiltresi = string.Empty;
+    private string selectedGrouping = "cari";
+    private Dictionary<string, bool> expandedGroups = new();
 
     private List<FiloGunlukPuantaj> FiltreliGunlukPuantajlar => gunlukPuantajlar
         .Where(FiltreyeUyar)
@@ -223,6 +273,39 @@
 
     private bool TumSeciliMi => FiltreliGunlukPuantajlar.Any() && FiltreliGunlukPuantajlar.All(x => seciliPuantajIds.Contains(x.Id));
     private List<FiloGunlukPuantaj> SeciliPuantajlar => FiltreliGunlukPuantajlar.Where(x => seciliPuantajIds.Contains(x.Id)).ToList();
+
+    // Gruplama sonuçları
+    private Dictionary<string, List<FiloGunlukPuantaj>> GetGroupedData()
+    {
+        var filtered = FiltreliGunlukPuantajlar;
+
+        return selectedGrouping switch
+        {
+            "plaka" => filtered
+                .GroupBy(x => x.Arac?.Plaka ?? "Bilinmiyor")
+                .OrderBy(g => g.Key)
+                .ToDictionary(g => g.Key, g => g.ToList()),
+
+            "kurum" => filtered
+                .GroupBy(x => x.MusteriCari?.Unvan ?? "Bilinmiyor")
+                .OrderBy(g => g.Key)
+                .ToDictionary(g => g.Key, g => g.ToList()),
+
+            _ => // "cari" (default)
+                filtered
+                    .GroupBy(x => x.MusteriCari?.Unvan ?? "Bilinmiyor")
+                    .OrderBy(g => g.Key)
+                    .ToDictionary(g => g.Key, g => g.ToList()),
+        };
+    }
+
+    private void ToggleGroup(string groupKey)
+    {
+        if (!expandedGroups.ContainsKey(groupKey))
+            expandedGroups[groupKey] = true;
+        else
+            expandedGroups[groupKey] = !expandedGroups[groupKey];
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -502,5 +585,13 @@
             AracSahiplikTipi.Komisyon => "table-secondary",
             _ => string.Empty
         };
+    }
+
+    private async Task TarihDegisti()
+    {
+        hataMesaji = null;
+        bilgiMesaji = null;
+        seciliPuantajIds.Clear();
+        await YukleGunlukPuantajlarAsync();
     }
 }
