@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using MKFiloServis.Shared.Entities;
+using MKFiloServis.Web.Models;
 
 namespace MKFiloServis.Web.Services.Interfaces;
 
@@ -25,6 +26,11 @@ public interface IFiloKomisyonService
     /// Belirli bir tarihteki puantaj dökümünü getirir
     /// </summary>
     Task<List<FiloGunlukPuantaj>> GetGunlukPuantajlarSiraliAsync(int firmaId, DateTime tarih);
+
+    /// <summary>
+    /// Belirli bir tarihteki puantaj satırlarını araç sahibi ve fatura toplam bilgileri ile birlikte getirir.
+    /// </summary>
+    Task<List<PuantajSatirDetayDto>> GetGunlukPuantajDetayliAsync(int firmaId, DateTime tarih);
 
     /// <summary>
     /// İki tarih aralığındaki ve (opsiyonel) belirli bir kuruma / araca ait puantaj listesini getirir

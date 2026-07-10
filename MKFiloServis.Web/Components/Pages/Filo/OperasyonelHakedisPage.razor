@@ -9,6 +9,7 @@
 @inject IFirmaService FirmaService
 @inject ITasimaTedarikciService TedarikciService
 @inject IAracService AracService
+@inject ICariService CariService
 @inject IPdfService PdfService
 @inject IJSRuntime JS
 @inject IAktifFirmaProvider AktifFirmaProvider
@@ -189,7 +190,7 @@
                                                 </td>
                                                 <td>@h.Id</td>
                                                 <td><span class="badge @GetTipBadge(h.Tip)">@GetTipText(h.Tip)</span></td>
-                                                <td>@GetReferansAd(h)</td>
+                                                <td title="@GetCariTooltip(h)">@GetReferansAd(h)</td>
                                                 <td class="text-end">@h.ToplamSeferSayisi.ToString("N2")</td>
                                                 <td class="text-end">@h.Tutar.ToString("N2")</td>
                                                 <td class="text-end">@h.KdvTutar.ToString("N2")</td>
@@ -259,6 +260,8 @@
     private readonly Dictionary<int, string> kurumAdlari = new();
     private readonly Dictionary<int, string> tedarikciAdlari = new();
     private readonly Dictionary<int, string> aracAdlari = new();
+    private readonly Dictionary<int, string> aracSahibiAdlari = new();
+    private readonly Dictionary<int, Cari> cariDetaylari = new();
     private readonly HashSet<int> seciliHakedisIds = new();
 
     private List<Hakedis> hakedisler = new();
@@ -279,7 +282,7 @@
 
             _ => // "cari" (default)
                 hakedisler
-                    .GroupBy(h => h.Tip == HakedisTipi.Kurum ? $"Kurum #{h.ReferansId}" : h.Tip.ToString())
+                    .GroupBy(GetCariGrupAnahtari)
                     .OrderBy(g => g.Key)
                     .ToDictionary(g => g.Key, g => g.ToList()),
         };
@@ -613,11 +616,61 @@
 
             case HakedisTipi.Arac:
                 var araclar = await AracService.GetAllAsync();
+                var cariler = await CariService.GetAllAsync();
+                var tumTedarikciler = await TedarikciService.GetAllAsync(false);
+
                 aracAdlari.Clear();
+                aracSahibiAdlari.Clear();
+                cariDetaylari.Clear();
+
+                var cariById = cariler.ToDictionary(c => c.Id, c => c);
+                var tedarikciById = tumTedarikciler.ToDictionary(t => t.Id, t => t);
+
                 foreach (var a in araclar.Where(a => referansIdler.Contains(a.Id)))
+                {
                     aracAdlari[a.Id] = !string.IsNullOrWhiteSpace(a.AktifPlaka) ? a.AktifPlaka : a.Plaka;
+
+                    string sahipAd = "Bilinmeyen Sahip";
+                    Cari? sahipCari = null;
+
+                    if (a.SahiplikTipi == AracSahiplikTipi.Kiralik && a.KiralikCariId.HasValue && cariById.TryGetValue(a.KiralikCariId.Value, out var kiralikCari))
+                    {
+                        sahipAd = kiralikCari.Unvan;
+                        sahipCari = kiralikCari;
+                    }
+                    else if (a.SahiplikTipi == AracSahiplikTipi.Komisyon && a.KomisyoncuCariId.HasValue && cariById.TryGetValue(a.KomisyoncuCariId.Value, out var komisyonCari))
+                    {
+                        sahipAd = komisyonCari.Unvan;
+                        sahipCari = komisyonCari;
+                    }
+                    else if (a.SahiplikTipi == AracSahiplikTipi.Tedarikci && a.TasimaTedarikciId.HasValue && tedarikciById.TryGetValue(a.TasimaTedarikciId.Value, out var t))
+                    {
+                        sahipAd = t.Unvan;
+                        if (t.CariId.HasValue && cariById.TryGetValue(t.CariId.Value, out var tCari))
+                            sahipCari = tCari;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(a.Firma?.FirmaAdi))
+                    {
+                        sahipAd = a.Firma.FirmaAdi;
+                    }
+
+                    aracSahibiAdlari[a.Id] = sahipAd;
+                    if (sahipCari != null)
+                        cariDetaylari[a.Id] = sahipCari;
+                }
                 break;
         }
+    }
+
+    private string GetCariGrupAnahtari(Hakedis h)
+    {
+        return h.Tip switch
+        {
+            HakedisTipi.Kurum => kurumAdlari.TryGetValue(h.ReferansId, out var kurumAd) ? $"Cari: {kurumAd}" : $"Kurum #{h.ReferansId}",
+            HakedisTipi.Tedarikci => tedarikciAdlari.TryGetValue(h.ReferansId, out var tedarikciAd) ? $"Cari: {tedarikciAd}" : $"Tedarikçi #{h.ReferansId}",
+            HakedisTipi.Arac => aracSahibiAdlari.TryGetValue(h.ReferansId, out var sahipAd) ? $"Cari: {sahipAd}" : "Cari: Bilinmeyen Sahip",
+            _ => h.ReferansId.ToString()
+        };
     }
 
     private string GetReferansAd(Hakedis h) => h.Tip switch
@@ -629,10 +682,23 @@
             ? tedarikciAd
             : $"Tedarikçi #{h.ReferansId}",
         HakedisTipi.Arac => aracAdlari.TryGetValue(h.ReferansId, out var aracAd)
-            ? aracAd
+            ? (aracSahibiAdlari.TryGetValue(h.ReferansId, out var sahipAd) ? $"{aracAd} • {sahipAd}" : aracAd)
             : $"Araç #{h.ReferansId}",
         _ => h.ReferansId.ToString()
     };
+
+    private string GetCariTooltip(Hakedis h)
+    {
+        Cari? cari = null;
+
+        if (h.Tip == HakedisTipi.Arac)
+            cariDetaylari.TryGetValue(h.ReferansId, out cari);
+
+        if (cari is null)
+            return GetReferansAd(h);
+
+        return $"Cari: {cari.Unvan} | VergiNo: {cari.VergiNo ?? "-"} | Telefon: {cari.Telefon ?? "-"} | İl/İlçe: {cari.Il ?? "-"}/{cari.Ilce ?? "-"}";
+    }
 
     private static string GetTipText(HakedisTipi tip) => tip switch
     {

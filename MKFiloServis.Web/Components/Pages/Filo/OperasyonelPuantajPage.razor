@@ -4,6 +4,7 @@
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
 @using MKFiloServis.Web.Services.Interfaces
+@using MKFiloServis.Web.Models
 @inject IFiloKomisyonService FiloKomisyonService
 @inject IAktifFirmaProvider AktifFirmaProvider
 @inject NavigationManager Navigation
@@ -90,7 +91,7 @@
     <div class="card shadow-sm">
         <div class="card-header bg-light">
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <strong>Seçili Gün Kayıtları (@seciliTarih.ToString("dd.MM.yyyy"))</strong>
+                <strong>Aylık Kayıtlar (@seciliTarih.ToString("MM.yyyy"))</strong>
                 <small class="text-muted">Tahakkuk değerleri servis kurallarına göre otomatik hesaplanır.</small>
             </div>
             <div class="row g-2 mt-1 align-items-end">
@@ -156,14 +157,18 @@
                             <th style="width:40px">
                                 <input type="checkbox" class="form-check-input" checked="@TumSeciliMi" @onchange="_ => TumunuSecKaldir()" disabled="@isBusy || !gunlukPuantajlar.Any()" />
                             </th>
+                            <th>Tarih</th>
                             <th>Güzergah</th>
                             <th>Kurum</th>
                             <th>Araç</th>
+                            <th>Araç Sahibi</th>
                             <th>Şoför</th>
                             <th>Servis Türü</th>
                             <th class="text-end" style="width:120px">Sefer</th>
-                            <th class="text-end">Kurum Tahakkuk</th>
-                            <th class="text-end">Tedarikçi Tahakkuk</th>
+                            <th class="text-end">Gelir</th>
+                            <th class="text-end">Gider</th>
+                            <th class="text-end">Giden Fatura</th>
+                            <th class="text-end">Gelen Fatura</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -173,7 +178,7 @@
                         }
                         @if (!grouped.Any())
                         {
-                            <tr><td colspan="10" class="text-center text-muted p-4">Filtreye uygun kayıt yok</td></tr>
+                            <tr><td colspan="14" class="text-center text-muted p-4">Filtreye uygun kayıt yok</td></tr>
                         }
                         else
                         {
@@ -181,7 +186,7 @@
                             {
                                 var isExpanded = expandedGroups.ContainsKey(group.Key) ? expandedGroups[group.Key] : true;
                                 <tr class="table-secondary" @onclick="() => ToggleGroup(group.Key)" style="cursor:pointer;">
-                                    <td colspan="10">
+                                    <td colspan="14">
                                         <i class="bi @(isExpanded ? "bi-chevron-down" : "bi-chevron-right") me-2"></i>
                                         <strong>
                                             @if (selectedGrouping == "plaka")
@@ -205,12 +210,17 @@
                                             <td>
                                                 <input type="checkbox" class="form-check-input" checked="@seciliPuantajIds.Contains(item.Id)" @onchange="_ => SecimiDegistir(item.Id)" disabled="@isBusy" />
                                             </td>
+                                            <td class="small">@item.Tarih.ToString("dd.MM.yyyy")</td>
                                             <td>
                                                 <div class="fw-semibold small">@item.Guzergah?.GuzergahKodu</div>
                                                 <div class="text-muted" style="font-size:.75rem">@item.Guzergah?.GuzergahAdi</div>
                                             </td>
                                             <td class="small">@(item.MusteriCari?.Unvan ?? "-")</td>
                                             <td class="small">@item.Arac?.AktifPlaka</td>
+                                            <td class="small">
+                                                @GetAracSahibiAd(item.Id)
+                                                <div class="text-muted" style="font-size:.75rem">@GetAracSahibiTip(item.Id)</div>
+                                            </td>
                                             <td class="small">@item.Sofor?.Ad @item.Sofor?.Soyad</td>
                                             <td class="small">@item.ServisTuru</td>
                                             <td class="text-end">
@@ -221,6 +231,8 @@
                                             </td>
                                             <td class="text-end">@item.TahakkukEdenKurumUcreti.ToString("N2")</td>
                                             <td class="text-end">@item.TahakkukEdenTaseronUcreti.ToString("N2")</td>
+                                            <td class="text-end">@GetGidenFaturaTutari(item.Id).ToString("N2")</td>
+                                            <td class="text-end">@GetGelenFaturaTutari(item.Id).ToString("N2")</td>
                                             <td class="text-end" style="white-space:nowrap">
                                                 <button class="btn btn-sm btn-outline-primary"
                                                         @onclick="() => SatirKaydetAsync(item)"
@@ -266,6 +278,7 @@
     private string servisTuruFiltresi = string.Empty;
     private string selectedGrouping = "cari";
     private Dictionary<string, bool> expandedGroups = new();
+    private Dictionary<int, PuantajSatirDetayDto> puantajDetayMap = new();
 
     private List<FiloGunlukPuantaj> FiltreliGunlukPuantajlar => gunlukPuantajlar
         .Where(FiltreyeUyar)
@@ -361,7 +374,15 @@
         isBusy = true;
         try
         {
-            gunlukPuantajlar = await FiloKomisyonService.GetGunlukPuantajlarSiraliAsync(firmaId, seciliTarih);
+            var ayBaslangic = new DateTime(seciliTarih.Year, seciliTarih.Month, 1);
+            var ayBitis = ayBaslangic.AddMonths(1).AddDays(-1);
+
+            var aralik = await FiloKomisyonService.GetPuantajlarByTarihAraligiAsync(firmaId, ayBaslangic, ayBitis);
+            gunlukPuantajlar = aralik;
+
+            var detaylar = await FiloKomisyonService.GetGunlukPuantajDetayliAsync(firmaId, seciliTarih);
+            puantajDetayMap = detaylar.ToDictionary(d => d.Puantaj.Id, d => d);
+
             seciliPuantajIds.IntersectWith(gunlukPuantajlar.Select(x => x.Id));
         }
         catch (Exception ex)
@@ -574,6 +595,18 @@
             || (item.Arac?.AktifPlaka?.Contains(metin, StringComparison.OrdinalIgnoreCase) ?? false)
             || sofor.Contains(metin, StringComparison.OrdinalIgnoreCase);
     }
+
+    private string GetAracSahibiAd(int puantajId)
+        => puantajDetayMap.TryGetValue(puantajId, out var detay) ? detay.AracSahibiAd : "-";
+
+    private string GetAracSahibiTip(int puantajId)
+        => puantajDetayMap.TryGetValue(puantajId, out var detay) ? detay.AracSahibiTip : "-";
+
+    private decimal GetGelenFaturaTutari(int puantajId)
+        => puantajDetayMap.TryGetValue(puantajId, out var detay) ? detay.GelenFaturaTutari : 0m;
+
+    private decimal GetGidenFaturaTutari(int puantajId)
+        => puantajDetayMap.TryGetValue(puantajId, out var detay) ? detay.GidenFaturaTutari : 0m;
 
     private static string GetSatirSinifi(FiloGunlukPuantaj item)
     {

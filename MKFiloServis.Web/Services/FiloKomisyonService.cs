@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Services.Interfaces;
+using MKFiloServis.Web.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace MKFiloServis.Web.Services;
@@ -212,6 +213,63 @@ public class FiloKomisyonService : IFiloKomisyonService
             Console.WriteLine($"  - Id={item.Id}, Eslestirme={item.FiloGuzergahEslestirmeId}, SeferSayisi={item.SeferSayisi}, Arac={item.Arac?.Plaka}");
         }
         return result;
+    }
+
+    public async Task<List<PuantajSatirDetayDto>> GetGunlukPuantajDetayliAsync(int firmaId, DateTime tarih)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var puantajlar = await context.FiloGunlukPuantajlar
+            .Include(p => p.MusteriCari)
+            .Include(p => p.Guzergah)
+            .Include(p => p.Arac)
+                .ThenInclude(a => a!.KiralikCari)
+            .Include(p => p.Arac)
+                .ThenInclude(a => a!.KomisyoncuCari)
+            .Include(p => p.Arac)
+                .ThenInclude(a => a!.TasimaTedarikci)
+            .Include(p => p.Arac)
+                .ThenInclude(a => a!.Firma)
+            .Include(p => p.Sofor)
+            .Where(p => p.FirmaId == firmaId && p.Tarih.Date == tarih.Date && !p.IsDeleted)
+            .OrderBy(p => p.MusteriCari!.Unvan)
+            .ThenBy(p => p.Guzergah!.GuzergahAdi)
+            .ToListAsync();
+
+        var faturaIds = puantajlar
+            .SelectMany(p => new[] { p.KurumFaturaId, p.TedarikciOdemeFaturaId })
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
+
+        var faturaTutarlari = faturaIds.Any()
+            ? await context.Faturalar
+                .Where(f => faturaIds.Contains(f.Id) && !f.IsDeleted)
+                .ToDictionaryAsync(f => f.Id, f => f.GenelToplam)
+            : new Dictionary<int, decimal>();
+
+        return puantajlar.Select(p =>
+        {
+            var sahipAd = GetAracSahibiAd(p.Arac);
+            var sahipTip = GetAracSahibiTip(p.Arac);
+
+            var giden = p.KurumFaturaId.HasValue && faturaTutarlari.TryGetValue(p.KurumFaturaId.Value, out var gidenTutar)
+                ? gidenTutar
+                : 0m;
+            var gelen = p.TedarikciOdemeFaturaId.HasValue && faturaTutarlari.TryGetValue(p.TedarikciOdemeFaturaId.Value, out var gelenTutar)
+                ? gelenTutar
+                : 0m;
+
+            return new PuantajSatirDetayDto
+            {
+                Puantaj = p,
+                AracSahibiAd = sahipAd,
+                AracSahibiTip = sahipTip,
+                GidenFaturaTutari = giden,
+                GelenFaturaTutari = gelen
+            };
+        }).ToList();
     }
 
     public async Task<List<FiloGunlukPuantaj>> GetPuantajlarByTarihAraligiAsync(int? firmaId, DateTime baslangic, DateTime bitis, int? kurumId = null, int? aracId = null)
@@ -562,6 +620,39 @@ public class FiloKomisyonService : IFiloKomisyonService
             ServisTuru.Ozel => 1.25m,
             ServisTuru.YardaMesai => 1.5m,
             _ => 1m
+        };
+    }
+
+    private static string GetAracSahibiAd(Arac? arac)
+    {
+        if (arac is null)
+            return "Bilinmeyen Sahip";
+
+        if (arac.SahiplikTipi == AracSahiplikTipi.Kiralik && !string.IsNullOrWhiteSpace(arac.KiralikCari?.Unvan))
+            return arac.KiralikCari.Unvan;
+
+        if (arac.SahiplikTipi == AracSahiplikTipi.Komisyon && !string.IsNullOrWhiteSpace(arac.KomisyoncuCari?.Unvan))
+            return arac.KomisyoncuCari.Unvan;
+
+        if (arac.SahiplikTipi == AracSahiplikTipi.Tedarikci && !string.IsNullOrWhiteSpace(arac.TasimaTedarikci?.Unvan))
+            return arac.TasimaTedarikci.Unvan;
+
+        if (!string.IsNullOrWhiteSpace(arac.Firma?.FirmaAdi))
+            return arac.Firma.FirmaAdi;
+
+        return "Bilinmeyen Sahip";
+    }
+
+    private static string GetAracSahibiTip(Arac? arac)
+    {
+        return arac?.SahiplikTipi switch
+        {
+            AracSahiplikTipi.Kiralik => "Kiralık Cari",
+            AracSahiplikTipi.Komisyon => "Komisyoncu Cari",
+            AracSahiplikTipi.Tedarikci => "Tedarikçi",
+            AracSahiplikTipi.Ozmal => "Firma Özmalı",
+            AracSahiplikTipi.Diger => "Diğer",
+            _ => "Bilinmeyen"
         };
     }
 }

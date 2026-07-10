@@ -69,6 +69,13 @@ puantajlar = puantajlar.Where(p => p.SeferSayisi > 0).ToList();
 - ✅ Service-level eager loading optimizasyonları
 - ✅ Build hataları çözüldü
 
+### 5. Tek Paket Uygulama (Toplu Puantaj Tutarlılık + Zengin Görünüm)
+- ✅ Operasyonel Puantaj için detay DTO modeli eklendi (`PuantajSatirDetayDto`)
+- ✅ `GetGunlukPuantajDetayliAsync` ile araç sahibi + gelen/giden fatura tutarı servis katmanında tek kaynaktan üretildi
+- ✅ Operasyonel Puantaj tablosuna yeni alanlar eklendi: Araç Sahibi, Gelir, Gider, Giden Fatura, Gelen Fatura
+- ✅ Operasyonel Hakediş "Cari" gruplaması araç sahibi bazına alındı (fallback: Kiralık/Komisyon/Tedarikçi/Firma)
+- ✅ Operasyonel Hakediş referans alanına cari bilgi tooltip’i eklendi
+
 ---
 
 ## ⏳ YAPILACAK İŞLER (Öncelik Sırasına Göre)
@@ -77,6 +84,8 @@ puantajlar = puantajlar.Where(p => p.SeferSayisi > 0).ToList();
 - [ ] Operasyonel Puantaj sayfası end-to-end test
 - [ ] Operasyonel Hakediş sayfası gruplama testi
 - [ ] Sefer sayıları tutarlılığı kontrolü
+- [ ] **Toplu Puantaj -> Operasyonel Puantaj -> Operasyonel Hakediş veri akışı mutabakat testi**
+- [ ] **Toplu Puantaj ile diğer menüler arasında kayıt/tutar/sefer eşitliği kontrol raporu**
 - [ ] Arayüz responsive tasarım kontrolü (mobile)
 - [ ] Excel/PDF export'ün gruplama ile uyumluluğu
 
@@ -127,72 +136,128 @@ OperasyonelHakedisPage.razor
 
 ---
 
-## 🔍 Bilinen Limitasyonlar & Notlar
+## 🔍 Bilinen Limitasyonlar, Riskler & Risk Azaltma Planı
 
-1. **Toplu Puantaj İçinde Sefer Sayısı**
-   - `TopluPuantajUretAsync()` henüz `SeferSayisi = 0m` ile başlıyor
-   - Kullanıcı manuel olarak doldurmak ZORUNDA
-   - İleride auto-fill logic'i eklenebilir (tarihsel ortalar, vb.)
+1. **Toplu Puantaj İçinde Sefer Sayısı (Veri Eksikliği Riski)**
+   - Mevcut durumda `TopluPuantajUretAsync()` yeni kayıtları `SeferSayisi = 0m` ile başlatıyor.
+   - Risk: Kullanıcı sefer sayısı girmezse hakediş üretiminde kayıtlar atlanır veya eksik finansal sonuç oluşur.
+   - Risk Azaltma:
+     - Hakediş öncesi “SeferSayisi=0” kayıt kontrolü ve bloklayıcı uyarı ekranı eklenmesi.
+     - Toplu puantaj sonrası “eksik sefer” raporu zorunlu gösterimi.
+     - Opsiyonel: Servis kuralına göre varsayılan sefer önerisi (kullanıcı onayı ile) uygulanması.
 
-2. **Gruplama Logic'i**
-   - "Cari" seçimi: `Tip == Kurum ? "Kurum #{ReferansId}" : Tip.ToString()`
-   - "Referans" seçimi: `ReferansId.ToString()`
-   - Referans adlarını görmek için daha gelişmiş mapping gerekebilir
+2. **Araç Sahibi Firma/Cari Null Olabilir (Eski Veri Riski)**
+   - Bazı eski araç kayıtlarında `KiralikCariId`, `KomisyoncuCariId` veya tedarikçi ilişkisi boş olabilir.
+   - Risk: “Cari gruplama” yanlış/eksik görünebilir, kullanıcı yanlış yorum yapabilir.
+   - Risk Azaltma:
+     - Grup anahtarı için fallback zinciri: Sahip Cari -> Tedarikçi -> Firma -> `Bilinmeyen Sahip`.
+     - Veri kalite scripti: null sahiplikli araçları listeleyip düzeltme ekranına yönlendirme.
+     - UI’de görsel uyarı etiketi: `Sahip Bilgisi Eksik`.
 
-3. **Performance Consideration**
-   - Büyük veri setlerinde `GetGroupedData()` LINQ-to-Objects'te çalışıyor
-   - Pagination eklenebilir (gelecek)
+3. **Gelen/Giden Fatura Toplamı Sunumu (Karar Belirsizliği Riski)**
+   - Henüz net değil: fatura tutarları satır bazlı mı, grup bazlı mı gösterilecek.
+   - Risk: farklı ekranlarda farklı toplam mantığı ile güven kaybı oluşabilir.
+   - Risk Azaltma:
+     - Karar standardı belirlenmesi: Varsayılan grup toplam + opsiyonel satır detayı.
+     - Tek hesaplama kaynağı: servis katmanında ortak DTO/projection ile üretim.
+     - Kolon başlığında açık etiket: `Gelen Fatura Toplamı (Grup)` / `Giden Fatura Toplamı (Satır)`.
+
+4. **Çok Kolonlu Tablo Mobilde Taşma Riski**
+   - Ek alanlar (plaka, sahip firma, kurum, cari, şoför, sefer, gelir, gider, gelen/giden fatura) mobilde okunurluğu düşürür.
+   - Risk: kullanıcı kritik veriyi göremez, yanlış işlem yapabilir.
+   - Risk Azaltma:
+     - Mobilde kolon gizleme + satır detay paneli (accordion/drawer) yaklaşımı.
+     - Desktop’ta tam tablo, mobilde özet + “Detay Göster” standardı.
+     - Sticky kritik kolonlar (Araç, Sefer, Gelir/Gider) ve yatay kaydırma iyileştirmesi.
+
+5. **Performance Consideration**
+   - Büyük veri setlerinde `GetGroupedData()` LINQ-to-Objects ile çalışıyor.
+   - Risk Azaltma:
+     - Server-side projection + pagination + filtreli sorgu.
+     - Gerekirse aylık dönem için önbelleklenmiş özet metrikler.
+
+6. **Toplu Puantaj ve Diğer Menüler Arasında Veri Tutarsızlığı Riski (Kritik)**
+   - Beklenen: Operasyonel Puantaj ve Operasyonel Hakediş ekranları veriyi Toplu Puantaj üretiminden tutarlı biçimde devralmalı.
+   - Gözlem: Menüler arasında kayıt adedi, sefer, gelir/gider ve fatura bağlantıları bazı senaryolarda birebir eşleşmiyor.
+   - Olası Nedenler:
+     - Dönem/tarih filtrelerinin farklı yorumlanması (gün sonu, ay başlangıç-bitiş sınırı).
+     - `SeferSayisi=0` veya eksik sahiplik/cari ilişki kayıtlarının ekranlar arasında farklı filtrelenmesi.
+     - Operasyonel menülerde farklı `Include`/projection kullanımı nedeniyle eksik ilişkisel veri.
+     - Toplu üretim sonrası yeniden yükleme/senkron sırasının farklı olması.
+   - Risk Azaltma:
+     - Tek kaynak kuralı: Toplu Puantaj verisini baz alan ortak servis DTO/projection standardı.
+     - Mutabakat job'ı: günlük/aylık “Toplu vs Operasyonel” karşılaştırma raporu (kayıt, sefer, tutar, fatura linki).
+     - Bloklayıcı kontrol: Hakediş üretmeden önce tutarsız kayıt varsa uyarı + detay liste.
+     - Test standardı: aynı dataset için 3 ekranın aynı toplamları verdiğini doğrulayan entegrasyon testi.
+     - İzlenebilirlik: üretim ve aktarım adımlarına correlation-id/log eklenmesi.
 
 ---
 
-## 📝 Git Commit Mesajı (Push Edildi)
+## 🚀 Canlıya Çıkışa Hazır Son Plan
 
-```
-feat: operasyonel hakedişe gruplama ekle ve sefer aktarım sorununu çöz
+### 1) Yayın Öncesi Zorunlu Kontrol Listesi (Go/No-Go)
+- [ ] `dotnet build` hatasız
+- [ ] Kritik akış testleri geçti:
+  - [ ] Toplu Puantaj üretimi
+  - [ ] Operasyonel Puantaj listeleme/güncelleme
+  - [ ] Operasyonel Hakediş üretim/listeleme
+- [ ] Mutabakat testi geçti (aynı dönem için):
+  - [ ] Toplu Puantaj kayıt adedi == Operasyonel Puantaj kaynak adedi
+  - [ ] Toplam sefer eşitliği doğrulandı
+  - [ ] Toplam gelir/gider eşitliği doğrulandı
+  - [ ] Fatura link alanları (KurumFaturaId / TedarikciOdemeFaturaId) tutarlı
+- [ ] `SeferSayisi=0` kayıtları raporlandı ve aksiyonlandı (düzeltildi/atlandı)
+- [ ] Mobil görünümde tablo taşma kontrolü yapıldı (kritik kolonlar görünür)
 
-- Gruplama selector (Cari/Referans) eklendi
-- Smart expand/collapse for grouped hakediş records
-- Grup toplamları gösterilir
-- Fix: SeferSayisi = 0 olan puantajlar hakediş üretiminden filtreleyelendi
-- OperasyonelHakedisService: boş puantaj kayıtları filtreleme
-```
+### 2) Canlı Geçiş Sırası (Runbook)
+1. Üretim öncesi son kodu çek: `main` güncel olmalı.
+2. Uygulamayı deploy et (mevcut release prosedürü ile).
+3. Deploy sonrası aşağıdaki smoke testleri uygula:
+   - Operasyonel Puantaj ekranı açılıyor, filtreleme/gruplama çalışıyor.
+   - Operasyonel Hakediş ekranı açılıyor, gruplama ve toplu üretim çalışıyor.
+   - Dönem bazında en az 1 gerçek veriyle sefer ve tutar doğrulaması yapılıyor.
+4. İlk 24 saat izleme:
+   - Hata loglarında hakediş/puantaj/fatura akış hatası var mı?
+   - Toplamlarda sapma var mı?
+
+### 3) Risk Kaldırma İçin Operasyonel Kararlar (Net)
+- **Gelen/Giden fatura gösterimi standardı:**
+  - Varsayılan: **grup toplamı**
+  - Opsiyonel: satır detayında fatura kırılımı
+- **Araç sahibi bilgisi boşsa:**
+  - Fallback zorunlu: `Sahip Cari -> Tedarikçi -> Firma -> Bilinmeyen Sahip`
+  - UI etiketi: `Sahip Bilgisi Eksik`
+- **Tutarsızlık tespitinde politika:**
+  - Hakediş üretimi öncesi bloklayıcı uyarı
+  - Tutarsız kayıt listesi üretilmeden onay verilmez
+
+### 4) Geri Dönüş (Rollback) Planı
+- Canlıda kritik tutarsızlık/hata durumunda bir önceki stabil sürüme dön.
+- Rollback sonrası:
+  - Son 24 saatlik puantaj/hakediş değişikliklerini raporla
+  - Veri mutabakatını tekrar çalıştır
+  - Düzeltme sonrası yeniden release penceresi aç
+
+### 5) Canlı Sonrası Başarı Kriterleri
+- Aynı dönem için Toplu Puantaj, Operasyonel Puantaj ve Operasyonel Hakediş toplamları eşit.
+- Kullanıcıdan “kayıt adedi/sefer/tutar uyuşmuyor” bildirimi gelmiyor.
+- Kritik akışlarda (üret, listele, onayla, faturala) bloklayıcı hata yok.
 
 ---
 
-## 🚀 Yarın Başlama Adımları
-
-1. **Repository Güncelleştir**
-   ```bash
-   git pull origin main
-   ```
-
-2. **Build ve Test Et**
-   ```bash
-   dotnet build
-   dotnet test
-   ```
-
-3. **Aplikasyonu Çalıştır**
-   - F5 veya `dotnet run` ile başlat
-   - Operasyonel Puantaj sayfasına git
-   - Operasyonel Hakediş sayfasına git
-   - Gruplama özelliğini test et
-
-4. **Üzerinde Çalışacağın Alan**
-   - YAPILACAK İŞLER listesinden START yapılacak olanı seç
-   - Test & Validation en kritik olanlar
-   - `MKFiloServis.Web/Docs/` dizininde notlar tut
+## 📝 Son Commit Notu (Özet)
+- Operasyonel Hakediş gruplama iyileştirmeleri
+- Sefer aktarımında `SeferSayisi > 0` filtrelemesi
+- Rapor/plan güncellemeleri ve canlıya çıkış kontrol adımları
 
 ---
 
 ## 📞 İletişim Notları
-
-- **User Preference:** Türkçe konuşulmalı
-- **Code Style:** Puantaj-related modüllerine dokunulmalı (diğer modüllere değil)
-- **Priority:** Gruplama + sefer aktarımı ✅ TAM
-- **Next Focus:** Test + Validasyon
+- **Dil:** Türkçe
+- **Kod sınırı:** Yalnızca puantaj/hakediş ile ilişkili alanlarda değişiklik
+- **Öncelik:** Toplu Puantaj ↔ Operasyonel menüler mutabakatı
 
 ---
 
 **Generated:** 2024  
-**Status:** Session Complete ✅
+**Status:** Release-Ready Plan ✅
