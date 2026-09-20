@@ -5,6 +5,91 @@ namespace MKFiloServis.Web.Components.Pages.Filo;
 
 public partial class OperasyonPlanPage
 {
+    private bool EkSeferFormuAcik;
+    private DateTime EkSeferTarihi = DateTime.Today;
+    private int EkSeferGuzergahId;
+    private int EkSeferAracId;
+    private int EkSeferSoforId;
+    private decimal EkSeferAdedi = 1m;
+    private decimal? EkSeferFiyati;
+
+    private IEnumerable<KeyValuePair<int, string>> EkSeferAracSecenekleri =>
+        Planlar
+            .Where(p => p.GuzergahId == EkSeferGuzergahId)
+            .GroupBy(p => p.AracId)
+            .Select(g => new KeyValuePair<int, string>(g.Key, GetAracAd(g.Key)))
+            .OrderBy(x => x.Value);
+
+    private void EkSeferFormunuAc()
+    {
+        EkSeferFormuAcik = true;
+        EkSeferTarihi = AyBaslangic >= DateTime.Today.AddMonths(-1) && AyBaslangic <= DateTime.Today.AddMonths(1)
+            ? DateTime.Today
+            : AyBaslangic;
+        EkSeferGuzergahId = Planlar.Select(p => p.GuzergahId).Distinct().FirstOrDefault();
+        EkSeferAracId = 0;
+        EkSeferSoforId = 0;
+        EkSeferAdedi = 1m;
+        EkSeferFiyati = null;
+        EkSeferGuzergahDegisti();
+    }
+
+    private void EkSeferFormunuKapat() => EkSeferFormuAcik = false;
+
+    private void EkSeferGuzergahDegisti()
+    {
+        var arac = EkSeferAracSecenekleri.FirstOrDefault();
+        EkSeferAracId = arac.Key;
+        EkSeferAracDegisti();
+    }
+
+    private void EkSeferAracDegisti()
+    {
+        var plan = Planlar.FirstOrDefault(p =>
+            p.GuzergahId == EkSeferGuzergahId && p.AracId == EkSeferAracId);
+        if (plan is null)
+            return;
+
+        EkSeferSoforId = plan.SoforId;
+        EkSeferFiyati = plan.KurumSeferUcretiSnapshot;
+    }
+
+    private async Task EkSeferPlaniniEkleAsync()
+    {
+        if (EkSeferTarihi == default || EkSeferGuzergahId <= 0 || EkSeferAracId <= 0 || EkSeferSoforId <= 0 || EkSeferAdedi <= 0m)
+        {
+            HataMesaji = "Ek sefer için tarih, güzergâh, plaka, şoför ve sıfırdan büyük sefer sayısı girilmelidir.";
+            BilgiMesaji = null;
+            return;
+        }
+
+        Yukleniyor = true;
+        HataMesaji = null;
+        BilgiMesaji = null;
+        try
+        {
+            await PlanService.EkSeferPlanSatiriEkleAsync(
+                EkSeferTarihi,
+                EkSeferGuzergahId,
+                EkSeferAracId,
+                EkSeferSoforId,
+                EkSeferAdedi,
+                EkSeferFiyati);
+
+            EkSeferFormuAcik = false;
+            BilgiMesaji = "Ek sefer planı kaydedildi.";
+            await YukleAsync();
+        }
+        catch (Exception ex)
+        {
+            HataMesaji = $"Ek sefer planı kaydedilemedi: {ex.Message}";
+        }
+        finally
+        {
+            Yukleniyor = false;
+        }
+    }
+
     private void HaftaSonuOlanlariIsaretle()
         => SecimleriTarihTipineGoreBelirle(t => t.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday,
             "Hafta sonu kayıtları seçildi.");

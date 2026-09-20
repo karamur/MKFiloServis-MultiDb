@@ -146,6 +146,56 @@ public class OperasyonPlanService : IOperasyonPlanService
             .ToListAsync();
     }
 
+    public async Task<OperasyonPlanSatiri> EkSeferPlanSatiriEkleAsync(
+        DateTime tarih,
+        int guzergahId,
+        int aracId,
+        int soforId,
+        decimal seferSayisi,
+        decimal? kurumSeferUcreti,
+        ServisTuru servisTuru = ServisTuru.SabahAksam)
+    {
+        if (seferSayisi <= 0m)
+            throw new ArgumentOutOfRangeException(nameof(seferSayisi), "Sefer sayısı sıfırdan büyük olmalıdır.");
+
+        var gun = tarih.Date;
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var eslestirme = await db.Set<FiloGuzergahEslestirme>()
+            .Where(e => e.IsActive && e.GuzergahId == guzergahId && e.AracId == aracId)
+            .AsNoTracking()
+            .FirstOrDefaultAsync();
+
+        if (eslestirme is null)
+            throw new InvalidOperationException("Seçilen güzergâh ve plaka için aktif eşleştirme bulunamadı.");
+
+        var takvim = await db.OperasyonTakvimGunleri
+            .FirstOrDefaultAsync(t => t.Tarih == gun);
+        if (takvim?.GunTipi == OperasyonGunTipi.Tatil)
+            throw new InvalidOperationException("Tatil gününe ek sefer planı eklenemez.");
+
+        var plan = new OperasyonPlanSatiri
+        {
+            Tarih = gun,
+            FiloGuzergahEslestirmeId = eslestirme.Id,
+            KurumFirmaId = eslestirme.KurumFirmaId,
+            GuzergahId = guzergahId,
+            AracId = aracId,
+            SoforId = soforId,
+            ServisTuru = servisTuru,
+            PlanlananSefer = seferSayisi,
+            PuantajCarpani = takvim?.PuantajCarpani ?? 1.0m,
+            KurumSeferUcretiSnapshot = kurumSeferUcreti ?? eslestirme.KurumaKesilecekUcret,
+            TaseronSeferUcretiSnapshot = eslestirme.TaseronaOdenenUcret,
+            Durum = (takvim?.PuantajCarpani ?? 1.0m) > 0m
+                ? OperasyonPlanDurumu.Planlandi
+                : OperasyonPlanDurumu.EksikGiris
+        };
+
+        db.OperasyonPlanSatirlari.Add(plan);
+        await db.SaveChangesAsync();
+        return plan;
+    }
+
     public async Task<int> PlanlariGuncelleAsync(List<OperasyonPlanSatiri> planlar)
     {
         if (planlar.Count == 0)
