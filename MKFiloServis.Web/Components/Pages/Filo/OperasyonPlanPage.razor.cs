@@ -12,6 +12,7 @@ public partial class OperasyonPlanPage
     private int EkSeferSoforId;
     private decimal EkSeferAdedi = 1m;
     private decimal? EkSeferFiyati;
+    private ServisTuru EkSeferServisTuru = ServisTuru.SabahAksam;
 
     private IEnumerable<KeyValuePair<int, string>> EkSeferAracSecenekleri =>
         Planlar
@@ -31,6 +32,7 @@ public partial class OperasyonPlanPage
         EkSeferSoforId = 0;
         EkSeferAdedi = 1m;
         EkSeferFiyati = null;
+        EkSeferServisTuru = ServisTuru.SabahAksam;
         EkSeferGuzergahDegisti();
     }
 
@@ -74,7 +76,8 @@ public partial class OperasyonPlanPage
                 EkSeferAracId,
                 EkSeferSoforId,
                 EkSeferAdedi,
-                EkSeferFiyati);
+                EkSeferFiyati,
+                EkSeferServisTuru);
 
             EkSeferFormuAcik = false;
             BilgiMesaji = "Ek sefer planı kaydedildi.";

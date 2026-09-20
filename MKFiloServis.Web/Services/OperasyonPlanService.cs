@@ -160,13 +160,12 @@ public class OperasyonPlanService : IOperasyonPlanService
 
         var gun = tarih.Date;
         await using var db = await _dbFactory.CreateDbContextAsync();
-        var eslestirme = await db.Set<FiloGuzergahEslestirme>()
-            .Where(e => e.IsActive && e.GuzergahId == guzergahId && e.AracId == aracId)
+        var guzergah = await db.Set<Guzergah>()
             .AsNoTracking()
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(g => g.Id == guzergahId);
 
-        if (eslestirme is null)
-            throw new InvalidOperationException("Seçilen güzergâh ve plaka için aktif eşleştirme bulunamadı.");
+        if (guzergah is null)
+            throw new InvalidOperationException("Seçilen güzergâh bulunamadı.");
 
         var takvim = await db.OperasyonTakvimGunleri
             .FirstOrDefaultAsync(t => t.Tarih == gun);
@@ -176,16 +175,18 @@ public class OperasyonPlanService : IOperasyonPlanService
         var plan = new OperasyonPlanSatiri
         {
             Tarih = gun,
-            FiloGuzergahEslestirmeId = eslestirme.Id,
-            KurumFirmaId = eslestirme.KurumFirmaId,
+            // Ek sefer, güzergâh-plaka eşleştirmesi olmadan da oluşturulabilir.
+            // Mevcut şema bu alanı zorunlu tuttuğu için 0, serbest ek sefer bağlantısıdır.
+            FiloGuzergahEslestirmeId = 0,
+            KurumFirmaId = guzergah.CariId,
             GuzergahId = guzergahId,
             AracId = aracId,
             SoforId = soforId,
             ServisTuru = servisTuru,
             PlanlananSefer = seferSayisi,
             PuantajCarpani = takvim?.PuantajCarpani ?? 1.0m,
-            KurumSeferUcretiSnapshot = kurumSeferUcreti ?? eslestirme.KurumaKesilecekUcret,
-            TaseronSeferUcretiSnapshot = eslestirme.TaseronaOdenenUcret,
+            KurumSeferUcretiSnapshot = kurumSeferUcreti ?? guzergah.BirimFiyat,
+            TaseronSeferUcretiSnapshot = guzergah.GiderFiyat,
             Durum = (takvim?.PuantajCarpani ?? 1.0m) > 0m
                 ? OperasyonPlanDurumu.Planlandi
                 : OperasyonPlanDurumu.EksikGiris
@@ -219,6 +220,72 @@ public class OperasyonPlanService : IOperasyonPlanService
 
         await db.SaveChangesAsync();
         return kayitlar.Count;
+    }
+
+    public async Task DuzenlemeIcinGeriAlAsync(int planId)
+    {
+        if (planId <= 0)
+            throw new ArgumentOutOfRangeException(nameof(planId));
+
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        await using var transaction = await db.Database.BeginTransactionAsync();
+
+        var plan = await db.OperasyonPlanSatirlari
+            .FirstOrDefaultAsync(p => p.Id == planId);
+        if (plan is null)
+            throw new InvalidOperationException("Düzenlenecek plan bulunamadı.");
+
+        if (!plan.FiloGunlukPuantajId.HasValue)
+        {
+            plan.Durum = OperasyonPlanDurumu.Planlandi;
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+            return;
+        }
+
+        var puantaj = await db.FiloGunlukPuantajlar
+            .FirstOrDefaultAsync(p => p.Id == plan.FiloGunlukPuantajId.Value && !p.IsDeleted);
+        if (puantaj is null)
+            throw new InvalidOperationException("Plana bağlı puantaj kaydı bulunamadı.");
+
+        if (puantaj.Onaylandi || puantaj.KurumFaturaKesildiMi || puantaj.TaseronOdemeYapildiMi ||
+            puantaj.KurumFaturaId.HasValue || puantaj.TedarikciOdemeFaturaId.HasValue)
+        {
+            throw new InvalidOperationException("Onaylanmış, faturalanmış veya ödemesi yapılmış puantaj düzenlenemez.");
+        }
+
+        var hakedisDetaylari = await db.HakedisDetaylari
+            .Include(d => d.Hakedis)
+            .Where(d => d.FiloGunlukPuantajId == puantaj.Id)
+            .ToListAsync();
+
+        if (hakedisDetaylari.Any(d => d.Hakedis is not null &&
+            d.Hakedis.Durum is not (HakedisDurum.Taslak or HakedisDurum.Iptal)))
+        {
+            throw new InvalidOperationException("Onaylanmış veya kapanmış hakedişe bağlı puantaj düzenlenemez.");
+        }
+
+        var hakedisler = hakedisDetaylari
+            .Select(d => d.Hakedis)
+            .Where(h => h is not null)
+            .Cast<Hakedis>()
+            .DistinctBy(h => h.Id)
+            .ToList();
+
+        if (hakedisDetaylari.Count > 0)
+            db.HakedisDetaylari.RemoveRange(hakedisDetaylari);
+        if (hakedisler.Count > 0)
+            db.Hakedisler.RemoveRange(hakedisler);
+
+        db.FiloGunlukPuantajlar.Remove(puantaj);
+        plan.FiloGunlukPuantajId = null;
+        plan.Durum = OperasyonPlanDurumu.Planlandi;
+        plan.TeyitTarihi = null;
+        plan.UpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        _logger.LogWarning("PLAN_DUZENLEME_GERI_AL: {PlanId} bekleyen duruma alındı.", planId);
     }
 
     public async Task SilTekGunlukPlanAsync(int planId)
@@ -275,7 +342,9 @@ public class OperasyonPlanService : IOperasyonPlanService
                 .Where(p => (puantajIdleri.Contains(p.Id) ||
                              (p.Tarih >= ayBaslangic && p.Tarih < aySonu &&
                               p.FiloGuzergahEslestirmeId.HasValue &&
-                              planlar.Select(x => x.FiloGuzergahEslestirmeId).Contains(p.FiloGuzergahEslestirmeId.Value))) &&
+                              planlar.Select(x => x.FiloGuzergahEslestirmeId)
+                                  .Where(id => id > 0)
+                                  .Contains(p.FiloGuzergahEslestirmeId.Value))) &&
                             !p.IsDeleted)
                 .ToListAsync();
 
@@ -363,7 +432,8 @@ public class OperasyonPlanService : IOperasyonPlanService
             foreach (var plan in planlar)
             {
                 var mevcutPuantaj = await db.Set<FiloGunlukPuantaj>()
-                    .FirstOrDefaultAsync(p => p.Tarih == plan.Tarih &&
+                    .FirstOrDefaultAsync(p => p.Tarih.Date == plan.Tarih.Date &&
+                                              plan.FiloGuzergahEslestirmeId > 0 &&
                                               p.FiloGuzergahEslestirmeId == plan.FiloGuzergahEslestirmeId &&
                                               !p.IsDeleted);
 
@@ -379,7 +449,9 @@ public class OperasyonPlanService : IOperasyonPlanService
                 var puantaj = new FiloGunlukPuantaj
                 {
                     Tarih = plan.Tarih,
-                    FiloGuzergahEslestirmeId = plan.FiloGuzergahEslestirmeId,
+                    FiloGuzergahEslestirmeId = plan.FiloGuzergahEslestirmeId > 0
+                        ? plan.FiloGuzergahEslestirmeId
+                        : null,
                     KurumFirmaId = plan.KurumFirmaId,
                     GuzergahId = plan.GuzergahId,
                     AracId = plan.AracId,

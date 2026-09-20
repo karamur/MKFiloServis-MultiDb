@@ -18,6 +18,7 @@ public interface IOperasyonPlanService
         decimal? kurumSeferUcreti,
         ServisTuru servisTuru = ServisTuru.SabahAksam);
     Task<int> PlanlariGuncelleAsync(List<OperasyonPlanSatiri> planlar);
+    Task DuzenlemeIcinGeriAlAsync(int planId);
     Task SilTekGunlukPlanAsync(int planId);
     Task<(int Plan, int Puantaj, int Hakedis)> AylikPlaniTemizleAsync(int yil, int ay);
     Task<OperasyonTakvimGunu?> GetTakvimGunuAsync(DateTime tarih);

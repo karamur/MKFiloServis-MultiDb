@@ -161,7 +161,7 @@
                                         {
                                             var tarih = new DateTime(seciliYil, seciliAy, g);
                                             var haftaSonu = tarih.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
-                                            var deger = satir.GunlukSeferler.TryGetValue(g, out var v) ? v : 0m;
+                                             var deger = satir.GunlukSeferler.TryGetValue(tarih.Date, out var v) ? v : 0m;
                                             <td class="text-center @(haftaSonu ? "table-secondary" : "")">@(deger > 0 ? deger.ToString("0.#") : "")</td>
                                         }
                                         <td class="text-center fw-semibold">@satir.GunSayisi</td>
@@ -181,8 +181,8 @@
                                     <td colspan="4"></td>
                                     @for (var g = 1; g <= AyGunSayisi; g++)
                                     {
-                                        var gun = g;
-                                        var gunToplam = filtreli.Sum(x => x.GunlukSeferler.TryGetValue(gun, out var v) ? v : 0m);
+                                         var tarih = new DateTime(seciliYil, seciliAy, g);
+                                         var gunToplam = filtreli.Sum(x => x.GunlukSeferler.TryGetValue(tarih.Date, out var v) ? v : 0m);
                                         <td class="text-center">@(gunToplam > 0 ? gunToplam.ToString("0.#") : "")</td>
                                     }
                                     <td class="text-center">@filtreli.Sum(x => x.GunSayisi)</td>
@@ -294,8 +294,8 @@
                 .Select(grp =>
                 {
                     var ilk = grp.First();
-                    var gunluk = grp
-                        .GroupBy(x => x.Puantaj.Tarih.Day)
+                     var gunluk = grp
+                         .GroupBy(x => x.Puantaj.Tarih.Date)
                         .ToDictionary(g => g.Key, g => g.Sum(x => x.Puantaj.SeferSayisi));
 
                     var seferSayisi = grp.Sum(x => x.Puantaj.SeferSayisi);
@@ -457,7 +457,8 @@
 
                 for (var g = 1; g <= gunSayisi; g++)
                 {
-                    var deger = satir.GunlukSeferler.TryGetValue(g, out var v) ? v : 0m;
+                     var tarih = new DateTime(seciliYil, seciliAy, g);
+                     var deger = satir.GunlukSeferler.TryGetValue(tarih.Date, out var v) ? v : 0m;
                     if (deger > 0)
                         ws.Cell(satirNo, c).Value = deger;
                     c++;
@@ -661,7 +662,7 @@
         public Sofor? SoforRef { get; set; }
         public Cari? MusteriCariRef { get; set; }
         public string AracSahibiTip { get; set; } = string.Empty;
-        public Dictionary<int, decimal> GunlukSeferler { get; set; } = new();
+        public Dictionary<DateTime, decimal> GunlukSeferler { get; set; } = new();
         public int GunSayisi { get; set; }
         public decimal SeferSayisi { get; set; }
         public decimal ToplamGelir { get; set; }

@@ -122,6 +122,15 @@
                             <label class="form-label small mb-1">Sefer fiyatı</label>
                             <InputNumber class="form-control form-control-sm" @bind-Value="EkSeferFiyati" min="0" step="0.01" placeholder="Normal ücret" />
                         </div>
+                        <div class="col-md-2">
+                            <label class="form-label small mb-1">Servis türü</label>
+                            <InputSelect class="form-select form-select-sm" @bind-Value="EkSeferServisTuru">
+                                @foreach (var servisTuru in Enum.GetValues<ServisTuru>())
+                                {
+                                    <option value="@servisTuru">@ServisTuruMetni(servisTuru)</option>
+                                }
+                            </InputSelect>
+                        </div>
                     </div>
                     <div class="small text-muted mt-2">Fiyat boş bırakılırsa seçilen güzergâhın normal kuruma kesilecek sefer ücreti kullanılır. Şoför, güzergâh ve plaka seçiminden sonra otomatik önerilir; isterseniz değiştirebilirsiniz.</div>
                     <div class="mt-2">
@@ -132,6 +141,21 @@
                     </div>
                 </div>
             }
+
+    @if (DuzenlenecekPlan is not null)
+    {
+        <div class="alert alert-warning border-warning">
+            <div class="fw-bold"><i class="bi bi-pencil-square me-1"></i>Plan düzenlemeye alınacak</div>
+            <div class="small mb-2">
+                @DuzenlenecekPlan.Tarih.ToString("dd.MM.yyyy") tarihli planın bağlı puantajı ve varsa taslak hakedişi geri alınacaktır.
+                Değişiklikten sonra yeniden aktarım için <strong>Teyit Et ve Puantaja Aktar</strong> düğmesine basmanız gerekir.
+            </div>
+            <button class="btn btn-warning me-2" @onclick="PlanDuzenlemeyeAlAsync" disabled="@Yukleniyor">
+                <i class="bi bi-check2 me-1"></i>Düzenleme için geri al
+            </button>
+            <button class="btn btn-link" @onclick="PlanDuzenlemeOnayiniIptalEt" disabled="@Yukleniyor">Vazgeç</button>
+        </div>
+    }
         </div>
     </div>
 
@@ -213,7 +237,7 @@
 
     <div class="row g-3 mb-3">
         <div class="col-md-4"><div class="card border-primary shadow-sm"><div class="card-body py-2"><div class="small text-muted">Toplam plan</div><div class="fs-4 fw-bold">@Planlar.Count</div></div></div></div>
-        <div class="col-md-4"><div class="card border-warning shadow-sm"><div class="card-body py-2"><div class="small text-muted">Teyit bekleyen</div><div class="fs-4 fw-bold">@Planlar.Count(p => p.Durum == OperasyonPlanDurumu.Planlandi)</div></div></div></div>
+        <div class="col-md-4"><div class="card border-warning shadow-sm"><div class="card-body py-2"><div class="small text-muted">Teyit bekleyen</div><div class="fs-4 fw-bold">@Planlar.Count(TeyitIcinSecilebilirMi)</div></div></div></div>
         <div class="col-md-4"><div class="card border-success shadow-sm"><div class="card-body py-2"><div class="small text-muted">Gerçekleşene aktarılan</div><div class="fs-4 fw-bold">@Planlar.Count(p => p.Durum == OperasyonPlanDurumu.TeyitEdildi)</div></div></div></div>
     </div>
 
@@ -254,13 +278,14 @@
                             <td class="@(grup.Planlar.Any(CakismaVarMi) ? "table-warning" : "")" style="position:sticky;left:300px;background:var(--bs-body-bg);z-index:1;">@grup.Sofor</td>
                             @for (var gun = 1; gun <= AyGunSayisi; gun++)
                             {
-                                var planlar = grup.Planlar.Where(p => p.Tarih.Day == gun).ToList();
+                                var tarih = new DateTime(SeciliYil, SeciliAy, gun);
+                                var planlar = grup.Planlar.Where(p => p.Tarih.Date == tarih.Date).ToList();
                                 var cakismaVar = planlar.Any(CakismaVarMi);
                                 <td class="text-center @(cakismaVar ? "table-danger" : planlar.Any(p => p.Durum == OperasyonPlanDurumu.TeyitEdildi) ? "table-success" : "")"
                                     title="@(cakismaVar ? CakismaAciklamasi(planlar) : planlar.Any() ? "Plan kaydı" : "")">
                                     @foreach (var plan in planlar)
                                     {
-                                        @if (plan.Durum == OperasyonPlanDurumu.Planlandi)
+                                        @if (TeyitIcinSecilebilirMi(plan))
                                         {
                                             <input type="checkbox" class="form-check-input" title="@plan.ServisTuru - teyit bekliyor"
                                                    checked="@SecilenIdler.Contains(plan.Id)"
@@ -269,8 +294,12 @@
                                         else
                                         {
                                             <i class="bi bi-check-circle-fill text-success" title="Teyit edildi"></i>
+                                            <button class="btn btn-link btn-sm text-primary p-0 ms-1" title="Düzenlemek için geri al"
+                                                    @onclick="() => PlanDuzenlemeOnayiIste(plan)">
+                                                <i class="bi bi-pencil-square"></i>
+                                            </button>
                                         }
-                                        @if (cakismaVar && plan.Durum == OperasyonPlanDurumu.Planlandi)
+                                        @if (cakismaVar && TeyitIcinSecilebilirMi(plan))
                                         {
                                             <button class="btn btn-link btn-sm text-danger p-0 ms-1" title="Bu günün çakışmalı planını sil"
                                                     @onclick="() => TekGunPlanSilmeOnayiIste(plan)">
@@ -319,10 +348,11 @@
     private bool CakismaOnayiVerildi;
     private bool AylikPlanTemizlemeOnayiBekleniyor;
     private OperasyonPlanSatiri? TekGunSilinecekPlan;
+    private OperasyonPlanSatiri? DuzenlenecekPlan;
     private bool TumuSecili =>
-        Planlar.Any(p => p.Durum == OperasyonPlanDurumu.Planlandi) &&
-        Planlar.Where(p => p.Durum == OperasyonPlanDurumu.Planlandi).All(p => SecilenIdler.Contains(p.Id));
-    private IEnumerable<OperasyonPlanSatiri> SeciliPlanlar => Planlar.Where(p => SecilenIdler.Contains(p.Id) && p.Durum == OperasyonPlanDurumu.Planlandi);
+        Planlar.Any(TeyitIcinSecilebilirMi) &&
+        Planlar.Where(TeyitIcinSecilebilirMi).All(p => SecilenIdler.Contains(p.Id));
+    private IEnumerable<OperasyonPlanSatiri> SeciliPlanlar => Planlar.Where(p => SecilenIdler.Contains(p.Id) && TeyitIcinSecilebilirMi(p));
     private IEnumerable<MatrisSatir> CakismaGruplari => MatrisSatirlari.Where(g => g.Planlar.Any(CakismaVarMi));
     private bool DegisiklikVarMi => Planlar.Any(p =>
         BaslangicDegerleri.TryGetValue(p.Id, out var baslangic) &&
@@ -333,6 +363,39 @@
     private async Task AyDegisti()
     {
         await YukleAsync();
+    }
+
+    private void PlanDuzenlemeOnayiIste(OperasyonPlanSatiri plan)
+    {
+        DuzenlenecekPlan = plan;
+        HataMesaji = null;
+        BilgiMesaji = null;
+    }
+
+    private void PlanDuzenlemeOnayiniIptalEt()
+    {
+        DuzenlenecekPlan = null;
+    }
+
+    private async Task PlanDuzenlemeyeAlAsync()
+    {
+        if (DuzenlenecekPlan is null)
+            return;
+
+        var plan = DuzenlenecekPlan;
+        Yukleniyor = true;
+        try
+        {
+            await PlanService.DuzenlemeIcinGeriAlAsync(plan.Id);
+            DuzenlenecekPlan = null;
+            Toast.ShowSuccess($"{plan.Tarih:dd.MM.yyyy} tarihli plan düzenleme için açıldı. Değişiklikten sonra Teyit Et ve Puantaja Aktar düğmesine basın.");
+            await YukleAsync();
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"Plan düzenlemeye alınamadı: {ex.Message}");
+            Yukleniyor = false;
+        }
     }
 
     private void TekGunPlanSilmeOnayiIste(OperasyonPlanSatiri plan)
@@ -421,7 +484,7 @@
 
     private void TumunuIsaretle()
     {
-        SecilenIdler = Planlar.Where(p => p.Durum == OperasyonPlanDurumu.Planlandi).Select(p => p.Id).ToHashSet();
+        SecilenIdler = Planlar.Where(TeyitIcinSecilebilirMi).Select(p => p.Id).ToHashSet();
     }
 
     private async Task HaftaSonlariniIsaretle()
@@ -473,7 +536,7 @@
         Yukleniyor = true;
         try
         {
-            var adet = await PlanService.PlanlariGuncelleAsync(Planlar.Where(p => p.Durum == OperasyonPlanDurumu.Planlandi).ToList());
+            var adet = await PlanService.PlanlariGuncelleAsync(Planlar.Where(TeyitIcinSecilebilirMi).ToList());
             BaslangicDegerleri = Planlar.ToDictionary(p => p.Id, p => (p.PlanlananSefer, p.ServisTuru));
             BilgiMesaji = $"{adet} plan değişikliği kaydedildi.";
         }
@@ -581,9 +644,12 @@
     {
         var secili = (bool)e.Value!;
         SecilenIdler = secili
-            ? Planlar.Where(p => p.Durum == OperasyonPlanDurumu.Planlandi).Select(p => p.Id).ToHashSet()
+            ? Planlar.Where(TeyitIcinSecilebilirMi).Select(p => p.Id).ToHashSet()
             : new();
     }
+
+    private static bool TeyitIcinSecilebilirMi(OperasyonPlanSatiri plan) =>
+        plan.Durum is OperasyonPlanDurumu.Planlandi or OperasyonPlanDurumu.EksikGiris;
 
     private async Task AdlariYukleAsync()
     {
