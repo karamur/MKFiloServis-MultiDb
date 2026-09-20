@@ -69,7 +69,7 @@
                 <button class="btn btn-outline-warning btn-sm" @onclick="EkSeferUygula" disabled="@(Yukleniyor || !SeciliPlanlar.Any() || EkSeferSayisi is null)">
                     <i class="bi bi-plus-circle me-1"></i>Ek Sefer Ekle
                 </button>
-                <button class="btn btn-outline-dark btn-sm" @onclick="MesaiOlarakIsaretlePlanlar" disabled="@(Yukleniyor || !SeciliPlanlar.Any())">
+                <button class="btn btn-outline-dark btn-sm" @onclick="MesaiOlarakIsaretlePlanlarAsync" disabled="@(Yukleniyor || !SeciliPlanlar.Any())">
                     <i class="bi bi-clock-history me-1"></i>Mesai Olarak İşaretle
                 </button>
                 <button class="btn btn-primary btn-sm" @onclick="PlanDegisiklikleriniKaydetAsync" disabled="@(Yukleniyor || !DegisiklikVarMi)">

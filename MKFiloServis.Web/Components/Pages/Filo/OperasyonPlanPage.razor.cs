@@ -13,7 +13,7 @@ public partial class OperasyonPlanPage
         => SecimleriTarihTipineGoreBelirle(t => t.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday),
             "Hafta içi kayıtları seçildi.");
 
-    private void MesaiOlarakIsaretlePlanlar()
+    private async Task MesaiOlarakIsaretlePlanlarAsync()
     {
         var seciliPlanlar = Planlar
             .Where(p => SecilenIdler.Contains(p.Id))
@@ -27,13 +27,28 @@ public partial class OperasyonPlanPage
             return;
         }
 
-        foreach (var plan in seciliPlanlar)
-        {
-            plan.ServisTuru = ServisTuru.YardaMesai;
-        }
-
-        BilgiMesaji = $"{seciliPlanlar.Count} plan mesai olarak işaretlendi. Kaydetmek için 'Plan Değişikliklerini Kaydet' kullanın.";
+        Yukleniyor = true;
         HataMesaji = null;
+        BilgiMesaji = null;
+        try
+        {
+            foreach (var plan in seciliPlanlar)
+            {
+                plan.ServisTuru = ServisTuru.YardaMesai;
+            }
+
+            var kaydedilen = await PlanService.PlanlariGuncelleAsync(seciliPlanlar);
+            BaslangicDegerleri = Planlar.ToDictionary(p => p.Id, p => (p.PlanlananSefer, p.ServisTuru));
+            BilgiMesaji = $"{kaydedilen} plan mesai olarak işaretlendi ve kaydedildi.";
+        }
+        catch (Exception ex)
+        {
+            HataMesaji = $"Mesai işaretleme kaydedilemedi: {ex.Message}";
+        }
+        finally
+        {
+            Yukleniyor = false;
+        }
     }
 
     private void SecimleriTarihTipineGoreBelirle(Func<DateTime, bool> tarihKriteri, string basariMesaji)
