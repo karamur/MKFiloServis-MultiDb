@@ -25,6 +25,10 @@ public class OperasyonelHakedisService : IOperasyonelHakedisService
             .Include(h => h.Detaylar)
                 .ThenInclude(d => d.Guzergah)
                 .ThenInclude(g => g!.Kurum)
+            .Include(h => h.Detaylar)
+                .ThenInclude(d => d.Arac)
+            .Include(h => h.Detaylar)
+                .ThenInclude(d => d.Sofor)
             .Include(h => h.Fatura)
             .AsQueryable();
 

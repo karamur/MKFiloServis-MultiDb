@@ -569,6 +569,84 @@ public class PdfService : IPdfService
         return document.GeneratePdf();
     }
 
+    public byte[] GenerateHakedisDetayRaporPdf(HakedisDetayRaporModel model)
+    {
+        var document = Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4.Landscape());
+                page.Margin(25);
+                page.DefaultTextStyle(x => x.FontSize(8));
+                page.Header().Element(c => ComposeHeader(c, $"HAKEDİŞ DETAY RAPORU\n{model.Yil}/{model.Ay:D2}"));
+                page.Content().Element(c => ComposeHakedisDetayRaporContent(c, model));
+                page.Footer().Element(ComposeFooter);
+            });
+        });
+
+        return document.GeneratePdf();
+    }
+
+    private void ComposeHakedisDetayRaporContent(IContainer container, HakedisDetayRaporModel model)
+    {
+        container.Column(col =>
+        {
+            col.Item().Text($"Dönem: {model.Ay:D2}/{model.Yil}").Bold().FontSize(11);
+            col.Item().PaddingVertical(6);
+            col.Item().Table(table =>
+            {
+                table.ColumnsDefinition(columns =>
+                {
+                    columns.RelativeColumn(2.4f);
+                    columns.RelativeColumn(1.8f);
+                    columns.RelativeColumn(1.1f);
+                    columns.RelativeColumn(1.5f);
+                    columns.RelativeColumn(0.9f);
+                    columns.RelativeColumn(1.1f);
+                    columns.RelativeColumn(1.5f);
+                });
+
+                table.Header(header =>
+                {
+                    foreach (var baslik in new[] { "Firma", "Güzergâh", "Plaka", "Şoför", "Sefer", "Birim Fiyat", "Kesilecek Fatura" })
+                        header.Cell().Background(Colors.Grey.Lighten2).Padding(4).Text(baslik).Bold();
+                });
+
+                foreach (var grup in model.Satirlar.GroupBy(x => x.Firma).OrderBy(x => x.Key))
+                {
+                    if (model.FirmalariGrupla)
+                    {
+                        table.Cell().ColumnSpan(7).Background(Colors.Blue.Lighten4).Padding(4).Text($"FİRMA: {grup.Key}").Bold();
+                    }
+
+                    foreach (var satir in grup.OrderBy(x => x.Guzergah).ThenBy(x => x.Plaka).ThenBy(x => x.Sofor))
+                    {
+                        table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).Text(satir.Firma);
+                        table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).Text(satir.Guzergah);
+                        table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).Text(satir.Plaka);
+                        table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).Text(satir.Sofor);
+                        table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).AlignRight().Text(satir.SeferSayisi.ToString("N2"));
+                        table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).AlignRight().Text(satir.BirimFiyat.ToString("N2"));
+                        table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).AlignRight().Text(satir.FaturaTutari.ToString("N2"));
+                    }
+
+                    if (model.FirmalariGrupla)
+                    {
+                        table.Cell().ColumnSpan(4).Background(Colors.Grey.Lighten3).Padding(4).Text($"{grup.Key} Ara Toplam").Bold();
+                        table.Cell().Background(Colors.Grey.Lighten3).Padding(4).AlignRight().Text(grup.Sum(x => x.SeferSayisi).ToString("N2")).Bold();
+                        table.Cell().Background(Colors.Grey.Lighten3).Padding(4);
+                        table.Cell().Background(Colors.Grey.Lighten3).Padding(4).AlignRight().Text(grup.Sum(x => x.FaturaTutari).ToString("N2")).Bold();
+                    }
+                }
+
+                table.Cell().ColumnSpan(4).Background(Colors.Grey.Lighten2).Padding(5).Text("GENEL TOPLAM").Bold();
+                table.Cell().Background(Colors.Grey.Lighten2).Padding(5).AlignRight().Text(model.Satirlar.Sum(x => x.SeferSayisi).ToString("N2")).Bold();
+                table.Cell().Background(Colors.Grey.Lighten2).Padding(5);
+                table.Cell().Background(Colors.Grey.Lighten2).Padding(5).AlignRight().Text(model.Satirlar.Sum(x => x.FaturaTutari).ToString("N2")).Bold();
+            });
+        });
+    }
+
     private void ComposeHakedisContent(IContainer container, Hakedis h, string? referansAd)
     {
         container.Column(col =>

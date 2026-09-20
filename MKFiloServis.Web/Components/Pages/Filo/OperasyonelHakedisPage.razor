@@ -27,6 +27,12 @@
             <button class="btn btn-outline-success" @onclick="ExceleAktarAsync" disabled="@(isBusy || !hakedisler.Any())">
                 <i class="bi bi-file-earmark-excel me-1"></i>Excel'e Aktar
             </button>
+            <button class="btn btn-success" @onclick="DetayliRaporuExceleAktarAsync" disabled="@(isBusy || !FiltreliRaporSatirlari.Any())">
+                <i class="bi bi-file-earmark-spreadsheet me-1"></i>Detaylı Rapor
+            </button>
+            <button class="btn btn-outline-danger" @onclick="DetayliRaporuPdfAktarAsync" disabled="@(isBusy || !FiltreliRaporSatirlari.Any())">
+                <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+            </button>
             <button class="btn btn-outline-secondary" @onclick="YukleAsync" disabled="@isBusy">
                 <i class="bi bi-arrow-clockwise me-1"></i>Yenile
             </button>
@@ -105,8 +111,106 @@
                     }
                 </div>
             </div>
+            @if (seciliTip == HakedisTipi.Kurum)
+            {
+                <div class="row g-2 align-items-end mt-1">
+                    <div class="col-md-4">
+                        <label class="form-label small mb-1">Firmalar</label>
+                        <select class="form-select form-select-sm" multiple size="3" @onchange="KurumFiltresiDegisti">
+                            @foreach (var kurum in KurumFiltreSecenekleri)
+                            {
+                                <option value="@kurum.Id">@kurum.Ad</option>
+                            }
+                        </select>
+                        <div class="form-text">Boş bırakılırsa tüm firmalar alınır.</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small mb-1">Güzergâh</label>
+                        <select class="form-select form-select-sm" @bind="seciliGuzergahId">
+                            <option value="0">Tüm güzergâhlar</option>
+                            @foreach (var guzergah in GuzergahFiltreSecenekleri)
+                            {
+                                <option value="@guzergah.Id">@guzergah.Ad</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4 small text-muted">
+                        <i class="bi bi-info-circle me-1"></i>Detaylı rapor; firma, güzergâh, plaka, şoför, sefer ve kesilecek fatura tutarını içerir.
+                    </div>
+                    <div class="col-md-4 form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" id="firmalariGrupla" @bind="firmalariGrupla" />
+                        <label class="form-check-label" for="firmalariGrupla">Firmaları grupla ve ara toplamları göster</label>
+                    </div>
+                </div>
+            }
         </div>
     </div>
+
+    @if (seciliTip == HakedisTipi.Kurum && FiltreliRaporSatirlari.Any())
+    {
+        <div class="card shadow-sm mb-3">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>Firma / Güzergâh Detay Raporu</strong>
+                    <div class="small text-muted">Rapor dönemi: @ay.ToString("D2")/@yil</div>
+                </div>
+                <span class="small text-muted">@FiltreliRaporSatirlari.Count satır</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-striped table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Firma</th>
+                            <th>Güzergâh</th>
+                            <th>Plaka</th>
+                            <th>Şoför</th>
+                            <th class="text-end">Sefer</th>
+                            <th class="text-end">Birim Fiyat</th>
+                            <th class="text-end">Kesilecek Fatura</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var grup in DetayRaporGruplari)
+                        {
+                            @if (firmalariGrupla)
+                            {
+                                <tr class="table-primary"><td colspan="7" class="fw-bold">FİRMA: @grup.Key</td></tr>
+                            }
+                            @foreach (var satir in grup)
+                            {
+                                <tr>
+                                    <td>@satir.Firma</td>
+                                    <td>@satir.Guzergah</td>
+                                    <td>@satir.Plaka</td>
+                                    <td>@satir.Sofor</td>
+                                    <td class="text-end">@satir.SeferSayisi.ToString("N2")</td>
+                                    <td class="text-end">@satir.BirimFiyat.ToString("N2") ₺</td>
+                                    <td class="text-end fw-semibold">@satir.FaturaTutari.ToString("N2") ₺</td>
+                                </tr>
+                            }
+                            @if (firmalariGrupla)
+                            {
+                                <tr class="table-light fw-bold">
+                                    <td colspan="4">@grup.Key Ara Toplam</td>
+                                    <td class="text-end">@grup.Sum(x => x.SeferSayisi).ToString("N2")</td>
+                                    <td></td>
+                                    <td class="text-end">@grup.Sum(x => x.FaturaTutari).ToString("N2") ₺</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                    <tfoot class="table-light fw-bold">
+                        <tr>
+                            <td colspan="4">GENEL TOPLAM</td>
+                            <td class="text-end">@FiltreliRaporSatirlari.Sum(x => x.SeferSayisi).ToString("N2")</td>
+                            <td></td>
+                            <td class="text-end">@FiltreliRaporSatirlari.Sum(x => x.FaturaTutari).ToString("N2") ₺</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    }
 
     <div class="row g-3 mb-3">
         <div class="col-md-3">
@@ -331,6 +435,7 @@
                                             </tr>
                                         }
                                     }
+
                                 }
                             }
                         </tbody>
@@ -375,9 +480,59 @@
 
     private List<Hakedis> hakedisler = new();
     private PuantajDonemOzetDto? puantajDonemOzeti;
+    private List<int> seciliKurumIdleri = new();
+    private int seciliGuzergahId;
+    private bool firmalariGrupla = true;
 
     private string durumFiltre = "";
     private string aramaMetni = "";
+
+    private IEnumerable<(int Id, string Ad)> KurumFiltreSecenekleri => hakedisler
+        .Where(h => h.Tip == HakedisTipi.Kurum)
+        .Select(h => (h.ReferansId, GetReferansAd(h)))
+        .DistinctBy(x => x.ReferansId)
+        .OrderBy(x => x.Item2)
+        .Select(x => (x.ReferansId, x.Item2));
+
+    private IEnumerable<(int Id, string Ad)> GuzergahFiltreSecenekleri => hakedisler
+        .Where(h => h.Tip == HakedisTipi.Kurum)
+        .SelectMany(h => h.Detaylar)
+        .Where(d => d.GuzergahId.HasValue)
+        .Select(d => (d.GuzergahId!.Value, d.Guzergah?.GuzergahAdi ?? $"Güzergâh #{d.GuzergahId}"))
+        .DistinctBy(x => x.Item1)
+        .OrderBy(x => x.Item2)
+        .Select(x => (x.Item1, x.Item2));
+
+    private List<DetayliHakedisRaporSatiri> FiltreliRaporSatirlari => hakedisler
+        .Where(h => h.Tip == HakedisTipi.Kurum)
+        .Where(h => seciliKurumIdleri.Count == 0 || seciliKurumIdleri.Contains(h.ReferansId))
+        .SelectMany(h => h.Detaylar.Select(d => new { Hakedis = h, Detay = d }))
+        .Where(x => seciliGuzergahId == 0 || x.Detay.GuzergahId == seciliGuzergahId)
+        .GroupBy(x => new
+        {
+            Firma = GetReferansAd(x.Hakedis),
+            Guzergah = x.Detay.Guzergah?.GuzergahAdi ?? $"Güzergâh #{x.Detay.GuzergahId}",
+            Plaka = x.Detay.Arac?.AktifPlaka ?? x.Detay.Arac?.Plaka ?? $"Araç #{x.Detay.AracId}",
+            Sofor = x.Detay.Sofor?.TamAd ?? $"Şoför #{x.Detay.SoforId}"
+        })
+        .Select(g =>
+        {
+            var sefer = g.Sum(x => x.Detay.SeferSayisi);
+            var tutar = g.Sum(x => x.Detay.Tutar);
+            return new DetayliHakedisRaporSatiri(g.Key.Firma, g.Key.Guzergah, g.Key.Plaka, g.Key.Sofor,
+                sefer, sefer > 0 ? tutar / sefer : 0m, tutar);
+        })
+        .OrderBy(x => x.Firma)
+        .ThenBy(x => x.Guzergah)
+        .ThenBy(x => x.Plaka)
+        .ThenBy(x => x.Sofor)
+        .ToList();
+
+    private sealed record DetayliHakedisRaporSatiri(string Firma, string Guzergah, string Plaka, string Sofor,
+        decimal SeferSayisi, decimal BirimFiyat, decimal FaturaTutari);
+
+    private IEnumerable<IGrouping<string, DetayliHakedisRaporSatiri>> DetayRaporGruplari =>
+        FiltreliRaporSatirlari.GroupBy(x => x.Firma).OrderBy(x => x.Key);
 
     private List<Hakedis> FiltreliHakedisler
     {
@@ -406,6 +561,27 @@
     {
         durumFiltre = "";
         aramaMetni = "";
+        seciliKurumIdleri.Clear();
+        seciliGuzergahId = 0;
+    }
+
+    private void KurumFiltresiDegisti(ChangeEventArgs args)
+    {
+        seciliKurumIdleri = args.Value switch
+        {
+            string[] secimler => secimler
+                .Select(x => int.TryParse(x, out var id) ? (int?)id : null)
+                .Where(x => x.HasValue)
+                .Select(x => x!.Value)
+                .ToList(),
+            IEnumerable<string> secimler => secimler
+                .Select(x => int.TryParse(x, out var id) ? (int?)id : null)
+                .Where(x => x.HasValue)
+                .Select(x => x!.Value)
+                .ToList(),
+            string secim when int.TryParse(secim, out var id) => new List<int> { id },
+            _ => new List<int>()
+        };
     }
 
     private bool TumSeciliMi => FiltreliHakedisler.Any() && FiltreliHakedisler.All(h => seciliHakedisIds.Contains(h.Id));
@@ -498,6 +674,112 @@
         catch (Exception ex)
         {
             hataMesaji = $"Excel oluşturulurken hata: {ex.Message}";
+        }
+    }
+
+    private async Task DetayliRaporuExceleAktarAsync()
+    {
+        try
+        {
+            var satirlar = FiltreliRaporSatirlari;
+            if (!satirlar.Any()) return;
+
+            using var workbook = new ClosedXML.Excel.XLWorkbook();
+            var ws = workbook.Worksheets.Add("Firma Güzergah Raporu");
+            ws.Cell(1, 1).Value = $"HAKEDİŞ DETAY RAPORU - {ay:D2}/{yil}";
+            ws.Range(1, 1, 1, 7).Merge();
+            ws.Cell(1, 1).Style.Font.Bold = true;
+            ws.Cell(1, 1).Style.Font.FontSize = 14;
+            var basliklar = new[] { "Firma", "Güzergâh", "Plaka", "Şoför", "Sefer Sayısı", "Birim Fiyat", "Firmaya Kesilecek Güzergâh Faturası" };
+            for (var i = 0; i < basliklar.Length; i++)
+            {
+                ws.Cell(3, i + 1).Value = basliklar[i];
+                ws.Cell(3, i + 1).Style.Font.Bold = true;
+                ws.Cell(3, i + 1).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightBlue;
+            }
+
+            var excelSatir = 4;
+            foreach (var grup in DetayRaporGruplari)
+            {
+                if (firmalariGrupla)
+                {
+                    ws.Cell(excelSatir, 1).Value = $"FİRMA: {grup.Key}";
+                    ws.Range(excelSatir, 1, excelSatir, 7).Merge();
+                    ws.Range(excelSatir, 1, excelSatir, 7).Style.Font.Bold = true;
+                    ws.Range(excelSatir, 1, excelSatir, 7).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightBlue;
+                    excelSatir++;
+                }
+
+                foreach (var satir in grup)
+                {
+                    ws.Cell(excelSatir, 1).Value = satir.Firma;
+                    ws.Cell(excelSatir, 2).Value = satir.Guzergah;
+                    ws.Cell(excelSatir, 3).Value = satir.Plaka;
+                    ws.Cell(excelSatir, 4).Value = satir.Sofor;
+                    ws.Cell(excelSatir, 5).Value = satir.SeferSayisi;
+                    ws.Cell(excelSatir, 6).Value = satir.BirimFiyat;
+                    ws.Cell(excelSatir, 7).Value = satir.FaturaTutari;
+                    excelSatir++;
+                }
+
+                if (firmalariGrupla)
+                {
+                    ws.Cell(excelSatir, 1).Value = $"{grup.Key} Ara Toplam";
+                    ws.Cell(excelSatir, 5).Value = grup.Sum(x => x.SeferSayisi);
+                    ws.Cell(excelSatir, 7).Value = grup.Sum(x => x.FaturaTutari);
+                    ws.Range(excelSatir, 1, excelSatir, 7).Style.Font.Bold = true;
+                    excelSatir++;
+                }
+            }
+
+            ws.Cell(excelSatir, 1).Value = "GENEL TOPLAM";
+            ws.Cell(excelSatir, 5).Value = satirlar.Sum(x => x.SeferSayisi);
+            ws.Cell(excelSatir, 7).Value = satirlar.Sum(x => x.FaturaTutari);
+            ws.Range(excelSatir, 1, excelSatir, 7).Style.Font.Bold = true;
+            ws.Range(4, 5, excelSatir, 7).Style.NumberFormat.Format = "#,##0.00";
+            ws.Columns().AdjustToContents();
+            ws.SheetView.FreezeRows(3);
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            await JS.InvokeVoidAsync("downloadFile", $"Hakedis_Detay_Raporu_{yil}-{ay:D2}.xlsx", Convert.ToBase64String(stream.ToArray()), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = $"Detaylı rapor oluşturulurken hata: {ex.Message}";
+        }
+    }
+
+    private async Task DetayliRaporuPdfAktarAsync()
+    {
+        try
+        {
+            var satirlar = FiltreliRaporSatirlari;
+            if (!satirlar.Any()) return;
+
+            var model = new HakedisDetayRaporModel
+            {
+                Yil = yil,
+                Ay = ay,
+                FirmalariGrupla = firmalariGrupla,
+                Satirlar = satirlar.Select(x => new HakedisDetayRaporSatiri
+                {
+                    Firma = x.Firma,
+                    Guzergah = x.Guzergah,
+                    Plaka = x.Plaka,
+                    Sofor = x.Sofor,
+                    SeferSayisi = x.SeferSayisi,
+                    BirimFiyat = x.BirimFiyat,
+                    FaturaTutari = x.FaturaTutari
+                }).ToList()
+            };
+
+            var bytes = PdfService.GenerateHakedisDetayRaporPdf(model);
+            await JS.InvokeVoidAsync("downloadFile", $"Hakedis_Detay_Raporu_{yil}-{ay:D2}.pdf", Convert.ToBase64String(bytes), "application/pdf");
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = $"PDF oluşturulurken hata: {ex.GetBaseException().Message}";
         }
     }
 

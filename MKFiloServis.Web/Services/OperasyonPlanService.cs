@@ -228,63 +228,69 @@ public class OperasyonPlanService : IOperasyonPlanService
             throw new ArgumentOutOfRangeException(nameof(planId));
 
         await using var db = await _dbFactory.CreateDbContextAsync();
-        await using var transaction = await db.Database.BeginTransactionAsync();
+        var strategy = db.Database.CreateExecutionStrategy();
 
-        var plan = await db.OperasyonPlanSatirlari
-            .FirstOrDefaultAsync(p => p.Id == planId);
-        if (plan is null)
-            throw new InvalidOperationException("Düzenlenecek plan bulunamadı.");
-
-        if (!plan.FiloGunlukPuantajId.HasValue)
+        await strategy.ExecuteAsync(async () =>
         {
+            await using var transaction = await db.Database.BeginTransactionAsync();
+
+            var plan = await db.OperasyonPlanSatirlari
+                .FirstOrDefaultAsync(p => p.Id == planId);
+            if (plan is null)
+                throw new InvalidOperationException("Düzenlenecek plan bulunamadı.");
+
+            if (!plan.FiloGunlukPuantajId.HasValue)
+            {
+                plan.Durum = OperasyonPlanDurumu.Planlandi;
+                await db.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return;
+            }
+
+            var puantaj = await db.FiloGunlukPuantajlar
+                .FirstOrDefaultAsync(p => p.Id == plan.FiloGunlukPuantajId.Value && !p.IsDeleted);
+            if (puantaj is null)
+                throw new InvalidOperationException("Plana bağlı puantaj kaydı bulunamadı.");
+
+            if (puantaj.Onaylandi || puantaj.KurumFaturaKesildiMi || puantaj.TaseronOdemeYapildiMi ||
+                puantaj.KurumFaturaId.HasValue || puantaj.TedarikciOdemeFaturaId.HasValue)
+            {
+                throw new InvalidOperationException("Onaylanmış, faturalanmış veya ödemesi yapılmış puantaj düzenlenemez.");
+            }
+
+            var hakedisDetaylari = await db.HakedisDetaylari
+                .Include(d => d.Hakedis)
+                .Where(d => d.FiloGunlukPuantajId == puantaj.Id)
+                .ToListAsync();
+
+            if (hakedisDetaylari.Any(d => d.Hakedis is not null &&
+                d.Hakedis.Durum is not (HakedisDurum.Taslak or HakedisDurum.Iptal)))
+            {
+                throw new InvalidOperationException("Onaylanmış veya kapanmış hakedişe bağlı puantaj düzenlenemez.");
+            }
+
+            var hakedisler = hakedisDetaylari
+                .Select(d => d.Hakedis)
+                .Where(h => h is not null)
+                .Cast<Hakedis>()
+                .DistinctBy(h => h.Id)
+                .ToList();
+
+            if (hakedisDetaylari.Count > 0)
+                db.HakedisDetaylari.RemoveRange(hakedisDetaylari);
+            if (hakedisler.Count > 0)
+                db.Hakedisler.RemoveRange(hakedisler);
+
+            db.FiloGunlukPuantajlar.Remove(puantaj);
+            plan.FiloGunlukPuantajId = null;
             plan.Durum = OperasyonPlanDurumu.Planlandi;
+            plan.TeyitTarihi = null;
+            plan.UpdatedAt = DateTime.UtcNow;
+
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
-            return;
-        }
+        });
 
-        var puantaj = await db.FiloGunlukPuantajlar
-            .FirstOrDefaultAsync(p => p.Id == plan.FiloGunlukPuantajId.Value && !p.IsDeleted);
-        if (puantaj is null)
-            throw new InvalidOperationException("Plana bağlı puantaj kaydı bulunamadı.");
-
-        if (puantaj.Onaylandi || puantaj.KurumFaturaKesildiMi || puantaj.TaseronOdemeYapildiMi ||
-            puantaj.KurumFaturaId.HasValue || puantaj.TedarikciOdemeFaturaId.HasValue)
-        {
-            throw new InvalidOperationException("Onaylanmış, faturalanmış veya ödemesi yapılmış puantaj düzenlenemez.");
-        }
-
-        var hakedisDetaylari = await db.HakedisDetaylari
-            .Include(d => d.Hakedis)
-            .Where(d => d.FiloGunlukPuantajId == puantaj.Id)
-            .ToListAsync();
-
-        if (hakedisDetaylari.Any(d => d.Hakedis is not null &&
-            d.Hakedis.Durum is not (HakedisDurum.Taslak or HakedisDurum.Iptal)))
-        {
-            throw new InvalidOperationException("Onaylanmış veya kapanmış hakedişe bağlı puantaj düzenlenemez.");
-        }
-
-        var hakedisler = hakedisDetaylari
-            .Select(d => d.Hakedis)
-            .Where(h => h is not null)
-            .Cast<Hakedis>()
-            .DistinctBy(h => h.Id)
-            .ToList();
-
-        if (hakedisDetaylari.Count > 0)
-            db.HakedisDetaylari.RemoveRange(hakedisDetaylari);
-        if (hakedisler.Count > 0)
-            db.Hakedisler.RemoveRange(hakedisler);
-
-        db.FiloGunlukPuantajlar.Remove(puantaj);
-        plan.FiloGunlukPuantajId = null;
-        plan.Durum = OperasyonPlanDurumu.Planlandi;
-        plan.TeyitTarihi = null;
-        plan.UpdatedAt = DateTime.UtcNow;
-
-        await db.SaveChangesAsync();
-        await transaction.CommitAsync();
         _logger.LogWarning("PLAN_DUZENLEME_GERI_AL: {PlanId} bekleyen duruma alındı.", planId);
     }
 
