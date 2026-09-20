@@ -95,8 +95,13 @@ public class OperasyonelHakedisService : IOperasyonelHakedisService
 
         var puantajlar = await q.OrderBy(p => p.Tarih).ToListAsync();
 
-        // 🔧 FIX: Sefer sayısı 0 olan kayıtları filtrele (henüz doldurulmamış puantajlar)
-        puantajlar = puantajlar.Where(p => p.SeferSayisi > 0).ToList();
+        // Boş, gitmedi ve iptal kayıtları hakedişe dahil edilmez.
+        puantajlar = puantajlar
+            .Where(p => p.SeferSayisi > 0 &&
+                        p.Durum is not (OperasyonDurumu.Gitmedi_Mazeretli or
+                                        OperasyonDurumu.Gitmedi_Mazeretsiz or
+                                        OperasyonDurumu.Iptal_KurumTarafindan))
+            .ToList();
 
         // Mevcut taslak varsa üzerine yaz, yoksa yeni
         var hakedis = await context.Hakedisler
@@ -131,26 +136,22 @@ public class OperasyonelHakedisService : IOperasyonelHakedisService
 
         foreach (var p in puantajlar)
         {
-            var gelirBirim = p.Guzergah?.GelirFiyat ?? 0m;
-            var giderBirim = p.Guzergah?.GiderFiyat ?? 0m;
+            var tahakkuk = tip switch
+            {
+                HakedisTipi.Kurum => p.TahakkukEdenKurumUcreti,
+                HakedisTipi.Tedarikci => p.TahakkukEdenTaseronUcreti,
+                HakedisTipi.Arac => (p.MaliyetOzmalKiralik ?? 0m) * p.SeferSayisi * p.PuantajCarpani,
+                _ => 0m
+            };
 
             decimal birim = tip switch
             {
-                // Kurum/Tedarikçi hakedişinde birim fiyat doğrudan güzergah kartından alınır.
-                HakedisTipi.Kurum => gelirBirim,
-                HakedisTipi.Tedarikci => giderBirim,
+                HakedisTipi.Kurum or HakedisTipi.Tedarikci => p.SeferSayisi > 0 ? tahakkuk / p.SeferSayisi : 0m,
                 HakedisTipi.Arac => p.MaliyetOzmalKiralik ?? 0m,
                 _ => 0m
             };
 
-            decimal tutar = tip switch
-            {
-                // Tutar = Sefer × Güzergah Fiyatı (çarpanlı tahakkuk alanı değil)
-                HakedisTipi.Kurum => gelirBirim * p.SeferSayisi,
-                HakedisTipi.Tedarikci => giderBirim * p.SeferSayisi,
-                HakedisTipi.Arac => (p.MaliyetOzmalKiralik ?? 0m) * p.SeferSayisi,
-                _ => 0m
-            };
+            decimal tutar = tahakkuk;
 
             var detay = new HakedisDetay
             {

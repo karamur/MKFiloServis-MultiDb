@@ -78,11 +78,14 @@ internal sealed class DestekSmokeRunner(string baseUrl, string username, string 
         await ExecuteAsync("Destek ayarları açılır", () => VerifySettingsAsync(page));
         await ExecuteAsync("Puantaj grid ekranı açılır", () => VerifyPuantajGridAsync(page));
         await ExecuteAsync("Puantaj grid Excel aksiyonları başlangıçta pasiftir", () => VerifyPuantajGridExcelDefaultStateAsync(page));
+        await ExecuteAsync("Operasyon merkezi kullanıcı akışını gösterir", () => VerifyOperationalCenterFlowAsync(page));
+        await ExecuteAsync("Operasyon planı ekranı açılır", () => VerifyOperationalPlanAsync(page));
         await ExecuteAsync("Operasyonel puantaj ekranı açılır", () => VerifyOperationalPuantajAsync(page));
         await ExecuteAsync("Operasyonel puantaj filtreleri çalışır", () => VerifyOperationalPuantajFiltersAsync(page));
         await ExecuteAsync("Operasyonel puantaj toplu aksiyon butonları varsayılan durumda pasiftir", () => VerifyOperationalPuantajBulkActionsDefaultStateAsync(page));
         await ExecuteAsync("Operasyonel puantaj toplu sefer aksiyonu seçimle çalışır", () => VerifyOperationalPuantajBulkApplyFlowAsync(page));
         await ExecuteAsync("Operasyonel puantaj seçimle kaydet butonu aktifleşir", () => VerifyOperationalPuantajBulkSaveButtonEnableFlowAsync(page));
+        await ExecuteAsync("Aylık operasyon kontrolü ekranı açılır", () => VerifyOperationalPuantajMatrixAsync(page));
         await ExecuteAsync("Operasyonel hakediş ekranı açılır", () => VerifyOperationalHakedisAsync(page));
         await ExecuteAsync("Operasyonel hakediş dönem validasyonu çalışır", () => VerifyOperationalHakedisPeriodValidationAsync(page));
         await ExecuteAsync("Operasyonel hakediş toplu aksiyon butonları varsayılan durumda pasiftir", () => VerifyOperationalHakedisBulkActionsDefaultStateAsync(page));
@@ -425,6 +428,45 @@ internal sealed class DestekSmokeRunner(string baseUrl, string username, string 
         }
     }
 
+    private async Task VerifyOperationalCenterFlowAsync(IPage page)
+    {
+        await page.GotoAsync($"{_baseUrl}/operasyon-merkezi");
+        await WaitForPageSettledAsync(page);
+        await SkipIfAccessDeniedAsync(page, "Operasyon merkezi", "/operasyon-merkezi");
+        await EnsureAnyVisibleAsync(page,
+            "text=Operasyon Merkezi",
+            "text=1. Planla",
+            "text=2. Gerçekleşeni Gir",
+            "text=3. Kontrol Et",
+            "text=4. Hakedişe Geç");
+    }
+
+    private async Task VerifyOperationalPlanAsync(IPage page)
+    {
+        await page.GotoAsync($"{_baseUrl}/operasyon/plan");
+        await WaitForPageSettledAsync(page);
+        await SkipIfAccessDeniedAsync(page, "Operasyon planı", "/operasyon/plan");
+        await EnsureAnyVisibleAsync(page,
+            "text=Operasyon Planı",
+            "text=Aylık Operasyon Planı",
+            "text=Planlama ayı",
+            "text=Aylık Planı Oluştur",
+            "text=Teyit Et ve Puantaja Aktar",
+            "text=Aktif firma bulunamadı. Lütfen önce firma seçiniz.");
+    }
+
+    private async Task VerifyOperationalPuantajMatrixAsync(IPage page)
+    {
+        await page.GotoAsync($"{_baseUrl}/operasyon/puantaj-matris");
+        await WaitForPageSettledAsync(page);
+        await SkipIfAccessDeniedAsync(page, "Aylık operasyon kontrolü", "/operasyon/puantaj-matris");
+        await EnsureAnyVisibleAsync(page,
+            "text=Aylık Operasyon Kontrolü",
+            "text=Toplam Gelir",
+            "text=Toplam Gider",
+            "text=Aktif firma bulunamadı. Lütfen önce firma seçiniz.");
+    }
+
     private async Task VerifyOperationalPuantajAsync(IPage page)
     {
         await page.GotoAsync($"{_baseUrl}/operasyon/puantaj");
@@ -432,6 +474,7 @@ internal sealed class DestekSmokeRunner(string baseUrl, string username, string 
         await SkipIfAccessDeniedAsync(page, "Operasyonel puantaj ekranı", "/operasyon/puantaj");
         await EnsureAnyVisibleAsync(page,
             "text=Operasyonel Puantaj",
+            "text=Gerçekleşen seferler",
             "text=Bugün için satırları oluştur",
             "text=Aktif firma bulunamadı. Lütfen önce firma seçiniz.");
     }

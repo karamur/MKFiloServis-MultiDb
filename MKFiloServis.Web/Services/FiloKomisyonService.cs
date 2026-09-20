@@ -369,6 +369,8 @@ public class FiloKomisyonService : IFiloKomisyonService
         if (existing == null)
             throw new InvalidOperationException($"Puantaj kaydı bulunamadı (Id={puantaj.Id}). Sayfayı yenileyip tekrar deneyin.");
 
+        EnsurePuantajDegistirilebilir(existing);
+
         await MapAndApplyRulesAsync(context, existing, puantaj);
         // ChangeTracker'ı manuel set et
         context.Entry(existing).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
@@ -415,6 +417,7 @@ public class FiloKomisyonService : IFiloKomisyonService
                 if (!mevcutById.TryGetValue(gelen.Id, out var existing))
                     continue;
 
+                EnsurePuantajDegistirilebilir(existing);
                 Console.WriteLine($"UpdateGunlukPuantajlarAsync: Id={gelen.Id}, Eski SeferSayisi={existing.SeferSayisi} -> Yeni SeferSayisi={gelen.SeferSayisi}");
                 await MapAndApplyRulesAsync(context, existing, gelen);
                 // ChangeTracker'ı manuel set et - ToList() ile detach olabilir
@@ -443,7 +446,7 @@ public class FiloKomisyonService : IFiloKomisyonService
 
         await using var context = await _contextFactory.CreateDbContextAsync();
         var kayitlar = await context.FiloGunlukPuantajlar
-            .Where(p => p.FirmaId == firmaId && p.Tarih >= baslangic && p.Tarih < bitis && !p.IsDeleted)
+            .Where(p => p.FirmaId == firmaId && p.Tarih >= baslangic && p.Tarih < bitis && !p.IsDeleted && !p.Onaylandi)
             .ToListAsync();
 
         foreach (var p in kayitlar)
@@ -481,6 +484,7 @@ public class FiloKomisyonService : IFiloKomisyonService
 
             foreach (var kayit in kayitlar)
             {
+                EnsurePuantajDegistirilebilir(kayit);
                 kayit.IsDeleted = true;
                 kayit.UpdatedAt = DateTime.UtcNow;
                 // ChangeTracker'ı manuel set et - ToList() ile detach olabilir
@@ -621,6 +625,16 @@ public class FiloKomisyonService : IFiloKomisyonService
 
         await UygulaPuantajKurallariAsync(context, existing);
         existing.UpdatedAt = DateTime.UtcNow;
+    }
+
+    private static void EnsurePuantajDegistirilebilir(FiloGunlukPuantaj puantaj)
+    {
+        if (puantaj.Onaylandi || puantaj.KurumFaturaKesildiMi || puantaj.TaseronOdemeYapildiMi ||
+            puantaj.KurumFaturaId.HasValue || puantaj.TedarikciOdemeFaturaId.HasValue)
+        {
+            throw new InvalidOperationException(
+                $"Puantaj kaydı onaylandığı veya finansal belgeye bağlandığı için değiştirilemez (Id={puantaj.Id}).");
+        }
     }
 
     private async Task UygulaPuantajKurallariAsync(ApplicationDbContext context, FiloGunlukPuantaj puantaj, FiloGuzergahEslestirme? eslestirme = null)

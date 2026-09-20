@@ -20,9 +20,6 @@
             <button class="btn btn-outline-success" @onclick="ExceleAktarAsync" disabled="@(isBusy || !FiltreliGunlukPuantajlar.Any())">
                 <i class="bi bi-file-earmark-excel me-1"></i>Excel'e Aktar
             </button>
-            <button class="btn btn-outline-secondary" @onclick="YenileAsync" disabled="@isBusy">
-                <i class="bi bi-arrow-clockwise me-1"></i>Yenile
-            </button>
             <button class="btn btn-primary" @onclick="YenileAsync" disabled="@isBusy" title="Güncel verileri veritabanından yeniden yükler">
                 <i class="bi bi-arrow-repeat me-1"></i>Güncelle
             </button>
@@ -53,15 +50,15 @@
     <div class="alert alert-light border small mb-3">
         <a class="text-decoration-none" href="javascript:void(0)" @onclick="() => yardimAcik = !yardimAcik" @onclick:preventDefault>
             <i class="bi @(yardimAcik ? "bi-chevron-down" : "bi-chevron-right") me-1"></i>
-            <i class="bi bi-question-circle me-1"></i><strong>Puantaj nasıl yapılır?</strong>
+            <i class="bi bi-question-circle me-1"></i><strong>Bu ekran nasıl kullanılır?</strong>
         </a>
         @if (yardimAcik)
         {
             <ol class="mb-0 mt-2">
-                <li><strong>Eşleştirme:</strong> <a href="/filo/komisyon-eslestirme">Eşleştirme Havuzu</a>'nda kurum + güzergah + araç + şoför eşleşmesini tanımlayın (Aktif olmalı).</li>
-                <li><strong>Satır üretme:</strong> Tarihi seçip <em>"Bugün için satırları oluştur"</em> deyin — aktif eşleştirmelerden ayın tüm günleri için otomatik satır üretilir (hafta içi: Gitti, hafta sonu: Gitmedi-Mazeretli).</li>
-                <li><strong>Düzeltme:</strong> Sadece istisnaları düzeltin (gitmedi, yarım gün, ek sefer). Tutarlar servis kurallarına göre otomatik hesaplanır.</li>
-                <li><strong>Hakediş:</strong> Ay sonunda <a href="/operasyonel-hakedis">Operasyonel Hakediş</a> sayfasından <em>"Toplu Hakediş Üret"</em> ile faturalamaya geçin.</li>
+                <li>Önce tarihi seçin ve <strong>Seçili gün için satırları oluştur</strong> düğmesine basın.</li>
+                <li>Gerçekleşmeyen veya farklı gerçekleşen seferlerde satırdaki <strong>durum, sefer ve not</strong> alanlarını düzeltin.</li>
+                <li>Değişiklikleri satırdaki <strong>Kaydet</strong> veya toplu kaydetme düğmesiyle saklayın.</li>
+                <li>Ay sonunda kontrolü tamamlanan kayıtları <a href="/operasyonel-hakedis">Operasyonel Hakediş</a>'e aktarın.</li>
             </ol>
         }
     </div>
@@ -71,13 +68,13 @@
             <div class="row g-2 align-items-end">
                 <div class="col-md-3">
                     <label class="form-label small mb-1">Tarih</label>
-                    <InputDate class="form-control form-control-sm" @bind-Value="seciliTarih" />
+                    <InputDate class="form-control form-control-sm" @bind-Value="seciliTarih" @bind-Value:after="TarihDegisti" />
                 </div>
                 <div class="col-md-3 d-flex gap-2">
                     <button class="btn btn-primary" @onclick="EksikKayitlariOlusturAsync" disabled="@isBusy">
-                        <i class="bi bi-magic me-1"></i>Bugün için satırları oluştur
+                        <i class="bi bi-magic me-1"></i>Seçili gün için satırları oluştur
                     </button>
-                    <button class="btn btn-outline-primary" @onclick="YukleGunlukPuantajlarAsync" disabled="@isBusy">
+                    <button class="btn btn-outline-primary" @onclick="() => YukleGunlukPuantajlarAsync()" disabled="@isBusy">
                         <i class="bi bi-list-ul me-1"></i>Listele
                     </button>
                 </div>
@@ -127,8 +124,8 @@
     <div class="card shadow-sm">
         <div class="card-header bg-light">
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <strong>Aylık Kayıtlar (@seciliTarih.ToString("MM.yyyy"))</strong>
-                <small class="text-muted">Tahakkuk değerleri servis kurallarına göre otomatik hesaplanır.</small>
+                <strong>Gerçekleşen seferler (@seciliTarih.ToString("MM.yyyy"))</strong>
+                <small class="text-muted">Sefer sayısını ve istisnaları düzeltin; tutarlar otomatik hesaplanır.</small>
             </div>
             <div class="row g-2 mt-1 align-items-end">
                 <div class="col-md-4">
@@ -174,8 +171,8 @@
                     <i class="bi bi-check2-square me-1"></i>@(TumSeciliMi ? "Seçimi Temizle" : "Tümünü Seç")
                 </button>
                 <InputNumber class="form-control form-control-sm" style="width:130px" @bind-Value="topluSeferSayisi" min="0" step="0.5" placeholder="Sefer" />
-                <button class="btn btn-sm btn-outline-primary" @onclick="TopluSeferUygula" disabled="@(isBusy || !SeciliPuantajlar.Any() || topluSeferSayisi is null)">
-                    <i class="bi bi-pencil-square me-1"></i>Toplu Sefer Uygula
+                <button class="btn btn-sm btn-outline-primary" @onclick="TopluSeferUygulaAsync" disabled="@(isBusy || !SeciliPuantajlar.Any() || topluSeferSayisi is null)">
+                    <i class="bi bi-pencil-square me-1"></i>Uygula ve Kaydet
                 </button>
                 <button class="btn btn-sm btn-primary" @onclick="SecilenleriKaydetAsync" disabled="@(isBusy || !SeciliPuantajlar.Any())">
                     <i class="bi bi-save me-1"></i>Seçilenleri Kaydet (@SeciliPuantajlar.Count)
@@ -293,17 +290,10 @@
 
 @code {
     private DateTime _seciliTarih = DateTime.Today;
-    private DateTime seciliTarih 
-    { 
-        get => _seciliTarih; 
-        set 
-        { 
-            if (_seciliTarih != value) 
-            { 
-                _seciliTarih = value; 
-                _ = TarihDegisti();
-            }
-        } 
+    private DateTime seciliTarih
+    {
+        get => _seciliTarih;
+        set => _seciliTarih = value;
     }
     private bool isBusy;
     private string? hataMesaji;
@@ -454,6 +444,7 @@
         {
             var eslestirmeler = await FiloKomisyonService.GetEslestirmelerAsync(firmaId, true);
             aktifEslestirmeSayisi = eslestirmeler.Count;
+            await YukleGunlukPuantajlarAsync();
         }
         catch (Exception ex)
         {
@@ -465,7 +456,7 @@
         }
     }
 
-    private async Task YukleGunlukPuantajlarAsync()
+    private async Task YukleGunlukPuantajlarAsync(DateTime? istenenTarih = null)
     {
         hataMesaji = null;
         bilgiMesaji = null;
@@ -480,13 +471,18 @@
         isBusy = true;
         try
         {
-            var ayBaslangic = new DateTime(seciliTarih.Year, seciliTarih.Month, 1);
+            var tarih = istenenTarih ?? seciliTarih;
+            var ayBaslangic = new DateTime(tarih.Year, tarih.Month, 1);
             var ayBitis = ayBaslangic.AddMonths(1).AddDays(-1);
 
             var aralik = await FiloKomisyonService.GetPuantajlarByTarihAraligiAsync(firmaId, ayBaslangic, ayBitis);
+            if (istenenTarih.HasValue && seciliTarih != tarih)
+                return;
             gunlukPuantajlar = aralik;
 
             var detaylar = await FiloKomisyonService.GetPuantajDetayliByTarihAraligiAsync(firmaId, ayBaslangic, ayBitis);
+            if (istenenTarih.HasValue && seciliTarih != tarih)
+                return;
             puantajDetayMap = detaylar.ToDictionary(d => d.Puantaj.Id, d => d);
 
             seciliPuantajIds.IntersectWith(gunlukPuantajlar.Select(x => x.Id));
@@ -555,6 +551,7 @@
             bilgiMesaji = olusturulan > 0
                 ? $"{olusturulan} adet eksik günlük puantaj satırı oluşturuldu."
                 : "Eksik satır yok. Tüm aktif eşleştirmeler için kayıt zaten mevcut.";
+            await YukleGunlukPuantajlarAsync();
         }
         catch (Exception ex)
         {
@@ -618,16 +615,36 @@
         seciliPuantajIds.Clear();
     }
 
-    private void TopluSeferUygula()
+    private async Task TopluSeferUygulaAsync()
     {
         if (topluSeferSayisi is null)
             return;
 
+        hataMesaji = null;
+        bilgiMesaji = null;
         var deger = topluSeferSayisi.Value < 0 ? 0 : topluSeferSayisi.Value;
-        foreach (var item in SeciliPuantajlar)
-            item.SeferSayisi = deger;
+        var secilenler = SeciliPuantajlar;
+        if (!secilenler.Any())
+            return;
 
-        bilgiMesaji = $"{SeciliPuantajlar.Count} satıra toplu sefer değeri uygulandı.";
+        isBusy = true;
+        try
+        {
+            foreach (var item in secilenler)
+                item.SeferSayisi = deger;
+
+            await FiloKomisyonService.UpdateGunlukPuantajlarAsync(secilenler);
+            bilgiMesaji = $"{secilenler.Count} satıra sefer değeri uygulandı ve kaydedildi.";
+            await YukleGunlukPuantajlarAsync();
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
     }
 
     private async Task SecilenleriKaydetAsync()
@@ -760,9 +777,10 @@
 
     private async Task TarihDegisti()
     {
+        var tarih = seciliTarih;
         hataMesaji = null;
         bilgiMesaji = null;
         seciliPuantajIds.Clear();
-        await YukleGunlukPuantajlarAsync();
+        await YukleGunlukPuantajlarAsync(tarih);
     }
 }

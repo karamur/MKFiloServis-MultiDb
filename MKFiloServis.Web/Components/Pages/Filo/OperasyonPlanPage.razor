@@ -1,6 +1,9 @@
 ﻿@page "/operasyon/plan"
+@attribute [Authorize]
 @rendermode InteractiveServer
 @using MKFiloServis.Shared.Entities
+@using System.Globalization
+@using Microsoft.AspNetCore.Authorization
 @using MKFiloServis.Web.Services.Interfaces
 @inject IOperasyonPlanService PlanService
 @inject IGuzergahService GuzergahService
@@ -8,29 +11,155 @@
 @inject ISoforService SoforService
 @inject IToastService Toast
 
-<PageTitle>Operasyon Plan - Günlük Puantaj Planı</PageTitle>
+<PageTitle>Operasyon Planı</PageTitle>
 
 <div class="container-fluid">
-    <div class="d-flex align-items-center gap-3 mb-3">
-        <h4 class="mb-0">📋 Günlük Operasyon Planı</h4>
-        <input type="date" class="form-control" style="width:180px"
-               value="@SeciliTarih.ToString("yyyy-MM-dd")"
-               @onchange="TarihDegisti" />
-        <button class="btn btn-primary" @onclick="PlanUretAsync" disabled="@Yukleniyor">
-            Plan Üret
-        </button>
-        <button class="btn btn-success" @onclick="TeyitEtAsync"
-                disabled="@(Yukleniyor || !SecilenIdler.Any())">
-            Seçilenleri Teyit Et (@SecilenIdler.Count)
-        </button>
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <div>
+            <h4 class="mb-1"><i class="bi bi-calendar3 me-2 text-primary"></i>Aylık Operasyon Planı</h4>
+            <p class="text-muted mb-0">Seçtiğiniz ayın çalışma planını oluşturun, hafta sonu ve hafta içi kayıtlarını ayrı ayrı işaretleyin, gerektiğinde mesai olarak düzenleyin ve gerçekleşen puantaja aktarın.</p>
+        </div>
+        <span class="badge text-bg-light border">@AyBaslangic.ToString("MMMM yyyy", TrKultur)</span>
     </div>
 
-    @if (TakvimGunu is not null)
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <div class="d-flex align-items-end gap-3 flex-wrap">
+                <div>
+                    <label class="form-label small mb-1">Planlama ayı</label>
+                    <select class="form-select" style="width:180px" @bind="SeciliAy" @bind:after="AyDegisti">
+                        @for (var ay = 1; ay <= 12; ay++)
+                        {
+                            <option value="@ay">@(new DateTime(2000, ay, 1).ToString("MMMM", TrKultur))</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label small mb-1">Yıl</label>
+                    <select class="form-select" style="width:120px" @bind="SeciliYil" @bind:after="AyDegisti">
+                        @for (var yil = DateTime.Today.Year - 1; yil <= DateTime.Today.Year + 1; yil++)
+                        {
+                            <option value="@yil">@yil</option>
+                        }
+                    </select>
+                </div>
+                <button class="btn btn-primary" @onclick="PlanUretAsync" disabled="@Yukleniyor">
+                    <i class="bi bi-magic me-1"></i>Aylık Planı Oluştur
+                </button>
+                <button class="btn btn-outline-danger" @onclick="AylikPlaniTemizlemeOnayiIsteAsync"
+                        disabled="@(Yukleniyor || !Planlar.Any())">
+                    <i class="bi bi-trash3 me-1"></i>Seçilen Aylık Planı Temizle
+                </button>
+                <button class="btn btn-success" @onclick="TeyitEtAsync"
+                        disabled="@(Yukleniyor || !SecilenIdler.Any())">
+                    <i class="bi bi-check2-circle me-1"></i>Teyit Et ve Puantaja Aktar (@SecilenIdler.Count)
+                </button>
+            </div>
+            <div class="d-flex align-items-end gap-2 flex-wrap mt-3 pt-3 border-top">
+                <button class="btn btn-outline-primary btn-sm" @onclick="TumunuIsaretle" disabled="@(Yukleniyor || !Planlar.Any())">
+                    <i class="bi bi-check2-square me-1"></i>Hepsini İşaretle
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="HaftaSonuOlanlariIsaretle" disabled="@Yukleniyor">
+                    <i class="bi bi-calendar-week me-1"></i>Hafta Sonlarını İşaretle
+                </button>
+                <button class="btn btn-outline-info btn-sm" @onclick="HaftaIciOlanlariIsaretle" disabled="@Yukleniyor">
+                    <i class="bi bi-calendar-day me-1"></i>Hafta İçi Olanları İşaretle
+                </button>
+                <InputNumber class="form-control form-control-sm" style="width:130px" @bind-Value="EkSeferSayisi" min="0" step="0.5" placeholder="Ek sefer" />
+                <button class="btn btn-outline-warning btn-sm" @onclick="EkSeferUygula" disabled="@(Yukleniyor || !SeciliPlanlar.Any() || EkSeferSayisi is null)">
+                    <i class="bi bi-plus-circle me-1"></i>Ek Sefer Ekle
+                </button>
+                <button class="btn btn-outline-dark btn-sm" @onclick="MesaiOlarakIsaretlePlanlar" disabled="@(Yukleniyor || !SeciliPlanlar.Any())">
+                    <i class="bi bi-clock-history me-1"></i>Mesai Olarak İşaretle
+                </button>
+                <button class="btn btn-primary btn-sm" @onclick="PlanDegisiklikleriniKaydetAsync" disabled="@(Yukleniyor || !DegisiklikVarMi)">
+                    <i class="bi bi-save me-1"></i>Plan Değişikliklerini Kaydet
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(HataMesaji))
     {
-        <div class="alert alert-info py-1">
-            Gün tipi: @TakvimGunu.GunTipi — Çarpan: @TakvimGunu.PuantajCarpani
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i><strong>İşlem yapılamadı:</strong> @HataMesaji
+            <button type="button" class="btn-close" @onclick="() => HataMesaji = null"></button>
         </div>
     }
+
+    @if (TekGunSilinecekPlan is not null)
+    {
+        <div class="alert alert-warning border-warning">
+            <div class="fw-bold"><i class="bi bi-trash3 me-1"></i>Tek günlük plan silinsin mi?</div>
+            <div class="small mb-2">
+                @TekGunSilinecekPlan.Tarih.ToString("dd.MM.yyyy", TrKultur) tarihinde
+                @GetGuzergahAd(TekGunSilinecekPlan.GuzergahId) - @GetAracAd(TekGunSilinecekPlan.AracId) - @GetSoforAd(TekGunSilinecekPlan.SoforId) planı silinecek.
+            </div>
+            <button class="btn btn-danger me-2" @onclick="TekGunPlanSilAsync" disabled="@Yukleniyor">
+                <i class="bi bi-check2 me-1"></i>Evet, bu günü sil
+            </button>
+            <button class="btn btn-link" @onclick="TekGunPlanSilmeOnayiniIptalEt" disabled="@Yukleniyor">Vazgeç</button>
+        </div>
+    }
+    @if (AylikPlanTemizlemeOnayiBekleniyor)
+    {
+        <div class="alert alert-danger border-danger">
+            <div class="fw-bold"><i class="bi bi-trash3-fill me-1"></i>@AyBaslangic.ToString("MMMM yyyy", TrKultur) planını ve sonraki aşamalardaki bağlı kayıtları temizlemek üzeresiniz.</div>
+            <div class="small mt-1 mb-2">Bu işlem seçili ayın planlarını, bağlı günlük puantajları ve yalnızca taslak hakedişleri siler. Onaylı veya finansal işleme alınmış kayıt varsa işlem tamamen durdurulur.</div>
+            <button class="btn btn-danger me-2" @onclick="AylikPlaniTemizleAsync" disabled="@Yukleniyor">
+                <i class="bi bi-check2 me-1"></i>Evet, planı ve bağlı kayıtları temizle
+            </button>
+            <button class="btn btn-link" @onclick="AylikPlanTemizlemeOnayiniIptalEt" disabled="@Yukleniyor">Vazgeç</button>
+        </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(BilgiMesaji))
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle-fill me-1"></i>@BilgiMesaji
+            <button type="button" class="btn-close" @onclick="() => BilgiMesaji = null"></button>
+        </div>
+    }
+
+    <div class="alert alert-info py-1">
+        <i class="bi bi-info-circle me-1"></i>
+        Seçili ay için plan oluşturulurken hafta sonu, tatil ve yarım gün kuralları otomatik uygulanır.
+    </div>
+
+    @if (CakismaSayisi > 0)
+    {
+        <div class="alert alert-danger border-danger">
+            <div class="fw-bold"><i class="bi bi-exclamation-triangle-fill me-1"></i>@CakismaSayisi çakışmalı plan bulundu.</div>
+            <div class="small mt-1">Kırmızı hücreler aynı gün araç-güzergâh tekrarını veya aynı servis zamanında şoför tekrarını gösterir. Teyit etmeden önce kontrol edin.</div>
+            <ul class="small mb-0 mt-2">
+                @foreach (var grup in CakismaGruplari)
+                {
+                    <li><strong>@grup.Guzergah</strong> - <strong>@grup.Plaka</strong> - <strong>@grup.Sofor</strong>: @string.Join(", ", grup.Planlar.Select(p => p.Tarih.ToString("dd.MM.yyyy")))</li>
+                }
+            </ul>
+        </div>
+    }
+
+    @if (CakismaOnayiBekleniyor)
+    {
+        <div class="alert alert-warning border-warning">
+            <div class="fw-bold"><i class="bi bi-shield-exclamation me-1"></i>Çakışmalı planları teyit etmek üzeresiniz</div>
+            <div class="small mb-2">Seçtiğiniz planlarda araç-güzergâh veya şoför-servis zamanı çakışması var. Kullanıcı onayı olmadan aktarım yapılmayacaktır.</div>
+            <div class="form-check mb-2">
+                <input id="cakismaOnay" class="form-check-input" type="checkbox" @bind="CakismaOnayiVerildi" />
+                <label class="form-check-label" for="cakismaOnay">Çakışmaları kontrol ettim, yine de teyit etmek istiyorum.</label>
+            </div>
+            <button class="btn btn-warning" @onclick="TeyitEtAsync" disabled="@(Yukleniyor || !CakismaOnayiVerildi)">
+                <i class="bi bi-exclamation-triangle me-1"></i>Çakışmalara Rağmen Teyit Et
+            </button>
+            <button class="btn btn-link" @onclick="CakismaOnayiniIptalEt">Vazgeç</button>
+        </div>
+    }
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-4"><div class="card border-primary shadow-sm"><div class="card-body py-2"><div class="small text-muted">Toplam plan</div><div class="fs-4 fw-bold">@Planlar.Count</div></div></div></div>
+        <div class="col-md-4"><div class="card border-warning shadow-sm"><div class="card-body py-2"><div class="small text-muted">Teyit bekleyen</div><div class="fs-4 fw-bold">@Planlar.Count(p => p.Durum == OperasyonPlanDurumu.Planlandi)</div></div></div></div>
+        <div class="col-md-4"><div class="card border-success shadow-sm"><div class="card-body py-2"><div class="small text-muted">Gerçekleşene aktarılan</div><div class="fs-4 fw-bold">@Planlar.Count(p => p.Durum == OperasyonPlanDurumu.TeyitEdildi)</div></div></div></div>
+    </div>
 
     @if (Yukleniyor)
     {
@@ -38,105 +167,279 @@
     }
     else if (Planlar.Count == 0)
     {
-        <div class="alert alert-warning">Bu tarih için plan yok. "Plan Üret" ile oluşturabilirsiniz.</div>
+        <div class="alert alert-warning"><i class="bi bi-info-circle me-1"></i>Bu ay için henüz plan bulunmuyor. Aktif eşleştirmelerden plan oluşturmak için <strong>Aylık Planı Oluştur</strong> düğmesine basın.</div>
     }
     else
     {
-        <table class="table table-sm table-hover">
-            <thead>
-                <tr>
-                    <th style="width:36px">
-                        <input type="checkbox" checked="@TumuSecili" @onchange="TumunuSec" />
-                    </th>
-                    <th>Güzergah</th>
-                    <th>Araç</th>
-                    <th>Şoför</th>
-                    <th>Servis</th>
-                    <th class="text-end">Sefer</th>
-                    <th class="text-end">Çarpan</th>
-                    <th class="text-end">Kurum ₺</th>
-                    <th class="text-end">Taşeron ₺</th>
-                    <th>Durum</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var p in Planlar)
-                {
-                    <tr class="@(p.Durum == OperasyonPlanDurumu.TeyitEdildi ? "table-success" : "")">
-                        <td>
-                            @if (p.Durum == OperasyonPlanDurumu.Planlandi)
-                            {
-                                <input type="checkbox" checked="@SecilenIdler.Contains(p.Id)"
-                                       @onchange="e => SecimDegisti(p.Id, (bool)e.Value!)" />
-                            }
-                        </td>
-                        <td>@GetGuzergahAd(p.GuzergahId)</td>
-                        <td>@GetAracAd(p.AracId)</td>
-                        <td>@GetSoforAd(p.SoforId)</td>
-                        <td>@p.ServisTuru</td>
-                        <td class="text-end">@p.PlanlananSefer</td>
-                        <td class="text-end">@p.PuantajCarpani</td>
-                        <td class="text-end">@p.KurumSeferUcretiSnapshot.ToString("N2")</td>
-                        <td class="text-end">@p.TaseronSeferUcretiSnapshot.ToString("N2")</td>
-                        <td>@p.Durum</td>
+        <div class="alert alert-secondary py-2 small">
+            <i class="bi bi-info-circle me-1"></i>
+            Gün hücresini işaretleyerek o güne ait planı seçin. Yeşil hücreler daha önce teyit edilip puantaja aktarılmıştır.
+        </div>
+        <div class="table-responsive" style="max-height:70vh;">
+            <table class="table table-bordered table-sm align-middle mb-0" style="font-size:.8rem; white-space:nowrap;">
+                <thead class="table-light" style="position:sticky;top:0;z-index:2;">
+                    <tr>
+                        <th style="position:sticky;left:0;z-index:3;min-width:190px;">GÜZERGÂH</th>
+                        <th style="position:sticky;left:190px;z-index:3;min-width:110px;">PLAKA</th>
+                        <th style="position:sticky;left:300px;z-index:3;min-width:150px;">ŞOFÖR</th>
+                        @for (var gun = 1; gun <= AyGunSayisi; gun++)
+                        {
+                            var tarih = new DateTime(SeciliYil, SeciliAy, gun);
+                            <th class="text-center @(tarih.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday ? "table-secondary" : "")" style="min-width:42px;" title="@tarih.ToString("dd.MM.yyyy dddd", TrKultur)">@gun</th>
+                        }
                     </tr>
-                }
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @foreach (var grup in MatrisSatirlari)
+                    {
+                        <tr>
+                            <td class="@(grup.Planlar.Any(CakismaVarMi) ? "table-warning" : "")" style="position:sticky;left:0;background:var(--bs-body-bg);z-index:1;">@grup.Guzergah</td>
+                            <td class="@(grup.Planlar.Any(CakismaVarMi) ? "table-warning" : "")" style="position:sticky;left:190px;background:var(--bs-body-bg);z-index:1;">@grup.Plaka</td>
+                            <td class="@(grup.Planlar.Any(CakismaVarMi) ? "table-warning" : "")" style="position:sticky;left:300px;background:var(--bs-body-bg);z-index:1;">@grup.Sofor</td>
+                            @for (var gun = 1; gun <= AyGunSayisi; gun++)
+                            {
+                                var planlar = grup.Planlar.Where(p => p.Tarih.Day == gun).ToList();
+                                var cakismaVar = planlar.Any(CakismaVarMi);
+                                <td class="text-center @(cakismaVar ? "table-danger" : planlar.Any(p => p.Durum == OperasyonPlanDurumu.TeyitEdildi) ? "table-success" : "")"
+                                    title="@(cakismaVar ? CakismaAciklamasi(planlar) : planlar.Any() ? "Plan kaydı" : "")">
+                                    @foreach (var plan in planlar)
+                                    {
+                                        @if (plan.Durum == OperasyonPlanDurumu.Planlandi)
+                                        {
+                                            <input type="checkbox" class="form-check-input" title="@plan.ServisTuru - teyit bekliyor"
+                                                   checked="@SecilenIdler.Contains(plan.Id)"
+                                                   @onchange="e => SecimDegisti(plan.Id, (bool)e.Value!)" />
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-check-circle-fill text-success" title="Teyit edildi"></i>
+                                        }
+                                        @if (cakismaVar && plan.Durum == OperasyonPlanDurumu.Planlandi)
+                                        {
+                                            <button class="btn btn-link btn-sm text-danger p-0 ms-1" title="Bu günün çakışmalı planını sil"
+                                                    @onclick="() => TekGunPlanSilmeOnayiIste(plan)">
+                                                <i class="bi bi-trash3"></i>
+                                            </button>
+                                        }
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
     }
 </div>
 
 @code {
-    private DateTime SeciliTarih = DateTime.Today;
+    private int SeciliAy = DateTime.Today.Month;
+    private int SeciliYil = DateTime.Today.Year;
     private List<OperasyonPlanSatiri> Planlar = new();
-    private OperasyonTakvimGunu? TakvimGunu;
     private HashSet<int> SecilenIdler = new();
+    private decimal? EkSeferSayisi;
+    private string? HataMesaji;
+    private string? BilgiMesaji;
+    private Dictionary<int, (decimal Sefer, ServisTuru Servis)> BaslangicDegerleri = new();
     private bool Yukleniyor;
     private Dictionary<int, string> guzergahAdlari = new();
     private Dictionary<int, string> aracAdlari = new();
     private Dictionary<int, string> soforAdlari = new();
+    private static readonly CultureInfo TrKultur = CultureInfo.GetCultureInfo("tr-TR");
+    private DateTime AyBaslangic => new(SeciliYil, SeciliAy, 1);
+    private int AyGunSayisi => DateTime.DaysInMonth(SeciliYil, SeciliAy);
+    private IEnumerable<MatrisSatir> MatrisSatirlari => Planlar
+        .GroupBy(p => new { p.GuzergahId, p.AracId, p.SoforId })
+        .Select(g => new MatrisSatir(
+            GetGuzergahAd(g.Key.GuzergahId),
+            GetAracAd(g.Key.AracId),
+            GetSoforAd(g.Key.SoforId),
+            g.ToList()));
+    private IReadOnlyCollection<OperasyonPlanSatiri> CakismaliPlanlar => Planlar
+        .Where(CakismaVarMi)
+        .ToList();
+    private int CakismaSayisi => CakismaliPlanlar.Count;
+    private bool CakismaOnayiBekleniyor;
+    private bool CakismaOnayiVerildi;
+    private bool AylikPlanTemizlemeOnayiBekleniyor;
+    private OperasyonPlanSatiri? TekGunSilinecekPlan;
     private bool TumuSecili =>
         Planlar.Any(p => p.Durum == OperasyonPlanDurumu.Planlandi) &&
         Planlar.Where(p => p.Durum == OperasyonPlanDurumu.Planlandi).All(p => SecilenIdler.Contains(p.Id));
+    private IEnumerable<OperasyonPlanSatiri> SeciliPlanlar => Planlar.Where(p => SecilenIdler.Contains(p.Id) && p.Durum == OperasyonPlanDurumu.Planlandi);
+    private IEnumerable<MatrisSatir> CakismaGruplari => MatrisSatirlari.Where(g => g.Planlar.Any(CakismaVarMi));
+    private bool DegisiklikVarMi => Planlar.Any(p =>
+        BaslangicDegerleri.TryGetValue(p.Id, out var baslangic) &&
+        (baslangic.Sefer != p.PlanlananSefer || baslangic.Servis != p.ServisTuru));
 
     protected override async Task OnInitializedAsync() => await YukleAsync();
 
-    private async Task TarihDegisti(ChangeEventArgs e)
+    private async Task AyDegisti()
     {
-        if (DateTime.TryParse(e.Value?.ToString(), out var t))
+        await YukleAsync();
+    }
+
+    private void TekGunPlanSilmeOnayiIste(OperasyonPlanSatiri plan)
+    {
+        TekGunSilinecekPlan = plan;
+        HataMesaji = null;
+        BilgiMesaji = null;
+    }
+
+    private void TekGunPlanSilmeOnayiniIptalEt()
+    {
+        TekGunSilinecekPlan = null;
+    }
+
+    private async Task TekGunPlanSilAsync()
+    {
+        if (TekGunSilinecekPlan is null)
+            return;
+
+        var plan = TekGunSilinecekPlan;
+        Yukleniyor = true;
+        try
         {
-            SeciliTarih = t;
+            await PlanService.SilTekGunlukPlanAsync(plan.Id);
+            TekGunSilinecekPlan = null;
+            Toast.ShowSuccess($"{plan.Tarih:dd.MM.yyyy} tarihli {GetGuzergahAd(plan.GuzergahId)} / {GetAracAd(plan.AracId)} / {GetSoforAd(plan.SoforId)} planı silindi.");
             await YukleAsync();
         }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"Tek günlük plan silinemedi: {ex.Message}");
+            Yukleniyor = false;
+        }
     }
+
+    private bool CakismaVarMi(OperasyonPlanSatiri plan)
+    {
+        return Planlar.Any(digeri =>
+            digeri.Id != plan.Id &&
+            digeri.Tarih.Date == plan.Tarih.Date &&
+            ((digeri.AracId == plan.AracId && digeri.GuzergahId == plan.GuzergahId) ||
+             (digeri.SoforId == plan.SoforId && digeri.ServisTuru == plan.ServisTuru)));
+    }
+
+    private string CakismaAciklamasi(IEnumerable<OperasyonPlanSatiri> planlar)
+    {
+        var aciklamalar = new List<string>();
+        if (planlar.Any(p => Planlar.Count(digeri => digeri.Tarih.Date == p.Tarih.Date && digeri.AracId == p.AracId && digeri.GuzergahId == p.GuzergahId) > 1))
+            aciklamalar.Add("Aynı gün aynı araç aynı güzergâhta birden fazla kez planlanmış");
+        if (planlar.Any(p => Planlar.Count(digeri => digeri.Tarih.Date == p.Tarih.Date && digeri.SoforId == p.SoforId && digeri.ServisTuru == p.ServisTuru) > 1))
+            aciklamalar.Add($"Aynı gün {ServisTuruMetni(planlar.First().ServisTuru)} servisinde şoför birden fazla araçta planlanmış");
+        return string.Join("; ", aciklamalar);
+    }
+
+    private static string ServisTuruMetni(ServisTuru servisTuru) => servisTuru switch
+    {
+        ServisTuru.Sabah => "sabah",
+        ServisTuru.Aksam => "akşam",
+        ServisTuru.SabahAksam => "sabah-akşam",
+        ServisTuru.YardaMesai => "mesai",
+        ServisTuru.Ozel => "özel",
+        _ => servisTuru.ToString()
+    };
 
     private async Task YukleAsync()
     {
         Yukleniyor = true;
         SecilenIdler.Clear();
+        HataMesaji = null;
+        BilgiMesaji = null;
         try
         {
-            Planlar = await PlanService.GetPlanlarAsync(SeciliTarih);
-            TakvimGunu = await PlanService.GetTakvimGunuAsync(SeciliTarih);
+            Planlar = await PlanService.GetAylikPlanlarAsync(SeciliYil, SeciliAy);
+            BaslangicDegerleri = Planlar.ToDictionary(p => p.Id, p => (p.PlanlananSefer, p.ServisTuru));
             await AdlariYukleAsync();
         }
         catch (Exception ex)
         {
-            Toast.ShowError($"Yükleme hatası: {ex.Message}");
+            HataMesaji = $"Yükleme hatası: {ex.Message}";
         }
-        finally { Yukleniyor = false; }
+        finally
+        {
+            Yukleniyor = false;
+        }
     }
 
+    private void TumunuIsaretle()
+    {
+        SecilenIdler = Planlar.Where(p => p.Durum == OperasyonPlanDurumu.Planlandi).Select(p => p.Id).ToHashSet();
+    }
+
+    private async Task HaftaSonlariniIsaretle()
+    {
+        Yukleniyor = true;
+        try
+        {
+            // Hafta sonu planlarını üret
+            var (olusan, atlanan) = await PlanService.HaftaSonuPlanlariniUretAsync(SeciliYil, SeciliAy);
+            await YukleAsync();
+
+            // Bilgi mesajı ayarla
+            BilgiMesaji = $"{olusan} hafta sonu planı oluşturuldu, {atlanan} plan zaten mevcuttu. Eklenen planlar teyit beklemektedir.";
+        }
+        catch (Exception ex)
+        {
+            HataMesaji = $"Hafta sonu planları yüklenemedi: {ex.Message}";
+        }
+        finally
+        {
+            Yukleniyor = false;
+        }
+    }
+
+    private void EkSeferUygula()
+    {
+        if (EkSeferSayisi is null)
+            return;
+
+        var ekSefer = Math.Max(0, EkSeferSayisi.Value);
+        foreach (var plan in SeciliPlanlar)
+            plan.PlanlananSefer += ekSefer;
+
+        BilgiMesaji = $"{SeciliPlanlar.Count()} plana {ekSefer:N1} ek sefer uygulandı. Kalıcı olması için Plan Değişikliklerini Kaydet butonuna basın.";
+    }
+
+    private void MesaiOlarakIsaretle()
+    {
+        foreach (var plan in SeciliPlanlar)
+            plan.ServisTuru = ServisTuru.YardaMesai;
+
+        BilgiMesaji = $"{SeciliPlanlar.Count()} plan mesai olarak işaretlendi. Kalıcı olması için Plan Değişikliklerini Kaydet butonuna basın.";
+    }
+
+    private async Task PlanDegisiklikleriniKaydetAsync()
+    {
+        HataMesaji = null;
+        BilgiMesaji = null;
+        Yukleniyor = true;
+        try
+        {
+            var adet = await PlanService.PlanlariGuncelleAsync(Planlar.Where(p => p.Durum == OperasyonPlanDurumu.Planlandi).ToList());
+            BaslangicDegerleri = Planlar.ToDictionary(p => p.Id, p => (p.PlanlananSefer, p.ServisTuru));
+            BilgiMesaji = $"{adet} plan değişikliği kaydedildi.";
+        }
+        catch (Exception ex)
+        {
+            HataMesaji = ex.Message;
+        }
+        finally
+        {
+            Yukleniyor = false;
+        }
+    }
     private async Task PlanUretAsync()
     {
         Yukleniyor = true;
         try
         {
-            var (olusan, atlanan) = await PlanService.PlanUretAsync(SeciliTarih);
+            var (olusan, atlanan, islenmeyenGun) = await PlanService.AyPlaniUretAsync(SeciliYil, SeciliAy);
             if (olusan == 0 && atlanan == 0)
-                Toast.ShowWarning("Plan üretilmedi (tatil günü veya aktif eşleştirme yok).");
+                Toast.ShowWarning($"Plan üretilmedi. {islenmeyenGun} gün hafta sonu, tatil veya aktif eşleştirme olmaması nedeniyle işlenmedi.");
             else
-                Toast.ShowSuccess($"{olusan} plan oluşturuldu, {atlanan} zaten mevcuttu.");
+                Toast.ShowSuccess($"{olusan} plan oluşturuldu, {atlanan} plan zaten mevcuttu. İşlenmeyen gün: {islenmeyenGun}.");
             await YukleAsync();
         }
         catch (Exception ex)
@@ -146,13 +449,56 @@
         }
     }
 
+    private Task AylikPlaniTemizlemeOnayiIsteAsync()
+    {
+        AylikPlanTemizlemeOnayiBekleniyor = true;
+        HataMesaji = null;
+        BilgiMesaji = null;
+        return Task.CompletedTask;
+    }
+
+    private void AylikPlanTemizlemeOnayiniIptalEt()
+    {
+        AylikPlanTemizlemeOnayiBekleniyor = false;
+    }
+
+    private async Task AylikPlaniTemizleAsync()
+    {
+        Yukleniyor = true;
+        HataMesaji = null;
+        BilgiMesaji = null;
+        try
+        {
+            var sonuc = await PlanService.AylikPlaniTemizleAsync(SeciliYil, SeciliAy);
+            AylikPlanTemizlemeOnayiBekleniyor = false;
+            Toast.ShowSuccess($"{SeciliYil}/{SeciliAy:00} planı temizlendi. Plan: {sonuc.Plan}, puantaj: {sonuc.Puantaj}, hakediş: {sonuc.Hakedis}.");
+            await YukleAsync();
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"Aylık plan temizleme hatası: {ex.Message}");
+            Yukleniyor = false;
+        }
+    }
+
     private async Task TeyitEtAsync()
     {
+        if (!SecilenIdler.Any())
+            return;
+
+        if (SecilenPlanlardaCakismaVarMi && !CakismaOnayiVerildi)
+        {
+            CakismaOnayiBekleniyor = true;
+            return;
+        }
+
         Yukleniyor = true;
         try
         {
             var adet = await PlanService.PlanTeyitEtAsync(SecilenIdler.ToList());
             Toast.ShowSuccess($"{adet} plan teyit edilip günlük puantaja aktarıldı.");
+            CakismaOnayiBekleniyor = false;
+            CakismaOnayiVerildi = false;
             await YukleAsync();
         }
         catch (Exception ex)
@@ -160,6 +506,14 @@
             Toast.ShowError($"Teyit hatası: {ex.Message}");
             Yukleniyor = false;
         }
+    }
+
+    private bool SecilenPlanlardaCakismaVarMi => Planlar.Any(p => SecilenIdler.Contains(p.Id) && CakismaVarMi(p));
+
+    private void CakismaOnayiniIptalEt()
+    {
+        CakismaOnayiBekleniyor = false;
+        CakismaOnayiVerildi = false;
     }
 
     private void SecimDegisti(int id, bool secili)
@@ -199,4 +553,23 @@
     private string GetGuzergahAd(int id) => guzergahAdlari.TryGetValue(id, out var ad) ? ad : $"#{id}";
     private string GetAracAd(int id) => aracAdlari.TryGetValue(id, out var ad) ? ad : $"#{id}";
     private string GetSoforAd(int id) => soforAdlari.TryGetValue(id, out var ad) ? ad : $"#{id}";
+
+    private static string DurumMetni(OperasyonPlanDurumu durum) => durum switch
+    {
+        OperasyonPlanDurumu.Planlandi => "Teyit bekliyor",
+        OperasyonPlanDurumu.TeyitEdildi => "Gerçekleşene aktarıldı",
+        OperasyonPlanDurumu.IptalEdildi => "İptal edildi",
+        OperasyonPlanDurumu.EksikGiris => "Eksik bilgi",
+        _ => durum.ToString()
+    };
+
+    private static string DurumSinifi(OperasyonPlanDurumu durum) => durum switch
+    {
+        OperasyonPlanDurumu.TeyitEdildi => "text-bg-success",
+        OperasyonPlanDurumu.IptalEdildi => "text-bg-danger",
+        OperasyonPlanDurumu.EksikGiris => "text-bg-warning",
+        _ => "text-bg-secondary"
+    };
+
+    private sealed record MatrisSatir(string Guzergah, string Plaka, string Sofor, List<OperasyonPlanSatiri> Planlar);
 }

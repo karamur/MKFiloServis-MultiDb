@@ -23,7 +23,10 @@ public class OperasyonPlanService : IOperasyonPlanService
         _logger = logger;
     }
 
-    public async Task<(int Olusan, int Atlanan)> PlanUretAsync(DateTime tarih)
+    public Task<(int Olusan, int Atlanan)> PlanUretAsync(DateTime tarih)
+        => PlanUretAsync(tarih, haftaSonunuDahilEt: false);
+
+    private async Task<(int Olusan, int Atlanan)> PlanUretAsync(DateTime tarih, bool haftaSonunuDahilEt)
     {
         var gun = tarih.Date;
         await using var db = await _dbFactory.CreateDbContextAsync();
@@ -35,6 +38,12 @@ public class OperasyonPlanService : IOperasyonPlanService
         if (takvim?.GunTipi == OperasyonGunTipi.Tatil)
         {
             _logger.LogInformation("PLAN_URET: {Tarih} tatil günü, plan üretilmedi.", gun);
+            return (0, 0);
+        }
+
+        if (!haftaSonunuDahilEt && takvim is null && gun.DayOfWeek is (DayOfWeek.Saturday or DayOfWeek.Sunday))
+        {
+            _logger.LogInformation("PLAN_URET: {Tarih} hafta sonu, plan üretilmedi.", gun);
             return (0, 0);
         }
 
@@ -67,13 +76,62 @@ public class OperasyonPlanService : IOperasyonPlanService
                 PuantajCarpani = carpan,
                 KurumSeferUcretiSnapshot = e.KurumaKesilecekUcret,
                 TaseronSeferUcretiSnapshot = e.TaseronaOdenenUcret,
-                Durum = OperasyonPlanDurumu.Planlandi
+                Durum = carpan > 0m ? OperasyonPlanDurumu.Planlandi : OperasyonPlanDurumu.EksikGiris
             });
             olusan++;
         }
 
         await db.SaveChangesAsync();
         _logger.LogInformation("PLAN_URET: {Tarih} için {Olusan} plan oluştu, {Atlanan} atlandı.", gun, olusan, atlanan);
+        return (olusan, atlanan);
+    }
+
+    public async Task<(int Olusan, int Atlanan, int IslenmeyenGun)> AyPlaniUretAsync(int yil, int ay)
+    {
+        if (ay is < 1 or > 12)
+            throw new ArgumentOutOfRangeException(nameof(ay));
+
+        var ayBaslangic = new DateTime(yil, ay, 1);
+        var aySonu = ayBaslangic.AddMonths(1);
+        var toplamOlusan = 0;
+        var toplamAtlanan = 0;
+        var islenmeyenGun = 0;
+
+        for (var tarih = ayBaslangic; tarih < aySonu; tarih = tarih.AddDays(1))
+        {
+            var sonuc = await PlanUretAsync(tarih);
+            if (sonuc.Olusan == 0 && sonuc.Atlanan == 0)
+                islenmeyenGun++;
+
+            toplamOlusan += sonuc.Olusan;
+            toplamAtlanan += sonuc.Atlanan;
+        }
+
+        _logger.LogInformation(
+            "AYLIK_PLAN_URET: {Yil}/{Ay} için {Olusan} plan oluştu, {Atlanan} atlandı, {IslenmeyenGun} gün işlenmedi.",
+            yil, ay, toplamOlusan, toplamAtlanan, islenmeyenGun);
+
+        return (toplamOlusan, toplamAtlanan, islenmeyenGun);
+    }
+
+    public async Task<(int Olusan, int Atlanan)> HaftaSonuPlanlariniUretAsync(int yil, int ay)
+    {
+        var ayBaslangic = new DateTime(yil, ay, 1);
+        var gunSayisi = DateTime.DaysInMonth(yil, ay);
+        int olusan = 0, atlanan = 0;
+
+        for (var gun = 0; gun < gunSayisi; gun++)
+        {
+            var tarih = ayBaslangic.AddDays(gun);
+            if (tarih.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday))
+                continue;
+
+            // Yalnızca varsayılan hafta sonu kuralını aş; tatil ve çarpan kurallarını koru.
+            var sonuc = await PlanUretAsync(tarih, haftaSonunuDahilEt: true);
+            olusan += sonuc.Olusan;
+            atlanan += sonuc.Atlanan;
+        }
+
         return (olusan, atlanan);
     }
 
@@ -84,6 +142,145 @@ public class OperasyonPlanService : IOperasyonPlanService
         return await db.OperasyonPlanSatirlari
             .Where(p => p.Tarih == gun)
             .OrderBy(p => p.GuzergahId)
+            .AsNoTracking()
+            .ToListAsync();
+    }
+
+    public async Task<int> PlanlariGuncelleAsync(List<OperasyonPlanSatiri> planlar)
+    {
+        if (planlar.Count == 0)
+            return 0;
+
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var planIdleri = planlar.Select(p => p.Id).ToList();
+        var kayitlar = await db.OperasyonPlanSatirlari
+            .Where(p => planIdleri.Contains(p.Id) && p.Durum == OperasyonPlanDurumu.Planlandi)
+            .ToListAsync();
+
+        var guncellenecekler = planlar.ToDictionary(p => p.Id);
+        foreach (var kayit in kayitlar)
+        {
+            if (!guncellenecekler.TryGetValue(kayit.Id, out var kaynak))
+                continue;
+
+            kayit.PlanlananSefer = kaynak.PlanlananSefer < 0 ? 0 : kaynak.PlanlananSefer;
+            kayit.ServisTuru = kaynak.ServisTuru;
+        }
+
+        await db.SaveChangesAsync();
+        return kayitlar.Count;
+    }
+
+    public async Task SilTekGunlukPlanAsync(int planId)
+    {
+        if (planId <= 0)
+            throw new ArgumentOutOfRangeException(nameof(planId));
+
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var strategy = db.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            var plan = await db.OperasyonPlanSatirlari
+                .FirstOrDefaultAsync(p => p.Id == planId);
+
+            if (plan is null)
+                throw new InvalidOperationException("Silinecek günlük plan bulunamadı.");
+
+            if (plan.Durum != OperasyonPlanDurumu.Planlandi || plan.FiloGunlukPuantajId.HasValue)
+                throw new InvalidOperationException("Bu günlük plan teyit edildiği veya puantaja aktarıldığı için silinemez.");
+
+            db.OperasyonPlanSatirlari.Remove(plan);
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+        });
+
+        _logger.LogWarning("TEK_GUN_PLAN_SIL: {PlanId} numaralı günlük plan silindi.", planId);
+    }
+
+    public async Task<(int Plan, int Puantaj, int Hakedis)> AylikPlaniTemizleAsync(int yil, int ay)
+    {
+        if (ay is < 1 or > 12)
+            throw new ArgumentOutOfRangeException(nameof(ay));
+
+        var ayBaslangic = new DateTime(yil, ay, 1);
+        var aySonu = ayBaslangic.AddMonths(1);
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var strategy = db.Database.CreateExecutionStrategy();
+        var sonuc = (Plan: 0, Puantaj: 0, Hakedis: 0);
+
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            var planlar = await db.OperasyonPlanSatirlari
+                .Where(p => p.Tarih >= ayBaslangic && p.Tarih < aySonu)
+                .ToListAsync();
+            var puantajIdleri = planlar
+                .Where(p => p.FiloGunlukPuantajId.HasValue)
+                .Select(p => p.FiloGunlukPuantajId!.Value)
+                .Distinct()
+                .ToList();
+            var puantajlar = await db.Set<FiloGunlukPuantaj>()
+                .Where(p => (puantajIdleri.Contains(p.Id) ||
+                             (p.Tarih >= ayBaslangic && p.Tarih < aySonu &&
+                              p.FiloGuzergahEslestirmeId.HasValue &&
+                              planlar.Select(x => x.FiloGuzergahEslestirmeId).Contains(p.FiloGuzergahEslestirmeId.Value))) &&
+                            !p.IsDeleted)
+                .ToListAsync();
+
+            if (puantajlar.Any(p => p.Onaylandi || p.KurumFaturaKesildiMi || p.TaseronOdemeYapildiMi || p.KurumFaturaId.HasValue))
+                throw new InvalidOperationException("Seçili ayda onaylanmış, faturalanmış veya ödemesi yapılmış puantaj bulunduğu için plan temizlenemedi.");
+
+            var puantajIds = puantajlar.Select(p => p.Id).ToList();
+            var hakedisDetaylari = await db.Set<HakedisDetay>()
+                .Where(d => puantajIds.Contains(d.FiloGunlukPuantajId ?? 0))
+                .Include(d => d.Hakedis)
+                .ToListAsync();
+
+            if (hakedisDetaylari.Any(d => d.Hakedis is not null && d.Hakedis.Durum != HakedisDurum.Taslak && d.Hakedis.Durum != HakedisDurum.Iptal))
+                throw new InvalidOperationException("Seçili ayda onaylanmış veya kapanmış hakediş bulunduğu için plan temizlenemedi.");
+
+            var temizlenecekHakedisler = hakedisDetaylari
+                .Select(d => d.Hakedis)
+                .Where(h => h is not null)
+                .Cast<Hakedis>()
+                .DistinctBy(h => h.Id)
+                .ToList();
+
+            if (hakedisDetaylari.Count > 0)
+                db.Set<HakedisDetay>().RemoveRange(hakedisDetaylari);
+            if (temizlenecekHakedisler.Count > 0)
+                db.Set<Hakedis>().RemoveRange(temizlenecekHakedisler);
+
+            if (puantajlar.Count > 0)
+                db.Set<FiloGunlukPuantaj>().RemoveRange(puantajlar);
+            if (planlar.Count > 0)
+                db.OperasyonPlanSatirlari.RemoveRange(planlar);
+
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+            sonuc = (planlar.Count, puantajlar.Count, temizlenecekHakedisler.Count);
+        });
+
+        _logger.LogWarning("AYLIK_PLAN_TEMIZLE: {Yil}/{Ay} plan={Plan}, puantaj={Puantaj}, hakediş={Hakedis} temizlendi.",
+            yil, ay, sonuc.Plan, sonuc.Puantaj, sonuc.Hakedis);
+        return sonuc;
+    }
+
+    public async Task<List<OperasyonPlanSatiri>> GetAylikPlanlarAsync(int yil, int ay)
+    {
+        if (ay is < 1 or > 12)
+            throw new ArgumentOutOfRangeException(nameof(ay));
+
+        var ayBaslangic = new DateTime(yil, ay, 1);
+        var aySonu = ayBaslangic.AddMonths(1);
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        return await db.OperasyonPlanSatirlari
+            .Where(p => p.Tarih >= ayBaslangic && p.Tarih < aySonu)
+            .OrderBy(p => p.Tarih)
+            .ThenBy(p => p.GuzergahId)
             .AsNoTracking()
             .ToListAsync();
     }
@@ -102,39 +299,62 @@ public class OperasyonPlanService : IOperasyonPlanService
         if (planIdleri.Count == 0) return 0;
 
         await using var db = await _dbFactory.CreateDbContextAsync();
-        var planlar = await db.OperasyonPlanSatirlari
-            .Where(p => planIdleri.Contains(p.Id) && p.Durum == OperasyonPlanDurumu.Planlandi)
-            .ToListAsync();
+        var strategy = db.Database.CreateExecutionStrategy();
+        var teyit = 0;
 
-        int teyit = 0;
-        foreach (var plan in planlar)
+        await strategy.ExecuteAsync(async () =>
         {
-            var puantaj = new FiloGunlukPuantaj
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            var planlar = await db.OperasyonPlanSatirlari
+                .Where(p => planIdleri.Contains(p.Id) && p.Durum == OperasyonPlanDurumu.Planlandi)
+                .ToListAsync();
+
+            teyit = 0;
+            foreach (var plan in planlar)
             {
-                Tarih = plan.Tarih,
-                FiloGuzergahEslestirmeId = plan.FiloGuzergahEslestirmeId,
-                KurumFirmaId = plan.KurumFirmaId,
-                GuzergahId = plan.GuzergahId,
-                AracId = plan.AracId,
-                SoforId = plan.SoforId,
-                Durum = OperasyonDurumu.Gitti,
-                ServisTuru = plan.ServisTuru,
-                SeferSayisi = plan.PlanlananSefer,
-                PuantajCarpani = plan.PuantajCarpani,
-                TahakkukEdenKurumUcreti = plan.PlanlananSefer * plan.PuantajCarpani * plan.KurumSeferUcretiSnapshot,
-                TahakkukEdenTaseronUcreti = plan.PlanlananSefer * plan.PuantajCarpani * plan.TaseronSeferUcretiSnapshot,
-                FirmaId = plan.FirmaId
-            };
-            db.Set<FiloGunlukPuantaj>().Add(puantaj);
+                var mevcutPuantaj = await db.Set<FiloGunlukPuantaj>()
+                    .FirstOrDefaultAsync(p => p.Tarih == plan.Tarih &&
+                                              p.FiloGuzergahEslestirmeId == plan.FiloGuzergahEslestirmeId &&
+                                              !p.IsDeleted);
+
+                if (mevcutPuantaj is not null)
+                {
+                    plan.Durum = OperasyonPlanDurumu.TeyitEdildi;
+                    plan.FiloGunlukPuantajId = mevcutPuantaj.Id;
+                    plan.TeyitTarihi = DateTime.UtcNow;
+                    teyit++;
+                    continue;
+                }
+
+                var puantaj = new FiloGunlukPuantaj
+                {
+                    Tarih = plan.Tarih,
+                    FiloGuzergahEslestirmeId = plan.FiloGuzergahEslestirmeId,
+                    KurumFirmaId = plan.KurumFirmaId,
+                    GuzergahId = plan.GuzergahId,
+                    AracId = plan.AracId,
+                    SoforId = plan.SoforId,
+                    Durum = OperasyonDurumu.Gitti,
+                    ServisTuru = plan.ServisTuru,
+                    SeferSayisi = plan.PlanlananSefer,
+                    PuantajCarpani = plan.PuantajCarpani,
+                    TahakkukEdenKurumUcreti = plan.PlanlananSefer * plan.PuantajCarpani * plan.KurumSeferUcretiSnapshot,
+                    TahakkukEdenTaseronUcreti = plan.PlanlananSefer * plan.PuantajCarpani * plan.TaseronSeferUcretiSnapshot,
+                    FirmaId = plan.FirmaId
+                };
+                db.Set<FiloGunlukPuantaj>().Add(puantaj);
+                await db.SaveChangesAsync();
+
+                plan.Durum = OperasyonPlanDurumu.TeyitEdildi;
+                plan.FiloGunlukPuantajId = puantaj.Id;
+                plan.TeyitTarihi = DateTime.UtcNow;
+                teyit++;
+            }
+
             await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+        });
 
-            plan.Durum = OperasyonPlanDurumu.TeyitEdildi;
-            plan.FiloGunlukPuantajId = puantaj.Id;
-            plan.TeyitTarihi = DateTime.UtcNow;
-            teyit++;
-        }
-
-        await db.SaveChangesAsync();
         _logger.LogInformation("PLAN_TEYIT: {Adet} plan teyit edilip günlük puantaja aktarıldı.", teyit);
         return teyit;
     }

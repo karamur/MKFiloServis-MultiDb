@@ -6,35 +6,59 @@
 <PageTitle>Operasyon Merkezi</PageTitle>
 
 <div class="container-fluid">
-    <ul class="nav nav-tabs mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <div>
+            <h3 class="mb-1"><i class="bi bi-diagram-3 me-2 text-primary"></i>Operasyon Merkezi</h3>
+            <p class="text-muted mb-0">Aylık servis operasyonunu planlayın, gerçekleşeni girin ve hakedişe hazırlayın.</p>
+        </div>
+    </div>
+
+    <div class="alert alert-light border mb-3">
+        <strong>İş akışı:</strong>
+        <span class="ms-2">1. Planla</span><i class="bi bi-chevron-right mx-2"></i>
+        <span>2. Gerçekleşeni Gir</span><i class="bi bi-chevron-right mx-2"></i>
+        <span>3. Kontrol Et</span><i class="bi bi-chevron-right mx-2"></i>
+        <span>4. Hakedişe Geç</span>
+    </div>
+
+    <ul class="nav nav-pills nav-fill mb-3">
+        <li class="nav-item">
+            <a class="nav-link @(aktifSekme == Sekme.Plan ? "active" : "")" href="javascript:void(0)"
+               @onclick="() => SekmeDegistir(Sekme.Plan)" @onclick:preventDefault>
+                <i class="bi bi-calendar3 me-1"></i>1. Planla
+            </a>
+        </li>
         <li class="nav-item">
             <a class="nav-link @(aktifSekme == Sekme.Eslestirme ? "active" : "")" href="javascript:void(0)"
                @onclick="() => SekmeDegistir(Sekme.Eslestirme)" @onclick:preventDefault>
-                <i class="bi bi-list-check me-1 text-info"></i>1. Eşleştirme &amp; Toplu Puantaj
+                <i class="bi bi-list-check me-1"></i>Tanımları Yönet
             </a>
         </li>
         <li class="nav-item">
             <a class="nav-link @(aktifSekme == Sekme.Puantaj ? "active" : "")" href="javascript:void(0)"
                @onclick="() => SekmeDegistir(Sekme.Puantaj)" @onclick:preventDefault>
-                <i class="bi bi-calendar2-check me-1 text-success"></i>2. Operasyonel Puantaj
+                <i class="bi bi-calendar2-check me-1"></i>2. Gerçekleşeni Gir
             </a>
         </li>
         <li class="nav-item">
             <a class="nav-link @(aktifSekme == Sekme.Hakedis ? "active" : "")" href="javascript:void(0)"
                @onclick="() => SekmeDegistir(Sekme.Hakedis)" @onclick:preventDefault>
-                <i class="bi bi-clipboard-check me-1 text-warning"></i>3. Operasyonel Hakediş
+                <i class="bi bi-clipboard-check me-1"></i>4. Hakedişe Geç
             </a>
         </li>
         <li class="nav-item">
             <a class="nav-link @(aktifSekme == Sekme.Matris ? "active" : "")" href="javascript:void(0)"
                @onclick="() => SekmeDegistir(Sekme.Matris)" @onclick:preventDefault>
-                <i class="bi bi-table me-1 text-primary"></i>4. Aylık Puantaj Tablosu
+                <i class="bi bi-table me-1"></i>3. Kontrol Et
             </a>
         </li>
     </ul>
 
     @switch (aktifSekme)
     {
+        case Sekme.Plan:
+            <OperasyonPlanPage />
+            break;
         case Sekme.Eslestirme:
             <EslestirmeTanimlari />
             break;
@@ -51,9 +75,9 @@
 </div>
 
 @code {
-    private enum Sekme { Eslestirme, Puantaj, Hakedis, Matris }
+    private enum Sekme { Plan, Eslestirme, Puantaj, Hakedis, Matris }
 
-    private Sekme aktifSekme = Sekme.Eslestirme;
+    private Sekme aktifSekme = Sekme.Plan;
 
     private void SekmeDegistir(Sekme sekme)
     {
