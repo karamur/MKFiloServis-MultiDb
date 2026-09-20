@@ -59,14 +59,13 @@
                 <button class="btn btn-outline-primary btn-sm" @onclick="TumunuIsaretle" disabled="@(Yukleniyor || !Planlar.Any())">
                     <i class="bi bi-check2-square me-1"></i>Hepsini İşaretle
                 </button>
-                <button class="btn btn-outline-secondary btn-sm" @onclick="HaftaSonuOlanlariIsaretle" disabled="@Yukleniyor">
+                <button class="btn btn-outline-secondary btn-sm" @onclick="HaftaSonlariniIsaretle" disabled="@Yukleniyor">
                     <i class="bi bi-calendar-week me-1"></i>Hafta Sonlarını İşaretle
                 </button>
                 <button class="btn btn-outline-info btn-sm" @onclick="HaftaIciOlanlariIsaretle" disabled="@Yukleniyor">
                     <i class="bi bi-calendar-day me-1"></i>Hafta İçi Olanları İşaretle
                 </button>
-                <InputNumber class="form-control form-control-sm" style="width:130px" @bind-Value="EkSeferSayisi" min="0" step="0.5" placeholder="Ek sefer" />
-                <button class="btn btn-outline-warning btn-sm" @onclick="EkSeferUygula" disabled="@(Yukleniyor || !SeciliPlanlar.Any() || EkSeferSayisi is null)">
+                <button class="btn btn-outline-warning btn-sm" @onclick="EkSeferFormunuAc" disabled="@Yukleniyor">
                     <i class="bi bi-plus-circle me-1"></i>Ek Sefer Ekle
                 </button>
                 <button class="btn btn-outline-dark btn-sm" @onclick="MesaiOlarakIsaretlePlanlarAsync" disabled="@(Yukleniyor || !SeciliPlanlar.Any())">
@@ -76,6 +75,63 @@
                     <i class="bi bi-save me-1"></i>Plan Değişikliklerini Kaydet
                 </button>
             </div>
+            @if (EkSeferFormuAcik)
+            {
+                <div class="border rounded p-3 mt-3 bg-light">
+                    <div class="fw-semibold mb-2">Yeni ek sefer planı</div>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-2">
+                            <label class="form-label small mb-1">Tarih</label>
+                            <InputDate class="form-control form-control-sm" @bind-Value="EkSeferTarihi" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small mb-1">Güzergâh</label>
+                            <InputSelect class="form-select form-select-sm" @bind-Value="EkSeferGuzergahId" @bind:after="EkSeferGuzergahDegisti">
+                                <option value="0">Seçiniz</option>
+                                @foreach (var guzergah in guzergahAdlari.OrderBy(x => x.Value))
+                                {
+                                    <option value="@guzergah.Key">@guzergah.Value</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small mb-1">Plaka</label>
+                            <InputSelect class="form-select form-select-sm" @bind-Value="EkSeferAracId" @bind:after="EkSeferAracDegisti">
+                                <option value="0">Seçiniz</option>
+                                @foreach (var arac in EkSeferAracSecenekleri)
+                                {
+                                    <option value="@arac.Key">@arac.Value</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small mb-1">Şoför</label>
+                            <InputSelect class="form-select form-select-sm" @bind-Value="EkSeferSoforId">
+                                <option value="0">Seçiniz</option>
+                                @foreach (var sofor in soforAdlari.OrderBy(x => x.Value))
+                                {
+                                    <option value="@sofor.Key">@sofor.Value</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label small mb-1">Sefer</label>
+                            <InputNumber class="form-control form-control-sm" @bind-Value="EkSeferAdedi" min="0.5" step="0.5" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small mb-1">Sefer fiyatı</label>
+                            <InputNumber class="form-control form-control-sm" @bind-Value="EkSeferFiyati" min="0" step="0.01" placeholder="Normal ücret" />
+                        </div>
+                    </div>
+                    <div class="small text-muted mt-2">Fiyat boş bırakılırsa seçilen güzergâhın normal kuruma kesilecek sefer ücreti kullanılır. Şoför, güzergâh ve plaka seçiminden sonra otomatik önerilir; isterseniz değiştirebilirsiniz.</div>
+                    <div class="mt-2">
+                        <button class="btn btn-warning btn-sm me-2" @onclick="EkSeferPlaniniEkleAsync" disabled="@Yukleniyor">
+                            <i class="bi bi-check2 me-1"></i>Ek Sefer Planını Kaydet
+                        </button>
+                        <button class="btn btn-link btn-sm" @onclick="EkSeferFormunuKapat" disabled="@Yukleniyor">Vazgeç</button>
+                    </div>
+                </div>
+            }
         </div>
     </div>
 
