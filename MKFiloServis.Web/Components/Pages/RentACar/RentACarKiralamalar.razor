@@ -16,7 +16,7 @@
 
 <MKFiloServis.Web.Components.Shared.YetkiKontrol Yetki="rentacar.oku" GerekliYetkiAdi="Rent a Car Görüntüleme">
     <Yetkili>
-<div class="container-fluid">
+<div class="container-fluid rentacar-page">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
             <h3 class="mb-1"><i class="bi bi-car-front-fill me-2 text-primary"></i>Rent a Car</h3>
@@ -77,21 +77,21 @@
                                 <InputNumber class="form-control" @bind-Value="rezervasyon.Depozito" />
                                 <ValidationMessage For="@(() => rezervasyon.Depozito)" class="text-danger" />
                             </div>
-                            <div class="col-md-1 d-grid">
+                            <div class="col-md-2 d-grid">
                                 <button type="button" class="btn btn-outline-primary" @onclick="MusaitAraclariGetirAsync" disabled="musaitlikYukleniyor">
                                     @if (musaitlikYukleniyor)
                                     {
-                                        <span class="spinner-border spinner-border-sm"></span>
+                                        <span class="spinner-border spinner-border-sm me-1"></span><span>Araçlar aranıyor</span>
                                     }
                                     else
                                     {
-                                        <i class="bi bi-search"></i>
+                                        <i class="bi bi-search me-1"></i><span>Müsait araçları bul</span>
                                     }
                                 </button>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label">Müsait araç</label>
-                                <InputSelect class="form-select" @bind-Value="rezervasyon.AracId">
+                                <label class="form-label">Müsait araç (@(MusaitlikGuncel ? musaitAraclar.Count : 0))</label>
+                                <InputSelect class="form-select" @bind-Value="rezervasyon.AracId" disabled="@(!MusaitlikGuncel || musaitAraclar.Count == 0)">
                                     <option value="0">Araç seçin</option>
                                     @foreach (var arac in musaitAraclar)
                                     {
@@ -99,6 +99,18 @@
                                     }
                                 </InputSelect>
                                 <ValidationMessage For="@(() => rezervasyon.AracId)" class="text-danger" />
+                                @if (!musaitlikYukleniyor && MusaitlikGuncel && musaitAraclar.Count == 0)
+                                {
+                                    <small class="text-danger d-block mt-1">Bu tarih aralığında uygun araç bulunamadı. Tarihleri değiştirip yeniden arayın.</small>
+                                }
+                                else if (MusaitlikGuncel && musaitAraclar.Count > 0)
+                                {
+                                    <small class="text-success d-block mt-1">@musaitAraclar.Count araç bu tarih aralığında müsait.</small>
+                                }
+                                else
+                                {
+                                    <small class="text-muted d-block mt-1">Tarih aralığı için önce müsait araçları arayın.</small>
+                                }
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Not</label>
@@ -124,6 +136,38 @@
             </div>
         </Yetkili>
     </MKFiloServis.Web.Components.Shared.YetkiKontrol>
+
+<style>
+    @@media print {
+        body * { visibility: hidden !important; }
+        .rentacar-document-preview,
+        .rentacar-document-preview * { visibility: visible !important; }
+        .rentacar-document-preview {
+            position: absolute !important;
+            inset: 0 !important;
+            display: block !important;
+            overflow: visible !important;
+            padding: 0 !important;
+            background: #fff !important;
+        }
+        .rentacar-document-preview .modal-dialog,
+        .rentacar-document-preview .modal-content,
+        .rentacar-document-preview .modal-body {
+            width: 100% !important;
+            max-width: none !important;
+            height: auto !important;
+            max-height: none !important;
+            margin: 0 !important;
+            overflow: visible !important;
+            border: 0 !important;
+            box-shadow: none !important;
+            background: #fff !important;
+        }
+        .rentacar-print-sheet { width: 100% !important; padding: 0 !important; }
+        .rentacar-document-preview .d-print-none { display: none !important; }
+        .rentacar-document-preview .d-print-block { display: block !important; }
+    }
+</style>
 
     @if (!string.IsNullOrWhiteSpace(hataMesaji))
     {
@@ -179,6 +223,26 @@
                         @foreach (var durum in Enum.GetValues<KiralamaDurumu>())
                         {
                             <option value="@((int)durum)">@durum</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="iadeZamaniFiltresi" class="form-label">İade zamanı</label>
+                    <select id="iadeZamaniFiltresi" class="form-select" @bind="iadeZamaniFiltresi">
+                        <option value="0">Tüm iade zamanları</option>
+                        <option value="1">İadesi gecikmiş</option>
+                        <option value="2">İade yaklaşıyor (24 saat)</option>
+                        <option value="3">Süresi var (&gt;24 saat)</option>
+                        <option value="4">İade edilmiş</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="aracFiltre" class="form-label">Araç / plaka</label>
+                    <select id="aracFiltre" class="form-select" @bind="aracFiltreId">
+                        <option value="0">Tüm araçlar</option>
+                        @foreach (var arac in FiltreAraclari)
+                        {
+                            <option value="@arac.Id">@arac.Plaka — @arac.AracTanimi</option>
                         }
                     </select>
                 </div>
@@ -241,6 +305,12 @@
                                 <td class="text-end">@kiralama.ToplamTutar.ToString("N2") ₺</td>
                                 <td>@kiralama.OdemeDurumu</td>
                                 <td>
+                                    <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => BelgeOnizle(kiralama, RentACarBelgeTuru.Sozlesme)" title="Sözleşme taslağını ön izle">
+                                        <i class="bi bi-file-earmark-text me-1"></i>Sözleşme
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => BelgeOnizle(kiralama, RentACarBelgeTuru.TeslimIade)" title="Teslim/iade tutanağını ön izle">
+                                        <i class="bi bi-clipboard-check me-1"></i>Teslim/iade
+                                    </button>
                                     @if (kiralama.Durum == KiralamaDurumu.Rezervasyon)
                                     {
                                         <MKFiloServis.Web.Components.Shared.YetkiKontrol Yetki="rentacar.rezervasyon.yaz" GerekliYetkiAdi="Rent a Car Rezervasyon Düzenleme">
@@ -266,6 +336,109 @@
             </table>
         </div>
     </div>
+
+    @if (onizlenenKiralama is not null)
+    {
+        <div class="rentacar-document-preview modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,.55);">
+            <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header d-print-none">
+                        <div>
+                            <h5 class="modal-title">@BelgeBasligi</h5>
+                            <small class="text-muted">Ön izleme — bilgileri kontrol edin, ardından yazdırın veya PDF olarak kaydedin.</small>
+                        </div>
+                        <button type="button" class="btn-close" aria-label="Kapat" @onclick="BelgeOnizlemeyiKapat"></button>
+                    </div>
+                    <div class="modal-body bg-body-secondary">
+                        <article class="rentacar-print-sheet bg-white mx-auto p-4 p-md-5">
+                            <header class="text-center border-bottom pb-3 mb-4">
+                                <h2 class="h4 mb-1">@(onizlenenBelgeTuru == RentACarBelgeTuru.Sozlesme ? "ARAÇ KİRALAMA SÖZLEŞMESİ TASLAĞI" : "ARAÇ TESLİM / İADE TUTANAĞI")</h2>
+                                <div class="text-muted">Sözleşme / kayıt no: @(onizlenenKiralama.SozlesmeNo ?? "-")</div>
+                            </header>
+
+                            <div class="alert alert-warning py-2 d-print-none">
+                                Bu belge, sistem verilerinden oluşturulan kontrol taslağıdır. Resmî/yasal kullanımdan önce şirket yetkilisi ve hukuk danışmanı tarafından incelenip onaylanmalıdır.
+                            </div>
+                            <p class="small border rounded p-2 d-none d-print-block">
+                                Taslak belge — resmî kullanım öncesinde yetkili onayı ve mevzuata uygunluk kontrolü gerekir.
+                            </p>
+
+                            <h3 class="h6 mt-4">Kiraya veren</h3>
+                            <p>
+                                <strong>@BelgeDegeri(onizlenenKiralama.FirmaUnvan)</strong><br />
+                                @if (!string.IsNullOrWhiteSpace(onizlenenKiralama.FirmaVergiDairesi) || !string.IsNullOrWhiteSpace(onizlenenKiralama.FirmaVergiNo))
+                                {
+                                    <span>Vergi dairesi/no: @BelgeDegeri(onizlenenKiralama.FirmaVergiDairesi) / @BelgeDegeri(onizlenenKiralama.FirmaVergiNo)<br /></span>
+                                }
+                                @BelgeDegeri(onizlenenKiralama.FirmaAdres)<br />
+                                @BelgeDegeri(onizlenenKiralama.FirmaTelefon)
+                            </p>
+
+                            <h3 class="h6 mt-4">Kiracı</h3>
+                            <p>
+                                <strong>@onizlenenKiralama.MusteriUnvan</strong><br />
+                                @if (!string.IsNullOrWhiteSpace(onizlenenKiralama.MusteriKimlikNo))
+                                {
+                                    <span>T.C. kimlik no: @onizlenenKiralama.MusteriKimlikNo<br /></span>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(onizlenenKiralama.MusteriVergiNo))
+                                {
+                                    <span>Vergi dairesi/no: @BelgeDegeri(onizlenenKiralama.MusteriVergiDairesi) / @onizlenenKiralama.MusteriVergiNo<br /></span>
+                                }
+                                @BelgeDegeri(onizlenenKiralama.MusteriAdres)<br />
+                                @BelgeDegeri(onizlenenKiralama.MusteriTelefon)
+                            </p>
+
+                            <h3 class="h6 mt-4">Araç ve kiralama bilgileri</h3>
+                            <table class="table table-bordered table-sm">
+                                <tbody>
+                                    <tr><th>Araç</th><td>@BelgeDegeri(onizlenenKiralama.AracTanimi)</td><th>Plaka</th><td>@BelgeDegeri(onizlenenKiralama.Plaka)</td></tr>
+                                    <tr><th>Başlangıç</th><td>@onizlenenKiralama.BaslangicTarihi.ToString("dd.MM.yyyy HH:mm")</td><th>Planlanan iade</th><td>@onizlenenKiralama.PlanlananBitisTarihi.ToString("dd.MM.yyyy HH:mm")</td></tr>
+                                    <tr><th>Günlük bedel</th><td>@onizlenenKiralama.GunlukFiyat.ToString("N2") ₺</td><th>Toplam</th><td>@onizlenenKiralama.ToplamTutar.ToString("N2") ₺</td></tr>
+                                    <tr><th>Depozito</th><td>@(onizlenenKiralama.Depozito?.ToString("N2") ?? "-") ₺</td><th>Ödeme</th><td>@onizlenenKiralama.OdemeDurumu</td></tr>
+                                </tbody>
+                            </table>
+
+                            @if (onizlenenBelgeTuru == RentACarBelgeTuru.Sozlesme)
+                            {
+                                <h3 class="h6 mt-4">Taslak sözleşme hükümleri</h3>
+                                <ol>
+                                    <li>Kiracı, aracı yukarıda belirtilen süre ve koşullarda teslim aldığını; aracı dikkatli ve mevzuata uygun kullanacağını kabul eder.</li>
+                                    <li>Kiralama bedeli, depozito, kilometre/yakıt sınırı, ek sürücü, hasar ve gecikme koşulları taraflarca teslim öncesinde ayrıca doldurulup onaylanmalıdır.</li>
+                                    <li>Araç teslim ve iade durumu, kilometre ve mevcut hasarlar ayrı tutanakla kayıt altına alınmalıdır.</li>
+                                    <li>İşbu metin doldurulması ve yetkili incelemesi gereken taslak şablondur; imzalanmadan önce geçerli mevzuata ve şirketin onaylı sözleşme şartlarına göre düzenlenmelidir.</li>
+                                </ol>
+                            }
+                            else
+                            {
+                                <h3 class="h6 mt-4">Teslim / iade kontrol alanları</h3>
+                                <table class="table table-bordered table-sm">
+                                    <tbody>
+                                        <tr><th>İşlem</th><td>☐ Teslim &nbsp;&nbsp; ☐ İade</td><th>Gerçek tarih/saat</th><td>____ / ____ / ______ &nbsp; ____:____</td></tr>
+                                        <tr><th>Kilometre</th><td>Başlangıç: @(onizlenenKiralama.BaslangicKm?.ToString("N0") ?? "________")</td><td colspan="2">İade: @(onizlenenKiralama.BitisKm?.ToString("N0") ?? "________")</td></tr>
+                                        <tr><th>Yakıt seviyesi</th><td colspan="3">Teslim: ____________________ &nbsp;&nbsp; İade: ____________________</td></tr>
+                                        <tr><th>Hasar / eksik</th><td colspan="3" style="height: 75px;"></td></tr>
+                                        <tr><th>Aksesuar / ekipman</th><td colspan="3" style="height: 55px;"></td></tr>
+                                    </tbody>
+                                </table>
+                                <p>Notlar: @BelgeDegeri(onizlenenKiralama.Notlar)</p>
+                            }
+
+                            <div class="row mt-5 pt-3 text-center">
+                                <div class="col-6"><div class="border-top pt-2">Kiracı / yetkili imza<br />Ad soyad: ____________________</div></div>
+                                <div class="col-6"><div class="border-top pt-2">Kiraya veren / teslim eden<br />Ad soyad: ____________________</div></div>
+                            </div>
+                            <footer class="small text-muted text-center mt-4">Belge oluşturma tarihi: @DateTime.Now.ToString("dd.MM.yyyy HH:mm")</footer>
+                        </article>
+                    </div>
+                    <div class="modal-footer d-print-none">
+                        <button class="btn btn-secondary" @onclick="BelgeOnizlemeyiKapat">Kapat</button>
+                        <button class="btn btn-primary" @onclick="BelgeYazdirAsync"><i class="bi bi-printer me-1"></i>Yazdır / PDF kaydet</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
 
     @if (iptalEdilecekId.HasValue)
     {
@@ -386,6 +559,8 @@
 </MKFiloServis.Web.Components.Shared.YetkiKontrol>
 
 @code {
+    private enum RentACarBelgeTuru { Sozlesme, TeslimIade }
+
     private IReadOnlyList<RentACarKiralamaSatiri> kiralamalar = Array.Empty<RentACarKiralamaSatiri>();
     private IReadOnlyList<Cari> musteriler = Array.Empty<Cari>();
     private IReadOnlyList<Arac> musaitAraclar = Array.Empty<Arac>();
@@ -416,8 +591,16 @@
     private bool duzenlemeBasarili;
     private string? duzenlemeMesaji;
     private int durumFiltresi = -1;
+    private int aracFiltreId;
+    private int iadeZamaniFiltresi;
     private DateTime? baslangicFiltre;
     private DateTime? bitisFiltre;
+    private RentACarKiralamaSatiri? onizlenenKiralama;
+    private RentACarBelgeTuru onizlenenBelgeTuru;
+
+    private string BelgeBasligi => onizlenenBelgeTuru == RentACarBelgeTuru.Sozlesme
+        ? "Kira sözleşmesi taslağı"
+        : "Teslim / iade tutanağı";
 
     private bool MusaitlikGuncel => musaitlikBaslangic == rezervasyon.BaslangicTarihi
         && musaitlikBitis == rezervasyon.PlanlananBitisTarihi;
@@ -428,6 +611,24 @@
     private decimal IptalHaricPlanlananTutar => kiralamalar
         .Where(x => x.Durum != KiralamaDurumu.IptalEdildi)
         .Sum(x => x.ToplamTutar);
+
+    private static string BelgeDegeri(string? deger) => string.IsNullOrWhiteSpace(deger) ? "Belirtilmemiş" : deger;
+
+    private void BelgeOnizle(RentACarKiralamaSatiri kiralama, RentACarBelgeTuru belgeTuru)
+    {
+        onizlenenKiralama = kiralama;
+        onizlenenBelgeTuru = belgeTuru;
+    }
+
+    private void BelgeOnizlemeyiKapat() => onizlenenKiralama = null;
+
+    private async Task BelgeYazdirAsync() => await JS.InvokeVoidAsync("window.print");
+
+    private IReadOnlyList<RentACarKiralamaSatiri> FiltreAraclari => kiralamalar
+        .GroupBy(x => x.AracId)
+        .Select(grup => grup.OrderByDescending(x => x.BaslangicTarihi).First())
+        .OrderBy(x => x.Plaka)
+        .ToList();
 
     private List<RentACarKiralamaSatiri> FiltrelenmisKiralamalar
     {
@@ -446,6 +647,35 @@
             if (durumFiltresi >= 0)
             {
                 query = query.Where(x => (int)x.Durum == durumFiltresi);
+            }
+
+            if (aracFiltreId > 0)
+            {
+                query = query.Where(x => x.AracId == aracFiltreId);
+            }
+
+            var simdi = DateTime.Now;
+            switch (iadeZamaniFiltresi)
+            {
+                case 1:
+                    query = query.Where(x => x.Durum == KiralamaDurumu.Aktif
+                        && !x.GercekBitisTarihi.HasValue && x.PlanlananBitisTarihi < simdi);
+                    break;
+                case 2:
+                    query = query.Where(x => x.Durum == KiralamaDurumu.Aktif
+                        && !x.GercekBitisTarihi.HasValue
+                        && x.PlanlananBitisTarihi >= simdi
+                        && x.PlanlananBitisTarihi <= simdi.AddHours(24));
+                    break;
+                case 3:
+                    query = query.Where(x => x.Durum == KiralamaDurumu.Aktif
+                        && !x.GercekBitisTarihi.HasValue
+                        && x.PlanlananBitisTarihi > simdi.AddHours(24));
+                    break;
+                case 4:
+                    query = query.Where(x => x.GercekBitisTarihi.HasValue
+                        || x.Durum == KiralamaDurumu.Tamamlandi);
+                    break;
             }
 
             if (baslangicFiltre.HasValue)
@@ -539,6 +769,8 @@
     {
         arama = string.Empty;
         durumFiltresi = -1;
+        aracFiltreId = 0;
+        iadeZamaniFiltresi = 0;
         baslangicFiltre = null;
         bitisFiltre = null;
     }
