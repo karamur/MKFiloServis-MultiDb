@@ -53,6 +53,7 @@
 
   <ItemGroup>
     <None Include="Tests\PlaywrightSmoke\MKFiloServis.PlaywrightSmoke.csproj" />
+    <None Include="Tests\RentACar\MKFiloServis.RentACarChecks.csproj" />
   </ItemGroup>
 
   <ItemGroup>

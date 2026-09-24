@@ -587,6 +587,78 @@ public class PdfService : IPdfService
         return document.GeneratePdf();
     }
 
+    public byte[] GenerateRentACarKiralamaRaporPdf(RentACarKiralamaRaporModel model)
+    {
+        var document = Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4.Landscape());
+                page.Margin(25);
+                page.DefaultTextStyle(x => x.FontSize(8));
+                page.Header().Element(c => ComposeHeader(c, "RENT A CAR KİRALAMA RAPORU"));
+                page.Content().Element(c => ComposeRentACarKiralamaRaporContent(c, model));
+                page.Footer().Element(ComposeFooter);
+            });
+        });
+
+        return document.GeneratePdf();
+    }
+
+    private void ComposeRentACarKiralamaRaporContent(IContainer container, RentACarKiralamaRaporModel model)
+    {
+        container.Column(col =>
+        {
+            col.Item().Text($"Rapor tarihi: {model.RaporOlusturmaTarihi:dd.MM.yyyy HH:mm}").FontSize(9);
+            col.Item().Text($"Başlangıç tarih aralığı: {model.RaporTarihAraligi}").FontSize(9);
+            col.Item().Text($"Durum filtresi: {model.DurumFiltresi}    Arama: {(string.IsNullOrWhiteSpace(model.AramaFiltresi) ? "Yok" : model.AramaFiltresi)}").FontSize(9);
+            col.Item().Text("Tutarlar planlanan kiralama tutarıdır; tahsilat veya finans mutabakatı anlamına gelmez.").Italic().FontSize(8);
+            col.Item().PaddingVertical(6);
+            col.Item().Table(table =>
+            {
+                table.ColumnsDefinition(columns =>
+                {
+                    columns.RelativeColumn(1.2f);
+                    columns.RelativeColumn(2.1f);
+                    columns.RelativeColumn(1.0f);
+                    columns.RelativeColumn(1.4f);
+                    columns.RelativeColumn(1.3f);
+                    columns.RelativeColumn(1.3f);
+                    columns.RelativeColumn(1.3f);
+                    columns.RelativeColumn(1.0f);
+                    columns.RelativeColumn(1.2f);
+                    columns.RelativeColumn(1.1f);
+                });
+
+                table.Header(header =>
+                {
+                    foreach (var baslik in new[] { "Sözleşme", "Müşteri", "Plaka", "Araç", "Başlangıç", "Planlanan İade", "Gerçek İade", "Durum", "Planlanan Tutar", "Ödeme" })
+                    {
+                        header.Cell().Background(Colors.Grey.Lighten2).Padding(4).Text(baslik).Bold();
+                    }
+                });
+
+                foreach (var satir in model.Satirlar)
+                {
+                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).Text(satir.SozlesmeNo ?? "-");
+                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).Text(satir.Musteri);
+                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).Text(satir.Plaka);
+                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).Text(satir.Arac);
+                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).Text(satir.Baslangic.ToString("dd.MM.yy HH:mm"));
+                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).Text(satir.PlanlananIade.ToString("dd.MM.yy HH:mm"));
+                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).Text(satir.GercekIade?.ToString("dd.MM.yy HH:mm") ?? "-");
+                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).Text(satir.Durum);
+                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).AlignRight().Text(satir.PlanlananTutar.ToString("N2"));
+                    table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3).Text(satir.OdemeDurumu);
+                }
+
+                table.Cell().ColumnSpan(8).Background(Colors.Grey.Lighten2).Padding(5).Text("İPTAL DIŞI PLANLANAN TOPLAM").Bold();
+                table.Cell().ColumnSpan(2).Background(Colors.Grey.Lighten2).Padding(5).AlignRight()
+                    .Text(model.Satirlar.Where(x => !string.Equals(x.Durum, "IptalEdildi", StringComparison.OrdinalIgnoreCase)).Sum(x => x.PlanlananTutar).ToString("N2") + " ₺").Bold();
+            });
+        });
+    }
+
     private void ComposeHakedisDetayRaporContent(IContainer container, HakedisDetayRaporModel model)
     {
         container.Column(col =>

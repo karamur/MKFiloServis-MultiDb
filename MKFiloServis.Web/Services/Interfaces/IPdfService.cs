@@ -11,6 +11,30 @@ public interface IPdfService
     byte[] GenerateMutabakatPdf(MutabakatPdfModel model);
     byte[] GenerateHakedisPdf(Hakedis hakedis, string? referansAd = null);
     byte[] GenerateHakedisDetayRaporPdf(HakedisDetayRaporModel model);
+    byte[] GenerateRentACarKiralamaRaporPdf(RentACarKiralamaRaporModel model);
+}
+
+public sealed class RentACarKiralamaRaporModel
+{
+    public string RaporTarihAraligi { get; set; } = string.Empty;
+    public string DurumFiltresi { get; set; } = string.Empty;
+    public string AramaFiltresi { get; set; } = string.Empty;
+    public DateTime RaporOlusturmaTarihi { get; set; } = DateTime.Now;
+    public List<RentACarPdfKiralamaSatiri> Satirlar { get; set; } = new();
+}
+
+public sealed class RentACarPdfKiralamaSatiri
+{
+    public string? SozlesmeNo { get; set; }
+    public string Musteri { get; set; } = string.Empty;
+    public string Plaka { get; set; } = string.Empty;
+    public string Arac { get; set; } = string.Empty;
+    public DateTime Baslangic { get; set; }
+    public DateTime PlanlananIade { get; set; }
+    public DateTime? GercekIade { get; set; }
+    public string Durum { get; set; } = string.Empty;
+    public decimal PlanlananTutar { get; set; }
+    public string OdemeDurumu { get; set; } = string.Empty;
 }
 
 public sealed class HakedisDetayRaporModel

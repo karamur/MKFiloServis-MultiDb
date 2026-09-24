@@ -5,6 +5,7 @@ using MKFiloServis.Web.Jobs;
 using MKFiloServis.Web.Services;
 using MKFiloServis.Web.Services.Interfaces;
 using MKFiloServis.Web.Services.Security;
+using MKFiloServis.Web.Services.RentACar;
 using MKFiloServis.Web.Hubs;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Shared.Services.Contracts;
@@ -347,6 +348,8 @@ builder.Services.AddScoped<IPiyasaKaynakService, PiyasaKaynakService>(); // Piya
 builder.Services.AddScoped<IHttpScraperService, HttpScraperService>(); // HTTP Scraper (en hizli)
 builder.Services.AddScoped<IPlaywrightScraperService, PlaywrightScraperService>(); // Playwright Web Scraper (yedek)
 builder.Services.AddScoped<IMusteriKiralamaService, MusteriKiralamaService>();
+builder.Services.AddScoped<IRentACarKiralamaSorguServisi, RentACarKiralamaSorguServisi>();
+builder.Services.AddScoped<IRentACarRezervasyonServisi, RentACarRezervasyonServisi>();
 builder.Services.AddScoped<ICRMService, CRMService>(); // CRM Servisi - Bildirim, Mesaj, Hatırlatıcı
 builder.Services.AddScoped<MKFiloServis.Web.Services.Interfaces.IWhatsAppService, WhatsAppService>(); // WhatsApp Servisi
 builder.Services.AddScoped<IStokService, StokService>(); // Stok/Envanter Servisi

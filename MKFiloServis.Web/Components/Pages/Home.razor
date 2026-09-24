@@ -76,6 +76,25 @@ else
 
     <MKFiloServis.Web.Components.Shared.OperasyonelOzetBandi />
 
+    @if (HasYetki("rentacar.oku"))
+    {
+        <section class="mb-4" aria-label="Modüller">
+            <h5 class="mb-3">Modüller</h5>
+            <div class="row g-3">
+                <div class="col-md-6 col-xl-4">
+                    <div class="card h-100 shadow-sm border-0">
+                        <div class="card-body d-flex flex-column">
+                            <i class="bi bi-car-front-fill fs-2 text-primary mb-2"></i>
+                            <h6 class="card-title">Rent a Car</h6>
+                            <p class="card-text text-muted">Araç kiralama kayıtları ve rezervasyon yönetimi.</p>
+                            <a href="/rent-a-car" class="btn btn-outline-primary mt-auto align-self-start">Modülü Aç <i class="bi bi-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    }
+
     @if (widgetAyarGoster)
     {
         <div class="modal show d-block" style="background:rgba(0,0,0,.5);" @onclick="() => widgetAyarGoster = false">
