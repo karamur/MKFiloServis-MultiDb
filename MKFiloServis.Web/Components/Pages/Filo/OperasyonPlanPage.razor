@@ -322,7 +322,6 @@
     private int SeciliYil = DateTime.Today.Year;
     private List<OperasyonPlanSatiri> Planlar = new();
     private HashSet<int> SecilenIdler = new();
-    private decimal? EkSeferSayisi;
     private string? HataMesaji;
     private string? BilgiMesaji;
     private Dictionary<int, (decimal Sefer, ServisTuru Servis)> BaslangicDegerleri = new();
@@ -507,18 +506,6 @@
         {
             Yukleniyor = false;
         }
-    }
-
-    private void EkSeferUygula()
-    {
-        if (EkSeferSayisi is null)
-            return;
-
-        var ekSefer = Math.Max(0, EkSeferSayisi.Value);
-        foreach (var plan in SeciliPlanlar)
-            plan.PlanlananSefer += ekSefer;
-
-        BilgiMesaji = $"{SeciliPlanlar.Count()} plana {ekSefer:N1} ek sefer uygulandı. Kalıcı olması için Plan Değişikliklerini Kaydet butonuna basın.";
     }
 
     private void MesaiOlarakIsaretle()

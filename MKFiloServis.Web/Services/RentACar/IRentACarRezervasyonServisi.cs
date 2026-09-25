@@ -30,7 +30,6 @@ public sealed class RentACarRezervasyonTalebi : IValidatableObject
                 "Günlük fiyat sıfırdan büyük olmalıdır.",
                 [nameof(GunlukFiyat)]);
         }
-
         if (Depozito < 0)
         {
             yield return new ValidationResult(
@@ -47,11 +46,48 @@ public sealed class RentACarRezervasyonTalebi : IValidatableObject
     }
 }
 
+public sealed class RentACarAracIslemBilgisi : IValidatableObject
+{
+    [Range(0, int.MaxValue, ErrorMessage = "Kilometre negatif olamaz.")]
+    public int Kilometre { get; set; }
+
+    [Required(ErrorMessage = "Yakıt seviyesi girilmelidir.")]
+    [StringLength(50, ErrorMessage = "Yakıt seviyesi en fazla 50 karakter olabilir.")]
+    public string YakitSeviyesi { get; set; } = string.Empty;
+
+    [StringLength(1000, ErrorMessage = "Hasar/eksik notu en fazla 1000 karakter olabilir.")]
+    public string? HasarNotlari { get; set; }
+
+    [StringLength(1000, ErrorMessage = "Aksesuar bilgisi en fazla 1000 karakter olabilir.")]
+    public string? Aksesuarlar { get; set; }
+
+    [StringLength(1000, ErrorMessage = "Not alanı en fazla 1000 karakter olabilir.")]
+    public string? Notlar { get; set; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (string.IsNullOrWhiteSpace(YakitSeviyesi))
+        {
+            yield return new ValidationResult("Yakıt seviyesi girilmelidir.", [nameof(YakitSeviyesi)]);
+        }
+    }
+}
+
+public sealed class RentACarMusaitlikSonucu
+{
+    public IReadOnlyList<Arac> MusaitAraclar { get; init; } = Array.Empty<Arac>();
+    public IReadOnlyList<Arac> RezervasyonluAraclar { get; init; } = Array.Empty<Arac>();
+}
+
 public interface IRentACarRezervasyonServisi
 {
     Task<IReadOnlyList<Cari>> GetAktifMusterilerAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Arac>> GetAktifAraclarAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Arac>> GetMusaitAraclarAsync(
+        DateTime baslangic,
+        DateTime bitis,
+        CancellationToken cancellationToken = default);
+    Task<RentACarMusaitlikSonucu> GetAracMusaitlikAsync(
         DateTime baslangic,
         DateTime bitis,
         CancellationToken cancellationToken = default);
@@ -62,5 +98,7 @@ public interface IRentACarRezervasyonServisi
         int kiralamaId,
         RentACarRezervasyonTalebi talep,
         CancellationToken cancellationToken = default);
+    Task AraciTeslimEtAsync(int kiralamaId, RentACarAracIslemBilgisi bilgi, CancellationToken cancellationToken = default);
+    Task AraciIadeAlAsync(int kiralamaId, RentACarAracIslemBilgisi bilgi, CancellationToken cancellationToken = default);
     Task IptalEtAsync(int kiralamaId, string iptalNedeni, CancellationToken cancellationToken = default);
 }

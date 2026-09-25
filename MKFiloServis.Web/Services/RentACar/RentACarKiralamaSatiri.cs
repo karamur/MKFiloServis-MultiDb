@@ -18,6 +18,7 @@ public sealed class RentACarKiralamaSatiri
     public string AracTanimi { get; init; } = string.Empty;
     public int? BaslangicKm { get; init; }
     public int? BitisKm { get; init; }
+    public DateTime? GercekBaslangicTarihi { get; init; }
     public DateTime BaslangicTarihi { get; init; }
     public DateTime PlanlananBitisTarihi { get; init; }
     public DateTime? GercekBitisTarihi { get; init; }
@@ -26,6 +27,14 @@ public sealed class RentACarKiralamaSatiri
     public decimal GunlukFiyat { get; init; }
     public decimal? Depozito { get; init; }
     public string? Notlar { get; init; }
+    public string? TeslimYakitSeviyesi { get; init; }
+    public string? IadeYakitSeviyesi { get; init; }
+    public string? TeslimHasarNotlari { get; init; }
+    public string? IadeHasarNotlari { get; init; }
+    public string? TeslimAksesuarlar { get; init; }
+    public string? IadeAksesuarlar { get; init; }
+    public string? TeslimNotlari { get; init; }
+    public string? IadeNotlari { get; init; }
     public KiralamaOdemeDurumu OdemeDurumu { get; init; }
     public string FirmaUnvan { get; init; } = string.Empty;
     public string FirmaVergiDairesi { get; init; } = string.Empty;

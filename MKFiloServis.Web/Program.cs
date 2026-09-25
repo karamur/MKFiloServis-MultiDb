@@ -350,6 +350,8 @@ builder.Services.AddScoped<IPlaywrightScraperService, PlaywrightScraperService>(
 builder.Services.AddScoped<IMusteriKiralamaService, MusteriKiralamaService>();
 builder.Services.AddScoped<IRentACarKiralamaSorguServisi, RentACarKiralamaSorguServisi>();
 builder.Services.AddScoped<IRentACarRezervasyonServisi, RentACarRezervasyonServisi>();
+builder.Services.AddScoped<RentACarKaraListeServisi>();
+builder.Services.AddScoped<RentACarOdemeServisi>();
 builder.Services.AddScoped<ICRMService, CRMService>(); // CRM Servisi - Bildirim, Mesaj, Hatırlatıcı
 builder.Services.AddScoped<MKFiloServis.Web.Services.Interfaces.IWhatsAppService, WhatsAppService>(); // WhatsApp Servisi
 builder.Services.AddScoped<IStokService, StokService>(); // Stok/Envanter Servisi
@@ -1214,8 +1216,6 @@ if (httpsPort.HasValue)
     app.UseHttpsRedirection();
 }
 
-app.UseAntiforgery();
-
 // IP Güvenlik Middleware (beyaz/kara liste)
 app.UseMiddleware<MKFiloServis.Web.Middleware.IpGuvenlikMiddleware>();
 
@@ -1225,6 +1225,7 @@ app.UseMiddleware<MKFiloServis.Web.Middleware.ErrorLoggingMiddleware>();
 // Authentication & Authorization - API için
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseAntiforgery();
 
 // Uploads klasörünü oluştur (SecureFileService kullanır)
 var externalUploadsPath = AppStoragePaths.GetUploadsRoot(app.Environment.ContentRootPath);

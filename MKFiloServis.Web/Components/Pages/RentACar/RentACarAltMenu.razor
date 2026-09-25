@@ -1,0 +1,14 @@
+﻿@using Microsoft.AspNetCore.Components.Authorization
+<nav class="nav nav-pills gap-2 mb-3" aria-label="Rent a Car alt menüsü">
+    <a class="nav-link @(Aktif == "rezervasyon" ? "active" : "")" href="/rent-a-car?sekme=rezervasyon">Rezervasyon</a>
+    <a class="nav-link @(Aktif == "araclar" ? "active" : "")" href="/rent-a-car?sekme=araclar">Araçlar / Müsaitlik</a>
+    <a class="nav-link @(Aktif == "kiralamalar" ? "active" : "")" href="/rent-a-car?sekme=kiralamalar">Kiralamalar</a>
+    <a class="nav-link @(Aktif == "teslim-iade" ? "active" : "")" href="/rent-a-car?sekme=teslim-iade">Teslim / İade</a>
+    <a class="nav-link @(Aktif == "odemeler" ? "active" : "")" href="/rent-a-car/odemeler">Ödeme Takibi</a>
+    <AuthorizeView Roles="Admin">
+        <a class="nav-link @(Aktif == "kara-liste" ? "active" : "")" href="/rent-a-car/kara-liste">Kara Liste</a>
+    </AuthorizeView>
+</nav>
+@code {
+    [Parameter] public string Aktif { get; set; } = "rezervasyon";
+}

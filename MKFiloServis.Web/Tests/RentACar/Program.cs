@@ -18,6 +18,12 @@ IDbContextFactory<ApplicationDbContext> factory = new TestContextFactory(options
 await using (var context = await factory.CreateDbContextAsync())
 {
     await context.Database.EnsureCreatedAsync();
+    await context.Database.ExecuteSqlRawAsync("DROP TABLE RentACarKaraListeKayitlari");
+    var migration = new MKFiloServis.Web.Data.Migrations.RentACarKaraListe();
+    var sqlGenerator = Microsoft.EntityFrameworkCore.Infrastructure.AccessorExtensions.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrationsSqlGenerator>(context);
+    foreach (var command in sqlGenerator.Generate(migration.UpOperations, context.Model))
+        await context.Database.ExecuteSqlRawAsync(command.CommandText);
+    Console.WriteLine("PASS: ayrı kara liste migration tablosu oluşturuldu");
     context.Organizasyonlar.Add(new Organizasyon { Id = 1, Adi = "Test organizasyonu", Kod = "RC-ORG" });
     context.Firmalar.AddRange(
         new Firma { Id = 1, OrganizasyonId = 1, FirmaKodu = "RC-F1", FirmaAdi = "Birinci firma" },
@@ -86,6 +92,74 @@ await ExpectFailure("başka firma müşterisi reddedilir", () => service.Rezerva
 await ExpectFailure("başka firma aracı reddedilir", () => service.RezervasyonOlusturAsync(Request(101, 202, start.AddDays(3), start.AddDays(4))), "araç aktif firmaya ait değil");
 await ExpectFailure("rezervasyon çakışması reddedilir", () => service.RezervasyonOlusturAsync(Request(101, 201, start.AddDays(1), start.AddDays(3))), "müsait değil");
 
+var deliveryInfo = new RentACarAracIslemBilgisi
+{
+    Kilometre = 10000,
+    YakitSeviyesi = "8/8",
+    HasarNotlari = "Teslim hasarı yok",
+    Aksesuarlar = "Yedek anahtar",
+    Notlar = "Teslim edildi"
+};
+await service.AraciTeslimEtAsync(reservation.Id, deliveryInfo);
+await using (var context = await factory.CreateDbContextAsync())
+{
+    var delivered = await context.MusteriKiralamalar.SingleAsync(x => x.Id == reservation.Id);
+    var deliveredVehicle = await context.Araclar.SingleAsync(x => x.Id == reservation.AracId);
+    if (delivered.Durum != KiralamaDurumu.Aktif || delivered.BaslangicKm != 10000
+        || delivered.TeslimYakitSeviyesi != "8/8" || delivered.TeslimHasarNotlari != "Teslim hasarı yok"
+        || deliveredVehicle.Durumu != AracDurumu.Kiralandi)
+    {
+        throw new Exception("Araç teslim bilgileri kalıcı olarak kaydedilmedi.");
+    }
+}
+Console.WriteLine("PASS: araç teslimi durumu ve tutanak alanları kaydedildi");
+await ExpectFailure("aynı rezervasyon ikinci kez teslim edilemez", () => service.AraciTeslimEtAsync(reservation.Id, deliveryInfo), "Yalnızca rezervasyon");
+firma.AktifFirmaId = 2;
+var foreignDelivery = await service.RezervasyonOlusturAsync(Request(102, 202, start.AddDays(10), start.AddDays(11)));
+firma.AktifFirmaId = 1;
+await ExpectFailure("başka firma rezervasyonu teslim edilemez", () => service.AraciTeslimEtAsync(foreignDelivery.Id, deliveryInfo), "bulunamadı");
+
+var returnInfo = new RentACarAracIslemBilgisi
+{
+    Kilometre = 10075,
+    YakitSeviyesi = "7/8",
+    HasarNotlari = "Yeni hasar yok",
+    Aksesuarlar = "Yedek anahtar teslim alındı",
+    Notlar = "İade tamamlandı"
+};
+await service.AraciIadeAlAsync(reservation.Id, returnInfo);
+await using (var context = await factory.CreateDbContextAsync())
+{
+    var returned = await context.MusteriKiralamalar.SingleAsync(x => x.Id == reservation.Id);
+    var returnedVehicle = await context.Araclar.SingleAsync(x => x.Id == reservation.AracId);
+    if (returned.Durum != KiralamaDurumu.Tamamlandi || returned.BitisKm != 10075
+        || returned.IadeYakitSeviyesi != "7/8" || returned.IadeHasarNotlari != "Yeni hasar yok"
+        || returned.IadeNotlari != "İade tamamlandı" || returnedVehicle.Durumu != AracDurumu.Bosta)
+    {
+        throw new Exception("Araç iade bilgileri kalıcı olarak kaydedilmedi.");
+    }
+}
+Console.WriteLine("PASS: araç iadesi durumu ve tutanak alanları kaydedildi");
+await ExpectFailure("tamamlanan kiralama ikinci kez iade edilemez", () => service.AraciIadeAlAsync(reservation.Id, returnInfo), "Yalnızca aktif");
+await ExpectFailure("teslim kilometresinden düşük iade reddedilir", async () =>
+{
+    try
+    {
+        firma.AktifFirmaId = 2;
+        var activeReservation = await service.RezervasyonOlusturAsync(Request(102, 202, start.AddDays(20), start.AddDays(22)));
+        await service.AraciTeslimEtAsync(activeReservation.Id, deliveryInfo);
+        await service.AraciIadeAlAsync(activeReservation.Id, new RentACarAracIslemBilgisi
+        {
+            Kilometre = deliveryInfo.Kilometre - 1,
+            YakitSeviyesi = "8/8"
+        });
+    }
+    finally
+    {
+        firma.AktifFirmaId = 1;
+    }
+}, "İade kilometresi");
+
 await using (var context = await factory.CreateDbContextAsync())
 {
     var completed = await context.MusteriKiralamalar.SingleAsync(x => x.Id == reservation.Id);
@@ -105,6 +179,38 @@ firma.AktifFirmaId = 2;
 var otherTenantReservation = await service.RezervasyonOlusturAsync(Request(102, 202, start, start.AddDays(1)));
 firma.AktifFirmaId = 1;
 await ExpectFailure("başka firmanın rezervasyonu düzenlenemez", () => service.RezervasyonGuncelleAsync(otherTenantReservation.Id, Request(101, 201, start.AddDays(4), start.AddDays(5))), "bulunamadı");
+
+var blacklistAuth = new TestAuthenticationStateProvider();
+var blacklist = new RentACarKaraListeServisi(factory, firma, blacklistAuth);
+await ExpectFailure("kara liste gerekçesi zorunlu", () => blacklist.EkleAsync(1, 101, " "), "Gerekçe");
+await ExpectFailure("başka firma müşterisi kara listeye eklenemez", () => blacklist.EkleAsync(1, 102, "Test"), "aktif firmaya ait değil");
+await blacklist.EkleAsync(1, 101, "Test engeli");
+await ExpectFailure("mükerrer aktif engel reddedilir", () => blacklist.EkleAsync(1, 101, "Tekrar"), "zaten kara listede");
+await ExpectFailure("kara liste rezervasyon oluşturmayı engeller", () => service.RezervasyonOlusturAsync(Request(101, 201, start.AddDays(40), start.AddDays(41))), "kara listesinde");
+await ExpectFailure("kara liste rezervasyon düzenlemeyi engeller", () => service.RezervasyonGuncelleAsync(later.Id, Request(101, 201, start.AddDays(40), start.AddDays(41))), "kara listesinde");
+await ExpectFailure("kara liste teslimi engeller", () => service.AraciTeslimEtAsync(later.Id, deliveryInfo), "kara listesinde");
+var blocked = (await blacklist.ListeleAsync(1)).Single();
+firma.AktifFirmaId = 2;
+if ((await blacklist.ListeleAsync(2)).Count != 0) throw new Exception("Kara liste firma izolasyonu bozuldu.");
+await ExpectFailure("başka firma engeli kaldırılamaz", () => blacklist.KaldirAsync(2, blocked.Id, "Test"), "bulunamadı");
+await service.RezervasyonOlusturAsync(Request(102, 202, start.AddDays(40), start.AddDays(41)));
+Console.WriteLine("PASS: kara liste diğer firmayı etkilemedi");
+firma.AktifFirmaId = 1;
+await blacklist.KaldirAsync(1, blocked.Id, "Kontrol tamamlandı");
+var released = (await blacklist.ListeleAsync(1)).Single();
+if (released.KaldirmaTarihi is null || released.KaldiranKullaniciId != 7 || released.Neden != "Test engeli"
+    || released.KaldirmaNedeni != "Kontrol tamamlandı") throw new Exception("Kara liste işlem izi kayboldu.");
+await service.AraciTeslimEtAsync(later.Id, deliveryInfo);
+await blacklist.EkleAsync(1, 101, "İade testi");
+await service.AraciIadeAlAsync(later.Id, returnInfo);
+Console.WriteLine("PASS: kara liste iadeyi engellemedi; kaldırma sonrası teslim kabul edildi");
+blacklistAuth.Admin = false;
+try
+{
+    await blacklist.EkleAsync(1, 101, "Yetkisiz");
+    throw new Exception("Yetkisiz kara liste yönetimi kabul edildi.");
+}
+catch (UnauthorizedAccessException) { Console.WriteLine("PASS: yetkisiz kara liste yönetimi reddedildi"); }
 
 var dbPath = Path.Combine(Path.GetTempPath(), $"rentacar-check-{Guid.NewGuid():N}.db");
 try
@@ -163,6 +269,20 @@ sealed class TestContextFactory(DbContextOptions<ApplicationDbContext> options, 
         var context = new ApplicationDbContext(options);
         context.SetServiceProvider(services);
         return context;
+    }
+}
+
+sealed class TestAuthenticationStateProvider : Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider
+{
+    public bool Admin { get; set; } = true;
+    public override Task<Microsoft.AspNetCore.Components.Authorization.AuthenticationState> GetAuthenticationStateAsync()
+    {
+        var identity = new System.Security.Claims.ClaimsIdentity(new[]
+        {
+            new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, "7"),
+            new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, Admin ? SistemRolleri.Admin : "Kullanici")
+        }, "Test");
+        return Task.FromResult(new Microsoft.AspNetCore.Components.Authorization.AuthenticationState(new System.Security.Claims.ClaimsPrincipal(identity)));
     }
 }
 

@@ -83,12 +83,30 @@ else
             <div class="row g-3">
                 <div class="col-md-6 col-xl-4">
                     <div class="card h-100 shadow-sm border-0">
-                        <div class="card-body d-flex flex-column">
-                            <i class="bi bi-car-front-fill fs-2 text-primary mb-2"></i>
-                            <h6 class="card-title">Rent a Car</h6>
-                            <p class="card-text text-muted">Araç kiralama kayıtları ve rezervasyon yönetimi.</p>
-                            <a href="/rent-a-car" class="btn btn-outline-primary mt-auto align-self-start">Modülü Aç <i class="bi bi-arrow-right ms-1"></i></a>
+                        <div class="card-header bg-transparent border-0">
+                            <button type="button" class="btn btn-link text-decoration-none text-start w-100 p-0"
+                                    @onclick="() => rentACarPanelAcik = !rentACarPanelAcik"
+                                    aria-expanded="@rentACarPanelAcik" aria-controls="rentACarPanel">
+                                <i class="bi bi-car-front-fill fs-2 text-primary me-2"></i>
+                                <strong>Rent a Car</strong>
+                                <i class="bi @(rentACarPanelAcik ? "bi-chevron-up" : "bi-chevron-down") float-end mt-2"></i>
+                            </button>
                         </div>
+                        @if (rentACarPanelAcik)
+                        {
+                            <div id="rentACarPanel" class="card-body d-flex flex-column pt-0">
+                                <p class="card-text text-muted">Araç kiralama kayıtları ve rezervasyon yönetimi.</p>
+                                <a href="/rent-a-car" class="btn btn-outline-primary mt-auto align-self-start">Modülü Aç <i class="bi bi-arrow-right ms-1"></i></a>
+                                <div class="d-flex flex-wrap gap-2 mt-3">
+                                    <a href="/rent-a-car?sekme=rezervasyon">Rezervasyon</a>
+                                    <a href="/rent-a-car?sekme=araclar">Araçlar / Müsaitlik</a>
+                                    <a href="/rent-a-car?sekme=kiralamalar">Kiralamalar</a>
+                                    <a href="/rent-a-car?sekme=teslim-iade">Teslim / İade</a>
+                                    <a href="/rent-a-car/odemeler">Ödeme Takibi</a>
+                                    <AuthorizeView Roles="Admin"><a href="/rent-a-car/kara-liste">Kara Liste</a></AuthorizeView>
+                                </div>
+                            </div>
+                        }
                     </div>
                 </div>
             </div>
@@ -1214,6 +1232,7 @@ else
     private bool showAtananEvraklarModal = false;
     private bool showGecmisBorcModal = false;
     private bool isLoading = true;
+    private bool rentACarPanelAcik = true;
 
     // Widget ayarları
     private bool widgetAyarGoster = false;

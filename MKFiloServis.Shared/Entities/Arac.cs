@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations.Schema;
+﻿using System.ComponentModel.DataAnnotations.Schema;
 
 namespace MKFiloServis.Shared.Entities;
 
@@ -184,7 +184,9 @@ public enum AracDurumu
     Bosta = 1,
     Operasyon = 2,
     Yonetim = 3,
-    Satis = 4
+    Satis = 4,
+    Kiralik = 5,
+    Kiralandi = 6
 }
 
 

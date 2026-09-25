@@ -43,14 +43,6 @@
             </NavLink>
         </div>
 
-        @if (HasYetki("rentacar.oku"))
-        {
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="rent-a-car">
-                    <i class="bi bi-car-front-fill me-2 text-primary"></i> Rent a Car
-                </NavLink>
-            </div>
-        }
         
         <!-- Belge Uyarilari -->
         @if (HasYetki("belgeuyari.oku"))
@@ -425,6 +417,29 @@
                                 }
                             </div>
                         }
+
+        @if (HasYetki("rentacar.oku"))
+        {
+            <div class="nav-section">
+                <div class="nav-section-header" @onclick="() => ToggleSection(NavSection.RentACar)" style="cursor: pointer;">
+                    <span><i class="bi bi-car-front-fill me-2"></i>RENT A CAR</span>
+                    <i class="bi @(IsExpanded(NavSection.RentACar) ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                </div>
+                @if (IsExpanded(NavSection.RentACar))
+                {
+                    <div class="nav-section-content">
+                        <div class="nav-item px-3"><NavLink class="nav-link" href="rent-a-car?sekme=rezervasyon">Rezervasyon</NavLink></div>
+                        <div class="nav-item px-3"><NavLink class="nav-link" href="rent-a-car?sekme=araclar">Araçlar / Müsaitlik</NavLink></div>
+                        <div class="nav-item px-3"><NavLink class="nav-link" href="rent-a-car?sekme=kiralamalar">Kiralamalar</NavLink></div>
+                        <div class="nav-item px-3"><NavLink class="nav-link" href="rent-a-car?sekme=teslim-iade">Teslim / İade</NavLink></div>
+                        <div class="nav-item px-3"><NavLink class="nav-link" href="rent-a-car/odemeler">Ödeme Takibi</NavLink></div>
+                        <AuthorizeView Roles="Admin">
+                            <div class="nav-item px-3"><NavLink class="nav-link" href="rent-a-car/kara-liste">Kara Liste</NavLink></div>
+                        </AuthorizeView>
+                    </div>
+                }
+            </div>
+        }
 
                         <!-- BANKA / KASA -->
         @if (HasMenuYetki("menu.bankakasa"))
@@ -1203,6 +1218,7 @@
     {
         Cari,
         FiloServis,
+        RentACar,
         Fatura,
         BankaKasa,
         Raporlar,

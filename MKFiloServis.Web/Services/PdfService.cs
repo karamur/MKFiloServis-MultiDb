@@ -96,8 +96,8 @@ public class PdfService : IPdfService
         {
             row.RelativeItem().Column(col =>
             {
-                col.Item().Text("CRM F�LO SERV�S").Bold().FontSize(16);
-                col.Item().Text("Filo Y�netim Sistemi").FontSize(10).FontColor(Colors.Grey.Medium);
+                col.Item().Text("CRM FİLO SERVİS").Bold().FontSize(16);
+                col.Item().Text("Filo Yönetim Sistemi").FontSize(10).FontColor(Colors.Grey.Medium);
             });
 
             row.RelativeItem().AlignRight().Column(col =>
@@ -596,7 +596,7 @@ public class PdfService : IPdfService
                 page.Size(PageSizes.A4.Landscape());
                 page.Margin(25);
                 page.DefaultTextStyle(x => x.FontSize(8));
-                page.Header().Element(c => ComposeHeader(c, "RENT A CAR KİRALAMA RAPORU"));
+                page.Header().Element(c => ComposeRentACarHeader(c, model));
                 page.Content().Element(c => ComposeRentACarKiralamaRaporContent(c, model));
                 page.Footer().Element(ComposeFooter);
             });
@@ -609,6 +609,21 @@ public class PdfService : IPdfService
     {
         container.Column(col =>
         {
+            if (!string.IsNullOrWhiteSpace(model.FirmaVergiDairesi) || !string.IsNullOrWhiteSpace(model.FirmaVergiNo)
+                || !string.IsNullOrWhiteSpace(model.FirmaAdres) || !string.IsNullOrWhiteSpace(model.FirmaTelefon))
+            {
+                col.Item().Text(text =>
+                {
+                    text.Span("Firma: ").Bold();
+                    text.Span(string.IsNullOrWhiteSpace(model.FirmaUnvan) ? "Belirtilmemiş" : model.FirmaUnvan);
+                    if (!string.IsNullOrWhiteSpace(model.FirmaVergiDairesi) || !string.IsNullOrWhiteSpace(model.FirmaVergiNo))
+                        text.Span($"  Vergi: {model.FirmaVergiDairesi} / {model.FirmaVergiNo}");
+                    if (!string.IsNullOrWhiteSpace(model.FirmaAdres))
+                        text.Span($"  Adres: {model.FirmaAdres}");
+                    if (!string.IsNullOrWhiteSpace(model.FirmaTelefon))
+                        text.Span($"  Tel: {model.FirmaTelefon}");
+                });
+            }
             col.Item().Text($"Rapor tarihi: {model.RaporOlusturmaTarihi:dd.MM.yyyy HH:mm}").FontSize(9);
             col.Item().Text($"Başlangıç tarih aralığı: {model.RaporTarihAraligi}").FontSize(9);
             col.Item().Text($"Durum filtresi: {model.DurumFiltresi}    Arama: {(string.IsNullOrWhiteSpace(model.AramaFiltresi) ? "Yok" : model.AramaFiltresi)}").FontSize(9);
@@ -655,6 +670,25 @@ public class PdfService : IPdfService
                 table.Cell().ColumnSpan(8).Background(Colors.Grey.Lighten2).Padding(5).Text("İPTAL DIŞI PLANLANAN TOPLAM").Bold();
                 table.Cell().ColumnSpan(2).Background(Colors.Grey.Lighten2).Padding(5).AlignRight()
                     .Text(model.Satirlar.Where(x => !string.Equals(x.Durum, "IptalEdildi", StringComparison.OrdinalIgnoreCase)).Sum(x => x.PlanlananTutar).ToString("N2") + " ₺").Bold();
+            });
+        });
+    }
+
+    private static void ComposeRentACarHeader(IContainer container, RentACarKiralamaRaporModel model)
+    {
+        container.PaddingBottom(15).Row(row =>
+        {
+            row.RelativeItem().Column(col =>
+            {
+                col.Item().Text(string.IsNullOrWhiteSpace(model.FirmaUnvan) ? "CRM FİLO SERVİS" : model.FirmaUnvan)
+                    .Bold().FontSize(16);
+                col.Item().Text("Filo Yönetim Sistemi").FontSize(10).FontColor(Colors.Grey.Medium);
+            });
+
+            row.RelativeItem().AlignRight().Column(col =>
+            {
+                col.Item().Text("RENT A CAR KİRALAMA RAPORU").Bold().FontSize(14).AlignRight();
+                col.Item().Text($"Tarih: {model.RaporOlusturmaTarihi:dd.MM.yyyy HH:mm}").FontSize(9).AlignRight();
             });
         });
     }

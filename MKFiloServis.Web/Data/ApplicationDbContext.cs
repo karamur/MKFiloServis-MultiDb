@@ -182,6 +182,8 @@ public class ApplicationDbContext : DbContext
 
     // Musteri Kiralama Modulu
     public DbSet<MusteriKiralama> MusteriKiralamalar { get; set; }
+    public DbSet<RentACarKaraListeKaydi> RentACarKaraListeKayitlari { get; set; }
+    public DbSet<RentACarOdemeHareketi> RentACarOdemeHareketleri { get; set; }
 
     // Puantaj Modulu
     public DbSet<PersonelPuantaj> PersonelPuantajlar { get; set; }
@@ -432,6 +434,15 @@ public class ApplicationDbContext : DbContext
             entity.HasQueryFilter(e => !e.IsDeleted);
         });
 
+        modelBuilder.Entity<RentACarOdemeHareketi>(entity =>
+        {
+            entity.HasIndex(e => new { e.FirmaId, e.MusteriKiralamaId, e.IslemTarihi });
+            entity.Property(e => e.Tutar).HasPrecision(18, 2);
+            entity.HasOne<Firma>().WithMany().HasForeignKey(e => e.FirmaId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.MusteriKiralama).WithMany().HasForeignKey(e => e.MusteriKiralamaId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasQueryFilter(e => !e.IsDeleted);
+        });
+
         // Organizasyon (Nihai Mimari Kural 2)
         modelBuilder.Entity<Organizasyon>(entity =>
         {
@@ -593,6 +604,14 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.SgkCalismaTuru).HasDefaultValue(SgkCalismaTuru.TamZamanli).HasSentinel(null);
 
             // Global Query Filter: IsDeleted (Tenant izolasyonu IFirmaTenant filter'ı tarafından otomatik ekleniyor)
+            entity.HasQueryFilter(e => !e.IsDeleted);
+        });
+
+        modelBuilder.Entity<RentACarKaraListeKaydi>(entity =>
+        {
+            entity.HasIndex(e => new { e.FirmaId, e.MusteriId });
+            entity.HasOne<Firma>().WithMany().HasForeignKey(e => e.FirmaId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<Cari>().WithMany().HasForeignKey(e => e.MusteriId).OnDelete(DeleteBehavior.Restrict);
             entity.HasQueryFilter(e => !e.IsDeleted);
         });
 

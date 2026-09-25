@@ -23,18 +23,21 @@
             <p class="text-muted mb-0">Kiralama kayıtlarını görüntüleyin.</p>
         </div>
         <div class="d-flex gap-2">
-            <button class="btn btn-outline-success" @onclick="ExceleAktarAsync" disabled="yukleniyor || !FiltrelenmisKiralamalar.Any()">
+            <button class="btn btn-outline-success" @onclick="ExceleAktarAsync" disabled="@(yukleniyor || !FiltrelenmisKiralamalar.Any())">
                 <i class="bi bi-file-earmark-excel me-1"></i>Filtreli Excel
             </button>
-            <button class="btn btn-outline-danger" @onclick="PdfyeAktarAsync" disabled="yukleniyor || !FiltrelenmisKiralamalar.Any()">
+            <button class="btn btn-outline-danger" @onclick="PdfyeAktarAsync" disabled="@(yukleniyor || !FiltrelenmisKiralamalar.Any())">
                 <i class="bi bi-file-earmark-pdf me-1"></i>Filtreli PDF
             </button>
-            <button class="btn btn-outline-primary" @onclick="YenileAsync" disabled="yukleniyor">
+            <button class="btn btn-outline-primary" @onclick="YenileAsync" disabled="@(yukleniyor)">
                 <i class="bi bi-arrow-clockwise me-1"></i>Yenile
             </button>
         </div>
     </div>
 
+    <RentACarAltMenu Aktif="@AktifSekme" />
+    @if (AktifSekme is "rezervasyon" or "araclar")
+    {
     <MKFiloServis.Web.Components.Shared.YetkiKontrol Yetki="rentacar.rezervasyon.yaz" GerekliYetkiAdi="Rent a Car Rezervasyon Oluşturma">
         <Yetkili>
             <div class="card shadow-sm mb-3">
@@ -59,12 +62,12 @@
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">Başlangıç</label>
-                                <InputDate class="form-control" Type="InputDateType.DateTimeLocal" @bind-Value="rezervasyon.BaslangicTarihi" @bind-Value:after="RezervasyonTarihiDegisti" />
+                                <InputDate class="form-control" Type="InputDateType.DateTimeLocal" @bind-Value="rezervasyon.BaslangicTarihi" @bind-Value:after="() => RezervasyonTarihiDegisti()" />
                                 <ValidationMessage For="@(() => rezervasyon.BaslangicTarihi)" class="text-danger" />
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">Planlanan iade</label>
-                                <InputDate class="form-control" Type="InputDateType.DateTimeLocal" @bind-Value="rezervasyon.PlanlananBitisTarihi" @bind-Value:after="RezervasyonTarihiDegisti" />
+                                <InputDate class="form-control" Type="InputDateType.DateTimeLocal" @bind-Value="rezervasyon.PlanlananBitisTarihi" @bind-Value:after="() => RezervasyonTarihiDegisti()" />
                                 <ValidationMessage For="@(() => rezervasyon.PlanlananBitisTarihi)" class="text-danger" />
                             </div>
                             <div class="col-md-2">
@@ -78,7 +81,7 @@
                                 <ValidationMessage For="@(() => rezervasyon.Depozito)" class="text-danger" />
                             </div>
                             <div class="col-md-2 d-grid">
-                                <button type="button" class="btn btn-outline-primary" @onclick="MusaitAraclariGetirAsync" disabled="musaitlikYukleniyor">
+                                 <button type="button" class="btn btn-outline-primary" @onclick="MusaitAraclariGetirAsync" disabled="@musaitlikYukleniyor">
                                     @if (musaitlikYukleniyor)
                                     {
                                         <span class="spinner-border spinner-border-sm me-1"></span><span>Araçlar aranıyor</span>
@@ -101,7 +104,10 @@
                                 <ValidationMessage For="@(() => rezervasyon.AracId)" class="text-danger" />
                                 @if (!musaitlikYukleniyor && MusaitlikGuncel && musaitAraclar.Count == 0)
                                 {
-                                    <small class="text-danger d-block mt-1">Bu tarih aralığında uygun araç bulunamadı. Tarihleri değiştirip yeniden arayın.</small>
+                                    <small class="text-danger d-block mt-1">
+                                        Bu tarih aralığında müsait araç bulunamadı. Boşta/Kiralık durumundaki araçlar çakışan sözleşmeler nedeniyle ayrılmış olabilir.
+                                        @if (rezervasyonluAraclar.Count > 0) { <span>@rezervasyonluAraclar.Count araç aşağıda sözleşme çakışması nedeniyle gösteriliyor.</span> }
+                                    </small>
                                 }
                                 else if (MusaitlikGuncel && musaitAraclar.Count > 0)
                                 {
@@ -118,7 +124,7 @@
                                 <ValidationMessage For="@(() => rezervasyon.Notlar)" class="text-danger" />
                             </div>
                             <div class="col-md-2 d-grid">
-                                <button type="submit" class="btn btn-primary" disabled="kaydediliyor || !MusaitlikGuncel || musaitAraclar.Count == 0">
+                                 <button type="submit" class="btn btn-primary" disabled="@(kaydediliyor || !MusaitlikGuncel || rezervasyon.AracId <= 0 || musaitAraclar.Count == 0)">
                                     @if (kaydediliyor)
                                     {
                                         <span class="spinner-border spinner-border-sm me-1"></span>
@@ -127,6 +133,49 @@
                                 </button>
                             </div>
                         </div>
+                        @if (MusaitlikGuncel)
+                        {
+                            <h5 class="mt-4">Müsait araçlar</h5>
+                            <p class="text-muted">Seçilen tarih aralığına uygun aracın kartındaki “Aracı seç” düğmesini kullanın. Kayıt sırasında müsaitlik yeniden kontrol edilir.</p>
+                            <div class="row g-3">
+                                @foreach (var arac in musaitAraclar)
+                                {
+                                    <div class="col-md-4 col-xl-3" @key="arac.Id">
+                                        <div class="card h-100 @(rezervasyon.AracId == arac.Id ? "border-primary" : "border-success")">
+                                            <div class="card-body">
+                                                <h6>@arac.AktifPlaka</h6>
+                                                <p>@arac.Marka @arac.Model</p>
+                                                <span class="badge bg-success mb-2">Seçilen tarihlerde müsait</span>
+                                                <button type="button" class="btn btn-outline-primary w-100" aria-pressed="@(rezervasyon.AracId == arac.Id)" @onclick="() => AracKartindanSec(arac)">
+                                                    @(rezervasyon.AracId == arac.Id ? "Seçildi" : "Aracı seç")
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                            @if (rezervasyonluAraclar.Count > 0)
+                            {
+                                <div class="alert alert-warning mt-4 mb-2">
+                                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                    Aşağıdaki araçların seçilen tarih aralığında rezervasyon veya kiralama sözleşmesi vardır ve seçilemez.
+                                </div>
+                                <div class="row g-3">
+                                    @foreach (var rezervasyonluArac in rezervasyonluAraclar)
+                                    {
+                                        <div class="col-md-4 col-xl-3" @key="rezervasyonluArac.Id">
+                                            <div class="card h-100 border-danger bg-danger-subtle">
+                                                <div class="card-body">
+                                                    <h6>@rezervasyonluArac.AktifPlaka</h6>
+                                                    <p>@rezervasyonluArac.Marka @rezervasyonluArac.Model</p>
+                                                    <span class="badge bg-danger">Bu tarihlerde sözleşmesi var</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                                }
+                            </div>
+                        }
                     </EditForm>
                     @if (!string.IsNullOrWhiteSpace(rezervasyonMesaji))
                     {
@@ -136,6 +185,7 @@
             </div>
         </Yetkili>
     </MKFiloServis.Web.Components.Shared.YetkiKontrol>
+    }
 
 <style>
     @@media print {
@@ -174,6 +224,8 @@
         <div class="alert alert-danger">@hataMesaji</div>
     }
 
+    @if (AktifSekme is "kiralamalar" or "teslim-iade")
+    {
     <div class="row g-2 mb-3">
         <div class="col-md-3">
             <div class="card border-primary h-100">
@@ -313,6 +365,26 @@
                                     </button>
                                     @if (kiralama.Durum == KiralamaDurumu.Rezervasyon)
                                     {
+                                        <MKFiloServis.Web.Components.Shared.YetkiKontrol Yetki="rentacar.rezervasyon.yaz" GerekliYetkiAdi="Rent a Car Araç Teslimi">
+                                            <Yetkili>
+                                                <button class="btn btn-sm btn-outline-success me-1" @onclick="() => AracIslemPenceresiAc(kiralama, false)">
+                                                    <i class="bi bi-box-arrow-up-right me-1"></i>Kiralamaya dönüştür
+                                                </button>
+                                            </Yetkili>
+                                        </MKFiloServis.Web.Components.Shared.YetkiKontrol>
+                                    }
+                                    else if (kiralama.Durum == KiralamaDurumu.Aktif)
+                                    {
+                                        <MKFiloServis.Web.Components.Shared.YetkiKontrol Yetki="rentacar.rezervasyon.yaz" GerekliYetkiAdi="Rent a Car Araç İadesi">
+                                            <Yetkili>
+                                                <button class="btn btn-sm btn-outline-warning me-1" @onclick="() => AracIslemPenceresiAc(kiralama, true)">
+                                                    <i class="bi bi-box-arrow-in-down-left me-1"></i>İadeyi kaydet
+                                                </button>
+                                            </Yetkili>
+                                        </MKFiloServis.Web.Components.Shared.YetkiKontrol>
+                                    }
+                                    @if (kiralama.Durum == KiralamaDurumu.Rezervasyon)
+                                    {
                                         <MKFiloServis.Web.Components.Shared.YetkiKontrol Yetki="rentacar.rezervasyon.yaz" GerekliYetkiAdi="Rent a Car Rezervasyon Düzenleme">
                                             <Yetkili>
                                                 <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => DuzenlemePenceresiAc(kiralama)">
@@ -336,6 +408,8 @@
             </table>
         </div>
     </div>
+
+    }
 
     @if (onizlenenKiralama is not null)
     {
@@ -389,11 +463,13 @@
                                 @BelgeDegeri(onizlenenKiralama.MusteriTelefon)
                             </p>
 
-                            <h3 class="h6 mt-4">Araç ve kiralama bilgileri</h3>
+                                <h3 class="h6 mt-4">Rezervasyon ve kiralama bilgileri</h3>
                             <table class="table table-bordered table-sm">
                                 <tbody>
                                     <tr><th>Araç</th><td>@BelgeDegeri(onizlenenKiralama.AracTanimi)</td><th>Plaka</th><td>@BelgeDegeri(onizlenenKiralama.Plaka)</td></tr>
+                                        <tr><th>Müşteri</th><td>@BelgeDegeri(onizlenenKiralama.MusteriUnvan)</td><th>Durum</th><td>@onizlenenKiralama.Durum</td></tr>
                                     <tr><th>Başlangıç</th><td>@onizlenenKiralama.BaslangicTarihi.ToString("dd.MM.yyyy HH:mm")</td><th>Planlanan iade</th><td>@onizlenenKiralama.PlanlananBitisTarihi.ToString("dd.MM.yyyy HH:mm")</td></tr>
+                                        <tr><th>Gerçek teslim</th><td>@(onizlenenKiralama.GercekBaslangicTarihi?.ToString("dd.MM.yyyy HH:mm") ?? "Teslim edilmedi")</td><th>Gerçek iade</th><td>@(onizlenenKiralama.GercekBitisTarihi?.ToString("dd.MM.yyyy HH:mm") ?? "İade edilmedi")</td></tr>
                                     <tr><th>Günlük bedel</th><td>@onizlenenKiralama.GunlukFiyat.ToString("N2") ₺</td><th>Toplam</th><td>@onizlenenKiralama.ToplamTutar.ToString("N2") ₺</td></tr>
                                     <tr><th>Depozito</th><td>@(onizlenenKiralama.Depozito?.ToString("N2") ?? "-") ₺</td><th>Ödeme</th><td>@onizlenenKiralama.OdemeDurumu</td></tr>
                                 </tbody>
@@ -411,17 +487,34 @@
                             }
                             else
                             {
-                                <h3 class="h6 mt-4">Teslim / iade kontrol alanları</h3>
+                                <h3 class="h6 mt-4">Araç teslim kaydı</h3>
                                 <table class="table table-bordered table-sm">
                                     <tbody>
-                                        <tr><th>İşlem</th><td>☐ Teslim &nbsp;&nbsp; ☐ İade</td><th>Gerçek tarih/saat</th><td>____ / ____ / ______ &nbsp; ____:____</td></tr>
-                                        <tr><th>Kilometre</th><td>Başlangıç: @(onizlenenKiralama.BaslangicKm?.ToString("N0") ?? "________")</td><td colspan="2">İade: @(onizlenenKiralama.BitisKm?.ToString("N0") ?? "________")</td></tr>
-                                        <tr><th>Yakıt seviyesi</th><td colspan="3">Teslim: ____________________ &nbsp;&nbsp; İade: ____________________</td></tr>
-                                        <tr><th>Hasar / eksik</th><td colspan="3" style="height: 75px;"></td></tr>
-                                        <tr><th>Aksesuar / ekipman</th><td colspan="3" style="height: 55px;"></td></tr>
+                                        <tr><th>Tarih / saat</th><td>@(onizlenenKiralama.GercekBaslangicTarihi?.ToString("dd.MM.yyyy HH:mm") ?? "Teslim edilmedi")</td><th>Kilometre</th><td>@(onizlenenKiralama.BaslangicKm?.ToString("N0") ?? "-")</td></tr>
+                                        <tr><th>Yakıt seviyesi</th><td colspan="3"><span class="fw-semibold">@BelgeDegeri(onizlenenKiralama.TeslimYakitSeviyesi)</span></td></tr>
+                                        <tr><th>Hasar / eksik</th><td colspan="3">@BelgeDegeri(onizlenenKiralama.TeslimHasarNotlari)</td></tr>
+                                        <tr><th>Aksesuar / ekipman</th><td colspan="3">@BelgeDegeri(onizlenenKiralama.TeslimAksesuarlar)</td></tr>
+                                        <tr><th>Teslim notu</th><td colspan="3">@BelgeDegeri(onizlenenKiralama.TeslimNotlari)</td></tr>
                                     </tbody>
                                 </table>
-                                <p>Notlar: @BelgeDegeri(onizlenenKiralama.Notlar)</p>
+                                <h3 class="h6 mt-4">Araç iade kaydı</h3>
+                                <table class="table table-bordered table-sm">
+                                    <tbody>
+                                        <tr><th>Tarih / saat</th><td>@(onizlenenKiralama.GercekBitisTarihi?.ToString("dd.MM.yyyy HH:mm") ?? "İade edilmedi")</td><th>Kilometre</th><td>@(onizlenenKiralama.BitisKm?.ToString("N0") ?? "-")</td></tr>
+                                        <tr><th>Yakıt seviyesi</th><td colspan="3"><span class="fw-semibold">@BelgeDegeri(onizlenenKiralama.IadeYakitSeviyesi)</span></td></tr>
+                                        <tr><th>Hasar / eksik</th><td colspan="3">@BelgeDegeri(onizlenenKiralama.IadeHasarNotlari)</td></tr>
+                                        <tr><th>Aksesuar / ekipman</th><td colspan="3">@BelgeDegeri(onizlenenKiralama.IadeAksesuarlar)</td></tr>
+                                        <tr><th>İade notu</th><td colspan="3">@BelgeDegeri(onizlenenKiralama.IadeNotlari)</td></tr>
+                                    </tbody>
+                                </table>
+                                <h3 class="h6 mt-4">Ek bilgiler</h3>
+                                <table class="table table-bordered table-sm">
+                                    <tbody>
+                                        <tr><th>Rezervasyon notları</th><td>@BelgeDegeri(onizlenenKiralama.Notlar)</td></tr>
+                                        <tr><th>Teslim durumu</th><td>@(onizlenenKiralama.GercekBaslangicTarihi.HasValue ? "Teslim kaydı tamamlandı" : "Teslim kaydı bekleniyor")</td></tr>
+                                        <tr><th>İade durumu</th><td>@(onizlenenKiralama.GercekBitisTarihi.HasValue ? "İade kaydı tamamlandı" : "İade kaydı bekleniyor")</td></tr>
+                                    </tbody>
+                                </table>
                             }
 
                             <div class="row mt-5 pt-3 text-center">
@@ -440,6 +533,89 @@
         </div>
     }
 
+    @if (aracIslemKiralama is not null)
+    {
+        <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,.55);">
+            <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div>
+                            <h5 class="modal-title">@(aracIadeIslemi ? "Araç iade kaydı" : "Rezervasyonu kiralamaya dönüştür")</h5>
+                            <small class="text-muted">@aracIslemKiralama.Plaka — @aracIslemKiralama.MusteriUnvan</small>
+                        </div>
+                        <button type="button" class="btn-close" @onclick="AracIslemPenceresiKapat" disabled="@(aracIslemKaydediliyor)"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert @(aracIadeIslemi ? "alert-warning" : "alert-info") py-2">
+                            <div class="fw-semibold">
+                                <i class="bi @(aracIadeIslemi ? "bi-box-arrow-in-down-left" : "bi-box-arrow-up-right") me-1"></i>
+                                @(aracIadeIslemi ? "İade bilgilerini tamamlayın" : "Teslim bilgilerini girerek aktif kiralamayı başlatın")
+                            </div>
+                            <div class="small mt-1">
+                                Sözleşme: @(aracIslemKiralama.SozlesmeNo ?? "-") ·
+                                Planlanan iade: @aracIslemKiralama.PlanlananBitisTarihi.ToString("dd.MM.yyyy HH:mm")
+                            </div>
+                        </div>
+                        <div class="row g-2 mb-3 small">
+                            <div class="col-md-4"><span class="text-muted">Müşteri:</span> @aracIslemKiralama.MusteriUnvan</div>
+                            <div class="col-md-4"><span class="text-muted">Araç:</span> @aracIslemKiralama.AracTanimi</div>
+                            <div class="col-md-4"><span class="text-muted">Plaka:</span> @aracIslemKiralama.Plaka</div>
+                        </div>
+                        <EditForm Model="aracIslemBilgisi" OnValidSubmit="AracIsleminiKaydetAsync">
+                            <DataAnnotationsValidator />
+                            <ValidationSummary class="text-danger mb-3" />
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">@(aracIadeIslemi ? "İade kilometresi *" : "Teslim kilometresi *")</label>
+                                    <InputNumber class="form-control" @bind-Value="aracIslemBilgisi.Kilometre" />
+                                    <ValidationMessage For="@(() => aracIslemBilgisi.Kilometre)" class="text-danger" />
+                                    @if (aracIadeIslemi && aracIslemKiralama.BaslangicKm.HasValue)
+                                    {
+                                        <small class="text-muted">Teslim kilometresi: @aracIslemKiralama.BaslangicKm.Value.ToString("N0")</small>
+                                    }
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Yakıt seviyesi * </label>
+                                    <InputText class="form-control" @bind-Value="aracIslemBilgisi.YakitSeviyesi" placeholder="Örn. 8/8, 3/4 veya %75" />
+                                    <ValidationMessage For="@(() => aracIslemBilgisi.YakitSeviyesi)" class="text-danger" />
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Hasar / eksik kontrolü <span class="text-muted">(yoksa “Yok” yazın)</span></label>
+                                    <InputTextArea class="form-control" @bind-Value="aracIslemBilgisi.HasarNotlari" rows="3" maxlength="1000" />
+                                    <ValidationMessage For="@(() => aracIslemBilgisi.HasarNotlari)" class="text-danger" />
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Aksesuar ve ekipman <span class="text-muted">(yoksa “Yok” yazın)</span></label>
+                                    <InputTextArea class="form-control" @bind-Value="aracIslemBilgisi.Aksesuarlar" rows="2" maxlength="1000" />
+                                    <ValidationMessage For="@(() => aracIslemBilgisi.Aksesuarlar)" class="text-danger" />
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">@(aracIadeIslemi ? "İade notu" : "Teslim notu") <span class="text-muted">(isteğe bağlı)</span></label>
+                                    <InputTextArea class="form-control" @bind-Value="aracIslemBilgisi.Notlar" rows="2" maxlength="1000" />
+                                    <ValidationMessage For="@(() => aracIslemBilgisi.Notlar)" class="text-danger" />
+                                </div>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(aracIslemMesaji))
+                            {
+                                <div class="alert @(aracIslemBasarili ? "alert-success" : "alert-danger") mt-3 mb-0">@aracIslemMesaji</div>
+                            }
+                            <div class="modal-footer px-0 pb-0 mt-3">
+                                <button type="button" class="btn btn-secondary" @onclick="AracIslemPenceresiKapat" disabled="@(aracIslemKaydediliyor)">Vazgeç</button>
+                                <button type="submit" class="btn @(aracIadeIslemi ? "btn-warning" : "btn-success")" disabled="@(aracIslemKaydediliyor)">
+                                    @if (aracIslemKaydediliyor)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                    }
+                                    @(aracIadeIslemi ? "İadeyi kaydet" : "Kiralamayı başlat")
+                                </button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
     @if (iptalEdilecekId.HasValue)
     {
         <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,.45);">
@@ -447,7 +623,7 @@
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title">Rezervasyonu iptal et</h5>
-                        <button type="button" class="btn-close" @onclick="IptalPenceresiKapat" disabled="iptalEdiliyor"></button>
+                        <button type="button" class="btn-close" @onclick="IptalPenceresiKapat" disabled="@(iptalEdiliyor)"></button>
                     </div>
                     <div class="modal-body">
                         <label class="form-label" for="iptalNedeni">İptal nedeni</label>
@@ -458,8 +634,8 @@
                         }
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" @onclick="IptalPenceresiKapat" disabled="iptalEdiliyor">Vazgeç</button>
-                        <button type="button" class="btn btn-danger" @onclick="RezervasyonIptalEtAsync" disabled="iptalEdiliyor || string.IsNullOrWhiteSpace(iptalNedeni)">
+                        <button type="button" class="btn btn-secondary" @onclick="IptalPenceresiKapat" disabled="@(iptalEdiliyor)">Vazgeç</button>
+                        <button type="button" class="btn btn-danger" @onclick="RezervasyonIptalEtAsync" disabled="@(iptalEdiliyor || string.IsNullOrWhiteSpace(iptalNedeni))">
                             @if (iptalEdiliyor)
                             {
                                 <span class="spinner-border spinner-border-sm me-1"></span>
@@ -479,7 +655,7 @@
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title">Rezervasyonu düzenle</h5>
-                        <button type="button" class="btn-close" @onclick="DuzenlemePenceresiKapat" disabled="duzenleniyor"></button>
+                        <button type="button" class="btn-close" @onclick="DuzenlemePenceresiKapat" disabled="@(duzenleniyor)"></button>
                     </div>
                     <div class="modal-body">
                         <EditForm Model="duzenlemeTalebi" OnValidSubmit="RezervasyonuGuncelleAsync">
@@ -539,8 +715,8 @@
                                 <div class="alert @(duzenlemeBasarili ? "alert-success" : "alert-danger") mt-3 mb-0">@duzenlemeMesaji</div>
                             }
                             <div class="modal-footer px-0 pb-0 mt-3">
-                                <button type="button" class="btn btn-secondary" @onclick="DuzenlemePenceresiKapat" disabled="duzenleniyor">Vazgeç</button>
-                                <button type="submit" class="btn btn-primary" disabled="duzenleniyor">
+                                <button type="button" class="btn btn-secondary" @onclick="DuzenlemePenceresiKapat" disabled="@(duzenleniyor)">Vazgeç</button>
+                                <button type="submit" class="btn btn-primary" disabled="@(duzenleniyor)">
                                     @if (duzenleniyor)
                                     {
                                         <span class="spinner-border spinner-border-sm me-1"></span>
@@ -559,11 +735,36 @@
 </MKFiloServis.Web.Components.Shared.YetkiKontrol>
 
 @code {
+    [SupplyParameterFromQuery(Name = "sekme")] public string? Sekme { get; set; }
+    private string AktifSekme => Sekme is "araclar" or "kiralamalar" or "teslim-iade" ? Sekme : "rezervasyon";
+
+    private void AracKartindanSec(Arac arac)
+    {
+        if (!MusaitlikGuncel || !musaitAraclar.Any(x => x.Id == arac.Id))
+        {
+            rezervasyonMesaji = "Önce seçilen tarih aralığı için müsait araçları yeniden arayın.";
+            rezervasyonBasarili = false;
+            return;
+        }
+
+        rezervasyon.AracId = arac.Id;
+        if (arac.GunlukKiraBedeli is > 0) rezervasyon.GunlukFiyat = arac.GunlukKiraBedeli.Value;
+        rezervasyonMesaji = null;
+        rezervasyonBasarili = false;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AktifSekme == "araclar" && !MusaitlikGuncel) await MusaitAraclariGetirAsync();
+        durumFiltresi = -1;
+    }
+
     private enum RentACarBelgeTuru { Sozlesme, TeslimIade }
 
     private IReadOnlyList<RentACarKiralamaSatiri> kiralamalar = Array.Empty<RentACarKiralamaSatiri>();
     private IReadOnlyList<Cari> musteriler = Array.Empty<Cari>();
     private IReadOnlyList<Arac> musaitAraclar = Array.Empty<Arac>();
+    private IReadOnlyList<Arac> rezervasyonluAraclar = Array.Empty<Arac>();
     private DateTime? musaitlikBaslangic;
     private DateTime? musaitlikBitis;
     private int musaitlikSorguSurumu;
@@ -597,6 +798,12 @@
     private DateTime? bitisFiltre;
     private RentACarKiralamaSatiri? onizlenenKiralama;
     private RentACarBelgeTuru onizlenenBelgeTuru;
+    private RentACarKiralamaSatiri? aracIslemKiralama;
+    private RentACarAracIslemBilgisi aracIslemBilgisi = new();
+    private bool aracIadeIslemi;
+    private bool aracIslemKaydediliyor;
+    private bool aracIslemBasarili;
+    private string? aracIslemMesaji;
 
     private string BelgeBasligi => onizlenenBelgeTuru == RentACarBelgeTuru.Sozlesme
         ? "Kira sözleşmesi taslağı"
@@ -613,6 +820,64 @@
         .Sum(x => x.ToplamTutar);
 
     private static string BelgeDegeri(string? deger) => string.IsNullOrWhiteSpace(deger) ? "Belirtilmemiş" : deger;
+
+    private void AracIslemPenceresiAc(RentACarKiralamaSatiri kiralama, bool iade)
+    {
+        aracIslemKiralama = kiralama;
+        aracIadeIslemi = iade;
+        aracIslemBilgisi = new RentACarAracIslemBilgisi
+        {
+            Kilometre = iade ? kiralama.BaslangicKm ?? 0 : 0
+        };
+        aracIslemMesaji = null;
+        aracIslemBasarili = false;
+    }
+
+    private void AracIslemPenceresiKapat()
+    {
+        if (!aracIslemKaydediliyor)
+        {
+            aracIslemKiralama = null;
+        }
+    }
+
+    private async Task AracIsleminiKaydetAsync()
+    {
+        if (aracIslemKiralama is null)
+        {
+            return;
+        }
+
+        aracIslemKaydediliyor = true;
+        aracIslemMesaji = null;
+        try
+        {
+            if (aracIadeIslemi)
+            {
+                await RezervasyonServisi.AraciIadeAlAsync(aracIslemKiralama.Id, aracIslemBilgisi);
+            }
+            else
+            {
+                await RezervasyonServisi.AraciTeslimEtAsync(aracIslemKiralama.Id, aracIslemBilgisi);
+            }
+
+            aracIslemBasarili = true;
+            aracIslemMesaji = aracIadeIslemi
+                ? "Araç iadesi kaydedildi ve kiralama tamamlandı."
+                : "Rezervasyon aktif kiralamaya dönüştürüldü.";
+            await YenileAsync();
+            aracIslemKiralama = null;
+        }
+        catch (Exception ex)
+        {
+            aracIslemBasarili = false;
+            aracIslemMesaji = ex.Message;
+        }
+        finally
+        {
+            aracIslemKaydediliyor = false;
+        }
+    }
 
     private void BelgeOnizle(RentACarKiralamaSatiri kiralama, RentACarBelgeTuru belgeTuru)
     {
@@ -635,6 +900,9 @@
         get
         {
             var query = kiralamalar.AsEnumerable();
+
+            if (AktifSekme == "teslim-iade")
+                query = query.Where(x => x.Durum is KiralamaDurumu.Rezervasyon or KiralamaDurumu.Aktif);
 
             if (!string.IsNullOrWhiteSpace(arama))
             {
@@ -826,15 +1094,20 @@
         await YenileAsync();
     }
 
-    private void RezervasyonTarihiDegisti()
+    private void RezervasyonTarihiDegisti(bool mesajGosterilmeyeDevamEtsin = false)
     {
         musaitlikSorguSurumu++;
         musaitlikYukleniyor = false;
         musaitlikBaslangic = null;
         musaitlikBitis = null;
         musaitAraclar = Array.Empty<Arac>();
+        rezervasyonluAraclar = Array.Empty<Arac>();
         rezervasyon.AracId = 0;
-        rezervasyonMesaji = null;
+        if (!mesajGosterilmeyeDevamEtsin)
+        {
+            rezervasyonMesaji = null;
+            rezervasyonBasarili = false;
+        }
     }
 
     private async Task MusaitAraclariGetirAsync()
@@ -846,12 +1119,13 @@
         musaitlikYukleniyor = true;
         try
         {
-            var araclar = await RezervasyonServisi.GetMusaitAraclarAsync(baslangic, bitis);
+            var sonuc = await RezervasyonServisi.GetAracMusaitlikAsync(baslangic, bitis);
             if (sorguSurumu != musaitlikSorguSurumu)
             {
                 return;
             }
-            musaitAraclar = araclar;
+            musaitAraclar = sonuc.MusaitAraclar;
+            rezervasyonluAraclar = sonuc.RezervasyonluAraclar;
             musaitlikBaslangic = baslangic;
             musaitlikBitis = bitis;
             if (musaitAraclar.Count == 0)
@@ -891,7 +1165,7 @@
                 BaslangicTarihi = DateTime.Now,
                 PlanlananBitisTarihi = DateTime.Now.AddDays(1)
             };
-            RezervasyonTarihiDegisti();
+            RezervasyonTarihiDegisti(mesajGosterilmeyeDevamEtsin: true);
             await YenileAsync();
         }
         catch (Exception ex)
@@ -967,6 +1241,11 @@
 
         var model = new RentACarKiralamaRaporModel
         {
+            FirmaUnvan = liste.FirstOrDefault()?.FirmaUnvan ?? string.Empty,
+            FirmaVergiDairesi = liste.FirstOrDefault()?.FirmaVergiDairesi ?? string.Empty,
+            FirmaVergiNo = liste.FirstOrDefault()?.FirmaVergiNo ?? string.Empty,
+            FirmaAdres = liste.FirstOrDefault()?.FirmaAdres ?? string.Empty,
+            FirmaTelefon = liste.FirstOrDefault()?.FirmaTelefon ?? string.Empty,
             RaporTarihAraligi = TarihAraligiMetni(),
             DurumFiltresi = durumFiltresi < 0 ? "Tüm durumlar" : ((KiralamaDurumu)durumFiltresi).ToString(),
             AramaFiltresi = arama,

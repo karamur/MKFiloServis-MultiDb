@@ -16,6 +16,11 @@ public interface IPdfService
 
 public sealed class RentACarKiralamaRaporModel
 {
+    public string FirmaUnvan { get; set; } = string.Empty;
+    public string FirmaVergiDairesi { get; set; } = string.Empty;
+    public string FirmaVergiNo { get; set; } = string.Empty;
+    public string FirmaAdres { get; set; } = string.Empty;
+    public string FirmaTelefon { get; set; } = string.Empty;
     public string RaporTarihAraligi { get; set; } = string.Empty;
     public string DurumFiltresi { get; set; } = string.Empty;
     public string AramaFiltresi { get; set; } = string.Empty;

@@ -1,0 +1,189 @@
+﻿@page "/rent-a-car/odemeler"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services.RentACar
+@inject RentACarOdemeServisi OdemeServisi
+@rendermode InteractiveServer
+
+<PageTitle>Rent a Car Ödeme Takibi</PageTitle>
+
+<MKFiloServis.Web.Components.Shared.YetkiKontrol Yetki="rentacar.oku" GerekliYetkiAdi="Rent a Car Ödeme Takibi">
+    <Yetkili>
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h3 class="mb-1"><i class="bi bi-cash-coin me-2 text-success"></i>Rent a Car Ödeme Takibi</h3>
+                    <p class="text-muted mb-0">Kira tahsilatı, kısmi ödeme, depozito tahsilatı ve iadelerini izleyin.</p>
+                </div>
+                <button class="btn btn-outline-primary" @onclick="YukleAsync" disabled="@(yukleniyor)"><i class="bi bi-arrow-clockwise me-1"></i>Yenile</button>
+            </div>
+
+            <RentACarAltMenu Aktif="odemeler" />
+
+            @if (!string.IsNullOrWhiteSpace(mesaj))
+            {
+                <div class="alert @(basarili ? "alert-success" : "alert-danger")">@mesaj</div>
+            }
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-3"><div class="card border-primary h-100"><div class="card-body"><small class="text-muted">Toplam kiralama</small><div class="fs-4 fw-bold">@ToplamKiralama.ToString("N2") ₺</div></div></div></div>
+                <div class="col-md-3"><div class="card border-success h-100"><div class="card-body"><small class="text-muted">Net kira tahsilatı</small><div class="fs-4 fw-bold text-success">@ToplamTahsilat.ToString("N2") ₺</div></div></div></div>
+                <div class="col-md-3"><div class="card border-danger h-100"><div class="card-body"><small class="text-muted">Kalan kira</small><div class="fs-4 fw-bold text-danger">@ToplamKalan.ToString("N2") ₺</div></div></div></div>
+                <div class="col-md-3"><div class="card border-warning h-100"><div class="card-body"><small class="text-muted">Emanetteki depozito</small><div class="fs-4 fw-bold text-warning">@ToplamEmanetDepozito.ToString("N2") ₺</div></div></div></div>
+            </div>
+
+            @if (odemeFormuAcik)
+            {
+            <MKFiloServis.Web.Components.Shared.YetkiKontrol Yetki="rentacar.rezervasyon.yaz" GerekliYetkiAdi="Rent a Car Ödeme Kaydı">
+                <Yetkili>
+                    <div class="card shadow-sm mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-plus-circle me-2"></i>Seçili sözleşmeye ödeme/depozito hareketi</span>
+                            <button type="button" class="btn-close" aria-label="Kapat" @onclick="OdemeFormunuKapat" disabled="@(kaydediliyor)"></button>
+                        </div>
+                        <div class="card-body">
+                            <EditForm Model="talep" OnValidSubmit="KaydetAsync">
+                                <DataAnnotationsValidator />
+                                <ValidationSummary class="text-danger" />
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Kiralama</label>
+                                        <InputSelect class="form-select" @bind-Value="talep.MusteriKiralamaId" @bind-Value:after="SecimDegisti">
+                                            <option value="0">Kiralama seçin</option>
+                                            @foreach (var ozet in ozetler)
+                                            {
+                                                <option value="@ozet.KiralamaId">@ozet.SozlesmeNo — @ozet.Musteri — @ozet.Plaka</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">İşlem türü</label>
+                                        <InputSelect class="form-select" @bind-Value="talep.HareketTuru">
+                                            @foreach (var tur in Enum.GetValues<RentACarOdemeHareketTuru>()) { <option value="@tur">@HareketTuruMetni(tur)</option> }
+                                        </InputSelect>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Ödeme yöntemi</label>
+                                        <InputSelect class="form-select" @bind-Value="talep.OdemeYontemi">
+                                            @foreach (var yontem in Enum.GetValues<RentACarOdemeYontemi>()) { <option value="@yontem">@OdemeYontemiMetni(yontem)</option> }
+                                        </InputSelect>
+                                    </div>
+                                    <div class="col-md-2"><label class="form-label">Tarih</label><InputDate class="form-control" Type="InputDateType.DateTimeLocal" @bind-Value="talep.IslemTarihi" /></div>
+                                    <div class="col-md-2"><label class="form-label">Tutar (₺)</label><InputNumber class="form-control" @bind-Value="talep.Tutar" /></div>
+                                    <div class="col-md-3"><label class="form-label">Belge/dekont no</label><InputText class="form-control" @bind-Value="talep.BelgeNo" /></div>
+                                    <div class="col-md-7"><label class="form-label">Açıklama</label><InputText class="form-control" @bind-Value="talep.Aciklama" /></div>
+                                    <div class="col-md-2 d-grid"><button class="btn btn-success" type="submit" disabled="@(kaydediliyor)">@if (kaydediliyor) { <span class="spinner-border spinner-border-sm me-1"></span> }Kaydet</button></div>
+                                </div>
+                                @if (SeciliOzet is not null)
+                                {
+                                    <div class="alert alert-light border mt-3 mb-0 small">
+                                        Kira: @SeciliOzet.KiralamaTutari.ToString("N2") ₺ · Tahsil edilen: @SeciliOzet.NetKiraTahsilati.ToString("N2") ₺ · Kalan: @SeciliOzet.KalanKiraTutari.ToString("N2") ₺ ·
+                                        Depozito: @SeciliOzet.DepozitoTutari.ToString("N2") ₺ · Emanette: @SeciliOzet.EmanettekiDepozito.ToString("N2") ₺
+                                    </div>
+                                }
+                            </EditForm>
+                        </div>
+
+                    </div>
+                </Yetkili>
+            </MKFiloServis.Web.Components.Shared.YetkiKontrol>
+            }
+
+            <div class="card shadow-sm mb-3">
+                <div class="card-header">Kiralama ödeme özeti</div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead><tr><th>Sözleşme</th><th>Müşteri</th><th>Plaka</th><th>Durum</th><th class="text-end">Kira</th><th class="text-end">Tahsil</th><th class="text-end">Kalan</th><th class="text-end">Depozito</th><th class="text-end">Emanette</th><th>Ödeme</th><th>İşlem</th></tr></thead>
+                        <tbody>
+                            @if (yukleniyor) { <tr><td colspan="11" class="text-center py-4">Yükleniyor...</td></tr> }
+                            else if (ozetler.Count == 0) { <tr><td colspan="11" class="text-center text-muted py-4">Kiralama kaydı bulunamadı.</td></tr> }
+                            else @foreach (var o in ozetler) { <tr class="@(o.KalanKiraTutari > 0 ? "table-warning" : "table-success")"><td>@o.SozlesmeNo</td><td>@o.Musteri</td><td>@o.Plaka</td><td>@o.KiralamaDurumu</td><td class="text-end">@o.KiralamaTutari.ToString("N2")</td><td class="text-end text-success">@o.NetKiraTahsilati.ToString("N2")</td><td class="text-end text-danger">@o.KalanKiraTutari.ToString("N2")</td><td class="text-end">@o.DepozitoTutari.ToString("N2")</td><td class="text-end text-warning">@o.EmanettekiDepozito.ToString("N2")</td><td>@o.OdemeDurumu</td><td class="text-nowrap"><button class="btn btn-sm btn-success me-1" @onclick="() => OdemeFormunuAc(o)"><i class="bi bi-cash me-1"></i>Ödeme</button><button class="btn btn-sm btn-outline-primary" @onclick="() => DetayAc(o)"><i class="bi bi-eye me-1"></i>Detay</button></td></tr> }
+                        </tbody>
+                    </table>
+                </div>
+
+            @if (detayOzet is not null)
+            {
+                <div class="modal d-block" tabindex="-1" style="background-color:rgba(0,0,0,.5)">
+                    <div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">
+                        <div class="modal-header"><h5 class="modal-title">Sözleşme ödeme detayı — @detayOzet.SozlesmeNo</h5><button class="btn-close" @onclick="DetayKapat"></button></div>
+                        <div class="modal-body">
+                            <div class="row g-3 mb-3"><div class="col-md-4"><strong>Müşteri</strong><div>@detayOzet.Musteri</div></div><div class="col-md-4"><strong>Plaka</strong><div>@detayOzet.Plaka</div></div><div class="col-md-4"><strong>Durum</strong><div>@detayOzet.KiralamaDurumu / @detayOzet.OdemeDurumu</div></div></div>
+                            <table class="table table-bordered"><tbody><tr><th>Kiralama tutarı</th><td>@detayOzet.KiralamaTutari.ToString("N2") ₺</td><th>Net tahsilat</th><td>@detayOzet.NetKiraTahsilati.ToString("N2") ₺</td></tr><tr><th>Kalan kira</th><td>@detayOzet.KalanKiraTutari.ToString("N2") ₺</td><th>Planlanan depozito</th><td>@detayOzet.DepozitoTutari.ToString("N2") ₺</td></tr><tr><th>Depozito tahsilatı</th><td>@detayOzet.DepozitoTahsilati.ToString("N2") ₺</td><th>Depozito iadesi / emanette</th><td>@detayOzet.DepozitoIadesi.ToString("N2") ₺ / @detayOzet.EmanettekiDepozito.ToString("N2") ₺</td></tr></tbody></table>
+                            <h6>Hareketler</h6>
+                            <div class="table-responsive"><table class="table table-sm"><thead><tr><th>Tarih</th><th>Tür</th><th>Yöntem</th><th>Tutar</th><th>Belge</th><th>Açıklama</th></tr></thead><tbody>@foreach (var h in DetayHareketleri) { <tr><td>@h.IslemTarihi.ToString("dd.MM.yyyy HH:mm")</td><td>@HareketTuruMetni(h.HareketTuru)</td><td>@OdemeYontemiMetni(h.OdemeYontemi)</td><td>@h.Tutar.ToString("N2") ₺</td><td>@(h.BelgeNo ?? "-")</td><td>@(h.Aciklama ?? "-")</td></tr> }</tbody></table></div>
+                        </div>
+                        <div class="modal-footer"><button class="btn btn-secondary" @onclick="DetayKapat">Kapat</button><button class="btn btn-success" @onclick="() => DetaydanOdemeAc(detayOzet)">Ödeme al</button></div>
+                    </div></div>
+                </div>
+            }
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-header">Ödeme hareket geçmişi</div>
+                <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Tarih</th><th>Sözleşme</th><th>Müşteri</th><th>Plaka</th><th>Tür</th><th>Yöntem</th><th class="text-end">Tutar</th><th>Belge no</th><th>Açıklama</th></tr></thead><tbody>
+                    @if (hareketler.Count == 0) { <tr><td colspan="9" class="text-center text-muted py-4">Ödeme hareketi bulunamadı.</td></tr> }
+                    else @foreach (var h in hareketler) { <tr><td>@h.IslemTarihi.ToString("dd.MM.yyyy HH:mm")</td><td>@h.SozlesmeNo</td><td>@h.Musteri</td><td>@h.Plaka</td><td>@HareketTuruMetni(h.HareketTuru)</td><td>@OdemeYontemiMetni(h.OdemeYontemi)</td><td class="text-end">@h.Tutar.ToString("N2") ₺</td><td>@(h.BelgeNo ?? "-")</td><td>@(h.Aciklama ?? "-")</td></tr> }
+                </tbody></table></div>
+            </div>
+        </div>
+    </Yetkili>
+</MKFiloServis.Web.Components.Shared.YetkiKontrol>
+
+@code {
+    private IReadOnlyList<RentACarOdemeOzet> ozetler = Array.Empty<RentACarOdemeOzet>();
+    private IReadOnlyList<RentACarOdemeHareketSatiri> hareketler = Array.Empty<RentACarOdemeHareketSatiri>();
+    private RentACarOdemeKayitTalebi talep = new();
+    private bool yukleniyor;
+    private bool kaydediliyor;
+    private bool odemeFormuAcik;
+    private RentACarOdemeOzet? detayOzet;
+    private bool basarili;
+    private string? mesaj;
+    private RentACarOdemeOzet? SeciliOzet => ozetler.FirstOrDefault(x => x.KiralamaId == talep.MusteriKiralamaId);
+    private IEnumerable<RentACarOdemeHareketSatiri> DetayHareketleri => hareketler.Where(x => x.MusteriKiralamaId == detayOzet?.KiralamaId);
+    private decimal ToplamKiralama => ozetler.Sum(x => x.KiralamaTutari);
+    private decimal ToplamTahsilat => ozetler.Sum(x => x.NetKiraTahsilati);
+    private decimal ToplamKalan => ozetler.Sum(x => x.KalanKiraTutari);
+    private decimal ToplamEmanetDepozito => ozetler.Sum(x => x.EmanettekiDepozito);
+
+    protected override Task OnInitializedAsync() => YukleAsync();
+    private async Task YukleAsync() { yukleniyor = true; try { ozetler = await OdemeServisi.GetOzetlerAsync(); hareketler = await OdemeServisi.GetHareketlerAsync(); } catch (Exception ex) { basarili = false; mesaj = ex.Message; } finally { yukleniyor = false; } }
+    private void SecimDegisti() { var o = SeciliOzet; if (o is not null) talep.Tutar = talep.HareketTuru == RentACarOdemeHareketTuru.DepozitoTahsilati ? Math.Max(0, o.DepozitoTutari - o.EmanettekiDepozito) : o.KalanKiraTutari; }
+    private void OdemeFormunuAc(RentACarOdemeOzet ozet) { talep = new RentACarOdemeKayitTalebi { MusteriKiralamaId = ozet.KiralamaId, IslemTarihi = DateTime.Now, Tutar = ozet.KalanKiraTutari }; odemeFormuAcik = true; mesaj = null; }
+    private void OdemeFormunuKapat() { if (!kaydediliyor) odemeFormuAcik = false; }
+    private void DetayAc(RentACarOdemeOzet ozet) => detayOzet = ozet;
+    private void DetayKapat() => detayOzet = null;
+    private void DetaydanOdemeAc(RentACarOdemeOzet ozet) { detayOzet = null; OdemeFormunuAc(ozet); }
+    private async Task KaydetAsync()
+    {
+        kaydediliyor = true;
+        mesaj = null;
+        try
+        {
+            await OdemeServisi.KaydetAsync(talep);
+            basarili = true;
+            mesaj = "Ödeme hareketi kaydedildi. Bu sayfada yeni bir işlem girebilirsiniz.";
+            var kiralamaId = talep.MusteriKiralamaId;
+            talep = new RentACarOdemeKayitTalebi
+            {
+                MusteriKiralamaId = kiralamaId,
+                IslemTarihi = DateTime.Now
+            };
+            await YukleAsync();
+            SecimDegisti();
+        }
+        catch (Exception ex)
+        {
+            basarili = false;
+            mesaj = ex.Message;
+        }
+        finally
+        {
+            kaydediliyor = false;
+        }
+    }
+    private static string HareketTuruMetni(RentACarOdemeHareketTuru tur) => tur switch { RentACarOdemeHareketTuru.KiraTahsilati => "Kira tahsilatı", RentACarOdemeHareketTuru.DepozitoTahsilati => "Depozito tahsilatı", RentACarOdemeHareketTuru.KiraIadesi => "Kira iadesi", RentACarOdemeHareketTuru.DepozitoIadesi => "Depozito iadesi", _ => tur.ToString() };
+    private static string OdemeYontemiMetni(RentACarOdemeYontemi yontem) => yontem switch { RentACarOdemeYontemi.KrediKarti => "Kredi kartı", RentACarOdemeYontemi.BankaKarti => "Banka kartı", RentACarOdemeYontemi.CariMahsup => "Cari mahsup", RentACarOdemeYontemi.EFT => "EFT", _ => yontem.ToString() };
+}

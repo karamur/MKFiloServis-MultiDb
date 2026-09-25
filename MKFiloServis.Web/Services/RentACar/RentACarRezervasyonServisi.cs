@@ -43,6 +43,12 @@ public sealed class RentACarRezervasyonServisi : IRentACarRezervasyonServisi
         DateTime baslangic,
         DateTime bitis,
         CancellationToken cancellationToken = default)
+        => (await GetAracMusaitlikAsync(baslangic, bitis, cancellationToken)).MusaitAraclar;
+
+    public async Task<RentACarMusaitlikSonucu> GetAracMusaitlikAsync(
+        DateTime baslangic,
+        DateTime bitis,
+        CancellationToken cancellationToken = default)
     {
         TarihleriDogrula(baslangic, bitis);
         var firmaId = AktifFirmaIdAl();
@@ -57,11 +63,17 @@ public sealed class RentACarRezervasyonServisi : IRentACarRezervasyonServisi
             .Distinct()
             .ToListAsync(cancellationToken);
 
-        return await context.Araclar.AsNoTracking()
+        var adayAraclar = await context.Araclar.AsNoTracking()
             .Where(x => x.FirmaId == firmaId && x.Aktif && !x.IsDeleted
-                && !kiradakiAracIds.Contains(x.Id))
+                && (x.Durumu == AracDurumu.Bosta || x.Durumu == AracDurumu.Kiralik))
             .OrderBy(x => x.AktifPlaka)
             .ToListAsync(cancellationToken);
+
+        return new RentACarMusaitlikSonucu
+        {
+            MusaitAraclar = adayAraclar.Where(x => !kiradakiAracIds.Contains(x.Id)).ToList(),
+            RezervasyonluAraclar = adayAraclar.Where(x => kiradakiAracIds.Contains(x.Id)).ToList()
+        };
     }
 
     public async Task<MusteriKiralama> RezervasyonOlusturAsync(
@@ -99,11 +111,14 @@ public sealed class RentACarRezervasyonServisi : IRentACarRezervasyonServisi
             throw new InvalidOperationException("Seçilen müşteri aktif firmaya ait değil veya kullanılamıyor.");
         }
 
+        await KaraListeKontrolAsync(context, firmaId, talep.MusteriId, cancellationToken);
+
         var aracGecerli = await context.Araclar.AnyAsync(x =>
-            x.Id == talep.AracId && x.FirmaId == firmaId && x.Aktif && !x.IsDeleted, cancellationToken);
+            x.Id == talep.AracId && x.FirmaId == firmaId && x.Aktif && !x.IsDeleted
+            && (x.Durumu == AracDurumu.Bosta || x.Durumu == AracDurumu.Kiralik), cancellationToken);
         if (!aracGecerli)
         {
-            throw new InvalidOperationException("Seçilen araç aktif firmaya ait değil veya kullanılamıyor.");
+            throw new InvalidOperationException("Seçilen araç Boşta/Kiralık durumda değil, aktif firmaya ait değil veya kullanılamıyor.");
         }
 
         var cakismaVar = await context.MusteriKiralamalar.AnyAsync(x =>
@@ -176,11 +191,14 @@ public sealed class RentACarRezervasyonServisi : IRentACarRezervasyonServisi
             throw new InvalidOperationException("Seçilen müşteri aktif firmaya ait değil veya kullanılamıyor.");
         }
 
+        await KaraListeKontrolAsync(context, firmaId, talep.MusteriId, cancellationToken);
+
         var aracGecerli = await context.Araclar.AnyAsync(x =>
-            x.Id == talep.AracId && x.FirmaId == firmaId && x.Aktif && !x.IsDeleted, cancellationToken);
+            x.Id == talep.AracId && x.FirmaId == firmaId && x.Aktif && !x.IsDeleted
+            && (x.Durumu == AracDurumu.Bosta || x.Durumu == AracDurumu.Kiralik), cancellationToken);
         if (!aracGecerli)
         {
-            throw new InvalidOperationException("Seçilen araç aktif firmaya ait değil veya kullanılamıyor.");
+            throw new InvalidOperationException("Seçilen araç Boşta/Kiralık durumda değil, aktif firmaya ait değil veya kullanılamıyor.");
         }
 
         var cakismaVar = await context.MusteriKiralamalar.AnyAsync(x =>
@@ -208,6 +226,125 @@ public sealed class RentACarRezervasyonServisi : IRentACarRezervasyonServisi
         await context.SaveChangesAsync(cancellationToken);
         return true;
         }, cancellationToken);
+    }
+
+    public async Task AraciTeslimEtAsync(
+        int kiralamaId,
+        RentACarAracIslemBilgisi bilgi,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(bilgi);
+        AracIslemBilgisiniDogrula(bilgi);
+        var firmaId = AktifFirmaIdAl();
+
+        await SeriIslemAsync(async context =>
+        {
+            var kiralama = await context.MusteriKiralamalar.FirstOrDefaultAsync(
+                x => x.Id == kiralamaId && x.FirmaId == firmaId && !x.IsDeleted,
+                cancellationToken);
+            if (kiralama is null)
+            {
+                throw new InvalidOperationException("Kiralama kaydı bulunamadı.");
+            }
+            if (kiralama.Durum != KiralamaDurumu.Rezervasyon)
+            {
+                throw new InvalidOperationException("Yalnızca rezervasyon durumundaki araç teslim edilebilir.");
+            }
+
+            var arac = await context.Araclar.FirstOrDefaultAsync(x =>
+                x.Id == kiralama.AracId && x.FirmaId == firmaId && !x.IsDeleted,
+                cancellationToken);
+            if (arac is null)
+            {
+                throw new InvalidOperationException("Kiralama kaydına bağlı araç bulunamadı.");
+            }
+
+            await KaraListeKontrolAsync(context, firmaId, kiralama.MusteriId, cancellationToken);
+            kiralama.GercekBaslangicTarihi = DateTime.Now;
+            kiralama.BaslangicKm = bilgi.Kilometre;
+            kiralama.TeslimYakitSeviyesi = bilgi.YakitSeviyesi.Trim();
+            kiralama.TeslimHasarNotlari = Temizle(bilgi.HasarNotlari);
+            kiralama.TeslimAksesuarlar = Temizle(bilgi.Aksesuarlar);
+            kiralama.TeslimNotlari = Temizle(bilgi.Notlar);
+            kiralama.Durum = KiralamaDurumu.Aktif;
+            arac.Durumu = AracDurumu.Kiralandi;
+            kiralama.UpdatedAt = DateTime.UtcNow;
+            await context.SaveChangesAsync(cancellationToken);
+            return true;
+        }, cancellationToken);
+    }
+
+    public async Task AraciIadeAlAsync(
+        int kiralamaId,
+        RentACarAracIslemBilgisi bilgi,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(bilgi);
+        AracIslemBilgisiniDogrula(bilgi);
+        var firmaId = AktifFirmaIdAl();
+
+        await SeriIslemAsync(async context =>
+        {
+            var kiralama = await context.MusteriKiralamalar.FirstOrDefaultAsync(
+                x => x.Id == kiralamaId && x.FirmaId == firmaId && !x.IsDeleted,
+                cancellationToken);
+            if (kiralama is null)
+            {
+                throw new InvalidOperationException("Kiralama kaydı bulunamadı.");
+            }
+            if (kiralama.Durum != KiralamaDurumu.Aktif)
+            {
+                throw new InvalidOperationException("Yalnızca aktif kiralamadaki araç iade alınabilir.");
+            }
+            if (kiralama.BaslangicKm.HasValue && bilgi.Kilometre < kiralama.BaslangicKm.Value)
+            {
+                throw new InvalidOperationException("İade kilometresi teslim kilometresinden küçük olamaz.");
+            }
+
+            var arac = await context.Araclar.FirstOrDefaultAsync(x =>
+                x.Id == kiralama.AracId && x.FirmaId == firmaId && !x.IsDeleted,
+                cancellationToken);
+            if (arac is null)
+            {
+                throw new InvalidOperationException("Kiralama kaydına bağlı araç bulunamadı.");
+            }
+
+            kiralama.GercekBitisTarihi = DateTime.Now;
+            kiralama.BitisKm = bilgi.Kilometre;
+            kiralama.IadeYakitSeviyesi = bilgi.YakitSeviyesi.Trim();
+            kiralama.IadeHasarNotlari = Temizle(bilgi.HasarNotlari);
+            kiralama.IadeAksesuarlar = Temizle(bilgi.Aksesuarlar);
+            kiralama.IadeNotlari = Temizle(bilgi.Notlar);
+            kiralama.Durum = KiralamaDurumu.Tamamlandi;
+            arac.Durumu = arac.SahiplikTipi == AracSahiplikTipi.Kiralik
+                ? AracDurumu.Kiralik
+                : AracDurumu.Bosta;
+            kiralama.UpdatedAt = DateTime.UtcNow;
+            await context.SaveChangesAsync(cancellationToken);
+            return true;
+        }, cancellationToken);
+    }
+
+    private static void AracIslemBilgisiniDogrula(RentACarAracIslemBilgisi bilgi)
+    {
+        var results = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
+        if (!System.ComponentModel.DataAnnotations.Validator.TryValidateObject(
+                bilgi,
+                new System.ComponentModel.DataAnnotations.ValidationContext(bilgi),
+                results,
+                validateAllProperties: true))
+        {
+            throw new InvalidOperationException(results.FirstOrDefault()?.ErrorMessage ?? "Teslim/iade bilgileri geçersiz.");
+        }
+    }
+
+    private static string? Temizle(string? deger) => string.IsNullOrWhiteSpace(deger) ? null : deger.Trim();
+
+    private static async Task KaraListeKontrolAsync(ApplicationDbContext context, int firmaId, int musteriId, CancellationToken cancellationToken)
+    {
+        if (await context.RentACarKaraListeKayitlari.AnyAsync(x => x.FirmaId == firmaId
+            && x.MusteriId == musteriId && !x.IsDeleted && x.KaldirmaTarihi == null, cancellationToken))
+            throw new InvalidOperationException("Müşteri bu firmanın kara listesinde. Rezervasyon ve teslim engellendi.");
     }
 
     private async Task<T> SeriIslemAsync<T>(Func<ApplicationDbContext, Task<T>> islem, CancellationToken cancellationToken)

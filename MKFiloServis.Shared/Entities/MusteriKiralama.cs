@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace MKFiloServis.Shared.Entities;
@@ -32,6 +32,8 @@ public class MusteriKiralama : BaseEntity, IFirmaTenant
     [Required]
     public DateTime BaslangicTarihi { get; set; }
 
+    public DateTime? GercekBaslangicTarihi { get; set; }
+
     /// <summary>
     /// Planlanan biti� tarihi
     /// </summary>
@@ -52,6 +54,30 @@ public class MusteriKiralama : BaseEntity, IFirmaTenant
     /// Biti� kilometresi
     /// </summary>
     public int? BitisKm { get; set; }
+
+    [StringLength(50)]
+    public string? TeslimYakitSeviyesi { get; set; }
+
+    [StringLength(50)]
+    public string? IadeYakitSeviyesi { get; set; }
+
+    [StringLength(1000)]
+    public string? TeslimHasarNotlari { get; set; }
+
+    [StringLength(1000)]
+    public string? IadeHasarNotlari { get; set; }
+
+    [StringLength(1000)]
+    public string? TeslimAksesuarlar { get; set; }
+
+    [StringLength(1000)]
+    public string? IadeAksesuarlar { get; set; }
+
+    [StringLength(1000)]
+    public string? TeslimNotlari { get; set; }
+
+    [StringLength(1000)]
+    public string? IadeNotlari { get; set; }
 
     /// <summary>
     /// G�nl�k kira bedeli

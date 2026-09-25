@@ -1,4 +1,4 @@
-namespace MKFiloServis.Shared.Entities;
+﻿namespace MKFiloServis.Shared.Entities;
 
 /// <summary>
 /// Cari hesap (Musteri/Tedarikci/Firma/Personel)

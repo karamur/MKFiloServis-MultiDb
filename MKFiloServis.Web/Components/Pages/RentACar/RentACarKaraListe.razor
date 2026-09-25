@@ -1,0 +1,111 @@
+﻿@page "/rent-a-car/kara-liste"
+@using Microsoft.AspNetCore.Authorization
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.RentACar
+@attribute [Authorize(Roles = "Admin")]
+@inject RentACarKaraListeServisi KaraListe
+@inject IRentACarRezervasyonServisi Rezervasyon
+@inject IAktifFirmaProvider Firma
+@rendermode InteractiveServer
+
+<PageTitle>Rent a Car — Kara Liste</PageTitle>
+<div class="container-fluid">
+    <h3>Rent a Car — Kara Liste</h3>
+    <RentACarAltMenu Aktif="kara-liste" />
+    <p class="text-muted">Yalnız seçili firmaya aittir. Aktif engel rezervasyon ve teslimi durdurur; iadeyi engellemez. Kaldırılan kayıtlar işlem geçmişinde korunur.</p>
+    @if (mesaj is not null)
+    {
+        <div class="alert alert-info" role="status">@mesaj</div>
+    }
+    <div class="card card-body mb-3">
+        <label class="form-label" for="kara-musteri">Müşteri</label>
+        <select id="kara-musteri" class="form-select mb-2" @bind="musteriId" disabled="@(mesgul)">
+            <option value="0">Müşteri seçin</option>
+            @foreach (var musteri in musteriler)
+            {
+                <option value="@musteri.Id">@musteri.Unvan</option>
+            }
+        </select>
+        <label class="form-label" for="kara-neden">Ekleme / kaldırma gerekçesi</label>
+        <textarea id="kara-neden" class="form-control mb-2" @bind="neden" maxlength="500" disabled="@(mesgul)"></textarea>
+        <div class="d-flex gap-2">
+            <button class="btn btn-danger" disabled="@(mesgul || musteriId <= 0 || string.IsNullOrWhiteSpace(neden))" @onclick="EkleAsync">Kara listeye ekle</button>
+            <button class="btn btn-outline-primary" disabled="@(mesgul)" @onclick="YukleAsync">Yenile</button>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead><tr><th>Müşteri</th><th>Ekleme</th><th>Gerekçe</th><th>Durum</th><th>Kaldırma gerekçesi</th><th>İşlem</th></tr></thead>
+            <tbody>
+                @foreach (var kayit in kayitlar)
+                {
+                    <tr @key="kayit.Id">
+                        <td>@(musteriler.FirstOrDefault(x => x.Id == kayit.MusteriId)?.Unvan ?? $"Müşteri #{kayit.MusteriId}")</td>
+                        <td>@kayit.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm") / #@kayit.EkleyenKullaniciId</td>
+                        <td>@kayit.Neden</td>
+                        <td>@(kayit.KaldirmaTarihi.HasValue ? $"Kaldırıldı: {kayit.KaldirmaTarihi.Value.ToLocalTime():dd.MM.yyyy HH:mm}" : "Aktif engel")</td>
+                        <td>@kayit.KaldirmaNedeni</td>
+                        <td>
+                            @if (kayit.KaldirmaTarihi is null)
+                            {
+                                <button class="btn btn-sm btn-outline-warning" disabled="@(mesgul || string.IsNullOrWhiteSpace(neden))" @onclick="() => KaldirAsync(kayit.Id)">Gerekçeyle kaldır</button>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (kayitlar.Count == 0)
+                {
+                    <tr><td colspan="6">Kara liste kaydı yok.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private int firmaId;
+    private int musteriId;
+    private string neden = string.Empty;
+    private string? mesaj;
+    private bool mesgul;
+    private List<RentACarKaraListeKaydi> kayitlar = new();
+    private IReadOnlyList<Cari> musteriler = Array.Empty<Cari>();
+
+    protected override Task OnInitializedAsync() => YukleAsync();
+
+    private async Task YukleAsync()
+    {
+        mesgul = true;
+        mesaj = null;
+        kayitlar.Clear();
+        musteriler = Array.Empty<Cari>();
+        musteriId = 0;
+        neden = string.Empty;
+        try
+        {
+            firmaId = Firma.AktifFirmaId ?? 0;
+            kayitlar = await KaraListe.ListeleAsync(firmaId);
+            musteriler = await Rezervasyon.GetAktifMusterilerAsync();
+        }
+        catch (Exception ex) { mesaj = ex.Message; }
+        finally { mesgul = false; }
+    }
+
+    private Task EkleAsync() => KaydetAsync(() => KaraListe.EkleAsync(firmaId, musteriId, neden));
+    private Task KaldirAsync(int id) => KaydetAsync(() => KaraListe.KaldirAsync(firmaId, id, neden));
+
+    private async Task KaydetAsync(Func<Task> islem)
+    {
+        if (mesgul) return;
+        mesgul = true;
+        try
+        {
+            await islem();
+            mesaj = "Kara liste işlemi kaydedildi.";
+            await YukleAsync();
+        }
+        catch (Exception ex) { mesaj = ex.Message; }
+        finally { mesgul = false; }
+    }
+}

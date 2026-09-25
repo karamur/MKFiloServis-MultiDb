@@ -17,6 +17,27 @@ namespace MKFiloServis.Web.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.9");
 
+            modelBuilder.Entity("MKFiloServis.Shared.Entities.RentACarKaraListeKaydi", b =>
+            {
+                b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                b.Property<int>("FirmaId").HasColumnType("INTEGER");
+                b.Property<int>("MusteriId").HasColumnType("INTEGER");
+                b.Property<string>("Neden").IsRequired().HasMaxLength(500).HasColumnType("TEXT");
+                b.Property<int>("EkleyenKullaniciId").HasColumnType("INTEGER");
+                b.Property<DateTime?>("KaldirmaTarihi").HasColumnType("TEXT");
+                b.Property<int?>("KaldiranKullaniciId").HasColumnType("INTEGER");
+                b.Property<string>("KaldirmaNedeni").HasMaxLength(500).HasColumnType("TEXT");
+                b.Property<DateTime>("CreatedAt").HasColumnType("TEXT");
+                b.Property<DateTime?>("UpdatedAt").HasColumnType("TEXT");
+                b.Property<bool>("IsDeleted").HasColumnType("INTEGER");
+                b.Property<DateTime?>("DeletedAt").HasColumnType("TEXT");
+                b.Property<int?>("DeletedBy").HasColumnType("INTEGER");
+                b.HasKey("Id");
+                b.HasIndex("FirmaId", "MusteriId");
+                b.HasIndex("MusteriId");
+                b.ToTable("RentACarKaraListeKayitlari");
+            });
+
             modelBuilder.Entity("MKFiloServis.Shared.Entities.AktiviteLog", b =>
                 {
                     b.Property<int>("Id")
@@ -10084,6 +10105,9 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.Property<int>("FirmaId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTime?>("GercekBaslangicTarihi")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("GercekBitisTarihi")
                         .HasColumnType("TEXT");
 
@@ -10093,11 +10117,43 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("IadeAksesuarlar")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("IadeHasarNotlari")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("IadeNotlari")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("IadeYakitSeviyesi")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("MusteriId")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Notlar")
                         .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TeslimAksesuarlar")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TeslimHasarNotlari")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TeslimNotlari")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TeslimYakitSeviyesi")
+                        .HasMaxLength(50)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("OdemeDurumu")
@@ -19893,6 +19949,13 @@ namespace MKFiloServis.Web.Data.Migrations
                 {
                     b.Navigation("Gruplari");
                 });
+            modelBuilder.Entity("MKFiloServis.Shared.Entities.RentACarKaraListeKaydi", b =>
+            {
+                b.HasOne("MKFiloServis.Shared.Entities.Firma", null).WithMany()
+                    .HasForeignKey("FirmaId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                b.HasOne("MKFiloServis.Shared.Entities.Cari", null).WithMany()
+                    .HasForeignKey("MusteriId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+            });
 #pragma warning restore 612, 618
         }
     }
