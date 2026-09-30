@@ -1,16 +1,16 @@
-﻿{
+{
   "Id": 0,
-  "Provider": 2,
+  "Provider": 1,
   "CanonicalProvider": 2,
-  "Host": "localhost",
-  "Port": 5432,
-  "DatabaseName": "MKFiloServis",
-  "Username": "postgres",
-  "Password": "Fast123",
+  "Host": "",
+  "Port": 0,
+  "DatabaseName": "MKFiloServis_Demo.db",
+  "Username": "",
+  "Password": "",
   "UseIntegratedSecurity": false,
   "AdditionalOptions": null,
-  "TransitionManifestPath": "C:\\Users\\muratk\\Desktop\\d yedek\\calisma\\Claude-Code\\MKFiloServis-MultiDb\\MKFiloServis.Web\\App_Data\\db-transitions\\transition-20260818083614.json",
+  "TransitionManifestPath": null,
   "LastTransitionAtUtc": "2026-08-18T08:36:14.3915401Z",
-  "LastUpdated": "2026-08-18T08:36:14.3915429Z",
+  "LastUpdated": "2026-09-30T20:01:20.9008701Z",
   "IsCanonicalProvider": true
 }

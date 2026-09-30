@@ -75,6 +75,8 @@ public sealed class RentACarKiralamaSorguServisi : IRentACarKiralamaSorguServisi
                 Durum = kiralama.Durum,
                 ToplamTutar = kiralama.ToplamTutar,
                 GunlukFiyat = kiralama.GunlukFiyat,
+                 KiralamaPlani = kiralama.KiralamaPlani,
+                 SaatlikFiyat = kiralama.SaatlikFiyat,
                 Depozito = kiralama.Depozito,
                 Notlar = kiralama.Notlar,
                 OdemeDurumu = kiralama.OdemeDurumu
@@ -111,6 +113,8 @@ public sealed class RentACarKiralamaSorguServisi : IRentACarKiralamaSorguServisi
             Durum = kiralama.Durum,
             ToplamTutar = kiralama.ToplamTutar,
             GunlukFiyat = kiralama.GunlukFiyat,
+             KiralamaPlani = kiralama.KiralamaPlani,
+             SaatlikFiyat = kiralama.SaatlikFiyat,
             Depozito = kiralama.Depozito,
             Notlar = kiralama.Notlar,
             OdemeDurumu = kiralama.OdemeDurumu,

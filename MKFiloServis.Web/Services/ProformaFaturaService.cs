@@ -142,6 +142,7 @@ public class ProformaFaturaService : IProformaFaturaService
         existing.OzelNotlar = proforma.OzelNotlar;
         existing.IskontoOrani = proforma.IskontoOrani;
         existing.KdvOrani = proforma.KdvOrani;
+        SyncKalemler(existing, proforma.Kalemler);
         existing.UpdatedAt = DateTime.UtcNow;
 
         // Yeniden hesapla
@@ -151,6 +152,57 @@ public class ProformaFaturaService : IProformaFaturaService
 
         _logger.LogInformation("Proforma fatura güncellendi: {ProformaNo}", existing.ProformaNo);
         return existing;
+    }
+
+    private void SyncKalemler(ProformaFatura existing, ICollection<ProformaFaturaKalem>? incomingKalemler)
+    {
+        var aktifKalemler = incomingKalemler?.Where(k => !k.IsDeleted).ToList() ?? new List<ProformaFaturaKalem>();
+        var gelenIdler = aktifKalemler.Where(k => k.Id > 0).Select(k => k.Id).ToHashSet();
+        var simdi = DateTime.UtcNow;
+
+        foreach (var kalem in existing.Kalemler.Where(k => !k.IsDeleted && !gelenIdler.Contains(k.Id)))
+        {
+            kalem.IsDeleted = true;
+            kalem.UpdatedAt = simdi;
+        }
+
+        for (var index = 0; index < aktifKalemler.Count; index++)
+        {
+            var gelen = aktifKalemler[index];
+            var kayitli = gelen.Id > 0
+                ? existing.Kalemler.FirstOrDefault(k => k.Id == gelen.Id && !k.IsDeleted)
+                : null;
+
+            if (gelen.Id > 0 && kayitli is null)
+            {
+                throw new InvalidOperationException("Proforma kalemi bulunamadı veya bu proformaya ait değil.");
+            }
+
+            kayitli ??= new ProformaFaturaKalem
+            {
+                ProformaFaturaId = existing.Id,
+                FirmaId = existing.FirmaId,
+                CreatedAt = simdi
+            };
+
+            kayitli.SiraNo = index + 1;
+            kayitli.StokKartiId = gelen.StokKartiId;
+            kayitli.UrunKodu = gelen.UrunKodu;
+            kayitli.UrunAdi = gelen.UrunAdi;
+            kayitli.Aciklama = gelen.Aciklama;
+            kayitli.Miktar = gelen.Miktar;
+            kayitli.Birim = gelen.Birim;
+            kayitli.BirimFiyat = gelen.BirimFiyat;
+            kayitli.IskontoOrani = gelen.IskontoOrani;
+            kayitli.KdvOrani = gelen.KdvOrani;
+            kayitli.UpdatedAt = gelen.Id > 0 ? simdi : null;
+            HesaplaKalem(kayitli);
+
+            if (gelen.Id == 0)
+            {
+                existing.Kalemler.Add(kayitli);
+            }
+        }
     }
 
     public async Task DeleteAsync(int id)

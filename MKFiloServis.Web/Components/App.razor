@@ -9,6 +9,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#1e3c72" />
+    <meta name="application-name" content="MKFiloServis" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <base href="/" />
     <ResourcePreloader />
     <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
@@ -112,6 +115,7 @@
         })();
     </script>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script src="js/pwa.js"></script>
     <script src="js/dashboard-charts.js"></script>
     <script src="js/karlilik-charts.js"></script>
     <script src="js/filo-kpi-charts.js"></script>

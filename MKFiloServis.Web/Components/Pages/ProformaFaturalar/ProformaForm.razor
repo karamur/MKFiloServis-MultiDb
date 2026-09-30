@@ -8,13 +8,13 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 
-<PageTitle>@(Id.HasValue ? "Proforma Düzenle" : "Yeni Proforma") - MK Filo Servis</PageTitle>
+<PageTitle>@(Id.HasValue ? "Proforma Fatura Düzenle" : "Yeni Proforma") - MK Filo Servis</PageTitle>
 
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h3>
             <i class="bi bi-file-earmark-text me-2"></i>
-            @(Id.HasValue ? $"Proforma Düzenle: {proforma.ProformaNo}" : "Yeni Proforma Fatura")
+            @(Id.HasValue ? $"Proforma Fatura Düzenle: {proforma.ProformaNo}" : "Yeni Proforma Fatura")
         </h3>
         <a href="/proforma-faturalar" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left me-1"></i> Geri
@@ -370,11 +370,8 @@
 
             if (Id.HasValue)
             {
-                // Güncelleme
+                proforma.Kalemler = kalemler;
                 await ProformaService.UpdateAsync(proforma);
-                
-                // Kalemler için ayrı işlem gerekebilir
-                // Şimdilik basit tutuyoruz
             }
             else
             {

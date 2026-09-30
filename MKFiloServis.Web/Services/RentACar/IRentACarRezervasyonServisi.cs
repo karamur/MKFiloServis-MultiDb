@@ -15,7 +15,11 @@ public sealed class RentACarRezervasyonTalebi : IValidatableObject
 
     public DateTime PlanlananBitisTarihi { get; set; }
 
+    public RentACarKiralamaPlani KiralamaPlani { get; set; } = RentACarKiralamaPlani.Gunluk;
+
     public decimal GunlukFiyat { get; set; }
+
+    public decimal SaatlikFiyat { get; set; }
 
     public decimal? Depozito { get; set; }
 
@@ -24,11 +28,17 @@ public sealed class RentACarRezervasyonTalebi : IValidatableObject
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        if (GunlukFiyat <= 0)
+        if (KiralamaPlani == RentACarKiralamaPlani.Gunluk && GunlukFiyat <= 0)
         {
             yield return new ValidationResult(
                 "Günlük fiyat sıfırdan büyük olmalıdır.",
                 [nameof(GunlukFiyat)]);
+        }
+        if (KiralamaPlani == RentACarKiralamaPlani.Saatlik && SaatlikFiyat <= 0)
+        {
+            yield return new ValidationResult(
+                "Saatlik fiyat sıfırdan büyük olmalıdır.",
+                [nameof(SaatlikFiyat)]);
         }
         if (Depozito < 0)
         {

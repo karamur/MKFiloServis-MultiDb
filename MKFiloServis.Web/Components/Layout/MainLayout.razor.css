@@ -58,10 +58,24 @@ main {
 }
 
 @media (max-width: 640.98px) {
+    main { min-width: 0; width: 100%; }
+
     .top-row {
         justify-content: space-between;
-        padding-inline: 1rem !important;
+        padding: 0.55rem 0.75rem !important;
+        min-height: 3.5rem;
+        gap: 0.5rem;
     }
+
+    .top-row > div { min-width: 0; }
+    .top-row > div:last-child { flex-wrap: wrap; justify-content: flex-end; gap: 0.3rem !important; }
+    .top-row > div:last-child > * { flex-shrink: 0; }
+    .top-row .btn { min-height: 38px; }
+    .top-row .dropdown-menu { max-width: min(90vw, 320px); }
+
+    ::deep .sidebar .top-row { padding-right: 4.5rem !important; }
+    ::deep .sidebar .navbar-toggler { z-index: 2; }
+    ::deep .sidebar .nav-scrollable { max-height: min(70vh, 620px); overflow-y: auto; }
 
     .top-row ::deep a,
     .top-row ::deep .btn-link {
@@ -98,6 +112,8 @@ main {
         padding-left: 2rem !important;
         padding-right: 2rem !important;
     }
+
+    main { min-width: 0; }
 }
 
 #blazor-error-ui {

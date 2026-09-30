@@ -25,6 +25,8 @@ public sealed class RentACarKiralamaSatiri
     public KiralamaDurumu Durum { get; init; }
     public decimal ToplamTutar { get; init; }
     public decimal GunlukFiyat { get; init; }
+    public RentACarKiralamaPlani KiralamaPlani { get; init; }
+    public decimal SaatlikFiyat { get; init; }
     public decimal? Depozito { get; init; }
     public string? Notlar { get; init; }
     public string? TeslimYakitSeviyesi { get; init; }

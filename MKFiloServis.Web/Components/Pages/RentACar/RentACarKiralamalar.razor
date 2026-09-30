@@ -2,7 +2,6 @@
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
 @using MKFiloServis.Shared.Entities
-@using MKFiloServis.Web.Services
 @using MKFiloServis.Web.Services.Interfaces
 @using MKFiloServis.Web.Services.RentACar
 @inject IRentACarKiralamaSorguServisi KiralamaSorguServisi
@@ -71,9 +70,25 @@
                                 <ValidationMessage For="@(() => rezervasyon.PlanlananBitisTarihi)" class="text-danger" />
                             </div>
                             <div class="col-md-2">
-                                <label class="form-label">Günlük fiyat (₺)</label>
-                                <InputNumber class="form-control" @bind-Value="rezervasyon.GunlukFiyat" />
-                                <ValidationMessage For="@(() => rezervasyon.GunlukFiyat)" class="text-danger" />
+                                <label class="form-label">Kiralama planı</label>
+                                <InputSelect class="form-select" @bind-Value="rezervasyon.KiralamaPlani" @bind-Value:after="() => RezervasyonTarihiDegisti()">
+                                    <option value="@RentACarKiralamaPlani.Gunluk">Günlük</option>
+                                    <option value="@RentACarKiralamaPlani.Saatlik">Saatlik</option>
+                                </InputSelect>
+                            </div>
+                            <div class="col-md-2">
+                                @if (rezervasyon.KiralamaPlani == RentACarKiralamaPlani.Saatlik)
+                                {
+                                    <label class="form-label">Saatlik fiyat (₺)</label>
+                                    <InputNumber class="form-control" @bind-Value="rezervasyon.SaatlikFiyat" />
+                                    <ValidationMessage For="@(() => rezervasyon.SaatlikFiyat)" class="text-danger" />
+                                }
+                                else
+                                {
+                                    <label class="form-label">Günlük fiyat (₺)</label>
+                                    <InputNumber class="form-control" @bind-Value="rezervasyon.GunlukFiyat" />
+                                    <ValidationMessage For="@(() => rezervasyon.GunlukFiyat)" class="text-danger" />
+                                }
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">Depozito (₺)</label>
@@ -118,6 +133,12 @@
                                     <small class="text-muted d-block mt-1">Tarih aralığı için önce müsait araçları arayın.</small>
                                 }
                             </div>
+                            <div class="col-md-4">
+                                <div class="alert alert-light border mb-0">
+                                    <strong>Plan özeti:</strong> @KiralamaSuresiMetni
+                                    <br /><span>Hesaplama: @(rezervasyon.KiralamaPlani == RentACarKiralamaPlani.Saatlik ? "saatlik" : "günlük")</span>
+                                </div>
+                            </div>
                             <div class="col-md-6">
                                 <label class="form-label">Not</label>
                                 <InputText class="form-control" @bind-Value="rezervasyon.Notlar" maxlength="500" />
@@ -145,7 +166,9 @@
                                             <div class="card-body">
                                                 <h6>@arac.AktifPlaka</h6>
                                                 <p>@arac.Marka @arac.Model</p>
-                                                <span class="badge bg-success mb-2">Seçilen tarihlerde müsait</span>
+                                                 <span class="badge @(arac.Durumu == AracDurumu.Kiralik ? "bg-info text-dark" : "bg-success") mb-2">
+                                                     @AracDurumuMetni(arac.Durumu) — seçilen saatlerde müsait
+                                                 </span>
                                                 <button type="button" class="btn btn-outline-primary w-100" aria-pressed="@(rezervasyon.AracId == arac.Id)" @onclick="() => AracKartindanSec(arac)">
                                                     @(rezervasyon.AracId == arac.Id ? "Seçildi" : "Aracı seç")
                                                 </button>
@@ -469,9 +492,10 @@
                                     <tr><th>Araç</th><td>@BelgeDegeri(onizlenenKiralama.AracTanimi)</td><th>Plaka</th><td>@BelgeDegeri(onizlenenKiralama.Plaka)</td></tr>
                                         <tr><th>Müşteri</th><td>@BelgeDegeri(onizlenenKiralama.MusteriUnvan)</td><th>Durum</th><td>@onizlenenKiralama.Durum</td></tr>
                                     <tr><th>Başlangıç</th><td>@onizlenenKiralama.BaslangicTarihi.ToString("dd.MM.yyyy HH:mm")</td><th>Planlanan iade</th><td>@onizlenenKiralama.PlanlananBitisTarihi.ToString("dd.MM.yyyy HH:mm")</td></tr>
-                                        <tr><th>Gerçek teslim</th><td>@(onizlenenKiralama.GercekBaslangicTarihi?.ToString("dd.MM.yyyy HH:mm") ?? "Teslim edilmedi")</td><th>Gerçek iade</th><td>@(onizlenenKiralama.GercekBitisTarihi?.ToString("dd.MM.yyyy HH:mm") ?? "İade edilmedi")</td></tr>
-                                    <tr><th>Günlük bedel</th><td>@onizlenenKiralama.GunlukFiyat.ToString("N2") ₺</td><th>Toplam</th><td>@onizlenenKiralama.ToplamTutar.ToString("N2") ₺</td></tr>
-                                    <tr><th>Depozito</th><td>@(onizlenenKiralama.Depozito?.ToString("N2") ?? "-") ₺</td><th>Ödeme</th><td>@onizlenenKiralama.OdemeDurumu</td></tr>
+                                        <tr><th>Gerçek teslim</th><td>@(onizlenenKiralama.GercekBaslangicTarihi?.ToString("dd.MM.yyyy HH:mm") ?? "Teslim edilmedi")</td><th>Gerçek iade</th><td>@(onizlenenKiralama.GercekBitisTarihi?.ToString("dd.MM.yyyy HH:mm") ?? string.Empty)</td></tr>
+                                    <tr><th>Plan</th><td>@KiralamaPlaniMetni(onizlenenKiralama.KiralamaPlani)</td><th>Toplam</th><td>@onizlenenKiralama.ToplamTutar.ToString("N2") ₺</td></tr>
+                                    <tr><th>Birim bedel</th><td>@BirimFiyatMetni(onizlenenKiralama)</td><th>Depozito</th><td>@(onizlenenKiralama.Depozito?.ToString("N2") ?? "-") ₺</td></tr>
+                                    <tr><th>Ödeme</th><td colspan="3">@onizlenenKiralama.OdemeDurumu</td></tr>
                                 </tbody>
                             </table>
 
@@ -490,7 +514,7 @@
                                 <h3 class="h6 mt-4">Araç teslim kaydı</h3>
                                 <table class="table table-bordered table-sm">
                                     <tbody>
-                                        <tr><th>Tarih / saat</th><td>@(onizlenenKiralama.GercekBaslangicTarihi?.ToString("dd.MM.yyyy HH:mm") ?? "Teslim edilmedi")</td><th>Kilometre</th><td>@(onizlenenKiralama.BaslangicKm?.ToString("N0") ?? "-")</td></tr>
+                                        <tr><th>Tarih / saat</th><td>@(onizlenenKiralama.GercekBaslangicTarihi?.ToString("dd.MM.yyyy HH:mm") ?? "Teslim edilmedi")</td><th>Kilometre</th><td>@(onizlenenKiralama.BaslangicKm?.ToString("N0") ?? string.Empty)</td></tr>
                                         <tr><th>Yakıt seviyesi</th><td colspan="3"><span class="fw-semibold">@BelgeDegeri(onizlenenKiralama.TeslimYakitSeviyesi)</span></td></tr>
                                         <tr><th>Hasar / eksik</th><td colspan="3">@BelgeDegeri(onizlenenKiralama.TeslimHasarNotlari)</td></tr>
                                         <tr><th>Aksesuar / ekipman</th><td colspan="3">@BelgeDegeri(onizlenenKiralama.TeslimAksesuarlar)</td></tr>
@@ -500,7 +524,7 @@
                                 <h3 class="h6 mt-4">Araç iade kaydı</h3>
                                 <table class="table table-bordered table-sm">
                                     <tbody>
-                                        <tr><th>Tarih / saat</th><td>@(onizlenenKiralama.GercekBitisTarihi?.ToString("dd.MM.yyyy HH:mm") ?? "İade edilmedi")</td><th>Kilometre</th><td>@(onizlenenKiralama.BitisKm?.ToString("N0") ?? "-")</td></tr>
+                                        <tr><th>Tarih / saat</th><td>@(onizlenenKiralama.GercekBitisTarihi?.ToString("dd.MM.yyyy HH:mm") ?? string.Empty)</td><th>Kilometre</th><td>@(onizlenenKiralama.BitisKm?.ToString("N0") ?? string.Empty)</td></tr>
                                         <tr><th>Yakıt seviyesi</th><td colspan="3"><span class="fw-semibold">@BelgeDegeri(onizlenenKiralama.IadeYakitSeviyesi)</span></td></tr>
                                         <tr><th>Hasar / eksik</th><td colspan="3">@BelgeDegeri(onizlenenKiralama.IadeHasarNotlari)</td></tr>
                                         <tr><th>Aksesuar / ekipman</th><td colspan="3">@BelgeDegeri(onizlenenKiralama.IadeAksesuarlar)</td></tr>
@@ -512,7 +536,7 @@
                                     <tbody>
                                         <tr><th>Rezervasyon notları</th><td>@BelgeDegeri(onizlenenKiralama.Notlar)</td></tr>
                                         <tr><th>Teslim durumu</th><td>@(onizlenenKiralama.GercekBaslangicTarihi.HasValue ? "Teslim kaydı tamamlandı" : "Teslim kaydı bekleniyor")</td></tr>
-                                        <tr><th>İade durumu</th><td>@(onizlenenKiralama.GercekBitisTarihi.HasValue ? "İade kaydı tamamlandı" : "İade kaydı bekleniyor")</td></tr>
+                                        <tr><th>İade durumu</th><td>@(onizlenenKiralama.GercekBitisTarihi.HasValue ? "İade kaydı tamamlandı" : string.Empty)</td></tr>
                                     </tbody>
                                 </table>
                             }
@@ -805,6 +829,30 @@
     private bool aracIslemBasarili;
     private string? aracIslemMesaji;
 
+    private string KiralamaSuresiMetni
+    {
+        get
+        {
+            var sure = rezervasyon.PlanlananBitisTarihi - rezervasyon.BaslangicTarihi;
+            if (sure <= TimeSpan.Zero)
+            {
+                return "Geçerli bir tarih-saat aralığı seçin.";
+            }
+
+            return rezervasyon.KiralamaPlani == RentACarKiralamaPlani.Saatlik
+                ? $"{Math.Ceiling(sure.TotalHours):0} saat"
+                : $"{Math.Max(1, Math.Ceiling(sure.TotalDays)):0} gün";
+        }
+    }
+
+    private static string AracDurumuMetni(AracDurumu durum) => durum switch
+    {
+        AracDurumu.Bosta => "Boşta",
+        AracDurumu.Kiralik => "Kiralık",
+        AracDurumu.Kiralandi => "Kiralandı",
+        _ => durum.ToString()
+    };
+
     private string BelgeBasligi => onizlenenBelgeTuru == RentACarBelgeTuru.Sozlesme
         ? "Kira sözleşmesi taslağı"
         : "Teslim / iade tutanağı";
@@ -819,7 +867,7 @@
         .Where(x => x.Durum != KiralamaDurumu.IptalEdildi)
         .Sum(x => x.ToplamTutar);
 
-    private static string BelgeDegeri(string? deger) => string.IsNullOrWhiteSpace(deger) ? "Belirtilmemiş" : deger;
+    private static string BelgeDegeri(string? deger) => string.IsNullOrWhiteSpace(deger) ? string.Empty : deger;
 
     private void AracIslemPenceresiAc(RentACarKiralamaSatiri kiralama, bool iade)
     {
@@ -989,7 +1037,9 @@
             AracId = kiralama.AracId,
             BaslangicTarihi = kiralama.BaslangicTarihi,
             PlanlananBitisTarihi = kiralama.PlanlananBitisTarihi,
+            KiralamaPlani = kiralama.KiralamaPlani,
             GunlukFiyat = kiralama.GunlukFiyat,
+            SaatlikFiyat = kiralama.SaatlikFiyat,
             Depozito = kiralama.Depozito,
             Notlar = kiralama.Notlar
         };
@@ -1276,6 +1326,17 @@
         var son = bitisFiltre?.ToString("dd.MM.yyyy") ?? "Bitiş yok";
         return $"{ilk} - {son}";
     }
+
+    private static string KiralamaPlaniMetni(RentACarKiralamaPlani plan) => plan switch
+    {
+        RentACarKiralamaPlani.Saatlik => "Saatlik",
+        _ => "Günlük"
+    };
+
+    private static string BirimFiyatMetni(RentACarKiralamaSatiri kiralama)
+        => kiralama.KiralamaPlani == RentACarKiralamaPlani.Saatlik
+            ? $"{kiralama.SaatlikFiyat:N2} ₺ / saat"
+            : $"{kiralama.GunlukFiyat:N2} ₺ / gün";
 
     private static string DurumSinifi(KiralamaDurumu durum) => durum switch
     {

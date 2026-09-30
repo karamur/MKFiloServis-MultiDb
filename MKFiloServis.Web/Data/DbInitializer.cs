@@ -921,6 +921,31 @@ WHERE IsDeleted = 0;");
                         ON "RentACarKaraListeKayitlari" ("FirmaId", "MusteriId");
                     CREATE INDEX IF NOT EXISTS "IX_RentACarKaraListeKayitlari_MusteriId"
                         ON "RentACarKaraListeKayitlari" ("MusteriId");
+
+                    CREATE TABLE IF NOT EXISTS "RentACarOdemeHareketleri" (
+                        "Id" INTEGER NOT NULL CONSTRAINT "PK_RentACarOdemeHareketleri" PRIMARY KEY AUTOINCREMENT,
+                        "FirmaId" INTEGER NOT NULL,
+                        "MusteriKiralamaId" INTEGER NOT NULL,
+                        "IslemTarihi" TEXT NOT NULL,
+                        "HareketTuru" INTEGER NOT NULL,
+                        "OdemeYontemi" INTEGER NOT NULL,
+                        "Tutar" decimal(18,2) NOT NULL,
+                        "BelgeNo" TEXT NULL,
+                        "Aciklama" TEXT NULL,
+                        "CreatedAt" TEXT NOT NULL,
+                        "UpdatedAt" TEXT NULL,
+                        "IsDeleted" INTEGER NOT NULL DEFAULT 0,
+                        "DeletedAt" TEXT NULL,
+                        "DeletedBy" INTEGER NULL,
+                        CONSTRAINT "FK_RentACarOdemeHareketleri_Firmalar_FirmaId"
+                            FOREIGN KEY ("FirmaId") REFERENCES "Firmalar" ("Id") ON DELETE RESTRICT,
+                        CONSTRAINT "FK_RentACarOdemeHareketleri_MusteriKiralamalar_MusteriKiralamaId"
+                            FOREIGN KEY ("MusteriKiralamaId") REFERENCES "MusteriKiralamalar" ("Id") ON DELETE RESTRICT
+                    );
+                    CREATE INDEX IF NOT EXISTS "IX_RentACarOdemeHareketleri_FirmaId_MusteriKiralamaId_IslemTarihi"
+                        ON "RentACarOdemeHareketleri" ("FirmaId", "MusteriKiralamaId", "IslemTarihi");
+                    CREATE INDEX IF NOT EXISTS "IX_RentACarOdemeHareketleri_MusteriKiralamaId"
+                        ON "RentACarOdemeHareketleri" ("MusteriKiralamaId");
                     """);
             }
             catch (Exception ex)

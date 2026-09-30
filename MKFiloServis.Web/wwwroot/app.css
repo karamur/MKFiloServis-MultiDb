@@ -179,6 +179,32 @@ html, body {
     color: var(--crm-text);
 }
 
+html, body {
+    min-height: 100%;
+    overflow-x: hidden;
+}
+
+*, *::before, *::after {
+    -webkit-tap-highlight-color: transparent;
+}
+
+button, .btn, input, select, textarea {
+    touch-action: manipulation;
+}
+
+@media (max-width: 640.98px) {
+    body { font-size: 0.95rem; }
+    .content { padding: 0.85rem !important; }
+    .content h1 { font-size: 1.45rem; }
+    .content h2 { font-size: 1.25rem; }
+    .content .card { margin-bottom: 0.85rem; }
+    .content .table-responsive { -webkit-overflow-scrolling: touch; }
+    .content .btn { min-height: 40px; }
+    .content .form-control, .content .form-select { min-height: 42px; font-size: 16px; }
+    .modal-dialog { margin: 0.5rem; }
+    .modal-dialog.modal-xl, .modal-dialog.modal-lg { max-width: calc(100% - 1rem); }
+}
+
 body {
     letter-spacing: 0.1px;
 }

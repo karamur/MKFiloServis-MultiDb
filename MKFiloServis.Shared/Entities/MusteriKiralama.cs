@@ -86,6 +86,17 @@ public class MusteriKiralama : BaseEntity, IFirmaTenant
     public decimal GunlukFiyat { get; set; }
 
     /// <summary>
+    /// Kiralama ücretlendirme planı
+    /// </summary>
+    public RentACarKiralamaPlani KiralamaPlani { get; set; } = RentACarKiralamaPlani.Gunluk;
+
+    /// <summary>
+    /// Saatlik kiralama bedeli
+    /// </summary>
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal SaatlikFiyat { get; set; }
+
+    /// <summary>
     /// Toplam tutar
     /// </summary>
     [Column(TypeName = "decimal(18,2)")]

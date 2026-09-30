@@ -99,6 +99,12 @@ Web uygulamasını yerel ortamınızın veritabanı ve gizli ayarları yapıland
 dotnet run --project .\MKFiloServis.Web\MKFiloServis.Web.csproj
 ```
 
+### Masaüstü ve mobil uygulama olarak kurulum
+
+MKFiloServis web uygulaması PWA olarak kurulabilir. Web uygulamasını HTTPS üzerinden yayımlayın, bilgisayar veya telefonda desteklenen tarayıcıdan açın ve **Uygulamayı yükle** seçeneğini kullanın. iPhone/iPad'de Safari paylaş menüsünden **Ana Ekrana Ekle** seçilir. Masaüstünde Chrome/Edge kurulum simgesi veya tarayıcı menüsü kullanılabilir.
+
+Kurulan uygulama aynı sunucudaki Blazor uygulamasına bağlanır; cihazda yerel veritabanı barındırmaz ve çevrimdışı işlem yapmaz. Geliştirme ortamında `localhost` masaüstünde kurulabilir; telefondan erişim için uygulamayı telefonun ulaşabildiği bir HTTPS adresinde yayımlayın. HTTPS olmayan yerel ağ adreslerinde tarayıcı PWA kurulumunu ve service worker'ı engelleyebilir.
+
 > Uygulamanın adresi ve bağlantı noktası etkin ASP.NET Core yapılandırmasına bağlıdır; çalıştırma çıktısındaki adresi kullanın. Gerçek ortam sırlarını kaynak koda veya Git’e eklemeyin.
 
 ## Yapılandırma

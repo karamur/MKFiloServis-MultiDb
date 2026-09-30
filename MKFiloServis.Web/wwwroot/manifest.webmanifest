@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "MKFiloServis Filo Yönetimi",
+  "short_name": "MKFiloServis",
+  "description": "Filo, servis, finans ve Rent a Car operasyonları",
+  "lang": "tr-TR",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6f8fb",
+  "theme_color": "#1e3c72",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

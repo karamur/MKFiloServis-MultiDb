@@ -65,7 +65,9 @@ public sealed class RentACarRezervasyonServisi : IRentACarRezervasyonServisi
 
         var adayAraclar = await context.Araclar.AsNoTracking()
             .Where(x => x.FirmaId == firmaId && x.Aktif && !x.IsDeleted
-                && (x.Durumu == AracDurumu.Bosta || x.Durumu == AracDurumu.Kiralik))
+                && (x.Durumu == AracDurumu.Bosta
+                    || x.Durumu == AracDurumu.Kiralik
+                    || x.Durumu == AracDurumu.Kiralandi))
             .OrderBy(x => x.AktifPlaka)
             .ToListAsync(cancellationToken);
 
@@ -86,9 +88,13 @@ public sealed class RentACarRezervasyonServisi : IRentACarRezervasyonServisi
         {
             throw new InvalidOperationException("Müşteri ve araç seçilmelidir.");
         }
-        if (talep.GunlukFiyat <= 0)
+        if (talep.KiralamaPlani == RentACarKiralamaPlani.Gunluk && talep.GunlukFiyat <= 0)
         {
             throw new InvalidOperationException("Günlük fiyat sıfırdan büyük olmalıdır.");
+        }
+        if (talep.KiralamaPlani == RentACarKiralamaPlani.Saatlik && talep.SaatlikFiyat <= 0)
+        {
+            throw new InvalidOperationException("Saatlik fiyat sıfırdan büyük olmalıdır.");
         }
         if (talep.Depozito < 0)
         {
@@ -115,10 +121,12 @@ public sealed class RentACarRezervasyonServisi : IRentACarRezervasyonServisi
 
         var aracGecerli = await context.Araclar.AnyAsync(x =>
             x.Id == talep.AracId && x.FirmaId == firmaId && x.Aktif && !x.IsDeleted
-            && (x.Durumu == AracDurumu.Bosta || x.Durumu == AracDurumu.Kiralik), cancellationToken);
+            && (x.Durumu == AracDurumu.Bosta
+                || x.Durumu == AracDurumu.Kiralik
+                || x.Durumu == AracDurumu.Kiralandi), cancellationToken);
         if (!aracGecerli)
         {
-            throw new InvalidOperationException("Seçilen araç Boşta/Kiralık durumda değil, aktif firmaya ait değil veya kullanılamıyor.");
+            throw new InvalidOperationException("Seçilen araç Boşta/Kiralık/Kiralandı durumunda değil, aktif firmaya ait değil veya kullanılamıyor.");
         }
 
         var cakismaVar = await context.MusteriKiralamalar.AnyAsync(x =>
@@ -139,8 +147,10 @@ public sealed class RentACarRezervasyonServisi : IRentACarRezervasyonServisi
             AracId = talep.AracId,
             BaslangicTarihi = talep.BaslangicTarihi,
             PlanlananBitisTarihi = talep.PlanlananBitisTarihi,
+            KiralamaPlani = talep.KiralamaPlani,
             GunlukFiyat = decimal.Round(talep.GunlukFiyat, 2),
-            ToplamTutar = decimal.Round(ToplamTutarHesapla(talep.BaslangicTarihi, talep.PlanlananBitisTarihi, talep.GunlukFiyat), 2),
+            SaatlikFiyat = decimal.Round(talep.SaatlikFiyat, 2),
+            ToplamTutar = decimal.Round(ToplamTutarHesapla(talep), 2),
             Depozito = talep.Depozito.HasValue ? decimal.Round(talep.Depozito.Value, 2) : null,
             Durum = KiralamaDurumu.Rezervasyon,
             OdemeDurumu = KiralamaOdemeDurumu.Beklemede,
@@ -195,10 +205,12 @@ public sealed class RentACarRezervasyonServisi : IRentACarRezervasyonServisi
 
         var aracGecerli = await context.Araclar.AnyAsync(x =>
             x.Id == talep.AracId && x.FirmaId == firmaId && x.Aktif && !x.IsDeleted
-            && (x.Durumu == AracDurumu.Bosta || x.Durumu == AracDurumu.Kiralik), cancellationToken);
+            && (x.Durumu == AracDurumu.Bosta
+                || x.Durumu == AracDurumu.Kiralik
+                || x.Durumu == AracDurumu.Kiralandi), cancellationToken);
         if (!aracGecerli)
         {
-            throw new InvalidOperationException("Seçilen araç Boşta/Kiralık durumda değil, aktif firmaya ait değil veya kullanılamıyor.");
+            throw new InvalidOperationException("Seçilen araç Boşta/Kiralık/Kiralandı durumunda değil, aktif firmaya ait değil veya kullanılamıyor.");
         }
 
         var cakismaVar = await context.MusteriKiralamalar.AnyAsync(x =>
@@ -216,9 +228,11 @@ public sealed class RentACarRezervasyonServisi : IRentACarRezervasyonServisi
         kiralama.AracId = talep.AracId;
         kiralama.BaslangicTarihi = talep.BaslangicTarihi;
         kiralama.PlanlananBitisTarihi = talep.PlanlananBitisTarihi;
+        kiralama.KiralamaPlani = talep.KiralamaPlani;
         kiralama.GunlukFiyat = decimal.Round(talep.GunlukFiyat, 2);
+        kiralama.SaatlikFiyat = decimal.Round(talep.SaatlikFiyat, 2);
         kiralama.ToplamTutar = decimal.Round(
-            ToplamTutarHesapla(talep.BaslangicTarihi, talep.PlanlananBitisTarihi, talep.GunlukFiyat), 2);
+            ToplamTutarHesapla(talep), 2);
         kiralama.Depozito = talep.Depozito.HasValue ? decimal.Round(talep.Depozito.Value, 2) : null;
         kiralama.Notlar = string.IsNullOrWhiteSpace(talep.Notlar) ? null : talep.Notlar.Trim();
         kiralama.UpdatedAt = DateTime.UtcNow;
@@ -435,9 +449,13 @@ public sealed class RentACarRezervasyonServisi : IRentACarRezervasyonServisi
         {
             throw new InvalidOperationException("Müşteri ve araç seçilmelidir.");
         }
-        if (talep.GunlukFiyat <= 0)
+        if (talep.KiralamaPlani == RentACarKiralamaPlani.Gunluk && talep.GunlukFiyat <= 0)
         {
             throw new InvalidOperationException("Günlük fiyat sıfırdan büyük olmalıdır.");
+        }
+        if (talep.KiralamaPlani == RentACarKiralamaPlani.Saatlik && talep.SaatlikFiyat <= 0)
+        {
+            throw new InvalidOperationException("Saatlik fiyat sıfırdan büyük olmalıdır.");
         }
         if (talep.Depozito < 0)
         {
@@ -449,9 +467,11 @@ public sealed class RentACarRezervasyonServisi : IRentACarRezervasyonServisi
         }
     }
 
-    private static decimal ToplamTutarHesapla(DateTime baslangic, DateTime bitis, decimal gunlukFiyat)
+    private static decimal ToplamTutarHesapla(RentACarRezervasyonTalebi talep)
     {
-        var gunSayisi = Math.Max(1, (int)Math.Ceiling((bitis - baslangic).TotalDays));
-        return gunSayisi * gunlukFiyat;
+        var sure = talep.PlanlananBitisTarihi - talep.BaslangicTarihi;
+        return talep.KiralamaPlani == RentACarKiralamaPlani.Saatlik
+            ? (decimal)Math.Ceiling(sure.TotalHours) * talep.SaatlikFiyat
+            : Math.Max(1, (int)Math.Ceiling(sure.TotalDays)) * talep.GunlukFiyat;
     }
 }

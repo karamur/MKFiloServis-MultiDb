@@ -16,7 +16,10 @@
                     <h3 class="mb-1"><i class="bi bi-cash-coin me-2 text-success"></i>Rent a Car Ödeme Takibi</h3>
                     <p class="text-muted mb-0">Kira tahsilatı, kısmi ödeme, depozito tahsilatı ve iadelerini izleyin.</p>
                 </div>
-                <button class="btn btn-outline-primary" @onclick="YukleAsync" disabled="@(yukleniyor)"><i class="bi bi-arrow-clockwise me-1"></i>Yenile</button>
+                <div class="d-flex gap-2">
+                    <a class="btn btn-outline-success" href="/proforma-faturalar"><i class="bi bi-file-earmark-text me-1"></i>Proforma faturalar</a>
+                    <button class="btn btn-outline-primary" @onclick="YukleAsync" disabled="@(yukleniyor)"><i class="bi bi-arrow-clockwise me-1"></i>Yenile</button>
+                </div>
             </div>
 
             <RentACarAltMenu Aktif="odemeler" />
@@ -98,7 +101,7 @@
                         <tbody>
                             @if (yukleniyor) { <tr><td colspan="11" class="text-center py-4">Yükleniyor...</td></tr> }
                             else if (ozetler.Count == 0) { <tr><td colspan="11" class="text-center text-muted py-4">Kiralama kaydı bulunamadı.</td></tr> }
-                            else @foreach (var o in ozetler) { <tr class="@(o.KalanKiraTutari > 0 ? "table-warning" : "table-success")"><td>@o.SozlesmeNo</td><td>@o.Musteri</td><td>@o.Plaka</td><td>@o.KiralamaDurumu</td><td class="text-end">@o.KiralamaTutari.ToString("N2")</td><td class="text-end text-success">@o.NetKiraTahsilati.ToString("N2")</td><td class="text-end text-danger">@o.KalanKiraTutari.ToString("N2")</td><td class="text-end">@o.DepozitoTutari.ToString("N2")</td><td class="text-end text-warning">@o.EmanettekiDepozito.ToString("N2")</td><td>@o.OdemeDurumu</td><td class="text-nowrap"><button class="btn btn-sm btn-success me-1" @onclick="() => OdemeFormunuAc(o)"><i class="bi bi-cash me-1"></i>Ödeme</button><button class="btn btn-sm btn-outline-primary" @onclick="() => DetayAc(o)"><i class="bi bi-eye me-1"></i>Detay</button></td></tr> }
+                            else @foreach (var o in ozetler) { <tr class="@(o.KalanKiraTutari > 0 ? "table-warning" : "table-success")"><td>@o.SozlesmeNo</td><td>@o.Musteri</td><td>@o.Plaka</td><td>@o.KiralamaDurumu</td><td class="text-end">@o.KiralamaTutari.ToString("N2")</td><td class="text-end text-success">@o.NetKiraTahsilati.ToString("N2")</td><td class="text-end text-danger">@o.KalanKiraTutari.ToString("N2")</td><td class="text-end">@DepozitoGorunenTutar(o)</td><td class="text-end text-warning">@o.EmanettekiDepozito.ToString("N2")</td><td>@o.OdemeDurumu</td><td class="text-nowrap"><button class="btn btn-sm btn-success me-1" @onclick="() => OdemeFormunuAc(o)"><i class="bi bi-cash me-1"></i>Ödeme</button><button class="btn btn-sm btn-outline-primary" @onclick="() => DetayAc(o)"><i class="bi bi-eye me-1"></i>Detay</button></td></tr> }
                         </tbody>
                     </table>
                 </div>
@@ -112,7 +115,7 @@
                             <div class="row g-3 mb-3"><div class="col-md-4"><strong>Müşteri</strong><div>@detayOzet.Musteri</div></div><div class="col-md-4"><strong>Plaka</strong><div>@detayOzet.Plaka</div></div><div class="col-md-4"><strong>Durum</strong><div>@detayOzet.KiralamaDurumu / @detayOzet.OdemeDurumu</div></div></div>
                             <table class="table table-bordered"><tbody><tr><th>Kiralama tutarı</th><td>@detayOzet.KiralamaTutari.ToString("N2") ₺</td><th>Net tahsilat</th><td>@detayOzet.NetKiraTahsilati.ToString("N2") ₺</td></tr><tr><th>Kalan kira</th><td>@detayOzet.KalanKiraTutari.ToString("N2") ₺</td><th>Planlanan depozito</th><td>@detayOzet.DepozitoTutari.ToString("N2") ₺</td></tr><tr><th>Depozito tahsilatı</th><td>@detayOzet.DepozitoTahsilati.ToString("N2") ₺</td><th>Depozito iadesi / emanette</th><td>@detayOzet.DepozitoIadesi.ToString("N2") ₺ / @detayOzet.EmanettekiDepozito.ToString("N2") ₺</td></tr></tbody></table>
                             <h6>Hareketler</h6>
-                            <div class="table-responsive"><table class="table table-sm"><thead><tr><th>Tarih</th><th>Tür</th><th>Yöntem</th><th>Tutar</th><th>Belge</th><th>Açıklama</th></tr></thead><tbody>@foreach (var h in DetayHareketleri) { <tr><td>@h.IslemTarihi.ToString("dd.MM.yyyy HH:mm")</td><td>@HareketTuruMetni(h.HareketTuru)</td><td>@OdemeYontemiMetni(h.OdemeYontemi)</td><td>@h.Tutar.ToString("N2") ₺</td><td>@(h.BelgeNo ?? "-")</td><td>@(h.Aciklama ?? "-")</td></tr> }</tbody></table></div>
+                            <div class="table-responsive"><table class="table table-sm"><thead><tr><th>Tarih</th><th>Tür</th><th>Yöntem</th><th>Tutar</th><th>Belge</th><th>Açıklama</th></tr></thead><tbody>@foreach (var h in DetayHareketleri) { <tr class="@HareketSatirRengi(h.HareketTuru)"><td>@h.IslemTarihi.ToString("dd.MM.yyyy HH:mm")</td><td><span class="badge @HareketRozetRengi(h.HareketTuru)">@HareketTuruMetni(h.HareketTuru)</span></td><td>@OdemeYontemiMetni(h.OdemeYontemi)</td><td>@h.Tutar.ToString("N2") ₺</td><td>@(h.BelgeNo ?? "-")</td><td>@(h.Aciklama ?? "-")</td></tr> }</tbody></table></div>
                         </div>
                         <div class="modal-footer"><button class="btn btn-secondary" @onclick="DetayKapat">Kapat</button><button class="btn btn-success" @onclick="() => DetaydanOdemeAc(detayOzet)">Ödeme al</button></div>
                     </div></div>
@@ -124,7 +127,7 @@
                 <div class="card-header">Ödeme hareket geçmişi</div>
                 <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Tarih</th><th>Sözleşme</th><th>Müşteri</th><th>Plaka</th><th>Tür</th><th>Yöntem</th><th class="text-end">Tutar</th><th>Belge no</th><th>Açıklama</th></tr></thead><tbody>
                     @if (hareketler.Count == 0) { <tr><td colspan="9" class="text-center text-muted py-4">Ödeme hareketi bulunamadı.</td></tr> }
-                    else @foreach (var h in hareketler) { <tr><td>@h.IslemTarihi.ToString("dd.MM.yyyy HH:mm")</td><td>@h.SozlesmeNo</td><td>@h.Musteri</td><td>@h.Plaka</td><td>@HareketTuruMetni(h.HareketTuru)</td><td>@OdemeYontemiMetni(h.OdemeYontemi)</td><td class="text-end">@h.Tutar.ToString("N2") ₺</td><td>@(h.BelgeNo ?? "-")</td><td>@(h.Aciklama ?? "-")</td></tr> }
+                    else @foreach (var h in hareketler) { <tr class="@HareketSatirRengi(h.HareketTuru)"><td>@h.IslemTarihi.ToString("dd.MM.yyyy HH:mm")</td><td>@h.SozlesmeNo</td><td>@h.Musteri</td><td>@h.Plaka</td><td><span class="badge @HareketRozetRengi(h.HareketTuru)">@HareketTuruMetni(h.HareketTuru)</span></td><td>@OdemeYontemiMetni(h.OdemeYontemi)</td><td class="text-end">@h.Tutar.ToString("N2") ₺</td><td>@(h.BelgeNo ?? "-")</td><td>@(h.Aciklama ?? "-")</td></tr> }
                 </tbody></table></div>
             </div>
         </div>
@@ -147,6 +150,8 @@
     private decimal ToplamTahsilat => ozetler.Sum(x => x.NetKiraTahsilati);
     private decimal ToplamKalan => ozetler.Sum(x => x.KalanKiraTutari);
     private decimal ToplamEmanetDepozito => ozetler.Sum(x => x.EmanettekiDepozito);
+    private static string DepozitoGorunenTutar(RentACarOdemeOzet ozet)
+        => ozet.EmanettekiDepozito > 0 ? ozet.DepozitoTutari.ToString("N2") : string.Empty;
 
     protected override Task OnInitializedAsync() => YukleAsync();
     private async Task YukleAsync() { yukleniyor = true; try { ozetler = await OdemeServisi.GetOzetlerAsync(); hareketler = await OdemeServisi.GetHareketlerAsync(); } catch (Exception ex) { basarili = false; mesaj = ex.Message; } finally { yukleniyor = false; } }
@@ -185,5 +190,21 @@
         }
     }
     private static string HareketTuruMetni(RentACarOdemeHareketTuru tur) => tur switch { RentACarOdemeHareketTuru.KiraTahsilati => "Kira tahsilatı", RentACarOdemeHareketTuru.DepozitoTahsilati => "Depozito tahsilatı", RentACarOdemeHareketTuru.KiraIadesi => "Kira iadesi", RentACarOdemeHareketTuru.DepozitoIadesi => "Depozito iadesi", _ => tur.ToString() };
+    private static string HareketSatirRengi(RentACarOdemeHareketTuru tur) => tur switch
+    {
+        RentACarOdemeHareketTuru.KiraTahsilati => "table-success",
+        RentACarOdemeHareketTuru.DepozitoTahsilati => "table-info",
+        RentACarOdemeHareketTuru.KiraIadesi => "table-warning",
+        RentACarOdemeHareketTuru.DepozitoIadesi => "table-danger",
+        _ => string.Empty
+    };
+    private static string HareketRozetRengi(RentACarOdemeHareketTuru tur) => tur switch
+    {
+        RentACarOdemeHareketTuru.KiraTahsilati => "text-bg-success",
+        RentACarOdemeHareketTuru.DepozitoTahsilati => "text-bg-info",
+        RentACarOdemeHareketTuru.KiraIadesi => "text-bg-warning",
+        RentACarOdemeHareketTuru.DepozitoIadesi => "text-bg-danger",
+        _ => "text-bg-secondary"
+    };
     private static string OdemeYontemiMetni(RentACarOdemeYontemi yontem) => yontem switch { RentACarOdemeYontemi.KrediKarti => "Kredi kartı", RentACarOdemeYontemi.BankaKarti => "Banka kartı", RentACarOdemeYontemi.CariMahsup => "Cari mahsup", RentACarOdemeYontemi.EFT => "EFT", _ => yontem.ToString() };
 }

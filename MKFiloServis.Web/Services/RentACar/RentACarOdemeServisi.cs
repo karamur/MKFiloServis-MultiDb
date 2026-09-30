@@ -5,17 +5,26 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MKFiloServis.Web.Services.RentACar;
 
-public sealed class RentACarOdemeKayitTalebi
+public sealed class RentACarOdemeKayitTalebi : IValidatableObject
 {
     [Range(1, int.MaxValue, ErrorMessage = "Kiralama seçilmelidir.")]
     public int MusteriKiralamaId { get; set; }
     public DateTime IslemTarihi { get; set; } = DateTime.Now;
     public RentACarOdemeHareketTuru HareketTuru { get; set; }
     public RentACarOdemeYontemi OdemeYontemi { get; set; }
-    [Range(typeof(decimal), "0.01", "999999999.99", ErrorMessage = "Tutar sıfırdan büyük olmalıdır.")]
     public decimal Tutar { get; set; }
     [StringLength(100)] public string? BelgeNo { get; set; }
     [StringLength(500)] public string? Aciklama { get; set; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (Tutar <= 0)
+        {
+            yield return new ValidationResult(
+                "Tutar sıfırdan büyük olmalıdır.",
+                [nameof(Tutar)]);
+        }
+    }
 }
 
 public sealed class RentACarOdemeOzet
