@@ -29,6 +29,16 @@ public sealed class RentACarRezervasyonServisi : IRentACarRezervasyonServisi
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<bool> MusteriKaraListedeMiAsync(int musteriId, CancellationToken cancellationToken = default)
+    {
+        if (musteriId <= 0) return false;
+        var firmaId = AktifFirmaIdAl();
+        await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        return await context.RentACarKaraListeKayitlari.AsNoTracking()
+            .AnyAsync(x => x.FirmaId == firmaId && x.MusteriId == musteriId
+                && !x.IsDeleted && x.KaldirmaTarihi == null, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Arac>> GetAktifAraclarAsync(CancellationToken cancellationToken = default)
     {
         var firmaId = AktifFirmaIdAl();

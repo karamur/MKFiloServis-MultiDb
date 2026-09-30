@@ -1,0 +1,16 @@
+.tree-toggle {
+    width: 1.1rem;
+    color: #64748b;
+    text-decoration: none;
+}
+
+.tree-toggle:hover,
+.tree-toggle:focus {
+    color: var(--crm-primary);
+}
+
+.tree-spacer {
+    display: inline-block;
+    width: 1.1rem;
+    height: 1rem;
+}

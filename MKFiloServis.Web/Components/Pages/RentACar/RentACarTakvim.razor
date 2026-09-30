@@ -1,0 +1,300 @@
+@page "/rent-a-car/takvim"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services.RentACar
+@implements IAsyncDisposable
+@inject IRentACarKiralamaSorguServisi KiralamaSorguServisi
+@rendermode InteractiveServer
+
+<PageTitle>Rent a Car Takvimi</PageTitle>
+
+<MKFiloServis.Web.Components.Shared.YetkiKontrol Yetki="rentacar.oku" GerekliYetkiAdi="Rent a Car Takvimi">
+    <Yetkili>
+        <div class="container-fluid rentacar-calendar">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                <div>
+                    <h3 class="mb-1"><i class="bi bi-calendar-week me-2 text-primary"></i>Rent a Car Plan Takvimi</h3>
+                    <p class="text-muted mb-0">Araçların rezervasyon ve kiralama dönemlerini aylık takvimden izleyin.</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-primary" @onclick="YukleAsync" disabled="@yukleniyor"><i class="bi bi-arrow-clockwise me-1"></i>Yenile</button>
+                    <a class="btn btn-primary" href="/rent-a-car?sekme=rezervasyon"><i class="bi bi-plus-lg me-1"></i>Rezervasyon oluştur</a>
+                </div>
+            </div>
+
+            <RentACarAltMenu Aktif="takvim" />
+
+            @if (!string.IsNullOrWhiteSpace(hata))
+            {
+                <div class="alert alert-danger" role="alert">@hata</div>
+            }
+
+            <div class="row g-3 mb-3">
+                <div class="col-sm-6 col-xl"><div class="card border-primary h-100"><div class="card-body py-2"><small class="text-muted">Bu aydaki rezervasyonlar</small><div class="fs-4 fw-bold text-primary">@AylikRezervasyonSayisi</div></div></div></div>
+                <div class="col-sm-6 col-xl"><div class="card border-success h-100"><div class="card-body py-2"><small class="text-muted">Bu aydaki aktif kiralamalar</small><div class="fs-4 fw-bold text-success">@AylikAktifKiralamaSayisi</div></div></div></div>
+                <div class="col-sm-6 col-xl"><div class="card border-danger h-100"><div class="card-body py-2"><small class="text-muted">İade zamanı geçen</small><div class="fs-4 fw-bold text-danger">@GecikenKiralamalar.Count</div></div></div></div>
+                <div class="col-sm-6 col-xl"><div class="card border-secondary h-100"><div class="card-body py-2"><small class="text-muted">Takvimdeki araç sayısı</small><div class="fs-4 fw-bold">@AylikAracSayisi</div></div></div></div>
+                <div class="col-sm-6 col-xl"><div class="card border-info h-100"><div class="card-body py-2"><small class="text-muted">Görüntülenen dönem</small><div class="fs-5 fw-bold text-info">@AyBasligi</div></div></div></div>
+            </div>
+
+            @if (GecikenKiralamalar.Count > 0)
+            {
+                <div class="alert alert-danger overdue-alert" role="alert">
+                    <div class="d-flex align-items-start gap-2">
+                        <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+                        <div>
+                            <strong>@GecikenKiralamalar.Count aracın planlanan iade zamanı geçti.</strong>
+                            <div class="small mt-1">
+                                @foreach (var geciken in GecikenKiralamalar)
+                                {
+                                    <span class="overdue-alert-item">@geciken.Plaka — @geciken.MusteriUnvan (planlanan iade: @geciken.PlanlananBitisTarihi.ToString("dd.MM.yyyy HH:mm"))</span>
+                                }
+                            </div>
+                            <a class="alert-link small" href="/rent-a-car?sekme=teslim-iade">Teslim / İade ekranına git</a>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <div class="card shadow-sm">
+                <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <button class="btn btn-sm btn-outline-secondary" title="Önceki ay" @onclick="OncekiAy"><i class="bi bi-chevron-left"></i></button>
+                        <h5 class="mb-0 calendar-month-title">@AyBasligi</h5>
+                        <button class="btn btn-sm btn-outline-secondary" title="Sonraki ay" @onclick="SonrakiAy"><i class="bi bi-chevron-right"></i></button>
+                        <button class="btn btn-sm btn-outline-primary ms-1" @onclick="BuAyaGit">Bugün</button>
+                    </div>
+                    <div class="d-flex flex-wrap align-items-center gap-3">
+                        <div class="calendar-legend"><span class="legend-dot reservation"></span>Rezervasyon <span class="legend-dot active"></span>Aktif kiralama <span class="legend-dot overdue"></span>İade gecikti <span class="legend-dot completed"></span>Tamamlandı</div>
+                        <label class="form-check mb-0"><input class="form-check-input" type="checkbox" @bind="iptalEdilenleriGoster" /><span class="form-check-label small">İptal edilenleri göster</span></label>
+                        <input class="form-control form-control-sm calendar-search" placeholder="Plaka, müşteri veya sözleşme ara" @bind="arama" @bind:event="oninput" />
+                    </div>
+                </div>
+
+                @if (yukleniyor)
+                {
+                    <div class="text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2"></span>Takvim yükleniyor...</div>
+                }
+                else
+                {
+                    <div class="calendar-scroll">
+                        <div class="calendar-grid">
+                            @foreach (var gunAdi in GunAdlari)
+                            {
+                                <div class="calendar-weekday">@gunAdi</div>
+                            }
+                            @foreach (var gun in TakvimGunleri)
+                            {
+                                var gunKayitlari = GununKayitlari(gun);
+                                <div class="calendar-day @(gun.Month == goruntulenenAy.Month ? "" : "outside-month") @(gun.Date == DateTime.Today ? "today" : "")">
+                                    <div class="calendar-day-number">@gun.Day</div>
+                                    @if (gunKayitlari.Count == 0)
+                                    {
+                                        <span class="calendar-empty">—</span>
+                                    }
+                                    else
+                                    {
+                                        <div class="calendar-events">
+                                            @foreach (var kayit in gunKayitlari)
+                                            {
+                                                <button type="button" class="calendar-event @DurumSinifi(kayit.Durum) @(IadeGeciktiMi(kayit) ? "overdue" : "")" title="@KayitBasligi(kayit)" @onclick="() => KayitSec(kayit)">
+                                                    <span class="event-plate">@kayit.Plaka</span>
+                                                    <span class="event-customer">@kayit.MusteriUnvan</span>
+                                                    <span class="event-status">@(IadeGeciktiMi(kayit) ? "İade gecikti" : kayit.Durum.ToString())</span>
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @if (seciliKayit is not null)
+            {
+                <div class="modal d-block" tabindex="-1" role="dialog" style="background-color:rgba(0,0,0,.5)" @onclick="KayitKapat">
+                    <div class="modal-dialog modal-dialog-centered" role="document" @onclick:stopPropagation="true">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <div><h5 class="modal-title mb-1">@seciliKayit.Plaka · @seciliKayit.MusteriUnvan</h5><span class="badge @(IadeGeciktiMi(seciliKayit) ? "text-bg-danger" : DurumRozeti(seciliKayit.Durum))">@(IadeGeciktiMi(seciliKayit) ? "İade gecikti" : seciliKayit.Durum.ToString())</span></div>
+                                <button type="button" class="btn-close" aria-label="Kapat" @onclick="KayitKapat"></button>
+                            </div>
+                            <div class="modal-body">
+                                <dl class="row mb-0">
+                                    <dt class="col-5">Sözleşme</dt><dd class="col-7">@(seciliKayit.SozlesmeNo ?? "-")</dd>
+                                    <dt class="col-5">Araç</dt><dd class="col-7">@seciliKayit.AracTanimi</dd>
+                                    <dt class="col-5">Başlangıç</dt><dd class="col-7">@seciliKayit.BaslangicTarihi.ToString("dd.MM.yyyy HH:mm")</dd>
+                                    <dt class="col-5">Planlanan iade</dt><dd class="col-7">@seciliKayit.PlanlananBitisTarihi.ToString("dd.MM.yyyy HH:mm")</dd>
+                                    @if (IadeGeciktiMi(seciliKayit))
+                                    {
+                                        <dt class="col-5 text-danger">Gecikme</dt><dd class="col-7 text-danger fw-semibold">@GecikmeMetni(seciliKayit.PlanlananBitisTarihi)</dd>
+                                    }
+                                    @if (seciliKayit.GercekBitisTarihi.HasValue)
+                                    {
+                                        <dt class="col-5">Gerçek iade</dt><dd class="col-7">@seciliKayit.GercekBitisTarihi.Value.ToString("dd.MM.yyyy HH:mm")</dd>
+                                    }
+                                    <dt class="col-5">Kiralama planı</dt><dd class="col-7">@PlanMetni(seciliKayit.KiralamaPlani)</dd>
+                                    <dt class="col-5">Tutar</dt><dd class="col-7">@seciliKayit.ToplamTutar.ToString("N2") ₺</dd>
+                                    <dt class="col-5">Ödeme</dt><dd class="col-7">@seciliKayit.OdemeDurumu</dd>
+                                    @if (!string.IsNullOrWhiteSpace(seciliKayit.Notlar))
+                                    {
+                                        <dt class="col-5">Not</dt><dd class="col-7 text-break">@seciliKayit.Notlar</dd>
+                                    }
+                                </dl>
+                            </div>
+                            <div class="modal-footer"><a class="btn btn-outline-primary" href="/rent-a-car?sekme=kiralamalar">Kiralamalar listesine git</a><button class="btn btn-secondary" @onclick="KayitKapat">Kapat</button></div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </Yetkili>
+</MKFiloServis.Web.Components.Shared.YetkiKontrol>
+
+@code {
+    private static readonly string[] GunAdlari = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
+    private IReadOnlyList<RentACarKiralamaSatiri> kayitlar = Array.Empty<RentACarKiralamaSatiri>();
+    private DateTime goruntulenenAy = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private string arama = string.Empty;
+    private string? hata;
+    private bool yukleniyor;
+    private bool iptalEdilenleriGoster;
+    private RentACarKiralamaSatiri? seciliKayit;
+    private readonly CancellationTokenSource saatTakipIptal = new();
+    private Task? saatTakipGorevi;
+
+    private string AyBasligi => goruntulenenAy.ToString("MMMM yyyy", new System.Globalization.CultureInfo("tr-TR"));
+    private IReadOnlyList<DateTime> TakvimGunleri
+    {
+        get
+        {
+            var ilkGun = goruntulenenAy.AddDays(-(((int)goruntulenenAy.DayOfWeek + 6) % 7));
+            var gunSayisi = (int)Math.Ceiling(((goruntulenenAy - ilkGun).TotalDays + DateTime.DaysInMonth(goruntulenenAy.Year, goruntulenenAy.Month)) / 7d) * 7;
+            return Enumerable.Range(0, gunSayisi).Select(gun => ilkGun.AddDays(gun)).ToList();
+        }
+    }
+
+    private IEnumerable<RentACarKiralamaSatiri> FiltrelenmisKayitlar
+    {
+        get
+        {
+            var aySonu = goruntulenenAy.AddMonths(1);
+            var aramaMetni = arama.Trim();
+            return kayitlar.Where(k => k.Durum != KiralamaDurumu.IptalEdildi || iptalEdilenleriGoster)
+                .Where(k => k.BaslangicTarihi < aySonu && BitisTarihi(k) > goruntulenenAy)
+                .Where(k => string.IsNullOrEmpty(aramaMetni)
+                    || k.Plaka.Contains(aramaMetni, StringComparison.CurrentCultureIgnoreCase)
+                    || k.MusteriUnvan.Contains(aramaMetni, StringComparison.CurrentCultureIgnoreCase)
+                    || (k.SozlesmeNo?.Contains(aramaMetni, StringComparison.CurrentCultureIgnoreCase) ?? false));
+        }
+    }
+
+    private int AylikRezervasyonSayisi => FiltrelenmisKayitlar.Count(k => k.Durum == KiralamaDurumu.Rezervasyon);
+    private int AylikAktifKiralamaSayisi => FiltrelenmisKayitlar.Count(k => k.Durum == KiralamaDurumu.Aktif);
+    private int AylikAracSayisi => FiltrelenmisKayitlar.Select(k => k.AracId).Distinct().Count();
+    private IReadOnlyList<RentACarKiralamaSatiri> GecikenKiralamalar => kayitlar
+        .Where(IadeGeciktiMi)
+        .OrderBy(k => k.PlanlananBitisTarihi)
+        .ToList();
+
+    protected override Task OnInitializedAsync()
+    {
+        saatTakipGorevi = SaatiTakipEtAsync(saatTakipIptal.Token);
+        return YukleAsync();
+    }
+
+    private async Task SaatiTakipEtAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+                await InvokeAsync(StateHasChanged);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
+    private async Task YukleAsync()
+    {
+        yukleniyor = true;
+        hata = null;
+        try
+        {
+            kayitlar = await KiralamaSorguServisi.GetKiralamalarAsync();
+        }
+        catch
+        {
+            hata = "Kiralama takvimi yüklenemedi. Veritabanı bağlantısını kontrol edip yeniden deneyin.";
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private IReadOnlyList<RentACarKiralamaSatiri> GununKayitlari(DateTime gun)
+        => FiltrelenmisKayitlar
+            .Where(k => k.BaslangicTarihi < gun.AddDays(1) && BitisTarihi(k) > gun)
+            .OrderBy(k => k.BaslangicTarihi)
+            .ThenBy(k => k.Plaka)
+            .ToList();
+
+    private static DateTime BitisTarihi(RentACarKiralamaSatiri kayit)
+        => kayit.GercekBitisTarihi
+            ?? (IadeGeciktiMi(kayit) ? DateTime.Now : kayit.PlanlananBitisTarihi);
+
+    private static bool IadeGeciktiMi(RentACarKiralamaSatiri kayit)
+        => kayit.Durum == KiralamaDurumu.Aktif
+            && !kayit.GercekBitisTarihi.HasValue
+            && kayit.PlanlananBitisTarihi < DateTime.Now;
+
+    private static string GecikmeMetni(DateTime planlananIade)
+    {
+        var gecikme = DateTime.Now - planlananIade;
+        if (gecikme.TotalDays >= 1) return $"{(int)gecikme.TotalDays} gün {(int)gecikme.Hours} saat";
+        if (gecikme.TotalHours >= 1) return $"{(int)gecikme.TotalHours} saat {(int)gecikme.Minutes} dakika";
+        return $"{Math.Max(1, (int)gecikme.TotalMinutes)} dakika";
+    }
+
+    private static string KayitBasligi(RentACarKiralamaSatiri kayit)
+        => $"{kayit.Plaka} · {kayit.MusteriUnvan} · {kayit.BaslangicTarihi:dd.MM.yyyy HH:mm} – {BitisTarihi(kayit):dd.MM.yyyy HH:mm}";
+
+    private static string DurumSinifi(KiralamaDurumu durum) => durum switch
+    {
+        KiralamaDurumu.Rezervasyon => "reservation",
+        KiralamaDurumu.Aktif => "active",
+        KiralamaDurumu.Tamamlandi => "completed",
+        KiralamaDurumu.IptalEdildi => "cancelled",
+        _ => "reservation"
+    };
+
+    private static string DurumRozeti(KiralamaDurumu durum) => durum switch
+    {
+        KiralamaDurumu.Rezervasyon => "text-bg-primary",
+        KiralamaDurumu.Aktif => "text-bg-success",
+        KiralamaDurumu.Tamamlandi => "text-bg-secondary",
+        KiralamaDurumu.IptalEdildi => "text-bg-danger",
+        _ => "text-bg-secondary"
+    };
+
+    private static string PlanMetni(RentACarKiralamaPlani plan)
+        => plan == RentACarKiralamaPlani.Saatlik ? "Saatlik" : "Günlük";
+
+    private void OncekiAy() => goruntulenenAy = goruntulenenAy.AddMonths(-1);
+    private void SonrakiAy() => goruntulenenAy = goruntulenenAy.AddMonths(1);
+    private void BuAyaGit() => goruntulenenAy = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private void KayitSec(RentACarKiralamaSatiri kayit) => seciliKayit = kayit;
+    private void KayitKapat() => seciliKayit = null;
+
+    public async ValueTask DisposeAsync()
+    {
+        await saatTakipIptal.CancelAsync();
+        if (saatTakipGorevi is not null) await saatTakipGorevi;
+        saatTakipIptal.Dispose();
+    }
+}

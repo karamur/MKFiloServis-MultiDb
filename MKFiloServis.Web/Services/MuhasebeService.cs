@@ -55,6 +55,27 @@ public class MuhasebeService : IMuhasebeService
     public async Task<MuhasebeHesap> CreateHesapAsync(MuhasebeHesap hesap)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
+        hesap.HesapKodu = hesap.HesapKodu.Trim();
+        hesap.HesapAdi = hesap.HesapAdi.Trim();
+        if (string.IsNullOrWhiteSpace(hesap.HesapKodu) || hesap.HesapKodu.Length > 10)
+            throw new InvalidOperationException("Hesap kodu boş olamaz ve en fazla 10 karakter olmalıdır.");
+        if (string.IsNullOrWhiteSpace(hesap.HesapAdi))
+            throw new InvalidOperationException("Hesap adı boş olamaz.");
+        if (await context.MuhasebeHesaplari.AnyAsync(h => h.HesapKodu == hesap.HesapKodu))
+            throw new InvalidOperationException($"'{hesap.HesapKodu}' hesap kodu zaten kullanılıyor.");
+
+        MuhasebeHesap? ustHesap = null;
+        if (hesap.UstHesapId is int ustId)
+        {
+            ustHesap = await context.MuhasebeHesaplari.FirstOrDefaultAsync(h => h.Id == ustId)
+                ?? throw new InvalidOperationException("Seçilen üst hesap bulunamadı.");
+            if (!hesap.HesapKodu.StartsWith(ustHesap.HesapKodu + ".", StringComparison.Ordinal))
+                throw new InvalidOperationException("Alt hesap kodu üst hesap koduyla başlamalıdır.");
+            hesap.HesapGrubu = ustHesap.HesapGrubu;
+            hesap.HesapTuru = ustHesap.HesapTuru;
+            ustHesap.AltHesapVar = true;
+        }
+
         hesap.CreatedAt = DateTime.UtcNow;
         context.MuhasebeHesaplari.Add(hesap);
         await context.SaveChangesAsync();

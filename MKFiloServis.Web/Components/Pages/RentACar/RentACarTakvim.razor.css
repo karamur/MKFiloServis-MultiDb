@@ -1,0 +1,95 @@
+.calendar-month-title {
+    min-width: 150px;
+    text-align: center;
+    text-transform: capitalize;
+}
+
+.calendar-legend {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: #475569;
+    font-size: 0.8rem;
+}
+
+.legend-dot {
+    display: inline-block;
+    width: 0.65rem;
+    height: 0.65rem;
+    margin-left: 0.35rem;
+    border-radius: 50%;
+}
+
+.legend-dot.reservation { background: #2563eb; }
+.legend-dot.active { background: #16a34a; }
+.legend-dot.overdue { background: #dc2626; }
+.legend-dot.completed { background: #64748b; }
+
+.calendar-search { width: min(260px, 70vw); }
+
+.calendar-scroll { overflow-x: auto; }
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(135px, 1fr));
+    min-width: 960px;
+    border-top: 1px solid #e2e8f0;
+    border-left: 1px solid #e2e8f0;
+}
+
+.calendar-weekday {
+    padding: 0.55rem 0.4rem;
+    background: #f8fafc;
+    border-right: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
+    color: #475569;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-align: center;
+}
+
+.calendar-day {
+    position: relative;
+    min-height: 132px;
+    padding: 0.35rem;
+    border-right: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
+    background: #fff;
+}
+
+.calendar-day.outside-month { background: #f8fafc; color: #94a3b8; }
+.calendar-day.today { box-shadow: inset 0 0 0 2px #2563eb; }
+.calendar-day-number { margin: 0 0 0.3rem 0.15rem; font-size: 0.85rem; font-weight: 700; }
+.outside-month .calendar-day-number { color: #94a3b8; }
+.calendar-empty { color: #cbd5e1; font-size: 0.75rem; }
+.calendar-events { display: flex; flex-direction: column; gap: 0.2rem; }
+
+.calendar-event {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    padding: 0.25rem 0.35rem;
+    border: 0;
+    border-left: 3px solid transparent;
+    border-radius: 4px;
+    text-align: left;
+    line-height: 1.25;
+    cursor: pointer;
+}
+
+.calendar-event:hover { filter: brightness(0.96); }
+.calendar-event.reservation { color: #1e40af; background: #dbeafe; border-left-color: #2563eb; }
+.calendar-event.active { color: #166534; background: #dcfce7; border-left-color: #16a34a; }
+.calendar-event.completed { color: #475569; background: #e2e8f0; border-left-color: #64748b; }
+.calendar-event.cancelled { color: #991b1b; background: #fee2e2; border-left-color: #dc2626; }
+.calendar-event.overdue { color: #7f1d1d; background: #fecaca; border-left-color: #b91c1c; box-shadow: inset 0 0 0 1px #f87171; }
+.calendar-event.overdue::before { content: "⚠ İADE GECİKTİ"; margin-bottom: 0.1rem; color: #991b1b; font-size: 0.58rem; font-weight: 800; }
+.event-plate { overflow: hidden; font-size: 0.74rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.event-customer, .event-status { overflow: hidden; font-size: 0.69rem; text-overflow: ellipsis; white-space: nowrap; }
+.overdue-alert-item { display: inline-block; margin-right: 0.8rem; }
+
+@media (max-width: 640.98px) {
+    .calendar-legend { flex-wrap: wrap; }
+    .calendar-day { min-height: 116px; }
+}

@@ -92,6 +92,7 @@ public sealed class RentACarMusaitlikSonucu
 public interface IRentACarRezervasyonServisi
 {
     Task<IReadOnlyList<Cari>> GetAktifMusterilerAsync(CancellationToken cancellationToken = default);
+    Task<bool> MusteriKaraListedeMiAsync(int musteriId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Arac>> GetAktifAraclarAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Arac>> GetMusaitAraclarAsync(
         DateTime baslangic,

@@ -431,6 +431,7 @@
                         <div class="nav-item px-3"><NavLink class="nav-link" href="rent-a-car?sekme=rezervasyon">Rezervasyon</NavLink></div>
                         <div class="nav-item px-3"><NavLink class="nav-link" href="rent-a-car?sekme=araclar">Araçlar / Müsaitlik</NavLink></div>
                         <div class="nav-item px-3"><NavLink class="nav-link" href="rent-a-car?sekme=kiralamalar">Kiralamalar</NavLink></div>
+                        <div class="nav-item px-3"><NavLink class="nav-link" href="rent-a-car/takvim">Takvim</NavLink></div>
                         <div class="nav-item px-3"><NavLink class="nav-link" href="rent-a-car?sekme=teslim-iade">Teslim / İade</NavLink></div>
                         <div class="nav-item px-3"><NavLink class="nav-link" href="rent-a-car/odemeler">Ödeme Takibi</NavLink></div>
                         <AuthorizeView Roles="Admin">
@@ -1136,10 +1137,14 @@
         @* === HOLDING === *@
         @if (HasMenuYetki(Yetkiler.MenuHolding))
         {
-            <div class="nav-item px-3 mt-2 pt-2 border-top">
-                <div class="nav-section-header text-white-50 small">
-                    <span><i class="bi bi-buildings me-2"></i>Holding Yonetimi</span>
+            <div class="nav-section">
+                <div class="nav-section-header" @onclick="() => ToggleSection(NavSection.Holding)" style="cursor: pointer;">
+                    <span><i class="bi bi-buildings me-2"></i>HOLDİNG YÖNETİMİ</span>
+                    <i class="bi @(IsExpanded(NavSection.Holding) ? "bi-chevron-up" : "bi-chevron-down")"></i>
                 </div>
+                @if (IsExpanded(NavSection.Holding))
+                {
+                    <div class="nav-section-content">
                 @if (HasYetki(Yetkiler.HoldingDashboardOku))
                 {
                     <div class="nav-item px-3">
@@ -1196,6 +1201,8 @@
                         </NavLink>
                     </div>
                 }
+                    </div>
+                }
             </div>
         }
     </nav>
@@ -1234,7 +1241,8 @@
         Araclar,
         TedarikciOperasyon,
         LastikTakip,
-        PuantajIslemleri
+        PuantajIslemleri,
+        Holding
     }
 
     private HashSet<NavSection> expandedSections = new();

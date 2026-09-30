@@ -47,10 +47,14 @@
                     <EditForm Model="rezervasyon" OnValidSubmit="RezervasyonOlusturAsync">
                         <DataAnnotationsValidator />
                         <ValidationSummary class="text-danger mb-3" />
+                        @if (!string.IsNullOrWhiteSpace(rezervasyonMesaji))
+                        {
+                            <div class="alert @(rezervasyonBasarili ? "alert-success" : "alert-danger") mb-3" role="alert" aria-live="assertive">@rezervasyonMesaji</div>
+                        }
                         <div class="row g-3 align-items-end">
                             <div class="col-md-3">
                                 <label class="form-label">Müşteri</label>
-                                <InputSelect class="form-select" @bind-Value="rezervasyon.MusteriId">
+                                <InputSelect class="form-select" @bind-Value="rezervasyon.MusteriId" @bind-Value:after="MusteriSecildiAsync">
                                     <option value="0">Müşteri seçin</option>
                                     @foreach (var musteri in musteriler)
                                     {
@@ -145,7 +149,7 @@
                                 <ValidationMessage For="@(() => rezervasyon.Notlar)" class="text-danger" />
                             </div>
                             <div class="col-md-2 d-grid">
-                                 <button type="submit" class="btn btn-primary" disabled="@(kaydediliyor || !MusaitlikGuncel || rezervasyon.AracId <= 0 || musaitAraclar.Count == 0)">
+                                 <button type="submit" class="btn btn-primary" disabled="@(kaydediliyor || musteriKaraListeKontrolEdiliyor || musteriKaraListeKontrolHatasi || musteriKaraListede || !MusaitlikGuncel || rezervasyon.AracId <= 0 || musaitAraclar.Count == 0)">
                                     @if (kaydediliyor)
                                     {
                                         <span class="spinner-border spinner-border-sm me-1"></span>
@@ -200,10 +204,6 @@
                             </div>
                         }
                     </EditForm>
-                    @if (!string.IsNullOrWhiteSpace(rezervasyonMesaji))
-                    {
-                        <div class="alert @(rezervasyonBasarili ? "alert-success" : "alert-danger") mt-3 mb-0">@rezervasyonMesaji</div>
-                    }
                 </div>
             </div>
         </Yetkili>
@@ -773,7 +773,7 @@
 
         rezervasyon.AracId = arac.Id;
         if (arac.GunlukKiraBedeli is > 0) rezervasyon.GunlukFiyat = arac.GunlukKiraBedeli.Value;
-        rezervasyonMesaji = null;
+        rezervasyonMesaji = musteriKaraListede ? KaraListeUyarisi : null;
         rezervasyonBasarili = false;
     }
 
@@ -801,6 +801,9 @@
     private bool musaitlikYukleniyor;
     private bool kaydediliyor;
     private bool rezervasyonBasarili;
+    private bool musteriKaraListede;
+    private bool musteriKaraListeKontrolEdiliyor;
+    private bool musteriKaraListeKontrolHatasi;
     private string arama = string.Empty;
     private string? hataMesaji;
     private string? rezervasyonMesaji;
@@ -1155,8 +1158,43 @@
         rezervasyon.AracId = 0;
         if (!mesajGosterilmeyeDevamEtsin)
         {
-            rezervasyonMesaji = null;
+            rezervasyonMesaji = musteriKaraListede ? KaraListeUyarisi : null;
             rezervasyonBasarili = false;
+        }
+    }
+
+    private const string KaraListeUyarisi = "Müşteri bu firmanın kara listesinde. Rezervasyon ve teslim engellendi.";
+
+    private async Task MusteriSecildiAsync()
+    {
+        var secilenMusteriId = rezervasyon.MusteriId;
+        musteriKaraListede = false;
+        musteriKaraListeKontrolHatasi = false;
+        rezervasyonMesaji = null;
+        rezervasyonBasarili = false;
+        if (secilenMusteriId <= 0)
+        {
+            musteriKaraListeKontrolEdiliyor = false;
+            return;
+        }
+
+        musteriKaraListeKontrolEdiliyor = true;
+        try
+        {
+            var karaListede = await RezervasyonServisi.MusteriKaraListedeMiAsync(secilenMusteriId);
+            if (rezervasyon.MusteriId != secilenMusteriId) return;
+            musteriKaraListede = karaListede;
+            if (karaListede) rezervasyonMesaji = KaraListeUyarisi;
+        }
+        catch
+        {
+            if (rezervasyon.MusteriId != secilenMusteriId) return;
+            musteriKaraListeKontrolHatasi = true;
+            rezervasyonMesaji = "Müşterinin kara liste durumu kontrol edilemedi. Lütfen müşteriyi yeniden seçip tekrar deneyin.";
+        }
+        finally
+        {
+            if (rezervasyon.MusteriId == secilenMusteriId) musteriKaraListeKontrolEdiliyor = false;
         }
     }
 
@@ -1180,7 +1218,7 @@
             musaitlikBitis = bitis;
             if (musaitAraclar.Count == 0)
             {
-                rezervasyonMesaji = "Seçilen tarih aralığında müsait araç bulunamadı.";
+                rezervasyonMesaji = musteriKaraListede ? KaraListeUyarisi : "Seçilen tarih aralığında müsait araç bulunamadı.";
                 rezervasyonBasarili = false;
             }
         }
@@ -1215,6 +1253,9 @@
                 BaslangicTarihi = DateTime.Now,
                 PlanlananBitisTarihi = DateTime.Now.AddDays(1)
             };
+            musteriKaraListede = false;
+            musteriKaraListeKontrolEdiliyor = false;
+            musteriKaraListeKontrolHatasi = false;
             RezervasyonTarihiDegisti(mesajGosterilmeyeDevamEtsin: true);
             await YenileAsync();
         }

@@ -63,16 +63,25 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var hesap in filtrelenmisHesaplar)
+                            @foreach (var satir in filtrelenmisHesaplar)
                             {
-                                var indent = hesap.HesapKodu.Contains('.') ? (hesap.HesapKodu.Split('.').Length - 1) * 20 : 0;
-                                <tr class="@(hesap.AltHesapVar ? "fw-bold" : "")">
-                                    <td style="padding-left: @(indent + 8)px;">
-                                        @if (indent > 0)
+                                var hesap = satir.Hesap;
+                                var altHesaplariVar = AltHesaplariVar(hesap.Id);
+                                <tr class="@(altHesaplariVar ? "fw-bold" : "")">
+                                    <td>
+                                        <div class="d-flex align-items-center" style="padding-left: @(satir.Seviye * 22)px;">
+                                        @if (altHesaplariVar)
                                         {
-                                            <i class="bi bi-arrow-return-right text-muted me-1"></i>
+                                            <button type="button" class="btn btn-sm btn-link p-0 me-1 tree-toggle" title="@(DaraltilmisHesaplar.Contains(hesap.Id) ? "Alt hesapları göster" : "Alt hesapları gizle")" @onclick="() => HesapAgaciniDegistir(hesap.Id)">
+                                                <i class="bi @(DaraltilmisHesaplar.Contains(hesap.Id) ? "bi-caret-right-fill" : "bi-caret-down-fill")"></i>
+                                            </button>
                                         }
-                                        @hesap.HesapKodu
+                                        else
+                                        {
+                                            <span class="tree-spacer me-1"></span>
+                                        }
+                                        <span class="@(satir.Seviye == 0 ? "fw-bold" : "")">@hesap.HesapKodu</span>
+                                        </div>
                                     </td>
                                     <td>@hesap.HesapAdi</td>
                                     <td><small>@GetGrupAdi(hesap.HesapGrubu)</small></td>
@@ -95,6 +104,9 @@
                                     </td>
                                     <td class="text-center">
                                         <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-success py-0 px-1" @onclick="() => AltHesapEkle(hesap)" title="Alt hesap ekle">
+                                                <i class="bi bi-plus-lg"></i>
+                                            </button>
                                             <button class="btn btn-outline-primary py-0 px-1" @onclick="() => HesapDuzenle(hesap)" title="Duzenle">
                                                 <i class="bi bi-pencil"></i>
                                             </button>
@@ -139,9 +151,23 @@
                     }
                     <div class="mb-3">
                         <label class="form-label">Hesap Kodu *</label>
-                        <input type="text" class="form-control" @bind="editHesap.HesapKodu" maxlength="15" 
+                        <input type="text" class="form-control" @bind="editHesap.HesapKodu" maxlength="10"
                                disabled="@(editHesap.Id > 0)" placeholder="Ornek: 100.01" />
                     </div>
+                    @if (editHesap.Id == 0)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Üst Hesap</label>
+                            <select class="form-select" @bind="editHesap.UstHesapId" @bind:after="UstHesapDegisti">
+                                <option value="">Ana hesap olarak ekle</option>
+                                @foreach (var ust in hesaplar.OrderBy(h => h.HesapKodu, StringComparer.Ordinal))
+                                {
+                                    <option value="@ust.Id">@ust.HesapKodu — @ust.HesapAdi</option>
+                                }
+                            </select>
+                            <small class="text-muted">Bir üst hesap seçerseniz hesap kodu otomatik oluşturulur.</small>
+                        </div>
+                    }
                     <div class="mb-3">
                         <label class="form-label">Hesap Adi *</label>
                         <input type="text" class="form-control" @bind="editHesap.HesapAdi" maxlength="200" />
@@ -271,7 +297,8 @@
     private string aramaMetni = "";
     private HesapGrubu? seciliGrup = null;
     private List<MuhasebeHesap> hesaplar = new();
-    private List<MuhasebeHesap> filtrelenmisHesaplar = new();
+    private List<HesapAgacSatiri> filtrelenmisHesaplar = new();
+    private HashSet<int> DaraltilmisHesaplar = new();
     private MuhasebeHesap editHesap = new();
     private bool isImporting = false;
     private IBrowserFile? importFile = null;
@@ -302,18 +329,81 @@
 
     private void Filtrele()
     {
-        var filtered = hesaplar.AsEnumerable();
-
+        var grupHesaplari = hesaplar.AsEnumerable();
         if (seciliGrup.HasValue)
-            filtered = filtered.Where(h => h.HesapGrubu == seciliGrup.Value);
+            grupHesaplari = grupHesaplari.Where(h => h.HesapGrubu == seciliGrup.Value);
 
+        var grupListesi = grupHesaplari.ToList();
+        var gosterilecekIdler = grupListesi.Select(h => h.Id).ToHashSet();
         if (!string.IsNullOrWhiteSpace(aramaMetni))
-            filtered = filtered.Where(h => 
+        {
+            var eslesenler = grupListesi.Where(h =>
                 h.HesapKodu.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase) ||
-                h.HesapAdi.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase));
+                h.HesapAdi.Contains(aramaMetni, StringComparison.OrdinalIgnoreCase)).ToList();
+            gosterilecekIdler = eslesenler.Select(h => h.Id).ToHashSet();
+            foreach (var eslesen in eslesenler)
+            {
+                var ustId = UstHesapIdBul(eslesen);
+                var ziyaretEdilenler = new HashSet<int>();
+                while (ustId.HasValue && ziyaretEdilenler.Add(ustId.Value))
+                {
+                    gosterilecekIdler.Add(ustId.Value);
+                    var ustHesap = hesaplar.FirstOrDefault(h => h.Id == ustId.Value);
+                    ustId = ustHesap is null ? null : UstHesapIdBul(ustHesap);
+                }
+            }
+        }
 
-        filtrelenmisHesaplar = filtered.OrderBy(h => h.HesapKodu).ToList();
+        var gosterilecekHesaplar = grupListesi.Where(h => gosterilecekIdler.Contains(h.Id)).ToList();
+        var cocuklar = gosterilecekHesaplar
+            .Select(h => new { Hesap = h, UstId = UstHesapIdBul(h) })
+            .Where(x => x.UstId.HasValue)
+            .GroupBy(x => x.UstId!.Value)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.Hesap).OrderBy(h => h.HesapKodu, StringComparer.Ordinal).ToList());
+        var sonuc = new List<HesapAgacSatiri>();
+        var eklenenler = new HashSet<int>();
+
+        void DallariEkle(MuhasebeHesap ebeveyn, int seviye)
+        {
+            if (!eklenenler.Add(ebeveyn.Id)) return;
+            sonuc.Add(new(ebeveyn, seviye));
+            if (DaraltilmisHesaplar.Contains(ebeveyn.Id) || !cocuklar.TryGetValue(ebeveyn.Id, out var altlar)) return;
+            foreach (var alt in altlar) DallariEkle(alt, seviye + 1);
+        }
+
+        // Ebeveyni filtre sonucunda varsa hesap yalnızca ebeveynin ağacından eklenir.
+        // Böylece ebeveyn daraltıldığında alt hesaplar listenin sonunda bağımsız satır olmaz.
+        foreach (var kok in gosterilecekHesaplar
+            .Where(h => UstHesapIdBul(h) is not int ustId || !gosterilecekIdler.Contains(ustId))
+            .OrderBy(h => h.HesapKodu, StringComparer.Ordinal))
+            DallariEkle(kok, 0);
+
+        filtrelenmisHesaplar = sonuc;
         StateHasChanged();
+    }
+
+    private int? UstHesapIdBul(MuhasebeHesap hesap)
+    {
+        if (hesap.UstHesapId.HasValue && hesap.UstHesapId.Value != hesap.Id && hesaplar.Any(h => h.Id == hesap.UstHesapId.Value))
+            return hesap.UstHesapId;
+
+        var ayirac = hesap.HesapKodu.LastIndexOf('.');
+        while (ayirac > 0)
+        {
+            var ustKod = hesap.HesapKodu[..ayirac];
+            var ust = hesaplar.FirstOrDefault(h => h.HesapKodu == ustKod && h.Id != hesap.Id);
+            if (ust is not null) return ust.Id;
+            ayirac = ustKod.LastIndexOf('.');
+        }
+        return null;
+    }
+
+    private bool AltHesaplariVar(int hesapId) => hesaplar.Any(h => UstHesapIdBul(h) == hesapId);
+
+    private void HesapAgaciniDegistir(int hesapId)
+    {
+        if (!DaraltilmisHesaplar.Add(hesapId)) DaraltilmisHesaplar.Remove(hesapId);
+        Filtrele();
     }
 
     private void GrupFiltrele(HesapGrubu? grup)
@@ -327,6 +417,44 @@
         editHesap = new MuhasebeHesap { Aktif = true };
         hesapIslemGormusMu = false;
         showModal = true;
+    }
+
+    private void AltHesapEkle(MuhasebeHesap ustHesap)
+    {
+        editHesap = new MuhasebeHesap
+        {
+            Aktif = true,
+            UstHesapId = ustHesap.Id,
+            HesapKodu = YeniAltHesapKodu(ustHesap),
+            HesapGrubu = ustHesap.HesapGrubu,
+            HesapTuru = ustHesap.HesapTuru
+        };
+        hesapIslemGormusMu = false;
+        showModal = true;
+    }
+
+    private string YeniAltHesapKodu(MuhasebeHesap ustHesap)
+    {
+        var cocukKodlari = hesaplar.Where(h => UstHesapIdBul(h) == ustHesap.Id)
+            .Select(h => h.HesapKodu)
+            .Where(k => k.StartsWith(ustHesap.HesapKodu + ".", StringComparison.Ordinal))
+            .Select(k => k[(ustHesap.HesapKodu.Length + 1)..])
+            .Where(s => !s.Contains('.') && int.TryParse(s, out _))
+            .ToList();
+        var basamak = Math.Max(2, cocukKodlari.Select(x => x.Length).DefaultIfEmpty(2).Max());
+        var sonraki = cocukKodlari.Select(x => int.Parse(x)).DefaultIfEmpty(0).Max() + 1;
+        var adayKod = $"{ustHesap.HesapKodu}.{sonraki.ToString($"D{basamak}")}";
+        return adayKod.Length <= 10 ? adayKod : string.Empty;
+    }
+
+    private void UstHesapDegisti()
+    {
+        if (editHesap.UstHesapId is not int ustId) return;
+        var ust = hesaplar.FirstOrDefault(h => h.Id == ustId);
+        if (ust is null) return;
+        editHesap.HesapGrubu = ust.HesapGrubu;
+        editHesap.HesapTuru = ust.HesapTuru;
+        editHesap.HesapKodu = YeniAltHesapKodu(ust);
     }
 
     private async Task HesapDuzenle(MuhasebeHesap hesap)
@@ -507,5 +635,7 @@
         HesapTuru.Maliyet => "bg-warning text-dark",
         _ => "bg-secondary"
     };
+
+    private sealed record HesapAgacSatiri(MuhasebeHesap Hesap, int Seviye);
 }
 
