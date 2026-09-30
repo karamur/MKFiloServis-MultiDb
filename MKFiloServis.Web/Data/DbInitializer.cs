@@ -879,6 +879,62 @@ WHERE IsDeleted = 0;");
 
     private static async Task EnsureRentACarKaraListeTableAsync(ApplicationDbContext context, string dbProvider)
     {
+        if (dbProvider == "SQLite")
+        {
+            try
+            {
+                await context.Database.OpenConnectionAsync();
+                var connection = context.Database.GetDbConnection();
+                await EnsureSqliteColumnAsync(connection, "MusteriKiralamalar", "GercekBaslangicTarihi", "TEXT NULL");
+                await EnsureSqliteColumnAsync(connection, "MusteriKiralamalar", "TeslimYakitSeviyesi", "TEXT NULL");
+                await EnsureSqliteColumnAsync(connection, "MusteriKiralamalar", "IadeYakitSeviyesi", "TEXT NULL");
+                await EnsureSqliteColumnAsync(connection, "MusteriKiralamalar", "TeslimHasarNotlari", "TEXT NULL");
+                await EnsureSqliteColumnAsync(connection, "MusteriKiralamalar", "IadeHasarNotlari", "TEXT NULL");
+                await EnsureSqliteColumnAsync(connection, "MusteriKiralamalar", "TeslimAksesuarlar", "TEXT NULL");
+                await EnsureSqliteColumnAsync(connection, "MusteriKiralamalar", "IadeAksesuarlar", "TEXT NULL");
+                await EnsureSqliteColumnAsync(connection, "MusteriKiralamalar", "TeslimNotlari", "TEXT NULL");
+                await EnsureSqliteColumnAsync(connection, "MusteriKiralamalar", "IadeNotlari", "TEXT NULL");
+                await EnsureSqliteColumnAsync(connection, "MusteriKiralamalar", "KiralamaPlani", "INTEGER NOT NULL DEFAULT 0");
+                await EnsureSqliteColumnAsync(connection, "MusteriKiralamalar", "SaatlikFiyat", "numeric(18,2) NOT NULL DEFAULT 0");
+
+                await context.Database.ExecuteSqlRawAsync("""
+                    CREATE TABLE IF NOT EXISTS "RentACarKaraListeKayitlari" (
+                        "Id" INTEGER NOT NULL CONSTRAINT "PK_RentACarKaraListeKayitlari" PRIMARY KEY AUTOINCREMENT,
+                        "FirmaId" INTEGER NOT NULL,
+                        "MusteriId" INTEGER NOT NULL,
+                        "Neden" TEXT NOT NULL,
+                        "EkleyenKullaniciId" INTEGER NOT NULL,
+                        "KaldirmaTarihi" TEXT NULL,
+                        "KaldiranKullaniciId" INTEGER NULL,
+                        "KaldirmaNedeni" TEXT NULL,
+                        "CreatedAt" TEXT NOT NULL,
+                        "UpdatedAt" TEXT NULL,
+                        "IsDeleted" INTEGER NOT NULL,
+                        "DeletedAt" TEXT NULL,
+                        "DeletedBy" INTEGER NULL,
+                        CONSTRAINT "FK_RentACarKaraListeKayitlari_Firmalar_FirmaId"
+                            FOREIGN KEY ("FirmaId") REFERENCES "Firmalar" ("Id") ON DELETE RESTRICT,
+                        CONSTRAINT "FK_RentACarKaraListeKayitlari_Cariler_MusteriId"
+                            FOREIGN KEY ("MusteriId") REFERENCES "Cariler" ("Id") ON DELETE RESTRICT
+                    );
+                    CREATE INDEX IF NOT EXISTS "IX_RentACarKaraListeKayitlari_FirmaId_MusteriId"
+                        ON "RentACarKaraListeKayitlari" ("FirmaId", "MusteriId");
+                    CREATE INDEX IF NOT EXISTS "IX_RentACarKaraListeKayitlari_MusteriId"
+                        ON "RentACarKaraListeKayitlari" ("MusteriId");
+                    """);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"RentACarKaraListeKayitlari tablosu güvenceye alınamadı: {ex.Message}");
+            }
+            finally
+            {
+                await context.Database.CloseConnectionAsync();
+            }
+
+            return;
+        }
+
         if (dbProvider != "PostgreSQL")
         {
             return;
