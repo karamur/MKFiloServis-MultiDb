@@ -260,21 +260,6 @@
                                                 <i class="bi bi-card-text me-2 text-primary"></i> Plaka Takip
                                             </NavLink>
                                         </div>
-                                        <div class="nav-item px-3">
-                                            <NavLink class="nav-link" href="arac-takip">
-                                                <i class="bi bi-geo-alt-fill me-2 text-success"></i> Canlı Araç Takip
-                                            </NavLink>
-                                        </div>
-                                        <div class="nav-item px-3">
-                                            <NavLink class="nav-link" href="ayarlar/arac-takip-cihaz">
-                                                <i class="bi bi-broadcast-pin me-2 text-danger"></i> Araç Takip Cihazları
-                                            </NavLink>
-                                        </div>
-                                        <div class="nav-item px-3">
-                                            <NavLink class="nav-link" href="ayarlar/gps-simulasyon">
-                                                <i class="bi bi-broadcast me-2 text-warning"></i> GPS Simülasyon
-                                            </NavLink>
-                                        </div>
 
                                         <div class="nav-subsection mt-2 pt-2 border-top">
                                             <div class="nav-subsection-header" @onclick="() => ToggleSection(NavSection.LastikTakip)" style="cursor: pointer;">
@@ -371,11 +356,6 @@
                             </NavLink>
                         </div>
                         <div class="nav-item px-3">
-                            <NavLink class="nav-link" href="filo-operasyon">
-                                <i class="bi bi-gear-wide-connected me-2 text-info"></i> <strong>Filo Operasyon</strong>
-                            </NavLink>
-                        </div>
-                        <div class="nav-item px-3">
                             <NavLink class="nav-link" href="arac-maliyet-snapshot">
                                 <i class="bi bi-fuel-pump me-2 text-info"></i> Araç Maliyet Snapshot
                             </NavLink>
@@ -390,26 +370,10 @@
                                     </NavLink>
                                 </div>
                             }
-                            <div class="nav-subsection">
-                                <div class="nav-subsection-header" @onclick="() => ToggleSection(NavSection.PuantajIslemleri)" style="cursor: pointer;">
-                                    <span><i class="bi bi-calendar2-check me-2"></i>Puantaj &amp; Hakediş</span>
-                                    <i class="bi @(IsExpanded(NavSection.PuantajIslemleri) ? "bi-chevron-up" : "bi-chevron-down")"></i>
-                                </div>
-                                @if (IsExpanded(NavSection.PuantajIslemleri))
-                                {
-                                    <div class="nav-subsection-content">
-                                        <div class="nav-item px-3">
-                                            <NavLink class="nav-link" href="operasyon/plan">
-                                                <i class="bi bi-calendar3 me-2 text-primary"></i> Operasyon Planı
-                                            </NavLink>
-                                        </div>
-                                        <div class="nav-item px-3">
-                                            <NavLink class="nav-link" href="operasyon-merkezi">
-                                                <i class="bi bi-grid-1x2 me-2 text-success"></i> Operasyon Merkezi
-                                            </NavLink>
-                                        </div>
-                                    </div>
-                                }
+                            <div class="nav-item px-3">
+                                <NavLink class="nav-link" href="operasyon-merkezi">
+                                    <i class="bi bi-grid-1x2 me-2 text-success"></i> Operasyon Merkezi
+                                </NavLink>
                             </div>
                         }
 
@@ -434,6 +398,10 @@
                         <div class="nav-item px-3"><NavLink class="nav-link" href="rent-a-car/takvim">Takvim</NavLink></div>
                         <div class="nav-item px-3"><NavLink class="nav-link" href="rent-a-car?sekme=teslim-iade">Teslim / İade</NavLink></div>
                         <div class="nav-item px-3"><NavLink class="nav-link" href="rent-a-car/odemeler">Ödeme Takibi</NavLink></div>
+                        @if (HasYetki(Yetkiler.RentACarKarlilikOku))
+                        {
+                            <div class="nav-item px-3"><NavLink class="nav-link" href="rent-a-car/arac-karlilik">Araç Kâr/Zarar Raporu</NavLink></div>
+                        }
                         <AuthorizeView Roles="Admin">
                             <div class="nav-item px-3"><NavLink class="nav-link" href="rent-a-car/kara-liste">Kara Liste</NavLink></div>
                         </AuthorizeView>
@@ -540,6 +508,14 @@
                             <div class="nav-item px-3">
                                 <NavLink class="nav-link" href="muhasebe/raporlar">
                                     <i class="bi bi-file-earmark-bar-graph me-2"></i> Muhasebe Raporlari
+                                </NavLink>
+                            </div>
+                        }
+                        @if (HasYetki(Yetkiler.MuhasebeAracKarlilikOku))
+                        {
+                            <div class="nav-item px-3">
+                                <NavLink class="nav-link" href="muhasebe/arac-karlilik">
+                                    <i class="bi bi-graph-up-arrow me-2"></i> Araç Kâr/Zarar Raporu
                                 </NavLink>
                             </div>
                         }
@@ -866,9 +842,14 @@
                         </div>
 
                         @* === TANIMLAR === *@
-                        <div class="nav-item px-3 mt-2 pt-2 border-top text-muted small">
-                            <span><i class="bi bi-sliders me-2"></i>Tanımlar</span>
-                        </div>
+                        @if (HasAnyYetki("firmayonetim.oku", Yetkiler.WebSayfasiOku, Yetkiler.CariMuhasebeAyarOku,
+                            Yetkiler.BelgeUyariAyarOku, Yetkiler.ArsivGoruntuleyiciOku,
+                            "masrafkalem.oku", "piyasakaynak.oku", "aracsase.oku"))
+                        {
+                            <div class="nav-item px-3 mt-2 pt-2 border-top text-muted small">
+                                <span><i class="bi bi-sliders me-2"></i>Tanımlar</span>
+                            </div>
+                        }
                         @if (HasYetki("firmayonetim.oku"))
                         {
                             <div class="nav-item px-3">
@@ -882,34 +863,38 @@
                             @* Faz 5.3-A: Şirket Yönetimi ve Şirketler Arası Transfer ekranları kaldırıldı.
                                Tenant kavramı artık Firma üzerinden yönetiliyor (bkz. ayarlar/firmalar). *@
                         }
-                        @if (HasYetki("ayarlar.oku"))
+                        @if (HasYetki(Yetkiler.WebSayfasiOku))
                         {
                             <div class="nav-item px-3">
                                 <NavLink class="nav-link" href="ayarlar/web-sayfasi">
                                     <i class="bi bi-window me-2 text-primary"></i> Web Sayfası Yönetimi
                                 </NavLink>
                             </div>
+                        }
+                        @if (HasYetki(Yetkiler.CariMuhasebeAyarOku))
+                        {
                             <div class="nav-item px-3">
                                 <NavLink class="nav-link" href="ayarlar/muhasebe-cari">
                                     <i class="bi bi-journal-text me-2 text-primary"></i> Cari / Muhasebe Ayarları
                                 </NavLink>
                             </div>
+                        }
+                        @if (HasYetki(Yetkiler.BelgeUyariAyarOku))
+                        {
                             <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="ayarlar/grup-sablonlari">
-                                    <i class="bi bi-collection me-2 text-success"></i> Puantaj Grup Şablonları <span class="badge bg-success ms-1">Yeni</span>
+                                <NavLink class="nav-link" href="ayarlar/belge-uyari">
+                                    <i class="bi bi-shield-exclamation me-2 text-danger"></i> Belge Uyarı Ayarları
                                 </NavLink>
                             </div>
                         }
-                        <div class="nav-item px-3">
-                            <NavLink class="nav-link" href="ayarlar/belge-uyari">
-                                <i class="bi bi-shield-exclamation me-2 text-danger"></i> Belge Uyarı Ayarları
-                            </NavLink>
-                        </div>
-                        <div class="nav-item px-3">
-                            <NavLink class="nav-link" href="ayarlar/arsiv-goruntuleyici">
-                                <i class="bi bi-archive me-2 text-warning"></i> Arşiv Dosya Görüntüleyici
-                            </NavLink>
-                        </div>
+                        @if (HasYetki(Yetkiler.ArsivGoruntuleyiciOku))
+                        {
+                            <div class="nav-item px-3">
+                                <NavLink class="nav-link" href="ayarlar/arsiv-goruntuleyici">
+                                    <i class="bi bi-archive me-2 text-warning"></i> Arşiv Dosya Görüntüleyici
+                                </NavLink>
+                            </div>
+                        }
                         @if (HasYetki("masrafkalem.oku"))
                         {
                             <div class="nav-item px-3">
@@ -1072,16 +1057,6 @@
                                     <i class="bi bi-chat-dots me-2 text-success"></i> SMS Ayarları
                                 </NavLink>
                             </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="ayarlar/arac-takip-cihaz">
-                                    <i class="bi bi-broadcast-pin me-2 text-danger"></i> Araç Takip Cihazları
-                                </NavLink>
-                            </div>
-                            <div class="nav-item px-3">
-                                <NavLink class="nav-link" href="ayarlar/gps-simulasyon">
-                                    <i class="bi bi-broadcast me-2 text-success"></i> GPS Simülasyon
-                                </NavLink>
-                            </div>
                         }
 
                         @* === DESTEK === *@
@@ -1241,7 +1216,6 @@
         Araclar,
         TedarikciOperasyon,
         LastikTakip,
-        PuantajIslemleri,
         Holding
     }
 
@@ -1422,7 +1396,7 @@
     {
         ["menu.crm"] = new() { "bildirim", "mesaj", "email", "hatirlatici" },
         ["menu.cari"] = new() { "cari", "cariler", "kesilenfatura", "gelenfatura" },
-        ["menu.filoservis"] = new() { "arac", "araclar", "aractakip", "arac-takip", "guzergah", "guzergahlar", "serviscalisma", "toplucalisma", "aracmasraf", "filo", "hakedis", "operasyonel-hakedis", "arac-maliyet-snapshot", "tedarikciservis", "tedarikciarac", "tedarikcipersonel", "tedarikciaracevrak" },
+        ["menu.filoservis"] = new() { "arac", "araclar", "guzergah", "guzergahlar", "serviscalisma", "toplucalisma", "aracmasraf", "filo", "hakedis", "operasyonel-hakedis", "arac-maliyet-snapshot", "tedarikciservis", "tedarikciarac", "tedarikcipersonel", "tedarikciaracevrak" },
         ["menu.muhasebe"] = new() { "muhasebe", "hesapplani", "muhasebefis", "muhaseberapor" },
         ["menu.personel"] = new() { "personel", "maas", "izin" },
         ["menu.fatura"] = new() { "fatura", "faturalar", "faturahazirlik", "kesilenfatura", "gelenfatura" },
@@ -1433,7 +1407,7 @@
         ["menu.checklist"] = new() { "checklist", "checklistmali" },
         ["menu.raporlar"] = new() { "rapor", "raporlar", "raporozmal", "raporkirala", "raporkomisyon", "raporservis", "raporfatura", "rapormasraf", "raporekstre" },
         ["menu.satis"] = new() { "satis", "piyasa", "ilan" },
-        ["menu.ayarlar"] = new() { "firma", "ayarlar", "kullanici", "rol", "veritabani", "sistemdurumu", "aktivitelog", "yedekleme", "guncelleme", "destektalebi", "piyasakaynak", "masrafkalem" },
+        ["menu.ayarlar"] = new() { "firma", "ayarlar", "websayfasi", "carimuhasebeayar", "belgeuyariayar", "arsivgoruntuleyici", "kullanici", "rol", "veritabani", "sistemdurumu", "aktivitelog", "yedekleme", "guncelleme", "destektalebi", "piyasakaynak", "masrafkalem", "aracsase" },
         ["menu.ebys"] = new() { "ebys", "evrak", "belgeuyari" },
         ["menu.stok"] = new() { "stok" },
     };

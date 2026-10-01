@@ -31,11 +31,11 @@
                     <span class="fw-bold">AI Asistan</span>
                     @if (isOllamaAvailable)
                     {
-                        <span class="badge bg-success ms-1" style="font-size: 0.65rem;">Online</span>
+                        <span class="badge bg-success ms-1" style="font-size: 0.65rem;">Yerel model hazır</span>
                     }
                     else
                     {
-                        <span class="badge bg-danger ms-1" style="font-size: 0.65rem;">Offline</span>
+                        <span class="badge bg-warning text-dark ms-1" style="font-size: 0.65rem;">Yerel model yok</span>
                     }
                 </div>
                 <div class="d-flex gap-1">
@@ -92,7 +92,7 @@
                             <div class="d-flex mb-2 @(msg.IsUser ? "justify-content-end" : "justify-content-start")">
                                 <div class="@(msg.IsUser ? "bg-primary text-white" : "bg-light") rounded-3 p-2" 
                                      style="max-width: 85%; font-size: 0.85rem;">
-                                    <div style="white-space: pre-wrap;">@((MarkupString)FormatMessage(msg.Content))</div>
+                                    <div style="white-space: pre-wrap;">@msg.Content</div>
                                     <small class="@(msg.IsUser ? "text-white-50" : "text-muted") d-block mt-1" 
                                            style="font-size: 0.65rem;">
                                         @msg.Timestamp.ToString("HH:mm")
@@ -107,7 +107,7 @@
                                 <div class="bg-light rounded-3 p-2" style="max-width: 85%;">
                                     @if (!string.IsNullOrEmpty(streamingContent))
                                     {
-                                        <div style="white-space: pre-wrap; font-size: 0.85rem;">@((MarkupString)FormatMessage(streamingContent))</div>
+                                        <div style="white-space: pre-wrap; font-size: 0.85rem;">@streamingContent</div>
                                     }
                                     else
                                     {

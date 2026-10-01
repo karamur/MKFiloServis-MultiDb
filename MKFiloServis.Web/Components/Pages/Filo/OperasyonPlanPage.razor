@@ -247,7 +247,17 @@
     }
     else if (Planlar.Count == 0)
     {
-        <div class="alert alert-warning"><i class="bi bi-info-circle me-1"></i>Bu ay için henüz plan bulunmuyor. Aktif eşleştirmelerden plan oluşturmak için <strong>Aylık Planı Oluştur</strong> düğmesine basın.</div>
+        @if (AktifEslestirmeSayisi == 0)
+        {
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle me-1"></i>Aktif araç, şoför ve güzergâh eşleştirmesi bulunmuyor.
+                Aylık plan oluşturmak için <a class="alert-link" href="/filo/komisyon-eslestirme">eşleştirme tanımlayın</a>.
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-warning"><i class="bi bi-info-circle me-1"></i>Bu ay için henüz plan bulunmuyor. Aktif eşleştirmelerden plan oluşturmak için <strong>Aylık Planı Oluştur</strong> düğmesine basın.</div>
+        }
     }
     else
     {
@@ -321,6 +331,7 @@
     private int SeciliAy = DateTime.Today.Month;
     private int SeciliYil = DateTime.Today.Year;
     private List<OperasyonPlanSatiri> Planlar = new();
+    private int AktifEslestirmeSayisi;
     private HashSet<int> SecilenIdler = new();
     private string? HataMesaji;
     private string? BilgiMesaji;
@@ -468,6 +479,7 @@
         try
         {
             Planlar = await PlanService.GetAylikPlanlarAsync(SeciliYil, SeciliAy);
+            AktifEslestirmeSayisi = await PlanService.GetAktifEslestirmeSayisiAsync();
             BaslangicDegerleri = Planlar.ToDictionary(p => p.Id, p => (p.PlanlananSefer, p.ServisTuru));
             await AdlariYukleAsync();
         }
@@ -541,9 +553,16 @@
         Yukleniyor = true;
         try
         {
+            AktifEslestirmeSayisi = await PlanService.GetAktifEslestirmeSayisiAsync();
+            if (AktifEslestirmeSayisi == 0)
+            {
+                Toast.ShowWarning("Plan oluşturmak için önce Tanımları Yönet bölümünde aktif araç, şoför ve güzergâh eşleştirmesi ekleyin.");
+                return;
+            }
+
             var (olusan, atlanan, islenmeyenGun) = await PlanService.AyPlaniUretAsync(SeciliYil, SeciliAy);
             if (olusan == 0 && atlanan == 0)
-                Toast.ShowWarning($"Plan üretilmedi. {islenmeyenGun} gün hafta sonu, tatil veya aktif eşleştirme olmaması nedeniyle işlenmedi.");
+                Toast.ShowWarning($"Plan üretilmedi. {islenmeyenGun} gün hafta sonu veya tatil nedeniyle işlenmedi.");
             else
                 Toast.ShowSuccess($"{olusan} plan oluşturuldu, {atlanan} plan zaten mevcuttu. İşlenmeyen gün: {islenmeyenGun}.");
             await YukleAsync();
@@ -551,6 +570,9 @@
         catch (Exception ex)
         {
             Toast.ShowError($"Plan üretim hatası: {ex.Message}");
+        }
+        finally
+        {
             Yukleniyor = false;
         }
     }

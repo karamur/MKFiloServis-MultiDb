@@ -4,6 +4,7 @@
 @using MKFiloServis.Web.Services.Interfaces
 @inject IDatabaseSettingsService DbSettingsService
 @inject IBackupService BackupService
+@inject DatabaseRuntimeInfo ActiveDatabase
 @inject IToastService ToastService
 @inject NavigationManager Navigation
 @rendermode InteractiveServer
@@ -23,6 +24,14 @@
     }
     else
     {
+        <div class="alert @(settings.Provider == ActiveDatabase.Provider ? "alert-info" : "alert-warning") mb-3">
+            <strong>Uygulamanın aktif veritabanı:</strong> @ActiveDatabase.Provider
+            <span class="ms-2">(kaynak: @ActiveDatabase.Source)</span>
+            @if (settings.Provider != ActiveDatabase.Provider)
+            {
+                <div class="mt-1">Kaydedilmiş sağlayıcı @settings.Provider; uygulama şu anda @ActiveDatabase.Provider kullanıyor. Değişikliğin etkinleşmesi için uygulamayı yeniden başlatın.</div>
+            }
+        </div>
         <div class="row">
             <div class="col-md-8">
                 <div class="card">
@@ -262,10 +271,10 @@
                     <div class="card-body">
                         <h6>Desteklenen Runtime Sağlayıcılar:</h6>
                         <ul class="list-unstyled mb-3">
-                            <li><strong>PostgreSQL:</strong> Kanonik ve önerilen</li>
+                            <li><strong>PostgreSQL:</strong> Kanonik migration kaynağı</li>
                             <li><strong>SQL Server:</strong> Sunucu tabanlı çalışma modu</li>
                             <li><strong>MySQL:</strong> Sunucu tabanlı çalışma modu</li>
-                            <li><strong>SQLite:</strong> Yerel/tek dosya çalışma modu</li>
+                            <li><strong>SQLite:</strong> Yerel/tek dosya çalışma modu; aktif sağlayıcı olarak seçilebilir</li>
                         </ul>
                         @if (!string.IsNullOrWhiteSpace(settings.TransitionManifestPath))
                         {

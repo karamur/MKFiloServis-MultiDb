@@ -1,5 +1,4 @@
 ﻿@page "/ayarlar/arsiv-goruntuleyici"
-@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
 @using MKFiloServis.Web.Helpers
 @using MKFiloServis.Web.Services
 @using MKFiloServis.Web.Services.Interfaces
@@ -7,10 +6,13 @@
 @inject ArchiveBrowserService ArchiveBrowser
 @inject IToastService ToastService
 @inject IJSRuntime JS
+@inject IKullaniciService KullaniciService
 @rendermode InteractiveServer
 
 <PageTitle>Arşiv Dosya Görüntüleyici</PageTitle>
 
+<YetkiKontrol Yetki="@MKFiloServis.Shared.Entities.Yetkiler.ArsivGoruntuleyiciOku" GerekliYetkiAdi="Arşiv Dosya Görüntüleyici">
+<Yetkili>
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
@@ -29,7 +31,7 @@
 
     <div class="alert alert-info py-2">
         <i class="bi bi-shield-lock me-1"></i>
-        Yalnız sunucudaki <code>Depo</code> alanı ve alt dizinleri görüntülenir. Yeni dosyalar uygulama anahtarlarıyla
+        Sunucudaki uygulama dizininin <code>Depo</code> ve <code>Arşiv</code> alanları ve alt dizinleri görüntülenir. Yeni dosyalar uygulama anahtarlarıyla
         korunur. Anahtarı bulunmayan eski şifreli dosyalar listelenir ancak açılamaz.
     </div>
 
@@ -37,24 +39,48 @@
         <div class="card-body py-2">
             <div class="row g-2 align-items-end">
                 <div class="col-md-4">
-                    <label class="form-label small mb-1">Depo Dizini</label>
+                    <label class="form-label small mb-1">Bilgisayar / Dizin</label>
                     <select class="form-select form-select-sm" @bind="seciliDizin" @bind:after="YenileAsync">
-                        <option value="">Depo (Tümü)</option>
-                        @foreach (var dizin in depoDizinleri)
-                        {
-                            <option value="@dizin.RelativePath">@dizin.Name</option>
-                        }
+                        <option value="">Uygulama Dizini (Depo + Arşiv)</option>
+                        <option value="Depo">Depo</option>
+                        <option value="Arsiv">Arşiv</option>
                     </select>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label small mb-1">Dosya Ara</label>
-                    <input type="text" class="form-control form-control-sm" @bind="filtreArama" @bind:after="FiltreUygula"
+                    <input type="text" class="form-control form-control-sm" @bind="filtreArama" @bind:event="oninput" @bind:after="FiltreUygula"
                            placeholder="Dosya adı veya klasör..." />
                 </div>
                 <div class="col-md-4 text-end">
                     <span class="badge bg-secondary">@filtrelenmisDosyalar.Count / @tumDosyalar.Count dosya</span>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="small text-muted mb-2"><i class="bi bi-pc-display me-1"></i>Bilgisayar (sunucu) / @ArchiveBrowser.StorageRoot</div>
+            <nav aria-label="Arşiv dizin yolu" class="d-flex flex-wrap align-items-center gap-1 mb-2">
+                <button class="btn btn-sm btn-outline-secondary" @onclick='() => DizinSecAsync("")'>Dizin</button>
+                @foreach (var yol in DizinKirimlari())
+                {
+                    <span class="text-muted">/</span>
+                    <button class="btn btn-sm @(seciliDizin == yol.RelativePath ? "btn-primary" : "btn-outline-secondary")"
+                            @onclick="() => DizinSecAsync(yol.RelativePath)">@yol.Name</button>
+                }
+            </nav>
+            @if (altDizinler.Count > 0)
+            {
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach (var dizin in altDizinler)
+                    {
+                        <button class="btn btn-sm btn-outline-primary" @onclick="() => DizinSecAsync(dizin.RelativePath)">
+                            <i class="bi bi-folder me-1"></i>@dizin.Name
+                        </button>
+                    }
+                </div>
+            }
         </div>
     </div>
 
@@ -68,7 +94,7 @@
     else if (!filtrelenmisDosyalar.Any())
     {
         <div class="alert alert-warning">
-            <i class="bi bi-info-circle me-1"></i>Seçilen Depo dizininde görüntülenecek dosya bulunamadı.
+            <i class="bi bi-info-circle me-1"></i>Seçilen dizinde aramaya uygun dosya bulunamadı.
         </div>
     }
     else
@@ -170,6 +196,8 @@
     </div>
 }
 
+</Yetkili>
+</YetkiKontrol>
 @code {
     private sealed class ArsivDosya
     {
@@ -186,8 +214,8 @@
     private List<ArsivDosya> filtrelenmisDosyalar = new();
     private bool isLoading = true;
 
-    private List<ArchiveDirectoryItem> depoDizinleri = new();
-    private string seciliDizin = string.Empty;
+    private List<ArchiveDirectoryItem> altDizinler = new();
+    private string seciliDizin = "Arsiv";
     private string filtreArama = string.Empty;
 
     private bool showPreviewModal = false;
@@ -200,16 +228,18 @@
 
     protected override async Task OnInitializedAsync()
     {
-        depoDizinleri = ArchiveBrowser.GetDirectories().ToList();
+        if (!await GoruntulemeYetkisiVarMiAsync()) return;
         await YenileAsync();
     }
 
     private async Task YenileAsync()
     {
+        if (!await GoruntulemeYetkisiVarMiAsync()) return;
         isLoading = true;
         StateHasChanged();
         try
         {
+            altDizinler = ArchiveBrowser.GetDirectories(seciliDizin).ToList();
             tumDosyalar = await Task.Run(() => ArchiveBrowser.GetFiles(seciliDizin)
                 .Select(d => new ArsivDosya
                 {
@@ -235,16 +265,36 @@
         }
     }
 
+    private async Task DizinSecAsync(string relativePath)
+    {
+        seciliDizin = relativePath;
+        await YenileAsync();
+    }
+
+    private IEnumerable<ArchiveDirectoryItem> DizinKirimlari()
+    {
+        var yol = string.Empty;
+        foreach (var parca in seciliDizin.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            yol = string.IsNullOrEmpty(yol) ? parca : $"{yol}/{parca}";
+            yield return new ArchiveDirectoryItem(parca, yol);
+        }
+    }
+
     private void FiltreUygula()
     {
         IEnumerable<ArsivDosya> liste = tumDosyalar;
 
         if (!string.IsNullOrWhiteSpace(filtreArama))
         {
-            var arama = filtreArama.Trim();
+            var arama = filtreArama.Trim().Trim('"').Replace('\\', '/');
+            var storageRoot = ArchiveBrowser.StorageRoot.Replace('\\', '/').TrimEnd('/');
+            if (arama.StartsWith(storageRoot + "/", StringComparison.OrdinalIgnoreCase))
+                arama = arama[(storageRoot.Length + 1)..];
             liste = liste.Where(d =>
                 d.GorunenAd.Contains(arama, StringComparison.OrdinalIgnoreCase) ||
-                d.Klasor.Contains(arama, StringComparison.OrdinalIgnoreCase));
+                d.Klasor.Contains(arama, StringComparison.OrdinalIgnoreCase) ||
+                d.RelativePath.Contains(arama, StringComparison.OrdinalIgnoreCase));
         }
 
         filtrelenmisDosyalar = liste.ToList();
@@ -253,6 +303,8 @@
 
     private async Task<byte[]?> DosyaCoz(ArsivDosya dosya)
     {
+        if (!await GoruntulemeYetkisiVarMiAsync()) return null;
+        ArchiveBrowser.ValidateStorageRelativePath(dosya.RelativePath);
         if (dosya.Format == ArchiveFileFormat.Plain)
             return await File.ReadAllBytesAsync(ArchiveBrowser.ValidateStorageRelativePath(dosya.RelativePath));
 
@@ -265,6 +317,12 @@
             return null;
         }
         return bytes;
+    }
+
+    private async Task<bool> GoruntulemeYetkisiVarMiAsync()
+    {
+        var aktif = await KullaniciService.GetAktifKullaniciAsync();
+        return aktif is not null && await KullaniciService.YetkiVarMiAsync(aktif.Id, MKFiloServis.Shared.Entities.Yetkiler.ArsivGoruntuleyiciOku);
     }
 
     private async Task OnIzlemeAc(ArsivDosya dosya)

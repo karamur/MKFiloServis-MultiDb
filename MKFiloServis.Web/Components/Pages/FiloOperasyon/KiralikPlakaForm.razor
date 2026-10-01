@@ -1,3 +1,6 @@
+@page "/araclar/plaka-takip/yeni"
+@page "/filo-operasyon/kiralik-c-plaka-takip/yeni"
+@page "/filo-operasyon/kiralık-c-plaka-takip/yeni"
 @page "/araclar/plaka-takip/{Id:int}/duzenle"
 @page "/filo-operasyon/kiralik-c-plaka-takip/{Id:int}/duzenle"
 @page "/filo-operasyon/kiralık-c-plaka-takip/{Id:int}/duzenle"
@@ -37,7 +40,7 @@
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label">Plaka</label>
-                            <input class="form-control" @bind="_model.Plaka" @onblur="PlakadanAracEslestir" />
+                            <input class="form-control" @bind="_model.Plaka" @onblur="PlakadanAracEslestir" required maxlength="15" />
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Eşleşen Araç</label>
@@ -52,7 +55,7 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">İsim Soyisim</label>
-                            <input class="form-control" @bind="_model.IsimSoyisim" />
+                            <input class="form-control" @bind="_model.IsimSoyisim" required maxlength="100" />
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Başlama Tarihi</label>
@@ -83,7 +86,7 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Periyot Tutarı</label>
-                            <input type="number" step="0.01" class="form-control" @bind="_model.AylikVeyaYillikTutar" @bind:after="OnPlanParametreDegisti" />
+                            <input type="number" step="0.01" min="0" class="form-control" @bind="_model.AylikVeyaYillikTutar" @bind:after="OnPlanParametreDegisti" />
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Ödeme Sayısı</label>
@@ -803,6 +806,18 @@
             BirlesikTabloyuModeleAktar();
             ModeliKaydetmeOncesiNormalizeEt();
 
+            if (_model.BaslamaTarihi == default || _model.BitisTarihi < _model.BaslamaTarihi)
+            {
+                ToastService.ShowError("Bitiş tarihi başlangıç tarihinden önce olamaz.");
+                return;
+            }
+
+            if (_model.AylikVeyaYillikTutar < 0 || _aylikTakipSatirlari.Any(x => x.EkOdemeTutari < 0 || x.FaturaTutari < 0 || x.BuAyOdenen < 0))
+            {
+                ToastService.ShowError("Tutarlar negatif olamaz.");
+                return;
+            }
+
             if (!editContext.Validate())
             {
                 ToastService.ShowError("Formda eksik/geçersiz alan var. Lütfen zorunlu alanları kontrol edin.");
@@ -817,7 +832,7 @@
             }
             else 
             {
-                throw new InvalidOperationException("Yeni kayıt sadece Excel import ile yapılabilir.");
+                _model = await TakipService.CreateAsync(_model);
             }
 
             ToastService.ShowSuccess("Kaydedildi");

@@ -4,7 +4,7 @@
   "CanonicalProvider": 2,
   "Host": "",
   "Port": 0,
-  "DatabaseName": "MKFiloServis_Demo.db",
+  "DatabaseName": "App_Data/test.db",
   "Username": "",
   "Password": "",
   "UseIntegratedSecurity": false,

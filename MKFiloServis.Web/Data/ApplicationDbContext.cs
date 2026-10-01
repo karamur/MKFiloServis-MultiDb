@@ -361,13 +361,6 @@ public class ApplicationDbContext : DbContext
 
     // Multi-tenant (Legacy Şirket) - Faz 5.3-B3-i: DbSet kaldırıldı, entity dosyası silinecek
 
-    // Araç Takip (GPS) Modülü
-    public DbSet<AracTakipCihaz> AracTakipCihazlar { get; set; }
-    public DbSet<AracKonum> AracKonumlar { get; set; }
-    public DbSet<AracBolge> AracBolgeler { get; set; }
-    public DbSet<AracBolgeAtama> AracBolgeAtamalar { get; set; }
-    public DbSet<AracTakipAlarm> AracTakipAlarmlar { get; set; }
-
     // Şirketler Arası Transfer (Legacy) - Faz 5.3-B3-i: DbSet kaldırıldı, entity dosyası silinecek
 
     // Audit Log Modülü
@@ -2447,23 +2440,11 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<PersonelBorcOdeme>()
             .HasQueryFilter(e => !e.IsDeleted && !e.Borc.IsDeleted);
 
-        modelBuilder.Entity<AracBolgeAtama>()
-            .HasQueryFilter(e => !e.IsDeleted && !e.Arac.IsDeleted);
-
         modelBuilder.Entity<BakimPeriyot>()
             .HasQueryFilter(e => !e.IsDeleted && (e.Arac == null || !e.Arac.IsDeleted));
 
         modelBuilder.Entity<AracBakimUyari>()
             .HasQueryFilter(e => !e.IsDeleted && (e.Arac == null || !e.Arac.IsDeleted));
-
-        modelBuilder.Entity<AracTakipCihaz>()
-            .HasQueryFilter(e => !e.IsDeleted && !e.Arac.IsDeleted);
-
-        modelBuilder.Entity<AracKonum>()
-            .HasQueryFilter(e => !e.IsDeleted && !e.AracTakipCihaz.IsDeleted);
-
-        modelBuilder.Entity<AracTakipAlarm>()
-            .HasQueryFilter(e => !e.IsDeleted && !e.AracTakipCihaz.IsDeleted);
 
         modelBuilder.Entity<AracEvrakDosyaVersiyon>()
             .HasQueryFilter(e => !e.IsDeleted && e.AracEvrakDosya != null && !e.AracEvrakDosya.IsDeleted);

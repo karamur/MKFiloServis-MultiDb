@@ -3,11 +3,6 @@
   "ConnectionStrings": {
     "DefaultConnection": "Host=SUNUCU;Port=5432;Database=CRMFiloServisDb;Username=KULLANICI;Password=SIFRE;Pooling=true;MinPoolSize=1;MaxPoolSize=50;"
   },
-  "OpenAI": {
-    "ApiKey": "",
-    "Model": "gpt-4o-mini",
-    "BaseUrl": "https://api.openai.com/v1"
-  },
   "PythonScraper": {
     "BaseUrl": "http://localhost:5050",
     "Enabled": false

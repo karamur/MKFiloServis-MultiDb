@@ -56,7 +56,7 @@
                     <div class="license-detail-box mb-3">
                         <div class="d-flex justify-content-between mb-1">
                             <span class="text-muted">Lisans Tipi:</span>
-                            <span class="fw-semibold">@(lisans.IsDemo ? "Demo (30 gün)" : "Yıllık")</span>
+                            <span class="fw-semibold">@(lisans.IsDemo ? "Demo (15 gün)" : "Yıllık")</span>
                         </div>
                         <div class="d-flex justify-content-between mb-1">
                             <span class="text-muted">Bitiş:</span>
@@ -138,6 +138,21 @@
                         <span>Lisansı Aktif Et ve Devam Et</span>
                     }
                 </button>
+
+                @if (lisans == null && !LicenseService.HasDemoBeenUsed())
+                {
+                    <button class="btn btn-warning btn-lg w-100 mb-3 text-white" @onclick="DemoModunuBaslatAsync"
+                            disabled="@demoKurulumuYukleniyor">
+                        @if (demoKurulumuYukleniyor)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span><span>Demo hazırlanıyor...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-play-circle me-2"></i><span>Demo Modunda Kullan (15 Gün)</span>
+                        }
+                    </button>
+                }
 
                 @* Güven ver *@
                 <p class="text-muted small text-center mb-0">
@@ -560,6 +575,7 @@
     private string? lisansHataMesaji;
     private string? lisansBasariMesaji;
     private bool lisansAktivasyonYukleniyor = false;
+    private bool demoKurulumuYukleniyor = false;
 
     private const string REMEMBER_KEY = "MKFiloServis_RememberMe";
 
@@ -928,6 +944,27 @@
         {
             lisansAktivasyonYukleniyor = false;
             StateHasChanged();
+        }
+    }
+
+    private async Task DemoModunuBaslatAsync()
+    {
+        if (demoKurulumuYukleniyor) return;
+        demoKurulumuYukleniyor = true;
+        lisansHataMesaji = null;
+        try
+        {
+            lisans = await LicenseSvc.InstallDemoLicenseAsync();
+            lisansSuresiDoldu = false;
+            lisansBasariMesaji = "15 günlük demo lisansı etkinleştirildi. Şimdi kullanıcı bilgilerinizle giriş yapabilirsiniz.";
+        }
+        catch (Exception ex)
+        {
+            lisansHataMesaji = ex.Message;
+        }
+        finally
+        {
+            demoKurulumuYukleniyor = false;
         }
     }
 

@@ -31,18 +31,20 @@ public class LicenseService
     private readonly IConfiguration _config;
     private readonly ILogger<LicenseService> _logger;
     private readonly LicenseCache _cache; // Singleton cache — request'ler arası yaşar
+    private readonly DatabaseRuntimeInfo _databaseRuntime;
     private const string SecretKey = "MKFiloServis-LCNS-2026-SECURE-KEY-X9mK2pL5vR8w";
     private const string RegistryPath = @"SOFTWARE\KOAFiloServis";
     private const string DemoUsedValueName = "DemoUsed";
-    private const int DemoMaxDays = 30;
+    private const int DemoMaxDays = 15;
     private const int DemoButtonDays = 15;
 
-    public LicenseService(IDbContextFactory<ApplicationDbContext> dbFactory, IConfiguration config, ILogger<LicenseService> logger, LicenseCache cache)
+    public LicenseService(IDbContextFactory<ApplicationDbContext> dbFactory, IConfiguration config, ILogger<LicenseService> logger, LicenseCache cache, DatabaseRuntimeInfo databaseRuntime)
     {
         _dbFactory = dbFactory;
         _config = config;
         _logger = logger;
         _cache = cache;
+        _databaseRuntime = databaseRuntime;
     }
 
     // ══════════════════════════════════════════════
@@ -323,7 +325,7 @@ public class LicenseService
                 .IgnoreQueryFilters()
                 .AnyAsync(l => !l.IsDeleted);
 
-            // ── Lisans yok → Demo kontrolu ──
+            // ── Lisans yok: demo ancak kullanıcı giriş ekranından açıkça başlatır ──
             if (lic == null)
             {
                 // PART 1: Registry kontrolu
@@ -331,21 +333,12 @@ public class LicenseService
                     return LicenseValidationResult.Fail(
                         "🛑 Demo hakki zaten kullanilmis. Lisans dosyasini yukleyin.");
 
-                // PART 1 EXTRA: DB'de demo varsa (yeni eklenmis olabilir) tekrar uretme
                 if (hasAnyLicense)
                     return LicenseValidationResult.Fail(
                         "🛑 Veritabaninda lisans kaydi var fakat aktif degil. Lisans dosyasini yukleyin.");
 
-                lic = await CreateTrialLicenseAsync(db);
-                MarkDemoUsed();
-                WriteLicenseHash(lic);
-
-                _logger.LogWarning(
-                    "🚨 DEMO LISANS OLUSTURULDU | Makine: {MachineId} | Firma: {FirmaKodu} | Bitis: {ExpireDate:yyyy-MM-dd} | Registry: set",
-                    lic.MachineId, lic.FirmaKodu, lic.ExpireDate);
-
-                _cache.Set(lic); // 🔥 KRİTİK: Singleton cache set — demo lisans
-                return LicenseValidationResult.Ok(lic);
+                return LicenseValidationResult.Fail(
+                    "Lisans bulunamadı. Giriş ekranından 15 günlük demo modunu başlatabilir veya lisans anahtarı yükleyebilirsiniz.");
             }
 
             // ── PART 8: SECURITY VIOLATION — registry silinmis ama DB'de lisans var ──
@@ -472,10 +465,16 @@ public class LicenseService
 
     public async Task<LicenseInfo> InstallDemoLicenseAsync()
     {
+        if (!_databaseRuntime.IsSqlite)
+            throw new InvalidOperationException("Demo modu yalnızca kurulumda seçilen bağımsız SQLite demo veritabanında kullanılabilir. Mevcut sunucu veritabanınız değiştirilmedi.");
+
         if (HasDemoBeenUsed())
             throw new InvalidOperationException("Demo hakki zaten kullanildi. Lisans anahtarini girin.");
 
         await using var db = await _dbFactory.CreateDbContextAsync();
+        if (await db.LicenseInfos.IgnoreQueryFilters().AnyAsync(l => !l.IsDeleted))
+            throw new InvalidOperationException("Bu veritabanında daha önce lisans kaydı oluşturulmuş. Demo lisansı mevcut verinin üzerine kurulamaz.");
+
         await db.LicenseInfos
             .IgnoreQueryFilters()
             .Where(l => l.IsActive)
@@ -605,7 +604,7 @@ public class LicenseService
         await using var db = await _dbFactory.CreateDbContextAsync();
 
         // FirmaKodu'ndan FirmaId'yi bul veya yoksa lisansa gore firma olustur
-        var firma = await ResolveFirmaForLicenseAsync(db, lic.FirmaKodu)
+        var firma = await ResolveFirmaForLicenseAsync(db, lic.FirmaKodu, lic.IsDemo)
                     ?? await CreateFirmaFromLicenseAsync(db, lic);
 
         // 🔥 KRİTİK: FirmaKodu'nu DEGISTIRME! Signature, anahtar icindeki orijinal
@@ -639,7 +638,7 @@ public class LicenseService
         return lic;
     }
 
-    private async Task<Firma?> ResolveFirmaForLicenseAsync(ApplicationDbContext db, string? licenseFirmaValue)
+    private async Task<Firma?> ResolveFirmaForLicenseAsync(ApplicationDbContext db, string? licenseFirmaValue, bool isDemo)
     {
         var firmalar = await db.Firmalar
             .IgnoreQueryFilters()
@@ -668,9 +667,17 @@ public class LicenseService
 
         if (varsayilanFirma != null)
         {
-            // Fallback firma seçildi, ancak bu sistem tarafından desteklenen bir durum
-            _logger.LogWarning("Lisans firma kodu doğrudan eşleşme bulunamadı, varsayılan firmaya atandı. LisansDegeri={LicenseFirmaValue}, FirmaId={FirmaId}, FirmaKodu={FirmaKodu}",
-                licenseFirmaValue, varsayilanFirma.Id, varsayilanFirma.FirmaKodu);
+            // Demo anahtarlarında DEMO FIRMASI gibi görünen adlar, gerçek demo firma koduyla eşleşmeyebilir.
+            if (isDemo && NormalizeFirmaMatchValue(licenseFirmaValue) is "DEMO" or "DEMOFIRMASI")
+            {
+                _logger.LogInformation("Demo lisansi varsayilan firmaya baglandi. FirmaId={FirmaId}, FirmaKodu={FirmaKodu}",
+                    varsayilanFirma.Id, varsayilanFirma.FirmaKodu);
+            }
+            else
+            {
+                _logger.LogWarning("Lisans firma kodu doğrudan eşleşme bulunamadı, varsayılan firmaya atandı. LisansDegeri={LicenseFirmaValue}, FirmaId={FirmaId}, FirmaKodu={FirmaKodu}",
+                    licenseFirmaValue, varsayilanFirma.Id, varsayilanFirma.FirmaKodu);
+            }
             return varsayilanFirma;
         }
 

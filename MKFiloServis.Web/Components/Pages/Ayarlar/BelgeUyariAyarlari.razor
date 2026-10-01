@@ -7,9 +7,12 @@
 @inject BelgeUyariBackgroundService BelgeUyariService
 @inject IWhatsAppService WhatsAppService
 @inject IToastService ToastService
+@inject IKullaniciService KullaniciService
 
 <PageTitle>Belge Uyarı Ayarları - MK Filo Servis</PageTitle>
 
+<YetkiKontrol Yetki="@Yetkiler.BelgeUyariAyarOku" GerekliYetkiAdi="Belge Uyarı Ayarları">
+<Yetkili>
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
@@ -73,9 +76,13 @@
                         {
                             <div class="alert alert-info py-2 small">
                                 <i class="bi bi-info-circle me-1"></i>
-                                E-postalar sistemdeki <strong>Admin</strong> ve <strong>Yönetici</strong> rolündeki kullanıcılara gönderilir.
+                                E-postalar sistemdeki <strong>Admin</strong> ve <strong>Yönetici</strong> kullanıcılarına ve aşağıdaki ek adreslere gönderilir.
                             </div>
                         }
+                        <label class="form-label small fw-semibold" for="ekEmailAdresleri">Ek e-posta adresleri (isteğe bağlı)</label>
+                        <textarea id="ekEmailAdresleri" class="form-control" rows="3" @bind="ekEmailAdresleriMetin"
+                                  placeholder="ornek@firma.com&#10;diger@firma.com"></textarea>
+                        <div class="form-text">Birden fazla adresi yeni satır, virgül veya noktalı virgülle ayırın.</div>
                     </div>
                 </div>
 
@@ -239,12 +246,15 @@
     }
 </div>
 
+</Yetkili>
+</YetkiKontrol>
 @code {
     private BelgeUyariAyarlar? ayarlar;
     private List<BelgeUyariItem> yaklasanBelgeler = [];
     private List<WhatsAppGrup> whatsappGruplar = [];
     private List<WhatsAppKisi> whatsappKisiler = [];
     private string uyariGunleriMetin = "";
+    private string ekEmailAdresleriMetin = "";
     private bool isLoading = true;
     private bool isKaydediliyor = false;
     private bool isManuelCalistiyor = false;
@@ -252,8 +262,11 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var aktif = await KullaniciService.GetAktifKullaniciAsync();
+        if (aktif is null || !await KullaniciService.YetkiVarMiAsync(aktif.Id, Yetkiler.BelgeUyariAyarOku)) return;
         ayarlar = await AyarlariService.GetAyarlarAsync();
         uyariGunleriMetin = string.Join(", ", ayarlar.UyariGunleri.OrderByDescending(x => x));
+        ekEmailAdresleriMetin = string.Join(Environment.NewLine, ayarlar.EkEmailAdresleri ?? []);
 
         await Task.WhenAll(
             YenileOnizlemeAsync(),
@@ -312,10 +325,12 @@
 
     private async Task KaydetAsync()
     {
+        if (!await DuzenlemeYetkisiVarMiAsync()) return;
         if (ayarlar == null) return;
         isKaydediliyor = true;
         try
         {
+            ayarlar.EkEmailAdresleri = BelgeUyariAyarlariService.ParseEmailAddresses(ekEmailAdresleriMetin);
             await AyarlariService.SaveAyarlarAsync(ayarlar);
             ToastService.ShowSuccess("Ayarlar kaydedildi");
             await YenileOnizlemeAsync();
@@ -332,12 +347,14 @@
 
     private async Task ManuelCalistirAsync()
     {
+        if (!await DuzenlemeYetkisiVarMiAsync()) return;
         isManuelCalistiyor = true;
         StateHasChanged();
         try
         {
             await BelgeUyariService.RunOnceAsync();
             ayarlar = await AyarlariService.GetAyarlarAsync();
+            ekEmailAdresleriMetin = string.Join(Environment.NewLine, ayarlar.EkEmailAdresleri ?? []);
             ToastService.ShowSuccess("Belge uyarı kontrolü tamamlandı. Bildirimler gönderildi.");
         }
         catch (Exception ex)
@@ -348,6 +365,14 @@
         {
             isManuelCalistiyor = false;
         }
+    }
+
+    private async Task<bool> DuzenlemeYetkisiVarMiAsync()
+    {
+        var aktif = await KullaniciService.GetAktifKullaniciAsync();
+        if (aktif is not null && await KullaniciService.YetkiVarMiAsync(aktif.Id, Yetkiler.BelgeUyariAyarDuzenle)) return true;
+        ToastService.ShowError("Belge uyarı ayarlarını düzenleme yetkiniz yok.");
+        return false;
     }
 
     private static string GetSatirClass(int kalanGun) => kalanGun switch

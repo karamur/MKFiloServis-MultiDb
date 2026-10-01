@@ -34,6 +34,26 @@ public static class AppStoragePaths
     public static string GetDatabaseBackupRoot(string contentRootPath)
         => Path.Combine(GetStorageRoot(contentRootPath), "database");
 
+    public static string GetWritableBackupFolder(string contentRootPath, string? configuredFolder)
+    {
+        var folder = string.IsNullOrWhiteSpace(configuredFolder) ? "database" : configuredFolder.Trim();
+        var isAbsolutePath = Path.IsPathRooted(folder);
+        var requestedPath = Path.GetFullPath(isAbsolutePath
+            ? folder
+            : Path.Combine(GetStorageRoot(contentRootPath), folder));
+
+        EnsureWritableDirectory(requestedPath);
+        return requestedPath;
+    }
+
+    private static void EnsureWritableDirectory(string path)
+    {
+        Directory.CreateDirectory(path);
+        var probe = Path.Combine(path, $".write-test-{Guid.NewGuid():N}");
+        using (new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None)) { }
+        File.Delete(probe);
+    }
+
     public static string GetArchiveRepositoryRoot(string contentRootPath)
         => Path.Combine(GetStorageRoot(contentRootPath), "Depo");
 

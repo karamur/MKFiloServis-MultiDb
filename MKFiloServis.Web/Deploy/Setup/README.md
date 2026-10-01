@@ -32,11 +32,18 @@ setup.bat "" "" "" 1.0.27
 - `Runtime` (varsayilan: `win-x64`)
 - `OutputRoot` (varsayilan: `./artifacts/setup`)
 - `Version` (varsayilan: `1.0.27`)
+- `UseDemoSqlite` (varsayilan: kapali; acildiginda dagitim paketini ayri `App_Data/MKFiloServis_Demo.db` SQLite veritabanini kullanacak sekilde ayarlar)
 
 Ornek:
 ```powershell
 pwsh .\\setup.ps1 -Configuration Release -Runtime win-x64 -OutputRoot .\\artifacts\\setup -Version 1.0.27
 ```
+
+15 gunluk demo icin yalnizca yeni dagitim paketini SQLite demo veritabanina yonlendirmek:
+```powershell
+pwsh .\\setup.ps1 -UseDemoSqlite
+```
+Bu secenek kaynak `dbsettings.json` dosyasini ve kurulu veritabanlarini degistirmez; yalnizca olusturulan paket ayarini yazar. SQLite dosyasi ilk uygulama baslangicinda olusturulur.
 
 ## Ciktılar
 

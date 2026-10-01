@@ -1,6 +1,6 @@
 namespace MKFiloServis.Web.Services.Interfaces;
 
-/// <summary>AI analiz stub — Ollama kaldırıldı.</summary>
+/// <summary>Yalnizca yerel model uzerinden AI analizi.</summary>
 public interface IOllamaService
 {
     string ModelAdi { get; }
@@ -11,7 +11,7 @@ public interface IOllamaService
     Task<float[]> EmbeddingOlusturAsync(string metin);
 }
 
-/// <summary>AI chat stub — Ollama kaldırıldı.</summary>
+/// <summary>Yerel model sohbet arayuzu.</summary>
 public interface IOllamaAIChatService
 {
     Task<bool> IsAvailableAsync();

@@ -5,7 +5,7 @@
 
 [Setup]
 AppName=MKFiloServis
-AppVersion=1.0.27
+AppVersion=1.0.37
 AppPublisher=MKFiloServis
 AppPublisherURL=https://github.com/karamur/MKFiloServis-MultiDb
 AppSupportURL=https://github.com/karamur/MKFiloServis-MultiDb/issues

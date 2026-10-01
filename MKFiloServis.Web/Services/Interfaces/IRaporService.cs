@@ -52,7 +52,8 @@ public interface IRaporService
     Task<List<AracKarsilastirmaOzeti>> GetAracKarsilastirmaAsync(
         DateTime startDate,
         DateTime endDate,
-        AracSahiplikTipi? sahiplikTipi = null);
+        AracSahiplikTipi? sahiplikTipi = null,
+        IReadOnlyCollection<int>? aracIds = null);
 
     // Cari Bakiye Yaşlandırma Raporu
     Task<CariYaslandirmaRapor> GetCariYaslandirmaAsync(

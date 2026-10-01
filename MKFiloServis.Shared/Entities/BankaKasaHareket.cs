@@ -119,7 +119,8 @@ public enum IslemKaynak
     Mahsup = 9,         // Hesaplar arasi transfer
     CariMahsup = 10,    // Cari hesap mahsubu
     PersonelCebinden = 11, // Personel cebinden harcama
-    PersonelGeriOdeme = 12 // Personele cebinden harcama geri ödemesi (Cikis)
+    PersonelGeriOdeme = 12, // Personele cebinden harcama geri ödemesi (Cikis)
+    RentACar = 13 // Rent a Car tahsilat/iade hareketi
 }
 
 

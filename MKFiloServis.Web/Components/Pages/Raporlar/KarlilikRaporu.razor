@@ -214,6 +214,7 @@
                                 <th>Ay</th>
                                 <th class="text-end">Gelir Sefer</th>
                                 <th class="text-end">Gelir ₺</th>
+                                <th class="text-end">Rent a Car ₺</th>
                                 <th class="text-end">Tedarikçi Gider ₺</th>
                                 <th class="text-end">Özmal Maliyet ₺</th>
                                 <th class="text-end">Toplam Gider ₺</th>
@@ -228,6 +229,7 @@
                                     <td><strong>@AyAdi(a.Ay)</strong></td>
                                     <td class="text-end">@a.Sefer.ToString("N2")</td>
                                     <td class="text-end text-success">@a.Gelir.ToString("N2")</td>
+                                    <td class="text-end text-success">@a.RentACarGeliri.ToString("N2")</td>
                                     <td class="text-end text-warning">@a.TedarikciGider.ToString("N2")</td>
                                     <td class="text-end text-info">@a.OzmalMaliyet.ToString("N2")</td>
                                     <td class="text-end">@a.ToplamGider.ToString("N2")</td>
@@ -241,6 +243,7 @@
                                 <td>TOPLAM</td>
                                 <td class="text-end">@AylikOzet().Sum(x => x.Sefer).ToString("N2")</td>
                                 <td class="text-end text-success">@AylikOzet().Sum(x => x.Gelir).ToString("N2")</td>
+                                <td class="text-end text-success">@AylikOzet().Sum(x => x.RentACarGeliri).ToString("N2")</td>
                                 <td class="text-end text-warning">@AylikOzet().Sum(x => x.TedarikciGider).ToString("N2")</td>
                                 <td class="text-end text-info">@AylikOzet().Sum(x => x.OzmalMaliyet).ToString("N2")</td>
                                 <td class="text-end">@AylikOzet().Sum(x => x.ToplamGider).ToString("N2")</td>
@@ -320,6 +323,7 @@
                                 <th>Sahiplik</th>
                                 <th class="text-end">Sefer</th>
                                 <th class="text-end">Gelir ₺</th>
+                                <th class="text-end">Rent a Car ₺</th>
                                 <th class="text-end">Maliyet ₺</th>
                                 <th class="text-end">Sefer/₺</th>
                                 <th class="text-end fw-bold">Kar/Zarar ₺</th>
@@ -333,6 +337,7 @@
                                     <td><span class="badge @SahiplikBadge(a.Sahiplik)">@a.Sahiplik</span></td>
                                     <td class="text-end">@a.Sefer.ToString("N2")</td>
                                     <td class="text-end text-success">@a.Gelir.ToString("N2")</td>
+                                    <td class="text-end text-success">@a.RentACarGeliri.ToString("N2")</td>
                                     <td class="text-end text-warning">@a.Maliyet.ToString("N2")</td>
                                     <td class="text-end">@(a.Sefer > 0 ? (a.Maliyet / a.Sefer).ToString("N2") : "-")</td>
                                     <td class="text-end fw-bold @(a.KarZarar >= 0 ? "text-success" : "text-danger")">@a.KarZarar.ToString("N2")</td>
@@ -357,6 +362,7 @@
     private List<Hakedis> hakedisler = new();
     private List<AracMaliyetSnapshot> snapshotlar = new();
     private List<FiloGunlukPuantaj> puantajlar = new();
+    private List<RentACarGelirSatiri> rentACarGelirleri = new();
     private List<Firma> firmalar = new();
     private List<TasimaTedarikci> tedarikciler = new();
     private List<Arac> araclar = new();
@@ -368,6 +374,7 @@
     private int tedarikciHakedisSayi;
     private decimal toplamOzmalMaliyet;
     private int snapshotSayi;
+    private decimal toplamRentACarGeliri;
 
     private decimal NetKarZarar => toplamGelir - toplamTedarikciGider - toplamOzmalMaliyet;
     private decimal MarjYuzde => toplamGelir > 0 ? Math.Round((NetKarZarar / toplamGelir) * 100m, 1) : 0m;
@@ -453,9 +460,19 @@
                 .Where(p => p.Tarih >= basTarih && p.Tarih <= bitTarih)
                 .ToListAsync();
 
+            rentACarGelirleri = await (from h in ctx.RentACarOdemeHareketleri
+                join k in ctx.MusteriKiralamalar on h.MusteriKiralamaId equals k.Id
+                join a in ctx.Araclar on k.AracId equals a.Id
+                where h.IslemTarihi >= basTarih && h.IslemTarihi < bitTarih.AddDays(1)
+                    && (h.HareketTuru == RentACarOdemeHareketTuru.KiraTahsilati
+                        || h.HareketTuru == RentACarOdemeHareketTuru.KiraIadesi)
+                select new RentACarGelirSatiri(k.AracId, h.IslemTarihi.Month,
+                    a.AktifPlaka ?? "-", h.HareketTuru, h.Tutar)).AsNoTracking().ToListAsync();
+
             // Toplam metrikler
             var kurumH = hakedisler.Where(h => h.Tip == HakedisTipi.Kurum).ToList();
-            toplamGelir = kurumH.Sum(h => h.Tutar);
+            toplamRentACarGeliri = rentACarGelirleri.Sum(h => h.HareketTuru == RentACarOdemeHareketTuru.KiraTahsilati ? h.Tutar : -h.Tutar);
+            toplamGelir = kurumH.Sum(h => h.Tutar) + toplamRentACarGeliri;
             toplamGelirSefer = kurumH.Sum(h => h.ToplamSeferSayisi);
 
             var tedH = hakedisler.Where(h => h.Tip == HakedisTipi.Tedarikci).ToList();
@@ -495,7 +512,8 @@
             .ToList();
     }
 
-    private record AylikRow(int Ay, decimal Sefer, decimal Gelir, decimal TedarikciGider, decimal OzmalMaliyet, decimal ToplamGider, decimal KarZarar, decimal Marj);
+    private record AylikRow(int Ay, decimal Sefer, decimal Gelir, decimal RentACarGeliri, decimal TedarikciGider, decimal OzmalMaliyet, decimal ToplamGider, decimal KarZarar, decimal Marj);
+    private record RentACarGelirSatiri(int AracId, int Ay, string Plaka, RentACarOdemeHareketTuru HareketTuru, decimal Tutar);
     private List<AylikRow> AylikOzet()
     {
         var liste = new List<AylikRow>();
@@ -504,13 +522,15 @@
         for (int ay = ayMin; ay <= ayMax; ay++)
         {
             var gelir = hakedisler.Where(h => h.Ay == ay && h.Tip == HakedisTipi.Kurum).Sum(h => h.Tutar);
+            var rentGelir = rentACarGelirleri.Where(h => h.Ay == ay).Sum(h => h.HareketTuru == RentACarOdemeHareketTuru.KiraTahsilati ? h.Tutar : -h.Tutar);
             var sefer = hakedisler.Where(h => h.Ay == ay && h.Tip == HakedisTipi.Kurum).Sum(h => h.ToplamSeferSayisi);
             var tedGider = hakedisler.Where(h => h.Ay == ay && h.Tip == HakedisTipi.Tedarikci).Sum(h => h.Tutar);
             var ozMal = snapshotlar.Where(s => s.Ay == ay).Sum(s => s.ToplamMaliyet);
             var topGider = tedGider + ozMal;
-            var kz = gelir - topGider;
-            var marj = gelir > 0 ? Math.Round((kz / gelir) * 100m, 1) : 0m;
-            liste.Add(new AylikRow(ay, sefer, gelir, tedGider, ozMal, topGider, kz, marj));
+            var toplamGelirAy = gelir + rentGelir;
+            var kz = toplamGelirAy - topGider;
+            var marj = toplamGelirAy > 0 ? Math.Round((kz / toplamGelirAy) * 100m, 1) : 0m;
+            liste.Add(new AylikRow(ay, sefer, toplamGelirAy, rentGelir, tedGider, ozMal, topGider, kz, marj));
         }
         return liste;
     }
@@ -547,7 +567,7 @@
             .ToList();
     }
 
-    private record AracRow(string Plaka, AracSahiplikTipi Sahiplik, decimal Sefer, decimal Gelir, decimal Maliyet, decimal KarZarar);
+    private record AracRow(string Plaka, AracSahiplikTipi Sahiplik, decimal Sefer, decimal Gelir, decimal RentACarGeliri, decimal Maliyet, decimal KarZarar);
     private List<AracRow> AracOzet()
     {
         // Araç bazlı: puantajdan gelir, snapshot'tan maliyet (tedarikçi araçta puantajdaki taşeron ücreti)
@@ -566,7 +586,9 @@
             .GroupBy(s => s.AracId)
             .ToDictionary(g => g.Key, g => g.Sum(x => x.ToplamMaliyet));
 
-        var aracIdler = puantajGruplari.Keys.Union(snapshotGruplari.Keys).ToList();
+        var rentGruplari = rentACarGelirleri.GroupBy(x => x.AracId).ToDictionary(g => g.Key,
+            g => g.Sum(x => x.HareketTuru == RentACarOdemeHareketTuru.KiraTahsilati ? x.Tutar : -x.Tutar));
+        var aracIdler = puantajGruplari.Keys.Union(snapshotGruplari.Keys).Union(rentGruplari.Keys).ToList();
         var liste = new List<AracRow>();
         foreach (var id in aracIdler)
         {
@@ -578,7 +600,8 @@
             var maliyet = arac.SahiplikTipi == AracSahiplikTipi.Tedarikci ? (p?.TedarikciGider ?? 0) : snapMaliyet;
             var sefer = p?.Sefer ?? 0;
             var gelir = p?.Gelir ?? 0;
-            liste.Add(new AracRow(arac.Plaka, arac.SahiplikTipi, sefer, gelir, maliyet, gelir - maliyet));
+            var rentGelir = rentGruplari.GetValueOrDefault(id);
+            liste.Add(new AracRow(arac.Plaka, arac.SahiplikTipi, sefer, gelir + rentGelir, rentGelir, maliyet, gelir + rentGelir - maliyet));
         }
         return liste.OrderByDescending(x => x.KarZarar).ToList();
     }
@@ -612,7 +635,8 @@
             decimal marj = toplamGelir > 0 ? Math.Round(netKar / toplamGelir * 100m, 2) : 0m;
 
             int r = 4;
-            wsOzet.Cell(r, 1).Value = "Toplam Gelir (Kurum Hakediş)"; wsOzet.Cell(r++, 2).Value = toplamGelir;
+            wsOzet.Cell(r, 1).Value = "Toplam Gelir (Kurum Hakediş + Rent a Car)"; wsOzet.Cell(r++, 2).Value = toplamGelir;
+            wsOzet.Cell(r, 1).Value = "Rent a Car Net Kira Geliri"; wsOzet.Cell(r++, 2).Value = toplamRentACarGeliri;
             wsOzet.Cell(r, 1).Value = "Toplam Sefer (Gelir)";        wsOzet.Cell(r++, 2).Value = toplamGelirSefer;
             wsOzet.Cell(r, 1).Value = "Tedarikçi Gideri";              wsOzet.Cell(r++, 2).Value = toplamTedarikciGider;
             wsOzet.Cell(r, 1).Value = "Özmal/Kiralık Maliyet";        wsOzet.Cell(r++, 2).Value = toplamOzmalMaliyet;

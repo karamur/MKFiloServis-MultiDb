@@ -497,6 +497,14 @@
                 }),
             }),
             
+            new("Rent a Car", "bi-car-front-fill", "rentacar.oku", new List<AltMenuYapisi>
+            {
+                new("Arac Karlilik Raporu", "bi-graph-up-arrow", new List<YetkiItem>
+                {
+                    new("rentacar.arackarlilik.oku", "Goruntuleme"),
+                    new("rentacar.arackarlilik.export", "Export"),
+                }),
+            }),
             new("Muhasebe", "bi-journal-text", "menu.muhasebe", new List<AltMenuYapisi>
             {
                 new("Muhasebe Dashboard", "bi-speedometer2", new List<YetkiItem>
@@ -521,6 +529,11 @@
                 {
                     new("muhaseberapor.oku", "Goruntuleme"),
                     new("muhaseberapor.export", "Export"),
+                }),
+                new("Arac Karlilik Raporu", "bi-graph-up-arrow", new List<YetkiItem>
+                {
+                    new("muhasebe.arackarlilik.oku", "Goruntuleme"),
+                    new("muhasebe.arackarlilik.export", "Export"),
                 }),
                 new("Mali Analiz", "bi-graph-up", new List<YetkiItem>
                 {
@@ -741,6 +754,32 @@
             
             new("Ayarlar", "bi-gear-fill", "menu.ayarlar", new List<AltMenuYapisi>
             {
+                new("Web Sayfası Yönetimi", "bi-window", new List<YetkiItem>
+                {
+                    new(YetkilerClass.WebSayfasiOku, "Goruntuleme"),
+                    new(YetkilerClass.WebSayfasiDuzenle, "Duzenleme"),
+                }),
+                new("Cari / Muhasebe Ayarları", "bi-journal-text", new List<YetkiItem>
+                {
+                    new(YetkilerClass.CariMuhasebeAyarOku, "Goruntuleme"),
+                    new(YetkilerClass.CariMuhasebeAyarDuzenle, "Duzenleme"),
+                }),
+                new("Belge Uyarı Ayarları", "bi-shield-exclamation", new List<YetkiItem>
+                {
+                    new(YetkilerClass.BelgeUyariAyarOku, "Goruntuleme"),
+                    new(YetkilerClass.BelgeUyariAyarDuzenle, "Duzenleme"),
+                }),
+                new("Arşiv Dosya Görüntüleyici", "bi-archive", new List<YetkiItem>
+                {
+                    new(YetkilerClass.ArsivGoruntuleyiciOku, "Goruntuleme"),
+                }),
+                new("Masraf Kalemleri", "bi-list-task", new List<YetkiItem>
+                {
+                    new(YetkilerClass.MasrafKalemleriOku, "Okuma"),
+                    new(YetkilerClass.MasrafKalemleriYaz, "Yazma"),
+                    new(YetkilerClass.MasrafKalemleriDuzenle, "Duzenleme"),
+                    new(YetkilerClass.MasrafKalemleriSil, "Silme"),
+                }),
                 new("Firma Yonetimi", "bi-building", new List<YetkiItem>
                 {
                     new("firmayonetim.oku", "Okuma"),

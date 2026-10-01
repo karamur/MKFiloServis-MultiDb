@@ -27,7 +27,7 @@ public static class DatabaseRuntimeResolver
 
         if (!File.Exists(settingsPath))
         {
-            return CreateInfo(fallbackProvider, fallbackProvider, fallbackConnectionString, "appsettings.json", settingsPath);
+            return CreateFallbackInfo(fallbackProvider, fallbackConnectionString, settingsPath);
         }
 
         try
@@ -36,7 +36,7 @@ public static class DatabaseRuntimeResolver
             var dbSettings = JsonSerializer.Deserialize<DatabaseSettings>(dbSettingsJson);
             if (dbSettings is null)
             {
-                return CreateInfo(fallbackProvider, fallbackProvider, fallbackConnectionString, "appsettings.json", settingsPath);
+                return CreateFallbackInfo(fallbackProvider, fallbackConnectionString, settingsPath);
             }
 
             var runtimeProvider = DatabaseSettings.NormalizeRuntimeProvider(dbSettings.Provider);
@@ -50,37 +50,55 @@ public static class DatabaseRuntimeResolver
             if (!IsConnectionStringValid(connectionString, runtimeProvider))
             {
                 var fallback = configuration.GetConnectionString("DefaultConnection") ?? string.Empty;
-                // Fallback da SQLite ise provider'ı PostgreSQL yap (geçiş tamamlandı)
                 var fallbackProvider2 = DatabaseSettings.ParseProvider(configuration.GetValue<string>("DatabaseProvider"));
-                if (fallbackProvider2 == DatabaseProvider.SQLite)
-                    fallbackProvider2 = DatabaseProvider.PostgreSQL;
-                return CreateInfo(fallbackProvider2, canonicalProvider, fallback, "appsettings.json (fallback)", settingsPath);
+                if (IsConnectionStringValid(fallback, fallbackProvider2))
+                    return CreateInfo(fallbackProvider2, canonicalProvider, fallback, "appsettings.json (fallback)", settingsPath);
+
+                throw new InvalidOperationException(
+                    $"dbsettings.json ayarı geçersiz ve appsettings.json içindeki {fallbackProvider2} bağlantısı bu sağlayıcı için uygun değil.");
             }
 
             return CreateInfo(runtimeProvider, canonicalProvider, connectionString, "dbsettings.json", settingsPath);
         }
-        catch
+        catch (Exception ex)
         {
-            return CreateInfo(fallbackProvider, fallbackProvider, fallbackConnectionString, "appsettings.json", settingsPath);
+            if (IsConnectionStringValid(fallbackConnectionString, fallbackProvider))
+                return CreateInfo(fallbackProvider, DatabaseProvider.PostgreSQL, fallbackConnectionString, "appsettings.json (fallback)", settingsPath);
+
+            throw new InvalidOperationException(
+                $"Veritabanı ayarları okunamadı ve appsettings.json içindeki {fallbackProvider} bağlantısı geçersiz.", ex);
         }
+    }
+
+    private static DatabaseRuntimeInfo CreateFallbackInfo(
+        DatabaseProvider provider,
+        string connectionString,
+        string settingsPath)
+    {
+        if (!IsConnectionStringValid(connectionString, provider))
+            throw new InvalidOperationException($"appsettings.json içindeki {provider} veritabanı bağlantısı geçersiz.");
+
+        return CreateInfo(provider, DatabaseProvider.PostgreSQL, connectionString, "appsettings.json", settingsPath);
     }
 
     private static bool IsConnectionStringValid(string connectionString, DatabaseProvider provider)
     {
         if (string.IsNullOrWhiteSpace(connectionString)) return false;
 
-        // SQLite: Data Source yeterli
-        if (provider == DatabaseProvider.SQLite)
-            return connectionString.Contains("Data Source", StringComparison.OrdinalIgnoreCase);
-
-        // PostgreSQL / MySQL / SQLServer: Host boş veya Port=0 ise geçersiz
-        if (connectionString.Contains("Host=;", StringComparison.OrdinalIgnoreCase) ||
-            connectionString.Contains("Host= ;", StringComparison.OrdinalIgnoreCase) ||
-            connectionString.Contains("Port=0;", StringComparison.OrdinalIgnoreCase) ||
-            connectionString.Contains("Port=0,", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        return true;
+        return provider switch
+        {
+            DatabaseProvider.SQLite => connectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase),
+            DatabaseProvider.PostgreSQL => connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase)
+                && !connectionString.Contains("Host=;", StringComparison.OrdinalIgnoreCase)
+                && !connectionString.Contains("Host= ;", StringComparison.OrdinalIgnoreCase)
+                && !connectionString.Contains("Port=0;", StringComparison.OrdinalIgnoreCase)
+                && !connectionString.Contains("Port=0,", StringComparison.OrdinalIgnoreCase),
+            DatabaseProvider.SQLServer => connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase)
+                && connectionString.Contains("Database=", StringComparison.OrdinalIgnoreCase),
+            DatabaseProvider.MySQL => connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase)
+                && connectionString.Contains("Database=", StringComparison.OrdinalIgnoreCase),
+            _ => false
+        };
     }
 
     private static DatabaseRuntimeInfo CreateInfo(

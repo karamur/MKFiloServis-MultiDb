@@ -75,6 +75,9 @@ public class BankaKasaHareketService : IBankaKasaHareketService
             query = query.Where(h => h.HareketTipi == filter.HareketTipi.Value);
         }
 
+        if (filter.IslemKaynak.HasValue)
+            query = query.Where(h => h.IslemKaynak == filter.IslemKaynak.Value);
+
         // Tarih aralığı filtresi
         if (filter.BaslangicTarihi.HasValue)
         {
@@ -206,6 +209,28 @@ public class BankaKasaHareketService : IBankaKasaHareketService
         if (existing == null)
             throw new InvalidOperationException($"Banka/Kasa hareketi bulunamadı. Id: {hareket.Id}");
 
+        if (existing.IslemKaynak == IslemKaynak.RentACar)
+        {
+            if (hareket.IslemKaynak != IslemKaynak.RentACar || hareket.IslemNo != existing.IslemNo || hareket.IsDeleted)
+                throw new InvalidOperationException("Rent a Car hareketinin kaynak türü ve işlem numarası değiştirilemez.");
+            if (hareket.HareketTipi != existing.HareketTipi)
+                throw new InvalidOperationException("Rent a Car tahsilat/iade yönü Banka/Kasa üzerinden değiştirilemez.");
+
+            await using var transaction = await context.Database.BeginTransactionAsync();
+            await RentOdemeHareketiniGuncelleAsync(context, existing, hareket);
+            BankaHareketAlanlariniGuncelle(existing, hareket);
+            await context.SaveChangesAsync();
+            await transaction.CommitAsync();
+            return existing;
+        }
+
+        BankaHareketAlanlariniGuncelle(existing, hareket);
+        await context.SaveChangesAsync();
+        return existing;
+    }
+
+    private static void BankaHareketAlanlariniGuncelle(BankaKasaHareket existing, BankaKasaHareket hareket)
+    {
         existing.IslemNo = hareket.IslemNo;
         existing.IslemTarihi = hareket.IslemTarihi;
         existing.HareketTipi = hareket.HareketTipi;
@@ -224,9 +249,6 @@ public class BankaKasaHareketService : IBankaKasaHareketService
         existing.CariId = hareket.CariId;
         existing.IsDeleted = hareket.IsDeleted;
         existing.UpdatedAt = DateTime.UtcNow;
-
-        await context.SaveChangesAsync();
-        return existing;
     }
 
     private async Task ApplyMuhasebeDefaultsAsync(ApplicationDbContext context, BankaKasaHareket hareket)
@@ -340,6 +362,17 @@ public class BankaKasaHareketService : IBankaKasaHareketService
                 return;
             }
 
+            if (hareket.IslemKaynak == IslemKaynak.RentACar)
+            {
+                await RentOdemeHareketiniSilAsync(context, hareket);
+                hareket.IsDeleted = true;
+                hareket.DeletedAt = DateTime.UtcNow;
+                hareket.UpdatedAt = DateTime.UtcNow;
+                await context.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return;
+            }
+
             // İlişkili bütçe ödemesini bul ve durumunu geri al
             var iliskiliOdeme = await context.BudgetOdemeler
                 .FirstOrDefaultAsync(o => o.BankaKasaHareketId == id);
@@ -369,6 +402,108 @@ public class BankaKasaHareketService : IBankaKasaHareketService
             await context.SaveChangesAsync();
             await transaction.CommitAsync();
         });
+    }
+
+    private static async Task RentOdemeHareketiniGuncelleAsync(
+        ApplicationDbContext context, BankaKasaHareket mevcutBankaHareketi, BankaKasaHareket yeniBankaHareketi)
+    {
+        var odeme = await BagliRentOdemeBulAsync(context, mevcutBankaHareketi)
+            ?? throw new InvalidOperationException("Banka/Kasa hareketine bağlı Rent a Car ödeme kaydı bulunamadı.");
+
+        if (yeniBankaHareketi.Tutar <= 0)
+            throw new InvalidOperationException("Rent a Car ödeme tutarı sıfırdan büyük olmalıdır.");
+
+        var hesap = await context.BankaHesaplari
+            .FirstOrDefaultAsync(h => h.Id == yeniBankaHareketi.BankaHesapId && h.FirmaId == odeme.FirmaId)
+            ?? throw new InvalidOperationException("Seçilen Banka/Kasa hesabı bulunamadı.");
+
+        odeme.Tutar = decimal.Round(yeniBankaHareketi.Tutar, 2);
+        odeme.IslemTarihi = yeniBankaHareketi.IslemTarihi;
+        odeme.BelgeNo = yeniBankaHareketi.BelgeNo?.Trim();
+        odeme.OdemeYontemi = hesap.HesapTipi switch
+        {
+            HesapTipi.Kasa => RentACarOdemeYontemi.Nakit,
+            HesapTipi.KrediKarti => RentACarOdemeYontemi.KrediKarti,
+            _ when odeme.OdemeYontemi is RentACarOdemeYontemi.BankaKarti or RentACarOdemeYontemi.Havale or RentACarOdemeYontemi.EFT
+                => odeme.OdemeYontemi,
+            _ => RentACarOdemeYontemi.Havale
+        };
+
+        if (!string.Equals(yeniBankaHareketi.Aciklama, mevcutBankaHareketi.Aciklama, StringComparison.Ordinal))
+            odeme.Aciklama = RentAciklamasiniAyikla(yeniBankaHareketi.Aciklama, odeme);
+
+        if (odeme.BelgeNo?.Length > 100 || odeme.Aciklama?.Length > 500)
+            throw new InvalidOperationException("Rent a Car belge numarası en fazla 100, açıklaması en fazla 500 karakter olabilir.");
+
+        odeme.UpdatedAt = DateTime.UtcNow;
+        await KiralamaOdemeDurumunuYenileAsync(context, odeme.MusteriKiralamaId, odeme.FirmaId);
+    }
+
+    private static async Task RentOdemeHareketiniSilAsync(ApplicationDbContext context, BankaKasaHareket bankaHareketi)
+    {
+        var odeme = await BagliRentOdemeBulAsync(context, bankaHareketi);
+        if (odeme is null)
+            return;
+
+        odeme.IsDeleted = true;
+        odeme.DeletedAt = DateTime.UtcNow;
+        odeme.UpdatedAt = DateTime.UtcNow;
+        await KiralamaOdemeDurumunuYenileAsync(context, odeme.MusteriKiralamaId, odeme.FirmaId, odeme.Id);
+    }
+
+    private static async Task<RentACarOdemeHareketi?> BagliRentOdemeBulAsync(
+        ApplicationDbContext context, BankaKasaHareket bankaHareketi)
+    {
+        if (!bankaHareketi.IslemNo.StartsWith("RAC-", StringComparison.OrdinalIgnoreCase)
+            || !int.TryParse(bankaHareketi.IslemNo[4..], out var odemeId))
+            return null;
+
+        return await context.RentACarOdemeHareketleri
+            .Include(o => o.MusteriKiralama)
+            .FirstOrDefaultAsync(o =>
+            o.Id == odemeId && o.FirmaId == bankaHareketi.FirmaId && !o.IsDeleted);
+    }
+
+    private static string? RentAciklamasiniAyikla(string? bankaAciklamasi, RentACarOdemeHareketi odeme)
+    {
+        if (string.IsNullOrWhiteSpace(bankaAciklamasi))
+            return null;
+
+        var aciklama = bankaAciklamasi.Trim();
+        var onEk = $"Rent a Car {odeme.MusteriKiralama?.SozlesmeNo} — ";
+        if (aciklama.StartsWith(onEk, StringComparison.OrdinalIgnoreCase))
+        {
+            var ayirici = aciklama.IndexOf(": ", onEk.Length, StringComparison.Ordinal);
+            return ayirici < 0 ? null : aciklama[(ayirici + 2)..].Trim();
+        }
+
+        return aciklama;
+    }
+
+    private static async Task KiralamaOdemeDurumunuYenileAsync(
+        ApplicationDbContext context, int kiralamaId, int firmaId, int? haricOdemeId = null)
+    {
+        var kiralama = await context.MusteriKiralamalar.FirstOrDefaultAsync(k =>
+            k.Id == kiralamaId && k.FirmaId == firmaId && !k.IsDeleted)
+            ?? throw new InvalidOperationException("Rent a Car kiralama kaydı bulunamadı.");
+
+        var odemeler = await context.RentACarOdemeHareketleri
+            .Where(o => o.MusteriKiralamaId == kiralamaId && o.FirmaId == firmaId && !o.IsDeleted)
+            .ToListAsync();
+        if (haricOdemeId.HasValue)
+            odemeler.RemoveAll(o => o.Id == haricOdemeId.Value);
+
+        var netKira = odemeler.Where(o => o.HareketTuru == RentACarOdemeHareketTuru.KiraTahsilati).Sum(o => o.Tutar)
+            - odemeler.Where(o => o.HareketTuru == RentACarOdemeHareketTuru.KiraIadesi).Sum(o => o.Tutar);
+        var netDepozito = odemeler.Where(o => o.HareketTuru == RentACarOdemeHareketTuru.DepozitoTahsilati).Sum(o => o.Tutar)
+            - odemeler.Where(o => o.HareketTuru == RentACarOdemeHareketTuru.DepozitoIadesi).Sum(o => o.Tutar);
+
+        if (netKira < 0 || netKira > kiralama.ToplamTutar || netDepozito < 0 || netDepozito > (kiralama.Depozito ?? 0))
+            throw new InvalidOperationException("Bu değişiklik kira/depozito tahsilat ve iade dengesini bozuyor. Önce ilişkili iade hareketini düzenleyin veya silin.");
+
+        kiralama.OdemeDurumu = netKira <= 0 ? KiralamaOdemeDurumu.Beklemede
+            : netKira >= kiralama.ToplamTutar ? KiralamaOdemeDurumu.Odendi : KiralamaOdemeDurumu.KismiOdendi;
+        kiralama.UpdatedAt = DateTime.UtcNow;
     }
 
     public async Task<string> GenerateNextIslemNoAsync(int firmaId = 0)

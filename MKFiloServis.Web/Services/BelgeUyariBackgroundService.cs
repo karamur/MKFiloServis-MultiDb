@@ -38,13 +38,7 @@ public class BelgeUyariBackgroundService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_enabled)
-        {
-            _logger.LogInformation("Belge uyarı email servisi devre dışı");
-            return;
-        }
-
-        _logger.LogInformation("Belge uyarı email servisi başlatıldı");
+        _logger.LogInformation("Belge uyarı servisi başlatıldı");
 
         // İlk çalışmayı bir dakika sonra yap (uygulama başlangıcını bekle)
         await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
@@ -104,29 +98,19 @@ public class BelgeUyariBackgroundService : BackgroundService
             }
         }
 
-        if (emailService == null)
-        {
+        var emailAktif = jsonAyarlar?.EmailEnabled ?? _enabled;
+        var whatsappAktif = jsonAyarlar?.WhatsAppEnabled
+            ?? _configuration.GetValue("BelgeUyari:WhatsAppEnabled", false);
+        if (!emailAktif && !whatsappAktif) return;
+
+        if (emailAktif && emailService == null)
             _logger.LogWarning("Email servisi bulunamadı, belge uyarı emaili gönderilemedi");
-            return;
-        }
 
         var bugun = DateTime.Today;
         // JSON ayar dosyası varsa oradan, yoksa appsettings'den oku
         var uyariGunleri = (jsonAyarlar?.UyariGunleri?.Length > 0)
             ? jsonAyarlar.UyariGunleri
             : (_configuration.GetSection("BelgeUyari:UyariGunleri").Get<int[]>() ?? [30, 15, 7, 3, 1]);
-
-        // Admin kullanıcılarını al
-        var adminler = await context.Kullanicilar
-            .Where(k => k.Aktif && k.Email != null && k.Email != "" &&
-                       (k.Rol.RolAdi == "Admin" || k.Rol.RolAdi == "Yonetici"))
-            .ToListAsync();
-
-        if (!adminler.Any())
-        {
-            _logger.LogWarning("Email gönderilecek admin kullanıcı bulunamadı");
-            return;
-        }
 
         // Araç belgelerini kontrol et
         var aracBelgeleri = await GetAracBelgeUyarilariAsync(context, bugun, uyariGunleri);
@@ -147,23 +131,41 @@ public class BelgeUyariBackgroundService : BackgroundService
 
         _logger.LogInformation("Toplam {Count} belge uyarısı tespit edildi", toplamUyari);
 
-        // Her admin için email gönder
-        foreach (var admin in adminler)
+        // Rol alıcıları ve ayarlarda tanımlanan ek adresleri tekilleştir.
+        if (emailAktif && emailService != null)
         {
-            try
+            var rolAdresleri = await context.Kullanicilar
+                .Where(k => k.Aktif && k.Email != null && k.Email != "" &&
+                           (k.Rol.RolAdi == "Admin" || k.Rol.RolAdi == "Yonetici"))
+                .Select(k => k.Email!)
+                .ToListAsync();
+            var alicilar = rolAdresleri
+                .Concat(jsonAyarlar?.EkEmailAdresleri ?? [])
+                .Where(adres => !string.IsNullOrWhiteSpace(adres))
+                .Select(adres => adres.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (alicilar.Count == 0)
+                _logger.LogWarning("Belge uyarısı için e-posta alıcısı bulunamadı");
+
+            foreach (var adres in alicilar)
             {
-                await GonderBelgeUyariEmailAsync(emailService, admin, aracBelgeleri, personelBelgeleri, firmaBelgeleri);
-                _logger.LogInformation("Belge uyarı emaili gönderildi: {Email}", admin.Email);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Email gönderim hatası: {Email}", admin.Email);
+                try
+                {
+                    if (await GonderBelgeUyariEmailAsync(emailService, adres, aracBelgeleri, personelBelgeleri, firmaBelgeleri))
+                        _logger.LogInformation("Belge uyarı emaili gönderildi: {Email}", adres);
+                    else
+                        _logger.LogWarning("Belge uyarı emaili gönderilemedi: {Email}", adres);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Email gönderim hatası: {Email}", adres);
+                }
             }
         }
 
         // WhatsApp bildirim gönder
-        var whatsappAktif = jsonAyarlar?.WhatsAppEnabled
-            ?? _configuration.GetValue("BelgeUyari:WhatsAppEnabled", false);
         if (whatsappAktif && whatsappService != null)
         {
             try
@@ -447,9 +449,9 @@ public class BelgeUyariBackgroundService : BackgroundService
         return uyarilar;
     }
 
-    private async Task GonderBelgeUyariEmailAsync(
+    private async Task<bool> GonderBelgeUyariEmailAsync(
         IEmailService emailService, 
-        Kullanici admin,
+        string adres,
         List<BelgeUyariItem> aracBelgeleri,
         List<BelgeUyariItem> personelBelgeleri,
         List<BelgeUyariItem> firmaBelgeleri)
@@ -475,7 +477,7 @@ public class BelgeUyariBackgroundService : BackgroundService
 Bu email CRM Filo Servis sistemi tarafından otomatik olarak gönderilmiştir.
 </p>";
 
-        await emailService.SendEmailAsync(admin.Email!, konu, icerik, true);
+        return await emailService.SendEmailAsync(adres, konu, icerik, true);
     }
 
     private string OlusturBelgeTablosu(List<BelgeUyariItem> belgeler)

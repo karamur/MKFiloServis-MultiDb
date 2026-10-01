@@ -68,10 +68,23 @@
                                     </div>
                                     <div class="col-md-2">
                                         <label class="form-label">Ödeme yöntemi</label>
-                                        <InputSelect class="form-select" @bind-Value="talep.OdemeYontemi">
+                                        <InputSelect class="form-select" @bind-Value="talep.OdemeYontemi" @bind-Value:after="OdemeYontemiDegisti">
                                             @foreach (var yontem in Enum.GetValues<RentACarOdemeYontemi>()) { <option value="@yontem">@OdemeYontemiMetni(yontem)</option> }
                                         </InputSelect>
                                     </div>
+                                    @if (talep.OdemeYontemi != RentACarOdemeYontemi.CariMahsup)
+                                    {
+                                        <div class="col-md-3">
+                                            <label class="form-label">Banka / Kasa hesabı</label>
+                                            <InputSelect class="form-select" @bind-Value="talep.BankaHesapId">
+                                                <option value="">Otomatik hesap seç</option>
+                                                @foreach (var hesap in UygunHesaplar)
+                                                {
+                                                    <option value="@hesap.Id">@hesap.HesapAdi</option>
+                                                }
+                                            </InputSelect>
+                                        </div>
+                                    }
                                     <div class="col-md-2"><label class="form-label">Tarih</label><InputDate class="form-control" Type="InputDateType.DateTimeLocal" @bind-Value="talep.IslemTarihi" /></div>
                                     <div class="col-md-2"><label class="form-label">Tutar (₺)</label><InputNumber class="form-control" @bind-Value="talep.Tutar" /></div>
                                     <div class="col-md-3"><label class="form-label">Belge/dekont no</label><InputText class="form-control" @bind-Value="talep.BelgeNo" /></div>
@@ -125,11 +138,50 @@
 
             <div class="card shadow-sm">
                 <div class="card-header">Ödeme hareket geçmişi</div>
-                <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Tarih</th><th>Sözleşme</th><th>Müşteri</th><th>Plaka</th><th>Tür</th><th>Yöntem</th><th class="text-end">Tutar</th><th>Belge no</th><th>Açıklama</th></tr></thead><tbody>
-                    @if (hareketler.Count == 0) { <tr><td colspan="9" class="text-center text-muted py-4">Ödeme hareketi bulunamadı.</td></tr> }
-                    else @foreach (var h in hareketler) { <tr class="@HareketSatirRengi(h.HareketTuru)"><td>@h.IslemTarihi.ToString("dd.MM.yyyy HH:mm")</td><td>@h.SozlesmeNo</td><td>@h.Musteri</td><td>@h.Plaka</td><td><span class="badge @HareketRozetRengi(h.HareketTuru)">@HareketTuruMetni(h.HareketTuru)</span></td><td>@OdemeYontemiMetni(h.OdemeYontemi)</td><td class="text-end">@h.Tutar.ToString("N2") ₺</td><td>@(h.BelgeNo ?? "-")</td><td>@(h.Aciklama ?? "-")</td></tr> }
-                </tbody></table></div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                        <thead><tr><th>Tarih</th><th>Sözleşme</th><th>Müşteri</th><th>Plaka</th><th>Tür</th><th>Yöntem</th><th class="text-end">Tutar</th><th>Belge no</th><th>Açıklama</th><th>İşlem</th></tr></thead>
+                        <tbody>
+                            @if (hareketler.Count == 0)
+                            {
+                                <tr><td colspan="10" class="text-center text-muted py-4">Ödeme hareketi bulunamadı.</td></tr>
+                            }
+                            else
+                            {
+                                @foreach (var h in hareketler)
+                                {
+                                    <tr class="@HareketSatirRengi(h.HareketTuru)">
+                                        <td>@h.IslemTarihi.ToString("dd.MM.yyyy HH:mm")</td><td>@h.SozlesmeNo</td><td>@h.Musteri</td><td>@h.Plaka</td>
+                                        <td><span class="badge @HareketRozetRengi(h.HareketTuru)">@HareketTuruMetni(h.HareketTuru)</span></td>
+                                        <td>@OdemeYontemiMetni(h.OdemeYontemi)</td><td class="text-end">@h.Tutar.ToString("N2") ₺</td>
+                                        <td>@(h.BelgeNo ?? "-")</td><td>@(h.Aciklama ?? "-")</td>
+                                        <td>
+                                            <MKFiloServis.Web.Components.Shared.YetkiKontrol Yetki="rentacar.rezervasyon.yaz" GerekliYetkiAdi="Rent a Car Ödeme Geri Alma">
+                                                <Yetkili><button class="btn btn-sm btn-outline-danger text-nowrap" @onclick="() => GeriAlOnayAc(h)"><i class="bi bi-arrow-counterclockwise me-1"></i>Geri al</button></Yetkili>
+                                                <Yetkisiz></Yetkisiz>
+                                            </MKFiloServis.Web.Components.Shared.YetkiKontrol>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
             </div>
+
+            @if (geriAlinacakHareket is not null)
+            {
+                <div class="modal fade show d-block" tabindex="-1" style="background-color:rgba(0,0,0,.5)">
+                    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+                        <div class="modal-header"><h5 class="modal-title">Ödeme hareketini geri al</h5><button class="btn-close" @onclick="GeriAlOnayKapat" disabled="@geriAliniyor"></button></div>
+                        <div class="modal-body">
+                            <p><strong>@geriAlinacakHareket.SozlesmeNo</strong> sözleşmesindeki <strong>@HareketTuruMetni(geriAlinacakHareket.HareketTuru)</strong> kaydını (@geriAlinacakHareket.Tutar.ToString("N2") ₺) geri almak istiyor musunuz?</p>
+                            <p class="mb-0 text-muted">Ödeme ve bağlı Banka/Kasa hareketi silinmiş olarak işaretlenecek; tutarlar yeniden hesaplanacaktır.</p>
+                        </div>
+                        <div class="modal-footer"><button class="btn btn-secondary" @onclick="GeriAlOnayKapat" disabled="@geriAliniyor">Vazgeç</button><button class="btn btn-danger" @onclick="GeriAlAsync" disabled="@geriAliniyor">Geri al ve sil</button></div>
+                    </div></div>
+                </div>
+            }
         </div>
     </Yetkili>
 </MKFiloServis.Web.Components.Shared.YetkiKontrol>
@@ -137,10 +189,13 @@
 @code {
     private IReadOnlyList<RentACarOdemeOzet> ozetler = Array.Empty<RentACarOdemeOzet>();
     private IReadOnlyList<RentACarOdemeHareketSatiri> hareketler = Array.Empty<RentACarOdemeHareketSatiri>();
+    private IReadOnlyList<BankaHesap> bankaHesaplari = Array.Empty<BankaHesap>();
     private RentACarOdemeKayitTalebi talep = new();
     private bool yukleniyor;
     private bool kaydediliyor;
     private bool odemeFormuAcik;
+    private bool geriAliniyor;
+    private RentACarOdemeHareketSatiri? geriAlinacakHareket;
     private RentACarOdemeOzet? detayOzet;
     private bool basarili;
     private string? mesaj;
@@ -150,17 +205,49 @@
     private decimal ToplamTahsilat => ozetler.Sum(x => x.NetKiraTahsilati);
     private decimal ToplamKalan => ozetler.Sum(x => x.KalanKiraTutari);
     private decimal ToplamEmanetDepozito => ozetler.Sum(x => x.EmanettekiDepozito);
+    private IEnumerable<BankaHesap> UygunHesaplar => bankaHesaplari.Where(h => h.HesapTipi == (talep.OdemeYontemi switch
+    {
+        RentACarOdemeYontemi.Nakit or RentACarOdemeYontemi.Diger => HesapTipi.Kasa,
+        RentACarOdemeYontemi.KrediKarti => HesapTipi.KrediKarti,
+        _ => HesapTipi.VadesizHesap
+    }));
     private static string DepozitoGorunenTutar(RentACarOdemeOzet ozet)
         => ozet.EmanettekiDepozito > 0 ? ozet.DepozitoTutari.ToString("N2") : string.Empty;
 
     protected override Task OnInitializedAsync() => YukleAsync();
-    private async Task YukleAsync() { yukleniyor = true; try { ozetler = await OdemeServisi.GetOzetlerAsync(); hareketler = await OdemeServisi.GetHareketlerAsync(); } catch (Exception ex) { basarili = false; mesaj = ex.Message; } finally { yukleniyor = false; } }
+    private async Task YukleAsync() { yukleniyor = true; try { ozetler = await OdemeServisi.GetOzetlerAsync(); hareketler = await OdemeServisi.GetHareketlerAsync(); bankaHesaplari = await OdemeServisi.GetBankaHesaplariAsync(); } catch (Exception ex) { basarili = false; mesaj = ex.Message; } finally { yukleniyor = false; } }
     private void SecimDegisti() { var o = SeciliOzet; if (o is not null) talep.Tutar = talep.HareketTuru == RentACarOdemeHareketTuru.DepozitoTahsilati ? Math.Max(0, o.DepozitoTutari - o.EmanettekiDepozito) : o.KalanKiraTutari; }
+    private void OdemeYontemiDegisti() => talep.BankaHesapId = null;
     private void OdemeFormunuAc(RentACarOdemeOzet ozet) { talep = new RentACarOdemeKayitTalebi { MusteriKiralamaId = ozet.KiralamaId, IslemTarihi = DateTime.Now, Tutar = ozet.KalanKiraTutari }; odemeFormuAcik = true; mesaj = null; }
     private void OdemeFormunuKapat() { if (!kaydediliyor) odemeFormuAcik = false; }
     private void DetayAc(RentACarOdemeOzet ozet) => detayOzet = ozet;
     private void DetayKapat() => detayOzet = null;
     private void DetaydanOdemeAc(RentACarOdemeOzet ozet) { detayOzet = null; OdemeFormunuAc(ozet); }
+    private void GeriAlOnayAc(RentACarOdemeHareketSatiri hareket) => geriAlinacakHareket = hareket;
+    private void GeriAlOnayKapat() { if (!geriAliniyor) geriAlinacakHareket = null; }
+    private async Task GeriAlAsync()
+    {
+        if (geriAlinacakHareket is null || geriAliniyor) return;
+        geriAliniyor = true;
+        try
+        {
+            await OdemeServisi.GeriAlAsync(geriAlinacakHareket.Id);
+            geriAlinacakHareket = null;
+            await YukleAsync();
+            basarili = true;
+            mesaj = "Ödeme ve bağlı Banka/Kasa hareketi geri alındı.";
+        }
+        catch (Exception ex)
+        {
+            geriAlinacakHareket = null;
+            basarili = false;
+            mesaj = ex.Message;
+        }
+        finally
+        {
+            geriAliniyor = false;
+        }
+    }
     private async Task KaydetAsync()
     {
         kaydediliyor = true;

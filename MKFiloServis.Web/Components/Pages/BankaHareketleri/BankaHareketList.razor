@@ -56,6 +56,12 @@
                     </select>
                 </div>
                 <div class="col-md-2">
+                    <select class="form-select" @bind="selectedIslemKaynak" @bind:after="OnFilterChanged">
+                        <option value="">Tüm kaynaklar</option>
+                        <option value="@IslemKaynak.RentACar">Rent a Car</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
                     <input type="date" class="form-control" @bind="baslangicTarihi" @bind:after="OnFilterChanged" />
                 </div>
                 <div class="col-md-2">
@@ -129,7 +135,13 @@
                             @foreach (var hareket in pagedResult.Items)
                             {
                                 <tr>
-                                    <td><strong>@hareket.IslemNo</strong></td>
+                                    <td>
+                                        <strong>@hareket.IslemNo</strong>
+                                        @if (hareket.IslemKaynak == IslemKaynak.RentACar)
+                                        {
+                                            <span class="badge text-bg-info d-block mt-1">Rent a Car</span>
+                                        }
+                                    </td>
                                     <td>@hareket.IslemTarihi.ToString("dd.MM.yyyy")</td>
                                     <td>@hareket.BankaHesap?.HesapAdi</td>
                                     <td>@hareket.Cari?.Unvan</td>
@@ -204,7 +216,14 @@
                 </div>
                 <div class="modal-body">
                     <p><strong>@silinecekHareket?.IslemNo</strong> numarali hareketi silmek istediginize emin misiniz?</p>
-                    <p class="text-danger"><strong>@silinecekHareket?.Tutar.ToString("N2") TL</strong> tutarindaki bu islem kalici olarak silinecektir.</p>
+                    @if (silinecekHareket?.IslemKaynak == IslemKaynak.RentACar)
+                    {
+                        <p class="text-warning mb-0"><strong>@silinecekHareket.Tutar.ToString("N2") TL</strong> tutarındaki işlem ve bağlı Rent a Car ödeme hareketi silinmiş olarak işaretlenecek; ödeme durumu yeniden hesaplanacaktır.</p>
+                    }
+                    else
+                    {
+                        <p class="text-danger"><strong>@silinecekHareket?.Tutar.ToString("N2") TL</strong> tutarindaki bu islem kalici olarak silinecektir.</p>
+                    }
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @onclick="() => showDeleteModal = false">Iptal</button>
@@ -236,6 +255,7 @@
     private string searchTerm = "";
     private int selectedHesapId = 0;
     private HareketTipi? selectedHareketTipi;
+    private IslemKaynak? selectedIslemKaynak;
     private DateTime? baslangicTarihi;
     private DateTime? bitisTarihi;
 
@@ -262,6 +282,7 @@
             SearchTerm = searchTerm,
             HesapId = selectedHesapId > 0 ? selectedHesapId : null,
             HareketTipi = selectedHareketTipi,
+            IslemKaynak = selectedIslemKaynak,
             BaslangicTarihi = baslangicTarihi,
             BitisTarihi = bitisTarihi
         };
@@ -303,6 +324,7 @@
         searchTerm = "";
         selectedHesapId = 0;
         selectedHareketTipi = null;
+        selectedIslemKaynak = null;
         baslangicTarihi = null;
         bitisTarihi = null;
         currentPage = 1;

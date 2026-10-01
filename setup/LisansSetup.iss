@@ -9,7 +9,7 @@
 #define LisansInstallDir "C:\MKLisans"
 
 #ifndef LisansAppVersion
-#define LisansAppVersion "1.0.26"
+#define LisansAppVersion "1.0.37"
 #endif
 
 [Setup]

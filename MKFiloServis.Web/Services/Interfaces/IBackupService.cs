@@ -9,6 +9,7 @@ public interface IBackupService
     Task<bool> DeleteBackupAsync(string backupFileName);
     Task CleanupOldBackupsAsync(int keepCount = 10);
     BackupSettings GetSettings();
+    string GetResolvedBackupFolderPath();
     Task SaveSettingsAsync(BackupSettings settings);
     Task<bool> ApplyMigrationsAsync();
     Task<ConversionResult> ConvertAndRestoreAsync(string backupFileName, string sourceProvider, string targetProvider);

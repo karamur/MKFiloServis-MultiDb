@@ -15,7 +15,8 @@
 
     <div class="alert alert-light border mb-3">
         <strong>İş akışı:</strong>
-        <span class="ms-2">1. Planla</span><i class="bi bi-chevron-right mx-2"></i>
+        <span class="ms-2">Tanımları Yönet</span><i class="bi bi-chevron-right mx-2"></i>
+        <span>1. Planla</span><i class="bi bi-chevron-right mx-2"></i>
         <span>2. Gerçekleşeni Gir</span><i class="bi bi-chevron-right mx-2"></i>
         <span>3. Kontrol Et</span><i class="bi bi-chevron-right mx-2"></i>
         <span>4. Hakedişe Geç</span>
@@ -23,15 +24,15 @@
 
     <ul class="nav nav-pills nav-fill mb-3">
         <li class="nav-item">
-            <a class="nav-link @(aktifSekme == Sekme.Plan ? "active" : "")" href="javascript:void(0)"
-               @onclick="() => SekmeDegistir(Sekme.Plan)" @onclick:preventDefault>
-                <i class="bi bi-calendar3 me-1"></i>1. Planla
-            </a>
-        </li>
-        <li class="nav-item">
             <a class="nav-link @(aktifSekme == Sekme.Eslestirme ? "active" : "")" href="javascript:void(0)"
                @onclick="() => SekmeDegistir(Sekme.Eslestirme)" @onclick:preventDefault>
                 <i class="bi bi-list-check me-1"></i>Tanımları Yönet
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(aktifSekme == Sekme.Plan ? "active" : "")" href="javascript:void(0)"
+               @onclick="() => SekmeDegistir(Sekme.Plan)" @onclick:preventDefault>
+                <i class="bi bi-calendar3 me-1"></i>1. Planla
             </a>
         </li>
         <li class="nav-item">

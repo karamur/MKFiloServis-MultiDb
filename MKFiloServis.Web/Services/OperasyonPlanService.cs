@@ -23,6 +23,13 @@ public class OperasyonPlanService : IOperasyonPlanService
         _logger = logger;
     }
 
+    public async Task<int> GetAktifEslestirmeSayisiAsync()
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        return await db.Set<FiloGuzergahEslestirme>()
+            .CountAsync(e => e.IsActive);
+    }
+
     public Task<(int Olusan, int Atlanan)> PlanUretAsync(DateTime tarih)
         => PlanUretAsync(tarih, haftaSonunuDahilEt: false);
 
@@ -90,6 +97,12 @@ public class OperasyonPlanService : IOperasyonPlanService
     {
         if (ay is < 1 or > 12)
             throw new ArgumentOutOfRangeException(nameof(ay));
+
+        if (await GetAktifEslestirmeSayisiAsync() == 0)
+        {
+            _logger.LogInformation("AYLIK_PLAN_URET: Aktif eşleştirme bulunamadı, {Yil}/{Ay} için plan üretilmedi.", yil, ay);
+            return (0, 0, DateTime.DaysInMonth(yil, ay));
+        }
 
         var ayBaslangic = new DateTime(yil, ay, 1);
         var aySonu = ayBaslangic.AddMonths(1);

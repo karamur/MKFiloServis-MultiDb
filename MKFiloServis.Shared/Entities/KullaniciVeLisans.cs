@@ -352,6 +352,12 @@ public static class Yetkiler
     public const string MenuStokEnvanter = "menu.stok";
     public const string MenuAyarlar = "menu.ayarlar";
     public const string MenuHolding = "menu.holding";
+
+    // -- Araç kârlılık raporu (modül bazlı erişim ve dışa aktarma) --
+    public const string RentACarKarlilikOku = "rentacar.arackarlilik.oku";
+    public const string RentACarKarlilikExport = "rentacar.arackarlilik.export";
+    public const string MuhasebeAracKarlilikOku = "muhasebe.arackarlilik.oku";
+    public const string MuhasebeAracKarlilikExport = "muhasebe.arackarlilik.export";
     // === CRM MODULU YETKILERI ===
     
     // -- Bildirimler/Uyarilar --
@@ -610,6 +616,15 @@ public static class Yetkiler
     public const string FirmaYonetimiDuzenle = "firmayonetim.duzenle";
     public const string FirmaYonetimiSil = "firmayonetim.sil";
 
+    // -- Ayarlar / Tanimlar --
+    public const string WebSayfasiOku = "websayfasi.oku";
+    public const string WebSayfasiDuzenle = "websayfasi.duzenle";
+    public const string CariMuhasebeAyarOku = "carimuhasebeayar.oku";
+    public const string CariMuhasebeAyarDuzenle = "carimuhasebeayar.duzenle";
+    public const string BelgeUyariAyarOku = "belgeuyariayar.oku";
+    public const string BelgeUyariAyarDuzenle = "belgeuyariayar.duzenle";
+    public const string ArsivGoruntuleyiciOku = "arsivgoruntuleyici.oku";
+
     // -- Veritabani Ayarlari --
     public const string VeritabaniAyarlariOku = "veritabani.oku";
     public const string VeritabaniAyarlariDuzenle = "veritabani.duzenle";
@@ -837,6 +852,20 @@ public static class Yetkiler
                     new(MaliAnalizOku, "Goruntuleme", "bi-eye"),
                     new(MaliAnalizExport, "Export", "bi-download"),
                 }),
+                new("Arac Karlilik Raporu", "bi-graph-up-arrow", new List<YetkiTanim>
+                {
+                    new(MuhasebeAracKarlilikOku, "Goruntuleme", "bi-eye"),
+                    new(MuhasebeAracKarlilikExport, "Export", "bi-download"),
+                }),
+            }),
+
+            new("Rent a Car", "bi-car-front-fill", "rentacar.oku", new List<AltMenuYetki>
+            {
+                new("Arac Karlilik Raporu", "bi-graph-up-arrow", new List<YetkiTanim>
+                {
+                    new(RentACarKarlilikOku, "Goruntuleme", "bi-eye"),
+                    new(RentACarKarlilikExport, "Export", "bi-download"),
+                }),
             }),
 
             new("Personel", "bi-people", MenuPersonel, new List<AltMenuYetki>
@@ -1038,6 +1067,32 @@ public static class Yetkiler
 
             new("Ayarlar", "bi-gear", MenuAyarlar, new List<AltMenuYetki>
             {
+                new("Web Sayfasi Yonetimi", "bi-window", new List<YetkiTanim>
+                {
+                    new(WebSayfasiOku, "Goruntuleme", "bi-eye"),
+                    new(WebSayfasiDuzenle, "Duzenleme", "bi-pencil"),
+                }),
+                new("Cari / Muhasebe Ayarlari", "bi-journal-text", new List<YetkiTanim>
+                {
+                    new(CariMuhasebeAyarOku, "Goruntuleme", "bi-eye"),
+                    new(CariMuhasebeAyarDuzenle, "Duzenleme", "bi-pencil"),
+                }),
+                new("Belge Uyari Ayarlari", "bi-shield-exclamation", new List<YetkiTanim>
+                {
+                    new(BelgeUyariAyarOku, "Goruntuleme", "bi-eye"),
+                    new(BelgeUyariAyarDuzenle, "Duzenleme", "bi-pencil"),
+                }),
+                new("Arsiv Dosya Goruntuleyici", "bi-archive", new List<YetkiTanim>
+                {
+                    new(ArsivGoruntuleyiciOku, "Goruntuleme", "bi-eye"),
+                }),
+                new("Masraf Kalemleri", "bi-list-task", new List<YetkiTanim>
+                {
+                    new(MasrafKalemleriOku, "Okuma", "bi-eye"),
+                    new(MasrafKalemleriYaz, "Yazma", "bi-plus"),
+                    new(MasrafKalemleriDuzenle, "Duzenleme", "bi-pencil"),
+                    new(MasrafKalemleriSil, "Silme", "bi-trash"),
+                }),
                 new("Firma Yonetimi", "bi-building", new List<YetkiTanim>
                 {
                     new(FirmaYonetimiOku, "Okuma", "bi-eye"),

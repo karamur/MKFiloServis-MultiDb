@@ -33,12 +33,21 @@ ExcelPackage.License.SetNonCommercialPersonal("MKFiloServis");
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Windows Event Log providerı kullanıcı yetkisi olmadan log kaydında exception atabiliyor.
+// Web uygulaması loglarını konsol/debug/EventSource üzerinden tut; başlangıç hataları
+// logger'ın kendisi tarafından sürecin çökmesine neden olmamalı.
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+builder.Logging.AddEventSourceLogger();
+
 // Npgsql EnableLegacyTimestampBehavior: herhangi bir UseNpgsql() cagrisindan ONCE set edilmeli.
 // Npgsql static constructor bu switch'i ilk kez UseNpgsql()'de okur ve cache'ler.
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 // Database Provider Secimi (dbsettings.json varsa onu oncele)
 var databaseRuntime = await DatabaseRuntimeResolver.ResolveAsync(builder.Configuration, builder.Environment);
+builder.Services.AddSingleton(databaseRuntime);
 var dbProvider = databaseRuntime.Provider.ToString();
 var defaultConnectionString = databaseRuntime.ConnectionString;
 
@@ -282,15 +291,14 @@ builder.Services.AddScoped<IPdfService, PdfService>();
 builder.Services.AddScoped<IBudgetService, BudgetService>();
 builder.Services.AddScoped<NumaraSerisiService>(); // Kural 15: Firma bazlı numara serisi
 
-// OpenRouter AI Integration
-builder.Services.AddHttpClient<IOpenRouterService, OpenRouterService>();
-
-// Ollama AI — kaldırıldı, stub implementasyon kayıtlı
-builder.Services.AddScoped<IOllamaService, OllamaService>();
+// AI verisi yalnizca bu bilgisayardaki modele gidebilir. Proxy ve HTTP yonlendirmeleri kapali.
+builder.Services.AddHttpClient<IOllamaService, OllamaService>()
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        UseProxy = false,
+        AllowAutoRedirect = false
+    });
 builder.Services.AddScoped<IOllamaAIChatService, OllamaAIChatService>();
-
-// DeepSeek AI Integration (DeepSeek V3)
-builder.Services.AddHttpClient<IDeepSeekService, DeepSeekService>();
 
 // Eski KOA1/AES dosyalari icin geriye uyumluluk saglayicisi.
 // Yeni dosyalar DataProtectionFileProtector ile yazilir; master.key zorunlu degildir.
@@ -399,12 +407,7 @@ builder.Services.AddScoped<ISmsService, SmsService>(); // SMS Gönderim Servisi
 builder.Services.AddScoped<IWebhookService, WebhookService>(); // Webhook Sistemi Servisi
 builder.Services.AddScoped<TestDataSeeder>(); // Test/Demo Veri Oluşturma Servisi
 builder.Services.AddScoped<DemoDataService>(); // Demo Veri Yönetim Servisi (Reset/Seed/Remove)
-builder.Services.AddScoped<IAracTakipService, AracTakipService>(); // Araç GPS Takip Servisi
-builder.Services.AddScoped<IAracTakipBildirimService, AracTakipBildirimService>(); // SignalR Araç Takip Bildirim Servisi
 builder.Services.AddScoped<IAuditLogService, AuditLogService>(); // Audit Log (Tüm İşlem Takibi) Servisi
-builder.Services.AddSingleton<GpsSimulasyonService>(); // GPS Simülasyon Servisi (Singleton - state tutar)
-builder.Services.AddHostedService(sp => sp.GetRequiredService<GpsSimulasyonService>()); // BackgroundService olarak çalıştır
-builder.Services.AddSignalR(); // SignalR Hub'ları için
 builder.Services.AddHttpClient("SMS"); // SMS provider'lar için HttpClient
 builder.Services.AddHttpClient("Webhook"); // Webhook gönderimi için HttpClient
 builder.Services.AddScoped<AutoBackupService>(); // Quartz job tarafından tetiklenen otomatik yedek servisi
@@ -641,6 +644,10 @@ builder.Services.AddControllersWithViews()
     .AddDataAnnotationsLocalization();
 
 var app = builder.Build();
+app.Logger.LogInformation(
+    "Aktif veritabani saglayicisi: {Provider}. Baglanti kaynagi: {Source}.",
+    databaseRuntime.Provider,
+    databaseRuntime.Source);
 
 var supportedCultures = new[] { "tr", "en" };
 var localizationOptions = new RequestLocalizationOptions()
@@ -1266,9 +1273,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 // ══════════════════════════════════════════════
-// LISANS KONTROL — DEMO MODE (block YOK)
-// Lisans yoksa uygulama AÇILIR, demo modda çalışır.
-// Kullanıcı içeriden lisans yükleyince FULL MODE'a geçer.
+// LISANS KONTROL — lisans yoksa demo lisansı kendiliğinden oluşturulmaz.
 // ══════════════════════════════════════════════
 using (var scope = app.Services.CreateScope())
 {
@@ -1306,7 +1311,6 @@ app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 app.MapControllers(); // API Controller'larini haritalandir
-app.MapHub<AracTakipHub>("/hubs/aractakip"); // SignalR Araç Takip Hub'ı
 app.MapHub<MKFiloServis.Web.Hubs.EvrakHub>("/hubs/evrak"); // SignalR Evrak Hub'ı
 
 // Admin: Evrak arşiv backfill endpoint'i (sadece Development'da aktif)

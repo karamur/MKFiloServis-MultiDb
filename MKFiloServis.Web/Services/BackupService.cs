@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Data;
 using System.Data.Common;
+using Microsoft.Data.Sqlite;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Helpers;
@@ -18,60 +19,29 @@ public class BackupService : IBackupService
     private readonly IWebHostEnvironment _environment;
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<BackupService> _logger;
+    private readonly DatabaseRuntimeInfo _databaseRuntime;
     private readonly string _settingsFile;
 
     public BackupService(
         IConfiguration configuration,
         IWebHostEnvironment environment,
         IServiceProvider serviceProvider,
-        ILogger<BackupService> logger)
+        ILogger<BackupService> logger,
+        DatabaseRuntimeInfo databaseRuntime)
     {
         _configuration = configuration;
         _environment = environment;
         _serviceProvider = serviceProvider;
         _logger = logger;
+        _databaseRuntime = databaseRuntime;
         _settingsFile = Path.Combine(_environment.ContentRootPath, "backup_settings.json");
     }
 
     public string GetCurrentDatabaseProvider()
     {
-        var dbSettings = ReadDatabaseSettings();
-        if (dbSettings != null)
-        {
-            // Provider, CanonicalProvider ile eşleşmiyorsa (geçiş sonrası kalıntı) düzelt
-            if (dbSettings.Provider == DatabaseProvider.SQLite &&
-                dbSettings.CanonicalProvider == DatabaseProvider.PostgreSQL)
-            {
-                _logger.LogDebug(
-                    "dbsettings.json Provider=SQLite ama CanonicalProvider=PostgreSQL; PostgreSQL-only modda devam ediliyor.");
-                return "PostgreSQL";
-            }
-            return dbSettings.GetProviderDisplayName();
-        }
-
-        var configuredProvider = _configuration.GetValue<string>("DatabaseProvider");
-        if (!string.IsNullOrWhiteSpace(configuredProvider))
-        {
-            return DatabaseSettings.ParseProvider(configuredProvider) switch
-            {
-                DatabaseProvider.SQLServer => "SQLServer",
-                DatabaseProvider.MySQL => "MySQL",
-                _ => "PostgreSQL"
-            };
-        }
-
-        var defaultConnection = _configuration.GetConnectionString("DefaultConnection");
-        if (!string.IsNullOrWhiteSpace(defaultConnection))
-        {
-            return GetProviderFromConnectionString(defaultConnection) switch
-            {
-                "SQLSERVER" => "SQLServer",
-                "MYSQL" => "MySQL",
-                _ => "PostgreSQL"
-            };
-        }
-
-        return "PostgreSQL";
+        // Program.cs, EF Core ve tüm çalışma zamanı servisleri aynı çözümlenmiş sağlayıcıyı kullanır.
+        // CanonicalProvider yalnızca migration hedefidir; aktif bağlantı bilgisini belirlemez.
+        return _databaseRuntime.Provider.ToString();
     }
 
     public async Task<BackupResult> CreateBackupAsync(string? customBackupFolder = null)
@@ -111,6 +81,12 @@ public class BackupService : IBackupService
                     backupFileName = $"MKFiloServis_MySQL_{timestamp}.sql";
                     backupFilePath = Path.Combine(backupFolder, backupFileName);
                     result = await CreateMySqlBackupAsync(backupFilePath);
+                    break;
+
+                case "SQLITE":
+                    backupFileName = $"MKFiloServis_SQLite_{timestamp}.db";
+                    backupFilePath = Path.Combine(backupFolder, backupFileName);
+                    result = await CreateSqliteBackupAsync(backupFilePath);
                     break;
 
                 case "MONGO":
@@ -250,11 +226,33 @@ public class BackupService : IBackupService
         return sanitized.ToString();
     }
 
-    /// <summary>SQLite backup devre disi — proje PostgreSQL-only. MKFiloServis.SqliteTool kullanin.</summary>
-    private Task<BackupResult> CreateSqliteBackupAsync(string backupFilePath)
+    /// <summary>Aktif SQLite veritabanını tutarlı bir anlık görüntü olarak yedekler.</summary>
+    private async Task<BackupResult> CreateSqliteBackupAsync(string backupFilePath)
     {
-        _logger.LogWarning("SQLite yedekleme desteklenmiyor: {Path}. Proje PostgreSQL-only.", backupFilePath);
-        return Task.FromResult(new BackupResult { ErrorMessage = "SQLite yedekleme desteklenmiyor. Proje PostgreSQL-only mimariye gecildi." });
+        try
+        {
+            var connectionString = ResolveConnectionString("SQLite");
+            if (string.IsNullOrWhiteSpace(connectionString))
+                return new BackupResult { ErrorMessage = "SQLite connection string bulunamadi." };
+
+            var destinationBuilder = new SqliteConnectionStringBuilder
+            {
+                DataSource = backupFilePath,
+                Mode = SqliteOpenMode.ReadWriteCreate
+            };
+
+            await using var source = new SqliteConnection(connectionString);
+            await using var destination = new SqliteConnection(destinationBuilder.ToString());
+            await source.OpenAsync();
+            await destination.OpenAsync();
+            source.BackupDatabase(destination);
+            return CreateSuccessResult(backupFilePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "SQLite yedekleme hatasi: {Path}", backupFilePath);
+            return new BackupResult { ErrorMessage = ex.Message };
+        }
     }
 
     private async Task<BackupResult> CreatePostgreSqlBackupAsync(string backupFilePath)
@@ -637,6 +635,13 @@ public class BackupService : IBackupService
 
     private string? ResolveConnectionString(string provider)
     {
+        var activeProvider = _databaseRuntime.Provider.ToString();
+        if (string.Equals(activeProvider, provider, StringComparison.OrdinalIgnoreCase) ||
+            (provider.Equals("MSSQL", StringComparison.OrdinalIgnoreCase) && activeProvider == "SQLServer"))
+        {
+            return _databaseRuntime.ConnectionString;
+        }
+
         var dbSettings = ReadDatabaseSettings();
         if (dbSettings != null)
         {
@@ -1243,16 +1248,31 @@ public class BackupService : IBackupService
 
     private string GetBackupFolderPath(BackupSettings settings)
     {
-        var folder = settings.BackupFolder;
+        string? directoryManagementPath = null;
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            using var db = dbFactory.CreateDbContext();
+            directoryManagementPath = db.AppAyarlari
+                .AsNoTracking()
+                .Where(a => a.Anahtar == "BackupDizin" && a.Kategori == "Dizin")
+                .Select(a => a.Deger)
+                .FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Dizin Yönetimi yedekleme ayarı okunamadı; yedekleme ekranı ayarı kullanılacak.");
+        }
 
-        if (string.IsNullOrWhiteSpace(folder))
-            folder = "database";
-
-        if (!Path.IsPathRooted(folder))
-            folder = Path.Combine(AppStoragePaths.GetStorageRoot(_environment.ContentRootPath), folder);
-
-        return folder;
+        var configuredPath = string.IsNullOrWhiteSpace(directoryManagementPath)
+            ? settings.BackupFolder
+            : directoryManagementPath;
+        return AppStoragePaths.GetWritableBackupFolder(_environment.ContentRootPath, configuredPath);
     }
+
+    public string GetResolvedBackupFolderPath()
+        => GetBackupFolderPath(GetSettings());
 
     private static string GetArchiveFolderPath(string backupRoot, DateTime tarih)
     {
@@ -1806,7 +1826,7 @@ public class BackupService : IBackupService
         try
         {
             var storageRoot = AppStoragePaths.GetStorageRoot(_environment.ContentRootPath);
-            var filesBackupDir = Path.Combine(storageRoot, "Backups", "Files");
+            var filesBackupDir = Path.Combine(GetBackupFolderPath(GetSettings()), "Files");
             Directory.CreateDirectory(filesBackupDir);
 
             var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
@@ -1917,8 +1937,7 @@ public class BackupService : IBackupService
         var backups = new List<BackupInfo>();
         try
         {
-            var storageRoot = AppStoragePaths.GetStorageRoot(_environment.ContentRootPath);
-            var filesBackupDir = Path.Combine(storageRoot, "Backups", "Files");
+            var filesBackupDir = Path.Combine(GetBackupFolderPath(GetSettings()), "Files");
 
             if (Directory.Exists(filesBackupDir))
             {
@@ -1948,8 +1967,7 @@ public class BackupService : IBackupService
     {
         try
         {
-            var storageRoot = AppStoragePaths.GetStorageRoot(_environment.ContentRootPath);
-            var filesBackupDir = Path.Combine(storageRoot, "Backups", "Files");
+            var filesBackupDir = Path.Combine(GetBackupFolderPath(GetSettings()), "Files");
             var filePath = Path.Combine(filesBackupDir, backupFileName);
 
             if (File.Exists(filePath))
@@ -1972,8 +1990,7 @@ public class BackupService : IBackupService
     {
         try
         {
-            var storageRoot = AppStoragePaths.GetStorageRoot(_environment.ContentRootPath);
-            var filesBackupDir = Path.Combine(storageRoot, "Backups", "Files");
+            var filesBackupDir = Path.Combine(GetBackupFolderPath(GetSettings()), "Files");
 
             if (!Directory.Exists(filesBackupDir))
                 return;

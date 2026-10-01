@@ -410,14 +410,18 @@
             var ws = workbook.Worksheets.Add("Aylık Puantaj");
 
             var gunSayisi = AyGunSayisi;
-            var sabitBasliklar = new[] { "S.NO", "KURUM", "GÜZERGAH", "GELİR", "GİDER", "YÖN", "PLAKA", "tedarikçi/personel ŞOFÖR", "tedarikçi/firma FATURA" };
+            var sabitBasliklar = new[] { "S.NO", "KURUM", "GÜZERGAH", "GELİR", "GİDER", "YÖN", "PLAKA", "ŞOFÖR / TEDARİKÇİ", "TELEFON", "FATURA FİRMASI", "TELEFON" };
             var sonBasliklar = new[] { "GÜN", "SEFER", "TOPLAM GELİR", "TOPLAM GİDER", "KDV ORANI", "KDV MİKTAR", "KESİNTİ", "ÖDENECEK" };
 
             var kolon = 1;
             foreach (var b in sabitBasliklar)
                 ws.Cell(1, kolon++).Value = b;
             for (var g = 1; g <= gunSayisi; g++)
-                ws.Cell(1, kolon++).Value = g;
+            {
+                var gunBasligi = ws.Cell(1, kolon++);
+                gunBasligi.Value = g;
+                gunBasligi.Style.Alignment.Horizontal = ClosedXML.Excel.XLAlignmentHorizontalValues.Center;
+            }
             foreach (var b in sonBasliklar)
                 ws.Cell(1, kolon++).Value = b;
 
@@ -451,29 +455,45 @@
                 ws.Cell(satirNo, c++).Value = satir.Yon;
                 ws.Cell(satirNo, c++).Value = satir.Plaka;
                 ws.Cell(satirNo, c++).Value = satir.Sofor;
+                var soforTelefonHucre = ws.Cell(satirNo, c++);
+                soforTelefonHucre.Value = GetSoforTedarikciTelefon(satir);
+                soforTelefonHucre.Style.NumberFormat.Format = "@";
                 var faturaHucre = ws.Cell(satirNo, c++);
                 faturaHucre.Value = satir.FaturaFirma;
                 faturaHucre.Style.Font.FontColor = ClosedXML.Excel.XLColor.Red;
+                var faturaTelefonHucre = ws.Cell(satirNo, c++);
+                faturaTelefonHucre.Value = GetFaturaFirmaTelefon(satir.AracRef);
+                faturaTelefonHucre.Style.NumberFormat.Format = "@";
 
                 for (var g = 1; g <= gunSayisi; g++)
                 {
-                     var tarih = new DateTime(seciliYil, seciliAy, g);
-                     var deger = satir.GunlukSeferler.TryGetValue(tarih.Date, out var v) ? v : 0m;
-                    if (deger > 0)
-                        ws.Cell(satirNo, c).Value = deger;
+                    var tarih = new DateTime(seciliYil, seciliAy, g);
+                    var deger = satir.GunlukSeferler.TryGetValue(tarih.Date, out var v) ? v : 0m;
+                    var gunHucresi = ws.Cell(satirNo, c);
+                    gunHucresi.Value = deger;
+                    gunHucresi.Style.Alignment.Horizontal = ClosedXML.Excel.XLAlignmentHorizontalValues.Center;
                     c++;
                 }
 
-                ws.Cell(satirNo, c++).Value = satir.GunSayisi;
-                ws.Cell(satirNo, c++).Value = satir.SeferSayisi;
-                ws.Cell(satirNo, c++).Value = satir.ToplamGelir;
-                ws.Cell(satirNo, c++).Value = satir.ToplamGider;
+                var ilkGunAdresi = ws.Cell(satirNo, sabitBasliklar.Length + 1).Address;
+                var sonGunAdresi = ws.Cell(satirNo, sabitBasliklar.Length + gunSayisi).Address;
+                var gunAraligi = $"{ilkGunAdresi}:{sonGunAdresi}";
+
+                ws.Cell(satirNo, c++).FormulaA1 = $"COUNTIF({gunAraligi},\">0\")";
+                var seferAdresi = ws.Cell(satirNo, c).Address;
+                ws.Cell(satirNo, c++).FormulaA1 = $"SUM({gunAraligi})";
+                var toplamGelirAdresi = ws.Cell(satirNo, c).Address;
+                ws.Cell(satirNo, c++).FormulaA1 = $"{seferAdresi}*{ws.Cell(satirNo, 4).Address}";
+                ws.Cell(satirNo, c++).FormulaA1 = $"{seferAdresi}*{ws.Cell(satirNo, 5).Address}";
                 ws.Cell(satirNo, c++).Value = satir.KdvOrani / 100m;
+                var kdvOraniAdresi = ws.Cell(satirNo, c - 1).Address;
                 ws.Cell(satirNo, c - 1).Style.NumberFormat.Format = "0.##%";
-                ws.Cell(satirNo, c++).Value = satir.KdvMiktar;
+                var kdvMiktarAdresi = ws.Cell(satirNo, c).Address;
+                ws.Cell(satirNo, c++).FormulaA1 = $"ROUND({toplamGelirAdresi}*{kdvOraniAdresi},2)";
                 if (satir.Kesinti != 0) ws.Cell(satirNo, c).Value = satir.Kesinti;
+                var kesintiAdresi = ws.Cell(satirNo, c).Address;
                 c++;
-                ws.Cell(satirNo, c).Value = satir.Odenecek;
+                ws.Cell(satirNo, c).FormulaA1 = $"{toplamGelirAdresi}+{kdvMiktarAdresi}-{kesintiAdresi}";
                 satirNo++;
             }
 
@@ -505,6 +525,11 @@
             ws.Range(2, sonBaslangic + 6, satirNo, sonKolon).Style.NumberFormat.Format = "#,##0.00"; // KDV MİKTAR..ÖDENECEK
 
             ws.Columns().AdjustToContents();
+            for (var g = 1; g <= gunSayisi; g++)
+            {
+                var gunKolonu = ws.Column(sabitBasliklar.Length + g);
+                gunKolonu.Width = Math.Max(gunKolonu.Width, 5);
+            }
             ws.SheetView.FreezeRows(1);
             ws.SheetView.FreezeColumns(sabitBasliklar.Length);
 
@@ -646,6 +671,34 @@
             return AktifFirmaProvider.Mevcut.FirmaId;
 
         return 0;
+    }
+
+    private static string GetSoforTedarikciTelefon(MatrisSatir satir)
+    {
+        if (!string.IsNullOrWhiteSpace(satir.SoforRef?.Telefon))
+            return satir.SoforRef.Telefon;
+
+        if (!string.IsNullOrWhiteSpace(satir.SoforRef?.TasimaTedarikci?.Telefon))
+            return satir.SoforRef.TasimaTedarikci.Telefon;
+
+        return satir.AracRef?.TasimaTedarikci?.Telefon ?? string.Empty;
+    }
+
+    private static string GetFaturaFirmaTelefon(Arac? arac)
+    {
+        if (arac is null)
+            return string.Empty;
+
+        if (arac.SahiplikTipi == AracSahiplikTipi.Kiralik && !string.IsNullOrWhiteSpace(arac.KiralikCari?.Unvan))
+            return arac.KiralikCari.Telefon ?? string.Empty;
+
+        if (arac.SahiplikTipi == AracSahiplikTipi.Komisyon && !string.IsNullOrWhiteSpace(arac.KomisyoncuCari?.Unvan))
+            return arac.KomisyoncuCari.Telefon ?? string.Empty;
+
+        if (arac.SahiplikTipi == AracSahiplikTipi.Tedarikci && !string.IsNullOrWhiteSpace(arac.TasimaTedarikci?.Unvan))
+            return arac.TasimaTedarikci.Telefon ?? string.Empty;
+
+        return arac.Firma?.Telefon ?? string.Empty;
     }
 
     private sealed class MatrisSatir

@@ -130,7 +130,7 @@
                         </tr>
                         <tr>
                             <td><strong>Yedekleme Yolu:</strong></td>
-                            <td><code class="small text-break">@GetResolvedBackupFolderPath()</code></td>
+                            <td><code class="small text-break">@BackupService.GetResolvedBackupFolderPath()</code></td>
                         </tr>
                     </table>
                 </div>
@@ -193,9 +193,8 @@
                         <label class="form-label">Saklanacak Yedek Sayisi</label>
                         <input type="number" class="form-control" @bind="settings.KeepBackupCount" min="1" max="100" />
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Yedekleme Klasoru</label>
-                        <input type="text" class="form-control" @bind="settings.BackupFolder" placeholder="Backups" />
+                    <div class="alert alert-info py-2 small">
+                        Yedekler, <strong>Dizin Yönetimi → Yedekleme Dizini</strong> alanında belirlenen klasöre kaydedilir.
                     </div>
                     <button class="btn btn-primary" @onclick="AyarlariKaydet" disabled="@IsAnyOperationInProgress">
                         <i class="bi bi-check-lg me-1"></i>Ayarlari Kaydet
@@ -769,18 +768,7 @@
 
         try
         {
-            var backupFolder = settings.BackupFolder;
-            if (string.IsNullOrWhiteSpace(backupFolder))
-            {
-                backupFolder = "database";
-            }
-
-            if (!Path.IsPathRooted(backupFolder))
-            {
-                backupFolder = Path.Combine(AppStoragePaths.GetStorageRoot(Environment.ContentRootPath), backupFolder);
-            }
-
-            Directory.CreateDirectory(backupFolder);
+            var backupFolder = BackupService.GetResolvedBackupFolderPath();
 
             var fileName = $"uploaded_{DateTime.Now:yyyyMMdd_HHmmss}_{yuklenecekDosya.Name}";
             var filePath = Path.Combine(backupFolder, fileName);
@@ -919,18 +907,6 @@
     }
 
     private DateTime? GetNextBackupTime() => settings.GetNextBackupTime();
-
-    private string GetResolvedBackupFolderPath()
-    {
-        var backupFolder = settings.BackupFolder;
-        if (string.IsNullOrWhiteSpace(backupFolder))
-            backupFolder = "database";
-
-        if (!Path.IsPathRooted(backupFolder))
-            backupFolder = Path.Combine(AppStoragePaths.GetStorageRoot(Environment.ContentRootPath), backupFolder);
-
-        return backupFolder;
-    }
 
     private string GetScheduleSummary()
     {

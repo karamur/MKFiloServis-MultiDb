@@ -411,8 +411,8 @@
                                         <td><span class="badge @GetKategoriBadgeClass(kat)">@GetKategoriGosterimAdi(kat)</span></td>
                                         <td colspan="5"><em>Henüz eklenmedi</em></td>
                                         <td class="text-end">
-                                            <button class="btn btn-sm btn-outline-primary" @onclick="() => YeniEvrakKategoriIle(kat)">
-                                                <i class="bi bi-plus-circle me-1"></i>Ekle
+                                            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => YeniEvrakKategoriIle(kat)">
+                                                <i class="bi bi-upload me-1"></i>Belge Ekle
                                             </button>
                                         </td>
                                     </tr>
@@ -450,8 +450,8 @@
                                             <td><span class="badge @GetKategoriBadgeClass(kat)">@GetKategoriGosterimAdi(kat)</span></td>
                                             <td colspan="5"><em>Henüz eklenmedi</em></td>
                                             <td class="text-end">
-                                                <button class="btn btn-sm btn-outline-primary" @onclick="() => YeniEvrakKategoriIle(kat)">
-                                                    <i class="bi bi-plus-circle me-1"></i>Ekle
+                                                <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => YeniEvrakKategoriIle(kat)">
+                                                    <i class="bi bi-upload me-1"></i>Belge Ekle
                                                 </button>
                                             </td>
                                         </tr>
@@ -606,15 +606,24 @@
                         <label class="form-label">Açıklama</label>
                         <textarea class="form-control" rows="2" @bind="yeniEvrak.Aciklama"></textarea>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label">Belge Dosyası *</label>
+                        <InputFile OnChange="YeniEvrakDosyasiSecildi" class="form-control" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" />
+                        <small class="text-muted">PDF, JPG, PNG veya DOC dosyası; en fazla 10 MB.</small>
+                        @if (yeniEvrakDosyasi != null)
+                        {
+                            <div class="small text-success mt-1"><i class="bi bi-file-earmark-check me-1"></i>@yeniEvrakDosyasi.Name (@FormatDosyaBoyutu(yeniEvrakDosyasi.Size))</div>
+                        }
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @onclick="YeniEvrakModalKapat">İptal</button>
-                    <button type="button" class="btn btn-primary" @onclick="YeniEvrakKaydet" disabled="@evrakKaydediliyor">
+                    <button type="button" class="btn btn-primary" @onclick="YeniEvrakKaydet" disabled="@(evrakKaydediliyor || yeniEvrakDosyasi == null)">
                         @if (evrakKaydediliyor)
                         {
                             <span class="spinner-border spinner-border-sm me-1"></span>
                         }
-                        <i class="bi bi-check-lg me-1"></i>Kaydet
+                        <i class="bi bi-upload me-1"></i>Belgeyi Kaydet ve Yükle
                     </button>
                 </div>
             </div>
@@ -935,6 +944,7 @@
     private bool showEvrakDetayModal = false;
     private bool showDosyaYukleModal = false;
     private AracEvrak yeniEvrak = new();
+    private IBrowserFile? yeniEvrakDosyasi;
     private AracEvrak? seciliEvrak;
     private AracEvrak? dosyaYukleEvrak;
     private IBrowserFile? secilenDosya;
@@ -1277,6 +1287,7 @@
     private void YeniEvrakModalAc()
     {
         yeniEvrak = new AracEvrak { AracId = Id!.Value, Durum = EvrakDurum.Aktif };
+        yeniEvrakDosyasi = null;
         showYeniEvrakModal = true;
     }
 
@@ -1288,6 +1299,7 @@
             Durum = EvrakDurum.Aktif,
             EvrakKategorisi = kategori
         };
+        yeniEvrakDosyasi = null;
         showYeniEvrakModal = true;
     }
 
@@ -1295,6 +1307,12 @@
     {
         showYeniEvrakModal = false;
         yeniEvrak = new();
+        yeniEvrakDosyasi = null;
+    }
+
+    private void YeniEvrakDosyasiSecildi(InputFileChangeEventArgs e)
+    {
+        yeniEvrakDosyasi = e.File;
     }
 
     private async Task YeniEvrakKaydet()
@@ -1302,6 +1320,12 @@
         if (string.IsNullOrWhiteSpace(yeniEvrak.EvrakKategorisi))
         {
             ToastService.ShowWarning("Belge türü seçiniz!");
+            return;
+        }
+
+        if (yeniEvrakDosyasi == null)
+        {
+            ToastService.ShowWarning("Belge dosyası seçiniz.");
             return;
         }
 
@@ -1313,8 +1337,16 @@
         evrakKaydediliyor = true;
         try
         {
-            await AracService.CreateAracEvrakAsync(yeniEvrak);
-            ToastService.ShowSuccess("Belge başarıyla eklendi.");
+            var kaydedilenEvrak = await AracService.CreateAracEvrakAsync(yeniEvrak);
+            try
+            {
+                await AracService.UploadEvrakDosyaAsync(kaydedilenEvrak.Id, yeniEvrakDosyasi);
+                ToastService.ShowSuccess("Belge ve dosyası başarıyla eklendi.");
+            }
+            catch (Exception uploadEx)
+            {
+                ToastService.ShowWarning($"Belge kaydedildi ancak dosya yüklenemedi: {uploadEx.Message} Dosyayı belge satırından tekrar yükleyebilirsiniz.");
+            }
             YeniEvrakModalKapat();
             await EvraklariYukle();
         }

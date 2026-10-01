@@ -7,40 +7,53 @@ public sealed class ArchiveBrowserService
 {
     private readonly string _storageRoot;
     private readonly string _repositoryRoot;
+    private readonly string _archiveRoot;
 
     public ArchiveBrowserService(IWebHostEnvironment environment)
     {
         _storageRoot = Path.GetFullPath(AppStoragePaths.GetStorageRoot(environment.ContentRootPath));
         _repositoryRoot = Path.GetFullPath(AppStoragePaths.GetArchiveRepositoryRoot(environment.ContentRootPath));
+        _archiveRoot = Path.GetFullPath(Path.Combine(_storageRoot, "Arsiv"));
         Directory.CreateDirectory(_repositoryRoot);
     }
 
     public string RepositoryRoot => _repositoryRoot;
+    public string StorageRoot => _storageRoot;
 
     public IReadOnlyList<ArchiveDirectoryItem> GetDirectories(string? relativeDirectory = null)
     {
-        var directory = ResolveRepositoryPath(relativeDirectory);
+        if (string.IsNullOrWhiteSpace(relativeDirectory))
+        {
+            return new[] { _repositoryRoot, _archiveRoot }
+                .Where(Directory.Exists)
+                .Select(path => new ArchiveDirectoryItem(Path.GetFileName(path), Path.GetRelativePath(_storageRoot, path).Replace('\\', '/')))
+                .ToList();
+        }
+
+        var directory = ResolveBrowsePath(relativeDirectory);
         return Directory.EnumerateDirectories(directory)
+            .Where(path => !IsReparsePoint(path))
             .Select(path => new DirectoryInfo(path))
             .OrderBy(info => info.Name)
             .Select(info => new ArchiveDirectoryItem(
                 info.Name,
-                Path.GetRelativePath(_repositoryRoot, info.FullName).Replace('\\', '/')))
+                Path.GetRelativePath(_storageRoot, info.FullName).Replace('\\', '/')))
             .ToList();
     }
 
     public IReadOnlyList<ArchiveFileItem> GetFiles(string? relativeDirectory = null, bool recursive = true)
     {
-        var directory = ResolveRepositoryPath(relativeDirectory);
-        var option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+        var roots = string.IsNullOrWhiteSpace(relativeDirectory)
+            ? new[] { _repositoryRoot, _archiveRoot }.Where(Directory.Exists)
+            : new[] { ResolveBrowsePath(relativeDirectory) }.AsEnumerable();
 
-        return Directory.EnumerateFiles(directory, "*", option)
+        return roots.SelectMany(root => EnumerateFilesWithoutLinks(root, recursive))
             .Select(path => new FileInfo(path))
             .OrderByDescending(info => info.LastWriteTimeUtc)
             .Select(info =>
             {
                 var storageRelativePath = Path.GetRelativePath(_storageRoot, info.FullName).Replace('\\', '/');
-                var repositoryRelativePath = Path.GetRelativePath(_repositoryRoot, info.FullName).Replace('\\', '/');
+                var repositoryRelativePath = storageRelativePath;
                 var format = DetectFormat(info.FullName);
                 var displayName = info.Name.EndsWith(".enc", StringComparison.OrdinalIgnoreCase)
                     ? info.Name[..^4]
@@ -63,28 +76,59 @@ public sealed class ArchiveBrowserService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(storageRelativePath);
         var fullPath = Path.GetFullPath(Path.Combine(_storageRoot, storageRelativePath.Replace('/', Path.DirectorySeparatorChar)));
-        EnsureUnderRoot(fullPath, _repositoryRoot);
+        EnsureBrowsablePath(fullPath);
         if (!File.Exists(fullPath))
             throw new FileNotFoundException("Depo dosyası bulunamadı.", storageRelativePath);
         return fullPath;
     }
 
-    private string ResolveRepositoryPath(string? relativeDirectory)
+    private string ResolveBrowsePath(string relativeDirectory)
     {
-        var relative = string.IsNullOrWhiteSpace(relativeDirectory) ? "." : relativeDirectory;
-        var fullPath = Path.GetFullPath(Path.Combine(_repositoryRoot, relative.Replace('/', Path.DirectorySeparatorChar)));
-        EnsureUnderRoot(fullPath, _repositoryRoot);
+        var fullPath = Path.GetFullPath(Path.Combine(_storageRoot, relativeDirectory.Replace('/', Path.DirectorySeparatorChar)));
+        EnsureBrowsablePath(fullPath);
         if (!Directory.Exists(fullPath))
-            throw new DirectoryNotFoundException("Seçilen Depo dizini bulunamadı.");
+            throw new DirectoryNotFoundException("Seçilen arşiv dizini bulunamadı.");
         return fullPath;
     }
 
-    private static void EnsureUnderRoot(string fullPath, string root)
+    private void EnsureBrowsablePath(string fullPath)
+    {
+        if (!IsUnderRoot(fullPath, _repositoryRoot) && !IsUnderRoot(fullPath, _archiveRoot))
+            throw new UnauthorizedAccessException("Yalnız Depo ve Arşiv dizinlerine erişilebilir.");
+
+        var relative = Path.GetRelativePath(_storageRoot, fullPath);
+        var current = _storageRoot;
+        foreach (var part in relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+        {
+            current = Path.Combine(current, part);
+            if ((Directory.Exists(current) || File.Exists(current)) && IsReparsePoint(current))
+                throw new UnauthorizedAccessException("Bağlantı dizinleri üzerinden arşiv dışına çıkılamaz.");
+        }
+    }
+
+    private static IEnumerable<string> EnumerateFilesWithoutLinks(string root, bool recursive)
+    {
+        var pending = new Stack<string>();
+        pending.Push(root);
+        while (pending.Count > 0)
+        {
+            var directory = pending.Pop();
+            foreach (var file in Directory.EnumerateFiles(directory))
+                if (!IsReparsePoint(file)) yield return file;
+            if (recursive)
+                foreach (var child in Directory.EnumerateDirectories(directory))
+                    if (!IsReparsePoint(child)) pending.Push(child);
+        }
+    }
+
+    private static bool IsReparsePoint(string path)
+        => (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
+
+    private static bool IsUnderRoot(string fullPath, string root)
     {
         var normalizedRoot = root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        if (!fullPath.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(fullPath, root, StringComparison.OrdinalIgnoreCase))
-            throw new UnauthorizedAccessException("Depo kökü dışındaki dizinlere erişilemez.");
+        return fullPath.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(fullPath, root, StringComparison.OrdinalIgnoreCase);
     }
 
     private static ArchiveFileFormat DetectFormat(string fullPath)

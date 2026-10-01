@@ -229,8 +229,9 @@ public sealed class SecureFileService : ISecureFileService
 
         string rootToUse;
 
-        // Yeni arşiv path: Arsiv ile başlıyorsa base storage root altında (uploads değil)
-        if (normalized.StartsWith("Arsiv/", StringComparison.OrdinalIgnoreCase))
+        // Arşiv ve Depo dosyaları base storage root altında (uploads değil).
+        if (normalized.StartsWith("Arsiv/", StringComparison.OrdinalIgnoreCase) ||
+            normalized.StartsWith("Depo/", StringComparison.OrdinalIgnoreCase))
         {
             rootToUse = _baseStorageRoot;
         }

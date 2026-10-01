@@ -26,7 +26,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $Version = '1.0.25',
+    [string] $Version = '1.0.37',
     [switch] $SkipPublish,
     [switch] $LisansOnly
 )
@@ -38,6 +38,11 @@ $Root      = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $RepoRoot  = Split-Path -Parent $Root
 $Payload   = Join-Path $Root 'payload'
 $Output    = Join-Path $Root "output\v$Version"
+
+$expectedPayload = [System.IO.Path]::GetFullPath((Join-Path $Root 'payload'))
+if (-not [System.IO.Path]::GetFullPath($Payload).Equals($expectedPayload, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Payload yolu setup klasoru disinda: $Payload"
+}
 
 $Web       = Join-Path $RepoRoot 'MKFiloServis.Web\MKFiloServis.Web.csproj'
 $Lisans    = Join-Path $RepoRoot 'MKFiloServis.LisansDesktop\MKFiloServis.LisansDesktop.csproj'
@@ -81,6 +86,12 @@ if (-not $SkipPublish) {
         Write-Host "[1/5] Web publish..." -ForegroundColor Green
         dotnet publish $Web -c Release -o "$Payload\Web" /p:Version=$Version /p:UseAppHost=true --nologo | Out-Host
         if ($LASTEXITCODE -ne 0) { throw "Web publish basarisiz." }
+
+        foreach ($relativePath in @('Tests', 'App_Data', 'Backups', 'artifacts', '.artifacts', 'wwwroot\uploads')) {
+            if (Test-Path (Join-Path $Payload "Web\$relativePath")) {
+                throw "Yerel veri/test klasoru publish ciktisinda bulundu: $relativePath"
+            }
+        }
 
         $webConfigPath = Join-Path $Payload 'Web\web.config'
         if (Test-Path $webConfigPath) {

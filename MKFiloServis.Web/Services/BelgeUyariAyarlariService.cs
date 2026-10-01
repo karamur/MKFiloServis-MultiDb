@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Net.Mail;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Web.Data;
@@ -62,10 +63,23 @@ public class BelgeUyariAyarlariService
 
     public async Task SaveAyarlarAsync(BelgeUyariAyarlar ayarlar)
     {
+        ayarlar.EkEmailAdresleri = ParseEmailAddresses(string.Join(";", ayarlar.EkEmailAdresleri ?? []));
         var yol = DosyaYolu();
         var json = JsonSerializer.Serialize(ayarlar, JsonOptions);
         await File.WriteAllTextAsync(yol, json);
         _logger.LogInformation("Belge uyarı ayarları kaydedildi");
+    }
+
+    public static List<string> ParseEmailAddresses(string? addresses)
+    {
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var value in (addresses ?? string.Empty).Split([',', ';', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!MailAddress.TryCreate(value, out var address) || !string.Equals(address.Address, value, StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException($"Geçersiz e-posta adresi: {value}");
+            result.Add(address.Address);
+        }
+        return result.ToList();
     }
 
     public async Task GuncelleSonCalismaAsync(DateTime sonCalisma, int uyariSayisi)

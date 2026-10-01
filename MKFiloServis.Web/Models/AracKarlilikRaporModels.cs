@@ -14,6 +14,7 @@ public class AracKarlilikOzet
     // Gelir bilgileri
     public int ToplamSeferSayisi { get; set; }
     public decimal ToplamGelir { get; set; }
+    public decimal RentACarGeliri { get; set; }
     
     // Gider bilgileri
     public decimal ToplamMasraf { get; set; }
@@ -97,6 +98,7 @@ public class AracKarsilastirmaOzeti
     
     public int SeferSayisi { get; set; }
     public decimal ToplamGelir { get; set; }
+    public decimal RentACarGeliri { get; set; }
     public decimal ToplamGider { get; set; }
     public decimal NetKar { get; set; }
     public decimal KarMarji { get; set; }

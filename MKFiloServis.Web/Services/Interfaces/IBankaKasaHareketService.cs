@@ -12,6 +12,7 @@ public class BankaHareketFilterParams : PagingParameters
     public int? HesapId { get; set; }
     public int? CariId { get; set; }
     public HareketTipi? HareketTipi { get; set; }
+    public IslemKaynak? IslemKaynak { get; set; }
     public DateTime? BaslangicTarihi { get; set; }
     public DateTime? BitisTarihi { get; set; }
 }

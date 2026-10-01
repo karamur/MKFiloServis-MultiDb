@@ -51,6 +51,12 @@
     <Compile Remove="Tests\**\*.cs" />
   </ItemGroup>
 
+  <!-- Gelistirme/test ciktilari ve yerel veriler kurulum paketine girmemeli. -->
+  <ItemGroup>
+    <Content Remove="Tests\**;App_Data\**;Backups\**;artifacts\**;.artifacts\**;wwwroot\uploads\**;cookies.txt" />
+    <None Remove="Tests\**;App_Data\**;Backups\**;artifacts\**;.artifacts\**;wwwroot\uploads\**;cookies.txt" />
+  </ItemGroup>
+
   <ItemGroup>
     <None Include="Tests\PlaywrightSmoke\MKFiloServis.PlaywrightSmoke.csproj" />
     <None Include="Tests\RentACar\MKFiloServis.RentACarChecks.csproj" />

@@ -183,7 +183,6 @@
         ("faturalar", "Faturalar"),
         ("servis-calismalar", "Servis Çalışmaları"),
         ("arac-masraflar", "Araç Masrafları"),
-        ("filo-operasyon", "Filo Operasyon"),
         ("arac-ilan-yayinlari", "Araç İlan Yayınları"),
         ("muhasebe", "Muhasebe"),
         ("bordro", "Bordro"),
@@ -221,6 +220,10 @@
                             TarayiciBildirimAktif = true,
                             AnasayfaWidgetGoster = true
                         };
+                    }
+                    else if (tercih.VarsayilanAnasayfa == "filo-operasyon")
+                    {
+                        tercih.VarsayilanAnasayfa = null;
                     }
 
                     sonIslemler = await IlanYayinService.GetSonIslemlerAsync(kullaniciId, 10);

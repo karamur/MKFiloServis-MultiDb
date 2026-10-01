@@ -1,6 +1,7 @@
 ﻿using System.IO.Compression;
 using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Web.Data;
+using MKFiloServis.Web.Helpers;
 using Npgsql;
 using MKFiloServis.Web.Services.Interfaces;
 
@@ -14,9 +15,8 @@ public class DatabaseBackupService : IHostedService, IDisposable
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<DatabaseBackupService> _logger;
-    private readonly IConfiguration _configuration;
     private Timer? _timer;
-    private readonly string _backupPath;
+    private string _backupPath = string.Empty;
     private readonly int _retentionDays;
     private readonly bool _enabled;
 
@@ -27,21 +27,37 @@ public class DatabaseBackupService : IHostedService, IDisposable
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
-        _configuration = configuration;
-        
-        _backupPath = configuration["Backup:Path"] ?? Path.Combine(AppContext.BaseDirectory, "backups");
         _retentionDays = configuration.GetValue("Backup:RetentionDays", 30);
         _enabled = configuration.GetValue("Backup:Enabled", true);
     }
 
-    public Task StartAsync(CancellationToken cancellationToken)
+    public async Task StartAsync(CancellationToken cancellationToken)
     {
         if (!_enabled)
         {
             _logger.LogInformation("Veritabanı yedekleme servisi devre dışı");
-            return Task.CompletedTask;
+            return;
         }
 
+        var configuredDirectory = AppStoragePaths.DefaultStorageRoot;
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+            configuredDirectory = await db.AppAyarlari
+                .AsNoTracking()
+                .Where(a => a.Anahtar == "BackupDizin" && a.Kategori == "Dizin")
+                .Select(a => a.Deger)
+                .FirstOrDefaultAsync(cancellationToken)
+                ?? configuredDirectory;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Dizin Yönetimi yedekleme yolu okunamadı; varsayılan yedekleme dizini kullanılacak.");
+        }
+
+        _backupPath = AppStoragePaths.GetWritableBackupFolder(AppContext.BaseDirectory, configuredDirectory);
         _logger.LogInformation("Veritabanı yedekleme servisi başlatıldı");
 
         // Klasörü oluştur
@@ -58,7 +74,6 @@ public class DatabaseBackupService : IHostedService, IDisposable
 
         _timer = new Timer(ExecuteBackup, null, initialDelay, TimeSpan.FromDays(1));
 
-        return Task.CompletedTask;
     }
 
     private async void ExecuteBackup(object? state)

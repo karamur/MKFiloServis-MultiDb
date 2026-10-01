@@ -4,6 +4,7 @@ namespace MKFiloServis.Web.Services.Interfaces;
 
 public interface IOperasyonPlanService
 {
+    Task<int> GetAktifEslestirmeSayisiAsync();
     Task<(int Olusan, int Atlanan)> PlanUretAsync(DateTime tarih);
     Task<(int Olusan, int Atlanan, int IslenmeyenGun)> AyPlaniUretAsync(int yil, int ay);
     Task<(int Olusan, int Atlanan)> HaftaSonuPlanlariniUretAsync(int yil, int ay);

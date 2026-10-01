@@ -6,10 +6,13 @@
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject IToastService ToastService
 @inject ICariService CariService
+@inject IKullaniciService KullaniciService
 @rendermode InteractiveServer
 
 <PageTitle>Cari / Muhasebe Ayarları</PageTitle>
 
+<YetkiKontrol Yetki="@Yetkiler.CariMuhasebeAyarOku" GerekliYetkiAdi="Cari / Muhasebe Ayarları">
+<Yetkili>
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h3><i class="bi bi-journal-text me-2"></i>Cari / Muhasebe Ayarları</h3>
@@ -396,6 +399,8 @@
     }
 </div>
 
+</Yetkili>
+</YetkiKontrol>
 @code {
     private bool isLoading = true;
     private bool isSaving = false;
@@ -421,6 +426,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var aktif = await KullaniciService.GetAktifKullaniciAsync();
+        if (aktif is null || !await KullaniciService.YetkiVarMiAsync(aktif.Id, Yetkiler.CariMuhasebeAyarOku)) return;
         await LoadAyarlar();
         await LoadCariEslesmeleri();
     }
@@ -537,6 +544,7 @@
 
     private async Task HesapOlustur(CariEslestirmeModel model)
     {
+        if (!await DuzenlemeYetkisiVarMiAsync()) return;
         model.IsProcessing = true;
         StateHasChanged();
 
@@ -559,6 +567,7 @@
 
     private async Task TopluHesapOlustur()
     {
+        if (!await DuzenlemeYetkisiVarMiAsync()) return;
         isMapping = true;
         StateHasChanged();
 
@@ -624,6 +633,7 @@
 
     private async Task Kaydet()
     {
+        if (!await DuzenlemeYetkisiVarMiAsync()) return;
         isSaving = true;
         try
         {
@@ -702,6 +712,14 @@
             HesaplananKdvHesabi = "391.20",
             IndirilecekKdvHesabi = "191.20"
         });
+    }
+
+    private async Task<bool> DuzenlemeYetkisiVarMiAsync()
+    {
+        var aktif = await KullaniciService.GetAktifKullaniciAsync();
+        if (aktif is not null && await KullaniciService.YetkiVarMiAsync(aktif.Id, Yetkiler.CariMuhasebeAyarDuzenle)) return true;
+        ToastService.ShowError("Cari / muhasebe ayarlarını düzenleme yetkiniz yok.");
+        return false;
     }
 
     private void KdvEslestirmeSil(KdvHesapEslestirme e)

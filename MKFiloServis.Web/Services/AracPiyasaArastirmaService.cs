@@ -35,7 +35,6 @@ public class AracPiyasaArastirmaService : IAracPiyasaArastirmaService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly IConfiguration _configuration;
-    private readonly HttpClient _httpClient;
     private readonly ILogger<AracPiyasaArastirmaService> _logger;
     private readonly IHttpScraperService _httpScraper;
     private readonly IPlaywrightScraperService _playwrightScraper;
@@ -159,14 +158,12 @@ public class AracPiyasaArastirmaService : IAracPiyasaArastirmaService
     public AracPiyasaArastirmaService(
         IDbContextFactory<ApplicationDbContext> contextFactory,
         IConfiguration configuration,
-        IHttpClientFactory httpClientFactory,
         ILogger<AracPiyasaArastirmaService> logger,
         IHttpScraperService httpScraper,
         IPlaywrightScraperService playwrightScraper)
     {
         _contextFactory = contextFactory;
         _configuration = configuration;
-        _httpClient = httpClientFactory.CreateClient("OpenAI");
         _logger = logger;
         _httpScraper = httpScraper;
         _playwrightScraper = playwrightScraper;

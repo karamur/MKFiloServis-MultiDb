@@ -151,7 +151,7 @@ public class KullaniciTercihi : BaseEntity
     public virtual Kullanici Kullanici { get; set; } = null!;
 
     // Anasayfa Tercihleri
-    public string? VarsayilanAnasayfa { get; set; } // dashboard, filo-operasyon, araclar vs.
+    public string? VarsayilanAnasayfa { get; set; } // dashboard, araclar vs.
 
     public bool AnasayfaWidgetGoster { get; set; } = true;
 

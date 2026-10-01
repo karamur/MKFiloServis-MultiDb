@@ -391,6 +391,7 @@ public class RaporService : IRaporService
         DateTime endDate)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
+        var endExclusive = endDate.Date.AddDays(1);
         var arac = await context.Araclar
             .Include(a => a.KiralikCari)
             .FirstOrDefaultAsync(a => a.Id == aracId);
@@ -403,7 +404,7 @@ public class RaporService : IRaporService
             .Include(s => s.Guzergah)
                 .ThenInclude(g => g.Cari)
             .Where(s => s.AracId == aracId)
-            .Where(s => s.CalismaTarihi >= startDate && s.CalismaTarihi <= endDate)
+            .Where(s => s.CalismaTarihi >= startDate.Date && s.CalismaTarihi < endExclusive)
             .Where(s => s.Durum == CalismaDurum.Tamamlandi)
             .AsNoTracking()
             .ToListAsync();
@@ -413,7 +414,7 @@ public class RaporService : IRaporService
         var masraflar = await context.AracMasraflari
             .Include(m => m.MasrafKalemi)
             .Where(m => m.AracId == aracId)
-            .Where(m => m.MasrafTarihi >= startDate && m.MasrafTarihi <= endDate)
+            .Where(m => m.MasrafTarihi >= startDate.Date && m.MasrafTarihi < endExclusive)
             .Where(m => !m.IsDeleted)
             .AsNoTracking()
             .ToListAsync();
@@ -421,11 +422,21 @@ public class RaporService : IRaporService
         // ServisKaydi giderleri (AracMasraf bağlantısı olmayanlar)
         var servisGiderleri = await context.ServisKayitlari
             .Where(s => s.AracId == aracId)
-            .Where(s => s.ServisTarihi >= startDate && s.ServisTarihi <= endDate)
+            .Where(s => s.ServisTarihi >= startDate.Date && s.ServisTarihi < endExclusive)
             .Where(s => !s.IsDeleted)
             .Where(s => s.AracMasrafId == null)
             .AsNoTracking()
             .ToListAsync();
+
+        var rentPayments = await (from h in context.RentACarOdemeHareketleri
+            join k in context.MusteriKiralamalar on h.MusteriKiralamaId equals k.Id
+            where k.AracId == aracId && h.IslemTarihi >= startDate.Date && h.IslemTarihi < endExclusive
+                && (h.HareketTuru == RentACarOdemeHareketTuru.KiraTahsilati
+                    || h.HareketTuru == RentACarOdemeHareketTuru.KiraIadesi)
+            select h).AsNoTracking().ToListAsync();
+        var rentACarGeliri = rentPayments
+            .Where(h => h.HareketTuru == RentACarOdemeHareketTuru.KiraTahsilati).Sum(h => h.Tutar)
+            - rentPayments.Where(h => h.HareketTuru == RentACarOdemeHareketTuru.KiraIadesi).Sum(h => h.Tutar);
 
         // Dönem içindeki ay sayısı (kira hesaplama için)
         var aylikKiraBedeli = arac.AylikKiraBedeli ?? 0;
@@ -452,7 +463,8 @@ public class RaporService : IRaporService
             Model = arac.Model,
             SahiplikTipi = arac.SahiplikTipi == AracSahiplikTipi.Ozmal ? "Özmal" : "Kiralık",
             ToplamSeferSayisi = calismalar.Count,
-            ToplamGelir = calismalar.Sum(c => c.Fiyat ?? c.Guzergah.BirimFiyat),
+            ToplamGelir = calismalar.Sum(c => c.Fiyat ?? c.Guzergah.BirimFiyat) + rentACarGeliri,
+            RentACarGeliri = rentACarGeliri,
             ToplamMasraf = masraflar.Sum(m => m.Tutar),
             KiraBedeli = toplamKiraBedeli,
             KomisyonTutari = toplamKomisyon,
@@ -504,6 +516,9 @@ public class RaporService : IRaporService
             .Union(masraflar
                 .GroupBy(m => new { m.MasrafTarihi.Year, m.MasrafTarihi.Month })
                 .Select(g => new { g.Key.Year, g.Key.Month }))
+            .Union(rentPayments
+                .GroupBy(h => new { h.IslemTarihi.Year, h.IslemTarihi.Month })
+                .Select(g => new { g.Key.Year, g.Key.Month }))
             .Distinct()
             .OrderBy(a => a.Year).ThenBy(a => a.Month)
             .ToList();
@@ -512,7 +527,9 @@ public class RaporService : IRaporService
         {
             var ayGelir = calismalar
                 .Where(c => c.CalismaTarihi.Year == ay.Year && c.CalismaTarihi.Month == ay.Month)
-                .Sum(c => c.Fiyat ?? c.Guzergah.BirimFiyat);
+                .Sum(c => c.Fiyat ?? c.Guzergah.BirimFiyat)
+                + rentPayments.Where(h => h.IslemTarihi.Year == ay.Year && h.IslemTarihi.Month == ay.Month && h.HareketTuru == RentACarOdemeHareketTuru.KiraTahsilati).Sum(h => h.Tutar)
+                - rentPayments.Where(h => h.IslemTarihi.Year == ay.Year && h.IslemTarihi.Month == ay.Month && h.HareketTuru == RentACarOdemeHareketTuru.KiraIadesi).Sum(h => h.Tutar);
 
             var ayMasraf = masraflar
                 .Where(m => m.MasrafTarihi.Year == ay.Year && m.MasrafTarihi.Month == ay.Month)
@@ -548,9 +565,11 @@ public class RaporService : IRaporService
     public async Task<List<AracKarsilastirmaOzeti>> GetAracKarsilastirmaAsync(
         DateTime startDate,
         DateTime endDate,
-        AracSahiplikTipi? sahiplikTipi = null)
+        AracSahiplikTipi? sahiplikTipi = null,
+        IReadOnlyCollection<int>? aracIds = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
+        var endExclusive = endDate.Date.AddDays(1);
         // Tüm aktif araçları getir
         var araclarQuery = context.Araclar
             .Where(a => a.Aktif && !a.IsDeleted);
@@ -558,6 +577,8 @@ public class RaporService : IRaporService
         // Sahiplik tipi filtreleme
         if (sahiplikTipi.HasValue)
             araclarQuery = araclarQuery.Where(a => a.SahiplikTipi == sahiplikTipi.Value);
+        if (aracIds is { Count: > 0 })
+            araclarQuery = araclarQuery.Where(a => aracIds.Contains(a.Id));
 
         var araclar = await araclarQuery.AsNoTracking().ToListAsync();
 
@@ -565,7 +586,7 @@ public class RaporService : IRaporService
         var calismaQuery = context.ServisCalismalari
             .Include(s => s.Guzergah)
             .Include(s => s.Arac)
-            .Where(s => s.CalismaTarihi >= startDate && s.CalismaTarihi <= endDate)
+            .Where(s => s.CalismaTarihi >= startDate.Date && s.CalismaTarihi < endExclusive)
             .Where(s => s.Durum == CalismaDurum.Tamamlandi);
 
         // Sahiplik tipi filtreleme
@@ -577,7 +598,7 @@ public class RaporService : IRaporService
         // Masrafları getir
         var masrafQuery = context.AracMasraflari
             .Include(m => m.Arac)
-            .Where(m => m.MasrafTarihi >= startDate && m.MasrafTarihi <= endDate)
+            .Where(m => m.MasrafTarihi >= startDate.Date && m.MasrafTarihi < endExclusive)
             .Where(m => !m.IsDeleted);
 
         // Sahiplik tipi filtreleme
@@ -589,7 +610,7 @@ public class RaporService : IRaporService
         // ServisKaydi giderleri (AracMasraf bağlantısı olmayanlar)
         var servisKayitlariQuery = context.ServisKayitlari
             .Include(s => s.Arac)
-            .Where(s => s.ServisTarihi >= startDate && s.ServisTarihi <= endDate)
+            .Where(s => s.ServisTarihi >= startDate.Date && s.ServisTarihi < endExclusive)
             .Where(s => !s.IsDeleted)
             .Where(s => s.AracMasrafId == null);
 
@@ -598,6 +619,15 @@ public class RaporService : IRaporService
 
         var servisKayitlari = await servisKayitlariQuery.AsNoTracking().ToListAsync();
 
+        var aracIdFiltresi = araclar.Select(a => a.Id).ToHashSet();
+        var rentPayments = await (from h in context.RentACarOdemeHareketleri
+            join k in context.MusteriKiralamalar on h.MusteriKiralamaId equals k.Id
+            where h.IslemTarihi >= startDate.Date && h.IslemTarihi < endExclusive
+                && (h.HareketTuru == RentACarOdemeHareketTuru.KiraTahsilati
+                    || h.HareketTuru == RentACarOdemeHareketTuru.KiraIadesi)
+            select new { k.AracId, h.HareketTuru, h.Tutar }).AsNoTracking().ToListAsync();
+        rentPayments = rentPayments.Where(h => aracIdFiltresi.Contains(h.AracId)).ToList();
+
         var aySayisi = ((endDate.Year - startDate.Year) * 12) + endDate.Month - startDate.Month + 1;
 
         var sonuclar = araclar.Select(arac =>
@@ -605,8 +635,11 @@ public class RaporService : IRaporService
             var aracCalismalari = calismalar.Where(c => c.AracId == arac.Id).ToList();
             var aracMasraflari = masraflar.Where(m => m.AracId == arac.Id).ToList();
             var aracServisleri = servisKayitlari.Where(s => s.AracId == arac.Id).ToList();
+            var aracRentPayments = rentPayments.Where(h => h.AracId == arac.Id).ToList();
 
-            var toplamGelir = aracCalismalari.Sum(c => c.Fiyat ?? c.Guzergah.BirimFiyat);
+            var rentACarGeliri = aracRentPayments.Where(h => h.HareketTuru == RentACarOdemeHareketTuru.KiraTahsilati).Sum(h => h.Tutar)
+                - aracRentPayments.Where(h => h.HareketTuru == RentACarOdemeHareketTuru.KiraIadesi).Sum(h => h.Tutar);
+            var toplamGelir = aracCalismalari.Sum(c => c.Fiyat ?? c.Guzergah.BirimFiyat) + rentACarGeliri;
             var toplamMasraf = aracMasraflari.Sum(m => m.Tutar) +
                                aracServisleri.Sum(s => s.ToplamTutar > 0 ? s.ToplamTutar : (s.IscilikTutari + s.ParcaTutari + s.KdvTutar));
             var kiraBedeli = arac.SahiplikTipi == AracSahiplikTipi.Kiralik ? (arac.AylikKiraBedeli ?? 0) * aySayisi : 0;
@@ -628,6 +661,7 @@ public class RaporService : IRaporService
                 SahiplikTipi = arac.SahiplikTipi == AracSahiplikTipi.Ozmal ? "Özmal" : "Kiralık",
                 SeferSayisi = aracCalismalari.Count,
                 ToplamGelir = toplamGelir,
+                RentACarGeliri = rentACarGeliri,
                 ToplamGider = toplamGider,
                 NetKar = netKar,
                 KarMarji = toplamGelir > 0 ? netKar / toplamGelir * 100 : 0,
@@ -635,7 +669,7 @@ public class RaporService : IRaporService
                 ArizaOrani = aracCalismalari.Count > 0 ? (decimal)aracCalismalari.Count(c => c.ArizaOlduMu) / aracCalismalari.Count * 100 : 0
             };
         })
-        .Where(a => a.SeferSayisi > 0) // En az 1 sefer yapmış araçlar
+        .Where(a => a.SeferSayisi > 0 || a.ToplamGelir != 0 || a.ToplamGider != 0)
         .OrderByDescending(a => a.NetKar)
         .ToList();
 

@@ -8,6 +8,9 @@ public class BelgeUyariAyarlar
     /// <summary>E-posta bildirimi etkin mi?</summary>
     public bool EmailEnabled { get; set; } = false;
 
+    /// <summary>Admin/Yönetici kullanıcılarına ek olarak uyarı gönderilecek adresler.</summary>
+    public List<string> EkEmailAdresleri { get; set; } = [];
+
     /// <summary>WhatsApp bildirimi etkin mi?</summary>
     public bool WhatsAppEnabled { get; set; } = false;
 

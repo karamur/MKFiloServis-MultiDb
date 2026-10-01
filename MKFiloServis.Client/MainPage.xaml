@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="MKFiloServis.Client.MainPage">
+
+    <Grid RowDefinitions="Auto,*">
+        <VerticalStackLayout x:Name="AddressHeader" Grid.Row="0" Padding="12,10" Spacing="5" BackgroundColor="#1E3C72">
+            <Label x:Name="HeaderLabel" Text="MK Filo Servis" TextColor="White" FontSize="18" FontAttributes="Bold" />
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <Entry x:Name="ServerAddressEntry" Grid.Column="0"
+                       Placeholder="Sunucu adresi: https://filo.ornek.com"
+                       Keyboard="Url" ReturnType="Go" Completed="OnAddressCompleted"
+                       BackgroundColor="White" TextColor="#14233D" />
+                <Button Grid.Column="1" Text="Bağlan" Clicked="OnConnectClicked" BackgroundColor="#0D6EFD" TextColor="White" />
+                <Button Grid.Column="2" Text="Yenile" Clicked="OnRefreshClicked" BackgroundColor="#315786" TextColor="White" />
+            </Grid>
+            <Label x:Name="StatusLabel" TextColor="White" FontSize="12" />
+        </VerticalStackLayout>
+        <WebView x:Name="AppWebView" Grid.Row="1" IsVisible="False"
+                 Navigating="OnNavigating" Navigated="OnNavigated" />
+        <VerticalStackLayout x:Name="WelcomePanel" Grid.Row="1" Padding="24"
+                             VerticalOptions="Center" HorizontalOptions="Center" Spacing="10">
+            <Label Text="Sunucuya bağlanın" FontSize="24" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+            <Label Text="MK Filo Servis sunucusunun adresini üst alana yazın. Telefon ve sunucu aynı ağda olmalı veya sunucuya güvenli bir internet adresinden erişilebilmelidir."
+                   HorizontalTextAlignment="Center" MaximumWidthRequest="500" />
+        </VerticalStackLayout>
+    </Grid>
+
+</ContentPage>

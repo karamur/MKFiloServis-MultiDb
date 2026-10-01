@@ -3,7 +3,9 @@
 public class DatabaseSettings
 {
     public int Id { get; set; }
+    /// <summary>Uygulamanın çalışma sırasında kullandığı veritabanı sağlayıcısı.</summary>
     public DatabaseProvider Provider { get; set; } = DatabaseProvider.PostgreSQL;
+    /// <summary>Şema migration'larının kanonik hedefi; aktif bağlantı sağlayıcısı değildir.</summary>
     public DatabaseProvider CanonicalProvider { get; set; } = DatabaseProvider.PostgreSQL;
     public string Host { get; set; } = "localhost";
     public int Port { get; set; } = 5432;

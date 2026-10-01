@@ -10,7 +10,7 @@
 #define MyDataSyncExe "MKFiloServis.DataSync.exe"
 
 #ifndef MyAppVersion
-#define MyAppVersion "1.0.26"
+#define MyAppVersion "1.0.37"
 #endif
 
 [Setup]
