@@ -1,6 +1,6 @@
 using MKFiloServis.Web.Services;
 using Microsoft.AspNetCore.Components;
-using System.Net.Http.Json;
+using System.Security.Cryptography;
 
 namespace MKFiloServis.Web.Components.Pages;
 
@@ -9,7 +9,7 @@ namespace MKFiloServis.Web.Components.Pages;
 /// </summary>
 public partial class AdminSystemHealth
 {
-    [Inject] public HttpClient HttpClient { get; set; } = null!;
+    [Inject] public FileRecoveryService FileRecoveryService { get; set; } = null!;
     [Inject] public ILogger<AdminSystemHealth> Logger { get; set; } = null!;
 
     private string oldMasterKeyHex = "";
@@ -41,27 +41,45 @@ public partial class AdminSystemHealth
 
         try
         {
-            var request = new
+            byte[] oldKeyBytes;
+            try
             {
-                oldMasterKeyHex = oldMasterKeyHex.Trim(),
-                targetDirectory = (string?)null
-            };
-
-            var response = await HttpClient.PostAsJsonAsync(
-                "api/system/recover-encrypted-files",
-                request);
-
-            if (response.IsSuccessStatusCode)
-            {
-                recoveryResult = await response.Content.ReadFromJsonAsync<RecoveryResultSimple>();
-                statusMessage = recoveryResult?.IsSuccess ?? false
-                    ? $"✅ Recovery başarılı: {recoveryResult?.SuccessCount} dosya kurtarıldı, {recoveryResult?.FailedCount} başarısız"
-                    : $"⚠️ Recovery kısmi başarılı: {recoveryResult?.SuccessCount}✓ / {recoveryResult?.FailedCount}❌";
+                oldKeyBytes = Convert.FromHexString(oldMasterKeyHex.Trim().Replace(" ", string.Empty));
             }
-            else
+            catch (FormatException)
             {
-                var error = await response.Content.ReadAsStringAsync();
-                statusMessage = $"❌ Recovery hatası: {error}";
+                statusMessage = "❌ Eski master key geçerli hex biçiminde olmalıdır.";
+                return;
+            }
+
+            if (oldKeyBytes.Length != 32)
+            {
+                CryptographicOperations.ZeroMemory(oldKeyBytes);
+                statusMessage = "❌ Eski master key 64 hex karakter (32 bayt) olmalıdır.";
+                return;
+            }
+
+            try
+            {
+                var result = await FileRecoveryService.RecoverEncryptedFilesAsync(oldKeyBytes);
+                recoveryResult = new RecoveryResultSimple
+                {
+                    SuccessCount = result.SuccessCount,
+                    FailedCount = result.FailedCount,
+                    SkippedCount = result.SkippedCount,
+                    RecoveredFiles = result.RecoveredFiles,
+                    FailedFiles = result.FailedFiles.Cast<object>().ToList(),
+                    IsSuccess = result.IsSuccess
+                };
+                statusMessage = !string.IsNullOrEmpty(result.ErrorMessage)
+                    ? $"❌ Recovery hatası: {result.ErrorMessage}"
+                    : result.IsSuccess
+                        ? $"✅ Recovery başarılı: {result.SuccessCount} dosya kurtarıldı, {result.FailedCount} başarısız"
+                        : $"⚠️ Recovery kısmi başarılı: {result.SuccessCount}✓ / {result.FailedCount}❌";
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(oldKeyBytes);
             }
         }
         catch (Exception ex)

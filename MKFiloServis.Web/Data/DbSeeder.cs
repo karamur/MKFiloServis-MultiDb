@@ -42,31 +42,6 @@ public static class DbSeeder
             await context.SaveChangesAsync();
         }
 
-        // Kullanici (Admin)
-        if (!await context.Kullanicilar.IgnoreQueryFilters().AnyAsync())
-        {
-            var adminRol = await context.Roller.IgnoreQueryFilters().FirstOrDefaultAsync(r => r.RolAdi == "Admin");
-            if (adminRol is null)
-            {
-                Console.WriteLine("⚠️ Admin rolü bulunamadı, admin kullanıcı oluşturulamadı.");
-            }
-            else
-            {
-                var admin = new Kullanici
-                {
-                    KullaniciAdi = "admin",
-                    SifreHash = "admin123", // Production'da düzgün hash'lenmiş olmalı
-                    AdSoyad = "Sistem Yöneticisi",
-                    Email = "admin@firma.com",
-                    RolId = adminRol.Id,
-                    Aktif = true,
-                    CreatedAt = DateTime.UtcNow
-                };
-                context.Kullanicilar.Add(admin);
-                await context.SaveChangesAsync();
-            }
-        }
-
         // Muhasebe Hesap Planı (Tek Düzen Hesap Planı)
         if (!await context.MuhasebeHesaplari.IgnoreQueryFilters().AnyAsync())
         {

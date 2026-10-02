@@ -7,11 +7,11 @@
 - 3 farklı kullanıcı hesabı (`Admin`, `Muhasebeci`, `Şoför`)
 
 ### Test Kullanıcıları
-| Kullanıcı Adı | Şifre    | Rol         | Test PC |
-|---------------|----------|-------------|---------|
-| admin         | admin123 | Admin       | PC-1    |
-| muhasebe      | test123  | Muhasebeci  | PC-2    |
-| sofor1        | test123  | Şoför       | PC-3    |
+| Kullanıcı Adı | Şifre | Rol | Test PC |
+|---|---|---|---|
+| Test ortamında oluşturulmuş hesap | Gizli ortam değişkeninden alınır | Admin | PC-1 |
+| Test ortamında oluşturulmuş hesap | Gizli ortam değişkeninden alınır | Muhasebeci | PC-2 |
+| Test ortamında oluşturulmuş hesap | Gizli ortam değişkeninden alınır | Şoför | PC-3 |
 
 ### Yapılan Güvenlik Değişiklikleri
 

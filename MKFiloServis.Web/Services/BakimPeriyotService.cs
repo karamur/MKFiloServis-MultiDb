@@ -299,17 +299,33 @@ public class BakimPeriyotService : IBakimPeriyotService
             // Uygulama içi bildirim
             if (bildirimService != null)
             {
-                await bildirimService.CreateAsync(new Bildirim
+                var yoneticiler = await ctx.Kullanicilar
+                    .Include(k => k.Rol)
+                    .Where(k => k.Aktif && (k.Rol.RolAdi == "Admin" || k.Rol.RolAdi == "Yonetici"))
+                    .Select(k => k.Id)
+                    .ToListAsync();
+
+                if (yoneticiler.Count == 0)
                 {
-                    KullaniciId = 1,
-                    Baslik = $"Bakım Uyarısı: {plaka}",
-                    Icerik = mesaj,
-                    Tip = BildirimTipi.Uyari,
-                    Oncelik = BildirimOncelik.Yuksek,
-                    Link = "/araclar",
-                    IliskiliTablo = "Arac",
-                    IliskiliKayitId = arac.Id
-                });
+                    _logger.LogWarning("Bakım bildirimi için aktif Admin/Yönetici kullanıcısı bulunamadı. AraçId={AracId}", arac.Id);
+                }
+                else
+                {
+                    foreach (var kullaniciId in yoneticiler)
+                    {
+                        await bildirimService.CreateAsync(new Bildirim
+                        {
+                            KullaniciId = kullaniciId,
+                            Baslik = $"Bakım Uyarısı: {plaka}",
+                            Icerik = mesaj,
+                            Tip = BildirimTipi.Uyari,
+                            Oncelik = BildirimOncelik.Yuksek,
+                            Link = "/araclar",
+                            IliskiliTablo = "Arac",
+                            IliskiliKayitId = arac.Id
+                        });
+                    }
+                }
             }
 
             log.WhatsAppGonderildi = true;

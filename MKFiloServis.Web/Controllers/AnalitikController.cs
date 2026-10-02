@@ -172,7 +172,6 @@ public class AnalitikController : ControllerBase
 
     /// <summary>Prometheus scrape endpoint — /api/analitik/metrics</summary>
     [HttpGet("metrics")]
-    [AllowAnonymous]
     public async Task<IActionResult> Metrics()
     {
         await using var ctx = await _contextFactory.CreateDbContextAsync();

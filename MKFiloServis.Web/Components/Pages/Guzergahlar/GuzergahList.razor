@@ -841,9 +841,11 @@
 
         try
         {
-            var firmaId = AktifFirma.AktifFirmaId ?? 1;
+            var firmaId = AktifFirma.AktifFirmaId;
+            if (!firmaId.HasValue || firmaId.Value <= 0)
+                throw new InvalidOperationException("Excel aktarımı için önce geçerli bir aktif firma seçin.");
             await using var stream = importDosya.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
-            importSonuc = await GuzergahService.ImportFromExcelAsync(stream, firmaId);
+            importSonuc = await GuzergahService.ImportFromExcelAsync(stream, firmaId.Value);
             importYapildi = true;
         }
         catch (Exception ex)

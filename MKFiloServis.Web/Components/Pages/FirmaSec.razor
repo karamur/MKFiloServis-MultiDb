@@ -4,6 +4,7 @@
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
 @inject IFirmaService FirmaService
+@inject MKFiloServis.Web.Services.AppAuthenticationStateProvider AuthProvider
 @inject NavigationManager Navigation
 @inject IToastService ToastService
 @inject ILogger<FirmaSec> Logger
@@ -37,6 +38,8 @@
         }
         else
         {
+            @if (isAdmin)
+            {
             <div class="row g-3">
                 @foreach (var f in firmalar)
                 {
@@ -80,6 +83,7 @@
                     Bu modda yeni kayıt ekleme yapılamaz; sadece çapraz raporlama içindir.
                 </div>
             </div>
+            }
         }
     </div>
 </div>
@@ -139,12 +143,31 @@
 
     private List<Firma> firmalar = new();
     private bool yukleniyor = true;
+    private bool isAdmin;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
+            isAdmin = AuthProvider.GetAktifKullanici()?.Rol?.RolAdi == "Admin";
             firmalar = await FirmaService.GetAktifFirmalarAsync();
+
+            if (!isAdmin)
+            {
+                var varsayilan = await FirmaService.GetVarsayilanFirmaAsync()
+                    ?? firmalar.OrderBy(f => f.SiraNo).ThenBy(f => f.FirmaAdi).FirstOrDefault();
+                if (varsayilan != null)
+                {
+                    FirmaService.SetAktifFirma(varsayilan.Id);
+                    FirmaService.SetTumFirmalar(false);
+                    Navigation.NavigateTo(GetSafeReturnUrl(), forceLoad: false);
+                }
+                else
+                {
+                    ToastService.ShowError("Erişilebilir aktif firma bulunamadı. Sistem yöneticinize başvurun.");
+                }
+                return;
+            }
 
             // Tek firma varsa otomatik seç ve yönlendir
             if (firmalar.Count == 1)
@@ -167,6 +190,12 @@
 
     private Task SecAsync(int firmaId)
     {
+        if (!isAdmin)
+        {
+            ToastService.ShowError("Firma değiştirme yetkiniz yok.");
+            return Task.CompletedTask;
+        }
+
         try
         {
             FirmaService.SetAktifFirma(firmaId);
@@ -185,6 +214,12 @@
 
     private Task TumFirmalarSecAsync()
     {
+        if (!isAdmin)
+        {
+            ToastService.ShowError("Tüm firmalar görünümü için yönetici yetkisi gerekir.");
+            return Task.CompletedTask;
+        }
+
         try
         {
             FirmaService.SetTumFirmalar(true);

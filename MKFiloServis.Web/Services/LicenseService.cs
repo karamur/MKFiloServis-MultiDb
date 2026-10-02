@@ -23,7 +23,7 @@ namespace MKFiloServis.Web.Services;
 ///   7. Single system — LicenseService + LicenseInfos (eski sistem tamamen kalkti)
 ///   8. Security viol — Registry yok ama DB'de lisans varsa ihlal tespiti
 ///   9. Version check — AllowedVersion kontrolu
-///  10. Self-heal     — Hash dosyasi yoksa yeniden olusturur
+///  10. File integrity — Hash yoksa veya okunamiyorsa dogrulama basarisiz olur
 /// </summary>
 public class LicenseService
 {
@@ -140,7 +140,9 @@ public class LicenseService
             lic.FirmaKodu, lic.MachineId, lic.ExpireDate,
             lic.IsDemo, lic.AllowedVersion, lic.CreatedAt,
             lic.DurationDays, lic.ContactPhone);
-        return lic.Signature == expected;
+        return CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(lic.Signature ?? string.Empty),
+            Encoding.UTF8.GetBytes(expected));
     }
 
     // ══════════════════════════════════════════════
@@ -187,20 +189,18 @@ public class LicenseService
             var path = GetLicenseHashPath();
             if (!File.Exists(path))
             {
-                // Self-heal: hash dosyasi yoksa yeniden olustur
-                _logger.LogWarning("License hash dosyasi bulunamadi, yeniden olusturuluyor: {Path}", path);
-                WriteLicenseHash(lic);
-                return true;
+                _logger.LogError("Lisans bütünlük dosyası bulunamadı: {Path}. Lisans yeniden yüklenmelidir.", path);
+                return false;
             }
 
             var storedHash = File.ReadAllText(path).Trim();
             var computedHash = ComputeLicenseHash(lic);
 
-            if (!string.Equals(storedHash, computedHash, StringComparison.Ordinal))
+            if (!CryptographicOperations.FixedTimeEquals(
+                    Encoding.UTF8.GetBytes(storedHash),
+                    Encoding.UTF8.GetBytes(computedHash)))
             {
-                _logger.LogError("License hash MISMATCH! Stored: {Stored}, Computed: {Computed}",
-                    storedHash[..Math.Min(16, storedHash.Length)],
-                    computedHash[..Math.Min(16, computedHash.Length)]);
+                _logger.LogError("Lisans bütünlük doğrulaması başarısız oldu.");
                 return false;
             }
 
@@ -209,7 +209,7 @@ public class LicenseService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "License hash dogrulama hatasi (disk erisilemez)");
-            return true; // Disk erisilemezse blocklama — DOS korumasi
+            return false;
         }
     }
 
@@ -603,9 +603,19 @@ public class LicenseService
         // DB'ye kaydet — eski lisanslari pasif yap
         await using var db = await _dbFactory.CreateDbContextAsync();
 
-        // FirmaKodu'ndan FirmaId'yi bul veya yoksa lisansa gore firma olustur
-        var firma = await ResolveFirmaForLicenseAsync(db, lic.FirmaKodu, lic.IsDemo)
-                    ?? await CreateFirmaFromLicenseAsync(db, lic);
+        // Mevcut kurulumda firma kodu eşleşmiyorsa lisansı başka firmaya bağlama.
+        // Yalnızca henüz hiç firma kaydı olmayan temiz kurulum lisans bilgisiyle ilk firmayı kurabilir.
+        var firma = await ResolveFirmaForLicenseAsync(db, lic.FirmaKodu);
+        if (firma == null)
+        {
+            var mevcutFirmaVar = await db.Firmalar.IgnoreQueryFilters()
+                .AnyAsync(f => !f.IsDeleted);
+            if (mevcutFirmaVar)
+                throw new InvalidOperationException(
+                    $"Lisans firma kodu ('{lic.FirmaKodu}') mevcut aktif firmalarla eşleşmiyor. Firma kodunu doğrulayın veya doğru lisansı kullanın.");
+
+            firma = await CreateFirmaFromLicenseAsync(db, lic);
+        }
 
         // 🔥 KRİTİK: FirmaKodu'nu DEGISTIRME! Signature, anahtar icindeki orijinal
         // FirmaKodu ile uretildi. Degistirirsek sonraki ValidateAsync/VerifySignature
@@ -638,49 +648,27 @@ public class LicenseService
         return lic;
     }
 
-    private async Task<Firma?> ResolveFirmaForLicenseAsync(ApplicationDbContext db, string? licenseFirmaValue, bool isDemo)
+    private async Task<Firma?> ResolveFirmaForLicenseAsync(ApplicationDbContext db, string? licenseFirmaValue)
     {
         var firmalar = await db.Firmalar
             .IgnoreQueryFilters()
-            .Where(f => !f.IsDeleted)
+            .Where(f => !f.IsDeleted && f.Aktif)
             .OrderBy(f => f.Id)
             .ToListAsync();
-
-        if (firmalar.Count == 0)
-            return null;
 
         var normalizedLicenseValue = NormalizeFirmaMatchValue(licenseFirmaValue);
         if (!string.IsNullOrWhiteSpace(normalizedLicenseValue))
         {
-            var exactMatch = firmalar.FirstOrDefault(f =>
-                NormalizeFirmaMatchValue(f.FirmaKodu) == normalizedLicenseValue ||
-                NormalizeFirmaMatchValue(f.FirmaAdi) == normalizedLicenseValue ||
-                NormalizeFirmaMatchValue(f.UnvanTam) == normalizedLicenseValue);
+            var exactMatch = firmalar.FirstOrDefault(f => f.Aktif &&
+                (NormalizeFirmaMatchValue(f.FirmaKodu) == normalizedLicenseValue ||
+                 NormalizeFirmaMatchValue(f.FirmaAdi) == normalizedLicenseValue ||
+                 NormalizeFirmaMatchValue(f.UnvanTam) == normalizedLicenseValue));
 
             if (exactMatch != null)
                 return exactMatch;
         }
 
-        var varsayilanFirma = firmalar.FirstOrDefault(f => f.VarsayilanFirma && f.Aktif)
-                              ?? firmalar.FirstOrDefault(f => f.Aktif)
-                              ?? firmalar.FirstOrDefault();
-
-        if (varsayilanFirma != null)
-        {
-            // Demo anahtarlarında DEMO FIRMASI gibi görünen adlar, gerçek demo firma koduyla eşleşmeyebilir.
-            if (isDemo && NormalizeFirmaMatchValue(licenseFirmaValue) is "DEMO" or "DEMOFIRMASI")
-            {
-                _logger.LogInformation("Demo lisansi varsayilan firmaya baglandi. FirmaId={FirmaId}, FirmaKodu={FirmaKodu}",
-                    varsayilanFirma.Id, varsayilanFirma.FirmaKodu);
-            }
-            else
-            {
-                _logger.LogWarning("Lisans firma kodu doğrudan eşleşme bulunamadı, varsayılan firmaya atandı. LisansDegeri={LicenseFirmaValue}, FirmaId={FirmaId}, FirmaKodu={FirmaKodu}",
-                    licenseFirmaValue, varsayilanFirma.Id, varsayilanFirma.FirmaKodu);
-            }
-            return varsayilanFirma;
-        }
-
+        _logger.LogWarning("Lisans firma koduyla eşleşen aktif firma yok. LisansDegeri={LicenseFirmaValue}", licenseFirmaValue);
         return null;
     }
 

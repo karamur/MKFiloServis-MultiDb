@@ -29,12 +29,15 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
       TZ: Europe/Istanbul
-      # Bağlantı dizesi — appsettings'te ConnectionStrings__DefaultConnection olarak okunur
-      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-MKFiloServis};Username=${POSTGRES_USER:-koafilo};Password=${POSTGRES_PASSWORD:-ChangeMe!2025}"
-      # JWT — .env'den gelmeli; default sadece local geliştirme için
-      Jwt__Secret: "${JWT_SECRET:-local-dev-secret-please-change-in-production-32chars-minimum}"
+      # Üretim sırları .env dosyasından veya dağıtım ortamının secret store'undan verilmelidir.
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-MKFiloServis};Username=${POSTGRES_USER:-koafilo};Password=${POSTGRES_PASSWORD:?Set_POSTGRES_PASSWORD_in_.env}"
+      Jwt__Secret: "${JWT_SECRET:?Set_JWT_SECRET_in_.env}"
       Jwt__Issuer: "${JWT_ISSUER:-MKFiloServis}"
       Jwt__Audience: "${JWT_AUDIENCE:-MKFiloServis-Users}"
+      INITIAL_ADMIN_USERNAME: "${INITIAL_ADMIN_USERNAME:-}"
+      INITIAL_ADMIN_PASSWORD: "${INITIAL_ADMIN_PASSWORD:-}"
+      INITIAL_ADMIN_NAME: "${INITIAL_ADMIN_NAME:-}"
+      MKFILOSERVIS_SETUP_BOOTSTRAP_TOKEN: "${MKFILOSERVIS_SETUP_BOOTSTRAP_TOKEN:-}"
       # Ollama (opsiyonel AI servisi)
       Ollama__BaseUrl: "http://ollama:11434"
     ports:
@@ -64,7 +67,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-MKFiloServis}
       POSTGRES_USER: ${POSTGRES_USER:-koafilo}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ChangeMe!2025}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set_POSTGRES_PASSWORD_in_.env}
       TZ: Europe/Istanbul
       PGTZ: Europe/Istanbul
     ports:

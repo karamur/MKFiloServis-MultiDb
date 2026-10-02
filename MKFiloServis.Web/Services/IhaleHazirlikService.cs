@@ -12,15 +12,21 @@ namespace MKFiloServis.Web.Services;
 public class IhaleHazirlikService : IIhaleHazirlikService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+    private readonly IAktifFirmaProvider _aktifFirmaProvider;
     private readonly IOllamaService _ollamaService;
     private readonly ILogger<IhaleHazirlikService> _logger;
 
     private static readonly string[] AyAdlari = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
         "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 
-    public IhaleHazirlikService(IDbContextFactory<ApplicationDbContext> contextFactory, IOllamaService ollamaService, ILogger<IhaleHazirlikService> logger)
+    public IhaleHazirlikService(
+        IDbContextFactory<ApplicationDbContext> contextFactory,
+        IAktifFirmaProvider aktifFirmaProvider,
+        IOllamaService ollamaService,
+        ILogger<IhaleHazirlikService> logger)
     {
         _contextFactory = contextFactory;
+        _aktifFirmaProvider = aktifFirmaProvider;
         _ollamaService = ollamaService;
         _logger = logger;
     }
@@ -1210,6 +1216,10 @@ public class IhaleHazirlikService : IIhaleHazirlikService
 
     public async Task<IhaleProje> OrnekProjeOlusturAsync()
     {
+        var firmaId = _aktifFirmaProvider.AktifFirmaId;
+        if (firmaId is null or <= 0)
+            throw new InvalidOperationException("Örnek ihale verisi oluşturmak için önce aktif firma seçin.");
+
         await using var context = await _contextFactory.CreateDbContextAsync();
         // Rastgele değerler için
         var random = new Random();
@@ -1231,7 +1241,7 @@ public class IhaleHazirlikService : IIhaleHazirlikService
                 SeferTipi = SeferTipi.SabahAksam,
                 PersonelSayisi = 35,
                 Aktif = true,
-                FirmaId = 1
+                FirmaId = firmaId.Value
             };
             context.Guzergahlar.Add(ornekGuzergah);
             await context.SaveChangesAsync();
@@ -1254,7 +1264,8 @@ public class IhaleHazirlikService : IIhaleHazirlikService
                 Gorev = PersonelGorev.Sofor,
                 BrutMaas = 32000,
                 NetMaas = 26500,
-                EhliyetNo = "TR123456"
+                EhliyetNo = "TR123456",
+                FirmaId = firmaId.Value
             };
             context.Soforler.Add(ornekSofor);
             await context.SaveChangesAsync();
@@ -1276,7 +1287,8 @@ public class IhaleHazirlikService : IIhaleHazirlikService
                 ModelYili = 2022,
                 KoltukSayisi = 27,
                 SahiplikTipi = AracSahiplikTipi.Ozmal,
-                Aktif = true
+                Aktif = true,
+                FirmaId = firmaId.Value
             };
             context.Araclar.Add(ornekArac);
             await context.SaveChangesAsync();
@@ -1286,6 +1298,7 @@ public class IhaleHazirlikService : IIhaleHazirlikService
         var proje = new IhaleProje
         {
             ProjeKodu = await GenerateProjeKoduAsync(),
+            FirmaId = firmaId.Value,
             ProjeAdi = "Örnek Personel Servis İhalesi - ABC Fabrikası",
             Aciklama = "Test amaçlı oluşturulmuş örnek ihale projesi. Tüm maliyet kalemleri ve hesaplamalar otomatik doldurulmuştur.",
             BaslangicTarihi = new DateTime(simdi.Year, simdi.Month, 1),
@@ -1362,6 +1375,7 @@ public class IhaleHazirlikService : IIhaleHazirlikService
         {
             Yil = simdi.Year,
             Ay = simdi.Month,
+            IsverenFirmaId = firmaId.Value,
             Bolge = "Merkez",
             SiraNo = 1,
             KurumAdi = "ABC Fabrikası (Örnek)",

@@ -1,6 +1,8 @@
 using MKFiloServis.Web.Services;
 using MKFiloServis.Web.Services.Interfaces;
 using MKFiloServis.Web.Services.Security;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MKFiloServis.Web.Controllers;
@@ -10,6 +12,7 @@ namespace MKFiloServis.Web.Controllers;
 /// Yönetim dashboard'ında kullanılır.
 /// </summary>
 [ApiController]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
 [Route("api/system")]
 public class SystemHealthController : ControllerBase
 {

@@ -1,8 +1,10 @@
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.AspNetCore.Components.Forms;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Web.Services.Interfaces;
+using System.Security.Claims;
 
 namespace MKFiloServis.Web.Services;
 
@@ -13,15 +15,18 @@ public class EbysEvrakService : IEbysEvrakService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly ISecureFileService _secureFileService;
+    private readonly AuthenticationStateProvider _authenticationStateProvider;
     private readonly ILogger<EbysEvrakService> _logger;
 
     public EbysEvrakService(
         IDbContextFactory<ApplicationDbContext> contextFactory,
         ISecureFileService secureFileService,
+        AuthenticationStateProvider authenticationStateProvider,
         ILogger<EbysEvrakService> logger)
     {
         _contextFactory = contextFactory;
         _secureFileService = secureFileService;
+        _authenticationStateProvider = authenticationStateProvider;
         _logger = logger;
     }
 
@@ -129,7 +134,7 @@ public class EbysEvrakService : IEbysEvrakService
         await _context.SaveChangesAsync();
 
         // Hareket kaydı
-        await HareketEkleAsync(evrak.Id, 1, EbysHareketTipi.Olusturuldu, $"Evrak oluşturuldu: {evrakNo}");
+        await HareketEkleAsync(evrak.Id, await GetCurrentUserIdAsync(), EbysHareketTipi.Olusturuldu, $"Evrak oluşturuldu: {evrakNo}");
 
         _logger.LogInformation("EBYS Evrak oluşturuldu: {EvrakNo}", evrakNo);
         return evrak;
@@ -162,7 +167,7 @@ public class EbysEvrakService : IEbysEvrakService
 
         await _context.SaveChangesAsync();
 
-        await HareketEkleAsync(evrak.Id, 1, EbysHareketTipi.Guncellendi, "Evrak güncellendi");
+        await HareketEkleAsync(evrak.Id, await GetCurrentUserIdAsync(), EbysHareketTipi.Guncellendi, "Evrak güncellendi");
 
         return evrak;
     }
@@ -249,7 +254,7 @@ public class EbysEvrakService : IEbysEvrakService
 
         _context.EbysEvrakDosyalar.Add(evrakDosya);
         await _context.SaveChangesAsync();
-        await HareketEkleAsync(evrakId, 1, EbysHareketTipi.DosyaEklendi, $"Dosya eklendi: {file.Name}");
+        await HareketEkleAsync(evrakId, await GetCurrentUserIdAsync(), EbysHareketTipi.DosyaEklendi, $"Dosya eklendi: {file.Name}");
         return evrakDosya;
     }
 
@@ -276,7 +281,7 @@ public class EbysEvrakService : IEbysEvrakService
             await _secureFileService.DeleteAsync(dosya.DosyaYolu);
             dosya.IsDeleted = true;
             await _context.SaveChangesAsync();
-            await HareketEkleAsync(dosya.EvrakId, 1, EbysHareketTipi.DosyaSilindi, $"Dosya silindi: {dosya.DosyaAdi}");
+            await HareketEkleAsync(dosya.EvrakId, await GetCurrentUserIdAsync(), EbysHareketTipi.DosyaSilindi, $"Dosya silindi: {dosya.DosyaAdi}");
         }
     }
 
@@ -303,7 +308,7 @@ public class EbysEvrakService : IEbysEvrakService
         dosya.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
-        await HareketEkleAsync(dosya.EvrakId, 1, EbysHareketTipi.Guncellendi,
+        await HareketEkleAsync(dosya.EvrakId, await GetCurrentUserIdAsync(), EbysHareketTipi.Guncellendi,
             $"Dosya guncellendi (v{dosya.VersiyonNo}): {file.Name}" +
             (!string.IsNullOrEmpty(degisiklikNotu) ? $" - {degisiklikNotu}" : ""));
         return dosya;
@@ -323,7 +328,7 @@ public class EbysEvrakService : IEbysEvrakService
             EvrakId = model.EvrakId,
             AtananKullaniciId = model.AtananKullaniciId,
             AtananDepartmanId = model.AtananDepartmanId,
-            AtayanKullaniciId = 1, // TODO: Gerçek kullanıcıdan al
+            AtayanKullaniciId = await GetCurrentUserIdAsync(),
             AtamaTarihi = DateTime.Now,
             Talimat = model.Talimat,
             TeslimTarihi = model.TeslimTarihi,
@@ -340,7 +345,7 @@ public class EbysEvrakService : IEbysEvrakService
 
         await _context.SaveChangesAsync();
 
-        await HareketEkleAsync(model.EvrakId, 1, EbysHareketTipi.AtamaYapildi,
+        await HareketEkleAsync(model.EvrakId, await GetCurrentUserIdAsync(), EbysHareketTipi.AtamaYapildi,
             $"Evrak atandı: Kullanıcı #{model.AtananKullaniciId}");
 
         return atama;
@@ -366,7 +371,7 @@ public class EbysEvrakService : IEbysEvrakService
 
         await _context.SaveChangesAsync();
 
-        await HareketEkleAsync(atama.EvrakId, 1, EbysHareketTipi.DurumDegisti,
+        await HareketEkleAsync(atama.EvrakId, await GetCurrentUserIdAsync(), EbysHareketTipi.DurumDegisti,
             $"Atama tamamlandı: {sonuc}");
     }
 
@@ -390,7 +395,7 @@ public class EbysEvrakService : IEbysEvrakService
 
         await _context.SaveChangesAsync();
 
-        await HareketEkleAsync(atama.EvrakId, 1, EbysHareketTipi.DurumDegisti,
+        await HareketEkleAsync(atama.EvrakId, await GetCurrentUserIdAsync(), EbysHareketTipi.DurumDegisti,
             $"Atama reddedildi: {sebep}");
     }
 
@@ -433,7 +438,7 @@ public class EbysEvrakService : IEbysEvrakService
 
         await _context.SaveChangesAsync();
 
-        await HareketEkleAsync(evrakId, 1, EbysHareketTipi.DurumDegisti,
+        await HareketEkleAsync(evrakId, await GetCurrentUserIdAsync(), EbysHareketTipi.DurumDegisti,
             aciklama ?? $"Durum değişti: {eskiDurum} → {yeniDurum}",
             eskiDurum.ToString(), yeniDurum.ToString());
     }
@@ -450,6 +455,18 @@ public class EbysEvrakService : IEbysEvrakService
             .Where(h => h.EvrakId == evrakId)
             .OrderByDescending(h => h.IslemTarihi)
             .ToListAsync();
+    }
+
+    private async Task<int> GetCurrentUserIdAsync()
+    {
+        var principal = (await _authenticationStateProvider.GetAuthenticationStateAsync()).User;
+        var id = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? principal.FindFirst("KullaniciId")?.Value;
+
+        if (principal.Identity?.IsAuthenticated != true || !int.TryParse(id, out var kullaniciId) || kullaniciId <= 0)
+            throw new UnauthorizedAccessException("EBYS işlemini yapan kullanıcı kimliği belirlenemedi.");
+
+        return kullaniciId;
     }
 
     private async Task HareketEkleAsync(int evrakId, int kullaniciId, EbysHareketTipi hareketTipi,

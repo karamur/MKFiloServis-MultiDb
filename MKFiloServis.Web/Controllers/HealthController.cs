@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MKFiloServis.Web.Services;
@@ -6,6 +7,7 @@ using MKFiloServis.Web.Services.Interfaces;
 namespace MKFiloServis.Web.Controllers;
 
 [ApiController]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 [Route("api/[controller]")]
 public class HealthController : ControllerBase
 {
@@ -31,30 +33,12 @@ public class HealthController : ControllerBase
         return StatusCode(statusCode, new
         {
             Status = report.OverallStatus.ToString(),
-            Timestamp = report.CheckedAt,
-            Database = new
-            {
-                report.Database.IsHealthy,
-                report.Database.ProviderName,
-                report.Database.ResponseTimeMs
-            },
-            Disk = new
-            {
-                report.Disk.IsHealthy,
-                report.Disk.UsedPercentage,
-                report.Disk.WarningMessage
-            },
-            Memory = new
-            {
-                report.Memory.IsHealthy,
-                report.Memory.WorkingSetBytes,
-                report.Memory.WarningMessage
-            }
+            Timestamp = report.CheckedAt
         });
     }
 
     [HttpGet("details")]
-    [AllowAnonymous]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<SystemHealthReport>> GetDetails()
     {
         var report = await _healthService.GetHealthReportAsync();

@@ -2,7 +2,9 @@ using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Services.Interfaces;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -16,6 +18,7 @@ public class AuditLogService : IAuditLogService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly AuthenticationStateProvider _authenticationStateProvider;
     private readonly IAktifFirmaProvider _aktifFirmaProvider;
     private readonly ILogger<AuditLogService> _logger;
     
@@ -30,28 +33,32 @@ public class AuditLogService : IAuditLogService
     public AuditLogService(
         IDbContextFactory<ApplicationDbContext> contextFactory,
         IHttpContextAccessor httpContextAccessor,
+        AuthenticationStateProvider authenticationStateProvider,
         IAktifFirmaProvider aktifFirmaProvider,
         ILogger<AuditLogService> logger)
     {
         _contextFactory = contextFactory;
         _httpContextAccessor = httpContextAccessor;
+        _authenticationStateProvider = authenticationStateProvider;
         _aktifFirmaProvider = aktifFirmaProvider;
         _logger = logger;
     }
     
     #region Private Helpers
     
-    private (int? kullaniciId, string? kullaniciAdi, string? ipAdresi, string? userAgent, string? requestPath) GetRequestInfo()
+    private async Task<(int? kullaniciId, string? kullaniciAdi, string? ipAdresi, string? userAgent, string? requestPath)> GetRequestInfoAsync()
     {
         var httpContext = _httpContextAccessor.HttpContext;
-        if (httpContext == null)
-            return (null, null, null, null, null);
-        
-        var kullaniciId = httpContext.User.FindFirst("KullaniciId")?.Value;
-        var kullaniciAdi = httpContext.User.Identity?.Name;
-        var ipAdresi = httpContext.Connection.RemoteIpAddress?.ToString();
-        var userAgent = httpContext.Request.Headers.UserAgent.ToString();
-        var requestPath = httpContext.Request.Path.Value;
+        var principal = httpContext?.User;
+        if (principal?.Identity?.IsAuthenticated != true)
+            principal = (await _authenticationStateProvider.GetAuthenticationStateAsync()).User;
+
+        var kullaniciId = principal.FindFirst("KullaniciId")?.Value
+            ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var kullaniciAdi = principal.Identity?.Name;
+        var ipAdresi = httpContext?.Connection.RemoteIpAddress?.ToString();
+        var userAgent = httpContext?.Request.Headers.UserAgent.ToString();
+        var requestPath = httpContext?.Request.Path.Value;
         
         return (
             int.TryParse(kullaniciId, out var id) ? id : null,
@@ -144,7 +151,7 @@ public class AuditLogService : IAuditLogService
     public async Task<AuditLog> LogAsync(AuditLogCreateDto dto)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var (kullaniciId, kullaniciAdi, ipAdresi, userAgent, requestPath) = GetRequestInfo();
+        var (kullaniciId, kullaniciAdi, ipAdresi, userAgent, requestPath) = await GetRequestInfoAsync();
         
         var log = new AuditLog
         {
@@ -265,7 +272,7 @@ public class AuditLogService : IAuditLogService
     public async Task LogLoginAsync(int kullaniciId, string kullaniciAdi, bool basarili, string? hataMesaji = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var (_, _, ipAdresi, userAgent, requestPath) = GetRequestInfo();
+        var (_, _, ipAdresi, userAgent, requestPath) = await GetRequestInfoAsync();
         
         var log = new AuditLog
         {

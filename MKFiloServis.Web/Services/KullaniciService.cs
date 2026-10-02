@@ -15,6 +15,7 @@ public class KullaniciService : IKullaniciService
     private readonly IEmailService _emailService;
     private readonly LicenseService _licenseService;
     private readonly UserManager<Kullanici> _userManager;
+    private readonly IConfiguration _configuration;
 
     public KullaniciService(
         IDbContextFactory<ApplicationDbContext> contextFactory,
@@ -22,7 +23,8 @@ public class KullaniciService : IKullaniciService
         ILogger<KullaniciService> logger,
         IEmailService emailService,
         LicenseService licenseService,
-        UserManager<Kullanici> userManager)
+        UserManager<Kullanici> userManager,
+        IConfiguration configuration)
     {
         _contextFactory = contextFactory;
         _authProvider = authProvider;
@@ -30,6 +32,7 @@ public class KullaniciService : IKullaniciService
         _emailService = emailService;
         _licenseService = licenseService;
         _userManager = userManager;
+        _configuration = configuration;
     }
 
     #region CRUD
@@ -664,89 +667,54 @@ public class KullaniciService : IKullaniciService
         await EnsureRolePermissionAsync(context, SistemRolleri.Operasyon, Yetkiler.TedarikciPersonelOku);
         await EnsureRolePermissionAsync(context, SistemRolleri.Operasyon, Yetkiler.TedarikciAracEvraklariOku);
 
-        // Admin kullanici olustur veya sifresini dogrula
-        var adminRol = await context.Roller.FirstOrDefaultAsync(r => r.RolAdi == SistemRolleri.Admin);
-        if (adminRol != null)
+        // İlk yönetici yalnızca boş veritabanında ve açıkça sağlanan sırlarla oluşturulur.
+        // Var olan veya soft-delete edilmiş hesapların üzerine yazılmaz.
+        var herhangiBirKullaniciVar = await context.Kullanicilar
+            .IgnoreQueryFilters()
+            .AnyAsync();
+        if (!herhangiBirKullaniciVar)
         {
-            var adminUser = await context.Kullanicilar.FirstOrDefaultAsync(k => k.KullaniciAdi == "admin");
-            if (adminUser == null)
+            var adminAdi = _configuration["INITIAL_ADMIN_USERNAME"]?.Trim();
+            var adminSifre = _configuration["INITIAL_ADMIN_PASSWORD"];
+            if (string.IsNullOrWhiteSpace(adminAdi) || string.IsNullOrWhiteSpace(adminSifre))
             {
-                adminUser = new Kullanici
-                {
-                    KullaniciAdi = "admin",
-                    SifreHash = HashPassword(new Kullanici { KullaniciAdi = "admin", AdSoyad = "Sistem Yoneticisi" }, "admin123"),
-                    AdSoyad = "Sistem Yoneticisi",
-                    RolId = adminRol.Id,
-                    Aktif = true,
-                    CreatedAt = DateTime.UtcNow
-                };
-                context.Kullanicilar.Add(adminUser);
-                await context.SaveChangesAsync();
+                _logger.LogCritical("Veritabanında kullanıcı yok. İlk yönetici için INITIAL_ADMIN_USERNAME ve INITIAL_ADMIN_PASSWORD yapılandırılmalıdır.");
+                return;
             }
-            else
-            {
-                // Admin zaten varsa sadece kilitli/pasif durumunu duzelt.
-                // ŞIFREYE DOKUNMA — admin kendi belirledigi sifreyi kullanmaya devam etsin.
-                var adminGuncelle = false;
-                if (!adminUser.Aktif)
-                {
-                    adminUser.Aktif = true;
-                    adminGuncelle = true;
-                }
-                if (adminUser.Kilitli)
-                {
-                    adminUser.Kilitli = false;
-                    adminUser.BasarisizGirisSayisi = 0;
-                    adminGuncelle = true;
-                }
-                if (adminGuncelle)
-                {
-                    adminUser.UpdatedAt = DateTime.UtcNow;
-                    await context.SaveChangesAsync();
-                }
-            }
-        }
 
-        // TEST kullanici olustur - hizli giris icin
-        if (adminRol != null)
-        {
-            var testUser = await context.Kullanicilar.FirstOrDefaultAsync(k => k.KullaniciAdi == "test");
-            if (testUser == null)
+            if (adminAdi.Length > 50 || adminSifre.Length < 12)
             {
-                testUser = new Kullanici
-                {
-                    KullaniciAdi = "test",
-                    SifreHash = HashPassword(new Kullanici { KullaniciAdi = "test", AdSoyad = "Test Kullanici" }, "test123"),
-                    AdSoyad = "Test Kullanici",
-                    RolId = adminRol.Id,
-                    Aktif = true,
-                    CreatedAt = DateTime.UtcNow
-                };
-                context.Kullanicilar.Add(testUser);
-                await context.SaveChangesAsync();
+                _logger.LogCritical("İlk yönetici oluşturulmadı: kullanıcı adı en fazla 50, parola en az 12 karakter olmalıdır.");
+                return;
             }
-            else
+
+            var adminRol = await context.Roller.FirstOrDefaultAsync(r => r.RolAdi == SistemRolleri.Admin);
+            if (adminRol == null)
             {
-                // Test kullanici zaten varsa sadece kilitli/pasif durumunu duzelt.
-                // ŞIFREYE DOKUNMA.
-                var testGuncelle = false;
-                if (!testUser.Aktif)
-                {
-                    testUser.Aktif = true;
-                    testGuncelle = true;
-                }
-                if (testUser.Kilitli)
-                {
-                    testUser.Kilitli = false;
-                    testUser.BasarisizGirisSayisi = 0;
-                    testGuncelle = true;
-                }
-                if (testGuncelle)
-                {
-                    testUser.UpdatedAt = DateTime.UtcNow;
-                    await context.SaveChangesAsync();
-                }
+                _logger.LogCritical("İlk yönetici oluşturulmadı: Admin rolü bulunamadı.");
+                return;
             }
+
+            var admin = new Kullanici
+            {
+                KullaniciAdi = adminAdi,
+                AdSoyad = _configuration["INITIAL_ADMIN_NAME"]?.Trim() is { Length: > 0 } ad
+                    ? ad
+                    : "Sistem Yöneticisi",
+                RolId = adminRol.Id,
+                Aktif = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            var sonuc = await _userManager.CreateAsync(admin, adminSifre);
+            if (!sonuc.Succeeded)
+            {
+                _logger.LogCritical("İlk yönetici oluşturulamadı. Identity hata kodları: {Errors}",
+                    string.Join(", ", sonuc.Errors.Select(error => error.Code)));
+                return;
+            }
+
+            _logger.LogWarning("İlk yönetici hesabı yapılandırılmış sırlarla oluşturuldu. Kullanıcı adı: {UserName}", adminAdi);
         }
     }
 

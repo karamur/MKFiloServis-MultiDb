@@ -51,7 +51,7 @@ http://localhost:5190/puantaj/cari-hiyerarsi
 2. Kontrol Noktaları:
    ✓ Uygulama açılıyor mı?
    ✓ Login gerekli mi?
-   ✓ Admin giriş yapılabiliyor mu? (user: admin, pass: admin123)
+   ✓ Test ortamında oluşturulmuş Admin kullanıcısıyla giriş yapılabiliyor mu?
 ```
 
 #### ✅ Seviye 2: Rota Erişim
@@ -123,8 +123,8 @@ dotnet run
 
 # Ortam değişkenleriyle
 $env:CRMFILO_BASE_URL = "http://localhost:5190"
-$env:CRMFILO_TEST_USER = "admin"
-$env:CRMFILO_TEST_PASSWORD = "admin123"
+$env:CRMFILO_TEST_USER = "<test kullanıcı adı>"
+$env:CRMFILO_TEST_PASSWORD = "<gizli test parolası>"
 dotnet run
 ```
 

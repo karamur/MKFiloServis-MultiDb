@@ -13,6 +13,7 @@ namespace MKFiloServis.Web.Controllers;
 /// API Authentication Controller - JWT Token oluşturma ve doğrulama
 /// </summary>
 [ApiController]
+[Microsoft.AspNetCore.Authorization.Authorize(AuthenticationSchemes = Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme)]
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
@@ -33,6 +34,7 @@ public class AuthController : ControllerBase
     /// <param name="request">Giriş bilgileri</param>
     /// <returns>JWT token ve kullanıcı bilgileri</returns>
     [HttpPost("login")]
+    [Microsoft.AspNetCore.Authorization.AllowAnonymous]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         if (string.IsNullOrEmpty(request.KullaniciAdi) || string.IsNullOrEmpty(request.Sifre))

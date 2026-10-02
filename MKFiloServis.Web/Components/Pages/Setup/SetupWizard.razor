@@ -7,11 +7,18 @@
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.Configuration
+@using Microsoft.Extensions.Logging
+@using System.Data
+@using System.Security.Cryptography
+@using System.Text
 @inject IDbContextFactory<ApplicationDbContext> DbContextFactory
 @inject IPasswordHasher<Kullanici> PasswordHasher
+@inject IConfiguration Configuration
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 @inject BrandingService BrandingService
+@inject ILogger<SetupWizard> Logger
 
 <PageTitle>Kurulum - MK Filo Servis</PageTitle>
 
@@ -32,6 +39,27 @@
             <p>İlk Kurulum Sihirbazı</p>
         </div>
 
+        @if (!setupAllowed)
+        {
+            <div class="setup-step-body mt-3">
+                @if (!string.IsNullOrWhiteSpace(setupUnavailableMessage))
+                {
+                    <div class="alert alert-warning">@setupUnavailableMessage</div>
+                }
+                else
+                {
+                    <label class="form-label" for="setup-token">Tek kullanımlık kurulum anahtarı</label>
+                    <input id="setup-token" type="password" class="form-control" autocomplete="off"
+                           @bind="bootstrapTokenInput" @bind:event="oninput" />
+                    <button class="btn btn-primary w-100 mt-3" @onclick="KurulumAnahtariniDogrula">
+                        Kurulum anahtarını doğrula
+                    </button>
+                }
+            </div>
+        }
+
+        @if (setupAllowed)
+        {
         <!-- Adım Göstergesi -->
         <div class="setup-steps-bar">
             <div class="step-item @(aktifAdim >= 1 ? "active" : "") @(aktifAdim > 1 ? "completed" : "")">
@@ -160,7 +188,7 @@
                     <label class="form-label">Şifre <span class="text-danger">*</span></label>
                     <div class="input-group">
                         <input type="@(sifreGoster ? "text" : "password")" class="form-control"
-                               placeholder="En az 6 karakter" @bind="adminSifre" @bind:event="oninput" />
+                               placeholder="En az 12 karakter" @bind="adminSifre" @bind:event="oninput" />
                         <button class="btn btn-outline-secondary" type="button"
                                 @onclick="() => sifreGoster = !sifreGoster">
                             <i class="bi @(sifreGoster ? "bi-eye-slash" : "bi-eye")"></i>
@@ -215,6 +243,7 @@
                     </button>
                 </div>
             </div>
+        }
         }
     </div>
 </div>
@@ -376,6 +405,9 @@
 @code {
     private int aktifAdim = 1;
     private bool islemDevamEdiyor = false;
+    private bool setupAllowed;
+    private string? setupUnavailableMessage;
+    private string bootstrapTokenInput = string.Empty;
     private string hataMesaji = string.Empty;
     private string setupTextLogoSrc = BrandingService.DefaultTextLogoPath;
 
@@ -401,16 +433,50 @@
     {
         try
         {
+            var configuredToken = Configuration["MKFILOSERVIS_SETUP_BOOTSTRAP_TOKEN"];
+            if (string.IsNullOrWhiteSpace(configuredToken) || Encoding.UTF8.GetByteCount(configuredToken) < 32)
+            {
+                setupUnavailableMessage = "Kurulum devre dışı. MKFILOSERVIS_SETUP_BOOTSTRAP_TOKEN ortam değişkenine en az 32 baytlık rastgele bir değer verin.";
+                return;
+            }
+
             var branding = await BrandingService.GetAsync();
             setupTextLogoSrc = branding.ResolvedTextLogo;
 
             using var ctx = await DbContextFactory.CreateDbContextAsync();
-            if (await ctx.Firmalar.IgnoreQueryFilters().AnyAsync())
+            if (await ctx.Kullanicilar.IgnoreQueryFilters().AnyAsync())
             {
+                setupUnavailableMessage = "Kurulum daha önce tamamlanmış. Mevcut hesapları korumak için kurulum yeniden açılamaz.";
                 Navigation.NavigateTo("/login", replace: true);
             }
         }
-        catch { /* DB bağlantı hatası → setup devam et */ }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "İlk kurulum durumu doğrulanamadı; kurulum güvenlik nedeniyle kapatıldı.");
+            setupUnavailableMessage = "Kurulum durumu doğrulanamadı. Veritabanı erişimi sağlanana kadar kurulum kapalıdır.";
+        }
+    }
+
+    private void KurulumAnahtariniDogrula()
+    {
+        var configuredToken = Configuration["MKFILOSERVIS_SETUP_BOOTSTRAP_TOKEN"];
+        if (string.IsNullOrWhiteSpace(configuredToken) || Encoding.UTF8.GetByteCount(configuredToken) < 32)
+        {
+            setupUnavailableMessage = "Kurulum anahtarı yapılandırılmamış.";
+            return;
+        }
+
+        var expected = Encoding.UTF8.GetBytes(configuredToken);
+        var supplied = Encoding.UTF8.GetBytes(bootstrapTokenInput ?? string.Empty);
+        if (CryptographicOperations.FixedTimeEquals(expected, supplied))
+        {
+            setupAllowed = true;
+            bootstrapTokenInput = string.Empty;
+            hataMesaji = string.Empty;
+            return;
+        }
+
+        hataMesaji = "Kurulum anahtarı geçersiz.";
     }
 
     private async Task Adim1IleriAsync()
@@ -433,42 +499,66 @@
 
         if (string.IsNullOrWhiteSpace(adminAdSoyad))   { hataMesaji = "Ad Soyad zorunludur."; return; }
         if (string.IsNullOrWhiteSpace(adminKullaniciAdi)) { hataMesaji = "Kullanıcı adı zorunludur."; return; }
-        if (adminSifre.Length < 6)                      { hataMesaji = "Şifre en az 6 karakter olmalıdır."; return; }
+        if (adminSifre.Length < 12)                     { hataMesaji = "Şifre en az 12 karakter olmalıdır."; return; }
         if (adminSifre != adminSifreTekrar)             { hataMesaji = "Şifreler eşleşmiyor."; return; }
 
         islemDevamEdiyor = true;
         try
         {
             using var ctx = await DbContextFactory.CreateDbContextAsync();
+            await using var transaction = await ctx.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
+            // Seed edilmiş varsayılan firma ve roller kullanılabilir; hiçbir kullanıcı varsa
+            // kurulum token'ı tekrar kullanılamaz.
+            if (await ctx.Kullanicilar.IgnoreQueryFilters().AnyAsync())
+            {
+                setupAllowed = false;
+                setupUnavailableMessage = "Kurulum zaten tamamlanmış.";
+                await transaction.RollbackAsync();
+                return;
+            }
 
             // 1. Firma
-            var firma = new Firma
+            var firma = await ctx.Firmalar.IgnoreQueryFilters()
+                .OrderBy(f => f.Id)
+                .FirstOrDefaultAsync();
+            if (firma == null)
             {
-                FirmaKodu = await GenerateSetupFirmaCodeAsync(ctx),
-                FirmaAdi = firmaAdi.Trim(),
-                VergiNo = string.IsNullOrWhiteSpace(firmaVergiNo) ? null : firmaVergiNo.Trim(),
-                VergiDairesi = string.IsNullOrWhiteSpace(firmaVergiDairesi) ? null : firmaVergiDairesi.Trim(),
-                Telefon = string.IsNullOrWhiteSpace(firmaTelefon) ? null : firmaTelefon.Trim(),
-                Email = string.IsNullOrWhiteSpace(firmaEmail) ? null : firmaEmail.Trim(),
-                Adres = string.IsNullOrWhiteSpace(firmaAdres) ? null : firmaAdres.Trim(),
-                OrganizasyonId = await EnsureSetupOrganizasyonIdAsync(ctx),
-                VarsayilanFirma = true,
-                Aktif = true,
-                AktifDonemYil = DateTime.Today.Year,
-                AktifDonemAy = DateTime.Today.Month,
-                CreatedAt = DateTime.UtcNow
-            };
-            ctx.Firmalar.Add(firma);
+                firma = new Firma
+                {
+                    FirmaKodu = await GenerateSetupFirmaCodeAsync(ctx),
+                    OrganizasyonId = await EnsureSetupOrganizasyonIdAsync(ctx),
+                    VarsayilanFirma = true,
+                    Aktif = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                ctx.Firmalar.Add(firma);
+            }
+
+            firma.FirmaAdi = firmaAdi.Trim();
+            firma.VergiNo = string.IsNullOrWhiteSpace(firmaVergiNo) ? null : firmaVergiNo.Trim();
+            firma.VergiDairesi = string.IsNullOrWhiteSpace(firmaVergiDairesi) ? null : firmaVergiDairesi.Trim();
+            firma.Telefon = string.IsNullOrWhiteSpace(firmaTelefon) ? null : firmaTelefon.Trim();
+            firma.Email = string.IsNullOrWhiteSpace(firmaEmail) ? null : firmaEmail.Trim();
+            firma.Adres = string.IsNullOrWhiteSpace(firmaAdres) ? null : firmaAdres.Trim();
+            firma.VarsayilanFirma = true;
+            firma.Aktif = true;
+            firma.AktifDonemYil = DateTime.Today.Year;
+            firma.AktifDonemAy = DateTime.Today.Month;
             await ctx.SaveChangesAsync();
 
             // 2. Roller
-            var roller = new List<Rol>
+            var roller = new List<Rol>();
+            foreach (var rolAdi in new[] { "Admin", "Muhasebe", "Kullanici" })
             {
-                new() { RolAdi = "Admin",     Aciklama = "Sistem yöneticisi",  CreatedAt = DateTime.UtcNow },
-                new() { RolAdi = "Muhasebe",  Aciklama = "Muhasebe personeli", CreatedAt = DateTime.UtcNow },
-                new() { RolAdi = "Kullanici", Aciklama = "Standart kullanıcı", CreatedAt = DateTime.UtcNow }
-            };
-            ctx.Roller.AddRange(roller);
+                var rol = await ctx.Roller.IgnoreQueryFilters().FirstOrDefaultAsync(r => r.RolAdi == rolAdi);
+                if (rol == null)
+                {
+                    rol = new Rol { RolAdi = rolAdi, Aciklama = rolAdi == "Admin" ? "Sistem yöneticisi" : null, CreatedAt = DateTime.UtcNow };
+                    ctx.Roller.Add(rol);
+                }
+                roller.Add(rol);
+            }
             await ctx.SaveChangesAsync();
 
             // 3. Admin kullanıcı
@@ -486,11 +576,13 @@
             await ctx.SaveChangesAsync();
 
             await BrandingService.SaveAsync(brandingTextLogo);
+            await transaction.CommitAsync();
             aktifAdim = 3;
         }
         catch (Exception ex)
         {
-            hataMesaji = $"Kurulum sırasında hata: {ex.Message}";
+            Logger.LogError(ex, "İlk kurulum tamamlanamadı.");
+            hataMesaji = "Kurulum tamamlanamadı. Veritabanı işlemi geri alındı; sistem yöneticisi günlükleri incelemelidir.";
         }
         finally
         {

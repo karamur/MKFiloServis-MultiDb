@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using MKFiloServis.Web.Services;
 using MKFiloServis.Web.Services.Interfaces;
 using MKFiloServis.Shared.Entities;
+using MKFiloServis.Web.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace MKFiloServis.Web.Controllers;
 
@@ -14,10 +16,14 @@ namespace MKFiloServis.Web.Controllers;
 public class GuzergahlarController : ControllerBase
 {
     private readonly IGuzergahService _guzergahService;
+    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
 
-    public GuzergahlarController(IGuzergahService guzergahService)
+    public GuzergahlarController(
+        IGuzergahService guzergahService,
+        IDbContextFactory<ApplicationDbContext> contextFactory)
     {
         _guzergahService = guzergahService;
+        _contextFactory = contextFactory;
     }
 
     /// <summary>
@@ -232,15 +238,23 @@ public class GuzergahlarController : ControllerBase
     /// Excel'den toplu güzergah import eder
     /// </summary>
     [HttpPost("import-excel")]
-    [AllowAnonymous]
-    public async Task<IActionResult> ImportExcel(IFormFile file, [FromQuery] int firmaId = 1)
+    [Authorize(AuthenticationSchemes = "Bearer", Roles = "Admin")]
+    public async Task<IActionResult> ImportExcel(IFormFile file, [FromQuery] int firmaId)
     {
+        if (firmaId <= 0)
+            return BadRequest(new { Error = "Geçerli bir firmaId belirtilmelidir." });
+
         if (file == null || file.Length == 0)
             return BadRequest(new { Error = "Excel dosyası gereklidir." });
 
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
         if (ext != ".xlsx" && ext != ".xls")
             return BadRequest(new { Error = "Sadece .xlsx veya .xls dosyaları kabul edilir." });
+
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var firmaVar = await context.Firmalar.AnyAsync(f => f.Id == firmaId && f.Aktif);
+        if (!firmaVar)
+            return NotFound(new { Error = "Belirtilen aktif firma bulunamadı." });
 
         using var stream = file.OpenReadStream();
         var sonuc = await _guzergahService.ImportFromExcelAsync(stream, firmaId);

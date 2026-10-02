@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using Microsoft.Playwright;
@@ -8,8 +8,8 @@ Console.OutputEncoding = System.Text.Encoding.UTF8;
 var baseUrl = args.FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal))
     ?? Environment.GetEnvironmentVariable("CRMFILO_BASE_URL")
     ?? "http://127.0.0.1:5190";
-var username = Environment.GetEnvironmentVariable("CRMFILO_TEST_USER") ?? "admin";
-var password = Environment.GetEnvironmentVariable("CRMFILO_TEST_PASSWORD") ?? "admin123";
+var username = Environment.GetEnvironmentVariable("CRMFILO_TEST_USER") ?? throw new InvalidOperationException("CRMFILO_TEST_USER ortam değişkeni gerekli.");
+var password = Environment.GetEnvironmentVariable("CRMFILO_TEST_PASSWORD") ?? throw new InvalidOperationException("CRMFILO_TEST_PASSWORD ortam değişkeni gerekli.");
 var allowMutationArg = args.Any(a => string.Equals(a, "--allow-mutation", StringComparison.OrdinalIgnoreCase));
 var allowMutationEnv = string.Equals(Environment.GetEnvironmentVariable("CRMFILO_SMOKE_ALLOW_MUTATION"), "true", StringComparison.OrdinalIgnoreCase);
 var prepareDemoArg = args.Any(a => string.Equals(a, "--prepare-demo-data", StringComparison.OrdinalIgnoreCase));

@@ -202,8 +202,9 @@ builder.Services.AddIdentityCore<Kullanici>(options =>
     options.Password.RequireLowercase = false;
     options.Password.RequireUppercase = false;
     options.Password.RequireNonAlphanumeric = false;
-    options.Password.RequiredLength = 6;
+    options.Password.RequiredLength = 12;
     options.Lockout.MaxFailedAccessAttempts = 5;
+    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
     options.User.RequireUniqueEmail = false;
 })
     .AddUserStore<KullaniciUserStore>();
@@ -543,18 +544,34 @@ builder.Services.AddControllers()
 
 // JWT Authentication - API için
 var jwtSecret = builder.Configuration["Jwt:Secret"];
-if (string.IsNullOrEmpty(jwtSecret) || jwtSecret.StartsWith("REPLACE_") || jwtSecret.Length < 32)
+if (string.IsNullOrWhiteSpace(jwtSecret) && builder.Environment.IsDevelopment())
+{
+    // Development için yalnızca process ömrü boyunca geçerli, rastgele anahtar.
+    // Kalıcı geliştirme anahtarı User Secrets üzerinden Jwt:Secret ile verilebilir.
+    jwtSecret = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(48));
+    builder.Configuration["Jwt:Secret"] = jwtSecret;
+    Console.WriteLine("JWT: Development ortamında geçici bir anahtar üretildi. Uygulama yeniden başlayınca API tokenları geçersiz olur.");
+}
+
+if (string.IsNullOrWhiteSpace(jwtSecret) || jwtSecret.StartsWith("REPLACE_", StringComparison.OrdinalIgnoreCase) || jwtSecret.Length < 32)
 {
     throw new InvalidOperationException(
         "JWT Secret yapılandırılmamış veya geçersiz. " +
-        "appsettings.Production.json → Jwt:Secret alanına en az 32 karakterli güçlü bir değer girin. " +
-        "Örnek: openssl rand -base64 48");
+        "Production ortamında Jwt__Secret ortam değişkenini en az 32 karakterli rastgele bir değerle yapılandırın. " +
+        "Örnek üretim komutu: openssl rand -base64 48");
+}
+var jwtSecretFingerprint = Convert.ToHexString(
+    System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(jwtSecret)));
+if (jwtSecretFingerprint == "F96583977D82A77C0DC5DEE3B5EBB60911C9380D662EF7DC24EEC50828B397BC")
+{
+    throw new InvalidOperationException("JWT Secret, kaynak kodda ifşa edilmiş eski anahtardır. Yeni ve rastgele bir Jwt__Secret belirleyin.");
 }
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "MKFiloServis";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "MKFiloServis-API";
 builder.Services.AddAuthentication(options =>
 {
-    options.DefaultScheme = "Cookies";
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
 })
 .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
@@ -1322,7 +1339,12 @@ if (app.Environment.IsDevelopment())
     {
         var rapor = await backfillService.DryRunAsync(ct);
         return Results.Ok(rapor);
-    }).WithTags("Admin");
+    }).WithTags("Admin")
+      .RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute
+      {
+          AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+          Roles = "Admin"
+      });
 
     app.MapPost("/admin/evrak-arsiv-backfill/execute", async (
         IEvrakArsivBackfillService backfillService,
@@ -1332,7 +1354,12 @@ if (app.Environment.IsDevelopment())
     {
         var rapor = await backfillService.ExecuteAsync(updateDatabase, overwriteExisting, ct);
         return Results.Ok(rapor);
-    }).WithTags("Admin");
+    }).WithTags("Admin")
+      .RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute
+      {
+          AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+          Roles = "Admin"
+      });
 }
 
 app.Run();

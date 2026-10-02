@@ -13,9 +13,8 @@ Bu prosedürler, `CRMFiloServis.Web` uygulamasında kullanıcı girişini ve kri
 5. `Bilgi Bankası` ekranı açılabilir.
 6. `Destek Ayarları` ekranı açılabilir.
 
-## Varsayılan test kullanıcısı
-- Kullanıcı adı: `admin`
-- Şifre: `admin123`
+## Test kullanıcısı
+Test veritabanında ayrıca oluşturulmuş, minimum 12 karakterli bir hesap kullanın. Uygulama varsayılan test hesabı oluşturmaz.
 
 ## Çalıştırma
 Uygulama çalışırken aşağıdaki komut kullanılabilir:
@@ -25,7 +24,7 @@ dotnet run --project CRMFiloServis.Web\Tests\PlaywrightSmoke\CRMFiloServis.Playw
 ```
 
 ## Ortam değişkenleri
-İstenirse test kullanıcı bilgileri ortam değişkenleriyle verilebilir:
+Test kullanıcı bilgilerini sırları dosyaya yazmadan ortam değişkenleriyle verin:
 
 - `CRMFILO_BASE_URL`
 - `CRMFILO_TEST_USER`

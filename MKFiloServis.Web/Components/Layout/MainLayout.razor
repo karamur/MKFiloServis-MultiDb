@@ -100,37 +100,46 @@
                             <MKFiloServis.Web.Components.Shared.OperasyonAlarmDropdown />
                             <MKFiloServis.Web.Components.Shared.BildirimDropdown />
 
-                            <div class="dropdown">
-                                <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                    <i class="bi bi-building me-1"></i><span class="d-none d-md-inline">@aktifFirmaAdi</span>
-                                </button>
-                                <ul class="dropdown-menu dropdown-menu-end" style="min-width: 250px;">
-                                    @foreach (var firma in firmalar)
-                                    {
+                            @if (IsFirmaYoneticisi)
+                            {
+                                <div class="dropdown">
+                                    <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                        <i class="bi bi-building me-1"></i><span class="d-none d-md-inline">@aktifFirmaAdi</span>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end" style="min-width: 250px;">
+                                        @foreach (var firma in firmalar)
+                                        {
+                                            <li>
+                                                <button class="dropdown-item @(firma.Id == aktifFirmaId ? "active" : "")"
+                                                        @onclick="() => FirmaSecildi(firma)">
+                                                    <i class="bi bi-building me-2"></i>@firma.FirmaAdi
+                                                    @if (firma.VarsayilanFirma)
+                                                    {
+                                                        <i class="bi bi-star-fill text-warning ms-2"></i>
+                                                    }
+                                                </button>
+                                            </li>
+                                        }
+                                        <li><hr class="dropdown-divider"></li>
                                         <li>
-                                            <button class="dropdown-item @(firma.Id == aktifFirmaId ? "active" : "")" 
-                                                    @onclick="() => FirmaSecildi(firma)">
-                                                <i class="bi bi-building me-2"></i>@firma.FirmaAdi
-                                                @if (firma.VarsayilanFirma)
-                                                {
-                                                    <i class="bi bi-star-fill text-warning ms-2"></i>
-                                                }
-                                            </button>
+                                            <a class="dropdown-item" href="/firma-sec?returnUrl=%2Fdashboard">
+                                                <i class="bi bi-building-check me-2"></i>Firma Değiştir (Tam Ekran)
+                                            </a>
                                         </li>
-                                    }
-                                    <li><hr class="dropdown-divider"></li>
-                                    <li>
-                                        <a class="dropdown-item" href="/firma-sec?returnUrl=%2Fdashboard">
-                                            <i class="bi bi-building-check me-2"></i>Firma Değiştir (Tam Ekran)
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="dropdown-item text-primary" href="/ayarlar/firmalar">
-                                            <i class="bi bi-gear me-2"></i>Firma Ayarlari
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
+                                        <li>
+                                            <a class="dropdown-item text-primary" href="/ayarlar/firmalar">
+                                                <i class="bi bi-gear me-2"></i>Firma Ayarlari
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="btn btn-light btn-sm border" title="Kullanıcı-firma üyeliği tanımlanana kadar varsayılan firma kullanılır">
+                                    <i class="bi bi-building me-1"></i><span class="d-none d-md-inline">@aktifFirmaAdi</span>
+                                </span>
+                            }
 
                             <div class="dropdown">
                                 <button id="settings-dropdown-button" class="btn btn-light btn-sm dropdown-toggle border" type="button" data-bs-toggle="dropdown">
@@ -250,6 +259,7 @@
     private int aktifDonemAy = DateTime.Today.Month;
     private bool tumFirmalarMod = false;
     private bool isDarkMode = false;
+    private bool IsFirmaYoneticisi => aktifKullanici?.Rol?.RolAdi == "Admin";
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -311,6 +321,9 @@
                 try { await FirmalariYukle(); }
                 catch (Exception ex) { Logger.LogWarning(ex, "MainLayout firmalar yuklenirken hata olustu (firma restore)"); }
             }
+
+            aktifKullanici ??= AuthProvider.GetAktifKullanici();
+            await EnforceFirmaScopeAsync();
 
             // Kural 11: Aktif firma zorunludur. Firma seçilmemişse /firma-sec'e yönlendir.
             if (!AktifFirmaProvider.HasAktifFirma)
@@ -439,8 +452,34 @@
         }
     }
 
+    private async Task EnforceFirmaScopeAsync()
+    {
+        // Uygulamada kullanıcı-firma üyelik tablosu henüz bulunmadığından,
+        // yönetici olmayan kullanıcıları varsayılan tek firmayla sınırla.
+        if (IsFirmaYoneticisi)
+            return;
+
+        var mevcut = FirmaService.GetAktifFirma();
+        var varsayilan = await FirmaService.GetVarsayilanFirmaAsync();
+        if (varsayilan == null)
+        {
+            varsayilan = (await FirmaService.GetAktifFirmalarAsync())
+                .OrderBy(f => f.SiraNo).ThenBy(f => f.FirmaAdi).FirstOrDefault();
+        }
+
+        if (varsayilan == null)
+            return;
+
+        if (mevcut.TumFirmalar || mevcut.FirmaId != varsayilan.Id)
+        {
+            FirmaService.SetAktifFirma(varsayilan.Id);
+            await FirmalariYukle();
+        }
+    }
+
     private void FirmaSecildi(MKFiloServis.Shared.Entities.Firma firma)
     {
+        if (!IsFirmaYoneticisi) return;
         FirmaService.SetAktifFirma(firma.Id);
         aktifFirmaId = firma.Id;
         aktifFirmaAdi = firma.FirmaAdi;
@@ -450,6 +489,7 @@
 
     private void TumFirmalarSecildi()
     {
+        if (!IsFirmaYoneticisi) return;
         FirmaService.SetTumFirmalar(true);
         tumFirmalarMod = true;
         aktifFirmaAdi = "Tüm Firmalar";
@@ -468,6 +508,9 @@
         }
         finally
         {
+            aktifKullanici = null;
+            AktifFirmaProvider.Set(new MKFiloServis.Shared.Entities.AktifFirmaBilgisi());
+            AktifFirmaProvider.SetTumFirmalar(false);
             Navigation.NavigateTo("/login", forceLoad: false);
         }
     }

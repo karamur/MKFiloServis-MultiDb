@@ -114,20 +114,8 @@ if (-not $SkipPublish) {
             Write-Host "       dbsettings.json payload'a kopyalandi" -ForegroundColor DarkGray
         }
 
-        # Jwt:Secret placeholder'ini guclu rastgele bir degerle degistir;
-        # aksi halde uygulama Production ortaminda 500.30 ile aciliyor.
-        $prodSettingsPath = Join-Path $Payload 'Web\appsettings.Production.json'
-        if (Test-Path $prodSettingsPath) {
-            $ps = Get-Content $prodSettingsPath -Raw
-            if ($ps -match 'REPLACE_WITH_STRONG_SECRET') {
-                $bytes = New-Object byte[] 48
-                [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-                $secret = [Convert]::ToBase64String($bytes)
-                $ps = $ps -replace 'REPLACE_WITH_STRONG_SECRET_MIN_32_CHARS', $secret
-                Set-Content -Path $prodSettingsPath -Value $ps -Encoding UTF8 -NoNewline
-                Write-Host "       appsettings.Production.json: Jwt:Secret otomatik uretildi" -ForegroundColor DarkGray
-            }
-        }
+        # JWT özel anahtarını ortak kurulum paketine koyma. Her müşteri kurulumunda
+        # Jwt__Secret dağıtım ortamının gizli ayar deposundan ayrıca sağlanmalıdır.
     }
 
     Write-Host "[2/5] LisansDesktop publish..." -ForegroundColor Green

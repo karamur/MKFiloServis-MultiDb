@@ -20,6 +20,7 @@ public class BackupService : IBackupService
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<BackupService> _logger;
     private readonly DatabaseRuntimeInfo _databaseRuntime;
+    private readonly IAktifFirmaProvider _aktifFirmaProvider;
     private readonly string _settingsFile;
 
     public BackupService(
@@ -27,13 +28,15 @@ public class BackupService : IBackupService
         IWebHostEnvironment environment,
         IServiceProvider serviceProvider,
         ILogger<BackupService> logger,
-        DatabaseRuntimeInfo databaseRuntime)
+        DatabaseRuntimeInfo databaseRuntime,
+        IAktifFirmaProvider aktifFirmaProvider)
     {
         _configuration = configuration;
         _environment = environment;
         _serviceProvider = serviceProvider;
         _logger = logger;
         _databaseRuntime = databaseRuntime;
+        _aktifFirmaProvider = aktifFirmaProvider;
         _settingsFile = Path.Combine(_environment.ContentRootPath, "backup_settings.json");
     }
 
@@ -1728,13 +1731,22 @@ public class BackupService : IBackupService
         if (!targetColumns.Contains("FirmaId"))
             return null;
 
+        var firmaId = _aktifFirmaProvider.AktifFirmaId;
+        if (firmaId is null or <= 0)
+            throw new InvalidOperationException(
+                $"{tableName} tablosu için FirmaId eşlemesi gerekiyor. Geri yüklemeden önce hedef firmayı seçin.");
+
         await using var command = context.Database.GetDbConnection().CreateCommand();
         command.Transaction = context.Database.CurrentTransaction?.GetDbTransaction();
-        command.CommandText = "SELECT \"Id\" FROM \"Firmalar\" WHERE COALESCE(\"IsDeleted\", 0) = 0 ORDER BY \"Id\" LIMIT 1;";
+        command.CommandText = "SELECT \"Id\" FROM \"Firmalar\" WHERE \"Id\" = @firmaId AND \"Aktif\" = 1 AND COALESCE(\"IsDeleted\", 0) = 0 LIMIT 1;";
+        var firmaParameter = command.CreateParameter();
+        firmaParameter.ParameterName = "@firmaId";
+        firmaParameter.Value = firmaId.Value;
+        command.Parameters.Add(firmaParameter);
 
         var scalar = await command.ExecuteScalarAsync();
         if (scalar == null || scalar == DBNull.Value)
-            return 1;
+            throw new InvalidOperationException("Geri yükleme için seçilen aktif firma veritabanında bulunamadı.");
 
         return Convert.ToInt32(scalar);
     }
@@ -1745,10 +1757,10 @@ public class BackupService : IBackupService
             return value;
 
         if (value is int intValue)
-            return intValue > 0 ? intValue : firmaIdFallback ?? 1;
+            return intValue > 0 ? intValue : RequireFirmaFallback(firmaIdFallback);
 
         if (value is long longValue)
-            return longValue > 0 ? longValue : firmaIdFallback ?? 1;
+            return longValue > 0 ? longValue : RequireFirmaFallback(firmaIdFallback);
 
         if (value is string stringValue)
         {
@@ -1756,13 +1768,21 @@ public class BackupService : IBackupService
                 return parsedValue;
 
             if (string.IsNullOrWhiteSpace(stringValue) || stringValue == "0")
-                return firmaIdFallback ?? 1;
+                return RequireFirmaFallback(firmaIdFallback);
         }
 
         if (value == null || value == DBNull.Value)
-            return firmaIdFallback ?? 1;
+            return RequireFirmaFallback(firmaIdFallback);
 
         return value;
+    }
+
+    private static int RequireFirmaFallback(int? firmaIdFallback)
+    {
+        if (firmaIdFallback is > 0)
+            return firmaIdFallback.Value;
+
+        throw new InvalidOperationException("FirmaId değeri bulunmayan yedek satırı güvenli bir hedef firmaya eşleştirilemedi.");
     }
 
     private static object? ParsePostgreSqlCopyValue(string rawValue)

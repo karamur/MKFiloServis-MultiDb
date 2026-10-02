@@ -14,8 +14,7 @@ Bu prosedürler, Blazor tabanlı `CRMFiloServis.Web` uygulamasında login, yetki
 Bu testler GitHub'a göndermeden yerelde çalıştırılabilir. Testler uygulama `http://127.0.0.1:5190` üzerinde açık değilse uygulamayı kendisi başlatmayı dener.
 
 ## Test kullanıcısı
-- Kullanıcı adı: `admin`
-- Şifre: `admin123`
+Test veritabanında ayrıca oluşturulmuş, minimum 12 karakterli bir hesap kullanın. Uygulama varsayılan test hesabı oluşturmaz.
 
 ## Manuel prosedürler
 
