@@ -29,13 +29,18 @@ $cfg = @{
     PgHost         = "localhost"
     PgPort         = "5432"
     PgUser         = "postgres"
-    PgPassword     = "Fast123"
+    # Parola kaynak kodda tutulmaz; MKFILO_PG_PASSWORD ortam değişkeninden okunur.
+    PgPassword     = $env:MKFILO_PG_PASSWORD
 
     # Yeni veritabanı adı
     NewDbName      = "MKFiloServis"
 
     # Yeni sistemin depolama kökü
     YeniDepolamaKok = "C:\MKFiloServis_yedekleme"
+}
+
+if ([string]::IsNullOrWhiteSpace($cfg.PgPassword)) {
+    throw "Veritabani parolasi belirtilmedi. MKFILO_PG_PASSWORD ortam degiskenini ayarlayin (orn. `$env:MKFILO_PG_PASSWORD = '<parola>`)."
 }
 # ---------------------------------------------------------------------------
 

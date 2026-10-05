@@ -1,4 +1,5 @@
-﻿@page "/ayarlar/yedekleme"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
+@page "/ayarlar/yedekleme"
 @using MKFiloServis.Web.Helpers
 @using MKFiloServis.Web.Services
 @using System.Globalization
@@ -261,6 +262,12 @@
                                             <button class="btn btn-outline-success" @onclick="() => YedekIndir(backup)" title="Indir" disabled="@IsAnyOperationInProgress">
                                                 <i class="bi bi-download"></i>
                                             </button>
+                                            @if (backup.FileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <button class="btn btn-outline-primary" @onclick="() => KurtarmaHazirla(backup)" title="Kurtarma Dosyalarını Hazırla" disabled="@IsAnyOperationInProgress">
+                                                    <i class="bi bi-folder-check me-1"></i>Kurtarma Hazırla
+                                                </button>
+                                            }
                                             @if (CanRestore(backup.FileName))
                                             {
                                                 <button class="btn btn-outline-warning" @onclick="() => GeriYukleOnay(backup)" title="Geri Yukle" disabled="@IsAnyOperationInProgress">
@@ -306,6 +313,22 @@
                     <button class="btn btn-danger" @onclick="YedekSil" disabled="@IsAnyOperationInProgress">Sil</button>
                 </div>
             </div>
+        </div>
+    </div>
+}
+
+@if (recoveryPreparation != null)
+{
+    <div class="container-fluid mt-3">
+        <div class="alert @(recoveryPreparation.Prepared && recoveryPreparation.KeyProbeVerified ? "alert-success" : "alert-warning")">
+            <strong>Kurtarma Hazırlığı</strong>
+            <p class="mb-2">@recoveryPreparation.Message</p>
+            @if (recoveryPreparation.Prepared)
+            {
+                <p class="mb-1">Sunucudaki kurtarma klasörü: <code>@recoveryPreparation.FolderPath</code></p>
+                <p class="mb-1">@recoveryPreparation.FileCount dosya · DB dump: @(recoveryPreparation.HasDatabaseDump ? "Var" : "Yok") · Anahtar probu: @(recoveryPreparation.KeyProbeVerified ? "Doğrulandı" : "Doğrulanamadı")</p>
+                <p class="mb-0">Canlı sisteme uygulanmadı. Ayrı kurulumda dosyaları, belgelerin açılmasını ve DB ilişkilerini kontrol edin.</p>
+            }
         </div>
     </div>
 }
@@ -358,7 +381,7 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Yedek Dosyasi Secin</label>
-                        <InputFile class="form-control" OnChange="YedekDosyaSecildi" accept=".sql,.db,.bak,.backup" />
+                        <InputFile class="form-control" OnChange="YedekDosyaSecildi" accept=".sql,.db,.bak,.backup,.zip" />
                         <small class="text-muted">Desteklenen formatlar: .sql, .db, .bak, .backup</small>
                     </div>
                     @if (yuklenecekDosya != null)
@@ -475,6 +498,8 @@
 }
 
 @code {
+    private RecoveryPreparationResult? recoveryPreparation;
+    private bool isPreparingRecovery;
     private List<BackupInfo> backups = new();
     private BackupSettings settings = new();
     private string dbProvider = "PostgreSQL";
@@ -504,6 +529,23 @@
         dbProvider = BackupService.GetCurrentDatabaseProvider();
         settings = BackupService.GetSettings();
         await YedekleriYenile();
+    }
+
+    private async Task KurtarmaHazirla(BackupInfo backup)
+    {
+        if (IsAnyOperationInProgress) return;
+        isPreparingRecovery = true;
+        recoveryPreparation = null;
+        try
+        {
+            recoveryPreparation = await BackupService.PrepareRecoveryAsync(backup.FileName);
+            if (!recoveryPreparation.Prepared) ToastService.ShowError(recoveryPreparation.Message);
+        }
+        catch (Exception)
+        {
+            ToastService.ShowError("Kurtarma dosyaları hazırlanamadı.");
+        }
+        finally { isPreparingRecovery = false; }
     }
 
     private async Task YedekleriYenile()
@@ -733,7 +775,7 @@
 
     private string GetFileType(string fileName)
     {
-        if (fileName.EndsWith(".zip")) return "Dosya";
+        if (fileName.EndsWith(".zip")) return "Kurtarma ZIP";
         if (fileName.EndsWith(".db")) return "SQLite";
         if (fileName.EndsWith(".sql") && fileName.Contains("PostgreSQL")) return "PostgreSQL";
         if (fileName.EndsWith(".sql") && fileName.Contains("MySQL")) return "MySQL";
@@ -770,12 +812,27 @@
         {
             var backupFolder = BackupService.GetResolvedBackupFolderPath();
 
-            var fileName = $"uploaded_{DateTime.Now:yyyyMMdd_HHmmss}_{yuklenecekDosya.Name}";
+            var uploadedName = yuklenecekDosya.Name;
+            if (Path.GetFileName(uploadedName) != uploadedName || uploadedName.IndexOfAny(['/', '\\', ':', '*', '?']) >= 0)
+                throw new InvalidDataException("Dosya adı geçersiz.");
+            var extension = Path.GetExtension(uploadedName).ToLowerInvariant();
+            if (!new[] { ".zip", ".backup", ".db", ".bak", ".sql", ".json" }.Contains(extension))
+                throw new InvalidDataException("Yedek dosya türü desteklenmiyor.");
+            var fileName = $"uploaded_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}{extension}";
             var filePath = Path.Combine(backupFolder, fileName);
 
-            using var stream = yuklenecekDosya.OpenReadStream(maxAllowedSize: 500 * 1024 * 1024); // 500MB max
-            using var fileStream = new FileStream(filePath, FileMode.Create);
-            await stream.CopyToAsync(fileStream);
+            var partialPath = filePath + ".partial";
+            try
+            {
+                await using (var stream = yuklenecekDosya.OpenReadStream(maxAllowedSize: 500 * 1024 * 1024))
+                await using (var fileStream = new FileStream(partialPath, FileMode.CreateNew))
+                {
+                    await stream.CopyToAsync(fileStream);
+                    await fileStream.FlushAsync();
+                }
+                File.Move(partialPath, filePath, overwrite: false);
+            }
+            finally { if (File.Exists(partialPath)) File.Delete(partialPath); }
 
             ToastService.ShowSuccess($"Yedek dosyasi yuklendi: {fileName}");
             showYukleModal = false;
@@ -880,7 +937,7 @@
         }
     }
 
-    private bool IsAnyOperationInProgress => isBackingUp || isFileBackup || isFullBackup || isRestoring || isUploading || isMigrating || isDonusuyor;
+    private bool IsAnyOperationInProgress => isPreparingRecovery || isBackingUp || isFileBackup || isFullBackup || isRestoring || isUploading || isMigrating || isDonusuyor;
 
     private static bool CanRestore(string fileName)
     {

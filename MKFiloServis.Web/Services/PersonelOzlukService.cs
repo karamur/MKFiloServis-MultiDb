@@ -1,4 +1,4 @@
-﻿using MKFiloServis.Shared.Entities;
+using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Fluent;
@@ -13,13 +13,16 @@ public class PersonelOzlukService : IPersonelOzlukService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly ISecureFileService _secureFileService;
+    private readonly ILogger<PersonelOzlukService> _logger;
 
     public PersonelOzlukService(
         IDbContextFactory<ApplicationDbContext> contextFactory,
-        ISecureFileService secureFileService)
+        ISecureFileService secureFileService,
+        ILogger<PersonelOzlukService> logger)
     {
         _contextFactory = contextFactory;
         _secureFileService = secureFileService;
+        _logger = logger;
         QuestPDF.Settings.License = LicenseType.Community;
     }
 
@@ -733,7 +736,7 @@ public class PersonelOzlukService : IPersonelOzlukService
 
         if (versiyonId.HasValue)
         {
-            var versiyon = await context.PersonelOzlukEvrakVersiyonlar
+            var versiyon = await context.PersonelOzlukEvrakVersiyonlar.AsTracking()
                 .Where(v =>
                     v.Id == versiyonId.Value &&
                     !v.IsDeleted &&
@@ -752,23 +755,26 @@ public class PersonelOzlukService : IPersonelOzlukService
         }
         else if (personelEvrakId.HasValue)
         {
-            var affected = await context.PersonelOzlukEvraklar
+            var evrak = await context.PersonelOzlukEvraklar.AsTracking()
                 .Where(e =>
                     e.Id == personelEvrakId.Value &&
                     e.SoforId == soforId &&
                     e.EvrakTanimId == evrakTanimId &&
                     !e.IsDeleted)
-                .ExecuteUpdateAsync(setters => setters
-                    .SetProperty(x => x.DosyaYolu, (string?)null)
-                    .SetProperty(x => x.DosyaAdi, (string?)null)
-                    .SetProperty(x => x.DosyaTipi, (string?)null)
-                    .SetProperty(x => x.DosyaBoyutu, (long?)null)
-                    .SetProperty(x => x.Tamamlandi, false)
-                    .SetProperty(x => x.TamamlanmaTarihi, (DateTime?)null)
-                    .SetProperty(x => x.UpdatedAt, simdi));
+                .FirstOrDefaultAsync();
 
-            if (affected != 1)
+            if (evrak is null)
                 throw new InvalidOperationException("Dosya silinemedi (DB güncellemesi uygulanmadı).");
+
+            silinecekDosyaYolu = evrak.DosyaYolu;
+            evrak.DosyaYolu = null;
+            evrak.DosyaAdi = null;
+            evrak.DosyaTipi = null;
+            evrak.DosyaBoyutu = null;
+            evrak.Tamamlandi = false;
+            evrak.TamamlanmaTarihi = null;
+            evrak.UpdatedAt = simdi;
+            await context.SaveChangesAsync();
         }
         else
         {
@@ -777,7 +783,18 @@ public class PersonelOzlukService : IPersonelOzlukService
 
         if (!string.IsNullOrWhiteSpace(silinecekDosyaYolu))
         {
-            try { await _secureFileService.DeleteAsync(silinecekDosyaYolu); } catch { }
+            try
+            {
+                await _secureFileService.DeleteAsync(silinecekDosyaYolu);
+            }
+            catch (Exception ex)
+            {
+                // DB commit'i geri alınmış gibi bildirme; yeniden temizleme için yolu logda koru.
+                _logger.LogError(ex,
+                    "Özlük DB kaydı kaldırıldı ancak fiziksel dosya temizliği bekliyor. SoforId={SoforId}, EvrakTanimId={EvrakTanimId}, PersonelEvrakId={PersonelEvrakId}, VersiyonId={VersiyonId}, DosyaYolu={DosyaYolu}",
+                    soforId, evrakTanimId, personelEvrakId, versiyonId, silinecekDosyaYolu);
+                throw new FileCleanupPendingException(ex);
+            }
         }
     }
 

@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Data;
@@ -758,17 +758,18 @@ public class BackupService : IBackupService
         {
             // MKFiloServis_ ile baslayan dosyalar
             var crmFiles = Directory.GetFiles(backupFolder, "MKFiloServis_*.*", SearchOption.AllDirectories)
-                .Where(f => f.EndsWith(".sql") || f.EndsWith(".json") || f.EndsWith(".db") || f.EndsWith(".bak") || f.EndsWith(".backup"));
+                .Where(f => f.EndsWith(".sql") || f.EndsWith(".json") || f.EndsWith(".db") || f.EndsWith(".bak") || f.EndsWith(".backup") || f.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
 
             // uploaded_ ile baslayan dosyalar (disaridan yuklenen)
             var uploadedFiles = Directory.GetFiles(backupFolder, "uploaded_*.*", SearchOption.AllDirectories)
-                .Where(f => f.EndsWith(".sql") || f.EndsWith(".db") || f.EndsWith(".bak") || f.EndsWith(".backup"));
+                .Where(f => f.EndsWith(".sql") || f.EndsWith(".db") || f.EndsWith(".bak") || f.EndsWith(".backup") || f.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
 
             // Diger yedek dosyalari
             var otherFiles = Directory.GetFiles(backupFolder, "*.*", SearchOption.AllDirectories)
                 .Where(f => !Path.GetFileName(f).StartsWith("MKFiloServis_") && 
                             !Path.GetFileName(f).StartsWith("uploaded_") &&
-                            (f.EndsWith(".sql") || f.EndsWith(".db") || f.EndsWith(".bak") || f.EndsWith(".backup")));
+                            !Path.GetFileName(f).StartsWith("files_", StringComparison.OrdinalIgnoreCase) &&
+                            (f.EndsWith(".sql") || f.EndsWith(".db") || f.EndsWith(".bak") || f.EndsWith(".backup") || f.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)));
 
             var allFiles = crmFiles.Concat(uploadedFiles).Concat(otherFiles)
                 .Distinct()
@@ -944,7 +945,7 @@ public class BackupService : IBackupService
                 var restoreInfo = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = pgRestorePath,
-                    Arguments = $"-h {host} -p {port} -U {username} -d {database} --clean --if-exists --no-owner --no-privileges --verbose \"{backupFilePath}\"",
+                    Arguments = $"-h {host} -p {port} -U {username} -d {database} --single-transaction --exit-on-error --clean --if-exists --no-owner --no-privileges --verbose \"{backupFilePath}\"",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
@@ -958,8 +959,11 @@ public class BackupService : IBackupService
                 using var restoreProcess = System.Diagnostics.Process.Start(restoreInfo);
                 if (restoreProcess != null)
                 {
-                    var restoreError = await restoreProcess.StandardError.ReadToEndAsync();
+                    var outputTask = restoreProcess.StandardOutput.ReadToEndAsync();
+                    var errorTask = restoreProcess.StandardError.ReadToEndAsync();
                     await restoreProcess.WaitForExitAsync();
+                    await outputTask;
+                    var restoreError = await errorTask;
 
                     if (restoreProcess.ExitCode == 0)
                     {
@@ -976,7 +980,7 @@ public class BackupService : IBackupService
             var processInfo = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = psqlPath,
-                Arguments = $"-h {host} -p {port} -U {username} -d {database} -f \"{backupFilePath}\"",
+                Arguments = $"-h {host} -p {port} -U {username} -d {database} --single-transaction --set ON_ERROR_STOP=on -f \"{backupFilePath}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -990,9 +994,11 @@ public class BackupService : IBackupService
             using var process = System.Diagnostics.Process.Start(processInfo);
             if (process != null)
             {
-                var output = await process.StandardOutput.ReadToEndAsync();
-                var error = await process.StandardError.ReadToEndAsync();
+                var outputTask = process.StandardOutput.ReadToEndAsync();
+                var errorTask = process.StandardError.ReadToEndAsync();
                 await process.WaitForExitAsync();
+                var output = await outputTask;
+                var error = await errorTask;
 
                 if (process.ExitCode == 0)
                 {
@@ -1840,99 +1846,54 @@ public class BackupService : IBackupService
     // Dosya / Veri Yedeği (ZIP)
     // ─────────────────────────────────────────────────────────────────
 
-    public async Task<BackupResult> CreateFileBackupAsync(CancellationToken cancellationToken = default)
+    public async Task<RecoveryPreparationResult> PrepareRecoveryAsync(string backupFileName, CancellationToken cancellationToken = default)
     {
-        var result = new BackupResult();
         try
         {
-            var storageRoot = AppStoragePaths.GetStorageRoot(_environment.ContentRootPath);
+            if (string.IsNullOrWhiteSpace(backupFileName) || Path.GetFileName(backupFileName) != backupFileName
+                || backupFileName.IndexOfAny(['/', '\\', ':', '*', '?']) >= 0
+                || !backupFileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Kurtarma için listeden bir ZIP yedeği seçin.");
+            var listed = (await GetBackupListAsync()).Concat(await GetFileBackupListAsync())
+                .Where(x => x.FileName == backupFileName).Select(x => Path.GetFullPath(x.FilePath))
+                .Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal).ToArray();
+            if (listed.Length != 1)
+                throw new InvalidDataException("Yedek bulunamadı veya aynı isimde birden fazla yedek var.");
+            var backupRoot = Path.GetFullPath(GetResolvedBackupFolderPath()).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            if (!listed[0].StartsWith(backupRoot, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                throw new InvalidDataException("Yedek yapılandırılmış yedek klasörü dışında.");
+            var result = await RecoveryArchive.PrepareAsync(listed[0], _environment.ContentRootPath, _environment.WebRootPath, cancellationToken);
+            _logger.LogInformation("İzole kurtarma dosyaları hazırlandı: {Files} dosya, anahtar probu={ProbeVerified}", result.FileCount, result.KeyProbeVerified);
+            return result;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Kurtarma dosyaları hazırlanamadı.");
+            return new RecoveryPreparationResult { Message = "Kurtarma hazırlanamadı. ZIP biçimini, manifest bütünlüğünü ve klasör erişimini kontrol edin." };
+        }
+    }
+
+    public async Task<BackupResult> CreateFileBackupAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
             var filesBackupDir = Path.Combine(GetBackupFolderPath(GetSettings()), "Files");
             Directory.CreateDirectory(filesBackupDir);
-
-            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            var zipFileName = $"files_{timestamp}.zip";
-            var zipFilePath = Path.Combine(filesBackupDir, zipFileName);
-
-            // Master key kontrolü
-            var masterKeyPath = Path.Combine(storageRoot, "keys", "master.key");
-            if (!File.Exists(masterKeyPath))
-            {
-                result.ErrorMessage = "KRİTİK: master.key bulunamadı. Evrak şifreleri bu dosya olmadan açılamaz. Dosya yedeği alınmadı.";
-                _logger.LogError(result.ErrorMessage);
-                return result;
-            }
-
-            // Yedeklenecek kaynak klasörler
-            var kaynakKlasorler = new Dictionary<string, string>
-            {
-                ["uploads"] = Path.Combine(storageRoot, "uploads"),
-                ["Arsiv"] = Path.Combine(storageRoot, "Arsiv"),
-                ["keys"] = Path.Combine(storageRoot, "keys"),
-                ["logs"] = Path.Combine(storageRoot, "logs"),
-                ["data"] = Path.Combine(storageRoot, "data")
-            };
-
-            using var zipStream = new FileStream(zipFilePath, FileMode.Create, FileAccess.Write);
-            using var archive = new System.IO.Compression.ZipArchive(zipStream, System.IO.Compression.ZipArchiveMode.Create);
-
-            foreach (var (klasorAdi, kaynakYol) in kaynakKlasorler)
-            {
-                if (!Directory.Exists(kaynakYol))
-                {
-                    _logger.LogWarning("Yedeklenecek klasör bulunamadı, atlandı: {Path}", kaynakYol);
-                    continue;
-                }
-
-                await ZipKlasorEkleAsync(archive, kaynakYol, klasorAdi, storageRoot, cancellationToken);
-            }
-
-            // Create modda archive.GetEntry/Entries erişimi yapılmamalı.
-            // Güvence için kaynak dosya varlığını kullanıyoruz (yukarıda da kontrol edildi).
-            if (!File.Exists(masterKeyPath))
-            {
-                result.ErrorMessage = "Kaynak depolamada keys/master.key bulunamadı.";
-                _logger.LogError(result.ErrorMessage);
-                return result;
-            }
-
-            result = CreateSuccessResult(zipFilePath);
-            _logger.LogInformation("Dosya yedeği alındı: {Path} ({Size} bytes)", zipFilePath, result.FileSizeBytes);
+            var zipPath = Path.Combine(filesBackupDir, $"files_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}.zip");
+            var protection = _serviceProvider.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>();
+            await RecoveryArchive.CreateAsync(zipPath, _environment.ContentRootPath, protection, null, cancellationToken);
+            var result = CreateSuccessResult(zipPath);
+            _logger.LogInformation("Dosya yedeği ve kurtarma manifesti doğrulandı: {Path} ({Size} bytes)", zipPath, result.FileSizeBytes);
+            return result;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Dosya yedeği hatası");
-            result.ErrorMessage = ex.Message;
-        }
-
-        return result;
-    }
-
-    private static async Task ZipKlasorEkleAsync(
-        System.IO.Compression.ZipArchive archive,
-        string kaynakYol,
-        string zipIciKlasorAdi,
-        string storageRoot,
-        CancellationToken ct)
-    {
-        foreach (var dosya in Directory.GetFiles(kaynakYol, "*", SearchOption.AllDirectories))
-        {
-            ct.ThrowIfCancellationRequested();
-
-            // Backups klasörünü dahil etme
-            var normalizedPath = dosya.Replace('\\', '/');
-            if (normalizedPath.Contains("/Backups/"))
-                continue;
-
-            var relativePath = normalizedPath.Replace(kaynakYol.Replace('\\', '/'), "").TrimStart('/');
-            var entryName = $"{zipIciKlasorAdi}/{relativePath}";
-
-            var entry = archive.CreateEntry(entryName, System.IO.Compression.CompressionLevel.Optimal);
-            await using var entryStream = entry.Open();
-            await using var fileStream = File.OpenRead(dosya);
-            await fileStream.CopyToAsync(entryStream, ct);
+            return new BackupResult { Success = false, ErrorMessage = ex.Message };
         }
     }
-
     public async Task<BackupResult> CreateFullBackupAsync(CancellationToken cancellationToken = default)
     {
         var dbResult = await CreateBackupAsync();

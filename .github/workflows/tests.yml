@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # 🧪 Tests — Build, Test & Coverage Reporting
 # ------------------------------------------------------------
 # Tamamen ücretsiz: GitHub Actions (Linux runner) + Codecov (public repo)
@@ -12,19 +12,8 @@ name: Tests
 on:
   push:
     branches: [main]
-    paths:
-      - "**/*.cs"
-      - "**/*.csproj"
-      - "**/*.sln"
-      - "Directory.Packages.props"
-      - ".github/workflows/tests.yml"
   pull_request:
     branches: [main]
-    paths:
-      - "**/*.cs"
-      - "**/*.csproj"
-      - "**/*.sln"
-      - "Directory.Packages.props"
   workflow_dispatch:
 
 concurrency:
@@ -60,16 +49,39 @@ jobs:
           cache-dependency-path: "**/*.csproj"
 
       - name: 📦 Restore dependencies
-        run: dotnet restore MKFiloServis.Tests/MKFiloServis.Tests.csproj
+        run: dotnet restore MKFiloServis.Web/MKFiloServis.Web.csproj
 
       - name: 🔨 Build (no restore)
         run: |
-          dotnet build MKFiloServis.Tests/MKFiloServis.Tests.csproj \
+          dotnet build MKFiloServis.Web/MKFiloServis.Web.csproj \
             --configuration Release \
             --no-restore \
             /p:ContinuousIntegrationBuild=true
 
+      # Not: `MKFiloServis.Tests` bu depoda BULUNAMIYOR. Once var olmayan bir proje yolunu
+      # restore etmek işi, testler koşmadan kırmızı bırakıyordu. Test projesi depoya geri
+      # alininca asagidaki blok otomatik olarak devreye girer.
+      - name: 🔎 Detect test project
+        id: detect_tests
+        run: |
+          if [ -f "MKFiloServis.Tests/MKFiloServis.Tests.csproj" ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "MKFiloServis.Tests bulundu; testler calistirilacak."
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::MKFiloServis.Tests/MKFiloServis.Tests.csproj depoda yok. " \
+                 "Test paketi ve kapsam raporu bu calistirmada atlandi. " \
+                 "Yalnizca derleme dogrulandi."
+          fi
+
+      - name: Build test project
+        if: steps.detect_tests.outputs.found == 'true'
+        run: |
+          dotnet restore MKFiloServis.Tests/MKFiloServis.Tests.csproj
+          dotnet build MKFiloServis.Tests/MKFiloServis.Tests.csproj --configuration Release --no-restore
+
       - name: 🧪 Run tests with coverage
+        if: steps.detect_tests.outputs.found == 'true'
         run: |
           dotnet test MKFiloServis.Tests/MKFiloServis.Tests.csproj \
             --configuration Release \
@@ -81,7 +93,7 @@ jobs:
             -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
 
       - name: 📊 Generate coverage report
-        if: always()
+        if: always() && steps.detect_tests.outputs.found == 'true'
         uses: danielpalme/ReportGenerator-GitHub-Action@5.4.4
         with:
           reports: "TestResults/**/coverage.cobertura.xml"
@@ -91,11 +103,11 @@ jobs:
           tag: "${{ github.run_number }}_${{ github.run_id }}"
 
       - name: 📝 Add coverage to job summary
-        if: always() && hashFiles('coverage-report/SummaryGithub.md') != ''
+        if: always() && steps.detect_tests.outputs.found == 'true' && hashFiles('coverage-report/SummaryGithub.md') != ''
         run: cat coverage-report/SummaryGithub.md >> $GITHUB_STEP_SUMMARY
 
       - name: 📤 Upload coverage to Codecov
-        if: always()
+        if: always() && steps.detect_tests.outputs.found == 'true'
         uses: codecov/codecov-action@v5
         with:
           files: ./TestResults/**/coverage.cobertura.xml
@@ -106,7 +118,7 @@ jobs:
         continue-on-error: true
 
       - name: 📋 Publish test results
-        if: always()
+        if: always() && steps.detect_tests.outputs.found == 'true'
         uses: dorny/test-reporter@v2
         with:
           name: xUnit Test Results
@@ -115,7 +127,7 @@ jobs:
           fail-on-error: false
 
       - name: 💬 Comment coverage on PR
-        if: github.event_name == 'pull_request' && always() && hashFiles('coverage-report/SummaryGithub.md') != ''
+        if: github.event_name == 'pull_request' && always() && steps.detect_tests.outputs.found == 'true' && hashFiles('coverage-report/SummaryGithub.md') != ''
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           path: coverage-report/SummaryGithub.md
@@ -123,7 +135,7 @@ jobs:
           recreate: true
 
       - name: 📦 Upload coverage artifacts
-        if: always()
+        if: always() && steps.detect_tests.outputs.found == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
@@ -133,9 +145,9 @@ jobs:
             TestResults/**/test-results.trx
           retention-days: 14
 
-      - name: ❌ Fail if tests failed
+      - name: ❌ Fail if build or tests failed
         if: failure()
         run: |
-          echo "::error::Tests failed. See job summary for details."
+          echo "::error::Build veya testler basarisiz oldu. Ayrinti icin job ozetine bakin."
           exit 1
 

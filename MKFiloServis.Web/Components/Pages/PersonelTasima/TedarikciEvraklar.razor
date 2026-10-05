@@ -1,3 +1,4 @@
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:filoservis")]
 @page "/personel-tasima/tedarikciler/{TedarikciId:int}/evraklar"
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
@@ -910,6 +911,13 @@
             {
                 await TedarikciService.DeleteTedarikciEvrakDosyaAsync(dosya.Id);
                 ToastService.ShowSuccess("Dosya silindi.");
+                await YenileAsync();
+                if (dosyaEvrak != null)
+                    dosyaEvrak = evraklar.FirstOrDefault(e => e.Id == dosyaEvrak.Id);
+            }
+            catch (FileCleanupPendingException ex)
+            {
+                ToastService.ShowWarning(ex.Message);
                 await YenileAsync();
                 if (dosyaEvrak != null)
                     dosyaEvrak = evraklar.FirstOrDefault(e => e.Id == dosyaEvrak.Id);

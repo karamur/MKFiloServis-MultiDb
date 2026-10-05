@@ -42,11 +42,12 @@ public sealed class SqliteToPostgresImporter
         var sqliteConnString = new SqliteConnectionStringBuilder { DataSource = _sqlitePath, Mode = SqliteOpenMode.ReadOnly }.ToString();
         await using var sqlite = new SqliteConnection(sqliteConnString);
         await sqlite.OpenAsync();
+        await using var sourceSnapshot = sqlite.BeginTransaction(deferred: true);
 
         await using var pg = new NpgsqlConnection(_pgConnectionString);
         await pg.OpenAsync();
 
-        var sqliteTables = await ListSqliteUserTablesAsync(sqlite);
+        var sqliteTables = await ListSqliteUserTablesAsync(sqlite, sourceSnapshot);
         _progress($"▸ Kaynak SQLite'da {sqliteTables.Count} tablo tespit edildi.");
 
         var pgTables = await ListPostgresUserTablesAsync(pg);
@@ -57,17 +58,45 @@ public sealed class SqliteToPostgresImporter
             .ToList();
         _progress($"▸ Kopyalanacak tablo sayisi: {ortakTablolar.Count}");
 
-        var atlanan = sqliteTables.Except(ortakTablolar, StringComparer.OrdinalIgnoreCase).ToList();
-        foreach (var t in atlanan)
-            _progress($"  ⚠ PG'de karsiligi yok, atlaniyor: {t}");
+        // Sema on kosulu: Kaynakta var ama hedefte olmayan tablolar veri kaybi yaratir.
+        // Sessizce atlanmak yerine islem durdurulur.
+        var atlanan = sqliteTables.Except(ortakTablolar, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(t => t, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (atlanan.Count > 0)
+        {
+            foreach (var t in atlanan)
+            {
+                _progress($"  ⚠ PG'de karsiligi yok, ATLANDI: {t}");
+                Console.Error.WriteLine($"[UYARI] Kaynakta var ama hedefte eksik, ATLANDI: {t}");
+            }
 
-        await using var tx = await pg.BeginTransactionAsync();
+            throw new InvalidOperationException(
+                $"Hedef PostgreSQL semasi gecersiz: {atlanan.Count} tablo eksik " +
+                $"({string.Join(", ", atlanan)}). Hedef semayi guncelleyip aktarimi tekrarlayin.");
+        }
+
+        await using (var sourceIntegrity = sqlite.CreateCommand())
+        {
+            sourceIntegrity.Transaction = sourceSnapshot;
+            sourceIntegrity.CommandText = "PRAGMA foreign_key_check;";
+            await using var reader = await sourceIntegrity.ExecuteReaderAsync();
+            if (await reader.ReadAsync()) throw new InvalidDataException($"Kaynak SQLite yabancı anahtar ihlali: {reader.GetString(0)}");
+        }
+        await using var tx = await pg.BeginTransactionAsync(IsolationLevel.Serializable);
+        if (pgTables.Count == 0) throw new InvalidOperationException("Hedefte aktarılabilir tablo bulunamadı.");
+        await using (var tableLock = pg.CreateCommand())
+        {
+            tableLock.Transaction = tx;
+            tableLock.CommandText = "LOCK TABLE " + string.Join(", ", pgTables.Select(t => "public." + Quote(t))) + " IN ACCESS EXCLUSIVE MODE";
+            await tableLock.ExecuteNonQueryAsync();
+        }
 
         // FK tetikleyicilerini bu oturum icin devre disi birak
         await using (var replica = pg.CreateCommand())
         {
             replica.Transaction = tx;
-            replica.CommandText = "SET session_replication_role = replica;";
+            replica.CommandText = "SET LOCAL session_replication_role = replica;";
             await replica.ExecuteNonQueryAsync();
         }
 
@@ -87,7 +116,7 @@ public sealed class SqliteToPostgresImporter
                 await del.ExecuteNonQueryAsync();
             }
 
-            var (kaynakSatir, kopyalanan) = await KopyalaTabloAsync(sqlite, pg, tx, tablo, pgTabloAdi);
+            var (kaynakSatir, kopyalanan) = await KopyalaTabloAsync(sqlite, sourceSnapshot, pg, tx, tablo, pgTabloAdi);
             toplamSatir += kopyalanan;
             sonuclar.Add((pgTabloAdi, kaynakSatir, kopyalanan));
             _progress($"  [{tabloIndex}/{ortakTablolar.Count}] {pgTabloAdi}: {kopyalanan}/{kaynakSatir} satir");
@@ -96,21 +125,24 @@ public sealed class SqliteToPostgresImporter
                 throw new InvalidOperationException($"Satir sayisi uyusmuyor: {pgTabloAdi} kaynak={kaynakSatir}, kopyalanan={kopyalanan}");
         }
 
+        await ValidateForeignKeysAsync(pg, tx);
+        await ResetSequencesAsync(pg, tx, sonuclar.Select(s => s.Tablo).ToList());
         await tx.CommitAsync();
-
-        // Identity/sequence reset
-        await ResetSequencesAsync(pg, sonuclar.Select(s => s.Tablo).ToList());
+        await sourceSnapshot.CommitAsync();
 
         _progress($"✔ Toplam {toplamSatir} satir kopyalandi.");
     }
 
-    private static async Task<List<string>> ListSqliteUserTablesAsync(SqliteConnection conn)
+    private static async Task<List<string>> ListSqliteUserTablesAsync(SqliteConnection conn, SqliteTransaction sourceTx)
     {
         var list = new List<string>();
         await using var cmd = conn.CreateCommand();
+        cmd.Transaction = sourceTx;
         cmd.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__EFMigrations%' ORDER BY name;";
         await using var rdr = await cmd.ExecuteReaderAsync();
         while (await rdr.ReadAsync()) list.Add(rdr.GetString(0));
+        if (list.Any(value => value.Contains('"')))
+            throw new InvalidOperationException("Çift tırnak içeren şema kimlikleri aktarımda desteklenmiyor.");
         return list;
     }
 
@@ -124,13 +156,16 @@ public sealed class SqliteToPostgresImporter
                             ORDER BY table_name;";
         await using var rdr = await cmd.ExecuteReaderAsync();
         while (await rdr.ReadAsync()) list.Add(rdr.GetString(0));
+        if (list.Any(value => value.Contains('"')))
+            throw new InvalidOperationException("Çift tırnak içeren şema kimlikleri aktarımda desteklenmiyor.");
         return list;
     }
 
-    private static async Task<List<string>> ListSqliteColumnsAsync(SqliteConnection conn, string tablo)
+    private static async Task<List<string>> ListSqliteColumnsAsync(SqliteConnection conn, string tablo, SqliteTransaction sourceTx)
     {
         var list = new List<string>();
         await using var cmd = conn.CreateCommand();
+        cmd.Transaction = sourceTx;
         cmd.CommandText = $"PRAGMA table_info(\"{tablo}\");";
         await using var rdr = await cmd.ExecuteReaderAsync();
         while (await rdr.ReadAsync()) list.Add(rdr.GetString(1));
@@ -151,24 +186,29 @@ public sealed class SqliteToPostgresImporter
         await using var rdr = await cmd.ExecuteReaderAsync();
         while (await rdr.ReadAsync())
             list.Add(new PgColumn(rdr.GetString(0), rdr.GetString(1), rdr.GetString(2) == "YES"));
+        if (list.Any(column => column.Name.Contains('"')))
+            throw new InvalidOperationException("Çift tırnak içeren kolon kimlikleri desteklenmiyor.");
         return list;
     }
 
     private async Task<(long Kaynak, long Kopyalanan)> KopyalaTabloAsync(
-        SqliteConnection sqlite, NpgsqlConnection pg, NpgsqlTransaction tx, string sqliteTablo, string pgTablo)
+        SqliteConnection sqlite, SqliteTransaction sourceTx, NpgsqlConnection pg, NpgsqlTransaction tx, string sqliteTablo, string pgTablo)
     {
-        var sqliteKolonlar = await ListSqliteColumnsAsync(sqlite, sqliteTablo);
+        var sqliteKolonlar = await ListSqliteColumnsAsync(sqlite, sqliteTablo, sourceTx);
         var pgKolonlar = await ListPgColumnsAsync(pg, tx, pgTablo);
 
         var ortak = pgKolonlar
             .Where(p => sqliteKolonlar.Contains(p.Name, StringComparer.OrdinalIgnoreCase))
             .ToList();
-        if (ortak.Count == 0) return (0, 0);
+        var missing = sqliteKolonlar.Where(c => !pgKolonlar.Any(p => p.Name.Equals(c, StringComparison.OrdinalIgnoreCase))).ToList();
+        if (missing.Count > 0 || ortak.Count == 0)
+            throw new InvalidOperationException($"{sqliteTablo}: hedefte kaynak kolonları eksik: {string.Join(", ", missing)}");
 
         // Kaynak satir sayisi
         long kaynakSatir;
         await using (var cnt = sqlite.CreateCommand())
         {
+            cnt.Transaction = sourceTx;
             cnt.CommandText = $"SELECT COUNT(*) FROM \"{sqliteTablo}\";";
             kaynakSatir = Convert.ToInt64(await cnt.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
         }
@@ -181,6 +221,7 @@ public sealed class SqliteToPostgresImporter
         var select = "SELECT " + string.Join(", ", sqliteSelectKolonlari.Select(c => $"\"{c}\"")) + $" FROM \"{sqliteTablo}\";";
 
         await using var srcCmd = sqlite.CreateCommand();
+        srcCmd.Transaction = sourceTx;
         srcCmd.CommandText = select;
         await using var rdr = await srcCmd.ExecuteReaderAsync();
 
@@ -202,6 +243,11 @@ public sealed class SqliteToPostgresImporter
             await writer.CompleteAsync();
         }
 
+        await using var targetCount = pg.CreateCommand();
+        targetCount.Transaction = tx;
+        targetCount.CommandText = $"SELECT COUNT(*) FROM public.{Quote(pgTablo)}";
+        if (Convert.ToInt64(await targetCount.ExecuteScalarAsync(), CultureInfo.InvariantCulture) != kaynakSatir)
+            throw new InvalidOperationException($"{pgTablo}: hedef satır sayısı uyuşmuyor.");
         return (kaynakSatir, kopyalanan);
     }
 
@@ -240,10 +286,10 @@ public sealed class SqliteToPostgresImporter
                 await writer.WriteAsync(Guid.Parse(Convert.ToString(deger, CultureInfo.InvariantCulture)!), NpgsqlDbType.Uuid);
                 break;
             case "timestamp with time zone":
-                await writer.WriteAsync(ToDateTime(deger), NpgsqlDbType.TimestampTz);
+                await writer.WriteAsync(DateTime.SpecifyKind(ToDateTime(deger), DateTimeKind.Utc), NpgsqlDbType.TimestampTz);
                 break;
             case "timestamp without time zone":
-                await writer.WriteAsync(ToDateTime(deger), NpgsqlDbType.Timestamp);
+                await writer.WriteAsync(DateTime.SpecifyKind(ToDateTime(deger), DateTimeKind.Unspecified), NpgsqlDbType.Timestamp);
                 break;
             case "date":
                 await writer.WriteAsync(ToDateTime(deger).Date, NpgsqlDbType.Date);
@@ -298,15 +344,55 @@ public sealed class SqliteToPostgresImporter
         TimeSpan ts => ts,
         string s => TimeSpan.Parse(s, CultureInfo.InvariantCulture),
         long l => TimeSpan.FromTicks(l),
-        _ => TimeSpan.Zero
+        _ => throw new InvalidDataException("Aktarımda geçersiz zaman aralığı değeri.")
     };
 
-    private async Task ResetSequencesAsync(NpgsqlConnection pg, List<string> tablolar)
+    private static string Quote(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";
+
+    private static async Task ValidateForeignKeysAsync(NpgsqlConnection pg, NpgsqlTransaction tx)
+    {
+        await using var metadata = pg.CreateCommand();
+        metadata.Transaction = tx;
+        metadata.CommandText = @"SELECT c.conname, ns.nspname, t.relname, pns.nspname, pt.relname,
+            c.confmatchtype::text,
+            array_agg(a.attname::text ORDER BY keys.ord),
+            array_agg(pa.attname::text ORDER BY keys.ord)
+            FROM pg_constraint c
+            JOIN pg_class t ON t.oid=c.conrelid JOIN pg_namespace ns ON ns.oid=t.relnamespace
+            JOIN pg_class pt ON pt.oid=c.confrelid JOIN pg_namespace pns ON pns.oid=pt.relnamespace
+            CROSS JOIN LATERAL unnest(c.conkey,c.confkey) WITH ORDINALITY AS keys(child,parent,ord)
+            JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=keys.child
+            JOIN pg_attribute pa ON pa.attrelid=pt.oid AND pa.attnum=keys.parent
+            WHERE c.contype='f' AND ns.nspname='public'
+            GROUP BY c.oid,c.conname,ns.nspname,t.relname,pns.nspname,pt.relname,c.confmatchtype";
+        var constraints = new List<(string Name, string Child, string Parent, string Match, string[] Columns, string[] ParentColumns)>();
+        await using (var reader = await metadata.ExecuteReaderAsync())
+            while (await reader.ReadAsync())
+                constraints.Add((reader.GetString(0), Quote(reader.GetString(1))+"."+Quote(reader.GetString(2)),
+                    Quote(reader.GetString(3))+"."+Quote(reader.GetString(4)), reader.GetString(5),
+                    reader.GetFieldValue<string[]>(6), reader.GetFieldValue<string[]>(7)));
+        foreach (var fk in constraints)
+        {
+            var allPresent = string.Join(" AND ", fk.Columns.Select(c => "child."+Quote(c)+" IS NOT NULL"));
+            var someMissing = string.Join(" OR ", fk.Columns.Select(c => "child."+Quote(c)+" IS NULL"));
+            var somePresent = string.Join(" OR ", fk.Columns.Select(c => "child."+Quote(c)+" IS NOT NULL"));
+            var equal = string.Join(" AND ", fk.Columns.Select((c,i) => "child."+Quote(c)+"=parent."+Quote(fk.ParentColumns[i])));
+            var partialNull = fk.Match == "f" ? $" OR (({someMissing}) AND ({somePresent}))" : "";
+            await using var check = pg.CreateCommand();
+            check.Transaction = tx;
+            check.CommandText = $"SELECT EXISTS(SELECT 1 FROM {fk.Child} child WHERE (({allPresent}) AND NOT EXISTS(SELECT 1 FROM {fk.Parent} parent WHERE {equal})){partialNull})";
+            if ((bool)(await check.ExecuteScalarAsync())!)
+                throw new InvalidOperationException($"Yabancı anahtar ihlali: {fk.Name}. Aktarım geri alınacak.");
+        }
+    }
+
+    private async Task ResetSequencesAsync(NpgsqlConnection pg, NpgsqlTransaction tx, List<string> tablolar)
     {
         _progress("▸ Sequence'lar resetleniyor...");
         foreach (var tablo in tablolar)
         {
             await using var cmd = pg.CreateCommand();
+            cmd.Transaction = tx;
             cmd.CommandText = @"SELECT column_name FROM information_schema.columns
                                 WHERE table_schema='public' AND table_name=@t
                                   AND (column_default LIKE 'nextval%' OR is_identity='YES');";
@@ -320,11 +406,20 @@ public sealed class SqliteToPostgresImporter
 
             foreach (var kolon in idKolonlari)
             {
+                await using var sequence = pg.CreateCommand();
+                sequence.Transaction = tx;
+                sequence.CommandText = "SELECT quote_ident(n.nspname)||'.'||quote_ident(c.relname) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.oid=pg_get_serial_sequence(@table,@column)::regclass";
+                sequence.Parameters.AddWithValue("table", "public." + Quote(tablo));
+                sequence.Parameters.AddWithValue("column", kolon);
+                var sequenceName = (string?)await sequence.ExecuteScalarAsync()
+                    ?? throw new InvalidOperationException($"{tablo}.{kolon}: sequence bulunamadı.");
+                await using var maximum = pg.CreateCommand();
+                maximum.Transaction = tx;
+                maximum.CommandText = $"SELECT GREATEST(COALESCE(MAX({Quote(kolon)}),0),0)+1 FROM public.{Quote(tablo)}";
+                var next = Convert.ToInt64(await maximum.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
                 await using var reset = pg.CreateCommand();
-                reset.CommandText = $@"SELECT setval(
-                    pg_get_serial_sequence('public.""{tablo}""', '{kolon}'),
-                    GREATEST(COALESCE((SELECT MAX(""{kolon}"") FROM public.""{tablo}""), 0), 1),
-                    (SELECT COUNT(*) > 0 FROM public.""{tablo}""));";
+                reset.Transaction = tx;
+                reset.CommandText = $"ALTER SEQUENCE {sequenceName} RESTART WITH {next.ToString(CultureInfo.InvariantCulture)}";
                 await reset.ExecuteNonQueryAsync();
             }
         }

@@ -3282,22 +3282,154 @@ public class ApplicationDbContext : DbContext
         }
     }
 
-    public override int SaveChanges()
+    public override int SaveChanges() => SaveChanges(true);
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
-        ConvertDatesToUtc();
-        UpdateTimestamps();
-        AssignFirmaTenantId();
-        SafeGenerateAuditLogs();
-        return base.SaveChanges();
+        PrepareSave();
+        var pendingIds = _generatedAuditEntityIds.ToList();
+        if (pendingIds.Count == 0) return base.SaveChanges(acceptAllChangesOnSuccess);
+
+        int SaveWithAuditIds()
+        {
+            var temporaryValues = CaptureTemporaryValues();
+            var existingTransaction = Database.CurrentTransaction;
+            var savepoint = existingTransaction?.SupportsSavepoints == true ? "audit_" + Guid.NewGuid().ToString("N") : null;
+            if (savepoint is not null) existingTransaction!.CreateSavepoint(savepoint);
+            using var transaction = existingTransaction is null ? Database.BeginTransaction() : null;
+            try
+            {
+                var affected = base.SaveChanges(false);
+                EnrichGeneratedAuditIds(pendingIds);
+                if (savepoint is not null) existingTransaction!.ReleaseSavepoint(savepoint);
+                transaction?.Commit();
+                if (acceptAllChangesOnSuccess) ChangeTracker.AcceptAllChanges();
+                return affected;
+            }
+            catch
+            {
+                try
+                {
+                    if (savepoint is not null) existingTransaction!.RollbackToSavepoint(savepoint);
+                }
+                finally { RestoreTemporaryValues(temporaryValues); }
+                throw;
+            }
+        }
+
+        // PostgreSQL/SQL Server retry stratejisi, açtığımız transaction'ın tamamını kapsamalı.
+        return Database.CurrentTransaction is null
+            ? Database.CreateExecutionStrategy().Execute(SaveWithAuditIds)
+            : SaveWithAuditIds();
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        => SaveChangesAsync(true, cancellationToken);
+
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
+        PrepareSave();
+        var pendingIds = _generatedAuditEntityIds.ToList();
+        if (pendingIds.Count == 0) return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+
+        async Task<int> SaveWithAuditIdsAsync()
+        {
+            var temporaryValues = CaptureTemporaryValues();
+            var existingTransaction = Database.CurrentTransaction;
+            var savepoint = existingTransaction?.SupportsSavepoints == true ? "audit_" + Guid.NewGuid().ToString("N") : null;
+            if (savepoint is not null) await existingTransaction!.CreateSavepointAsync(savepoint, cancellationToken);
+            await using var transaction = existingTransaction is null
+                ? await Database.BeginTransactionAsync(cancellationToken)
+                : null;
+            try
+            {
+                var affected = await base.SaveChangesAsync(false, cancellationToken);
+                await EnrichGeneratedAuditIdsAsync(pendingIds, cancellationToken);
+                if (savepoint is not null) await existingTransaction!.ReleaseSavepointAsync(savepoint, cancellationToken);
+                if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+                if (acceptAllChangesOnSuccess) ChangeTracker.AcceptAllChanges();
+                return affected;
+            }
+            catch
+            {
+                try
+                {
+                    // İptal edilmiş token rollback'i engellememeli.
+                    if (savepoint is not null) await existingTransaction!.RollbackToSavepointAsync(savepoint, CancellationToken.None);
+                }
+                finally { RestoreTemporaryValues(temporaryValues); }
+                throw;
+            }
+        }
+
+        return Database.CurrentTransaction is null
+            ? await Database.CreateExecutionStrategy().ExecuteAsync(SaveWithAuditIdsAsync)
+            : await SaveWithAuditIdsAsync();
+    }
+
+    private List<(Microsoft.EntityFrameworkCore.ChangeTracking.PropertyEntry Property, object? Value)> CaptureTemporaryValues()
+        => ChangeTracker.Entries().Where(entry => entry.State == EntityState.Added)
+            .SelectMany(entry => entry.Properties).Where(property => property.IsTemporary)
+            .Select(property => (property, property.CurrentValue)).ToList();
+
+    private static void RestoreTemporaryValues(
+        IEnumerable<(Microsoft.EntityFrameworkCore.ChangeTracking.PropertyEntry Property, object? Value)> temporaryValues)
+    {
+        foreach (var (property, value) in temporaryValues)
+        {
+            property.CurrentValue = value;
+            property.IsTemporary = true;
+        }
+    }
+
+    private readonly List<AktiviteLog> _generatedAuditLogs = new();
+    private readonly List<(AktiviteLog Log, Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry Source, string KeyName)> _generatedAuditEntityIds = new();
+
+    private void PrepareSave()
+    {
+        // Başarısız kaydı tekrar denerken aynı denetim izini çoğaltma.
+        foreach (var log in _generatedAuditLogs)
+            if (Entry(log).State == EntityState.Added) Entry(log).State = EntityState.Detached;
+        _generatedAuditLogs.Clear();
+        _generatedAuditEntityIds.Clear();
         ConvertDatesToUtc();
         UpdateTimestamps();
         AssignFirmaTenantId();
-        SafeGenerateAuditLogs();
-        return base.SaveChangesAsync(cancellationToken);
+        GenerateAuditLogs();
+    }
+
+    private void EnrichGeneratedAuditIds(
+        IReadOnlyCollection<(AktiviteLog Log, Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry Source, string KeyName)> pendingIds)
+    {
+        foreach (var (log, source, keyName) in pendingIds)
+        {
+            var key = source.Property(keyName).CurrentValue;
+            if (key is null) throw new InvalidOperationException("Yeni kaydın denetim kimliği belirlenemedi.");
+            log.EntityId = (int?)Convert.ChangeType(key, typeof(int));
+            // SaveChanges(false) sonrası üretilen PK, CLR nesnesinden önce EF entry'de bulunur.
+            var logId = Entry(log).Property(x => x.Id).CurrentValue;
+            var updated = AktiviteLoglar.Where(x => x.Id == logId)
+                .ExecuteUpdate(update => update.SetProperty(x => x.EntityId, log.EntityId));
+            if (updated != 1)
+                throw new InvalidOperationException("Yeni kaydın kimliği denetim satırına yazılamadı; işlem kaydedilmedi.");
+        }
+    }
+
+    private async Task EnrichGeneratedAuditIdsAsync(
+        IReadOnlyCollection<(AktiviteLog Log, Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry Source, string KeyName)> pendingIds,
+        CancellationToken cancellationToken)
+    {
+        foreach (var (log, source, keyName) in pendingIds)
+        {
+            var key = source.Property(keyName).CurrentValue;
+            if (key is null) throw new InvalidOperationException("Yeni kaydın denetim kimliği belirlenemedi.");
+            log.EntityId = (int?)Convert.ChangeType(key, typeof(int));
+            var logId = Entry(log).Property(x => x.Id).CurrentValue;
+            var updated = await AktiviteLoglar.Where(x => x.Id == logId)
+                .ExecuteUpdateAsync(update => update.SetProperty(x => x.EntityId, log.EntityId), cancellationToken);
+            if (updated != 1)
+                throw new InvalidOperationException("Yeni kaydın kimliği denetim satırına yazılamadı; işlem kaydedilmedi.");
+        }
     }
 
     /// <summary>
@@ -3324,42 +3456,6 @@ public class ApplicationDbContext : DbContext
         }
     }
 
-    private bool? _auditLogTableExists;
-
-    /// <summary>
-    /// AktiviteLoglar tablosu henüz oluşmamışsa (pending migration) audit log kaydını sessizce atlar.
-    /// Startup seed sırasında tablo yoksa uygulama çökmeye devam eder.
-    /// </summary>
-    private void SafeGenerateAuditLogs()
-    {
-        if (_auditLogTableExists == null)
-        {
-            try
-            {
-                // Tablo var mı kontrol et (lightweight: LIMIT 0)
-                Database.ExecuteSqlRaw("SELECT 1 FROM \"AktiviteLoglar\" LIMIT 0");
-                _auditLogTableExists = true;
-            }
-            catch
-            {
-                // PostgresException disindaki hatalar (farkli provider, baglanti sorunu vb.)
-                // SaveChanges'i kirmamali; audit log sessizce atlanir.
-                _auditLogTableExists = false;
-            }
-        }
-
-        if (_auditLogTableExists != true) return;
-
-        try
-        {
-            GenerateAuditLogs();
-        }
-        catch
-        {
-            // Audit log uretimi asla asil kaydi engellememeli.
-        }
-    }
-
     private void GenerateAuditLogs()
     {
         var modifiedEntities = ChangeTracker.Entries()
@@ -3370,7 +3466,7 @@ public class ApplicationDbContext : DbContext
         {
             var entityType = entry.Entity.GetType();
             // Skip logging for system/identity entities if needed, e.g.
-            if (entityType.Name.Contains("AktiviteLog") || entityType.Name.Contains("Log")) continue;
+            if (entityType == typeof(AktiviteLog)) continue;
 
             var firmaId = ResolveAuditFirmaId(entry.Entity);
             if (firmaId is null or <= 0)
@@ -3383,15 +3479,31 @@ public class ApplicationDbContext : DbContext
                 EntityTipi = entityType.Name,
                 Modul = "Genel", // Default, could be mapped based on type
                 FirmaId = firmaId,
-                KullaniciId = null // UI katmanindan set edilebilir
+                KullaniciAdi = (_serviceProvider ?? AmbientServiceProvider.Value)?.GetService<MKFiloServis.Web.Services.ICurrentUserAccessor>()?.GetCurrentUserName() ?? "Sistem"
             };
 
             try
             {
+                var services = _serviceProvider ?? AmbientServiceProvider.Value;
+                var http = services?.GetService<IHttpContextAccessor>()?.HttpContext;
+                var user = http?.User;
+                var userIdClaim = user?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                    ?? user?.FindFirst("KullaniciId")?.Value;
+                if (user?.Identity?.IsAuthenticated == true)
+                {
+                    if (int.TryParse(userIdClaim, out var userId) && userId > 0) log.KullaniciId = userId;
+                    if (log.KullaniciAdi == "Sistem") log.KullaniciAdi = user.Identity.Name ?? userIdClaim;
+                }
+                log.IpAdresi = http?.Connection.RemoteIpAddress?.ToString();
+                log.Tarayici = http?.Request.Headers.UserAgent.ToString();
                 var idProperty = entry.Properties.FirstOrDefault(p => p.Metadata.IsPrimaryKey());
                 if (idProperty != null && idProperty.CurrentValue != null && entry.State != EntityState.Added)
                 {
                     log.EntityId = (int?)Convert.ChangeType(idProperty.CurrentValue, typeof(int));
+                }
+                else if (idProperty != null && entry.State == EntityState.Added && idProperty.CurrentValue != null)
+                {
+                    _generatedAuditEntityIds.Add((log, entry, idProperty.Metadata.Name));
                 }
 
                 if (entry.State == EntityState.Modified)
@@ -3403,8 +3515,9 @@ public class ApplicationDbContext : DbContext
                     {
                         if (property.IsModified)
                         {
-                            originalValues[property.Metadata.Name] = property.OriginalValue;
-                            currentValues[property.Metadata.Name] = property.CurrentValue;
+                            var sensitive = IsSensitiveAuditProperty(property.Metadata.Name);
+                            originalValues[property.Metadata.Name] = sensitive ? "[GİZLENDİ]" : property.OriginalValue;
+                            currentValues[property.Metadata.Name] = sensitive ? "[GİZLENDİ]" : property.CurrentValue;
                         }
                     }
 
@@ -3415,17 +3528,26 @@ public class ApplicationDbContext : DbContext
                 else if (entry.State == EntityState.Added)
                 {
                     log.Aciklama = $"{entityType.Name} kaydı eklendi.";
-                    // We don't have the ID yet for Added entities, it will be generated after SaveChanges.
-                    // A proper implementation would run a second pass after SaveChanges.
+                    log.YeniDeger = System.Text.Json.JsonSerializer.Serialize(entry.Properties.ToDictionary(
+                        property => property.Metadata.Name,
+                        property => IsSensitiveAuditProperty(property.Metadata.Name) ? (object?)"[GİZLENDİ]"
+                            : property.IsTemporary ? null : property.CurrentValue));
                 }
                 else if (entry.State == EntityState.Deleted)
                 {
                     log.Aciklama = $"{entityType.Name} kaydı silindi.";
+                    log.EskiDeger = System.Text.Json.JsonSerializer.Serialize(entry.Properties.ToDictionary(
+                        property => property.Metadata.Name,
+                        property => IsSensitiveAuditProperty(property.Metadata.Name) ? (object?)"[GİZLENDİ]" : property.OriginalValue));
                 }
 
                 AktiviteLoglar.Add(log);
+                _generatedAuditLogs.Add(log);
             }
-            catch { /* Ignore logging errors */ }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"{entityType.Name} denetim kaydı oluşturulamadı; işlem kaydedilmedi.", ex);
+            }
         }
     }
 
@@ -3438,21 +3560,13 @@ public class ApplicationDbContext : DbContext
         if (aktifFirmaId is > 0)
             return aktifFirmaId;
 
-        try
-        {
-            return Firmalar
-                .IgnoreQueryFilters()
-                .Where(f => !f.IsDeleted)
-                .OrderByDescending(f => f.VarsayilanFirma)
-                .ThenBy(f => f.Id)
-                .Select(f => (int?)f.Id)
-                .FirstOrDefault();
-        }
-        catch
-        {
-            return null;
-        }
+        // Firma bağlamı olmayan sistem kayıtlarını başka bir firmaya mal etme.
+        return entity is Firma firma && firma.Id > 0 ? firma.Id : null;
     }
+
+    private static bool IsSensitiveAuditProperty(string name)
+        => new[] { "password", "sifre", "parola", "token", "secret", "connectionstring", "privatekey", "licensekey", "lisansanahtar" }
+            .Any(part => name.Contains(part, StringComparison.OrdinalIgnoreCase));
 
     // SirketTransferLog Entity Configuration - Faz 5.3-B3-i: kaldırıldı, entity dosyası silinecek
 

@@ -9,7 +9,6 @@
 #define MyAppExeName     "MKFiloServis.Web.exe"
 #define MyInstallDirBase "C:\MKFiloServis"
 #define MyBackupDirBase  "C:\MKFiloServis_yedekleme"
-#define MyLisansExe      "MKFiloServisLisans.exe"
 #define MyDataSyncExe    "MKFiloServis.DataSync.exe"
 #define MyIisSiteName    "MKFiloServis"
 #define MyIisAppPool     "MKFiloServis"
@@ -64,9 +63,6 @@ Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
 ; Web uygulamasi (self-contained, Kestrel ile calisir)
 Source: "payload\Web\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-; Lisans Yonetim Araci
-Source: "payload\LisansDesktop\*"; DestDir: "{app}\tools\lisans"; Flags: ignoreversion recursesubdirs createallsubdirs
-
 ; Veri Aktarim Araci
 Source: "payload\DataSync\*"; DestDir: "{app}\tools\datasync"; Flags: ignoreversion recursesubdirs createallsubdirs
 
@@ -83,7 +79,6 @@ Name: "{#MyBackupDir}"; Permissions: users-modify
 
 [Icons]
 Name: "{group}\{#MyShortcutName}"; Filename: "{app}\app\{#MyAppExeName}"; WorkingDir: "{app}\app"
-Name: "{group}\{#MyShortcutName} - Lisans Yonetimi"; Filename: "{app}\tools\lisans\{#MyLisansExe}"; WorkingDir: "{app}\tools\lisans"
 Name: "{group}\{#MyShortcutName} - Veri Aktarim"; Filename: "{app}\tools\datasync\{#MyDataSyncExe}"; WorkingDir: "{app}\tools\datasync"
 Name: "{group}\{#MyShortcutName} - Kurulum Klasorunu Ac"; Filename: "{app}"
 Name: "{group}\{#MyShortcutName} - Kaldir"; Filename: "{uninstallexe}"

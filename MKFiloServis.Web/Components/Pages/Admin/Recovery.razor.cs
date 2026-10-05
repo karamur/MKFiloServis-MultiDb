@@ -7,8 +7,11 @@ namespace MKFiloServis.Web.Components.Pages.Admin;
 
 public partial class Recovery
 {
-    private List<Firma> _firmalar = [];
-    private int _firmaId = 1;
+private List<Firma> _firmalar = [];
+    // Firma listesi boş çıkarsa 0 (geçersiz) kalır. Rebuild yıkıcı bir işlem olduğu için
+    // asla sabit bir firma kimliğine düşülmez.
+    private int _firmaId;
+    private bool FirmaSecili => _firmaId > 0;
     private int _yil = DateTime.Today.Year;
     private int _ay = DateTime.Today.Month;
     private bool _calisiyor;
@@ -23,8 +26,14 @@ public partial class Recovery
         if (_firmalar.Any()) _firmaId = _firmalar.First().Id;
     }
 
-    private async Task OnizlemeYap()
+private async Task OnizlemeYap()
     {
+        if (!FirmaSecili)
+        {
+            _durumMesaji = "Firma seçilmedi; işlem yapılamaz.";
+            return;
+        }
+
         _calisiyor = true;
         _sonuc = null;
         _durumMesaji = "Önizleme yapılıyor...";
@@ -36,8 +45,14 @@ public partial class Recovery
 
     private bool _rebuildOnay;
 
-    private async Task RebuildCalistir()
+private async Task RebuildCalistir()
     {
+        if (!FirmaSecili)
+        {
+            _durumMesaji = "Firma seçilmedi; rebuild çalıştırılamaz.";
+            return;
+        }
+
         if (!_rebuildOnay)
         {
             _rebuildOnay = true;

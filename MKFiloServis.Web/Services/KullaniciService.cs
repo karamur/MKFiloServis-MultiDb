@@ -9,6 +9,7 @@ namespace MKFiloServis.Web.Services;
 
 public class KullaniciService : IKullaniciService
 {
+    private static readonly TimeSpan LoginLockoutDuration = TimeSpan.FromMinutes(15);
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly AppAuthenticationStateProvider _authProvider;
     private readonly ILogger<KullaniciService> _logger;
@@ -181,6 +182,7 @@ public class KullaniciService : IKullaniciService
 
         var eskiHash = kullanici.SifreHash;
         var eskiKilitli = kullanici.Kilitli;
+        var eskiKilitlenmeBitisUtc = kullanici.KilitlenmeBitisUtc;
         var eskiBasarisizGiris = kullanici.BasarisizGirisSayisi;
         var geciciSifre = GenerateTemporaryPassword();
 
@@ -188,6 +190,7 @@ public class KullaniciService : IKullaniciService
         {
             kullanici.SifreHash = HashPassword(kullanici, geciciSifre);
             kullanici.Kilitli = false;
+            kullanici.KilitlenmeBitisUtc = null;
             kullanici.BasarisizGirisSayisi = 0;
             kullanici.UpdatedAt = DateTime.UtcNow;
             context.Kullanicilar.Update(kullanici);
@@ -207,6 +210,7 @@ public class KullaniciService : IKullaniciService
             {
                 kullanici.SifreHash = eskiHash;
                 kullanici.Kilitli = eskiKilitli;
+                kullanici.KilitlenmeBitisUtc = eskiKilitlenmeBitisUtc;
                 kullanici.BasarisizGirisSayisi = eskiBasarisizGiris;
                 kullanici.UpdatedAt = DateTime.UtcNow;
                 context.Kullanicilar.Update(kullanici);
@@ -319,31 +323,62 @@ public class KullaniciService : IKullaniciService
             return new KullaniciGirisSonuc { Basarili = false, Mesaj = "Kullanici aktif degil" };
         }
 
-        if (kullanici.Kilitli)
+        var nowUtc = DateTime.UtcNow;
+        if (kullanici.Kilitli &&
+            (kullanici.KilitlenmeBitisUtc is null || kullanici.KilitlenmeBitisUtc > nowUtc))
         {
-            _logger.LogWarning("Giris basarisiz - kullanici kilitli: {KullaniciAdi}", kullaniciAdi);
-            return new KullaniciGirisSonuc { Basarili = false, Mesaj = "Kullanici kilitli. Yoneticiye basvurun." };
+            _logger.LogWarning("Giris reddedildi - kullanici kilitli: {KullaniciAdi}", kullaniciAdi);
+            var message = kullanici.KilitlenmeBitisUtc is null
+                ? "Hesap yönetici tarafından kilitlenmiş. Yöneticiye başvurun."
+                : $"Çok sayıda hatalı deneme nedeniyle hesap geçici olarak kilitli. Yaklaşık {Math.Max(1, Math.Ceiling((kullanici.KilitlenmeBitisUtc.Value - nowUtc).TotalMinutes))} dakika sonra yeniden deneyin.";
+            return new KullaniciGirisSonuc { Basarili = false, Mesaj = message };
         }
 
-        var parolaDogru = await _userManager.CheckPasswordAsync(kullanici, sifre);
+        if (kullanici.Kilitli)
+        {
+            // Önceki sürümlerdeki süresiz kilitler null bitiş tarihiyle tutulur ve
+            // yönetici sıfırlayana kadar kapalı kalır. Yeni kilitler 15 dakikada açılır.
+            kullanici.Kilitli = false;
+            kullanici.BasarisizGirisSayisi = 0;
+            kullanici.KilitlenmeBitisUtc = null;
+        }
+
+        // CheckPasswordAsync rehash gerektiğinde UserManager üzerinden ayrı DbContext'te
+        // kayıt yapar. Bu metot daha sonra kendi context'indeki eski entity'yi kaydettiği
+        // için rehash geri alınabiliyordu. Doğrula ve gerekiyorsa aynı izlenen entity'yi
+        // yükselt; aşağıdaki başarılı giriş kaydı yeni hash'i de kalıcılaştırır.
+        var parolaDogrulama = _userManager.PasswordHasher.VerifyHashedPassword(
+            kullanici, kullanici.SifreHash, sifre);
+        var parolaDogru = parolaDogrulama != PasswordVerificationResult.Failed;
+        if (parolaDogrulama == PasswordVerificationResult.SuccessRehashNeeded)
+            kullanici.SifreHash = _userManager.PasswordHasher.HashPassword(kullanici, sifre);
+
         if (!parolaDogru)
         {
             kullanici.BasarisizGirisSayisi++;
             if (kullanici.BasarisizGirisSayisi >= 5)
             {
                 kullanici.Kilitli = true;
+                kullanici.KilitlenmeBitisUtc = nowUtc.Add(LoginLockoutDuration);
                 _logger.LogWarning("Kullanici kilitlendi (5 basarisiz deneme): {KullaniciAdi}", kullaniciAdi);
             }
             context.Kullanicilar.Update(kullanici);
             await context.SaveChangesAsync();
 
             _logger.LogWarning("Giris basarisiz - sifre hatali: {KullaniciAdi}", kullaniciAdi);
-            return new KullaniciGirisSonuc { Basarili = false, Mesaj = "Sifre hatali" };
+            return new KullaniciGirisSonuc
+            {
+                Basarili = false,
+                Mesaj = kullanici.Kilitli
+                    ? "Çok sayıda hatalı deneme nedeniyle hesap 15 dakika kilitlendi."
+                    : "Şifre hatalı"
+            };
         }
 
         // Basarili giris
         kullanici.SonGirisTarihi = DateTime.UtcNow;
         kullanici.BasarisizGirisSayisi = 0;
+        kullanici.KilitlenmeBitisUtc = null;
 
         if (kullanici.IkiFaktorAktif && !string.IsNullOrWhiteSpace(kullanici.IkiFaktorSecretKey))
         {
@@ -439,9 +474,12 @@ public class KullaniciService : IKullaniciService
         var kullanici = await context.Kullanicilar.FindAsync(kullaniciId);
         if (kullanici == null) throw new Exception("Kullanici bulunamadi");
 
+        await ValidateNewPasswordAsync(kullanici, yeniSifre);
+
         kullanici.SifreHash = HashPassword(kullanici, yeniSifre);
         kullanici.Kilitli = false;
         kullanici.BasarisizGirisSayisi = 0;
+        kullanici.KilitlenmeBitisUtc = null;
         kullanici.UpdatedAt = DateTime.UtcNow;
         context.Kullanicilar.Update(kullanici);
         await context.SaveChangesAsync();
@@ -727,15 +765,37 @@ public class KullaniciService : IKullaniciService
         return _userManager.PasswordHasher.HashPassword(kullanici, password);
     }
 
+    private async Task ValidateNewPasswordAsync(Kullanici kullanici, string password)
+    {
+        foreach (var validator in _userManager.PasswordValidators)
+        {
+            var result = await validator.ValidateAsync(_userManager, kullanici, password);
+            if (!result.Succeeded)
+                throw new InvalidOperationException(string.Join(" ", result.Errors.Select(error => error.Description)));
+        }
+    }
+
     private static string GenerateTemporaryPassword()
     {
-        const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-        var bytes = new byte[10];
-        System.Security.Cryptography.RandomNumberGenerator.Fill(bytes);
+        const string upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+        const string lower = "abcdefghijkmnopqrstuvwxyz";
+        const string digits = "23456789";
+        const string symbols = "!@#$%*-_+?";
+        const string all = upper + lower + digits + symbols;
+        var passwordChars = new char[16];
+        passwordChars[0] = upper[System.Security.Cryptography.RandomNumberGenerator.GetInt32(upper.Length)];
+        passwordChars[1] = lower[System.Security.Cryptography.RandomNumberGenerator.GetInt32(lower.Length)];
+        passwordChars[2] = digits[System.Security.Cryptography.RandomNumberGenerator.GetInt32(digits.Length)];
+        passwordChars[3] = symbols[System.Security.Cryptography.RandomNumberGenerator.GetInt32(symbols.Length)];
 
-        var passwordChars = bytes
-            .Select(b => chars[b % chars.Length])
-            .ToArray();
+        for (var i = 4; i < passwordChars.Length; i++)
+            passwordChars[i] = all[System.Security.Cryptography.RandomNumberGenerator.GetInt32(all.Length)];
+
+        for (var i = passwordChars.Length - 1; i > 0; i--)
+        {
+            var swapIndex = System.Security.Cryptography.RandomNumberGenerator.GetInt32(i + 1);
+            (passwordChars[i], passwordChars[swapIndex]) = (passwordChars[swapIndex], passwordChars[i]);
+        }
 
         return new string(passwordChars);
     }

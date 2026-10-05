@@ -9,6 +9,7 @@ namespace MKFiloServis.Web.Controllers;
 /// <summary>
 /// Cari (Müşteri/Tedarikçi) yönetimi API endpoint'leri
 /// </summary>
+[Authorize(Policy = "Licensed:cari")]
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(AuthenticationSchemes = "Bearer")]

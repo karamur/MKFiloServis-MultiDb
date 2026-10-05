@@ -1,4 +1,4 @@
-﻿@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services
 @using MKFiloServis.Shared.Entities
 @using Microsoft.Extensions.Logging
 @implements IDisposable
@@ -7,6 +7,7 @@
 @inject IAktifFirmaProvider AktifFirmaProvider
 @inject ILogger<NavMenu> Logger
 @inject BrandingService BrandingService
+@inject LicenseService ModuleLicenses
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
@@ -1338,6 +1339,7 @@
 
     private bool HasYetki(string yetkiKodu)
     {
+        if (!ModuleLicenses.HasLicensedPermission(yetkiKodu)) return false;
         // Admin her seyi gorebilir
         if (isAdmin) return true;
 
@@ -1349,12 +1351,12 @@
 
     private bool HasAnyYetki(params string[] yetkiKodlari)
     {
-        if (isAdmin) return true;
+        if (isAdmin) return yetkiKodlari.Any(ModuleLicenses.HasLicensedPermission);
         if (!yetkilerYuklendi) return false;
 
         foreach (var kod in yetkiKodlari)
         {
-            if (kullaniciYetkileri.Contains(kod)) return true;
+            if (ModuleLicenses.HasLicensedPermission(kod) && kullaniciYetkileri.Contains(kod)) return true;
         }
         return false;
     }
@@ -1363,6 +1365,7 @@
 
     private bool HasMenuYetki(string menuKodu)
     {
+        if (!ModuleLicenses.HasLicensedPermission(menuKodu)) return false;
         // Admin her seyi gorebilir
         if (isAdmin) return true;
         

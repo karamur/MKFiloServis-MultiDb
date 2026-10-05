@@ -1,4 +1,4 @@
-﻿using System.Net.Http.Headers;
+using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using MKFiloServis.Web.Services.Interfaces;
@@ -78,14 +78,15 @@ public class S3ObjectStorageService : IObjectStorageService
         try
         {
             var client = _httpClientFactory.CreateClient("S3");
-            var request = BuildRequest(HttpMethod.Delete, key);
-            var response = await client.SendAsync(request, ct);
+            using var request = BuildRequest(HttpMethod.Delete, key);
+            using var response = await client.SendAsync(request, ct);
             if (response.StatusCode != System.Net.HttpStatusCode.NotFound)
                 response.EnsureSuccessStatusCode();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "S3: silme başarısız {Key}", key);
+            throw;
         }
     }
 
@@ -98,7 +99,12 @@ public class S3ObjectStorageService : IObjectStorageService
             var response = await client.SendAsync(request, ct);
             return response.IsSuccessStatusCode;
         }
-        catch { return false; }
+        catch (Exception ex)
+        {
+            // Sorgulanamayan nesne "yok" sayılmamalı ama çağıranı da patlatmamalı; en azından kayda geçmeli.
+            _logger.LogWarning(ex, "S3 nesne varligi denetlenemedi. Key: {Key}", key);
+            return false;
+        }
     }
 
     public Task<string> GetPresignedUrlAsync(string key, int expiresInMinutes = 60)

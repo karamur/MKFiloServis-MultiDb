@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using MKFiloServis.Shared.Entities;
+using MKFiloServis.Shared.Licensing;
 using MKFiloServis.Web.Helpers;
 
 namespace MKFiloServis.Web.Services;
@@ -179,7 +180,7 @@ public class UpdateService
                 (info.SignatureValid, info.SignatureError) = await VerifyPatchSignatureAsync(zipPath);
 
                 // PART 5: Lisans versiyon kontrolü
-                if (currentLicense != null && !string.IsNullOrEmpty(info.Version))
+                if (currentLicense != null)
                 {
                     info.IsVersionAllowed = IsVersionAllowed(info.Version, currentLicense.AllowedVersion);
                     if (!info.IsVersionAllowed)
@@ -223,7 +224,7 @@ public class UpdateService
             if (lic == null)
                 return UpdateResult.Fail("Aktif lisans bulunamadi. Once lisans yukleyin.");
 
-            if (!string.IsNullOrEmpty(version) && !IsVersionAllowed(version, lic.AllowedVersion))
+            if (!IsVersionAllowed(version, lic.AllowedVersion))
                 return UpdateResult.Fail(
                     $"Bu güncelleme (v{version}) lisansa dahil degil. " +
                     $"Izin verilen max surum: {lic.AllowedVersion}");
@@ -404,7 +405,7 @@ public class UpdateService
         var fileName = Path.GetFileNameWithoutExtension(filePath);
 
         // patch_v1.0.25 → "1.0.25"
-        var match = Regex.Match(fileName, @"v?(\d+\.\d+\.\d+)");
+        var match = Regex.Match(fileName, @"(?<![\d.])v?(\d+(?:\.\d+){1,3})(?![\d.])");
         if (match.Success)
             return match.Groups[1].Value;
 
@@ -416,21 +417,7 @@ public class UpdateService
     /// PART 5: Güncelleme versiyonu lisansa dahil mi?
     /// </summary>
     private static bool IsVersionAllowed(string updateVersion, string allowedVersion)
-    {
-        if (string.IsNullOrWhiteSpace(allowedVersion) || allowedVersion == "0.0.0")
-            return true;
-
-        try
-        {
-            var update = new Version(updateVersion);
-            var allowed = new Version(allowedVersion);
-            return update <= allowed;
-        }
-        catch
-        {
-            return true; // Parse edilemezse blocklama
-        }
-    }
+        => LicenseVersionPolicy.Allows(allowedVersion, updateVersion);
 
     // ══════════════════════════════════════════════
     // LEGACY (mevcut arayuzu bozmamak icin)

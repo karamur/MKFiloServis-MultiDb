@@ -950,7 +950,11 @@ public class HttpScraperService : IHttpScraperService
                 var y = int.Parse(tarihMatch.Groups[3].Value);
                 return new DateTime(y, a, g);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Tarih ayristirilamazsa bugunun tarihi kullanilir.
+                _logger.LogWarning(ex, "Ilan tarihi ayristirilamadi; bugunun tarihi kullaniliyor.");
+            }
         }
 
         return DateTime.Today;

@@ -1,4 +1,5 @@
-﻿@page "/filo/komisyon-eslestirme"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:filoservis")]
+@page "/filo/komisyon-eslestirme"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services.Interfaces
 @using MKFiloServis.Web.Services

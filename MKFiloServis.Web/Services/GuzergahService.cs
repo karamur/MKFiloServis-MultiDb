@@ -13,19 +13,22 @@ public class GuzergahService : IGuzergahService
     private readonly NumaraSerisiService _numaraSerisi;
     private readonly IAktifFirmaProvider _aktifFirmaProvider;
     private readonly GuzergahSeferService _seferService;
+    private readonly ILogger<GuzergahService> _logger;
 
     public GuzergahService(
         IDbContextFactory<ApplicationDbContext> contextFactory,
         ICacheService cache,
         NumaraSerisiService numaraSerisi,
         IAktifFirmaProvider aktifFirmaProvider,
-        GuzergahSeferService seferService)
+        GuzergahSeferService seferService,
+        ILogger<GuzergahService> logger)
     {
         _contextFactory = contextFactory;
         _cache = cache;
         _numaraSerisi = numaraSerisi;
         _aktifFirmaProvider = aktifFirmaProvider;
         _seferService = seferService;
+        _logger = logger;
     }
 
     public Task<List<Guzergah>> GetAllAsync() =>
@@ -559,10 +562,15 @@ public class GuzergahService : IGuzergahService
         };
     }
 
-    private static string? GetCell(ClosedXML.Excel.IXLRow row, int col)
+    private string? GetCell(ClosedXML.Excel.IXLRow row, int col)
     {
         try { return row.Cell(col).GetString(); }
-        catch { return null; }
+        catch (Exception ex)
+        {
+            // Excel importunda bozuk/eksik hücre satırı düşürmek yerine boş geçilir; neden kayda geçmeli.
+            _logger.LogWarning(ex, "Excel hucresi okunamadi. Satir: {Satir}, Sutun: {Sutun}", row.RowNumber(), col);
+            return null;
+        }
     }
 
     #endregion

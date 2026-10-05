@@ -11,6 +11,12 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+    <Compile Include="..\MKFiloServis.Shared\Licensing\LicenseSigningPublicKey.cs" Link="Licensing\LicenseSigningPublicKey.cs" />
+    <Compile Include="..\MKFiloServis.Shared\Licensing\LicenseVersionPolicy.cs" Link="Licensing\LicenseVersionPolicy.cs" />
+    <Compile Include="..\MKFiloServis.Shared\Licensing\LicenseSignaturePayload.cs" Link="Licensing\LicenseSignaturePayload.cs" />
+    <Compile Include="..\MKFiloServis.Shared\Licensing\LicenseModules.cs" Link="Licensing\LicenseModules.cs" />
+    <Compile Include="..\MKFiloServis.Shared\Licensing\LicenseIdentity.cs" Link="Licensing\LicenseIdentity.cs" />
   </ItemGroup>
 
 </Project>

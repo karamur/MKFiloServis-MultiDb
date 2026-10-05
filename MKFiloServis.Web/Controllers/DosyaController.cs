@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MKFiloServis.Web.Services;
 using MKFiloServis.Web.Services.Interfaces;
@@ -10,6 +10,7 @@ namespace MKFiloServis.Web.Controllers;
 /// Tüm erişimler auth + audit log gerektirir.
 /// Doğrudan /uploads static files KALDIRILDI — dosyalar sadece bu endpoint üzerinden erişilebilir.
 /// </summary>
+[Authorize(Policy = "Licensed:ebys")]
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]

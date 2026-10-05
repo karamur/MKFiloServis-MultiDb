@@ -10,9 +10,7 @@ public partial class LicensePage
     private bool _calisiyor;
     private bool _validationIsValid;
     private string _validationMessage = "";
-    private string _firmaKodu = "";
-    private string _machineId = LicenseService.GetMachineId();
-    private DateTime _expireDate = DateTime.UtcNow.AddYears(1);
+    private string _licenseKey = "";
 
     protected override async Task OnInitializedAsync()
     {
@@ -29,19 +27,17 @@ public partial class LicensePage
         _calisiyor = true; StateHasChanged();
         try
         {
-            if (string.IsNullOrWhiteSpace(_firmaKodu)) return;
-            var lic = new LicenseInfo
-            {
-                FirmaKodu = _firmaKodu,
-                MachineId = _machineId,
-                ExpireDate = _expireDate,
-                Signature = LicenseService.GenerateSignature(_firmaKodu, _machineId, _expireDate),
-                CreatedAt = DateTime.UtcNow
-            };
-            await LicenseService.SaveLicenseAsync(lic);
+            if (string.IsNullOrWhiteSpace(_licenseKey)) return;
+            var lic = await LicenseService.ActivateFromKeyAsync(_licenseKey);
             _license = lic;
             _validationIsValid = true;
+            _validationMessage = "Lisans geçerli.";
             MKFiloServis.Shared.AppMode.ExitDemoMode(); // Lisans yüklendi → FULL MODE
+        }
+        catch (Exception ex)
+        {
+            _validationIsValid = false;
+            _validationMessage = ex.Message;
         }
         finally { _calisiyor = false; StateHasChanged(); }
     }

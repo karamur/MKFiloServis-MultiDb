@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Threading;
@@ -23,6 +23,9 @@ public class CacheService : ICacheService
     // (orn. arac firma transferi sonrasi eski firmada gorunme sorunu).
     // Bu nedenle tracker tum instance'lar arasinda paylasilir (static).
     private static readonly ConcurrentDictionary<string, bool> _keyTracker = new();
+    // Factory bu kilidin dışında çalışır; yalnız yayınlama/temizleme sırası korunur.
+    private static readonly SemaphoreSlim MutationGate = new(1, 1);
+    private static long _invalidationVersion;
     private static readonly TimeSpan DefaultExpiration = TimeSpan.FromMinutes(5);
     
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -65,82 +68,111 @@ public class CacheService : ICacheService
         await SetAsync(key, value, DefaultExpiration, cancellationToken);
     }
 
-    public async Task SetAsync<T>(string key, T value, TimeSpan absoluteExpiration, CancellationToken cancellationToken = default) where T : class
+    public Task SetAsync<T>(string key, T value, TimeSpan absoluteExpiration, CancellationToken cancellationToken = default) where T : class
+        => SetCoreAsync(key, value, new DistributedCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = absoluteExpiration
+        }, null, cancellationToken);
+
+    public Task SetWithSlidingAsync<T>(string key, T value, TimeSpan slidingExpiration, CancellationToken cancellationToken = default) where T : class
+        => SetCoreAsync(key, value, new DistributedCacheEntryOptions
+        {
+            SlidingExpiration = slidingExpiration
+        }, null, cancellationToken);
+
+    private async Task SetCoreAsync<T>(string key, T value, DistributedCacheEntryOptions options,
+        long? expectedVersion, CancellationToken cancellationToken) where T : class
     {
+        string data;
         try
         {
-            var options = new DistributedCacheEntryOptions
+            data = JsonSerializer.Serialize(value, JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Cache serialize hatası: {Key}", key);
+            return;
+        }
+        await MutationGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (expectedVersion.HasValue && expectedVersion.Value != _invalidationVersion)
             {
-                AbsoluteExpirationRelativeToNow = absoluteExpiration
-            };
-            
-            var data = JsonSerializer.Serialize(value, JsonOptions);
+                _logger.LogDebug("Cache sonucu temizlik sonrası yayınlanmadı: {Key}", key);
+                return;
+            }
             await _cache.SetStringAsync(key, data, options, cancellationToken);
-            
-            // Key tracking for prefix-based removal
             _keyTracker.TryAdd(key, true);
-            
-            _logger.LogDebug("Cache SET: {Key}, TTL: {TTL}", key, absoluteExpiration);
+            _logger.LogDebug("Cache SET: {Key}", key);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Cache SET hatası: {Key}", key);
         }
-    }
-
-    public async Task SetWithSlidingAsync<T>(string key, T value, TimeSpan slidingExpiration, CancellationToken cancellationToken = default) where T : class
-    {
-        try
+        finally
         {
-            var options = new DistributedCacheEntryOptions
-            {
-                SlidingExpiration = slidingExpiration
-            };
-            
-            var data = JsonSerializer.Serialize(value, JsonOptions);
-            await _cache.SetStringAsync(key, data, options, cancellationToken);
-            
-            _keyTracker.TryAdd(key, true);
-            
-            _logger.LogDebug("Cache SET (sliding): {Key}, Sliding: {Sliding}", key, slidingExpiration);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Cache SET (sliding) hatası: {Key}", key);
+            MutationGate.Release();
         }
     }
 
     public async Task RemoveAsync(string key, CancellationToken cancellationToken = default)
     {
+        await MutationGate.WaitAsync(cancellationToken);
         try
         {
+            Interlocked.Increment(ref _invalidationVersion);
             await _cache.RemoveAsync(key, cancellationToken);
             _keyTracker.TryRemove(key, out _);
             _logger.LogDebug("Cache REMOVE: {Key}", key);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Cache REMOVE hatası: {Key}", key);
         }
+        finally
+        {
+            MutationGate.Release();
+        }
     }
 
     public async Task RemoveByPrefixAsync(string prefix, CancellationToken cancellationToken = default)
     {
+        await MutationGate.WaitAsync(cancellationToken);
         try
         {
+            // İlk kez hesaplanan anahtar tracker'da olmasa bile eski factory geçersiz olsun.
+            Interlocked.Increment(ref _invalidationVersion);
             var keysToRemove = _keyTracker.Keys.Where(k => k.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToList();
-            
             foreach (var key in keysToRemove)
             {
-                await _cache.RemoveAsync(key, cancellationToken);
-                _keyTracker.TryRemove(key, out _);
+                try
+                {
+                    await _cache.RemoveAsync(key, cancellationToken);
+                    _keyTracker.TryRemove(key, out _);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    // Başarısız anahtar takibi korunur; diğer anahtarları temizlemeye devam et.
+                    _logger.LogWarning(ex, "Cache prefix anahtarı silinemedi: {Key}", key);
+                }
             }
-            
-            _logger.LogDebug("Cache REMOVE BY PREFIX: {Prefix}, Count: {Count}", prefix, keysToRemove.Count);
+            _logger.LogDebug("Cache REMOVE BY PREFIX: {Prefix}, Attempted: {Count}", prefix, keysToRemove.Count);
         }
-        catch (Exception ex)
+        finally
         {
-            _logger.LogWarning(ex, "Cache REMOVE BY PREFIX hatası: {Prefix}", prefix);
+            MutationGate.Release();
         }
     }
 
@@ -160,23 +192,23 @@ public class CacheService : ICacheService
 
     public async Task<T> GetOrSetAsync<T>(string key, Func<Task<T>> factory, TimeSpan? absoluteExpiration = null, CancellationToken cancellationToken = default) where T : class
     {
-        // Önce cache'den dene
+        cancellationToken.ThrowIfCancellationRequested();
+        var version = Volatile.Read(ref _invalidationVersion);
         var cached = await GetAsync<T>(key, cancellationToken);
-        if (cached != null)
-        {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (cached != null && version == Volatile.Read(ref _invalidationVersion))
             return cached;
-        }
-        
-        // Cache'de yoksa factory ile oluştur
+
         _logger.LogDebug("Cache MISS: {Key}, factory çağrılıyor", key);
         var value = await factory();
-
-        // Cache'e yaz
+        cancellationToken.ThrowIfCancellationRequested();
         if (value != null)
         {
-            await SetAsync(key, value, absoluteExpiration ?? DefaultExpiration, cancellationToken);
+            await SetCoreAsync(key, value, new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = absoluteExpiration ?? DefaultExpiration
+            }, version, cancellationToken);
         }
-
         return value!;
     }
 

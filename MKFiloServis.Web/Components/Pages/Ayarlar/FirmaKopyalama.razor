@@ -1,4 +1,7 @@
-﻿@page "/ayarlar/firma-kopyalama"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:cari")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:filoservis")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:personel")]
+@page "/ayarlar/firma-kopyalama"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
 @inject IFirmaService FirmaService

@@ -65,14 +65,17 @@ MKFiloServis-MultiDb/
 ├── MKFiloServis.Web/              # Blazor web uygulaması ve servisler
 │   └── Tests/                     # Rent a Car kontrolleri ve smoke test projeleri
 ├── MKFiloServis.Shared/           # Paylaşılan domain modelleri ve sözleşmeler
-├── MKFiloServis.Infrastructure/   # Altyapı bileşenleri
-├── MKFiloServis.Service/          # Servis uygulaması
+├── MKFiloServis.Client/           # MAUI istemci (Android + Windows)
 ├── MKFiloServis.DataSync/         # Veri eşitleme aracı
 ├── MKFiloServis.LisansDesktop/    # Windows lisans yönetim uygulaması
 ├── docs/                          # Ürün ve teknik dokümantasyon
 ├── setup/                         # Kurulum paketi betikleri
 └── scripts/                       # Geliştirme ve dağıtım yardımcıları
 ```
+
+> Not: Çözümde (`MKFiloServis.slnx`) birim test projesi bulunmuyor. CI iş akışı, test projesi
+> depoya geri alınınca otomatik olarak devreye giren bir algılama adımı içerir; o tarihe kadar
+> yalnızca derleme doğrulanır.
 
 ## Başlarken
 

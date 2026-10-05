@@ -248,19 +248,15 @@ public class SoforService : ISoforService
             throw new ArgumentException("Sıra No negatif olamaz.", nameof(siraNo));
 
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var affected = await context.Soforler
-            .Where(x => x.Id == personelId && !x.IsDeleted)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(x => x.SiralamaNo, siraNo)
-                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow),
-                cancellationToken);
-
-        if (affected != 1)
-        {
+        var sofor = await context.Soforler
+            .FirstOrDefaultAsync(x => x.Id == personelId && !x.IsDeleted, cancellationToken);
+        if (sofor is null)
             throw new InvalidOperationException(
-                $"Sıra No güncellenemedi. PersonelId={personelId}, Affected={affected}. " +
-                "Kayıt bulunamadı veya soft-delete edilmiş olabilir.");
-        }
+                $"Sıra No güncellenemedi. PersonelId={personelId}. Kayıt bulunamadı veya soft-delete edilmiş olabilir.");
+
+        sofor.SiralamaNo = siraNo;
+        sofor.UpdatedAt = DateTime.UtcNow;
+        await context.SaveChangesAsync(cancellationToken);
 
         await _cache.RemoveByPrefixAsync(CacheKeys.SoforPrefix);
         return true;
@@ -1262,7 +1258,7 @@ public class SoforService : ISoforService
     }
 
     /// <summary>
-    /// Personel 335/195 muhasebe hesap bağlantılarını ExecuteUpdateAsync ile doğrudan DB'ye yazar.
+    /// Personel 335/195 muhasebe hesap bağlantılarını aynı context transaction'ında yazar.
     /// Entity tracking'e güvenmez; UI modelinden gelen null FK değerlerinden etkilenmez.
     /// </summary>
     private async Task EnsurePersonelMuhasebeBaglantilariAsync(ApplicationDbContext context, int personelId)
@@ -1295,20 +1291,19 @@ public class SoforService : ISoforService
             HesapGrubu.DonenVarliklar,
             HesapTuru.Aktif);
 
-        // ── 3. ExecuteUpdateAsync ile DOĞRUDAN DB'ye yaz ──
-        // Bu yöntem entity tracking'i bypass eder; SetValues ile null'a çekilmiş
-        // olsa bile DB'deki değeri garanti olarak günceller.
-        var updated = await context.Soforler
-            .IgnoreQueryFilters()
-            .Where(x => x.Id == personelId)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(x => x.MuhasebeHesapId, hesap335.Id)
-                .SetProperty(x => x.PersonelAvansHesapId, hesap195.Id)
-                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow));
+        // ── 3. İzlenen entity üzerinden kaydet ──
+        // SaveChanges, EntityId ve değişen alanları aynı transaction'daki audit kaydına ekler.
+        var personel = await context.Soforler
+            .Where(x => x.Id == personelId && !x.IsDeleted)
+            .FirstOrDefaultAsync();
 
-        if (updated != 1)
-            throw new InvalidOperationException(
-                $"Personel 335/195 ExecuteUpdate başarısız. PersonelId={personelId}, UpdatedRows={updated}");
+        if (personel == null)
+            throw new InvalidOperationException($"Personel güncelleme öncesinde bulunamadı. PersonelId={personelId}");
+
+        personel.MuhasebeHesapId = hesap335.Id;
+        personel.PersonelAvansHesapId = hesap195.Id;
+        personel.UpdatedAt = DateTime.UtcNow;
+        await context.SaveChangesAsync();
 
         // ── 4. DB'den tekrar oku ve doğrula ──
         var kontrol = await context.Soforler

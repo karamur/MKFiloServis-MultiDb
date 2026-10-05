@@ -19,30 +19,6 @@
         <div class="alert alert-danger py-2">
             <strong>Lisans bulunamadi!</strong>
         </div>
-        <div class="card">
-            <div class="card-header"><strong>Lisans Yukle</strong></div>
-            <div class="card-body">
-                <div class="row g-2">
-                    <div class="col-md-3">
-                        <label class="form-label small">Firma Kodu</label>
-                        <input type="text" class="form-control form-control-sm" @bind="_firmaKodu" />
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small">Makine ID</label>
-                        <input type="text" class="form-control form-control-sm" @bind="_machineId" />
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small">Bitis Tarihi</label>
-                        <input type="date" class="form-control form-control-sm" @bind="_expireDate" />
-                    </div>
-                    <div class="col-md-3 d-flex align-items-end">
-                        <button class="btn btn-primary btn-sm w-100" @onclick="LisansYukle" disabled="@_calisiyor">
-                            Lisans Yukle
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
     }
     else
     {
@@ -57,18 +33,41 @@
                             <tr><td class="fw-bold">Firma</td><td>@_license.FirmaKodu</td></tr>
                             <tr><td class="fw-bold">Makine</td><td>@_license.MachineId</td></tr>
                             <tr><td class="fw-bold">Bitis</td><td class="@(DateTime.UtcNow > _license.ExpireDate ? "text-danger fw-bold" : "text-success")">@_license.ExpireDate.ToString("dd.MM.yyyy")</td></tr>
+                            <tr><td class="fw-bold">Lisanslı Modüller</td><td>
+                                @if (_license.IsDemo) { <span>Demo süresince tüm modüller</span> }
+                                else if (MKFiloServis.Shared.Licensing.LicenseModules.TryRead(_license.Signature, out var modules, out _))
+                                {
+                                    @string.Join(", ", modules.Split(',').Select(x => MKFiloServis.Shared.Licensing.LicenseModules.All[x]))
+                                }
+                                else { <span class="text-warning">Modül hakkı bulunmuyor. Lisans programından modülleri seçip v3 lisans yükleyin.</span> }
+                            </td></tr>
                             <tr><td class="fw-bold">Son Kontrol</td><td>@(_license.LastValidatedAt?.ToString("dd.MM HH:mm") ?? "-")</td></tr>
                             <tr><td class="fw-bold">Durum</td><td>
                                 @if (_validationIsValid) { <span class="badge bg-success">AKTIF</span> }
                                 else { <span class="badge bg-danger">GECERSIZ</span> }
                             </td></tr>
                         </table>
-                        @if (!string.IsNullOrEmpty(_validationMessage))
+                        @if (!_validationIsValid && !string.IsNullOrEmpty(_validationMessage))
                         {
                             <div class="alert alert-danger py-2 mt-2 mb-0 small">@_validationMessage</div>
                         }
                     </div>
                 </div>
+            </div>
+        </div>
+    }
+    @if (!_yukleniyor)
+    {
+        <div class="card mt-3">
+            <div class="card-header"><strong>İmzalı Lisans Yükle</strong></div>
+            <div class="card-body">
+                <label class="form-label small">Lisans anahtarı</label>
+                <textarea class="form-control mb-2" rows="4" @bind="_licenseKey"></textarea>
+                <button class="btn btn-primary btn-sm" @onclick="LisansYukle" disabled="@_calisiyor">Lisans Yükle</button>
+                @if (!_validationIsValid && !string.IsNullOrWhiteSpace(_validationMessage))
+                {
+                    <div class="alert alert-danger mt-2 mb-0">@_validationMessage</div>
+                }
             </div>
         </div>
     }

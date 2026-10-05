@@ -1,7 +1,10 @@
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:filoservis")]
 @page "/araclar"
+@implements IDisposable
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
 @using Microsoft.AspNetCore.Components.Forms
+@inject ILogger<AracList> Logger
 @inject IAracService AracService
 @inject IAktifFirmaProvider AktifFirmaProvider
 @inject IFirmaService FirmaService
@@ -209,6 +212,14 @@
             </div>
         </div>
     }
+    @if (!string.IsNullOrWhiteSpace(listeYuklemeUyarisi))
+    {
+        <div class="alert alert-warning d-flex align-items-center justify-content-between" role="alert">
+            <span>@listeYuklemeUyarisi</span>
+            <button class="btn btn-sm btn-outline-secondary" disabled="@isLoading" @onclick="LoadData">Yeniden Dene</button>
+        </div>
+    }
+
     @if (isLoading)
     {
         <div class="text-center py-5">
@@ -401,14 +412,14 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">Silme Onayı</h5>
-                    <button type="button" class="btn-close" @onclick="() => showDeleteModal = false"></button>
+                    <button type="button" class="btn-close" @onclick="SilmeModalKapat"></button>
                 </div>
                 <div class="modal-body">
                     <p><strong>@(silinecekArac?.AktifPlaka ?? silinecekArac?.SaseNo)</strong> plakalı aracı silmek istediğinize emin misiniz?</p>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" @onclick="() => showDeleteModal = false">İptal</button>
-                    <button type="button" class="btn btn-danger" @onclick="Sil">Sil</button>
+                    <button type="button" class="btn btn-secondary" @onclick="SilmeModalKapat">İptal</button>
+                    <button type="button" class="btn btn-danger" @onclick="Sil" disabled="@isSiliniyor">@(isSiliniyor ? "Siliniyor..." : "Sil")</button>
                 </div>
             </div>
         </div>
@@ -521,6 +532,7 @@
                     <!-- Yeni Plaka Ekleme Formu -->
                     <div class="card mb-3 bg-light">
                         <div class="card-body">
+                            <fieldset disabled="@isPlakaKaydediliyor">
                             <h6><i class="bi bi-plus-circle me-2"></i>Yeni Plaka Ekle</h6>
                             <div class="row g-2">
                                 <div class="col-md-3">
@@ -559,6 +571,7 @@
                                     <i class="bi bi-plus me-1"></i>Ekle
                                 </button>
                             </div>
+                            </fieldset>
                         </div>
                     </div>
 
@@ -622,11 +635,11 @@
                                             <td>
                                                 @if (plaka.Aktif && plaka.Plaka == seciliArac.AktifPlaka)
                                                 {
-                                                    <button class="btn btn-sm btn-outline-warning" @onclick="() => PlakayiKapat(plaka)" title="Plakayı Kapat">
+                                                    <button class="btn btn-sm btn-outline-warning" @onclick="() => PlakayiKapat(plaka)" disabled="@isPlakaKaydediliyor" title="Plakayı Kapat">
                                                         <i class="bi bi-x-circle"></i>
                                                     </button>
                                                 }
-                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => PlakaSil(plaka)" title="Sil">
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => PlakaSil(plaka)" disabled="@isPlakaKaydediliyor" title="Sil">
                                                     <i class="bi bi-trash"></i>
                                                 </button>
                                             </td>
@@ -651,7 +664,12 @@
     private bool showDeleteModal = false;
     private bool showImportModal = false;
     private Arac? silinecekArac;
+    private long silmeModalSurumu;
+    private bool isSiliniyor;
     private bool isLoading = true;
+    private long listeYuklemeSurumu;
+    private volatile bool disposed;
+    private string? listeYuklemeUyarisi;
     
     // Import
     private bool isImporting = false;
@@ -666,6 +684,7 @@
     private DateTime yeniPlakaGirisTarihi = DateTime.Today;
     private DateTime? yeniPlakaCikisTarihi;
     private bool isPlakaKaydediliyor = false;
+    private long plakaModalSurumu;
 
     // Filtre Değişkenleri
     private string filtreDurum = "Tumu";
@@ -694,31 +713,97 @@
 
     protected override async Task OnInitializedAsync()
     {
+        AktifFirmaProvider.AktifFirmaDegisti += FirmaDegisti;
         await LoadData();
+    }
+
+    private bool ListeYuklemesiGuncel(long surum, int? firmaId, bool tumFirmalar)
+        => !disposed && surum == System.Threading.Volatile.Read(ref listeYuklemeSurumu) &&
+           AktifFirmaProvider.AktifFirmaId == firmaId && AktifFirmaProvider.TumFirmalar == tumFirmalar;
+
+    private void FirmaDegisti()
+    {
+        if (disposed) return;
+        System.Threading.Interlocked.Increment(ref listeYuklemeSurumu);
+        System.Threading.Interlocked.Increment(ref plakaModalSurumu);
+        System.Threading.Interlocked.Increment(ref silmeModalSurumu);
+        _ = InvokeAsync(async () =>
+        {
+            if (disposed) return;
+            filtreFirmaId = 0;
+            SilmeModalKapat();
+            PlakaGecmisiKapat();
+            await LoadData();
+            if (!disposed) StateHasChanged();
+        });
     }
 
     private async Task LoadData()
     {
+        if (disposed) return;
+        var surum = System.Threading.Interlocked.Increment(ref listeYuklemeSurumu);
+        var firmaId = AktifFirmaProvider.AktifFirmaId;
+        var tumFirmalar = AktifFirmaProvider.TumFirmalar;
         isLoading = true;
-        tumAraclar = await AracService.GetAllAsync() ?? new List<Arac>();
+        listeYuklemeUyarisi = null;
+        tumAraclar = new();
+        filtrelenmisAraclar = new();
+        firmaListesi = new();
+        firmasizAracSayisi = 0;
+        StateHasChanged();
         try
         {
-            firmasizAracSayisi = await AracService.GetFirmaIdYokSayisiAsync();
+            var araclar = await AracService.GetAllAsync() ?? new List<Arac>();
+            if (!ListeYuklemesiGuncel(surum, firmaId, tumFirmalar)) return;
+            var firmasizSayisi = 0;
+            string? uyari = null;
+            try
+            {
+                firmasizSayisi = await AracService.GetFirmaIdYokSayisiAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Araç listesinde firmasız araç sayısı yüklenemedi.");
+                uyari = "Firmasız araç sayısı yüklenemedi. Yeniden deneyin.";
+            }
+            if (!ListeYuklemesiGuncel(surum, firmaId, tumFirmalar)) return;
+            var firmalar = new List<Firma>();
+            try
+            {
+                firmalar = await FirmaService.GetAktifFirmalarAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Araç listesinde firma seçenekleri yüklenemedi.");
+                uyari = uyari == null ? "Firma seçenekleri yüklenemedi. Yeniden deneyin."
+                    : "Firma seçenekleri ve firmasız araç sayısı yüklenemedi. Yeniden deneyin.";
+            }
+            if (!ListeYuklemesiGuncel(surum, firmaId, tumFirmalar)) return;
+            tumAraclar = araclar;
+            firmasizAracSayisi = firmasizSayisi;
+            firmaListesi = firmalar;
+            listeYuklemeUyarisi = uyari;
+            Filtrele();
         }
-        catch
+        catch (Exception ex)
         {
-            firmasizAracSayisi = 0;
+            Logger.LogError(ex, "Araç listesi yüklenemedi. FirmaId={FirmaId}, TumFirmalar={TumFirmalar}", firmaId, tumFirmalar);
+            if (ListeYuklemesiGuncel(surum, firmaId, tumFirmalar))
+                listeYuklemeUyarisi = "Araç listesi yüklenemedi. Firma seçimini kontrol edip yeniden deneyin.";
         }
-        try
+        finally
         {
-            firmaListesi = await FirmaService.GetAktifFirmalarAsync();
+            if (ListeYuklemesiGuncel(surum, firmaId, tumFirmalar)) isLoading = false;
         }
-        catch
-        {
-            firmaListesi = new();
-        }
-        Filtrele();
-        isLoading = false;
+    }
+
+    public void Dispose()
+    {
+        disposed = true;
+        System.Threading.Interlocked.Increment(ref silmeModalSurumu);
+        System.Threading.Interlocked.Increment(ref plakaModalSurumu);
+        System.Threading.Interlocked.Increment(ref listeYuklemeSurumu);
+        AktifFirmaProvider.AktifFirmaDegisti -= FirmaDegisti;
     }
 
     private int firmasizAracSayisi = 0;
@@ -947,19 +1032,62 @@
 
     private void SilOnay(Arac arac)
     {
-        silinecekArac = arac;
+        if (disposed || isLoading) return;
+        var guncelArac = tumAraclar.FirstOrDefault(a => a.Id == arac.Id);
+        if (guncelArac == null) return;
+        SilmeModalKapat();
+        silinecekArac = guncelArac;
         showDeleteModal = true;
     }
 
-    private async Task Sil()
+    private void SilmeModalKapat()
     {
-        if (silinecekArac != null)
-        {
-            await AracService.DeleteAsync(silinecekArac.Id);
-            await LoadData();
-        }
+        System.Threading.Interlocked.Increment(ref silmeModalSurumu);
         showDeleteModal = false;
         silinecekArac = null;
+        isSiliniyor = false;
+    }
+
+    private bool SilmeIslemiGuncel(long surum, int aracId, int? firmaId, bool tumFirmalar)
+        => !disposed && showDeleteModal && silinecekArac?.Id == aracId &&
+           surum == System.Threading.Volatile.Read(ref silmeModalSurumu) &&
+           AktifFirmaProvider.AktifFirmaId == firmaId && AktifFirmaProvider.TumFirmalar == tumFirmalar;
+
+    private async Task Sil()
+    {
+        if (disposed || isLoading || isSiliniyor || !showDeleteModal || silinecekArac == null) return;
+        var aracId = silinecekArac.Id;
+        var surum = System.Threading.Volatile.Read(ref silmeModalSurumu);
+        var firmaId = AktifFirmaProvider.AktifFirmaId;
+        var tumFirmalar = AktifFirmaProvider.TumFirmalar;
+        if (tumFirmalar || firmaId is not > 0 || silinecekArac.FirmaId != firmaId)
+        {
+            ToastService.ShowWarning("Araç silmek için aracın firmasını seçin.");
+            return;
+        }
+        isSiliniyor = true;
+        try
+        {
+            await AracService.DeleteAsync(aracId);
+            if (!SilmeIslemiGuncel(surum, aracId, firmaId, tumFirmalar)) return;
+            ToastService.ShowSuccess("Araç silindi.");
+            await LoadData();
+            if (SilmeIslemiGuncel(surum, aracId, firmaId, tumFirmalar)) SilmeModalKapat();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Araç silinemedi. Araç: {AracId}, Firma: {FirmaId}", aracId, firmaId);
+            if (SilmeIslemiGuncel(surum, aracId, firmaId, tumFirmalar))
+                ToastService.ShowError("Araç silinemedi. Listeyi yenileyip tekrar deneyin.");
+        }
+        finally
+        {
+            if (SilmeIslemiGuncel(surum, aracId, firmaId, tumFirmalar))
+            {
+                isSiliniyor = false;
+                StateHasChanged();
+            }
+        }
     }
 
     private string GetTipText(AracTipi tip) => tip switch
@@ -1095,94 +1223,131 @@
 
     private void PlakaGecmisiAc(Arac arac)
     {
-        seciliArac = arac;
-        plakaGecmisi = new List<AracPlaka>(arac.PlakaGecmisi);
+        if (disposed || isLoading) return;
+        var guncelArac = tumAraclar.FirstOrDefault(a => a.Id == arac.Id);
+        if (guncelArac == null) return;
+        PlakaGecmisiKapat();
+        seciliArac = guncelArac;
+        plakaGecmisi = new List<AracPlaka>(guncelArac.PlakaGecmisi);
+        yeniPlaka = new AracPlaka();
+        yeniPlakaGirisTarihi = DateTime.Today;
+        yeniPlakaCikisTarihi = null;
         showPlakaGecmisiModal = true;
     }
 
     private void PlakaGecmisiKapat()
     {
+        System.Threading.Interlocked.Increment(ref plakaModalSurumu);
         showPlakaGecmisiModal = false;
         seciliArac = null;
         plakaGecmisi = null;
+        isPlakaKaydediliyor = false;
     }
 
-    private async Task YeniPlakaEkle()
-    {
-        if (seciliArac == null || string.IsNullOrWhiteSpace(yeniPlaka.Plaka)) return;
+    private bool PlakaIslemiGuncel(long surum, int aracId, int? firmaId, bool tumFirmalar)
+        => !disposed && showPlakaGecmisiModal && seciliArac?.Id == aracId &&
+           surum == System.Threading.Volatile.Read(ref plakaModalSurumu) &&
+           AktifFirmaProvider.AktifFirmaId == firmaId && AktifFirmaProvider.TumFirmalar == tumFirmalar;
 
+    private Task YeniPlakaEkle()
+    {
+        if (seciliArac == null || string.IsNullOrWhiteSpace(yeniPlaka.Plaka)) return Task.CompletedTask;
+        var istek = new AracPlaka
+        {
+            AracId = seciliArac.Id,
+            Plaka = yeniPlaka.Plaka.Trim().ToUpperInvariant(),
+            GirisTarihi = yeniPlakaGirisTarihi,
+            CikisTarihi = yeniPlakaCikisTarihi,
+            IslemTipi = yeniPlaka.IslemTipi,
+            Aciklama = yeniPlaka.Aciklama
+        };
+        return PlakaIsleminiYurut(() => AracService.AddPlakaToAracAsync(istek), "Yeni plaka eklendi.", true);
+    }
+
+    private bool PlakaSecimeAit(AracPlaka plaka)
+        => seciliArac != null && plaka.AracId == seciliArac.Id &&
+           plakaGecmisi?.Any(p => p.Id == plaka.Id) == true;
+
+    private Task PlakaSil(AracPlaka plaka)
+    {
+        if (!PlakaSecimeAit(plaka)) return Task.CompletedTask;
+        var plakaId = plaka.Id;
+        return PlakaIsleminiYurut(() => AracService.DeletePlakaFromAracAsync(plakaId), "Plaka silindi.");
+    }
+
+    private Task PlakayiKapat(AracPlaka plaka)
+    {
+        if (!PlakaSecimeAit(plaka)) return Task.CompletedTask;
+        var plakaId = plaka.Id;
+        var cikisTarihi = DateTime.Today;
+        return PlakaIsleminiYurut(async () =>
+        {
+            await AracService.ClosePlakaAsync(plakaId, cikisTarihi);
+            return true;
+        }, "Plaka kapatıldı.");
+    }
+
+    private async Task PlakaIsleminiYurut(Func<Task<bool>> islem, string basariMesaji, bool formuTemizle = false)
+    {
+        if (disposed || !showPlakaGecmisiModal || seciliArac == null || isPlakaKaydediliyor || isLoading) return;
+        var aracId = seciliArac.Id;
+        var surum = System.Threading.Volatile.Read(ref plakaModalSurumu);
+        var firmaId = AktifFirmaProvider.AktifFirmaId;
+        var tumFirmalar = AktifFirmaProvider.TumFirmalar;
+        if (tumFirmalar || !firmaId.HasValue || firmaId.Value <= 0 || seciliArac.FirmaId != firmaId)
+        {
+            ToastService.ShowWarning("Plaka işlemi için aracın firmasını seçin.");
+            return;
+        }
         isPlakaKaydediliyor = true;
         StateHasChanged();
-
         try
         {
-            yeniPlaka.AracId = seciliArac.Id;
-            yeniPlaka.GirisTarihi = yeniPlakaGirisTarihi;
-            yeniPlaka.CikisTarihi = yeniPlakaCikisTarihi;
-            yeniPlaka.Plaka = yeniPlaka.Plaka.Trim().ToUpperInvariant();
-            
-            var result = await AracService.AddPlakaToAracAsync(yeniPlaka);
-            if (result)
+            var basarili = await islem();
+            if (!PlakaIslemiGuncel(surum, aracId, firmaId, tumFirmalar)) return;
+            if (!basarili)
             {
-                ToastService.ShowSuccess("Yeni plaka eklendi.");
-                await LoadData();
-                seciliArac = tumAraclar.FirstOrDefault(a => a.Id == seciliArac.Id);
-                plakaGecmisi = seciliArac != null ? new List<AracPlaka>(seciliArac.PlakaGecmisi) : null;
+                ToastService.ShowError("Plaka işlemi tamamlanamadı. Listeyi yenileyip tekrar deneyin.");
+                return;
+            }
+            ToastService.ShowSuccess(basariMesaji);
+            var yukleme = LoadData();
+            var listeSurumu = System.Threading.Volatile.Read(ref listeYuklemeSurumu);
+            await yukleme;
+            if (!PlakaIslemiGuncel(surum, aracId, firmaId, tumFirmalar)) return;
+            if (!ListeYuklemesiGuncel(listeSurumu, firmaId, tumFirmalar) || isLoading)
+            {
+                PlakaGecmisiKapat();
+                return;
+            }
+            var guncelArac = tumAraclar.FirstOrDefault(a => a.Id == aracId);
+            if (guncelArac == null)
+            {
+                PlakaGecmisiKapat();
+                return;
+            }
+            seciliArac = guncelArac;
+            plakaGecmisi = new List<AracPlaka>(guncelArac.PlakaGecmisi);
+            if (formuTemizle)
+            {
                 yeniPlaka = new AracPlaka();
                 yeniPlakaGirisTarihi = DateTime.Today;
                 yeniPlakaCikisTarihi = null;
             }
-            else
-            {
-                ToastService.ShowError("Plaka eklenirken hata oluştu.");
-            }
         }
         catch (Exception ex)
         {
-            ToastService.ShowError($"Hata: {ex.Message}");
+            Logger.LogError(ex, "Plaka geçmişi işlemi başarısız. Araç: {AracId}, Firma: {FirmaId}", aracId, firmaId);
+            if (PlakaIslemiGuncel(surum, aracId, firmaId, tumFirmalar))
+                ToastService.ShowError("Plaka işlemi tamamlanamadı. Listeyi yenileyip tekrar deneyin.");
         }
         finally
         {
-            isPlakaKaydediliyor = false;
-            StateHasChanged();
-        }
-    }
-
-    private async Task PlakaSil(AracPlaka plaka)
-    {
-        if (seciliArac == null) return;
-
-        var result = await AracService.DeletePlakaFromAracAsync(plaka.Id);
-        if (result)
-        {
-            ToastService.ShowSuccess("Plaka silindi.");
-            await LoadData();
-            seciliArac = tumAraclar.FirstOrDefault(a => a.Id == seciliArac.Id);
-            plakaGecmisi = seciliArac != null ? new List<AracPlaka>(seciliArac.PlakaGecmisi) : null;
-        }
-        else
-        {
-            ToastService.ShowError("Plaka silinirken hata oluştu.");
-        }
-    }
-
-    private async Task PlakayiKapat(AracPlaka plaka)
-    {
-        if (seciliArac == null) return;
-
-        try
-        {
-            plaka.CikisTarihi = DateTime.Today;
-            await AracService.ClosePlakaAsync(plaka.Id, DateTime.Today);
-            ToastService.ShowSuccess("Plaka kapatıldı.");
-            await LoadData();
-            // Modal'ı güncelle
-            seciliArac = tumAraclar.FirstOrDefault(a => a.Id == seciliArac.Id);
-            plakaGecmisi = seciliArac != null ? new List<AracPlaka>(seciliArac.PlakaGecmisi) : null;
-        }
-        catch (Exception ex)
-        {
-            ToastService.ShowError($"Hata: {ex.Message}");
+            if (PlakaIslemiGuncel(surum, aracId, firmaId, tumFirmalar))
+            {
+                isPlakaKaydediliyor = false;
+                StateHasChanged();
+            }
         }
     }
 

@@ -63,10 +63,9 @@ $Version | Set-Content -LiteralPath (Join-Path $output 'version.txt') -Encoding 
 @"
 # MK Filo Servis v$Version
 
-- MKFiloServisKurulum-$Version.exe: Web sunucusu, lisans araci ve veri aktarimi.
+- MKFiloServisKurulum-$Version.exe: Web sunucusu ve veri aktarimi; lisans araci icermez.
 - MKFiloServisGuncelle-$Version.exe: Mevcut Windows kurulumu icin guncelleme.
-- MKFiloServisKurulumMusteri-$Version.exe: Lisans araci haric musteri kurulumu.
-- MKLisansArac-$Version.exe: Bagimsiz lisans araci.
+- MKFiloServisKurulumMusteri-$Version.exe: Musteri kurulumu (Web ve veri aktarimi).
 - MKFiloServisMasaustu-$Version.exe: Windows masaustu istemcisi.
 - MKFiloServisAndroid-$Version.apk: Android istemcisi, gelistirme anahtariyla imzali.
 

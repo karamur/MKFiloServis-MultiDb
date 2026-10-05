@@ -8,10 +8,12 @@ namespace MKFiloServis.Web.Services;
 public class GlobalSearchService : IGlobalSearchService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+    private readonly LicenseService _licenses;
 
-    public GlobalSearchService(IDbContextFactory<ApplicationDbContext> contextFactory)
+    public GlobalSearchService(IDbContextFactory<ApplicationDbContext> contextFactory, LicenseService licenses)
     {
         _contextFactory = contextFactory;
+        _licenses = licenses;
     }
 
     public async Task<GlobalSearchResult> SearchAsync(string searchTerm, int maxResults = 10)
@@ -26,31 +28,36 @@ public class GlobalSearchService : IGlobalSearchService
         var cariTask = Task.Run(async () =>
         {
             await using var context = await _contextFactory.CreateDbContextAsync();
-            return await SearchCarilerAsync(context, term, maxResults);
+            return _licenses.HasModulePermission("cari")
+                ? await SearchCarilerAsync(context, term, maxResults) : new List<SearchResultItem>();
         });
 
         var aracTask = Task.Run(async () =>
         {
             await using var context = await _contextFactory.CreateDbContextAsync();
-            return await SearchAraclarAsync(context, term, maxResults);
+            return _licenses.HasModulePermission("filoservis")
+                ? await SearchAraclarAsync(context, term, maxResults) : new List<SearchResultItem>();
         });
 
         var personelTask = Task.Run(async () =>
         {
             await using var context = await _contextFactory.CreateDbContextAsync();
-            return await SearchPersonellerAsync(context, term, maxResults);
+            return _licenses.HasModulePermission("personel")
+                ? await SearchPersonellerAsync(context, term, maxResults) : new List<SearchResultItem>();
         });
 
         var faturaTask = Task.Run(async () =>
         {
             await using var context = await _contextFactory.CreateDbContextAsync();
-            return await SearchFaturalarAsync(context, term, maxResults);
+            return _licenses.HasModulePermission("fatura")
+                ? await SearchFaturalarAsync(context, term, maxResults) : new List<SearchResultItem>();
         });
 
         var guzergahTask = Task.Run(async () =>
         {
             await using var context = await _contextFactory.CreateDbContextAsync();
-            return await SearchGuzergahlarAsync(context, term, maxResults);
+            return _licenses.HasModulePermission("filoservis")
+                ? await SearchGuzergahlarAsync(context, term, maxResults) : new List<SearchResultItem>();
         });
 
         await Task.WhenAll(cariTask, aracTask, personelTask, faturaTask, guzergahTask);

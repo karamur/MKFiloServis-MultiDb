@@ -1,4 +1,4 @@
-﻿using MKFiloServis.Web.Components;
+using MKFiloServis.Web.Components;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Helpers;
 using MKFiloServis.Web.Jobs;
@@ -43,13 +43,35 @@ builder.Logging.AddEventSourceLogger();
 
 // Npgsql EnableLegacyTimestampBehavior: herhangi bir UseNpgsql() cagrisindan ONCE set edilmeli.
 // Npgsql static constructor bu switch'i ilk kez UseNpgsql()'de okur ve cache'ler.
-AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+//
+// YAN ETKI (bilinçli olarak varsayılan: açık). Legacy modda Npgsql, `timestamp with time zone`
+// değerlerini okurken MAKİNE YEREL SAATİNE çevirir ve Kind=Utc döndürmek yerine dönüşüm uygular.
+// Bu uygulamanın tarihleri tarihsel olarak yerel saat (Türkiye = UTC+3) semantiğiyle saklanıp
+// gösterildiği varsayıldığı için davranış değiştirilmeden sütun ve gösterim semantiği
+// doğrulanmalıdır. Okuma ve yazma sonuçları değişebilir; bu nedenle otomatik kapatılmıyor.
+//
+// Kapatmak isteyenler için: Npgsql:EnableLegacyTimestampBehavior=false ayarlanmalı, TÜM tarih
+// sütunlarının hangi semantikle yazıldığı denetlenmeli. `timestamp` -> `timestamptz`
+// dönüşümünde kaynak değerlerin gerçek saat dilimi kullanılmalı (UTC olduğu varsayılmamalı).
+// Yedek ve kabul doğrulaması gerektiren bir veri geçişidir.
+var legacyZamanDamgasi = builder.Configuration.GetValue("Npgsql:EnableLegacyTimestampBehavior", true);
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", legacyZamanDamgasi);
+// Uyarı yalnız gerçekten Npgsql kullanan kurulumlarda anlamlıdır.
+// Switch yine sağlayıcı başlatılmadan önce ayarlanır.
 
 // Database Provider Secimi (dbsettings.json varsa onu oncele)
 var databaseRuntime = await DatabaseRuntimeResolver.ResolveAsync(builder.Configuration, builder.Environment);
 builder.Services.AddSingleton(databaseRuntime);
 var dbProvider = databaseRuntime.Provider.ToString();
 var defaultConnectionString = databaseRuntime.ConnectionString;
+if (legacyZamanDamgasi && databaseRuntime.Provider == DatabaseProvider.PostgreSQL)
+{
+    Console.WriteLine(
+        "[UYARI] Npgsql.EnableLegacyTimestampBehavior=AÇIK. timestamptz değerleri sunucu yerel " +
+        "saatine çevrilerek okunur. Saat kaymalarına karşı tarih sütunlarının yerel saat " +
+        "semantiğiyle yazıldığı varsayılır; kapatmadan önce veri geçiş planı gerekir.");
+}
+
 
 // URL baglama: IIS tarafi zaten adres/port yonetir; burada zorlama yapma.
 // Explicit URL verilmediyse development ve self-hosted production icin cakismayan port sec.
@@ -97,7 +119,7 @@ if (!hasExplicitUrls && !isIisHosted)
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddSingleton<AktiviteLogInterceptor>();
+// Audit kayıtları ApplicationDbContext tarafından aynı SaveChanges işleminde yazılır.
 builder.Services.AddSingleton<ICurrentUserAccessor, CurrentUserAccessor>();
 
 // Database - Kanonik migration otoritesi PostgreSQL, desteklenen runtime: PostgreSQL + SQLite + SQL Server + MySQL
@@ -167,19 +189,21 @@ builder.Services.AddPooledDbContextFactory<ApplicationDbContext>((sp, options) =
 
     // Query-filter etkileşim uyarısı: EF Core'un global query filter + required navigation
     // etkileşiminde verdiği false-positive uyarı. Model doğru, uyarı bastırılıyor.
-    // Pending model değişiklik uyarısı startup'ta exception'a dönüşmemeli.
     options.ConfigureWarnings(w =>
     {
         w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning);
         w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.MultipleCollectionIncludeWarning);
-        w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning);
+        // PendingModelChangesWarning varsayılan olarak HATA seviyesindedir ve model ile migration
+        // uyuşmazlığında başlatmayı düşürür. Burada bastırılmadan önce uyarı seviyesine indirilir:
+        // başlatma akışı kırılmaz ama şema kayması gizli kalmaz, loga düşer.
+        w.Log(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning);
     });
-    options.AddInterceptors(sp.GetRequiredService<AktiviteLogInterceptor>());
+
 });
 
 // Scoped IDbContextFactory: her context oluşturulduğunda SetServiceProvider çağrılır.
 // Pooled factory'yi sarar → IAktifFirmaProvider + Global Query Filter (Kural 6, Kural 7).
-// Singleton tüketiciler (LisansService) IServiceScopeFactory üzerinden ApplicationDbContext alır.
+// Scoped tüketiciler bu factory üzerinden firma kapsamlı ApplicationDbContext alır.
 builder.Services.AddScoped<IDbContextFactory<ApplicationDbContext>>(sp =>
 {
     var options = sp.GetRequiredService<DbContextOptions<ApplicationDbContext>>();
@@ -198,17 +222,26 @@ builder.Services.AddScoped<IUserStore<Kullanici>, KullaniciUserStore>();
 builder.Services.AddScoped<IPasswordHasher<Kullanici>, KullaniciPasswordHasher>();
 builder.Services.AddIdentityCore<Kullanici>(options =>
 {
-    options.Password.RequireDigit = false;
-    options.Password.RequireLowercase = false;
-    options.Password.RequireUppercase = false;
-    options.Password.RequireNonAlphanumeric = false;
+    options.Password.RequireDigit = true;
+    options.Password.RequireLowercase = true;
+    options.Password.RequireUppercase = true;
+    options.Password.RequireNonAlphanumeric = true;
     options.Password.RequiredLength = 12;
-    options.Lockout.MaxFailedAccessAttempts = 5;
-    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
     options.User.RequireUniqueEmail = false;
 })
     .AddUserStore<KullaniciUserStore>();
-builder.Services.AddAuthorizationCore();
+builder.Services.Configure<PasswordHasherOptions>(options =>
+{
+    options.CompatibilityMode = PasswordHasherCompatibilityMode.IdentityV3;
+    options.IterationCount = 310_000;
+});
+builder.Services.AddAuthorizationCore(options =>
+{
+    foreach (var module in MKFiloServis.Shared.Licensing.LicenseModules.All.Keys)
+        options.AddPolicy("Licensed:" + module, policy => policy.RequireAuthenticatedUser()
+            .AddRequirements(new LicenseModuleRequirement(module)));
+});
+builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, LicenseModuleAuthorizationHandler>();
 builder.Services.AddCascadingAuthenticationState();
 var dataProtectionKeysRoot = new DirectoryInfo(AppStoragePaths.GetDataProtectionKeysRoot(builder.Environment.ContentRootPath));
 dataProtectionKeysRoot.Create();
@@ -410,7 +443,14 @@ builder.Services.AddScoped<TestDataSeeder>(); // Test/Demo Veri Oluşturma Servi
 builder.Services.AddScoped<DemoDataService>(); // Demo Veri Yönetim Servisi (Reset/Seed/Remove)
 builder.Services.AddScoped<IAuditLogService, AuditLogService>(); // Audit Log (Tüm İşlem Takibi) Servisi
 builder.Services.AddHttpClient("SMS"); // SMS provider'lar için HttpClient
-builder.Services.AddHttpClient("Webhook"); // Webhook gönderimi için HttpClient
+builder.Services.AddHttpClient("Webhook")
+    .AddHttpMessageHandler(sp => new MKFiloServis.Web.Http.ResilientHttpMessageHandler(
+        2, TimeSpan.FromMilliseconds(200),
+        sp.GetRequiredService<ILogger<MKFiloServis.Web.Http.ResilientHttpMessageHandler>>(),
+  // Bildirim webhook'ları POST ile gider. retryNonIdempotent yalnızca isteğin sunucuya
+  // ULAŞMADIĞI kesin hatalarda (DNS/bağlantı reddi) tekrar denemeye izin verir; belirsiz
+  // hatalarda (zaman aşımı, bağlantı sıfırlanması) çift gönderim önlenir.
+  retryNonIdempotent: true));
 builder.Services.AddScoped<AutoBackupService>(); // Quartz job tarafından tetiklenen otomatik yedek servisi
 builder.Services.AddScoped<GunlukOzetService>(); // Quartz job tarafından tetiklenen günlük WhatsApp özet servisi
 builder.Services.AddScoped<IBakimPeriyotService, BakimPeriyotService>();
@@ -435,8 +475,22 @@ else
 builder.Services.AddScoped<ITeamsBildirimService, TeamsBildirimService>(); // Microsoft Teams Webhook Bildirimleri
 builder.Services.AddScoped<ISlackBildirimService, SlackBildirimService>(); // Slack Webhook Bildirimleri
 builder.Services.AddScoped<ILokalizasyonService, LokalizasyonService>(); // i18n Lokalizasyon
-builder.Services.AddHttpClient("Teams"); // Teams webhook için
-builder.Services.AddHttpClient("Slack");  // Slack webhook için
+builder.Services.AddHttpClient("Teams") // Teams webhook için
+    .AddHttpMessageHandler(sp => new MKFiloServis.Web.Http.ResilientHttpMessageHandler(
+        2, TimeSpan.FromMilliseconds(200),
+        sp.GetRequiredService<ILogger<MKFiloServis.Web.Http.ResilientHttpMessageHandler>>(),
+  // Bildirim webhook'ları POST ile gider. retryNonIdempotent yalnızca isteğin sunucuya
+  // ULAŞMADIĞI kesin hatalarda (DNS/bağlantı reddi) tekrar denemeye izin verir; belirsiz
+  // hatalarda (zaman aşımı, bağlantı sıfırlanması) çift gönderim önlenir.
+  retryNonIdempotent: true));
+builder.Services.AddHttpClient("Slack")  // Slack webhook için
+    .AddHttpMessageHandler(sp => new MKFiloServis.Web.Http.ResilientHttpMessageHandler(
+        2, TimeSpan.FromMilliseconds(200),
+        sp.GetRequiredService<ILogger<MKFiloServis.Web.Http.ResilientHttpMessageHandler>>(),
+  // Bildirim webhook'ları POST ile gider. retryNonIdempotent yalnızca isteğin sunucuya
+  // ULAŞMADIĞI kesin hatalarda (DNS/bağlantı reddi) tekrar denemeye izin verir; belirsiz
+  // hatalarda (zaman aşımı, bağlantı sıfırlanması) çift gönderim önlenir.
+  retryNonIdempotent: true));
 builder.Services.AddHttpContextAccessor();
 
 var belgeUyariCheckIntervalHours = Math.Max(1, builder.Configuration.GetValue("BelgeUyari:CheckIntervalHours", 24));
@@ -694,7 +748,7 @@ app.Use(async (context, next) =>
     await next();
 });
 
-static async Task RunScopedSafeAsync(WebApplication app, string taskName, Func<IServiceProvider, Task> action)
+static async Task RunScopedSafeAsync(WebApplication app, string taskName, Func<IServiceProvider, Task> action, bool required = true)
 {
     using var scope = app.Services.CreateScope();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
@@ -707,15 +761,20 @@ static async Task RunScopedSafeAsync(WebApplication app, string taskName, Func<I
     }
     catch (Exception ex)
     {
-        // Nihai mimari: eksik tablolar/kolonlar idempotent helper'larla duzeltilir.
-        // Kritik olmayan hatalarda uygulama devam eder.
-        logger.LogWarning(ex, "Startup gorevi hatasi (kritik degil, devam): {TaskName}", taskName);
+        if (required)
+        {
+            logger.LogCritical(ex, "Zorunlu startup görevi başarısız: {TaskName}", taskName);
+            throw;
+        }
+        logger.LogWarning(ex, "İsteğe bağlı startup görevi başarısız: {TaskName}", taskName);
     }
 }
 
 // Master DB: olustur ve tablolari hazirla (raw SQL ile, EF migration cascade sorununu bypass eder)
 await RunScopedSafeAsync(app, "MasterDatabase", async services =>
 {
+    var runtime = services.GetRequiredService<DatabaseRuntimeInfo>();
+    if (!runtime.IsPostgreSql) return;
     var configuration = services.GetRequiredService<IConfiguration>();
     await DbInitializer.EnsureMasterDatabaseAsync(configuration);
 });
@@ -853,25 +912,25 @@ await RunScopedSafeAsync(app, "MarkaModelSeed", async services =>
 {
     var satisService = services.GetRequiredService<ISatisService>();
     await satisService.SeedMarkaModelAsync();
-});
+}, required: false);
 
 await RunScopedSafeAsync(app, "MuhasebeHesapPlaniSeed", async services =>
 {
     var muhasebeService = services.GetRequiredService<IMuhasebeService>();
     await muhasebeService.SeedVarsayilanHesapPlaniAsync();
-});
+}, required: false);
 
 await RunScopedSafeAsync(app, "PiyasaKaynakSeed", async services =>
 {
     var piyasaKaynakService = services.GetRequiredService<IPiyasaKaynakService>();
     await piyasaKaynakService.SeedDefaultKaynaklarAsync();
-});
+}, required: false);
 
 await RunScopedSafeAsync(app, "BudgetMasrafKalemleriSeed", async services =>
 {
     var budgetService = services.GetRequiredService<IBudgetService>();
     await budgetService.SeedMasrafKalemleriAsync();
-});
+}, required: false);
 
 await RunScopedSafeAsync(app, "CariAlanGenisletmeMigration", async services =>
 {
@@ -968,7 +1027,7 @@ await RunScopedSafeAsync(app, "SeedDefaultEvrakTanimlari", async services =>
 {
     var ozlukService = services.GetRequiredService<IPersonelOzlukService>();
     await ozlukService.SeedDefaultEvrakTanimlariAsync();
-});
+}, required: false);
 
 // Nihai Mimari
 // Tüm firmalar tek MKFiloServis veritabanında çalışır.
@@ -1208,26 +1267,77 @@ if (!app.Environment.IsDevelopment())
 }
 
 // Health check endpoints
-app.MapHealthChecks("/healthz", new HealthCheckOptions { Predicate = _ => false });
-app.MapHealthChecks("/readyz", new HealthCheckOptions { Predicate = _ => true });
+    // Liveness/readiness probleları bilinçli olarak anonimdir. R-6 yetkilendirme envanterinde
+    // bunlar AÇIKÇA işaretlenir; böylece envanterde çıkan her yeni uç, korumasız eklenmiş bir uçtur.
+    app.MapHealthChecks("/healthz", new HealthCheckOptions { Predicate = _ => false })
+        .AllowAnonymous();
+    app.MapHealthChecks("/readyz", new HealthCheckOptions { Predicate = _ => true })
+        .AllowAnonymous();
 
-// Swagger UI - tüm ortamlarda aktif (API dokümantasyonu)
-app.UseSwagger(c =>
+// Swagger UI - yalnizca Development ortaminda, ya da acikca istenirse baslar.
+// Production'da API dokumantasyonu ve tum endpoint/semasi haritasi internete acilir.
+var swaggerEnabled = app.Environment.IsDevelopment()
+    || string.Equals(app.Configuration["MKFILOSERVIS_ENABLE_SWAGGER"], "true", StringComparison.OrdinalIgnoreCase);
+
+if (swaggerEnabled)
 {
-    c.RouteTemplate = "swagger/{documentName}/swagger.json";
-});
-app.UseSwaggerUI(c =>
+    // Swagger UI ve swagger.json, tüm endpoint/sema haritasını internete açar. Development'ta
+    // geliştirici kolaylığı için anonim kalır; production'da açıkça istenmiş olsa bile
+    // Admin rolu + Bearer token gerekir (şema bilgisi internete açılmış sayılır).
+    var swaggerAuthZorunlu = !app.Environment.IsDevelopment();
+
+    app.Use(async (ctx, next) =>
+    {
+        if (!swaggerAuthZorunlu || !ctx.Request.Path.StartsWithSegments("/swagger"))
+        {
+            await next();
+            return;
+        }
+
+        // Swagger middleware'i kimlik doğrulamadan ÖNCE çalıştığı için burada açıkça tetiklenir.
+        var sonuc = await Microsoft.AspNetCore.Authentication.AuthenticationHttpContextExtensions
+            .AuthenticateAsync(ctx, JwtBearerDefaults.AuthenticationScheme);
+
+        var adminMi = sonuc.Succeeded && (sonuc.Principal?.IsInRole("Admin") ?? false);
+        if (!adminMi)
+        {
+            ctx.Response.StatusCode = sonuc.Succeeded ? StatusCodes.Status403Forbidden : StatusCodes.Status401Unauthorized;
+            ctx.Response.Headers.WWWAuthenticate = JwtBearerDefaults.AuthenticationScheme;
+            await ctx.Response.WriteAsync("Swagger erisimi icin yetkili (Admin) Bearer token gerekir.");
+            return;
+        }
+
+        await next();
+    });
+
+    if (swaggerAuthZorunlu)
+    {
+        app.Logger.LogWarning(
+            "Swagger {Environment} ortaminda acik; /swagger yalnizca Admin rolu + Bearer token ile erisilebilir.",
+            app.Environment.EnvironmentName);
+    }
+
+    app.UseSwagger(c =>
+    {
+        c.RouteTemplate = "swagger/{documentName}/swagger.json";
+    });
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "MKFiloServis API v1");
+        c.RoutePrefix = "swagger";
+        c.DocumentTitle = "MKFiloServis API Dokümantasyonu";
+        c.DefaultModelsExpandDepth(-1); // Models bölümünü kapalı başlat
+        c.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.None);
+        c.EnableDeepLinking();
+        c.DisplayRequestDuration();
+        c.EnableFilter();
+        c.EnableTryItOutByDefault();
+    });
+}
+else
 {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "MKFiloServis API v1");
-    c.RoutePrefix = "swagger";
-    c.DocumentTitle = "MKFiloServis API Dokümantasyonu";
-    c.DefaultModelsExpandDepth(-1); // Models bölümünü kapalı başlat
-    c.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.None);
-    c.EnableDeepLinking();
-    c.DisplayRequestDuration();
-    c.EnableFilter();
-    c.EnableTryItOutByDefault();
-});
+    app.Logger.LogInformation("Swagger kapali ({Environment}). Gelistirme icin MKFILOSERVIS_ENABLE_SWAGGER=true verilebilir.", app.Environment.EnvironmentName);
+}
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 
@@ -1297,15 +1407,13 @@ using (var scope = app.Services.CreateScope())
     var licSvc = scope.ServiceProvider.GetRequiredService<LicenseService>();
     var licCache = scope.ServiceProvider.GetRequiredService<LicenseCache>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-    var overrideKey = config["DevSettings:OverrideKey"];
 
     // Her uygulama başlangıcında cache temizlenir ve lisans DB üzerinden yeniden doğrulanır.
     licCache.Clear();
 
     try
     {
-        var val = await licSvc.ValidateAsync(overrideKey);
+        var val = await licSvc.ValidateAsync();
         if (!val.IsValid)
         {
             MKFiloServis.Shared.AppMode.EnterDemoMode(val.Message);
@@ -1324,10 +1432,27 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-app.MapStaticAssets();
-app.MapRazorComponents<App>()
+// Statik dosyalar ve framework'ün geliştirme dosyası fallback'i herkese açıktır.
+// Grubun metadatası fallback'e de uygulanır; uygulama/controller uçlarını kapsamaz.
+app.MapGroup("").AllowAnonymous().MapStaticAssets();
+var razorEndpoints = app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
-app.MapControllers(); // API Controller'larini haritalandir
+razorEndpoints.Add(endpoint =>
+{
+    // Girişe yönlendirme dahil, DataProtection ile korunan framework yönlendirmesi.
+    // Sayfalara toplu AllowAnonymous eklenmez; yalnız bu framework ucu işaretlenir.
+    if (endpoint is Microsoft.AspNetCore.Routing.RouteEndpointBuilder route
+        && route.RoutePattern.RawText == "/_framework/opaque-redirect"
+        && route.DisplayName == "Blazor Opaque Redirection")
+        endpoint.Metadata.Add(new Microsoft.AspNetCore.Authorization.AllowAnonymousAttribute());
+});
+// MVC controller endpoint'leri varsayılan olarak JWT ile korunur.
+// Bilerek herkese açık action'lar [AllowAnonymous] ile açıkça işaretlenmelidir.
+app.MapControllers()
+    .RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute
+    {
+        AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme
+    });
 app.MapHub<MKFiloServis.Web.Hubs.EvrakHub>("/hubs/evrak"); // SignalR Evrak Hub'ı
 
 // Admin: Evrak arşiv backfill endpoint'i (sadece Development'da aktif)
@@ -1339,7 +1464,7 @@ if (app.Environment.IsDevelopment())
     {
         var rapor = await backfillService.DryRunAsync(ct);
         return Results.Ok(rapor);
-    }).WithTags("Admin")
+    }).WithTags("Admin").RequireAuthorization("Licensed:ebys")
       .RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute
       {
           AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
@@ -1354,7 +1479,7 @@ if (app.Environment.IsDevelopment())
     {
         var rapor = await backfillService.ExecuteAsync(updateDatabase, overwriteExisting, ct);
         return Results.Ok(rapor);
-    }).WithTags("Admin")
+    }).WithTags("Admin").RequireAuthorization("Licensed:ebys")
       .RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute
       {
           AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
@@ -1362,8 +1487,71 @@ if (app.Environment.IsDevelopment())
       });
 }
 
-app.Run();
+// R-6: Yetkilendirme envanteri denetimi.
+//
+// Küresel FallbackPolicy bilinçli olarak EKLENMEDİ: DefaultScheme JWT Bearer olduğu için
+// fallback, Blazor devrelerinin kullandığı COOKIE kimlik doğrulamasını ve statik varlıkları da
+// kapsar ve uygulamayı kırardı. Bunun yerine her açılışta haritalanan tüm uçlar denetlenir ve
+// yetkilendirme metadatası taşımayanlar AÇIKÇA listelenir. Böylece korumasız yeni bir minimal API
+// endpoint'i eklenmesi sessizce kalmaz; her startup'ta loglanır.
+//
+// EndpointDataSource startup anında BOŞTUR (uçlar tembel materyalize edilir); bu yüzden denetim
+// ApplicationStarted sonrasına bırakılır. Daha erken çalıştırılırsa envanter 0 uç gösterir.
+app.Lifetime.ApplicationStarted.Register(() =>
+{
+    try
+    {
+        var endpointSources = app.Services.GetRequiredService<Microsoft.AspNetCore.Routing.EndpointDataSource>();
+        var allEndpoints = endpointSources.Endpoints.OfType<Microsoft.AspNetCore.Routing.RouteEndpoint>().ToList();
 
+        if (allEndpoints.Count == 0)
+        {
+            app.Logger.LogWarning("Yetkilendirme envanteri boş geldi ({Count} uç); endpoint denetimi yapılamadı.", 0);
+            return;
+        }
+
+        // MapStaticAssets() her dosya için ayrı bir uç üretir; bunlar korunmasız olması beklenen
+        // varlıklardır ve envanteri okunamaz hâle getirir. Bunlar ve yalnızca iskelet olan Blazor
+        // framework uçları dışarıda bırakılır; geriye gerçek uygulama uçları kalır.
+        static bool StatikVarlikMi(object m) =>
+            m.GetType().Name.Contains("StaticAsset", StringComparison.Ordinal);
+
+        static bool BlazorFrameworkMi(object m) =>
+            m.GetType().Name.Contains("RootComponentMetadata", StringComparison.Ordinal)
+            || m.GetType().Name.Contains("InteractiveServerEndpointMetadata", StringComparison.Ordinal);
+
+        var korumasizUclar = allEndpoints
+            .Where(e => !e.Metadata.Any(StatikVarlikMi) && !e.Metadata.Any(BlazorFrameworkMi))
+            .Where(e => !e.Metadata.Any(m => m.GetType().Name is "IAllowAnonymous" or "IAuthorizeData"
+                    || m is Microsoft.AspNetCore.Authorization.IAllowAnonymous
+                    || m is Microsoft.AspNetCore.Authorization.IAuthorizeData
+                    || m.GetType().Name.Contains("AuthorizationRequirement", StringComparison.Ordinal)
+                    || m.GetType().Name.Contains("RequireAuthorization", StringComparison.Ordinal)))
+            .Select(e => e.RoutePattern.RawText ?? "(statik)")
+            .Distinct()
+            .OrderBy(r => r, StringComparer.Ordinal)
+            .ToList();
+
+        app.Logger.LogInformation(
+            "Yetkilendirme envanteri: {Toplam} uç tarandı, {Korumasiz} uç yetkilendirme metadatası taşımıyor (statik varlıklar ve Blazor iskelet uçları hariç).",
+            allEndpoints.Count, korumasizUclar.Count);
+
+        if (korumasizUclar.Count > 0)
+        {
+            app.Logger.LogWarning(
+                "Yetkilendirme metadatası taşımayan uçlar: {Uclar}. " +
+                "Bunlar varsayılan olarak kimlik doğrulaması gerektirmez. Yalnızca bilinçli olarak herkese açık olması istenen uçlar olmalıdır; " +
+                "aksi halde .RequireAuthorization() uygulanmalı, kasıtlıysa .AllowAnonymous() ile açıkça işaretlenmelidir.",
+                string.Join(", ", korumasizUclar));
+        }
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Yetkilendirme envanteri üretilemedi; endpoint denetimi yapılamadı.");
+    }
+});
+
+app.Run();
 
 
 

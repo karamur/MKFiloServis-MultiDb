@@ -67,52 +67,77 @@ public class FiloKomisyonService : IFiloKomisyonService
     public async Task<FiloGuzergahEslestirme> CreateEslestirmeAsync(FiloGuzergahEslestirme eslestirme)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        context.FiloGuzergahEslestirmeleri.Add(eslestirme);
+        await ValidateEslestirmeRelationsAsync(context, eslestirme.FirmaId, eslestirme);
+
+        // Yalnız doğrulanan scalar değerleri ekle; gelen navigation grafiği FK'leri
+        // değiştirememeli veya başka firma kayıtlarını context'e ekleyememeli.
+        var yeni = new FiloGuzergahEslestirme
+        {
+            FirmaId = eslestirme.FirmaId,
+            KurumFirmaId = eslestirme.KurumFirmaId,
+            GuzergahId = eslestirme.GuzergahId,
+            AracId = eslestirme.AracId,
+            SoforId = eslestirme.SoforId,
+            KullaniciId = eslestirme.KullaniciId,
+            ServisTuru = eslestirme.ServisTuru,
+            KurumaKesilecekUcret = eslestirme.KurumaKesilecekUcret,
+            TaseronaOdenenUcret = eslestirme.TaseronaOdenenUcret,
+            IsActive = eslestirme.IsActive
+        };
+        context.FiloGuzergahEslestirmeleri.Add(yeni);
         await context.SaveChangesAsync();
-        return eslestirme;
+        return yeni;
     }
 
     public async Task<FiloGuzergahEslestirme> UpdateEslestirmeAsync(FiloGuzergahEslestirme eslestirme)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
 
-        // Garanti DB yazımı: doğrudan SQL UPDATE (tracking/audit akışını atlar).
-        // IgnoreQueryFilters: global filtre Arac/Firma join'i içerdiğinden SQLite UPDATE'te
-        // "no such column" hatasına yol açıyor; soft-delete kontrolü açıkça yapılıyor.
-        var etkilenen = await context.FiloGuzergahEslestirmeleri
-            .IgnoreQueryFilters()
-            .Where(e => e.Id == eslestirme.Id && !e.IsDeleted)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(e => e.KurumFirmaId, eslestirme.KurumFirmaId)
-                .SetProperty(e => e.GuzergahId, eslestirme.GuzergahId)
-                .SetProperty(e => e.AracId, eslestirme.AracId)
-                .SetProperty(e => e.SoforId, eslestirme.SoforId)
-                .SetProperty(e => e.KullaniciId, eslestirme.KullaniciId)
-                .SetProperty(e => e.ServisTuru, eslestirme.ServisTuru)
-                .SetProperty(e => e.KurumaKesilecekUcret, eslestirme.KurumaKesilecekUcret)
-                .SetProperty(e => e.TaseronaOdenenUcret, eslestirme.TaseronaOdenenUcret)
-                .SetProperty(e => e.IsActive, eslestirme.IsActive)
-                .SetProperty(e => e.UpdatedAt, DateTime.UtcNow));
-
-        if (etkilenen == 0)
-            throw new InvalidOperationException($"Eşleştirme (Id={eslestirme.Id}) veritabanında bulunamadı; güncelleme yapılamadı.");
-
-        // Doğrulama: yazılan değerleri geri oku
+        // Filtreli SELECT, ilişkili araç/firma kontrollerini korur. Tracked yazım
+        // SQLite toplu UPDATE join sorununu önler ve değişiklikleri audit'e alır.
         var guncel = await context.FiloGuzergahEslestirmeleri
-            .AsNoTracking()
-            .FirstOrDefaultAsync(e => e.Id == eslestirme.Id);
+            .FirstOrDefaultAsync(e => e.Id == eslestirme.Id && !e.IsDeleted);
 
-        if (guncel == null ||
-            guncel.KurumaKesilecekUcret != eslestirme.KurumaKesilecekUcret ||
-            guncel.TaseronaOdenenUcret != eslestirme.TaseronaOdenenUcret ||
-            guncel.AracId != eslestirme.AracId ||
-            guncel.SoforId != eslestirme.SoforId ||
-            guncel.GuzergahId != eslestirme.GuzergahId)
-        {
-            throw new InvalidOperationException("Eşleştirme değişiklikleri veritabanına yazılamadı (doğrulama başarısız).");
-        }
+        if (guncel is null)
+            throw new InvalidOperationException($"Eşleştirme (Id={eslestirme.Id}) bulunamadı veya firma kapsamında erişilebilir değil; güncelleme yapılamadı.");
+
+        // Firma kapsamı istemciden değil, mevcut eşleştirmeden alınır.
+        await ValidateEslestirmeRelationsAsync(context, guncel.FirmaId, eslestirme);
+
+        guncel.KurumFirmaId = eslestirme.KurumFirmaId;
+        guncel.GuzergahId = eslestirme.GuzergahId;
+        guncel.AracId = eslestirme.AracId;
+        guncel.SoforId = eslestirme.SoforId;
+        guncel.KullaniciId = eslestirme.KullaniciId;
+        guncel.ServisTuru = eslestirme.ServisTuru;
+        guncel.KurumaKesilecekUcret = eslestirme.KurumaKesilecekUcret;
+        guncel.TaseronaOdenenUcret = eslestirme.TaseronaOdenenUcret;
+        guncel.IsActive = eslestirme.IsActive;
+        guncel.UpdatedAt = DateTime.UtcNow;
+        await context.SaveChangesAsync();
 
         return guncel;
+    }
+
+    private static async Task ValidateEslestirmeRelationsAsync(
+        ApplicationDbContext context, int firmaId, FiloGuzergahEslestirme eslestirme)
+    {
+        if (firmaId <= 0 || !await context.Firmalar.AnyAsync(x => x.Id == firmaId && !x.IsDeleted))
+            throw new InvalidOperationException("Eşleştirme için geçerli bir firma seçilmelidir.");
+
+        if (!await context.Cariler.AnyAsync(x => x.Id == eslestirme.KurumFirmaId && x.FirmaId == firmaId && !x.IsDeleted))
+            throw new InvalidOperationException("Seçilen kurum eşleştirmenin firmasına ait değil veya erişilebilir değil.");
+        if (!await context.Guzergahlar.AnyAsync(x => x.Id == eslestirme.GuzergahId && x.FirmaId == firmaId && !x.IsDeleted))
+            throw new InvalidOperationException("Seçilen güzergâh eşleştirmenin firmasına ait değil veya erişilebilir değil.");
+        if (!await context.Araclar.AnyAsync(x => x.Id == eslestirme.AracId && x.FirmaId == firmaId && !x.IsDeleted))
+            throw new InvalidOperationException("Seçilen araç eşleştirmenin firmasına ait değil veya erişilebilir değil.");
+        if (!await context.Soforler.AnyAsync(x => x.Id == eslestirme.SoforId && x.FirmaId == firmaId && !x.IsDeleted))
+            throw new InvalidOperationException("Seçilen personel eşleştirmenin firmasına ait değil veya erişilebilir değil.");
+
+        // Kullanıcı modeli globaldir (FirmaId yok); yalnız varlık/silinme kontrolü yapılır.
+        if (eslestirme.KullaniciId.HasValue &&
+            !await context.Kullanicilar.AnyAsync(x => x.Id == eslestirme.KullaniciId.Value && !x.IsDeleted))
+            throw new InvalidOperationException("Seçilen kullanıcı bulunamadı veya silinmiş.");
     }
 
     public async Task<bool> DeleteEslestirmeAsync(int id)

@@ -24,10 +24,10 @@ veya PowerShell ile:
 
 | Dosya | Aciklama |
 |-------|----------|
-| `MKFiloServisKurulum-1.0.37.exe` | Tam kurulum (Web + Lisans + DataSync) |
+| `MKFiloServisKurulum-1.0.37.exe` | Sunucu kurulumu (Web + DataSync); lisans üretim aracı içermez |
 | `MKFiloServisGuncelle-1.0.37.exe` | Guncelleme paketi |
 | `MKFiloServisKurulumMusteri-1.0.37.exe` | Musteri paketi (lisans araci haric) |
-| `MKLisansArac-1.0.37.exe` | Bagimsiz lisans yonetim araci |
+| `MKLisansArac-1.0.37.exe` | Yalnızca dahili lisans üretim akışında oluşturulur |
 | `MKFiloServisMasaustu-1.0.37.exe` | Windows masaustu istemcisi |
 | `MKFiloServisAndroid-1.0.37.apk` | Android istemcisi (imzali APK) |
 
@@ -38,6 +38,7 @@ veya PowerShell ile:
 | `-Version` | Versiyon numarasi (varsayilan: 1.0.37) |
 | `-SkipPublish` | Publish atla, sadece Inno Setup calistir |
 | `-LisansOnly` | Sadece lisans araci EXE'si uret |
+| `-IncludeInternalLicenseTool` | Sunucu paketleriyle birlikte ayrıca dahili lisans aracını üret; müşteri kurulumuna eklemez |
 
 ## Klasor Yapisi
 
@@ -74,3 +75,12 @@ agdan erisilebilir olmalidir. Windows istemcisinde varsayilan adres
 veya HTTPS adresi girilir; telefondaki `localhost` bilgisayari gostermez.
 Girilen adres cihazda saklanir. APK gelistirme anahtariyla imzalanir; herkese
 dagitilacak kalici surum icin kuruma ait Android imzalama anahtari gereklidir.
+
+
+## Şirket içi lisans programı
+
+Lisans üretimi ve anahtar yedek/geri yükleme işlemleri LisansDesktop programından yürütülür.
+Programın **İmza Anahtarı** menüsünde durum kontrolü, parola korumalı `.mkkey` yedeği
+ve geri yükleme bulunur. Harici anahtar yönetim betiği veya ortam değişkeni gerekmez.
+İmzalama anahtarı ve LisansDesktop müşteri kurulumuna eklenmez.
+Ayrıntılar: [Lisans geçişi](../docs/LISANS-IMZA-GECIS.md).

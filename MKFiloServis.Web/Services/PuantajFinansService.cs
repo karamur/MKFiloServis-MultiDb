@@ -416,7 +416,12 @@ public sealed class PuantajFinansService : IPuantajFinansService
                     await GiderFaturasiUretAsync(fk.Id, ct);
                 uretilen++;
             }
-            catch { /* Tekil hata, devam et */ }
+            catch (Exception ex)
+            {
+                // Fatura üretimi kaydı tutarsız bırakmaması için tekil hatayı kaydet, diğer kayıtları atlamaya devam et.
+                _logger.LogError(ex, "Puantaj finans faturası üretilemedi. PuantajKayitId: {PuanKayitId}, GelirCariId: {GelirCariId}, GiderCariId: {GiderCariId}",
+                    fk.Id, fk.GelirCariId, fk.GiderCariId);
+            }
         }
 
         return uretilen;

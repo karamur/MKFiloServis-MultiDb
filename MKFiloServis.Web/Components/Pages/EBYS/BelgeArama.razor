@@ -1,4 +1,5 @@
-﻿@page "/ebys/arama"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:ebys")]
+@page "/ebys/arama"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
 @using MKFiloServis.Web.Services.Interfaces

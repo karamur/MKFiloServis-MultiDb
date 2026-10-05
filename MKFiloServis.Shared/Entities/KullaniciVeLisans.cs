@@ -97,6 +97,7 @@ public class Kullanici : BaseEntity
     public DateTime? SonGirisTarihi { get; set; }
     public int BasarisizGirisSayisi { get; set; } = 0;
     public bool Kilitli { get; set; } = false;
+    public DateTime? KilitlenmeBitisUtc { get; set; }
 
     public bool IkiFaktorAktif { get; set; } = false;
 

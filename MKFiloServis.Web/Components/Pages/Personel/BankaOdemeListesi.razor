@@ -1,4 +1,5 @@
-﻿@page "/personel/banka-odeme-listesi"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:personel")]
+@page "/personel/banka-odeme-listesi"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
 @using MKFiloServis.Web.Services.Interfaces
@@ -9,16 +10,34 @@
 @inject IPersonelFinansService FinansService
 @inject IPersonelMaasIzinService PersonelMaasService
 @inject IMaasSnapshotService SnapshotService
+@inject IAktifFirmaProvider AktifFirmaProvider
 @inject IBankaHesapService BankaHesapService
 @inject IDbContextFactory<ApplicationDbContext> DbContextFactory
 @inject IToastService ToastService
+@inject ILoggerFactory LoggerFactory
 @inject IJSRuntime JS
+@implements IDisposable
 @rendermode InteractiveServer
 
 <PageTitle>Personel Banka Ödeme Listesi</PageTitle>
 
-<div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-3">
+<HeadContent>
+    <link rel="stylesheet" href="css/personel-banka-odeme-print.css" media="print" />
+</HeadContent>
+
+<div class="container-fluid banka-odeme-report">
+    <div class="d-none d-print-block banka-odeme-print-heading">
+        <h1>Personel Banka Ödeme Listesi</h1>
+        <p>@(new DateTime(secilenYil, secilenAy, 1).ToString("MMMM yyyy")) ·
+            @(sgkBordroFiltre == "true" ? "SGK Bordrolu" : sgkBordroFiltre == "false" ? "SGK Bordrosuz" : "Tüm Bordro") ·
+            @(Enum.TryParse<PersonelGorev>(secilenGorev, out var raporGorevi) ? GetGorevAdi(raporGorevi) : "Tüm Görevler")
+        </p>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(snapshotUyari))
+    {
+        <div class="alert alert-warning" role="alert">@snapshotUyari</div>
+    }
+    <div class="d-flex justify-content-between align-items-center mb-3 d-print-none">
         <div>
             <h3><i class="bi bi-bank me-2"></i>Personel Banka Ödeme Listesi</h3>
             <nav aria-label="breadcrumb">
@@ -61,8 +80,8 @@
                 <button class="btn btn-outline-success btn-sm" @onclick="ExcelAktar" disabled="@(personelListesi == null || !personelListesi.Any())">
                     <i class="bi bi-file-earmark-excel me-1"></i>Excel
                 </button>
-                <button class="btn btn-outline-danger btn-sm" @onclick="PdfAktar" disabled="@(personelListesi == null || !personelListesi.Any())" title="PDF olarak aktar">
-                    <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+                <button class="btn btn-outline-danger btn-sm" @onclick="PdfAktar" disabled="@(isLoading || personelListesi == null || !personelListesi.Any())" title="Yazdır / PDF olarak kaydet">
+                    <i class="bi bi-file-earmark-pdf me-1"></i>PDF / Yazdır
                 </button>
             </div>
             <div class="btn-group" role="group">
@@ -490,6 +509,9 @@
     private string sgkBordroFiltre = "";
     private bool sgkAyriListedeGoster = false;
     private bool isLoading = false;
+    private string? snapshotUyari;
+    private long yuklemeSurumu;
+    private bool componentDisposed;
     private bool isProcessing = false;
 
     private List<PersonelOdemeKalemi>? personelListesi;
@@ -515,18 +537,51 @@
 
     protected override async Task OnInitializedAsync()
     {
+        AktifFirmaProvider.AktifFirmaDegisti += HandleAktifFirmaDegisti;
         await YenileData();
         bankaHesaplari = await BankaHesapService.GetActiveAsync();
     }
 
+    private void HandleAktifFirmaDegisti()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            if (componentDisposed) return;
+            personelListesi = null;
+            gorevOzetleri.Clear();
+            await YenileData();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        componentDisposed = true;
+        ++yuklemeSurumu;
+        AktifFirmaProvider.AktifFirmaDegisti -= HandleAktifFirmaDegisti;
+    }
+
     private async Task YenileData()
     {
+        if (componentDisposed) return;
+        var surum = ++yuklemeSurumu;
         isLoading = true;
+        var yuklemeYil = secilenYil;
+        var yuklemeAy = secilenAy;
+        var yuklemeGorev = secilenGorev;
+        var yuklemeBordroFiltre = sgkBordroFiltre;
+        var yuklemeFirmaId = AktifFirmaProvider.AktifFirmaId;
+        var yuklemeTumFirmalar = AktifFirmaProvider.TumFirmalar;
+
+        bool YuklemeGuncelMi() => !componentDisposed && surum == yuklemeSurumu && yuklemeYil == secilenYil && yuklemeAy == secilenAy && yuklemeGorev == secilenGorev && yuklemeBordroFiltre == sgkBordroFiltre &&
+            yuklemeFirmaId == AktifFirmaProvider.AktifFirmaId && yuklemeTumFirmalar == AktifFirmaProvider.TumFirmalar;
+
+        snapshotUyari = null;
         try
         {
             // Aktif personelleri doğrudan DB'den al (cache bypass + AracAtamalari dahil)
             await using var db = await DbContextFactory.CreateDbContextAsync();
-            var donemBaslangic = new DateTime(secilenYil, secilenAy, 1);
+            var donemBaslangic = new DateTime(yuklemeYil, yuklemeAy, 1);
             var aktifPersoneller = await db.Soforler
                 .AsNoTracking()
                 .Include(s => s.Firma)
@@ -539,20 +594,20 @@
                 .ToListAsync();
 
             // Görev filtresi
-            if (!string.IsNullOrEmpty(secilenGorev) && Enum.TryParse<PersonelGorev>(secilenGorev, out var gorev))
+            if (!string.IsNullOrEmpty(yuklemeGorev) && Enum.TryParse<PersonelGorev>(yuklemeGorev, out var gorev))
             {
                 aktifPersoneller = aktifPersoneller.Where(p => p.Gorev == gorev).ToList();
             }
 
             // SGK bordro filtresi
-            if (!string.IsNullOrEmpty(sgkBordroFiltre) && bool.TryParse(sgkBordroFiltre, out var sgkDurum))
+            if (!string.IsNullOrEmpty(yuklemeBordroFiltre) && bool.TryParse(yuklemeBordroFiltre, out var sgkDurum))
             {
                 aktifPersoneller = aktifPersoneller.Where(p => p.SGKBordroDahilMi == sgkDurum).ToList();
             }
 
             // Her personel için avans ve borç bilgilerini al
-            personelListesi = new List<PersonelOdemeKalemi>();
-            var donemMaasKayitlari = await PersonelMaasService.GetMaaslarAsync(secilenYil, secilenAy);
+            var yeniPersonelListesi = new List<PersonelOdemeKalemi>();
+            var donemMaasKayitlari = await PersonelMaasService.GetMaaslarAsync(yuklemeYil, yuklemeAy);
             var donemMaasMap = donemMaasKayitlari
                 .GroupBy(m => m.SoforId)
                 .ToDictionary(g => g.Key, g => g.First());
@@ -596,11 +651,11 @@
                 });
                 item.EldenOdenecek = sonuc.Odenecek;
 
-                personelListesi.Add(item);
+                yeniPersonelListesi.Add(item);
             }
 
             // Görev özetlerini hesapla
-            gorevOzetleri = personelListesi
+            var yeniGorevOzetleri = yeniPersonelListesi
                 .GroupBy(p => p.Personel.Gorev)
                 .Select(g => new GorevOzet
                 {
@@ -618,18 +673,28 @@
                 .OrderBy(g => g.Gorev)
                 .ToList();
 
-            // ── Snapshot kaydet (arka planda, sessiz) ──
-            _ = Task.Run(async () =>
+            if (!YuklemeGuncelMi()) return;
+            personelListesi = yeniPersonelListesi;
+            gorevOzetleri = yeniGorevOzetleri;
+
+            // Snapshot sonucunu yükleme akışı içinde bekle ve eksik kaydı bildir.
+            if (yuklemeTumFirmalar || yuklemeFirmaId is not > 0)
+                snapshotUyari = "Liste gösteriliyor; dönem kaydı oluşturmak için tek bir firma seçin.";
+            else if (!string.IsNullOrEmpty(yuklemeGorev) || !string.IsNullOrEmpty(yuklemeBordroFiltre))
+                snapshotUyari = "Filtreli liste dönem kaydı olarak kaydedilmedi. Dönem kaydı için görev ve bordro filtrelerini kaldırıp listeyi yenileyin.";
+            else
             {
                 try
                 {
-                    var firmaId = aktifPersoneller.FirstOrDefault()?.FirmaId ?? 0;
-                    if (firmaId > 0 && personelListesi.Any())
+                    var firmaId = yuklemeFirmaId ?? 0;
+                    var snapshotPersoneller = yeniPersonelListesi.ToArray();
+                    if (firmaId > 0 && snapshotPersoneller.Length > 0)
                     {
-                        var varMi = await SnapshotService.VarMiAsync(secilenYil, secilenAy, firmaId);
+                        var varMi = await SnapshotService.VarMiAsync(yuklemeYil, yuklemeAy, firmaId);
+                        if (!YuklemeGuncelMi()) return;
                         if (!varMi)
                         {
-                            var snapshotData = personelListesi.Select(p => (
+                            var snapshotData = snapshotPersoneller.Select(p => (
                                 PersonelId: p.Personel.Id,
                                 AdSoyad: p.Personel.TamAd,
                                 PersonelKodu: (string?)p.Personel.SoforKodu,
@@ -644,20 +709,26 @@
                                 HakedisGelir: 0m,
                                 HakedisGider: 0m
                             )).ToList();
-                            await SnapshotService.OlusturAsync(secilenYil, secilenAy, firmaId, snapshotData);
+                            await SnapshotService.OlusturAsync(yuklemeYil, yuklemeAy, firmaId, snapshotData);
                         }
                     }
                 }
-                catch (Exception ex) { Console.WriteLine($"[Snapshot] Banka liste kayıt hatası: {ex.Message}"); }
-            });
+                catch (Exception ex)
+                {
+                    if (!YuklemeGuncelMi()) return;
+                    LoggerFactory.CreateLogger("BankaOdemeListesi").LogError(ex, "Maaş dönem kaydı oluşturulamadı. Yıl={Yil}, Ay={Ay}", yuklemeYil, yuklemeAy);
+                    snapshotUyari = "Liste yüklendi ancak maaş dönem kaydı oluşturulamadı. Firma ve dönem seçimini kontrol edip listeyi yeniden yükleyin. Sorun sürerse yöneticinize başvurun.";
+                }
+            }
         }
         catch (Exception ex)
         {
+            if (!YuklemeGuncelMi()) return;
             ToastService.ShowError($"Veri yüklenirken hata: {ex.Message}");
         }
         finally
         {
-            isLoading = false;
+            if (surum == yuklemeSurumu) isLoading = false;
         }
     }
 
@@ -752,11 +823,6 @@
 
         worksheet.Range(4, 6, row, 11).Style.NumberFormat.Format = "#,##0.00 ₺";
         worksheet.Columns().AdjustToContents();
-    }
-
-    private async Task Yazdir()
-    {
-        await JS.InvokeVoidAsync("window.print");
     }
 
     private static string FormatPara(decimal tutar)
@@ -1165,14 +1231,15 @@
 
     private async Task PdfAktar()
     {
+        if (isLoading || personelListesi == null || !personelListesi.Any()) return;
         try
         {
-            // Tarayıcı print dialog ile PDF
             await JS.InvokeVoidAsync("window.print");
         }
         catch (Exception ex)
         {
-            ToastService.ShowError($"PDF hatası: {ex.Message}");
+            LoggerFactory.CreateLogger("BankaOdemeListesi").LogError(ex, "Banka ödeme listesi yazdırılamadı.");
+            ToastService.ShowError("Yazdırma penceresi açılamadı. Tekrar deneyin.");
         }
     }
 }

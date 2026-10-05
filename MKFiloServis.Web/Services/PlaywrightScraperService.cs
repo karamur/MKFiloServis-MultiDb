@@ -53,13 +53,26 @@ public class PlaywrightScraperService : IPlaywrightScraperService
 
     public void DurdurTarama()
     {
+        // Tarama döngüleri bu bayrağı kendi hızlarında kontrol edip kendi sayfalarını kapatır.
         _stopRequested = true;
-        try
+
+        // Tarayıcı önbelleğe alınmış ve yeniden kullanılmak üzere tutuluyordu. Çağıranı bloklamamak
+        // için kapatma işi arka plana alınır; alan hemen boşaltılarak yarış durumu engellenir.
+        var browser = Interlocked.Exchange(ref _browser, null);
+        if (browser == null) return;
+
+        _ = Task.Run(async () =>
         {
-            _browser?.CloseAsync().GetAwaiter().GetResult();
-            _browser = null;
-        }
-        catch { }
+            try
+            {
+                await browser.CloseAsync();
+            }
+            catch (Exception ex)
+            {
+                // Tarayıcı zaten kapanmış/ölmüş olabilir; temizlik yine de yapılır.
+                _logger.LogDebug(ex, "Playwright tarayicisi kapatilamadi.");
+            }
+        });
     }
 
     private async Task<IBrowser> GetBrowserAsync()
@@ -644,7 +657,11 @@ public class PlaywrightScraperService : IPlaywrightScraperService
                     if (ilan.Fiyat > 0)
                         ilanlar.Add(ilan);
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    // Tek ilan ayrıştırılamadı; diğer ilanlar atlanmadan listelenmeye devam eder.
+                    _logger.LogWarning(ex, "Ilan ayristirilamadi; ilan atlandi.");
+                }
             }
         }
         catch (Exception ex)
@@ -751,7 +768,11 @@ public class PlaywrightScraperService : IPlaywrightScraperService
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    // Ilan fotograflari eksik kalir; ilan kaydi yine de isleme devam eder.
+                    _logger.LogWarning(ex, "Ilan fotograflari okunamadi. Url: {Url}", ilanUrl);
+                }
             }
 
             await page.CloseAsync();
@@ -848,7 +869,11 @@ public class PlaywrightScraperService : IPlaywrightScraperService
                 var y = int.Parse(tarihMatch.Groups[3].Value);
                 return new DateTime(y, a, g);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Tarih ayristirilamazsa bugunun tarihi kullanilir.
+                _logger.LogWarning(ex, "Ilan tarihi ayristirilamadi; bugunun tarihi kullaniliyor.");
+            }
         }
 
         return DateTime.Today;

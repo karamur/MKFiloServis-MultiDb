@@ -20,13 +20,13 @@ public class LicenseInfo : BaseEntity, IFirmaTenant
     public bool IsDemo { get; set; } // Demo lisansı mı?
 
     [StringLength(20)]
-    public string AllowedVersion { get; set; } = "1.0.99"; // Max izin verilen versiyon
+    public string AllowedVersion { get; set; } = "1.0.99"; // varchar(20); LicenseVersionPolicy aynı sınırı uygular
 
     [StringLength(20)]
     public string ContactPhone { get; set; } = string.Empty; // Süre uzatma için iletişim telefonu
 
     [Required]
-    public string Signature { get; set; } = string.Empty; // SHA256 + secret
+    public string Signature { get; set; } = string.Empty; // v3 modüllü/v2 RSA-PSS, yerel demo veya süreli legacy imzası
 
     public bool IsActive { get; set; } = true;
 

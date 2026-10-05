@@ -146,10 +146,10 @@ public class ArchiveMigrationService
 
         report.Personel.Total = evraklar.Count;
         foreach (var evrak in evraklar)
-            AnalyzePersonelEntry(evrak, report);
+            await AnalyzePersonelEntryAsync(evrak, report, ct);
     }
 
-    private void AnalyzePersonelEntry(PersonelOzlukEvrak evrak, MigrationReport report)
+    private async Task AnalyzePersonelEntryAsync(PersonelOzlukEvrak evrak, MigrationReport report, CancellationToken ct)
     {
         var entry = new MigrationEntry
         {
@@ -169,7 +169,7 @@ public class ArchiveMigrationService
             return;
         }
 
-        if (!_secureFileService.ExistsAsync(evrak.DosyaYolu).Result)
+        if (!await _secureFileService.ExistsAsync(evrak.DosyaYolu, ct))
         {
             entry.Status = "Missing";
             entry.Error = "Kaynak dosya bulunamadı.";
@@ -263,10 +263,10 @@ public class ArchiveMigrationService
 
         report.Arac.Total = evraklar.Count;
         foreach (var dosya in evraklar)
-            AnalyzeAracEntry(dosya, report);
+            await AnalyzeAracEntryAsync(dosya, report, ct);
     }
 
-    private void AnalyzeAracEntry(AracEvrakDosya dosya, MigrationReport report)
+    private async Task AnalyzeAracEntryAsync(AracEvrakDosya dosya, MigrationReport report, CancellationToken ct)
     {
         var entry = new MigrationEntry
         {
@@ -281,7 +281,7 @@ public class ArchiveMigrationService
             report.Arac.AlreadyInNewPath++; report.Entries.Add(entry); return;
         }
 
-        if (!_secureFileService.ExistsAsync(dosya.DosyaYolu).Result)
+        if (!await _secureFileService.ExistsAsync(dosya.DosyaYolu, ct))
         {
             entry.Status = "Missing"; entry.Error = "Kaynak dosya bulunamadı.";
             report.Arac.MissingSource++; report.Entries.Add(entry); return;

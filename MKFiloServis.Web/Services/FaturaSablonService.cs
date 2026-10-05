@@ -44,66 +44,68 @@ public class FaturaSablonService : IFaturaSablonService
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();
         var aktifFirma = _firmaService.GetAktifFirma();
-
-        return await context.FaturaSablonlari
+        var query = context.FaturaSablonlari.AsNoTracking()
             .Include(s => s.Firma)
-            .Where(s => aktifFirma.TumFirmalar || s.FirmaId == aktifFirma.FirmaId)
-            .OrderByDescending(s => s.Varsayilan)
-            .ThenBy(s => s.SablonAdi)
+            .Where(s => !s.IsDeleted);
+        if (!aktifFirma.TumFirmalar)
+        {
+            var firmaId = await GetAktifFirmaIdAsync(context);
+            query = query.Where(s => s.FirmaId == firmaId);
+        }
+
+        return await query.OrderByDescending(s => s.Varsayilan)
+            .ThenBy(s => s.SablonAdi).ThenBy(s => s.Id)
             .ToListAsync();
     }
 
     public async Task<FaturaSablon?> SablonGetirAsync(int id)
     {
+        KayitKimliginiDogrula(id);
         await using var context = await _dbContextFactory.CreateDbContextAsync();
-        return await context.FaturaSablonlari
+        var firmaId = await GetAktifFirmaIdAsync(context);
+        return await context.FaturaSablonlari.AsNoTracking()
             .Include(s => s.Firma)
-            .FirstOrDefaultAsync(s => s.Id == id);
+            .FirstOrDefaultAsync(s => s.Id == id && s.FirmaId == firmaId && !s.IsDeleted);
     }
 
     public async Task<FaturaSablon?> VarsayilanSablonGetirAsync()
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();
-        var aktifFirma = _firmaService.GetAktifFirma();
+        var firmaId = await GetAktifFirmaIdAsync(context);
 
-        // Önce firmaya özel varsayılan şablon ara
-        var sablon = await context.FaturaSablonlari
+        // Varsayılan yoksa aktif şablon seç; eski çoklu varsayılanda sonuç sabit olsun.
+        return await context.FaturaSablonlari.AsNoTracking()
             .Include(s => s.Firma)
-            .Where(s => s.FirmaId == aktifFirma.FirmaId && s.Varsayilan && s.Aktif)
+            .Where(s => s.FirmaId == firmaId && s.Aktif && !s.IsDeleted)
+            .OrderByDescending(s => s.Varsayilan).ThenBy(s => s.Id)
             .FirstOrDefaultAsync();
-
-        // Bulunamazsa firmanın herhangi aktif şablonu
-        if (sablon == null)
-        {
-            sablon = await context.FaturaSablonlari
-                .Include(s => s.Firma)
-                .Where(s => s.FirmaId == aktifFirma.FirmaId && s.Aktif)
-                .FirstOrDefaultAsync();
-        }
-
-        return sablon;
     }
 
     public async Task<FaturaSablon> SablonEkleAsync(FaturaSablon sablon)
     {
+        if (sablon.Id != 0)
+            throw new InvalidOperationException("Yeni fatura şablonunun kayıt kimliği sıfır olmalıdır.");
         await using var context = await _dbContextFactory.CreateDbContextAsync();
-        var aktifFirma = _firmaService.GetAktifFirma();
+        var firmaId = await GetAktifFirmaIdAsync(context);
 
-        sablon.FirmaId = aktifFirma.FirmaId;
-        sablon.CreatedAt = DateTime.Now;
+        sablon.FirmaId = firmaId;
+        sablon.Firma = null;
+        sablon.CreatedAt = DateTime.UtcNow;
+        sablon.UpdatedAt = null;
+        sablon.IsDeleted = false;
+        sablon.DeletedAt = null;
+        sablon.DeletedBy = null;
 
         // İlk şablon ise varsayılan yap
         var mevcutSayisi = await context.FaturaSablonlari
-            .CountAsync(s => s.FirmaId == aktifFirma.FirmaId);
+            .CountAsync(s => s.FirmaId == firmaId && !s.IsDeleted);
         if (mevcutSayisi == 0)
             sablon.Varsayilan = true;
 
         // Varsayılan yapılıyorsa diğerlerini kaldır
         if (sablon.Varsayilan)
         {
-            await context.FaturaSablonlari
-                .Where(s => s.FirmaId == aktifFirma.FirmaId && s.Varsayilan)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Varsayilan, false));
+            await UnsetVarsayilanAsync(context, firmaId);
         }
 
         context.FaturaSablonlari.Add(sablon);
@@ -117,15 +119,15 @@ public class FaturaSablonService : IFaturaSablonService
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();
 
-        var mevcut = await context.FaturaSablonlari.FindAsync(sablon.Id);
+        var firmaId = await GetAktifFirmaIdAsync(context);
+        var mevcut = await context.FaturaSablonlari.AsTracking()
+            .FirstOrDefaultAsync(s => s.Id == sablon.Id && s.FirmaId == firmaId && !s.IsDeleted);
         if (mevcut == null) return false;
 
         // Varsayılan değişiyorsa diğerlerini kaldır
         if (sablon.Varsayilan && !mevcut.Varsayilan)
         {
-            await context.FaturaSablonlari
-                .Where(s => s.FirmaId == mevcut.FirmaId && s.Varsayilan && s.Id != sablon.Id)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Varsayilan, false));
+            await UnsetVarsayilanAsync(context, firmaId, sablon.Id);
         }
 
         // Alanları güncelle
@@ -211,7 +213,7 @@ public class FaturaSablonService : IFaturaSablonService
         mevcut.QrKodGoster = sablon.QrKodGoster;
         mevcut.QrKodIcerik = sablon.QrKodIcerik;
 
-        mevcut.UpdatedAt = DateTime.Now;
+        mevcut.UpdatedAt = DateTime.UtcNow;
 
         await context.SaveChangesAsync();
         _logger.LogInformation("Fatura şablonu güncellendi: {SablonId}", sablon.Id);
@@ -222,18 +224,22 @@ public class FaturaSablonService : IFaturaSablonService
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();
 
-        var sablon = await context.FaturaSablonlari.FindAsync(id);
+        var firmaId = await GetAktifFirmaIdAsync(context);
+        var sablon = await context.FaturaSablonlari.AsTracking()
+            .FirstOrDefaultAsync(s => s.Id == id && s.FirmaId == firmaId && !s.IsDeleted);
         if (sablon == null) return false;
 
         // Varsayılan şablon siliniyorsa başka birini varsayılan yap
         if (sablon.Varsayilan)
         {
-            var digerSablon = await context.FaturaSablonlari
-                .Where(s => s.FirmaId == sablon.FirmaId && s.Id != id && s.Aktif)
+            var digerSablon = await context.FaturaSablonlari.AsTracking()
+                .Where(s => s.FirmaId == firmaId && s.Id != id && s.Aktif && !s.IsDeleted)
+                .OrderBy(s => s.Id)
                 .FirstOrDefaultAsync();
             if (digerSablon != null)
             {
                 digerSablon.Varsayilan = true;
+                digerSablon.UpdatedAt = DateTime.UtcNow;
             }
         }
 
@@ -248,17 +254,17 @@ public class FaturaSablonService : IFaturaSablonService
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();
 
-        var sablon = await context.FaturaSablonlari.FindAsync(id);
+        var firmaId = await GetAktifFirmaIdAsync(context);
+        var sablon = await context.FaturaSablonlari.AsTracking()
+            .FirstOrDefaultAsync(s => s.Id == id && s.FirmaId == firmaId && !s.IsDeleted);
         if (sablon == null) return false;
 
         // Mevcut varsayılanları kaldır
-        await context.FaturaSablonlari
-            .Where(s => s.FirmaId == sablon.FirmaId && s.Varsayilan)
-            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Varsayilan, false));
+        await UnsetVarsayilanAsync(context, firmaId, id);
 
         // Yenisini varsayılan yap
         sablon.Varsayilan = true;
-        sablon.UpdatedAt = DateTime.Now;
+        sablon.UpdatedAt = DateTime.UtcNow;
         await context.SaveChangesAsync();
 
         _logger.LogInformation("Fatura şablonu varsayılan yapıldı: {SablonId}", id);
@@ -269,7 +275,9 @@ public class FaturaSablonService : IFaturaSablonService
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();
 
-        var kaynak = await context.FaturaSablonlari.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id);
+        var firmaId = await GetAktifFirmaIdAsync(context);
+        var kaynak = await context.FaturaSablonlari.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == id && s.FirmaId == firmaId && !s.IsDeleted);
         if (kaynak == null)
             throw new InvalidOperationException("Kaynak şablon bulunamadı.");
 
@@ -333,7 +341,7 @@ public class FaturaSablonService : IFaturaSablonService
             KaseResmi = kaynak.KaseResmi,
             QrKodGoster = kaynak.QrKodGoster,
             QrKodIcerik = kaynak.QrKodIcerik,
-            CreatedAt = DateTime.Now
+            CreatedAt = DateTime.UtcNow
         };
 
         context.FaturaSablonlari.Add(yeni);
@@ -343,50 +351,119 @@ public class FaturaSablonService : IFaturaSablonService
         return yeni;
     }
 
+    private async Task<int> GetAktifFirmaIdAsync(ApplicationDbContext context)
+    {
+        var firma = _firmaService.GetAktifFirma();
+        if (firma.TumFirmalar || firma.FirmaId <= 0)
+            throw new InvalidOperationException("Fatura şablonu işlemi için tek bir firma seçin.");
+        var firmaId = firma.FirmaId;
+        if (!await context.Firmalar.AnyAsync(x => x.Id == firmaId && !x.IsDeleted))
+            throw new InvalidOperationException("Seçili firma bulunamadı veya erişilebilir değil.");
+        return firmaId;
+    }
+
+    private static void KayitKimliginiDogrula(int id)
+    {
+        if (id <= 0)
+            throw new InvalidOperationException("Fatura şablonu kimliği pozitif olmalıdır.");
+    }
+
+    private async Task<FaturaSablon?> GorselYazimiIcinSablonGetirAsync(ApplicationDbContext context, int sablonId)
+    {
+        KayitKimliginiDogrula(sablonId);
+        var firmaId = await GetAktifFirmaIdAsync(context);
+        return await context.FaturaSablonlari.AsTracking()
+            .FirstOrDefaultAsync(s => s.Id == sablonId && s.FirmaId == firmaId && !s.IsDeleted);
+    }
+
+    private static async Task UnsetVarsayilanAsync(ApplicationDbContext context, int firmaId, int? haricId = null)
+    {
+        var query = context.FaturaSablonlari.AsTracking()
+            .Where(s => s.FirmaId == firmaId && s.Varsayilan && !s.IsDeleted);
+        if (haricId.HasValue)
+            query = query.Where(s => s.Id != haricId.Value);
+        var sablonlar = await query.ToListAsync();
+        var now = DateTime.UtcNow;
+        foreach (var sablon in sablonlar)
+        {
+            sablon.Varsayilan = false;
+            sablon.UpdatedAt = now;
+        }
+        // Çağıran, yeni varsayılan/ekleme ile birlikte tek SaveChanges yapar.
+    }
+
     #endregion
 
     #region PDF Oluşturma
 
     public async Task<FaturaPdfResult> FaturaPdfOlusturAsync(int faturaId, int? sablonId = null)
     {
-        await using var context = await _dbContextFactory.CreateDbContextAsync();
-
-        var fatura = await context.Faturalar
-            .Include(f => f.Cari)
-            .Include(f => f.Firma)
-            .Include(f => f.FaturaKalemleri)
-            .FirstOrDefaultAsync(f => f.Id == faturaId);
-
-        if (fatura == null)
+        try
         {
-            return new FaturaPdfResult
-            {
-                Basarili = false,
-                Mesaj = "Fatura bulunamadı."
-            };
+            await using var context = await _dbContextFactory.CreateDbContextAsync();
+            var firmaId = await GetAktifFirmaIdAsync(context);
+            var fatura = await PdfIcinFaturaGetirAsync(context, faturaId, firmaId);
+            if (fatura == null)
+                return PdfReddedildi("Fatura bulunamadı veya seçili firma kapsamında erişilebilir değil.");
+            var sablon = await PdfIcinSablonGetirAsync(context, firmaId, sablonId);
+            return PdfOlustur(fatura, sablon);
         }
-
-        FaturaSablon? sablon = null;
-        if (sablonId.HasValue)
+        catch (InvalidOperationException ex)
         {
-            sablon = await SablonGetirAsync(sablonId.Value);
+            _logger.LogWarning(ex, "Fatura PDF isteği tamamlanamadı: {FaturaId}", faturaId);
+            return PdfReddedildi("Firma ve şablon seçimini kontrol edin.");
         }
-        sablon ??= await VarsayilanSablonGetirAsync();
-
-        return await FaturaPdfOlusturAsync(fatura, sablon);
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Fatura PDF hazırlama hatası: {FaturaId}", faturaId);
+            return PdfReddedildi("PDF oluşturulamadı. Lütfen tekrar deneyin.");
+        }
     }
 
-    public async Task<FaturaPdfResult> FaturaPdfOlusturAsync(Fatura fatura, FaturaSablon? sablon = null)
+    public Task<FaturaPdfResult> FaturaPdfOlusturAsync(Fatura fatura, FaturaSablon? sablon = null)
+    {
+        // Gerçek fatura PDF'si kayıtlı veriden üretilir; düzenlenmemiş örnek için önizleme kullanılır.
+        if (fatura.Id <= 0 || (sablon != null && (sablon.Id <= 0 || sablon.FirmaId != fatura.FirmaId)))
+            return Task.FromResult(PdfReddedildi("Kayıtlı fatura ve aynı firmaya ait kayıtlı şablon gereklidir."));
+        return FaturaPdfOlusturAsync(fatura.Id, sablon?.Id);
+    }
+
+    private static FaturaPdfResult PdfReddedildi(string mesaj) => new() { Basarili = false, Mesaj = mesaj };
+
+    private static async Task<Fatura?> PdfIcinFaturaGetirAsync(ApplicationDbContext context, int faturaId, int firmaId)
+    {
+        if (faturaId <= 0) return null;
+        var fatura = await context.Faturalar.AsNoTracking()
+            .Include(f => f.Cari).Include(f => f.Firma).Include(f => f.FaturaKalemleri)
+            .FirstOrDefaultAsync(f => f.Id == faturaId && f.FirmaId == firmaId && !f.IsDeleted);
+        // Eski bozuk ilişkiler farklı firmanın başlık/müşteri/kalem bilgilerini PDF'ye taşımasın.
+        if (fatura == null || fatura.Firma == null || fatura.Firma.IsDeleted ||
+            fatura.Cari == null || fatura.Cari.IsDeleted || fatura.Cari.FirmaId != firmaId ||
+            fatura.FaturaKalemleri.Any(k => k.FirmaId != firmaId || k.IsDeleted))
+            return null;
+        return fatura;
+    }
+
+    private static async Task<FaturaSablon> PdfIcinSablonGetirAsync(ApplicationDbContext context, int firmaId, int? sablonId)
+    {
+        var query = context.FaturaSablonlari.AsNoTracking()
+            .Where(s => s.FirmaId == firmaId && !s.IsDeleted && s.Aktif);
+        if (sablonId.HasValue)
+        {
+            if (sablonId.Value <= 0)
+                throw new InvalidOperationException("Şablon kimliği pozitif olmalıdır.");
+            return await query.FirstOrDefaultAsync(s => s.Id == sablonId.Value)
+                ?? throw new InvalidOperationException("Seçilen şablon bulunamadı veya kullanılamıyor.");
+        }
+        return await query.OrderByDescending(s => s.Varsayilan).ThenBy(s => s.Id).FirstOrDefaultAsync()
+            ?? new FaturaSablon { FirmaId = firmaId };
+    }
+
+    private FaturaPdfResult PdfOlustur(Fatura fatura, FaturaSablon sablon)
     {
         try
         {
-            // Varsayılan şablon yoksa temel ayarlarla oluştur
-            sablon ??= new FaturaSablon();
-
-            // Firma bilgisini al
-            await using var context = await _dbContextFactory.CreateDbContextAsync();
-            var firma = fatura.Firma ?? await context.Firmalar.FindAsync(fatura.FirmaId);
-
+            var firma = fatura.Firma;
             var document = Document.Create(container =>
             {
                 container.Page(page =>
@@ -434,7 +511,7 @@ public class FaturaSablonService : IFaturaSablonService
             return new FaturaPdfResult
             {
                 Basarili = false,
-                Mesaj = $"PDF oluşturulurken hata: {ex.Message}"
+                Mesaj = "PDF oluşturulamadı. Lütfen tekrar deneyin."
             };
         }
     }
@@ -469,8 +546,13 @@ public class FaturaSablonService : IFaturaSablonService
 
         // Firma bilgisi
         await using var context = await _dbContextFactory.CreateDbContextAsync();
-        var aktifFirma = _firmaService.GetAktifFirma();
-        var firma = await context.Firmalar.FindAsync(aktifFirma.FirmaId);
+        var firmaId = await GetAktifFirmaIdAsync(context);
+        if (sablon.IsDeleted || sablon.Id < 0 || (sablon.FirmaId != 0 && sablon.FirmaId != firmaId))
+            throw new InvalidOperationException("Önizleme şablonu seçili firmaya ait olmalıdır.");
+        if (sablon.Id > 0 && !await context.FaturaSablonlari.AnyAsync(x => x.Id == sablon.Id && x.FirmaId == firmaId && !x.IsDeleted))
+            throw new InvalidOperationException("Önizleme şablonu bulunamadı veya erişilebilir değil.");
+        var firma = await context.Firmalar.AsNoTracking().FirstOrDefaultAsync(x => x.Id == firmaId && !x.IsDeleted)
+            ?? throw new InvalidOperationException("Seçili firma bulunamadı veya erişilebilir değil.");
 
         var document = Document.Create(container =>
         {
@@ -510,88 +592,67 @@ public class FaturaSablonService : IFaturaSablonService
     {
         try
         {
-            if (string.IsNullOrEmpty(request.EmailAdresi))
-            {
-                _logger.LogWarning("Email adresi belirtilmedi: FaturaId={FaturaId}", request.FaturaId);
-                return false;
-            }
-
-            var pdfResult = await FaturaPdfOlusturAsync(request.FaturaId, request.SablonId);
-            if (!pdfResult.Basarili || pdfResult.PdfData == null)
-            {
-                _logger.LogWarning("PDF oluşturulamadı: FaturaId={FaturaId}", request.FaturaId);
-                return false;
-            }
-
+            if (string.IsNullOrWhiteSpace(request.EmailAdresi)) return false;
             await using var context = await _dbContextFactory.CreateDbContextAsync();
-            var fatura = await context.Faturalar
-                .Include(f => f.Cari)
-                .FirstOrDefaultAsync(f => f.Id == request.FaturaId);
-
-            var konu = request.EmailKonu ?? $"Fatura: {fatura?.FaturaNo}";
-            var mesaj = request.EmailMesaj ?? $"""
-                Sayın Yetkili,
-
-                {fatura?.FaturaNo} numaralı faturanız ekte gönderilmektedir.
-
-                Fatura Tarihi: {fatura?.FaturaTarihi:dd.MM.yyyy}
-                Vade Tarihi: {fatura?.VadeTarihi:dd.MM.yyyy}
-                Toplam Tutar: {fatura?.GenelToplam:N2} TL
-
-                Saygılarımızla,
-                """;
-
-            var sonuc = await SendEmailWithAttachmentAsync(
-                request.EmailAdresi,
-                konu,
-                mesaj,
-                pdfResult.PdfData,
-                pdfResult.DosyaAdi ?? $"Fatura_{fatura?.FaturaNo}.pdf"
-            );
-
-            if (sonuc)
-            {
-                _logger.LogInformation("Fatura email gönderildi: FaturaId={FaturaId}, Email={Email}",
-                    request.FaturaId, request.EmailAdresi);
-            }
-
-            return sonuc;
+            var firmaId = await GetAktifFirmaIdAsync(context);
+            var fatura = await PdfIcinFaturaGetirAsync(context, request.FaturaId, firmaId);
+            if (fatura == null) return false;
+            var sablon = await PdfIcinSablonGetirAsync(context, firmaId, request.SablonId);
+            return await FaturaEmailHazirlaVeGonderAsync(fatura, sablon, request.EmailAdresi, request.EmailKonu, request.EmailMesaj);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Fatura email gönderme hatası: FaturaId={FaturaId}", request.FaturaId);
+            _logger.LogError(ex, "Fatura email gönderme hatası: {FaturaId}", request.FaturaId);
             return false;
         }
     }
 
+    private async Task<bool> FaturaEmailHazirlaVeGonderAsync(Fatura fatura, FaturaSablon sablon,
+        string emailAdresi, string? emailKonu, string? emailMesaj)
+    {
+        var pdfResult = PdfOlustur(fatura, sablon);
+        if (!pdfResult.Basarili || pdfResult.PdfData == null) return false;
+        var konu = emailKonu ?? $"Fatura: {fatura.FaturaNo}";
+        var mesaj = emailMesaj ?? $"""
+            Sayın Yetkili,
+
+            {fatura.FaturaNo} numaralı faturanız ekte gönderilmektedir.
+
+            Fatura Tarihi: {fatura.FaturaTarihi:dd.MM.yyyy}
+            Vade Tarihi: {fatura.VadeTarihi:dd.MM.yyyy}
+            Toplam Tutar: {fatura.GenelToplam:N2} TL
+
+            Saygılarımızla,
+            """;
+        return await SendEmailWithAttachmentAsync(emailAdresi, konu, mesaj, pdfResult.PdfData,
+            pdfResult.DosyaAdi ?? $"Fatura_{fatura.FaturaNo}.pdf");
+    }
+
     public async Task<bool> TopluFaturaEmailGonderAsync(List<int> faturaIds, int? sablonId = null, string? emailKonu = null, string? emailMesaj = null)
     {
-        var basariliSayisi = 0;
-
-        foreach (var faturaId in faturaIds)
+        try
         {
+            if (faturaIds.Count == 0 || faturaIds.Any(id => id <= 0)) return false;
+            // Dönem boyunca değişen UI seçimi farklı firma faturalarının karışmasına yol açmasın.
             await using var context = await _dbContextFactory.CreateDbContextAsync();
-            var fatura = await context.Faturalar
-                .Include(f => f.Cari)
-                .FirstOrDefaultAsync(f => f.Id == faturaId);
-
-            if (fatura?.Cari?.Email == null) continue;
-
-            var sonuc = await FaturaEmailGonderAsync(new FaturaYazdirRequest
+            var firmaId = await GetAktifFirmaIdAsync(context);
+            var sablon = await PdfIcinSablonGetirAsync(context, firmaId, sablonId);
+            var basariliSayisi = 0;
+            foreach (var faturaId in faturaIds.Distinct())
             {
-                FaturaId = faturaId,
-                SablonId = sablonId,
-                EmailGonder = true,
-                EmailAdresi = fatura.Cari.Email,
-                EmailKonu = emailKonu,
-                EmailMesaj = emailMesaj
-            });
-
-            if (sonuc) basariliSayisi++;
+                var fatura = await PdfIcinFaturaGetirAsync(context, faturaId, firmaId);
+                if (fatura == null || string.IsNullOrWhiteSpace(fatura.Cari.Email)) continue;
+                if (await FaturaEmailHazirlaVeGonderAsync(fatura, sablon, fatura.Cari.Email, emailKonu, emailMesaj))
+                    basariliSayisi++;
+            }
+            _logger.LogInformation("Toplu fatura email gönderildi: {Basarili}/{Toplam}", basariliSayisi, faturaIds.Distinct().Count());
+            return basariliSayisi > 0;
         }
-
-        _logger.LogInformation("Toplu fatura email gönderildi: {Basarili}/{Toplam}", basariliSayisi, faturaIds.Count);
-        return basariliSayisi > 0;
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Toplu fatura email gönderme hatası");
+            return false;
+        }
     }
 
     #endregion
@@ -601,11 +662,11 @@ public class FaturaSablonService : IFaturaSablonService
     public async Task<bool> LogoYukleAsync(int sablonId, byte[] logoData, string dosyaAdi)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();
-        var sablon = await context.FaturaSablonlari.FindAsync(sablonId);
+        var sablon = await GorselYazimiIcinSablonGetirAsync(context, sablonId);
         if (sablon == null) return false;
 
         sablon.OzelLogo = Convert.ToBase64String(logoData);
-        sablon.UpdatedAt = DateTime.Now;
+        sablon.UpdatedAt = DateTime.UtcNow;
         await context.SaveChangesAsync();
 
         _logger.LogInformation("Şablon logosu yüklendi: {SablonId}", sablonId);
@@ -615,11 +676,11 @@ public class FaturaSablonService : IFaturaSablonService
     public async Task<bool> LogoSilAsync(int sablonId)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();
-        var sablon = await context.FaturaSablonlari.FindAsync(sablonId);
+        var sablon = await GorselYazimiIcinSablonGetirAsync(context, sablonId);
         if (sablon == null) return false;
 
         sablon.OzelLogo = null;
-        sablon.UpdatedAt = DateTime.Now;
+        sablon.UpdatedAt = DateTime.UtcNow;
         await context.SaveChangesAsync();
 
         _logger.LogInformation("Şablon logosu silindi: {SablonId}", sablonId);
@@ -629,12 +690,12 @@ public class FaturaSablonService : IFaturaSablonService
     public async Task<bool> KaseYukleAsync(int sablonId, byte[] kaseData, string dosyaAdi)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();
-        var sablon = await context.FaturaSablonlari.FindAsync(sablonId);
+        var sablon = await GorselYazimiIcinSablonGetirAsync(context, sablonId);
         if (sablon == null) return false;
 
         sablon.KaseResmi = Convert.ToBase64String(kaseData);
         sablon.KaseAlaniGoster = true;
-        sablon.UpdatedAt = DateTime.Now;
+        sablon.UpdatedAt = DateTime.UtcNow;
         await context.SaveChangesAsync();
 
         _logger.LogInformation("Şablon kaşesi yüklendi: {SablonId}", sablonId);
@@ -644,11 +705,11 @@ public class FaturaSablonService : IFaturaSablonService
     public async Task<bool> KaseSilAsync(int sablonId)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();
-        var sablon = await context.FaturaSablonlari.FindAsync(sablonId);
+        var sablon = await GorselYazimiIcinSablonGetirAsync(context, sablonId);
         if (sablon == null) return false;
 
         sablon.KaseResmi = null;
-        sablon.UpdatedAt = DateTime.Now;
+        sablon.UpdatedAt = DateTime.UtcNow;
         await context.SaveChangesAsync();
 
         _logger.LogInformation("Şablon kaşesi silindi: {SablonId}", sablonId);
@@ -966,7 +1027,11 @@ public class FaturaSablonService : IFaturaSablonService
                                     kaseCol.Item().Width(100).Height(60).Image(kaseBytes, ImageScaling.FitArea);
 #pragma warning restore CS0618
                                 }
-                                catch { }
+                                catch (Exception ex)
+                                {
+                                    // Kaşe görseli bozuksa belge yine de üretilir; yalnız logo eksik olur.
+                                    _logger.LogWarning(ex, "Fatura sablonunda kase resmi eklenemedi. SablonId: {SablonId}", sablon.Id);
+                                }
                             }
                             kaseCol.Item().Text("Kaşe").FontSize(8).FontColor(Colors.Grey.Medium);
                         });

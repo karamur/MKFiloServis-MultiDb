@@ -6,69 +6,43 @@ namespace MKFiloServis.Web.Services;
 
 /// <summary>
 /// Legacy veritabanından MKFiloServis veritabanına veri aktarım servisi.
-/// Talimat Bölüm 16-23: Legacy DB READ ONLY, FirmaId=1 varsayılan.
+/// Legacy DB salt okunur; kaynak ve hedef firma açıkça yapılandırılmalıdır.
 /// </summary>
 public class LegacyDataTransferService
 {
+    private readonly bool _enabled;
+    private readonly int _targetFirmaId;
     private readonly string _sourceConnStr;
     private readonly string _targetConnStr;
     private readonly ILogger<LegacyDataTransferService> _logger;
 
     public LegacyDataTransferService(
         IConfiguration configuration,
-        ILogger<LegacyDataTransferService> logger)
+        ILogger<LegacyDataTransferService> logger,
+        DatabaseRuntimeInfo databaseRuntime)
     {
         _logger = logger;
-        _targetConnStr = configuration.GetConnectionString("DefaultConnection")!;
+        _targetConnStr = databaseRuntime.ConnectionString;
+        _enabled = configuration.GetValue("LegacyTransfer:Enabled", false);
+        _targetFirmaId = configuration.GetValue("LegacyTransfer:TargetFirmaId", 0);
 
-        // Öncelik: appsettings'te açıkça verilen LegacySourceConnection.
-        // Yoksa DefaultConnection'dan türet: MKFiloServis -> KOAFiloServis.
-        _sourceConnStr = configuration.GetConnectionString("LegacySourceConnection")
-            ?? BuildLegacySourceConnectionString(_targetConnStr);
-
-        // Kaynak ve hedef aynıysa aktarım metotları sessizce atlanır; burada log üretilmez.
+        _sourceConnStr = configuration.GetConnectionString("LegacySourceConnection") ?? _targetConnStr;
+        if (_enabled && (string.IsNullOrWhiteSpace(configuration.GetConnectionString("LegacySourceConnection")) || _targetFirmaId <= 0))
+            throw new InvalidOperationException("Legacy aktarımı için LegacySourceConnection ve LegacyTransfer:TargetFirmaId zorunludur.");
     }
 
     private static bool IsPostgresConnectionString(string connStr) =>
-        connStr.Contains("Host=", StringComparison.OrdinalIgnoreCase) ||
-        connStr.Contains("Server=", StringComparison.OrdinalIgnoreCase) ||
-        connStr.Contains("Port=", StringComparison.OrdinalIgnoreCase);
+        connStr.Contains("Host=", StringComparison.OrdinalIgnoreCase);
 
-    private static string BuildLegacySourceConnectionString(string targetConnStr)
+    private static bool IsSameDatabase(string sourceConnection, string targetConnection)
     {
-        // SQLite veya diğer non-PostgreSQL: kaynak = hedef → transfer metodları sessizce atlanır
-        if (!IsPostgresConnectionString(targetConnStr))
-            return targetConnStr;
-
-        var builder = new NpgsqlConnectionStringBuilder(targetConnStr);
-        var targetDb = builder.Database ?? string.Empty;
-
-        if (targetDb.Contains("MKFiloServis", StringComparison.OrdinalIgnoreCase))
-        {
-            builder.Database = targetDb.Replace("MKFiloServis", "KOAFiloServis", StringComparison.OrdinalIgnoreCase);
-        }
-        else
-        {
-            // Fallback: hedef adı MK pattern'i taşımıyorsa yine de legacy varsayılan DB adına dön.
-            builder.Database = "KOAFiloServis";
-        }
-
-        return builder.ConnectionString;
-    }
-
-    private static bool IsSameDatabase(string sourceConnStr, string targetConnStr)
-    {
-        // Non-PostgreSQL: string karşılaştırması
-        if (!IsPostgresConnectionString(sourceConnStr) || !IsPostgresConnectionString(targetConnStr))
-            return string.Equals(sourceConnStr, targetConnStr, StringComparison.OrdinalIgnoreCase);
-
-        var source = new NpgsqlConnectionStringBuilder(sourceConnStr);
-        var target = new NpgsqlConnectionStringBuilder(targetConnStr);
-
+        if (!IsPostgresConnectionString(sourceConnection) || !IsPostgresConnectionString(targetConnection))
+            return string.Equals(sourceConnection, targetConnection, StringComparison.Ordinal);
+        var source = new NpgsqlConnectionStringBuilder(sourceConnection);
+        var target = new NpgsqlConnectionStringBuilder(targetConnection);
         return string.Equals(source.Host, target.Host, StringComparison.OrdinalIgnoreCase)
-               && source.Port == target.Port
-               && string.Equals(source.Database, target.Database, StringComparison.OrdinalIgnoreCase)
-               && string.Equals(source.Username, target.Username, StringComparison.OrdinalIgnoreCase);
+            && source.Port == target.Port
+            && string.Equals(source.Database, target.Database, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -162,21 +136,29 @@ public class LegacyDataTransferService
     public async Task<TransferResult> TransferAllAsync()
     {
         var result = new TransferResult();
-        var firmaIdVarsayilan = 1;
+        var firmaIdVarsayilan = _targetFirmaId;
+        if (!_enabled) return result;
 
         if (IsSameDatabase(_sourceConnStr, _targetConnStr))
-        {
-            return result;
-        }
+            throw new InvalidOperationException("Legacy kaynak ve hedef aynı veritabanı olamaz.");
 
+        if (!IsPostgresConnectionString(_sourceConnStr) || !IsPostgresConnectionString(_targetConnStr))
+            throw new NotSupportedException("Legacy aktarımı PostgreSQL kaynak ve hedef gerektirir.");
+        using (var target = await OpenTargetAsync())
+        {
+            using var firma = target.CreateCommand();
+            firma.CommandText = "SELECT EXISTS(SELECT 1 FROM \"Firmalar\" WHERE \"Id\"=@id AND NOT \"IsDeleted\" AND \"Aktif\")";
+            firma.Parameters.AddWithValue("id", _targetFirmaId);
+            if (!(bool)(await firma.ExecuteScalarAsync())!)
+                throw new InvalidOperationException("Legacy aktarımı için belirtilen aktif hedef firma bulunamadı.");
+        }
         _logger.LogInformation("=== Veri aktarimi basladi ===");
         _logger.LogInformation("LegacyDataTransfer source DB: {SourceDb}", new NpgsqlConnectionStringBuilder(_sourceConnStr).Database);
         _logger.LogInformation("LegacyDataTransfer target DB: {TargetDb}", new NpgsqlConnectionStringBuilder(_targetConnStr).Database);
 
         if (!await SourceDatabaseExistsAsync())
         {
-            _logger.LogInformation("LegacyDataTransfer source DB bulunamadi, aktarim atlandi.");
-            return result;
+            throw new InvalidOperationException("Yapılandırılan legacy kaynak veritabanına erişilemiyor; aktarım durduruldu.");
         }
 
         async Task<TransferResult> SafeTransferAsync(Func<Task<TransferResult>> transfer, string name)
@@ -185,7 +167,7 @@ public class LegacyDataTransferService
             catch (PostgresException ex) when (ex.SqlState == "42P01")
             { _logger.LogInformation("{Name}: kaynak tablo yok, atlandi", name); return new(); }
             catch (Exception ex)
-            { _logger.LogWarning(ex, "{Name}: aktarim hatasi", name); return new(); }
+            { throw new InvalidOperationException($"Legacy {name} aktarımı başarısız; başlangıç durduruldu.", ex); }
         }
 
         // ── Öncelikli kritik tablolar (FK bağımlılık sırası, generic) ──
@@ -371,7 +353,7 @@ public class LegacyDataTransferService
             !targetCols.Contains("HesapKodu", StringComparer.OrdinalIgnoreCase))
         {
             _logger.LogWarning("{Table}: zorunlu kolonlar bulunamadi, generic aktarim deneniyor", tableName);
-            return await TransferSimpleWithFirmaIdAsync(tableName, 1);
+            return await TransferSimpleWithFirmaIdAsync(tableName, _targetFirmaId);
         }
 
         var targetColsByName = targetCols.ToDictionary(c => c, c => c, StringComparer.OrdinalIgnoreCase);
@@ -598,9 +580,21 @@ public class LegacyDataTransferService
 
     private async Task<NpgsqlConnection> OpenSourceAsync()
     {
+        if (!_enabled) throw new InvalidOperationException("Legacy aktarımı etkinleştirilmedi.");
         var conn = new NpgsqlConnection(_sourceConnStr);
-        await conn.OpenAsync();
-        return conn;
+        try
+        {
+            await conn.OpenAsync();
+            using var readOnly = conn.CreateCommand();
+            readOnly.CommandText = "SET default_transaction_read_only = on";
+            await readOnly.ExecuteNonQueryAsync();
+            return conn;
+        }
+        catch
+        {
+            await conn.DisposeAsync();
+            throw;
+        }
     }
 
     private async Task<NpgsqlConnection> OpenTargetAsync()

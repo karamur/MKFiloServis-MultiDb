@@ -1,4 +1,5 @@
-﻿@page "/arac-maliyet-snapshot"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:filoservis")]
+@page "/arac-maliyet-snapshot"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
 @using MKFiloServis.Web.Services.Interfaces

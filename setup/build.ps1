@@ -4,12 +4,11 @@
 
 .DESCRIPTION
     1) MKFiloServis.Web           -> publish (framework-dependent, IIS)
-    2) MKFiloServis.LisansDesktop -> publish (self-contained, win-x64, SingleFile)
-    3) MKFiloServis.DataSync      -> publish (self-contained, win-x64, SingleFile)
+    2) MKFiloServis.DataSync      -> publish (self-contained, win-x64, SingleFile)
     4) Inno Setup - Setup.iss      -> MKFiloServisKurulum-<version>.exe (tam paket)
     5) Inno Setup - GuncelleSetup.iss-> MKFiloServisGuncelle-<version>.exe
     6) Inno Setup - MusteriSetup.iss-> MKFiloServisKurulumMusteri-<version>.exe
-    7) Inno Setup - LisansSetup.iss-> MKLisansArac-<version>.exe
+    Internal license utility is built only with -LisansOnly or -IncludeInternalLicenseTool.
 
 .PARAMETER Version
     Paket versiyon numarasi. Varsayilan 1.0.25
@@ -18,7 +17,10 @@
     Publish atlanir, sadece Inno Setup calistirilir.
 
 .PARAMETER LisansOnly
-    Sadece LisansDesktop publish + LisansSetup.iss EXE uretir.
+    Sadece dahili LisansDesktop publish + LisansSetup.iss EXE uretir.
+
+.PARAMETER IncludeInternalLicenseTool
+    Dahili lisans aracini ayrıca üretir. Müşteri kurulumlarına eklemez.
 
 .EXAMPLE
     .\build.ps1 -Version 1.0.22
@@ -28,7 +30,8 @@
 param(
     [string] $Version = '1.0.37',
     [switch] $SkipPublish,
-    [switch] $LisansOnly
+    [switch] $LisansOnly,
+    [switch] $IncludeInternalLicenseTool
 )
 
 $ErrorActionPreference = 'Stop'
@@ -38,6 +41,14 @@ $Root      = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $RepoRoot  = Split-Path -Parent $Root
 $Payload   = Join-Path $Root 'payload'
 $Output    = Join-Path $Root "output\v$Version"
+$BuildLicenseTool = $LisansOnly -or $IncludeInternalLicenseTool
+
+if ($LisansOnly -and $IncludeInternalLicenseTool) {
+    throw "-LisansOnly ile -IncludeInternalLicenseTool birlikte kullanilamaz."
+}
+if ($SkipPublish -and $BuildLicenseTool -and -not (Test-Path (Join-Path $Payload 'LisansDesktop'))) {
+    throw "Dahili lisans araci publish cikisi yok. -SkipPublish kaldirip yeniden deneyin."
+}
 
 $expectedPayload = [System.IO.Path]::GetFullPath((Join-Path $Root 'payload'))
 if (-not [System.IO.Path]::GetFullPath($Payload).Equals($expectedPayload, [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -118,11 +129,16 @@ if (-not $SkipPublish) {
         # Jwt__Secret dağıtım ortamının gizli ayar deposundan ayrıca sağlanmalıdır.
     }
 
-    Write-Host "[2/5] LisansDesktop publish..." -ForegroundColor Green
-    dotnet publish $Lisans -c Release -r win-x64 --self-contained `
-        -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
-        /p:Version=$Version -o "$Payload\LisansDesktop" --nologo | Out-Host
-    if ($LASTEXITCODE -ne 0) { throw "LisansDesktop publish basarisiz." }
+    if ($BuildLicenseTool) {
+        Write-Host "[2/5] Dahili LisansDesktop publish..." -ForegroundColor Green
+        dotnet publish $Lisans -c Release -r win-x64 --self-contained `
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
+            /p:Version=$Version -o "$Payload\LisansDesktop" --nologo | Out-Host
+        if ($LASTEXITCODE -ne 0) { throw "LisansDesktop publish basarisiz." }
+    } elseif (Test-Path (Join-Path $Payload 'LisansDesktop')) {
+        Remove-Item (Join-Path $Payload 'LisansDesktop') -Recurse -Force
+        Write-Host "Eski LisansDesktop payload'i temizlendi; musteri paketine alinmayacak." -ForegroundColor DarkGray
+    }
 
     if (-not $LisansOnly) {
         Write-Host "[3/5] DataSync publish..." -ForegroundColor Green
@@ -168,9 +184,11 @@ if (-not $LisansOnly) {
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup (MusteriSetup.iss) basarisiz." }
 }
 
-Write-Host "[7/7] Inno Setup - Lisans araci..." -ForegroundColor Green
-& $IsccExe "/DLisansAppVersion=$Version" "/DOutputDir=$Output" (Join-Path $Root 'LisansSetup.iss')
-if ($LASTEXITCODE -ne 0) { throw "Inno Setup (LisansSetup.iss) basarisiz." }
+if ($BuildLicenseTool) {
+    Write-Host "[Dahili] Inno Setup - Lisans araci..." -ForegroundColor Green
+    & $IsccExe "/DLisansAppVersion=$Version" "/DOutputDir=$Output" (Join-Path $Root 'LisansSetup.iss')
+    if ($LASTEXITCODE -ne 0) { throw "Inno Setup (LisansSetup.iss) basarisiz." }
+}
 
 $sonuclar = @()
 if (-not $LisansOnly) {
@@ -181,8 +199,10 @@ if (-not $LisansOnly) {
     $p3 = Join-Path $Output "MKFiloServisKurulumMusteri-$Version.exe"
     if (Test-Path $p3) { $s = [math]::Round((Get-Item $p3).Length/1MB,2); $sonuclar += "  Musteri    : $p3 ($s MB)" }
 }
-$p4 = Join-Path $Output "MKLisansArac-$Version.exe"
-if (Test-Path $p4) { $s = [math]::Round((Get-Item $p4).Length/1MB,2); $sonuclar += "  Lisans     : $p4 ($s MB)" }
+if ($BuildLicenseTool) {
+    $p4 = Join-Path $Output "MKLisansArac-$Version.exe"
+    if (Test-Path $p4) { $s = [math]::Round((Get-Item $p4).Length/1MB,2); $sonuclar += "  Dahili lisans araci: $p4 ($s MB)" }
+}
 
 Write-Host ""
 Write-Host "==================================================" -ForegroundColor Cyan

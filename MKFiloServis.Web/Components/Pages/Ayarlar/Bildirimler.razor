@@ -1,4 +1,5 @@
-﻿@page "/ayarlar/bildirimler"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:crm")]
+@page "/ayarlar/bildirimler"
 @rendermode InteractiveServer
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services

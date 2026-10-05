@@ -9,6 +9,7 @@ namespace MKFiloServis.Web.Controllers;
 /// <summary>
 /// Şoför/Personel yönetimi API endpoint'leri
 /// </summary>
+[Authorize(Policy = "Licensed:personel")]
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(AuthenticationSchemes = "Bearer")]

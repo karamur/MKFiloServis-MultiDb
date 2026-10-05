@@ -8,19 +8,19 @@ namespace MKFiloServis.Web.Services.Interfaces;
 /// </summary>
 public interface IFaturaGrupSablonuService
 {
-    /// <summary>Firmanın tüm şablonlarını (ve opsiyonel kullanıcı filtresiyle) getirir.</summary>
+    /// <summary>Seçili firmada oturum kullanıcısının özel ve firma geneli şablonlarını getirir; başka kullanıcı kimliği reddedilir.</summary>
     Task<List<FaturaGrupSablonu>> GetByFirmaAsync(int firmaId, int? kullaniciId = null, CancellationToken ct = default);
 
-    /// <summary>Tek şablon getirir.</summary>
+    /// <summary>Seçili firmada kullanıcıya erişilebilir tek şablonu getirir.</summary>
     Task<FaturaGrupSablonu?> GetByIdAsync(int id, CancellationToken ct = default);
 
-    /// <summary>Kullanıcının varsayılan şablonunu getirir (yoksa null).</summary>
+    /// <summary>Kullanıcı belirtilmezse firma geneli, belirtilirse oturum kullanıcısının varsayılanını getirir (yoksa null).</summary>
     Task<FaturaGrupSablonu?> GetVarsayilanAsync(int firmaId, int? kullaniciId = null, CancellationToken ct = default);
 
     /// <summary>Yeni şablon oluşturur.</summary>
     Task<FaturaGrupSablonu> CreateAsync(FaturaGrupSablonu sablon, CancellationToken ct = default);
 
-    /// <summary>Şablon günceller.</summary>
+    /// <summary>Şablonu günceller; kayıtlı firma ve kullanıcı sahipliğini korur.</summary>
     Task<FaturaGrupSablonu> UpdateAsync(FaturaGrupSablonu sablon, CancellationToken ct = default);
 
     /// <summary>Şablonu soft-delete yapar.</summary>

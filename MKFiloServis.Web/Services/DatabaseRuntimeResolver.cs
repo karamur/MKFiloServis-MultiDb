@@ -19,6 +19,12 @@ public sealed class DatabaseRuntimeInfo
 
 public static class DatabaseRuntimeResolver
 {
+    /// <summary>
+    /// dbsettings.json yoksa/okunamazsa kullanılacak kanonik sağlayıcı. Tek sabit noktada tanımlı;
+    /// migration hedefi aktif bağlantı sağlayıcısından bağımsızdır.
+    /// </summary>
+    private const DatabaseProvider VARSAYILAN_KANONIK_SAGLAYICI = DatabaseProvider.PostgreSQL;
+
     public static async Task<DatabaseRuntimeInfo> ResolveAsync(IConfiguration configuration, IWebHostEnvironment environment)
     {
         var fallbackProvider = DatabaseSettings.ParseProvider(configuration.GetValue<string>("DatabaseProvider"));
@@ -40,7 +46,9 @@ public static class DatabaseRuntimeResolver
             }
 
             var runtimeProvider = DatabaseSettings.NormalizeRuntimeProvider(dbSettings.Provider);
-            var canonicalProvider = DatabaseProvider.PostgreSQL;
+            // Kanonik sağlayıcı aktif bağlantı sağlayıcısı değildir; şema migration hedefidir.
+            // dbsettings.json bunu tanımlıyorsa ona saygı gösterilir, yoksa PostgreSQL varsayılanı kullanılır.
+            var canonicalProvider = DatabaseSettings.NormalizeCanonicalProvider(dbSettings.CanonicalProvider);
             var connectionString = runtimeProvider == DatabaseProvider.SQLite && string.IsNullOrWhiteSpace(dbSettings.DatabaseName)
                 ? new DatabaseSettings { Provider = DatabaseProvider.SQLite, DatabaseName = "MKFiloServis.db" }.GetConnectionString()
                 : dbSettings.GetConnectionString();
@@ -63,7 +71,7 @@ public static class DatabaseRuntimeResolver
         catch (Exception ex)
         {
             if (IsConnectionStringValid(fallbackConnectionString, fallbackProvider))
-                return CreateInfo(fallbackProvider, DatabaseProvider.PostgreSQL, fallbackConnectionString, "appsettings.json (fallback)", settingsPath);
+                return CreateInfo(fallbackProvider, VARSAYILAN_KANONIK_SAGLAYICI, fallbackConnectionString, "appsettings.json (fallback)", settingsPath);
 
             throw new InvalidOperationException(
                 $"Veritabanı ayarları okunamadı ve appsettings.json içindeki {fallbackProvider} bağlantısı geçersiz.", ex);
@@ -78,7 +86,7 @@ public static class DatabaseRuntimeResolver
         if (!IsConnectionStringValid(connectionString, provider))
             throw new InvalidOperationException($"appsettings.json içindeki {provider} veritabanı bağlantısı geçersiz.");
 
-        return CreateInfo(provider, DatabaseProvider.PostgreSQL, connectionString, "appsettings.json", settingsPath);
+        return CreateInfo(provider, VARSAYILAN_KANONIK_SAGLAYICI, connectionString, "appsettings.json", settingsPath);
     }
 
     private static bool IsConnectionStringValid(string connectionString, DatabaseProvider provider)

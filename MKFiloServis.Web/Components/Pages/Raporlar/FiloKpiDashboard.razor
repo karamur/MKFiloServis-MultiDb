@@ -1,4 +1,5 @@
-﻿@page "/raporlar/filo-kpi"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:raporlar")]
+@page "/raporlar/filo-kpi"
 @using System.Globalization
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services

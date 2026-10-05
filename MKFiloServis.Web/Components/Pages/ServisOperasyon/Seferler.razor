@@ -285,8 +285,6 @@
     private string? secilenSoforTelefon;
     private string? secilenSoforFirma;
     private int seciliKurumCariId;
-    private Dictionary<int, int> cariToFirmaMap = new();
-    private Dictionary<int, int> firmaToCariMap = new();
     private decimal modalOncekiServisCarpani = 1m;
 
     private FiloGuzergahEslestirme model = new();
@@ -323,15 +321,6 @@
         aracListesi = await FiloKomisyonService.GetAraclarAsync(aktifFirmaId);
         soforListesi = await FiloKomisyonService.GetSoforlerAsync();
         kullaniciListesi = await FiloKomisyonService.GetKullanicilarAsync();
-
-        var firmalar = await FirmaService.GetAllAsync();
-        cariToFirmaMap = firmalar
-            .Where(f => !f.IsDeleted && f.CariId.HasValue)
-            .GroupBy(f => f.CariId!.Value)
-            .ToDictionary(g => g.Key, g => g.First().Id);
-        firmaToCariMap = firmalar
-            .Where(f => !f.IsDeleted && f.CariId.HasValue)
-            .ToDictionary(f => f.Id, f => f.CariId!.Value);
 
         await YukleAktifAracSoforMapAsync();
         await KurumSecimiDegistiAsync();
@@ -388,7 +377,7 @@
             TaseronaOdenenUcret = esleme.TaseronaOdenenUcret,
             IsActive = esleme.IsActive
         };
-        seciliKurumCariId = firmaToCariMap.TryGetValue(model.KurumFirmaId, out var cariId) ? cariId : 0;
+        seciliKurumCariId = model.KurumFirmaId;
 
         modalOncekiServisCarpani = GetServisTuruCarpani(model.ServisTuru);
         _ = KurumSecimiDegistiAsync();
@@ -414,13 +403,8 @@
             return;
         }
 
-        if (!cariToFirmaMap.TryGetValue(seciliKurumCariId, out var kurumFirmaId))
-        {
-            ToastService.ShowError("Seçilen kurum bir firma kaydı ile eşleşmiyor. Lütfen kurum/firma eşleştirmesini kontrol edin.");
-            return;
-        }
-
-        model.KurumFirmaId = kurumFirmaId;
+        // KurumFirmaId adı legacy'dir; FK, Firma tablosuna değil Cari tablosuna bağlıdır.
+        model.KurumFirmaId = seciliKurumCariId;
 
         if (model.KurumFirmaId == 0 || model.GuzergahId == 0 || model.AracId == 0 || model.SoforId == 0)
         {

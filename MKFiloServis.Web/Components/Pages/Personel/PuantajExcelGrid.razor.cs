@@ -18,7 +18,10 @@ public partial class PuantajExcelGrid
     // ── State ──────────────────────────────────────────────────────
     private List<Firma> _firmalar = new();
     private List<PuantajGridSatir> satirlar = new();
-    private int _firmaId = 1;
+    // Firma listesi bos cikarsa 0 (gecersiz) kalir: sabit bir firma kimligine duserek
+    // baska bir tenant'in verisini okumak/yazmak yerine islem yapilmaz.
+    private int _firmaId;
+    private bool FirmaSecili => _firmaId > 0;
     private int _yil = DateTime.Today.Year;
     private int _ay = DateTime.Today.Month;
     private int _gunSayisi => DateTime.DaysInMonth(_yil, _ay);
@@ -64,8 +67,14 @@ public partial class PuantajExcelGrid
     {
         await using var context = await DbFactory.CreateDbContextAsync();
         _firmalar = await context.Firmalar.AsNoTracking().Where(f => !f.IsDeleted).OrderBy(f => f.FirmaAdi).ToListAsync();
-        if (_firmalar.Any())
-            _firmaId = _firmalar.First().Id;
+        _firmaId = _firmalar.FirstOrDefault()?.Id ?? 0;
+        if (!FirmaSecili)
+        {
+            _yukleniyor = false;
+            _mesaj = "Sisteme tanımlı firma bulunamadı. Puantaj şablonu yüklenemez.";
+            _mesajHata = true;
+            return;
+        }
         await Yukle();
     }
 
@@ -651,6 +660,13 @@ public partial class PuantajExcelGrid
 
     private async Task ExcelOnizlemeYap()
     {
+        if (!FirmaSecili)
+        {
+            _mesaj = "Firma seçilmedi; işlem yapılamaz.";
+            _mesajHata = true;
+            return;
+        }
+
         if (_excelDosya is null)
         {
             _mesaj = "Önce bir Excel dosyası seçin.";
@@ -692,6 +708,13 @@ public partial class PuantajExcelGrid
 
     private async Task ExcelImportYap()
     {
+        if (!FirmaSecili)
+        {
+            _mesaj = "Firma seçilmedi; içe aktarma yapılamaz.";
+            _mesajHata = true;
+            return;
+        }
+
         if (_excelDosya is null)
         {
             _mesaj = "Önce bir Excel dosyası seçin.";

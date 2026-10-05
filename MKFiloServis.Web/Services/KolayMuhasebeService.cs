@@ -11,15 +11,18 @@ public class KolayMuhasebeService : IKolayMuhasebeService
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly IMuhasebeService _muhasebeService;
     private readonly ICariService _cariService;
+    private readonly ILogger<KolayMuhasebeService> _logger;
 
     public KolayMuhasebeService(
         IDbContextFactory<ApplicationDbContext> contextFactory,
         IMuhasebeService muhasebeService,
-        ICariService cariService)
+        ICariService cariService,
+        ILogger<KolayMuhasebeService> logger)
     {
         _contextFactory = contextFactory;
         _muhasebeService = muhasebeService;
         _cariService = cariService;
+        _logger = logger;
     }
 
     #region Önizleme Oluşturma
@@ -638,7 +641,10 @@ public class KolayMuhasebeService : IKolayMuhasebeService
                 return sonuc;
             }
 
-            // İşlem türüne göre kayıtları oluştur
+            // Fatura, muhasebe fişi, banka ve stok kayıtları tek transaction içinde tamamlanır.
+            // Herhangi bir alt kayıt başarısız olursa üstteki catch başarısız sonucu döndürür;
+            // transaction dispose edilirken daha önce kaydedilen parçalar da geri alınır.
+            await using var transaction = await context.Database.BeginTransactionAsync();
             switch (giris.IslemTuru)
             {
                 case KolayIslemTuru.GelirFatura:
@@ -669,10 +675,16 @@ public class KolayMuhasebeService : IKolayMuhasebeService
                     sonuc.Mesaj = "Muhasebe fişi oluşturuldu.";
                     break;
             }
+
+            if (sonuc.Basarili)
+                await transaction.CommitAsync();
         }
         catch (Exception ex)
         {
             sonuc.Basarili = false;
+            _logger.LogError(ex,
+                "Kolay muhasebe kaydı transaction içinde tamamlanamadı. İşlem türü: {IslemTuru}, CariId: {CariId}, BelgeNo: {BelgeNo}",
+                giris.IslemTuru, giris.CariId, giris.BelgeNo);
             var msg = ex.Message;
             var inner = ex.InnerException;
             while (inner != null) { msg += $" → {inner.Message}"; inner = inner.InnerException; }
@@ -727,22 +739,18 @@ public class KolayMuhasebeService : IKolayMuhasebeService
         // Stok kalemleri varsa stok çıkış hareketi oluştur
         foreach (var kalem in giris.Kalemler.Where(k => k.StokId.HasValue && k.Miktar > 0))
         {
-            try
+            context.StokHareketler.Add(new StokHareket
             {
-                context.StokHareketler.Add(new StokHareket
-                {
-                    StokKartiId = kalem.StokId!.Value,
-                    IslemTarihi = DateTime.SpecifyKind(giris.IslemTarihi, DateTimeKind.Utc),
-                    HareketTipi = StokHareketTipi.Cikis,
-                    Miktar = kalem.Miktar,
-                    BirimFiyat = kalem.BirimFiyat,
-                    BelgeNo = fatura.FaturaNo,
-                    Aciklama = kalem.Aciklama ?? giris.Aciklama,
-                    CariId = giris.CariId,
-                    CreatedAt = DateTime.UtcNow
-                });
-            }
-            catch { }
+                StokKartiId = kalem.StokId!.Value,
+                IslemTarihi = DateTime.SpecifyKind(giris.IslemTarihi, DateTimeKind.Utc),
+                HareketTipi = StokHareketTipi.Cikis,
+                Miktar = kalem.Miktar,
+                BirimFiyat = kalem.BirimFiyat,
+                BelgeNo = fatura.FaturaNo,
+                Aciklama = kalem.Aciklama ?? giris.Aciklama,
+                CariId = giris.CariId,
+                CreatedAt = DateTime.UtcNow
+            });
         }
         if (giris.Kalemler.Any(k => k.StokId.HasValue))
             await context.SaveChangesAsync();
@@ -797,22 +805,18 @@ public class KolayMuhasebeService : IKolayMuhasebeService
         // Stok kalemleri varsa stok giriş hareketi oluştur
         foreach (var kalem in giris.Kalemler.Where(k => k.StokId.HasValue && k.Miktar > 0))
         {
-            try
+            context.StokHareketler.Add(new StokHareket
             {
-                context.StokHareketler.Add(new StokHareket
-                {
-                    StokKartiId = kalem.StokId!.Value,
-                    IslemTarihi = DateTime.SpecifyKind(giris.IslemTarihi, DateTimeKind.Utc),
-                    HareketTipi = StokHareketTipi.Giris,
-                    Miktar = kalem.Miktar,
-                    BirimFiyat = kalem.BirimFiyat,
-                    BelgeNo = fatura.FaturaNo,
-                    Aciklama = kalem.Aciklama ?? giris.Aciklama,
-                    CariId = giris.CariId,
-                    CreatedAt = DateTime.UtcNow
-                });
-            }
-            catch { }
+                StokKartiId = kalem.StokId!.Value,
+                IslemTarihi = DateTime.SpecifyKind(giris.IslemTarihi, DateTimeKind.Utc),
+                HareketTipi = StokHareketTipi.Giris,
+                Miktar = kalem.Miktar,
+                BirimFiyat = kalem.BirimFiyat,
+                BelgeNo = fatura.FaturaNo,
+                Aciklama = kalem.Aciklama ?? giris.Aciklama,
+                CariId = giris.CariId,
+                CreatedAt = DateTime.UtcNow
+            });
         }
         if (giris.Kalemler.Any(k => k.StokId.HasValue))
             await context.SaveChangesAsync();
@@ -889,23 +893,19 @@ public class KolayMuhasebeService : IKolayMuhasebeService
         // Stok kalemleri varsa stok hareketleri oluştur
         foreach (var kalem in giris.Kalemler.Where(k => k.StokId.HasValue && k.Miktar > 0))
         {
-            try
+            context.StokHareketler.Add(new StokHareket
             {
-                context.StokHareketler.Add(new StokHareket
-                {
-                    StokKartiId = kalem.StokId!.Value,
-                    IslemTarihi = DateTime.SpecifyKind(giris.IslemTarihi, DateTimeKind.Utc),
-                    HareketTipi = StokHareketTipi.Cikis,
-                    Miktar = kalem.Miktar,
-                    BirimFiyat = kalem.BirimFiyat,
-                    BelgeNo = giris.BelgeNo,
-                    Aciklama = kalem.Aciklama ?? giris.Aciklama,
-                    CariId = giris.CariId,
-                    AracMasrafId = sonuc.MasrafId,
-                    CreatedAt = DateTime.UtcNow
-                });
-            }
-            catch { }
+                StokKartiId = kalem.StokId!.Value,
+                IslemTarihi = DateTime.SpecifyKind(giris.IslemTarihi, DateTimeKind.Utc),
+                HareketTipi = StokHareketTipi.Cikis,
+                Miktar = kalem.Miktar,
+                BirimFiyat = kalem.BirimFiyat,
+                BelgeNo = giris.BelgeNo,
+                Aciklama = kalem.Aciklama ?? giris.Aciklama,
+                CariId = giris.CariId,
+                AracMasrafId = sonuc.MasrafId,
+                CreatedAt = DateTime.UtcNow
+            });
         }
         if (giris.Kalemler.Any(k => k.StokId.HasValue))
             await context.SaveChangesAsync();
@@ -1150,7 +1150,7 @@ public class KolayMuhasebeService : IKolayMuhasebeService
         };
 
         // Atomik olarak FisNo üret + fişi kaydet (SemaphoreSlim koruması altında)
-        var savedFis = await _muhasebeService.CreateFisAtomicAsync(fis);
+        var savedFis = await _muhasebeService.CreateFisAtomicAsync(fis, context);
 
         // Kalemleri mevcut context üzerinden ekle (FK ile bağlı)
         foreach (var kalem in onizleme.Kalemler)

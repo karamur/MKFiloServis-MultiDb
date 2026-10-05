@@ -301,7 +301,11 @@ public class WebhookService : IWebhookService
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    // Bozuk özel başlık göndermeyi engellemez; teslimat yine de denenir.
+                    _logger.LogWarning(ex, "Webhook ozel basligi eklenemedi. EndpointId: {EndpointId}, Url: {Url}", endpoint.Id, endpoint.Url);
+                }
             }
 
             request.Headers.Add("X-Webhook-Event", log.OlayTipi);

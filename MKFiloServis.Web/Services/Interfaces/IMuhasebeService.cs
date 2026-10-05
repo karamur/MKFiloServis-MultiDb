@@ -1,4 +1,5 @@
 using MKFiloServis.Shared.Entities;
+using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Models;
 
 namespace MKFiloServis.Web.Services.Interfaces;
@@ -27,7 +28,7 @@ public interface IMuhasebeService
     Task DeleteFisAsync(int id);
     Task<string> GenerateNextFisNoAsync(FisTipi tip, int firmaId = 0);
     /// <summary>Kilitli olarak FisNo üretir ve fişi kaydeder. Duplicate key hatasını önler.</summary>
-    Task<MuhasebeFis> CreateFisAtomicAsync(MuhasebeFis fis);
+    Task<MuhasebeFis> CreateFisAtomicAsync(MuhasebeFis fis, ApplicationDbContext? existingContext = null);
     Task OnayliFisAsync(int fisId);
     Task OnayGeriAlFisAsync(int fisId);
 

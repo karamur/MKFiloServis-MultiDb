@@ -9,10 +9,12 @@ namespace MKFiloServis.Web.Services;
 public class MaasSnapshotService : IMaasSnapshotService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+    private readonly IAktifFirmaProvider _aktifFirmaProvider;
 
-    public MaasSnapshotService(IDbContextFactory<ApplicationDbContext> contextFactory)
+    public MaasSnapshotService(IDbContextFactory<ApplicationDbContext> contextFactory, IAktifFirmaProvider aktifFirmaProvider)
     {
         _contextFactory = contextFactory;
+        _aktifFirmaProvider = aktifFirmaProvider;
     }
 
     public async Task<bool> VarMiAsync(int yil, int ay, int firmaId)
@@ -37,12 +39,17 @@ public class MaasSnapshotService : IMaasSnapshotService
         List<(int PersonelId, string AdSoyad, string? PersonelKodu, string? GorevAdi, string? AracPlakasi,
               decimal GercekMaas, decimal BankayaYatan, decimal Avans, decimal Kesinti, decimal Harcama, decimal Odenecek, decimal HakedisGelir, decimal HakedisGider)> data)
     {
+        DonemiDogrula(yil, ay, firmaId);
         await using var context = await _contextFactory.CreateDbContextAsync();
+        await FirmayiDogrulaAsync(context, firmaId);
+        await PersonelleriDogrulaAsync(context, firmaId, data.Select(x => x.PersonelId).ToArray());
 
         // Zaten varsa tekrar oluşturma
-        var varMi = await VarMiAsync(yil, ay, firmaId);
-        if (varMi)
-            return await GetAsync(yil, ay, firmaId);
+        var mevcut = await context.MaasOdemeSnapshotlar.AsNoTracking()
+            .Where(x => x.Yil == yil && x.Ay == ay && x.FirmaId == firmaId && !x.IsDeleted)
+            .OrderBy(x => x.PersonelAdSoyad).ToListAsync();
+        if (mevcut.Count > 0)
+            return mevcut;
 
         var now = DateTime.UtcNow;
         var snapshots = data.Select(x => new MaasOdemeSnapshot
@@ -79,9 +86,13 @@ public class MaasSnapshotService : IMaasSnapshotService
         List<(int PersonelId, string AdSoyad, string? PersonelKodu, string? GorevAdi, string? AracPlakasi,
               decimal GercekMaas, decimal BankayaYatan, decimal Avans, decimal Kesinti, decimal Harcama, decimal Odenecek, decimal HakedisGelir, decimal HakedisGider)> data)
     {
+        DonemiDogrula(yil, ay, firmaId);
         await using var context = await _contextFactory.CreateDbContextAsync();
+        await FirmayiDogrulaAsync(context, firmaId);
+        await PersonelleriDogrulaAsync(context, firmaId, data.Select(x => x.PersonelId).ToArray());
 
         var snapshot = await context.MaasOdemeSnapshotlar
+            .AsTracking()
             .Where(x => x.Yil == yil && x.Ay == ay && x.FirmaId == firmaId && !x.IsDeleted)
             .ToListAsync();
 
@@ -93,6 +104,9 @@ public class MaasSnapshotService : IMaasSnapshotService
             throw new InvalidOperationException($"Kilitli dönem güncellenemez. Yil={yil} Ay={ay}");
 
         var dataMap = data.ToDictionary(x => x.PersonelId);
+        var snapshotPersonelIds = snapshot.Select(x => x.PersonelId).ToHashSet();
+        if (dataMap.Keys.Any(id => !snapshotPersonelIds.Contains(id)))
+            throw new InvalidOperationException("Güncellenecek personelin bu dönemde maaş snapshot kaydı bulunmuyor.");
 
         foreach (var item in snapshot)
         {
@@ -130,24 +144,73 @@ public class MaasSnapshotService : IMaasSnapshotService
 
     public async Task KilitleAsync(int yil, int ay, int firmaId)
     {
+        DonemiDogrula(yil, ay, firmaId);
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var affected = await context.MaasOdemeSnapshotlar
-            .Where(x => x.Yil == yil && x.Ay == ay && x.FirmaId == firmaId && !x.IsDeleted)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(x => x.Kilitli, true)
-                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow));
-        // Kilitlendi
+        await FirmayiDogrulaAsync(context, firmaId);
+        var snapshots = await context.MaasOdemeSnapshotlar.AsTracking()
+            .Where(x => x.Yil == yil && x.Ay == ay && x.FirmaId == firmaId && !x.IsDeleted && !x.Kilitli)
+            .ToListAsync();
+        if (snapshots.Count == 0) return;
+
+        var now = DateTime.UtcNow;
+        foreach (var snapshot in snapshots)
+        {
+            snapshot.Kilitli = true;
+            snapshot.UpdatedAt = now;
+        }
+        await context.SaveChangesAsync();
     }
 
     public async Task SilAsync(int yil, int ay, int firmaId)
     {
+        DonemiDogrula(yil, ay, firmaId);
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var affected = await context.MaasOdemeSnapshotlar
-            .Where(x => x.Yil == yil && x.Ay == ay && x.FirmaId == firmaId)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(x => x.IsDeleted, true)
-                .SetProperty(x => x.DeletedAt, DateTime.UtcNow));
-        // Silindi
+        await FirmayiDogrulaAsync(context, firmaId);
+        var snapshots = await context.MaasOdemeSnapshotlar.AsTracking()
+            .Where(x => x.Yil == yil && x.Ay == ay && x.FirmaId == firmaId && !x.IsDeleted)
+            .ToListAsync();
+        if (snapshots.Count == 0) return;
+
+        var now = DateTime.UtcNow;
+        foreach (var snapshot in snapshots)
+        {
+            snapshot.IsDeleted = true;
+            snapshot.DeletedAt = now;
+            snapshot.UpdatedAt = now;
+        }
+        await context.SaveChangesAsync();
+    }
+
+    private void DonemiDogrula(int yil, int ay, int firmaId)
+    {
+        if (firmaId <= 0)
+            throw new ArgumentOutOfRangeException(nameof(firmaId), "Maaş snapshot işlemi için geçerli bir firma gereklidir.");
+        if (yil is < 1 or > 9999)
+            throw new ArgumentOutOfRangeException(nameof(yil), "Yıl 1 ile 9999 arasında olmalıdır.");
+        if (ay is < 1 or > 12)
+            throw new ArgumentOutOfRangeException(nameof(ay), "Ay 1 ile 12 arasında olmalıdır.");
+        if (_aktifFirmaProvider.TumFirmalar || _aktifFirmaProvider.AktifFirmaId is not > 0 ||
+            _aktifFirmaProvider.AktifFirmaId != firmaId)
+            throw new InvalidOperationException("Maaş snapshot yazımı için hedef firmayı tek aktif firma olarak seçin.");
+    }
+
+    private static async Task FirmayiDogrulaAsync(ApplicationDbContext context, int firmaId)
+    {
+        if (!await context.Firmalar.AnyAsync(x => x.Id == firmaId && !x.IsDeleted))
+            throw new InvalidOperationException("Maaş snapshot firmasına erişilemiyor veya firma silinmiş.");
+    }
+
+    private static async Task PersonelleriDogrulaAsync(ApplicationDbContext context, int firmaId, int[] personelIds)
+    {
+        if (personelIds.Any(id => id <= 0) || personelIds.Distinct().Count() != personelIds.Length)
+            throw new InvalidOperationException("Snapshot personel kimlikleri pozitif ve benzersiz olmalıdır.");
+        // Uzun personel listelerinde tek sorgunun parametre sınırına yaklaşma.
+        foreach (var ids in personelIds.Chunk(500))
+        {
+            var count = await context.Soforler.CountAsync(x => ids.Contains(x.Id) && x.FirmaId == firmaId && !x.IsDeleted);
+            if (count != ids.Length)
+                throw new InvalidOperationException("Snapshot personelleri seçili firmaya ait, erişilebilir ve silinmemiş olmalıdır.");
+        }
     }
 }
 

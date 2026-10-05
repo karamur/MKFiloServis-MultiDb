@@ -11,14 +11,15 @@ public class DatabaseSettings
     public int Port { get; set; } = 5432;
     public string DatabaseName { get; set; } = "MKFiloServis";
     public string Username { get; set; } = "postgres";
-    public string Password { get; set; } = "Fast123";
+    /// <summary>Varsayılan parola yok; kurulum sihirbazı veya ortam değişkeni ile doldurulmalıdır.</summary>
+    public string Password { get; set; } = string.Empty;
     public bool UseIntegratedSecurity { get; set; } = false;
     public string? AdditionalOptions { get; set; }
     public string? TransitionManifestPath { get; set; }
     public DateTime? LastTransitionAtUtc { get; set; }
     public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
 
-    public bool IsCanonicalProvider => CanonicalProvider == DatabaseProvider.PostgreSQL;
+    public bool IsCanonicalProvider => Provider == CanonicalProvider;
 
     public string GetConnectionString()
     {
@@ -74,12 +75,23 @@ public class DatabaseSettings
             : $"{DatabaseName}.db";
     }
 
-    public static DatabaseProvider NormalizeRuntimeProvider(DatabaseProvider provider)
-    {
-        return provider is DatabaseProvider.PostgreSQL or DatabaseProvider.SQLite or DatabaseProvider.MySQL or DatabaseProvider.SQLServer
-            ? provider
-            : DatabaseProvider.PostgreSQL;
-    }
+public static DatabaseProvider NormalizeRuntimeProvider(DatabaseProvider provider)
+        {
+            return provider is DatabaseProvider.PostgreSQL or DatabaseProvider.SQLite or DatabaseProvider.MySQL or DatabaseProvider.SQLServer
+                ? provider
+                : DatabaseProvider.PostgreSQL;
+        }
+
+        /// <summary>
+        /// Şema migration hedefi olan kanonik sağlayıcıyı doğrular ve normalleştirir.
+        /// Tanımsız/geçersiz bir değerde PostgreSQL varsayılanına döner.
+        /// </summary>
+        public static DatabaseProvider NormalizeCanonicalProvider(DatabaseProvider provider)
+        {
+            return provider is DatabaseProvider.PostgreSQL or DatabaseProvider.SQLite or DatabaseProvider.MySQL or DatabaseProvider.SQLServer
+                ? provider
+                : DatabaseProvider.PostgreSQL;
+        }
 
     public static DatabaseProvider ParseProvider(string? providerName)
     {

@@ -1,3 +1,6 @@
+﻿using System.Globalization;
+using System.Xml;
+using System.Xml.Linq;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
@@ -6,6 +9,7 @@ using System.Text.RegularExpressions;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Services.Interfaces;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 
 namespace MKFiloServis.Web.Services;
@@ -22,23 +26,29 @@ public class LucaPortalService : ILucaPortalService
     private readonly IFirmaService _firmaService;
     private readonly IWebHostEnvironment _environment;
     
+    private static readonly SemaphoreSlim SettingsFileLock = new(1, 1);
     private LucaPortalSettings? _cachedSettings;
     private HttpClient? _authenticatedClient;
-    
+    private readonly IDataProtector _sifreProtector;
+
     private const string DEFAULT_PORTAL_URL = "https://edonusum.lfrms.com.tr";
-    
+    /// <summary>Sifreli olarak saklanan portal parolasının dosyadaki öneki.</summary>
+    private const string SIFRE_KORUMA_ONEKI = "dp:v1:";
+
     public LucaPortalService(
         IDbContextFactory<ApplicationDbContext> contextFactory,
         IHttpClientFactory httpClientFactory,
         ILogger<LucaPortalService> logger,
         IFirmaService firmaService,
-        IWebHostEnvironment environment)
+        IWebHostEnvironment environment,
+        IDataProtectionProvider dataProtection)
     {
         _contextFactory = contextFactory;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
         _firmaService = firmaService;
         _environment = environment;
+        _sifreProtector = dataProtection.CreateProtector("MKFiloServis.LucaPortal.Credentials.v1");
     }
 
     #region Ayarlar
@@ -105,6 +115,7 @@ public class LucaPortalService : ILucaPortalService
 
     private async Task<LucaPortalSettings?> AyarlariDosyadanOkuAsync(int? firmaId)
     {
+        await SettingsFileLock.WaitAsync();
         try
         {
             var dosyaYolu = GetAyarDosyaYolu(firmaId);
@@ -113,19 +124,49 @@ public class LucaPortalService : ILucaPortalService
                 return null;
             
             var json = await File.ReadAllTextAsync(dosyaYolu);
-            return JsonSerializer.Deserialize<LucaPortalSettings>(json, new JsonSerializerOptions
+            var ayarlar = JsonSerializer.Deserialize<LucaPortalSettings>(json, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
             });
+
+            if (ayarlar is not null)
+            {
+                var migrationNeeded = new[] { ayarlar.Sifre, ayarlar.AccessToken, ayarlar.RefreshToken }
+                    .Any(value => !string.IsNullOrEmpty(value) && !value.StartsWith(SIFRE_KORUMA_ONEKI, StringComparison.Ordinal));
+                ayarlar.Sifre = GizliDegeriCoz(ayarlar.Sifre);
+                ayarlar.AccessToken = GizliDegeriCoz(ayarlar.AccessToken);
+                ayarlar.RefreshToken = GizliDegeriCoz(ayarlar.RefreshToken);
+                if (migrationNeeded) await AyarlariDosyayaKaydetCoreAsync(ayarlar);
+            }
+
+            return ayarlar;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Luca Portal ayar dosyasi okunamadi");
             return null;
         }
+        finally { SettingsFileLock.Release(); }
     }
 
+    /// <summary>Dosyada şifreli saklanan parolayı bellekte açık metne çevirir.</summary>
+    private string GizliDegeriCoz(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return string.Empty;
+        if (!value.StartsWith(SIFRE_KORUMA_ONEKI, StringComparison.Ordinal)) return value;
+        // Çözülemeyen şifreli kaydı boş bir parola ile ezme.
+        return _sifreProtector.Unprotect(value[SIFRE_KORUMA_ONEKI.Length..]);
+    }
+
+    /// <summary>Parolayı diske yazmadan önce DataProtection ile şifreler.</summary>
     private async Task AyarlariDosyayaKaydetAsync(LucaPortalSettings ayarlar)
+    {
+        await SettingsFileLock.WaitAsync();
+        try { await AyarlariDosyayaKaydetCoreAsync(ayarlar); }
+        finally { SettingsFileLock.Release(); }
+    }
+
+    private async Task AyarlariDosyayaKaydetCoreAsync(LucaPortalSettings ayarlar)
     {
         var dosyaYolu = GetAyarDosyaYolu(ayarlar.FirmaId);
         var klasor = Path.GetDirectoryName(dosyaYolu);
@@ -134,13 +175,53 @@ public class LucaPortalService : ILucaPortalService
         {
             Directory.CreateDirectory(klasor);
         }
-        
-        var json = JsonSerializer.Serialize(ayarlar, new JsonSerializerOptions
+
+        // Bellekteki nesneyi değiştirmeden, yalnız diske yazılacak kopyayı şifreliyoruz.
+        var diskeYazilacak = new LucaPortalSettings
+        {
+            Id = ayarlar.Id,
+            FirmaId = ayarlar.FirmaId,
+            PortalUrl = ayarlar.PortalUrl,
+            KullaniciAdi = ayarlar.KullaniciAdi,
+            Sifre = SifreyiSifrele(ayarlar.Sifre),
+            LucaFirmaKodu = ayarlar.LucaFirmaKodu,
+            OtomatikSenkron = ayarlar.OtomatikSenkron,
+            SenkronAralikSaat = ayarlar.SenkronAralikSaat,
+            AccessToken = SifreyiSifrele(ayarlar.AccessToken ?? string.Empty),
+            RefreshToken = SifreyiSifrele(ayarlar.RefreshToken ?? string.Empty),
+            TokenGecerlilikTarihi = ayarlar.TokenGecerlilikTarihi,
+            SonSenkronTarihi = ayarlar.SonSenkronTarihi,
+            OlusturmaTarihi = ayarlar.OlusturmaTarihi,
+            GuncellemeTarihi = ayarlar.GuncellemeTarihi
+        };
+
+        var json = JsonSerializer.Serialize(diskeYazilacak, new JsonSerializerOptions
         {
             WriteIndented = true
         });
         
-        await File.WriteAllTextAsync(dosyaYolu, json);
+        var temp = dosyaYolu + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            await File.WriteAllTextAsync(temp, json);
+            File.Move(temp, dosyaYolu, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temp)) File.Delete(temp);
+        }
+    }
+
+    private string SifreyiSifrele(string sifre)
+    {
+        if (string.IsNullOrEmpty(sifre))
+            return sifre;
+
+        // Zaten şifrelenmiş bir değer geldiyse (ör. ayar dosyası geri yüklenmişse) tekrar sarmalama.
+        if (sifre.StartsWith(SIFRE_KORUMA_ONEKI, StringComparison.Ordinal))
+            return sifre;
+
+        return SIFRE_KORUMA_ONEKI + _sifreProtector.Protect(sifre);
     }
 
     private string GetAyarDosyaYolu(int? firmaId)
@@ -163,7 +244,16 @@ public class LucaPortalService : ILucaPortalService
             
             var ayarlar = await GetAyarlarAsync();
             var portalUrl = ayarlar?.PortalUrl ?? DEFAULT_PORTAL_URL;
-            
+
+            if (!PortalUrlGuvenliMi(portalUrl, "GirisYapAsync"))
+            {
+                return new LucaLoginSonuc
+                {
+                    Basarili = false,
+                    HataMesaji = "Portal adresi HTTPS olmadigi icin giris yapilmadi."
+                };
+            }
+
             _logger.LogInformation("Luca Portal'a giris yapiliyor: {Url}", portalUrl);
             
             // 1. Login sayfasina git ve CSRF token al
@@ -208,7 +298,7 @@ public class LucaPortalService : ILucaPortalService
                 if (ayarlar != null)
                 {
                     ayarlar.KullaniciAdi = kullaniciAdi;
-                    ayarlar.Sifre = sifre; // Sifreyi sifrelenmis olarak sakla (TODO: Encryption)
+                    ayarlar.Sifre = sifre; // Bellekte açık metin; diske yazarken SifreyiSifrele() ile şifrelenir.
                     ayarlar.LucaFirmaKodu = firmaKodu;
                     ayarlar.AccessToken = Guid.NewGuid().ToString(); // Session token olarak kullan
                     ayarlar.TokenGecerlilikTarihi = DateTime.UtcNow.AddHours(8);
@@ -407,23 +497,17 @@ public class LucaPortalService : ILucaPortalService
     {
         try
         {
-            if (!await EnsureAuthenticatedAsync())
-                return null;
-            
-            var ayarlar = await GetAyarlarAsync();
-            var portalUrl = ayarlar?.PortalUrl ?? DEFAULT_PORTAL_URL;
-            
-            var detayPath = belgeTipi == LucaBelgeTipi.EFatura
-                ? $"/EFatura/Detay/{belgeId}"
-                : $"/EArsiv/Detay/{belgeId}";
-            
-            var response = await _authenticatedClient!.GetAsync($"{portalUrl}{detayPath}");
-            
-            if (!response.IsSuccessStatusCode)
-                return null;
-            
-            var html = await response.Content.ReadAsStringAsync();
-            return ParseBelgeDetay(html, belgeTipi);
+            if (belgeTipi is not (LucaBelgeTipi.EFatura or LucaBelgeTipi.EArsiv))
+                throw new NotSupportedException("Detay aktarımı yalnız e-Fatura ve e-Arşiv UBL belgelerini destekler.");
+            var downloaded = await XmlIndirAsync(belgeId, belgeTipi);
+            if (!downloaded.Basarili || downloaded.Icerik is not { Length: > 0 })
+                throw new InvalidOperationException(downloaded.HataMesaji ?? "Belge XML içeriği alınamadı.");
+            var firma = _firmaService.GetAktifFirma();
+            if (firma?.FirmaId is not > 0) throw new InvalidOperationException("Aktif firma seçilmelidir.");
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            var vkn = await context.Firmalar.Where(f => f.Id == firma.FirmaId)
+                .Select(f => f.VergiNo).FirstOrDefaultAsync();
+            return ParseBelgeDetay(downloaded.Icerik, belgeTipi, belgeId, vkn);
         }
         catch (Exception ex)
         {
@@ -751,11 +835,38 @@ public class LucaPortalService : ILucaPortalService
         client.DefaultRequestHeaders.Add("Accept-Language", "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7");
     }
 
+    /// <summary>
+    /// Portal adresi ayarlardan gelir ve kullanıcı tarafından değiştirilebilir. Bu adrese portal
+    /// kullanıcı adı/parolası POST edilir ve imzalı e-fatura belgeleri indirilir; düz HTTP'ye izin
+    /// vermek kimlik bilgilerini ve mali belgeleri ağa açık eder. Sertifika doğrulaması .NET
+    /// varsayılanında açıktır; burada yalnız şema HTTPS olarak zorlanır.
+    /// </summary>
+    private bool PortalUrlGuvenliMi(string portalUrl, string islem)
+    {
+        if (Uri.TryCreate(portalUrl, UriKind.Absolute, out var uri)
+            && uri.Scheme == Uri.UriSchemeHttps)
+        {
+            return true;
+        }
+
+        _logger.LogError(
+            "Luca Portal adresi HTTPS degil; islem reddedildi. Islem: {Islem}, Url: {Url}",
+            islem, portalUrl);
+        return false;
+    }
+
     private async Task<bool> EnsureAuthenticatedAsync()
     {
         var ayarlar = await GetAyarlarAsync();
         
         if (ayarlar == null || string.IsNullOrEmpty(ayarlar.KullaniciAdi))
+        {
+            return false;
+        }
+
+        // Belge listeleme/indirme gibi tüm oturumlu çağrılar bu noktadan geçer; düz HTTP'ye
+        // izin verilirse imzalı mali belgeler ağ üzerinde açık taşınır.
+        if (!PortalUrlGuvenliMi(ayarlar.PortalUrl ?? DEFAULT_PORTAL_URL, "EnsureAuthenticatedAsync"))
         {
             return false;
         }
@@ -892,11 +1003,61 @@ public class LucaPortalService : ILucaPortalService
         return 0;
     }
 
-    private LucaBelge? ParseBelgeDetay(string html, LucaBelgeTipi belgeTipi)
+    private static LucaBelge ParseBelgeDetay(byte[] xml, LucaBelgeTipi belgeTipi, string belgeId, string? firmaVkn)
     {
-        // Detay sayfasindan belge bilgilerini parse et
-        // Bu method belgenin tam detaylarini cekmek icin kullanilir
-        return null; // TODO: Implementasyon
+        using var input = new MemoryStream(xml, writable: false);
+        using var reader = XmlReader.Create(input, new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            MaxCharactersInDocument = 20_000_000
+        });
+        var document = XDocument.Load(reader);
+        XNamespace invoice = "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2";
+        XNamespace basic = "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2";
+        XNamespace aggregate = "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2";
+        var root = document.Root;
+        if (root?.Name != invoice + "Invoice") throw new InvalidDataException("Geçerli UBL Invoice belgesi bekleniyor.");
+        string Required(XElement? element, string field) => !string.IsNullOrWhiteSpace(element?.Value)
+            ? element.Value : throw new InvalidDataException($"UBL alanı eksik: {field}");
+        decimal Amount(XElement? element, string field) => decimal.Parse(Required(element, field), NumberStyles.Number, CultureInfo.InvariantCulture);
+        var supplier = root.Element(aggregate + "AccountingSupplierParty")?.Element(aggregate + "Party");
+        var customer = root.Element(aggregate + "AccountingCustomerParty")?.Element(aggregate + "Party");
+        string TaxId(XElement? party) => party?.Elements(aggregate + "PartyIdentification")
+            .Select(p => p.Element(basic + "ID"))
+            .FirstOrDefault(id => (string?)id?.Attribute("schemeID") is "VKN" or "TCKN")?.Value ?? "";
+        string PartyName(XElement? party) => party?.Element(aggregate + "PartyName")?.Element(basic + "Name")?.Value
+            ?? party?.Element(aggregate + "PartyLegalEntity")?.Element(basic + "RegistrationName")?.Value
+            ?? string.Join(" ", new[] { party?.Element(aggregate + "Person")?.Element(basic + "FirstName")?.Value,
+                party?.Element(aggregate + "Person")?.Element(basic + "FamilyName")?.Value }.Where(v => !string.IsNullOrWhiteSpace(v)));
+        var sender = TaxId(supplier);
+        var receiver = TaxId(customer);
+        var ownTaxId = firmaVkn?.Trim();
+        var direction = !string.IsNullOrEmpty(ownTaxId) && sender == ownTaxId ? LucaBelgeYonu.Giden
+            : !string.IsNullOrEmpty(ownTaxId) && receiver == ownTaxId ? LucaBelgeYonu.Gelen
+            : throw new InvalidDataException("Belgenin gönderici/alıcı VKN'si aktif firma ile eşleşmiyor.");
+        var totals = root.Element(aggregate + "LegalMonetaryTotal");
+        // LucaBelge para birimi taşımıyor; dövizli belgeyi TL tutarı gibi aktarma.
+        if (Required(root.Element(basic + "DocumentCurrencyCode"), "DocumentCurrencyCode") != "TRY")
+            throw new NotSupportedException("Dövizli UBL belgesi için para birimi destekli model gerekir.");
+        var taxTotals = root.Elements(aggregate + "TaxTotal").ToList();
+        if (taxTotals.Count == 0) throw new InvalidDataException("UBL TaxTotal alanı eksik.");
+        return new LucaBelge
+        {
+            BelgeId = belgeId,
+            EttnNo = Required(root.Element(basic + "UUID"), "UUID"),
+            FaturaNo = Required(root.Element(basic + "ID"), "ID"),
+            BelgeTarihi = DateTime.ParseExact(Required(root.Element(basic + "IssueDate"), "IssueDate"), "yyyy-MM-dd", CultureInfo.InvariantCulture),
+            BelgeTipi = belgeTipi, BelgeYonu = direction,
+            GondericiVkn = sender, GondericiUnvan = PartyName(supplier),
+            AliciVkn = receiver, AliciUnvan = PartyName(customer),
+            AraToplam = Amount(totals?.Element(basic + "LineExtensionAmount"), "LineExtensionAmount"),
+            KdvToplam = taxTotals.SelectMany(t => t.Elements(aggregate + "TaxSubtotal"))
+                .Where(t => t.Element(aggregate + "TaxCategory")?.Element(aggregate + "TaxScheme")?.Element(basic + "TaxTypeCode")?.Value == "0015")
+                .Sum(t => Amount(t.Element(basic + "TaxAmount"), "TaxAmount")),
+            GenelToplam = Amount(totals?.Element(basic + "PayableAmount"), "PayableAmount"),
+            XmlMevcut = true
+        };
     }
 
     #endregion

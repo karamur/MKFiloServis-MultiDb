@@ -1,4 +1,5 @@
-﻿@page "/rent-a-car/kara-liste"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:rentacar")]
+@page "/rent-a-car/kara-liste"
 @using Microsoft.AspNetCore.Authorization
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services

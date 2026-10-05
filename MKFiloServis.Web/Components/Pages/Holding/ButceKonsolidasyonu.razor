@@ -1,3 +1,4 @@
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:holding")]
 @page "/holding/butce"
 @attribute [Authorize(Roles = "Admin,HoldingYoneticisi")]
 @rendermode InteractiveServer

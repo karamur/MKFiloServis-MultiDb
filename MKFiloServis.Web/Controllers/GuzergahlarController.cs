@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using MKFiloServis.Web.Services;
 using MKFiloServis.Web.Services.Interfaces;
@@ -11,8 +12,10 @@ namespace MKFiloServis.Web.Controllers;
 /// <summary>
 /// Güzergah yönetimi API endpoint'leri
 /// </summary>
+[Authorize(Policy = "Licensed:filoservis")]
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class GuzergahlarController : ControllerBase
 {
     private readonly IGuzergahService _guzergahService;
@@ -30,7 +33,6 @@ public class GuzergahlarController : ControllerBase
     /// Tüm güzergahları listeler
     /// </summary>
     [HttpGet]
-    [Authorize(AuthenticationSchemes = "Bearer")]
     public async Task<IActionResult> GetAll([FromQuery] bool? aktif = null)
     {
         var guzergahlar = await _guzergahService.GetAllAsync();
@@ -68,7 +70,6 @@ public class GuzergahlarController : ControllerBase
     /// Belirli bir güzergahı getirir
     /// </summary>
     [HttpGet("{id}")]
-    [Authorize(AuthenticationSchemes = "Bearer")]
     public async Task<IActionResult> GetById(int id)
     {
         var guzergah = await _guzergahService.GetByIdAsync(id);
@@ -101,7 +102,6 @@ public class GuzergahlarController : ControllerBase
     /// Yeni güzergah oluşturur
     /// </summary>
     [HttpPost]
-    [Authorize(AuthenticationSchemes = "Bearer")]
     public async Task<IActionResult> Create([FromBody] GuzergahCreateDto dto)
     {
         if (string.IsNullOrEmpty(dto.GuzergahAdi))
@@ -155,7 +155,6 @@ public class GuzergahlarController : ControllerBase
     /// Güzergah bilgilerini günceller
     /// </summary>
     [HttpPut("{id}")]
-    [Authorize(AuthenticationSchemes = "Bearer")]
     public async Task<IActionResult> Update(int id, [FromBody] GuzergahUpdateDto dto)
     {
         var guzergah = await _guzergahService.GetByIdAsync(id);
@@ -238,7 +237,7 @@ public class GuzergahlarController : ControllerBase
     /// Excel'den toplu güzergah import eder
     /// </summary>
     [HttpPost("import-excel")]
-    [Authorize(AuthenticationSchemes = "Bearer", Roles = "Admin")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> ImportExcel(IFormFile file, [FromQuery] int firmaId)
     {
         if (firmaId <= 0)
@@ -265,7 +264,6 @@ public class GuzergahlarController : ControllerBase
     /// Güzergah siler
     /// </summary>
     [HttpDelete("{id}")]
-    [Authorize(AuthenticationSchemes = "Bearer")]
     public async Task<IActionResult> Delete(int id)
     {
         var guzergah = await _guzergahService.GetByIdAsync(id);

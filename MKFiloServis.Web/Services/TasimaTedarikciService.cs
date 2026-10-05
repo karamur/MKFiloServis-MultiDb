@@ -49,11 +49,14 @@ public class TasimaTedarikciService : ITasimaTedarikciService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly ISecureFileService _secureFileService;
+    private readonly ILogger<TasimaTedarikciService> _logger;
 
-    public TasimaTedarikciService(IDbContextFactory<ApplicationDbContext> contextFactory, ISecureFileService secureFileService)
+    public TasimaTedarikciService(IDbContextFactory<ApplicationDbContext> contextFactory, ISecureFileService secureFileService,
+        ILogger<TasimaTedarikciService> logger)
     {
         _contextFactory = contextFactory;
         _secureFileService = secureFileService;
+        _logger = logger;
     }
 
     public async Task<List<TasimaTedarikci>> GetAllAsync(bool sadeceAktif = false)
@@ -336,21 +339,25 @@ public class TasimaTedarikciService : ITasimaTedarikciService
     public async Task DeleteTedarikciEvrakAsync(int evrakId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var evrak = await context.TedarikciEvraklari
+        var evrak = await context.TedarikciEvraklari.AsTracking()
             .Include(e => e.Dosyalar.Where(d => !d.IsDeleted))
             .FirstOrDefaultAsync(e => e.Id == evrakId && !e.IsDeleted);
+        if (evrak == null) return;
 
-        if (evrak != null)
+        var dosyalar = evrak.Dosyalar.Select(d => (d.Id, d.DosyaYolu)).ToArray();
+        var simdi = DateTime.UtcNow;
+        foreach (var dosya in evrak.Dosyalar)
         {
-            foreach (var dosya in evrak.Dosyalar)
-            {
-                await _secureFileService.DeleteAsync(dosya.DosyaYolu);
-                dosya.IsDeleted = true;
-            }
-
-            evrak.IsDeleted = true;
-            await context.SaveChangesAsync();
+            dosya.IsDeleted = true;
+            dosya.DeletedAt = simdi;
+            dosya.UpdatedAt = simdi;
         }
+        evrak.IsDeleted = true;
+        evrak.DeletedAt = simdi;
+        evrak.UpdatedAt = simdi;
+        // DB/audit kaydı başarısızsa fiziksel dosyalara dokunma.
+        await context.SaveChangesAsync();
+        await SilinenDosyalariTemizleAsync(evrakId, dosyalar);
     }
 
     public async Task<TedarikciEvrakDosya> UploadTedarikciEvrakDosyaAsync(int evrakId, IBrowserFile file)
@@ -389,7 +396,17 @@ public class TasimaTedarikciService : ITasimaTedarikciService
         {
             if (!string.IsNullOrWhiteSpace(storedPath))
             {
-                try { await _secureFileService.DeleteAsync(storedPath); } catch { }
+                try
+                {
+                    await _secureFileService.DeleteAsync(storedPath);
+                }
+                catch (Exception cleanupException)
+                {
+                    // Yükleme hatasını koru; başarısız telafinin yolunu operasyon logunda tut.
+                    _logger.LogError(cleanupException,
+                        "Tedarikçi evrak yükleme telafisinde dosya temizlenemedi. EvrakId={EvrakId}, DosyaYolu={DosyaYolu}",
+                        evrakId, storedPath);
+                }
             }
 
             throw;
@@ -411,15 +428,38 @@ public class TasimaTedarikciService : ITasimaTedarikciService
     public async Task DeleteTedarikciEvrakDosyaAsync(int dosyaId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var dosya = await context.TedarikciEvrakDosyalari
+        var dosya = await context.TedarikciEvrakDosyalari.AsTracking()
             .Include(d => d.TedarikciEvrak)
             .FirstOrDefaultAsync(d => d.Id == dosyaId && !d.IsDeleted && d.TedarikciEvrak != null && !d.TedarikciEvrak.IsDeleted);
-        if (dosya != null)
+        if (dosya == null) return;
+
+        dosya.IsDeleted = true;
+        dosya.DeletedAt = DateTime.UtcNow;
+        dosya.UpdatedAt = dosya.DeletedAt;
+        await context.SaveChangesAsync();
+        await SilinenDosyalariTemizleAsync(dosya.TedarikciEvrakId, new[] { (dosya.Id, dosya.DosyaYolu) });
+    }
+
+    private async Task SilinenDosyalariTemizleAsync(int evrakId, IEnumerable<(int Id, string DosyaYolu)> dosyalar)
+    {
+        List<Exception>? hatalar = null;
+        foreach (var dosya in dosyalar)
         {
-            await _secureFileService.DeleteAsync(dosya.DosyaYolu);
-            dosya.IsDeleted = true;
-            await context.SaveChangesAsync();
+            if (string.IsNullOrWhiteSpace(dosya.DosyaYolu)) continue;
+            try
+            {
+                await _secureFileService.DeleteAsync(dosya.DosyaYolu);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Tedarikçi evrak DB kaydı kaldırıldı ancak fiziksel temizlik bekliyor. EvrakId={EvrakId}, DosyaId={DosyaId}, DosyaYolu={DosyaYolu}",
+                    evrakId, dosya.Id, dosya.DosyaYolu);
+                (hatalar ??= new()).Add(ex);
+            }
         }
+        if (hatalar != null)
+            throw new FileCleanupPendingException(new AggregateException(hatalar));
     }
 
     public async Task<byte[]> GetTedarikciEvraklariZipAsync(int tedarikciId, IEnumerable<int>? evrakIds = null)

@@ -1,4 +1,5 @@
-﻿@page "/servis-operasyon/kurumlar"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:filoservis")]
+@page "/servis-operasyon/kurumlar"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
 @inject IKurumService KurumService

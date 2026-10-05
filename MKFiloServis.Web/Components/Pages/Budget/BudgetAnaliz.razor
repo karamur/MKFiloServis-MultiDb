@@ -1,4 +1,5 @@
-﻿@page "/butce"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:butce")]
+@page "/butce"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
 @using Microsoft.AspNetCore.Components.Forms

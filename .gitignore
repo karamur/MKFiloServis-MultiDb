@@ -82,6 +82,7 @@ MKFiloServis.Web/Backups/**
 # Runtime uploads / generated user files
 MKFiloServis.Web/wwwroot/uploads/**
 !MKFiloServis.Web/wwwroot/uploads/.gitkeep
+**/App_Data/db-transitions/
 deploy/Backups/**
 !deploy/Backups/.gitkeep
 deploy/Logs/**
@@ -126,3 +127,14 @@ KURULUM/*.zip
 diagnostic-test-output.txt
 
 setup/redist/
+
+# Lisans imzalama özel anahtarları
+*.pem
+*private*.key
+
+# Test çıktıları / yerel test günlükleri
+TestResults/
+*.trx
+coverage-report/
+test_all.txt
+diagnostic-test-output*.txt

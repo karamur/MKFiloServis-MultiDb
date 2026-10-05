@@ -1,4 +1,5 @@
-﻿@page "/guzergahlar/yeni"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:filoservis")]
+@page "/guzergahlar/yeni"
 @page "/guzergahlar/{Id:int}"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services

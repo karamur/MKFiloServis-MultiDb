@@ -39,7 +39,7 @@ public class DatabaseSettingsService : IDatabaseSettingsService
             if (settings != null)
             {
                 settings.Provider = DatabaseSettings.NormalizeRuntimeProvider(settings.Provider);
-                settings.CanonicalProvider = DatabaseProvider.PostgreSQL;
+                settings.CanonicalProvider = DatabaseSettings.NormalizeCanonicalProvider(settings.CanonicalProvider);
                 if (settings.Provider == DatabaseProvider.SQLite)
                 {
                     settings.DatabaseName = settings.GetNormalizedSqliteDatabaseName();
@@ -220,11 +220,9 @@ public class DatabaseSettingsService : IDatabaseSettingsService
         var manifest = new
         {
             createdAtUtc = DateTime.UtcNow,
-            canonicalProvider = DatabaseProvider.PostgreSQL.ToString(),
+            canonicalProvider = nextSettings.CanonicalProvider.ToString(),
             previousProvider = previousSettings.GetProviderDisplayName(),
             nextProvider = nextSettings.GetProviderDisplayName(),
-            previousConnectionString = previousSettings.GetConnectionString(),
-            nextConnectionString = nextSettings.GetConnectionString(),
             strategy = previousSettings.Provider == nextSettings.Provider
                 ? "in-place-update"
                 : "snapshot-and-convert",
@@ -239,7 +237,7 @@ public class DatabaseSettingsService : IDatabaseSettingsService
     private static void NormalizeSettings(DatabaseSettings settings)
     {
         settings.Provider = DatabaseSettings.NormalizeRuntimeProvider(settings.Provider);
-        settings.CanonicalProvider = DatabaseProvider.PostgreSQL;
+        settings.CanonicalProvider = DatabaseSettings.NormalizeCanonicalProvider(settings.CanonicalProvider);
 
         switch (settings.Provider)
         {

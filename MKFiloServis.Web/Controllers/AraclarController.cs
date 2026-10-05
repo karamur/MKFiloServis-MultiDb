@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MKFiloServis.Web.Services;
 using MKFiloServis.Web.Services.Interfaces;
@@ -9,6 +9,7 @@ namespace MKFiloServis.Web.Controllers;
 /// <summary>
 /// Araç yönetimi API endpoint'leri
 /// </summary>
+[Authorize(Policy = "Licensed:filoservis")]
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(AuthenticationSchemes = "Bearer")]

@@ -56,6 +56,17 @@
                         </div>
                     }
 
+                    @if (lisans != null)
+                    {
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Lisanslı Modüller</label>
+                            @if (lisans.IsDemo) { <p>Demo süresince tüm modüller.</p> }
+                            else if (LicenseService.VerifySignature(lisans) && MKFiloServis.Shared.Licensing.LicenseModules.TryRead(lisans.Signature, out var modules, out _))
+                            { <p>@string.Join(", ", modules.Split(',').Select(x => MKFiloServis.Shared.Licensing.LicenseModules.All[x]))</p> }
+                            else { <p class="text-warning">Modül hakkı bulunmuyor. Lisans programından modülleri seçerek v3 lisans yükleyin.</p> }
+                        </div>
+                    }
+
                     <div class="mb-4">
                         <label class="form-label fw-bold">Makine Kodu</label>
                         <div class="input-group">

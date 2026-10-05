@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
@@ -12,14 +12,21 @@ using Microsoft.Data.Sqlite;
 /// </summary>
 public class MainForm : Form
 {
-    private const string SECRET = "MKFiloServis-LCNS-2026-SECURE-KEY-X9mK2pL5vR8w";
-    private const string AllowedVersion = "1.0.99";
+    private const string DefaultAllowedVersion = "1.0.99";
+    private readonly Label lblMaximumVersion = new() { Text = "En Fazla Sürüm", AutoSize = true };
+    private readonly TextBox txtMaximumVersion = new() { Text = DefaultAllowedVersion, MaxLength = MKFiloServis.Shared.Licensing.LicenseVersionPolicy.MaximumLength, PlaceholderText = "Örn. 1.0.99" };
+    private readonly CheckBox chkUnlimitedVersion = new() { Text = "Sınırsız sürüm hakkı", AutoSize = true };
+    private readonly CheckedListBox moduleSelection = new() { CheckOnClick = true, DisplayMember = "Value", IntegralHeight = false };
+    private string SelectedModules() => MKFiloServis.Shared.Licensing.LicenseModules.Canonical(
+        moduleSelection.CheckedItems.Cast<KeyValuePair<string, string>>().Select(x => x.Key));
     private readonly string _dbPath;
+    private readonly Button btnSigningKeyStatus = new() { Text = "Anahtar Durumu", Width = 160, Height = 30 };
+    private readonly Button btnSigningKeyExport = new() { Text = "Şifreli Yedek Oluştur", Width = 185, Height = 30 };
+    private readonly Button btnSigningKeyVerify = new() { Text = "Yedeği Doğrula", Width = 160, Height = 30 };
+    private readonly Button btnSigningKeyImport = new() { Text = "Anahtar / Yedek İçe Aktar", Width = 220, Height = 30 };
 
     private Panel pnlHeader = new() { Height = 88, BackColor = Color.FromArgb(19, 33, 68) };
     private Label lblTitle = new() { Text = "MKFiloServis Lisans Yonetim Merkezi", AutoSize = true, Font = new Font("Segoe UI Semibold", 19, FontStyle.Bold), ForeColor = Color.White };
-    private Label lblSubtitle = new() { Text = "Lisans, yenileme ve paketleme islemlerini tek ekrandan, tutarli ve hizli sekilde yonetin.", AutoSize = true, Font = new Font("Segoe UI", 9.5f), ForeColor = Color.FromArgb(208, 220, 255) };
-    private Label lblStatusBadge = new() { Text = "WEB UYUMLU", AutoSize = true, Font = new Font("Segoe UI", 9, FontStyle.Bold), ForeColor = Color.White, BackColor = Color.FromArgb(34, 145, 92), Padding = new Padding(10, 6, 10, 6) };
 
     private GroupBox grpLicenseEditor = new() { Text = "Lisans Olusturma" };
     private GroupBox grpOutput = new() { Text = "Anahtar Ciktisi" };
@@ -28,7 +35,6 @@ public class MainForm : Form
     private Panel pnlQuickInfo = new() { BorderStyle = BorderStyle.FixedSingle, BackColor = Color.FromArgb(245, 248, 255) };
     private Label lblQuickInfoTitle = new() { Text = "Hizli Bilgi", AutoSize = true, Font = new Font("Segoe UI", 9, FontStyle.Bold), ForeColor = Color.FromArgb(19, 33, 68) };
     private Label lblQuickInfo = new() { Text = "Firma kodu, machine ID ve iletisim telefonu dogruysa uretilen anahtar web uygulamasinda dogrudan aktive edilir.", AutoSize = false, ForeColor = Color.FromArgb(58, 68, 88) };
-    private Label lblHistoryHint = new() { Text = "Arama, filtreleme ve yenileme gecmisini buradan yonetin.", AutoSize = true, ForeColor = Color.FromArgb(85, 96, 122) };
     private Label lblFirma = new() { Text = "Firma Kodu", AutoSize = true };
     private TextBox txtFirma = new() { PlaceholderText = "orn: USTUN" };
     private Label lblMachine = new() { Text = "Machine ID", AutoSize = true };
@@ -64,8 +70,6 @@ public class MainForm : Form
     };
     private Button btnCopy = new() { Text = "Anahtari Panoya Kopyala", Enabled = false, Height = 35 };
 
-    private Label lblHistory = new() { Text = "Lisans Listesi", AutoSize = true, Font = new Font("Segoe UI", 9, FontStyle.Bold) };
-    private Label lblSearch = new() { Text = "Arama", AutoSize = true };
     private TextBox txtSearch = new() { PlaceholderText = "Firma, Makine veya Telefon ara..." };
     private ComboBox cmbOperationFilter = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private Button btnExportReport = new() { Text = "CSV Disa Aktar", Width = 150, Height = 32 };
@@ -99,8 +103,6 @@ public class MainForm : Form
 
     private bool _syncing;
     private int? _selectedSaleId;
-    private bool _isLoadingSelection;
-    private bool _suppressHistoryRefresh;
 
     public MainForm()
     {
@@ -112,7 +114,7 @@ public class MainForm : Form
         Text = "MKFiloServis Lisans Yonetim Merkezi";
         Width = 1420;
         Height = 920;
-        MinimumSize = new Size(1340, 860);
+        MinimumSize = new Size(1180, 720);
         BackColor = Color.FromArgb(236, 240, 248);
         Font = new Font("Segoe UI", 9f);
         FormBorderStyle = FormBorderStyle.Sizable;
@@ -123,6 +125,12 @@ public class MainForm : Form
 
         InitializeLayout();
         ApplyProfessionalTheme();
+
+        btnSigningKeyStatus.Click += (_, _) => ShowSigningKeyStatus();
+        btnSigningKeyExport.Click += (_, _) => ExportSigningKeyBackup();
+        btnSigningKeyVerify.Click += (_, _) => VerifySigningKeyBackup();
+        btnSigningKeyImport.Click += (_, _) => ImportSigningKeyBackup();
+        chkUnlimitedVersion.CheckedChanged += (_, _) => txtMaximumVersion.Enabled = !chkUnlimitedVersion.Checked;
 
         btnUret.Click += (s, e) => UretSatisLisansi();
         btnUpdateSale.Click += (s, e) => SeciliSatisiGuncelle();
@@ -144,9 +152,6 @@ public class MainForm : Form
         ConfigureGridContextMenu();
         grid.SelectionChanged += (s, e) =>
         {
-            if (_isLoadingSelection)
-                return;
-
             LoadSelectedSaleToForm();
             LoadRenewalHistoryForSelected();
             UpdateActionButtons();
@@ -161,184 +166,219 @@ public class MainForm : Form
     private void InitializeLayout()
     {
         SuspendLayout();
-
+        pnlHeader.Height = 76;
         pnlHeader.Dock = DockStyle.Top;
-        pnlHeader.Padding = new Padding(22, 16, 22, 14);
+        pnlHeader.Padding = new Padding(18, 10, 18, 10);
+        lblTitle.Location = new Point(18, 8);
+        lblTitle.Text = "MKFiloServis Lisans Yönetimi";
+        var subtitle = new Label
+        {
+            Text = "Lisans oluşturun, geçmişi yönetin ve imza anahtarını güvenle yedekleyin.",
+            AutoSize = true, ForeColor = Color.FromArgb(208, 220, 255),
+            Location = new Point(20, 44)
+        };
+        pnlHeader.Controls.AddRange([lblTitle, subtitle]);
+
+        var tabs = new TabControl { Dock = DockStyle.Fill, Padding = new Point(20, 9) };
+        var licensesPage = new TabPage("Lisanslar") { Padding = new Padding(12), BackColor = BackColor };
+        var keysPage = new TabPage("Anahtar ve Yedek") { Padding = new Padding(20), BackColor = Color.White, AutoScroll = true };
+        var packagingPage = new TabPage("Paketleme") { Padding = new Padding(20), BackColor = Color.White, AutoScroll = true };
+        tabs.TabPages.AddRange([licensesPage, keysPage, packagingPage]);
+        Controls.Add(tabs);
         Controls.Add(pnlHeader);
 
-        lblTitle.Location = new Point(18, 10);
-        lblSubtitle.Location = new Point(20, 46);
-        lblStatusBadge.Location = new Point(1120, 24);
-        lblStatusBadge.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        pnlHeader.Controls.AddRange(new Control[] { lblTitle, lblSubtitle, lblStatusBadge });
-
-        pnlQuickInfo.Padding = new Padding(2);
-        grpLicenseEditor.Padding = new Padding(12, 18, 12, 12);
-        grpOutput.Padding = new Padding(12, 18, 12, 12);
-        grpPackaging.Padding = new Padding(12, 18, 12, 12);
-        grpHistory.Padding = new Padding(12, 18, 12, 12);
-        grpLicenseEditor.FlatStyle = FlatStyle.Standard;
-        grpOutput.FlatStyle = FlatStyle.Standard;
-        grpPackaging.FlatStyle = FlatStyle.Standard;
-        grpHistory.FlatStyle = FlatStyle.Standard;
-
-        grpLicenseEditor.Location = new Point(16, 104);
-        grpLicenseEditor.Size = new Size(480, 408);
+        var licenseLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1,
+            Margin = Padding.Empty
+        };
+        licenseLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 496));
+        licenseLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        licenseLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        licensesPage.Controls.Add(licenseLayout);
+        var editorScroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Margin = new Padding(0, 0, 12, 0) };
+        licenseLayout.Controls.Add(editorScroll, 0, 0);
+        grpLicenseEditor.Text = "Lisans Bilgileri";
+        grpLicenseEditor.SetBounds(0, 0, 480, 778);
         grpLicenseEditor.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-
-        grpOutput.Location = new Point(16, 514);
-        grpOutput.Size = new Size(480, 146);
+        grpOutput.Text = "İmzalı Lisans";
+        grpOutput.SetBounds(0, 788, 480, 205);
         grpOutput.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+        editorScroll.Controls.AddRange([grpLicenseEditor, grpOutput]);
+        editorScroll.AutoScrollMinSize = new Size(480, 1005);
 
-        grpPackaging.Location = new Point(16, 670);
-        grpPackaging.Size = new Size(480, 210);
-        grpPackaging.Anchor = AnchorStyles.Left | AnchorStyles.Bottom;
-
-        grpHistory.Location = new Point(510, 104);
-        grpHistory.Size = new Size(890, 774);
-        grpHistory.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-
-        pnlQuickInfo.Location = new Point(20, 28);
-        pnlQuickInfo.Size = new Size(438, 62);
+        pnlQuickInfo.SetBounds(20, 24, 438, 62);
+        lblQuickInfoTitle.Text = "Satış Özeti";
         lblQuickInfoTitle.Location = new Point(14, 10);
-        lblQuickInfo.Location = new Point(14, 28);
-        lblQuickInfo.Size = new Size(408, 24);
-        pnlQuickInfo.Controls.AddRange(new Control[] { lblQuickInfoTitle, lblQuickInfo });
-
-        lblFirma.Location = new Point(20, 106);
-        txtFirma.Location = new Point(20, 126);
-        txtFirma.Width = 205;
-
-        lblPhone.Location = new Point(246, 106);
-        txtPhone.Location = new Point(246, 126);
-        txtPhone.Width = 212;
-
-        lblMachine.Location = new Point(20, 164);
-        txtMachine.Location = new Point(20, 184);
-        txtMachine.Width = 438;
-
-        lblDays.Location = new Point(20, 248);
+        lblQuickInfo.SetBounds(14, 28, 408, 24);
+        pnlQuickInfo.Controls.AddRange([lblQuickInfoTitle, lblQuickInfo]);
+        lblFirma.Text = "Firma Kodu";
+        lblFirma.Location = new Point(20, 100);
+        txtFirma.SetBounds(20, 122, 205, 26);
+        lblPhone.Text = "İletişim Telefonu";
+        lblPhone.Location = new Point(246, 100);
+        txtPhone.SetBounds(246, 122, 212, 26);
+        lblMachine.Text = "Makine Kodu";
+        lblMachine.Location = new Point(20, 158);
+        txtMachine.SetBounds(20, 180, 438, 52);
+        lblDays.Text = "Süre (Gün)";
+        lblDays.Location = new Point(20, 246);
         txtDays.Location = new Point(20, 268);
-
-        lblExpire.Location = new Point(156, 248);
-        dtExpire.Location = new Point(156, 268);
-
+        lblExpire.Text = "Bitiş Tarihi";
+        lblExpire.Location = new Point(246, 246);
+        dtExpire.Location = new Point(246, 268);
+        lblSaleDate.Text = "Satış Tarihi";
         lblSaleDate.Location = new Point(20, 308);
-        dtSaleDate.Location = new Point(20, 328);
+        dtSaleDate.Location = new Point(20, 330);
+        lblAmount.Text = "Satış Tutarı (TL)";
+        lblAmount.Location = new Point(246, 308);
+        numAmount.Location = new Point(246, 330);
+        lblMaximumVersion.Location = new Point(20, 368);
+        txtMaximumVersion.SetBounds(20, 390, 205, 26);
+        chkUnlimitedVersion.Location = new Point(246, 392);
+        var modulesLabel = new Label { Text = "Lisanslı Modüller (yalnızca seçilenler açılır)", AutoSize = true, Location = new Point(20, 424) };
+        moduleSelection.SetBounds(20, 448, 438, 170);
+        foreach (var item in MKFiloServis.Shared.Licensing.LicenseModules.All)
+            moduleSelection.Items.Add(item, false);
+        grpLicenseEditor.Controls.AddRange([modulesLabel, moduleSelection]);
+        btnUret.Text = "İmzalı Lisans Oluştur";
+        btnUret.SetBounds(20, 638, 438, 42);
+        btnRenewRemaining.Text = "Seçili Lisansı Yenile";
+        btnRenewRemaining.SetBounds(20, 688, 438, 36);
+        btnUpdateSale.Text = "Kaydı Güncelle";
+        btnUpdateSale.SetBounds(20, 732, 208, 32);
+        btnDeleteSale.Text = "Kaydı Sil";
+        btnDeleteSale.SetBounds(250, 732, 208, 32);
+        grpLicenseEditor.Controls.AddRange([
+            pnlQuickInfo, lblFirma, txtFirma, lblPhone, txtPhone, lblMachine, txtMachine,
+            lblDays, txtDays, lblExpire, dtExpire, lblSaleDate, dtSaleDate,
+            lblAmount, numAmount, btnUret, btnRenewRemaining, btnUpdateSale, btnDeleteSale,
+            lblMaximumVersion, txtMaximumVersion, chkUnlimitedVersion
+        ]);
+        lblKey.Text = "Müşteriye iletilecek lisans";
+        lblKey.Location = new Point(20, 26);
+        txtKey.SetBounds(20, 50, 438, 94);
+        txtKey.ScrollBars = ScrollBars.Vertical;
+        txtKey.Text = "Henüz lisans oluşturulmadı.";
+        btnCopy.Text = "Lisansı Kopyala";
+        btnCopy.SetBounds(20, 154, 438, 35);
+        grpOutput.Controls.AddRange([lblKey, txtKey, btnCopy]);
 
-        lblAmount.Location = new Point(156, 308);
-        numAmount.Location = new Point(156, 328);
-
-        btnUret.Location = new Point(20, 360);
-        btnUret.Width = 438;
-
-        btnUpdateSale.Location = new Point(20, 408);
-        btnUpdateSale.Width = 208;
-
-        btnDeleteSale.Location = new Point(250, 408);
-        btnDeleteSale.Width = 208;
-
-        btnRenewRemaining.Location = new Point(20, 452);
-        btnRenewRemaining.Width = 438;
-
-        grpLicenseEditor.Controls.AddRange(new Control[]
-        {
-            pnlQuickInfo,
-            lblFirma, txtFirma,
-            lblPhone, txtPhone,
-            lblMachine, txtMachine,
-            lblDays, txtDays,
-            lblExpire, dtExpire,
-            lblSaleDate, dtSaleDate,
-            lblAmount, numAmount,
-            btnUret, btnUpdateSale, btnDeleteSale, btnRenewRemaining
-        });
-
-        lblKey.Location = new Point(20, 34);
-        txtKey.Location = new Point(20, 56);
-        txtKey.Width = 438;
-        btnCopy.Location = new Point(20, 120);
-        btnCopy.Width = 438;
-        grpOutput.Controls.AddRange(new Control[] { lblKey, txtKey, btnCopy });
-
-        lblUpdateZip.Location = new Point(20, 26);
-        txtUpdateSourceFolder.Location = new Point(20, 52);
-        txtUpdateSourceFolder.Width = 316;
-        btnSelectUpdateSource.Location = new Point(344, 50);
-        btnSelectUpdateSource.Width = 114;
-
-        txtUpdateVersion.Location = new Point(20, 88);
-        txtUpdateVersion.Width = 438;
-
-        txtUpdateOutputFolder.Location = new Point(20, 124);
-        txtUpdateOutputFolder.Width = 316;
-        btnSelectUpdateOutput.Location = new Point(344, 122);
-        btnSelectUpdateOutput.Width = 114;
-
-        btnCreateUpdateZip.Location = new Point(20, 164);
-        btnCreateUpdateZip.Width = 214;
-
-        btnPrepareCustomerSetup.Location = new Point(244, 164);
-        btnPrepareCustomerSetup.Width = 214;
-
-        grpPackaging.Controls.AddRange(new Control[]
-        {
-            lblUpdateZip,
-            txtUpdateSourceFolder, btnSelectUpdateSource,
-            txtUpdateVersion,
-            txtUpdateOutputFolder, btnSelectUpdateOutput,
-            btnCreateUpdateZip, btnPrepareCustomerSetup
-        });
-
-        lblHistory.Location = new Point(18, 28);
-        lblSearch.Location = new Point(18, 60);
-        txtSearch.Location = new Point(18, 80);
-        txtSearch.Width = 330;
-
-        cmbOperationFilter.Location = new Point(360, 80);
-        cmbOperationFilter.Width = 190;
-        cmbOperationFilter.Items.AddRange(new object[] { "Sadece Satislar", "Tum Islemler" });
+        grpHistory.Text = "Lisans Geçmişi";
+        grpHistory.Dock = DockStyle.Fill;
+        grpHistory.Margin = Padding.Empty;
+        grpHistory.Padding = new Padding(14, 22, 14, 12);
+        licenseLayout.Controls.Add(grpHistory, 1, 0);
+        var historyLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4 };
+        historyLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        historyLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
+        historyLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        historyLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        historyLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 90));
+        var filters = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, AutoScroll = true };
+        txtSearch.Width = 250;
+        txtSearch.PlaceholderText = "Firma, makine veya telefon ara";
+        cmbOperationFilter.Width = 150;
+        cmbOperationFilter.Items.AddRange(["Sadece Satışlar", "Tüm İşlemler"]);
         cmbOperationFilter.SelectedIndex = 0;
+        btnExportReport.Text = "CSV Dışa Aktar";
+        btnExportReport.Size = new Size(130, 28);
+        filters.Controls.AddRange([txtSearch, cmbOperationFilter, btnExportReport]);
+        grid.Dock = DockStyle.Fill;
+        grid.Margin = Padding.Empty;
+        lblRenewalHistory.Text = "Seçili Lisansın İşlem Geçmişi";
+        lblRenewalHistory.Dock = DockStyle.Fill;
+        lblRenewalHistory.TextAlign = ContentAlignment.MiddleLeft;
+        lstRenewals.Dock = DockStyle.Fill;
+        lstRenewals.HorizontalScrollbar = true;
+        historyLayout.Controls.Add(filters, 0, 0);
+        historyLayout.Controls.Add(grid, 0, 1);
+        historyLayout.Controls.Add(lblRenewalHistory, 0, 2);
+        historyLayout.Controls.Add(lstRenewals, 0, 3);
+        grpHistory.Controls.Add(historyLayout);
 
-        btnExportReport.Location = new Point(714, 78);
-        btnExportReport.Width = 150;
-        btnExportReport.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-
-        grid.Location = new Point(18, 122);
-        grid.Size = new Size(854, 500);
-        grid.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-
-        lblRenewalHistory.Location = new Point(18, 636);
-        lstRenewals.Location = new Point(18, 660);
-        lstRenewals.Size = new Size(854, 92);
-        lstRenewals.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
-
-        lblHistoryHint.Location = new Point(18, 48);
-
-        grpHistory.Controls.AddRange(new Control[]
+        var keyLayout = new TableLayoutPanel
         {
-            lblHistory, lblHistoryHint, lblSearch, txtSearch, cmbOperationFilter, btnExportReport, grid, lblRenewalHistory, lstRenewals
-        });
-
-        Controls.AddRange(new Control[]
+            Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Padding = new Padding(0, 8, 0, 20)
+        };
+        keyLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 250));
+        keyLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        var keyHeading = new Label
         {
-            grpLicenseEditor, grpOutput, grpPackaging, grpHistory
+            Text = "İmza Anahtarı ve Şifreli Yedek",
+            AutoSize = true, Font = new Font("Segoe UI Semibold", 15, FontStyle.Bold), Margin = new Padding(0, 0, 0, 16)
+        };
+        keyLayout.Controls.Add(keyHeading, 0, 0);
+        keyLayout.SetColumnSpan(keyHeading, 2);
+        var keyHelp = new Label
+        {
+            Text = "Lisanslar programın şifreli deposundaki anahtarla imzalanır. Anahtar ve yedek işlemlerini bu ekrandan yönetin.",
+            AutoSize = true, MaximumSize = new Size(780, 0), Margin = new Padding(0, 0, 0, 24)
+        };
+        keyLayout.Controls.Add(keyHelp, 0, 1);
+        keyLayout.SetColumnSpan(keyHelp, 2);
+        var keyButtons = new[] { btnSigningKeyStatus, btnSigningKeyExport, btnSigningKeyVerify, btnSigningKeyImport };
+        var descriptions = new[]
+        {
+            "Programın imzalama anahtarını kontrol edin.",
+            "Parola korumalı bir yedek oluşturun. Parolayı yedekten ayrı saklayın.",
+            "Yedeğin açılabildiğini kontrol edin. Mevcut anahtar değiştirilmez.",
+            "Yeni bilgisayarda yedeği geri yükleyin veya mevcut anahtarı içe alın."
+        };
+        for (var i = 0; i < keyButtons.Length; i++)
+        {
+            keyButtons[i].Size = new Size(230, 40);
+            keyButtons[i].Margin = new Padding(0, 0, 20, 16);
+            keyLayout.Controls.Add(keyButtons[i], 0, i + 2);
+            keyLayout.Controls.Add(new Label
+            {
+                Text = descriptions[i], AutoSize = true, MaximumSize = new Size(650, 0),
+                Margin = new Padding(0, 10, 0, 16)
+            }, 1, i + 2);
+        }
+        keysPage.Controls.Add(keyLayout);
+
+        grpPackaging.Text = "Kurulum ve Güncelleme";
+        grpPackaging.SetBounds(20, 20, 480, 290);
+        grpPackaging.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+        lblUpdateZip.Text = "Müşteri paketi hazırlama";
+        lblUpdateZip.Location = new Point(20, 26);
+        txtUpdateSourceFolder.SetBounds(20, 52, 316, 26);
+        btnSelectUpdateSource.Text = "Kaynak Klasör";
+        btnSelectUpdateSource.SetBounds(344, 50, 114, 32);
+        var versionLabel = new Label { Text = "Paket Sürümü", AutoSize = true, Location = new Point(20, 92) };
+        txtUpdateVersion.SetBounds(20, 114, 438, 26);
+        txtUpdateOutputFolder.SetBounds(20, 154, 316, 26);
+        btnSelectUpdateOutput.Text = "Çıkış Klasörü";
+        btnSelectUpdateOutput.SetBounds(344, 152, 114, 32);
+        btnCreateUpdateZip.Text = "Güncelleme ZIP Oluştur";
+        btnCreateUpdateZip.SetBounds(20, 200, 214, 36);
+        btnPrepareCustomerSetup.Text = "Müşteri Kurulumu Hazırla";
+        btnPrepareCustomerSetup.SetBounds(244, 200, 214, 36);
+        grpPackaging.Controls.AddRange([
+            lblUpdateZip, txtUpdateSourceFolder, btnSelectUpdateSource, versionLabel,
+            txtUpdateVersion, txtUpdateOutputFolder, btnSelectUpdateOutput,
+            btnCreateUpdateZip, btnPrepareCustomerSetup
+        ]);
+        packagingPage.Controls.Add(grpPackaging);
+        packagingPage.Controls.Add(new Label
+        {
+            Text = "İmza anahtarı ve lisans üretici müşteri paketine eklenmez.",
+            AutoSize = true, Location = new Point(20, 328)
         });
 
         dtExpire.Value = DateTime.Now.AddDays((int)txtDays.Value);
         dtSaleDate.Value = DateTime.Today;
         txtUpdateOutputFolder.Text = GetDefaultSetupOutputRoot();
         txtUpdateVersion.Text = "1.0.0";
-
-        txtDays.ValueChanged += (s, e) =>
+        txtDays.ValueChanged += (_, _) =>
         {
             if (_syncing) return;
             _syncing = true;
             dtExpire.Value = DateTime.Now.AddDays((int)txtDays.Value);
             _syncing = false;
         };
-
-        dtExpire.ValueChanged += (s, e) =>
+        dtExpire.ValueChanged += (_, _) =>
         {
             if (_syncing) return;
             _syncing = true;
@@ -346,10 +386,8 @@ public class MainForm : Form
             txtDays.Value = Math.Min(days, 3650);
             _syncing = false;
         };
-
-        ResumeLayout(false);
+        ResumeLayout(true);
     }
-
     private void ApplyProfessionalTheme()
     {
         foreach (var box in new[] { grpLicenseEditor, grpOutput, grpPackaging, grpHistory })
@@ -359,7 +397,7 @@ public class MainForm : Form
             box.BackColor = Color.White;
         }
 
-        foreach (var input in new Control[] { txtFirma, txtMachine, txtPhone, txtKey, txtSearch, txtUpdateSourceFolder, txtUpdateVersion, txtUpdateOutputFolder, txtDays, dtExpire, dtSaleDate, numAmount, cmbOperationFilter })
+        foreach (var input in new Control[] { txtFirma, txtMachine, txtPhone, txtMaximumVersion, txtKey, txtSearch, txtUpdateSourceFolder, txtUpdateVersion, txtUpdateOutputFolder, txtDays, dtExpire, dtSaleDate, numAmount, cmbOperationFilter })
         {
             input.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
         }
@@ -393,6 +431,16 @@ public class MainForm : Form
         btnPrepareCustomerSetup.BackColor = Color.FromArgb(53, 64, 126);
         btnPrepareCustomerSetup.ForeColor = Color.White;
 
+        foreach (var button in new[] { btnSigningKeyStatus, btnSigningKeyExport, btnSigningKeyVerify, btnSigningKeyImport })
+        {
+            button.FlatStyle = FlatStyle.Flat;
+            button.FlatAppearance.BorderSize = 0;
+            button.Cursor = Cursors.Hand;
+            button.Font = new Font("Segoe UI Semibold", 9f, FontStyle.Bold);
+            button.BackColor = Color.FromArgb(223, 229, 242);
+            button.ForeColor = Color.FromArgb(22, 36, 67);
+        }
+
         lstRenewals.BorderStyle = BorderStyle.FixedSingle;
         lstRenewals.Font = new Font("Segoe UI", 9f);
 
@@ -424,6 +472,7 @@ public class MainForm : Form
             )";
         cmd.ExecuteNonQuery();
 
+        AddColumnIfMissing(con, "Modules", "TEXT NOT NULL DEFAULT ''");
         AddColumnIfMissing(con, "DurationDays", "INTEGER NOT NULL DEFAULT 365");
         AddColumnIfMissing(con, "ContactPhone", "TEXT NOT NULL DEFAULT ''");
         AddColumnIfMissing(con, "SaleDate", "TEXT NOT NULL DEFAULT ''");
@@ -469,7 +518,8 @@ public class MainForm : Form
         decimal saleAmount,
         string operationType,
         int? parentLicenseId,
-        int remainingDaysAtIssue)
+        int remainingDaysAtIssue,
+        string modules)
     {
         using var con = new SqliteConnection($"Data Source={_dbPath}");
         con.Open();
@@ -479,13 +529,13 @@ public class MainForm : Form
             (
                 FirmaKodu, MachineId, ExpireDate, CreatedAt, AllowedVersion,
                 DurationDays, ContactPhone, SaleDate, SaleAmount, OperationType,
-                ParentLicenseId, RemainingDaysAtIssue
+                ParentLicenseId, RemainingDaysAtIssue, Modules
             )
             VALUES
             (
                 $f, $m, $e, $c, $v,
                 $d, $p, $sd, $sa, $ot,
-                $parent, $remaining
+                $parent, $remaining, $modules
             );
             SELECT last_insert_rowid();";
 
@@ -501,6 +551,7 @@ public class MainForm : Form
         cmd.Parameters.AddWithValue("$ot", operationType);
         cmd.Parameters.AddWithValue("$parent", (object?)parentLicenseId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$remaining", remainingDaysAtIssue);
+        cmd.Parameters.AddWithValue("$modules", modules);
 
         var inserted = cmd.ExecuteScalar();
         return Convert.ToInt32(inserted, CultureInfo.InvariantCulture);
@@ -531,7 +582,7 @@ public class MainForm : Form
                     ParentLicenseId,
                     ContactPhone,
                     CreatedAt,
-                    AllowedVersion
+                    AllowedVersion, Modules
                 FROM Licenses
                 WHERE
                     ($search = '' OR FirmaKodu LIKE $like OR MachineId LIKE $like OR ContactPhone LIKE $like)
@@ -623,11 +674,58 @@ public class MainForm : Form
 
         grid.Columns["AllowedVersion"]!.HeaderText = "Surum";
         grid.Columns["AllowedVersion"]!.FillWeight = 6;
+
+        grid.Columns["Modules"]!.HeaderText = "Modüller";
+        grid.Columns["Modules"]!.FillWeight = 18;
+        grid.Columns["Modules"]!.MinimumWidth = 100;
+
+        // Ayrıntılar seçilen kayıtta ve CSV raporunda korunur; liste temel alanları gösterir.
+        foreach (var name in new[] { "SaleDate", "DurationDays", "RemainingDaysAtIssue", "ParentLicenseId", "ContactPhone", "CreatedAt", "AllowedVersion" })
+            grid.Columns[name]!.Visible = false;
+        grid.Columns["OperationType"]!.HeaderText = "İşlem";
+        grid.Columns["ExpireDate"]!.HeaderText = "Bitiş Tarihi";
+        grid.Columns["Id"]!.MinimumWidth = 40;
+        grid.Columns["FirmaKodu"]!.MinimumWidth = 110;
+        grid.Columns["MachineId"]!.MinimumWidth = 150;
+        grid.Columns["ExpireDate"]!.MinimumWidth = 100;
+        grid.Columns["SaleAmount"]!.MinimumWidth = 85;
+        grid.Columns["KalanGun"]!.MinimumWidth = 55;
     }
 
     private void Grid_CellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
-        if (grid.Columns[e.ColumnIndex].Name != "KalanGun")
+        if (e.ColumnIndex < 0 || e.RowIndex < 0) return;
+        var column = grid.Columns[e.ColumnIndex].Name;
+        if (column == "ExpireDate" && DateTime.TryParse(Convert.ToString(e.Value, CultureInfo.InvariantCulture),
+            CultureInfo.InvariantCulture, DateTimeStyles.None, out var expiry))
+        {
+            e.Value = expiry.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
+            e.FormattingApplied = true;
+            return;
+        }
+        if (column == "Modules")
+        {
+            var ids = Convert.ToString(e.Value)?.Split(',') ?? [];
+            e.Value = string.Join(", ", ids.Where(MKFiloServis.Shared.Licensing.LicenseModules.All.ContainsKey)
+                .Select(x => MKFiloServis.Shared.Licensing.LicenseModules.All[x]));
+            if (string.IsNullOrEmpty(Convert.ToString(e.Value))) e.Value = "Modül seçilmemiş";
+            e.FormattingApplied = true;
+            return;
+        }
+        if (column == "OperationType")
+        {
+            e.Value = Convert.ToString(e.Value) switch
+            {
+                "Sale" => "Satış",
+                "Renewal" => "Yenileme",
+                "V2Reissue" => "v2 Yeniden Basım",
+                "V3Reissue" => "Modüllü Yeniden Basım",
+                _ => e.Value
+            };
+            e.FormattingApplied = true;
+            return;
+        }
+        if (column != "KalanGun")
             return;
 
         var row = grid.Rows[e.RowIndex];
@@ -642,6 +740,11 @@ public class MainForm : Form
         {
             row.DefaultCellStyle.BackColor = Color.Moccasin;
             row.DefaultCellStyle.ForeColor = Color.DarkOrange;
+        }
+        else
+        {
+            row.DefaultCellStyle.BackColor = Color.Empty;
+            row.DefaultCellStyle.ForeColor = Color.Empty;
         }
     }
 
@@ -659,20 +762,20 @@ public class MainForm : Form
             var expire = dtExpire.Value.Date;
             var durationDays = (int)txtDays.Value;
 
-            var key = BuildLicenseKey(firma, machine, expire, durationDays, phone, created);
+            var key = BuildLicenseKey(firma, machine, expire, durationDays, phone, created, GetMaximumVersion(), SelectedModules());
             SaveLicense(
                 firma,
                 machine,
                 expire,
                 created,
-                AllowedVersion,
+                GetMaximumVersion(),
                 durationDays,
                 phone,
                 dtSaleDate.Value.Date,
                 numAmount.Value,
                 operationType: "Sale",
                 parentLicenseId: null,
-                remainingDaysAtIssue: durationDays);
+                remainingDaysAtIssue: durationDays, modules: SelectedModules());
 
             ShowKeyAndRefresh(key);
 
@@ -724,20 +827,20 @@ public class MainForm : Form
             var machine = NormalizeMachineId(txtMachine.Text);
             var phone = NormalizePhone(txtPhone.Text);
 
-            var key = BuildLicenseKey(firma, machine, expire, remainingDays, phone, created);
+            var key = BuildLicenseKey(firma, machine, expire, remainingDays, phone, created, GetMaximumVersion(), SelectedModules());
             var newId = SaveLicense(
                 firma,
                 machine,
                 expire,
                 created,
-                AllowedVersion,
+                GetMaximumVersion(),
                 remainingDays,
                 phone,
                 dtSaleDate.Value.Date,
                 numAmount.Value,
                 operationType: "Renewal",
                 parentLicenseId: parentId,
-                remainingDaysAtIssue: remainingDays);
+                remainingDaysAtIssue: remainingDays, modules: SelectedModules());
 
             ShowKeyAndRefresh(key);
             SelectGridRowById(newId);
@@ -752,8 +855,147 @@ public class MainForm : Form
         }
     }
 
+    private void ReissueSelectedLicenseAsV2()
+    {
+        try { ReissueSelectedLicenseAsV2Core(); }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Lisans yeniden basımı tamamlanamadı: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void ReissueSelectedLicenseAsV2Core()
+    {
+        if (GetSelectedGridRow()?.DataBoundItem is not DataRowView rowView)
+        {
+            MessageBox.Show("modüllü olarak yeniden basmak için listeden bir lisans kaydı seçin.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var row = rowView.Row;
+        var sourceId = Convert.ToInt32(row["Id"], CultureInfo.InvariantCulture);
+        var firma = NormalizeFirmaKodu(row["FirmaKodu"]?.ToString());
+        var machine = NormalizeMachineId(row["MachineId"]?.ToString());
+        var phone = NormalizePhone(row["ContactPhone"]?.ToString());
+        var version = row["AllowedVersion"]?.ToString()?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(firma) || string.IsNullOrWhiteSpace(machine) ||
+            !MKFiloServis.Shared.Licensing.LicenseVersionPolicy.IsValid(version) ||
+            !DateTime.TryParse(row["ExpireDate"]?.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var expire))
+        {
+            MessageBox.Show("Seçili lisans kaydında firma, makine, sürüm veya bitiş tarihi eksik/geçersiz.", "Lisans kaydı geçersiz", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        if (expire.Date <= DateTime.Today)
+        {
+            MessageBox.Show("Süresi dolmuş lisans yeniden basılamaz. Yeni satış veya yenileme akışını kullanın.", "Lisans süresi dolmuş", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var remainingDays = (expire.Date - DateTime.Today).Days;
+        var originalDuration = row["DurationDays"] is DBNull ? 0 : Convert.ToInt32(row["DurationDays"], CultureInfo.InvariantCulture);
+        if (!DateTime.TryParse(row["CreatedAt"]?.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var originalCreated)
+            || Math.Abs((expire.Date - originalCreated.Date).Days - originalDuration) > 2)
+        {
+            MessageBox.Show("Kaydın oluşturma tarihi, süresi ve bitiş tarihi tutarlı değil. Yetkili kaynaktan doğrulayın.", "Lisans kaydı geçersiz", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+        if (originalDuration < 1 || originalDuration > 3650)
+        {
+            MessageBox.Show("Kaydın lisans süresi geçersiz; süreyi yetkili kaynaktan doğrulamadan yeniden basmayın.", "Lisans kaydı geçersiz", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        var operationType = row["OperationType"]?.ToString() ?? "Sale";
+        if (string.Equals(operationType, "V3Reissue", StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show("Bu kayıt zaten modüllü yeniden basım kaydı. Aynı lisansı tekrar üretmeyin.", "Yeniden basım zaten yapıldı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        using (var con = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            con.Open();
+            using var cmd = con.CreateCommand();
+            cmd.CommandText = @"
+                SELECT EXISTS(
+                    SELECT 1 FROM Licenses
+                    WHERE FirmaKodu = $firma AND MachineId = $machine AND Id <> $id
+                      AND (date(ExpireDate) > date($expire)
+                           OR (OperationType = 'V3Reissue' AND date(ExpireDate) >= date($expire)))
+                )";
+            cmd.Parameters.AddWithValue("$firma", firma);
+            cmd.Parameters.AddWithValue("$machine", machine);
+            cmd.Parameters.AddWithValue("$id", sourceId);
+            cmd.Parameters.AddWithValue("$expire", expire.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            if (Convert.ToInt32(cmd.ExecuteScalar(), CultureInfo.InvariantCulture) != 0)
+            {
+                MessageBox.Show("Bu firma/makine için daha ileri tarihli veya aynı bitiş tarihine sahip modüllü yeniden basım kaydı var. En güncel lisans kaydını seçin.", "Eski lisans kaydı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+        }
+
+        var rootLicenseId = sourceId;
+        if (row["ParentLicenseId"] is not DBNull && row["ParentLicenseId"] != null)
+            rootLicenseId = Convert.ToInt32(row["ParentLicenseId"], CultureInfo.InvariantCulture);
+
+        var answer = MessageBox.Show(
+            $"Bu kayıt müşteri lisans hakkının yetkili kaynağından doğrulandı mı?\n\n" +
+            $"Firma: {firma}\nMakine: {machine}\nBitiş: {expire:yyyy-MM-dd}\nKalan: {remainingDays} gün\nModüller: {string.Join(", ", moduleSelection.CheckedItems.Cast<KeyValuePair<string, string>>().Select(x => x.Value))}\nKaynak kayıt: #{sourceId} ({operationType})\n\n" +
+            "Onaylanırsa aynı firma, makine ve bitiş tarihi için Seçili modüller için v3 imzalı lisans anahtarı üretilecek. Bu işlem yeni satış/uzatma yapmaz.",
+            "Modüllü lisansı yeniden bas", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+        if (answer != DialogResult.Yes)
+            return;
+
+        try
+        {
+            var created = originalCreated;
+            if (moduleSelection.CheckedItems.Count == 0)
+                throw new InvalidOperationException("Yeniden basım için müşterinin lisanslı modüllerini seçin.");
+            var key = BuildLicenseKey(firma, machine, expire.Date, originalDuration, phone, created, version, SelectedModules());
+            var newId = SaveLicense(
+                firma,
+                machine,
+                expire.Date,
+                created,
+                version,
+                originalDuration,
+                phone,
+                DateTime.Today,
+                0m,
+                operationType: "V3Reissue",
+                parentLicenseId: rootLicenseId,
+                remainingDaysAtIssue: remainingDays, modules: SelectedModules());
+
+            ShowKeyAndRefresh(key);
+            cmbOperationFilter.SelectedItem = "Tum Islemler";
+            LoadData();
+            SelectGridRowById(newId);
+            MessageBox.Show(
+                $"Modüllü v3 lisansı oluşturuldu ve geçiş kaydına eklendi.\n\nYeni kayıt: #{newId}\nKaynak: #{sourceId}\nBitiş: {expire:yyyy-MM-dd}\nKalan: {remainingDays} gün\n\nAnahtar panoya kopyalandı. Müşteriye teslimi ve kabulü ayrıca kaydedin.",
+                "v3 lisansı hazır", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Modüllü lisans oluşturulamadı: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
     private bool ValidateMandatoryFields()
     {
+        if (moduleSelection.CheckedItems.Count == 0)
+        {
+            MessageBox.Show("En az bir lisans modülü seçin. Eski kayıtlarda modül hakkını müşteri anlaşmasına göre belirleyin.", "Modül Seçimi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
+        if (!MKFiloServis.Shared.Licensing.LicenseVersionPolicy.IsValid(GetMaximumVersion())
+            || (!chkUnlimitedVersion.Checked && GetMaximumVersion() == MKFiloServis.Shared.Licensing.LicenseVersionPolicy.Unlimited))
+        {
+            MessageBox.Show(this, "En fazla sürüm alanına 1.0.99 gibi geçerli bir sürüm girin. Sınırsız hak için ilgili kutuyu işaretleyin.",
+                "Lisans Sürümü", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
         if (string.IsNullOrWhiteSpace(txtFirma.Text))
         {
             MessageBox.Show("Firma kodu zorunlu. Web uygulamasindaki firma kodu ile ayni degeri girin (orn: F001).", "Eksik Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -800,32 +1042,42 @@ public class MainForm : Form
 
     /// <summary>Firma kodunu web'deki LicenseService ile ayni sekilde normalize eder.</summary>
     private static string NormalizeFirmaKodu(string? value)
-        => (value ?? string.Empty).Trim().ToUpperInvariant();
+        => MKFiloServis.Shared.Licensing.LicenseIdentity.CompanyCode(value);
 
     /// <summary>
     /// Machine ID icindeki TUM whitespace karakterlerini (satir sonu, tab, bosluk) temizler.
     /// Multiline kutuya yapistirilan makine kodlarindaki gizli satir sonlari lisans imzasini bozuyordu.
     /// </summary>
     private static string NormalizeMachineId(string? value)
-        => string.Concat((value ?? string.Empty).Where(c => !char.IsWhiteSpace(c)));
+        => MKFiloServis.Shared.Licensing.LicenseIdentity.MachineId(value);
 
     /// <summary>
     /// Telefon alanindaki whitespace karakterlerini temizler.
     /// Format karakterlerini korur, sadece yapistirma kaynakli gizli bosluklari atar.
     /// </summary>
     private static string NormalizePhone(string? value)
-        => string.Concat((value ?? string.Empty).Where(c => !char.IsWhiteSpace(c)));
+        => MKFiloServis.Shared.Licensing.LicenseIdentity.ContactPhone(value);
 
-    private static string BuildLicenseKey(string firma, string machine, DateTime expire, int durationDays, string phone, DateTime created)
+    private string GetMaximumVersion()
+        => chkUnlimitedVersion.Checked ? MKFiloServis.Shared.Licensing.LicenseVersionPolicy.Unlimited
+            : txtMaximumVersion.Text.Trim();
+
+    private static string BuildLicenseKey(string firma, string machine, DateTime expire, int durationDays, string phone, DateTime created, string allowedVersion, string modules)
     {
         const bool isDemo = false;
+        allowedVersion = allowedVersion.Trim();
+        if (!MKFiloServis.Shared.Licensing.LicenseVersionPolicy.IsValid(allowedVersion))
+            throw new ArgumentException("Lisans sürüm hakkı geçersiz. 1.0.99 gibi sayısal bir sürüm gerekir.", nameof(allowedVersion));
         firma = NormalizeFirmaKodu(firma);
         machine = NormalizeMachineId(machine);
         phone = NormalizePhone(phone);
 
-        var raw = $"{firma}|{machine}|{expire:yyyy-MM-dd}|{durationDays}|{isDemo}|{AllowedVersion}|{created:yyyy-MM-dd}|{phone}|{SECRET}";
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
-        var signature = Convert.ToBase64String(hash);
+        var v2Payload = MKFiloServis.Shared.Licensing.LicenseSignaturePayload.Create(
+            firma, machine, expire, durationDays, isDemo, allowedVersion, created, phone);
+        var raw = MKFiloServis.Shared.Licensing.LicenseModules.Payload(v2Payload, modules);
+        using var rsa = LicenseSigningKeyStore.OpenSigningKey();
+        var signature = MKFiloServis.Shared.Licensing.LicenseModules.Envelope(modules, Convert.ToBase64String(rsa.SignData(
+            Encoding.UTF8.GetBytes(raw), HashAlgorithmName.SHA256, RSASignaturePadding.Pss)));
 
         var json = JsonSerializer.Serialize(new
         {
@@ -833,7 +1085,7 @@ public class MainForm : Form
             MachineId = machine,
             ExpireDate = expire,
             DurationDays = durationDays,
-            AllowedVersion,
+            AllowedVersion = allowedVersion,
             IsDemo = isDemo,
             CreatedAt = created,
             ContactPhone = phone,
@@ -843,12 +1095,94 @@ public class MainForm : Form
         return Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
     }
 
+    private void ShowSigningKeyStatus()
+    {
+        try
+        {
+            var fingerprint = LicenseSigningKeyStore.GetFingerprint();
+            MessageBox.Show(this, "İmzalama anahtarı programın şifreli deposunda hazır.\n\nAçık anahtar parmak izi:\n" + fingerprint,
+                "İmza Anahtarı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "İmza Anahtarı", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+    }
+
+    private void ExportSigningKeyBackup()
+    {
+        using var password = new KeyBackupPasswordDialog(creatingBackup: true);
+        if (password.ShowDialog(this) != DialogResult.OK) return;
+        using var save = new SaveFileDialog
+        {
+            Title = "Şifreli imzalama anahtarı yedeğini kaydet",
+            Filter = "MKFiloServis şifreli anahtar yedeği (*.mkkey)|*.mkkey",
+            FileName = $"MKFiloServis-ImzaAnahtari-{DateTime.Now:yyyyMMdd-HHmmss}.mkkey",
+            OverwritePrompt = true
+        };
+        if (save.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            LicenseSigningKeyStore.ExportBackup(save.FileName, password.Password, overwrite: true);
+            MessageBox.Show(this, "Şifreli yedek kaydedildi ve geri açılarak doğrulandı.\n\n" + save.FileName,
+                "Anahtar Yedeği", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Anahtar Yedeği", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+    }
+
+    private void VerifySigningKeyBackup()
+    {
+        using var open = new OpenFileDialog
+        {
+            Title = "Şifreli anahtar yedeğini doğrula",
+            Filter = "MKFiloServis şifreli anahtar yedeği (*.mkkey)|*.mkkey",
+            CheckFileExists = true
+        };
+        if (open.ShowDialog(this) != DialogResult.OK) return;
+        using var password = new KeyBackupPasswordDialog(creatingBackup: false);
+        if (password.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            LicenseSigningKeyStore.VerifyBackup(open.FileName, password.Password);
+            MessageBox.Show(this, "Yedek parola ile açıldı ve bu sürümün açık anahtarıyla imza eşleşmesi doğrulandı.\nMevcut imzalama anahtarı değiştirilmedi.",
+                "Yedek Doğrulama", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Yedek Doğrulama", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+    }
+
+    private void ImportSigningKeyBackup()
+    {
+        using var open = new OpenFileDialog
+        {
+            Title = "İmzalama anahtarını veya yedeğini seç",
+            Filter = "Desteklenen anahtarlar (*.mkkey;*.pem;*.json)|*.mkkey;*.pem;*.json",
+            CheckFileExists = true
+        };
+        if (open.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            var extension = Path.GetExtension(open.FileName);
+            if (extension.Equals(".pem", StringComparison.OrdinalIgnoreCase) || extension.Equals(".json", StringComparison.OrdinalIgnoreCase))
+                LicenseSigningKeyStore.Import(open.FileName, []);
+            else
+            {
+                using var password = new KeyBackupPasswordDialog(creatingBackup: false);
+                if (password.ShowDialog(this) != DialogResult.OK) return;
+                LicenseSigningKeyStore.Import(open.FileName, password.Password);
+            }
+            MessageBox.Show(this, "İmzalama anahtarı doğrulandı ve programın şifreli deposuna alındı.",
+                "İmza Anahtarı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "İmza Anahtarı", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+    }
+
     private void ShowKeyAndRefresh(string key)
     {
         txtKey.Text = key;
         txtKey.SelectAll();
         btnCopy.Enabled = true;
-        Clipboard.SetText(key);
+        try { Clipboard.SetText(key); }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            MessageBox.Show("Lisans kaydedildi; pano kullanılamıyor. Anahtarı ekrandan kopyalayın.", "Pano", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
         UpdateHistorySummary();
         LoadData();
     }
@@ -914,6 +1248,12 @@ public class MainForm : Form
         var cleanVersion = versionInput.StartsWith("v", StringComparison.OrdinalIgnoreCase)
             ? versionInput[1..]
             : versionInput;
+        if (!MKFiloServis.Shared.Licensing.LicenseVersionPolicy.IsValid(cleanVersion))
+        {
+            MessageBox.Show(this, "Paket sürümü geçersiz. 1.0.26 gibi sayısal bir sürüm girin.",
+                "Paket Sürümü", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
         var versionFolderName = $"v{cleanVersion}";
         var versionFolder = Path.Combine(outputRoot, versionFolderName);
 
@@ -963,8 +1303,7 @@ public class MainForm : Form
         {
             ($"MKFiloServisGuncelle-{version}.exe", FindLatest(p => Path.GetFileName(p).StartsWith("MKFiloServisGuncelle", StringComparison.OrdinalIgnoreCase))),
             ($"MKFiloServisKurulumMusteri-{version}.exe", FindLatest(p => Path.GetFileName(p).StartsWith("MKFiloServisKurulumMusteri", StringComparison.OrdinalIgnoreCase))),
-            ($"MKFiloServisKurulum-{version}.exe", FindLatest(p => Path.GetFileName(p).StartsWith("MKFiloServisKurulum", StringComparison.OrdinalIgnoreCase) && !Path.GetFileName(p).StartsWith("MKFiloServisKurulumMusteri", StringComparison.OrdinalIgnoreCase))),
-            ($"MKLisansArac-{version}.exe", FindLatest(p => Path.GetFileName(p).StartsWith("MKLisansArac", StringComparison.OrdinalIgnoreCase)))
+            ($"MKFiloServisKurulum-{version}.exe", FindLatest(p => Path.GetFileName(p).StartsWith("MKFiloServisKurulum", StringComparison.OrdinalIgnoreCase) && !Path.GetFileName(p).StartsWith("MKFiloServisKurulumMusteri", StringComparison.OrdinalIgnoreCase)))
         };
 
         foreach (var file in filesToCopy)
@@ -1046,6 +1385,11 @@ public class MainForm : Form
             var cleanVersion = versionInput.StartsWith("v", StringComparison.OrdinalIgnoreCase)
                 ? versionInput[1..]
                 : versionInput;
+            if (!MKFiloServis.Shared.Licensing.LicenseVersionPolicy.IsValid(cleanVersion)
+                || !Version.TryParse(cleanVersion, out var packageVersion))
+                throw new ArgumentException("Paket sürümü geçersiz. 1.0.26 gibi sayısal bir sürüm girin.");
+            if (!MKFiloServis.Shared.Licensing.LicenseVersionPolicy.Allows(GetMaximumVersion(), packageVersion))
+                throw new InvalidOperationException("Paket sürümü seçilen lisans sürüm hakkını aşıyor. Lisanslar sekmesindeki hakkı kontrol edin.");
             var versionFolder = Path.Combine(outputRoot, $"v{cleanVersion}");
 
             Directory.CreateDirectory(outputRoot);
@@ -1058,7 +1402,7 @@ public class MainForm : Form
             var expire = dtExpire.Value.Date;
             var durationDays = (int)txtDays.Value;
 
-            var key = BuildLicenseKey(firma, machine, expire, durationDays, phone, created);
+            var key = BuildLicenseKey(firma, machine, expire, durationDays, phone, created, GetMaximumVersion(), SelectedModules());
 
             var licenseFileName = $"musteri-lisans-{firma}-v{cleanVersion}.txt";
             var licenseFilePath = Path.Combine(versionFolder, licenseFileName);
@@ -1081,14 +1425,14 @@ public class MainForm : Form
                 machine,
                 expire,
                 created,
-                AllowedVersion,
+                GetMaximumVersion(),
                 durationDays,
                 phone,
                 dtSaleDate.Value.Date,
                 numAmount.Value,
                 operationType: "Sale",
                 parentLicenseId: null,
-                remainingDaysAtIssue: durationDays);
+                remainingDaysAtIssue: durationDays, modules: SelectedModules());
 
             txtUpdateSourceFolder.Text = sourceFolder;
             txtUpdateOutputFolder.Text = outputRoot;
@@ -1131,11 +1475,19 @@ public class MainForm : Form
 
         // 2) Otomatik lisans anahtarini payload'a gom ve paketleri yeniden derle (publish atlanir)
         var payloadWeb = Path.Combine(setupDir, "payload", "Web");
-        if (Directory.Exists(payloadWeb))
+        if (!Directory.Exists(payloadWeb))
+            throw new DirectoryNotFoundException("Müşteri paketi için Web publish çıktısı bulunamadı.");
+        var temporaryLicense = Path.Combine(payloadWeb, "license.auto.key");
+        try
         {
-            File.WriteAllText(Path.Combine(payloadWeb, "license.auto.key"), licenseKey, Encoding.UTF8);
+            File.WriteAllText(temporaryLicense, licenseKey, Encoding.UTF8);
             if (!RunPowerShellScript(buildScript, $"-Version {version} -SkipPublish", setupDir, "Lisans anahtari gomulup paketler yeniden derleniyor..."))
                 return false;
+        }
+        finally
+        {
+            // Müşteriye özel anahtarı sonraki genel paketlere taşımamak için publish kaynağından kaldır.
+            if (File.Exists(temporaryLicense)) File.Delete(temporaryLicense);
         }
 
         // 3) Ciktilari MK adlariyla version klasorune tasi
@@ -1144,8 +1496,7 @@ public class MainForm : Form
         {
             ($"MKFiloServisKurulum-{version}.exe", $"MKFiloServisKurulum-{version}.exe"),
             ($"MKFiloServisGuncelle-{version}.exe", $"MKFiloServisGuncelle-{version}.exe"),
-            ($"MKFiloServisKurulumMusteri-{version}.exe", $"MKFiloServisKurulumMusteri-{version}.exe"),
-            ($"MKLisansArac-{version}.exe", $"MKLisansArac-{version}.exe")
+            ($"MKFiloServisKurulumMusteri-{version}.exe", $"MKFiloServisKurulumMusteri-{version}.exe")
         };
 
         Directory.CreateDirectory(versionFolder);
@@ -1278,7 +1629,7 @@ public class MainForm : Form
                 if (Path.IsPathRooted(candidate) && File.Exists(candidate))
                     return candidate;
             }
-            catch { /* yoksay */ }
+            catch (Exception ex) { System.Diagnostics.Trace.WriteLine($"[MainForm] Aday yol atlandi: {candidate} ({ex.Message})"); }
         }
 
         // PATH uzerinden pwsh dene, yoksa Windows PowerShell kullan
@@ -1312,6 +1663,13 @@ public class MainForm : Form
         txtFirma.Text = row["FirmaKodu"]?.ToString() ?? string.Empty;
         txtMachine.Text = row["MachineId"]?.ToString() ?? string.Empty;
         txtPhone.Text = row["ContactPhone"]?.ToString() ?? string.Empty;
+        var recordedModules = (row["Modules"]?.ToString() ?? "").Split(',');
+        for (var i = 0; i < moduleSelection.Items.Count; i++)
+            moduleSelection.SetItemChecked(i, recordedModules.Contains(((KeyValuePair<string, string>)moduleSelection.Items[i]).Key));
+        var recordedVersion = row["AllowedVersion"]?.ToString()?.Trim() ?? string.Empty;
+        chkUnlimitedVersion.Checked = recordedVersion == MKFiloServis.Shared.Licensing.LicenseVersionPolicy.Unlimited;
+        txtMaximumVersion.Enabled = !chkUnlimitedVersion.Checked;
+        txtMaximumVersion.Text = chkUnlimitedVersion.Checked ? DefaultAllowedVersion : recordedVersion;
 
         if (DateTime.TryParse(row["ExpireDate"]?.ToString(), out var expireDate))
             dtExpire.Value = expireDate.Date;
@@ -1547,6 +1905,7 @@ public class MainForm : Form
         gridContextMenu.Items.Clear();
         gridContextMenu.Items.Add(new ToolStripMenuItem("Seçili Kaydı Düzenle", null, (s, e) => SeciliSatisiGuncelle()));
         gridContextMenu.Items.Add(new ToolStripMenuItem("Seçili Kayıttan Yenileme Üret", null, (s, e) => YenileKalanGunle()));
+        gridContextMenu.Items.Add(new ToolStripMenuItem("Seçili Lisansı Modüllü Yeniden Bas", null, (s, e) => ReissueSelectedLicenseAsV2()));
         gridContextMenu.Items.Add(new ToolStripSeparator());
         gridContextMenu.Items.Add(new ToolStripMenuItem("Seçili Kaydı Sil", null, (s, e) => SeciliSatisiSil()));
         grid.ContextMenuStrip = gridContextMenu;

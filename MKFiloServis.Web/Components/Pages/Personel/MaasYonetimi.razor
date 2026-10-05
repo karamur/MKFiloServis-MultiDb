@@ -1,4 +1,5 @@
-﻿@page "/personel/maas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:personel")]
+@page "/personel/maas"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
 @using MKFiloServis.Web.Services.Calculation
@@ -23,6 +24,10 @@
 <PageTitle>Maaş / Ödeme Yönetimi</PageTitle>
 
 <div class="container-fluid">
+    @if (!string.IsNullOrWhiteSpace(snapshotUyari))
+    {
+        <div class="alert alert-warning" role="alert">@snapshotUyari</div>
+    }
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h3><i class="bi bi-cash-coin me-2"></i>Maaş / Ödeme Yönetimi</h3>
         <div class="d-flex gap-2 align-items-center">
@@ -1193,6 +1198,9 @@
     private string? odemeAciklama;
     private bool isOdemeYapiliyor = false;
     private string? bildirimMesaj;
+    private string? snapshotUyari;
+    private long yuklemeSurumu;
+    private bool componentDisposed;
     private bool bildirimBasarili;
     private System.Threading.Timer? bildirimTimer;
     private HashSet<string> kullaniciYetkileri = new();
@@ -1241,6 +1249,7 @@
     private int durYil = DateTime.Today.Year;
     private int durAy = DateTime.Today.Month;
     private bool durDetayYukleniyor = false;
+    private long detayYuklemeSurumu;
     private List<PersonelDurumSatir> durSatirlar = new();
     private List<Sofor> durTumPersoneller = new();
     private int durSecilenPersonelId;
@@ -1285,6 +1294,8 @@
     {
         await InvokeAsync(async () =>
         {
+            if (componentDisposed) return;
+            DurumPaneliKapat();
             ciktiFirmaSecim = 0;
             await YenileDurumData();
             StateHasChanged();
@@ -2288,26 +2299,41 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
     // ===== DURUM TABLOSU METHODS =====
     private async Task YenileDurumData()
     {
+        if (componentDisposed) return;
+        ++detayYuklemeSurumu;
+        DurumDetayiTemizle();
+        durDetayYukleniyor = false;
+        var surum = ++yuklemeSurumu;
         isLoading = true;
+        var yuklemeCiktiFirmaSecim = ciktiFirmaSecim;
+        var yuklemeYil = durYil;
+        var yuklemeAy = durAy;
+        var yuklemeFirmaId = AktifFirmaProvider.AktifFirmaId;
+        var yuklemeTumFirmalar = AktifFirmaProvider.TumFirmalar;
+
+        bool YuklemeGuncelMi() => !componentDisposed && surum == yuklemeSurumu && yuklemeYil == durYil && yuklemeAy == durAy && yuklemeCiktiFirmaSecim == ciktiFirmaSecim &&
+            yuklemeFirmaId == AktifFirmaProvider.AktifFirmaId && yuklemeTumFirmalar == AktifFirmaProvider.TumFirmalar;
+
+        snapshotUyari = null;
         try
         {
-            var donemBaslangic = new DateTime(durYil, durAy, 1);
+            var donemBaslangic = new DateTime(yuklemeYil, yuklemeAy, 1);
 
             // Firma kapsamı: Aktif Firma → normal tenant filter yeterli.
             // Tüm Firmalar → IgnoreQueryFilters + firmaIds güvenli sınırlama.
             var firmaIds = await GetMaasFirmaIdsAsync();
             _logger?.LogInformation(
                 "Maaş Firma Kapsamı Debug | Kapsam={Kapsam} | AktifFirmaId={AktifFirmaId} | FirmaIds={FirmaIds}",
-                ciktiFirmaSecim,
-                AktifFirmaProvider.AktifFirmaId,
+                yuklemeCiktiFirmaSecim,
+                yuklemeFirmaId,
                 string.Join(",", firmaIds));
 
             await using var ctx = await DbContextFactory.CreateDbContextAsync();
             IQueryable<Sofor> personelQuery = ctx.Soforler;
-            if (ciktiFirmaSecim == 1)
+            if (yuklemeCiktiFirmaSecim == 1)
                 personelQuery = personelQuery.IgnoreQueryFilters().Where(s => firmaIds.Contains(s.FirmaId!.Value));
 
-            durTumPersoneller = await personelQuery
+            var yeniTumPersoneller = await personelQuery
                 .Include(s => s.Firma)
                 .Include(s => s.AracAtamalari.Where(a => a.Aktif)).ThenInclude(a => a.Arac)
                 .Where(s => !s.IsDeleted && s.Aktif)
@@ -2320,21 +2346,21 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
 
             _logger?.LogInformation(
                 "Maaş Firma Kapsamı Debug | Kapsam={Kapsam} | SatirSayisi={SatirSayisi} | GelenFirmaIds={GelenFirmaIds}",
-                ciktiFirmaSecim,
-                durTumPersoneller.Count,
-                string.Join(",", durTumPersoneller.Select(x => x.FirmaId).Distinct()));
+                yuklemeCiktiFirmaSecim,
+                yeniTumPersoneller.Count,
+                string.Join(",", yeniTumPersoneller.Select(x => x.FirmaId).Distinct()));
 
-            var aktifler = durTumPersoneller
+            var aktifler = yeniTumPersoneller
                 .OrderBy(p => p.SiralamaNo == 0 ? int.MaxValue : p.SiralamaNo)
                 .ThenBy(p => p.Ad)
                 .ToList();
 
-            var donemMaasKayitlari = await PersonelService.GetMaaslarAsync(durYil, durAy);
+            var donemMaasKayitlari = await PersonelService.GetMaaslarAsync(yuklemeYil, yuklemeAy);
             var donemMaasMap = donemMaasKayitlari
                 .GroupBy(m => m.SoforId)
                 .ToDictionary(g => g.Key, g => g.First());
 
-            durSatirlar = new List<PersonelDurumSatir>();
+            var yeniSatirlar = new List<PersonelDurumSatir>();
             foreach (var p in aktifler)
             {
                 PersonelFinansOzet? finansOzet = null;
@@ -2386,23 +2412,38 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
                 satir.Fark = satir.GercekMaas - satir.AsgariUcret;
                 var odenecekSonuc = MaasHesaplamaEngine.Hesapla(new MaasInput { GercekMaas = satir.GercekMaas, BankayaYatan = satir.BankayaYatan, Avans = satir.Avans, Kesinti = satir.Kesinti, Harcama = satir.Harcamasi });
                 satir.Odenecek = odenecekSonuc.Odenecek;
-                durSatirlar.Add(satir);
+                yeniSatirlar.Add(satir);
             }
+            if (!YuklemeGuncelMi()) return;
+            durTumPersoneller = yeniTumPersoneller;
+            durSatirlar = yeniSatirlar;
             if (durSecilenPersonelId > 0)
-                await DurumPersonelDetayYukle();
+            {
+                durSecilenPersonel = yeniTumPersoneller.FirstOrDefault(p => p.Id == durSecilenPersonelId);
+                if (durSecilenPersonel is null)
+                    DurumPaneliKapat();
+                else
+                    await DurumPersonelDetayYukle();
+            }
 
-            // ── Snapshot kaydet (arka planda, sessiz) ──
-            _ = Task.Run(async () =>
+            if (!YuklemeGuncelMi()) return;
+
+            // Tüm firma raporu tek firmanın dönem kaydı olarak yazılamaz.
+            if (yuklemeCiktiFirmaSecim == 1 || yuklemeTumFirmalar || yuklemeFirmaId is not > 0)
+                snapshotUyari = "Liste gösteriliyor; dönem kaydı oluşturmak için tek bir firma seçin ve Aktif Firma görünümüne geçin.";
+            else
             {
                 try
                 {
-                    var firmaId = AktifFirmaProvider.AktifFirmaId ?? durTumPersoneller.FirstOrDefault()?.FirmaId ?? 0;
-                    if (firmaId > 0 && durSatirlar.Any())
+                    var firmaId = yuklemeFirmaId ?? 0;
+                    var snapshotPersoneller = yeniSatirlar.ToArray();
+                    if (firmaId > 0 && snapshotPersoneller.Length > 0)
                     {
-                        var varMi = await SnapshotService.VarMiAsync(durYil, durAy, firmaId);
+                        var varMi = await SnapshotService.VarMiAsync(yuklemeYil, yuklemeAy, firmaId);
+                        if (!YuklemeGuncelMi()) return;
                         if (!varMi)
                         {
-                            var snapshotData = durSatirlar.Select(s => (
+                            var snapshotData = snapshotPersoneller.Select(s => (
                                 PersonelId: s.PersonelId,
                                 AdSoyad: s.AdSoyad,
                                 PersonelKodu: (string?)s.SoforKodu,
@@ -2417,20 +2458,26 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
                                 HakedisGelir: 0m,
                                 HakedisGider: 0m
                             )).ToList();
-                            await SnapshotService.OlusturAsync(durYil, durAy, firmaId, snapshotData);
+                            await SnapshotService.OlusturAsync(yuklemeYil, yuklemeAy, firmaId, snapshotData);
                         }
                     }
                 }
-                catch (Exception ex) { Console.WriteLine($"[Snapshot] Durum kayıt hatası: {ex.Message}"); }
-            });
+                catch (Exception ex)
+                {
+                    if (!YuklemeGuncelMi()) return;
+                    _logger?.LogError(ex, "Maaş dönem kaydı oluşturulamadı. Yıl={Yil}, Ay={Ay}", yuklemeYil, yuklemeAy);
+                    snapshotUyari = "Liste yüklendi ancak maaş dönem kaydı oluşturulamadı. Firma ve dönem seçimini kontrol edip listeyi yeniden yükleyin. Sorun sürerse yöneticinize başvurun.";
+                }
+            }
         }
         catch (Exception ex)
         {
+            if (!YuklemeGuncelMi()) return;
             BildirimGoster($"Durum tablosu yüklenirken hata: {ex.Message}", false);
         }
         finally
         {
-            isLoading = false;
+            if (surum == yuklemeSurumu) isLoading = false;
         }
     }
 
@@ -2441,16 +2488,32 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
             DurumPaneliKapat();
             return;
         }
+        var personel = durTumPersoneller.FirstOrDefault(p => p.Id == personelId);
+        if (personel is null || componentDisposed) return;
         durSecilenPersonelId = personelId;
-        durSecilenPersonel = durTumPersoneller.FirstOrDefault(p => p.Id == personelId);
+        durSecilenPersonel = personel;
         durAktifSekme = "ekstra";
         await DurumPersonelDetayYukle();
     }
 
     private void DurumPaneliKapat()
     {
+        ++detayYuklemeSurumu;
         durSecilenPersonelId = 0;
         durSecilenPersonel = null;
+        durDetayYukleniyor = false;
+        DurumDetayiTemizle();
+    }
+
+    private void DurumDetayiTemizle()
+    {
+        durFinansOzet = null;
+        durAvanslar = new();
+        durBorclar = new();
+        durCebHarcamalar = new();
+        durEkstreHareketler = new();
+        durMaasGecmisi = new();
+        durBordroDetay = null;
     }
 
     private async Task DurumSekmeDegistir(string sekme)
@@ -2461,47 +2524,81 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
 
     private async Task DurumPersonelDetayYukle()
     {
-        if (durSecilenPersonelId == 0) return;
+        if (durSecilenPersonelId <= 0 || componentDisposed) return;
+        var surum = ++detayYuklemeSurumu;
+        var listeSurumu = yuklemeSurumu;
+        var personelId = durSecilenPersonelId;
+        var sekme = durAktifSekme;
+        var yil = durYil;
+        var ay = durAy;
+        var firmaId = AktifFirmaProvider.AktifFirmaId;
+        var tumFirmalar = AktifFirmaProvider.TumFirmalar;
+        var firmaGorunumu = ciktiFirmaSecim;
+        bool DetayGuncelMi() => !componentDisposed && surum == detayYuklemeSurumu && listeSurumu == yuklemeSurumu &&
+            personelId == durSecilenPersonelId && sekme == durAktifSekme && yil == durYil && ay == durAy &&
+            firmaId == AktifFirmaProvider.AktifFirmaId && tumFirmalar == AktifFirmaProvider.TumFirmalar && firmaGorunumu == ciktiFirmaSecim;
+        DurumDetayiTemizle();
         durDetayYukleniyor = true;
         StateHasChanged();
         try
         {
-            durFinansOzet = await PersonelFinansService.GetPersonelFinansOzetAsync(durSecilenPersonelId);
-            if (durAktifSekme == "ekstra")
+            var ozet = await PersonelFinansService.GetPersonelFinansOzetAsync(personelId);
+            if (!DetayGuncelMi()) return;
+            var avanslar = new List<PersonelAvans>();
+            var borclar = new List<PersonelBorc>();
+            var harcamalar = new List<PersonelCebindenHarcamaItem>();
+            var maaslar = new List<PersonelMaas>();
+            BordroDetay? bordroDetay = null;
+            if (sekme == "ekstra")
             {
-                durAvanslar = await PersonelFinansService.GetAvanslarAsync(personelId: durSecilenPersonelId);
-                durBorclar = await PersonelFinansService.GetBorclarAsync(personelId: durSecilenPersonelId);
-                durCebHarcamalar = await PersonelFinansService.GetPersonelCebindenHarcamalarAsync(durSecilenPersonelId);
-                durEkstreHareketler = DurumOlusturEkstre(durAvanslar, durBorclar, durCebHarcamalar);
+                avanslar = await PersonelFinansService.GetAvanslarAsync(personelId: personelId);
+                if (!DetayGuncelMi()) return;
+                borclar = await PersonelFinansService.GetBorclarAsync(personelId: personelId);
+                if (!DetayGuncelMi()) return;
+                harcamalar = await PersonelFinansService.GetPersonelCebindenHarcamalarAsync(personelId);
             }
-            else if (durAktifSekme == "avans")
-                durAvanslar = await PersonelFinansService.GetAvanslarAsync(personelId: durSecilenPersonelId);
-            else if (durAktifSekme == "borc")
-                durBorclar = await PersonelFinansService.GetBorclarAsync(personelId: durSecilenPersonelId);
-            else if (durAktifSekme == "maas")
-                durMaasGecmisi = await PersonelService.GetSoforMaasGecmisiAsync(durSecilenPersonelId);
-            else if (durAktifSekme == "harcama")
-                durCebHarcamalar = await PersonelFinansService.GetPersonelCebindenHarcamalarAsync(durSecilenPersonelId);
-            else if (durAktifSekme == "pusula")
+            else if (sekme == "avans")
+                avanslar = await PersonelFinansService.GetAvanslarAsync(personelId: personelId);
+            else if (sekme == "borc")
+                borclar = await PersonelFinansService.GetBorclarAsync(personelId: personelId);
+            else if (sekme == "maas")
+                maaslar = await PersonelService.GetSoforMaasGecmisiAsync(personelId);
+            else if (sekme == "harcama")
+                harcamalar = await PersonelFinansService.GetPersonelCebindenHarcamalarAsync(personelId);
+            else if (sekme == "pusula")
             {
-                durBordroDetay = null;
-                var bordrolar = await BordroService.GetBordrolarAsync(yil: durYil);
-                foreach (var bordro in bordrolar.Where(b => b.Ay == durAy))
+                var bordrolar = await BordroService.GetBordrolarAsync(yil: yil);
+                if (!DetayGuncelMi()) return;
+                foreach (var bordro in bordrolar.Where(b => b.Ay == ay))
                 {
                     var detaylar = await BordroService.GetBordroDetaylarAsync(bordro.Id);
-                    var detay = detaylar.FirstOrDefault(d => d.PersonelId == durSecilenPersonelId);
-                    if (detay != null) { durBordroDetay = detay; break; }
+                    if (!DetayGuncelMi()) return;
+                    var detay = detaylar.FirstOrDefault(d => d.PersonelId == personelId);
+                    if (detay != null) { bordroDetay = detay; break; }
                 }
             }
+            if (!DetayGuncelMi()) return;
+            durFinansOzet = ozet;
+            durAvanslar = avanslar;
+            durBorclar = borclar;
+            durCebHarcamalar = harcamalar;
+            durMaasGecmisi = maaslar;
+            durBordroDetay = bordroDetay;
+            durEkstreHareketler = sekme == "ekstra" ? DurumOlusturEkstre(avanslar, borclar, harcamalar) : new();
         }
         catch (Exception ex)
         {
-            BildirimGoster($"Detay yüklenirken hata: {ex.Message}", false);
+            if (!DetayGuncelMi()) return;
+            _logger?.LogError(ex, "Personel maaş detayı yüklenemedi. Sekme={Sekme}, Yıl={Yil}, Ay={Ay}", sekme, yil, ay);
+            BildirimGoster("Personel detayları yüklenemedi. Firma ve dönem seçimini kontrol edip tekrar deneyin.", false);
         }
         finally
         {
-            durDetayYukleniyor = false;
-            StateHasChanged();
+            if (surum == detayYuklemeSurumu && !componentDisposed)
+            {
+                durDetayYukleniyor = false;
+                StateHasChanged();
+            }
         }
     }
 
@@ -2637,6 +2734,9 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
 
     public void Dispose()
     {
+        componentDisposed = true;
+        ++detayYuklemeSurumu;
+        ++yuklemeSurumu;
         AktifFirmaProvider.AktifFirmaDegisti -= HandleAktifFirmaDegisti;
         bildirimTimer?.Dispose();
     }

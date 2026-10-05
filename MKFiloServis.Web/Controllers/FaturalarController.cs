@@ -9,6 +9,7 @@ namespace MKFiloServis.Web.Controllers;
 /// <summary>
 /// Fatura yönetimi API endpoint'leri
 /// </summary>
+[Authorize(Policy = "Licensed:fatura")]
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(AuthenticationSchemes = "Bearer")]

@@ -1,4 +1,5 @@
-﻿@page "/dashboard"
+@inject LicenseService ModuleLicenses
+@page "/dashboard"
 @attribute [Authorize]
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
@@ -1307,26 +1308,23 @@ else
     // Yetki kontrolleri - Shared.Entities.Yetkiler sabitlerini kullanıyoruz
     private HashSet<string> kullaniciYetkileri = new();
     private bool HasDashboardPermission => kullaniciYetkileri.Contains(Yetkiler.Dashboard) || kullaniciYetkileri.Contains("*");
-    private bool CanViewCariler => kullaniciYetkileri.Contains(Yetkiler.CarilerOku) || kullaniciYetkileri.Contains("*");
-    private bool CanViewAraclar => kullaniciYetkileri.Contains(Yetkiler.AraclarOku) || kullaniciYetkileri.Contains("*");
-    private bool CanViewSoforler => kullaniciYetkileri.Contains(Yetkiler.PersonelOku) || kullaniciYetkileri.Contains("*");
-    private bool CanViewFaturalar =>
-        kullaniciYetkileri.Contains(Yetkiler.FaturalarOku) ||
+    private bool CanViewCariler => ModuleLicenses.HasModulePermission("cari") && (kullaniciYetkileri.Contains(Yetkiler.CarilerOku) || kullaniciYetkileri.Contains("*"));
+    private bool CanViewAraclar => ModuleLicenses.HasModulePermission("filoservis") && (kullaniciYetkileri.Contains(Yetkiler.AraclarOku) || kullaniciYetkileri.Contains("*"));
+    private bool CanViewSoforler => ModuleLicenses.HasModulePermission("personel") && (kullaniciYetkileri.Contains(Yetkiler.PersonelOku) || kullaniciYetkileri.Contains("*"));
+    private bool CanViewFaturalar => ModuleLicenses.HasModulePermission("fatura") && (kullaniciYetkileri.Contains(Yetkiler.FaturalarOku) ||
         kullaniciYetkileri.Contains(Yetkiler.KesilenFaturalarOku) ||
         kullaniciYetkileri.Contains(Yetkiler.GelenFaturalarOku) ||
-        kullaniciYetkileri.Contains("*");
-    private bool CanViewFinans =>
-        kullaniciYetkileri.Contains(Yetkiler.BankaHesaplariOku) ||
+        kullaniciYetkileri.Contains("*"));
+    private bool CanViewFinans => ModuleLicenses.HasModulePermission("bankakasa") && ModuleLicenses.HasModulePermission("butce") && ModuleLicenses.HasModulePermission("cari") && ModuleLicenses.HasModulePermission("filoservis") && (kullaniciYetkileri.Contains(Yetkiler.BankaHesaplariOku) ||
         kullaniciYetkileri.Contains(Yetkiler.BankaHareketleriOku) ||
         kullaniciYetkileri.Contains(Yetkiler.ButceAnalizOku) ||
         kullaniciYetkileri.Contains(Yetkiler.OdemeYonetimiOku) ||
-        kullaniciYetkileri.Contains("*");
-    private bool CanViewServisler =>
-        kullaniciYetkileri.Contains(Yetkiler.ServisCalismalariOku) ||
+        kullaniciYetkileri.Contains("*"));
+    private bool CanViewServisler => ModuleLicenses.HasModulePermission("filoservis") && (kullaniciYetkileri.Contains(Yetkiler.ServisCalismalariOku) ||
         kullaniciYetkileri.Contains(Yetkiler.TopluCalismaOku) ||
-        kullaniciYetkileri.Contains("*");
-    private bool CanViewBelgeUyarilari => kullaniciYetkileri.Contains(Yetkiler.BelgeUyarilariOku) || kullaniciYetkileri.Contains("*");
-    private bool CanViewEbys => kullaniciYetkileri.Contains("menu.ebys") || kullaniciYetkileri.Contains("*");
+        kullaniciYetkileri.Contains("*"));
+    private bool CanViewBelgeUyarilari => ModuleLicenses.HasModulePermission("ebys") && (kullaniciYetkileri.Contains(Yetkiler.BelgeUyarilariOku) || kullaniciYetkileri.Contains("*"));
+    private bool CanViewEbys => ModuleLicenses.HasModulePermission("ebys") && (kullaniciYetkileri.Contains("menu.ebys") || kullaniciYetkileri.Contains("*"));
 
     protected override async Task OnInitializedAsync()
     {
@@ -1357,7 +1355,7 @@ else
 
     private bool HasYetki(string yetkiKodu)
     {
-        return kullaniciYetkileri.Contains(yetkiKodu) || kullaniciYetkileri.Contains("*");
+        return ModuleLicenses.HasLicensedPermission(yetkiKodu) && (kullaniciYetkileri.Contains(yetkiKodu) || kullaniciYetkileri.Contains("*"));
     }
 
     private async Task TryLoadDashboardSectionAsync(Func<IServiceProvider, Task> action, string sectionName)
@@ -1490,6 +1488,7 @@ else
                 }, "Belge uyarilari"));
 
             // PART 6-7: EvrakDosya tabanlı geçerlilik takibi
+            if (CanViewEbys)
             tasks.Add(TryLoadDashboardSectionAsync(async sp =>
             {
                 var svc = sp.GetRequiredService<EvrakExpiryService>();

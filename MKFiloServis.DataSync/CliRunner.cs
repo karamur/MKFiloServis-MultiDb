@@ -98,7 +98,7 @@ KULLANIM:
 
 ORNEK:
   MKFiloServis.DataSync.exe export ^
-    --source "Host=localhost;Port=5432;Database=DestekCRMServisBlazorDb;Username=postgres;Password=Fast123" ^
+    --source "Host=localhost;Port=5432;Database=MKFiloServis;Username=<kullanici>;Password=<parola>" ^
     --target "C:\MKFiloServis\koa.db"
 """);
     }

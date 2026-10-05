@@ -1,4 +1,5 @@
-﻿@page "/ayarlar/arsiv-goruntuleyici"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:ebys")]
+@page "/ayarlar/arsiv-goruntuleyici"
 @using MKFiloServis.Web.Helpers
 @using MKFiloServis.Web.Services
 @using MKFiloServis.Web.Services.Interfaces

@@ -8,6 +8,7 @@ namespace MKFiloServis.Web.Controllers;
 /// <summary>
 /// Puantaj istisna yönetimi CRUD API.
 /// </summary>
+[Authorize(Policy = "Licensed:filoservis")]
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]

@@ -1,4 +1,5 @@
-﻿@page "/personel/puantaj-grid"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:personel")]
+@page "/personel/puantaj-grid"
 @using Microsoft.EntityFrameworkCore
 @using System.Globalization
 @inject IDbContextFactory<ApplicationDbContext> DbFactory

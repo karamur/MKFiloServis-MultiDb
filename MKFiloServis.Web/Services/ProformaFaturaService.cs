@@ -1,3 +1,7 @@
+﻿using QuestPDF.Fluent;
+using QuestPDF.Helpers;
+using QuestPDF.Infrastructure;
+using System.Globalization;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
@@ -526,14 +530,70 @@ public class ProformaFaturaService : IProformaFaturaService
 
     public async Task<byte[]> ExportToPdfAsync(int proformaId)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        // Bu metod QuestPDF veya benzeri bir kütüphane ile implemente edilebilir
-        // Şimdilik basit bir placeholder
         var proforma = await GetByIdWithKalemlerAsync(proformaId)
-            ?? throw new InvalidOperationException("Proforma fatura bulunamadı.");
-
-        // TODO: PDF oluşturma implementasyonu
-        throw new NotImplementedException("PDF export henüz implemente edilmedi.");
+            ?? throw new KeyNotFoundException("Proforma bulunamadı veya firma kapsamında değil.");
+        var culture = CultureInfo.GetCultureInfo("tr-TR");
+        string Money(decimal amount) => amount.ToString("N2", culture) + " TL";
+        QuestPDF.Settings.License = LicenseType.Community;
+        return Document.Create(document => document.Page(page =>
+        {
+            page.Size(PageSizes.A4);
+            page.Margin(30);
+            page.DefaultTextStyle(style => style.FontSize(10));
+            page.Header().Column(column =>
+            {
+                column.Item().Text(proforma.Firma?.FirmaAdi ?? "").FontSize(16).Bold();
+                column.Item().Text("PROFORMA FATURA").FontSize(20).Bold();
+                column.Item().Text($"No: {proforma.ProformaNo}    Tarih: {proforma.ProformaTarihi:dd.MM.yyyy}");
+                column.Item().Text($"Geçerlilik: {proforma.GecerlilikTarihi:dd.MM.yyyy}");
+            });
+            page.Content().PaddingVertical(15).Column(column =>
+            {
+                column.Spacing(10);
+                column.Item().Text($"Müşteri: {proforma.Cari?.Unvan}").Bold();
+                if (!string.IsNullOrWhiteSpace(proforma.IlgiliKisi))
+                    column.Item().Text($"İlgili kişi: {proforma.IlgiliKisi}");
+                column.Item().Table(table =>
+                {
+                    table.ColumnsDefinition(columns =>
+                    {
+                        columns.RelativeColumn(4);
+                        columns.RelativeColumn(2);
+                        columns.RelativeColumn(2);
+                        columns.RelativeColumn(2);
+                        columns.RelativeColumn(2);
+                    });
+                    table.Header(header =>
+                    {
+                        foreach (var label in new[] { "Ürün / hizmet", "Miktar", "Birim fiyat", "KDV", "Toplam" })
+                            header.Cell().Background(Colors.Grey.Lighten3).Padding(5).Text(label).Bold();
+                    });
+                    foreach (var item in proforma.Kalemler.OrderBy(k => k.SiraNo))
+                    {
+                        table.Cell().BorderBottom(0.5f).Padding(5).Text(item.UrunAdi +
+                            (string.IsNullOrWhiteSpace(item.Aciklama) ? "" : "\n" + item.Aciklama));
+                        table.Cell().Padding(5).Text($"{item.Miktar.ToString("N2", culture)} {item.Birim}");
+                        table.Cell().Padding(5).AlignRight().Text(Money(item.BirimFiyat));
+                        table.Cell().Padding(5).AlignRight().Text(Money(item.KdvTutar));
+                        table.Cell().Padding(5).AlignRight().Text(Money(item.ToplamTutar));
+                    }
+                });
+                column.Item().AlignRight().Text($"Ara toplam: {Money(proforma.AraToplam)}");
+                column.Item().AlignRight().Text($"İskonto: {Money(proforma.IskontoTutar)}");
+                column.Item().AlignRight().Text($"KDV: {Money(proforma.KdvTutar)}");
+                column.Item().AlignRight().Text($"Genel toplam: {Money(proforma.GenelToplam)}").Bold();
+                foreach (var note in new[] { proforma.OdemeKosulu, proforma.TeslimKosulu, proforma.Aciklama })
+                    if (!string.IsNullOrWhiteSpace(note)) column.Item().Text(note);
+                column.Item().Text("Bu belge proformadır; mali fatura yerine geçmez.").Italic();
+                // OzelNotlar yalnız dahili kullanım içindir; belgeye dahil edilmez.
+            });
+            page.Footer().AlignCenter().Text(text =>
+            {
+                text.CurrentPageNumber();
+                text.Span(" / ");
+                text.TotalPages();
+            });
+        })).GeneratePdf();
     }
 
     public async Task<byte[]> ExportToExcelAsync(List<ProformaFatura> proformalars)

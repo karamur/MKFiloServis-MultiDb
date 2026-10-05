@@ -6,7 +6,6 @@
 #define MyAppName     "MKFiloServis"
 #define MyAppExeName  "MKFiloServis.Web.exe"
 #define MyInstallDir  "C:\MKFiloServis"
-#define MyLisansExe   "MKFiloServisLisans.exe"
 #define MyDataSyncExe "MKFiloServis.DataSync.exe"
 
 #ifndef MyAppVersion
@@ -47,7 +46,6 @@ Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
 
 [Components]
 Name: "web";      Description: "Web Uygulamasi (zorunlu)"; Flags: fixed; Types: full
-Name: "lisans";   Description: "Lisans Yonetim Aracini da guncelle"; Types: full
 Name: "datasync"; Description: "Veri Aktarim Aracini da guncelle"; Types: full
 
 [Types]
@@ -58,7 +56,6 @@ Name: "webonly"; Description: "Sadece Web"
 Source: "payload\Web\*"; DestDir: "{app}\app"; \
     Excludes: "dbsettings.json,appsettings.json,appsettings.Production.json,portalsettings.json,backup_settings.json,*.db,*.db-shm,*.db-wal,logs\*,uploads\*,Backups\*,keys\*"; \
     Flags: ignoreversion recursesubdirs createallsubdirs; Components: web
-Source: "payload\LisansDesktop\*"; DestDir: "{app}\tools\lisans"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: lisans
 Source: "payload\DataSync\*"; DestDir: "{app}\tools\datasync"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: datasync
 
 [Code]

@@ -1,4 +1,5 @@
-﻿@page "/soforler/yeni"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:personel")]
+@page "/soforler/yeni"
 @page "/soforler/{Id:int}"
 @page "/personel/yeni"
 @page "/personel/{Id:int}"
@@ -1776,18 +1777,24 @@
         {
             await using var ctx = await DbContextFactory.CreateDbContextAsync();
 
-            var affected = await ctx.PersonelAracAtamalari
-                .Where(a => a.Id == atamaId)
-                .ExecuteUpdateAsync(setters => setters
-                    .SetProperty(a => a.Aktif, false)
-                    .SetProperty(a => a.BitisTarihi, DateTime.Today)
-                    .SetProperty(a => a.UpdatedAt, DateTime.UtcNow));
+            if (!Id.HasValue)
+            {
+                ToastService.ShowError("Araç eşleştirme kapatılamadı. Personel kaydı seçili değil.");
+                return;
+            }
 
-            if (affected != 1)
+            var atama = await ctx.PersonelAracAtamalari
+                .FirstOrDefaultAsync(a => a.Id == atamaId && a.SoforId == Id.Value);
+            if (atama == null)
             {
                 ToastService.ShowError($"Araç eşleştirme kapatılamadı. Kayıt bulunamadı (Id={atamaId}).");
                 return;
             }
+
+            atama.Aktif = false;
+            atama.BitisTarihi = DateTime.Today;
+            atama.UpdatedAt = DateTime.UtcNow;
+            await ctx.SaveChangesAsync();
 
             ToastService.ShowSuccess("Araç eşleştirmesi kapatıldı.");
             await AracAtamalariniYukle();
@@ -1896,31 +1903,32 @@
         {
             await using var ctx = await DbContextFactory.CreateDbContextAsync();
 
-            // Güvenli silme: ExecuteUpdateAsync tracking bypass ile doğrudan DB'ye yazar.
-            // FindAsync + SaveChangesAsync pattern'i query filter / tracking sorunlarında
-            // update'i DB'ye göndermeyebilir. Bu yöntem kesin çalışır.
-            var affected = await ctx.PersonelAracAtamalari
-                .IgnoreQueryFilters()
-                .Where(a => a.Id == atamaId)
-                .ExecuteUpdateAsync(setters => setters
-                    .SetProperty(a => a.IsDeleted, true)
-                    .SetProperty(a => a.Aktif, false)
-                    .SetProperty(a => a.BitisTarihi, DateTime.Today)
-                    .SetProperty(a => a.DeletedAt, DateTime.UtcNow)
-                    .SetProperty(a => a.UpdatedAt, DateTime.UtcNow));
-
-            if (affected != 1)
+            if (!Id.HasValue)
             {
-                // Hiçbir satır etkilenmediyse kayıt DB'de yok demektir.
+                ToastService.ShowError("Araç eşleştirme silinemedi. Personel kaydı seçili değil.");
+                return;
+            }
+
+            var atama = await ctx.PersonelAracAtamalari
+                .FirstOrDefaultAsync(a => a.Id == atamaId && a.SoforId == Id.Value);
+            if (atama == null)
+            {
                 ToastService.ShowError($"Araç eşleştirme silinemedi. Kayıt bulunamadı (Id={atamaId}).");
                 return;
             }
+
+            atama.IsDeleted = true;
+            atama.Aktif = false;
+            atama.BitisTarihi = DateTime.Today;
+            atama.DeletedAt = DateTime.UtcNow;
+            atama.UpdatedAt = DateTime.UtcNow;
+            await ctx.SaveChangesAsync();
 
             // DB doğrulaması: Kayıt gerçekten silindi mi?
             var silinen = await ctx.PersonelAracAtamalari
                 .IgnoreQueryFilters()
                 .AsNoTracking()
-                .FirstOrDefaultAsync(a => a.Id == atamaId);
+                .FirstOrDefaultAsync(a => a.Id == atamaId && a.SoforId == Id.Value);
 
             if (silinen == null || !silinen.IsDeleted || silinen.Aktif)
             {
@@ -2528,6 +2536,12 @@
                 dosya.VersiyonId);
 
             ToastService.ShowSuccess("Dosya silindi.");
+            await EvrakDurumuYukle();
+            await DetayDosyalariYukle(seciliDetayEvrak);
+        }
+        catch (FileCleanupPendingException ex)
+        {
+            ToastService.ShowWarning(ex.Message);
             await EvrakDurumuYukle();
             await DetayDosyalariYukle(seciliDetayEvrak);
         }

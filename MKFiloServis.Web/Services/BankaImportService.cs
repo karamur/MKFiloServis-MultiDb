@@ -5,23 +5,25 @@ using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.VisualBasic.FileIO;
 
 namespace MKFiloServis.Web.Services;
 
 /// <summary>
 /// Dinamik banka Excel/CSV import servisi.
 /// Kullanıcı tanımlı kolon mapping ile çalışır.
-/// SHA256 hash + duplicate + preview + snapshot entegrasyonlu.
+/// SHA256 hash, mükerrer kayıt kontrolü ve önizleme içerir.
 /// </summary>
 public class BankaImportService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _factory;
-    private readonly IMaasSnapshotService? _snapshotService;
+    private readonly IAktifFirmaProvider _aktifFirmaProvider;
 
-    public BankaImportService(IDbContextFactory<ApplicationDbContext> factory, IMaasSnapshotService? snapshotService = null)
+    public BankaImportService(IDbContextFactory<ApplicationDbContext> factory, IAktifFirmaProvider aktifFirmaProvider,
+        IMaasSnapshotService? snapshotService = null)
     {
         _factory = factory;
-        _snapshotService = snapshotService;
+        _aktifFirmaProvider = aktifFirmaProvider;
     }
 
     /// <summary>
@@ -46,10 +48,12 @@ public class BankaImportService
     public async Task<BankaImportSonuc> PreviewAsync(byte[] fileBytes, string fileName, BankaKolonMapping map, int firmaId)
     {
         MapDogrula(map);
+        await using var context = await _factory.CreateDbContextAsync();
+        await ImportKapsaminiDogrulaAsync(context, map, firmaId);
         var hash = ComputeSha256(fileBytes);
 
         using var ms = new MemoryStream(fileBytes);
-        var satirlar = await DosyaOkuAsync(ms, fileName);
+        var satirlar = await DosyaOkuAsync(ms, fileName, map.Ayrac, map.SayiAyraci);
         var sonuc = new BankaImportSonuc { DosyaHash = hash, Basarili = true };
 
         var startIndex = map.BaslikVarMi ? 1 + map.AtlanacakSatir : map.AtlanacakSatir;
@@ -57,10 +61,11 @@ public class BankaImportService
 
         for (int i = startIndex; i < startIndex + previewRows; i++)
         {
+            if (satirlar[i].All(string.IsNullOrWhiteSpace)) continue;
             try
             {
                 var hareket = ParseSatir(satirlar[i], map, firmaId);
-                if (hareket != null) sonuc.Onizleme.Add(hareket);
+                sonuc.Onizleme.Add(hareket);
             }
             catch (Exception ex)
             {
@@ -70,11 +75,12 @@ public class BankaImportService
         }
 
         sonuc.AlinanSatir = Math.Max(0, satirlar.Length - startIndex);
+        sonuc.Basarili = sonuc.Hata == 0 && sonuc.Onizleme.Count > 0;
         return sonuc;
     }
 
     /// <summary>
-    /// Tam import: parse + hash kontrol + duplicate kontrol + kaydet + snapshot güncelle.
+    /// Tam import: kapsam, hash ve mükerrer kontrolü; tüm satırlar geçerliyse tek SaveChanges ile kaydet.
     /// </summary>
     public async Task<BankaImportSonuc> ImportAsync(byte[] fileBytes, string fileName, BankaKolonMapping map, int firmaId)
     {
@@ -84,6 +90,7 @@ public class BankaImportService
 
         // ── Hash kontrol: aynı dosya daha önce yüklendi mi? ──
         await using var context = await _factory.CreateDbContextAsync();
+        await ImportKapsaminiDogrulaAsync(context, map, firmaId);
         var hashVarMi = await context.FinansHareketler
             .AsNoTracking()
             .AnyAsync(x => x.DosyaHash == hash && x.FirmaId == firmaId && !x.IsDeleted);
@@ -95,7 +102,7 @@ public class BankaImportService
         }
 
         using var ms = new MemoryStream(fileBytes);
-        var satirlar = await DosyaOkuAsync(ms, fileName);
+        var satirlar = await DosyaOkuAsync(ms, fileName, map.Ayrac, map.SayiAyraci);
         if (satirlar.Length == 0)
         {
             sonuc.Hatalar.Add("Dosya boş.");
@@ -109,30 +116,28 @@ public class BankaImportService
         var mevcutTarihReferanslar = await context.FinansHareketler
             .AsNoTracking()
             .Where(x => x.FirmaId == firmaId && !x.IsDeleted)
-            .Select(x => new { x.Tarih, x.ReferansNo, x.Tutar })
+            .Select(x => new { x.Tarih, x.ReferansNo, x.Tutar, x.BorcMu })
             .ToListAsync();
+        var referanslar = mevcutTarihReferanslar
+            .Where(x => !string.IsNullOrWhiteSpace(x.ReferansNo))
+            .Select(x => (x.Tarih.Date, x.ReferansNo!.Trim(), x.Tutar, x.BorcMu))
+            .ToHashSet();
 
         for (int i = startIndex; i < satirlar.Length; i++)
         {
-            var line = satirlar[i].Trim();
-            if (string.IsNullOrWhiteSpace(line)) continue;
+            var line = satirlar[i];
+            if (line.All(string.IsNullOrWhiteSpace)) continue;
 
             try
             {
                 var hareket = ParseSatir(line, map, firmaId);
-                if (hareket == null) continue;
 
                 hareket.DosyaHash = hash;
 
-                // ── Duplicate kontrol: ReferansNo + Tarih + Tutar ──
+                // Mevcut DB kayıtları ve bu dosyada daha önce kabul edilen satırlar.
                 if (!string.IsNullOrWhiteSpace(hareket.ReferansNo))
                 {
-                    var dup = mevcutTarihReferanslar.Any(x =>
-                        x.Tarih.Date == hareket.Tarih.Date &&
-                        x.ReferansNo == hareket.ReferansNo &&
-                        x.Tutar == hareket.Tutar);
-
-                    if (dup)
+                    if (!referanslar.Add((hareket.Tarih.Date, hareket.ReferansNo.Trim(), hareket.Tutar, hareket.BorcMu)))
                     {
                         sonuc.Atlanan++;
                         continue;
@@ -148,6 +153,12 @@ public class BankaImportService
             }
         }
 
+        if (sonuc.Hata > 0)
+        {
+            sonuc.Hatalar.Add("Dosyada hatalı satırlar bulundu. Hiçbir kayıt eklenmedi; dosyayı düzeltip yeniden yükleyin.");
+            return sonuc;
+        }
+
         // ── Toplu kaydet ──
         if (kaydedilecekler.Any())
         {
@@ -157,24 +168,9 @@ public class BankaImportService
             sonuc.Kaydedilenler = kaydedilecekler;
             sonuc.Basarili = true;
 
-            // Import tamam
-
-            // ── Snapshot güncelle (varsa) ──
-            if (_snapshotService != null)
-            {
-                try
-                {
-                    var now = DateTime.Now;
-                    var varMi = await _snapshotService.VarMiAsync(now.Year, now.Month, firmaId);
-                    if (varMi)
-                    {
-                        await _snapshotService.GuncelleAsync(now.Year, now.Month, firmaId,
-                            new List<(int, string, string?, string?, string?, decimal, decimal, decimal, decimal, decimal, decimal, decimal, decimal)>());
-                    }
-                }
-                catch (Exception ex) { Console.WriteLine($"[BankaImport] Snapshot güncelleme hatası (önemsiz): {ex.Message}"); }
-            }
         }
+        else
+            sonuc.Hatalar.Add("İçe aktarılabilecek yeni kayıt bulunamadı.");
 
         return sonuc;
     }
@@ -182,14 +178,30 @@ public class BankaImportService
     /// <summary>
     /// CSV başlık satırını okuyup kolon adlarını döndürür (TahminEt için).
     /// </summary>
-    public async Task<string[]> ReadHeadersAsync(byte[] fileBytes, string fileName)
+    public async Task<string[]> ReadHeadersAsync(byte[] fileBytes, string fileName, string? ayrac = null)
     {
+        // Ayraç belirtilmediyse yalnız ilk mantıksal kaydın en çok kolon üreten adayı seçilir.
+        if (ayrac is null && Path.GetExtension(fileName).ToLowerInvariant() is ".csv" or ".txt")
+        {
+            using var reader = new StreamReader(new MemoryStream(fileBytes), Encoding.UTF8, true);
+            var content = await reader.ReadToEndAsync();
+            string[]? header = null;
+            foreach (var candidate in new[] { ";", ",", "\t" })
+            {
+                try
+                {
+                    using var parser = CreateCsvParser(content, candidate);
+                    var fields = parser.EndOfData ? Array.Empty<string>() : parser.ReadFields()!;
+                    if (header is null || fields.Length > header.Length) header = fields;
+                }
+                catch (MalformedLineException) { /* Diğer ayraç adayını dene. */ }
+            }
+            return header ?? throw new InvalidOperationException("CSV başlık satırı ayrıştırılamadı; kolon ayracını belirtin.");
+        }
         using var ms = new MemoryStream(fileBytes);
-        var satirlar = await DosyaOkuAsync(ms, fileName);
+        var satirlar = await DosyaOkuAsync(ms, fileName, ayrac ?? ";");
         if (satirlar.Length == 0) return Array.Empty<string>();
-
-        var firstLine = satirlar[0].Trim();
-        return firstLine.Split(';', ',', '\t').Select(c => c.Trim().Trim('"')).ToArray();
+        return satirlar[0];
     }
 
     public BankaKolonMapping TahminEt(string[] headerColumns)
@@ -219,25 +231,34 @@ public class BankaImportService
 
     public async Task<BankaKolonMapping> KaydetAsync(BankaKolonMapping map)
     {
+        MapDogrula(map);
+        if (map.Id < 0)
+            throw new InvalidOperationException("Geçersiz banka kolon eşleme kimliği.");
+
+        var firmaId = GetWriteFirmaId();
         await using var context = await _factory.CreateDbContextAsync();
         if (map.Id > 0)
         {
-            var existing = await context.BankaKolonMappingler.FindAsync(map.Id);
-            if (existing != null)
-            {
-                existing.Ad = map.Ad; existing.TarihKolon = map.TarihKolon; existing.AciklamaKolon = map.AciklamaKolon;
-                existing.TutarKolon = map.TutarKolon; existing.BorcAlacakKolon = map.BorcAlacakKolon; existing.ReferansKolon = map.ReferansKolon;
-                existing.DosyaTipi = map.DosyaTipi; existing.Ayrac = map.Ayrac; existing.TarihFormati = map.TarihFormati;
-                existing.SayiAyraci = map.SayiAyraci; existing.BorcGostergesi = map.BorcGostergesi; existing.AlacakGostergesi = map.AlacakGostergesi;
-                existing.BaslikVarMi = map.BaslikVarMi; existing.AtlanacakSatir = map.AtlanacakSatir; existing.Varsayilan = map.Varsayilan;
-                existing.UpdatedAt = DateTime.UtcNow;
-                await context.SaveChangesAsync();
-                return existing;
-            }
+            var existing = await context.BankaKolonMappingler.AsTracking()
+                .FirstOrDefaultAsync(x => x.Id == map.Id && x.FirmaId == firmaId && !x.IsDeleted);
+            if (existing is null)
+                throw new InvalidOperationException("Banka kolon eşleme şablonu bulunamadı veya firma kapsamında erişilebilir değil.");
+
+            CopyMappingFields(existing, map);
+            existing.UpdatedAt = DateTime.UtcNow;
+            await context.SaveChangesAsync();
+            return existing;
         }
-        context.BankaKolonMappingler.Add(map);
+        if (map.FirmaId.HasValue && map.FirmaId.Value != 0 && map.FirmaId.Value != firmaId)
+            throw new InvalidOperationException("Yeni banka şablonu yalnız seçili firma için oluşturulabilir.");
+        if (!await context.Firmalar.AnyAsync(x => x.Id == firmaId && !x.IsDeleted))
+            throw new InvalidOperationException("Seçili firma bulunamadı veya silinmiş.");
+
+        var yeni = new BankaKolonMapping { FirmaId = firmaId };
+        CopyMappingFields(yeni, map);
+        context.BankaKolonMappingler.Add(yeni);
         await context.SaveChangesAsync();
-        return map;
+        return yeni;
     }
 
     public async Task<List<BankaKolonMapping>> GetMappingsAsync(int firmaId)
@@ -250,24 +271,73 @@ public class BankaImportService
 
     public async Task SilAsync(int id)
     {
+        var firmaId = GetWriteFirmaId();
         await using var context = await _factory.CreateDbContextAsync();
-        await context.BankaKolonMappingler.Where(x => x.Id == id)
-            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.IsDeleted, true).SetProperty(x => x.DeletedAt, DateTime.UtcNow));
+        var existing = await context.BankaKolonMappingler.AsTracking()
+            .FirstOrDefaultAsync(x => x.Id == id && x.FirmaId == firmaId && !x.IsDeleted);
+        if (existing is null)
+            throw new InvalidOperationException("Banka kolon eşleme şablonu bulunamadı veya firma kapsamında erişilebilir değil.");
+
+        existing.IsDeleted = true;
+        existing.DeletedAt = DateTime.UtcNow;
+        await context.SaveChangesAsync();
     }
 
     #region Private Helpers
+
+    private async Task ImportKapsaminiDogrulaAsync(ApplicationDbContext context, BankaKolonMapping map, int firmaId)
+    {
+        var aktifFirmaId = GetWriteFirmaId();
+        if (firmaId != aktifFirmaId ||
+            (map.FirmaId is not null and not 0 && map.FirmaId != aktifFirmaId))
+            throw new InvalidOperationException("Banka dosyası yalnız seçili firmanın şablonuyla seçili firmaya aktarılabilir.");
+        if (!await context.Firmalar.AnyAsync(x => x.Id == aktifFirmaId && !x.IsDeleted))
+            throw new InvalidOperationException("Seçili firma bulunamadı veya silinmiş.");
+        if (map.Id < 0 || (map.Id > 0 && !await context.BankaKolonMappingler.AnyAsync(
+                x => x.Id == map.Id && x.FirmaId == aktifFirmaId && !x.IsDeleted)))
+            throw new InvalidOperationException("Banka kolon eşleme şablonu bulunamadı veya firma kapsamında erişilebilir değil.");
+    }
+
+    private int GetWriteFirmaId()
+    {
+        var firmaId = _aktifFirmaProvider.AktifFirmaId;
+        if (_aktifFirmaProvider.TumFirmalar || firmaId is not > 0)
+            throw new InvalidOperationException("Banka işlemi için tek bir firma seçilmelidir.");
+        return firmaId.Value;
+    }
+
+    private static void CopyMappingFields(BankaKolonMapping target, BankaKolonMapping source)
+    {
+        target.Ad = source.Ad; target.TarihKolon = source.TarihKolon; target.AciklamaKolon = source.AciklamaKolon;
+        target.TutarKolon = source.TutarKolon; target.BorcAlacakKolon = source.BorcAlacakKolon; target.ReferansKolon = source.ReferansKolon;
+        target.DosyaTipi = source.DosyaTipi; target.Ayrac = source.Ayrac; target.TarihFormati = source.TarihFormati;
+        target.SayiAyraci = source.SayiAyraci; target.BorcGostergesi = source.BorcGostergesi; target.AlacakGostergesi = source.AlacakGostergesi;
+        target.BaslikVarMi = source.BaslikVarMi; target.AtlanacakSatir = source.AtlanacakSatir; target.Varsayilan = source.Varsayilan;
+    }
 
     private static void MapDogrula(BankaKolonMapping map)
     {
         if (map.TarihKolon <= 0) throw new InvalidOperationException("Tarih kolonu zorunludur.");
         if (map.TutarKolon <= 0) throw new InvalidOperationException("Tutar kolonu zorunludur.");
+        if (map.AciklamaKolon < 0 || map.BorcAlacakKolon < 0 || map.ReferansKolon < 0)
+            throw new InvalidOperationException("İsteğe bağlı kolon numaraları negatif olamaz.");
+        if (map.AtlanacakSatir < 0 || map.AtlanacakSatir == int.MaxValue)
+            throw new InvalidOperationException("Atlanacak satır sayısı geçersiz.");
+        if (string.IsNullOrEmpty(map.Ayrac) || string.IsNullOrWhiteSpace(map.TarihFormati))
+            throw new InvalidOperationException("Kolon ayracı ve tarih formatı zorunludur.");
+        if (map.Ayrac.IndexOfAny(new[] { '\r', '\n', '"' }) >= 0)
+            throw new InvalidOperationException("Kolon ayracı satır sonu veya çift tırnak içeremez.");
+        if (map.BorcAlacakKolon > 0 &&
+            GetDirectionIndicators(true, map.BorcGostergesi).Overlaps(
+                GetDirectionIndicators(false, map.AlacakGostergesi)))
+            throw new InvalidOperationException("Borç ve alacak göstergeleri aynı değeri içeremez. Şablondaki göstergeleri düzeltin.");
     }
 
-    private static FinansHareket? ParseSatir(string line, BankaKolonMapping map, int firmaId)
+    private static FinansHareket ParseSatir(string[] cols, BankaKolonMapping map, int firmaId)
     {
-        var cols = line.Split(map.Ayrac);
-        if (cols.Length < Math.Max(map.TarihKolon, Math.Max(map.TutarKolon, map.AciklamaKolon > 0 ? map.AciklamaKolon : 1)))
-            return null;
+        var sonKolon = new[] { map.TarihKolon, map.TutarKolon, map.AciklamaKolon, map.BorcAlacakKolon, map.ReferansKolon }.Max();
+        if (cols.Length < sonKolon)
+            throw new InvalidOperationException($"Satırda {sonKolon} kolon bekleniyor; {cols.Length} kolon bulundu.");
 
         var tarih = ParseTarih(Temizle(cols, map.TarihKolon), map.TarihFormati);
         var aciklama = map.AciklamaKolon > 0 ? Temizle(cols, map.AciklamaKolon) : "";
@@ -283,25 +353,69 @@ public class BankaImportService
         };
     }
 
-    private static async Task<string[]> DosyaOkuAsync(Stream stream, string fileName)
+    private static TextFieldParser CreateCsvParser(string content, string ayrac)
+    {
+        var parser = new TextFieldParser(new StringReader(content))
+        {
+            TextFieldType = FieldType.Delimited,
+            HasFieldsEnclosedInQuotes = true,
+            TrimWhiteSpace = true
+        };
+        parser.SetDelimiters(ayrac);
+        return parser;
+    }
+
+    private static async Task<string[][]> DosyaOkuAsync(Stream stream, string fileName, string ayrac, string sayiAyraci = ",")
     {
         var ext = Path.GetExtension(fileName).ToLowerInvariant();
         if (ext == ".csv" || ext == ".txt")
         {
             using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-            return (await reader.ReadToEndAsync()).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            using var parser = CreateCsvParser(await reader.ReadToEndAsync(), ayrac);
+            var rows = new List<string[]>();
+            try
+            {
+                while (!parser.EndOfData)
+                    rows.Add(parser.ReadFields()!);
+            }
+            catch (MalformedLineException ex)
+            {
+                throw new InvalidOperationException($"CSV satırı {ex.LineNumber} ayrıştırılamadı. Tırnak ve ayraç kullanımını kontrol edin.", ex);
+            }
+            return rows.ToArray();
         }
-        if (ext == ".xlsx" || ext == ".xls")
+        if (ext == ".xlsx")
         {
             using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
             var ws = workbook.Worksheet(1);
-            return ws.RowsUsed().Select(row => string.Join(";", row.Cells().Select(c => c.GetString()))).ToArray();
+            var lastRow = ws.LastRowUsed()?.RowNumber() ?? 0;
+            var lastColumn = ws.LastColumnUsed()?.ColumnNumber() ?? 0;
+            var rows = new List<string[]>();
+            var numberCulture = sayiAyraci == "." ? CultureInfo.InvariantCulture : CultureInfo.GetCultureInfo("tr-TR");
+            for (var row = 1; row <= lastRow; row++)
+            {
+                var fields = new string[lastColumn];
+                for (var column = 1; column <= lastColumn; column++)
+                {
+                    var cell = ws.Cell(row, column);
+                    fields[column - 1] = cell.DataType switch
+                    {
+                        ClosedXML.Excel.XLDataType.DateTime => cell.GetDateTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                        ClosedXML.Excel.XLDataType.Number => cell.GetValue<decimal>().ToString(numberCulture),
+                        _ => cell.GetString()
+                    };
+                }
+                rows.Add(fields);
+            }
+            return rows.ToArray();
         }
+        if (ext == ".xls")
+            throw new InvalidOperationException("Eski Excel (.xls) biçimi desteklenmiyor. Dosyayı .xlsx veya CSV olarak kaydedin.");
         throw new InvalidOperationException($"Desteklenmeyen dosya türü: {ext}. CSV veya Excel (.xlsx) kullanın.");
     }
 
     private static string Temizle(string[] cols, int index)
-        => (index <= 0 || index > cols.Length) ? string.Empty : cols[index - 1].Trim().Trim('"', '\'');
+        => (index <= 0 || index > cols.Length) ? string.Empty : cols[index - 1].Trim();
 
     private static DateTime ParseTarih(string value, string format)
     {
@@ -324,23 +438,27 @@ public class BankaImportService
     private static bool ParseBorcAlacak(string[] cols, BankaKolonMapping map)
     {
         if (map.BorcAlacakKolon <= 0) return true;
-        var val = Temizle(cols, map.BorcAlacakKolon).ToUpperInvariant().Trim();
+        var val = Temizle(cols, map.BorcAlacakKolon);
+        if (string.IsNullOrWhiteSpace(val))
+            throw new InvalidOperationException("Borç/alacak kolonu boş. İşlem yönünü belirtin.");
 
-        // Negatif tutar → alacak
-        if (val == "-" || val.StartsWith("-")) return false;
+        // Tam değer eşleşmesi: açıklama içindeki bir harf işlem yönü sayılmaz.
+        var borcMu = GetDirectionIndicators(true, map.BorcGostergesi).Contains(val);
+        var alacakMi = GetDirectionIndicators(false, map.AlacakGostergesi).Contains(val);
+        if (borcMu == alacakMi)
+            throw new InvalidOperationException("Borç/alacak göstergesi tanınmıyor veya çelişkili. Şablondaki göstergeleri kontrol edin.");
+        return borcMu;
+    }
 
-        // Borç göstergeleri: B, BORÇ, GİDEN, D, DEBIT
-        if (val is "B" or "BORÇ" or "BORC" or "GİDEN" or "GIDEN" or "D" or "DEBIT") return true;
-        // Alacak göstergeleri: A, ALACAK, GELEN, C, CREDIT
-        if (val is "A" or "ALACAK" or "GELEN" or "C" or "CREDIT") return false;
-
-        // Kullanıcının özel göstergeleri
-        var borcIndicators = (map.BorcGostergesi ?? "B").ToUpperInvariant().Split('|');
-        var alacakIndicators = (map.AlacakGostergesi ?? "A").ToUpperInvariant().Split('|');
-        foreach (var b in borcIndicators) if (val.Contains(b.Trim())) return true;
-        foreach (var a in alacakIndicators) if (val.Contains(a.Trim())) return false;
-
-        return true;
+    private static HashSet<string> GetDirectionIndicators(bool borc, string? custom)
+    {
+        var indicators = new HashSet<string>(borc
+            ? new[] { "B", "BORÇ", "BORC", "GİDEN", "GIDEN", "D", "DEBIT" }
+            : new[] { "A", "ALACAK", "GELEN", "C", "CREDIT", "-" }, StringComparer.OrdinalIgnoreCase);
+        if (custom is not null)
+            foreach (var value in custom.Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                indicators.Add(value);
+        return indicators;
     }
 
     private static string ComputeSha256(byte[] data)

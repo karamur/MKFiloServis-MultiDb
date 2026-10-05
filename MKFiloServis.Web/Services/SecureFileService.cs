@@ -1,4 +1,4 @@
-﻿using MKFiloServis.Web.Helpers;
+using MKFiloServis.Web.Helpers;
 using MKFiloServis.Web.Services.Security;
 using Microsoft.AspNetCore.DataProtection;
 using System.Security.Cryptography;
@@ -151,17 +151,24 @@ public sealed class SecureFileService : ISecureFileService
 
     public Task DeleteAsync(string? relativePath, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(relativePath))
             return Task.CompletedTask;
 
-        var fullPath = ResolveFullPath(NormalizeRelativePath(relativePath));
-        if (File.Exists(fullPath))
+        try
         {
+            var fullPath = ResolveFullPath(NormalizeRelativePath(relativePath));
+            // File.Exists erişim/IO hatalarında false dönebilir; silme hatasını gizleme.
+            // File.Delete zaten bulunmayan dosyada başarılı olur.
             File.Delete(fullPath);
-            _logger.LogInformation("Dosya silindi: {RelativePath}", relativePath);
+            _logger.LogInformation("Dosya silme tamamlandı (dosya yoksa işlem gerekmiyor): {RelativePath}", relativePath);
+            return Task.CompletedTask;
         }
-
-        return Task.CompletedTask;
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Fiziksel dosya silinemedi: {RelativePath}", relativePath);
+            throw;
+        }
     }
 
     public async Task<string> CopyEncryptedAsync(
@@ -229,11 +236,14 @@ public sealed class SecureFileService : ISecureFileService
 
         string rootToUse;
 
-        // Arşiv ve Depo dosyaları base storage root altında (uploads değil).
+        // Arşiv ve Depo kendi klasörleriyle sınırlıdır; base storage içindeki
+        // anahtar/yedek dosyalarına ../ ile erişim verilmez.
         if (normalized.StartsWith("Arsiv/", StringComparison.OrdinalIgnoreCase) ||
             normalized.StartsWith("Depo/", StringComparison.OrdinalIgnoreCase))
         {
-            rootToUse = _baseStorageRoot;
+            var separatorIndex = normalized.IndexOf('/');
+            rootToUse = Path.Combine(_baseStorageRoot, normalized[..separatorIndex]);
+            normalized = normalized[(separatorIndex + 1)..];
         }
         else
         {
@@ -244,16 +254,8 @@ public sealed class SecureFileService : ISecureFileService
             rootToUse = _storageRoot;
         }
 
-        var fullPath = Path.GetFullPath(Path.Combine(rootToUse, normalized.Replace('/', Path.DirectorySeparatorChar)));
-        var uploadsRootPath = Path.GetFullPath(_storageRoot);
-        var baseRootPath = Path.GetFullPath(_baseStorageRoot);
-
-        // Her iki root altında olmasına izin ver
-        if (!fullPath.StartsWith(uploadsRootPath, StringComparison.OrdinalIgnoreCase) &&
-            !fullPath.StartsWith(baseRootPath, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException($"Geçersiz dosya yolu: {relativePath}");
-
-        return fullPath;
+        // uploads yolları base storage root'a da kaçamamalı; yalnız seçilen köke izin ver.
+        return StorageFilePath.Resolve(rootToUse, normalized);
     }
 
     private static string NormalizeRelativePath(string relativePath)

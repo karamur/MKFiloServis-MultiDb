@@ -2,6 +2,7 @@
 @using MKFiloServis.Shared.Entities
 @using Microsoft.Extensions.Logging
 @inject IKullaniciService KullaniciService
+@inject LicenseService ModuleLicenses
 @inject AppAuthenticationStateProvider AuthProvider
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
@@ -156,6 +157,12 @@ else
                 return;
             }
 
+            if ((!string.IsNullOrEmpty(Yetki) && !ModuleLicenses.HasLicensedPermission(Yetki))
+                || (Yetkiler is { Length: > 0 } && !Yetkiler.Any(ModuleLicenses.HasLicensedPermission)))
+            {
+                yetkiVar = false;
+                return;
+            }
             // Admin her şeye yetkili
             if (aktifKullanici.Rol?.RolAdi == SistemRolleri.Admin)
             {
@@ -199,7 +206,7 @@ else
             }
             else if (Yetkiler != null && Yetkiler.Length > 0)
             {
-                yetkiVar = Yetkiler.Any(y => yetkiSet.Contains(y));
+                yetkiVar = Yetkiler.Any(y => ModuleLicenses.HasLicensedPermission(y) && yetkiSet.Contains(y));
             }
             else
             {

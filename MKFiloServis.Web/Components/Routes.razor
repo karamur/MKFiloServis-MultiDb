@@ -5,6 +5,7 @@
 <CascadingAuthenticationState>
     <Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">
         <Found Context="routeData">
+            <LicenseModuleRouteGuard PageType="routeData.PageType">
             <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
                 <NotAuthorized>
                     @if (context.User.Identity?.IsAuthenticated != true)
@@ -40,6 +41,7 @@
                     </div>
                 </Authorizing>
             </AuthorizeRouteView>
+            </LicenseModuleRouteGuard>
             <FocusOnNavigate RouteData="routeData" Selector="h1" />
         </Found>
     </Router>

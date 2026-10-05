@@ -203,7 +203,11 @@ public class BelgeUyariBackgroundService : BackgroundService
         if (ayarlariService != null)
         {
             try { await ayarlariService.GuncelleSonCalismaAsync(DateTime.Now, toplamUyari); }
-            catch { /* kritik değil */ }
+            catch (Exception ex)
+            {
+                // Yalnızca çalışma zamanı damgası; kritik değil ama kayıpsız da olmasın.
+                _logger.LogWarning(ex, "Belge uyarisi son calisma bilgisi guncellenemedi.");
+            }
         }
     }
 

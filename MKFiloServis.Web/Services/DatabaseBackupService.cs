@@ -1,4 +1,4 @@
-﻿using System.IO.Compression;
+using System.IO.Compression;
 using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Helpers;
@@ -15,6 +15,7 @@ public class DatabaseBackupService : IHostedService, IDisposable
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<DatabaseBackupService> _logger;
+    private readonly IWebHostEnvironment _environment;
     private Timer? _timer;
     private string _backupPath = string.Empty;
     private readonly int _retentionDays;
@@ -23,10 +24,12 @@ public class DatabaseBackupService : IHostedService, IDisposable
     public DatabaseBackupService(
         IServiceScopeFactory scopeFactory,
         ILogger<DatabaseBackupService> logger,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IWebHostEnvironment environment)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _environment = environment;
         _retentionDays = configuration.GetValue("Backup:RetentionDays", 30);
         _enabled = configuration.GetValue("Backup:Enabled", true);
     }
@@ -109,7 +112,11 @@ public class DatabaseBackupService : IHostedService, IDisposable
     {
         try
         {
-            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            if (string.IsNullOrWhiteSpace(_backupPath))
+                _backupPath = AppStoragePaths.GetWritableBackupFolder(AppContext.BaseDirectory, AppStoragePaths.DefaultStorageRoot);
+            if (!string.IsNullOrEmpty(customName) && (Path.GetFileName(customName) != customName || customName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0))
+                throw new ArgumentException("Yedek adı yalnız dosya adı olmalıdır.", nameof(customName));
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss") + "_" + Guid.NewGuid().ToString("N");
             var fileName = string.IsNullOrEmpty(customName) 
                 ? $"MKFiloServis_Backup_{timestamp}" 
                 : $"{customName}_{timestamp}";
@@ -121,25 +128,14 @@ public class DatabaseBackupService : IHostedService, IDisposable
             var dumpFile = Path.Combine(backupDir, "database.backup");
             await ExportDatabaseToSqlAsync(dumpFile);
 
-            // 2. Uploads klasörü yedeği
-            var uploadsSource = Path.Combine(AppContext.BaseDirectory, "wwwroot", "uploads");
-            if (Directory.Exists(uploadsSource))
-            {
-                var uploadsDest = Path.Combine(backupDir, "uploads");
-                CopyDirectory(uploadsSource, uploadsDest);
-            }
-
-            // 3. appsettings.json yedeği
-            var settingsSource = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
-            if (File.Exists(settingsSource))
-            {
-                File.Copy(settingsSource, Path.Combine(backupDir, "appsettings.json"), true);
-            }
-
-            // 4. ZIP oluştur
+            // Aynı arşivde DB, kullanılan depolama, ayarlar ve DataProtection key ring.
+            // Başarı bildirmeden kapatılmış ZIP, manifest ve SHA-256 değerleriyle kontrol edilir.
             var zipPath = $"{backupDir}.zip";
-            ZipFile.CreateFromDirectory(backupDir, zipPath, CompressionLevel.Optimal, false);
-
+            using (var scope = _scopeFactory.CreateScope())
+            {
+                var protection = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>();
+                await RecoveryArchive.CreateAsync(zipPath, _environment.ContentRootPath, protection, dumpFile, CancellationToken.None);
+            }
             // 5. Geçici klasörü sil
             Directory.Delete(backupDir, true);
 
@@ -190,6 +186,8 @@ public class DatabaseBackupService : IHostedService, IDisposable
         using var scope = _scopeFactory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
+        if (!context.Database.IsNpgsql())
+            throw new NotSupportedException("ZIP veritabanı arşivi PostgreSQL içindir. Diğer sağlayıcılar için IBackupService kullanın.");
         var connectionString = context.Database.GetConnectionString();
         
         // pg_dump varsa kullan, yoksa basit export yap
@@ -224,92 +222,40 @@ public class DatabaseBackupService : IHostedService, IDisposable
     {
         var builder = new NpgsqlConnectionStringBuilder(connectionString);
         
-        var args = $"-h {builder.Host} -p {builder.Port} -U {builder.Username} -d {builder.Database} --format=custom --compress=9 --blobs --verbose --no-owner --no-privileges --encoding=UTF8 -f \"{outputPath}\" --no-password";
-        
-        var psi = new System.Diagnostics.ProcessStartInfo
-        {
-            FileName = pgDumpPath,
-            Arguments = args,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true,
-            Environment = { { "PGPASSWORD", builder.Password } }
-        };
-
-        using var process = System.Diagnostics.Process.Start(psi);
-        if (process != null)
-        {
-            await process.WaitForExitAsync();
-            
-            if (process.ExitCode != 0)
-            {
-                var error = await process.StandardError.ReadToEndAsync();
-                throw new Exception($"pg_dump hatası: {error}");
-            }
-        }
+        var psi = PostgreSqlProcess(pgDumpPath, builder);
+        foreach (var argument in new[] { "--format=custom", "--compress=9", "--blobs", "--no-owner", "--no-privileges", "--encoding=UTF8", "-f", outputPath })
+            psi.ArgumentList.Add(argument);
+        await RunPostgreSqlToolAsync(psi);
+        if (!File.Exists(outputPath) || new FileInfo(outputPath).Length == 0)
+            throw new IOException("pg_dump geçerli yedek oluşturmadı.");
     }
 
-    private async Task ExportWithEFCoreAsync(ApplicationDbContext context, string filePath)
+    private static System.Diagnostics.ProcessStartInfo PostgreSqlProcess(string executable, NpgsqlConnectionStringBuilder connection)
     {
-        // Basit SQL export - tablo yapıları ve veriler
-        using var writer = new StreamWriter(filePath, false, System.Text.Encoding.UTF8);
-        
-        await writer.WriteLineAsync("-- CRM Filo Servis Database Backup");
-        await writer.WriteLineAsync($"-- Created: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-        await writer.WriteLineAsync("");
-
-        // Tablo isimlerini al
-        var tables = context.Model.GetEntityTypes()
-            .Select(t => t.GetTableName())
-            .Where(t => !string.IsNullOrEmpty(t))
-            .Distinct()
-            .ToList();
-
-        foreach (var tableName in tables)
+        var info = new System.Diagnostics.ProcessStartInfo(executable)
         {
-            try
-            {
-                await writer.WriteLineAsync($"-- Table: {tableName}");
-                
-                using var command = context.Database.GetDbConnection().CreateCommand();
-                command.CommandText = $"SELECT * FROM \"{tableName}\"";
-                
-                await context.Database.OpenConnectionAsync();
-                
-                using var reader = await command.ExecuteReaderAsync();
-                
-                while (await reader.ReadAsync())
-                {
-                    var columns = new List<string>();
-                    var values = new List<string>();
-                    
-                    for (int i = 0; i < reader.FieldCount; i++)
-                    {
-                        columns.Add($"\"{reader.GetName(i)}\"");
-                        
-                        if (reader.IsDBNull(i))
-                            values.Add("NULL");
-                        else if (reader.GetFieldType(i) == typeof(string) || reader.GetFieldType(i) == typeof(DateTime))
-                            values.Add($"'{reader.GetValue(i).ToString()?.Replace("'", "''")}'");
-                        else if (reader.GetFieldType(i) == typeof(bool))
-                            values.Add(reader.GetBoolean(i) ? "TRUE" : "FALSE");
-                        else
-                            values.Add(reader.GetValue(i).ToString() ?? "NULL");
-                    }
-                    
-                    await writer.WriteLineAsync($"INSERT INTO \"{tableName}\" ({string.Join(", ", columns)}) VALUES ({string.Join(", ", values)});");
-                }
-                
-                await context.Database.CloseConnectionAsync();
-                await writer.WriteLineAsync("");
-            }
-            catch (Exception ex)
-            {
-                await writer.WriteLineAsync($"-- Error exporting {tableName}: {ex.Message}");
-            }
-        }
+            UseShellExecute = false, RedirectStandardOutput = true,
+            RedirectStandardError = true, CreateNoWindow = true
+        };
+        foreach (var argument in new[] { "-h", connection.Host ?? "localhost", "-p", connection.Port.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "-U", connection.Username ?? "", "-d", connection.Database ?? "", "--no-password" })
+            info.ArgumentList.Add(argument);
+        info.Environment["PGPASSWORD"] = connection.Password ?? "";
+        return info;
     }
+
+    private static async Task RunPostgreSqlToolAsync(System.Diagnostics.ProcessStartInfo info)
+    {
+        using var process = System.Diagnostics.Process.Start(info)
+            ?? throw new IOException("PostgreSQL aracı başlatılamadı.");
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        await output;
+        var errorText = await error;
+        if (process.ExitCode != 0) throw new IOException($"PostgreSQL aracı başarısız ({process.ExitCode}): {errorText}");
+    }
+
 
     private void CopyDirectory(string sourceDir, string destDir)
     {
@@ -380,13 +326,64 @@ public class DatabaseBackupService : IHostedService, IDisposable
     }
 
     /// <summary>
-    /// Yedeği geri yükler
+    /// ZIP içindeki PostgreSQL veritabanını atomik olarak geri yükler.
+    /// Dosya ekleri ve appsettings.json, çalışır uygulamanın ayarlarını değiştirmeden arşivde tutulur.
     /// </summary>
     public async Task<bool> RestoreBackupAsync(string backupPath)
     {
-        // TODO: Restore işlemi - dikkatli kullanılmalı
-        _logger.LogWarning("Restore işlemi henüz uygulanmadı: {Path}", backupPath);
-        return await Task.FromResult(false);
+        if (!backupPath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            using var nativeScope = _scopeFactory.CreateScope();
+            return await nativeScope.ServiceProvider.GetRequiredService<IBackupService>().RestoreBackupAsync(backupPath);
+        }
+        var staging = Path.Combine(Path.GetTempPath(), "MKFiloServis-Restore-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(staging);
+        try
+        {
+            using var archive = ZipFile.OpenRead(backupPath);
+            // Yeni biçimde bozuk/eksik arşiv DB'ye dokunmadan reddedilir.
+            if (archive.GetEntry("recovery-manifest.json") != null)
+                await RecoveryArchive.VerifyAsync(backupPath, CancellationToken.None);
+            var candidates = archive.Entries.Where(e => e.FullName == "database.backup").ToList();
+            if (candidates.Count != 1) throw new InvalidDataException("Arşiv tek database.backup kaydı içermelidir.");
+            var entry = candidates[0];
+            if (entry.Length <= 5 || entry.Length > 20L * 1024 * 1024 * 1024)
+                throw new InvalidDataException("Veritabanı yedeğinin boyutu geçersiz.");
+            var dump = Path.Combine(staging, "database.backup");
+            entry.ExtractToFile(dump);
+            await using (var stream = File.OpenRead(dump))
+            {
+                var magic = new byte[5];
+                await stream.ReadExactlyAsync(magic);
+                if (System.Text.Encoding.ASCII.GetString(magic) != "PGDMP")
+                    throw new InvalidDataException("PostgreSQL custom dump bekleniyor.");
+            }
+            using var scope = _scopeFactory.CreateScope();
+            var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            await using var context = await factory.CreateDbContextAsync();
+            if (!context.Database.IsNpgsql()) throw new NotSupportedException("PostgreSQL ZIP yedeği farklı sağlayıcıya yüklenemez.");
+            var restoreTool = Path.Combine(Path.GetDirectoryName(FindPgDump()) ?? "", OperatingSystem.IsWindows() ? "pg_restore.exe" : "pg_restore");
+            if (!File.Exists(restoreTool)) throw new FileNotFoundException("pg_restore bulunamadı.");
+            // Geri dönüş için mevcut durumun yedeği tamamlanmadan restore başlatma.
+            var recoveryBackup = await CreateBackupAsync("BeforeRestore");
+            if (!recoveryBackup.Success) throw new IOException("Geri dönüş yedeği alınamadı: " + recoveryBackup.ErrorMessage);
+            var info = PostgreSqlProcess(restoreTool, new NpgsqlConnectionStringBuilder(context.Database.GetConnectionString()));
+            foreach (var argument in new[] { "--single-transaction", "--exit-on-error", "--clean", "--if-exists", "--no-owner", "--no-privileges", dump })
+                info.ArgumentList.Add(argument);
+            await RunPostgreSqlToolAsync(info);
+            _logger.LogInformation("ZIP veritabanı geri yüklemesi tamamlandı. Geri dönüş yedeği: {RecoveryBackup}", recoveryBackup.FilePath);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ZIP veritabanı geri yüklemesi başarısız");
+            return false;
+        }
+        finally
+        {
+            // staging sabit geçici kök altında bu çağrıya özel oluşturulmuştur.
+            Directory.Delete(staging, recursive: true);
+        }
     }
 
     public Task StopAsync(CancellationToken cancellationToken)

@@ -9,9 +9,14 @@ param(
     [string]$PgHost      = "localhost",
     [string]$PgPort      = "5432",
     [string]$PgUser      = "postgres",
-    [string]$PgPassword  = "Fast123",
-    [string]$NewDbName   = "MKFiloServis"
+    [string]$NewDbName   = "MKFiloServis",
+    # Parola kaynak kodda tutulmaz. -PgPassword ile verilmeli ya da MKFILO_PG_PASSWORD ortam değişkeninden okunmalıdır.
+    [string]$PgPassword  = $env:MKFILO_PG_PASSWORD
 )
+
+if ([string]::IsNullOrWhiteSpace($PgPassword)) {
+    throw "Veritabani parolasi belirtilmedi. '-PgPassword <parola>' ile verin veya MKFILO_PG_PASSWORD ortam degiskenini ayarlayin."
+}
 
 $ErrorActionPreference = "Stop"
 

@@ -3,8 +3,6 @@
   "canonicalProvider": "PostgreSQL",
   "previousProvider": "PostgreSQL",
   "nextProvider": "SQLite",
-  "previousConnectionString": "Host=localhost;Port=5432;Database=MKFiloServis;Username=postgres;Password=Fast123;Pooling=true;MinPoolSize=1;MaxPoolSize=20;",
-  "nextConnectionString": "Data Source=MKFiloServis.db;",
   "strategy": "snapshot-and-convert",
   "note": "Provider gecislerinde migration replay yerine bu manifest ve veri snapshot/export akisi kullanilmalidir."
 }

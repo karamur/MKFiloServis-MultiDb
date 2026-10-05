@@ -1,4 +1,4 @@
-using OpenQA.Selenium;
+﻿using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
 using WebDriverManager;
 using WebDriverManager.DriverConfigs.Impl;
@@ -73,7 +73,11 @@ public class SeleniumScraperService : ISeleniumScraperService
             _activeDriver?.Dispose();
             _activeDriver = null;
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // Sürücü zaten kapanmış/ölmüş olabilir; temizlik yine de yapılır.
+            _logger.LogDebug(ex, "Aktif Selenium surucusu kapatilamadi.");
+        }
     }
 
     private ChromeDriver CreateDriver()
@@ -222,7 +226,7 @@ public class SeleniumScraperService : ISeleniumScraperService
             await Task.Delay(3000, ct);
 
             // Cookie kabul
-            TryClick(driver, By.Id("onetrust-accept-btn-handler"));
+            await TryClickAsync(driver, By.Id("onetrust-accept-btn-handler"));
             await Task.Delay(500, ct);
 
             var elements = driver.FindElements(By.CssSelector("tr.searchResultsItem, tbody tr[data-id]"));
@@ -355,9 +359,9 @@ public class SeleniumScraperService : ISeleniumScraperService
             await Task.Delay(3000, ct);
 
             // Cookie kabul
-            TryClick(driver, By.CssSelector("button[data-testid='accept-all-cookies']"));
-            TryClick(driver, By.CssSelector(".onetrust-accept-btn-handler"));
-            TryClick(driver, By.CssSelector("#onetrust-accept-btn-handler"));
+            await TryClickAsync(driver, By.CssSelector("button[data-testid='accept-all-cookies']"));
+            await TryClickAsync(driver, By.CssSelector(".onetrust-accept-btn-handler"));
+            await TryClickAsync(driver, By.CssSelector("#onetrust-accept-btn-handler"));
             await Task.Delay(1000, ct);
 
             // Sayfanin tamamen yuklenmesini bekle
@@ -429,7 +433,11 @@ public class SeleniumScraperService : ISeleniumScraperService
                         {
                             container = linkEl.FindElement(By.XPath("./.."));
                         }
-                        catch { }
+                        catch (Exception ex)
+                        {
+                            // Kapsayici bulunamazsa link metnine duser.
+                            _logger.LogDebug(ex, "Ilan kapsayici ogesi bulunamadi; link metni kullanilacak.");
+                        }
                     }
 
                     var textSource = container?.Text ?? linkEl.Text ?? "";
@@ -517,7 +525,7 @@ public class SeleniumScraperService : ISeleniumScraperService
             driver.Navigate().GoToUrl(url);
             await Task.Delay(3000, ct);
 
-            TryClick(driver, By.CssSelector("[class*='cookie'] button, .cookie-accept"));
+            await TryClickAsync(driver, By.CssSelector("[class*='cookie'] button, .cookie-accept"));
             await Task.Delay(500, ct);
 
             var elements = driver.FindElements(By.CssSelector(".car-card, .vehicle-card, [class*='listing-item']"));
@@ -552,7 +560,7 @@ public class SeleniumScraperService : ISeleniumScraperService
             driver.Navigate().GoToUrl(url);
             await Task.Delay(3000, ct);
 
-            TryClick(driver, By.CssSelector("[class*='cookie'] button, .cookie-accept"));
+            await TryClickAsync(driver, By.CssSelector("[class*='cookie'] button, .cookie-accept"));
             await Task.Delay(500, ct);
 
             var elements = driver.FindElements(By.CssSelector(".car-card, .vehicle-card, [class*='vehicle-item']"));
@@ -587,7 +595,7 @@ public class SeleniumScraperService : ISeleniumScraperService
             driver.Navigate().GoToUrl(url);
             await Task.Delay(3000, ct);
 
-            TryClick(driver, By.CssSelector("[class*='cookie'] button, .cookie-accept"));
+            await TryClickAsync(driver, By.CssSelector("[class*='cookie'] button, .cookie-accept"));
             await Task.Delay(500, ct);
 
             var elements = driver.FindElements(By.CssSelector(".car-card, .vehicle-card, [class*='car-item']"));
@@ -622,7 +630,7 @@ public class SeleniumScraperService : ISeleniumScraperService
             driver.Navigate().GoToUrl(url);
             await Task.Delay(3000, ct);
 
-            TryClick(driver, By.CssSelector("[class*='cookie'] button, .cookie-accept"));
+            await TryClickAsync(driver, By.CssSelector("[class*='cookie'] button, .cookie-accept"));
             await Task.Delay(500, ct);
 
             var elements = driver.FindElements(By.CssSelector(".car-card, .vehicle-card, [class*='car-item']"));
@@ -657,7 +665,7 @@ public class SeleniumScraperService : ISeleniumScraperService
             driver.Navigate().GoToUrl(url);
             await Task.Delay(3000, ct);
 
-            TryClick(driver, By.CssSelector("[class*='cookie'] button, .cookie-accept, #accept-cookies"));
+            await TryClickAsync(driver, By.CssSelector("[class*='cookie'] button, .cookie-accept, #accept-cookies"));
             await Task.Delay(500, ct);
 
             var elements = driver.FindElements(By.CssSelector(".car-card, .vehicle-card, .listing-item, [class*='vehicle-item'], [class*='car-item']"));
@@ -771,9 +779,9 @@ public class SeleniumScraperService : ISeleniumScraperService
             await Task.Delay(3000);
 
             // Cookie kabul
-            TryClick(driver, By.Id("onetrust-accept-btn-handler"));
-            TryClick(driver, By.CssSelector("button[data-testid='accept-all-cookies']"));
-            TryClick(driver, By.CssSelector("[class*='cookie'] button"));
+            await TryClickAsync(driver, By.Id("onetrust-accept-btn-handler"));
+            await TryClickAsync(driver, By.CssSelector("button[data-testid='accept-all-cookies']"));
+            await TryClickAsync(driver, By.CssSelector("[class*='cookie'] button"));
             await Task.Delay(500);
 
             // Sahibinden.com için özel selector'lar
@@ -805,7 +813,11 @@ public class SeleniumScraperService : ISeleniumScraperService
                             }
                         }
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        // Ilan fotograflari eksik kalir; ilan kaydi yine de isleme devam eder.
+                        _logger.LogWarning(ex, "Ilan fotograflari okunamadi. Url: {Url}", ilanUrl);
+                    }
                 }
             }
             // Arabam.com için
@@ -834,7 +846,11 @@ public class SeleniumScraperService : ISeleniumScraperService
                             }
                         }
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        // Ilan fotograflari eksik kalir; ilan kaydi yine de isleme devam eder.
+                        _logger.LogWarning(ex, "Ilan fotograflari okunamadi. Url: {Url}", ilanUrl);
+                    }
                 }
             }
             // Diğer siteler için genel
@@ -865,7 +881,11 @@ public class SeleniumScraperService : ISeleniumScraperService
                             }
                         }
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        // Ilan fotograflari eksik kalir; ilan kaydi yine de isleme devam eder.
+                        _logger.LogWarning(ex, "Ilan fotograflari okunamadi. Url: {Url}", ilanUrl);
+                    }
                 }
             }
         }
@@ -965,13 +985,17 @@ public class SeleniumScraperService : ISeleniumScraperService
                 var y = int.Parse(tarihMatch.Groups[3].Value);
                 return new DateTime(y, a, g);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Tarih ayristirilamazsa bugunun tarihi kullanilir.
+                _logger.LogWarning(ex, "Ilan tarihi ayristirilamadi; bugunun tarihi kullaniliyor.");
+            }
         }
 
         return DateTime.Today;
     }
 
-    private void TryClick(ChromeDriver driver, By selector)
+    private async Task TryClickAsync(ChromeDriver driver, By selector)
     {
         try
         {
@@ -979,10 +1003,14 @@ public class SeleniumScraperService : ISeleniumScraperService
             if (el != null && el.Displayed)
             {
                 el.Click();
-                Thread.Sleep(300);
+                await Task.Delay(300);
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // Tıklanamayan öğe formu bozar; çağıran zaten doğrulama yapıyor.
+            _logger.LogDebug(ex, "Selenium ogesine tiklanamadi.");
+        }
     }
 
     private void SafeQuitDriver(ChromeDriver? driver)
@@ -995,7 +1023,10 @@ public class SeleniumScraperService : ISeleniumScraperService
                 driver.Dispose();
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Selenium surucusu kapatilamadi.");
+        }
     }
 
     private string Slugify(string text)

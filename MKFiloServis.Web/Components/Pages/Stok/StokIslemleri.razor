@@ -1,4 +1,5 @@
-﻿@page "/stok/islemler"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:stok")]
+@page "/stok/islemler"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Models
 @using MKFiloServis.Web.Services

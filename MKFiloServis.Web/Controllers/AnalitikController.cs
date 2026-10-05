@@ -1,4 +1,4 @@
-﻿using MKFiloServis.Web.Data;
+using MKFiloServis.Web.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +9,7 @@ namespace MKFiloServis.Web.Controllers;
 /// Power BI / Grafana / n8n / Zapier için veri erişim endpoint'leri.
 /// Power BI: OData-benzeri JSON array, Grafana: Prometheus-metrikleri ve JSON, n8n/Zapier: webhook tetikleyici verisi.
 /// </summary>
+[Authorize(Policy = "Licensed:raporlar")]
 [ApiController]
 [Route("api/analitik")]
 [Authorize(AuthenticationSchemes = "Bearer")]

@@ -20,6 +20,17 @@ public interface IBackupService
     Task<List<BackupInfo>> GetFileBackupListAsync();
     Task<bool> DeleteFileBackupAsync(string backupFileName);
     Task CleanupOldFileBackupsAsync(int keepCount = 10);
+    Task<RecoveryPreparationResult> PrepareRecoveryAsync(string backupFileName, CancellationToken cancellationToken = default);
+}
+
+public sealed class RecoveryPreparationResult
+{
+    public bool Prepared { get; init; }
+    public string? FolderPath { get; init; }
+    public int FileCount { get; init; }
+    public bool KeyProbeVerified { get; init; }
+    public bool HasDatabaseDump { get; init; }
+    public string Message { get; init; } = string.Empty;
 }
 
 public class BackupResult

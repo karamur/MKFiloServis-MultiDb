@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using System.Data;
@@ -256,6 +256,8 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
 
     public static async Task InitializeAsync(ApplicationDbContext context, IConfiguration configuration)
     {
+        if (!context.Database.IsNpgsql() && !context.Database.IsSqlite())
+            throw new NotSupportedException("Otomatik şema geçişi PostgreSQL ve SQLite için uygulanmıştır; bu sağlayıcıda PostgreSQL migration'ları çalıştırılamaz.");
         var dbProvider = context.Database.IsNpgsql()
             ? "PostgreSQL"
             : context.Database.IsSqlite()
@@ -462,8 +464,7 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
             }
             else
             {
-                // Nihai mimari: idempotent helper'lar schema degisikliklerini uygular.
-                Console.WriteLine($"Migration uyarisi (idempotent devam): {ex.Message}");
+                throw new InvalidOperationException("Veritabanı migration tamamlanamadı; uygulama başlatılmadı.", ex);
             }
         }
 
@@ -1232,12 +1233,11 @@ WHERE IsDeleted = 0;");
         }
         catch (Exception ex)
         {
-            // Nihai mimari: idempotent helper'lar schema degisikliklerini uygular.
-            // MigrateAsync basarisiz olsa da uygulama devam eder.
-            Console.WriteLine($"Migration uyarisi (idempotent devam): {ex.Message}");
+            throw new InvalidOperationException("Veritabanı migration tamamlanamadı; uygulama başlatılmadı.", ex);
         }
 
-        var dbProvider = context.Database.IsNpgsql() ? "PostgreSQL" : context.Database.IsSqlite() ? "SQLite" : "SQLite";
+        var dbProvider = context.Database.IsNpgsql() ? "PostgreSQL" : context.Database.IsSqlite() ? "SQLite"
+            : throw new NotSupportedException("Bu migration akışı PostgreSQL ve SQLite için uygulanmıştır.");
         await EnsureDestekModuluTablesAsync(context, dbProvider, null);
         await EnsureDestekModuluColumnsAsync(context, dbProvider, null);
 
@@ -2012,7 +2012,11 @@ WHERE IsDeleted = 0;");
                         @"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DestekTalepleri_TalepNo"" ON ""DestekTalepleri"" (""TalepNo"")", conn);
                     await indexCmd.ExecuteNonQueryAsync();
                 }
-                catch { /* İndeks zaten var */ }
+                catch (Exception ex)
+                {
+                    // IF NOT EXISTS kullanildigi icin hata "zaten var" olabilir; baska bir nedeni varsa gorunur olmali.
+                    Console.WriteLine($"[DbInitializer] IX_DestekTalepleri_TalepNo olusturulamadi: {ex.Message}");
+                }
             }
 
             if (existingTables.Contains("DestekAyarlari"))
@@ -2023,7 +2027,11 @@ WHERE IsDeleted = 0;");
                         @"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DestekAyarlari_Anahtar"" ON ""DestekAyarlari"" (""Anahtar"")", conn);
                     await indexCmd.ExecuteNonQueryAsync();
                 }
-                catch { /* İndeks zaten var */ }
+                catch (Exception ex)
+                {
+                    // IF NOT EXISTS kullanildigi icin hata "zaten var" olabilir; baska bir nedeni varsa gorunur olmali.
+                    Console.WriteLine($"[DbInitializer] IX_DestekAyarlari_Anahtar olusturulamadi: {ex.Message}");
+                }
             }
 
             Console.WriteLine("Destek modulu kolonlari PostgreSQL'de kontrol edildi.");
@@ -2056,6 +2064,7 @@ WHERE IsDeleted = 0;");
                 await EnsureSqliteColumnAsync(connection, "Kullanicilar", "AdSoyad", "TEXT NOT NULL DEFAULT ''");
                 await EnsureSqliteColumnAsync(connection, "Kullanicilar", "BasarisizGirisSayisi", "INTEGER NOT NULL DEFAULT 0");
                 await EnsureSqliteColumnAsync(connection, "Kullanicilar", "Kilitli", "INTEGER NOT NULL DEFAULT 0");
+                await EnsureSqliteColumnAsync(connection, "Kullanicilar", "KilitlenmeBitisUtc", "TEXT NULL");
                 await EnsureSqliteColumnAsync(connection, "Kullanicilar", "Tema", "TEXT NOT NULL DEFAULT 'Default'");
                 await EnsureSqliteColumnAsync(connection, "Kullanicilar", "KompaktMod", "INTEGER NOT NULL DEFAULT 0");
                 await EnsureSqliteColumnAsync(connection, "Kullanicilar", "SoforId", "INTEGER NULL");
@@ -3018,6 +3027,9 @@ WHERE IsDeleted = 0;");
         // Eklenecek kolonlar listesi: (Tablo, Kolon, Tip, Default)
         var missingColumns = new List<(string Table, string Column, string Type, string? Default)>
         {
+            // Kullanicilar - sureli parola denemesi kilidi
+            ("Kullanicilar", "KilitlenmeBitisUtc", "TIMESTAMP WITHOUT TIME ZONE", null),
+
             // Fatura tablosu - EslesenFatura ve Mahsup alanları
             ("Faturalar", "EslesenFaturaId", "INTEGER", null),
             ("Faturalar", "MahsupKapatildi", "BOOLEAN", "FALSE"),

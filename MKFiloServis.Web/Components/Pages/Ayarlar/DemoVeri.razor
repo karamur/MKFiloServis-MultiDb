@@ -1,4 +1,19 @@
-﻿@page "/ayarlar/demo-veri"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:cari")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:filoservis")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:personel")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:fatura")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:bankakasa")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:butce")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:crm")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:ebys")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:satis")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:stok")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:holding")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:raporlar")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:planlama")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:rentacar")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:muhasebe")]
+@page "/ayarlar/demo-veri"
 @using MKFiloServis.Web.Data
 @inject TestDataSeeder TestDataSeeder
 @inject IJSRuntime JS

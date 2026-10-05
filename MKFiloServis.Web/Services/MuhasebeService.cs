@@ -3,6 +3,7 @@ using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Models;
 using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 using MKFiloServis.Web.Services.Interfaces;
 
@@ -496,27 +497,48 @@ public class MuhasebeService : IMuhasebeService
     /// </summary>
     internal static async Task<int> NextFisNoCounterAsync(ApplicationDbContext context, string prefix, string yilAy, int firmaId = 0)
     {
-        var connectionString = context.Database.GetConnectionString()!;
-        await using var conn = new NpgsqlConnection(connectionString);
-        await conn.OpenAsync();
-        await using var cmd = new NpgsqlCommand(
-            @"INSERT INTO ""FisNoCounters"" (""Prefix"", ""FirmaId"", ""YilAy"", ""SonNo"")
-              VALUES (@p, @f, @y, 1)
-              ON CONFLICT (""Prefix"", ""FirmaId"", ""YilAy"")
-              DO UPDATE SET ""SonNo"" = ""FisNoCounters"".""SonNo"" + 1
-              RETURNING ""SonNo""",
-            conn);
-        cmd.Parameters.AddWithValue("p", prefix);
-        cmd.Parameters.AddWithValue("f", firmaId);
-        cmd.Parameters.AddWithValue("y", yilAy);
-        var result = await cmd.ExecuteScalarAsync();
-        return Convert.ToInt32(result);
+        if (context.Database.GetDbConnection() is not NpgsqlConnection conn)
+            throw new NotSupportedException("Muhasebe fiş numarası PostgreSQL sağlayıcısı gerektirir.");
+
+        var openedHere = conn.State != System.Data.ConnectionState.Open;
+        if (openedHere)
+            await context.Database.OpenConnectionAsync();
+
+        try
+        {
+            await using var cmd = new NpgsqlCommand(
+                @"INSERT INTO ""FisNoCounters"" (""Prefix"", ""FirmaId"", ""YilAy"", ""SonNo"")
+                  VALUES (@p, @f, @y, 1)
+                  ON CONFLICT (""Prefix"", ""FirmaId"", ""YilAy"")
+                  DO UPDATE SET ""SonNo"" = ""FisNoCounters"".""SonNo"" + 1
+                  RETURNING ""SonNo""",
+                conn,
+                context.Database.CurrentTransaction?.GetDbTransaction() as NpgsqlTransaction);
+            cmd.Parameters.AddWithValue("p", prefix);
+            cmd.Parameters.AddWithValue("f", firmaId);
+            cmd.Parameters.AddWithValue("y", yilAy);
+            var result = await cmd.ExecuteScalarAsync();
+            return Convert.ToInt32(result);
+        }
+        finally
+        {
+            if (openedHere)
+                await context.Database.CloseConnectionAsync();
+        }
     }
 
     /// <inheritdoc/>
-    public async Task<MuhasebeFis> CreateFisAtomicAsync(MuhasebeFis fis)
+    public async Task<MuhasebeFis> CreateFisAtomicAsync(MuhasebeFis fis, ApplicationDbContext? existingContext = null)
     {
+        if (existingContext is not null)
+            return await CreateFisAtomicInContextAsync(existingContext, fis);
+
         await using var context = await _contextFactory.CreateDbContextAsync();
+        return await CreateFisAtomicInContextAsync(context, fis);
+    }
+
+    private static async Task<MuhasebeFis> CreateFisAtomicInContextAsync(ApplicationDbContext context, MuhasebeFis fis)
+    {
         fis.FisNo = await GenerateNextFisNoInContextAsync(context, fis.FisTipi);
         fis.FisTarihi = DateTime.SpecifyKind(fis.FisTarihi, DateTimeKind.Utc);
         fis.CreatedAt = DateTime.UtcNow;

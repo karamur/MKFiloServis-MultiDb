@@ -1,3 +1,4 @@
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:satis")]
 @page "/ihale-hazirlik"
 @page "/ihale-hazirlik/{ProjeId:int}"
 @rendermode InteractiveServer
@@ -20,6 +21,7 @@
 @inject IHttpClientFactory HttpClientFactory
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
+@inject ILogger<IhaleHazirlik> Logger
 @inject IToastService ToastService
 
 <PageTitle>İhale Hazırlık</PageTitle>
@@ -46,8 +48,11 @@
                 <h6 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>İhale Sonrası Operasyon Özeti</h6>
                 <div class="d-flex gap-2 align-items-center">
                     <small class="text-muted">Kazanılan projeler baz alınır</small>
-                    <button class="btn btn-sm btn-outline-success" @onclick="OperasyonDashboardExcelExportAsync">
+                    <button class="btn btn-sm btn-outline-success" disabled="@(raporAktariliyor || yukleniyor)" @onclick="() => OperasyonRaporExportAsync(false)">
                         <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" disabled="@(raporAktariliyor || yukleniyor)" @onclick="() => OperasyonRaporExportAsync(true)">
+                        <i class="bi bi-file-earmark-pdf me-1"></i>PDF
                     </button>
                 </div>
             </div>
@@ -282,7 +287,11 @@ else
         <div id="raporKart" class="card shadow-sm mb-3 border-primary">
             <div class="card-header d-flex justify-content-between align-items-center bg-primary text-white">
                 <h6 class="mb-0"><i class="bi bi-file-earmark-bar-graph me-2"></i>Kâr/Zarar/Masraf Tablosu - Enflasyonlu Projeksiyon</h6>
-                <button class="btn btn-sm btn-outline-light" @onclick="() => raporGoster = false"><i class="bi bi-x"></i></button>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-light" disabled="@(raporAktariliyor || yukleniyor)" @onclick="() => ProjeksiyonExportAsync(false)"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>
+                    <button class="btn btn-sm btn-light" disabled="@(raporAktariliyor || yukleniyor)" @onclick="() => ProjeksiyonExportAsync(true)"><i class="bi bi-file-earmark-pdf me-1"></i>PDF</button>
+                    <button class="btn btn-sm btn-outline-light" @onclick="() => raporGoster = false"><i class="bi bi-x"></i></button>
+                </div>
             </div>
             <div class="card-body p-0">
                 @if (projeOzet.AylikProjeksiyonlar.Any())
@@ -404,8 +413,11 @@ else
                 <h6 class="mb-0"><i class="bi bi-graph-up-arrow me-2"></i>Gerçekleşen vs Tekliflenen Analiz</h6>
                 <div class="d-flex gap-2 align-items-center">
                     <small class="text-muted">@gerceklesenAnaliz.AnalizBaslangicTarihi.ToString("dd.MM.yyyy") - @gerceklesenAnaliz.AnalizBitisTarihi.ToString("dd.MM.yyyy")</small>
-                    <button class="btn btn-sm btn-outline-success" @onclick="GerceklesenAnalizExcelExportAsync">
+                    <button class="btn btn-sm btn-outline-success" disabled="@(raporAktariliyor || yukleniyor)" @onclick="() => GerceklesenRaporExportAsync(false)">
                         <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" disabled="@(raporAktariliyor || yukleniyor)" @onclick="() => GerceklesenRaporExportAsync(true)">
+                        <i class="bi bi-file-earmark-pdf me-1"></i>PDF
                     </button>
                 </div>
             </div>
@@ -1807,8 +1819,9 @@ else
         }
     }
 
-    private async Task OperasyonDashboardExcelExportAsync()
+    private async Task OperasyonRaporExportAsync(bool pdf)
     {
+        if (raporAktariliyor || yukleniyor) return;
         if (operasyonDashboard == null)
         {
             ToastService.ShowWarning("Aktarılacak operasyon dashboard verisi bulunamadı.");
@@ -1817,7 +1830,7 @@ else
 
         try
         {
-            yukleniyor = true;
+            raporAktariliyor = true;
 
             var headers = new[]
             {
@@ -1852,17 +1865,26 @@ else
                 riskli.KarSapmasi
             }));
 
-            var bytes = ExcelService.CreateExcel(headers, rows, "OperasyonDashboard");
-            await JS.InvokeVoidAsync("downloadFileFromBytes", $"IhaleOperasyonDashboard_{DateTime.Now:yyyyMMddHHmmss}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes);
-            ToastService.ShowSuccess("Operasyon dashboard Excel olarak indirildi.");
+            var tablolar = new List<IhaleRaporExporter.RaporTablosu>
+            {
+                new("Operasyon Özeti", new[] { "Gösterge", "Değer" }, rows.Where(r => Equals(r[0], "Özet")).Select(r => new object[] { r[1], r[2] }).ToList()),
+                new("Riskli Projeler", headers.Skip(3).ToArray(), rows.Where(r => Equals(r[0], "Riskli Projeler")).Select(r => r.Skip(3).ToArray()).ToList())
+            };
+            var baslik = "İhale Sonrası Operasyon Özeti";
+            var bilgi = "Kazanılan projeler · Ekrandaki firma kapsamı";
+            var bytes = pdf ? IhaleRaporExporter.Pdf(baslik, bilgi, tablolar) : IhaleRaporExporter.Excel(baslik, bilgi, tablolar);
+            await JS.InvokeVoidAsync("downloadFileFromBytes", $"IhaleOperasyon_{DateTime.Now:yyyyMMdd_HHmm}.{(pdf ? "pdf" : "xlsx")}",
+                pdf ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes);
+            ToastService.ShowSuccess("Operasyon raporu hazırlandı.");
         }
         catch (Exception ex)
         {
-            ToastService.ShowError(ex.Message);
+            Logger.LogError(ex, "İhale raporu dışa aktarılamadı.");
+            ToastService.ShowError("Rapor hazırlanamadı. Tekrar deneyin.");
         }
         finally
         {
-            yukleniyor = false;
+            raporAktariliyor = false;
         }
     }
 
@@ -2222,6 +2244,37 @@ else
         finally { yukleniyor = false; }
     }
 
+    private bool raporAktariliyor;
+
+    private async Task ProjeksiyonExportAsync(bool pdf)
+    {
+        if (raporAktariliyor || yukleniyor || secilenProje == null || projeOzet == null) return;
+        if (projeOzet.ProjeId != secilenProje.Id)
+        {
+            ToastService.ShowWarning("Seçili projenin raporunu yeniden açın.");
+            return;
+        }
+        var ozet = projeOzet;
+        var baslik = $"{ozet.ProjeAdi} — Enflasyonlu Projeksiyon";
+        var bilgi = $"Proje: {ozet.ProjeKodu} | Müşteri: {ozet.MusteriFirma ?? "-"} | Süre: {ozet.SozlesmeSuresiAy} ay | Hat: {ozet.GuzergahSayisi}";
+        raporAktariliyor = true;
+        try
+        {
+            var tablolar = IhaleRaporExporter.ProjeksiyonTablolari(ozet);
+            var bytes = pdf ? IhaleRaporExporter.Pdf(baslik, bilgi, tablolar) : IhaleRaporExporter.Excel(baslik, bilgi, tablolar);
+            var uzanti = pdf ? "pdf" : "xlsx";
+            await JS.InvokeVoidAsync("downloadFileFromBytes", $"IhaleProjeksiyon_{SanitizeFileNamePart(ozet.ProjeKodu)}_{DateTime.Now:yyyyMMdd_HHmm}.{uzanti}",
+                pdf ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes);
+            ToastService.ShowSuccess("Rapor dosyası hazırlandı.");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "İhale projeksiyon raporu dışa aktarılamadı. Proje: {ProjeId}", ozet.ProjeId);
+            ToastService.ShowError("Rapor hazırlanamadı. Tekrar deneyin.");
+        }
+        finally { raporAktariliyor = false; }
+    }
+
     private async Task RaporGosterAsync()
     {
         if (secilenProje == null) return;
@@ -2238,9 +2291,10 @@ else
         finally { yukleniyor = false; }
     }
 
-    private async Task GerceklesenAnalizExcelExportAsync()
+    private async Task GerceklesenRaporExportAsync(bool pdf)
     {
-        if (secilenProje == null || gerceklesenAnaliz == null || !gerceklesenAnaliz.Kalemler.Any())
+        if (raporAktariliyor || yukleniyor) return;
+        if (secilenProje == null || gerceklesenAnaliz == null || gerceklesenAnaliz.ProjeId != secilenProje.Id || !gerceklesenAnaliz.Kalemler.Any())
         {
             ToastService.ShowWarning("Aktarılacak gerçekleşen analiz verisi bulunamadı.");
             return;
@@ -2248,7 +2302,7 @@ else
 
         try
         {
-            yukleniyor = true;
+            raporAktariliyor = true;
 
             var headers = new[]
             {
@@ -2294,17 +2348,22 @@ else
                 gerceklesenAnaliz.KarSapmasi
             });
 
-            var bytes = ExcelService.CreateExcel(headers, rows, "GerceklesenAnaliz");
-            await JS.InvokeVoidAsync("downloadFileFromBytes", $"IhaleGerceklesenAnaliz_{SanitizeFileNamePart(secilenProje.ProjeKodu)}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes);
-            ToastService.ShowSuccess("Gerçekleşen analiz Excel olarak indirildi.");
+            var tablolar = new List<IhaleRaporExporter.RaporTablosu> { new("Gerçekleşen Analiz", headers, rows) };
+            var baslik = $"{secilenProje.ProjeAdi} — Gerçekleşen / Tekliflenen Analiz";
+            var bilgi = $"Proje: {secilenProje.ProjeKodu} | Dönem: {gerceklesenAnaliz.AnalizBaslangicTarihi:dd.MM.yyyy} – {gerceklesenAnaliz.AnalizBitisTarihi:dd.MM.yyyy}";
+            var bytes = pdf ? IhaleRaporExporter.Pdf(baslik, bilgi, tablolar) : IhaleRaporExporter.Excel(baslik, bilgi, tablolar);
+            await JS.InvokeVoidAsync("downloadFileFromBytes", $"IhaleGerceklesenAnaliz_{SanitizeFileNamePart(secilenProje.ProjeKodu)}_{DateTime.Now:yyyyMMdd_HHmm}.{(pdf ? "pdf" : "xlsx")}",
+                pdf ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes);
+            ToastService.ShowSuccess("Gerçekleşen analiz raporu hazırlandı.");
         }
         catch (Exception ex)
         {
-            ToastService.ShowError(ex.Message);
+            Logger.LogError(ex, "İhale raporu dışa aktarılamadı.");
+            ToastService.ShowError("Rapor hazırlanamadı. Tekrar deneyin.");
         }
         finally
         {
-            yukleniyor = false;
+            raporAktariliyor = false;
         }
     }
 

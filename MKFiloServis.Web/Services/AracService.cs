@@ -1,4 +1,4 @@
-﻿using MKFiloServis.Shared.Entities;
+using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Services.Interfaces;
 using MKFiloServis.Web.Helpers;
@@ -14,91 +14,120 @@ public class AracService : IAracService
     private readonly IEvrakArsivService _evrakArsivService;
     private readonly ICacheService _cache;
     private readonly IAktifFirmaProvider _aktifFirmaProvider;
+    private readonly ILogger<AracService> _logger;
 
     public AracService(
         IDbContextFactory<ApplicationDbContext> contextFactory,
         ISecureFileService secureFileService,
         IEvrakArsivService evrakArsivService,
         ICacheService cache,
-        IAktifFirmaProvider aktifFirmaProvider)
+        IAktifFirmaProvider aktifFirmaProvider,
+        ILogger<AracService> logger)
     {
         _contextFactory = contextFactory;
         _secureFileService = secureFileService;
         _evrakArsivService = evrakArsivService;
         _cache = cache;
         _aktifFirmaProvider = aktifFirmaProvider;
+        _logger = logger;
     }
 
-    /// <summary>
-    /// Cache key'lerini aktif firmaya göre scope'lar. Firma seçili değil veya "Tüm Firmalar"
-    /// modu açıksa ortak bir key kullanır. Bu, EF global query filter ile birlikte çalışarak
-    /// firmalar arası veri sızmasını önler.
-    /// </summary>
-    private string ScopeKey(string baseKey)
+    private static string ScopeKey(string baseKey, int? firmaId, bool tumFirmalar)
+        => baseKey + ":Scope2:" + (tumFirmalar ? "Tum" : "F" + firmaId!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+    private async Task AracOnbelleginiTemizleAsync()
     {
-        if (_aktifFirmaProvider.TumFirmalar) return baseKey + ":Tum";
-        var fid = _aktifFirmaProvider.AktifFirmaId ?? 0;
-        return baseKey + ":F" + fid.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        try
+        {
+            // Firma ve Tüm firmalar anahtarları aynı araç verisini içerir.
+            await _cache.RemoveByPrefixAsync(CacheKeys.AracPrefix);
+        }
+        catch (Exception ex)
+        {
+            // DB commit'i tamamlandı; önbellek hatası yazım başarısızlığı gibi gösterilmesin.
+            _logger.LogWarning(ex, "Araç kaydı tamamlandı ancak önbellek temizlenemedi. Prefix={Prefix}", CacheKeys.AracPrefix);
+        }
     }
 
     #region Araç CRUD İşlemleri
 
-    public Task<List<Arac>> GetAllAsync() =>
-        _cache.GetOrSetAsync(ScopeKey(CacheKeys.AracListesi), async () =>
+    public Task<List<Arac>> GetAllAsync() => OnbellekliAraclariGetirAsync(false);
+
+    public Task<List<Arac>> GetActiveAsync() => OnbellekliAraclariGetirAsync(true);
+
+    private sealed class FirmaSecimiDegistiException : Exception { }
+
+    private async Task<List<Arac>> OnbellekliAraclariGetirAsync(bool sadeceAktif)
+    {
+        long secimSurumu = 0;
+        void SecimDegisti() => Interlocked.Increment(ref secimSurumu);
+        _aktifFirmaProvider.AktifFirmaDegisti += SecimDegisti;
+        try
         {
-            await using var context = await _contextFactory.CreateDbContextAsync();
-            var araclar = await context.Araclar
-                .AsNoTracking()
-                .Include(a => a.PlakaGecmisi.Where(p => !p.IsDeleted))
-                .Include(a => a.Firma)
-                .Where(a => !a.IsDeleted)
-                .ToListAsync();
-
-            foreach (var arac in araclar)
+            for (var deneme = 0; deneme < 3; deneme++)
             {
-                var aktifPlaka = arac.PlakaGecmisi
-                    .Where(p => p.CikisTarihi == null || p.CikisTarihi > DateTime.Today)
-                    .OrderByDescending(p => p.GirisTarihi)
-                    .FirstOrDefault();
-
-                if (aktifPlaka != null && arac.AktifPlaka != aktifPlaka.Plaka)
+                var surum = Volatile.Read(ref secimSurumu);
+                var secim = _aktifFirmaProvider.Mevcut;
+                var tumFirmalar = secim.TumFirmalar;
+                int? firmaId = secim.FirmaId > 0 ? secim.FirmaId : null;
+                void SecimiDogrula()
                 {
-                    arac.AktifPlaka = aktifPlaka.Plaka;
-                    arac.Plaka = aktifPlaka.Plaka;
+                    if (surum != Volatile.Read(ref secimSurumu) ||
+                        _aktifFirmaProvider.TumFirmalar != tumFirmalar ||
+                        _aktifFirmaProvider.AktifFirmaId != firmaId)
+                        throw new FirmaSecimiDegistiException();
+                }
+                try
+                {
+                    SecimiDogrula();
+                    if (!tumFirmalar && firmaId is not > 0)
+                        return new List<Arac>(); // Seçimsiz F0 önbelleği oluşturma.
+                    var key = ScopeKey(sadeceAktif ? CacheKeys.AracAktif : CacheKeys.AracListesi, firmaId, tumFirmalar);
+                    var sonuc = await _cache.GetOrSetAsync(key, async () =>
+                    {
+                        SecimiDogrula();
+                        await using var context = await _contextFactory.CreateDbContextAsync();
+                        SecimiDogrula();
+                        var query = context.Araclar.AsNoTracking()
+                            .Include(a => a.PlakaGecmisi.Where(p => !p.IsDeleted))
+                            .Include(a => a.Firma)
+                            .Where(a => !a.IsDeleted && (!sadeceAktif || a.Aktif));
+                        if (!tumFirmalar)
+                            query = query.Where(a => a.FirmaId == firmaId);
+                        var araclar = await query.ToListAsync();
+                        SecimiDogrula();
+                        var bugun = DateTime.Today;
+                        foreach (var arac in araclar)
+                        {
+                            var aktifPlaka = arac.PlakaGecmisi
+                                .Where(p => p.CikisTarihi == null || p.CikisTarihi > bugun)
+                                .OrderByDescending(p => p.GirisTarihi).ThenByDescending(p => p.Id)
+                                .FirstOrDefault();
+                            if (aktifPlaka != null && arac.AktifPlaka != aktifPlaka.Plaka)
+                            {
+                                arac.AktifPlaka = aktifPlaka.Plaka;
+                                arac.Plaka = aktifPlaka.Plaka;
+                            }
+                        }
+                        SecimiDogrula();
+                        return araclar.OrderBy(a => a.AktifPlaka ?? a.SaseNo).ThenBy(a => a.Id).ToList();
+                    }, CacheDurations.Medium);
+                    SecimiDogrula(); // Cache hit sırasında değişen seçim de eski listeyi döndürmesin.
+                    return sonuc;
+                }
+                catch (FirmaSecimiDegistiException)
+                {
+                    _logger.LogDebug("Araç liste yüklemesi firma değişimi nedeniyle yeniden deneniyor.");
                 }
             }
-
-            return araclar.OrderBy(a => a.AktifPlaka ?? a.SaseNo).ToList();
-        }, CacheDurations.Medium);
-
-    public Task<List<Arac>> GetActiveAsync() =>
-        _cache.GetOrSetAsync(ScopeKey(CacheKeys.AracAktif), async () =>
+            throw new InvalidOperationException("Firma seçimi yükleme sırasında değişti. Araç listesini yeniden yükleyin.");
+        }
+        finally
         {
-            await using var context = await _contextFactory.CreateDbContextAsync();
-            var araclar = await context.Araclar
-                .AsNoTracking()
-                .Include(a => a.PlakaGecmisi.Where(p => !p.IsDeleted))
-                .Include(a => a.Firma)
-                .Where(a => a.Aktif && !a.IsDeleted)
-                .ToListAsync();
-            
-            // Aktif plakaları güncelle
-            foreach (var arac in araclar)
-            {
-                var aktifPlaka = arac.PlakaGecmisi
-                    .Where(p => p.CikisTarihi == null || p.CikisTarihi > DateTime.Today)
-                    .OrderByDescending(p => p.GirisTarihi)
-                    .FirstOrDefault();
-            
-                if (aktifPlaka != null && arac.AktifPlaka != aktifPlaka.Plaka)
-                {
-                    arac.AktifPlaka = aktifPlaka.Plaka;
-                    arac.Plaka = aktifPlaka.Plaka;
-                }
-            }
-            
-            return araclar.OrderBy(a => a.AktifPlaka ?? a.SaseNo).ToList();
-        }, CacheDurations.Medium);
+            _aktifFirmaProvider.AktifFirmaDegisti -= SecimDegisti;
+        }
+    }
+
     public async Task<int> GetActiveCountAsync()
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
@@ -240,7 +269,7 @@ public class AracService : IAracService
             arac.PlakaGecmisi.Add(aracPlaka);
             await context.SaveChangesAsync();
             await transaction.CommitAsync();
-            await _cache.RemoveByPrefixAsync(CacheKeys.AracPrefix);
+            await AracOnbelleginiTemizleAsync();
 
             return arac;
             }); // ExecutionStrategy lambda sonu
@@ -312,10 +341,10 @@ public class AracService : IAracService
             }
             existing.UpdatedAt = DateTime.UtcNow;
             
-            await context.SaveChangesAsync();
-            
-            // Aktif plakayı güncelle
+            // Aktif plakayı araç değişiklikleriyle birlikte kaydet.
             await GuncelleAktifPlaka(context, existing.Id);
+            await context.SaveChangesAsync();
+            await AracOnbelleginiTemizleAsync();
             
             return existing;
         }
@@ -328,24 +357,31 @@ public class AracService : IAracService
 
     public async Task DeleteAsync(int id)
     {
+        if (id <= 0) throw new ArgumentException("Geçerli bir araç seçin.", nameof(id));
+        var firmaId = _aktifFirmaProvider.AktifFirmaId;
+        if (_aktifFirmaProvider.TumFirmalar || firmaId is not > 0)
+            throw new InvalidOperationException("Araç silmek için tek bir firma seçin.");
+
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var arac = await context.Araclar
+        if (!await context.Firmalar.AnyAsync(f => f.Id == firmaId.Value && !f.IsDeleted))
+            throw new InvalidOperationException("Seçili firma bulunamadı veya erişilebilir değil.");
+        var arac = await context.Araclar.AsTracking()
             .Include(a => a.PlakaGecmisi.Where(p => !p.IsDeleted))
-            .FirstOrDefaultAsync(a => a.Id == id && !a.IsDeleted);
+            .FirstOrDefaultAsync(a => a.Id == id && a.FirmaId == firmaId.Value && !a.IsDeleted)
+            ?? throw new InvalidOperationException("Araç bulunamadı veya seçili firmaya ait değil.");
 
-        if (arac != null)
+        var simdi = DateTime.UtcNow;
+        foreach (var aktifPlaka in arac.PlakaGecmisi.Where(p => p.CikisTarihi == null || p.CikisTarihi > DateTime.Today))
         {
-            foreach (var aktifPlaka in arac.PlakaGecmisi.Where(p => p.CikisTarihi == null || p.CikisTarihi > DateTime.Today))
-            {
-                aktifPlaka.CikisTarihi = DateTime.SpecifyKind(DateTime.Today, DateTimeKind.Utc);
-                aktifPlaka.UpdatedAt = DateTime.UtcNow;
-            }
-
-            arac.AktifPlaka = null;
-            arac.IsDeleted = true;
-            arac.UpdatedAt = DateTime.UtcNow;
-            await context.SaveChangesAsync();
+            aktifPlaka.CikisTarihi = DateTime.SpecifyKind(DateTime.Today, DateTimeKind.Utc);
+            aktifPlaka.UpdatedAt = simdi;
         }
+        arac.AktifPlaka = null;
+        arac.IsDeleted = true;
+        arac.DeletedAt = simdi;
+        arac.UpdatedAt = simdi;
+        await context.SaveChangesAsync();
+        await AracOnbelleginiTemizleAsync();
     }
 
     /// <summary>
@@ -378,7 +414,7 @@ public class AracService : IAracService
             a.UpdatedAt = DateTime.UtcNow;
         }
         await context.SaveChangesAsync();
-        await _cache.RemoveByPrefixAsync(CacheKeys.AracPrefix);
+        await AracOnbelleginiTemizleAsync();
         return firmasizlar.Count;
     }
 
@@ -409,12 +445,19 @@ public class AracService : IAracService
         decimal? islemTutari = null, int? cariId = null, string? aciklama = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
+        var firmaId = await PlakaYazimFirmasiniGetirAsync(context);
+        if (aracId <= 0 || string.IsNullOrWhiteSpace(yeniPlaka))
+            throw new InvalidOperationException("Geçerli araç ve plaka gereklidir.");
+        yeniPlaka = yeniPlaka.Trim().ToUpperInvariant();
+        var arac = await context.Araclar.AsTracking().FirstOrDefaultAsync(a => a.Id == aracId && a.FirmaId == firmaId && !a.IsDeleted)
+            ?? throw new InvalidOperationException("Araç bulunamadı veya erişilebilir değil.");
         // Plaka kontrolü
-        if (await PlakaMevcutMu(yeniPlaka))
+        if (await PlakaKullaniminiKontrolEtAsync(context, yeniPlaka, firmaId))
             throw new InvalidOperationException($"Bu plaka ({yeniPlaka}) başka bir araçta aktif olarak kullanılıyor.");
         
+        await PlakaCarisiniDogrulaAsync(context, cariId, firmaId);
         // Mevcut aktif plakayı kapat
-        var mevcutAktif = await context.AracPlakalar
+        var mevcutAktif = await context.AracPlakalar.AsTracking()
             .FirstOrDefaultAsync(ap => ap.AracId == aracId && !ap.IsDeleted && ap.CikisTarihi == null);
             
         if (mevcutAktif != null)
@@ -437,32 +480,31 @@ public class AracService : IAracService
         };
         context.AracPlakalar.Add(yeniPlakaKaydi);
         
-        // Araçtaki aktif plakayı güncelle
-        var arac = await context.Araclar.FirstOrDefaultAsync(a => a.Id == aracId && !a.IsDeleted);
-        if (arac != null)
-        {
-            arac.AktifPlaka = yeniPlaka;
-            arac.UpdatedAt = DateTime.UtcNow;
-        }
+        await GuncelleAktifPlaka(context, aracId, firmaId);
         
         await context.SaveChangesAsync();
+        await AracOnbelleginiTemizleAsync();
         return yeniPlakaKaydi;
     }
 
     public async Task<bool> AddPlakaToAracAsync(AracPlaka yeniPlaka)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
+        var firmaId = await PlakaYazimFirmasiniGetirAsync(context);
+        if (yeniPlaka.Id != 0)
+            throw new InvalidOperationException("Yeni plaka kaydının kimliği sıfır olmalıdır.");
         if (yeniPlaka.AracId <= 0 || string.IsNullOrWhiteSpace(yeniPlaka.Plaka))
             return false;
 
         var plakaText = yeniPlaka.Plaka.Trim().ToUpperInvariant();
-        if (await PlakaMevcutMu(plakaText, yeniPlaka.Id > 0 ? yeniPlaka.Id : null))
+        if (await PlakaKullaniminiKontrolEtAsync(context, plakaText, firmaId))
             throw new InvalidOperationException($"Bu plaka ({plakaText}) başka bir araçta aktif olarak kullanılıyor.");
 
-        var arac = await context.Araclar.FirstOrDefaultAsync(a => a.Id == yeniPlaka.AracId && !a.IsDeleted);
+        var arac = await context.Araclar.AsTracking().FirstOrDefaultAsync(a => a.Id == yeniPlaka.AracId && a.FirmaId == firmaId && !a.IsDeleted);
         if (arac == null)
             throw new InvalidOperationException("Araç bulunamadı.");
 
+        await PlakaCarisiniDogrulaAsync(context, yeniPlaka.CariId, firmaId);
         var girisTarihi = yeniPlaka.GirisTarihi == default ? DateTime.Today : yeniPlaka.GirisTarihi;
         var yeniKayit = new AracPlaka
         {
@@ -478,48 +520,55 @@ public class AracService : IAracService
         };
 
         context.AracPlakalar.Add(yeniKayit);
+        await GuncelleAktifPlaka(context, yeniPlaka.AracId, firmaId);
         await context.SaveChangesAsync();
-
-        await GuncelleAktifPlaka(context, yeniPlaka.AracId);
+        await AracOnbelleginiTemizleAsync();
         return true;
     }
 
     public async Task<bool> DeletePlakaFromAracAsync(int aracPlakaId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var plakaKaydi = await context.AracPlakalar.FirstOrDefaultAsync(ap => ap.Id == aracPlakaId && !ap.IsDeleted);
+        var firmaId = await PlakaYazimFirmasiniGetirAsync(context);
+        var plakaKaydi = await context.AracPlakalar.AsTracking().FirstOrDefaultAsync(ap => ap.Id == aracPlakaId && !ap.IsDeleted &&
+                context.Araclar.Any(a => a.Id == ap.AracId && a.FirmaId == firmaId && !a.IsDeleted));
         if (plakaKaydi == null)
             return false;
 
         plakaKaydi.IsDeleted = true;
-        plakaKaydi.UpdatedAt = DateTime.UtcNow;
+        plakaKaydi.DeletedAt = DateTime.UtcNow;
+        plakaKaydi.UpdatedAt = plakaKaydi.DeletedAt;
+        await GuncelleAktifPlaka(context, plakaKaydi.AracId, firmaId);
         await context.SaveChangesAsync();
-
-        await GuncelleAktifPlaka(context, plakaKaydi.AracId);
+        await AracOnbelleginiTemizleAsync();
         return true;
     }
 
     public async Task ClosePlakaAsync(int aracPlakaId, DateTime cikisTarihi)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var plakaKaydi = await context.AracPlakalar.FirstOrDefaultAsync(ap => ap.Id == aracPlakaId && !ap.IsDeleted);
+        var firmaId = await PlakaYazimFirmasiniGetirAsync(context);
+        var plakaKaydi = await context.AracPlakalar.AsTracking().FirstOrDefaultAsync(ap => ap.Id == aracPlakaId && !ap.IsDeleted &&
+                context.Araclar.Any(a => a.Id == ap.AracId && a.FirmaId == firmaId && !a.IsDeleted));
         if (plakaKaydi == null)
             throw new InvalidOperationException("Plaka kaydı bulunamadı.");
 
         plakaKaydi.CikisTarihi = cikisTarihi;
         plakaKaydi.UpdatedAt = DateTime.UtcNow;
+        await GuncelleAktifPlaka(context, plakaKaydi.AracId, firmaId);
         await context.SaveChangesAsync();
-
-        await GuncelleAktifPlaka(context, plakaKaydi.AracId);
+        await AracOnbelleginiTemizleAsync();
     }
     
     public async Task PlakaCikis(int aracPlakaId, PlakaIslemTipi cikisIslemTipi, 
         decimal? islemTutari = null, int? cariId = null, string? aciklama = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var plakaKaydi = await context.AracPlakalar
+        var firmaId = await PlakaYazimFirmasiniGetirAsync(context);
+        var plakaKaydi = await context.AracPlakalar.AsTracking()
             .Include(ap => ap.Arac)
-            .FirstOrDefaultAsync(ap => ap.Id == aracPlakaId && !ap.IsDeleted);
+            .FirstOrDefaultAsync(ap => ap.Id == aracPlakaId && !ap.IsDeleted &&
+                context.Araclar.Any(a => a.Id == ap.AracId && a.FirmaId == firmaId && !a.IsDeleted));
             
         if (plakaKaydi == null)
             throw new InvalidOperationException("Plaka kaydı bulunamadı.");
@@ -527,6 +576,7 @@ public class AracService : IAracService
         if (plakaKaydi.CikisTarihi.HasValue)
             throw new InvalidOperationException("Bu plaka zaten kapatılmış.");
         
+        await PlakaCarisiniDogrulaAsync(context, cariId ?? plakaKaydi.CariId, firmaId);
         plakaKaydi.CikisTarihi = DateTime.UtcNow;
         plakaKaydi.IslemTipi = cikisIslemTipi;
         if (islemTutari.HasValue) plakaKaydi.IslemTutari = islemTutari;
@@ -534,33 +584,69 @@ public class AracService : IAracService
         if (!string.IsNullOrEmpty(aciklama)) plakaKaydi.Aciklama = aciklama;
         plakaKaydi.UpdatedAt = DateTime.UtcNow;
         
-        // Araçtaki aktif plakayı temizle
-        if (plakaKaydi.Arac != null)
-        {
-            plakaKaydi.Arac.AktifPlaka = null;
-            plakaKaydi.Arac.UpdatedAt = DateTime.UtcNow;
-        }
+        // Başka aktif geçmiş kaydı varsa onu seç; araç değerini koşulsuz boşaltma.
+        await GuncelleAktifPlaka(context, plakaKaydi.AracId, firmaId, plakaKaydi.Id);
         
         await context.SaveChangesAsync();
+        await AracOnbelleginiTemizleAsync();
     }
     
-    private async Task GuncelleAktifPlaka(ApplicationDbContext context, int aracId)
+    private async Task<int> PlakaYazimFirmasiniGetirAsync(ApplicationDbContext context)
     {
-        var arac = await context.Araclar.FirstOrDefaultAsync(a => a.Id == aracId && !a.IsDeleted);
-        if (arac == null) return;
-        
-        // CikisTarihi null olan veya CikisTarihi bugünden sonra olan plakalardan en son eklenen
-        var aktifPlaka = await context.AracPlakalar
-            .Where(ap => ap.AracId == aracId && 
-                        !ap.IsDeleted &&
-                        (ap.CikisTarihi == null || ap.CikisTarihi > DateTime.Today))
-            .OrderByDescending(ap => ap.GirisTarihi)
-            .FirstOrDefaultAsync();
-            
-        arac.AktifPlaka = aktifPlaka?.Plaka;
-        await context.SaveChangesAsync();
+        var firmaId = _aktifFirmaProvider.AktifFirmaId;
+        if (_aktifFirmaProvider.TumFirmalar || firmaId is not > 0)
+            throw new InvalidOperationException("Plaka işlemi için tek bir firma seçin.");
+        if (!await context.Firmalar.AnyAsync(f => f.Id == firmaId.Value && !f.IsDeleted))
+            throw new InvalidOperationException("Seçili firma bulunamadı veya erişilebilir değil.");
+        return firmaId.Value;
     }
-    
+
+    private static async Task PlakaCarisiniDogrulaAsync(ApplicationDbContext context, int? cariId, int firmaId)
+    {
+        if (!cariId.HasValue) return;
+        if (cariId.Value <= 0 || !await context.Cariler.AnyAsync(c => c.Id == cariId.Value && c.FirmaId == firmaId && !c.IsDeleted))
+            throw new InvalidOperationException("Plaka işlemindeki cari seçili firmaya ait ve erişilebilir olmalıdır.");
+    }
+
+    private static Task<bool> PlakaKullaniminiKontrolEtAsync(ApplicationDbContext context, string plaka, int firmaId)
+    {
+        var bugun = DateTime.UtcNow.Date;
+        return context.AracPlakalar.AnyAsync(ap => ap.Plaka == plaka && !ap.IsDeleted &&
+            (ap.CikisTarihi == null || ap.CikisTarihi > bugun) &&
+            context.Araclar.Any(a => a.Id == ap.AracId && a.FirmaId == firmaId && !a.IsDeleted));
+    }
+
+    private static async Task GuncelleAktifPlaka(ApplicationDbContext context, int aracId, int? firmaId = null, int? kapatilanPlakaId = null)
+    {
+        var arac = await context.Araclar.AsTracking().FirstOrDefaultAsync(a => a.Id == aracId && (!firmaId.HasValue || a.FirmaId == firmaId) && !a.IsDeleted)
+            ?? throw new InvalidOperationException("Araç bulunamadı veya erişilebilir değil.");
+        // SQL'de çıkış filtresi kullanma: bekleyen kapatma/silme ve yeni kayıtları da gör.
+        var kayitlar = await context.AracPlakalar.AsTracking()
+            .Where(ap => ap.AracId == aracId && !ap.IsDeleted).ToListAsync();
+        var adaylar = new HashSet<AracPlaka>(kayitlar, ReferenceEqualityComparer.Instance);
+        foreach (var entry in context.ChangeTracker.Entries<AracPlaka>())
+        {
+            if (entry.Entity.AracId == aracId && entry.State == EntityState.Added)
+                adaylar.Add(entry.Entity);
+            if (entry.State == EntityState.Deleted)
+                adaylar.Remove(entry.Entity);
+        }
+        var bugun = DateTime.Today;
+        var aktifPlaka = adaylar
+            .Where(ap => !ap.IsDeleted && ap.Id != kapatilanPlakaId && (ap.CikisTarihi == null || ap.CikisTarihi > bugun))
+            .OrderByDescending(ap => ap.GirisTarihi)
+            .ThenByDescending(ap => context.Entry(ap).State == EntityState.Added)
+            .ThenByDescending(ap => ap.Id)
+            .FirstOrDefault();
+        var plaka = aktifPlaka?.Plaka;
+        if (arac.AktifPlaka != plaka)
+        {
+            arac.AktifPlaka = plaka;
+            arac.UpdatedAt = DateTime.UtcNow;
+        }
+        // Çağıran plaka geçmişi ve araç değişikliğini tek SaveChanges ile kaydeder.
+    }
+
     #endregion
     
     #region Satışa Açık Araçlar
@@ -578,7 +664,7 @@ public class AracService : IAracService
     public async Task AracSatisaAc(int aracId, decimal satisFiyati, string? aciklama = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var arac = await context.Araclar.FirstOrDefaultAsync(a => a.Id == aracId && !a.IsDeleted);
+        var arac = await context.Araclar.AsTracking().FirstOrDefaultAsync(a => a.Id == aracId && !a.IsDeleted);
         if (arac == null)
             throw new InvalidOperationException("Araç bulunamadı.");
             
@@ -589,12 +675,13 @@ public class AracService : IAracService
         arac.UpdatedAt = DateTime.UtcNow;
         
         await context.SaveChangesAsync();
+        await AracOnbelleginiTemizleAsync();
     }
     
     public async Task AracSatisKapat(int aracId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var arac = await context.Araclar.FirstOrDefaultAsync(a => a.Id == aracId && !a.IsDeleted);
+        var arac = await context.Araclar.AsTracking().FirstOrDefaultAsync(a => a.Id == aracId && !a.IsDeleted);
         if (arac == null)
             throw new InvalidOperationException("Araç bulunamadı.");
             
@@ -605,6 +692,7 @@ public class AracService : IAracService
         arac.UpdatedAt = DateTime.UtcNow;
         
         await context.SaveChangesAsync();
+        await AracOnbelleginiTemizleAsync();
     }
     
     #endregion
@@ -640,8 +728,9 @@ public class AracService : IAracService
 
         evrak.CreatedAt = DateTime.UtcNow;
         context.AracEvraklari.Add(evrak);
-        await context.SaveChangesAsync();
         await SenkronizeAracBelgeTarihleriAsync(context, evrak.AracId);
+        await context.SaveChangesAsync();
+        await AracOnbelleginiTemizleAsync();
         return evrak;
     }
 
@@ -652,7 +741,7 @@ public class AracService : IAracService
         // Mevcut kaydi yukleyip sadece duzenlenen alanlari aktar;
         // aksi halde kopya entity'deki bos FirmaId/CreatedAt degerleri
         // (Kind=Unspecified) veritabanina yazilirken hataya yol acar.
-        var mevcut = await context.AracEvraklari
+        var mevcut = await context.AracEvraklari.AsTracking()
             .FirstOrDefaultAsync(e => e.Id == evrak.Id && !e.IsDeleted)
             ?? throw new InvalidOperationException("Guncellenecek evrak bulunamadi.");
 
@@ -673,51 +762,67 @@ public class AracService : IAracService
         mevcut.HatirlatmaGunOnce = evrak.HatirlatmaGunOnce;
         mevcut.UpdatedAt = DateTime.UtcNow;
 
-        await context.SaveChangesAsync();
         await SenkronizeAracBelgeTarihleriAsync(context, mevcut.AracId);
+        await context.SaveChangesAsync();
+        await AracOnbelleginiTemizleAsync();
         return mevcut;
     }
 
     public async Task DeleteAracEvrakAsync(int evrakId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var evrak = await context.AracEvraklari
+        var evrak = await context.AracEvraklari.AsTracking()
             .Include(e => e.Dosyalar.Where(d => !d.IsDeleted))
             .FirstOrDefaultAsync(e => e.Id == evrakId && !e.IsDeleted);
+        if (evrak == null) return;
 
-        if (evrak != null)
+        var dosyalar = evrak.Dosyalar.Select(d => (d.Id, d.DosyaYolu)).ToArray();
+        var simdi = DateTime.UtcNow;
+        foreach (var dosya in evrak.Dosyalar)
         {
-            // Dosyaları sil
-            foreach (var dosya in evrak.Dosyalar)
-            {
-                await _secureFileService.DeleteAsync(dosya.DosyaYolu);
-                dosya.IsDeleted = true;
-            }
-
-            evrak.IsDeleted = true;
-            await context.SaveChangesAsync();
-            await SenkronizeAracBelgeTarihleriAsync(context, evrak.AracId);
+            dosya.IsDeleted = true;
+            dosya.DeletedAt = simdi;
+            dosya.UpdatedAt = simdi;
         }
+        evrak.IsDeleted = true;
+        evrak.DeletedAt = simdi;
+        evrak.UpdatedAt = simdi;
+        await SenkronizeAracBelgeTarihleriAsync(context, evrak.AracId);
+        await context.SaveChangesAsync();
+        await AracOnbelleginiTemizleAsync();
+        await SilinenEvrakDosyalariniTemizleAsync(evrakId, dosyalar);
     }
 
     /// <summary>
     /// AracEvrak tablosundaki en güncel (bitiş tarihi en yüksek, aktif, silinmemiş) kayıtlardan
     /// Arac tablosundaki geriye dönük belge bitiş tarihlerini (Muayene/Trafik/Kasko/Koltuk) tekilleştirir.
-    /// Böylece evrak güncellendiğinde uyarı/rapor/listelerde tek kaynaktan tutarlı tarih görünür.
+    /// Bekleyen belge değişikliklerini de hesaba katar; kaydı çağıran tek SaveChanges ile yapar.
     /// </summary>
     private static async Task SenkronizeAracBelgeTarihleriAsync(ApplicationDbContext context, int aracId)
     {
-        if (aracId <= 0) return;
-        var arac = await context.Araclar.FirstOrDefaultAsync(a => a.Id == aracId && !a.IsDeleted);
-        if (arac == null) return;
+        if (aracId <= 0)
+            throw new InvalidOperationException("Belge işlemi için geçerli bir araç gereklidir.");
+        var arac = await context.Araclar.AsTracking().FirstOrDefaultAsync(a => a.Id == aracId && !a.IsDeleted);
+        if (arac == null)
+            throw new InvalidOperationException("Belgenin aracı bulunamadı veya erişilebilir değil.");
 
-        var aktifEvraklar = await context.AracEvraklari
-            .Where(e => e.AracId == aracId
-                     && !e.IsDeleted
-                     && e.Durum != EvrakDurum.Pasif
-                     && e.BitisTarihi.HasValue)
-            .Select(e => new { e.EvrakKategorisi, e.BitisTarihi })
+        // DB'deki değerlerden önce identity resolution ile bekleyen güncellemeleri kullan.
+        // Aktif/tarihli filtreyi SQL'de uygulama: henüz kaydedilmemiş aktifleşme/kategori
+        // değişiklikleri ve silmeler de sonuç tarihini etkilemelidir.
+        var kayitliEvraklar = await context.AracEvraklari.AsTracking()
+            .Where(e => e.AracId == aracId && !e.IsDeleted)
             .ToListAsync();
+        var adaylar = new HashSet<AracEvrak>(kayitliEvraklar, ReferenceEqualityComparer.Instance);
+        foreach (var entry in context.ChangeTracker.Entries<AracEvrak>())
+        {
+            if (entry.Entity.AracId == aracId && entry.State == EntityState.Added)
+                adaylar.Add(entry.Entity);
+            if (entry.State == EntityState.Deleted)
+                adaylar.Remove(entry.Entity);
+        }
+        var aktifEvraklar = adaylar
+            .Where(e => !e.IsDeleted && e.Durum != EvrakDurum.Pasif && e.BitisTarihi.HasValue)
+            .ToList();
 
         static DateTime? NormalizeUtc(DateTime? value)
         {
@@ -747,7 +852,6 @@ public class AracService : IAracService
         if (degisti)
         {
             arac.UpdatedAt = DateTime.UtcNow;
-            await context.SaveChangesAsync();
         }
     }
 
@@ -794,13 +898,23 @@ public class AracService : IAracService
 
             context.AracEvrakDosyalari.Add(evrakDosya);
             await context.SaveChangesAsync();
+            await AracOnbelleginiTemizleAsync();
             return evrakDosya;
         }
         catch
         {
             if (!string.IsNullOrWhiteSpace(storedPath))
             {
-                try { await _secureFileService.DeleteAsync(storedPath); } catch { }
+                try
+                {
+                    await _secureFileService.DeleteAsync(storedPath);
+                }
+                catch (Exception cleanupException)
+                {
+                    _logger.LogError(cleanupException,
+                        "Araç evrak yükleme telafisinde dosya temizlenemedi. EvrakId={EvrakId}, DosyaYolu={DosyaYolu}",
+                        evrakId, storedPath);
+                }
             }
 
             throw;
@@ -826,16 +940,39 @@ public class AracService : IAracService
     public async Task DeleteEvrakDosyaAsync(int dosyaId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var dosya = await context.AracEvrakDosyalari
+        var dosya = await context.AracEvrakDosyalari.AsTracking()
             .Include(d => d.AracEvrak)
             .FirstOrDefaultAsync(d => d.Id == dosyaId && !d.IsDeleted && d.AracEvrak != null && !d.AracEvrak.IsDeleted);
-        if (dosya != null)
-        {
-            await _secureFileService.DeleteAsync(dosya.DosyaYolu);
+        if (dosya == null) return;
 
-            context.AracEvrakDosyalari.Remove(dosya);
-            await context.SaveChangesAsync();
+        dosya.IsDeleted = true;
+        dosya.DeletedAt = DateTime.UtcNow;
+        dosya.UpdatedAt = dosya.DeletedAt;
+        await context.SaveChangesAsync();
+        await AracOnbelleginiTemizleAsync();
+        await SilinenEvrakDosyalariniTemizleAsync(dosya.AracEvrakId, new[] { (dosya.Id, dosya.DosyaYolu) });
+    }
+
+    private async Task SilinenEvrakDosyalariniTemizleAsync(int evrakId, IEnumerable<(int Id, string DosyaYolu)> dosyalar)
+    {
+        List<Exception>? hatalar = null;
+        foreach (var dosya in dosyalar)
+        {
+            if (string.IsNullOrWhiteSpace(dosya.DosyaYolu)) continue;
+            try
+            {
+                await _secureFileService.DeleteAsync(dosya.DosyaYolu);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Araç evrak DB kaydı kaldırıldı ancak fiziksel temizlik bekliyor. EvrakId={EvrakId}, DosyaId={DosyaId}, DosyaYolu={DosyaYolu}",
+                    evrakId, dosya.Id, dosya.DosyaYolu);
+                (hatalar ??= new()).Add(ex);
+            }
         }
+        if (hatalar != null)
+            throw new FileCleanupPendingException(new AggregateException(hatalar));
     }
 
     #endregion
@@ -921,6 +1058,7 @@ public class AracService : IAracService
         await using var context = await _contextFactory.CreateDbContextAsync();
         var result = new AracImportResult();
         
+        var kayitTamamlandi = false;
         try
         {
             using var stream = new MemoryStream(fileContent);
@@ -1106,6 +1244,7 @@ public class AracService : IAracService
                             mevcutArac.UpdatedAt = DateTime.UtcNow;
                             await context.SaveChangesAsync();
                             await transaction.CommitAsync();
+                            kayitTamamlandi = true;
                         }
                     }
                     else
@@ -1161,6 +1300,7 @@ public class AracService : IAracService
                         context.Araclar.Add(yeniArac);
                         await context.SaveChangesAsync();
                         await transaction.CommitAsync();
+                        kayitTamamlandi = true;
                     }
                     }); // ExecutionStrategy lambda sonu
 
@@ -1211,6 +1351,9 @@ public class AracService : IAracService
             result.Success = false;
         }
         
+        if (kayitTamamlandi)
+            await AracOnbelleginiTemizleAsync();
+
         return result;
     }
 
