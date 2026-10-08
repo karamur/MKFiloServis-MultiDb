@@ -1177,4 +1177,5 @@ Kullanıcının bu oturumda verdiği test talebiyle son aşama kontrolleri başl
 
 - 🟢 Banka hesabı oluşturma, güncel izin kontrolü, seçili firma zorunluluğu ve Serializable ortak yazım/commit sınırına taşındı. Başka firma kimliğiyle yeni hesap oluşturma reddedilir; boş firma seçili firmaya bağlanır.
 - 🟢 İki SQLite regresyonu geçti: yabancı firma girişinde kayıt yok, seçili firmaya oluşturma başarılı; veritabanından Admin rolü kaldırılınca önceki oturum hesabı oluşturamaz.
+- 🟢 `5d1c4ed7` için [GitHub Tests koşusu](https://github.com/karamur/MKFiloServis-MultiDb/actions/runs/37835118724) başarılı: **104/104 test, 0 başarısız, 0 atlanan**. Yerel Release koşusu da 104/104 geçti.
 - 🟡 Diğer otomatik mali yazımlar, puantaj ve gerçek müşteri rol değişimi kabulü açık. A-29 🟡 ve genel satış kararı 🔴 kalır.
