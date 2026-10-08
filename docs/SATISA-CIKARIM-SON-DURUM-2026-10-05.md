@@ -103,6 +103,7 @@ Her satırın son sütunu yeşile geçiş ölçütüdür. Yalnız kodun derlenme
 
 ## 6. Mevcut kaynaklar
 
+- [Satışa çıkarım eksikler listesi — 2026-10-08 (yeni bulgular ve ticari eksikler)](SATISA-CIKARIM-EKSIKLER-LISTESI-2026-10-08.md)
 - [Güncel durum raporu ve tarihsel devam ekleri](SATISA-CIKARIM-GUNCEL-DURUM-RAPORU.md)
 - [İkinci düzeltme denetim raporu](DUZELTME-DENETIM-RAPORU-2.md)
 - [İlk satışa çıkarım analizi — tarihsel bulgular](SATISA-CIKARIM-ANALIZ-RAPORU.md)
