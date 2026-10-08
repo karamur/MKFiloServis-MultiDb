@@ -1375,4 +1375,6 @@ Dashboard finans verileri SQLite'ta `no such column: b.IslemKimligi` hatası ver
 
 🟢 Git'te izlenmeyen `postgres-write-audit.sql` gömülü kaynağı depoya eklendi. GitHub Linux Web/test derlemesi ve **102/102** xUnit testi geçti. Linux/Windows yol harfi karşılaştırması test verisinde işletim sistemine göre ayrıldı; üretim dosya silme kuralı değiştirilmedi. Windows 2025 NuGet işi MAUI restore ve çözüm/Rent-a-Car zafiyet taramasını başarıyla tamamladı. [GitHub çalışma kanıtı ve kapsam](A-07-CI-DOGRULAMA-2026-10-08.md).
 
-🟡 CodeQL/Docker son sonucu ve gerçek müşteri kabulü açık. A-07 🟡, A-22 🟢; satış durumu değişmedi.
+🟢 Docker imajı/GHCR gönderimi ile digest üzerinden Trivy taraması ve SARIF yüklemesi geçti.
+
+🟡 CodeQL son sonucu ve gerçek müşteri kabulü açık. A-07 🟡, A-22 🟢; satış durumu değişmedi.
