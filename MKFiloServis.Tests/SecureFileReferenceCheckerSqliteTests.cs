@@ -35,13 +35,17 @@ public sealed class SecureFileReferenceCheckerSqliteTests(Xunit.Abstractions.ITe
                 {
                     EvrakTipi = "Kimlik",
                     DosyaAdi = "owned.enc",
-                    DosyaYolu = "  \\uploads\\ebys\\OWNED.enc  ",
+                    DosyaYolu = OperatingSystem.IsWindows()
+                        ? "  \\uploads\\ebys\\OWNED.enc  "
+                        : "  \\uploads\\ebys\\owned.enc  ",
                     IsDeleted = true
                 });
                 db.EvrakDosyalari.Add(new EvrakDosya
                 {
                     EvrakTipi = "Kimlik", DosyaAdi = "özlük.enc",
-                    DosyaYolu = "  \\uploads\\ebys\\ÖZLÜK.enc  ", IsDeleted = true
+                    DosyaYolu = OperatingSystem.IsWindows()
+                        ? "  \\uploads\\ebys\\ÖZLÜK.enc  "
+                        : "  \\uploads\\ebys\\özlük.enc  ", IsDeleted = true
                 });
                 await db.SaveChangesAsync();
             }
@@ -78,7 +82,9 @@ public sealed class SecureFileReferenceCheckerSqliteTests(Xunit.Abstractions.ITe
                 {
                     EvrakTipi = "Kimlik",
                     DosyaAdi = "owned.enc",
-                    DosyaYolu = "/uploads/ebys/OWNED.enc",
+                    DosyaYolu = OperatingSystem.IsWindows()
+                        ? "/uploads/ebys/OWNED.enc"
+                        : "/uploads/ebys/owned.enc",
                     IsDeleted = true
                 });
                 await db.SaveChangesAsync();
