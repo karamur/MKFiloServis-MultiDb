@@ -84,6 +84,9 @@ public class Sofor : BaseEntity, IKopyalanabilirTenant, IFirmaTenant
     public decimal BireyselEmeklilik { get; set; } // Bireysel emeklilik (eski/2. kayıt)
     public decimal DigerOzelKesinti { get; set; } // Diğer kesintiler
 
+    [NotMapped]
+    public decimal OzelKesintiToplami => IcraKesintisi + BESKesintisi + SendikaKesintisi + HayatSigortasi + BireyselEmeklilik + DigerOzelKesinti;
+
     // Sosyal Yardımlar (Aylık Sabit)
     public decimal YemekYardimi { get; set; }
     public decimal YolYardimi { get; set; }

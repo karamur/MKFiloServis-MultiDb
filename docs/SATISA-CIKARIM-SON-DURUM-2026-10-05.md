@@ -1,6 +1,6 @@
 # MKFiloServis — Satışa Çıkarım Son Durum ve Açık Görevler
 
-**Son güncelleme:** 2026-10-08
+**Son güncelleme:** 2026-10-09
 
 **Esas:** Kaynak teslim commit'i ve yerel doğrulama; müşteri dağıtımı yapılmış sayılmaz.
 
@@ -1179,6 +1179,13 @@ Kullanıcının bu oturumda verdiği test talebiyle son aşama kontrolleri başl
 - 🟢 İki SQLite regresyonu geçti: yabancı firma girişinde kayıt yok, seçili firmaya oluşturma başarılı; veritabanından Admin rolü kaldırılınca önceki oturum hesabı oluşturamaz.
 - 🟢 `5d1c4ed7` için [GitHub Tests koşusu](https://github.com/karamur/MKFiloServis-MultiDb/actions/runs/37835118724) başarılı: **104/104 test, 0 başarısız, 0 atlanan**. Yerel Release koşusu da 104/104 geçti.
 - 🟡 Diğer otomatik mali yazımlar, puantaj ve gerçek müşteri rol değişimi kabulü açık. A-29 🟡 ve genel satış kararı 🔴 kalır.
+
+### 2026-10-09 — Personel özel kesintisinin Maaş/Ödeme Yönetimi'ne bağlanması
+
+- 🟢 `Sofor.OzelKesintiToplami`, personel kartındaki icra, BES, sendika, hayat sigortası, bireysel emeklilik ve diğer özel kesinti alanlarının ortak toplamını verir. Maaş/Ödeme Yönetimi listesindeki Kesinti değeri bu toplamı kullanır; alanlar için tekrar eden toplama kaldırıldı.
+- 🟢 Bordro servisindeki kalem bazlı özel kesinti aktarımı ve SGK/vergi hesaplaması değiştirilmedi. Operasyonel puantaj koduna dokunulmadı.
+- 🟢 Web projesi derlemesi başarılı: `dotnet build "C:\Users\muratk\Desktop\dyedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Web\MKFiloServis.Web.csproj" -nologo` — **0 hata / 0 uyarı**.
+- 🟡 Maaş ekranında gerçek personel verisiyle görsel/iş akışı kabulü ve özel kesinti için hedefli otomatik regresyon testi bu değişiklik kapsamında çalıştırılmadı. Bu nedenle yalnız kod/derleme doğrulaması tamamlandı; müşteri kabulü ve satışa hazırlık kararı değişmedi.
 
 ### 2026-10-09 — A-29 puantaj finans snapshot firma ve işlem sınırı
 

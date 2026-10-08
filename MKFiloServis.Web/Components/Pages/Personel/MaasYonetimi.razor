@@ -2399,12 +2399,7 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
                     GercekMaas = gercekMaas,
                     BankayaYatan = bankayaYatan,
                     Avans = finansOzet?.KalanAvans ?? 0,
-                    Kesinti = p.IcraKesintisi
-                        + p.BESKesintisi
-                        + p.SendikaKesintisi
-                        + p.HayatSigortasi
-                        + p.BireyselEmeklilik
-                        + p.DigerOzelKesinti,
+                    Kesinti = p.OzelKesintiToplami,
                     Harcamasi = (finansOzet?.ToplamHarcama ?? 0) + (finansOzet?.KalanBorc > 0 ? finansOzet!.KalanBorc : 0),
                     // Excel / yazdirma ek kolonlar
                     Plaka = p.AracAtamalari?.FirstOrDefault(a => a.Aktif)?.Arac?.AktifPlaka,
