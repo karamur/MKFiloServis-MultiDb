@@ -77,15 +77,21 @@ public class BankaHesapService : IBankaHesapService
     public async Task<BankaHesap> CreateAsync(BankaHesap bankaHesap)
     {
         await _permissionGuard.RequireAnyAsync(Yetkiler.BankaHesaplariYaz);
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        if (bankaHesap.Id != 0 || bankaHesap.IsDeleted)
-            throw new InvalidOperationException("Yeni hesap aktif ve kimliksiz olmalıdır.");
-        NormalizeBankaHesap(bankaHesap);
-        await ValidateBankaHesapAsync(context, bankaHesap);
+        return await WriteAccountAsync(Yetkiler.BankaHesaplariYaz, async context =>
+        {
+            if (bankaHesap.Id != 0 || bankaHesap.IsDeleted)
+                throw new InvalidOperationException("Yeni hesap aktif ve kimliksiz olmalıdır.");
+            var firmaId = _aktifFirmaProvider.AktifFirmaId;
+            if (_aktifFirmaProvider.TumFirmalar || firmaId is not > 0 ||
+                (bankaHesap.FirmaId.HasValue && bankaHesap.FirmaId != firmaId))
+                throw new UnauthorizedAccessException("Banka hesabı yalnız seçili firmada oluşturulabilir.");
+            bankaHesap.FirmaId = firmaId;
+            NormalizeBankaHesap(bankaHesap);
+            await ValidateBankaHesapAsync(context, bankaHesap);
 
-        context.BankaHesaplari.Add(bankaHesap);
-        await context.SaveChangesAsync();
-        return bankaHesap;
+            context.BankaHesaplari.Add(bankaHesap);
+            return bankaHesap;
+        });
     }
 
     public async Task<BankaHesap> UpdateAsync(BankaHesap bankaHesap)

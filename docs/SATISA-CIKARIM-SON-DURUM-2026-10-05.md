@@ -40,7 +40,7 @@ Bu belge tarihsel tekrarları tek görev listesine toplar. Eski raporlardaki “
 
 **Toplam: 31 görev.** A-23 teslim temizliği tamamlandı; diğer görevlerin kod ve kabul sınırları aşağıda ayrı gösterilir.
 
-- **A-29 🟡:** Fatura yazımları, manuel fiş oluşturma/düzenleme/silme/onay, hesap planı düzenleme/silme, araç masrafı ve kolay muhasebe kaydetme servislerine güncel izin kontrolü eklendi. Borç/alacak denetimi manuel oluşturma, düzenleme ve atomik fiş üretiminde var. Kalan otomatik/atomik çağrı sözleşmeleri, hesap oluşturma, puantaj ve çalışma zamanı doğrulaması açık.
+- **A-29 🟡:** Fatura yazımları, manuel fiş oluşturma/düzenleme/silme/onay, hesap planı düzenleme/silme, araç masrafı ve kolay muhasebe kaydetme servislerine güncel izin kontrolü eklendi. Banka hesabı oluşturma seçili firma ve ortak Serializable yazım sınırında; iki SQLite testi geçti. Borç/alacak denetimi manuel oluşturma, düzenleme ve atomik fiş üretiminde var. Kalan otomatik/atomik çağrı sözleşmeleri, puantaj ve çalışma zamanı doğrulaması açık.
 - **A-28 🔴:** SQL Server/MySQL güvenli biçimde reddediliyor. Sağlayıcı kapsam kararı ve PostgreSQL/SQLite hedef kurulum kabulü açık. Bu açıklama yalnız A-28'e aittir; diğer kırmızı görevlerin kapanış koşulları 3. bölümde yer alır.
 
 ## 2. Kodla tamamlanan alt parçalar
@@ -101,7 +101,7 @@ Her satırın son sütunu yeşile geçiş ölçütüdür. Yalnız kodun derlenme
 | A-26 | P2 | 🟡 | Personel banka / ihale / Y-2 | **Excel ve PDF çıktı kabulü:** Uzun metin, büyük/negatif tutar, çok sayfa, SGK ayrı/birleşik, boş risk listesi ve ekran/çıktı toplam eşitliğini kontrol et; proforma görsel kabulünü dahil et. | XLSX/PDF açılır ve baskıda kesilmez; Türkçe karakterler, başlık/filtre/toplamlar doğru. Çıktı kodu tamamlandı; görsel kabul bekliyor. |
 | A-27 | P2 | 🟡 | Y-2 / Y-3 / Y-9 | **Luca ve dış entegrasyon kabulü:** Gerçek UBL/portal, eski credential geçişi, HTTPS/retry ve belirsiz POST hatalarını kabul et; diğer entegrasyonların kapsamını incele. | Tekrar deneme istekleri taze; belirsiz mali POST çift gönderilmez; eski sır dosyası geçişi ve portal uyumu kanıtlı. |
 | A-28 | P2 | 🔴 | O-1 | **DB sağlayıcı ürün kapsamı:** MSSQL kurulum seçeneği görünür, ancak migration/master/audit desteği tamamlanana kadar kurulum durdurulur. Web başlangıcı ve ayar yazma/test servisi PostgreSQL/SQLite dışındaki SQL Server/MySQL sağlayıcılarını migration öncesi reddeder; yeni seçim ayar ekranında kapalıdır. | Yetkili ürün kapsamı kararı ve PostgreSQL/SQLite temiz kurulum/yükseltme hedef kabulü; veya SQL Server/MySQL için tam şema/migration/audit zinciri ve hedef kabulü. |
-| A-29 | P2 | 🟡 | Banka / maaş | [Mali kararlar](A-29-31-URUN-KARARLARI.md): cari eşleşmesi isteğe bağlı; çelişkili tutar/yön satırı reddedilir; kilitli/fişli snapshot silinemez. Koda uygulandı. | Fatura, manuel fiş, hesap düzenleme/silme, masraf, kolay muhasebe kaydetme ve personel finans yazımlarında güncel servis izni eklendi. Kalan atomik/otomatik çağrılar, puantaj ve rol değişimi çalışma zamanı kabulü açık. |
+| A-29 | P2 | 🟡 | Banka / maaş | [Mali kararlar](A-29-31-URUN-KARARLARI.md): cari eşleşmesi isteğe bağlı; çelişkili tutar/yön satırı reddedilir; kilitli/fişli snapshot silinemez. Banka hesabı oluşturma seçili firmaya ve ortak işlem sınırına bağlandı. | Fatura, manuel fiş, hesap düzenleme/silme, masraf, kolay muhasebe kaydetme ve personel finans yazımlarında güncel servis izni eklendi. Kalan atomik/otomatik çağrılar, puantaj ve rol değişimi çalışma zamanı kabulü açık. |
 | A-30 | P3 | 🟢 | O-8 / O-9 / O-10 / D-2 / D-3 / D-4 | [Refactor kararı](A-29-31-URUN-KARARLARI.md): davranış değiştirmeyen temizlik satış sürümüne alınmıyor; hata düzeltmeleri sürüyor. | P3 kapsam kararı kapandı; refactor yeni planlama işi olarak backlog'da. |
 | A-31 | P3 | 🟢 | D-1 / D-6 | [Ürün kapsamı](A-29-31-URUN-KARARLARI.md): çevrimdışı kullanım yok; Local tek düğüm, S3 ortak yapılandırmalı depolama; yedek ve log/audit sınırı tanımlandı. | Ürün kararı kapandı; saha S3/restore kabulleri A-04/A-10/A-11'de izlenir. |
 
@@ -1172,3 +1172,9 @@ Kullanıcının bu oturumda verdiği test talebiyle son aşama kontrolleri başl
 - 🟢 Docker imajı oluşturulup GHCR'ye gönderildi; aynı digest için Trivy ve SARIF yüklemesi başarılı.
 - 🟢 Windows tam çözüm derlemesi ve CodeQL C# analizi GitHub'da geçti.
 - 🟡 Gerçek müşteri kabulü ayrıca izlenir. A-07 🟡, A-22 🟢; görev renkleri ve satış kararı değişmedi.
+
+### 2026-10-08 — A-29 banka hesabı oluşturma güvenliği
+
+- 🟢 Banka hesabı oluşturma, güncel izin kontrolü, seçili firma zorunluluğu ve Serializable ortak yazım/commit sınırına taşındı. Başka firma kimliğiyle yeni hesap oluşturma reddedilir; boş firma seçili firmaya bağlanır.
+- 🟢 İki SQLite regresyonu geçti: yabancı firma girişinde kayıt yok, seçili firmaya oluşturma başarılı; veritabanından Admin rolü kaldırılınca önceki oturum hesabı oluşturamaz.
+- 🟡 Diğer otomatik mali yazımlar, puantaj ve gerçek müşteri rol değişimi kabulü açık. A-29 🟡 ve genel satış kararı 🔴 kalır.

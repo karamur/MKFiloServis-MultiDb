@@ -1380,3 +1380,9 @@ Dashboard finans verileri SQLite'ta `no such column: b.IslemKimligi` hatası ver
 🟢 Windows tam çözüm derlemesi ve CodeQL C# analizi GitHub'da başarıyla tamamlandı.
 
 🟡 Gerçek müşteri kabulü açık. A-07 🟡, A-22 🟢; satış durumu değişmedi.
+
+### 2026-10-08 — A-29 banka hesabı oluşturma
+
+🟢 Banka hesabı oluşturma seçili firma zorunluluğu, güncel yazma izni ve Serializable işlem/commit sınırına alındı. Başka firma kimliği reddedilir. İki odaklı SQLite regresyonu geçti; yetki iptalinde veya yabancı firmada satır oluşmadı.
+
+🟡 Puantaj ve diğer otomatik mali yazımların atomiklik/yetki sınırı ile gerçek müşteri rol değişimi kabulü açık. A-29 🟡; satış durumu değişmedi.
