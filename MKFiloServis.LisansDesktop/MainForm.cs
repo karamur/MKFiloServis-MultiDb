@@ -487,6 +487,8 @@ public class MainForm : Form
             CREATE INDEX IF NOT EXISTS IX_Licenses_ParentLicenseId ON Licenses(ParentLicenseId);
             CREATE INDEX IF NOT EXISTS IX_Licenses_FirmaMachine ON Licenses(FirmaKodu, MachineId);";
         idxCmd.ExecuteNonQuery();
+        // Yerel satış/yenileme geçmişindeki doğrudan SQL yazımları da aynı audit motorundan geçer.
+        MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(con).GetAwaiter().GetResult();
     }
 
     private static void AddColumnIfMissing(SqliteConnection con, string columnName, string definition)

@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 
 namespace MKFiloServis.Web.Services.Interfaces;
 
@@ -15,7 +15,7 @@ public interface IPersonelMaasIzinService
     Task<int> RecalculateMaaslarAsync(List<int> maasIds);
     Task<MaasOlusturmaSonuc> CreateMaasForPersonellerAsync(int yil, int ay, List<int> soforIds);
     Task<List<PersonelMaas>> GetSoforMaasGecmisiAsync(int soforId);
-    Task MaasOdemeYapAsync(int maasId, DateTime odemeTarihi);
+    Task MaasOdemeYapAsync(int maasId, DateTime odemeTarihi, string? aciklama = null);
     Task TopluMaasOlusturAsync(int yil, int ay);
 
     // �zin ��lemleri

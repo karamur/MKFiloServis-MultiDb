@@ -1,4 +1,4 @@
-﻿@page "/admin/test"
+@page "/admin/test"
 @using Microsoft.AspNetCore.Authorization
 @using MKFiloServis.Shared.Entities
 @using Microsoft.EntityFrameworkCore
@@ -82,11 +82,11 @@
                     <strong>Demo Veriler Ekle</strong>
                 </div>
                 <div class="card-body">
-                    <p class="text-muted small">Veri tabanini sifrla ve demo veriler ekle.</p>
-                    <p class="small text-warning fw-bold">DIKKAT: Tum tablolar temizlenecek ve demo veriler eklenecek.</p>
+                    <p class="text-muted small">Seçili firmanın [TEST] işaretli demo kayıtlarını yenile.</p>
+                    <p class="small text-warning fw-bold">Yalnız işaretli demo kayıtları temizlenir. Kullanıcı, lisans ve audit geçmişi korunur.</p>
                     <button class="btn btn-primary w-100" @onclick="DemoVerilerEkle" disabled="@_calisiyor">
                         @if (_calisiyor) { <span class="spinner-border spinner-border-sm me-1"></span> }
-                        Veri Tabanini Sifirla + Demo Ekle
+                        Demo Kayıtlarını Yenile
                     </button>
                     @if (_demoEkleSonuc != null)
                     {
@@ -108,7 +108,7 @@
                     <strong>Demo Veriler Kaldır</strong>
                 </div>
                 <div class="card-body">
-                    <p class="text-muted small">Sadece [TEST] markerli demo verileri kaldır.</p>
+                    <p class="text-muted small">Aktif firmanın [TEST] işaretli demo kayıtlarını kaldır.</p>
                     <p class="small text-info fw-bold">Not: Sadece ozel olarak isaretlenen test verileri silinir.</p>
                     <button class="btn btn-warning w-100" @onclick="DemoVerilerKaldir" disabled="@_calisiyor">
                         @if (_calisiyor) { <span class="spinner-border spinner-border-sm me-1"></span> }
@@ -132,7 +132,7 @@
                     <strong>Firma Verilerini Temizle</strong>
                 </div>
                 <div class="card-body">
-                    <p class="text-muted small">Seçilen firmanın TÜM verilerini sil (Cariler, Araçlar, Soförler, Faturalar, vb).</p>
+                    <p class="text-muted small">Aktif firmanın tanımlı işlem tablolarını temizle. Ortak muhasebe tabloları kapsama dahil değildir; ilişkili kayıtlar varsa işlem durdurulur.</p>
                     <p class="small text-danger fw-bold">DİKKAT: Bu işlem kalıcıdır ve geri alınamaz!</p>
                     <div class="row g-2">
                         <div class="col-md-6">

@@ -1,4 +1,4 @@
-using MKFiloServis.Web.Components;
+﻿using MKFiloServis.Web.Components;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Helpers;
 using MKFiloServis.Web.Jobs;
@@ -61,6 +61,13 @@ AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", legacyZamanDamgasi)
 
 // Database Provider Secimi (dbsettings.json varsa onu oncele)
 var databaseRuntime = await DatabaseRuntimeResolver.ResolveAsync(builder.Configuration, builder.Environment);
+if (databaseRuntime.Provider is not (DatabaseProvider.PostgreSQL or DatabaseProvider.SQLite))
+{
+    throw new NotSupportedException(
+        $"{databaseRuntime.Provider} bu satış sürümünde desteklenmiyor. Otomatik şema migration'ları ve başlangıç " +
+        "hazırlığı yalnız PostgreSQL ve SQLite için uygulanmıştır. Veritabanı ayarlarında desteklenen sağlayıcılardan " +
+        "birini seçip uygulamayı yeniden başlatın; mevcut veritabanı değiştirilmedi.");
+}
 builder.Services.AddSingleton(databaseRuntime);
 var dbProvider = databaseRuntime.Provider.ToString();
 var defaultConnectionString = databaseRuntime.ConnectionString;
@@ -122,7 +129,7 @@ builder.Services.AddRazorComponents()
 // Audit kayıtları ApplicationDbContext tarafından aynı SaveChanges işleminde yazılır.
 builder.Services.AddSingleton<ICurrentUserAccessor, CurrentUserAccessor>();
 
-// Database - Kanonik migration otoritesi PostgreSQL, desteklenen runtime: PostgreSQL + SQLite + SQL Server + MySQL
+// Database - Kanonik migration otoritesi PostgreSQL; bu satış sürümünde desteklenen runtime: PostgreSQL + SQLite.
 builder.Services.AddPooledDbContextFactory<ApplicationDbContext>((sp, options) =>
 {
     var enableSensitiveDataLogging = builder.Environment.IsDevelopment() &&
@@ -253,7 +260,11 @@ builder.Services.AddSingleton<IConfigureOptions<KeyManagementOptions>>(sp =>
         options.XmlRepository = new FileSystemXmlRepository(dataProtectionKeysRoot, sp.GetRequiredService<ILoggerFactory>());
     }));
 builder.Services.AddSingleton<IPortalProjectCatalogService, PortalProjectCatalogService>();
+builder.Services.AddSingleton<FileCleanupJournal>();
+builder.Services.AddScoped<LegacyFileCleanupService>();
+builder.Services.AddScoped<ISecureFileReferenceChecker, SecureFileReferenceChecker>();
 builder.Services.AddSingleton<ISecureFileService, SecureFileService>();
+builder.Services.AddHostedService<FileCleanupRetryWorker>();
 builder.Services.AddScoped<DosyaMigrasyonService>();
 builder.Services.AddScoped<ArchiveMigrationService>();
 builder.Services.AddScoped<ArchiveBrowserService>();
@@ -300,6 +311,7 @@ builder.Services.AddScoped<IMasrafKalemiService, MasrafKalemiService>();
 builder.Services.AddScoped<IKapasiteService, KapasiteService>();
 builder.Services.AddScoped<IAracMasrafService, AracMasrafService>();
 builder.Services.AddScoped<IServisCalismaService, ServisCalismaService>();
+builder.Services.AddScoped<CurrentPermissionGuard>();
 builder.Services.AddScoped<IFaturaService, FaturaService>();
 builder.Services.AddScoped<IBankaHesapService, BankaHesapService>();
 builder.Services.AddScoped<IBankaKasaHareketService, BankaKasaHareketService>();
@@ -356,7 +368,8 @@ builder.Services.AddScoped<ITekrarlayanOdemeService, TekrarlayanOdemeService>();
 builder.Services.AddScoped<IBackupService, BackupService>();
 builder.Services.AddScoped<IAktiviteLogService, AktiviteLogService>();
 builder.Services.AddScoped<IDatabaseSettingsService, DatabaseSettingsService>();
-builder.Services.AddScoped<IMuhasebeService, MuhasebeService>();
+builder.Services.AddScoped<MuhasebeService>();
+builder.Services.AddScoped<IMuhasebeService>(services => services.GetRequiredService<MuhasebeService>());
 builder.Services.AddScoped<ISatisService, SatisService>();
 builder.Services.AddSingleton<GuzergahDegisiklikUyariService>();
 builder.Services.AddScoped<FirmaTransferService>();
@@ -439,7 +452,6 @@ builder.Services.AddScoped<ISemanticSearchService, SemanticSearchService>(); // 
 builder.Services.AddScoped<IBildirimService, BildirimService>(); // Bildirim Sistemi Servisi
 builder.Services.AddScoped<ISmsService, SmsService>(); // SMS Gönderim Servisi
 builder.Services.AddScoped<IWebhookService, WebhookService>(); // Webhook Sistemi Servisi
-builder.Services.AddScoped<TestDataSeeder>(); // Test/Demo Veri Oluşturma Servisi
 builder.Services.AddScoped<DemoDataService>(); // Demo Veri Yönetim Servisi (Reset/Seed/Remove)
 builder.Services.AddScoped<IAuditLogService, AuditLogService>(); // Audit Log (Tüm İşlem Takibi) Servisi
 builder.Services.AddHttpClient("SMS"); // SMS provider'lar için HttpClient
@@ -757,6 +769,11 @@ static async Task RunScopedSafeAsync(WebApplication app, string taskName, Func<I
     {
         logger.LogInformation("Startup gorevi basliyor: {TaskName}", taskName);
         await action(scope.ServiceProvider);
+        if (taskName != "MasterDatabase")
+        {
+            var auditContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(auditContext.Database.GetDbConnection());
+        }
         logger.LogInformation("Startup gorevi tamamlandi: {TaskName}", taskName);
     }
     catch (Exception ex)
@@ -777,6 +794,12 @@ await RunScopedSafeAsync(app, "MasterDatabase", async services =>
     if (!runtime.IsPostgreSql) return;
     var configuration = services.GetRequiredService<IConfiguration>();
     await DbInitializer.EnsureMasterDatabaseAsync(configuration);
+});
+
+await RunScopedSafeAsync(app, "WriteAuditBootstrap", async services =>
+{
+    var context = services.GetRequiredService<ApplicationDbContext>();
+    await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(context.Database.GetDbConnection());
 });
 
 // Otomatik schema sync: EF modelindeki TÜM eksik kolonları tespit edip ekler
@@ -916,8 +939,8 @@ await RunScopedSafeAsync(app, "MarkaModelSeed", async services =>
 
 await RunScopedSafeAsync(app, "MuhasebeHesapPlaniSeed", async services =>
 {
-    var muhasebeService = services.GetRequiredService<IMuhasebeService>();
-    await muhasebeService.SeedVarsayilanHesapPlaniAsync();
+    var muhasebeService = services.GetRequiredService<MuhasebeService>();
+    await muhasebeService.InitializeDefaultAccountPlanAsync();
 }, required: false);
 
 await RunScopedSafeAsync(app, "PiyasaKaynakSeed", async services =>
@@ -1355,6 +1378,27 @@ app.UseMiddleware<MKFiloServis.Web.Middleware.IpGuvenlikMiddleware>();
 
 // Global exception logging — tüm yakalanmayan hataları AppErrorLog'a kaydeder
 app.UseMiddleware<MKFiloServis.Web.Middleware.ErrorLoggingMiddleware>();
+
+// E-Fatura/Luca çıktıları artık dış depoda şifreli tutuluyor. Eski webroot dosyaları
+// firma bazlı migrasyon tamamlanana kadar geriye dönük sunucu okuması için diskte kalır,
+// fakat statik endpoint'lerden anonim olarak yayımlanamaz.
+app.Use(async (context, next) =>
+{
+    var requestPath = context.Request.Path;
+    var extension = Path.GetExtension(requestPath.Value);
+    var invoiceDocument = (requestPath.StartsWithSegments("/efatura") ||
+                           requestPath.StartsWithSegments("/belgeler/efatura")) &&
+                          (string.Equals(extension, ".xml", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(extension, ".pdf", StringComparison.OrdinalIgnoreCase));
+    if (invoiceDocument &&
+        (HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method)))
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+
+    await next();
+});
 
 // Authentication & Authorization - API için
 app.UseAuthentication();

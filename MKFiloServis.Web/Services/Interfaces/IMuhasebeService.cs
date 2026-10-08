@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Models;
 
@@ -38,9 +38,9 @@ public interface IMuhasebeService
     Task<MuhasebeFis> CreateTediyeFisiAsync(BankaKasaHareket hareket, int? faturaId = null);
 
     // Mahsup Fişi Oluşturma
-    Task<MuhasebeFis?> CreateHesapTransferFisiAsync(BankaKasaHareket cikisHareket, BankaKasaHareket girisHareket, BankaHesap kaynakHesap, BankaHesap hedefHesap);
-    Task<MuhasebeFis?> CreateCariMahsupFisiAsync(BankaKasaHareket hareket, Cari cari, BankaHesap hesap, bool tahsilatMi);
-    Task IptalFisiOlusturAsync(Guid mahsupGrupId);
+    Task<MuhasebeFis?> CreateHesapTransferFisiAsync(BankaKasaHareket cikisHareket, BankaKasaHareket girisHareket, BankaHesap kaynakHesap, BankaHesap hedefHesap, ApplicationDbContext? existingContext = null);
+    Task<MuhasebeFis?> CreateCariMahsupFisiAsync(BankaKasaHareket hareket, Cari cari, BankaHesap hesap, bool tahsilatMi, ApplicationDbContext? existingContext = null);
+    Task IptalFisiOlusturAsync(Guid mahsupGrupId, ApplicationDbContext context);
 
     // Donemler
     Task<List<MuhasebeDonem>> GetDonemlerAsync(int yil);

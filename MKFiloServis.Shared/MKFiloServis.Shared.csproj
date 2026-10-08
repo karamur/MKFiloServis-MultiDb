@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -14,4 +14,11 @@
     <Folder Include="Tests\Services\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="setup\output\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Auditing/postgres-write-audit.sql" LogicalName="MKFiloServis.WriteAudit.sql" />
+  </ItemGroup>
 </Project>

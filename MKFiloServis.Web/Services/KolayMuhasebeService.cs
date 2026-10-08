@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Models;
 using Microsoft.EntityFrameworkCore;
@@ -8,6 +8,7 @@ namespace MKFiloServis.Web.Services;
 
 public class KolayMuhasebeService : IKolayMuhasebeService
 {
+    private readonly CurrentPermissionGuard _permissionGuard;
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly IMuhasebeService _muhasebeService;
     private readonly ICariService _cariService;
@@ -17,8 +18,10 @@ public class KolayMuhasebeService : IKolayMuhasebeService
         IDbContextFactory<ApplicationDbContext> contextFactory,
         IMuhasebeService muhasebeService,
         ICariService cariService,
-        ILogger<KolayMuhasebeService> logger)
+        ILogger<KolayMuhasebeService> logger,
+        CurrentPermissionGuard permissionGuard)
     {
+        _permissionGuard = permissionGuard;
         _contextFactory = contextFactory;
         _muhasebeService = muhasebeService;
         _cariService = cariService;
@@ -611,6 +614,7 @@ public class KolayMuhasebeService : IKolayMuhasebeService
 
     public async Task<KolayMuhasebeSonuc> KaydetAsync(KolayMuhasebeGiris giris, MuhasebeOnizleme? manuelOnizleme = null)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.MuhasebeFisleriYaz);
         await using var context = await _contextFactory.CreateDbContextAsync();
         var sonuc = new KolayMuhasebeSonuc();
 
@@ -1368,10 +1372,10 @@ public class KolayMuhasebeService : IKolayMuhasebeService
 
     public async Task<Cari> HizliCariOlusturAsync(string unvan, CariTipi tip)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.CarilerYaz);
         await using var context = await _contextFactory.CreateDbContextAsync();
         // Önce aynı unvan ile mevcut cari var mı kontrol et
         var mevcutCari = await context.Cariler
-            .IgnoreQueryFilters()
             .OrderBy(c => c.Id)
             .FirstOrDefaultAsync(c => c.Unvan == unvan && !c.IsDeleted);
 
@@ -1484,6 +1488,7 @@ public class KolayMuhasebeService : IKolayMuhasebeService
 
     public async Task<Cari> HizliCariOlusturDetayliAsync(HizliCariModel model)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.CarilerYaz);
         await using var context = await _contextFactory.CreateDbContextAsync();
         var cari = new Cari
         {
@@ -1746,6 +1751,7 @@ public class KolayMuhasebeService : IKolayMuhasebeService
 
     public async Task<StokBasit> HizliStokOlusturAsync(string stokAdi, string birim, decimal kdvOrani)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.StokKartlariYaz);
         await using var context = await _contextFactory.CreateDbContextAsync();
 
         // Mevcut stok var mı kontrol et

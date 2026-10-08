@@ -16,6 +16,7 @@ public class DestekTalebiService : IDestekTalebiService
     private readonly ILogger<DestekTalebiService> _logger;
     private readonly IEmailService _emailService;
     private readonly NumaraSerisiService _numaraSerisi;
+    private readonly ISecureFileService _secureFileService;
     private readonly string _uploadPath;
 
     public DestekTalebiService(
@@ -23,12 +24,14 @@ public class DestekTalebiService : IDestekTalebiService
         ILogger<DestekTalebiService> logger,
         IWebHostEnvironment env,
         IEmailService emailService,
-        NumaraSerisiService numaraSerisi)
+        NumaraSerisiService numaraSerisi,
+        ISecureFileService secureFileService)
     {
         _contextFactory = contextFactory;
         _logger = logger;
         _emailService = emailService;
         _numaraSerisi = numaraSerisi;
+        _secureFileService = secureFileService;
         _uploadPath = Path.Combine(env.WebRootPath, "uploads", "destek");
         
         // Upload klasörünü oluştur
@@ -544,19 +547,11 @@ public class DestekTalebiService : IDestekTalebiService
         if (talep == null)
             throw new InvalidOperationException("Talep bulunamadı");
 
-        // Dosyayı kaydet
-        var dosyaAdi = $"{Guid.NewGuid()}_{ek.OrijinalDosyaAdi}";
-        var talepKlasor = Path.Combine(_uploadPath, talepId.ToString());
-        
-        if (!Directory.Exists(talepKlasor))
-            Directory.CreateDirectory(talepKlasor);
-        
-        var dosyaYolu = Path.Combine(talepKlasor, dosyaAdi);
-        
-        using (var fs = new FileStream(dosyaYolu, FileMode.Create))
-        {
-            await fileStream.CopyToAsync(fs);
-        }
+        using var content = new MemoryStream();
+        await fileStream.CopyToAsync(content);
+        var dosyaAdi = $"{Guid.NewGuid()}_{Path.GetFileName(ek.OrijinalDosyaAdi)}";
+        var dosyaYolu = await _secureFileService.SaveEncryptedAsync(
+            $"destek/{talepId}", dosyaAdi, content.ToArray());
         
         ek.DestekTalebiId = talepId;
         ek.DosyaAdi = dosyaAdi;
@@ -568,7 +563,15 @@ public class DestekTalebiService : IDestekTalebiService
         talep.SonAktiviteTarihi = DateTime.UtcNow;
         talep.UpdatedAt = DateTime.UtcNow;
         
-        await context.SaveChangesAsync();
+        try
+        {
+            await context.SaveChangesAsync();
+        }
+        catch (Exception saveException)
+        {
+            await CompensateAttachmentSaveAsync(dosyaYolu, saveException);
+            throw;
+        }
         
         await LogAktiviteInternalAsync(context, talepId, AktiviteTuru.DosyaEklendi, 
             $"Dosya eklendi: {ek.OrijinalDosyaAdi}", ek.YukleyenKullaniciId);
@@ -584,19 +587,11 @@ public class DestekTalebiService : IDestekTalebiService
         if (yanit == null)
             throw new InvalidOperationException("Yanıt bulunamadı");
 
-        // Dosyayı kaydet
-        var dosyaAdi = $"{Guid.NewGuid()}_{ek.OrijinalDosyaAdi}";
-        var talepKlasor = Path.Combine(_uploadPath, yanit.DestekTalebiId.ToString());
-        
-        if (!Directory.Exists(talepKlasor))
-            Directory.CreateDirectory(talepKlasor);
-        
-        var dosyaYolu = Path.Combine(talepKlasor, dosyaAdi);
-        
-        using (var fs = new FileStream(dosyaYolu, FileMode.Create))
-        {
-            await fileStream.CopyToAsync(fs);
-        }
+        using var content = new MemoryStream();
+        await fileStream.CopyToAsync(content);
+        var dosyaAdi = $"{Guid.NewGuid()}_{Path.GetFileName(ek.OrijinalDosyaAdi)}";
+        var dosyaYolu = await _secureFileService.SaveEncryptedAsync(
+            $"destek/{yanit.DestekTalebiId}", dosyaAdi, content.ToArray());
         
         ek.YanitId = yanitId;
         ek.DestekTalebiId = yanit.DestekTalebiId;
@@ -605,7 +600,15 @@ public class DestekTalebiService : IDestekTalebiService
         ek.CreatedAt = DateTime.UtcNow;
         
         context.DestekTalebiEkleri.Add(ek);
-        await context.SaveChangesAsync();
+        try
+        {
+            await context.SaveChangesAsync();
+        }
+        catch (Exception saveException)
+        {
+            await CompensateAttachmentSaveAsync(dosyaYolu, saveException);
+            throw;
+        }
         
         return ek;
     }
@@ -632,10 +635,19 @@ public class DestekTalebiService : IDestekTalebiService
     public async Task<Stream?> GetEkDosyaStreamAsync(int ekId)
     {
         var ek = await GetEkByIdAsync(ekId);
-        if (ek == null || !File.Exists(ek.DosyaYolu))
+        if (ek == null || string.IsNullOrWhiteSpace(ek.DosyaYolu))
             return null;
 
-        return new FileStream(ek.DosyaYolu, FileMode.Open, FileAccess.Read);
+        if (Path.IsPathRooted(ek.DosyaYolu))
+        {
+            var legacyPath = ResolveLegacyAttachmentPath(ek.DosyaYolu);
+            return File.Exists(legacyPath)
+                ? new FileStream(legacyPath, FileMode.Open, FileAccess.Read)
+                : null;
+        }
+
+        var content = await _secureFileService.ReadDecryptedAsync(ek.DosyaYolu);
+        return content == null ? null : new MemoryStream(content, writable: false);
     }
 
     public async Task<bool> DeleteEkAsync(int ekId)
@@ -645,17 +657,42 @@ public class DestekTalebiService : IDestekTalebiService
         var ek = await context.DestekTalebiEkleri.FindAsync(ekId);
         if (ek == null) return false;
 
-        // Dosyayı sil
-        if (File.Exists(ek.DosyaYolu))
-        {
-            try { File.Delete(ek.DosyaYolu); } catch { }
-        }
-
         ek.IsDeleted = true;
         ek.UpdatedAt = DateTime.UtcNow;
         await context.SaveChangesAsync();
+
+        // Soft-delete geri alınabilir. Hem eski düz dosya hem şifreli dosya korunur.
+        _logger.LogInformation("Destek eki pasifleştirildi; dosya geri alma için korundu. EkId={EkId}", ekId);
         
         return true;
+    }
+
+    private async Task CompensateAttachmentSaveAsync(string path, Exception saveException)
+    {
+        try
+        {
+            await using var verify = await _contextFactory.CreateDbContextAsync();
+            var isReferenced = await verify.DestekTalebiEkleri.AsNoTracking()
+                .AnyAsync(x => x.DosyaYolu == path);
+            if (!isReferenced)
+                await _secureFileService.DeleteAsync(path);
+        }
+        catch (Exception compensationException)
+        {
+            throw new AggregateException(
+                "Destek eki DB kaydı başarısız veya belirsiz; yeni dosyanın DB başvurusu doğrulanamadı ve dosya güvenlik için korunuyor.",
+                saveException, compensationException);
+        }
+    }
+
+    private string ResolveLegacyAttachmentPath(string path)
+    {
+        var uploadRoot = Path.GetFullPath(_uploadPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        var fullPath = Path.GetFullPath(path);
+        if (!fullPath.StartsWith(uploadRoot, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Destek eki yolu izin verilen yükleme dizininin dışında.");
+        return fullPath;
     }
 
     #endregion

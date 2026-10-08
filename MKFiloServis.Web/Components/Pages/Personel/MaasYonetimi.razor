@@ -1,4 +1,4 @@
-@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:personel")]
+﻿@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:personel")]
 @page "/personel/maas"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
@@ -464,7 +464,7 @@
                                                                         </button>
                                                                         @if (CanBorcKaydiKaliciSil)
                                                                         {
-                                                                            <button class="btn btn-sm btn-outline-danger py-0 px-1" @onclick="() => DurumBorcKaydiniSil(borc)" title="Kalıcı Sil">
+                                                                            <button class="btn btn-sm btn-outline-danger py-0 px-1" @onclick="() => DurumBorcKaydiniSil(borc)" title="Borç Kaydını Kaldır">
                                                                                 <i class="bi bi-trash"></i>
                                                                             </button>
                                                                         }
@@ -1394,6 +1394,7 @@
 
     private async Task TopluMaasOlustur()
     {
+        if (!await GuncelYetkiGerekliAsync(Yetkiler.MaasYaz)) return;
         var tumAktifPersonelIds = soforler.Where(s => s.Aktif && !s.IsDeleted).Select(s => s.Id).ToList();
         var sonuc = await PersonelService.CreateMaasForPersonellerAsync(maasYil, maasAy, tumAktifPersonelIds);
         await YenileMaasData();
@@ -1409,6 +1410,7 @@
 
     private async Task SeciliPersonellerIcinMaasOlustur()
     {
+        if (!await GuncelYetkiGerekliAsync(Yetkiler.MaasYaz)) return;
         if (!seciliOlusturmaPersonelIds.Any())
         {
             BildirimGoster("Önce maaş oluşturulacak personelleri işaretleyin.", false);
@@ -1430,6 +1432,7 @@
 
     private async Task SeciliMaaslariSil()
     {
+        if (!await GuncelYetkiGerekliAsync(Yetkiler.MaasSil)) return;
         if (!seciliMaasIds.Any())
         {
             BildirimGoster("Önce silinecek maaş kayıtlarını işaretleyin.", false);
@@ -1448,6 +1451,7 @@
 
     private async Task SeciliMaaslariYenidenHesapla()
     {
+        if (!await GuncelYetkiGerekliAsync(Yetkiler.MaasDuzenle)) return;
         if (!seciliMaasIds.Any())
         {
             BildirimGoster("Önce yeniden hesaplanacak maaş kayıtlarını işaretleyin.", false);
@@ -1521,6 +1525,7 @@
     {
         if (duzenlenenMaas != null)
         {
+            if (!await GuncelYetkiGerekliAsync(Yetkiler.MaasDuzenle)) return;
             try
             {
                 await PersonelService.UpdateMaasAsync(duzenlenenMaas);
@@ -1557,6 +1562,7 @@
     private async Task AcikAvanslariMaasaMahsupEt()
     {
         if (duzenlenenMaas == null || isMahsupUygulaniyor) return;
+        if (!await GuncelYetkiGerekliAsync(Yetkiler.MaasDuzenle)) return;
         isMahsupUygulaniyor = true;
         try
         {
@@ -1567,7 +1573,7 @@
             duzenlenenMaas = await PersonelService.GetMaasByIdAsync(duzenlenenMaas.Id);
             await AcikAvanslariYukleAsync();
             await YenileMaasData();
-            BildirimGoster($"Açık avanslardan {mahsupTutar:N2} ₺ maaşa mahsup edildi.", true);
+            BildirimGoster($"Maaşa kayıtlı otomatik avans mahsubu: {mahsupTutar:N2} ₺. Tekrar çağrıda ek kesinti yapılmaz.", true);
         }
         catch (Exception ex)
         {
@@ -1599,32 +1605,27 @@
     private async Task OdemeOnayla()
     {
         if (secilenOdemeMaas == null) return;
+        if (!await GuncelYetkiGerekliAsync(Yetkiler.MaasDuzenle)) return;
         isOdemeYapiliyor = true;
         try
         {
-            await PersonelService.MaasOdemeYapAsync(secilenOdemeMaas.MaasId, odemeTarihi);
-            var maas = await PersonelService.GetMaasByIdAsync(secilenOdemeMaas.MaasId);
-            if (maas != null)
+            var yontemAdi = odemeYontemi switch
             {
-                var yontemAdi = odemeYontemi switch
-                {
-                    "Elden" => "Elden Ödeme",
-                    "Banka" => "Banka Transferi",
-                    "Mahsup" => "Mahsup",
-                    "KrediKarti" => "Kredi Kartı",
-                    _ => odemeYontemi
-                };
-                var aciklamaParçalar = new List<string> { yontemAdi };
-                if ((odemeYontemi == "Banka" || odemeYontemi == "KrediKarti") && secilenOdemeBankaHesapId.HasValue)
-                {
-                    var hesap = bankaHesapListesi.FirstOrDefault(h => h.Id == secilenOdemeBankaHesapId.Value);
-                    if (hesap != null) aciklamaParçalar.Add($"{hesap.HesapAdi}");
-                }
-                if (!string.IsNullOrWhiteSpace(odemeAciklama))
-                    aciklamaParçalar.Add(odemeAciklama);
-                maas.OdemeAciklama = string.Join(" - ", aciklamaParçalar);
-                await PersonelService.UpdateMaasAsync(maas);
+                "Elden" => "Elden Ödeme",
+                "Banka" => "Banka Transferi",
+                "Mahsup" => "Mahsup",
+                "KrediKarti" => "Kredi Kartı",
+                _ => odemeYontemi
+            };
+            var aciklamaParçalar = new List<string> { yontemAdi };
+            if ((odemeYontemi == "Banka" || odemeYontemi == "KrediKarti") && secilenOdemeBankaHesapId.HasValue)
+            {
+                var hesap = bankaHesapListesi.FirstOrDefault(h => h.Id == secilenOdemeBankaHesapId.Value);
+                if (hesap != null) aciklamaParçalar.Add($"{hesap.HesapAdi}");
             }
+            if (!string.IsNullOrWhiteSpace(odemeAciklama))
+                aciklamaParçalar.Add(odemeAciklama);
+            await PersonelService.MaasOdemeYapAsync(secilenOdemeMaas.MaasId, odemeTarihi, string.Join(" - ", aciklamaParçalar));
             OdemeModalKapat();
             await YenileMaasData();
             if (durSecilenPersonelId > 0) await DurumPersonelDetayYukle();
@@ -1643,6 +1644,7 @@
 
     private async Task OdemeIptalEt(int maasId)
     {
+        if (!await GuncelYetkiGerekliAsync(Yetkiler.MaasDuzenle)) return;
         try
         {
             var maas = await PersonelService.GetMaasByIdAsync(maasId);
@@ -1676,6 +1678,7 @@
     private async Task MaasSilOnayla()
     {
         if (silinecekMaas == null) return;
+        if (!await GuncelYetkiGerekliAsync(Yetkiler.MaasSil)) return;
         isSiliniyor = true;
         try
         {
@@ -1732,6 +1735,7 @@
     private async Task YeniAvansKaydet()
     {
         if (yeniAvans == null || yeniAvans.Tutar <= 0) return;
+        if (!await GuncelYetkiGerekliAsync(Yetkiler.MaasYaz)) return;
         isYeniAvansKaydediliyor = true;
         try
         {
@@ -1755,6 +1759,7 @@
     private async Task AvansKaydet()
     {
         if (duzenlenenAvans == null) return;
+        if (!await GuncelYetkiGerekliAsync(Yetkiler.MaasDuzenle)) return;
         isAvansKaydediliyor = true;
         try
         {
@@ -1776,6 +1781,7 @@
 
     private async Task AvansSil(PersonelAvans avans)
     {
+        if (!await GuncelYetkiGerekliAsync(Yetkiler.MaasSil)) return;
         var onay = await JS.InvokeAsync<bool>("confirm",
             $"{avans.AvansTarihi:dd.MM.yyyy} tarihli {avans.Tutar:N2} ₺ avans kaydı kalıcı olarak silinecek. Devam edilsin mi?");
         if (!onay) return;
@@ -1815,6 +1821,7 @@
     private async Task BorcKaydet()
     {
         if (duzenlenenBorc == null) return;
+        if (!await GuncelYetkiGerekliAsync(Yetkiler.MaasDuzenle)) return;
         isBorcKaydediliyor = true;
         try
         {
@@ -1854,6 +1861,7 @@
     private async Task BorcOdemeYap()
     {
         if (borcOdemeHedef == null || borcOdemeTutari <= 0) return;
+        if (!await GuncelYetkiGerekliAsync(Yetkiler.MaasDuzenle)) return;
         isBorcOdemeYapiliyor = true;
         try
         {
@@ -2443,6 +2451,12 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
                         if (!YuklemeGuncelMi()) return;
                         if (!varMi)
                         {
+                            if (!await GuncelYetkisiVarMiAsync(Yetkiler.MaasYaz))
+                            {
+                                snapshotUyari = "Maaş dönem kaydı oluşturulmadı; güncel maaş yazma yetkiniz yok.";
+                                return;
+                            }
+
                             var snapshotData = snapshotPersoneller.Select(s => (
                                 PersonelId: s.PersonelId,
                                 AdSoyad: s.AdSoyad,
@@ -2604,14 +2618,13 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
 
     private async Task DurumBorcKaydiniSil(PersonelBorc borc)
     {
-        if (!CanBorcKaydiKaliciSil)
+        if (!await GuncelYetkiGerekliAsync(Yetkiler.PersonelBorcSil))
         {
-            BildirimGoster("Borç kaydı silme yetkiniz yok.", false);
             return;
         }
 
         var onay = await JS.InvokeAsync<bool>("confirm",
-            $"{borc.BorcTarihi:dd.MM.yyyy} tarihli borç kaydı kalıcı olarak silinecek. Bağlı ödeme hareketleri de silinecek. Devam edilsin mi?");
+            $"{borc.BorcTarihi:dd.MM.yyyy} tarihli borç kaydı kaldırılacak. Ödeme geçmişi bulunan kayıtlar kaldırılamaz; işlem kimliği ve muhasebe geçmişi korunur. Devam edilsin mi?");
         if (!onay)
             return;
 
@@ -2622,7 +2635,7 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
             if (durSecilenPersonelId > 0)
                 await DurumPersonelDetayYukle();
 
-            BildirimGoster("Borç kaydı ve bağlı hareketleri kalıcı olarak silindi.", true);
+            BildirimGoster("Borç kaydı kaldırıldı.", true);
         }
         catch (Exception ex)
         {
@@ -2719,6 +2732,29 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
 
     private static decimal GetGorunenOdenecek(MaasDetay maas)
         => GetGercekMaas(maas) - GetBankayaYatan(maas) + GetGorunenEklemeler(maas);
+
+    private async Task<bool> GuncelYetkiGerekliAsync(string yetkiKodu)
+    {
+        if (await GuncelYetkisiVarMiAsync(yetkiKodu))
+            return true;
+
+        BildirimGoster("Bu işlem için güncel yetkiniz yok veya oturumunuz artık etkin değil.", false);
+        return false;
+    }
+
+    private async Task<bool> GuncelYetkisiVarMiAsync(string yetkiKodu)
+    {
+        try
+        {
+            var kullanici = await KullaniciService.GetAktifKullaniciAsync();
+            return kullanici is not null && await KullaniciService.YetkiVarMiAsync(kullanici.Id, yetkiKodu);
+        }
+        catch
+        {
+            // Yetki kaynağına erişilemiyorsa hassas yazımı reddet.
+            return false;
+        }
+    }
 
     private void BildirimGoster(string mesaj, bool basarili)
     {

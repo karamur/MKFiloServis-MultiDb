@@ -8,10 +8,41 @@ namespace MKFiloServis.Web.Services;
 public class PersonelMaasIzinService : IPersonelMaasIzinService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+    private readonly CurrentPermissionGuard _permissionGuard;
 
-    public PersonelMaasIzinService(IDbContextFactory<ApplicationDbContext> contextFactory)
+    public PersonelMaasIzinService(IDbContextFactory<ApplicationDbContext> contextFactory, CurrentPermissionGuard permissionGuard)
     {
         _contextFactory = contextFactory;
+        _permissionGuard = permissionGuard;
+    }
+
+    private async Task<T> WritePayrollAsync<T>(string permission, Func<ApplicationDbContext, Task<T>> write)
+    {
+        await using var strategyContext = await _contextFactory.CreateDbContextAsync();
+        var strategy = strategyContext.Database.CreateExecutionStrategy();
+        var commitStarted = false;
+        return await strategy.ExecuteAsync(async () =>
+        {
+            // Commit sonucu belirsizse aynı mali yazımı otomatik tekrarlama.
+            if (commitStarted)
+                throw new InvalidOperationException("Maaş işleminin commit sonucu belirsiz. Listeyi yenileyip kaydı kontrol edin.");
+            await _permissionGuard.RequireAnyAsync(permission);
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            await using var transaction = await context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            var result = await write(context);
+            await context.SaveChangesAsync();
+            commitStarted = true;
+            await transaction.CommitAsync();
+            return result;
+        });
+    }
+
+    private static async Task EnsurePayrollCanBeRemovedAsync(ApplicationDbContext context, PersonelMaas maas)
+    {
+        if (maas.OdemeDurum == MaasOdemeDurum.Odendi || maas.OdemeDurum == MaasOdemeDurum.KismiOdendi || maas.OdemeTarihi.HasValue)
+            throw new InvalidOperationException("Ödeme kaydı olan maaş kaldırılamaz; önce ödeme iptal akışını kullanın.");
+        if (await context.PersonelAvansMahsuplar.IgnoreQueryFilters().AnyAsync(m => m.MaasId == maas.Id))
+            throw new InvalidOperationException("Mahsup geçmişi bulunan maaş kaldırılamaz; mahsup ve tekrar koruması korunmalıdır.");
     }
 
     #region Maa� ��lemleri
@@ -44,122 +75,179 @@ public class PersonelMaasIzinService : IPersonelMaasIzinService
 
     public async Task<PersonelMaas> CreateMaasAsync(PersonelMaas maas)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        context.PersonelMaaslari.Add(maas);
-        await context.SaveChangesAsync();
-        return maas;
+        if (maas.Id != 0 || maas.IsDeleted || maas.OdemeDurum != MaasOdemeDurum.Bekliyor || maas.OdemeTarihi.HasValue)
+            throw new InvalidOperationException("Yeni maaş kaydı ödenmemiş ve aktif olmalıdır.");
+        var result = await WritePayrollAsync(Yetkiler.MaasYaz, async context =>
+        {
+            var sofor = await context.Soforler.FirstOrDefaultAsync(s => s.Id == maas.SoforId)
+                ?? throw new InvalidOperationException("Personel aktif firma kapsamında bulunamadı.");
+            if (maas.FirmaId.HasValue && maas.FirmaId != sofor.FirmaId)
+                throw new InvalidOperationException("Maaş ve personel firması uyuşmuyor.");
+            if (maas.Ay < 1 || maas.Ay > 12 || maas.Yil < 1 || maas.Yil > 9999)
+                throw new InvalidOperationException("Maaş dönemi geçersiz.");
+            if (await context.PersonelMaaslari.AnyAsync(m => m.SoforId == maas.SoforId && m.Yil == maas.Yil && m.Ay == maas.Ay))
+                throw new InvalidOperationException("Personelin bu dönemde maaş kaydı zaten var.");
+            // Her yeniden denemede yeni entity: başarısız INSERT kimliği tekrar kullanılmaz.
+            var entity = new PersonelMaas();
+            context.Entry(entity).CurrentValues.SetValues(maas);
+            entity.FirmaId = sofor.FirmaId;
+            entity.CreatedAt = DateTime.UtcNow;
+            entity.UpdatedAt = null;
+            entity.DeletedAt = null;
+            entity.DeletedBy = null;
+            context.PersonelMaaslari.Add(entity);
+            return entity;
+        });
+        return result;
     }
 
     public async Task<PersonelMaas> UpdateMaasAsync(PersonelMaas maas)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var existing = await context.PersonelMaaslari.FindAsync(maas.Id);
-        if (existing == null)
-            throw new InvalidOperationException($"PersonelMaas bulunamadı: {maas.Id}");
+        return await WritePayrollAsync(Yetkiler.MaasDuzenle, async context =>
+        {
+            var existing = await context.PersonelMaaslari.FirstOrDefaultAsync(m => m.Id == maas.Id)
+                ?? throw new InvalidOperationException($"PersonelMaas aktif firma kapsamında bulunamadı: {maas.Id}");
+            if (existing.UpdatedAt != maas.UpdatedAt)
+                throw new InvalidOperationException("Maaş başka bir işlemde güncellendi. Listeyi yenileyip tekrar düzenleyin.");
+            if (maas.IsDeleted || existing.FirmaId != maas.FirmaId || existing.SoforId != maas.SoforId || existing.Yil != maas.Yil || existing.Ay != maas.Ay)
+                throw new InvalidOperationException("Maaşın firma, personel, dönem veya silinme bilgisi düzenlenemez.");
+            if (!Enum.IsDefined(typeof(MaasOdemeDurum), maas.OdemeDurum) ||
+                (maas.OdemeDurum == MaasOdemeDurum.Odendi && !maas.OdemeTarihi.HasValue) ||
+                (maas.OdemeDurum == MaasOdemeDurum.Bekliyor && maas.OdemeTarihi.HasValue))
+                throw new InvalidOperationException("Ödeme durumu ve tarihi uyuşmuyor.");
+            if (maas.OdemeDurum != existing.OdemeDurum &&
+                !(existing.OdemeDurum == MaasOdemeDurum.Odendi && maas.OdemeDurum == MaasOdemeDurum.Bekliyor && !maas.OdemeTarihi.HasValue))
+                throw new InvalidOperationException("Ödeme durumunu maaş düzenleme üzerinden değiştiremezsiniz; ödeme akışını kullanın.");
+            if (maas.OdenecekTutar < 0)
+                throw new InvalidOperationException("Maaş kesintileri ödeme tutarını aşamaz.");
+            if (existing.Avans != maas.Avans && await context.PersonelAvansMahsuplar.IgnoreQueryFilters().AnyAsync(m => m.MaasId == existing.Id))
+                throw new InvalidOperationException("Mahsup geçmişi olan maaşın avans kesintisi doğrudan değiştirilemez; mahsup akışını kullanın.");
 
-        // 🔴 Fetch + map + SaveChanges — Attach/Modified KULLANMA
-        context.Entry(existing).CurrentValues.SetValues(maas);
-        existing.UpdatedAt = DateTime.UtcNow;
-        // Navigation property'leri etkileme
-        context.Entry(existing).Reference(x => x.Sofor).IsModified = false;
-        await context.SaveChangesAsync();
-        return existing;
+            var entry = context.Entry(existing);
+            var incoming = context.Entry(maas).CurrentValues;
+            var protectedFields = new[] { "Id", "FirmaId", "SoforId", "Yil", "Ay", "CreatedAt", "UpdatedAt", "IsDeleted", "DeletedAt", "DeletedBy" };
+            var paymentFields = new[] { "OdemeDurum", "OdemeTarihi", "OdemeAciklama", "Notlar" };
+            var paid = existing.OdemeDurum == MaasOdemeDurum.Odendi || existing.OdemeDurum == MaasOdemeDurum.KismiOdendi;
+            foreach (var property in entry.Properties)
+            {
+                var name = property.Metadata.Name;
+                if (protectedFields.Contains(name)) continue;
+                if (paid && !paymentFields.Contains(name) && !Equals(property.CurrentValue, incoming[name]))
+                    throw new InvalidOperationException("Ödenmiş maaşın hesap ve kesinti alanları değiştirilemez.");
+            }
+            foreach (var property in entry.Properties)
+                if (!protectedFields.Contains(property.Metadata.Name))
+                    property.CurrentValue = incoming[property.Metadata.Name];
+            existing.UpdatedAt = DateTime.UtcNow;
+            return existing;
+        });
     }
 
     public async Task DeleteMaasAsync(int id)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var maas = await context.PersonelMaaslari.FindAsync(id);
-        if (maas != null)
-        {
-            context.PersonelMaaslari.Remove(maas);
-            await context.SaveChangesAsync();
-        }
+        await DeleteMaaslarAsync(new List<int> { id });
     }
 
     public async Task<int> DeleteMaaslarAsync(List<int> maasIds)
     {
-        if (maasIds == null || !maasIds.Any()) return 0;
-
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var kayitlar = await context.PersonelMaaslari
-            .Where(m => maasIds.Contains(m.Id))
-            .ToListAsync();
-
-        if (!kayitlar.Any()) return 0;
-
-        context.PersonelMaaslari.RemoveRange(kayitlar);
-        await context.SaveChangesAsync();
-        return kayitlar.Count;
+        return await WritePayrollAsync(Yetkiler.MaasSil, async context =>
+        {
+            if (maasIds == null || maasIds.Count == 0) return 0;
+            var ids = maasIds.Distinct().ToList();
+            var records = await context.PersonelMaaslari.Where(m => ids.Contains(m.Id)).ToListAsync();
+            if (records.Count != ids.Count)
+                throw new InvalidOperationException("Seçilen maaşların tamamı aktif firma kapsamında bulunamadı.");
+            foreach (var maas in records) await EnsurePayrollCanBeRemovedAsync(context, maas);
+            foreach (var maas in records)
+            {
+                maas.IsDeleted = true;
+                maas.DeletedAt = DateTime.UtcNow;
+                maas.UpdatedAt = maas.DeletedAt;
+            }
+            return records.Count;
+        });
     }
 
     public async Task<int> RecalculateMaaslarAsync(List<int> maasIds)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.MaasDuzenle);
         if (maasIds == null || !maasIds.Any()) return 0;
 
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var kayitlar = await context.PersonelMaaslari
-            .Include(m => m.Sofor)
-            .Where(m => maasIds.Contains(m.Id) && !m.IsDeleted)
-            .ToListAsync();
-
-        foreach (var maas in kayitlar)
+        return await WritePayrollAsync(Yetkiler.MaasDuzenle, async context =>
         {
-            var sofor = maas.Sofor;
-            if (sofor == null) continue;
+            var kayitlar = await context.PersonelMaaslari
+                .Include(m => m.Sofor)
+                .Where(m => maasIds.Contains(m.Id) && !m.IsDeleted)
+                .ToListAsync();
 
-            maas.BrutMaas = sofor.BrutMaas;
-            maas.NetMaas = sofor.ResmiNetMaas > 0 ? sofor.ResmiNetMaas : sofor.NetMaas;
+            if (kayitlar.Count != maasIds.Distinct().Count())
+                throw new InvalidOperationException("Seçilen maaşların tamamı aktif firma kapsamında bulunamadı.");
 
-            // Eğer kayıtta başka ekleme yoksa personel kartındaki diğer maaşı taşı.
-            if (maas.ToplamEklemeler <= 0 && sofor.DigerMaas > 0)
+            foreach (var maas in kayitlar)
+                await EnsurePayrollCanBeRemovedAsync(context, maas);
+
+            foreach (var maas in kayitlar)
             {
-                maas.DigerEklemeler = sofor.DigerMaas;
+                var sofor = maas.Sofor;
+                if (sofor == null) continue;
+
+                maas.BrutMaas = sofor.BrutMaas;
+                maas.NetMaas = sofor.ResmiNetMaas > 0 ? sofor.ResmiNetMaas : sofor.NetMaas;
+
+                // Eğer kayıtta başka ekleme yoksa personel kartındaki diğer maaşı taşı.
+                if (maas.ToplamEklemeler <= 0 && sofor.DigerMaas > 0)
+                {
+                    maas.DigerEklemeler = sofor.DigerMaas;
+                }
+
+                maas.SGKIsciPayi = maas.BrutMaas * 0.14m;
+                maas.SGKIsverenPayi = maas.BrutMaas * 0.205m;
+                maas.IssizlikPrimi = maas.BrutMaas * 0.01m;
+                maas.DamgaVergisi = maas.BrutMaas * 0.00759m;
+
+                var vergiMatrahi = maas.BrutMaas - maas.SGKIsciPayi - maas.IssizlikPrimi;
+                maas.GelirVergisi = vergiMatrahi * 0.15m;
+                maas.UpdatedAt = DateTime.UtcNow;
             }
 
-            maas.SGKIsciPayi = maas.BrutMaas * 0.14m;
-            maas.SGKIsverenPayi = maas.BrutMaas * 0.205m;
-            maas.IssizlikPrimi = maas.BrutMaas * 0.01m;
-            maas.DamgaVergisi = maas.BrutMaas * 0.00759m;
-
-            var vergiMatrahi = maas.BrutMaas - maas.SGKIsciPayi - maas.IssizlikPrimi;
-            maas.GelirVergisi = vergiMatrahi * 0.15m;
-            maas.UpdatedAt = DateTime.UtcNow;
-        }
-
-        await context.SaveChangesAsync();
-        return kayitlar.Count;
+            return kayitlar.Count;
+        });
     }
 
     public async Task<MaasOlusturmaSonuc> CreateMaasForPersonellerAsync(int yil, int ay, List<int> soforIds)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.MaasYaz);
         var sonuc = new MaasOlusturmaSonuc();
         if (soforIds == null || !soforIds.Any()) return sonuc;
 
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var benzersizSoforIds = soforIds.Distinct().ToList();
-
-        var mevcutSoforIds = await context.PersonelMaaslari
-            .Where(m => m.Yil == yil && m.Ay == ay && benzersizSoforIds.Contains(m.SoforId) && !m.IsDeleted)
-            .Select(m => m.SoforId)
-            .Distinct()
-            .ToListAsync();
-
-        sonuc.ZatenVarSayisi = mevcutSoforIds.Count;
-
-        var olusturulacakSoforler = await context.Soforler
-            .Where(s => s.Aktif && (s.IstenAyrilmaTarihi == null || s.IstenAyrilmaTarihi >= new DateTime(yil, ay, 1)) && benzersizSoforIds.Contains(s.Id) && !mevcutSoforIds.Contains(s.Id))
-            .ToListAsync();
-
-        foreach (var sofor in olusturulacakSoforler)
+        return await WritePayrollAsync(Yetkiler.MaasYaz, async context =>
         {
-            var yeniMaas = BuildDefaultMaasFromSofor(sofor, yil, ay);
-            context.PersonelMaaslari.Add(yeniMaas);
-        }
+            var benzersizSoforIds = soforIds.Distinct().ToList();
+            var donemBaslangic = new DateTime(yil, ay, 1);
+            if (await context.Soforler.CountAsync(s => benzersizSoforIds.Contains(s.Id)) != benzersizSoforIds.Count)
+                throw new InvalidOperationException("Seçilen personellerin tamamı aktif firma kapsamında bulunamadı.");
 
-        await context.SaveChangesAsync();
-        sonuc.OlusturulanSayisi = olusturulacakSoforler.Count;
-        return sonuc;
+            var mevcutSoforIds = await context.PersonelMaaslari
+                .Where(m => m.Yil == yil && m.Ay == ay && benzersizSoforIds.Contains(m.SoforId) && !m.IsDeleted)
+                .Select(m => m.SoforId)
+                .Distinct()
+                .ToListAsync();
+
+            sonuc.ZatenVarSayisi = mevcutSoforIds.Count;
+
+            var olusturulacakSoforler = await context.Soforler
+                .Where(s => s.Aktif && (s.IstenAyrilmaTarihi == null || s.IstenAyrilmaTarihi >= donemBaslangic) && benzersizSoforIds.Contains(s.Id) && !mevcutSoforIds.Contains(s.Id))
+                .ToListAsync();
+
+            foreach (var sofor in olusturulacakSoforler)
+            {
+                var yeniMaas = BuildDefaultMaasFromSofor(sofor, yil, ay);
+                context.PersonelMaaslari.Add(yeniMaas);
+            }
+
+            sonuc.OlusturulanSayisi = olusturulacakSoforler.Count;
+            return sonuc;
+        });
     }
 
     public async Task<List<PersonelMaas>> GetSoforMaasGecmisiAsync(int soforId)
@@ -173,37 +261,36 @@ public class PersonelMaasIzinService : IPersonelMaasIzinService
             .ToListAsync();
     }
 
-    public async Task MaasOdemeYapAsync(int maasId, DateTime odemeTarihi)
+    public async Task MaasOdemeYapAsync(int maasId, DateTime odemeTarihi, string? aciklama = null)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var maas = await context.PersonelMaaslari.FindAsync(maasId);
-        if (maas != null)
+        await WritePayrollAsync(Yetkiler.MaasDuzenle, async context =>
         {
+            var maas = await context.PersonelMaaslari.FirstOrDefaultAsync(m => m.Id == maasId)
+                ?? throw new InvalidOperationException("Maaş aktif firma kapsamında bulunamadı.");
+            if (maas.OdemeDurum == MaasOdemeDurum.Odendi)
+            {
+                if (maas.OdemeTarihi == odemeTarihi && maas.OdemeAciklama == aciklama) return maas;
+                throw new InvalidOperationException("Maaş zaten ödenmiş; farklı ödeme bilgisiyle yeniden işaretlenemez.");
+            }
+            if (maas.OdemeDurum != MaasOdemeDurum.Bekliyor || maas.OdenecekTutar < 0)
+                throw new InvalidOperationException("Bu maaşın durumu veya tutarı ödeme işaretlemeye uygun değil.");
             maas.OdemeTarihi = odemeTarihi;
             maas.OdemeDurum = MaasOdemeDurum.Odendi;
-            await context.SaveChangesAsync();
-        }
+            maas.OdemeAciklama = aciklama;
+            maas.UpdatedAt = DateTime.UtcNow;
+            return maas;
+        });
     }
 
     public async Task TopluMaasOlusturAsync(int yil, int ay)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.MaasYaz);
         await using var context = await _contextFactory.CreateDbContextAsync();
         var donemBaslangic = new DateTime(yil, ay, 1);
-        var aktifSoforler = await context.Soforler
+        var ids = await context.Soforler
             .Where(s => s.Aktif && (s.IstenAyrilmaTarihi == null || s.IstenAyrilmaTarihi >= donemBaslangic))
-            .ToListAsync();
-
-        foreach (var sofor in aktifSoforler)
-        {
-            var mevcutMaas = await GetMaasBySoforAsync(sofor.Id, yil, ay);
-            if (mevcutMaas == null)
-            {
-                var yeniMaas = BuildDefaultMaasFromSofor(sofor, yil, ay);
-                context.PersonelMaaslari.Add(yeniMaas);
-            }
-        }
-
-        await context.SaveChangesAsync();
+            .Select(s => s.Id).ToListAsync();
+        await CreateMaasForPersonellerAsync(yil, ay, ids);
     }
 
     private static PersonelMaas BuildDefaultMaasFromSofor(Sofor sofor, int yil, int ay)
@@ -211,6 +298,7 @@ public class PersonelMaasIzinService : IPersonelMaasIzinService
         var yeniMaas = new PersonelMaas
         {
             SoforId = sofor.Id,
+            FirmaId = sofor.FirmaId,
             Yil = yil,
             Ay = ay,
             BrutMaas = sofor.BrutMaas,

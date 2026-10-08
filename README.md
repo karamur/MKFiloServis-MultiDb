@@ -68,14 +68,14 @@ MKFiloServis-MultiDb/
 ├── MKFiloServis.Client/           # MAUI istemci (Android + Windows)
 ├── MKFiloServis.DataSync/         # Veri eşitleme aracı
 ├── MKFiloServis.LisansDesktop/    # Windows lisans yönetim uygulaması
+├── MKFiloServis.Tests/            # xUnit birim ve izole veritabanı testleri
 ├── docs/                          # Ürün ve teknik dokümantasyon
 ├── setup/                         # Kurulum paketi betikleri
 └── scripts/                       # Geliştirme ve dağıtım yardımcıları
 ```
 
-> Not: Çözümde (`MKFiloServis.slnx`) birim test projesi bulunmuyor. CI iş akışı, test projesi
-> depoya geri alınınca otomatik olarak devreye giren bir algılama adımı içerir; o tarihe kadar
-> yalnızca derleme doğrulanır.
+> `MKFiloServis.Tests` çözümde bulunur ve CI üzerinde zorunlu çalışır. Kritik satış kabul
+> senaryolarının tamamı henüz bu projeye taşınmadı.
 
 ## Başlarken
 

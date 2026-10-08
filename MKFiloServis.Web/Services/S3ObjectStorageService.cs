@@ -42,8 +42,8 @@ public class S3ObjectStorageService : IObjectStorageService
         try
         {
             var client = _httpClientFactory.CreateClient("S3");
-            var request = BuildRequest(HttpMethod.Put, key, content, contentType);
-            var response = await client.SendAsync(request, ct);
+            using var request = BuildRequest(HttpMethod.Put, key, content, contentType);
+            using var response = await client.SendAsync(request, ct);
             response.EnsureSuccessStatusCode();
             _logger.LogInformation("S3: yüklendi {Key}", key);
             return key;
@@ -60,16 +60,17 @@ public class S3ObjectStorageService : IObjectStorageService
         try
         {
             var client = _httpClientFactory.CreateClient("S3");
-            var request = BuildRequest(HttpMethod.Get, key);
-            var response = await client.SendAsync(request, ct);
+            using var request = BuildRequest(HttpMethod.Get, key);
+            using var response = await client.SendAsync(request, ct);
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadAsByteArrayAsync(ct);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             _logger.LogError(ex, "S3: indirme başarısız {Key}", key);
-            return null;
+            throw;
         }
     }
 
@@ -95,24 +96,26 @@ public class S3ObjectStorageService : IObjectStorageService
         try
         {
             var client = _httpClientFactory.CreateClient("S3");
-            var request = BuildRequest(HttpMethod.Head, key);
-            var response = await client.SendAsync(request, ct);
-            return response.IsSuccessStatusCode;
+            using var request = BuildRequest(HttpMethod.Head, key);
+            using var response = await client.SendAsync(request, ct);
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return false;
+            response.EnsureSuccessStatusCode();
+            return true;
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
-            // Sorgulanamayan nesne "yok" sayılmamalı ama çağıranı da patlatmamalı; en azından kayda geçmeli.
-            _logger.LogWarning(ex, "S3 nesne varligi denetlenemedi. Key: {Key}", key);
-            return false;
+            _logger.LogError(ex, "S3 nesne varlığı denetlenemedi. Key: {Key}", key);
+            throw;
         }
     }
 
     public Task<string> GetPresignedUrlAsync(string key, int expiresInMinutes = 60)
     {
-        // Basit pre-signed URL (query string imzası)
-        var expires = DateTimeOffset.UtcNow.AddMinutes(expiresInMinutes).ToUnixTimeSeconds();
-        var url = $"{_serviceUrl}/{_bucket}/{Uri.EscapeDataString(key)}?X-Amz-Expires={expiresInMinutes * 60}";
-        return Task.FromResult(url);
+        // An expiry query alone is not a signed URL. Never return a link that
+        // looks authorized but will fail or bypass the authenticated download path.
+        return Task.FromException<string>(new NotSupportedException(
+            "S3 için imzalı indirme URL'si uygulanmadı; dosyayı yetkili indirme uç noktasından alın."));
     }
 
     public string GetStorageProvider() => "S3";
@@ -138,7 +141,9 @@ public class S3ObjectStorageService : IObjectStorageService
         request.Headers.Add("x-amz-content-sha256", payloadHash);
 
         var authHeader = BuildAuthorizationHeader(method.Method, key, date, dateShort, payloadHash, contentType);
-        request.Headers.Add("Authorization", authHeader);
+        // HttpHeaders' Authorization parser does not recognize AWS SigV4's
+        // comma-separated Credential/SignedHeaders/Signature parameter syntax.
+        request.Headers.TryAddWithoutValidation("Authorization", authHeader);
 
         return request;
     }

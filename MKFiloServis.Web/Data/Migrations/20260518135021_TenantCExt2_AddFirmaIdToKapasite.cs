@@ -18,7 +18,7 @@ namespace MKFiloServis.Web.Data.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             // 1) FirmaId kolonu (nullable, K9)
-            migrationBuilder.Sql(@"
+            migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + @"
                 DO $$
                 BEGIN
                     IF NOT EXISTS (
@@ -31,7 +31,7 @@ namespace MKFiloServis.Web.Data.Migrations
             ");
 
             // 2) Index (FirmaId, KapasiteAdi) — snapshot ile uyumlu
-            migrationBuilder.Sql(@"
+            migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + @"
                 DO $$
                 BEGIN
                     IF NOT EXISTS (
@@ -47,7 +47,7 @@ namespace MKFiloServis.Web.Data.Migrations
             ");
 
             // 3) FK Kapasiteler -> Firmalar (Restrict)
-            migrationBuilder.Sql(@"
+            migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + @"
                 DO $$
                 BEGIN
                     IF NOT EXISTS (
@@ -64,7 +64,7 @@ namespace MKFiloServis.Web.Data.Migrations
             ");
 
             // 4) Backfill: NULL/0 satırları varsayılan firma ile doldur
-            migrationBuilder.Sql(@"
+            migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + @"
                 DO $$
                 DECLARE
                     v_firma_id integer;
@@ -93,7 +93,7 @@ namespace MKFiloServis.Web.Data.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.Sql(@"
+            migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + @"
                 ALTER TABLE ""Kapasiteler"" DROP CONSTRAINT IF EXISTS ""FK_Kapasiteler_Firmalar_FirmaId"";
                 DROP INDEX IF EXISTS ""IX_Kapasiteler_FirmaId_KapasiteAdi"";
                 ALTER TABLE ""Kapasiteler"" DROP COLUMN IF EXISTS ""FirmaId"";

@@ -26,6 +26,9 @@ internal static class CliRunner
             {
                 "export" => await ExportAsync(source, target),
                 "import" => await ImportAsync(source, target),
+                "inventory" => await LegacyInventoryRunner.RunAsync(
+                    source, GetArg(args, "--provider"), GetArg(args, "--output"),
+                    GetArg(args, "--source-env")),
                 _ => Fail($"Bilinmeyen komut: {command}")
             };
         }
@@ -95,6 +98,8 @@ KULLANIM:
   MKFiloServis.DataSync.exe                                  (UI modu)
   MKFiloServis.DataSync.exe export --source "<PG>" --target "<sqlite.db>"
   MKFiloServis.DataSync.exe import --source "<sqlite.db>" --target "<PG>"
+  MKFiloServis.DataSync.exe inventory --provider sqlite --source "<sqlite.db>" [--output "<rapor.json>"]
+  MKFiloServis.DataSync.exe inventory --provider postgresql --source-env "<baglanti-degiskeni>" [--output "<rapor.json>"]
 
 ORNEK:
   MKFiloServis.DataSync.exe export ^

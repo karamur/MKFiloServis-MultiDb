@@ -1,8 +1,9 @@
-﻿<Solution>
+<Solution>
   <Project Path="MKFiloServis.DataSync/MKFiloServis.DataSync.csproj" />
   <Project Path="MKFiloServis.LisansDesktop/MKFiloServis.LisansDesktop.csproj" />
   <Project Path="MKFiloServis.Client/MKFiloServis.Client.csproj" />
   <Project Path="MKFiloServis.Shared/MKFiloServis.Shared.csproj" />
+  <Project Path="MKFiloServis.Tests/MKFiloServis.Tests.csproj" />
   <Project Path="MKFiloServis.Web/MKFiloServis.Web.csproj" />
   <Project Path="MKFiloServis.Web/Tests/PlaywrightSmoke/MKFiloServis.PlaywrightSmoke.csproj" />
 </Solution>

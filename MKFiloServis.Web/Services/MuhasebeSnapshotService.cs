@@ -11,10 +11,12 @@ namespace MKFiloServis.Web.Services;
 public class MuhasebeSnapshotService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _factory;
+    private readonly IAktifFirmaProvider _firmaProvider;
 
-    public MuhasebeSnapshotService(IDbContextFactory<ApplicationDbContext> factory)
+    public MuhasebeSnapshotService(IDbContextFactory<ApplicationDbContext> factory, IAktifFirmaProvider firmaProvider)
     {
         _factory = factory;
+        _firmaProvider = firmaProvider;
     }
 
     /// <summary>
@@ -22,12 +24,14 @@ public class MuhasebeSnapshotService
     /// 770 BORÇ / 335 ALACAK (personel bazlı).
     /// Mükerrer fişi engeller.
     /// </summary>
-    public async Task<MuhasebeFis?> CreateFromSnapshotAsync(int yil, int ay, int firmaId)
+    public Task<MuhasebeFis?> CreateFromSnapshotAsync(int yil, int ay, int firmaId)
+        => KayitTransactionAsync(yil, ay, firmaId, context => CreateFromSnapshotAsyncCore(context, yil, ay, firmaId));
+
+    private static async Task<MuhasebeFis?> CreateFromSnapshotAsyncCore(ApplicationDbContext context, int yil, int ay, int firmaId)
     {
-        await using var context = await _factory.CreateDbContextAsync();
 
         var snapshot = await context.MaasOdemeSnapshotlar
-            .AsNoTracking()
+            .AsTracking()
             .Where(x => x.Yil == yil && x.Ay == ay && x.FirmaId == firmaId && !x.IsDeleted)
             .ToListAsync();
 
@@ -42,6 +46,7 @@ public class MuhasebeSnapshotService
             .AsNoTracking()
             .AnyAsync(x => x.Kaynak == FisKaynak.Otomatik
                         && x.KaynakTip == "MaasSnapshot"
+                        && x.FisNo.StartsWith($"MAS-{firmaId}-")
                         && x.FisTarihi.Year == yil && x.FisTarihi.Month == ay
                         && !x.IsDeleted);
 
@@ -152,13 +157,13 @@ public class MuhasebeSnapshotService
         context.MuhasebeFisleri.Add(fis);
         await context.SaveChangesAsync();
 
-        // Snapshot'a MuhasebeFisId yaz
-        var snapshotIds = snapshot.Select(s => s.Id).ToList();
-        await context.MaasOdemeSnapshotlar
-            .Where(x => snapshotIds.Contains(x.Id))
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(x => x.MuhasebeFisId, fis.Id)
-                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow));
+        // Snapshot bağlantıları da audit ve üst transaction kapsamındadır.
+        foreach (var kayit in snapshot)
+        {
+            kayit.MuhasebeFisId = fis.Id;
+            kayit.UpdatedAt = DateTime.UtcNow;
+        }
+        await context.SaveChangesAsync();
 
         // Fiş oluşturuldu
 
@@ -169,11 +174,14 @@ public class MuhasebeSnapshotService
     /// Ters fiş oluşturur — maaş tahakkukunu iptal eder.
     /// Asla kayıt silinmez, sadece ters kayıt yapılır.
     /// </summary>
-    public async Task<MuhasebeFis?> ReverseSnapshotAsync(int yil, int ay, int firmaId)
+    public Task<MuhasebeFis?> ReverseSnapshotAsync(int yil, int ay, int firmaId)
+        => KayitTransactionAsync(yil, ay, firmaId, context => ReverseSnapshotAsyncCore(context, yil, ay, firmaId));
+
+    private static async Task<MuhasebeFis?> ReverseSnapshotAsyncCore(ApplicationDbContext context, int yil, int ay, int firmaId)
     {
-        await using var context = await _factory.CreateDbContextAsync();
 
         var snapshot = await context.MaasOdemeSnapshotlar
+            .AsTracking()
             .Where(x => x.Yil == yil && x.Ay == ay && x.FirmaId == firmaId && !x.IsDeleted)
             .ToListAsync();
 
@@ -192,10 +200,13 @@ public class MuhasebeSnapshotService
             return null;
         }
 
+        if (snapshot.Any(x => !x.MuhasebeFisId.HasValue) || snapshot.Select(x => x.MuhasebeFisId).Distinct().Count() != 1)
+            throw new InvalidOperationException("Snapshot muhasebe fişi bağlantıları tutarsız; iptal öncesinde düzeltilmelidir.");
         var orijinalFisId = snapshot.First().MuhasebeFisId!.Value;
         var orijinalFis = await context.MuhasebeFisleri
             .Include(x => x.Kalemler)
-            .FirstAsync(x => x.Id == orijinalFisId);
+            .FirstOrDefaultAsync(x => x.Id == orijinalFisId && !x.IsDeleted && x.KaynakTip == "MaasSnapshot" && x.FisNo.StartsWith($"MAS-{firmaId}-"))
+            ?? throw new InvalidOperationException("Snapshot kaynak muhasebe fişi erişilebilir değil veya firma bağlantısı tutarsız.");
 
         var toplamOdenecek = snapshot.Sum(x => x.Odenecek);
         var fisNo = await GenerateNextMaasFisNoAsync(context, firmaId);
@@ -233,17 +244,51 @@ public class MuhasebeSnapshotService
         context.MuhasebeFisleri.Add(reverseFis);
         await context.SaveChangesAsync();
 
-        // Snapshot'a IptalFisId yaz
-        var snapshotIds = snapshot.Select(s => s.Id).ToList();
-        await context.MaasOdemeSnapshotlar
-            .Where(x => snapshotIds.Contains(x.Id))
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(x => x.IptalFisId, reverseFis.Id)
-                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow));
+        // Snapshot bağlantıları da audit ve üst transaction kapsamındadır.
+        foreach (var kayit in snapshot)
+        {
+            kayit.IptalFisId = reverseFis.Id;
+            kayit.UpdatedAt = DateTime.UtcNow;
+        }
+        await context.SaveChangesAsync();
 
         // Ters fiş oluşturuldu
 
         return reverseFis;
+    }
+
+    private async Task<MuhasebeFis?> KayitTransactionAsync(int yil, int ay, int firmaId, Func<ApplicationDbContext, Task<MuhasebeFis?>> kaydet)
+    {
+        if (yil is < 1 or > 9999 || ay is < 1 or > 12 || firmaId <= 0)
+            throw new ArgumentException("Geçerli yıl, ay ve firma gerekir.");
+        long secimSurumu = 0;
+        void FirmaDegisimi() => System.Threading.Interlocked.Increment(ref secimSurumu);
+        void SecimiDogrula()
+        {
+            if (System.Threading.Volatile.Read(ref secimSurumu) != 0 || _firmaProvider.TumFirmalar || _firmaProvider.AktifFirmaId != firmaId)
+                throw new InvalidOperationException("Muhasebeleştirme için kaynak firmayı seçin; işlem sırasında firma seçimi değişmemelidir.");
+        }
+        _firmaProvider.AktifFirmaDegisti += FirmaDegisimi;
+        try
+        {
+            SecimiDogrula();
+            await using var strategyContext = await _factory.CreateDbContextAsync();
+            var strategy = strategyContext.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                SecimiDogrula();
+                // Retry her denemede yeni tracker ve transaction ile başlar.
+                await using var context = await _factory.CreateDbContextAsync();
+                if (!await context.Firmalar.AnyAsync(f => f.Id == firmaId && !f.IsDeleted))
+                    throw new InvalidOperationException("Kaynak firma erişilebilir değil.");
+                await using var transaction = await context.Database.BeginTransactionAsync();
+                var sonuc = await kaydet(context);
+                SecimiDogrula();
+                await transaction.CommitAsync();
+                return sonuc;
+            });
+        }
+        finally { _firmaProvider.AktifFirmaDegisti -= FirmaDegisimi; }
     }
 
     private static async Task<string> GenerateNextMaasFisNoAsync(ApplicationDbContext context, int firmaId)

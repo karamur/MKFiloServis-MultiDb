@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Models;
 using ClosedXML.Excel;
@@ -11,13 +11,15 @@ namespace MKFiloServis.Web.Services;
 
 public class MuhasebeService : IMuhasebeService
 {
+    private readonly CurrentPermissionGuard _permissionGuard;
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private static readonly string[] AyAdlari = { "", "Ocak", "Subat", "Mart", "Nisan", "Mayis", "Haziran", 
                                                    "Temmuz", "Agustos", "Eylul", "Ekim", "Kasim", "Aralik" };
 
 
-    public MuhasebeService(IDbContextFactory<ApplicationDbContext> contextFactory)
+    public MuhasebeService(IDbContextFactory<ApplicationDbContext> contextFactory, CurrentPermissionGuard permissionGuard)
     {
+        _permissionGuard = permissionGuard;
         _contextFactory = contextFactory;
     }
 
@@ -85,6 +87,7 @@ public class MuhasebeService : IMuhasebeService
 
     public async Task<MuhasebeHesap> UpdateHesapAsync(MuhasebeHesap hesap)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.HesapPlaniDuzenle);
         await using var context = await _contextFactory.CreateDbContextAsync();
         var existing = await context.MuhasebeHesaplari.FindAsync(hesap.Id);
         if (existing == null) throw new Exception("Hesap bulunamadi");
@@ -100,6 +103,7 @@ public class MuhasebeService : IMuhasebeService
 
     public async Task DeleteHesapAsync(int id)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.HesapPlaniSil);
         await using var context = await _contextFactory.CreateDbContextAsync();
         var hesap = await context.MuhasebeHesaplari.FindAsync(id);
         if (hesap == null) return;
@@ -115,6 +119,13 @@ public class MuhasebeService : IMuhasebeService
     }
 
     public async Task SeedVarsayilanHesapPlaniAsync()
+    {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.HesapPlaniYaz);
+        await InitializeDefaultAccountPlanAsync();
+    }
+
+    // Yalnız uygulama başlangıcındaki iç hazırlık çağrısı; kullanıcı servis sözleşmesinde yoktur.
+    internal async Task InitializeDefaultAccountPlanAsync()
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var hesaplar = new List<MuhasebeHesap>
@@ -222,6 +233,8 @@ public class MuhasebeService : IMuhasebeService
 
     public async Task<HesapPlaniImportResult> ImportHesapPlaniFromExcelAsync(byte[] fileContent)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.HesapPlaniYaz);
+        await _permissionGuard.RequireAnyAsync(Yetkiler.HesapPlaniDuzenle);
         await using var context = await _contextFactory.CreateDbContextAsync();
         var result = new HesapPlaniImportResult();
         
@@ -286,6 +299,8 @@ public class MuhasebeService : IMuhasebeService
                 }
             }
             
+            await _permissionGuard.RequireAnyAsync(Yetkiler.HesapPlaniYaz);
+            await _permissionGuard.RequireAnyAsync(Yetkiler.HesapPlaniDuzenle);
             await context.SaveChangesAsync();
             result.Success = true;
         }
@@ -406,16 +421,19 @@ public class MuhasebeService : IMuhasebeService
             .FirstOrDefaultAsync(f => f.Id == id);
     }
 
-    public async Task<MuhasebeFis> CreateFisAsync(MuhasebeFis fis)
+    private static void ValidateFisBalance(MuhasebeFis fis)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        // Borc/Alacak toplamlarini hesapla
         fis.ToplamBorc = fis.Kalemler.Sum(k => k.Borc);
         fis.ToplamAlacak = fis.Kalemler.Sum(k => k.Alacak);
-
-        // Borc = Alacak kontrolu
         if (Math.Abs(fis.ToplamBorc - fis.ToplamAlacak) > 0.01m)
-            throw new Exception("Borc ve Alacak toplamlari esit olmali!");
+            throw new InvalidOperationException("Borç ve alacak toplamları eşit olmalıdır.");
+    }
+
+    public async Task<MuhasebeFis> CreateFisAsync(MuhasebeFis fis)
+    {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.MuhasebeFisleriYaz);
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        ValidateFisBalance(fis);
 
         fis.FisTarihi = DateTime.SpecifyKind(fis.FisTarihi, DateTimeKind.Utc);
         fis.CreatedAt = DateTime.UtcNow;
@@ -427,13 +445,16 @@ public class MuhasebeService : IMuhasebeService
 
     public async Task<MuhasebeFis> UpdateFisAsync(MuhasebeFis fis)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.MuhasebeFisleriDuzenle);
         await using var context = await _contextFactory.CreateDbContextAsync();
         var existing = await context.MuhasebeFisleri
             .Include(f => f.Kalemler)
             .FirstOrDefaultAsync(f => f.Id == fis.Id);
 
         if (existing == null) throw new Exception("Fis bulunamadi");
+        EnsureNotBankSourcePosting(existing);
         if (existing.Durum == FisDurum.Onaylandi) throw new Exception("Onaylanmis fis duzenlenemez");
+        ValidateFisBalance(fis);
 
         existing.FisTarihi = DateTime.SpecifyKind(fis.FisTarihi, DateTimeKind.Utc);
         existing.Aciklama = fis.Aciklama;
@@ -458,9 +479,11 @@ public class MuhasebeService : IMuhasebeService
 
     public async Task DeleteFisAsync(int id)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.MuhasebeFisleriSil);
         await using var context = await _contextFactory.CreateDbContextAsync();
         var fis = await context.MuhasebeFisleri.FindAsync(id);
         if (fis == null) return;
+        EnsureNotBankSourcePosting(fis);
         if (fis.Durum == FisDurum.Onaylandi) throw new Exception("Onaylanmis fis silinemez");
 
         fis.IsDeleted = true;
@@ -497,33 +520,31 @@ public class MuhasebeService : IMuhasebeService
     /// </summary>
     internal static async Task<int> NextFisNoCounterAsync(ApplicationDbContext context, string prefix, string yilAy, int firmaId = 0)
     {
-        if (context.Database.GetDbConnection() is not NpgsqlConnection conn)
-            throw new NotSupportedException("Muhasebe fiş numarası PostgreSQL sağlayıcısı gerektirir.");
-
+        if (!context.Database.IsNpgsql() && !context.Database.IsSqlite())
+            throw new NotSupportedException("Fiş numarası yalnız PostgreSQL/SQLite sağlayıcılarında desteklenir.");
+        var conn = context.Database.GetDbConnection();
         var openedHere = conn.State != System.Data.ConnectionState.Open;
-        if (openedHere)
-            await context.Database.OpenConnectionAsync();
-
+        if (openedHere) await context.Database.OpenConnectionAsync();
         try
         {
-            await using var cmd = new NpgsqlCommand(
-                @"INSERT INTO ""FisNoCounters"" (""Prefix"", ""FirmaId"", ""YilAy"", ""SonNo"")
-                  VALUES (@p, @f, @y, 1)
-                  ON CONFLICT (""Prefix"", ""FirmaId"", ""YilAy"")
-                  DO UPDATE SET ""SonNo"" = ""FisNoCounters"".""SonNo"" + 1
-                  RETURNING ""SonNo""",
-                conn,
-                context.Database.CurrentTransaction?.GetDbTransaction() as NpgsqlTransaction);
-            cmd.Parameters.AddWithValue("p", prefix);
-            cmd.Parameters.AddWithValue("f", firmaId);
-            cmd.Parameters.AddWithValue("y", yilAy);
-            var result = await cmd.ExecuteScalarAsync();
-            return Convert.ToInt32(result);
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = context.Database.CurrentTransaction?.GetDbTransaction();
+            cmd.CommandText = @"INSERT INTO ""FisNoCounters"" (""Prefix"", ""FirmaId"", ""YilAy"", ""SonNo"")
+                VALUES (@p, @f, @y, 1)
+                ON CONFLICT (""Prefix"", ""FirmaId"", ""YilAy"")
+                DO UPDATE SET ""SonNo"" = ""FisNoCounters"".""SonNo"" + 1 RETURNING ""SonNo""";
+            foreach (var (name, value) in new (string, object)[] { ("p", prefix), ("f", firmaId), ("y", yilAy) })
+            {
+                var parameter = cmd.CreateParameter();
+                parameter.ParameterName = name;
+                parameter.Value = value;
+                cmd.Parameters.Add(parameter);
+            }
+            return Convert.ToInt32(await cmd.ExecuteScalarAsync());
         }
         finally
         {
-            if (openedHere)
-                await context.Database.CloseConnectionAsync();
+            if (openedHere) await context.Database.CloseConnectionAsync();
         }
     }
 
@@ -539,6 +560,7 @@ public class MuhasebeService : IMuhasebeService
 
     private static async Task<MuhasebeFis> CreateFisAtomicInContextAsync(ApplicationDbContext context, MuhasebeFis fis)
     {
+        ValidateFisBalance(fis);
         fis.FisNo = await GenerateNextFisNoInContextAsync(context, fis.FisTipi);
         fis.FisTarihi = DateTime.SpecifyKind(fis.FisTarihi, DateTimeKind.Utc);
         fis.CreatedAt = DateTime.UtcNow;
@@ -549,17 +571,28 @@ public class MuhasebeService : IMuhasebeService
 
     private static async Task FisKaydetKilitliAsync(ApplicationDbContext context, MuhasebeFis fis)
     {
+        ValidateFisBalance(fis);
         fis.FisNo = await GenerateNextFisNoInContextAsync(context, fis.FisTipi);
         context.MuhasebeFisleri.Add(fis);
         await context.SaveChangesAsync();
     }
 
+    private static void EnsureNotBankSourcePosting(MuhasebeFis fis)
+    {
+        if (fis.KaynakTip is "HesapTransfer" or "CariMahsup" or "IptalKaydi")
+            throw new InvalidOperationException("Banka kaynaklı fişler ve ters kayıtları kaynak işlem dışında değiştirilemez.");
+    }
+
     public async Task OnayliFisAsync(int fisId)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.MuhasebeFisleriDuzenle);
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var fis = await context.MuhasebeFisleri.FindAsync(fisId);
+        var fis = await context.MuhasebeFisleri.Include(f => f.Kalemler)
+            .FirstOrDefaultAsync(f => f.Id == fisId);
         if (fis == null) throw new Exception("Fis bulunamadi");
 
+        EnsureNotBankSourcePosting(fis);
+        ValidateFisBalance(fis);
         fis.Durum = FisDurum.Onaylandi;
         fis.UpdatedAt = DateTime.UtcNow;
         await context.SaveChangesAsync();
@@ -567,10 +600,12 @@ public class MuhasebeService : IMuhasebeService
 
     public async Task OnayGeriAlFisAsync(int fisId)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.MuhasebeFisleriDuzenle);
         await using var context = await _contextFactory.CreateDbContextAsync();
         var fis = await context.MuhasebeFisleri.FindAsync(fisId);
         if (fis == null) throw new Exception("Fis bulunamadi");
 
+        EnsureNotBankSourcePosting(fis);
         fis.Durum = FisDurum.Taslak;
         fis.UpdatedAt = DateTime.UtcNow;
         await context.SaveChangesAsync();
@@ -938,21 +973,21 @@ public class MuhasebeService : IMuhasebeService
 
     private async Task<MuhasebeHesap> GetOrCreateCariHesapAsync(ApplicationDbContext context, string ustHesapKodu, int? cariId)
     {
-        var ustHesap = await GetHesapByKodAsync(ustHesapKodu);
+        var cari = cariId.HasValue ? await context.Cariler.FirstOrDefaultAsync(c => c.Id == cariId.Value) : null;
+        if (cariId.HasValue && cari == null)
+            throw new InvalidOperationException("Cari aktif firma kapsamında bulunamadı.");
+        var ustHesap = await context.MuhasebeHesaplari.FirstOrDefaultAsync(h => h.HesapKodu == ustHesapKodu && h.Aktif);
         if (ustHesap == null)
             throw new Exception($"Ust hesap {ustHesapKodu} bulunamadi");
 
         if (!cariId.HasValue)
             return ustHesap;
 
-        var cari = await context.Cariler.FindAsync(cariId.Value);
-        if (cari == null)
-            return ustHesap;
 
         // Cari alt hesabi var mi?
-        var cariAltKod = BuildCariAltKod(cari);
+        var cariAltKod = BuildCariAltKod(cari!);
         var cariHesapKodu = $"{ustHesapKodu}.{cariAltKod}";
-        var cariHesap = await GetHesapByKodAsync(cariHesapKodu);
+        var cariHesap = await context.MuhasebeHesaplari.FirstOrDefaultAsync(h => h.HesapKodu == cariHesapKodu && h.Aktif);
 
         if (cariHesap == null)
         {
@@ -960,7 +995,7 @@ public class MuhasebeService : IMuhasebeService
             cariHesap = new MuhasebeHesap
             {
                 HesapKodu = cariHesapKodu,
-                HesapAdi = cari.Unvan,
+                HesapAdi = cari!.Unvan,
                 HesapTuru = ustHesap.HesapTuru,
                 HesapGrubu = ustHesap.HesapGrubu,
                 UstHesapId = ustHesap.Id,
@@ -1584,19 +1619,49 @@ public class MuhasebeService : IMuhasebeService
     /// Kaynak hesap ALACAK, Hedef hesap BORÇ kaydedilir.
     /// Örnek: Kasadan Bankaya transfer -> 102 Banka BORÇ, 100 Kasa ALACAK
     /// </summary>
+    private async Task<MuhasebeFis?> WriteGeneratedBankPostingAsync(Func<ApplicationDbContext, Task<MuhasebeFis?>> write)
+    {
+        await using var strategyContext = await _contextFactory.CreateDbContextAsync();
+        var strategy = strategyContext.Database.CreateExecutionStrategy();
+        var commitStarted = false;
+        return await strategy.ExecuteAsync(async () =>
+        {
+            if (commitStarted)
+                throw new InvalidOperationException("Banka fişi commit sonucu belirsiz; mevcut fişi kontrol edin.");
+            await _permissionGuard.RequireAnyAsync(Yetkiler.BankaHareketleriYaz);
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            await using var transaction = await context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            var result = await write(context);
+            commitStarted = true;
+            await transaction.CommitAsync();
+            return result;
+        });
+    }
+
     public async Task<MuhasebeFis?> CreateHesapTransferFisiAsync(
         BankaKasaHareket cikisHareket, 
         BankaKasaHareket girisHareket,
         BankaHesap kaynakHesap, 
-        BankaHesap hedefHesap)
+        BankaHesap hedefHesap, ApplicationDbContext? existingContext = null)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
+        await _permissionGuard.RequireAnyAsync(Yetkiler.BankaHareketleriYaz);
+        if (existingContext == null)
+            return await WriteGeneratedBankPostingAsync(context => CreateHesapTransferFisiAsync(cikisHareket, girisHareket, kaynakHesap, hedefHesap, context));
+        var context = existingContext;
         // Hesap tipine göre muhasebe hesap kodlarını belirle
+        if (cikisHareket.Id <= 0 || girisHareket.Id <= 0 || cikisHareket.Tutar != girisHareket.Tutar ||
+            cikisHareket.Tutar <= 0 || cikisHareket.FirmaId != girisHareket.FirmaId ||
+            kaynakHesap.FirmaId != cikisHareket.FirmaId || hedefHesap.FirmaId != cikisHareket.FirmaId ||
+            !await context.BankaKasaHareketleri.AnyAsync(h => h.Id == cikisHareket.Id && h.BankaHesapId == kaynakHesap.Id && h.HareketTipi == HareketTipi.Cikis && h.Tutar == cikisHareket.Tutar) ||
+            !await context.BankaKasaHareketleri.AnyAsync(h => h.Id == girisHareket.Id && h.BankaHesapId == hedefHesap.Id && h.HareketTipi == HareketTipi.Giris && h.Tutar == girisHareket.Tutar))
+            throw new InvalidOperationException("Transfer fişi için eşleşen kalıcı giriş/çıkış hareketleri gereklidir.");
+        var previousPosting = await context.MuhasebeFisleri.FirstOrDefaultAsync(f => f.KaynakTip == "HesapTransfer" && f.KaynakId == cikisHareket.Id);
+        if (previousPosting != null) return previousPosting;
         var kaynakMuhasebeKodu = kaynakHesap.VarsayilanMuhasebeKodu ?? GetDefaultMuhasebeKodu(kaynakHesap.HesapTipi);
         var hedefMuhasebeKodu = hedefHesap.VarsayilanMuhasebeKodu ?? GetDefaultMuhasebeKodu(hedefHesap.HesapTipi);
 
-        var kaynakMuhasebeHesap = await GetHesapByKodAsync(kaynakMuhasebeKodu);
-        var hedefMuhasebeHesap = await GetHesapByKodAsync(hedefMuhasebeKodu);
+        var kaynakMuhasebeHesap = await context.MuhasebeHesaplari.FirstOrDefaultAsync(h => h.HesapKodu == kaynakMuhasebeKodu && h.Aktif);
+        var hedefMuhasebeHesap = await context.MuhasebeHesaplari.FirstOrDefaultAsync(h => h.HesapKodu == hedefMuhasebeKodu && h.Aktif);
 
         // Muhasebe hesapları yoksa null dön (muhasebe entegrasyonu aktif değil)
         if (kaynakMuhasebeHesap == null || hedefMuhasebeHesap == null)
@@ -1653,11 +1718,20 @@ public class MuhasebeService : IMuhasebeService
         BankaKasaHareket hareket, 
         Cari cari, 
         BankaHesap hesap,
-        bool tahsilatMi)
+        bool tahsilatMi, ApplicationDbContext? existingContext = null)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
+        await _permissionGuard.RequireAnyAsync(Yetkiler.BankaHareketleriYaz);
+        if (existingContext == null)
+            return await WriteGeneratedBankPostingAsync(context => CreateCariMahsupFisiAsync(hareket, cari, hesap, tahsilatMi, context));
+        var context = existingContext;
         var hesapMuhasebeKodu = hesap.VarsayilanMuhasebeKodu ?? GetDefaultMuhasebeKodu(hesap.HesapTipi);
-        var kasaBankaHesap = await GetHesapByKodAsync(hesapMuhasebeKodu);
+        if (hareket.Id <= 0 || hareket.Tutar <= 0 || hareket.FirmaId != hesap.FirmaId || hareket.FirmaId != cari.FirmaId ||
+            !await context.BankaKasaHareketleri.AnyAsync(h => h.Id == hareket.Id && h.CariId == cari.Id && h.BankaHesapId == hesap.Id &&
+                h.Tutar == hareket.Tutar && h.HareketTipi == (tahsilatMi ? HareketTipi.Giris : HareketTipi.Cikis)))
+            throw new InvalidOperationException("Cari mahsup fişi için eşleşen kalıcı hareket gereklidir.");
+        var previousPosting = await context.MuhasebeFisleri.FirstOrDefaultAsync(f => f.KaynakTip == "CariMahsup" && f.KaynakId == hareket.Id);
+        if (previousPosting != null) return previousPosting;
+        var kasaBankaHesap = await context.MuhasebeHesaplari.FirstOrDefaultAsync(h => h.HesapKodu == hesapMuhasebeKodu && h.Aktif);
 
         if (kasaBankaHesap == null)
             return null;
@@ -1734,71 +1808,47 @@ public class MuhasebeService : IMuhasebeService
     /// <summary>
     /// Mahsup iptal edildiğinde ters kayıt (storno) fişi oluşturur.
     /// </summary>
-    public async Task IptalFisiOlusturAsync(Guid mahsupGrupId)
+    public async Task IptalFisiOlusturAsync(Guid mahsupGrupId, ApplicationDbContext context)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        // İlişkili muhasebe fişini bul
-        var mevcutFisler = await context.MuhasebeFisleri
-            .Include(f => f.Kalemler)
-                .ThenInclude(k => k.Hesap)
-            .Where(f => f.KaynakTip == "HesapTransfer" || f.KaynakTip == "CariMahsup")
-            .ToListAsync();
-
-        // MahsupGrupId ile eşleşen hareketlerin KaynakId'lerini bul
-        var iliskiliHareketler = await context.BankaKasaHareketleri
-            .Where(h => h.MahsupGrupId == mahsupGrupId)
-            .Select(h => h.Id)
-            .ToListAsync();
-
-        var iptalEdilecekFisler = mevcutFisler
-            .Where(f => f.KaynakId.HasValue && iliskiliHareketler.Contains(f.KaynakId.Value))
-            .ToList();
-
-        foreach (var eskiFis in iptalEdilecekFisler)
+        await _permissionGuard.RequireAnyAsync(Yetkiler.BankaHareketleriSil);
+        if (context.Database.CurrentTransaction == null)
+            throw new InvalidOperationException("Mahsup iptali banka işlemiyle aynı transaction içinde yapılmalıdır.");
+        var hareketler = await context.BankaKasaHareketleri
+            .Where(h => !h.IsDeleted && h.MahsupGrupId == mahsupGrupId).ToListAsync();
+        var ids = hareketler.Select(h => h.Id).ToArray();
+        var fisler = await context.MuhasebeFisleri.Include(f => f.Kalemler)
+            .Where(f => (f.KaynakTip == "HesapTransfer" || f.KaynakTip == "CariMahsup") &&
+                f.KaynakId.HasValue && ids.Contains(f.KaynakId.Value)).ToListAsync();
+        if (fisler.Count != 1 || hareketler.Any(h => h.MuhasebeFisId != fisler[0].Id))
+            throw new InvalidOperationException("Mahsubun muhasebe fişi bağlantısı eksik veya tutarsız.");
+        var eskiFis = fisler[0];
+        if (eskiFis.Durum != FisDurum.Onaylandi || eskiFis.Kalemler.Count == 0 ||
+            await context.MuhasebeFisleri.AnyAsync(f => f.KaynakTip == "IptalKaydi" && f.KaynakId == eskiFis.Id))
+            throw new InvalidOperationException("Fiş onaylı değil veya daha önce ters kayıt oluşturulmuş.");
+        ValidateFisBalance(eskiFis);
+        var expectedType = hareketler.All(h => h.IslemKaynak == IslemKaynak.Mahsup) ? "HesapTransfer" : "CariMahsup";
+        if (eskiFis.KaynakTip != expectedType || eskiFis.ToplamBorc != hareketler[0].Tutar || eskiFis.ToplamAlacak != hareketler[0].Tutar)
+            throw new InvalidOperationException("Mahsup tutarı ve muhasebe fişi tutarı/kaynağı tutarsız.");
+        // Original and reversal both remain in the approved ledger: together they net to zero.
+        var tersFis = new MuhasebeFis
         {
-            if (eskiFis.Durum == FisDurum.IptalEdildi)
-                continue;
-
-            // Eski fişi iptal et
-            eskiFis.Durum = FisDurum.IptalEdildi;
-            eskiFis.UpdatedAt = DateTime.UtcNow;
-
-            // Ters kayıt fişi oluştur
-            var tersFis = new MuhasebeFis
+            FisTarihi = DateTime.SpecifyKind(DateTime.Today, DateTimeKind.Utc),
+            FisTipi = eskiFis.FisTipi,
+            Aciklama = $"[İPTAL] {eskiFis.Aciklama} - Orijinal Fiş: {eskiFis.FisNo}",
+            Kaynak = FisKaynak.Otomatik,
+            KaynakId = eskiFis.Id,
+            KaynakTip = "IptalKaydi",
+            Durum = FisDurum.Onaylandi,
+            CreatedAt = DateTime.UtcNow,
+            Kalemler = eskiFis.Kalemler.OrderBy(k => k.SiraNo).Select((k, i) => new MuhasebeFisKalem
             {
-                FisNo = await GenerateNextFisNoInContextAsync(context, eskiFis.FisTipi),
-                        FisTarihi = DateTime.SpecifyKind(DateTime.Today, DateTimeKind.Utc),
-                        FisTipi = eskiFis.FisTipi,
-                        Aciklama = $"[İPTAL] {eskiFis.Aciklama} - Orijinal Fiş: {eskiFis.FisNo}",
-                        Kaynak = FisKaynak.Otomatik,
-                        KaynakId = eskiFis.Id,
-                        KaynakTip = "IptalKaydi",
-                        Durum = FisDurum.Onaylandi,
-                        CreatedAt = DateTime.UtcNow,
-                        Kalemler = new List<MuhasebeFisKalem>()
-                    };
-
-                    // Borç ve alacakları ters çevir
-                    int siraNo = 1;
-                    foreach (var kalem in eskiFis.Kalemler)
-                    {
-                        tersFis.Kalemler.Add(new MuhasebeFisKalem
-                        {
-                            HesapId = kalem.HesapId,
-                            Borc = kalem.Alacak,  // Alacağı borç yap
-                            Alacak = kalem.Borc,  // Borcu alacak yap
-                            CariId = kalem.CariId,
-                            Aciklama = $"[İPTAL] {kalem.Aciklama}",
-                            SiraNo = siraNo++
-                        });
-                    }
-
-                    tersFis.ToplamBorc = tersFis.Kalemler.Sum(k => k.Borc);
-                    tersFis.ToplamAlacak = tersFis.Kalemler.Sum(k => k.Alacak);
-
-                    context.MuhasebeFisleri.Add(tersFis);
-        }
-        await context.SaveChangesAsync();
+                HesapId = k.HesapId, CariId = k.CariId, Borc = k.Alacak, Alacak = k.Borc,
+                Aciklama = $"[İPTAL] {k.Aciklama}", SiraNo = i + 1
+            }).ToList()
+        };
+        tersFis.ToplamBorc = tersFis.Kalemler.Sum(k => k.Borc);
+        tersFis.ToplamAlacak = tersFis.Kalemler.Sum(k => k.Alacak);
+        await FisKaydetKilitliAsync(context, tersFis);
     }
 
     /// <summary>
@@ -2385,11 +2435,13 @@ public class MuhasebeService : IMuhasebeService
 
     public async Task<MuhasbelestirmeSonuc> TopluFaturaMuhasbelestirAsync(List<int> faturaIdleri)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.MuhasebeFisleriYaz);
         await using var context = await _contextFactory.CreateDbContextAsync();
         var sonuc = new MuhasbelestirmeSonuc();
 
         foreach (var faturaId in faturaIdleri)
         {
+            await _permissionGuard.RequireAnyAsync(Yetkiler.MuhasebeFisleriYaz);
             try
             {
                 var fatura = await context.Faturalar
@@ -2416,6 +2468,7 @@ public class MuhasebeService : IMuhasebeService
             }
             catch (Exception ex)
             {
+                context.ChangeTracker.Clear();
                 sonuc.HataliSayisi++;
                 sonuc.Hatalar.Add($"Fatura #{faturaId}: {ex.Message}");
             }
@@ -2426,11 +2479,13 @@ public class MuhasebeService : IMuhasebeService
 
     public async Task<MuhasbelestirmeSonuc> TopluMasrafMuhasbelestirAsync(List<int> masrafIdleri)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.MuhasebeFisleriYaz);
         await using var context = await _contextFactory.CreateDbContextAsync();
         var sonuc = new MuhasbelestirmeSonuc();
 
         foreach (var masrafId in masrafIdleri)
         {
+            await _permissionGuard.RequireAnyAsync(Yetkiler.MuhasebeFisleriYaz);
             try
             {
                 var masraf = await context.AracMasraflari
@@ -2460,6 +2515,7 @@ public class MuhasebeService : IMuhasebeService
             }
             catch (Exception ex)
             {
+                context.ChangeTracker.Clear();
                 sonuc.HataliSayisi++;
                 sonuc.Hatalar.Add($"Masraf #{masrafId}: {ex.Message}");
             }
@@ -2822,11 +2878,13 @@ public class MuhasebeService : IMuhasebeService
 
     public async Task<MuhasbelestirmeSonuc> TopluGeriAlAsync(List<int> fisIdleri)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.MuhasebeFisleriSil);
         await using var context = await _contextFactory.CreateDbContextAsync();
         var sonuc = new MuhasbelestirmeSonuc();
 
         foreach (var fisId in fisIdleri)
         {
+            await _permissionGuard.RequireAnyAsync(Yetkiler.MuhasebeFisleriSil);
             try
             {
                 var fis = await context.MuhasebeFisleri
@@ -2839,6 +2897,9 @@ public class MuhasebeService : IMuhasebeService
                     sonuc.Hatalar.Add($"Fiş #{fisId} bulunamadı.");
                     continue;
                 }
+
+                if (fis.Durum != FisDurum.Taslak)
+                    throw new InvalidOperationException("Yalnız taslak muhasebe fişleri toplu geri alınabilir. Onaylı veya iptal edilmiş fiş için ters kayıt akışını kullanın.");
 
                 // İlişkili faturayı bul ve geri al
                 var fatura = await context.Faturalar
@@ -2857,15 +2918,16 @@ public class MuhasebeService : IMuhasebeService
                     masraf.MuhasebeFisId = null;
                 }
 
-                // Fişi sil
-                context.MuhasebeFisKalemleri.RemoveRange(fis.Kalemler);
-                context.MuhasebeFisleri.Remove(fis);
+                // Kalemler audit/inceleme için korunur; normal fiş silme gibi soft-delete.
+                fis.IsDeleted = true;
+                fis.UpdatedAt = DateTime.UtcNow;
 
                 await context.SaveChangesAsync();
                 sonuc.BasariliSayisi++;
             }
             catch (Exception ex)
             {
+                context.ChangeTracker.Clear();
                 sonuc.HataliSayisi++;
                 sonuc.Hatalar.Add($"Fiş #{fisId}: {ex.Message}");
             }

@@ -25,6 +25,7 @@ public class LucaPortalService : ILucaPortalService
     private readonly ILogger<LucaPortalService> _logger;
     private readonly IFirmaService _firmaService;
     private readonly IWebHostEnvironment _environment;
+    private readonly ISecureFileService _secureFileService;
     
     private static readonly SemaphoreSlim SettingsFileLock = new(1, 1);
     private LucaPortalSettings? _cachedSettings;
@@ -41,13 +42,15 @@ public class LucaPortalService : ILucaPortalService
         ILogger<LucaPortalService> logger,
         IFirmaService firmaService,
         IWebHostEnvironment environment,
-        IDataProtectionProvider dataProtection)
+        IDataProtectionProvider dataProtection,
+        ISecureFileService secureFileService)
     {
         _contextFactory = contextFactory;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
         _firmaService = firmaService;
         _environment = environment;
+        _secureFileService = secureFileService;
         _sifreProtector = dataProtection.CreateProtector("MKFiloServis.LucaPortal.Credentials.v1");
     }
 
@@ -635,15 +638,10 @@ public class LucaPortalService : ILucaPortalService
                 return 0;
             }
 
-            // Dosya kayit klasoru
-            var belgelerKlasor = Path.Combine(_environment.ContentRootPath, "wwwroot", "belgeler", "efatura");
-            if (!Directory.Exists(belgelerKlasor))
-            {
-                Directory.CreateDirectory(belgelerKlasor);
-            }
-
             foreach (var belge in belgeler)
             {
+                string? xmlPath = null;
+                string? pdfPath = null;
                 try
                 {
                     // ETTN ile mevcut fatura kontrolu
@@ -702,9 +700,9 @@ public class LucaPortalService : ILucaPortalService
                         var xmlSonuc = await XmlIndirAsync(belge.BelgeId, belge.BelgeTipi);
                         if (xmlSonuc.Basarili && xmlSonuc.Icerik != null)
                         {
-                            var xmlDosya = Path.Combine(belgelerKlasor, $"{belge.EttnNo}.xml");
-                            await File.WriteAllBytesAsync(xmlDosya, xmlSonuc.Icerik);
-                            fatura.XmlDosyaYolu = $"/belgeler/efatura/{belge.EttnNo}.xml";
+                            xmlPath = await _secureFileService.SaveEncryptedAsync(
+                                "faturalar/luca-portal", $"{Guid.NewGuid():N}_{belge.EttnNo}.xml", xmlSonuc.Icerik);
+                            fatura.XmlDosyaYolu = xmlPath;
                         }
                     }
 
@@ -713,9 +711,9 @@ public class LucaPortalService : ILucaPortalService
                         var pdfSonuc = await PdfIndirAsync(belge.BelgeId, belge.BelgeTipi);
                         if (pdfSonuc.Basarili && pdfSonuc.Icerik != null)
                         {
-                            var pdfDosya = Path.Combine(belgelerKlasor, $"{belge.EttnNo}.pdf");
-                            await File.WriteAllBytesAsync(pdfDosya, pdfSonuc.Icerik);
-                            fatura.PdfDosyaYolu = $"/belgeler/efatura/{belge.EttnNo}.pdf";
+                            pdfPath = await _secureFileService.SaveEncryptedAsync(
+                                "faturalar/luca-portal", $"{Guid.NewGuid():N}_{belge.EttnNo}.pdf", pdfSonuc.Icerik);
+                            fatura.PdfDosyaYolu = pdfPath;
                         }
                     }
 
@@ -727,6 +725,14 @@ public class LucaPortalService : ILucaPortalService
                 }
                 catch (Exception ex)
                 {
+                    foreach (var path in new[] { xmlPath, pdfPath }.Where(path => !string.IsNullOrWhiteSpace(path)))
+                    {
+                        try { await _secureFileService.DeleteAsync(path); }
+                        catch (Exception cleanupException)
+                        {
+                            ex = new AggregateException("Luca faturası aktarılamadı; ek dosya temizliği kalıcı kuyruğa alındı.", ex, cleanupException);
+                        }
+                    }
                     _logger.LogError(ex, "Belge aktarilamadi: {ETTN}", belge.EttnNo);
                 }
             }

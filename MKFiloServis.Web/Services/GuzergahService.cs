@@ -1,4 +1,4 @@
-﻿using ClosedXML.Excel;
+using ClosedXML.Excel;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Services.Interfaces;
@@ -134,11 +134,12 @@ public class GuzergahService : IGuzergahService
     public async Task<Guzergah> UpdateAsync(Guzergah guzergah)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var existing = await context.Guzergahlar.FindAsync(guzergah.Id);
+        var existing = await context.Guzergahlar.AsTracking()
+            .FirstOrDefaultAsync(g => g.Id == guzergah.Id && !g.IsDeleted);
         if (existing == null)
             throw new InvalidOperationException($"Güzergah bulunamadı. Id: {guzergah.Id}");
 
-        // Normal alanları güncelle (CariId/KurumId hariç — onlar ExecuteUpdate ile garantilenecek)
+        // Alanları aynı tracked kayıt üzerinden audit ile birlikte güncelle.
         existing.GuzergahKodu = guzergah.GuzergahKodu;
         existing.GuzergahAdi = guzergah.GuzergahAdi;
         existing.BaslangicNoktasi = guzergah.BaslangicNoktasi;
@@ -165,31 +166,15 @@ public class GuzergahService : IGuzergahService
         existing.IsDeleted = guzergah.IsDeleted;
         existing.UpdatedAt = DateTime.UtcNow;
 
-        await context.SaveChangesAsync();
-
-        // ── CariId / KurumId garantili direkt DB yazma ──
-        // UI modelinden 0/null gelme ihtimaline karşı tracking bypass edilir.
+        // Eski 0/null giriş davranışını koru; FK'leri doğrudan SQL ile yazma.
         int? hedefCariId = guzergah.CariId > 0 ? guzergah.CariId : null;
         int? hedefKurumId = guzergah.KurumId > 0 ? guzergah.KurumId : null;
-
-        var updated = await context.Guzergahlar
-            .IgnoreQueryFilters()
-            .Where(x => x.Id == guzergah.Id)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(x => x.CariId, hedefCariId ?? existing.CariId)
-                .SetProperty(x => x.KurumId, hedefKurumId ?? existing.KurumId)
-                .SetProperty(x => x.BirimFiyat, guzergah.GelirFiyat)
-                .SetProperty(x => x.GiderFiyat, guzergah.GiderFiyat)
-                .SetProperty(x => x.KdvOrani, guzergah.KdvOrani)
-                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow));
-
-        if (updated != 1)
-            throw new InvalidOperationException(
-                $"Güzergah Cari/Kurum FK update başarısız. GuzergahId={guzergah.Id}, UpdatedRows={updated}");
+        existing.CariId = hedefCariId ?? existing.CariId;
+        existing.KurumId = hedefKurumId ?? existing.KurumId;
+        await context.SaveChangesAsync();
 
         // DB'den doğrula
         var kontrol = await context.Guzergahlar
-            .IgnoreQueryFilters()
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == guzergah.Id);
 
@@ -239,7 +224,8 @@ public class GuzergahService : IGuzergahService
                 var now = DateTime.UtcNow;
 
                 // 1. Güncelle ana güzergah kaydı
-                var existing = await context.Guzergahlar.FindAsync(guzergah.Id);
+                var existing = await context.Guzergahlar.AsTracking()
+                    .FirstOrDefaultAsync(g => g.Id == guzergah.Id && !g.IsDeleted);
                 if (existing == null)
                     throw new InvalidOperationException($"Güzergah bulunamadı. Id: {guzergah.Id}");
 
@@ -275,18 +261,6 @@ public class GuzergahService : IGuzergahService
                 existing.KurumId = hedefKurumId ?? existing.KurumId;
 
                 await context.SaveChangesAsync();
-
-                // CariId / KurumId / Fiyatlar garantili direkt DB yazma (eski UpdateAsync pattern)
-                await context.Guzergahlar
-                    .IgnoreQueryFilters()
-                    .Where(x => x.Id == guzergah.Id)
-                    .ExecuteUpdateAsync(setters => setters
-                        .SetProperty(x => x.CariId, hedefCariId ?? existing.CariId)
-                        .SetProperty(x => x.KurumId, hedefKurumId ?? existing.KurumId)
-                        .SetProperty(x => x.BirimFiyat, guzergah.GelirFiyat)
-                        .SetProperty(x => x.GiderFiyat, guzergah.GiderFiyat)
-                        .SetProperty(x => x.KdvOrani, guzergah.KdvOrani)
-                        .SetProperty(x => x.UpdatedAt, now));
 
                 // 2. Replace seferler (aynı context + transaction içinde)
                 await _seferService.ReplaceAllInCurrentDbAsync(context, guzergah.Id, seferler, now);

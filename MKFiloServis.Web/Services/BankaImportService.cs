@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Services.Interfaces;
@@ -137,11 +138,15 @@ public class BankaImportService
                 // Mevcut DB kayıtları ve bu dosyada daha önce kabul edilen satırlar.
                 if (!string.IsNullOrWhiteSpace(hareket.ReferansNo))
                 {
-                    if (!referanslar.Add((hareket.Tarih.Date, hareket.ReferansNo.Trim(), hareket.Tutar, hareket.BorcMu)))
+                    var referans = hareket.ReferansNo.Trim();
+                    if (!referanslar.Add((hareket.Tarih.Date, referans, hareket.Tutar, hareket.BorcMu)))
                     {
                         sonuc.Atlanan++;
                         continue;
                     }
+
+                    hareket.IthalatTekillikAnahtari = OlusturIthalatTekillikAnahtari(
+                        firmaId, hareket.Tarih.Date, referans, hareket.Tutar, hareket.BorcMu);
                 }
 
                 kaydedilecekler.Add(hareket);
@@ -173,6 +178,20 @@ public class BankaImportService
             sonuc.Hatalar.Add("İçe aktarılabilecek yeni kayıt bulunamadı.");
 
         return sonuc;
+    }
+
+    private static string OlusturIthalatTekillikAnahtari(
+        int firmaId, DateTime tarih, string referansNo, decimal tutar, bool borcMu)
+    {
+        var canonical = JsonSerializer.Serialize(new
+        {
+            FirmaId = firmaId,
+            Tarih = tarih.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            ReferansNo = referansNo,
+            Tutar = tutar.ToString("G29", CultureInfo.InvariantCulture),
+            BorcMu = borcMu
+        });
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
     }
 
     /// <summary>

@@ -392,20 +392,27 @@ public class TasimaTedarikciService : ITasimaTedarikciService
             await context.SaveChangesAsync();
             return dosya;
         }
-        catch
+        catch (Exception uploadException)
         {
             if (!string.IsNullOrWhiteSpace(storedPath))
             {
                 try
                 {
-                    await _secureFileService.DeleteAsync(storedPath);
+                    await using var verify = await _contextFactory.CreateDbContextAsync();
+                    var isReferenced = await verify.TedarikciEvrakDosyalari.AsNoTracking()
+                        .AnyAsync(x => x.DosyaYolu == storedPath);
+                    if (!isReferenced)
+                        await _secureFileService.DeleteAsync(storedPath);
+                    else
+                        _logger.LogWarning(
+                            "Tedarikçi evrak upload sonrası hata oluştu ancak dosya DB'de referanslı; fiziksel dosya korunuyor. EvrakId={EvrakId}, Yol={Yol}",
+                            evrakId, storedPath);
                 }
                 catch (Exception cleanupException)
                 {
-                    // Yükleme hatasını koru; başarısız telafinin yolunu operasyon logunda tut.
-                    _logger.LogError(cleanupException,
-                        "Tedarikçi evrak yükleme telafisinde dosya temizlenemedi. EvrakId={EvrakId}, DosyaYolu={DosyaYolu}",
-                        evrakId, storedPath);
+                    throw new AggregateException(
+                        "Tedarikçi evrak yükleme başarısız veya belirsiz; dosyanın DB başvurusu doğrulanamadı ve dosya güvenlik için korunuyor.",
+                        uploadException, cleanupException);
                 }
             }
 
@@ -442,24 +449,14 @@ public class TasimaTedarikciService : ITasimaTedarikciService
 
     private async Task SilinenDosyalariTemizleAsync(int evrakId, IEnumerable<(int Id, string DosyaYolu)> dosyalar)
     {
-        List<Exception>? hatalar = null;
         foreach (var dosya in dosyalar)
         {
             if (string.IsNullOrWhiteSpace(dosya.DosyaYolu)) continue;
-            try
-            {
-                await _secureFileService.DeleteAsync(dosya.DosyaYolu);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex,
-                    "Tedarikçi evrak DB kaydı kaldırıldı ancak fiziksel temizlik bekliyor. EvrakId={EvrakId}, DosyaId={DosyaId}, DosyaYolu={DosyaYolu}",
-                    evrakId, dosya.Id, dosya.DosyaYolu);
-                (hatalar ??= new()).Add(ex);
-            }
+            // Soft-delete geri alınabilir olduğundan diskteki şifreli ek korunur.
+            _logger.LogInformation(
+                "Tedarikçi evrakı soft-delete edildi; dosya geri alma için korundu. EvrakId={EvrakId}, DosyaId={DosyaId}, Yol={Yol}",
+                evrakId, dosya.Id, dosya.DosyaYolu);
         }
-        if (hatalar != null)
-            throw new FileCleanupPendingException(new AggregateException(hatalar));
     }
 
     public async Task<byte[]> GetTedarikciEvraklariZipAsync(int tedarikciId, IEnumerable<int>? evrakIds = null)

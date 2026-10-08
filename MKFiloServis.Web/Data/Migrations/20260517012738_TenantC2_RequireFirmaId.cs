@@ -31,7 +31,7 @@ namespace MKFiloServis.Web.Data.Migrations
                 table: "Kurumlar");
 
             // K9 backfill: NULL/0 FirmaId satırlarını varsayılan firma ile doldur.
-            migrationBuilder.Sql(@"
+            migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + @"
                 DO $$
                 DECLARE def_firma_id int;
                 BEGIN

@@ -804,11 +804,26 @@ public class BelgeUyariService : IBelgeUyariService
             await context.SaveChangesAsync();
             return true;
         }
-        catch
+        catch (Exception saveException)
         {
             if (!string.IsNullOrWhiteSpace(storedPath))
             {
-                try { await _secureFileService.DeleteAsync(storedPath); } catch { }
+                try
+                {
+                    // SaveChanges exception may occur after DB commit. Never delete a file
+                    // until a fresh context confirms no row references its path.
+                    await using var verifyContext = await _contextFactory.CreateDbContextAsync();
+                    var isReferenced = await verifyContext.AracEvrakDosyalari.AsNoTracking()
+                        .AnyAsync(x => x.DosyaYolu == storedPath);
+                    if (!isReferenced)
+                        await _secureFileService.DeleteAsync(storedPath);
+                }
+                catch (Exception compensationException)
+                {
+                    throw new AggregateException(
+                        "Araç belgesi DB kaydı başarısız veya belirsiz; yeni dosya için DB başvurusu doğrulanamadığından dosya güvenlik için silinmedi.",
+                        saveException, compensationException);
+                }
             }
 
             throw;

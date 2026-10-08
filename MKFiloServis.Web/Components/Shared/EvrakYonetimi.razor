@@ -2,10 +2,12 @@
 @using MKFiloServis.Web.Data
 @using MKFiloServis.Web.Helpers
 @using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.EntityFrameworkCore
 @rendermode InteractiveServer
 @inject FileService FileService
+@inject ISecureFileService SecureFileService
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject IJSRuntime JS
 @inject ILogger<EvrakYonetimi> Logger
@@ -136,7 +138,7 @@
                         @foreach (var evrak in _evraklar.OrderByDescending(x => x.YuklenmeTarihi))
                         {
                             var st = GetStatus(evrak);
-                            var dosyaVar = File.Exists(FileService.GetFullPath(evrak.DosyaYolu));
+                            var dosyaVar = _dosyaVar.GetValueOrDefault(evrak.Id);
                             <tr class="@(!dosyaVar ? "table-warning" : "")">
                                 <td><span class="badge bg-primary">@evrak.EvrakTipi</span></td>
                                 <td>
@@ -227,6 +229,7 @@
     [Parameter] public EventCallback OnChanged { get; set; }
 
     private List<EvrakDosya> _evraklar = new();
+    private Dictionary<int, bool> _dosyaVar = new();
     private string? _errorMessage;
     private DateTime? _seciliTarih;
 
@@ -258,10 +261,27 @@
                 _evraklar = await db.EvrakDosyalari.Where(x => x.AracId == AracId.Value && !x.IsDeleted).ToListAsync();
             else
                 _evraklar = new();
+
+            _dosyaVar = new Dictionary<int, bool>();
+            foreach (var evrak in _evraklar)
+            {
+                try
+                {
+                    _dosyaVar[evrak.Id] = IsEncryptedStoragePath(evrak.DosyaYolu)
+                        ? await SecureFileService.ExistsAsync(evrak.DosyaYolu)
+                        : File.Exists(FileService.GetFullPath(evrak.DosyaYolu));
+                }
+                catch (Exception ex)
+                {
+                    _dosyaVar[evrak.Id] = false;
+                    Logger.LogWarning(ex, "Evrak dosyası doğrulanamadı: EvrakId={EvrakId}", evrak.Id);
+                }
+            }
         }
         catch (Exception ex)
         {
             _evraklar = new();
+            _dosyaVar = new();
             Logger.LogError(ex, "EvrakYonetimi Load hatasi PersonelId={P} AracId={A}", PersonelId, AracId);
         }
     }
@@ -306,10 +326,15 @@
             return;
         }
 
-        // Araç bağlamı veya callback yok → eski EvrakDosya akışı
+        // Araç bağlamı veya callback yok → EvrakDosya kaydı, şifreli dosya.
+        string? newlySavedPath = null;
         try
         {
-            var diskAdi = await FileService.SaveAsync(file);
+            await using var input = file.OpenReadStream(maxAllowedSize: long.MaxValue);
+            await using var content = new MemoryStream();
+            await input.CopyToAsync(content);
+            var diskAdi = await SecureFileService.SaveEncryptedAsync("ortak-evrak", file.Name, content.ToArray());
+            newlySavedPath = diskAdi;
 
             await using var db = await DbFactory.CreateDbContextAsync();
 
@@ -321,7 +346,8 @@
 
             if (existing != null)
             {
-                FileService.Delete(existing.DosyaYolu);
+                // Eski dosya DB commit'inden önce silinmez. Referans güvenli
+                // kalıcı temizlik kuyruğu kurulana kadar dosyayı koruyoruz.
                 existing.DosyaAdi = file.Name;
                 existing.DosyaYolu = diskAdi;
                 existing.GuncellenmeTarihi = DateTime.UtcNow;
@@ -355,6 +381,23 @@
         }
         catch (Exception ex)
         {
+            if (!string.IsNullOrWhiteSpace(newlySavedPath))
+            {
+                try
+                {
+                    await using var verify = await DbFactory.CreateDbContextAsync();
+                    var isReferenced = await verify.EvrakDosyalari.IgnoreQueryFilters().AsNoTracking()
+                        .AnyAsync(x => x.DosyaYolu == newlySavedPath);
+                    if (!isReferenced)
+                        await SecureFileService.DeleteAsync(newlySavedPath);
+                }
+                catch (Exception compensationException)
+                {
+                    ex = new AggregateException(
+                        "Evrak DB kaydı başarısız veya belirsiz; yeni dosyanın DB başvurusu doğrulanamadı ve dosya korunuyor.",
+                        ex, compensationException);
+                }
+            }
             _errorMessage = $"Yükleme hatası: {ex.Message}";
             Logger.LogError(ex, "EvrakYonetimi Upload hatasi PersonelId={P} AracId={A} Tip={T}", PersonelId, AracId, evrakTipi);
         }
@@ -378,10 +421,10 @@
             }
         }
 
-        // Fallback: eski FileService (araç bağlamı, callback yoksa)
+        // Yeni şifreli yol ve geçmiş düz dosya kayıtları birlikte okunur.
         try
         {
-            var bytes = await FileService.ReadAsync(evrak.DosyaYolu);
+            var bytes = await ReadDocumentAsync(evrak.DosyaYolu);
             var base64 = Convert.ToBase64String(bytes);
             var ext = Path.GetExtension(evrak.DosyaAdi).ToLowerInvariant();
             var mime = ext switch
@@ -423,10 +466,10 @@
             }
         }
 
-        // Fallback: eski FileService
+        // Yeni şifreli yol ve geçmiş düz dosya kayıtları birlikte okunur.
         try
         {
-            var bytes = await FileService.ReadAsync(evrak.DosyaYolu);
+            var bytes = await ReadDocumentAsync(evrak.DosyaYolu);
             var base64 = Convert.ToBase64String(bytes);
             await JS.InvokeVoidAsync("downloadFile", evrak.DosyaAdi, base64, "application/octet-stream");
             Logger.LogInformation("Evrak indirildi: Id={Id} Dosya={D}", evrak.Id, evrak.DosyaAdi);
@@ -453,21 +496,6 @@
 
         try
         {
-            // Diskteki dosyayı sil — yoksa hata verme (idempotent)
-            try
-            {
-                FileService.Delete(evrak.DosyaYolu);
-            }
-            catch (FileNotFoundException)
-            {
-                Logger.LogWarning("EvrakYonetimi Delete: dosya zaten diskte yok Id={Id} Yol={Yol}", evrak.Id, evrak.DosyaYolu);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogWarning(ex, "EvrakYonetimi Delete: fiziksel dosya silinemedi Id={Id}", evrak.Id);
-            }
-
-            // DB'den soft delete — fiziksel dosya durumundan bağımsız
             await using var db = await DbFactory.CreateDbContextAsync();
             var entity = await db.EvrakDosyalari
                 .FirstOrDefaultAsync(x => x.Id == evrak.Id && !x.IsDeleted);
@@ -476,7 +504,9 @@
             {
                 entity.IsDeleted = true;
                 await db.SaveChangesAsync();
-                Logger.LogInformation("Evrak silindi: Id={Id} Tip={Tip} Dosya={D}", evrak.Id, evrak.EvrakTipi, evrak.DosyaAdi);
+                // Kayıt geri alınabilir: eski düz dosya dahil fiziksel içerik korunur.
+                Logger.LogInformation("Evrak pasifleştirildi; dosya geri alma için korundu: Id={Id} Tip={Tip} Dosya={D}",
+                    evrak.Id, evrak.EvrakTipi, evrak.DosyaAdi);
             }
             else
             {
@@ -507,6 +537,19 @@
             _errorMessage = $"Silme hatası: {ex.Message}";
             Logger.LogError(ex, "EvrakYonetimi Delete hatasi Id={Id}", evrak.Id);
         }
+    }
+
+    private static bool IsEncryptedStoragePath(string path) =>
+        path.EndsWith(".enc", StringComparison.OrdinalIgnoreCase) &&
+        (path.Contains('/') || path.Contains('\\'));
+
+    private async Task<byte[]> ReadDocumentAsync(string path)
+    {
+        if (!IsEncryptedStoragePath(path))
+            return await FileService.ReadAsync(path);
+
+        return await SecureFileService.ReadDecryptedAsync(path)
+            ?? throw new FileNotFoundException($"Dosya bulunamadı: {path}");
     }
 }
 

@@ -495,12 +495,14 @@ public class KullaniciService : IKullaniciService
         var kullanici = await context.Kullanicilar
             .Include(k => k.Rol)
             .ThenInclude(r => r.Yetkiler)
-            .FirstOrDefaultAsync(k => k.Id == kullaniciId);
+            .FirstOrDefaultAsync(k => k.Id == kullaniciId && k.Aktif && !k.IsDeleted);
 
-        if (kullanici == null) return false;
-        if (kullanici.Rol.RolAdi == "Admin") return true; // Admin her seye yetkili
+        // Rol ve hesap durumu circuit'te taşınan eski nesneden değil, her çağrıda
+        // veritabanından okunur. Pasife alınmış/silinmiş hesap oturum açık kalsa da yetki alamaz.
+        if (kullanici?.Rol == null || kullanici.Rol.IsDeleted) return false;
+        if (string.Equals(kullanici.Rol.RolAdi, "Admin", StringComparison.Ordinal)) return true;
 
-        return kullanici.Rol.Yetkiler.Any(y => y.YetkiKodu == yetkiKodu && y.Izin);
+        return kullanici.Rol.Yetkiler.Any(y => !y.IsDeleted && y.YetkiKodu == yetkiKodu && y.Izin);
     }
 
     public async Task<List<string>> GetKullaniciYetkileriAsync(int kullaniciId)
@@ -509,27 +511,25 @@ public class KullaniciService : IKullaniciService
         var kullanici = await context.Kullanicilar
             .Include(k => k.Rol)
             .ThenInclude(r => r.Yetkiler)
-            .FirstOrDefaultAsync(k => k.Id == kullaniciId);
+            .FirstOrDefaultAsync(k => k.Id == kullaniciId && k.Aktif && !k.IsDeleted);
 
-        if (kullanici == null) return new List<string>();
-        if (kullanici.Rol.RolAdi == "Admin") return GetTumYetkiler();
+        if (kullanici?.Rol == null || kullanici.Rol.IsDeleted) return new List<string>();
+        if (string.Equals(kullanici.Rol.RolAdi, "Admin", StringComparison.Ordinal)) return GetTumYetkiler();
 
-        return kullanici.Rol.Yetkiler.Where(y => y.Izin).Select(y => y.YetkiKodu).ToList();
+        return kullanici.Rol.Yetkiler.Where(y => !y.IsDeleted && y.Izin).Select(y => y.YetkiKodu).ToList();
     }
     
     public async Task<HashSet<string>> GetCurrentUserYetkilerAsync()
     {
         try
         {
-            var kullanici = await GetAktifKullaniciAsync();
-            if (kullanici == null)
+            // Circuit'teki Kullanici/Rol nesnesi oturum boyunca eski kalabilir.
+            // Önce yalnızca kimliği al, sonra aktif hesap ve güncel rolü DB'den oku.
+            var kullaniciId = _authProvider.GetAktifKullanici()?.Id;
+            if (kullaniciId is null)
                 return new HashSet<string>();
-                
-            // Admin ise tüm yetkiler
-            if (kullanici.Rol?.RolAdi == "Admin")
-                return new HashSet<string> { "*" };
-                
-            var yetkiler = await GetKullaniciYetkileriAsync(kullanici.Id);
+
+            var yetkiler = await GetKullaniciYetkileriAsync(kullaniciId.Value);
             return yetkiler.ToHashSet();
         }
         catch

@@ -2,8 +2,10 @@
 @page "/banka-hareketleri"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
 @using MKFiloServis.Web.Models
 @inject IBankaKasaHareketService HareketService
+@inject IKullaniciService KullaniciService
 @inject IBankaHesapService BankaHesapService
 @inject ICariService CariService
 @inject IToastService ToastService
@@ -364,6 +366,15 @@
     private async Task SilAsync()
     {
         if (silinecekHareket == null) return;
+
+        var aktifKullanici = await KullaniciService.GetAktifKullaniciAsync();
+        if (aktifKullanici is null || !await KullaniciService.YetkiVarMiAsync(aktifKullanici.Id, Yetkiler.BankaHareketleriSil))
+        {
+            ToastService.ShowError("Banka hareketi silme yetkiniz yok veya oturumunuz artık etkin değil. Sayfayı yenileyip tekrar giriş yapın.");
+            showDeleteModal = false;
+            silinecekHareket = null;
+            return;
+        }
 
         isDeleting = true;
         StateHasChanged();

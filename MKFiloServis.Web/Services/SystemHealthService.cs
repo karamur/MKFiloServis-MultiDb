@@ -2,6 +2,7 @@
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Web.Services.Interfaces;
+using MKFiloServis.Web.Helpers;
 
 namespace MKFiloServis.Web.Services;
 
@@ -157,8 +158,11 @@ public class SystemHealthService : ISystemHealthService
 
         try
         {
-            var appPath = AppContext.BaseDirectory;
-            var driveInfo = new DriveInfo(Path.GetPathRoot(appPath) ?? "C:\\");
+            // Encrypted uploads, recovery archives and quarantine live on the
+            // configured storage volume, which may differ from the app volume.
+            var storageRoot = AppStoragePaths.GetStorageRoot(_environment.ContentRootPath);
+            var driveInfo = new DriveInfo(Path.GetPathRoot(storageRoot)
+                ?? throw new InvalidOperationException("Depolama sürücüsü belirlenemedi."));
 
             info.IsHealthy = driveInfo.IsReady;
             info.DriveName = driveInfo.Name;

@@ -18,19 +18,23 @@ public class EFaturaXmlService : IEFaturaXmlService
     private readonly IFirmaService _firmaService;
     private readonly ILogger<EFaturaXmlService> _logger;
     private readonly IWebHostEnvironment _environment;
-
-    private const string XmlDizin = "wwwroot/efatura";
+    private readonly ISecureFileService _secureFileService;
+    private readonly FileCleanupJournal _cleanupJournal;
 
     public EFaturaXmlService(
         IDbContextFactory<ApplicationDbContext> dbContextFactory,
         IFirmaService firmaService,
         ILogger<EFaturaXmlService> logger,
-        IWebHostEnvironment environment)
+        IWebHostEnvironment environment,
+        ISecureFileService secureFileService,
+        FileCleanupJournal cleanupJournal)
     {
         _dbContextFactory = dbContextFactory;
         _firmaService = firmaService;
         _logger = logger;
         _environment = environment;
+        _secureFileService = secureFileService;
+        _cleanupJournal = cleanupJournal;
     }
 
     /// <inheritdoc/>
@@ -80,6 +84,8 @@ public class EFaturaXmlService : IEFaturaXmlService
 
             // Dosyaya kaydet
             var dosyaYolu = await DosyayaKaydetAsync(request.FaturaId, xmlIcerik);
+            if (string.IsNullOrWhiteSpace(dosyaYolu))
+                throw new IOException("E-Fatura XML şifreli depoya kaydedilemedi.");
 
             // Fatura kaydını güncelle
             await FaturayiGuncelleAsync(request.FaturaId, ettn, dosyaYolu);
@@ -301,24 +307,9 @@ public class EFaturaXmlService : IEFaturaXmlService
     {
         try
         {
-            var dizin = Path.Combine(_environment.ContentRootPath, XmlDizin);
-            if (!Directory.Exists(dizin))
-                Directory.CreateDirectory(dizin);
-
-            // Alt klasör: Yıl/Ay
-            var yil = DateTime.Now.Year.ToString();
-            var ay = DateTime.Now.Month.ToString("00");
-            var altDizin = Path.Combine(dizin, yil, ay);
-            if (!Directory.Exists(altDizin))
-                Directory.CreateDirectory(altDizin);
-
-            var dosyaAdi = $"fatura_{faturaId}_{DateTime.Now:yyyyMMddHHmmss}.xml";
-            var dosyaYolu = Path.Combine(altDizin, dosyaAdi);
-
-            await File.WriteAllTextAsync(dosyaYolu, xmlIcerik, Encoding.UTF8);
-
-            // Göreli yol döndür
-            return Path.Combine("efatura", yil, ay, dosyaAdi);
+            var dosyaAdi = $"fatura_{faturaId}_{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}.xml";
+            return await _secureFileService.SaveEncryptedAsync(
+                $"faturalar/{faturaId}/gib-xml", dosyaAdi, Encoding.UTF8.GetBytes(xmlIcerik));
         }
         catch (Exception ex)
         {
@@ -339,11 +330,22 @@ public class EFaturaXmlService : IEFaturaXmlService
         if (fatura?.XmlDosyaYolu == null)
             return null;
 
-        var dosyaYolu = Path.Combine(_environment.ContentRootPath, "wwwroot", fatura.XmlDosyaYolu);
-        if (!File.Exists(dosyaYolu))
-            return null;
+        if (fatura.XmlDosyaYolu.StartsWith("faturalar/", StringComparison.OrdinalIgnoreCase))
+        {
+            var content = await _secureFileService.ReadDecryptedAsync(fatura.XmlDosyaYolu);
+            return content is null ? null : Encoding.UTF8.GetString(content);
+        }
 
-        return await File.ReadAllTextAsync(dosyaYolu, Encoding.UTF8);
+        // Eski wwwroot XML yolları yalnız geriye dönük okuma içindir.
+        var relativePath = fatura.XmlDosyaYolu.TrimStart('/', '\\').Replace('/', Path.DirectorySeparatorChar);
+        var webRoot = Path.GetFullPath(_environment.WebRootPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var fullPath = Path.GetFullPath(Path.Combine(webRoot, relativePath));
+        var webRootPrefix = webRoot + Path.DirectorySeparatorChar;
+        if (!fullPath.StartsWith(webRootPrefix, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) ||
+            !(relativePath.StartsWith("efatura" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+              relativePath.StartsWith("belgeler" + Path.DirectorySeparatorChar + "efatura" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
+            return null;
+        return File.Exists(fullPath) ? await File.ReadAllTextAsync(fullPath, Encoding.UTF8) : null;
     }
 
     /// <inheritdoc/>
@@ -759,6 +761,7 @@ public class EFaturaXmlService : IEFaturaXmlService
         var fatura = await dbContext.Faturalar.FindAsync(faturaId);
         if (fatura != null)
         {
+            var oldPath = fatura.XmlDosyaYolu;
             fatura.EttnNo = ettn;
             if (!string.IsNullOrEmpty(dosyaYolu))
                 fatura.XmlDosyaYolu = dosyaYolu;
@@ -766,7 +769,57 @@ public class EFaturaXmlService : IEFaturaXmlService
             fatura.GibDurumMesaji = "UBL-TR XML oluşturuldu.";
             fatura.GibDurumGuncellemeTarihi = DateTime.UtcNow;
 
-            await dbContext.SaveChangesAsync();
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(dosyaYolu) &&
+                    !string.IsNullOrWhiteSpace(oldPath) &&
+                    oldPath.StartsWith("faturalar/", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(oldPath, dosyaYolu, StringComparison.Ordinal))
+                    await _cleanupJournal.EnqueueAsync(oldPath, waitForReferenceRemoval: true);
+
+                await dbContext.SaveChangesAsync();
+            }
+            catch (Exception saveException)
+            {
+                if (string.IsNullOrWhiteSpace(dosyaYolu))
+                    throw;
+
+                try
+                {
+                    await using var verify = await _dbContextFactory.CreateDbContextAsync();
+                    var currentPath = await verify.Faturalar.AsNoTracking()
+                        .Where(x => x.Id == faturaId)
+                        .Select(x => x.XmlDosyaYolu)
+                        .FirstOrDefaultAsync();
+                    if (string.Equals(currentPath, dosyaYolu, StringComparison.Ordinal))
+                    {
+                        if (!string.IsNullOrWhiteSpace(oldPath) &&
+                            oldPath.StartsWith("faturalar/", StringComparison.OrdinalIgnoreCase) &&
+                            !string.Equals(oldPath, dosyaYolu, StringComparison.Ordinal))
+                            await _secureFileService.DeleteAsync(oldPath);
+                        return;
+                    }
+
+                    await _secureFileService.DeleteAsync(dosyaYolu);
+                    if (string.Equals(currentPath, oldPath, StringComparison.Ordinal) &&
+                        !string.IsNullOrWhiteSpace(oldPath) &&
+                        oldPath.StartsWith("faturalar/", StringComparison.OrdinalIgnoreCase))
+                        await _cleanupJournal.CompleteAsync(oldPath);
+                }
+                catch (Exception compensationException)
+                {
+                    throw new AggregateException(
+                        "E-Fatura XML DB sonucu belirsiz; yeni dosyanın başvurusu doğrulanamadı ve güvenli cleanup kuyruğuna bırakıldı.",
+                        saveException, compensationException);
+                }
+
+                throw;
+            }
+
+            if (!string.IsNullOrWhiteSpace(oldPath) &&
+                oldPath.StartsWith("faturalar/", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(oldPath, dosyaYolu, StringComparison.Ordinal))
+                await _secureFileService.DeleteAsync(oldPath);
         }
     }
 

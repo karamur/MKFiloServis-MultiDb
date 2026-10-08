@@ -26,6 +26,10 @@ public sealed record EvrakDosyaMaintenanceReport
     public int SaglamSayisi { get; init; }
     public int TemizlenenEvrakDosya { get; init; }
     public int TemizlenenOzlukEvrak { get; init; }
+    public int YetimSifreliDosyaSayisi { get; init; }
+    public List<MKFiloServis.Web.Services.SecureFileOrphan> YetimSifreliDosyalar { get; init; } = new();
+    public int SifresizDosyaAdaySayisi { get; init; }
+    public List<MKFiloServis.Web.Services.SecureFileOrphan> SifresizDosyaAdaylari { get; init; } = new();
     public List<EvrakDosyaKayipOgesi> Kayiplar { get; init; } = new();
     public List<EvrakDosyaKayipOgesi> Saglamlar { get; init; } = new();
     public bool DryRun { get; init; } = true;

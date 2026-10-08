@@ -11,7 +11,7 @@ namespace MKFiloServis.Web.Data.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             // Adım 1: Duplicate kayıtları temizle — en eski kayıt (min Id) kalsın
-            migrationBuilder.Sql(@"
+            migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + @"
                 UPDATE ""HakedisPuantajlar""
                 SET ""IsDeleted"" = true, ""DeletedAt"" = NOW()
                 WHERE ""Id"" NOT IN (
@@ -25,7 +25,7 @@ namespace MKFiloServis.Web.Data.Migrations
 
             // Adım 2: UNIQUE index — duplicate engeli
             // COALESCE ile nullable FirmaId: PostgreSQL NULL'ları distinct sayar
-            migrationBuilder.Sql(@"
+            migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + @"
                 CREATE UNIQUE INDEX IF NOT EXISTS ""IX_HakedisPuantajlar_UniqueKey""
                 ON ""HakedisPuantajlar"" (""Yil"", ""Ay"", ""GuzergahId"", ""AracId"", ""SoforId"", COALESCE(""FirmaId"", 0))
                 WHERE ""IsDeleted"" = false;
@@ -35,7 +35,7 @@ namespace MKFiloServis.Web.Data.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.Sql(@"DROP INDEX IF EXISTS ""IX_HakedisPuantajlar_UniqueKey"";");
+            migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + @"DROP INDEX IF EXISTS ""IX_HakedisPuantajlar_UniqueKey"";");
         }
     }
 }

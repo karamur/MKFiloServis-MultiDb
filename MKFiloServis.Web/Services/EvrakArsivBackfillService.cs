@@ -1,4 +1,4 @@
-﻿using MKFiloServis.Shared.Entities;
+using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Helpers;
 using Microsoft.EntityFrameworkCore;
@@ -145,12 +145,13 @@ public sealed class EvrakArsivBackfillService : IEvrakArsivBackfillService
                         await context.AracEvrakDosyalari
                             .IgnoreQueryFilters()
                             .Where(x => x.Id == dosya.Id)
-                            .ExecuteUpdateAsync(setters => setters
-                                .SetProperty(x => x.DosyaYolu, yeniSifreliRelativePath)
-                                .SetProperty(x => x.DosyaAdi, Path.GetFileName(yeniSifreliRelativePath))
-                                .SetProperty(x => x.DosyaTipi, uzanti.TrimStart('.'))
-                                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow),
-                                cancellationToken);
+                            .UpdateTrackedAsync(context, record =>
+                            {
+                                record.DosyaYolu = yeniSifreliRelativePath;
+                                record.DosyaAdi = Path.GetFileName(yeniSifreliRelativePath);
+                                record.DosyaTipi = uzanti.TrimStart('.');
+                                record.UpdatedAt = DateTime.UtcNow;
+                            }, cancellationToken, requireSingleRecord: true);
                     }
                 }
 
@@ -246,12 +247,13 @@ public sealed class EvrakArsivBackfillService : IEvrakArsivBackfillService
                         await context.PersonelOzlukEvraklar
                             .IgnoreQueryFilters()
                             .Where(x => x.Id == evrak.Id)
-                            .ExecuteUpdateAsync(setters => setters
-                                .SetProperty(x => x.DosyaYolu, yeniSifreliRelativePath)
-                                .SetProperty(x => x.DosyaAdi, Path.GetFileName(yeniSifreliRelativePath))
-                                .SetProperty(x => x.DosyaTipi, uzanti.TrimStart('.'))
-                                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow),
-                                cancellationToken);
+                            .UpdateTrackedAsync(context, record =>
+                            {
+                                record.DosyaYolu = yeniSifreliRelativePath;
+                                record.DosyaAdi = Path.GetFileName(yeniSifreliRelativePath);
+                                record.DosyaTipi = uzanti.TrimStart('.');
+                                record.UpdatedAt = DateTime.UtcNow;
+                            }, cancellationToken, requireSingleRecord: true);
                     }
                 }
 

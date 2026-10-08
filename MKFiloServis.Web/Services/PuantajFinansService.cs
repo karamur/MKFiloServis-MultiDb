@@ -1,4 +1,4 @@
-﻿using MKFiloServis.Shared.Entities;
+using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -257,18 +257,21 @@ public sealed class PuantajFinansService : IPuantajFinansService
 
         await db.Hakedisler
             .Where(x => x.Id == kayit.Id)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(x => x.FaturaId, fatura.Id)
-                .SetProperty(x => x.Durum, HakedisDurum.Faturalandi)
-                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow));
+            .UpdateTrackedAsync(db, record =>
+            {
+                record.FaturaId = fatura.Id;
+                record.Durum = HakedisDurum.Faturalandi;
+                record.UpdatedAt = DateTime.UtcNow;
+            }, requireSingleRecord: true);
 
         try
         {
             await SnapshotHakedisGuncelleAsync(kayit, fatura.Id);
         }
-        catch
+        catch (Exception ex)
         {
-            // Non-critical: snapshot update failure doesn't block the finans chain
+            _logger.LogError(ex, "Hakediş faturalandı ancak snapshot güncellenemedi. Hakediş: {Id}", kayit.Id);
+            throw new InvalidOperationException("Hakediş faturası oluşturuldu ancak snapshot güncellemesi tamamlanamadı; yeniden fatura üretmeden mevcut kaydı kontrol edin.", ex);
         }
 
         var gelir = kayit.Tip == HakedisTipi.Kurum ? araToplam : 0m;
@@ -320,56 +323,61 @@ public sealed class PuantajFinansService : IPuantajFinansService
 
     private async Task SnapshotHakedisGuncelleAsync(Hakedis hakedis, int? faturaId = null)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync();
-        var firmaId = hakedis.FirmaId ?? 0;
-
-        var islemId = DeterministicGuid(hakedis.Id, "HakedisFinansV2");
-        var exists = await db.SnapshotTransactions
-            .AnyAsync(t => t.IslemId == islemId && !t.IsDeleted);
-        if (exists) return;
-
-        var hakedisTutar = hakedis.GenelToplam > 0 ? hakedis.GenelToplam : hakedis.Tutar;
-        var deltaGelir = hakedis.Tip == HakedisTipi.Kurum ? hakedisTutar : 0m;
-        var deltaGider = hakedis.Tip == HakedisTipi.Tedarikci ? hakedisTutar : 0m;
-
-        db.SnapshotTransactions.Add(new SnapshotTransaction
+        if (hakedis.FirmaId is not > 0)
+            throw new InvalidOperationException("Hakediş snapshot işlemi için geçerli firma gerekir.");
+        await using var strategyDb = await _dbFactory.CreateDbContextAsync();
+        var strategy = strategyDb.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
         {
-            FirmaId = firmaId,
-            IslemId = islemId,
-            Yil = hakedis.Yil,
-            Ay = hakedis.Ay,
-            IslemTipi = "HakedisFinansV2",
-            GelirDelta = deltaGelir,
-            GiderDelta = deltaGider,
-            FaturaId = faturaId,
-            Aciklama = $"Hakedis #{hakedis.Id} finans işlemi",
-            CreatedAt = DateTime.UtcNow
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            var firmaId = hakedis.FirmaId ?? 0;
+
+            var islemId = DeterministicGuid(hakedis.Id, "HakedisFinansV2");
+            var exists = await db.SnapshotTransactions
+                .AnyAsync(t => t.IslemId == islemId && !t.IsDeleted);
+            if (exists) return;
+
+            var hakedisTutar = hakedis.GenelToplam > 0 ? hakedis.GenelToplam : hakedis.Tutar;
+            var deltaGelir = hakedis.Tip == HakedisTipi.Kurum ? hakedisTutar : 0m;
+            var deltaGider = hakedis.Tip == HakedisTipi.Tedarikci ? hakedisTutar : 0m;
+
+            db.SnapshotTransactions.Add(new SnapshotTransaction
+            {
+                FirmaId = firmaId,
+                IslemId = islemId,
+                Yil = hakedis.Yil,
+                Ay = hakedis.Ay,
+                IslemTipi = "HakedisFinansV2",
+                GelirDelta = deltaGelir,
+                GiderDelta = deltaGider,
+                FaturaId = faturaId,
+                Aciklama = $"Hakedis #{hakedis.Id} finans işlemi",
+                CreatedAt = DateTime.UtcNow
+            });
+
+            var snapshots = await db.MaasOdemeSnapshotlar.AsTracking()
+                .Where(s => s.FirmaId == firmaId && s.Yil == hakedis.Yil && s.Ay == hakedis.Ay && !s.IsDeleted)
+                .ToListAsync();
+            foreach (var snapshot in snapshots)
+            {
+                if (!snapshot.Kilitli)
+                {
+                    snapshot.HakedisGelir += deltaGelir;
+                    snapshot.HakedisGider += deltaGider;
+                    snapshot.UpdatedAt = DateTime.UtcNow;
+                }
+                if (snapshot.HakedisGelir < 0 || snapshot.HakedisGider < 0)
+                {
+                    _logger.LogCritical("Snapshot negatif tutarı düzeltiliyor. Snapshot={Id}", snapshot.Id);
+                    snapshot.HakedisGelir = Math.Max(snapshot.HakedisGelir, 0m);
+                    snapshot.HakedisGider = Math.Max(snapshot.HakedisGider, 0m);
+                }
+            }
+
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
         });
-
-        await db.Database.ExecuteSqlRawAsync(@"
-            UPDATE ""MaasOdemeSnapshotlar""
-            SET ""HakedisGelir"" = ""HakedisGelir"" + {0},
-                ""HakedisGider"" = ""HakedisGider"" + {1},
-                ""UpdatedAt"" = NOW()
-            WHERE ""FirmaId"" = {2} AND ""Yil"" = {3} AND ""Ay"" = {4}
-              AND ""IsDeleted"" = false AND ""Kilitli"" = false",
-            deltaGelir, deltaGider, firmaId, hakedis.Yil, hakedis.Ay);
-
-        var negatifVar = await db.MaasOdemeSnapshotlar
-            .AnyAsync(s => s.FirmaId == firmaId && s.Yil == hakedis.Yil && s.Ay == hakedis.Ay
-                && !s.IsDeleted && (s.HakedisGelir < 0 || s.HakedisGider < 0));
-        if (negatifVar)
-        {
-            _logger.LogCritical("Snapshot NEGATİF değer tespit edildi! Firma={FirmaId} Yil={Yil} Ay={Ay}", firmaId, hakedis.Yil, hakedis.Ay);
-            await db.Database.ExecuteSqlRawAsync(@"
-                UPDATE ""MaasOdemeSnapshotlar""
-                SET ""HakedisGelir"" = GREATEST(""HakedisGelir"", 0),
-                    ""HakedisGider"" = GREATEST(""HakedisGider"", 0)
-                WHERE ""FirmaId"" = {0} AND ""Yil"" = {1} AND ""Ay"" = {2} AND ""IsDeleted"" = false",
-                firmaId, hakedis.Yil, hakedis.Ay);
-        }
-
-        await db.SaveChangesAsync();
     }
 
     private static Guid DeterministicGuid(int seed, string scope)

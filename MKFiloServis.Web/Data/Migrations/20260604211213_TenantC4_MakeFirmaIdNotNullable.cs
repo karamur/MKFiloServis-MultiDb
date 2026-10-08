@@ -16,7 +16,7 @@ namespace MKFiloServis.Web.Data.Migrations
 
             foreach (var table in tables)
             {
-                migrationBuilder.Sql($@"
+                migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + $@"
                     DO $$ DECLARE first_firma_id integer;
                     BEGIN
                         IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = '{table}') THEN
@@ -43,7 +43,7 @@ namespace MKFiloServis.Web.Data.Migrations
 
             foreach (var table in tables)
             {
-                migrationBuilder.Sql($@"
+                migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + $@"
                     DO $$ BEGIN
                         IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = '{table}') THEN
                             EXECUTE 'ALTER TABLE ""{table}"" ALTER COLUMN ""FirmaId"" DROP NOT NULL';

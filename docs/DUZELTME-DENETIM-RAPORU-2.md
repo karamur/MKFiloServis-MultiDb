@@ -1,7 +1,7 @@
 # MKFiloServis — İkinci Düzeltme Denetim Raporu
 
 **Denetim tarihi:** 2026-10-02 (önceki denetimin ~2 saat sonrası)
-**Önceki denetim:** [DUZELTME-DENETIM-RAPORU.md](DUZELTME-DENETIM-RAPORU.md)
+**Önceki denetim:** `DUZELTME-DENETIM-RAPORU.md` tarihsel kaynak dosyası çalışma ağacında bulunmuyor; bu bağlantı kaldırıldı. Güncel takip için [görev envanteri](SATISA-CIKARIM-GOREV-ENVANTERI-2026-10-06.md) kullanılır.
 **İlk rapor kesitinin kapsamı:** İlk denetimden sonra yapılan 27 dosyalık değişiklik (+297 / −828 satır). Sonraki değişiklikler Bölüm 8–26'te kayıtlıdır.
 **İlk rapor kesitinin yöntemi:** Git diff incelemesi, satır bazlı doğrulama ve o kesitte canlı `dotnet build`. Sonraki her ek için doğrulama durumu ayrıca belirtilir.
 
@@ -13,7 +13,7 @@
 >
 > **Durum renkleri:** 🟢 uygulandı ve mevcut kanıtla doğrulandı · 🟡 kısmi veya doğrulama bekliyor · 🔴 açık işlem/yayın engeli · ⚪ değişiklik yok.
 
-> **Yeniden analiz (2026-10-02):** İlk 39 maddenin tümü kaynakla yeniden karşılaştırıldı; [ayrıntılı karşılaştırma](SATISA-CIKARIM-YENIDEN-ANALIZ-2026-10-02.md) ve Bölüm 23. Geçersiz sürümün lisans kontrolünden geçmesi, yeni belge şifrelemesine uyumsuz yedek ön koşulu ve CI dosya filtreleri için üç yeni açık iş tespit edildi. Derleme ve kaynak düzeltmeleri satışa hazırlık kabulü yerine geçmez.
+> **Yeniden analiz (2026-10-02):** İlk 39 maddenin kaynakla karşılaştırması bu raporun Bölüm 23'ünde özetlendi; o tarihteki ayrı ayrıntı dosyası çalışma ağacında bulunmuyor. Mevcut birleşik görevler [2026-10-06 envanterinde](SATISA-CIKARIM-GOREV-ENVANTERI-2026-10-06.md) izlenir. Geçersiz sürümün lisans kontrolünden geçmesi, yeni belge şifrelemesine uyumsuz yedek ön koşulu ve CI dosya filtreleri için üç yeni açık iş tespit edilmişti. Derleme ve kaynak düzeltmeleri satışa hazırlık kabulü yerine geçmez.
 
 > **K-1 için geçerli yapı:** Lisans üretimi ve anahtar yönetimi yalnız **LisansDesktop** programında yapılır. **Anahtar ve Yedek** sekmesinde **Anahtar Durumu**, **Şifreli Yedek Oluştur**, **Yedeği Doğrula** ve **Anahtar / Yedek İçe Aktar** butonları bulunur. Anahtar programın şifreli deposundadır. Harici betik, ortam değişkeni veya ayrı anahtar yönetim hizmeti gerekmez. Önceki bölümlerdeki PEM/harici yedek açıklamaları tarihsel kayıttır; güncel uygulama Bölüm 20'dedir.
 
@@ -736,7 +736,7 @@ Kullanıcının ekran görüntüsünde anahtar işlemleri görünmüyordu. Önce
 
 ## 23. Satışa çıkarım yeniden analizi ve karşılaştırma (2026-10-02)
 
-**Tam liste:** [Satışa çıkarım yeniden analiz raporu](SATISA-CIKARIM-YENIDEN-ANALIZ-2026-10-02.md). İlk analizdeki 6 kritik, 11 yüksek, 14 orta ve 8 düşük madde ayrı ayrı değerlendirildi; güncel ana tabloda eksik O-8/O-9/O-14 eklendi. Düşük öncelikli sekiz madde ayrıntılı karşılaştırmada yer alır.
+**Güncel tam görev listesi:** [Satışa çıkarım görev envanteri](SATISA-CIKARIM-GOREV-ENVANTERI-2026-10-06.md). İlk analizdeki 6 kritik, 11 yüksek, 14 orta ve 8 düşük maddenin tarihsel değerlendirmesi Bölüm 23'te özetlenir; eski ayrı ayrıntı dosyası çalışma ağacında yoktur. Güncel birleşik tabloda eksik O-8/O-9/O-14 takip edilir.
 
 ### Yeni açık kod işleri
 
@@ -752,7 +752,7 @@ Kullanıcının ekran görüntüsünde anahtar işlemleri görünmüyordu. Önce
 - Y-7: Workflow eksik test projesini atlar; başarılı build, test kapsamı kanıtı değildir.
 - D-2: “Yalnız arayüz tanımı” ilk tespiti güncel kaynakla uyuşmaz; entity uygulamaları ve firma kopyalama kullanımı mevcut.
 - O-13/R-8: Güncel Git durumunda `test_all.txt` ve boş Infrastructure dosyası **staged**; eski raporlar ve Rent-a-Car analiz belgesi **unstaged** silinmiştir. Önceki bölümlerdeki staged anlatımları bu kayıtla düzeltilir. Silmelerin commit/yayınlandığı varsayılmadı.
-- Son paket zafiyet ve geçmiş sır taraması bu tur yapılmadı; önceki tarama sonuçları tarihsel kanıttır.
+- Bu tarihsel turda son paket zafiyet ve geçmiş sır taraması yapılmadı; bağımlılık taraması sonraki [2026-10-06 A-22 kapanışında](A-22-BAGIMLILIK-TARAMASI-2026-10-06.md) tamamlandı. Geçmiş sır taraması/rotasyonu A-06 kapsamında açık kalır.
 
 **Öncelik:** N-2/D-5 tam şifreli belge kurtarma → K-1/N-1/O-14 lisans hakları ve geçiş → erişim/tenant/parola kabulü → gerçek kurulum ve veri aktarımı → CI/kritik işlem bütünlüğü → sır rotasyonu ve teslim commit'i.
 
@@ -1123,7 +1123,7 @@ Gerçek yedek veya restore çalıştırılmadı, otomatik test eklenmedi/çalı�
 - 🟢 **Kod düzeltildi:** Firma değişimi eski çağrıyı olay anında geçersizleştirir; UI dispatcher üzerinden firma filtresi, eski liste ve silme/plaka geçmişi seçimleri temizlenerek yeniden yükleme yapılır. Başlayan yükleme eski veriyi temizler ve yükleme durumunu render eder. Dispose sürümü geçersizleştirir ve firma olay aboneliğini kaldırır; bekleyen liste sonucu kapatılmış ekrana aktarılmaz.
 - 🟢 **Kod düzeltildi:** Ana liste hatası try/catch/finally ile ele alınır; teknik ayrıntı logger'a gider, güncel kullanıcı hatası kalıcı role=alert uyarısı ve Yeniden Dene düğmesiyle bildirilir. Yardımcı firma seçenekleri/firmasız sayısı hataları da logger ve uyarıyla açıklanır; araçlar yüklenmişse liste gösterilmeye devam eder. Teknik istisna mesajı kullanıcı uyarısına eklenmez.
 - 🟢 **Derleme:** Son kaynakla Web Debug derlemesi **0 uyarı, 0 hata**; değişen dosyalarda `git diff --check` boşluk hatası bildirmedi.
-- 🟡 **Kabul bekliyor:** Bu turda runtime/UI testi yapılmadı. Hızlı firma/dönem/yenileme geçişleri, cache hit/miss, ana/yardımcı sorgu arızası, yeniden deneme ve Dispose kabulü bekler. Başlamış sorgular iptal edilmez. Plaka geçmişi modalının ekleme/silme/kapatma sonuç koruması sonraki ekte kod olarak tamamlandı; runtime kabulü bekler. Araç silme sonuç koruması sonraki ekte kod olarak tamamlandı; runtime kabulü bekler. Import sonuçlarının seçim değişimi sırasında ekrana aktarılması ve backfill yetki/firma kabulü ayrı işlerdir. Bu değişiklik ana liste yükleme akışını kapsar.
+- 🟡 **Kabul bekliyor:** Bu turda runtime/UI testi yapılmadı. Hızlı firma/dönem/yenileme geçişleri, cache hit/miss, ana/yardımcı sorgu arızası, yeniden deneme ve Dispose kabulü bekler. Başlamış sorgular iptal edilmez. Plaka geçmişi modalının ekleme/silme/kapatma sonuç koruması sonraki ekte kod olarak tamamlandı; runtime kabulü bekler. Araç silme sonuç koruması sonraki ekte kod olarak tamamlandı; runtime kabulü bekler. Import sonuç koruması son ekte kod olarak tamamlandı; runtime kabulü ve import servisinin firma kapsamı denetimi bekler. Backfill yetki/firma kabulü ayrı iştir. Bu değişiklik ana liste yükleme akışını kapsar.
 
 ## Araç plaka geçmişi modalında bekleyen yazım sonuçları — 2026-10-05
 
@@ -1159,3 +1159,710 @@ Gerçek yedek veya restore çalıştırılmadı, otomatik test eklenmedi/çalı�
 - 🟢 **Kod düzeltildi:** Silme hatası try/catch/finally ile ele alınır; teknik ayrıntı logger'a, genel bildirim yalnız güncel modalın kullanıcısına gider. Başarılı kayıt sonrası liste yenilenir; yenileme hatası ana listenin mevcut uyarı/yeniden deneme akışında kalır.
 - 🟢 **Derleme:** Son kaynak ayrı geçici çıktı klasörüne `UseAppHost=false` ile **0 uyarı, 0 hata** derlendi; değişen dosyaların `git diff --check` kontrolü boşluk hatası bildirmedi. Çalışan uygulama yeniden başlatılmadı.
 - 🟡 **Kabul bekliyor:** Bu turda runtime veya gerçek araç silme yapılmadı. NoTracking varsayılanı, DB/audit rollback, farklı firma/Tüm firmalar reddi, bulunmayan araç, çift tıklama, modal/firma geçişi ve Dispose kabulü açık. Başlamış silme iptal edilmez; modal kapansa da DB yazımı tamamlanabilir. İlişkili operasyonların araç soft delete politikasının kabulü, HTTP/yetki kabulü, Excel aktarım sonuç koruması ve backfill yetkisi ayrı işlerdir.
+
+## Araç Excel aktarımında modal ve seçim sonuç koruması — 2026-10-05
+
+- 🟢 **Kod düzeltildi:** Dosya nesnesi, modal sürümü ve firma/Tüm firmalar seçimi işlem başında yakalanır. Dosya okuması ve servis çağrısı sonrasında güncellik kontrol edilir; dosya okunurken seçim değişmişse servis yazımı başlatılmaz. Modal açma/kapatma, yeni dosya, firma olayı ve Dispose eski sonucu geçersizleştirir.
+- 🟢 **Kod düzeltildi:** Ekran genelinde aktarım kilidi modal kapansa da işlem bitene kadar korunur; çift başlatma ve bekleyen işlem sırasında dosya değiştirme engellenir. Açılan modal işlem sürdüğünü ve kapatmanın kayıtları geri almadığını açıklar. Yalnız kilidi tutan aktarım finally içinde kilidi bırakır; Dispose sonrası render yapılmaz.
+- 🟢 **Kod düzeltildi:** Sonuç yerel değişkende tutulur ve yalnız güncel modalda yayınlanır. Hatalı/kısmi sonuç başarı bildirimi yerine uyarı verir; eklenmiş/güncellenmiş satır varsa Success=false olsa da liste yenilenir. UI istisnası logger'a, genel hata güncel modala gider.
+- 🟢 **Derleme:** Web Debug ayrı geçici çıktı klasörüne `UseAppHost=false` ile **0 uyarı, 0 hata** tamamlandı; değişen dosyalarda `git diff --check` boşluk hatası bildirmedi. Çalışan uygulama yeniden başlatılmadı.
+- 🟡 **Kabul bekliyor:** Runtime/UI testi veya gerçek Excel aktarımı yapılmadı. Dosya okurken/modal veya firma A→B→A geçişi, iki tıklama, kısmi commit, okuma hatası, modalı yeniden açma ve Dispose kabulü açık. Başlamış servis yazımı iptal edilmez; DB kaydı sürebilir. Import servisinin firma kimliğini işlem boyunca sabitlemesi, sorgular/yeni kayıtlar için açık firma koşulu ve servis hata ayrıntılarının kullanıcı sunumu ayrıca denetlenmeli; bu ek UI sonucu kapsamındadır.
+
+## A-13 devamı — araç import servisinde sabit firma ve tracked yazım — 2026-10-05
+
+- 🟢 **Kod düzeltildi:** ImportFromExcelAsync boş/10 MB üzeri veriyi ve tek pozitif firma seçimi olmayan çağrıyı reddeder. Firma kimliği context oluşturulmadan önce yakalanır; firma erişilebilir/silinmemiş olmalıdır. Şase, güncelleme ve aktif plaka sorguları açık firma koşuluyla çalışır; yeni araç FirmaId alanı yakalanmış kimlikle atanır. Global filtreler kaldırılmaz.
+- 🟢 **Kod düzeltildi:** İşlem boyunca geçici firma olayı aboneliği seçim sürümünü artırır; A→B→A değişimi de yakalanır. Satır/transaction başında, kayıt öncesi ve SaveChanges sonrası commit öncesinde seçim doğrulanır. Değişim fark edilince mevcut transaction commit edilmez, kalan satırlar durur; daha önce commit edilmiş satırlar geri alınmaz. Abonelik finally ile kaldırılır.
+- 🟢 **Kod düzeltildi:** Güncelleme hedefi ve plaka geçmişi AsTracking yüklenir; hedef kaybolmuş/gizlenmişse başarılı güncelleme sayılmaz. ExecutionStrategy her denemede tracker'ı temizleyip hedefi tekrar yükler. Satır hata ayrıntısı logger'a gider; kullanıcıya satır kimliği ve genel hata/firma değişimi yönergesi verilir. Satır hatası varsa Success=false döner; önceki kısmi kayıtları UI yenilemesi kapsar.
+- 🟢 **Derleme:** Web Debug ayrı geçici çıktı klasörüne `UseAppHost=false` ile **0 uyarı, 0 hata** tamamlandı; değişen dosyaların `git diff --check` kontrolü boşluk hatası bildirmedi. Çalışan uygulama yeniden başlatılmadı.
+- 🟡 **Kabul bekliyor:** Gerçek Excel/DB/circuit testi yapılmadı. Firma değişimi ile SaveChanges/commit'in aynı anda gerçekleşmesi, audit tenant bilgisi, NoTracking, retry/commit belirsizliği, eski şase/plaka ilişkileri ve eşzamanlı DB tekillik kabulü açık. Kontroller başlamış commit'i iptal veya geri alma garantisi değildir; sağlayıcı/global filtre/audit bütünlüğünün gerçek kabulü gerekir. Backfill yetkisi ve genel araç firma değiştirme denetimi A-13 altında açık kalır.
+
+## A-13 devamı — firmasız araç atamasında Admin ve hedef firma kontrolü — 2026-10-05
+
+- 🟢 **Kod düzeltildi:** BackfillFirmaIdAsync HTTP varsa HTTP kimliğini, circuit çağrısında AuthenticationStateProvider kimliğini kullanır. Pozitif kullanıcı kimliği ve DB'de aktif/silinmemiş kullanıcı, silinmemiş Admin rolü gerekir; yalnız claim'deki rol yeterli değildir. Yetki kayıt öncesinde tekrar doğrulanır. Diğer kullanıcılar firmasız araç sayısını da alamaz; sıfır döndüğü için bakım düğmesi gösterilmez.
+- 🟢 **Kod düzeltildi:** Hedef kimlik tek seçili firma ile aynı olmalıdır; hedef firma global filtre kapsamında mevcut/silinmemiş olmalıdır. Filtre atlama yalnız yetkili bakım yolunda, FirmaId=null ve silinmemiş araç sorgusuna uygulanır. Araçlar AsTracking yüklenir; firma/UpdatedAt ortak SaveChanges/audit akışında kaydedilir ve ardından cache temizlenir.
+- 🟢 **Kod düzeltildi:** Geçici firma olayı aboneliği A→B→A geçişini de geçersizleştirir; seçim kayıt öncesi doğrulanır, abonelik finally ile kaldırılır. UI işlem kilidi onaydan önce alınır; onay ve servis sonucu liste sürümü/firma seçimiyle kontrol edilir. Eski sonuç başka firma ekranında başarı/yenileme başlatmaz. Teknik hatalar logger'a, genel bildirim güncel seçime gider.
+- 🟢 **Derleme:** Son kaynak Web Debug ayrı geçici çıktı klasörüne `UseAppHost=false` ile **0 uyarı, 0 hata** derlendi; değişen dosyaların `git diff --check` kontrolü boşluk hatası bildirmedi. Atama düğmesi işlem/yükleme sırasında devre dışıdır. Çalışan uygulama yeniden başlatılmadı.
+- 🟡 **Kabul ve kapsam:** Runtime testi veya gerçek backfill yapılmadı. HTTP/circuit kimliği, normal/Admin/pasif kullanıcı, rol kaldırma, NoTracking, audit rollback ve eşzamanlı firma seçimi kabulü açık. Başlamış kayıt iptal edilmez. İlişkili mevcut tenant verilerinin tutarlılığı ve eşzamanlı atama kabulü ayrıca yapılmalı; genel UpdateAsync firma değiştirme yolu bu ekte değiştirilmedi ve A-13'te açık kalır.
+
+## A-13 devamı — genel araç güncelleme ve taşıma giriş kontrolleri — 2026-10-05
+
+- 🟢 **Kod düzeltildi:** UpdateAsync pozitif araç kimliği, boş olmayan şase, tek seçili firma ve aktif/silinmemiş DB kullanıcısı ister. Genel güncelleme seçili firmadaki tracked araçla sınırlıdır. Bu ekteki Admin için hedef kaydı filtresiz yeniden açma yolu aşağıdaki ortak kayıt düzeltmesinde kaldırıldı; firma değişikliği taşıma servisinden yürütülür.
+- 🟢 **Kod düzeltildi:** Hedef firma mevcut/silinmemiş olmalıdır; kira/komisyon carileri pozitif, hedef firmaya ait ve silinmemiş olmalıdır. Null cari desteklenir; geçersiz cari sessizce null yapılmaz. Şase mükerrer sorgusu aynı context'te yapılır, yanlış firma sessizce yok sayılmaz. Kayıt öncesi seçili firma tekrar kontrol edilir. Teknik DB hatası logger'a gider; kullanıcıya genel hata verilir.
+- 🟢 **Kod düzeltildi:** MoveAracToFirmaAsync öncesinde aktif DB Admin yetkisi, tek seçili kaynak firma, kaynak firmada erişilebilir tracked araç, mevcut/silinmemiş ve farklı hedef firma ile izinli taşıma anahtarları kontrol edilir. Kira/komisyon bağlantıları hedefe uygun değilse taşıma başlamadan reddedilir; otomatik cari silme/eşleme yapılmaz. Puantaj ve servis çalışma hedefleri AsTracking yüklenir. Hazırlık hataları varsa SaveChanges yapılmaz; form da bu durumda ayrı UpdateAsync çağrısını başlatmaz.
+- 🟢 **Derleme:** Son kaynak Web Debug ayrı geçici çıktı klasörüne `UseAppHost=false` ile **0 uyarı, 0 hata** derlendi; değişen dosyaların `git diff --check` kontrolü boşluk hatası bildirmedi. Çalışan uygulama yeniden başlatılmadı.
+- 🟡 **Kalan uygulama/kabul:** Runtime veya gerçek taşıma yapılmadı. Bu ekte iki ayrı SaveChanges olarak kaydedilen taşıma/form güncellemesi, aşağıdaki ortak kayıt düzeltmesinde birleştirildi. İlişkili cari/plaka/puantaj/personel/operasyon kayıtlarının hedef firma tutarlılığı ve seçilmeyen kayıtların politikası ayrıca tamamlanmalı. Güzergâh taşıma yolu bu ekte değiştirilmedi. Rol/firma değişiminin yazımla yarışı, A→B→A, eski bozuk ilişkiler, tam HTTP/circuit ve DB/audit rollback kabulü bekler. Başlamış commit bu kontrollerle geri alınmaz; A-13 bütünüyle kapanmadı.
+
+## A-13 devamı — araç taşıma ve form alanlarının ortak kaydı — 2026-10-05
+
+- 🟢 **Kod düzeltildi:** Araç formundaki iki taşıma onayı güncel form alanlarını MoveAracToFirmaAsync çağrısına verir; taşıma sonrasında ikinci UpdateAsync çağrısı kaldırıldı. Form alanları, kaynak firma/kayıt izi ve seçilen ilişkili değişiklikler aynı context içinde hazırlanıp tek SaveChanges/audit akışında kaydedilir. Hazırlık hatasında hiçbir değişiklik kaydedilmez.
+- 🟢 **Kod düzeltildi:** Form kimliği ve hedef firma eşleşmesi kontrol edilir; değiştirilebilir alanların kopyası ilk await öncesinde alınır. Pozitif olmayan cari kimlikleri reddedilir; kira/komisyon carileri hedef firmada mevcut ve silinmemiş olmalıdır. Şase mükerrerliği kayıt öncesinde kontrol edilir. Genel UpdateAsync farklı firmaya yazımı reddeder ve taşıma akışına yönlendirir.
+- 🟢 **Kod düzeltildi:** Firma olayı sürümü A→B→A seçimini de geçersizleştirir; geçici abonelik finally ile kaldırılır. Aktif DB Admin yetkisi kayıt öncesinde yeniden doğrulanır. Kayıt sonrası cache temizleme hatası logger'a gider; tamamlanmış DB kaydı başarısız taşıma olarak bildirilmez.
+- 🟢 **Derleme:** Son kaynak Web Debug ayrı geçici çıktı klasörüne UseAppHost=false ile **0 uyarı, 0 hata** derlendi. git diff --check boşluk hatası bildirmedi.
+- 🟡 **Açık kapsam/kabul:** Runtime testi veya gerçek taşıma yapılmadı; çalışan uygulama yeniden başlatılmadı. İlişkili ve seçilmeyen kayıtların tenant politikası, eski cari/plaka/personel/operasyon bağlantıları, eşzamanlı taşıma, rol/firma değişiminin commit ile yarışı ve DB/audit rollback kabulü açık. Güzergâh taşıma yolu bu ekte değiştirilmedi. Başlamış commit'i geri alma garantisi verilmez; A-13 genel durumu sarıdır.
+
+## A-13 devamı — araç evrak/dosya firma bütünlüğü ve envanter yetkisi — 2026-10-05
+
+- 🟢 **Kod düzeltildi:** Taşıma kodundaki eski “AracEvrak FirmaId taşımaz” varsayımı kaldırıldı. Silinmemiş araç evrakları ve bu evrakların silinmemiş dosyaları AsTracking yüklenir; her iki kaydın FirmaId ve UpdatedAt alanları araçla aynı SaveChanges/audit akışında hedefe aktarılır. Taşınan kayıt sayısı dosyaları da kapsar; fiziksel dosya yolu değiştirilmez.
+- 🟢 **Kod düzeltildi:** Evrak/dosya kaynak firma kimliği araçla eşleşmiyorsa (boş kimlik dahil) işlem kayıt öncesinde reddedilir. Mevcut evraklar seçilmeden araç taşınamaz; UI bu seçimi zorunlu ve devre dışı onay kutusuyla gösterir. Servis aynı kuralı doğrudan çağrıda da uygular.
+- 🟢 **Kod düzeltildi:** GetAracTransferItemsAsync pozitif araç kimliği, tek seçili kaynak firma, aktif/silinmemiş DB Admin kullanıcısı ve kaynak firmada erişilebilir araç kontrolünden sonra ilişki sayımlarını açar. Firma olayı sürümü liste hazırlığı boyunca A→B→A değişimini de yakalar; abonelik finally ile kaldırılır. Listeleme hatası UI'de yakalanır, logger'a kaydedilir ve genel bildirim gösterilir.
+- 🟢 **Derleme:** Son kaynak Web Debug ayrı geçici çıktı klasörüne UseAppHost=false ile **0 uyarı, 0 hata** derlendi; git diff --check boşluk hatası bildirmedi.
+- 🟡 **Kalan kapsam/kabul:** Gerçek taşıma veya runtime testi yapılmadı; çalışan uygulama yeniden başlatılmadı. Puantaj/bakım ve diğer ilişkilerin kaynak/hedef bağlantıları, seçilmeyen kayıt politikası, silinmiş evrak/dosyaların yeniden etkinleştirilmesi, dosya sürümü erişimi, eşzamanlı yazım ve rollback kabulü açık. Eski firma uyuşmazlıkları bu akışta otomatik onarılmaz. A-13 genel durumu sarı kalır.
+
+## A-13 devamı — seçilen puantaj ve servis çalışma bağlantıları — 2026-10-05
+
+- 🟢 **Kod düzeltildi:** Taşınması seçilen aktif puantajların IsverenFirmaId, servis çalışmalarının FirmaId alanı kaynak araç firmasıyla eşleşmelidir; boş/başka firma bağlantısı kayıt öncesinde reddedilir. Uygun kayıtların firma ve UpdatedAt alanları ortak SaveChanges akışında güncellenir.
+- 🟢 **Kod düzeltildi:** Seçilen puantajın dolu cari, kurum, güzergâh ve şoför bağlantıları hedef firmada mevcut ve silinmemiş olmalıdır. Servis çalışmasının zorunlu güzergâh ve şoför bağlantıları da hedef firmaya göre kontrol edilir. Bağlantılar otomatik silinmez veya başka kimliğe çevrilmez; uyumsuzlukta taşıma kaydedilmez.
+- 🟢 **Kod düzeltildi:** Gelir/gider faturası, hesap dönemi veya önceki sürüm bağlantılı puantajlar ile aktif masraf bağlantılı servis çalışmaları eşleme tamamlanana kadar bu taşıma akışında reddedilir. Önceden değiştirilen tracked araç/evrak alanları da bu ret halinde SaveChanges yapılmadığı için kaydedilmez. ServisCalisma envanter etiketi gerçek kapsamına uygun “Servis çalışma kayıtları” olarak düzeltildi.
+- 🟢 **Derleme:** Son kaynak Web Debug ayrı geçici çıktı klasörüne UseAppHost=false ile **0 uyarı, 0 hata** derlendi; git diff --check boşluk hatası bildirmedi.
+- 🟡 **Kalan kapsam/kabul:** Gerçek taşıma veya runtime testi yapılmadı. Seçilmeyen kayıtların tarihsel firma politikası, hedef kayıt eşleme ekranı, Excel import ve diğer dolaylı ilişkiler, şoför/personel atamaları, plaka takibi/faturaları, silinmiş kayıtlar ve eşzamanlı yazım/rollback kabulü açıktır. Bu korumalar tam ilişki geçişi veya satış kabulü değildir; A-13 sarı kalır.
+
+## A-13 devamı — araç taşıma ekranında işlem ve sonuç koruması — 2026-10-05
+
+- 🟢 **Kod düzeltildi:** Taşıma envanteri ve onay işlemi ortak işlem kilidi kullanır; çift listeleme/taşıma ve işlem sürerken Kaydet üzerinden yeni taşıma penceresi açma engellenir. Onay düğmeleri ve seçim kutuları işlem boyunca devre dışıdır; yazım sürerken kapatma/iptal engellenir ve bekleme bilgisi gösterilir. Envanter yüklenmeden taşıma başlatılmaz.
+- 🟢 **Kod düzeltildi:** Modal sürümü, araç kimliği, kaynak ve hedef firma işlem başında yakalanır. İptal, yeni pencere, route parametresi, firma olayı (A→B→A dahil) ve Dispose eski sonucu geçersizleştirir. Envanter sonucu, hata/başarı bildirimi ve yönlendirme yalnız güncel pencere için uygulanır; firma olayı/Dispose aboneliği kaldırma kapsamındadır. İşlem kilidi finally ile bırakılır.
+- 🟢 **Kod düzeltildi:** Taşıma hazırlık ve istisna ayrıntıları logger'a gider; kullanıcıya genel yetki/firma/ilişki kontrolü yönergesi gösterilir. Hata halinde pencere açık kalır; başarı sonrası kapanır. Başlamış DB kaydı, pencere veya firma değişikliğiyle geri alınmış sayılmaz.
+- 🟢 **Ekran düzeltildi:** “Bugünden Sonra Kopyala” düğmesi aynı MoveAracToFirmaAsync çağrısını yaptığı ve tarih bazlı kopya üretmediği için kaldırıldı. Ekran yalnız gerçekten uygulanan taşıma işlemini sunar; kopyalama özelliği eklenmedi.
+- 🟢 **Derleme:** Son kaynak Web Debug ayrı geçici çıktı klasörüne UseAppHost=false ile **0 uyarı, 0 hata** derlendi; git diff --check boşluk hatası bildirmedi.
+- 🟡 **Kalan kabul/kapsam:** Runtime/UI veya gerçek taşıma testi yapılmadı. Çift tıklama, envanter beklerken iptal/yeniden açma, firma/route değişimi, Dispose, başarısız taşıma ve commit yarışı kabulü açıktır. Diğer form yükleme/kayıt/evrak işlemleri bu sürüm koruması kapsamında değildir. Seçilmeyen ilişkilerin politikası ve hedef eşleme işleri nedeniyle A-13 sarı kalır.
+
+## A-08 devamı — maaş snapshot muhasebe bağlantısı ve transaction — 2026-10-05
+
+- 🟢 **Kod düzeltildi:** MuhasebeSnapshotService içindeki fiş/iptal fişi bağlantısını yazan iki ExecuteUpdateAsync kaldırıldı. Snapshotlar AsTracking yüklenir; MuhasebeFisId/IptalFisId ve UpdatedAt değişiklikleri normal SaveChanges/audit akışından geçer.
+- 🟢 **Kod düzeltildi:** Hesap ön hazırlığı, normal/ters fiş ve snapshot bağlantıları tek üst transaction içinde çalışır. ExecutionStrategy her denemede yeni context/tracker ve transaction açar; hata halinde commit yapılmaz ve transaction dispose edilir. Audit savepoint akışı mevcut transaction içinde kalır.
+- 🟢 **Kod düzeltildi:** Yıl/ay/pozitif firma ve tek seçili kaynak firma doğrulanır. Firma olayı sürümü A→B→A değişimini yakalar; commit öncesi tekrar kontrol edilir, abonelik finally ile kaldırılır. Mükerrer fiş sorgusu MAS-firma önekiyle daraltıldı; iptal için tüm snapshotların aynı mevcut kaynak fişe bağlı olması ve fişin firma öneki/kaynak tipi kontrol edilir.
+- 🟢 **Derleme:** Son kaynak Web Debug ayrı geçici çıktı klasörüne UseAppHost=false ile **0 uyarı, 0 hata** derlendi; git diff --check boşluk hatası bildirmedi.
+- 🟡 **Kalan kabul:** Gerçek DB/audit rollback veya runtime testi yapılmadı. İki eşzamanlı muhasebeleştirme, fiş numarası/hesap tekillikleri, commit sonucu belirsizliği, eski tutarsız snapshotlar ve kaynak fiş toplam/kalem uyumu A-09/A-15/A-16 altında açıktır. MuhasebeFis üzerinde doğrudan FirmaId olmadığından önek kontrolü kalıcı tenant ilişki kısıtının yerine geçmez.
+> **Kapanış öncesi tarihsel durum (son kapanış ekiyle giderildi):** 🔴 **A-08 kalan uygulama:** Bu ek yalnız MuhasebeSnapshotService içindeki iki doğrudan yazımı kapatır. Hedefli servis aramasında BudgetService, PuantajFinansService, GuzergahService/GuzergahSeferService, RebuildService, LicenseService ve bakım/restore servislerinde başka doğrudan SQL/toplu yazım yolları vardır; tam repo envanteri ve her yolun audit/transaction kararı henüz tamamlanmadı. A-08 genel durumu kırmızı kalır.
+
+## A-08 devamı — güzergâh sefer yenilemede audit ve transaction sınırı — 2026-10-05
+
+- 🟢 **Kod düzeltildi:** GuzergahSeferService.ReplaceAllInCurrentDbAsync içindeki ExecuteUpdateAsync kaldırıldı. Aktif eski seferler AsTracking yüklenir; IsDeleted, DeletedAt ve UpdatedAt normal SaveChanges/audit akışında yazılır. Zaten silinmiş seferlerin geçmiş zaman damgaları değiştirilmez.
+- 🟢 **Kod düzeltildi:** Metot açık transaction gerektirir; eski seferleri kapatma ve yenilerini ekleme aynı üst transaction içinde kalır. Mevcut iki çağıran transaction açmaktadır. Hata/sayı uyuşmazlığında çağıranın rollback akışı çalışır. ChangeTracker.Clear kaldırıldı; üst işlemin takip ettiği güzergâh ve diğer kayıtlar yardımcı metot tarafından detache edilmez.
+- 🟢 **Kod düzeltildi:** Yazım için pozitif güzergâh ve tek seçili kaynak firma gerekir; parent ve aktif eski seferlerin firma kimlikleri eşleşmelidir. Seçili firma kayıtlar öncesinde ve metot sonunda tekrar kontrol edilir. Tutarsız sefer firması sessizce düzeltilmez; işlem reddedilir.
+- 🟢 **Derleme:** Son kaynak Web Debug ayrı geçici çıktı klasörüne UseAppHost=false ile **0 uyarı, 0 hata** derlendi; git diff --check boşluk hatası bildirmedi.
+- 🟡 **Kalan kabul/kapsam:** Runtime veya gerçek DB rollback/audit testi yapılmadı. Eşzamanlı replace, retry/commit belirsizliği, üst transaction savepoint davranışı ve eski ilişki kabulü açık. Buradaki seçim kontrolü anlık kimlik eşitliğidir; A→B→A olayı ve üst çağıranın commit anı için işlem boyunca sürüm koruması ayrıca tamamlanmalıdır. GuzergahService'in diğer doğrudan yazımları bu ekte değiştirilmedi; A-08 kırmızı kalır.
+
+## A-08 devamı — güzergâh ana kayıt yazımlarında audit — 2026-10-05
+
+- 🟢 **Kod düzeltildi:** GuzergahService.UpdateAsync ve UpdateWithSeferlerAsync içindeki iki ExecuteUpdateAsync kaldırıldı. Ana güzergâh AsTracking ve silinmemiş kayıt koşuluyla yüklenir; cari/kurum bağlantıları, gelir/gider fiyatı ve KDV aynı tracked kaydın SaveChanges/audit akışında yazılır. GelirFiyat mevcut BirimFiyat alanına bağlıdır; ayrı SQL fiyat yazımı gerekmez.
+- 🟢 **Kod düzeltildi:** Normal UpdateAsync içindeki ikinci bağımsız SQL yazımı kaldırıldı; ana alanlar ve cari/kurum tek SaveChanges çağrısında kaydedilir. Mevcut 0/null girişte eski cari/kurum bağlantısını koruma davranışı değişmedi. Sonuç doğrulaması global filtre kapsamında okunur.
+- 🟢 **Kod düzeltildi:** Seferli güncellemede ana kayıt, sefer kapatma/ekleme ve audit mevcut üst transaction içinde kalır. Sefer yardımcı metodundaki takip temizleme çağrısı önceki ekte kaldırılmıştır; bu ekte ana kayıt için ayrıca SQL bypass yapılmaz.
+- 🟢 **Derleme:** Son kaynak Web Debug ayrı geçici çıktı klasörüne UseAppHost=false ile **0 uyarı, 0 hata** derlendi; git diff --check boşluk hatası bildirmedi.
+- 🟡 **Kalan kapsam/kabul:** Runtime/gerçek DB veya rollback testi yapılmadı. Güzergâh genel güncelleme/create/delete/transfer yetkisi ve firma ilişkileri, 0/null ile ilişki temizleme ürün davranışı, firma değişiminde sonuç doğrulaması, cache hatası sonrası kullanıcı bildirimi, eşzamanlı yazım ve retry/commit belirsizliği ayrıca denetlenmelidir. Bu ek tam güzergâh tenant kabulü değildir.
+> **Kapanış öncesi tarihsel durum (son kapanış ekiyle giderildi):** 🔴 **A-08 kalan uygulama:** Güzergâh ana kayıt/sefer servislerindeki hedeflenen üç ExecuteUpdate yolu kapandı; BudgetService, PuantajFinansService ve diğer bakım/restore/toplu yazım yolları için repo envanteri ve audit/transaction kararları devam eder. A-08 genel durumu kırmızı kalır.
+
+## A-08 devamı — bütçe ödeme geri almada ortak kayıt/audit — 2026-10-05
+
+- 🟢 **Kod düzeltildi:** BudgetService.OdemeGeriAlAsync içindeki ExecuteUpdateAsync kaldırıldı. Aktif ödeme AsTracking yüklenir; ödeme durum/tarih/tutar/hesap/kesinti alanları normal SaveChanges/audit akışında sıfırlanır. Banka hareketinin silinmesi için ayrı erken SaveChanges kaldırıldı; banka silme ve ödeme güncelleme tek SaveChanges transaction'ında kaydedilir.
+- 🟢 **Kod düzeltildi:** Bağlı banka hareketi erişilebilir/silinmemiş ve ödeme ile aynı pozitif firmaya ait olmalıdır. Eksik/gizli hareket varsa ödeme bağlantısı sessizce sıfırlanmaz. Fatura, muhasebe fişi, mahsup, personel geri ödeme, araç masrafı veya aktif fatura eşlemesi olan hareketler kendi iptal akışına yönlendirilir; eşlemeler otomatik silinmez.
+- 🟢 **Kod düzeltildi:** Başka aktif bütçe ödemesinin veya mahsup/personel geri ödeme hareketinin kullandığı banka kaydı silinmez. Filtre atlama yalnız bağlı hareket kimliğiyle çakışma kontrolüdür. Kısmi ödeme veya sonraki döneme aktarılmış ödeme, tüm ilişkiler birlikte geri alınmadan bu basit iptal akışında reddedilir.
+- 🟢 **Derleme:** Son kaynak Web Debug ayrı geçici çıktı klasörüne UseAppHost=false ile **0 uyarı, 0 hata** derlendi; git diff --check boşluk hatası bildirmedi.
+- 🟡 **Kalan kabul/kapsam:** Runtime veya gerçek DB rollback/audit testi yapılmadı. Mevcut fiziksel banka hareketi silme davranışı korunmuştur; ters kayıt/soft delete politikası ayrıca değerlendirilmelidir. Tam rol/firma yetkisi, kredi kartı ve diğer dolaylı ilişkiler, kısmi/devir ödeme iptal uygulaması, eşzamanlı bağlantı ekleme ve commit belirsizliği açıktır. Ön sorgular eşzamanlı DB ilişki kısıtı değildir.
+> **Kapanış öncesi tarihsel durum (son kapanış ekiyle giderildi):** 🔴 **A-08 kalan uygulama:** Bu ek yalnız ödeme geri almadaki bir SQL bypass'ını kapatır. BudgetService'in kısmi ödeme, normal ödeme ve diğer toplu yazımları ile repo genelindeki SQL/audit envanteri devam eder; A-08 kırmızı kalır.
+
+## A-08 kapanış çalışması — kalan toplu servis yazımları ve repo envanteri — 2026-10-05
+
+- 🟢 **Kod düzeltildi:** BudgetService (5), CRMService (1), PuantajFinansService hakediş bağlantısı (1), RebuildService (6), LicenseService (3), eski TestSessionService satır rollback (4), WhatsAppService (1) ve EvrakArsivBackfillService (2) olmak üzere **23 toplu çağrı** tracked sorgu/UpdateTrackedAsync/SaveChanges akışına taşındı. Ortak yardımcı doğrudan SQL çalıştırmaz. Tek kayıt beklenen bütçe, hakediş ve evrak güncellemesi eşleşme yoksa başarısız olur; başarı gibi dönmez. Hata halinde bu sorgunun kayıt değerleri ve değişiklik işaretleri işlem öncesine döndürülür.
+- 🟢 **Kod düzeltildi:** Hakediş snapshotındaki iki raw SQL yazımı kaldırıldı. SnapshotTransaction işaretçisi ve tracked tutar artışı/negatif tutar normalizasyonu tek Serializable transaction/SaveChanges kapsamındadır; ExecutionStrategy her denemede yeni context açar. Snapshot hatası sessizce yutulmaz; mevcut faturanın oluşmuş olduğu açık hata mesajıyla belirtilir. Bu, fatura alt servisinin ayrı transaction'ını geri alma garantisi değildir.
+- 🟢 **Envanter oluşturuldu:** [A-08 SQL/audit kapanış envanteri](A-08-SQL-AUDIT-KAPANIS-ENVANTERI.md) repo C# kaynaklarındaki kalan çağrı konumlarını ve audit/transaction kararlarını listeler. Çağrı listesi DDL, sayaç, wrapper tanımı, audit iç düzeltmesi ve test kodunu da içerir; tamamı açık iş yazımı sayılmadı. Script/dinamik SQL semantik incelemesi ayrıca gereklidir.
+- 🟢 **Derleme:** Son kaynak Web Debug ayrı geçici çıktı klasörüne UseAppHost=false ile **0 uyarı, 0 hata** derlendi; git diff --check boşluk hatası bildirmedi.
+- 🟡 **Kabul sınırı:** Runtime/test veya gerçek veri değişikliği yapılmadı. Tracked batch büyük kümeyi belleğe alır ve context'teki diğer bekleyen değişiklikleri de kaydeder; yük, eşzamanlılık, commit belirsizliği ve tam mali zincir rollback kabulü açık. Firma bağlamı olmayan sistem kayıtlarında mevcut audit resolver satır üretmeyebilir; normal SaveChanges kullanılması her sistem kaydının audit kanıtı değildir.
+> **Kapanış öncesi tarihsel durum (son kapanış ekiyle giderildi):** 🔴 **A-08 kapanış engeli:** Başlangıç/migration/seed veri onarımları, restore/legacy transfer/DataSync/demo işlemleri ve test tablo restore yollarında operasyon audit/rollback sözleşmesi henüz tamamlanmadı. Destek sayaçlarının atomik increment kararı ve audit EntityId iç düzeltmesi ayrı belgelenmiştir. Bu açıklar yalnız rapor rengini değiştirerek kapatılmaz; A-08 genel durumu kırmızı kalır.
+
+## A-08 devamı — legacy aktarımda tablo transaction ve operasyon audit'i — 2026-10-05
+
+- 🟢 **Kod düzeltildi:** LegacyDataTransferService içindeki roller, kullanıcılar, rol yetkileri, muhasebe hesapları ve generic tablo aktarımı tablo başına Npgsql transaction açar. Veri yazımı ile parametreli AktiviteLoglar özet kaydı aynı transaction'dadır; audit kaydı başarısızsa tablo commit edilmez. Başarı logu commit sonrasında yazılır. Satır bazlı eski/yeni değer yerine açıkça operasyon özeti tutulur.
+- 🟢 **Kod düzeltildi:** Özet kaydı işlem kimliği, tablo, gerçek etkilenen satır sayısı, muhasebe üst hesap güncelleme sayısı, kaynak/hedef DB adı ve yapılandırılmış hedef firma kimliği içerir. Connection string, parola, kaynak satır verisi veya SQL parametreleri günlüğe kopyalanmaz. ON CONFLICT DO NOTHING satırları başarı sayısını artırmaz.
+- 🟢 **Kod düzeltildi:** Satır INSERT/upsert işlemleri savepoint kullanır. Beklenen unique çakışmasında savepoint geri alınarak transaction kullanılabilir tutulur; muhasebe hesap Id fallback'i aynı transaction içinde devam eder. Generic kolon uyuşmazlığı döngüyü kesip kısmi başarı vermek yerine tablo işlemini hatayla durdurur. Hata/erken çıkışta transaction disposal commit edilmemiş tablo değişikliklerini geri alır.
+- 🟢 **Derleme:** Son kaynak Web Debug ayrı geçici çıktı klasörüne UseAppHost=false ile **0 uyarı, 0 hata** derlendi; git diff --check boşluk hatası bildirmedi. Gerçek legacy veritabanı değiştirilmedi.
+- 🟡 **Kalan kapsam/kabul:** İşlem sınırı tüm aktarım değil, tek tablodur; daha önce commit edilen tablolar sonraki tablo hatasında geri alınmaz. Source bağlantıları salt okunur kalır fakat tüm kaynak tablolar ortak snapshot içinde okunmaz. PostgreSQL sequence setval etkileri transaction rollback garantisine dahil değildir. Audit tablosu/kolonları yoksa veri commit'i reddedilir. Eski firma/rol/kimlik eşleme, idempotency, aynı anda iki aktarım, audit PK/sequence ve gerçek PostgreSQL rollback kabulü bekler.
+> **Kapanış öncesi tarihsel durum (son kapanış ekiyle giderildi):** 🔴 **A-08 kalan kapanış:** Legacy tablo yazımı için operasyon audit'i eklendi; schema hazırlığı, başlangıç veri onarımları, diğer restore/aktarım/demo yolları ve firma bağlamı olmayan sistem audit'i açık. A-08 genel durumu kırmızıdır.
+
+## A-08 devamı — test tablo geri yüklemede ortak transaction ve audit — 2026-10-05
+
+- 🟢 **Kod düzeltildi:** TestSessionService.GeriAlAsync yalnız PostgreSQL'de, aktif test etiketi eşleştiğinde ve DB'de aktif/silinmemiş Admin yetkisi doğrulandığında çalışır. Tek pozitif firma seçimi gereklidir; işlem boyunca firma olay sürümü A→B→A değişimini de yakalar. Geçici abonelik finally ile kaldırılır.
+- 🟢 **Kod düzeltildi:** Gerekli altı backup tablosu yazım öncesinde kontrol edilir; eksik tablo sessizce atlanmaz. Bütün hedef tablolar tek TRUNCATE RESTRICT komutuyla hazırlanır; yedeklenmemiş bağımlı tabloları silen CASCADE kaldırıldı. Dış FK bağımlılığı varsa işlem reddedilir; bu tablolar otomatik silinmez veya yedeklenmiş kabul edilmez.
+- 🟢 **Kod düzeltildi:** TRUNCATE/INSERT ve TestSnapshotRestore AktiviteLog kaydı aynı üst transaction içindedir. Raw ADO komutları EF CurrentTransaction'a açıkça bağlanır. Audit kaydı işlem kimliği, tag, tablo kümesi, session ve WholeDatabaseTables kapsamını belirtir; satır audit'i yerine operasyon özeti üretir. ExecutionStrategy denemeleri yeni context/transaction ile başlar.
+- 🟢 **Kod düzeltildi:** Test oturumu yalnız başarılı commit sonrasında kapatılır. Hata halinde işlem başarılı gösterilmez; oturum/yedekler korunur ve teknik hata logger'a gider. Kullanıcıya genel yedek/bağımlılık/yetki kontrolü bildirimi verilir.
+- 🟢 **Derleme:** Son kaynak Web Debug ayrı geçici çıktı klasörüne UseAppHost=false ile **0 uyarı, 0 hata** derlendi; git diff --check boşluk hatası bildirmedi. Gerçek test verisi veya yedek geri yüklenmedi.
+- 🟡 **Kalan kabul/kapsam:** Gerçek PostgreSQL restore/rollback/audit testi yapılmadı. Mevcut altı tablo kümesi bütün FK bağımlılıklarını kapsamaz; bu durumda RESTRICT işlemi durdurur. Tam bağımlılık yedeği, INSERT sırası/kolon uyumu, sequence/kimlik eşlemesi ve commit belirsizliği kabulü açık. Seçilen firma audit aidiyetidir; tablo restore tüm firma satırlarını kapsar. Test başlatma/backup oluşturma, cleanup ve basit BeginSession yollarının yetki/transaction/audit sözleşmesi bu ekte tamamlanmadı. A-08 genel durumu kırmızı kalır.
+
+## A-08 devamı — test backup/cleanup/session bakım sözleşmesi — 2026-10-05
+
+- 🟢 **Kod düzeltildi:** BaslatAsync, BeginSessionAsync ve TemizleAsync PostgreSQL bakım yardımcısında aktif DB Admin yetkisi, tek pozitif firma ve işlem boyunca firma olay sürümü kontrolü kullanır. Bakım değişiklikleri, session rezervasyonu ve açık kapsamlı AktiviteLog operasyon kaydı aynı transaction/SaveChanges içindedir; yalnız commit sonrası AppMode/başarı durumu yayınlanır.
+- 🟢 **Kod düzeltildi:** Backup öncesinde aynı tag için mevcut tablo varsa işlem reddedilir; DROP ile eski yedek silinmez. Altı kaynak tablo SHARE kilidiyle korunur; CREATE TABLE AS SELECT işlemleri ve audit ortak transaction'dadır. Hata halinde dönülen backup tablosu listesi temizlenir ve başarısız işlem yeni oturum başlatmaz.
+- 🟢 **Kod düzeltildi:** Cleanup aktif test varken reddedilir. Süreç içi ortak semaphore bakım çağrılarını sıraya alır; PostgreSQL transaction advisory lock backup/cleanup/begin/restore DB işlemlerini aynı anahtarla sıralar. ReadCommitted altında session maksimumu silinmiş loglar dahil okunur; session Begin marker'ı audit ile birlikte kaydedilir. Başka süreçlerdeki AppMode durumunu bu kilit tek başına doğrulamaz.
+- 🟢 **Derleme:** Son kaynak Web Debug ayrı geçici çıktı klasörüne UseAppHost=false ile **0 uyarı, 0 hata** derlendi; git diff --check boşluk hatası bildirmedi. Gerçek backup/restore veya test oturumu çalıştırılmadı.
+- 🟡 **Kalan kabul:** Farklı süreçlerde aktif test oturumu sahipliği, bağlantı/commit belirsizliği, session marker ve eski rollback uyumu, tag normalizasyon çakışması, DDL/SHARE lock gecikmesi ve gerçek PostgreSQL rollback kabulü açık. SQL backup yalnız altı tabloyu kapsar; tam bağımlılık kurtarması değildir. Eski satır rollback yolunun ayrı yetki ve kısmi sonuç sözleşmesi ayrıca denetlenmelidir.
+> **Kapanış öncesi tarihsel durum (son kapanış ekiyle giderildi):** 🔴 **A-08 kapanış sınırı:** Test backup/cleanup/begin kaynak kontrolleri tamamlandı; başlangıç/migration veri onarımı, diğer restore/DataSync/demo/dış araç operasyon kayıtları ve firmasız sistem audit bağlamı halen açıktır. Bu işler tamamlanmadan A-08 yeşile çevrilmez.
+
+## A-08 devamı — başlangıç fatura onarımı ve demo bakım sınırı — 2026-10-05
+
+- 🟢 **Gelen fatura onarımı:** PostgreSQL doğrudan UPDATE kaldırıldı; bütün sağlayıcılarda AsTracking + SaveChanges ve UTC zaman damgası kullanılır. Firma aidiyeti bulunmayan kayıtlar yazımdan önce reddedilir; hata artık başarı gibi yutulmaz.
+- 🟢 **Demo bakım kaydı:** Ekleme, [TEST] temizliği ve yenileme aktif Admin/tek firma kontrolü, firma değişim sürümü, ortak PostgreSQL transaction/advisory kilidi ve aynı transaction'daki operasyon audit'i kapsamındadır. Retry denemesinde yeni context/seeder oluşturulur; seed başarısız sonucu commit edilmez. İki ekran aynı servisi çağırır.
+- 🟢 **Tehlikeli sıfırlama kaldırıldı:** Demo yenileme yalnız seçili firmanın [TEST] kayıtlarını temizleyip yeniden üretir. Eski tüm-veritabanı TRUNCATE API'si yazım yapmadan açık hata döndürür; kullanıcı/lisans/audit geçmişini silen CASCADE ve session_replication_role yolları kaldırılmıştır. Ekran açıklamaları kapsamı belirtir.
+- 🟢 **Sınırlı firma temizliği:** Tanımlı 11 tabloda parametreli FirmaId silme + operasyon audit'i ortak transaction'dadır. FK kontrolleri açık kalır; tablo hatası atlanmaz. FirmaId taşımayan ortak MuhasebeFisleri/MuhasebeHesaplari bu işlemden çıkarılmıştır. Bu yol tüm firma verisinin eksiksiz silindiğini iddia etmez.
+- 🟡 **Kabul açık:** Gerçek PostgreSQL demo/temizlik/audit/rollback testi yapılmadı. İlişkili kayıtlar fiziksel silmeyi engelleyebilir; işlem başarısız döner. Seed'in eski demo veri aidiyeti, FK/kayıt üretimi ve commit belirsizliği kabulü bekler. Sadece derleme kontrolü bu kabulü kapatmaz.
+> **Kapanış öncesi tarihsel durum (son kapanış ekiyle giderildi):** 🔴 **A-08 kalan:** Diğer başlangıç/migration veri onarımları, restore/DataSync/dış araç yazımları ve firmasız sistem audit sözleşmesi açıktır. A-08 genel durumu kırmızı kalır.
+
+- 🟢 **Derleme kontrolü:** Son kaynaklarla Web projesi izole çıktı klasörüne `--no-restore -p:UseAppHost=false` ile derlendi: **0 uyarı, 0 hata**. `git diff --check` temiz. Runtime/gerçek veri temizliği çalıştırılmadı.
+
+## A-08 ortak altyapı — SQL ve sistem yazımlarının veritabanında denetimi — 2026-10-05
+
+- 🟢 **Ortak altyapı eklendi:** PostgreSQL/SQLite iş tablosu tetikleyicileri EF dışı INSERT/UPDATE/DELETE'yi aynı transaction içinde denetler; PostgreSQL TRUNCATE kapsam/satır sayısını kaydeder. Firma bağlamı olmayan kayıtlar ayrı DB günlüğünde sistem kapsamındadır. Sır alanları maskelenir; audit hatası iş yazımını engeller.
+- 🟢 **Başlangıç/aktarım:** Şema kurulumundan sonra installer, legacy hedef bağlantısında installer, DataSync hedefinde installer eklendi. Master başlangıç kopyası kaynak snapshot ve ortak hedef transaction'a alındı; satır hatası artık atlanmaz. SQLite journal iş tablosu aktarım/sıfırlama listesinden çıkarıldı.
+- 🟢 **Restore:** Kalıcı dış operasyon makbuzu ve source SHA-256; PostgreSQL audit şemasını yedek/restore iş kapsamından ayırma; SQLite açık dosyayı ezmek yerine backup API ve öncesi geri dönüş kopyası. Deploy betiğinde DB DROP kaldırıldı; atomik restore ve sıfır dışı hata kodunun reddi eklendi.
+- 🟢 **SQLite izole kontrol:** Doğrudan SQL, sistem kapsamı, sır maskeleme, rollback, günlük değişmezliği ve audit hatasında veri yazımının durması geçti.
+- **Sözleşme:** [A-08 veritabanı audit sözleşmesi](A-08-VERITABANI-AUDIT-SOZLESMESI.md). PostgreSQL izole kontrolü ve son kaynak derlemeleri tamamlanınca görev satırı güncellenecek. Müşteri verisi restore edilmedi.
+
+## 🟢 A-08 kapanışı — ortak denetim motoru ve izole doğrulama — 2026-10-05
+
+**A-08 tamamlandı.** Bu ek önceki A-08 “açık/kırmızı” kayıtlarının güncel durumunu değiştirir; önceki ekler tarihsel çalışma kanıtıdır.
+
+- 🟢 **SQL bypass kökten kapatıldı:** Ortak PostgreSQL/SQLite tetikleyicisi EF, doğrudan SQL, toplu yazım, migration ve binary COPY'yi veriyle aynı transaction içinde kaydeder. Audit hatasında veri yazımı gerçekleşmez; rollback günlüğü de geri alır. Firma bilgisi bulunmayan sistem kayıtları başka firmaya mal edilmez.
+- 🟢 **Kapsam tamamlandı:** Web startup + 11 veri migration sınıfı; maaş/özlük/SMS onarım kapıları; master kopyada kaynak snapshot + ortak hedef transaction; legacy/DataSync hedef kurulumları; demo bakımı; LisansDesktop yerel satış/yenileme SQL geçmişi; 4 bağımsız veri SQL betiği ve Deploy restore. Günlük kendi kendini audit etmez; migration geçmişi/kimlik sequence metadatası iş satırı değildir.
+- 🟢 **Sır maskeleme ortaklaştırıldı:** DbContext otomatik audit, AuditLogService ve DB motoru API/key/password/credential/payload/değer alanlarını maskeler. Yerel/üretim sırları test çıktısına yazılmadı.
+- 🟢 **Restore kanıtı kalıcı:** PostgreSQL public restore mevcut `mk_audit` geçmişini korur. SQLite eski veri/audit bağımsız before-restore kopyasında korunur. SHA-256 başlangıç ve ayrı başarı/belirsiz sonuç makbuzu, restore edilen DB'nin dışında saklanır. Düz SQL restore ve mevcut DB'yi düşürme kaldırıldı; hata kodu 1 başarı sayılmaz.
+- 🟢 **Gerçek izole çalışma zamanı kontrolü:** SQLite ve PostgreSQL 17 üzerinde doğrudan SQL, sistem kapsamı, sır maskeleme, rollback, audit hatasında yazımın reddi, ALWAYS/replica, TRUNCATE, yeni migration tablosunun ilk INSERT'i ve binary COPY geçti. Gerçek custom pg_dump/pg_restore ile veri/audit koruması ve SQLite backup API ile geri dönüş kopyası doğrulandı. Geçici PG test DB'si silindi, sunucu durduruldu; müşteri DB'sine dokunulmadı.
+- 🟢 **Son kaynak derlemeleri:** Web, DataSync ve LisansDesktop projeleri izole çıktı klasörlerinde `--no-restore -p:UseAppHost=false` ile derlendi: her biri **0 uyarı / 0 hata**. Restore PowerShell parser kontrolü geçti.
+- **Kanıtlar:** [Veritabanı audit sözleşmesi](A-08-VERITABANI-AUDIT-SOZLESMESI.md), [izole kontrol ve kaynak SHA-256](A-08-IZOLE-DOGRULAMA-2026-10-05.md), [çağrı/kapsam envanteri](A-08-SQL-AUDIT-KAPANIS-ENVANTERI.md).
+- 🟡 **Ayrı ürün kabulü:** Gerçek müşteri migration/DataSync verisi, yüksek hacim, mali zincir, bağımsız makine ve dosya/key ring kurtarması A-04/A-09/A-18/A-19 kapsamında açıktır. Bunlar A-08'in açık kod işi olarak tekrar sayılmaz.
+
+## A-03 devamı — DB-only geri yükleme kapsamının ekranda belirtilmesi — 2026-10-05
+
+- 🟢 **Kod düzeltildi:** Yedekleme ekranındaki restore onayında işlemin yalnızca PostgreSQL verisini değiştirdiği; ZIP içindeki belge/dosya, ayar ve DataProtection anahtarlarının uygulanmadığı açıkça gösterilir. Eylem düğmesi “Yalnızca DB'yi Geri Yükle” olarak adlandırıldı.
+- 🟢 **Dokümantasyon:** `SIFRELI-BELGE-YEDEK-KURTARMA.md` ekran davranışı ve sınırla eşitlendi.
+- 🔴 **A-03 açık:** DB+dosya+anahtarları kapalı bakım penceresinde birlikte uygulayan, ayarları hedefe göre koruyan ve her aşamada önceki duruma dönen otomasyon henüz eklenmedi. Bu UI düzeltmesi tam kurtarma değildir; A-03 kırmızı kalır.
+
+## A-03 devamı — deploy DB restore hata geri dönüşü — 2026-10-05
+
+- 🟢 **Kod düzeltildi:** `01-db-restore.ps1`, mevcut DB için `mk_audit` hariç custom geri dönüş dump'ını restore öncesinde üretip boyutunu kontrol eder. Kaynak restore girişiminden sonra herhangi bir hata olursa eski `public` şemayı tek transaction'lı `pg_restore` ile geri yükler, audit installer'ı yeniden uygular ve `rolled-back.json` makbuzu yazar.
+- 🟢 **Yeni hedef DB:** DB önceden yoksa ve kaynak restore hata verirse yalnız bu çağrıda oluşturulan hedef DB bağlantıları kapatılıp DB kaldırılır. Eski bir DB hiçbir hata kolunda DROP edilmez.
+- 🟡 **Doğrulama sınırı:** PowerShell parser/derleme ve diff kontrolü yapılacak; bu turda canlı veya izole PostgreSQL hata enjeksiyonu çalıştırılmadı. Makbuz gerçek rollback kabulünün yerine geçmez.
+- 🔴 **A-03 açık:** Dosya/ayar/key ring ile DB'yi aynı tam kurtarma operasyonunda uygulama ve birlikte geri alma otomasyonu yoktur. Mevcut değişiklik yalnız deploy DB restore betiğinin rollback açığını kapatır.
+
+## A-03 devamı — Web ZIP DB restore rollback — 2026-10-05
+
+- 🟢 **Kod düzeltildi:** Web ZIP restore başarılı DB restore sonrasında audit doğrulaması veya başarı makbuzu başarısızsa, önceden alınmış tam ZIP yedeğindeki tek PostgreSQL custom dump ayrı staging'e çıkarılır ve `--single-transaction` ile önceki `public` şeması geri kurulur; ardından audit installer doğrulanır.
+- 🟢 **Sonuç kaydı:** Geri dönüş doğrulanırsa `rolled-back.json` yazılır. Kaynak/rollback işlemi belirsiz kalırsa `unconfirmed.json` korunur; rollback hatası Critical loglanır. Başarısız `pg_restore` da commit/bağlantı belirsizliği ihtimaline karşı önceki yedekten geri döndürülür.
+- 🟢 **Derleme:** Web + Shared Debug ayrı geçici çıktı klasörüne `--no-restore -p:UseAppHost=false` ile **0 uyarı / 0 hata** derlendi.
+- 🟡 **Kabul sınırı:** PostgreSQL hata enjeksiyonu/gerçek restore bu turda çalıştırılmadı; uygulama yolu kod derlemesiyle kabul edilmiş sayılmaz.
+- 🔴 **A-03 açık:** Web/deploy DB rollback uygulandı; dosya, ayar ve key ring'i aynı tam kurtarma operasyonunda atomik uygulama/rollback aracı hâlâ yoktur.
+
+## Güvenli parola istemi — restore betikleri — 2026-10-05
+
+- 🟢 `01-db-restore.ps1` artık parola parametresi veya `MKFILO_PG_PASSWORD` desteği sunmaz. PostgreSQL parolası `Read-Host -AsSecureString` ile istenir; komut satırı argümanına aktarılmaz. PowerShell süreç ortamındaki `PGPASSWORD` yalnız işlem boyunca ayarlanır, finally bloğunda önceki değer geri yüklenir; BSTR ve SecureString temizlenir.
+- 🟢 `00-aktar-baslat.ps1` parola değerini yapılandırmada tutmaz ve alt sürece parametre olarak geçmez. `04-pc2-kurulum-talimat.md` yeni istem akışını anlatır.
+- 🟢 İki betiğin PowerShell parser doğrulaması ve `git diff --check` geçti; eski açık parola parametresi/metin araması hedef betik ve talimatta eşleşme vermedi. 🟡 Gerçek müşteri bağlantısı ve sır rotasyonu kanıtı yoktur; A-06 açık kalır.
+
+## A-03 devamı — DB restore öncesi dosya/anahtar ön kontrolü — 2026-10-05
+
+- 🟢 **Kod düzeltildi:** `02-dosya-aktar.ps1 -PreflightOnly` kaynak `.enc` başlıklarını sınıflandırır. MKD1 dosyalarında `key-*.xml`; legacy/AES dosyalarında DPAPI ile çözülebilir `master.key` veya 32 baytlık geçerli import/raw key arar. Ön kontrol hedefe yazmaz.
+- 🟢 **Sıra düzeltildi:** `00-aktar-baslat.ps1` DB restore'dan önce dosya/anahtar preflight çalıştırır. Anahtarlar eksik/bozuksa DB restore başlatılmaz. Gerçek hedef kopyasında aynı kontroller yeniden yapılır.
+- 🟢 **Sözdizimi:** İki betiğin PowerShell parse kontrolü ve `git diff --check` geçti. 🟡 DataProtection key XML'in hedefte gerçekten çözülebildiği farklı makine kabulü A-04'tedir. Dosya kopyası sonrasındaki I/O hatasında ortak DB+dosya rollback henüz yoktur.
+- 🔴 **A-03 açık:** Bu düzeltme anahtar eksikliğiyle DB'yi tek başına restore etme riskini kapatır; tam operasyon transaction/rollback aracı değildir.
+
+## A-03 devamı — legacy DB+dosya aktarım rollback bağlama — 2026-10-05
+
+- 🟢 **Önceki durum snapshot'ı:** `00-aktar-baslat.ps1` dosya aktarımından önce `uploads`, `keys`, `database` klasörlerinin mevcut olup olmadığını kaydeder ve mevcut içeriği LocalAppData operasyon klasörüne kopyalar. Kopya eksikse DB restore başlamaz.
+- 🟢 **DB makbuzu:** `01-db-restore.ps1`, önceden var olan DB'nin ayrı SHA-256 doğrulamalı custom dump'ını parent operasyon klasörüne kopyalar. Yeni DB oluşturduysa `pg_database.oid` değerini operasyon makbuzuna yazar.
+- 🟢 **Dosya hatası geri dönüşü:** `02-dosya-aktar.ps1` başarısız olursa parent önce önceki DB dump'ını tek transaction ile yükler; DB başlangıçta yoksa yalnız aynı operasyonda oluşturulan ve OID'si eşleşen hedefi kaldırır. Sonra üç depolama klasörünü başlangıç var/yok durumuna döndürür. Geri dönüş başarı/başarısız makbuzu tutulur; hata halinde snapshot silinmez.
+- 🟢 **Statik doğrulama:** İlgili üç PowerShell betiğinin parser kontrolü ve `git diff --check` geçti.
+- 🟡 **Kabul sınırı:** Gerçek DB/file hata enjeksiyonu, müşteri verisi veya elektrik kesintisi testi yapılmadı. Bu, yakalanan süreç hatası rollback akışıdır; ani süreç/host kesintisinde otomatik devam garantisi değildir.
+- 🟢 **Kesinti sonrası elle kurtarma:** `03-full-transfer-recover.ps1`, LocalAppData altındaki tam aktarım snapshot/makbuzunu doğrular; önceden var olan DB'yi SHA-256 doğrulamalı dump'tan geri yükler veya makbuzdaki OID eşleşen yeni DB'yi kaldırır, ardından üç depolama klasörünü snapshot'tan geri alır. Önceki otomatik rollback başarısızlık makbuzu elle kurtarmayı engellemez; yeni DB zaten kaldırılmışsa adım idempotent tamamlanır. IIS havuzunun durduğu onaylanır ve sonuç makbuzu yazılır.
+- 🟢 **Güvenlik kontrolleri:** Operasyon klasörü doğrudan izinli journal kökü altında olmalı; dump yolu beklenen dosyaya sabitlenir, hash doğrulanır, junction/symlink hedefleri reddedilir.
+- 🟢 **Kapsam belgeleri eşitlendi:** Şifreli belge yedek rehberi legacy journal geri dönüşünü RecoveryArchive ZIP uygulamasından ayrı açıklar.
+- 🟢 **RecoveryArchive apply aracı:** `05-recovery-archive-apply.ps1` staging manifestinin boyut/hash'lerini doğrular; izinli storage/Luca/belge köklerini ve varsa DB dump'ını ayrı hedefe uygular. appsettings JSON dosyalarını atlar, önceki DB/dosya durumunu apply journal'ında saklar ve yakalanan hatada rollback dener.
+- 🟢 **DB hata dalı:** DB alt betiği hata kodu döndürürse üst apply akışı apply journal'daki önceki DB dump'ıyla rollback'i ayrıca dener.
+- 🟢 **Kesinti kurtarması:** `06-recovery-archive-rollback.ps1` tamamlanmamış apply journal'ındaki DB ve dosya snapshot'larını geri yükler. Apply/rollback belirtilen IIS havuzunu appcmd ile durdurup doğrular; yeniden başlatma kabul sonrası operatördedir. 🟡 Key XML/`KEY-HAZIR` onayı hedef kimliğinde belge çözümünü kanıtlamaz; PostgreSQL hata enjeksiyonu ve farklı makine key ring/credential kabulü yapılmadı.
+- 🟢 **Statik doğrulama:** Altı aktarım/kurtarma PowerShell betiğinin parser kontrolü geçti; `git diff --check` temiz. 🟡 Gerçek PostgreSQL/hata enjeksiyonu kabulü yapılmadı.
+- 🔴 **A-03 açık:** Başarı sonrası IIS yeniden başlatma ve gerçek hata/kesinti/DB+belge kabulü tamamlanmadı. Ortama özel appsettings otomatik uygulanmaz.
+
+## A-03 devamı — RecoveryArchive journal yolunun doğrulanması — 2026-10-05
+
+- 🟢 `05-recovery-archive-apply.ps1`, DB/dosya hedeflerine dokunmadan önce `%LOCALAPPDATA%\MKFiloServis\OperationJournal` yolunun üst bileşenlerinde junction/symlink bulunmadığını ve yeni operasyon klasörünün normal dizin olduğunu doğrular. Beklenmeyen yönlendirmede işlem durur.
+- 🟢 PowerShell parser: `05-recovery-archive-apply.ps1`, `06-recovery-archive-rollback.ps1`, `01-db-restore.ps1` başarılı. `git diff --check` temiz; yalnız doküman satır sonu uyarıları var.
+- 🔴 **A-03 açık:** Bu statik kontrol gerçek IIS/NTFS/DB hata enjeksiyonu, kesinti kurtarma veya farklı makine belge çözme kabulü yerine geçmez.
+
+## A-03 devamı — dosya rollback snapshot SHA-256 makbuzu — 2026-10-05
+
+- 🟢 `05-recovery-archive-apply.ps1`, her mevcut hedef dosya kökü için snapshot kopyası sonrası dosya yolu/boyut/SHA-256 manifesti üretir. Apply sırasında hata yakalanırsa snapshot hash'lerini yeniden doğrulamadan kopyalamaz.
+- 🟢 `06-recovery-archive-rollback.ps1`, kesinti sonrası geri dönüşe başlamadan önce ilgili snapshot'ların dosya sayısı, yolları, boyutları ve SHA-256 değerlerini doğrular; uyuşmazlıkta DB veya hedef dosyaları değiştirmeden durur.
+- 🟢 İki PowerShell betiğinin parser kontrolü başarılı; `git diff --check` temiz (dokümanlarda satır sonu uyarısı dışında).
+- 🔴 **A-03 açık:** Hash makbuzu snapshot bozulmasını saptar, imza/yerel yönetici müdahalesine karşı özgünlük sağlamaz. Gerçek PostgreSQL, kesinti, NTFS ve farklı makine belge kabulü yapılmadı.
+
+## A-03 devamı — apply hazırlık makbuzlarının atomik yazımı — 2026-10-05
+
+- 🟢 `05-recovery-archive-apply.ps1`, dosya öncesi durumu, snapshot SHA-256 listesini ve `ApplyStarted` makbuzunu önce aynı journal klasöründeki benzersiz geçici dosyaya yazar, diske flush eder ve hedef makbuz adına atomik taşır. Kesinti sırasında yarım JSON'un tamamlanmış makbuz gibi görünme olasılığı azaltıldı.
+- 🟢 PowerShell parser kontrolü başarılı; `git diff --check` temiz.
+- 🔴 **A-03 açık:** Dosya taşıma atomikliği hedef dosya sistemine bağlıdır; gerçek NTFS/ani güç kesintisi, PostgreSQL ve uygulama kabulü yapılmadı.
+
+## A-03 devamı — snapshot doğrulamasını hedef silmeden önce yapma — 2026-10-05
+
+- 🟢 Apply hata geri dönüşü ve kesinti sonrası rollback artık ilgili snapshot SHA-256 kontrolünü hedef klasörü silmeden önce yapar. Snapshot eksik/değişmişse o hedef korunur ve geri dönüş başarısızlığı açıkça kaydedilir; doğrulanmamış kopya kullanılmaz.
+- 🟢 `00`, `01`, `02`, `03`, `05`, `06` PowerShell betiklerinin parser kontrolü başarılı; `git diff --check` temiz.
+- 🔴 **A-03 açık:** Gerçek hata enjeksiyonu ve PostgreSQL/NTFS geri dönüş kabulü yapılmadı.
+
+## A-03 devamı — IIS durdurmadan önce apply journal alanı — 2026-10-05
+
+- 🟢 `05-recovery-archive-apply.ps1`, LocalAppData journal üst yolunu doğrulayıp yeni operasyon klasörünü oluşturmadan IIS havuzunu durdurmaz. Journal yolu/oluşturma hatası artık uygulama havuzunu gereksiz yere kapalı bırakmaz. Havuz yine dosya ve DB snapshot'larından önce durdurulur.
+- 🟢 Altı migration PowerShell betiğinin parser kontrolü başarılı; `git diff --check` temiz.
+- 🔴 **A-03 açık:** Gerçek IIS servis durumu geçişi, DB/NTFS hata enjeksiyonu ve hedef makine kurtarma kabulü yapılmadı.
+
+## A-03 devamı — DB rollback makbuz ve dump doğrulaması — 2026-10-05
+
+- 🟢 `01-db-restore.ps1` operasyon makbuzuna kaynak DB dump SHA-256 değerini yazar.
+- 🟢 `05` ve `06` rollback yolları mevcut DB için `PreExistingDatabaseSnapshotReady`, hedef adı, beklenen journal dump yolu ve rollback dump hash'ini doğrular. Yeni DB durumunda `DatabaseCreatedByOperation`, sayısal DB OID'si, journal içindeki sabit kaynak dump yolu ve kaynak dump hash'i doğrulanmadan DB kaldırma adımına geçmez.
+- 🟢 Üç PowerShell betiğinin parser kontrolü başarılı; `git diff --check` temiz.
+- 🔴 **A-03 açık:** PostgreSQL üzerinde gerçek yeni/mevcut DB geri dönüşü ve kesinti/hata enjeksiyonu kabulü henüz yapılmadı.
+
+## A-03 devamı — terminal apply/rollback makbuzlarını atomik yazma — 2026-10-05
+
+- 🟢 `05-recovery-archive-apply.ps1` artık `applied.json` ve `rollback-result.json` sonuçlarını geçici dosyaya flush edip atomik taşır. Başarı makbuzu tamamlanmadan oluşan yazma hatası apply hata/rollback akışına düşer.
+- 🟢 `06-recovery-archive-rollback.ps1` `recovered.json` ve `recovery-failed.json` makbuzlarını aynı yöntemle yazar; yarım terminal makbuzun sonraki kurtarma denemesini yanlış engelleme riski azaltıldı.
+- 🟢 İki PowerShell betiğinin parser kontrolü başarılı; `git diff --check` temiz.
+- 🔴 **A-03 açık:** Atomik dosya taşıma ve gerçek süreç/güç kesintisi davranışı hedef Windows/NTFS üzerinde denenmedi; DB ve belge kabulü de bekliyor.
+
+## A-03 devamı — hedef yol üst bileşenlerini yeniden doğrulama — 2026-10-05
+
+- 🟢 Apply ve rollback betikleri hedefleri snapshot alma, uygulama ve geri yükleme öncesinde üst dizinleri yeniden junction/symlink açısından denetler. Başlangıç kontrolünden sonra yol bileşeni değişmişse hedef üzerinde işlem yapmaz.
+- 🟢 İlgili PowerShell parser kontrolleri başarılı; `git diff --check` temiz.
+- 🔴 **A-03 açık:** Dosya sistemi yarış koşulları, PostgreSQL arızası ve gerçek hedef kurulum kabulü henüz çalıştırılmadı.
+
+## A-03 devamı — eski apply journal'larıyla kurtarma uyumluluğu — 2026-10-05
+
+- 🟢 `06-recovery-archive-rollback.ps1`, yeni apply journal'larında snapshot SHA-256 doğrulamasını zorunlu tutar. Hash makbuzu olmayan eski journal'larda snapshot'ı junction/symlink açısından denetler ve DB/dosya değişikliğinden önce `ESKI-SNAPSHOT-ONAY` operatör onayı ister; onay yoksa değişiklik yapmadan durur.
+- 🟢 Eski yeni-DB makbuzlarında kaynak dump hash alanı yoksa, hedef OID ve beklenen journal dump yolu doğrulanarak DB kaldırma kurtarması sürdürülebilir; yeni hash alanı varsa doğrulama zorunludur.
+- 🟢 `06-recovery-archive-rollback.ps1` parser kontrolü başarılı; `git diff --check` temiz.
+- 🔴 **A-03 açık:** Eski journal'larda eksik hash özgünlük doğrulaması operatör onayıyla sınırlıdır; gerçek DB/kesinti kabulü yapılmadı.
+
+## A-03 devamı — 6 Ekim journal tekrar deneme güvenliği
+
+- 🟢 `06-recovery-archive-rollback.ps1`, önceki başarısız denemeler için her seferinde benzersiz `recovery-failed-{guid}.json` makbuzu yazar; var olan hata kaydı yeni rollback denemesini engellemez veya hata ayrıntısını ezmez.
+- 🟢 `files-before-hashes.json` yolu varsa normal dosya olması zorunludur. Aynı adla klasör/özel yol bulunursa eski hash'siz journal olarak yorumlanmaz; işlem durur.
+- 🟢 PowerShell parser kontrolü başarılı; `git diff --check` temiz.
+- 🔴 **A-03 açık:** Gerçek Windows kesinti ve PostgreSQL rollback kabulü yapılmadı.
+
+## A-10 devamı — EBYS belge silme ve güncelleme sırası — 2026-10-06
+
+- 🟢 EBYS dosya silme artık önce kaydı soft-delete edip DB değişikliğini kaydeder, ardından fiziksel dosyayı temizler. Fiziksel silme başarısızlığı `FileCleanupPendingException` olarak bildirilir.
+- 🟢 EBYS dosya güncelleme eski dosyayı DB değişikliğinden önce silmez. Yeni şifreli dosya oluşturulur, DB'deki yol güncellenir ve commit sonucu hata verirse yeni yol taze context ile kontrol edilir; başvuru olup olmadığı doğrulanamazsa olası yetim dosya güvenlik için korunur. Commit başarılıysa eski dosya sonradan temizlenir.
+- 🟢 Web Debug derlemesi başarılı: 0 uyarı, 0 hata. Test veya gerçek dosya silme çalıştırılmadı.
+- 🔴 **A-10 açık:** Kalıcı temizleme kuyruğu/yeniden deneme, mevcut yetim dosya envanteri ve diğer servislerin DB/dosya sırası bu düzeltme kapsamında tamamlanmadı.
+
+## A-10 devamı — EBYS işlem hareketini dosya temizliğinden önce kaydetme — 2026-10-06
+
+- 🟢 EBYS silme/güncellemede iş kaydı DB'ye yazıldıktan sonra EBYS hareket kaydı ekleniyor, fiziksel eski dosya en son temizleniyor. Temizlik hatası olsa da DB hareket kaydı yazılmış olur; fiziksel silme DB kaydından önce çalışmaz.
+- 🟢 Web Debug derlemesi başarılı: 0 uyarı, 0 hata. Test/gerçek dosya silme yapılmadı.
+- 🔴 **A-10 açık:** Hareket/audit kaydı ve ana DB kaydı ayrı SaveChanges bağlamlarındadır; kalıcı cleanup kuyruğu, yetim envanteri ve diğer servislerin telafi akışı hâlâ gereklidir.
+
+## A-10 devamı — araç uyarı ekranı upload telafisi — 2026-10-06
+
+- 🟢 `BelgeUyariService.AracBelgeDosyaYukleAsync`, dosya DB kaydı hata döndürdüğünde artık yeni dosyayı körlemesine silmez. Taze context ile `AracEvrakDosyalari` içinde dosya yoluna başvuru aranır; başvuru varsa dosya korunur, yoksa telafi silmesi yapılır. DB doğrulaması veya telafi silmesi başarısızsa asıl hata ve telafi hatası birlikte yükseltilir.
+- 🟢 Web Debug derlemesi başarılı: 0 uyarı, 0 hata. Test/gerçek upload çalıştırılmadı.
+- 🔴 **A-10 açık:** Kalıcı temizlik kuyruğu/yeniden deneme, yetim dosya envanteri ve diğer dosya yazan servislerin belirsiz commit telafisi tamamlanmadı.
+
+## A-10 devamı — EBYS sürüm arşivini ana dosyadan ayırma — 2026-10-06
+
+- 🟢 `BelgeVersiyonService.ArsivleEbysEvrakDosyaAsync`, eski ana dosyanın aynı yolunu sürüm kaydına kopyalamak yerine şifreli baytları `ebys/versions/{id}` altında bağımsız dosyaya kopyalar ve sürüm kaydını bu yola bağlar. Ana dosya güncellendiğinde eski sürüm artık ana dosya temizliğiyle kaybolmaz.
+- 🟢 Arşiv DB kaydı başarısız/belirsizse taze context sürüm tablosunda bu yola başvuru arar; başvuru doğrulanmadan kopyayı silmez. Sürüm içeriği okuyucusu yeni şifreli depoyu açar, eski webroot kayıtları için kök dışına çıkmayan geriye uyumlu okuma sağlar.
+- 🟢 Web Debug derlemesi başarılı: 0 uyarı, 0 hata. Runtime/sürüm geri yükleme testi yapılmadı.
+- 🔴 **A-10 açık:** Araç/personel sürüm arşivleri, kalıcı temizleme kuyruğu/yeniden deneme, eski yetim dosya envanteri ve servisler arası telafi hâlâ bekliyor.
+
+## A-10 devamı — araç/personel sürüm arşivlerinin bağımsız dosyalanması — 2026-10-06
+
+- 🟢 Araç ve personel sürüm arşivleri artık mevcut dosyanın aynı path'ini paylaşmaz; `CopyVersionFileAsync` ile bağımsız şifreli sürüm dosyası oluşturulur. SecureFileService dışındaki eski webroot dosyaları güvenli kök altında okunup yeni korumalı depoya alınır.
+- 🟢 Sürüm içeriği okuyucuları şifreli depoyu açar, legacy webroot yolunu kök dışına çıkış denetimiyle destekler. (Sonraki 2026-10-06 düzeltmesiyle sürüm soft-delete artık fiziksel dosyayı silmiyor; aşağıdaki güncel not geçerlidir.)
+- 🟢 Web Debug derlemesi başarılı: 0 uyarı, 0 hata. Runtime test/gerçek dosya işlemi yapılmadı.
+- 🔴 **A-10 açık:** Dosya silme ile sürüm referans kontrolü eşzamanlı DB transaction/row lock altında değildir; kalıcı cleanup kuyruğu ve eski yetim dosya envanteri hâlâ gereklidir. Diğer servis akışlarının tamamı taranıp düzeltilmedi.
+
+## A-10 devamı — sürüm silme yarışı ve personel evrakı yenileme sırası — 2026-10-06
+
+- 🟢 Sürüm soft-delete işlemleri artık dosyayı fiziksel olarak silmiyor. Geri yükleme ile referans kontrolü/silme arasındaki yarış, kalıcı ve serileştirilmiş cleanup mekanizması gelene kadar dosyayı koruyarak önlendi.
+- 🟢 EBYS personel evrakı yenilemesinde mevcut dosya yeni upload ve DB güncellemesinden önce silinmiyor. Yeni dosya önce şifreli depoya yazılıyor; DB kaydı hata verirse taze context ile ana kayıt ve sürüm tablosu kontrol ediliyor. Başvuru doğrulanamıyorsa dosya korunup hata görünür kılınıyor.
+- 🟡 Eski personel dosyası bu akışta otomatik temizlenmiyor; geçmiş sürüm ilişkisi net olmadığı için tutuluyor. Kalıcı cleanup kuyruğu/yeniden deneme ve yetim envanteri gereklidir.
+- 🔴 **A-10 açık:** Genel servis taraması, belirsiz commit telafileri ve kalıcı dosya temizleme altyapısı tamamlanmadı.
+
+## A-10 devamı — fatura PDF/XML dosya değiştirme sırası — 2026-10-06
+
+- 🟢 Fatura PDF ve XML yenilemesinde eski dosya artık yeni dosya ve DB yolu kaydedilmeden silinmiyor. Yeni içerik şifreli depoya yazılıyor, DB path'i sonra güncelleniyor.
+- 🟢 DB kaydı hata verirse taze context ile PDF/XML yolunun fatura kayıtlarında bulunup bulunmadığı doğrulanıyor. Başvuru varsa PDF yüklemesi başarılı kabul ediliyor; başvuru yoksa yeni dosya telafi ediliyor. Doğrulama/temizlik hatasında AggregateException ile belirsizlik görünür kalıyor.
+- 🟡 Eski dosya otomatik kaldırılmıyor; firma içi kopya faturalar aynı yolu paylaşabildiği için güvenli, referans kontrollü kalıcı cleanup kuyruğu bekleniyor.
+- 🟢 Web Debug derlemesi başarılı: 0 uyarı, 0 hata. Runtime fatura dosyası işlemi yapılmadı.
+- 🔴 **A-10 açık:** Kalıcı cleanup/yeniden deneme kuyruğu, yetim dosya envanteri ve diğer tüm dosya yazan servislerin incelemesi gereklidir.
+
+## A-10 devamı — destek eki şifreli depolama ve upload telafisi — 2026-10-06
+
+- 🟢 Yeni destek talebi ve yanıt ekleri artık webroot içine düz metin yazılmıyor; `ISecureFileService` ile şifreli depoya kaydediliyor. Okuma akışı şifreli yeni yolları açıyor ve eski webroot eklerini kontrollü kök altında geriye dönük destekliyor.
+- 🟢 DB kaydı başarısız/belirsiz kaldığında taze context ile ek tablosu kontrol ediliyor; DB başvurusu yoksa yeni dosya telafi ediliyor, doğrulama/temizlik hatasında dosya korunup hata görünür kılınıyor.
+- 🟢 Web Debug derlemesi başarılı: 0 uyarı, 0 hata; `git diff --check` temiz. Gerçek ek yükleme/indirme/silme senaryosu çalıştırılmadı.
+- 🔴 **A-10 açık:** Eski düz metin eklerin toplu şifreli depoya taşınması, kalıcı cleanup kuyruğu/yeniden deneme ve yetim envanteri henüz yapılmadı.
+
+## A-10 devamı — ortak evrak ekranı dosya sırası ve yol doğrulaması — 2026-10-06
+
+- 🟢 Ortak evrak ekranında yenileme öncesi eski dosya silme kaldırıldı. Yeni dosya DB kaydından önce yazılıyor; DB başarısız/belirsiz kalırsa taze context ile referans doğrulanıp yalnız başvurulmayan yeni dosya telafi ediliyor.
+- 🟢 Evrak silme akışında önce DB soft-delete kaydediliyor; fiziksel silmeden önce diğer aktif kayıtlar denetleniyor. Temizlik hatası artık sessizce yutulmuyor.
+- 🟢 `FileService` okuma/silme/yol çözümlemesi, depolama kökü dışına taşan veya mutlak yol içeren dosya adlarını reddediyor.
+- 🟡 Eski evrak dosyaları, kalıcı referans kontrollü temizleme kuyruğu kurulana kadar tutuluyor.
+- 🟢 Web Debug derlemesi başarılı: 0 uyarı, 0 hata; `git diff --check` temiz. Runtime dosya senaryosu çalıştırılmadı.
+- 🔴 **A-10 açık:** Eski düz metin dosyaların şifreli depoya taşınması, kalıcı cleanup/yeniden deneme ve yetim envanteri devam ediyor.
+
+## A-10 devamı — personel özlük ekranı upload telafisi ve sürüm referansları — 2026-10-06
+
+- 🟢 Personel özlük ekranında upload sonrası bir UI/tarih yenileme hatası yeni dosyayı silip DB'de bozuk başvuru bırakabiliyordu. Telafi artık yeni yolu ana kayıt, sürüm geçmişi ve ortak evrak kayıtlarında kontrol ediyor; başvuru varsa dosyayı koruyor, kontrol başarısızsa da silmiyor.
+- 🟢 Başarılı yenilemede eski fiziksel dosya otomatik silinmiyor. Hızlı silme de ana kayıt temizlendikten sonra sürüm ve ortak evrak referanslarını kontrol ediyor; geçmişte kullanılan dosyanın silinmesini erteliyor.
+- 🟢 Web Debug derlemesi başarılı: 0 uyarı, 0 hata; `git diff --check` temiz. Gerçek upload/geri yükleme/silme senaryosu çalıştırılmadı.
+- 🔴 **A-10 açık:** Kalıcı cleanup kuyruğu/yeniden deneme ve yetim dosya envanteri; ayrıca eski dosyaların kontrollü temizliği gerekiyor.
+
+## A-10 devamı — araç/personel arşiv dosyalarının sürüm başına benzersizleştirilmesi — 2026-10-06
+
+- 🟢 Arşiv servisi aynı araç/personel evrak tipi için sabit şifreli dosya adını tekrar kullanıyordu; yeni yükleme geçmiş sürüm içeriğinin üstüne yazabiliyordu. Her yeni arşiv yazımı artık GUID tabanlı benzersiz dosya yoluna kaydediliyor.
+- 🟢 Araç upload telafisi artık DB kayıt işleminden sonra çalışan cache temizliği gibi bir adım hata verdiğinde taze context ile dosya yolu ve sürüm referanslarını denetliyor; başvurulan dosyayı silmiyor. Doğrulama/temizlik hatasında belirsizlik AggregateException ile korunuyor.
+- 🟢 Personel arşiv yüklemesi kaynak dosya adı/türü/boyutunu kayıt metoduna iletiyor; dosya adı benzersiz saklama adıyla karışmıyor.
+- 🟢 Web Debug derlemesi başarılı: 0 uyarı, 0 hata; `git diff --check` temiz. Gerçek arşiv sürümleme testi yapılmadı.
+- 🔴 **A-10 açık:** Mevcut sabit isimli arşivlerin geriye dönük taraması, cleanup kuyruğu/yeniden deneme ve yetim envanteri gereklidir.
+
+## A-10 devamı — araç evrak upload telafisi ve silme referans kontrolü — 2026-10-06
+
+- 🟢 Araç upload telafisi, yeni dosya DB’de veya sürüm tablosunda referanslıysa artık silmiyor. Cache invalidation gibi DB commit sonrası hata oluşsa da içerik korunuyor; referans denetimi başarısızsa AggregateException ile işlem belirsizliği bildiriliyor.
+- 🟢 Araç evrak dosyası silme DB soft-delete sonrasında taze context ile diğer aktif dosya ve sürüm referanslarını kontrol ediyor; bilinen paylaşımlı yol fiziksel olarak kaldırılmıyor.
+- 🟡 Referans kontrolü ile fiziksel silme halen tek bir DB transaction/lock içinde değil. Kalıcı serialized cleanup kuyruğu kurulana kadar A-10 kırmızı kalıyor.
+- 🟢 Web Debug derlemesi başarılı: 0 uyarı, 0 hata; `git diff --check` temiz. Runtime eşzamanlı upload/restore testi yapılmadı.
+
+## A-10 devamı — Şoför formu upload telafisi — 2026-10-06
+
+- 🟢 Şoför formunda post-save içerik doğrulaması veya UI yenilemesi hata verdiğinde `catch` artık yeni dosyayı körlemesine silmiyor. Taze DB context ile özlük ana kayıtları, sürüm geçmişi ve ortak evrak yolları denetleniyor.
+- 🟢 DB başvurusu varsa dosya korunuyor; referans sorgusu veya cleanup başarısızsa hata loglanıp belirsizlik AggregateException ile bildiriliyor.
+- 🟢 Web Debug derlemesi başarılı: 0 uyarı, 0 hata; `git diff --check` temiz. Gerçek personel upload senaryosu çalıştırılmadı.
+- 🔴 **A-10 açık:** Kalıcı cleanup kuyruğu/yeniden deneme, yetim envanteri ve tüm upload/silme yollarının çalışma zamanı kabulü gereklidir.
+
+## A-10 devamı — taşıma tedarikçisi eki upload telafisi ve referans kontrolü — 2026-10-06
+
+- 🟢 Tedarikçi eki upload hatasında yeni şifreli dosya silinmeden önce taze context ile dosya yolu DB'de aranıyor. Belirsiz committe referans varsa dosya korunuyor; sorgu/temizlik hatası AggregateException ile görünür.
+- 🟢 Tedarikçi eki silme DB soft-delete sonrasında diğer aktif eklerde aynı yol aranarak fiziksel temizlik yapıyor; ortak kullanılan dosya silinmiyor.
+- 🟡 Kontrol ve fiziksel silme arasında çoklu süreç kilidi yok; A-10'un kalıcı cleanup kuyruğu/serialized işleyicisi hâlâ açık.
+- 🟢 Web Debug derlemesi başarılı: 0 uyarı, 0 hata; `git diff --check` temiz. Runtime upload/silme senaryosu çalıştırılmadı.
+
+## A-10 devamı — destek talebi eki silme sırası — 2026-10-06
+
+- 🟢 Destek talebi eki silmede önce DB soft-delete kaydediliyor. Sonra taze context ile başka aktif ek kaydının aynı dosya yoluna başvurup başvurmadığı kontrol ediliyor; fiziksel dosya yalnız başvuru yoksa siliniyor.
+- 🟢 Fiziksel yolun destek yükleme kök dizini altında olduğu doğrulanıyor. Silme/konum hataları artık boş catch ile yutulmuyor; ek kimliği loglanıp `FileCleanupPendingException` ile bildiriliyor.
+- 🟢 Web Debug derlemesi başarılı: 0 uyarı, 0 hata. Destek eki runtime silme senaryosu çalıştırılmadı.
+- 🔴 **A-10 açık:** Kalıcı cleanup/yeniden deneme kuyruğu, yetim dosya envanteri ve diğer tüm dosya yazan servislerin incelemesi gereklidir.
+
+
+## Kurulumda veritabanı seçimi — 2026-10-06
+
+- 🟢 Ana (Setup.iss) ve müşteri (MusteriSetup.iss) Inno kurulumlarına PostgreSQL / SQLite / MSSQL seçim adımı eklendi. PostgreSQL bağlantı alanları; SQLite dosya yolu alınır ve seçime uygun dbsettings.json kurulumda yazılır. Güncelleme paketi mevcut ayarı korur.
+- 🟢 IIS kur.ps1 -Mode Install kurulumunda da sağlayıcı sorulur; PostgreSQL parolası maskeli alınır, yapılandırma geçici dosyadan atomik taşınır. Kurulum modu mevcut SQLite dosyasını artık silmez.
+- 🟡 **MSSQL açık:** Seçenek sihirbazda görünür, seçildiğinde neden ilerlenemediği bildirilir. DbInitializer.InitializeAsync yalnız PostgreSQL/SQLite desteklediğinden SQL Server otomatik migration/audit desteği eklenmeden MSSQL kurulumu tamamlanamaz; A-28 kırmızı kalır.
+- 🟢 Güncel Web/DataSync publish ile ana, güncelleme ve müşteri EXE paketleri v1.0.37 üretildi. Ana IIS kurulumunda dbsettings.json okuması yöneticiler ve yalnız ilgili uygulama havuzuyla sınırlandı; SQLite App_Data yazma izni uygulama havuzuna verilir. 🟡 Etkileşimli hedef makine kurulumu ve gerçek DB bağlantı kabulü yapılmadı.
+
+## A-15 devamı — aktif araç plakası DB tekilliği — 2026-10-06
+
+- 🟢 Aktif ve silinmemiş `AracPlakalar` kayıtları için filtreli benzersiz indeks; model, snapshot ve migration ile eklendi. Migration öncesi yinelenen aktif plakalar denetleniyor ve varsa veri değiştirmeden duruyor.
+- 🟢 Web Debug derlemesi başarılı: 0 uyarı, 0 hata.
+- 🟡 Gerçek PostgreSQL/SQLite migration ve eşzamanlı kayıt kabulü yapılmadı. A-15'in banka referansı, dönem snapshot, varsayılan şablon ve kalan firma ilişkileri açık; ana son durum raporunda 🔴 olarak izlenir.
+
+## A-15 devamı — banka importu eşzamanlı tekrar koruması — 2026-10-06
+
+- 🟢 Referans numaralı import satırlarına firma/tarih/referans/tutar/yön bileşiminden deterministik hash ekleniyor; aktif kayıtlar firma kapsamında benzersiz indeksle korunuyor. Soft-delete kayıtlar yeniden importu engellemiyor.
+- 🟢 Web Debug derlemesi başarılı: 0 uyarı, 0 hata.
+- 🟡 Gerçek migration/eşzamanlı import kabulü ve geçmiş satırlar için geriye dönük anahtar doldurma yapılmadı. Dönem snapshot/varsayılan şablonlar A-15 içinde açık.
+
+## A-15 devamı — aylık personel maaş snapshot tekilliği — 2026-10-06
+
+- 🟢 Firma/yıl/ay/personel doğal anahtarında aktif maaş snapshotlarını benzersiz tutan filtreli indeks ve yinelenen kayıt ön kontrolü eklendi.
+- 🟢 Web Debug derlemesi başarılı: 0 uyarı, 0 hata.
+- 🟡 Gerçek migration/eşzamanlı yazım kabulü yapılmadı. Araç maliyet snapshotı soft-delete davranışı ve varsayılan şablon kısıtları açık.
+
+## A-15 devamı — araç maliyet snapshotı yeniden üretim uyumu — 2026-10-06
+
+- 🟢 Araç/yıl/ay tekil indeksi artık yalnız aktif snapshotlara uygulanıyor. Silinen dönem snapshotı yeniden üretilebilir; migration mevcut indeksi filtreli indeksle değiştirir.
+- 🟢 Web Debug derlemesi başarılı: 0 uyarı, 0 hata.
+- 🟡 Migration ve silme/yeniden üretme runtime kabulü yapılmadı. Varsayılan fatura/grup şablonları A-15 içinde açık.
+
+## A-15 devamı — varsayılan fatura ve grup şablonu tekilliği — 2026-10-06
+
+- 🟢 Aktif fatura varsayılanı firma başına, grup şablonu varsayılanı ise firma geneli ve kullanıcı kapsamlarında ayrı filtreli benzersiz indekslerle korunuyor.
+- 🟢 Migration öncesi yinelenen varsayılan kontrolü eklendi; çakışma varsa mevcut satırlar değiştirilmeden migration reddediliyor.
+- 🟢 Web Debug derlemesi başarılı: 0 uyarı, 0 hata.
+- 🟡 Gerçek migration ve eşzamanlı şablon değiştirme kabulü yapılmadı; A-15’in diğer tenant ilişkileri açık.
+- 🟢 Temiz kurulumda henüz migration edilmemiş fatura/grup şablonu tabloları için yinelenen veri ön kontrolü güvenli biçimde atlanıyor.
+
+## A-15 devamı — banka hareketi hesap/cari firma kapsamı — 2026-10-06
+
+- 🟢 Banka/Kasa hareketi servisinde oluşturma/güncelleme seçilen hesabı ve cariyi hareket firmasıyla aynı kapsamda doğruluyor; güncelleme mevcut kaydın firma kapsamını değiştiremiyor.
+- 🟢 Web Debug derlemesi başarılı: 0 uyarı, 0 hata.
+- 🟡 Diğer doğrudan yazım yolları ve DB composite FK kapsamı tamamlanmadı; gerçek firma A/B kabulü yapılmadı.
+
+## A-15 devamı — ortak SaveChanges ilişki denetimi — 2026-10-06
+
+- 🟢 Banka/Kasa hareketi ekleyen/değiştiren EF yazımları hesap, cari ve personel geri ödeme hesabı firma eşleşmesini ortak SaveChanges sınırında denetler; aynı context'te yeni eklenen cari ve mevcut hareketin firma taşıması da kapsanır.
+- 🟢 Web Debug derlemesi 0 uyarı/0 hata. Geçici SQLite bellekiçi doğrulamada yanlış firma hesabı, cari, yeni cari, geri ödeme hesabı ve firma taşıma reddedildi; aynı firma hareketi kaydedildi.
+- 🟢 Audit `EntityId` iç düzeltmesi tenant sorgu filtresinden bağımsız yapılıyor; açık firma sağlayıcısı bulunmayan izole kayıtta iki yeni firma audit kimliği doğrulandı.
+- 🟡 Raw SQL/dış yazımlar, DB composite FK, diğer tenant bağlantıları ve gerçek PostgreSQL/SQLite migration/kabul açık. A-15 🔴 kalır.
+
+## A-15 devamı — banka hareketi veritabanı firma denetimi — 2026-10-06
+
+- 🟢 PostgreSQL/SQLite migration'ı banka hareketinin hesap/cari/geri ödeme hesabı firma bağını tetikleyicilerle denetler; bağlı hesap veya carinin firma değiştirmesini de engeller. Ön kontrolde eski uyuşmazlık varsa veri değiştirmeden migration durur.
+- 🟢 Web Debug derlemesi 0 uyarı/0 hata. 🟡 Gerçek DB migration, eski veri onarımı, diğer ilişkiler ve eşzamanlılık kabulü açık; A-15 🔴 kalır. Ayrıntı [görev envanterinde](SATISA-CIKARIM-GOREV-ENVANTERI-2026-10-06.md).
+
+## 🟢 A-22 kapanışı — güncel NuGet taraması — 2026-10-06
+
+- LisansDesktop geçişli `SQLitePCLRaw.lib.e_sqlite3 2.1.11` yüksek önem dereceli bildirimi tespit edildi; doğrudan 2.1.13 bağımlılığı eklendi ve dahili Release/win-x64 EXE yenilendi.
+- Altı çözüm projesi ve çözüm dışı Rent-a-Car kontrol projesinin doğrudan/geçişli son taramasında bilinen açık raporlanmadı. CI tarama hatasında başarısız olur ve iki proje kümesini kapsar. [Ayrıntı](A-22-BAGIMLILIK-TARAMASI-2026-10-06.md). A-22 🟢; müşteri kurulum kabulü A-21 🟡 kalır.
+
+## A-15 devamı — iki sağlayıcıda izole firma bağı denetimi — 2026-10-06
+
+- 🟢 SQLite bellek DB ve geçici PostgreSQL 17 kümesinde migration ön kontrolü, geçerli yazım ve yedi ret senaryosu geçti. Hareketin aynı anda hesap/cari değiştirerek firma değiştirmesi de DB'de reddediliyor.
+- 🟢 Web Debug derlemesi 0 uyarı/0 hata. [İzole kanıt ve sınır](A-15-IZOLE-FIRMA-BAGI-DOGRULAMA-2026-10-06.md). 🟡 Tam model/müşteri migration ve eşzamanlılık kabulü açık; A-15 🔴.
+
+## Y-7 / A-07 güncellemesi — 2026-10-06
+
+- 🟢 `MKFiloServis.Tests` xUnit projesi oluşturuldu; A-15 SQLite firma bağı için 9 test yerelde başarılı. CI artık test projesini algılayıp atlamak yerine zorunlu derleyip çalıştırır ve TRX sonucunu saklar.
+- 🟡 GitHub çalışma sonucu ve lisans, tenant, audit, restore, mali işlem regresyonları henüz yok. Önceki bölümlerdeki “test projesi yok” ifadeleri tarihsel durumu anlatır; güncel A-07 durumu 🟡. [Görev envanteri](SATISA-CIKARIM-GOREV-ENVANTERI-2026-10-06.md).
+
+## Y-7 / A-07 lisans protokolü ek testi — 2026-10-06
+
+- 🟢 V3 modül zarfı, geçersiz modül dizisi, RSA-PSS modül bağı ve sürüm sınırı regresyonları eklendi; yerel Release sonucu **21/21 başarılı**.
+- 🟡 Bu ortak protokol testleri gerçek müşteri lisansı yükleme ve modül erişimi kabulünün yerine geçmez. A-01/A-02/A-07 🟡; güncel kapsam [görev envanterinde](SATISA-CIKARIM-GOREV-ENVANTERI-2026-10-06.md).
+
+## A-10 upload güvenilirliği güncellemesi — 2026-10-06
+
+- 🟢 `SecureFileService` şifreli dosyaları önce aynı klasörde geçici dosyaya yazar; tamamlanınca son ada taşır. Böylece son dosya yolu kısmi bir şifreli yazım sırasında görünür olmaz.
+- 🟢 Başarılı yükleme/iptal regresyonları eklendi; Release test toplamı **23/23 başarılı**.
+- 🔴 Kalıcı cleanup kuyruğu, tekrar deneme ve yetim envanteri ile diğer yazım yollarının denetimi açık; A-10 kırmızı.
+
+## A-10 personel özlük referans güvenliği — 2026-10-06
+
+- 🟢 Fiziksel özlük dosyası silinmeden önce mevcut ve sürüm kayıtları `IgnoreQueryFilters()` ile kontrol ediliyor; başka kayıt aynı yolu kullanıyorsa silme yapılmıyor.
+- 🟢 Release derleme ve mevcut 23 test geçti. Eski paylaşılan yol için ayrı DB kabul testi henüz yok.
+- 🔴 Çoklu süreç kilidi, kalıcı cleanup kuyruğu, yeniden deneme ve diğer dosya türlerinin genel referans taraması açık.
+
+## A-10 yerel nesne deposu yolu — 2026-10-06
+
+- 🟢 Yerel depo anahtarlarının boş/köklenmiş veya uploads dışına çözümlenen biçimleri reddedilir; upload geçici dosyadan yayımlanır; silme erişim hatalarını `File.Exists` ile gizlemez.
+- 🟢 Yol, atomik upload ve eksik dosya silme testleri dahil Release paketi **25/25 başarılı**.
+- 🔴 Symlink ve gerçek storage kesintisi, kalıcı cleanup/yeniden deneme kuyruğu ve tam dosya referans envanteri açık.
+
+## A-10 yerel depolama sembolik bağlantı denetimi — 2026-10-06
+
+- 🟢 `StorageFilePath.Resolve` depolama içindeki mevcut sembolik bağlantı bileşenlerinden geçen yolları reddediyor; `LocalObjectStorageService` ortak çözümleyiciye geçirildi.
+- 🟢 Release test paketi **25/25 başarılı**, `git diff --check` temiz.
+- 🟡 Windows test kullanıcısının sembolik bağlantı oluşturma ayrıcalığı olmadığından doğrudan bağlantı saldırısı testi çalışmadı. Kontrol ile dosya işlemi arasındaki TOCTOU yarışı, cleanup kuyruğu, yetim envanteri ve gerçek storage kabulü açık; A-10 🔴 kalır.
+
+## A-10 yerel depo eksik klasör silme davranışı — 2026-10-06
+
+- 🟢 Var olmayan dosyanın üst klasörü de yoksa silme başarılı no-op olur; erişim/IO hataları `File.Exists` ile gizlenmez.
+- 🟢 Regresyon testleri dahil Release testleri 26/26 geçti, `git diff --check` temiz.
+- 🔴 Kalıcı cleanup kuyruğu/yeniden deneme, çok süreçli yarış/TOCTOU, yetim envanteri ve gerçek depolama kabulü açık olduğundan A-10 kapanmadı.
+
+## A-10 ortak idempotent silme — 2026-10-06
+
+- 🟢 `StorageFilePath.DeleteIdempotently` eksik üst klasörü idempotent ele alır; hem şifreli dosya servisi hem yerel depo ortak metodu kullanır. Erişim/IO hataları gizlenmez.
+- 🟢 Release test paketi 26/26 başarılı ve `git diff --check` temiz.
+- 🔴 Şifreli servis entegrasyon testi, kalıcı cleanup/yeniden deneme, TOCTOU/çok süreçli yarış, yetim envanteri ve gerçek storage kabulü açık kaldı.
+
+## A-10 DosyaMigrasyonService veri kaybı ve uploads yol sınırı — 2026-10-06
+
+- 🟢 Legacy açık dosya, yeni şifreli dosya ve yeni DB yolu kaydı tamamlanıp doğrulanmadan silinmiyor; SaveChanges belirsizliğinde eski dosya korunuyor. Başka DB satırları eski yolu kullanıyorsa eski dosya tutuluyor.
+- 🟢 Kaynak path uploads köküyle sınırlandı ve sembolik bağlantı bileşenleri reddediliyor. Release testleri **26/26 başarılı**, `git diff --check` temiz.
+- 🔴 Kalıcı cleanup kuyruğu/yeniden deneme, gerçek legacy DB+dizin üzerinde migration kabulü, genel yetim taraması ve çok süreçli TOCTOU kontrolü açık.
+
+- 🟢 Paylaşılan eski yol denetimi bilinen file path DB alanlarını (ortak evrak, özlük, destek, tedarikçi, fatura/proforma dâhil) soft-delete satırlarını da kapsayacak biçimde tarar.
+
+## A-10 migration erişimi ve sayım kapsamı — 2026-10-06
+
+- 🟢 Dosya migration ekranı Admin rolü gerektiriyor; EBYS lisans politikası da birlikte uygulanır.
+- 🟢 UI ve servis artık yalnız aktif firma filtreli EBYS/araç ana belge ve sürümlerini kapsadığını söylüyor; tüm düz metin dosyalarına yönelik yanlış izlenim kaldırıldı. Release test paketi 26/26 geçti.
+- 🔴 Soft-delete/destek/fatura/ortak evrak yolları ve tenant kabul kapsamı açık; genel orphan raporu ve kalıcı cleanup kuyruğu yapılmadı.
+
+## A-10 şifreli orphan raporu — 2026-10-06
+
+- 🟢 Admin bakım raporu uploads, Arsiv ve Depo depolarındaki `.enc` dosyaları bilinen `DosyaYolu`/PDF/XML DB alanlarıyla karşılaştırır ve soft-delete kayıtlarını referans olarak sayar.
+- 🟢 Yalnız raporlama yapar, hiçbir orphan dosyayı silmez. Release testi 27/27 geçti; diff kontrolü temiz.
+- 🔴 Eski düz metinler, tüm varlık/property envanteri, gerçek DB/storage kabulü ve kalıcı temizleme/yeniden deneme akışı açık kaldı.
+
+## A-10 kalıcı dosya temizleme kuyruğu — 2026-10-06
+
+- 🟢 Şifreli/atomik DP journal ve hosted retry worker eklendi. Silme öncesinde bilinen DB dosya yolu alanları soft-delete filtreleri yok sayılarak kontrol edilir; journal girdileri idempotent ve hatada artan aralıkla ertelenir.
+- 🟢 Journal persistence/retry regresyonu eklendi; Release test paketi **28/28 başarılı**, `git diff --check` temiz.
+- 🟢 Kuyruk girdileri 5 dakikalık lease ile claim edilir; aynı lease aktifken başka worker girdiyi alamaz, lease süresi geçince tekrar denenebilir. Release paketi 28/28 başarılı.
+- 🟢 Worker her turda tek girdiyi claim eder ve işlem sürerken lease'i dakikada bir yeniler. Test eski lease bitişinden sonra ikinci claim'i ve geçersiz sahip yenilemesini kontrol eder. Release test paketi 28/28 başarılı.
+- 🔴 DB commit ile journal enqueue tek transaction değildir; arada crash olursa dosya orphan kalabilir. Referans kontrolü ve unlink atomik değildir; yenileme kesilirse lease kaybedilebilir. Gerçek müşteri DB/storage ve key-ring kurtarma kabulü yapılmadı; A-10 açık kalır.
+
+## A-10 mutlak yol ve DB referans eşleştirmesi — 2026-10-06
+
+- 🟢 Depolama kökü altındaki mutlak DB yolları kanonik anahtara çevrilir. Worker doğrudan SQL eşleşmesi bulamayınca bilinen yol alanlarını kanonikleştirerek kontrol eder; Windows harf büyüklüğü farkında referanslı dosyayı silmez.
+- 🟢 Mutlak yol regresyonu dahil Release test paketi **28/28 başarılı**.
+- 🔴 Gerçek müşteri DB'sindeki tam tarama performansı ve referans kontrolü ile unlink arasındaki yarış açık; A-10 kapanmadı.
+
+## A-10 şifresiz dosya aday envanteri — 2026-10-06
+
+- 🟢 Admin evrak bakım raporu uploads ve Arsiv altındaki şifresiz, geçici olmayan ve DB'de bilinen yol alanlarında bulunmayan dosyaları ayrı listeler. Sembolik bağlantılar izlenmez; rapor otomatik silmez.
+- 🟢 Tarama aynı DB yol envanterini kullanır; Release test paketi **28/28 başarılı**.
+- 🔴 Bunlar manuel inceleme adaylarıdır. Referanslı eski açık dosyaların taşınması, tam yol alanı kapsamı ve gerçek müşteri DB/depo kabulü açık; A-10 🔴.
+
+## A-10 tam model SQLite referans doğrulaması — 2026-10-06
+
+- 🟢 İzole SQLite üzerinde tam `ApplicationDbContext` modeli oluşturuldu. Soft-delete edilmiş, farklı harf büyüklüğünde dosya yolu referanslı olarak korundu; bulunmayan yol serbest bırakıldı. Release test paketi **29/29 başarılı**.
+- 🔴 Gerçek müşteri DB/depo worker kabulü, PostgreSQL çevirisi, DB commit-kuyruk crash aralığı ve kontrol-silme yarışı açık; A-10 rengi değişmedi.
+
+## A-10 izole worker ve fiziksel silme kabulü — 2026-10-06
+
+- 🟢 Tam model SQLite, uploads dosyaları, kalıcı kuyruk ve `SecureFileService` birlikte çalıştırıldı. Worker soft-delete DB referansı bulunan dosyayı korudu; referanssız dosyayı fiziksel olarak sildi ve kuyruktan çıkardı. Release test paketi **30/30 başarılı**.
+- 🔴 Gerçek müşteri DB/depo ile PostgreSQL kabulü, DB commit-kuyruk crash aralığı ve sorgu-unlink yarışı açık; A-10 🔴 kalır.
+
+## A-10 soft-delete dosyalarını geri alma için koruma — 2026-10-06
+
+- 🟢 Kullanıcı kararına göre soft-delete satırına bağlı fiziksel dosya korunur. `SecureFileService` hem doğrudan silme çağrısında hem worker işinde DB referansını denetler; referans varsa journal isteği tamamlanır.
+- 🟢 Tam model SQLite testi doğrudan ve worker çağrısında referanslı dosyayı korudu, referanssız dosyayı sildi. DB referans sorgusu arızasında dosya ve journal isteği korundu. Release testleri **31/31 başarılı**.
+- 🔴 Gerçek müşteri DB/depo kabulü, commit-journal crash aralığı, referans sorgusu-unlink yarışı ve eski dosya kapsamı açık olduğundan A-10 kapanmadı.
+
+- 🟢 Ortak evrak ekranı ve destek eki servisindeki eski düz dosya doğrudan silme adımları soft-delete sonrasından çıkarıldı; dosyalar geri alma için kalır.
+- 🟢 Ortak evrakın yeni yüklemesi şifreli depoya taşındı; eski düz dosya okuma ve bakım ekranında varlık denetimi korundu. Web Release derlemesi 0 uyarı/0 hata.
+- 🟡 Geçmiş düz dosyaların toplu şifreli geçişi açık.
+
+- 🟢 Yönetici geçiş ekranı aktif ortak evrakın eski düz dosyalarını da sayıp taşır; yeni yol DB'de doğrulanır ve soft-delete kayıtlarının eski yol başvurusu korunur. Web Release derlemesi 0 uyarı/0 hata.
+- 🔴 Silinmiş kayıtların kendi şifreli geçişi ve gerçek müşteri verisiyle kabul açık.
+
+- 🟢 Yönetici geçişi tek aktif firma seçimini zorunlu tutar; firma alanı olmayan ortak evrak bağlı personel/araç üzerinden sınırlandırılır. Eski dosya yolu çözümü sembolik bağlantıyı reddeder.
+
+- 🟢 Geri alınabilir silinmiş ortak evrak satırlarının dosya yolları da firma bağlantısı doğrulanarak şifreli depoya taşınır; önizlemede ayrı sayılır. Web Release derlemesi 0 uyarı/0 hata.
+- 🔴 Bağı kopuk kayıtlar, EBYS/araç silinmiş dosya geçmişi ve gerçek müşteri veri kabulü açık.
+
+- 🟢 Araç ana/sürüm geçişi seçili firma kimliğiyle sınırlandırıldı. EBYS kayıtlarının firma bağı olmadığı yönetici ekranında açıklandı; bu sahiplik sorunu ayrıca açık.
+
+- 🟢 Şifreli geçiş kopyası DB yolu değiştirilmeden geri okunup kaynakla karşılaştırılır; doğrulanmazsa eski dosya korunur. Web Release derlemesi 0 uyarı/0 hata. Gerçek veriyle geçiş kabulü açık.
+
+- 🟢 Yeni şifreli yol DB'ye yazılıp eski dosya temizlenemezse UI ayrı `Temizlik Bekliyor` durumunu gösterir. Bakım envanteri eski ortak evrak ve wwwroot yüklemelerindeki referanssız düz dosya adaylarını da salt okunur listeler.
+- 🔴 Bu satırdaki eski köklerde kalıcı retry eksikliği aşağıdaki sonraki düzeltmeyle giderildi; gerçek müşteri depolama kabulü açık.
+
+## A-10 eski düz dosya temizliğinin kalıcı kuyruğu — 2026-10-06
+
+- 🟢 Geçiş sonrası eski ortak evrak ve `wwwroot/uploads` dosyaları için silme isteği DP korumalı `FileCleanupJournal` içine kaydedilir. `FileCleanupRetryWorker` bu tipli istekleri tekrar işler. Her denemede aktif ve silinmiş DB yolu referansları yeniden kontrol edilir; geri alma için kullanılan dosya korunur.
+- 🟢 Son Web Release derlemesi 0 uyarı/0 hata; bu değişiklik için çalışma zamanı testi yapılmadı.
+- 🔴 Bu satırdaki eski dosya geçişi commit-journal kesintisi aşağıdaki sonraki düzeltmeyle giderildi. Referans sorgusu ile fiziksel silme yarışı, büyük DB performansı ve gerçek müşteri DB/depo kabulü açık. A-10 kırmızı kalır.
+
+## A-10 geçiş temizleme isteğinin DB öncesi kaydı — 2026-10-06
+
+- 🟢 Eski düz dosya için temizleme isteği, doğrulanmış yeni şifreli kopyanın yolu ile birlikte DB yol değişiminden önce kalıcı journal'a yazılır. Worker yeni yol DB'de doğrulanana kadar eski dosyayı koruyup isteği erteler; commit sonrası yeniden değerlendirir. v1 kuyruk girdileri okunur.
+- 🟢 Web Release derlemesi 0 uyarı/0 hata. Son ek için çalışma zamanı testi yapılmadı.
+- 🔴 DB yazımı başarısız kalırsa güvenli bekleyen isteğin işletim temizliği, diğer silme akışlarının commit-kuyruk aralığı, referans kontrolü-unlink yarışı ve gerçek müşteri kabulü açık. A-10 kırmızı kalır.
+
+## A-10 geri alınabilir EBYS ve araç dosyalarını geçiş kapsamına alma — 2026-10-06
+
+- 🟢 Dosya geçişi silinmiş EBYS ve seçili firmaya ait araç ana dosyaları ile versiyon satırlarını da `IgnoreQueryFilters` üzerinden bulur; önizlemede aktif/silinmiş sayılar ayrıdır.
+- 🟢 Araç satırının `FirmaId` değeri ile bağlı evrak/aracın firma ilişkisi doğrulanır; başka firmaya ait, kopuk veya tutarsız kayıt geçişe girmez. Yönetici ekranı EBYS'nin firma bağı olmadığını açıkça belirtir.
+- 🟢 Web Release derlemesi 0 uyarı/0 hata. Gerçek müşteri verisiyle geçiş testi yapılmadı.
+- 🔴 EBYS firma sahipliği, bozuk eski araç verilerinin onarımı, büyük DB performansı, başka dosya alanları ve saha kabulü açık. A-10 tamamlanmadı.
+
+## A-10 personel özlük ve fatura dosya geçişi — 2026-10-06
+
+- 🟢 Seçili firma sürücüleriyle bağlı personel özlük dosyaları/sürümleri ve doğrudan `FirmaId` ile bağlı fatura PDF/XML alanları silinmiş satırlar dahil migrasyona eklendi.
+- 🟢 `/uploads/`, `uploads/`, ters eğik çizgili web upload yolları ve personel için eski ortak dosya adı destekleniyor. Yönetici özet ekranı modül başına aktif/silinmiş sayıları gruplayarak gösteriyor.
+- 🟢 Web Release derlemesi 0 uyarı/0 hata. Gerçek DB ve fiziksel dosya geçişi bu turda çalıştırılmadı.
+- 🔴 Destek/tedarikçi eski dosyalarının fiziksel kökü ve kayıt kapsamı, EBYS firma sahipliği, kalan doğrudan yazım/silme akışları, performans ve saha kabulü açık; A-10 kırmızı kalır.
+
+### A-10 dosya migrasyonunda fatura deposu — 2026-10-06
+
+- 🟢 Fatura legacy okuyucusuyla aynı `{StorageRoot}/uploads` kökü kullanıldı. Cleanup journal bu kökü webroot ve ortak dosya kökünden ayırıyor; eski URL alias'ları ve DB başvuru kontrolü korunuyor.
+- 🟢 Release derlemesi 0 uyarı/0 hata; bu değişiklik için runtime veya gerçek dosya geçişi yapılmadı.
+- 🔴 Saha geçişi, destek/tedarikçi güvenli firma kapsamı, EBYS firma sahipliği, kalan cleanup yarışları ve büyük veride performans açık; A-10 tamamlanmadı.
+
+### A-10 tedarikçi dosya migrasyonu — 2026-10-06
+
+- 🟢 Seçili firma cari hesabına açıkça bağlı tedarikçilerin silinmiş/aktif ekleri için geçiş ve özet sayaçları eklendi. Eski tekil dosya adları yalnız ortak upload kökünde çözümlenir.
+- 🟢 Web Release derlemesi 0 uyarı/0 hata; gerçek veri geçişi yapılmadı.
+- 🔴 Firma bağı kesin olmayan destek ekleri ve güvenli biçimde normalize edilmemiş mutlak legacy yolları kapsam dışı; saha kabulü, performans ve diğer yaşam döngüsü riskleri sürdüğünden A-10 kapanmadı.
+
+### A-10 destek dosyası migrasyon kapsamı — 2026-10-06
+
+- 🟢 Ticket ve yanıt ekleri cari-firma tenant ilişkisiyle sınırlandı; silinmiş kayıtlar da geri alınabilir kopya için taranır.
+- 🟢 Eski mutlak yol yalnız `wwwroot/uploads/destek` altında kabul edilir. Kalıcı temizlik journal'ı destek kökünü ayrı ve sınırlı bir türle çözümler. Web Release derlemesi 0 uyarı/0 hata.
+- 🔴 Cari bağı olmayan ticket’lar ve izinli kökün dışındaki legacy yollar kapsam dışıdır. Gerçek veri, worker, TOCTOU ve müşteri kabulü gereklidir; A-10 kapanmadı.
+
+### A-10 personel dosya temizliğinde journal-first akışı — 2026-10-06
+
+- 🟢 Özlük dosya yolu null yapılmadan veya sürüm satırı kaldırılmadan önce retry günlüğü kalıcılaştırılıyor. Worker referansın DB'den kalkmasını bekleyen journal girdisini referans varken tamamlamıyor.
+- 🟢 Release derlemesi 0 uyarı/0 hata. Çalışma zamanı kabulü yapılmadı.
+- 🔴 Akış henüz diğer modüllerin fiziksel dosya silmelerine uygulanmadı; DB referans kontrolü-unlink yarışı, gerçek müşteri worker testi ve performans açık; A-10 kırmızı.
+
+### A-10 EBYS güncellemesinde eski dosya temizleme sırası — 2026-10-06
+
+- 🟢 Eski dosya cleanup isteği EBYS yeni DB yolundan önce journal'a yazılıyor; worker DB referansı durdukça isteği koruyup yeniden dener.
+- 🟢 Belirsiz SaveChanges'te DB'den güncel yol kontrol edilerek eski/yeni dosya telafisi yapılır. Release build 0 uyarı/0 hata.
+- 🔴 Gerçek çalışma zamanı ve müşteri DB kabulü yapılmadı; diğer modül akışları ve kontrol/unlink yarışı açık, A-10 tamamlanmadı.
+
+### 2026-10-06 — A-10 fatura PDF/XML değiştirmede eski dosyayı güvenli temizleme
+
+- 🟢 Fatura PDF ve XML değişiminde eski yol, DB `SaveChanges` öncesi kalıcı temizleme günlüğüne eklenir. Şifreli yollar DB referansı kalkana kadar yeniden denenir; legacy `/uploads/...` dosyaları doğru storage köküyle, yeni DB yolu doğrulandıktan sonra işlenir.
+- 🟢 DB yazımı başarısız/belirsizse mevcut fatura yolu yeniden okunur. Eski yol hâlâ kayıtlıysa yeni dosya telafi edilir ve eski yolun isteği kaldırılır; yeni yol commit olduysa eski temizleme isteği korunur. Web Release derlemesi **0 uyarı / 0 hata**; çalışma zamanı/fatura verisiyle doğrulama yapılmadı.
+- 🔴 A-10 kırmızı kalır: diğer dosya yolu değiştirme/silme akışlarının tamamı, gerçek müşteri DB/storage worker kabulü, referans sorgusu-unlink yarışı ve büyük envanter performansı açıktır.
+
+### 2026-10-06 — A-10 yönetici arşiv geçişinde belirsiz commit telafisi
+
+- 🟢 Yönetici arşiv geçişinde personel/araç dosyasının kopyalanması veya DB transaction sonucu hata verirse, yeni dosya silinmeden önce taze DB bağlamında hedef satırın yolu doğrulanır. DB yeni yolu gösteriyorsa işlem `Copied` sayılır; eski dosya kopya-güvenli strateji gereği korunur.
+- 🟢 DB hedef yolu göstermiyorsa yeni kopya temizlenir. Doğrulama hatasında şifreli dosya silme servisi kalıcı cleanup günlüğüne başvuruyu ekler; referans kontrolü yapılamazsa dosya korunur ve worker tekrar dener. Web Release derlemesi **0 uyarı / 0 hata**; yönetici ekranında gerçek geçiş/commit hata enjeksiyonu yapılmadı.
+- 🔴 A-10 kırmızı kalır: diğer dosya akışlarının tam envanteri, gerçek DB/storage worker kabulü, referans kontrolü-unlink yarışı ve büyük envanter performansı açık.
+
+### 2026-10-06 — A-10 personel/araç arşiv dosyalarının atomik yazımı
+
+- 🟢 `EvrakArsivService` şifreli personel/araç arşivini benzersiz geçici `.tmp.enc` dosyasına yazar ve tamamlanınca aynı klasörde son `.enc` adına taşır. İptal/yazım hatasında geçici dosya temizlenmeye çalışılır; tamamlanmamış içerik DB’ye döndürülen yol olarak yayımlanmaz.
+- 🟢 Web Release derlemesi **0 uyarı / 0 hata**. Gerçek disk kesintisi/iptal çalıştırma testi yapılmadı.
+- 🔴 A-10 kırmızı kalır: arşiv kopyası ile DB kaydı arasındaki süreç kesintisi yetim bırakabilir (yetim envanteriyle görünür), bütün dosya akışlarının runtime kabulü, TOCTOU ve büyük envanter performansı açık.
+
+### 2026-10-06 — A-10 e-Fatura/Luca dosyalarında yeni yazımları şifreleme
+
+- 🟢 GİB e-Fatura XML üretimi artık `wwwroot/efatura` yerine atomik şifreli depoya yazar; XML okuma şifreli yolu açar ve eski e-Fatura webroot yollarını sınırlandırılmış geriye dönük okuma olarak destekler. Luca’dan gelen yeni XML/PDF dosyaları da `wwwroot/belgeler/efatura` yerine şifreli depoya yazılır; kaydetme hatasında DB referansı denetlenerek cleanup kuyruğu kullanılır.
+- 🟢 Fatura indirme yolu eski `/belgeler/efatura/...` ve `efatura/...` kayıtlarını güvenli `wwwroot` çözümlemesiyle okuyabilir. Yönetici dosya geçişi artık bu iki eski webroot yol ailesini de önizler, şifreli kopyayı doğrular, DB yolunu günceller ve yeni yol doğrulanınca referanssız eski açık dosya için dayanıklı temizlik isteği oluşturur. Web Release derlemesi **0 uyarı / 0 hata**; gerçek Luca/GİB bağlantısı veya eski müşteri dosyası geçişi çalıştırılmadı.
+- 🔴 Var olan müşteri webroot dosyaları otomatik toplu taşınmadı; yönetici geçişi seçili firma ile çalıştırılmalı. ETTN/fatura ilişkilendirme ve canlı entegrasyon kabulü, hata enjeksiyonu, TOCTOU ve büyük veri performansı açık; A-10 🔴 kalır.
+
+### 2026-10-07 — A-10 kalan yaşam döngüsü açıklarının kök düzeltmeleri
+
+- 🟢 Eski düz e-Fatura/Luca çıktıları artık anonim statik dosya olarak sunulmaz; yeni GİB XML ve Luca XML/PDF üretimleri şifreli depodadır. Eski `wwwroot/efatura` ve `wwwroot/belgeler/efatura` yolları seçili firma migrasyonuna alındı; legacy `FileService` düz metin yazma ve doğrudan silme API'leri kaldırılıp salt-okunur yapıldı.
+- 🟢 Dosya migrasyonu DB commit'inin gerçekleşmediğini taze bağlamla doğrularsa spekülatif şifreli kopyayı güvenli temizleme servisine verir ve eski-yeni yol bekleme isteğini tamamlar; böylece hiçbir zaman yazılmayacak yeni yolu bekleyen kalıcı kuyruk birikmez. Eski anahtar dosya kurtarması orijinali ezmeden geçici şifreli kopya üretip atomik değiştirir.
+- 🟢 Web Release derlemesi **0 uyarı / 0 hata**; `git diff --check` temiz. Bu turda test veya canlı müşteri geçişi çalıştırılmadı.
+- 🔴 A-10 henüz kapanmaz: mevcut müşteri legacy dosyalarının firma bazlı geçişi/restore kabulü, aynı dosya yoluna eşzamanlı yeni DB referansı ile fiziksel silme arasındaki TOCTOU yarışı ve büyük DB referans taraması yükü saha kanıtı ister. Müşteri geçişi yapılmadan legacy açık dosyalar diskte korunur.
+
+### 2026-10-07 — A-10 personel evrak sürümleme ve kaldırma tutarlılığı
+
+- 🟢 `PersonelOzlukService.EvrakDosyaYukle` yeniden yüklemede önceki dosya yolu/ad/tip/boyut bilgisini sürüm tablosuna alıyor; yeni yol artık yanlışlıkla geçmiş sürüm diye kaydedilmiyor.
+- 🟢 Hızlı evrak kaldırma DB’de aktif yolu ve metadata’yı gerçekten temizliyor; önceki dosya yolu aynı işlemde geçmiş sürüm olarak tutulduğundan geri alınabilir.
+- 🟢 Web Release derlemesi **0 uyarı / 0 hata**. Gerçek personel verisiyle geri alma testi yapılmadı.
+- 🔴 A-10 açık: gerçek müşteri geçiş/restore kabulü, TOCTOU ve büyük DB referans tarama yükü; kalan modül silme yolları ayrıca incelenmeli.
+
+### 2026-10-07 — A-10 geri alınabilir soft-delete dosyalarını koruma
+
+- 🟢 `AracService`, `TasimaTedarikciService` ve `EbysEvrakService` soft-delete sonrasında dosyayı artık fiziksel olarak silmiyor. Böylece DB’de geri alınabilir olarak kalan satırlar, gerekli şifreli içeriği de koruyor.
+- 🟢 Web Release derlemesi **0 uyarı / 0 hata**; bu turda test veya müşteri verisi restore işlemi çalıştırılmadı.
+- 🔴 A-10 açık: gerçek müşteri restore/geçiş kabulü, genel TOCTOU, büyük DB tarama maliyeti ve kalan hard-delete temizleme sözleşmeleri.
+
+### 2026-10-07 — A-10 dosya yolu referans kontrolü ve indeksleme
+
+- 🟢 Dosya yol referansı tutan 12 sütuna model indeksleri ve migration eklendi. Silme kontrolü artık bütün DB yol envanterini her istekte belleğe almaz; normalize edilmiş mutlak storage aliasları doğrudan sorguya girer ve Windows harf/ayraç karşılaştırması DB tarafında kalır.
+- 🟢 Web Release derlemesi **0 uyarı / 0 hata**. Test paketi bu turda çalıştırılmadı.
+- 🔴 Hedef müşteri hacminde migration/index performansı, Windows case varyantı ve çoklu sunucu eşzamanlı silme kabulü, gerçek geçiş/restore verisi ve firma bağı olmayan destek legacy kayıtları açık.
+
+### 2026-10-07 — A-10 personel dosya yolunu genel güncellemeden ayırma
+
+- 🟢 `UpdatePersonelEvrakAsync` artık dosya yolu alanlarına dokunmuyor; eski form state'i dosya başvurusunu geri yazamaz. Kayıp dosya temizliği kimlik bazlı ayrı metoda taşındı.
+- 🟢 Web Release derlemesi **0 uyarı / 0 hata**.
+- 🔴 Müşteri verisinde restore/geçiş ve hedef boyut performans kabulü açık.
+
+### A-10 — 2026-10-07 izole kabul güncellemesi
+
+- 🟢 Release xUnit paketi **32/32** geçti. Soft-delete edilmiş dosyanın cleanup sonrasında geri alınabilir olduğu ve iki ayrı worker örneğinin aynı işi eşzamanlı claim etmediği tam model SQLite üzerinde doğrulandı.
+- 🟡 Gerçek müşteri DB/depo geçiş-restore, hedef boyutta migration/performance ve iki ayrı sunucunun ortak ağ depolama kabulü yapılmadı. Bu maddeler için üretim verisi/bağlantısı mevcut değil; test sonucu müşteri kabulü diye sunulmuyor.
+### 2026-10-07 — A-10 kuyruk sahipliği ve geçiş güvenliği
+
+- 🟢 Worker tamamlaması lease/revizyon kontrolüne bağlandı; eski işlem yeniden kuyruğa alınan veya bekleme türü değişen isteği kaldıramaz. Doğrudan silme, DB başvurusunun kalkmasını bekleyen isteği korur.
+- 🟢 Legacy kaynak silinmeden önce yeni şifreli dosya tekrar çözülüp SHA-256 ile karşılaştırılır. Eksik/uyuşmayan hedefte eski dosya ve kuyruk korunur. Referans sorgusunda boşluk, ters ayraç ve Türkçe harf koruması tamamlandı; tam yol listesi belleğe alınmaz.
+- 🟢 Tam model SQLite ile gerçek geçiş servisi, soft-delete geri alma ve tekrar çalıştırma kabulü geçti. 100.000 sentetik satırda yerel sorgu ölçümleri 2,7 / 28,0 / 37,5 ms; Release paketi **34/34 başarılı**.
+- 🔴 Bu kanıt genel referans ekleme–silme yarışını, tüm firma sahipliği açıklarını veya müşteri/çoklu sunucu kabulünü kapatmaz. Güncel kapsam ve ölçüm sınırları [görev envanterinin son ekinde](SATISA-CIKARIM-GOREV-ENVANTERI-2026-10-06.md) kayıtlıdır.
+### 2026-10-07 — A-24/A-25 süreçler arası cache nesli
+
+- 🟢 CacheService ortak depodaki nesil belirteciyle çalışıyor. Geçersizleştirme, başka servisin başlattığı eski factory sonucunun yeniden görünmesini engeller; süreç içi anahtar listesine bağımlılık kaldırıldı. Prefix temizliği tüm uygulama cache'ini geçersizleştirdiği için DB yükü artabilir.
+- 🟢 İptal yutulmaz; okuma arızasında veri kaynağı kullanılır, invalidation arızası çağırana bildirilir. Dört yeni cache regresyonuyla Release paketi **38/38 başarılı**.
+- 🔴 Gerçek Redis/çok süreçli yük, diğer araç yazımları ve backend kesintisinde kalıcı invalidation retry kapsamı açık. Docker daemon erişilemedi. Detaylar [görev envanterinde](SATISA-CIKARIM-GOREV-ENVANTERI-2026-10-06.md); A-24 🔴 ve A-25 🟡.

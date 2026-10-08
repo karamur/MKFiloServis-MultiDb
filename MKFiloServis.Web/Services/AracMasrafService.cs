@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Web.Services.Interfaces;
@@ -7,12 +7,14 @@ namespace MKFiloServis.Web.Services;
 
 public class AracMasrafService : IAracMasrafService
 {
+    private readonly CurrentPermissionGuard _permissionGuard;
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly IMuhasebeService _muhasebeService;
     private readonly IBankaKasaHareketService _bankaKasaHareketService;
 
-    public AracMasrafService(IDbContextFactory<ApplicationDbContext> contextFactory, IMuhasebeService muhasebeService, IBankaKasaHareketService bankaKasaHareketService)
+    public AracMasrafService(IDbContextFactory<ApplicationDbContext> contextFactory, IMuhasebeService muhasebeService, IBankaKasaHareketService bankaKasaHareketService, CurrentPermissionGuard permissionGuard)
     {
+        _permissionGuard = permissionGuard;
         _contextFactory = contextFactory;
         _muhasebeService = muhasebeService;
         _bankaKasaHareketService = bankaKasaHareketService;
@@ -123,9 +125,13 @@ public class AracMasrafService : IAracMasrafService
 
     public async Task<AracMasraf> CreateAsync(AracMasraf aracMasraf, bool muhasebeFisiOlustur = true)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.AracMasraflariYaz);
         await using var context = await _contextFactory.CreateDbContextAsync();
         await UygulaSahiplikKurallariAsync(context, aracMasraf);
         ValidateMuhtapSecimi(aracMasraf);
+
+        if (muhasebeFisiOlustur && aracMasraf.Tutar > 0)
+            await _permissionGuard.RequireAnyAsync(Yetkiler.MuhasebeFisleriYaz);
 
         context.AracMasraflari.Add(aracMasraf);
         await context.SaveChangesAsync();
@@ -139,6 +145,7 @@ public class AracMasrafService : IAracMasrafService
 
     public async Task<AracMasraf> UpdateAsync(AracMasraf aracMasraf, bool muhasebeFisiOlustur = true)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.AracMasraflariDuzenle);
         await using var context = await _contextFactory.CreateDbContextAsync();
         await UygulaSahiplikKurallariAsync(context, aracMasraf);
         ValidateMuhtapSecimi(aracMasraf);
@@ -148,6 +155,13 @@ public class AracMasrafService : IAracMasrafService
 
         if (existing == null)
             throw new InvalidOperationException("Masraf kaydı bulunamadı.");
+
+        // Bağlı fişe uygulanacak işlem için izin, masraf kaydedilmeden önce aranır.
+        if (!muhasebeFisiOlustur && existing.MuhasebeFisId.HasValue)
+            await _permissionGuard.RequireAnyAsync(Yetkiler.MuhasebeFisleriSil);
+        else if (muhasebeFisiOlustur && aracMasraf.Tutar > 0)
+            await _permissionGuard.RequireAnyAsync(existing.MuhasebeFisId.HasValue
+                ? Yetkiler.MuhasebeFisleriDuzenle : Yetkiler.MuhasebeFisleriYaz);
 
         existing.MasrafTarihi = aracMasraf.MasrafTarihi;
         existing.Tutar = aracMasraf.Tutar;
@@ -181,6 +195,7 @@ public class AracMasrafService : IAracMasrafService
 
     public async Task DeleteAsync(int id)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.AracMasraflariSil);
         await using var context = await _contextFactory.CreateDbContextAsync();
         var aracMasraf = await context.AracMasraflari
             .FirstOrDefaultAsync(m => m.Id == id);

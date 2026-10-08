@@ -11,7 +11,11 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
+    <!-- Microsoft.Data.Sqlite 10.0.9'in getirdiği 2.1.11 için GHSA-2m69-gcr7-jv3q uyarısı vardır. -->
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.13" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+    <Compile Include="..\MKFiloServis.Shared\Auditing\DatabaseWriteAudit.cs" Link="Auditing\DatabaseWriteAudit.cs" />
+    <EmbeddedResource Include="..\MKFiloServis.Shared\Auditing\postgres-write-audit.sql" LogicalName="MKFiloServis.WriteAudit.sql" />
     <Compile Include="..\MKFiloServis.Shared\Licensing\LicenseSigningPublicKey.cs" Link="Licensing\LicenseSigningPublicKey.cs" />
     <Compile Include="..\MKFiloServis.Shared\Licensing\LicenseVersionPolicy.cs" Link="Licensing\LicenseVersionPolicy.cs" />
     <Compile Include="..\MKFiloServis.Shared\Licensing\LicenseSignaturePayload.cs" Link="Licensing\LicenseSignaturePayload.cs" />

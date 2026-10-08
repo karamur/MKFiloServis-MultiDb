@@ -1,4 +1,4 @@
-﻿using MKFiloServis.Shared.Entities;
+using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -79,9 +79,11 @@ public class RebuildService
                 // Adım 1: SnapshotTransaction'ları soft-delete
                 var txCount = await db.SnapshotTransactions
                     .Where(t => t.FirmaId == firmaId && t.Yil == yil && t.Ay == ay && !t.IsDeleted)
-                    .ExecuteUpdateAsync(s => s
-                        .SetProperty(t => t.IsDeleted, true)
-                        .SetProperty(t => t.DeletedAt, DateTime.UtcNow));
+                    .UpdateTrackedAsync(db, record =>
+                    {
+                        record.IsDeleted = true;
+                        record.DeletedAt = DateTime.UtcNow;
+                    });
                 sonuc.SnapshotTransactionSilinen = txCount;
 
                 // Adım 2: Hakedis fatura referanslarını temizle
@@ -101,10 +103,12 @@ public class RebuildService
                 // Adım 3: Snapshot HakedisGelir/HakedisGider sıfırla
                 await db.MaasOdemeSnapshotlar
                     .Where(s => s.FirmaId == firmaId && s.Yil == yil && s.Ay == ay && !s.IsDeleted)
-                    .ExecuteUpdateAsync(s => s
-                        .SetProperty(x => x.HakedisGelir, 0m)
-                        .SetProperty(x => x.HakedisGider, 0m)
-                        .SetProperty(x => x.UpdatedAt, DateTime.UtcNow));
+                    .UpdateTrackedAsync(db, record =>
+                    {
+                        record.HakedisGelir = 0m;
+                        record.HakedisGider = 0m;
+                        record.UpdatedAt = DateTime.UtcNow;
+                    });
 
                 // Adım 4: Her Hakedis için IsleAsync çağır
                 foreach (var h in hakedisler)
@@ -203,9 +207,11 @@ public class RebuildService
                 // SnapshotTransactions temizle
                 await db.SnapshotTransactions
                     .Where(t => t.FirmaId == firmaId && t.Yil == yil && t.Ay == ay)
-                    .ExecuteUpdateAsync(s => s
-                        .SetProperty(x => x.IsDeleted, true)
-                        .SetProperty(x => x.DeletedAt, DateTime.UtcNow));
+                    .UpdateTrackedAsync(db, record =>
+                    {
+                        record.IsDeleted = true;
+                        record.DeletedAt = DateTime.UtcNow;
+                    });
 
                 var donemHakedisIdler = await db.Hakedisler
                     .Where(h => h.FirmaId == firmaId && h.Yil == yil && h.Ay == ay && !h.IsDeleted)
@@ -215,25 +221,31 @@ public class RebuildService
                 // HakedisDetaylar temizle
                 await db.HakedisDetaylari
                     .Where(d => d.HakedisId > 0 && donemHakedisIdler.Contains(d.HakedisId) && !d.IsDeleted)
-                    .ExecuteUpdateAsync(s => s
-                        .SetProperty(x => x.IsDeleted, true)
-                        .SetProperty(x => x.DeletedAt, DateTime.UtcNow));
+                    .UpdateTrackedAsync(db, record =>
+                    {
+                        record.IsDeleted = true;
+                        record.DeletedAt = DateTime.UtcNow;
+                    });
 
                 // Hakedisler temizle
                 await db.Hakedisler
                     .Where(h => h.FirmaId == firmaId && h.Yil == yil && h.Ay == ay && !h.IsDeleted)
-                    .ExecuteUpdateAsync(s => s
-                        .SetProperty(x => x.IsDeleted, true)
-                        .SetProperty(x => x.DeletedAt, DateTime.UtcNow)
-                        .SetProperty(x => x.FaturaId, (int?)null));
+                    .UpdateTrackedAsync(db, record =>
+                    {
+                        record.IsDeleted = true;
+                        record.DeletedAt = DateTime.UtcNow;
+                        record.FaturaId = (int?)null;
+                    });
 
                 // Snapshot sıfırla
                 await db.MaasOdemeSnapshotlar
                     .Where(s => s.FirmaId == firmaId && s.Yil == yil && s.Ay == ay && !s.IsDeleted)
-                    .ExecuteUpdateAsync(s => s
-                        .SetProperty(x => x.HakedisGelir, 0m)
-                        .SetProperty(x => x.HakedisGider, 0m)
-                        .SetProperty(x => x.UpdatedAt, DateTime.UtcNow));
+                    .UpdateTrackedAsync(db, record =>
+                    {
+                        record.HakedisGelir = 0m;
+                        record.HakedisGider = 0m;
+                        record.UpdatedAt = DateTime.UtcNow;
+                    });
 
                 sonuc.ToplamHakedis = donemHakedisIdler.Count;
                 sonuc.BasariliIslem = 0;

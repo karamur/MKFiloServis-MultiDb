@@ -12,11 +12,16 @@ public class BelgeVersiyonService : IBelgeVersiyonService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly IWebHostEnvironment _environment;
+    private readonly ISecureFileService _secureFileService;
 
-    public BelgeVersiyonService(IDbContextFactory<ApplicationDbContext> contextFactory, IWebHostEnvironment environment)
+    public BelgeVersiyonService(
+        IDbContextFactory<ApplicationDbContext> contextFactory,
+        IWebHostEnvironment environment,
+        ISecureFileService secureFileService)
     {
         _contextFactory = contextFactory;
         _environment = environment;
+        _secureFileService = secureFileService;
     }
 
     #region EBYS Evrak Dosya Versiyonları
@@ -48,13 +53,21 @@ public class BelgeVersiyonService : IBelgeVersiyonService
         if (dosya == null)
             throw new ArgumentException("Evrak dosyası bulunamadı.", nameof(evrakDosyaId));
 
-        // Mevcut dosyayı versiyon tablosuna arşivle
+        if (string.IsNullOrWhiteSpace(dosya.DosyaYolu))
+            throw new InvalidOperationException("EBYS dosya yolu boş; sürüm arşivlenemedi.");
+
+        // Sürüm geçmişi ana dosyanın yaşam döngüsünden bağımsız olmalı.
+        var archivedPath = await _secureFileService.CopyEncryptedAsync(
+            dosya.DosyaYolu,
+            $"ebys/versions/{evrakDosyaId}",
+            $"v{dosya.VersiyonNo}_{dosya.DosyaAdi}");
+
         var versiyon = new EbysEvrakDosyaVersiyon
         {
             EvrakDosyaId = evrakDosyaId,
             VersiyonNo = dosya.VersiyonNo,
             DosyaAdi = dosya.DosyaAdi,
-            DosyaYolu = dosya.DosyaYolu,
+            DosyaYolu = archivedPath,
             DosyaTipi = dosya.DosyaTipi,
             DosyaBoyutu = dosya.DosyaBoyutu,
             Aciklama = dosya.Aciklama,
@@ -70,7 +83,28 @@ public class BelgeVersiyonService : IBelgeVersiyonService
         dosya.SonDegisiklikNotu = degisiklikNotu;
         dosya.UpdatedAt = DateTime.UtcNow;
 
-        await context.SaveChangesAsync();
+        try
+        {
+            await context.SaveChangesAsync();
+        }
+        catch (Exception saveException)
+        {
+            try
+            {
+                await using var verifyContext = await _contextFactory.CreateDbContextAsync();
+                var isReferenced = await verifyContext.EbysEvrakDosyaVersiyonlar.AsNoTracking()
+                    .AnyAsync(x => x.DosyaYolu == archivedPath);
+                if (!isReferenced)
+                    await _secureFileService.DeleteAsync(archivedPath);
+            }
+            catch (Exception compensationException)
+            {
+                throw new AggregateException(
+                    "EBYS sürüm kaydı başarısız veya belirsiz; arşiv dosyasına DB başvurusu doğrulanamadı ve dosya güvenlik için korunuyor.",
+                    saveException, compensationException);
+            }
+            throw;
+        }
     }
 
     public async Task<byte[]?> GetEbysEvrakVersiyonIcerikAsync(int versiyonId)
@@ -80,12 +114,15 @@ public class BelgeVersiyonService : IBelgeVersiyonService
         if (versiyon == null || string.IsNullOrEmpty(versiyon.DosyaYolu))
             return null;
 
-        var fizikselYol = Path.Combine(_environment.WebRootPath, versiyon.DosyaYolu.TrimStart('/'));
-        if (File.Exists(fizikselYol))
-        {
-            return await File.ReadAllBytesAsync(fizikselYol);
-        }
-        return null;
+        var storedContent = await _secureFileService.ReadDecryptedAsync(versiyon.DosyaYolu);
+        if (storedContent != null) return storedContent;
+
+        // Eski sürümlerin webroot içindeki açık dosya yolunu geriye dönük oku.
+        var webRoot = Path.GetFullPath(_environment.WebRootPath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var fizikselYol = Path.GetFullPath(Path.Combine(webRoot, versiyon.DosyaYolu.TrimStart('/', '\\')));
+        if (!fizikselYol.StartsWith(webRoot, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Eski EBYS sürüm yolu webroot dışına çıkıyor.");
+        return File.Exists(fizikselYol) ? await File.ReadAllBytesAsync(fizikselYol) : null;
     }
 
     public async Task SilEbysEvrakVersiyonAsync(int versiyonId)
@@ -99,6 +136,8 @@ public class BelgeVersiyonService : IBelgeVersiyonService
             versiyon.IsDeleted = true;
             versiyon.UpdatedAt = DateTime.UtcNow;
             await context.SaveChangesAsync();
+            // Geri yükleme ile fiziksel silme ayrı işlemler olduğundan, dosya
+            // temizliği kalıcı/serileştirilmiş kuyruk kurulana kadar ertelenir.
         }
     }
 
@@ -133,12 +172,17 @@ public class BelgeVersiyonService : IBelgeVersiyonService
         if (dosya == null)
             throw new ArgumentException("Araç evrak dosyası bulunamadı.", nameof(aracEvrakDosyaId));
 
+        if (string.IsNullOrWhiteSpace(dosya.DosyaYolu))
+            throw new InvalidOperationException("Araç evrak dosya yolu boş; sürüm arşivlenemedi.");
+        var archivedPath = await CopyVersionFileAsync(
+            dosya.DosyaYolu, $"arac-evrak/versions/{aracEvrakDosyaId}", $"v{dosya.VersiyonNo}_{dosya.DosyaAdi}");
+
         var versiyon = new AracEvrakDosyaVersiyon
         {
             AracEvrakDosyaId = aracEvrakDosyaId,
             VersiyonNo = dosya.VersiyonNo,
             DosyaAdi = dosya.DosyaAdi,
-            DosyaYolu = dosya.DosyaYolu,
+            DosyaYolu = archivedPath,
             DosyaTipi = dosya.DosyaTipi,
             DosyaBoyutu = dosya.DosyaBoyutu,
             Aciklama = dosya.Aciklama,
@@ -153,7 +197,14 @@ public class BelgeVersiyonService : IBelgeVersiyonService
         dosya.SonDegisiklikNotu = degisiklikNotu;
         dosya.UpdatedAt = DateTime.UtcNow;
 
-        await context.SaveChangesAsync();
+        try { await context.SaveChangesAsync(); }
+        catch (Exception saveException)
+        {
+            await CompensateVersionCopyAsync(archivedPath,
+                verify => verify.AracEvrakDosyaVersiyonlar.AsNoTracking().AnyAsync(x => x.DosyaYolu == archivedPath),
+                saveException);
+            throw;
+        }
     }
 
     public async Task<byte[]?> GetAracEvrakVersiyonIcerikAsync(int versiyonId)
@@ -163,12 +214,7 @@ public class BelgeVersiyonService : IBelgeVersiyonService
         if (versiyon == null || string.IsNullOrEmpty(versiyon.DosyaYolu))
             return null;
 
-        var fizikselYol = Path.Combine(_environment.WebRootPath, versiyon.DosyaYolu.TrimStart('/'));
-        if (File.Exists(fizikselYol))
-        {
-            return await File.ReadAllBytesAsync(fizikselYol);
-        }
-        return null;
+        return await ReadVersionFileAsync(versiyon.DosyaYolu);
     }
 
     public async Task SilAracEvrakVersiyonAsync(int versiyonId)
@@ -182,6 +228,8 @@ public class BelgeVersiyonService : IBelgeVersiyonService
             versiyon.IsDeleted = true;
             versiyon.UpdatedAt = DateTime.UtcNow;
             await context.SaveChangesAsync();
+            // Geri yükleme ile fiziksel silme ayrı işlemler olduğundan, dosya
+            // temizliği kalıcı/serileştirilmiş kuyruk kurulana kadar ertelenir.
         }
     }
 
@@ -216,11 +264,16 @@ public class BelgeVersiyonService : IBelgeVersiyonService
         if (evrak == null)
             throw new ArgumentException("Personel özlük evrak bulunamadı.", nameof(personelOzlukEvrakId));
 
+        if (string.IsNullOrWhiteSpace(evrak.DosyaYolu))
+            throw new InvalidOperationException("Personel özlük evrak dosya yolu boş; sürüm arşivlenemedi.");
+        var archivedPath = await CopyVersionFileAsync(
+            evrak.DosyaYolu, $"personel-ozluk/versions/{personelOzlukEvrakId}", $"v{evrak.VersiyonNo}_{evrak.DosyaAdi}");
+
         var versiyon = new PersonelOzlukEvrakVersiyon
         {
             PersonelOzlukEvrakId = personelOzlukEvrakId,
             VersiyonNo = evrak.VersiyonNo,
-            DosyaYolu = evrak.DosyaYolu,
+            DosyaYolu = archivedPath,
             DosyaAdi = evrak.DosyaAdi,
             DosyaTipi = evrak.DosyaTipi,
             DosyaBoyutu = evrak.DosyaBoyutu,
@@ -236,7 +289,14 @@ public class BelgeVersiyonService : IBelgeVersiyonService
         evrak.SonDegisiklikNotu = degisiklikNotu;
         evrak.UpdatedAt = DateTime.UtcNow;
 
-        await context.SaveChangesAsync();
+        try { await context.SaveChangesAsync(); }
+        catch (Exception saveException)
+        {
+            await CompensateVersionCopyAsync(archivedPath,
+                verify => verify.PersonelOzlukEvrakVersiyonlar.AsNoTracking().AnyAsync(x => x.DosyaYolu == archivedPath),
+                saveException);
+            throw;
+        }
     }
 
     public async Task<byte[]?> GetPersonelOzlukEvrakVersiyonIcerikAsync(int versiyonId)
@@ -246,12 +306,7 @@ public class BelgeVersiyonService : IBelgeVersiyonService
         if (versiyon == null || string.IsNullOrEmpty(versiyon.DosyaYolu))
             return null;
 
-        var fizikselYol = Path.Combine(_environment.WebRootPath, versiyon.DosyaYolu.TrimStart('/'));
-        if (File.Exists(fizikselYol))
-        {
-            return await File.ReadAllBytesAsync(fizikselYol);
-        }
-        return null;
+        return await ReadVersionFileAsync(versiyon.DosyaYolu);
     }
 
     public async Task SilPersonelOzlukEvrakVersiyonAsync(int versiyonId)
@@ -265,6 +320,8 @@ public class BelgeVersiyonService : IBelgeVersiyonService
             versiyon.IsDeleted = true;
             versiyon.UpdatedAt = DateTime.UtcNow;
             await context.SaveChangesAsync();
+            // Geri yükleme ile fiziksel silme ayrı işlemler olduğundan, dosya
+            // temizliği kalıcı/serileştirilmiş kuyruk kurulana kadar ertelenir.
         }
     }
 
@@ -402,6 +459,56 @@ public class BelgeVersiyonService : IBelgeVersiyonService
         evrak.UpdatedAt = DateTime.UtcNow;
 
         await context.SaveChangesAsync();
+    }
+
+    private async Task<string> CopyVersionFileAsync(string sourcePath, string targetDirectory, string fileName)
+    {
+        if (await _secureFileService.ExistsAsync(sourcePath))
+            return await _secureFileService.CopyEncryptedAsync(sourcePath, targetDirectory, fileName);
+
+        var legacyPath = ResolveLegacyWebRootPath(sourcePath);
+        if (!File.Exists(legacyPath))
+            throw new FileNotFoundException("Arşivlenecek belge dosyası bulunamadı.", sourcePath);
+
+        var legacyBytes = await File.ReadAllBytesAsync(legacyPath);
+        return await _secureFileService.SaveEncryptedAsync(targetDirectory, fileName, legacyBytes);
+    }
+
+    private async Task<byte[]?> ReadVersionFileAsync(string storedPath)
+    {
+        var protectedContent = await _secureFileService.ReadDecryptedAsync(storedPath);
+        if (protectedContent != null) return protectedContent;
+
+        var legacyPath = ResolveLegacyWebRootPath(storedPath);
+        return File.Exists(legacyPath) ? await File.ReadAllBytesAsync(legacyPath) : null;
+    }
+
+    private string ResolveLegacyWebRootPath(string relativePath)
+    {
+        var webRoot = Path.GetFullPath(_environment.WebRootPath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var fullPath = Path.GetFullPath(Path.Combine(webRoot, relativePath.TrimStart('/', '\\')));
+        if (!fullPath.StartsWith(webRoot, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Eski belge yolu webroot dışına çıkıyor.");
+        return fullPath;
+    }
+
+    private async Task CompensateVersionCopyAsync(
+        string copiedPath,
+        Func<ApplicationDbContext, Task<bool>> isReferenced,
+        Exception saveException)
+    {
+        try
+        {
+            await using var verifyContext = await _contextFactory.CreateDbContextAsync();
+            if (!await isReferenced(verifyContext))
+                await _secureFileService.DeleteAsync(copiedPath);
+        }
+        catch (Exception compensationException)
+        {
+            throw new AggregateException(
+                "Sürüm kaydı başarısız veya belirsiz; arşiv dosyasına DB başvurusu doğrulanamadı ve dosya güvenlik için korunuyor.",
+                saveException, compensationException);
+        }
     }
 
     #endregion

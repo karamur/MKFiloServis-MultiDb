@@ -221,11 +221,12 @@ public class ArchiveMigrationService
             entry.TargetPath = BuildPersonelTargetPath(evrak);
             if (dryRun) { entry.Status = "Pending"; report.Entries.Add(entry); continue; }
 
+            string? newPath = null;
             try
             {
                 var targetDir = Path.GetDirectoryName(entry.TargetPath)!.Replace('\\', '/');
                 var targetName = Path.GetFileName(entry.TargetPath);
-                var newPath = await _secureFileService.CopyEncryptedAsync(evrak.DosyaYolu!, targetDir, targetName, ct);
+                newPath = await _secureFileService.CopyEncryptedAsync(evrak.DosyaYolu!, targetDir, targetName, ct);
 
                 await using var uCtx = await _contextFactory.CreateDbContextAsync(ct);
                 await using var tx = await uCtx.Database.BeginTransactionAsync(ct);
@@ -242,6 +243,42 @@ public class ArchiveMigrationService
             }
             catch (Exception ex)
             {
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(newPath))
+                    {
+                        await using var verify = await _contextFactory.CreateDbContextAsync(ct);
+                        var currentPath = await verify.PersonelOzlukEvraklar.IgnoreQueryFilters()
+                            .Where(x => x.Id == evrak.Id)
+                            .Select(x => x.DosyaYolu)
+                            .FirstOrDefaultAsync(ct);
+                        if (string.Equals(currentPath, newPath, StringComparison.Ordinal))
+                        {
+                            entry.Status = "Copied";
+                            entry.TargetPath = newPath;
+                            report.Personel.Migrated++;
+                            report.Entries.Add(entry);
+                            continue;
+                        }
+
+                        await _secureFileService.DeleteAsync(newPath, ct);
+                    }
+                }
+                catch (Exception compensationException)
+                {
+                    if (!string.IsNullOrWhiteSpace(newPath))
+                    {
+                        try { await _secureFileService.DeleteAsync(newPath, CancellationToken.None); }
+                        catch (Exception cleanupException)
+                        {
+                            compensationException = new AggregateException(compensationException, cleanupException);
+                        }
+                    }
+                    ex = new AggregateException(
+                        "Personel arşiv geçişi sonucu belirsiz; yeni kopyanın DB başvurusu doğrulanamadı, dosya güvenlik için korundu.",
+                        ex, compensationException);
+                }
+
                 entry.Status = "Failed"; entry.Error = ex.Message;
                 report.Personel.Failed++;
                 _logger.LogError(ex, "Personel evrak taşıma hatası Id={Id}", evrak.Id);
@@ -328,11 +365,12 @@ public class ArchiveMigrationService
             entry.TargetPath = BuildAracTargetPath(dosya);
             if (dryRun) { entry.Status = "Pending"; report.Entries.Add(entry); continue; }
 
+            string? newPath = null;
             try
             {
                 var targetDir = Path.GetDirectoryName(entry.TargetPath)!.Replace('\\', '/');
                 var targetName = Path.GetFileName(entry.TargetPath);
-                var newPath = await _secureFileService.CopyEncryptedAsync(dosya.DosyaYolu!, targetDir, targetName, ct);
+                newPath = await _secureFileService.CopyEncryptedAsync(dosya.DosyaYolu!, targetDir, targetName, ct);
 
                 await using var uCtx = await _contextFactory.CreateDbContextAsync(ct);
                 await using var tx = await uCtx.Database.BeginTransactionAsync(ct);
@@ -349,6 +387,42 @@ public class ArchiveMigrationService
             }
             catch (Exception ex)
             {
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(newPath))
+                    {
+                        await using var verify = await _contextFactory.CreateDbContextAsync(ct);
+                        var currentPath = await verify.AracEvrakDosyalari.IgnoreQueryFilters()
+                            .Where(x => x.Id == dosya.Id)
+                            .Select(x => x.DosyaYolu)
+                            .FirstOrDefaultAsync(ct);
+                        if (string.Equals(currentPath, newPath, StringComparison.Ordinal))
+                        {
+                            entry.Status = "Copied";
+                            entry.TargetPath = newPath;
+                            report.Arac.Migrated++;
+                            report.Entries.Add(entry);
+                            continue;
+                        }
+
+                        await _secureFileService.DeleteAsync(newPath, ct);
+                    }
+                }
+                catch (Exception compensationException)
+                {
+                    if (!string.IsNullOrWhiteSpace(newPath))
+                    {
+                        try { await _secureFileService.DeleteAsync(newPath, CancellationToken.None); }
+                        catch (Exception cleanupException)
+                        {
+                            compensationException = new AggregateException(compensationException, cleanupException);
+                        }
+                    }
+                    ex = new AggregateException(
+                        "Araç arşiv geçişi sonucu belirsiz; yeni kopyanın DB başvurusu doğrulanamadı, dosya güvenlik için korundu.",
+                        ex, compensationException);
+                }
+
                 entry.Status = "Failed"; entry.Error = ex.Message;
                 report.Arac.Failed++;
                 _logger.LogError(ex, "Araç evrak taşıma hatası Id={Id}", dosya.Id);

@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Helpers;
 using MKFiloServis.Web.Models;
@@ -10,19 +10,46 @@ namespace MKFiloServis.Web.Services;
 
 public class FaturaService : IFaturaService
 {
+    private readonly CurrentPermissionGuard _permissionGuard;
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly IMuhasebeService _muhasebeService;
     private readonly NumaraSerisiService _numaraSerisi;
     private readonly IWebHostEnvironment _env;
     private readonly ISecureFileService _secureFileService;
+    private readonly FileCleanupJournal _cleanupJournal;
+    private readonly LegacyFileCleanupService _legacyFileCleanupService;
 
-    public FaturaService(IDbContextFactory<ApplicationDbContext> contextFactory, IMuhasebeService muhasebeService, NumaraSerisiService numaraSerisi, IWebHostEnvironment env, ISecureFileService secureFileService)
+    public FaturaService(IDbContextFactory<ApplicationDbContext> contextFactory, IMuhasebeService muhasebeService, NumaraSerisiService numaraSerisi, IWebHostEnvironment env, ISecureFileService secureFileService, FileCleanupJournal cleanupJournal, LegacyFileCleanupService legacyFileCleanupService, CurrentPermissionGuard permissionGuard)
     {
+        _permissionGuard = permissionGuard;
         _contextFactory = contextFactory;
         _muhasebeService = muhasebeService;
         _numaraSerisi = numaraSerisi;
         _env = env;
         _secureFileService = secureFileService;
+        _cleanupJournal = cleanupJournal;
+        _legacyFileCleanupService = legacyFileCleanupService;
+    }
+
+    private Task RequireFaturaPermissionAsync(FaturaYonu yon, string action)
+    {
+        var general = action switch
+        {
+            "yaz" => Yetkiler.FaturalarYaz,
+            "sil" => Yetkiler.FaturalarSil,
+            _ => Yetkiler.FaturalarDuzenle
+        };
+        var directional = (yon, action) switch
+        {
+            (FaturaYonu.Giden, "yaz") => Yetkiler.KesilenFaturalarYaz,
+            (FaturaYonu.Giden, "sil") => Yetkiler.KesilenFaturalarSil,
+            (FaturaYonu.Giden, _) => Yetkiler.KesilenFaturalarDuzenle,
+            (FaturaYonu.Gelen, "yaz") => Yetkiler.GelenFaturalarYaz,
+            (FaturaYonu.Gelen, "sil") => Yetkiler.GelenFaturalarSil,
+            (FaturaYonu.Gelen, _) => Yetkiler.GelenFaturalarDuzenle,
+            _ => throw new ArgumentOutOfRangeException(nameof(yon))
+        };
+        return _permissionGuard.RequireAnyAsync(general, directional);
     }
 
     public async Task<List<Fatura>> GetAllAsync()
@@ -205,6 +232,7 @@ public class FaturaService : IFaturaService
 
     public async Task<Fatura> CreateAsync(Fatura fatura)
     {
+        await RequireFaturaPermissionAsync(fatura.FaturaYonu, "yaz");
         await using var context = await _contextFactory.CreateDbContextAsync();
         try
         {
@@ -243,6 +271,9 @@ public class FaturaService : IFaturaService
                 .FirstOrDefaultAsync(f => f.Id == fatura.Id);
 
             if (existing == null) throw new Exception("Fatura bulunamadi");
+            await RequireFaturaPermissionAsync(existing.FaturaYonu, "duzenle");
+            if (existing.FaturaYonu != fatura.FaturaYonu)
+                await RequireFaturaPermissionAsync(fatura.FaturaYonu, "duzenle");
 
             // Mevcut entity'yi guncelle
             await PrepareFaturaForSaveAsync(context, fatura);
@@ -318,6 +349,7 @@ public class FaturaService : IFaturaService
         var fatura = await context.Faturalar.FindAsync(id);
         if (fatura != null)
         {
+            await RequireFaturaPermissionAsync(fatura.FaturaYonu, "sil");
             fatura.IsDeleted = true;
             await context.SaveChangesAsync();
         }
@@ -503,6 +535,7 @@ public class FaturaService : IFaturaService
     /// </summary>
     public async Task<EFaturaImportResult> ImportFromExcelAsync(byte[] fileContent, FaturaYonu yon, int? firmaId = null, EFaturaTipi? eFaturaTipi = null)
     {
+        await RequireFaturaPermissionAsync(yon, "yaz");
         await using var context = await _contextFactory.CreateDbContextAsync();
         var result = new EFaturaImportResult();
 
@@ -736,6 +769,7 @@ public class FaturaService : IFaturaService
 
     public async Task<EFaturaImportResult> ImportFromXmlAsync(List<XmlFileContent> xmlFiles, FaturaYonu yon, int? firmaId = null, EFaturaTipi? eFaturaTipi = null)
     {
+        await RequireFaturaPermissionAsync(yon, "yaz");
         await using var context = await _contextFactory.CreateDbContextAsync();
         var result = new EFaturaImportResult();
         var defaultEFaturaTipi = eFaturaTipi ?? EFaturaTipi.EFatura;
@@ -1404,6 +1438,7 @@ public class FaturaService : IFaturaService
 
     public async Task<EFaturaImportResult> ImportFromXmlWithPdfAsync(List<XmlPdfFileContent> files, FaturaYonu yon, int? firmaId = null, EFaturaTipi? eFaturaTipi = null)
     {
+        await RequireFaturaPermissionAsync(yon, "yaz");
         await using var context = await _contextFactory.CreateDbContextAsync();
         // Önce XML'leri import et
         var xmlContents = files.Select(f => new XmlFileContent { FileName = f.XmlFileName, Content = f.XmlContent }).ToList();
@@ -1427,7 +1462,7 @@ public class FaturaService : IFaturaService
                     // Bu XML'in kendi PDF'i var mı?
                     if (!string.IsNullOrEmpty(xmlPdfFile.PdfFileName) && xmlPdfFile.PdfContent != null)
                     {
-                        await UploadFaturaPdfAsync(fatura.Id, xmlPdfFile.PdfFileName, xmlPdfFile.PdfContent);
+                        await UploadFaturaPdfCoreAsync(fatura.Id, xmlPdfFile.PdfFileName, xmlPdfFile.PdfContent, "yaz");
                     }
                 }
             }
@@ -1436,32 +1471,85 @@ public class FaturaService : IFaturaService
         return result;
     }
 
-    public async Task<bool> UploadFaturaPdfAsync(int faturaId, string fileName, byte[] pdfContent)
+    public Task<bool> UploadFaturaPdfAsync(int faturaId, string fileName, byte[] pdfContent)
+        => UploadFaturaPdfCoreAsync(faturaId, fileName, pdfContent, "duzenle");
+
+    private async Task<bool> UploadFaturaPdfCoreAsync(int faturaId, string fileName, byte[] pdfContent, string action)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var fatura = await context.Faturalar.FindAsync(faturaId);
         if (fatura == null) return false;
+        await RequireFaturaPermissionAsync(fatura.FaturaYonu, action);
 
+        string newPath;
         try
         {
             ValidateStoredFileExtension(fileName, ".pdf");
-
-            if (!string.IsNullOrWhiteSpace(fatura.PdfDosyaYolu) && !IsLegacyUploadPath(fatura.PdfDosyaYolu))
-                await _secureFileService.DeleteAsync(fatura.PdfDosyaYolu);
-
-            fatura.PdfDosyaYolu = await _secureFileService.SaveEncryptedAsync(
+            newPath = await _secureFileService.SaveEncryptedAsync(
                 Path.Combine("faturalar", fatura.FaturaYonu.ToString().ToLowerInvariant(), "pdf"),
                 fileName,
                 pdfContent);
-            fatura.UpdatedAt = DateTime.UtcNow;
-            await context.SaveChangesAsync();
-
-            return true;
         }
         catch
         {
             return false;
         }
+
+        var oldPath = fatura.PdfDosyaYolu;
+        string? legacyCleanupKey = null;
+        var oldPathQueued = false;
+        fatura.PdfDosyaYolu = newPath;
+        fatura.UpdatedAt = DateTime.UtcNow;
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(oldPath) && !string.Equals(oldPath, newPath, StringComparison.Ordinal))
+            {
+                if (IsLegacyUploadPath(oldPath))
+                    legacyCleanupKey = await _legacyFileCleanupService.EnqueueMigrationAsync(oldPath, newPath, storageUploadsRoot: true);
+                else
+                {
+                    await _cleanupJournal.EnqueueAsync(oldPath, waitForReferenceRemoval: true);
+                    oldPathQueued = true;
+                }
+            }
+            await context.SaveChangesAsync();
+        }
+        catch (Exception saveException)
+        {
+            try
+            {
+                var currentPath = await GetCurrentInvoiceFilePathAsync(faturaId, FaturaDosyaTuru.Pdf);
+                if (!string.Equals(currentPath, newPath, StringComparison.Ordinal))
+                {
+                    await _secureFileService.DeleteAsync(newPath);
+                    if (string.Equals(currentPath, oldPath, StringComparison.Ordinal))
+                    {
+                        if (oldPathQueued)
+                            await _cleanupJournal.CompleteAsync(oldPath!);
+                        if (legacyCleanupKey is not null)
+                            await _cleanupJournal.CompleteAsync(legacyCleanupKey);
+                    }
+                }
+                else if (!string.IsNullOrWhiteSpace(oldPath) && !IsLegacyUploadPath(oldPath))
+                {
+                    await _secureFileService.DeleteAsync(oldPath);
+                }
+                return string.Equals(currentPath, newPath, StringComparison.Ordinal);
+            }
+            catch (Exception compensationException)
+            {
+                throw new AggregateException(
+                    "Fatura PDF kaydı başarısız veya belirsiz; yeni dosyanın DB başvurusu doğrulanamadı ve dosya güvenlik için korunuyor.",
+                    saveException, compensationException);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(oldPath) && !string.Equals(oldPath, newPath, StringComparison.Ordinal) && !IsLegacyUploadPath(oldPath))
+        {
+            try { await _secureFileService.DeleteAsync(oldPath); }
+            catch (Exception cleanupException) { throw new FileCleanupPendingException(cleanupException); }
+        }
+        return true;
     }
 
     public async Task<FaturaStoredFile?> GetFaturaDosyaAsync(int faturaId, FaturaDosyaTuru dosyaTuru)
@@ -1479,6 +1567,12 @@ public class FaturaService : IFaturaService
         if (IsLegacyUploadPath(storedPath))
         {
             content = await ReadLegacyUploadAsync(context, storedPath);
+        }
+        else if (TryResolveLegacyInvoiceWebPath(storedPath, out var legacyWebPath))
+        {
+            try { content = await File.ReadAllBytesAsync(legacyWebPath); }
+            catch (FileNotFoundException) { content = null; }
+            catch (DirectoryNotFoundException) { content = null; }
         }
         else
         {
@@ -1544,17 +1638,74 @@ public class FaturaService : IFaturaService
         ValidateStoredXmlFileExtension(fileName);
 
         var normalizedFileName = NormalizeXmlFileName(fileName);
-
-        if (!string.IsNullOrWhiteSpace(fatura.XmlDosyaYolu) && !IsLegacyUploadPath(fatura.XmlDosyaYolu))
-            await _secureFileService.DeleteAsync(fatura.XmlDosyaYolu);
-
-        fatura.XmlDosyaYolu = await _secureFileService.SaveEncryptedAsync(
+        var newPath = await _secureFileService.SaveEncryptedAsync(
             Path.Combine("faturalar", fatura.FaturaYonu.ToString().ToLowerInvariant(), "xml"),
             normalizedFileName,
             xmlContent);
 
+        var oldPath = fatura.XmlDosyaYolu;
+        string? legacyCleanupKey = null;
+        var oldPathQueued = false;
+        fatura.XmlDosyaYolu = newPath;
         fatura.UpdatedAt = DateTime.UtcNow;
-        await context.SaveChangesAsync();
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(oldPath) && !string.Equals(oldPath, newPath, StringComparison.Ordinal))
+            {
+                if (IsLegacyUploadPath(oldPath))
+                    legacyCleanupKey = await _legacyFileCleanupService.EnqueueMigrationAsync(oldPath, newPath, storageUploadsRoot: true);
+                else
+                {
+                    await _cleanupJournal.EnqueueAsync(oldPath, waitForReferenceRemoval: true);
+                    oldPathQueued = true;
+                }
+            }
+            await context.SaveChangesAsync();
+        }
+        catch (Exception saveException)
+        {
+            try
+            {
+                var currentPath = await GetCurrentInvoiceFilePathAsync(fatura.Id, FaturaDosyaTuru.Xml);
+                if (!string.Equals(currentPath, newPath, StringComparison.Ordinal))
+                {
+                    await _secureFileService.DeleteAsync(newPath);
+                    if (string.Equals(currentPath, oldPath, StringComparison.Ordinal))
+                    {
+                        if (oldPathQueued)
+                            await _cleanupJournal.CompleteAsync(oldPath!);
+                        if (legacyCleanupKey is not null)
+                            await _cleanupJournal.CompleteAsync(legacyCleanupKey);
+                    }
+                }
+                else if (!string.IsNullOrWhiteSpace(oldPath) && !IsLegacyUploadPath(oldPath))
+                {
+                    await _secureFileService.DeleteAsync(oldPath);
+                }
+            }
+            catch (Exception compensationException)
+            {
+                throw new AggregateException(
+                    "Fatura XML kaydı başarısız veya belirsiz; yeni dosyanın DB başvurusu doğrulanamadı ve dosya güvenlik için korunuyor.",
+                    saveException, compensationException);
+            }
+            throw;
+        }
+
+        if (!string.IsNullOrWhiteSpace(oldPath) && !string.Equals(oldPath, newPath, StringComparison.Ordinal) && !IsLegacyUploadPath(oldPath))
+        {
+            try { await _secureFileService.DeleteAsync(oldPath); }
+            catch (Exception cleanupException) { throw new FileCleanupPendingException(cleanupException); }
+        }
+    }
+
+    private async Task<string?> GetCurrentInvoiceFilePathAsync(int faturaId, FaturaDosyaTuru dosyaTuru)
+    {
+        await using var verify = await _contextFactory.CreateDbContextAsync();
+        return await verify.Faturalar.AsNoTracking()
+            .Where(x => x.Id == faturaId)
+            .Select(x => dosyaTuru == FaturaDosyaTuru.Pdf ? x.PdfDosyaYolu : x.XmlDosyaYolu)
+            .FirstOrDefaultAsync();
     }
 
     private static void ValidateStoredFileExtension(string fileName, string expectedExtension)
@@ -1584,6 +1735,18 @@ public class FaturaService : IFaturaService
 
     private static bool IsLegacyUploadPath(string path)
         => path.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase) || path.StartsWith("uploads/", StringComparison.OrdinalIgnoreCase);
+
+    private bool TryResolveLegacyInvoiceWebPath(string path, out string fullPath)
+    {
+        fullPath = string.Empty;
+        var relative = path.TrimStart('/', '\\').Replace('\\', '/');
+        if (!(relative.StartsWith("efatura/", StringComparison.OrdinalIgnoreCase) ||
+              relative.StartsWith("belgeler/efatura/", StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        fullPath = StorageFilePath.Resolve(_env.WebRootPath, relative);
+        return true;
+    }
 
     private async Task<byte[]?> ReadLegacyUploadAsync(ApplicationDbContext context, string legacyPath)
     {
@@ -1951,6 +2114,9 @@ public class FaturaService : IFaturaService
             .Where(k => kalemIds.Contains(k.Id))
             .ToListAsync();
 
+        foreach (var yon in mevcutKalemler.Where(k => k.Fatura != null).Select(k => k.Fatura!.FaturaYonu).Distinct())
+            await RequireFaturaPermissionAsync(yon, "duzenle");
+
         foreach (var kalem in kalemler)
         {
             var existing = mevcutKalemler.FirstOrDefault(k => k.Id == kalem.Id);
@@ -2023,6 +2189,9 @@ public class FaturaService : IFaturaService
         var olusturulacakStoklar = new List<StokKarti>();
         var stokHareketleri = new List<StokHareket>();
         var giderKayitlari = new List<(FaturaKalem kalem, StokKarti stok, decimal tutar)>();
+
+        foreach (var yon in mevcutKalemler.Where(k => k.Fatura != null).Select(k => k.Fatura!.FaturaYonu).Distinct())
+            await RequireFaturaPermissionAsync(yon, "duzenle");
 
         foreach (var kalem in kalemler)
         {
@@ -2404,6 +2573,9 @@ public class FaturaService : IFaturaService
 
         if (fatura == null)
             throw new Exception("Fatura bulunamadı.");
+
+        await RequireFaturaPermissionAsync(fatura.FaturaYonu, "duzenle");
+        await _permissionGuard.RequireAnyAsync(Yetkiler.MuhasebeFisleriYaz);
 
         if (fatura.MuhasebeFisiOlusturuldu)
             throw new InvalidOperationException($"Fatura {fatura.FaturaNo} zaten muhasebeleştirilmiş.");
@@ -3081,6 +3253,9 @@ public class FaturaService : IFaturaService
         var eslesenFatura = fatura.EslesenFatura;
         if (eslesenFatura == null) return false;
 
+        await RequireFaturaPermissionAsync(fatura.FaturaYonu, "duzenle");
+        await RequireFaturaPermissionAsync(eslesenFatura.FaturaYonu, "duzenle");
+
         // Her iki faturayı da ödenmiş olarak işaretle
         var mahsupTarihi = DateTime.UtcNow;
 
@@ -3196,6 +3371,9 @@ public class FaturaService : IFaturaService
         if (fatura1 == null || fatura2 == null) return false;
         if (!fatura1.FirmalarArasiFatura || !fatura2.FirmalarArasiFatura) return false;
         if (fatura1.FaturaYonu == fatura2.FaturaYonu) return false; // Biri gelen, biri giden olmalı
+
+        await RequireFaturaPermissionAsync(fatura1.FaturaYonu, "duzenle");
+        await RequireFaturaPermissionAsync(fatura2.FaturaYonu, "duzenle");
 
         // Eşleştir
         fatura1.EslesenFaturaId = fatura2.Id;

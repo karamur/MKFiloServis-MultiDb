@@ -35,7 +35,7 @@ namespace MKFiloServis.Web.Data.Migrations
                 table: "StokKategoriler");
 
             // K9 backfill (C3-a tabloları): startup helper'ı atlanırsa diye migration kendi başına da güvenli olsun.
-            migrationBuilder.Sql(@"
+            migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + @"
                 DO $$
                 DECLARE def_firma_id int;
                 BEGIN
@@ -117,7 +117,7 @@ namespace MKFiloServis.Web.Data.Migrations
                 nullable: true);
 
             // K9 backfill: varsayılan firma ile doldur (yoksa en eski aktif firmayı kullan).
-            migrationBuilder.Sql(@"
+            migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + @"
                 UPDATE ""Hakedisler""
                    SET ""FirmaId"" = COALESCE(
                        (SELECT ""Id"" FROM ""Firmalar"" WHERE ""VarsayilanFirma"" = true AND ""Aktif"" = true ORDER BY ""Id"" LIMIT 1),

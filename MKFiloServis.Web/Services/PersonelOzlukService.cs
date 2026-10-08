@@ -13,15 +13,18 @@ public class PersonelOzlukService : IPersonelOzlukService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly ISecureFileService _secureFileService;
+    private readonly FileCleanupJournal _cleanupJournal;
     private readonly ILogger<PersonelOzlukService> _logger;
 
     public PersonelOzlukService(
         IDbContextFactory<ApplicationDbContext> contextFactory,
         ISecureFileService secureFileService,
+        FileCleanupJournal cleanupJournal,
         ILogger<PersonelOzlukService> logger)
     {
         _contextFactory = contextFactory;
         _secureFileService = secureFileService;
+        _cleanupJournal = cleanupJournal;
         _logger = logger;
         QuestPDF.Settings.License = LicenseType.Community;
     }
@@ -501,7 +504,28 @@ public class PersonelOzlukService : IPersonelOzlukService
 
         if (existing != null)
         {
-            // 🔴 Duplicate upload → update (overwrite YOK, versiyon artar)
+            // Sürüm satırı, güncel kayıt değiştirilmeden önceki dosyayı göstermelidir.
+            var previousPath = existing.DosyaYolu;
+            var previousName = existing.DosyaAdi;
+            var previousType = existing.DosyaTipi;
+            var previousSize = existing.DosyaBoyutu;
+            var previousVersion = existing.VersiyonNo;
+
+            if (!string.IsNullOrWhiteSpace(previousPath))
+            {
+                context.PersonelOzlukEvrakVersiyonlar.Add(new PersonelOzlukEvrakVersiyon
+                {
+                    PersonelOzlukEvrakId = existing.Id,
+                    VersiyonNo = previousVersion,
+                    DosyaYolu = previousPath,
+                    DosyaAdi = previousName,
+                    DosyaTipi = previousType,
+                    DosyaBoyutu = previousSize,
+                    DegisiklikNotu = $"Yeni dosya yüklendi: {dosyaAdi}",
+                    OlusturmaTarihi = DateTime.UtcNow
+                });
+            }
+
             existing.VersiyonNo++;
             existing.SonDegisiklikNotu = $"Re-upload: {dosyaAdi}";
             existing.DosyaYolu = dosyaYolu;
@@ -512,16 +536,6 @@ public class PersonelOzlukService : IPersonelOzlukService
             existing.TamamlanmaTarihi = DateTime.UtcNow;
             existing.UpdatedAt = DateTime.UtcNow;
 
-            // Versiyon geçmişi kaydı
-            context.PersonelOzlukEvrakVersiyonlar.Add(new PersonelOzlukEvrakVersiyon
-            {
-                PersonelOzlukEvrakId = existing.Id,
-                VersiyonNo = existing.VersiyonNo,
-                DosyaYolu = dosyaYolu,
-                DosyaAdi = dosyaAdi,
-                DosyaTipi = dosyaTipi,
-                OlusturmaTarihi = DateTime.UtcNow
-            });
         }
         else
         {
@@ -751,7 +765,6 @@ public class PersonelOzlukService : IPersonelOzlukService
 
             silinecekDosyaYolu = versiyon.DosyaYolu;
             context.PersonelOzlukEvrakVersiyonlar.Remove(versiyon);
-            await context.SaveChangesAsync();
         }
         else if (personelEvrakId.HasValue)
         {
@@ -767,6 +780,23 @@ public class PersonelOzlukService : IPersonelOzlukService
                 throw new InvalidOperationException("Dosya silinemedi (DB güncellemesi uygulanmadı).");
 
             silinecekDosyaYolu = evrak.DosyaYolu;
+            if (!string.IsNullOrWhiteSpace(evrak.DosyaYolu))
+            {
+                // Kaldırma geri alınabilsin: geçmiş kaydı dosyaya referans vermeye
+                // devam eder, böylece cleanup worker fiziksel dosyayı silemez.
+                context.PersonelOzlukEvrakVersiyonlar.Add(new PersonelOzlukEvrakVersiyon
+                {
+                    PersonelOzlukEvrakId = evrak.Id,
+                    VersiyonNo = evrak.VersiyonNo,
+                    DosyaYolu = evrak.DosyaYolu,
+                    DosyaAdi = evrak.DosyaAdi,
+                    DosyaTipi = evrak.DosyaTipi,
+                    DosyaBoyutu = evrak.DosyaBoyutu,
+                    DegisiklikNotu = "Aktif evrak kaldırıldı; geri alma için saklandı.",
+                    OlusturmaTarihi = simdi
+                });
+                evrak.VersiyonNo++;
+            }
             evrak.DosyaYolu = null;
             evrak.DosyaAdi = null;
             evrak.DosyaTipi = null;
@@ -774,18 +804,41 @@ public class PersonelOzlukService : IPersonelOzlukService
             evrak.Tamamlandi = false;
             evrak.TamamlanmaTarihi = null;
             evrak.UpdatedAt = simdi;
-            await context.SaveChangesAsync();
         }
         else
         {
             throw new InvalidOperationException("Silinecek dosya parametreleri geçersiz.");
         }
 
+        // DB silme/güncelleme commit'inden önce dayanıklı istek yazılır. Worker
+        // satır hâlâ referanslıysa isteği tamamlamaz; daha sonra tekrar dener.
+        if (!string.IsNullOrWhiteSpace(silinecekDosyaYolu))
+            await _cleanupJournal.EnqueueAsync(silinecekDosyaYolu, waitForReferenceRemoval: true);
+        await context.SaveChangesAsync();
+
         if (!string.IsNullOrWhiteSpace(silinecekDosyaYolu))
         {
             try
             {
-                await _secureFileService.DeleteAsync(silinecekDosyaYolu);
+                // Legacy data may let the active row and version history share one
+                // stored path. Check both tables after the row change before unlinking.
+                await using var verifyContext = await _contextFactory.CreateDbContextAsync();
+                var stillReferenced = await verifyContext.PersonelOzlukEvraklar.IgnoreQueryFilters()
+                    .AnyAsync(x => x.DosyaYolu == silinecekDosyaYolu) ||
+                    await verifyContext.PersonelOzlukEvrakVersiyonlar.IgnoreQueryFilters()
+                        .AnyAsync(x => x.DosyaYolu == silinecekDosyaYolu);
+
+                if (stillReferenced)
+                {
+                    await _cleanupJournal.CompleteAsync(silinecekDosyaYolu);
+                    _logger.LogInformation(
+                        "Özlük dosya yolu başka bir aktif/geçmiş kayıt tarafından kullanılıyor; fiziksel silme atlandı. DosyaYolu={DosyaYolu}",
+                        silinecekDosyaYolu);
+                }
+                else
+                {
+                    await _secureFileService.DeleteAsync(silinecekDosyaYolu);
+                }
             }
             catch (Exception ex)
             {
@@ -919,10 +972,29 @@ public class PersonelOzlukService : IPersonelOzlukService
             ? DateTime.SpecifyKind(evrak.GecerlilikBitisTarihi.Value, DateTimeKind.Utc)
             : null;
         existing.Aciklama = evrak.Aciklama;
+        existing.SonDegisiklikNotu = evrak.SonDegisiklikNotu;
         existing.UpdatedAt = DateTime.UtcNow;
 
         await context.SaveChangesAsync();
         return existing;
+    }
+
+    public async Task ClearMissingEvrakReferenceAsync(int personelOzlukEvrakId)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var existing = await context.PersonelOzlukEvraklar
+            .FirstOrDefaultAsync(e => e.Id == personelOzlukEvrakId && !e.IsDeleted)
+            ?? throw new InvalidOperationException("Personel evrak kaydı bulunamadı.");
+
+        existing.DosyaYolu = null;
+        existing.DosyaAdi = null;
+        existing.DosyaTipi = null;
+        existing.DosyaBoyutu = null;
+        existing.Tamamlandi = false;
+        existing.TamamlanmaTarihi = null;
+        existing.SonDegisiklikNotu = "Eksik dosya referansı temizlendi";
+        existing.UpdatedAt = DateTime.UtcNow;
+        await context.SaveChangesAsync();
     }
 
     public async Task SoforBelgeTarihleriniSenkronizeEtAsync(int soforId, DateTime? ehliyetTarihi, DateTime? srcTarihi, DateTime? psikoteknikTarihi, DateTime? saglikTarihi)

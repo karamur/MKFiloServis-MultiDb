@@ -100,6 +100,7 @@ MKFiloServisKurulum.exe
 # Inno Setup build artifacts
 setup/payload/
 setup/output/
+**/setup/output/
 setup-build.log
 
 archive/**/*.zip
@@ -138,3 +139,6 @@ TestResults/
 coverage-report/
 test_all.txt
 diagnostic-test-output*.txt
+
+# Local authenticated sessions must never be delivered in the repository
+MKFiloServis.Web/cookies.txt

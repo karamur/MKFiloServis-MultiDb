@@ -1,4 +1,4 @@
-@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:muhasebe")]
+﻿@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:muhasebe")]
 @page "/muhasebe/mahsup"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
@@ -6,6 +6,7 @@
 @inject ICariService CariService
 @inject IToastService ToastService
 @inject IJSRuntime JS
+@inject IAktifFirmaProvider AktifFirma
 @rendermode InteractiveServer
 
 <PageTitle>Mahsup İşlemleri</PageTitle>
@@ -468,6 +469,10 @@
     private List<BankaKasaHareket> filtrelenmisHareketler = new();
     private Dictionary<int, decimal> hesapBakiyeleri = new();
 
+    private string transferIslemKimligi = Guid.NewGuid().ToString("N");
+    private string cariIslemKimligi = Guid.NewGuid().ToString("N");
+    private string transferKeySlot = "";
+    private string cariKeySlot = "";
     private bool isLoading = true;
     private bool isKaydediliyor = false;
     private bool showMuhasebeAlanlari = false;
@@ -557,9 +562,24 @@
         _ = YenileAsync();
     }
 
-    // Transfer Modal
-    private void HesapTransferModalAc()
+    private async Task<(string key, string slot)> LoadPendingBankKeyAsync(string operation)
     {
+        if (AktifFirma.TumFirmalar || AktifFirma.AktifFirmaId is not > 0)
+            throw new InvalidOperationException("İşlem için tek firma seçiniz.");
+        var slot = $"mkfilo:pending-bank:{AktifFirma.AktifFirmaId}:{operation}";
+        var stored = await JS.InvokeAsync<string?>("sessionStorage.getItem", slot);
+        if (Guid.TryParse(stored, out var pending) && pending != Guid.Empty)
+            return (pending.ToString("N"), slot);
+        var key = Guid.NewGuid().ToString("N");
+        await JS.InvokeVoidAsync("sessionStorage.setItem", slot, key);
+        return (key, slot);
+    }
+
+    // Transfer Modal
+    private async Task HesapTransferModalAc()
+    {
+        try { (transferIslemKimligi, transferKeySlot) = await LoadPendingBankKeyAsync("transfer"); }
+        catch (Exception ex) { ToastService.ShowError($"İşlem başlatılamadı: {ex.Message}"); return; }
         transferKaynakHesapId = 0;
         transferHedefHesapId = 0;
         transferTutar = 0;
@@ -586,6 +606,7 @@
 
     private async Task TransferYap()
     {
+        if (isKaydediliyor) return;
         if (transferKaynakHesapId == 0 || transferHedefHesapId == 0)
         {
             ToastService.ShowWarning("Lütfen kaynak ve hedef hesapları seçin.");
@@ -612,10 +633,11 @@
                 transferBelgeNo,
                 transferMuhasebeKodu,
                 transferKostMerkezi,
-                transferProjeKodu);
+                transferProjeKodu, transferIslemKimligi);
 
             if (sonuc.Basarili)
             {
+                await JS.InvokeVoidAsync("sessionStorage.removeItem", transferKeySlot);
                 ToastService.ShowSuccess($"Transfer başarılı. {FormatPara(transferTutar)} aktarıldı.");
                 showTransferModal = false;
                 await YenileAsync();
@@ -637,8 +659,10 @@
     }
 
     // Cari Mahsup Modal
-    private void CariMahsupModalAc()
+    private async Task CariMahsupModalAc()
     {
+        try { (cariIslemKimligi, cariKeySlot) = await LoadPendingBankKeyAsync("cari"); }
+        catch (Exception ex) { ToastService.ShowError($"İşlem başlatılamadı: {ex.Message}"); return; }
         mahsupCariId = 0;
         mahsupHesapId = 0;
         mahsupTutar = 0;
@@ -655,6 +679,7 @@
 
     private async Task CariMahsupYap()
     {
+        if (isKaydediliyor) return;
         if (mahsupCariId == 0 || mahsupHesapId == 0)
         {
             ToastService.ShowWarning("Lütfen cari ve hesap seçin.");
@@ -682,10 +707,11 @@
                 mahsupBelgeNo,
                 mahsupMuhasebeKodu,
                 mahsupKostMerkezi,
-                mahsupProjeKodu);
+                mahsupProjeKodu, cariIslemKimligi);
 
             if (sonuc.Basarili)
             {
+                await JS.InvokeVoidAsync("sessionStorage.removeItem", cariKeySlot);
                 var islemTipi = mahsupCaridenHesaba ? "Tahsilat" : "Ödeme";
                 ToastService.ShowSuccess($"{islemTipi} kaydedildi. {FormatPara(mahsupTutar)}");
                 showCariMahsupModal = false;

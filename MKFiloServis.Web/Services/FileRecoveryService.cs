@@ -50,7 +50,10 @@ public sealed class FileRecoveryService
             : new[]
             {
                 Path.Combine(_baseStorageRoot, AppStoragePaths.PersonelEvrakRelativeRoot),
-                Path.Combine(_baseStorageRoot, AppStoragePaths.AracEvrakRelativeRoot)
+                Path.Combine(_baseStorageRoot, AppStoragePaths.AracEvrakRelativeRoot),
+                // Cleanup preserves encrypted payloads here. They must follow the
+                // same master-key rotation as active archive documents.
+                Path.Combine(_baseStorageRoot, "uploads", ".deleted-file-quarantine-v1")
             };
 
         foreach (var root in scanRoots)
@@ -160,15 +163,26 @@ public sealed class FileRecoveryService
         }
 
         // 3) Yeni key ile re-encrypt et
+        var temporaryPath = $"{encryptedFilePath}.{Guid.NewGuid():N}.recovering.enc";
         try
         {
             var reEncrypted = _fileProtector.Protect(decryptedPlain);
-            await File.WriteAllBytesAsync(encryptedFilePath, reEncrypted, CancellationToken.None);
+            await File.WriteAllBytesAsync(temporaryPath, reEncrypted, CancellationToken.None);
+            File.Move(temporaryPath, encryptedFilePath, overwrite: true);
             _logger.LogInformation("🔄 Yeniden şifrelendi (old→new): {Path}", encryptedFilePath);
             return true;
         }
         catch (Exception ex)
         {
+            try
+            {
+                if (File.Exists(temporaryPath))
+                    File.Delete(temporaryPath);
+            }
+            catch (Exception cleanupException)
+            {
+                _logger.LogWarning(cleanupException, "Recovery geçici şifreli dosyası temizlenemedi: {Path}", temporaryPath);
+            }
             _logger.LogError(ex, "❌ Re-encryption hatası: {Path}", encryptedFilePath);
             return false;
         }

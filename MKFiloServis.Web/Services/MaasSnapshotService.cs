@@ -171,6 +171,10 @@ public class MaasSnapshotService : IMaasSnapshotService
             .ToListAsync();
         if (snapshots.Count == 0) return;
 
+        if (snapshots.Any(x => x.Kilitli || x.MuhasebeFisId.HasValue || x.IptalFisId.HasValue))
+            throw new InvalidOperationException(
+                "Kilitli veya muhasebe fişine bağlanmış maaş dönemi silinemez. Düzeltmeyi yetkili muhasebe ters fiş/mahsup süreciyle yapın.");
+
         var now = DateTime.UtcNow;
         foreach (var snapshot in snapshots)
         {

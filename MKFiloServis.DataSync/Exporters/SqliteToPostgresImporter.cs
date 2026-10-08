@@ -1,4 +1,4 @@
-﻿using Microsoft.Data.Sqlite;
+using Microsoft.Data.Sqlite;
 using Npgsql;
 using NpgsqlTypes;
 using System;
@@ -46,6 +46,7 @@ public sealed class SqliteToPostgresImporter
 
         await using var pg = new NpgsqlConnection(_pgConnectionString);
         await pg.OpenAsync();
+        await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(pg);
 
         var sqliteTables = await ListSqliteUserTablesAsync(sqlite, sourceSnapshot);
         _progress($"▸ Kaynak SQLite'da {sqliteTables.Count} tablo tespit edildi.");
@@ -138,7 +139,7 @@ public sealed class SqliteToPostgresImporter
         var list = new List<string>();
         await using var cmd = conn.CreateCommand();
         cmd.Transaction = sourceTx;
-        cmd.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__EFMigrations%' ORDER BY name;";
+        cmd.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__EFMigrations%' AND name <> '__MKWriteJournal' ORDER BY name;";
         await using var rdr = await cmd.ExecuteReaderAsync();
         while (await rdr.ReadAsync()) list.Add(rdr.GetString(0));
         if (list.Any(value => value.Contains('"')))

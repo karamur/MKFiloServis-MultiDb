@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations.Schema;
+﻿using System.ComponentModel.DataAnnotations.Schema;
 
 namespace MKFiloServis.Shared.Entities;
 
@@ -15,6 +15,9 @@ public class BankaKasaHareket : BaseEntity, IFirmaTenant
     public virtual Firma? Firma { get; set; }
 
     public string IslemNo { get; set; } = string.Empty;
+    // Only the primary movement consumes the request key; deleted operations retain it.
+    public string? IslemKimligi { get; set; }
+    public string? IslemOzeti { get; set; }
     public DateTime IslemTarihi { get; set; }
     public HareketTipi HareketTipi { get; set; }
     public decimal Tutar { get; set; }

@@ -4,6 +4,7 @@
 @using MKFiloServis.Web.Services
 @using MKFiloServis.Web.Services.Interfaces
 @inject IBankaKasaHareketService HareketService
+@inject IKullaniciService KullaniciService
 @inject IBankaHesapService BankaHesapService
 @inject ICariService CariService
 @inject ISoforService SoforService
@@ -641,6 +642,12 @@
     private async Task KaydetAsync()
     {
         if (!CanSave()) return;
+        if (!await GuncelYetkiVarMiAsync(Yetkiler.BankaHareketleriYaz) ||
+            (muhasebeFisiOlustur && !await GuncelYetkiVarMiAsync(Yetkiler.MuhasebeFisleriYaz)))
+        {
+            ToastService.ShowError("Banka hareketi veya seçilen muhasebe fişi için güncel yazma yetkiniz yok.");
+            return;
+        }
 
         isKaydediliyor = true;
         StateHasChanged();
@@ -790,6 +797,11 @@
 
     private async Task HareketGuncelleAsync()
     {
+        if (!await GuncelYetkiVarMiAsync(Yetkiler.BankaHareketleriDuzenle))
+        {
+            ToastService.ShowError("Güncel banka hareketi düzenleme yetkiniz yok veya oturumunuz etkin değil.");
+            return;
+        }
         if (duzenleHareket == null || duzenleHareket.Tutar <= 0) return;
         isDuzenleniyor = true;
         try
@@ -812,6 +824,11 @@
 
     private async Task SilAsync(BankaKasaHareket h)
     {
+        if (!await GuncelYetkiVarMiAsync(Yetkiler.BankaHareketleriSil))
+        {
+            ToastService.ShowError("Güncel banka hareketi silme yetkiniz yok veya oturumunuz etkin değil.");
+            return;
+        }
         var result = await JS.InvokeAsync<bool>("confirm", "Bu işlemi silmek istediğinizden emin misiniz?");
         if (!result) return;
 
@@ -848,6 +865,19 @@
         return odemeKaynagi == OdemeKaynakTipi.PersonelCebinden 
             ? $"{tip} Kaydet (Personele Ödenecek)" 
             : $"{tip} Kaydet";
+    }
+
+    private async Task<bool> GuncelYetkiVarMiAsync(string yetkiKodu)
+    {
+        try
+        {
+            var kullanici = await KullaniciService.GetAktifKullaniciAsync();
+            return kullanici is not null && await KullaniciService.YetkiVarMiAsync(kullanici.Id, yetkiKodu);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private string FormatPara(decimal tutar) => tutar.ToString("N2", new System.Globalization.CultureInfo("tr-TR")) + " ₺";
