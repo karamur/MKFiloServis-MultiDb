@@ -59,6 +59,8 @@ Desktop.ini
 # Database backups / local sensitive exports
 datayedek/
 *.sql
+# Derlemeye gömülen audit SQL kaynağı yedek dışıdır; depoda tutulmalıdır.
+!MKFiloServis.Shared/Auditing/postgres-write-audit.sql
 *.bak
 *.dump
 

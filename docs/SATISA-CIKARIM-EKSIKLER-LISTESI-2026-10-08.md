@@ -1,181 +1,121 @@
 # MKFiloServis — Satışa Çıkarım Eksikler Listesi
 
-**Tarih:** 2026-10-08
-**Esas:** `claude/kind-volta-f9swn3` dalı, son commit `0aecc4f` (2026-10-05)
-**Yöntem:** `docs/` altındaki satış analiz raporlarının incelenmesi ve öne çıkan iddiaların güncel kaynakta grep/dosya kontrolüyle doğrulanması.
-**Bu turda yapılmayanlar:** Derleme, test, bağımlılık taraması, kurulum, restore veya lisans üretimi yapılmadı (ortamda `dotnet` yok). Bu liste statik incelemeye dayanır.
+**Tarih:** 2026-10-08 (2. kontrol: `a99bcfa` sonrası)
+**Esas:** `main` @ `a99bcfa` — "Satışa çıkarım düzeltmelerini ve regresyonları tamamla" (187 dosya)
+**Yöntem:** Satış raporlarının incelenmesi; raporlardaki iddiaların ve bu listenin önceki sürümündeki E-xx/T-xx bulgularının güncel kaynakta grep/dosya kontrolüyle yeniden doğrulanması; GitHub Actions sonuçlarının okunması.
+**Bu turda yapılmayanlar:** Yerel derleme/test yapılmadı (ortamda `dotnet` yok). Derleme/test durumu GitHub Actions kayıtlarından alındı.
 
 ---
 
-## 1. Karar
+## 0. 2. kontrolün özeti
 
-**🔴 Ürün satışa hazır değil.** 10-01 analizindeki kritik kod sorunlarının büyük kısmı kaynakta kapatılmış (asimetrik lisans imzası, parola politikası, Swagger kısıtlaması, sır temizliği vb.). Ancak:
-
-- **6 adet P0** madde (lisans geçişi, modül erişim kabulü, tam kurtarma, bağımsız restore kanıtı, güvenlik/tenant kabulü, sır rotasyonu) kapanmadı.
-- **Otomatik test projesi hâlâ yok**; CI yalnız derleme doğruluyor.
-- Kullanıcının karşılaşacağı **yarım özellikler** (çalışmayan Excel butonları, sabit "Admin" denetim kaydı) duruyor.
-- Satış için gereken **ticari/hukuki paket** (kullanıcı kılavuzu, KVKK metinleri, destek/SLA, sürüm notları) eksik.
-
-| Kategori | Adet |
+| Konu | Sonuç |
 |---|---|
-| P0 — satış öncesi bloklayıcı | 6 |
-| P1 — ilk müşteri kurulumundan önce | 17 |
-| P2 — sürüm planına göre | 8 |
-| P3 — takip | 2 |
-| Bu incelemede eklenen yeni bulgular (E-xx) | 9 |
-| Ticari/hukuki hazırlık eksikleri (T-xx) | 8 |
-
-> Görev kodları (A-xx) [10-05 son durum raporu](SATISA-CIKARIM-SON-DURUM-2026-10-05.md) ile aynıdır; bu belge onu ikame etmez, üzerine yeni bulguları ve ticari eksikleri ekler.
+| Test projesi (A-07) | ✅ `MKFiloServis.Tests` eklendi (xUnit, 42 `[Fact]` + 17 `[Theory]`), `tests.yml` artık testleri koşuyor |
+| Yerel test raporu | Raporda 102/102 başarılı (Windows). **Kanıt dosyaları (log/TRX) depoda yok**, bağlantılar kırık |
+| **GitHub CI @ a99bcfa** | 🔴 **Tests: FAILURE**, 🔴 **Docker Image: FAILURE**, 🔴 **NuGet Audit: FAILURE** |
+| Önceki listedeki 9 yeni bulgu (E-01..E-09) | 1 tanesi büyük ölçüde kapandı (E-05), 8’i **hâlâ açık** |
+| Ticari/hukuki eksikler (T-01..T-08) | T-01 kısmen (A-31 kapsam kararı); diğerleri **açık** |
+| Genel karar | 🔴 **Satışa hazır değil** — üstelik `main` şu an temiz bir makinede **derlenmiyor** |
 
 ---
 
-## 2. İncelenen kaynaklar
+## 1. 🔴 YENİ BLOKLAYICI — `main` dalı temiz checkout’ta derlenmiyor (B-01..B-03)
 
-| Belge | Rol | Not |
-|---|---|---|
-| [SATISA-CIKARIM-ANALIZ-RAPORU.md](SATISA-CIKARIM-ANALIZ-RAPORU.md) | İlk analiz (10-01), 39 bulgu | Tarihsel kesit |
-| [SATISA-CIKARIM-GUNCEL-DURUM-RAPORU.md](SATISA-CIKARIM-GUNCEL-DURUM-RAPORU.md) | Düzeltme ekleri | Tarihsel ekler |
-| [DUZELTME-DENETIM-RAPORU-2.md](DUZELTME-DENETIM-RAPORU-2.md) | İkinci denetim | Bölüm 23 güncel karşılaştırma |
-| [SATISA-CIKARIM-SON-DURUM-2026-10-05.md](SATISA-CIKARIM-SON-DURUM-2026-10-05.md) | **Birleşik açık görev listesi (A-01..A-31)** | Esas alınan liste |
-| [LISANS-IMZA-GECIS.md](LISANS-IMZA-GECIS.md), [SIFRELI-BELGE-YEDEK-KURTARMA.md](SIFRELI-BELGE-YEDEK-KURTARMA.md) | Lisans ve kurtarma kapsamı | — |
-| `SATISA-CIKARIM-YENIDEN-ANALIZ-2026-10-02.md` | 39 maddenin tek tek değerlendirmesi | **Depoda yok** — 4 belgeden kırık bağlantı (bkz. A-23) |
-
----
-
-## 3. Kaynakta doğrulanan kapanışlar (özet)
-
-| İlk bulgu | Güncel kaynak durumu |
-|---|---|
-| K-1 lisans anahtarı gömülü | Asimetrik imza; özel anahtar yalnız LisansDesktop’ta (DPAPI + parola korumalı yedek). 14 gün yenileme toleransı ve saat geri alma kontrolü var (`LicenseService.cs:372-381`). |
-| K-3 Cookie şeması | `DefaultScheme = JwtBearer` (`Program.cs:628`). |
-| K-4 / O-11 sırlar | `appsettings*.json` ve `docker-compose.yml` içinde düz sır bulunmadı. **Rotasyon kanıtı yok → A-06 açık.** |
-| K-6 parola politikası | Uzunluk 12, rakam zorunlu (`Program.cs:225-229`). |
-| Y-5 Swagger | Yalnız Admin + Bearer ile açık (`Program.cs:1313-1330`). |
-| Y-6 PendingModelChanges | Susturulmuyor, log seviyesinde izleniyor (`Program.cs:196-199`). Kabul A-18’de. |
-| Y-10 legacy timestamp | Yapılandırılabilir; varsayılan hâlâ **açık** (`Program.cs:57`). Geçiş A-20’de. |
-| Y-11 NuGet audit bastırma | `NuGetAuditSuppress` kalmadı. |
-| O-13 / D-7 / D-8 bin/obj/log | Git’te izlenen bin/obj/log dosyası yok. |
-
----
-
-## 4. Birleşik eksik listesi (önceki raporlardan devreden)
-
-### P0 — Satış öncesi bloklayıcı
-
-| Kod | Durum | Eksik | Kapanış ölçütü |
-|---|---|---|---|
-| A-01 | 🟡 | Müşteri lisans envanteri, v3 lisans yeniden basımı, .mkkey anahtar yedeğinin bağımsız profilde geri yüklenmesi | Teslim kaydı + bağımsız geri yükleme kanıtı |
-| A-02 | 🟡 | Lisanssız modüle sayfa/API/hub/dosya/menü erişimi ve açık oturumda lisans değişimi kabul testi | Lisans dışı modül engelleniyor; Admin lisansı aşamıyor |
-| A-03 | 🔴 | **Tam kurtarma uygulaması yok**: DB + dosya + ayar + key ring canlı uygulama sırası ve geri dönüş | Uygulanabilir tam kurtarma akışı |
-| A-04 | 🟡 | Farklı makine/profilde gerçek dump + şifreli belge + credential kurtarma provası (DPAPI, S3 dahil) | Belgeler çözülebiliyor, DB-dosya ilişkileri tutarlı |
-| A-05 | 🟡 | Giriş/oturum/tenant kabul senaryoları (firma A/B, 401/403, kilit, çıkış, bootstrap kapanışı) | Senaryo kanıtları |
-| A-06 | 🟡 | Daha önce repoda bulunmuş JWT/admin/DB sırlarının rotasyonu ve git geçmişi kararı | Belgeli rotasyon |
-
-### P1 — İlk müşteri kurulumundan önce
-
-| Kod | Durum | Eksik |
-|---|---|---|
-| A-07 | 🔴 | **Kalıcı test projesi yok.** `MKFiloServis.Tests` diskte yok; `tests.yml` yalnız Web’i derliyor ve test adımını atlıyor. Mevcut "testler" iki konsol uygulaması (RentACar, PlaywrightSmoke). |
-| A-08 | 🔴 | ExecuteUpdate/Raw SQL yazımlarının audit ve transaction kapsamı envanteri |
-| A-09 | 🟡 | PostgreSQL/SQL Server üzerinde audit + mali rollback kabulü |
-| A-10 | 🔴 | Başarısız fiziksel dosya silme için kalıcı kuyruk/yeniden deneme; yetim dosya envanteri (kaynakta kuyruk yapısı bulunamadı) |
-| A-11 | 🟡 | Dosya silme hata senaryoları kabulü (S3 4xx/5xx, kilit, kısmi hata) |
-| A-12 | 🔴 | Araç Excel import sonucu için modal/firma sürüm koruması |
-| A-13 | 🟡 | `IgnoreQueryFilters` ile firma atama/firma değiştirme yollarının yetki denetimi |
-| A-14 | 🟡 | Araç ekranı/servis kabulü (cache, modal, plaka, soft delete) |
-| A-15 | 🔴 | Banka referansı, aktif plaka, dönem snapshot, varsayılan şablon için **DB tekillik kısıtları** |
-| A-16 | 🟡 | Eski kayıtlarda bozuk tenant ilişkileri taraması ve onarım planı |
-| A-17 | 🟡 | Gerçek banka CSV/XLSX, maaş, fatura API ve SMTP kabulü |
-| A-18 | 🟡 | Temiz ve eski kurulumda migration/başlangıç kabulü |
-| A-19 | 🟡 | DataSync iki yönlü aktarım provası (FK, sequence, rollback) |
-| A-20 | 🟡 | Legacy timestamp → `timestamptz` geçiş planı (varsayılan hâlâ açık) |
-| A-21 | 🟡 | Temiz makinede müşteri paketi kurulum/güncelleme kabulü; LisansDesktop pakette olmamalı |
-| A-22 | 🟡 | Güncel publish için tam (transitif dahil) zafiyet taraması kaydı |
-| A-23 | 🔴 | Kırık doküman bağlantısı (`SATISA-CIKARIM-YENIDEN-ANALIZ-2026-10-02.md`), silinen raporların gerekçesi, teslim commit’i |
-
-### P2 / P3
-
-| Kod | Öncelik | Durum | Eksik |
-|---|---|---|---|
-| A-24 | P2 | 🔴 | Çok süreçli Redis önbellek tazeliği |
-| A-25 | P2 | 🟡 | Önbellek yarış/yük kabulü |
-| A-26 | P2 | 🟡 | Excel/PDF çıktılarının görsel kabulü (uzun metin, çok sayfa, Türkçe karakter) |
-| A-27 | P2 | 🟡 | Luca/UBL/portal entegrasyon kabulü, çift POST koruması |
-| A-28 | P2 | ⚪ | SQL Server/MySQL destek kararı (migration’lar yalnız Npgsql) |
-| A-29 | P2 | ⚪ | Mali ürün politikaları (referanssız banka hareketi, muhasebeleşmiş snapshot silme) |
-| A-30 | P3 | ⚪ | Kod/doküman düzeni (tekrarlar, eski context’ler, DTO doğrulama) |
-| A-31 | P3 | ⚪ | Çevrimdışı ve depolama (local/S3) kapsamının müşteriye yazılı tanımı |
-
----
-
-## 5. Bu incelemede eklenen yeni bulgular
-
-Önceki raporlarda açık görev olarak yer almayan veya kapanmış sayılan, ancak güncel kaynakta duran eksikler:
-
-| Kod | Öncelik | Bulgu | Konum | Öneri |
+| Kod | Öncelik | Bulgu | Kanıt | Çözüm |
 |---|---|---|---|---|
-| E-01 | P1 | **Bordro işlemlerinde kullanıcı sabit "Admin" yazılıyor** — denetim izi yanlış (Y-4’ün benzeri, kapsam dışında kalmış) | `Personel/NormalBordro.razor:997`, `Personel/ArgeBordro.razor:970` | Kullanıcıyı `AuthenticationStateProvider`’dan al |
-| E-02 | P1 | **EBYS belge aramasında kullanıcı ID sabit 1** — arama geçmişi/önerileri tüm kullanıcılar arasında karışır | `EBYS/BelgeArama.razor:512, 567, 590` | Oturumdaki kullanıcı ID’si |
-| E-03 | P1 | **Çalışmayan Excel butonları**: tıklanınca "yakında eklenecek" uyarısı veya işlem yapmayan TODO | `Ayarlar/AuditLogYonetimi.razor:663`, `Budget/KrediTaksitler.razor:1498`, `Butce/HedefGerceklesen.razor:676`, `Finans/PersonelOdenecekler.razor:769`, `Cariler/CariRiskAnalizi.razor:563` | Uygula veya butonu gizle |
-| E-04 | P2 | CRM WhatsApp gönderimi uygulanmamış (TODO); muhasebe hesap listesi yorum satırında | `CRMService.cs:459`, `Personel/PersonelFinansAyarlar.razor:365` | Uygula veya UI’dan kaldır; satış broşüründe vaat edilmemeli |
-| E-05 | P1 | **Boş `catch` blokları hâlâ 39 adet** (ilk raporda 40). Mali/kritik dosyalarda: `BankaKasaHareketService` (2), `BackupService` (2), `FaturaSablonService` (1), `WebhookService` (1), `PersonelOzlukService` (1), `ApplicationDbContext` | `Services/*`, `Data/ApplicationDbContext.cs` | Mali, yedek ve DbContext yollarındakileri en az `LogWarning` ile logla |
-| E-06 | P2 | Blazor sayfasında aynı scoped servislere paralel `ContinueWith(t => t.Result)` — aynı DbContext üzerinde eşzamanlı sorgu riski | `ServisOperasyon/KontratList.razor:266-268`, `PuantajDetay.razor:501, 524` | Sıralı `await` veya `IDbContextFactory` |
-| E-07 | P1 | `CalismaPuantaji.razor:1145` firma filtresi varsayılanı sabit `1` | `Personel/CalismaPuantaji.razor:1145` | Aktif firmadan başlat |
-| E-08 | P1 | **CI yalnız `main` için tetikleniyor**; geliştirme dallarında (`claude/*` dahil) test/derleme kontrolü çalışmıyor | `.github/workflows/tests.yml:12-16` | PR hedefini genişlet veya dallarda `workflow_dispatch` kullan |
-| E-09 | P2 | Üretim izleme zayıf: yalnız `AddHealthChecks()`; yapılandırılmış log toplama/hata izleme (Serilog, OpenTelemetry vb.) yok. Yönetici/muhasebe rolleri için **2FA zorunluluğu** kodda bulunamadı | `Program.cs:589` | Merkezi log + uyarı; kritik rollerde 2FA zorunlu |
+| **B-01** | **P0** | `MKFiloServis.Shared/Auditing/postgres-write-audit.sql` **depoya hiç commit edilmemiş**. `.gitignore:61` içindeki `*.sql` kuralı dosyayı dışlıyor. Shared, Web ve LisansDesktop bu dosyayı `EmbeddedResource`/`Content` olarak kullanıyor. Sonuç: CI ve Docker derlemesi `CS1566 … Could not find file …postgres-write-audit.sql` ile kırılıyor. A-08 (🟢 işaretli) “ortak veritabanı denetimi”nin çekirdek SQL’i yalnız geliştiricinin makinesinde. | [Tests run 37826445846](https://github.com/karamur/MKFiloServis-MultiDb/actions/runs/37826445846), [Docker run 37826445804](https://github.com/karamur/MKFiloServis-MultiDb/actions/runs/37826445804) | Bu dalda `.gitignore`’a `!MKFiloServis.Shared/Auditing/postgres-write-audit.sql` istisnası eklendi. **Dosyanın kendisi geliştirici makinesinden eklenmeli:** `git add MKFiloServis.Shared/Auditing/postgres-write-audit.sql`. Bu yapılana kadar A-08 🟢 sayılamaz; yerel 102/102 sonucu depodaki kodla tekrarlanamaz. |
+| **B-02** | P1 | NuGet Audit iş akışı Linux’ta `dotnet restore MKFiloServis.slnx` adımında `NETSDK1100` ile düşüyor (DataSync, LisansDesktop Windows hedefli). Bu iş akışı 10-05’ten beri kırmızı; yani A-22 “CI’de izlenir” iddiası şu an geçerli değil. | [NuGet Audit run 37826445996](https://github.com/karamur/MKFiloServis-MultiDb/actions/runs/37826445996) | `-p:EnableWindowsTargeting=true` ile restore edin veya işi `windows-latest` üzerinde çalıştırın. Client (`net10.0-android`) için workload gereksinimini de kontrol edin. |
+| **B-03** | P1 | Test kanıt dosyaları (`build-final-validation.log`, `test-final-validation.log`, `TestResults/**`, `pg-validation.log`, `build-a15-final.log`, `test-a15-final.log`) depoda yok; `TEST-DOGRULAMA-2026-10-08.md` içindeki 7 bağlantı kırık. | `docs/TEST-DOGRULAMA-2026-10-08.md` | Satış kabul kanıtı olarak CI artefaktı (TRX) kullanın veya özetleri depoya ekleyin. |
+
+> **Sonuç:** “102/102 test geçti” sonucu yalnız geliştirici makinesinde geçerli. B-01 düzeltilip CI yeşil olmadan A-07 ve A-08 kapatılmamalı.
 
 ---
 
-## 6. Ticari / hukuki satış hazırlığı eksikleri
+## 2. Güncel görev durumu (A-01..A-31)
 
-Kod dışı, satış ve teslim için gerekli paket. Depoda arama ile kontrol edildi; bulunmayanlar "yok" olarak işaretlendi.
+Kaynak: [SATISA-CIKARIM-SON-DURUM-2026-10-05.md](SATISA-CIKARIM-SON-DURUM-2026-10-05.md) (son güncelleme 2026-10-08).
 
-| Kod | Öncelik | Eksik | Mevcut durum |
-|---|---|---|---|
-| T-01 | P0 | **Ürün kapsamı ve sürüm/paket tanımı**: hangi 15 modül hangi pakette, desteklenen DB (PostgreSQL/SQLite), çevrimdışı sınırı | Kodda modül hakları var; müşteriye yönelik kapsam belgesi yok (A-28, A-31 ile bağlı) |
-| T-02 | P0 | **Lisans sözleşmesi (EULA) son hukuki onayı** | `LICENSE` dosyası mevcut (Allbatros Global Teknoloji); hukuk onayı kaydı yok |
-| T-03 | P0 | **KVKK paketi**: aydınlatma metni, açık rıza, veri işleyen sözleşmesi (DPA), saklama/imha politikası, VERBİS rehberi | `KvkkYonetimi.razor` ekranı var; müşteriye verilecek metin/şablon yok |
-| T-04 | P1 | **Son kullanıcı kılavuzu** | Yalnız puantaj/fatura kılavuzu var (`wwwroot/docs/puantaj-ve-fatura-kilavuzu.md`); diğer modüller yok. `MKFiloServis.Web/Docs/` iç tasarım notlarıdır |
-| T-05 | P1 | **Kurulum, yedekleme ve kurtarma işletim kılavuzu (müşteri BT’si için)** | `setup/` altında geliştirici rehberleri var; tam kurtarma uygulanmadığı için (A-03) müşteri runbook’u yazılamaz |
-| T-06 | P1 | **Destek / SLA / güncelleme politikası** ve destek kanalı | Belge yok; `SECURITY.md` yalnız güvenlik bildirimi |
-| T-07 | P1 | **Rent a Car belge şablonlarının hukuk onayı** | README:36 açıkça "hukuken onaylı değildir" diyor |
-| T-08 | P2 | **Sürüm notları / CHANGELOG ve sürüm numaralandırma** | `release-drafter.yml` var; yayımlanmış sürüm notu yok. Demo verisi ve demo lisans akışının satış sunumu için hazırlanması |
+| Renk | Sayı | Görevler |
+|---|---:|---|
+| 🟢 | 4 | A-08\*, A-22\*, A-30, A-31 |
+| 🟡 | 21 | A-01, A-02, A-04, A-05, A-06, A-07, A-09, A-11, A-12, A-13, A-14, A-17, A-18, A-19, A-20, A-21, A-24, A-25, A-26, A-27, A-29 |
+| 🔴 | 6 | A-03, A-10, A-15, A-16, A-23, A-28 |
+
+\* Bu kontrolde **A-08** B-01 nedeniyle, **A-22** ise B-02 nedeniyle (CI audit kırık) 🟡’ye çekilmelidir.
+
+### Bu committe ilerleyen görevler
+
+| Görev | Önceki | Şimdi | Ne yapıldı | Kalan |
+|---|---|---|---|---|
+| A-03 | 🔴 | 🔴 | `05-recovery-archive-apply.ps1` / `06-recovery-archive-rollback.ps1` ile DB+dosya uygulama ve journal’dan geri dönüş | Gerçek restore ve hata enjeksiyonu kabulü |
+| A-07 | 🔴 | 🟡 | xUnit projesi, CI’de test adımı | **CI kırmızı (B-01)** |
+| A-08 | 🔴 | 🟢→🟡 | Ortak yazım denetimi, sözleşme ve izole kanıt belgeleri | SQL kaynağı depoda yok (B-01) |
+| A-10 | 🔴 | 🔴 | Atomik şifreli yazım, karantina, kalıcı temizlik günlüğü, yetim tarayıcı | Karantina kapasitesi, legacy yarışı, çok sunucu |
+| A-12 | 🔴 | 🟡 | Import sürüm/kilit koruması | Gerçek Excel ile ekran kabulü |
+| A-15 | 🔴 | 🔴 | Filtreli tekil indeksler, banka/fatura eşleştirme firma tetikleyicileri | Diğer ilişkiler, eşzamanlılık kabulü |
+| A-16 | 🟡 | 🔴 | DataSync’e salt okunur eski veri envanteri | Müşteri verisinde tarama ve onarım |
+| A-22 | 🟡 | 🟢→🟡 | Tarama belgesi, SQLite 2.1.13 | CI audit kırık (B-02) |
+| A-23 | 🔴 | 🔴 | Kırık yeniden analiz bağlantıları güncel envantere yönlendirildi | Yeni kırık kanıt bağlantıları (B-03), teslim commit’i |
+| A-28 | ⚪ | 🔴 | SQL Server/MySQL güvenli reddediliyor | Ürün kapsam kararı belgesi |
+| A-29..A-31 | ⚪ | 🟡/🟢/🟢 | [Ürün kararları](A-29-31-URUN-KARARLARI.md) | A-29 rol değişimi kabulü |
+
+### P0 — hâlâ açık (değişmedi)
+
+A-01 lisans müşteri geçişi · A-02 modül erişim kabulü · A-03 tam kurtarma kabulü · A-04 bağımsız makinede restore · A-05 giriş/tenant kabulü · A-06 sır rotasyonu. Bu committe bunlar için çalışma zamanı/müşteri kanıtı eklenmedi.
 
 ---
 
-## 7. Raporlar arası tutarsızlıklar
+## 3. Önceki listedeki yeni bulguların yeniden kontrolü (E-01..E-09)
 
-1. **Kırık bağlantı:** `SATISA-CIKARIM-YENIDEN-ANALIZ-2026-10-02.md` dört yerde bağlantılı, dosya yok (`SATISA-CIKARIM-ANALIZ-RAPORU.md:7`, `DUZELTME-DENETIM-RAPORU-2.md:16, 739`, `SATISA-CIKARIM-GUNCEL-DURUM-RAPORU.md:126`).
-2. **Migration sayısı:** İlk rapor "288 EF migration" diyor; güncel `Data/Migrations` altında 125 `Designer.cs` (156 migration dosyası, snapshot hariç) var. Raporlarda sayı güncellenmeli.
-3. **Proje profili:** İlk rapordaki `MKFiloServis.Infrastructure`/`Service` artık ne diskte ne README’de var; O-10 kapanmış sayılabilir.
-4. **Boş catch sayısı:** Y-1 için kapanış iddiası yok ama raporlarda da açık görev olarak ayrılmamış; E-05 ile listeye alındı.
-
----
-
-## 8. Önerilen sıra ve kaba efor
-
-| Faz | İçerik | Kaba süre |
+| Kod | Durum | Güncel kanıt |
 |---|---|---|
-| 1 | P0 kabulleri: A-01, A-02, A-05, A-06 + T-01, T-02, T-03 başlangıcı | 1 hafta |
-| 2 | A-03 tam kurtarma uygulaması + A-04 bağımsız prova + T-05 | 1–2 hafta |
-| 3 | A-07 xUnit test projesi (lisans, tenant, audit, mali) + E-08 CI | 1 hafta |
-| 4 | Kod eksikleri: A-08, A-10, A-12, A-15, E-01..E-07 | 1–2 hafta |
-| 5 | P1 kabulleri: A-09, A-11, A-13, A-14, A-16..A-22 | 1–2 hafta |
-| 6 | Teslim paketi: T-04, T-06, T-07, T-08, A-23 | 1 hafta (paralel yürüyebilir) |
-
-**Toplam:** paralel yürütmeyle ~5–7 hafta. P2/P3 (A-24..A-31, E-09) ilk sürüm sonrasına bırakılabilir; ancak A-28 ve A-31’in *kararı* (ürün kapsamı) satış öncesi T-01 için gereklidir.
+| E-01 | 🔴 Açık | Bordro işlemlerinde kullanıcı hâlâ sabit `"Admin"`: `Personel/NormalBordro.razor:997`, `Personel/ArgeBordro.razor:970` |
+| E-02 | 🔴 Açık | EBYS aramasında kullanıcı ID hâlâ `1`: `EBYS/BelgeArama.razor:512, 567, 590` |
+| E-03 | 🔴 Açık, **kapsam genişledi** | Çalışmayan Excel butonları duruyor (`AuditLogYonetimi.razor:663`, `KrediTaksitler.razor:1498`, `HedefGerceklesen.razor:676`, `PersonelOdenecekler.razor:769`, `CariRiskAnalizi.razor:563`). Ek olarak **“yakında eklenecek”** uyarısı veren butonlar: `Butce/AylikOdemeler.razor:368-399` (yeni plan, düzenleme, silme, detay, ödeme — 5 işlem), `Personel/PersonelAvanslar.razor:594` (detay) |
+| E-04 | 🟡 Açık | `CRMService.cs:461` WhatsApp TODO; `PersonelFinansAyarlar.razor:365` hesap listesi yorum satırında |
+| E-05 | 🟢 Büyük ölçüde kapandı | Mali yollardaki boş catch’ler kaldırıldı (`BankaKasaHareketService` 0). Kalanlar ya tipli ve bilinçli (`SecureFileService`, `FileCleanupJournal`, `LisansHelper` donanım kodu fallback’i) ya da zararsız (`FaturaSablonService:1082` renk ayrıştırma, `WebhookService:327` yanıt gövdesi). Scraper servislerinde 19 adet duruyor (P3). |
+| E-06 | 🟡 Açık | Paralel `ContinueWith(t => t.Result)`: `ServisOperasyon/KontratList.razor:266-268`, `PuantajDetay.razor:501, 524` |
+| E-07 | 🟢 Düşük risk | `CalismaPuantaji.razor:1145` varsayılan `1`, ancak `OnInitializedAsync` içinde ilk erişilebilir firmaya ayarlanıyor (`:1231`). Kozmetik. |
+| E-08 | 🔴 Açık | `tests.yml` hâlâ yalnız `main` push/PR’ında çalışıyor; diğer dallarda kontrol yok |
+| E-09 | 🟡 Açık | Yalnız `AddHealthChecks()` (`Program.cs:601`); merkezi log/hata izleme ve kritik roller için zorunlu 2FA bulunamadı |
 
 ---
 
-## 9. Satış kabul kontrol listesi
+## 4. Ticari / hukuki satış hazırlığı (T-01..T-08)
 
+| Kod | Öncelik | Eksik | Durum |
+|---|---|---|---|
+| T-01 | P0 | Ürün kapsamı / paket tanımı (modüller, DB, çevrimdışı) | 🟡 Kısmen: [A-29-31 kararları](A-29-31-URUN-KARARLARI.md) çevrimdışı ve depolama kapsamını tanımlıyor; modül paketleri ve DB sağlayıcı kararı (A-28) yok |
+| T-02 | P0 | EULA hukuki onayı | 🔴 `LICENSE` var, onay kaydı yok |
+| T-03 | P0 | KVKK aydınlatma/açık rıza/DPA/imha politikası | 🔴 Yok |
+| T-04 | P1 | Son kullanıcı kılavuzu | 🔴 Yalnız puantaj/fatura kılavuzu var |
+| T-05 | P1 | Müşteri BT için kurulum/yedek/kurtarma runbook’u | 🟡 Recovery betikleri ve `setup/README.md` güncellendi; müşteri için tek parça runbook yok |
+| T-06 | P1 | Destek/SLA/güncelleme politikası | 🔴 Yok |
+| T-07 | P1 | Rent a Car belge şablonları hukuk onayı | 🔴 README hâlâ “hukuken onaylı değildir” diyor |
+| T-08 | P2 | Sürüm notları / CHANGELOG, demo senaryosu | 🔴 Yok |
+
+---
+
+## 5. Öncelikli yapılacaklar (güncel sıra)
+
+1. **Hemen (bugün):** B-01 — `postgres-write-audit.sql` dosyasını commit et; CI’nin Tests ve Docker işlerinin yeşile döndüğünü doğrula. B-02 NuGet Audit restore düzeltmesi.
+2. **P0 kabul:** A-01, A-02, A-05, A-06 kanıtları; A-03/A-04 gerçek restore provası.
+3. **Kullanıcıya görünen eksikler:** E-01, E-02 (denetim izi), E-03 (12 çalışmayan buton — uygula ya da gizle).
+4. **P1 kod/veri:** A-10, A-15, A-16; E-06; E-08.
+5. **Ticari paket:** T-01..T-07 (kod işleriyle paralel).
+6. **Teslim:** B-03 kanıt bağlantıları, A-23 teslim commit’i ve sürüm etiketi.
+
+---
+
+## 6. Satış kabul kontrol listesi
+
+- [ ] `main` temiz checkout’ta derleniyor; Tests, Docker ve NuGet Audit CI yeşil (B-01, B-02)
 - [ ] Tüm P0 maddeleri (A-01..A-06, T-01..T-03) kanıtla kapandı
-- [ ] Test projesi CI’de çalışıyor ve yeşil (A-07, E-08)
-- [ ] Temiz makinede müşteri paketi kuruldu, güncellendi, tam kurtarma provası yapıldı (A-03, A-04, A-21)
 - [ ] Kullanıcıya görünen yarım özellik kalmadı (E-03, E-04)
 - [ ] Denetim izi gerçek kullanıcıyı yazıyor (E-01, E-02)
-- [ ] Güncel bağımlılık taraması temiz (A-22)
+- [ ] Temiz makinede müşteri paketi kuruldu, güncellendi, tam kurtarma provası yapıldı (A-03, A-04, A-21)
 - [ ] Kullanıcı kılavuzu, KVKK metinleri, SLA ve EULA müşteri paketinde (T-02..T-06)
-- [ ] Doküman bağlantıları geçerli, teslim commit’i etiketlendi (A-23)
+- [ ] Doküman/kanıt bağlantıları geçerli, teslim commit’i etiketlendi (A-23, B-03)
 
-*Bu liste statik incelemeye dayanır. "🟡 kabul" maddeleri yalnızca çalışan ortamda, kayıtlı kanıtla kapatılabilir.*
+*Bu liste statik incelemeye ve GitHub Actions kayıtlarına dayanır. “🟡 kabul” maddeleri yalnızca çalışan ortamda, kayıtlı kanıtla kapatılabilir.*
