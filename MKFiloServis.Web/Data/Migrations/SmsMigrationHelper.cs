@@ -197,6 +197,7 @@ public static class SmsMigrationHelper
     {
         try
         {
+            await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(context.Database.GetDbConnection());
             var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
             
             var sablonlar = new[]

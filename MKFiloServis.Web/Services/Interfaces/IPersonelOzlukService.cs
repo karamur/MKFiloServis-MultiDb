@@ -29,6 +29,7 @@ public interface IPersonelOzlukService
     Task DeleteEvrakDosyaAsync(int soforId, int evrakTanimId, int? personelEvrakId, int? versiyonId);
     Task<PersonelOzlukEvrak?> BelgeAlaniIleDosyaYukleAsync(int soforId, string belgeAlani, string dosyaYolu);
     Task<PersonelOzlukEvrak> UpdatePersonelEvrakAsync(PersonelOzlukEvrak evrak);
+    Task ClearMissingEvrakReferenceAsync(int personelOzlukEvrakId);
     Task SoforBelgeTarihleriniSenkronizeEtAsync(int soforId, DateTime? ehliyetTarihi, DateTime? srcTarihi, DateTime? psikoteknikTarihi, DateTime? saglikTarihi);
 
     // Raporlama

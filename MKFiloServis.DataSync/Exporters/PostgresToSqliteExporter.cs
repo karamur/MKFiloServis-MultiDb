@@ -1,4 +1,4 @@
-﻿using Microsoft.Data.Sqlite;
+using Microsoft.Data.Sqlite;
 using Npgsql;
 using System;
 using System.Collections.Generic;
@@ -47,6 +47,7 @@ public sealed class PostgresToSqliteExporter
         var sqliteConnString = new SqliteConnectionStringBuilder { DataSource = _sqlitePath }.ToString();
         await using var sqlite = new SqliteConnection(sqliteConnString);
         await sqlite.OpenAsync();
+        await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(sqlite);
 
         // 1) Hedef SQLite'da bulunan kullanici tablolarini listele (sqlite_% haric)
         var sqliteTables = await ListSqliteUserTablesAsync(sqlite);
@@ -136,7 +137,7 @@ public sealed class PostgresToSqliteExporter
     {
         var list = new List<string>();
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__EFMigrations%' ORDER BY name;";
+        cmd.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__EFMigrations%' AND name <> '__MKWriteJournal' ORDER BY name;";
         await using var rdr = await cmd.ExecuteReaderAsync();
         while (await rdr.ReadAsync()) list.Add(rdr.GetString(0));
         if (list.Any(value => value.Contains('"')))

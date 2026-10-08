@@ -349,7 +349,10 @@ public class WhatsAppService : IWhatsAppService
         if (grupId.HasValue)
             query = query.Where(m => m.GrupId == grupId.Value);
 
-        await query.ExecuteUpdateAsync(s => s.SetProperty(m => m.Okundu, true));
+        await query.UpdateTrackedAsync(context, record =>
+        {
+            record.Okundu = true;
+        });
     }
 
     #endregion

@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$TargetDir = 'C:\MKFiloServis\IIS',
     [string]$BackupRoot = 'C:\MKFiloServis_yedekleme\deploy',
     [string]$SiteName = '',
@@ -46,6 +46,62 @@ function Get-PgDumpPath {
     )
 
     return $fallbacks | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+
+function Read-DatabaseSettingsForInstall {
+    Write-Host ''
+    Write-Host 'Kullanilacak veritabani turunu secin:' -ForegroundColor Yellow
+    Write-Host '  1) SQLite'
+    Write-Host '  2) PostgreSQL'
+    Write-Host '  3) Microsoft SQL Server (MSSQL)'
+    $selection = Read-Host 'Secim (1/2/3)'
+
+    switch ($selection.Trim()) {
+        '1' {
+            $databaseName = Read-Host 'SQLite DB dosya yolu (varsayilan: App_Data/MKFiloServis.db)'
+            if ([string]::IsNullOrWhiteSpace($databaseName)) { $databaseName = 'App_Data/MKFiloServis.db' }
+            return [ordered]@{
+                Id = 0; Provider = 1; CanonicalProvider = 2; Host = ''; Port = 0
+                DatabaseName = $databaseName.Trim(); Username = ''; Password = ''
+                UseIntegratedSecurity = $false; LastUpdated = [DateTime]::UtcNow.ToString('o')
+            }
+        }
+        '2' {
+            $hostName = Read-Host 'PostgreSQL sunucu adresi'
+            if ([string]::IsNullOrWhiteSpace($hostName)) { throw 'PostgreSQL sunucu adresi bos olamaz.' }
+            $portText = Read-Host 'PostgreSQL portu (varsayilan: 5432)'
+            if ([string]::IsNullOrWhiteSpace($portText)) { $portText = '5432' }
+            $port = 0
+            if (-not [int]::TryParse($portText, [ref]$port) -or $port -lt 1 -or $port -gt 65535) { throw 'PostgreSQL portu 1-65535 arasinda olmalidir.' }
+            $databaseName = Read-Host 'PostgreSQL veritabani adi'
+            $username = Read-Host 'PostgreSQL kullanici adi'
+            if ([string]::IsNullOrWhiteSpace($databaseName) -or [string]::IsNullOrWhiteSpace($username)) { throw 'Veritabani adi ve kullanici adi bos olamaz.' }
+            $securePassword = Read-Host 'PostgreSQL parolasi' -AsSecureString
+            $passwordPointer = [IntPtr]::Zero
+            try {
+                $passwordPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
+                $password = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($passwordPointer)
+            }
+            finally {
+                if ($passwordPointer -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($passwordPointer) }
+                if ($securePassword) { $securePassword.Dispose() }
+            }
+            return [ordered]@{
+                Id = 0; Provider = 2; CanonicalProvider = 2; Host = $hostName.Trim(); Port = $port
+                DatabaseName = $databaseName.Trim(); Username = $username.Trim(); Password = $password
+                UseIntegratedSecurity = $false; LastUpdated = [DateTime]::UtcNow.ToString('o')
+            }
+        }
+        '3' { throw 'MSSQL secildi; ancak otomatik sema/migration ve audit kurulumu henuz SQL Server icin desteklenmiyor. PostgreSQL veya SQLite secin.' }
+        default { throw 'Gecersiz veritabani secimi. Kurulum degisiklik yapmadan durduruldu.' }
+    }
+}
+
+function Write-DatabaseSettings([System.Collections.IDictionary]$Settings, [string]$Path) {
+    $temporaryPath = "$Path.tmp"
+    $json = $Settings | ConvertTo-Json -Depth 8
+    [System.IO.File]::WriteAllText($temporaryPath, $json, [System.Text.UTF8Encoding]::new($false))
+    Move-Item -LiteralPath $temporaryPath -Destination $Path -Force
 }
 
 function Backup-Database([string]$SettingsPath, [string]$BackupDir) {
@@ -108,6 +164,7 @@ function Backup-Database([string]$SettingsPath, [string]$BackupDir) {
 }
 
 Write-Step 'Kurulum klasörleri hazırlanıyor.'
+$selectedDatabaseSettings = if ($Mode -eq 'Install') { Read-DatabaseSettingsForInstall } else { $null }
 New-Item -ItemType Directory -Force -Path $TargetDir | Out-Null
 New-Item -ItemType Directory -Force -Path $BackupRoot | Out-Null
 New-Item -ItemType Directory -Force -Path $ReleaseBackupRoot | Out-Null
@@ -142,33 +199,19 @@ Set-Content -Path $AppOfflinePath -Value '<html><body><h2>MK Filo Servis guncell
 try {
     Write-Step 'Paket dosyaları hedef klasöre kopyalanıyor.'
     if ($Mode -eq 'Install') {
-        Write-Step 'KURULUM modu: dbsettings.json paket icindekiyle DEGISTIRILECEK, SQLite veritabani sifirlanacak (varsa).'
-        $excludeFiles = @()
-
-        if (Test-Path $existingDbSettings) {
-            try {
-                $oldSettings = Get-Content $existingDbSettings -Raw | ConvertFrom-Json
-                if (([int]$oldSettings.Provider) -eq 1 -and -not [string]::IsNullOrWhiteSpace([string]$oldSettings.DatabaseName)) {
-                    $oldDbPath = if ([System.IO.Path]::IsPathRooted([string]$oldSettings.DatabaseName)) {
-                        [string]$oldSettings.DatabaseName
-                    } else {
-                        Join-Path $TargetDir ([string]$oldSettings.DatabaseName)
-                    }
-                    if (Test-Path $oldDbPath) {
-                        Remove-Item $oldDbPath -Force -ErrorAction SilentlyContinue
-                        Write-Step "Eski SQLite veritabani silindi: $oldDbPath"
-                    }
-                }
-            } catch {
-                Write-Step "Eski dbsettings.json okunamadi: $($_.Exception.Message)"
-            }
-        }
+        Write-Step 'KURULUM modu: secilen veritabani ayari yazilacak; mevcut veritabani dosyalari korunacak.'
+        $excludeFiles = @('/XF', 'dbsettings.json')
     }
     else {
         $excludeFiles = if (Test-Path $existingDbSettings) { @('/XF', 'dbsettings.json') } else { @() }
     }
 
     Invoke-Robocopy -Source $PackageDir -Destination $TargetDir -ExtraArgs $excludeFiles
+
+    if ($Mode -eq 'Install') {
+        Write-DatabaseSettings -Settings $selectedDatabaseSettings -Path $existingDbSettings
+        Write-Step "Veritabani ayari kaydedildi: $($selectedDatabaseSettings.DatabaseName) (Provider $($selectedDatabaseSettings.Provider))"
+    }
 
     if (-not (Test-Path $existingDbSettings) -and (Test-Path $packageDbSettings)) {
         Copy-Item $packageDbSettings $existingDbSettings -Force

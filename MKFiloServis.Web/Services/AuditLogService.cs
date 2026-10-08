@@ -78,7 +78,8 @@ public class AuditLogService : IAuditLogService
             // Navigation property'leri hariç tut
             var properties = typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Where(p => !p.PropertyType.IsClass || p.PropertyType == typeof(string))
-                .ToDictionary(p => p.Name, p => p.GetValue(entity));
+                .ToDictionary(p => p.Name, p => MKFiloServis.Shared.Auditing.DatabaseWriteAudit.IsSensitiveProperty(p.Name)
+                    ? (object?)"[GİZLENDİ]" : p.GetValue(entity));
             
             return JsonSerializer.Serialize(properties, _jsonOptions);
         }

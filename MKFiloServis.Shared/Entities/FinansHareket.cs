@@ -41,6 +41,9 @@ public class FinansHareket : BaseEntity, IFirmaTenant
 
     /// <summary>İçe aktarılan dosyanın SHA256 hash'i (mükerrer engelleme).</summary>
     public string? DosyaHash { get; set; }
+
+    /// <summary>Banka import satırının firma kapsamında deterministik tekillik anahtarı.</summary>
+    public string? IthalatTekillikAnahtari { get; set; }
 }
 
 

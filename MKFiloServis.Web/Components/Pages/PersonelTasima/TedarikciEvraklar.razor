@@ -910,7 +910,7 @@
             try
             {
                 await TedarikciService.DeleteTedarikciEvrakDosyaAsync(dosya.Id);
-                ToastService.ShowSuccess("Dosya silindi.");
+                ToastService.ShowSuccess("Dosya listeden kaldırıldı; geri alma için saklanıyor.");
                 await YenileAsync();
                 if (dosyaEvrak != null)
                     dosyaEvrak = evraklar.FirstOrDefault(e => e.Id == dosyaEvrak.Id);

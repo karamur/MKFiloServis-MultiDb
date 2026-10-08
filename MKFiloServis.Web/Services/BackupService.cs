@@ -187,7 +187,7 @@ public class BackupService : IBackupService
             var processInfo = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = pgDumpPath,
-                Arguments = $"-h {host} -p {port} -U {username} -d {database} --format=custom --compress=9 --blobs --no-owner --no-privileges --encoding=UTF8 -f \"{backupPath}\"",
+                Arguments = $"-h {host} -p {port} -U {username} -d {database} --format=custom --compress=9 --blobs --no-owner --no-privileges --exclude-schema=mk_audit --encoding=UTF8 -f \"{backupPath}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -288,7 +288,7 @@ public class BackupService : IBackupService
             var processInfo = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = pgDumpPath,
-                Arguments = $"-h {host} -p {port} -U {username} -d {database} --format=custom --compress=9 --blobs --verbose --no-owner --no-privileges --encoding=UTF8 -f \"{backupFilePath}\"",
+                Arguments = $"-h {host} -p {port} -U {username} -d {database} --format=custom --compress=9 --blobs --verbose --no-owner --no-privileges --exclude-schema=mk_audit --encoding=UTF8 -f \"{backupFilePath}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -836,6 +836,10 @@ public class BackupService : IBackupService
                 return await RestorePostgreSqlAsync(backupFilePath);
             }
 
+            if (!dbProvider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase) &&
+                !dbProvider.Equals("SQLite", StringComparison.OrdinalIgnoreCase))
+                throw new NotSupportedException("Denetimli restore yalnız PostgreSQL ve SQLite için desteklenir.");
+
             // MSSQL restore
             if (backupFilePath.EndsWith(".bak", StringComparison.OrdinalIgnoreCase) && 
                 (dbProvider.Equals("MSSQL", StringComparison.OrdinalIgnoreCase) || dbProvider.Equals("SQLServer", StringComparison.OrdinalIgnoreCase)))
@@ -896,7 +900,21 @@ public class BackupService : IBackupService
             }
 
             Directory.CreateDirectory(Path.GetDirectoryName(targetPath) ?? _environment.ContentRootPath);
-            File.Copy(backupFilePath, targetPath, overwrite: true);
+            using var operationJournal = await MKFiloServis.Shared.Auditing.RestoreOperationJournal.StartAsync(backupFilePath, targetPath, "SQLite");
+            await using var target = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = targetPath, Pooling = false }.ToString());
+            await target.OpenAsync();
+            await using (var recovery = new SqliteConnection(new SqliteConnectionStringBuilder
+                { DataSource = Path.Combine(operationJournal.DirectoryPath, "before-restore.db"), Pooling = false }.ToString()))
+            {
+                await recovery.OpenAsync();
+                target.BackupDatabase(recovery);
+            }
+            await using var source = new SqliteConnection(new SqliteConnectionStringBuilder
+                { DataSource = backupFilePath, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
+            await source.OpenAsync();
+            source.BackupDatabase(target);
+            await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(target);
+            operationJournal.Complete();
             _logger.LogInformation("SQLite yedegi hedef veritabanina geri yuklendi: {Path}", targetPath);
             return true;
         }
@@ -918,6 +936,12 @@ public class BackupService : IBackupService
                 return false;
             }
 
+            if (!backupFilePath.EndsWith(".backup", StringComparison.OrdinalIgnoreCase))
+                throw new NotSupportedException("Kalıcı audit geçmişini korumak için PostgreSQL restore yalnız custom .backup biçimini destekler.");
+            using var operationJournal = await MKFiloServis.Shared.Auditing.RestoreOperationJournal.StartAsync(backupFilePath,
+                new Npgsql.NpgsqlConnectionStringBuilder(connectionString).Database ?? "", "PostgreSQL");
+            await using (var beforeRestore = new Npgsql.NpgsqlConnection(connectionString))
+                await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(beforeRestore);
             var connParts = ParseConnectionString(connectionString);
             var psqlPath = FindPsql();
 
@@ -945,7 +969,7 @@ public class BackupService : IBackupService
                 var restoreInfo = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = pgRestorePath,
-                    Arguments = $"-h {host} -p {port} -U {username} -d {database} --single-transaction --exit-on-error --clean --if-exists --no-owner --no-privileges --verbose \"{backupFilePath}\"",
+                    Arguments = $"-h {host} -p {port} -U {username} -d {database} --single-transaction --exit-on-error --clean --if-exists --no-owner --no-privileges --schema=public --verbose \"{backupFilePath}\"",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
@@ -967,6 +991,9 @@ public class BackupService : IBackupService
 
                     if (restoreProcess.ExitCode == 0)
                     {
+                        await using var auditConnection = new Npgsql.NpgsqlConnection(connectionString);
+                        await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(auditConnection);
+                        operationJournal.Complete();
                         _logger.LogInformation("PostgreSQL restore basarili");
                         return true;
                     }
@@ -975,40 +1002,6 @@ public class BackupService : IBackupService
                 }
 
                 return false;
-            }
-
-            var processInfo = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = psqlPath,
-                Arguments = $"-h {host} -p {port} -U {username} -d {database} --single-transaction --set ON_ERROR_STOP=on -f \"{backupFilePath}\"",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            processInfo.Environment["PGPASSWORD"] = password;
-
-            _logger.LogInformation("PostgreSQL restore calistiriliyor: psql -h {Host} -d {Database}", host, database);
-
-            using var process = System.Diagnostics.Process.Start(processInfo);
-            if (process != null)
-            {
-                var outputTask = process.StandardOutput.ReadToEndAsync();
-                var errorTask = process.StandardError.ReadToEndAsync();
-                await process.WaitForExitAsync();
-                var output = await outputTask;
-                var error = await errorTask;
-
-                if (process.ExitCode == 0)
-                {
-                    _logger.LogInformation("PostgreSQL restore basarili");
-                    return true;
-                }
-                else
-                {
-                    _logger.LogError("PostgreSQL restore hatasi: {Error}", error);
-                }
             }
 
             return false;
@@ -1494,6 +1487,7 @@ public class BackupService : IBackupService
             await context.Database.EnsureCreatedAsync();
 
             await context.Database.OpenConnectionAsync();
+            await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(context.Database.GetDbConnection());
             await SetSqliteForeignKeysAsync(context, enabled: false);
 
             var strategy = context.Database.CreateExecutionStrategy();
@@ -1591,7 +1585,7 @@ public class BackupService : IBackupService
 #pragma warning restore EF1002
         }
 
-        await context.Database.ExecuteSqlRawAsync("DELETE FROM sqlite_sequence;");
+        await context.Database.ExecuteSqlRawAsync("DELETE FROM sqlite_sequence WHERE name <> '__MKWriteJournal';");
     }
 
     private async Task<List<PostgreSqlCopyBlock>> ParsePostgreSqlCopyBlocksAsync(string backupFilePath)
@@ -1661,7 +1655,7 @@ public class BackupService : IBackupService
             FROM sqlite_master
             WHERE type = 'table'
               AND name NOT LIKE 'sqlite_%'
-              AND name <> '__EFMigrationsHistory';";
+              AND name <> '__EFMigrationsHistory' AND name <> '__MKWriteJournal';";
 
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())

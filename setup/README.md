@@ -65,7 +65,14 @@ Bu surum **Database-Per-Firma** mimarisini kullanir:
 - `MK_[FirmaKodu]_[ID]` — Her firma icin ayri tenant DB
 - `MKFiloServis_Holding` — Konsolidasyon raporlari
 
-Kurulum sonrasi aktif veritabani `dbsettings.json` uzerinden yapilandirilir.
+Ana ve müşteri kurulum sihirbazı PostgreSQL, SQLite veya MSSQL seçimini sorar.
+PostgreSQL için bağlantı bilgileri, SQLite için dosya yolu alınır ve uygulama
+ayar dosyası kurulumda üretilir. SQL Server seçeneği bugün bilgilendirme amacıyla
+gösterilir ve ilerlemeyi durdurur; uygulamanın otomatik migration/audit altyapısı
+SQL Server'ı henüz desteklemiyor. PostgreSQL veya SQLite seçilmelidir.
+Ana IIS kurulumunda bağlantı ayar dosyası yalnız yöneticiler ve uygulama havuzu
+tarafından okunabilir; SQLite veri klasörüne yazma izni uygulama havuzuna verilir.
+Güncelleme paketi mevcut `dbsettings.json` ayarını korur.
 
 ## Masaustu ve Android istemcileri
 

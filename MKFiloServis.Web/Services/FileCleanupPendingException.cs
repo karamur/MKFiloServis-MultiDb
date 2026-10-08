@@ -4,7 +4,7 @@ namespace MKFiloServis.Web.Services;
 public sealed class FileCleanupPendingException : IOException
 {
     public FileCleanupPendingException(Exception innerException)
-        : base("Dosya kaydı kaldırıldı; fiziksel dosya temizliği tamamlanamadı. Sistem yöneticisine bildirin.", innerException)
+        : base("Veritabanı değişikliği kaydedildi; fiziksel dosya temizliği tamamlanamadı. Sistem yöneticisine bildirin.", innerException)
     {
     }
 }

@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS ""PersonelOzlukEvraklar"" (
             }
             catch { /* Index zaten varsa hata vermesini engelle */ }
 
+            await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(context.Database.GetDbConnection());
             // "Nüfus Cüzdanı Fotokopisi" -> "Kimlik Fotokopisi" tekilleştirmesi
             try
             {

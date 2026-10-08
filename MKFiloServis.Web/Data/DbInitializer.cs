@@ -1,4 +1,4 @@
-﻿using MKFiloServis.Shared.Entities;
+using MKFiloServis.Shared.Entities;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using System.Data;
@@ -19,6 +19,12 @@ public static class DbInitializer
     private const string AddPiyasaArastirmaModuleMigrationId = "20260324195453_AddPiyasaArastirmaModule";
     private const string CRMModuluMigrationId = "20260326204037_CRMModulu";
     private const string TekrarlayanOdemeMigrationId = "20260326090740_TekrarlayanOdeme";
+    private const string UniqueActiveVehiclePlateMigrationId = "20261006190000_AddUniqueActiveVehiclePlateIndex";
+    private const string UniqueMonthlyPayrollSnapshotMigrationId = "20261006192000_AddUniqueMonthlyPayrollSnapshotIndex";
+    private const string UniqueDefaultInvoiceTemplatesMigrationId = "20261006194000_AddUniqueDefaultInvoiceTemplateIndexes";
+    // Legacy SQLite databases without migration history are only baselined through
+    // this known schema watermark. Newer migrations must execute their DDL.
+    private const string SqliteLegacySchemaWatermark = UniqueDefaultInvoiceTemplatesMigrationId;
 
     public static async Task EnsureMasterDatabaseAsync(IConfiguration configuration)
     {
@@ -200,19 +206,22 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
         await sharedConn.OpenAsync();
         await using var masterConn = new NpgsqlConnection(masterConnStr);
         await masterConn.OpenAsync();
+        await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(masterConn);
+        await using var sourceSnapshot = await sharedConn.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+        await using var transaction = await masterConn.BeginTransactionAsync();
 
-        var tables = new[] { "Firmalar", "Kullanicilar", "Roller", "RolYetkileri", "Lisanslar", "AppAyarlari" };
+        var tables = new[] { "Roller", "Firmalar", "Kullanicilar", "RolYetkileri", "Lisanslar", "AppAyarlari" };
 
         foreach (var table in tables)
         {
-            await using var checkCmd = new NpgsqlCommand($"SELECT COUNT(*) FROM \"{table}\"", masterConn);
+            await using var checkCmd = new NpgsqlCommand($"SELECT COUNT(*) FROM \"{table}\"", masterConn, transaction);
             var count = (long)(await checkCmd.ExecuteScalarAsync())!;
             if (count > 0) continue;
 
             // Hedef (Master DB) sutun listesini al
             var targetColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             await using (var colCmd = new NpgsqlCommand(
-                "SELECT column_name FROM information_schema.columns WHERE table_name = @t", masterConn))
+                "SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name = @t", masterConn, transaction))
             {
                 colCmd.Parameters.AddWithValue("@t", table);
                 await using var colReader = await colCmd.ExecuteReaderAsync();
@@ -221,7 +230,7 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
             }
 
             // Kaynak (Shared DB) verileri oku, sadece ortak sutunlari kopyala
-            await using var readCmd = new NpgsqlCommand($"SELECT * FROM \"{table}\"", sharedConn);
+            await using var readCmd = new NpgsqlCommand($"SELECT * FROM \"{table}\"", sharedConn, sourceSnapshot);
             await using var reader = await readCmd.ExecuteReaderAsync();
 
             var sourceColumns = new List<string>();
@@ -242,16 +251,17 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
                 var colNames = string.Join("\", \"", commonColumns);
                 var insertSql = $"INSERT INTO \"{table}\" (\"{colNames}\") VALUES ({paramNames}) ON CONFLICT DO NOTHING";
 
-                await using var insertCmd = new NpgsqlCommand(insertSql, masterConn);
+                await using var insertCmd = new NpgsqlCommand(insertSql, masterConn, transaction);
                 for (var i = 0; i < values.Count; i++)
                     insertCmd.Parameters.AddWithValue($"@p{i}", values[i]);
 
-                try { await insertCmd.ExecuteNonQueryAsync(); inserted++; }
-                catch (Exception ex) { Console.WriteLine($"[MasterDb] {table} INSERT hatasi (skip): {ex.Message}"); }
+                inserted += await insertCmd.ExecuteNonQueryAsync();
             }
             await reader.CloseAsync();
-            Console.WriteLine($"[MasterDb] '{table}' -> {inserted} satir kopyalandi.");
+            Console.WriteLine($"[MasterDb] '{table}' -> {inserted} satir transaction'a eklendi.");
         }
+        await transaction.CommitAsync();
+        await sourceSnapshot.CommitAsync();
     }
 
     public static async Task InitializeAsync(ApplicationDbContext context, IConfiguration configuration)
@@ -285,6 +295,21 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
             {
                 await EnsureSqliteMigrationHistoryAsync(context, pendingMigrations);
                 pendingMigrations = (await context.Database.GetPendingMigrationsAsync()).ToList();
+            }
+
+            if (pendingMigrations.Contains(UniqueActiveVehiclePlateMigrationId))
+            {
+                await EnsureNoDuplicateActiveVehiclePlatesAsync(context);
+            }
+
+            if (pendingMigrations.Contains(UniqueMonthlyPayrollSnapshotMigrationId))
+            {
+                await EnsureNoDuplicatePayrollSnapshotsAsync(context);
+            }
+
+            if (pendingMigrations.Contains(UniqueDefaultInvoiceTemplatesMigrationId))
+            {
+                await EnsureNoDuplicateDefaultInvoiceTemplatesAsync(context);
             }
 
             if (pendingMigrations.Any())
@@ -468,6 +493,8 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
             }
         }
 
+        await EnsureSqliteBankOperationKeySchemaAsync(context);
+
         // PostgreSQL için eksik kolonları ekle
         if (dbProvider == "PostgreSQL")
         {
@@ -513,6 +540,110 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
 
         // EBYS örnek veri ve test senaryoları
         await SeedEbysOrnekVerileriAsync(context);
+    }
+
+    private static async Task EnsureNoDuplicateActiveVehiclePlatesAsync(ApplicationDbContext context)
+    {
+        if (!await ContextTableExistsAsync(context, "AracPlakalar"))
+            return;
+
+        var duplicates = await context.AracPlakalar
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(plate => !plate.IsDeleted && plate.CikisTarihi == null && !string.IsNullOrWhiteSpace(plate.Plaka))
+            .GroupBy(plate => plate.Plaka)
+            .Where(group => group.Count() > 1)
+            .Select(group => new { Plaka = group.Key, KayitSayisi = group.Count() })
+            .OrderBy(item => item.Plaka)
+            .Take(20)
+            .ToListAsync();
+
+        if (duplicates.Count == 0)
+            return;
+
+        var details = string.Join(", ", duplicates.Select(item => $"{item.Plaka} ({item.KayitSayisi} kayıt)"));
+        throw new InvalidOperationException(
+            $"Aktif plaka tekillik migration'ı uygulanmadı. Önce yinelenen aktif plakaları düzeltin: {details}");
+    }
+
+    private static async Task EnsureNoDuplicatePayrollSnapshotsAsync(ApplicationDbContext context)
+    {
+        if (!await ContextTableExistsAsync(context, "MaasOdemeSnapshotlar"))
+            return;
+
+        var duplicates = await context.MaasOdemeSnapshotlar
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(snapshot => !snapshot.IsDeleted)
+            .GroupBy(snapshot => new { snapshot.FirmaId, snapshot.Yil, snapshot.Ay, snapshot.PersonelId })
+            .Where(group => group.Count() > 1)
+            .Select(group => new
+            {
+                group.Key.FirmaId,
+                group.Key.Yil,
+                group.Key.Ay,
+                group.Key.PersonelId,
+                KayitSayisi = group.Count()
+            })
+            .OrderBy(item => item.FirmaId).ThenBy(item => item.Yil).ThenBy(item => item.Ay).ThenBy(item => item.PersonelId)
+            .Take(20)
+            .ToListAsync();
+
+        if (duplicates.Count == 0)
+            return;
+
+        var details = string.Join(", ", duplicates.Select(item =>
+            $"firma {item.FirmaId}, {item.Yil}-{item.Ay:D2}, personel {item.PersonelId} ({item.KayitSayisi} kayıt)"));
+        throw new InvalidOperationException(
+            $"Aylık maaş snapshot tekillik migration'ı uygulanmadı. Önce yinelenen kayıtları uzlaştırın: {details}");
+    }
+
+    private static async Task EnsureNoDuplicateDefaultInvoiceTemplatesAsync(ApplicationDbContext context)
+    {
+        var invoiceTableExists = await ContextTableExistsAsync(context, "FaturaSablonlari");
+        var groupTableExists = await ContextTableExistsAsync(context, "FaturaGrupSablonlari");
+
+        // Temiz kurulumda bu tablolar daha önceki bekleyen migration'larda oluşturulacaktır.
+        if (!invoiceTableExists && !groupTableExists)
+            return;
+
+        var details = new List<string>();
+        if (invoiceTableExists)
+        {
+            var invoiceDuplicates = await context.FaturaSablonlari
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(template => !template.IsDeleted && template.Varsayilan)
+                .GroupBy(template => template.FirmaId)
+                .Where(group => group.Count() > 1)
+                .Select(group => new { FirmaId = group.Key, KayitSayisi = group.Count() })
+                .OrderBy(item => item.FirmaId)
+                .Take(20)
+                .ToListAsync();
+            details.AddRange(invoiceDuplicates.Select(item => $"fatura şablonu firma {item.FirmaId} ({item.KayitSayisi} kayıt)"));
+        }
+
+        if (groupTableExists)
+        {
+            var groupDuplicates = await context.FaturaGrupSablonlari
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(template => !template.IsDeleted && template.VarsayilanMi)
+                .GroupBy(template => new { template.FirmaId, template.KullaniciId })
+                .Where(group => group.Count() > 1)
+                .Select(group => new { group.Key.FirmaId, group.Key.KullaniciId, KayitSayisi = group.Count() })
+                .OrderBy(item => item.FirmaId).ThenBy(item => item.KullaniciId)
+                .Take(20)
+                .ToListAsync();
+            details.AddRange(groupDuplicates.Select(item =>
+                $"grup şablonu firma {item.FirmaId}, kullanıcı {(item.KullaniciId?.ToString() ?? "firma geneli")} ({item.KayitSayisi} kayıt)"));
+        }
+
+        if (details.Count == 0)
+            return;
+
+        throw new InvalidOperationException(
+            $"Varsayılan fatura/grup şablonu tekillik migration'ı uygulanmadı. Önce yinelenen varsayılanları uzlaştırın: {string.Join(", ", details)}");
     }
 
     private static string GetDefaultConnectionString(ApplicationDbContext context, IConfiguration configuration)
@@ -1184,10 +1315,8 @@ WHERE IsDeleted = 0;");
             }
 
             var allMigrations = context.Database.GetMigrations().ToList();
-            var migrationsToBaseline = allMigrations
-                .Where(pendingMigrations.Contains)
-                .Where(migrationId => !existingMigrationIds.Contains(migrationId))
-                .ToList();
+            var migrationsToBaseline = SelectSqliteLegacyMigrationsToBaseline(
+                allMigrations, pendingMigrations, existingMigrationIds);
 
             if (migrationsToBaseline.Count == 0)
             {
@@ -1224,12 +1353,71 @@ WHERE IsDeleted = 0;");
         }
     }
 
+    internal static IReadOnlyList<string> SelectSqliteLegacyMigrationsToBaseline(
+        IEnumerable<string> allMigrations,
+        IEnumerable<string> pendingMigrations,
+        IEnumerable<string> existingMigrationIds)
+    {
+        var pending = pendingMigrations.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var existing = existingMigrationIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return allMigrations
+            .Where(pending.Contains)
+            .Where(id => !existing.Contains(id))
+            .Where(id => string.CompareOrdinal(id, SqliteLegacySchemaWatermark) <= 0)
+            .ToList();
+    }
+
+    internal static async Task EnsureSqliteBankOperationKeySchemaAsync(ApplicationDbContext context)
+    {
+        if (!context.Database.IsSqlite()) return;
+
+        var connection = context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose) await connection.OpenAsync();
+
+        try
+        {
+            await using var tableCheck = connection.CreateCommand();
+            tableCheck.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'BankaKasaHareketleri' LIMIT 1";
+            if (await tableCheck.ExecuteScalarAsync() is null) return;
+
+            var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using (var columnCheck = connection.CreateCommand())
+            {
+                columnCheck.CommandText = "PRAGMA table_info(\"BankaKasaHareketleri\")";
+                await using var reader = await columnCheck.ExecuteReaderAsync();
+                while (await reader.ReadAsync()) columns.Add(reader.GetString(1));
+            }
+
+            // Nullable additive repairs preserve existing movement rows.
+            await using var repair = connection.CreateCommand();
+            if (!columns.Contains("IslemKimligi"))
+            {
+                repair.CommandText = "ALTER TABLE \"BankaKasaHareketleri\" ADD COLUMN \"IslemKimligi\" TEXT NULL";
+                await repair.ExecuteNonQueryAsync();
+            }
+            if (!columns.Contains("IslemOzeti"))
+            {
+                repair.CommandText = "ALTER TABLE \"BankaKasaHareketleri\" ADD COLUMN \"IslemOzeti\" TEXT NULL";
+                await repair.ExecuteNonQueryAsync();
+            }
+
+            repair.CommandText = "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_BankaKasaHareketleri_IslemKimligi\" ON \"BankaKasaHareketleri\" (\"IslemKimligi\")";
+            await repair.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            if (shouldClose) await connection.CloseAsync();
+        }
+    }
+
     // Eski metod - geriye donuk uyumluluk icin
     public static async Task InitializeAsync(ApplicationDbContext context)
     {
         try
         {
             await context.Database.MigrateAsync();
+            await EnsureSqliteBankOperationKeySchemaAsync(context);
         }
         catch (Exception ex)
         {
@@ -3021,6 +3209,7 @@ WHERE IsDeleted = 0;");
         await EnsureCriticalTablesAsync(connection, existingTables);
 
         // ========== ADIM 1.5: Araç şase-plaka yapısını eski şemadan taşı ==========
+        await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(connection);
         await EnsureAracSasePlakaMigrationAsync(connection, existingTables);
 
         // ========== ADIM 2: Eksik kolonları ekle ==========
@@ -3293,6 +3482,7 @@ WHERE IsDeleted = 0;");
                     WHERE ""CikisTarihi"" IS NULL AND ""IsDeleted"" = false;");
 
             existingTables.Add("AracPlakalar");
+            await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(connection, transaction);
 
             if (legacyPlakaExists)
             {

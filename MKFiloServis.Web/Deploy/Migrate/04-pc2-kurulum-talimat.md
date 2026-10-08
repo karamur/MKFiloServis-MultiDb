@@ -1,4 +1,4 @@
-﻿# MK Filo Servis — 2. PC Kurulum Talimatı
+# MK Filo Servis — 2. PC Kurulum Talimatı
 
 > **Hazırlayan:** Otomatik oluşturuldu (`03-pc2-publish.ps1`)  
 > **Versiyon:** .NET 10 · PostgreSQL 16 · IIS (in-process)
@@ -53,9 +53,10 @@ pwsh -ExecutionPolicy Bypass -File "C:\MKFiloServis\IIS\01-db-restore.ps1" `
     -PgHost       "localhost" `
     -PgPort       "5432" `
     -PgUser       "postgres" `
-    -PgPassword   "SİFRENİZ" `
     -NewDbName    "MKFiloServis"
 ```
+
+Betik çalışırken veritabanı parolasını gizli giriş istemine yazın. Parolayı komut satırına veya betik dosyasına eklemeyin.
 
 **Backup dosyası:** 1. PC'de `C:\MKFiloServis_yedekleme\database\` altındaki en güncel `.backup` dosyası.
 
@@ -123,6 +124,54 @@ veya IIS Manager'dan:
 
 ## Sorun Giderme
 
+### Tam aktarım kesintiye uğradı ve eski duruma dönmek gerekiyor
+
+`00-aktar-baslat.ps1` dosya aktarımı sırasında başarısız olursa betik DB ve depolamayı otomatik geri almayı dener. İşlem aniden kesildiyse:
+
+1. MKFiloServis IIS uygulama havuzunu durdurun ve PostgreSQL'in erişilebilir olduğunu doğrulayın.
+2. Aktarımı çalıştıran Windows hesabının `%LOCALAPPDATA%\MKFiloServis\OperationJournal\full-transfer-*` klasörlerinden ilgili operasyonu bulun. `storage-before.json` ve `database-operation.json` dosyaları bulunmalıdır.
+3. PowerShell 7'yi yönetici olarak açıp script klasöründe aşağıdaki komutu çalıştırın; `StorageRoot` değerini kurulumdaki gerçek yedekleme/depolama köküyle değiştirin:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\03-full-transfer-recover.ps1 `
+  -OperationFolder "$env:LOCALAPPDATA\MKFiloServis\OperationJournal\full-transfer-{guid}" `
+  -StorageRoot 'C:\MKFiloServis_yedekleme' `
+  -PgHost 'localhost' -PgPort '5432' -PgUser 'postgres'
+```
+
+4. PostgreSQL parolasını betiğin güvenli isteminde girin. Uygulama havuzunun durduğu doğrulandıktan sonra onay için `UYGULAMA-DURDU` yazın.
+5. Yalnızca başarılı çıkış ve operasyon klasöründeki `recovered.json` sonrasında DB ve dosya durumunu kontrol edip uygulamayı yeniden başlatın. Hata varsa snapshot'ı silmeyin ve uygulamayı başlatmayın.
+
+Kurtarma betiği yalnızca tam aktarım journal klasörünü, o operasyona ait DB makbuzunu ve `uploads`, `keys`, `database` hedeflerini işler. Genel kurtarma ZIP'i veya `appsettings` dosyasını uygulamaz.
+
+### Hazırlanmış RecoveryArchive paketini ayrı hedefe uygulama
+
+`Ayarlar → Yedekleme → Kurtarma Hazırla` ile üretilen `RecoveryStaging` klasörü ancak boş/izole hedef makinede uygulanmalıdır. Hedef IIS havuzu betikçe durdurulur; PostgreSQL dışındaki background worker/entegrasyon yazımlarını siz durdurup doğrulayın.
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\05-recovery-archive-apply.ps1 `
+  -PreparedFolder 'C:\MKFiloServis_yedekleme\RecoveryStaging\recovery-YYYYMMDD-HHMMSS-GUID' `
+  -StorageRoot 'C:\MKFiloServis_yedekleme' `
+  -ContentRoot 'C:\MKFiloServis\IIS' -IisAppPoolName 'MKFiloServis' `
+  -NewDbName 'MKFiloServis' -PgHost 'localhost' -PgPort '5432' -PgUser 'postgres'
+```
+
+Betiğin kontrol ettiği manifest dosyaları hedefe uygular; varsa `database.backup` DB restore betiğiyle yüklenir. İşlemden önce DB ve etkilenecek dosya kökleri LocalAppData journal'ına alınır. İşlem ortasında yakalanan hata eski DB/dosyaları geri yükler; geri dönüşü doğrulanamayan durumda IIS kapalı ve journal korunmuş halde kalmalıdır. Parola güvenli istemde girilir. Diğer yazımların durduğunu onaylamak için `ARKAPLAN-DURDU`, hedefte gerekli DataProtection sertifika/DPAPI malzemesini doğruladıktan sonra `KEY-HAZIR` yazılır. Betik appcmd ile belirtilen IIS havuzunu durdurup durduğunu doğrular; başarılı apply sonrasında da kabul tamamlanana kadar havuz kapalı kalır. Betik key XML varlığını doğrular; hedef kimliğiyle gerçek belge çözmeyi kendisi kanıtlamaz.
+
+`application/*.json` ayar dosyaları **uygulanmaz**; hedef makinenin DB bağlantısı ve Production sırları korunur. Luca ayarları ve manifestteki `storage/` ile belge dizinleri uygulanır. Başarıda `applied.json` çıkar; uygulamayı başlatmadan önce DB bağlantısını, belge açılışını, Luca ayarlarını ve DB-belge ilişkilerini ayrıca kabul edin.
+
+İşlem aniden kesilir ve `applied.json` / `recovered.json` yoksa IIS'i açmayın. Aynı StorageRoot/ContentRoot ve journal yolu ile önceki durumu geri alın:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\06-recovery-archive-rollback.ps1 `
+  -OperationFolder "$env:LOCALAPPDATA\MKFiloServis\OperationJournal\recovery-apply-{guid}" `
+  -StorageRoot 'C:\MKFiloServis_yedekleme' `
+  -ContentRoot 'C:\MKFiloServis\IIS' -IisAppPoolName 'MKFiloServis' `
+  -PgHost 'localhost' -PgPort '5432' -PgUser 'postgres'
+```
+
+PostgreSQL parolasını istemde girin. Diğer yazımların durduğunu `ARKAPLAN-DURDU` ile onaylayın; betik belirtilen IIS havuzunu durdurur ve doğrular. Başarılı kurtarmada `recovered.json` oluşur. Hata halinde IIS'i kapalı, journal'ı korumalı tutun; otomatik tekrar denemeden önce DB/dosya durumunu inceleyin. Kurtarma ve uygulama kabulü bittikten sonra IIS havuzunu operatör başlatır.
+
 ### Evraklar açılmıyor / şifre çözme hatası
 - `C:\MKFiloServis_yedekleme\keys\key-*.xml` dosyalarının mevcut olduğunu kontrol edin.
 - Dosya izinleri: IIS uygulama havuzu kullanıcısı (`IIS AppPool\MKFiloServis` veya `NETWORK SERVICE`) bu klasörü okuyabilmeli.
@@ -157,3 +206,15 @@ C:\
     │   └── master.key
     └── database\                   ← DB yedekleri (uygulama otomatik oluşturur)
 ```
+
+Apply betiği ayrıca LocalAppData operasyon journal yolunun junction/symlink olmadığını doğrular; beklenmeyen yol yapısında DB ve dosya hedeflerine dokunmadan durur.
+
+Apply journal'ındaki `files-before-hashes.json`, önceki dosya snapshot'larının göreli yol, boyut ve SHA-256 listesidir. Hem otomatik hem elle geri dönüş kopyalama öncesinde bu listeyi yeniden doğrular; uyuşmazlıkta operatör incelemesi için durur.
+
+`applied.json`, `rollback-result.json`, `recovered.json` ve `recovery-failed-{guid}.json` hata makbuzları temp dosyadan atomik taşınır. Tamamlanmamış geçici `.tmp` dosyaları karar makbuzu değildir; ana JSON makbuzunu inceleyin.
+
+Apply/rollback, her hedef kökün üst dizinlerini işlem öncesinde yeniden denetler; hedef klasör bileşeni başlangıç kontrolünden sonra junction/symlink'e dönüşmüşse dosya değişikliği yapmadan durur.
+
+Eski apply journal'ında files-before-hashes.json yoksa kurtarma betiği snapshot'ı hash ile doğrulayamaz. Her hedef snapshot junction/symlink kontrolünden geçer ve devam etmeden önce `ESKI-SNAPSHOT-ONAY` ister. Kararsızsanız onay vermeyin; journal'ı ve mevcut hedefleri operatör incelemesine bırakın.
+
+Rollback hata makbuzları her denemede benzersiz recovery-failed-{guid}.json adıyla saklanır. Yeniden deneme eski hata kaydını ezmez. Snapshot hash makbuzu adı bir dosya yerine klasör veya başka bir yol öğesiyse journal reddedilir.

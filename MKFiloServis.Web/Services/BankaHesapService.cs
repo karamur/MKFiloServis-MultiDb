@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Web.Services.Interfaces;
@@ -10,11 +10,35 @@ public class BankaHesapService : IBankaHesapService
     private const string HesapKodPrefix = "HSP-";
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly NumaraSerisiService _numaraSerisi;
+    private readonly CurrentPermissionGuard _permissionGuard;
+    private readonly IAktifFirmaProvider _aktifFirmaProvider;
 
-    public BankaHesapService(IDbContextFactory<ApplicationDbContext> contextFactory, NumaraSerisiService numaraSerisi)
+    public BankaHesapService(IDbContextFactory<ApplicationDbContext> contextFactory, NumaraSerisiService numaraSerisi, CurrentPermissionGuard permissionGuard, IAktifFirmaProvider aktifFirmaProvider)
     {
         _contextFactory = contextFactory;
         _numaraSerisi = numaraSerisi;
+        _permissionGuard = permissionGuard;
+        _aktifFirmaProvider = aktifFirmaProvider;
+    }
+
+    private async Task<T> WriteAccountAsync<T>(string permission, Func<ApplicationDbContext, Task<T>> write)
+    {
+        await using var strategyContext = await _contextFactory.CreateDbContextAsync();
+        var strategy = strategyContext.Database.CreateExecutionStrategy();
+        var commitStarted = false;
+        return await strategy.ExecuteAsync(async () =>
+        {
+            if (commitStarted)
+                throw new InvalidOperationException("Hesap işleminin commit sonucu belirsiz; listeyi yenileyip kaydı kontrol edin.");
+            await _permissionGuard.RequireAnyAsync(permission);
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            await using var transaction = await context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            var result = await write(context);
+            await context.SaveChangesAsync();
+            commitStarted = true;
+            await transaction.CommitAsync();
+            return result;
+        });
     }
 
     public async Task<List<BankaHesap>> GetAllAsync()
@@ -52,7 +76,10 @@ public class BankaHesapService : IBankaHesapService
 
     public async Task<BankaHesap> CreateAsync(BankaHesap bankaHesap)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.BankaHesaplariYaz);
         await using var context = await _contextFactory.CreateDbContextAsync();
+        if (bankaHesap.Id != 0 || bankaHesap.IsDeleted)
+            throw new InvalidOperationException("Yeni hesap aktif ve kimliksiz olmalıdır.");
         NormalizeBankaHesap(bankaHesap);
         await ValidateBankaHesapAsync(context, bankaHesap);
 
@@ -63,51 +90,64 @@ public class BankaHesapService : IBankaHesapService
 
     public async Task<BankaHesap> UpdateAsync(BankaHesap bankaHesap)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var existing = await QueryBankaHesaplari(context, asNoTracking: false)
-            .FirstOrDefaultAsync(b => b.Id == bankaHesap.Id);
+        await _permissionGuard.RequireAnyAsync(Yetkiler.BankaHesaplariDuzenle);
+        return await WriteAccountAsync(Yetkiler.BankaHesaplariDuzenle, async context =>
+        {
+            var existing = await QueryBankaHesaplari(context, asNoTracking: false)
+                .FirstOrDefaultAsync(b => b.Id == bankaHesap.Id);
 
-        if (existing == null)
-            throw new InvalidOperationException($"Banka hesabı bulunamadı. Id: {bankaHesap.Id}");
+            if (existing == null)
+                throw new InvalidOperationException($"Banka hesabı bulunamadı. Id: {bankaHesap.Id}");
 
-        NormalizeBankaHesap(bankaHesap);
-        await ValidateBankaHesapAsync(context, bankaHesap);
+            if (bankaHesap.IsDeleted || bankaHesap.FirmaId != existing.FirmaId)
+                throw new InvalidOperationException("Hesabın firma/silinme bilgisi düzenlenemez.");
+            if (bankaHesap.UpdatedAt != existing.UpdatedAt)
+                throw new InvalidOperationException("Hesap başka bir işlemde güncellendi; listeyi yenileyin.");
+            if ((existing.ParaBirimi != bankaHesap.ParaBirimi || existing.HesapTipi != bankaHesap.HesapTipi || existing.AcilisBakiye != bankaHesap.AcilisBakiye) &&
+                await context.BankaKasaHareketleri.IgnoreQueryFilters().AnyAsync(h => h.BankaHesapId == existing.Id))
+                throw new InvalidOperationException("Hareket geçmişi bulunan hesabın para birimi, tipi ve açılış bakiyesi doğrudan değiştirilemez.");
 
-        existing.HesapKodu = bankaHesap.HesapKodu;
-        existing.HesapAdi = bankaHesap.HesapAdi;
-        existing.HesapTipi = bankaHesap.HesapTipi;
-        existing.BankaAdi = bankaHesap.BankaAdi;
-        existing.SubeAdi = bankaHesap.SubeAdi;
-        existing.SubeKodu = bankaHesap.SubeKodu;
-        existing.HesapNo = bankaHesap.HesapNo;
-        existing.Iban = bankaHesap.Iban;
-        existing.ParaBirimi = bankaHesap.ParaBirimi;
-        existing.AcilisBakiye = bankaHesap.AcilisBakiye;
-        existing.Aktif = bankaHesap.Aktif;
-        existing.Notlar = bankaHesap.Notlar;
-        existing.KrediTaksitGrupId = bankaHesap.KrediTaksitGrupId;
-        existing.VarsayilanMuhasebeKodu = bankaHesap.VarsayilanMuhasebeKodu;
-        existing.VarsayilanKostMerkezi = bankaHesap.VarsayilanKostMerkezi;
-        existing.IsDeleted = bankaHesap.IsDeleted;
-        existing.UpdatedAt = DateTime.UtcNow;
+            NormalizeBankaHesap(bankaHesap);
+            await ValidateBankaHesapAsync(context, bankaHesap);
 
-        await context.SaveChangesAsync();
-        return existing;
+            existing.HesapKodu = bankaHesap.HesapKodu;
+            existing.HesapAdi = bankaHesap.HesapAdi;
+            existing.HesapTipi = bankaHesap.HesapTipi;
+            existing.BankaAdi = bankaHesap.BankaAdi;
+            existing.SubeAdi = bankaHesap.SubeAdi;
+            existing.SubeKodu = bankaHesap.SubeKodu;
+            existing.HesapNo = bankaHesap.HesapNo;
+            existing.Iban = bankaHesap.Iban;
+            existing.ParaBirimi = bankaHesap.ParaBirimi;
+            existing.AcilisBakiye = bankaHesap.AcilisBakiye;
+            existing.Aktif = bankaHesap.Aktif;
+            existing.Notlar = bankaHesap.Notlar;
+            existing.KrediTaksitGrupId = bankaHesap.KrediTaksitGrupId;
+            existing.VarsayilanMuhasebeKodu = bankaHesap.VarsayilanMuhasebeKodu;
+            existing.VarsayilanKostMerkezi = bankaHesap.VarsayilanKostMerkezi;
+            existing.UpdatedAt = DateTime.UtcNow;
+
+            return existing;
+        });
     }
 
     public async Task DeleteAsync(int id)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var bankaHesap = await QueryBankaHesaplari(context, asNoTracking: false)
-            .FirstOrDefaultAsync(b => b.Id == id);
-
-        if (bankaHesap != null)
+        await _permissionGuard.RequireAnyAsync(Yetkiler.BankaHesaplariSil);
+        await WriteAccountAsync(Yetkiler.BankaHesaplariSil, async context =>
         {
-            bankaHesap.IsDeleted = true;
-            bankaHesap.Aktif = false;
-            bankaHesap.UpdatedAt = DateTime.UtcNow;
-            await context.SaveChangesAsync();
-        }
+            var bankaHesap = await QueryBankaHesaplari(context, asNoTracking: false)
+                .FirstOrDefaultAsync(b => b.Id == id);
+
+            if (bankaHesap != null)
+            {
+                bankaHesap.DeletedAt = DateTime.UtcNow;
+                bankaHesap.IsDeleted = true;
+                bankaHesap.Aktif = false;
+                bankaHesap.UpdatedAt = DateTime.UtcNow;
+            }
+            return 0;
+        });
     }
 
     public async Task<string> GenerateNextKodAsync()
@@ -171,26 +211,35 @@ public class BankaHesapService : IBankaHesapService
 
     public async Task AssignFirmaAsync(int hesapId, int firmaId)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.BankaHesaplariDuzenle);
         if (firmaId <= 0)
             throw new ArgumentException("Geçerli bir firma seçilmedi.", nameof(firmaId));
+        if (_aktifFirmaProvider.TumFirmalar || _aktifFirmaProvider.AktifFirmaId != firmaId)
+            throw new UnauthorizedAccessException("Firma ataması yalnız seçili firmaya yapılabilir.");
 
-        await using var context = await _contextFactory.CreateDbContextAsync();
+        await WriteAccountAsync(Yetkiler.BankaHesaplariDuzenle, async context =>
+        {
 
-        var firmaVar = await context.Firmalar.IgnoreQueryFilters()
-            .AnyAsync(f => f.Id == firmaId && !f.IsDeleted);
-        if (!firmaVar)
-            throw new InvalidOperationException($"Id={firmaId} olan firma bulunamadı.");
+            var firmaVar = await context.Firmalar.IgnoreQueryFilters()
+                .AnyAsync(f => f.Id == firmaId && !f.IsDeleted);
+            if (!firmaVar)
+                throw new InvalidOperationException($"Id={firmaId} olan firma bulunamadı.");
 
-        var hesap = await context.BankaHesaplari
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(b => b.Id == hesapId && !b.IsDeleted);
+            var hesap = await context.BankaHesaplari
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(b => b.Id == hesapId && !b.IsDeleted);
 
-        if (hesap == null)
-            throw new InvalidOperationException("Banka/Kasa hesabı bulunamadı.");
+            if (hesap == null)
+                throw new InvalidOperationException("Banka/Kasa hesabı bulunamadı.");
+            if (hesap.FirmaId.HasValue)
+                throw new InvalidOperationException("Firması bulunan hesap bu akıştan başka firmaya taşınamaz.");
+            if (await context.BankaKasaHareketleri.IgnoreQueryFilters().AnyAsync(h => h.BankaHesapId == hesap.Id && h.FirmaId != firmaId))
+                throw new InvalidOperationException("Hesabın hareket firmaları hedef firmayla uyuşmuyor; veri onarım akışını kullanın.");
 
-        hesap.FirmaId = firmaId;
-        hesap.UpdatedAt = DateTime.UtcNow;
-        await context.SaveChangesAsync();
+            hesap.FirmaId = firmaId;
+            hesap.UpdatedAt = DateTime.UtcNow;
+            return 0;
+        });
     }
 
     public async Task<int> GetFirmaIdYokSayisiAsync()

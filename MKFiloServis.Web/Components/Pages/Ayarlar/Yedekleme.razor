@@ -344,7 +344,10 @@
                 </div>
                 <div class="modal-body">
                     <div class="alert alert-danger">
-                        <strong>Dikkat!</strong> Bu islem mevcut veritabanini tamamen degistirecektir!
+                        <strong>Yalnızca veritabanı geri yüklenir.</strong> Bu işlem mevcut veritabanını yedekteki verilerle değiştirir. ZIP içindeki belgeler, dosyalar, ayarlar ve DataProtection anahtarları uygulanmaz.
+                    </div>
+                    <div class="alert alert-info py-2">
+                        Tam kurtarma için <strong>Kurtarma Hazırla</strong> ile dosyaları ayrı staging klasörüne alın; uygulama kapalıyken dosya/anahtar ve DB adımlarını birlikte, geri dönüş planıyla yürütün. Kurtarma yönergesi: <code>docs/SIFRELI-BELGE-YEDEK-KURTARMA.md</code>.
                     </div>
                     <p>Yedek dosyasi: <strong>@yuklenecekYedek.FileName</strong></p>
                     <p>Tarih: @yuklenecekYedek.CreatedAt.ToString("dd.MM.yyyy HH:mm")</p>
@@ -356,7 +359,7 @@
                         {
                             <span class="spinner-border spinner-border-sm me-1"></span>
                         }
-                        Geri Yukle
+                        Yalnızca DB'yi Geri Yükle
                     </button>
                 </div>
             </div>

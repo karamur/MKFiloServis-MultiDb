@@ -678,6 +678,7 @@ public class ApplicationDbContext : DbContext
             
             // Aynı anda aynı plaka farklı araçta aktif olamaz
             entity.HasIndex(e => new { e.Plaka, e.CikisTarihi })
+                .IsUnique()
                 .HasFilter("\"CikisTarihi\" IS NULL AND \"IsDeleted\" = false");
                 
             entity.HasQueryFilter(e => !e.IsDeleted);
@@ -926,6 +927,10 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.Tutar).HasPrecision(18, 2);
             entity.Property(e => e.Aciklama).HasMaxLength(500);
             entity.Property(e => e.ReferansNo).HasMaxLength(100);
+            entity.Property(e => e.IthalatTekillikAnahtari).HasMaxLength(64);
+            entity.HasIndex(e => new { e.FirmaId, e.IthalatTekillikAnahtari })
+                .IsUnique()
+                .HasFilter("\"IsDeleted\" = false AND \"IthalatTekillikAnahtari\" IS NOT NULL");
             entity.HasOne(e => e.Hesap).WithMany().HasForeignKey(e => e.HesapId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.KarsiHesap).WithMany().HasForeignKey(e => e.KarsiHesapId).OnDelete(DeleteBehavior.Restrict);
             entity.HasQueryFilter(e => !e.IsDeleted);
@@ -1135,7 +1140,9 @@ public class ApplicationDbContext : DbContext
         // MaasOdemeSnapshot — aylık maaş/ödeme snapshot
         modelBuilder.Entity<MaasOdemeSnapshot>(entity =>
         {
-            entity.HasIndex(e => new { e.FirmaId, e.Yil, e.Ay });
+            entity.HasIndex(e => new { e.FirmaId, e.Yil, e.Ay, e.PersonelId })
+                .IsUnique()
+                .HasFilter("\"IsDeleted\" = false");
             entity.Property(e => e.GercekMaas).HasPrecision(18, 2);
             entity.Property(e => e.BankayaYatan).HasPrecision(18, 2);
             entity.Property(e => e.Avans).HasPrecision(18, 2);
@@ -2215,6 +2222,21 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<FaturaSablon>()
             .HasQueryFilter(e => !e.IsDeleted && (e.Firma == null || !e.Firma.IsDeleted));
 
+        modelBuilder.Entity<FaturaSablon>()
+            .HasIndex(e => e.FirmaId, "IX_FaturaSablonlari_FirmaId_Varsayilan")
+            .IsUnique()
+            .HasFilter("\"IsDeleted\" = false AND \"Varsayilan\" = true");
+
+        modelBuilder.Entity<FaturaGrupSablonu>(entity =>
+        {
+            entity.HasIndex(e => e.FirmaId, "IX_FaturaGrupSablonlari_FirmaId_FirmaVarsayilan")
+                .IsUnique()
+                .HasFilter("\"IsDeleted\" = false AND \"VarsayilanMi\" = true AND \"KullaniciId\" IS NULL");
+            entity.HasIndex(e => new { e.FirmaId, e.KullaniciId }, "IX_FaturaGrupSablonlari_FirmaId_KullaniciId_Varsayilan")
+                .IsUnique()
+                .HasFilter("\"IsDeleted\" = false AND \"VarsayilanMi\" = true AND \"KullaniciId\" IS NOT NULL");
+        });
+
         modelBuilder.Entity<FiloGuzergahEslestirme>(entity =>
         {
             entity.HasOne(e => e.Kullanici)
@@ -2355,6 +2377,7 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<AracMaliyetSnapshot>()
             .HasIndex(s => new { s.AracId, s.Yil, s.Ay })
             .IsUnique()
+            .HasFilter("\"IsDeleted\" = false")
             .HasDatabaseName("IX_AracMaliyetSnapshot_Arac_Donem");
 
         modelBuilder.Entity<Hakedis>()
@@ -2413,6 +2436,16 @@ public class ApplicationDbContext : DbContext
             entity.HasQueryFilter(e => !e.IsDeleted && !e.Cari.IsDeleted);
         });
 
+        modelBuilder.Entity<BankaKasaHareket>().Property(e => e.IslemKimligi).HasMaxLength(32);
+        modelBuilder.Entity<BankaKasaHareket>().Property(e => e.IslemOzeti).HasMaxLength(64);
+        modelBuilder.Entity<BankaKasaHareket>().HasIndex(e => e.IslemKimligi).IsUnique();
+        modelBuilder.Entity<PersonelAvans>().Property(e => e.IslemKimligi).HasMaxLength(32);
+        modelBuilder.Entity<PersonelAvans>().Property(e => e.IslemOzeti).HasMaxLength(64);
+        modelBuilder.Entity<PersonelAvans>().HasIndex(e => e.IslemKimligi).IsUnique();
+        modelBuilder.Entity<PersonelBorc>().Property(e => e.IslemKimligi).HasMaxLength(32);
+        modelBuilder.Entity<PersonelBorc>().Property(e => e.IslemOzeti).HasMaxLength(64);
+        modelBuilder.Entity<PersonelBorc>().HasIndex(e => e.IslemKimligi).IsUnique();
+
         modelBuilder.Entity<PersonelAvans>()
             .HasQueryFilter(e => !e.IsDeleted && !e.Personel.IsDeleted);
 
@@ -2433,6 +2466,13 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<GunlukPuantaj>()
             .HasQueryFilter(e => !e.IsDeleted && (e.PersonelPuantaj == null || !e.PersonelPuantaj.IsDeleted));
+
+        modelBuilder.Entity<PersonelAvansMahsup>().Property(e => e.IslemKimligi).HasMaxLength(32);
+        modelBuilder.Entity<PersonelAvansMahsup>().Property(e => e.IslemOzeti).HasMaxLength(64);
+        modelBuilder.Entity<PersonelAvansMahsup>().HasIndex(e => e.IslemKimligi).IsUnique();
+        modelBuilder.Entity<PersonelBorcOdeme>().Property(e => e.IslemKimligi).HasMaxLength(32);
+        modelBuilder.Entity<PersonelBorcOdeme>().Property(e => e.IslemOzeti).HasMaxLength(64);
+        modelBuilder.Entity<PersonelBorcOdeme>().HasIndex(e => e.IslemKimligi).IsUnique();
 
         modelBuilder.Entity<PersonelAvansMahsup>()
             .HasQueryFilter(e => !e.IsDeleted && !e.Avans.IsDeleted);
@@ -3221,6 +3261,21 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.SetNull);
         });
 
+        // File reference checks run for every cleanup request. Index the path columns
+        // so exact canonical matches do not scan every row of each document table.
+        modelBuilder.Entity<AracEvrakDosya>().HasIndex(e => e.DosyaYolu);
+        modelBuilder.Entity<AracEvrakDosyaVersiyon>().HasIndex(e => e.DosyaYolu);
+        modelBuilder.Entity<DestekTalebiEk>().HasIndex(e => e.DosyaYolu);
+        modelBuilder.Entity<EbysEvrakDosya>().HasIndex(e => e.DosyaYolu);
+        modelBuilder.Entity<EbysEvrakDosyaVersiyon>().HasIndex(e => e.DosyaYolu);
+        modelBuilder.Entity<EvrakDosya>().HasIndex(e => e.DosyaYolu);
+        modelBuilder.Entity<Fatura>().HasIndex(e => e.PdfDosyaYolu);
+        modelBuilder.Entity<Fatura>().HasIndex(e => e.XmlDosyaYolu);
+        modelBuilder.Entity<PersonelOzlukEvrak>().HasIndex(e => e.DosyaYolu);
+        modelBuilder.Entity<PersonelOzlukEvrakVersiyon>().HasIndex(e => e.DosyaYolu);
+        modelBuilder.Entity<ProformaFatura>().HasIndex(e => e.PdfDosyaYolu);
+        modelBuilder.Entity<TedarikciEvrakDosya>().HasIndex(e => e.DosyaYolu);
+
         // ----------------------------------------------------------------
         // GLOBAL TENANT FILTER (IFirmaTenant)
         // ----------------------------------------------------------------
@@ -3287,6 +3342,9 @@ public class ApplicationDbContext : DbContext
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         PrepareSave();
+        ValidateBankMovementTenantLinks();
+        ValidatePaymentMatchingTenantLinksAsync(false, CancellationToken.None).GetAwaiter().GetResult();
+        GenerateAuditLogs();
         var pendingIds = _generatedAuditEntityIds.ToList();
         if (pendingIds.Count == 0) return base.SaveChanges(acceptAllChangesOnSuccess);
 
@@ -3329,6 +3387,9 @@ public class ApplicationDbContext : DbContext
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
         PrepareSave();
+        await ValidateBankMovementTenantLinksAsync(cancellationToken);
+        await ValidatePaymentMatchingTenantLinksAsync(true, cancellationToken);
+        GenerateAuditLogs();
         var pendingIds = _generatedAuditEntityIds.ToList();
         if (pendingIds.Count == 0) return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
 
@@ -3395,7 +3456,167 @@ public class ApplicationDbContext : DbContext
         ConvertDatesToUtc();
         UpdateTimestamps();
         AssignFirmaTenantId();
-        GenerateAuditLogs();
+    }
+
+    private void ValidateBankMovementTenantLinks()
+    {
+        var movements = PendingBankMovements();
+        if (movements.Count == 0) return;
+
+        var accountIds = movements.SelectMany(m => new[] { m.BankaHesapId, m.PersonelOdemeHesapId ?? 0 })
+            .Where(id => id > 0).Distinct().ToArray();
+        var cariIds = movements.Where(m => m.CariId is > 0).Select(m => m.CariId!.Value).Distinct().ToArray();
+        var accounts = BankaHesaplari.IgnoreQueryFilters().AsNoTracking()
+            .Where(h => accountIds.Contains(h.Id))
+            .Select(h => new { h.Id, h.FirmaId })
+            .ToDictionary(h => h.Id, h => h.FirmaId);
+        var caris = Cariler.IgnoreQueryFilters().AsNoTracking()
+            .Where(c => cariIds.Contains(c.Id))
+            .Select(c => new { c.Id, c.FirmaId })
+            .ToDictionary(c => c.Id, c => c.FirmaId);
+        EnsureBankMovementTenantLinks(movements, accounts, caris);
+        ValidateBankAuxiliaryLinksAsync(movements, false, CancellationToken.None).GetAwaiter().GetResult();
+    }
+
+    private async Task ValidateBankMovementTenantLinksAsync(CancellationToken cancellationToken)
+    {
+        var movements = PendingBankMovements();
+        if (movements.Count == 0) return;
+
+        var accountIds = movements.SelectMany(m => new[] { m.BankaHesapId, m.PersonelOdemeHesapId ?? 0 })
+            .Where(id => id > 0).Distinct().ToArray();
+        var cariIds = movements.Where(m => m.CariId is > 0).Select(m => m.CariId!.Value).Distinct().ToArray();
+        var accounts = await BankaHesaplari.IgnoreQueryFilters().AsNoTracking()
+            .Where(h => accountIds.Contains(h.Id))
+            .Select(h => new { h.Id, h.FirmaId })
+            .ToDictionaryAsync(h => h.Id, h => h.FirmaId, cancellationToken);
+        var caris = await Cariler.IgnoreQueryFilters().AsNoTracking()
+            .Where(c => cariIds.Contains(c.Id))
+            .Select(c => new { c.Id, c.FirmaId })
+            .ToDictionaryAsync(c => c.Id, c => c.FirmaId, cancellationToken);
+        EnsureBankMovementTenantLinks(movements, accounts, caris);
+        await ValidateBankAuxiliaryLinksAsync(movements, true, cancellationToken);
+    }
+
+    private async Task ValidateBankAuxiliaryLinksAsync(IReadOnlyList<BankaKasaHareket> movements, bool asynchronous, CancellationToken ct)
+    {
+        int? Link(BankaKasaHareket movement, string name) => (int?)Entry(movement).Property(name).CurrentValue;
+        int[] Ids(params string[] names) => movements.SelectMany(m => names.Select(n => Link(m, n)))
+            .Where(id => id.HasValue && id.Value != 0).Select(id => id!.Value).Distinct().ToArray();
+        var people = await ReadTrackedTenantFirmsAsync<Sofor>(Ids(nameof(BankaKasaHareket.PersonelCebindenId)), asynchronous, ct);
+        var vehicles = await ReadTrackedTenantFirmsAsync<Arac>(Ids(nameof(BankaKasaHareket.AracId)), asynchronous, ct);
+        var expenses = await ReadTrackedTenantFirmsAsync<AracMasraf>(Ids(nameof(BankaKasaHareket.AracMasrafId)), asynchronous, ct);
+        var related = await ReadTrackedTenantFirmsAsync<BankaKasaHareket>(Ids(nameof(BankaKasaHareket.MahsupHareketId), nameof(BankaKasaHareket.PersonelGeriOdemeHareketId)), asynchronous, ct);
+        foreach (var movement in movements)
+        {
+            Check(nameof(BankaKasaHareket.PersonelCebindenId), people);
+            Check(nameof(BankaKasaHareket.AracId), vehicles);
+            Check(nameof(BankaKasaHareket.AracMasrafId), expenses);
+            Check(nameof(BankaKasaHareket.MahsupHareketId), related);
+            Check(nameof(BankaKasaHareket.PersonelGeriOdemeHareketId), related);
+            void Check(string property, Dictionary<int, int?> firms)
+            {
+                var id = Link(movement, property);
+                if (id.HasValue && (id.Value == 0 || !firms.TryGetValue(id.Value, out var firm) || firm != movement.FirmaId))
+                    throw new InvalidOperationException($"Banka/Kasa hareketinin {property} bağlantısı aynı firmaya ait olmalıdır.");
+            }
+        }
+    }
+
+    private async Task<Dictionary<int, int?>> ReadTrackedTenantFirmsAsync<T>(int[] ids, bool asynchronous, CancellationToken ct)
+        where T : BaseEntity, IFirmaTenant
+    {
+        if (ids.Length == 0) return new Dictionary<int, int?>();
+        var query = Set<T>().IgnoreQueryFilters().AsNoTracking().Where(e => ids.Contains(e.Id))
+            .Select(e => new { e.Id, FirmaId = EF.Property<int?>(e, "FirmaId") });
+        var firms = asynchronous
+            ? await query.ToDictionaryAsync(e => e.Id, e => e.FirmaId, ct)
+            : query.ToDictionary(e => e.Id, e => e.FirmaId);
+        foreach (var entry in ChangeTracker.Entries<T>())
+        {
+            var id = (int)entry.Property("Id").CurrentValue!;
+            if (ids.Contains(id) && entry.State is EntityState.Added or EntityState.Modified or EntityState.Unchanged)
+                firms[id] = entry.Entity.FirmaId;
+        }
+        return firms;
+    }
+
+    private List<BankaKasaHareket> PendingBankMovements()
+        => ChangeTracker.Entries<BankaKasaHareket>()
+            .Where(entry => entry.State is EntityState.Added or EntityState.Modified)
+            .Select(entry => entry.Entity)
+            .ToList();
+
+    private async Task ValidatePaymentMatchingTenantLinksAsync(bool asynchronous, CancellationToken ct)
+    {
+        var matches = ChangeTracker.Entries<OdemeEslestirme>()
+            .Where(entry => entry.State is EntityState.Added or EntityState.Modified)
+            .Select(entry => entry.Entity)
+            .ToList();
+        if (matches.Count == 0) return;
+
+        var invoiceIds = matches.Select(x => x.FaturaId > 0 ? x.FaturaId : x.Fatura?.Id ?? 0).Where(id => id != 0).Distinct().ToArray();
+        var movementIds = matches.Select(x => x.BankaKasaHareketId > 0 ? x.BankaKasaHareketId : x.BankaKasaHareket?.Id ?? 0).Where(id => id != 0).Distinct().ToArray();
+        var invoices = await ReadTrackedTenantFirmsAsync<Fatura>(invoiceIds, asynchronous, ct);
+        var movements = await ReadTrackedTenantFirmsAsync<BankaKasaHareket>(movementIds, asynchronous, ct);
+        foreach (var match in matches)
+        {
+            var invoiceId = match.FaturaId > 0 ? match.FaturaId : match.Fatura?.Id ?? 0;
+            var movementId = match.BankaKasaHareketId > 0 ? match.BankaKasaHareketId : match.BankaKasaHareket?.Id ?? 0;
+            var invoiceFirm = invoices.GetValueOrDefault(invoiceId);
+            var movementFirm = movements.GetValueOrDefault(movementId);
+            if (invoiceId <= 0 || movementId <= 0 || invoiceFirm is not > 0 || movementFirm != invoiceFirm)
+                throw new InvalidOperationException("Ödeme eşleştirmesindeki fatura ve banka hareketi aynı firmaya ait olmalıdır.");
+        }
+    }
+
+    private void EnsureBankMovementTenantLinks(
+        IReadOnlyList<BankaKasaHareket> movements,
+        Dictionary<int, int?> accounts,
+        Dictionary<int, int?> caris)
+    {
+        foreach (var entry in ChangeTracker.Entries<BankaHesap>())
+            if ((entry.State is EntityState.Added or EntityState.Modified or EntityState.Unchanged) && entry.Entity.Id > 0)
+                accounts[entry.Entity.Id] = entry.Entity.FirmaId;
+
+        foreach (var entry in ChangeTracker.Entries<Cari>())
+            if ((entry.State is EntityState.Added or EntityState.Modified or EntityState.Unchanged) && entry.Entity.Id > 0)
+                caris[entry.Entity.Id] = entry.Entity.FirmaId;
+
+        foreach (var movement in movements)
+        {
+            var movementEntry = Entry(movement);
+            if (movementEntry.State == EntityState.Modified
+                && movementEntry.Property(x => x.FirmaId).OriginalValue != movement.FirmaId)
+                throw new InvalidOperationException("Mevcut Banka/Kasa hareketinin firma kapsamı değiştirilemez.");
+
+            if (movement.FirmaId is not > 0)
+                throw new InvalidOperationException("Banka/Kasa hareketinin firma kimliği zorunludur.");
+
+            var accountFirmId = accounts.GetValueOrDefault(movement.BankaHesapId);
+            if (accountFirmId is null && movement.BankaHesap is not null
+                && Entry(movement.BankaHesap).State == EntityState.Added)
+                accountFirmId = movement.BankaHesap.FirmaId;
+            if (accountFirmId != movement.FirmaId)
+                throw new InvalidOperationException(
+                    $"Banka/Kasa hareketinin hesabı aynı firmaya ait olmalıdır. Hareket firma: {movement.FirmaId}, hesap: {movement.BankaHesapId}.");
+
+            if (movement.PersonelOdemeHesapId is > 0
+                && accounts.GetValueOrDefault(movement.PersonelOdemeHesapId.Value) != movement.FirmaId)
+                throw new InvalidOperationException(
+                    $"Personel geri ödeme hesabı hareketle aynı firmaya ait olmalıdır. Hareket firma: {movement.FirmaId}, hesap: {movement.PersonelOdemeHesapId}.");
+
+            if (movement.CariId is null && movement.Cari is null) continue;
+            var cariFirmId = movement.CariId is > 0
+                ? caris.GetValueOrDefault(movement.CariId.Value)
+                : null;
+            if (cariFirmId is null && movement.Cari is not null
+                && Entry(movement.Cari).State == EntityState.Added)
+                cariFirmId = movement.Cari.FirmaId;
+            if (cariFirmId != movement.FirmaId)
+                throw new InvalidOperationException(
+                    $"Banka/Kasa hareketinin carisi aynı firmaya ait olmalıdır. Hareket firma: {movement.FirmaId}, cari: {movement.CariId}.");
+        }
     }
 
     private void EnrichGeneratedAuditIds(
@@ -3408,7 +3629,7 @@ public class ApplicationDbContext : DbContext
             log.EntityId = (int?)Convert.ChangeType(key, typeof(int));
             // SaveChanges(false) sonrası üretilen PK, CLR nesnesinden önce EF entry'de bulunur.
             var logId = Entry(log).Property(x => x.Id).CurrentValue;
-            var updated = AktiviteLoglar.Where(x => x.Id == logId)
+            var updated = AktiviteLoglar.IgnoreQueryFilters().Where(x => x.Id == logId)
                 .ExecuteUpdate(update => update.SetProperty(x => x.EntityId, log.EntityId));
             if (updated != 1)
                 throw new InvalidOperationException("Yeni kaydın kimliği denetim satırına yazılamadı; işlem kaydedilmedi.");
@@ -3425,7 +3646,7 @@ public class ApplicationDbContext : DbContext
             if (key is null) throw new InvalidOperationException("Yeni kaydın denetim kimliği belirlenemedi.");
             log.EntityId = (int?)Convert.ChangeType(key, typeof(int));
             var logId = Entry(log).Property(x => x.Id).CurrentValue;
-            var updated = await AktiviteLoglar.Where(x => x.Id == logId)
+            var updated = await AktiviteLoglar.IgnoreQueryFilters().Where(x => x.Id == logId)
                 .ExecuteUpdateAsync(update => update.SetProperty(x => x.EntityId, log.EntityId), cancellationToken);
             if (updated != 1)
                 throw new InvalidOperationException("Yeni kaydın kimliği denetim satırına yazılamadı; işlem kaydedilmedi.");
@@ -3565,8 +3786,7 @@ public class ApplicationDbContext : DbContext
     }
 
     private static bool IsSensitiveAuditProperty(string name)
-        => new[] { "password", "sifre", "parola", "token", "secret", "connectionstring", "privatekey", "licensekey", "lisansanahtar" }
-            .Any(part => name.Contains(part, StringComparison.OrdinalIgnoreCase));
+        => MKFiloServis.Shared.Auditing.DatabaseWriteAudit.IsSensitiveProperty(name);
 
     // SirketTransferLog Entity Configuration - Faz 5.3-B3-i: kaldırıldı, entity dosyası silinecek
 

@@ -132,9 +132,11 @@ public class CRMService : ICRMService
         await using var context = await _contextFactory.CreateDbContextAsync();
         await context.Bildirimler
             .Where(b => b.KullaniciId == kullaniciId && !b.Okundu)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(b => b.Okundu, true)
-                .SetProperty(b => b.OkunmaTarihi, DateTime.UtcNow));
+            .UpdateTrackedAsync(context, record =>
+            {
+                record.Okundu = true;
+                record.OkunmaTarihi = DateTime.UtcNow;
+            });
     }
 
     public async Task DeleteBildirimAsync(int bildirimId)

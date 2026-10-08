@@ -3,6 +3,7 @@ using MKFiloServis.Web.Services.Security;
 using Microsoft.AspNetCore.DataProtection;
 using System.Security.Cryptography;
 using MKFiloServis.Web.Services.Interfaces;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MKFiloServis.Web.Services;
 
@@ -16,6 +17,8 @@ public sealed class SecureFileService : ISecureFileService
     private readonly string _baseStorageRoot;    // C:\KOAFiloServis_yedekleme (uploads üst dizini)
     private readonly ILogger<SecureFileService> _logger;
     private readonly IDecryptionRecoveryTracker _recoveryTracker;
+    private readonly FileCleanupJournal _cleanupJournal;
+    private readonly IServiceScopeFactory _scopeFactory;
 
     public SecureFileService(
         IFileProtector fileProtector,
@@ -23,7 +26,9 @@ public sealed class SecureFileService : ISecureFileService
         IDataProtectionProvider dataProtectionProvider,
         IWebHostEnvironment environment,
         ILogger<SecureFileService> logger,
-        IDecryptionRecoveryTracker recoveryTracker)
+        IDecryptionRecoveryTracker recoveryTracker,
+        FileCleanupJournal cleanupJournal,
+        IServiceScopeFactory scopeFactory)
     {
         _fileProtector = fileProtector;
         _legacyAesProtector = new AesGcmFileProtector(legacyMasterKeyProvider);
@@ -32,6 +37,8 @@ public sealed class SecureFileService : ISecureFileService
         _baseStorageRoot = AppStoragePaths.GetStorageRoot(environment.ContentRootPath);
         _logger = logger;
         _recoveryTracker = recoveryTracker;
+        _cleanupJournal = cleanupJournal;
+        _scopeFactory = scopeFactory;
         Directory.CreateDirectory(_storageRoot);
     }
 
@@ -52,7 +59,33 @@ public sealed class SecureFileService : ISecureFileService
         var encrypted = _fileProtector.Protect(content);
 
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-        await File.WriteAllBytesAsync(fullPath, encrypted, cancellationToken);
+        var temporaryPath = fullPath + ".uploading-" + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            // Publish only a complete encrypted file. The temporary file is on the same
+            // volume so the final move is atomic and the database never receives a path
+            // to a partially written payload.
+            await File.WriteAllBytesAsync(temporaryPath, encrypted, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(temporaryPath, fullPath, overwrite: false);
+        }
+        catch (Exception writeException)
+        {
+            try
+            {
+                // File.Delete is idempotent for a missing file and avoids a File.Exists
+                // check that can hide access/IO errors.
+                File.Delete(temporaryPath);
+            }
+            catch (Exception cleanupException)
+            {
+                throw new AggregateException(
+                    "Şifreli dosya yüklemesi tamamlanamadı ve geçici dosya temizlenemedi.",
+                    writeException, cleanupException);
+            }
+
+            throw;
+        }
 
         _logger.LogInformation("Dosya kaydedildi: {RelativePath} ({Size} bytes)", relativePath, content.Length);
         return relativePath;
@@ -149,20 +182,34 @@ public sealed class SecureFileService : ISecureFileService
         }
     }
 
-    public Task DeleteAsync(string? relativePath, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(string? relativePath, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(relativePath))
-            return Task.CompletedTask;
+            return;
 
         try
         {
-            var fullPath = ResolveFullPath(NormalizeRelativePath(relativePath));
-            // File.Exists erişim/IO hatalarında false dönebilir; silme hatasını gizleme.
-            // File.Delete zaten bulunmayan dosyada başarılı olur.
-            File.Delete(fullPath);
-            _logger.LogInformation("Dosya silme tamamlandı (dosya yoksa işlem gerekmiyor): {RelativePath}", relativePath);
-            return Task.CompletedTask;
+            var pendingPath = relativePath.Trim().Replace('\\', '/');
+            var fullPath = ResolveFullPath(NormalizeRelativePath(pendingPath));
+            var request = await _cleanupJournal.EnqueueAsync(pendingPath, cancellationToken);
+            await using (var scope = _scopeFactory.CreateAsyncScope())
+            {
+                var checker = scope.ServiceProvider.GetRequiredService<ISecureFileReferenceChecker>();
+                if (await checker.IsReferencedAsync(pendingPath, cancellationToken))
+                {
+                    // Soft-delete geçmişindeki dosyalar geri alınabilir kalmalıdır.
+                    // Referans devam ettiği sürece bu isteği tekrar denemek gerekmez.
+                    if (!request.WaitForReferenceRemoval)
+                        await _cleanupJournal.CompleteRequestAsync(request, cancellationToken);
+                    _logger.LogInformation("Dosya DB kaydı tarafından tutulduğu için fiziksel olarak korundu: {RelativePath}", pendingPath);
+                    return;
+                }
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            QuarantineIfPresent(fullPath);
+            _logger.LogInformation("Referanssız şifreli dosya geri alınabilir karantinaya taşındı: {RelativePath}", relativePath);
+            await _cleanupJournal.CompleteRequestAsync(request, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -171,13 +218,33 @@ public sealed class SecureFileService : ISecureFileService
         }
     }
 
+    /// <summary>Worker path for journal entries that must wait until the DB reference disappears.</summary>
+    public async Task<bool> TryDeleteIfUnreferencedAsync(string? relativePath, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(relativePath))
+            return true;
+
+        var pendingPath = relativePath.Trim().Replace('\\', '/');
+        var fullPath = ResolveFullPath(NormalizeRelativePath(pendingPath));
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var checker = scope.ServiceProvider.GetRequiredService<ISecureFileReferenceChecker>();
+        if (await checker.IsReferencedAsync(pendingPath, cancellationToken))
+            return false;
+
+        cancellationToken.ThrowIfCancellationRequested();
+        QuarantineIfPresent(fullPath);
+        return true;
+    }
+
     public async Task<string> CopyEncryptedAsync(
         string sourceRelativePath,
         string targetDirectory,
         string targetFileName,
         CancellationToken cancellationToken = default)
     {
-        var sourceFull = ResolveFullPath(NormalizeRelativePath(sourceRelativePath));
+        var originalSourceFull = ResolveFullPath(NormalizeRelativePath(sourceRelativePath));
+        var sourceFull = ResolveReadableFullPath(originalSourceFull);
         if (!File.Exists(sourceFull))
             throw new FileNotFoundException($"Kaynak dosya bulunamadı: {sourceRelativePath}");
 
@@ -206,7 +273,19 @@ public sealed class SecureFileService : ISecureFileService
             counter++;
         }
 
-        File.Copy(sourceFull, finalTargetFull, overwrite: false);
+        try
+        {
+            File.Copy(sourceFull, finalTargetFull, overwrite: false);
+        }
+        catch (FileNotFoundException) when (sourceFull == originalSourceFull)
+        {
+            // Cleanup may have moved the source after the existence check.
+            File.Copy(GetQuarantinePath(originalSourceFull), finalTargetFull, overwrite: false);
+        }
+        catch (DirectoryNotFoundException) when (sourceFull == originalSourceFull)
+        {
+            File.Copy(GetQuarantinePath(originalSourceFull), finalTargetFull, overwrite: false);
+        }
 
         _logger.LogInformation("Dosya kopyalandı: {Source} -> {Target}", sourceRelativePath, finalRelative);
         return finalRelative;
@@ -218,16 +297,65 @@ public sealed class SecureFileService : ISecureFileService
             return Task.FromResult(false);
 
         var fullPath = ResolveFullPath(NormalizeRelativePath(relativePath));
-        return Task.FromResult(File.Exists(fullPath));
+        return Task.FromResult(File.Exists(fullPath) || File.Exists(GetQuarantinePath(fullPath)));
     }
 
     private async Task<byte[]?> ReadRawAsync(string relativePath, CancellationToken cancellationToken)
     {
         var fullPath = ResolveFullPath(NormalizeRelativePath(relativePath));
-        if (!File.Exists(fullPath))
-            return null;
+        try
+        {
+            return await File.ReadAllBytesAsync(fullPath, cancellationToken);
+        }
+        catch (FileNotFoundException) { }
+        catch (DirectoryNotFoundException) { }
 
-        return await File.ReadAllBytesAsync(fullPath, cancellationToken);
+        try
+        {
+            return await File.ReadAllBytesAsync(GetQuarantinePath(fullPath), cancellationToken);
+        }
+        catch (FileNotFoundException) { return null; }
+        catch (DirectoryNotFoundException) { return null; }
+    }
+
+    // Kalıcı DB yoluna yeni bir referans, referans kontrolü ile silme arasına girebilir.
+    // Dosya bu nedenle geri alınabilir biçimde saklanır. RecoveryArchive uploads
+    // ağacını yedeklediği için karantina da tam dosya yedeğine dahil olur.
+    private string GetQuarantinePath(string fullPath)
+    {
+        // Preserve the logical key under quarantine so an operator can recover
+        // an orphan even after its DB row is gone, on a different machine/root.
+        var storageKey = Path.GetRelativePath(_baseStorageRoot, Path.GetFullPath(fullPath))
+            .Replace('\\', '/');
+        if (storageKey == ".." || storageKey.StartsWith("../", StringComparison.Ordinal))
+            throw new InvalidOperationException("Karantina yolu depolama kökü dışında.");
+        return StorageFilePath.Resolve(_storageRoot,
+            Path.Combine(".deleted-file-quarantine-v1", storageKey.Replace('/', Path.DirectorySeparatorChar)));
+    }
+
+    private string ResolveReadableFullPath(string fullPath) =>
+        File.Exists(fullPath) ? fullPath : GetQuarantinePath(fullPath);
+
+    private void QuarantineIfPresent(string fullPath)
+    {
+        if (!fullPath.EndsWith(".enc", StringComparison.OrdinalIgnoreCase))
+        {
+            if (File.Exists(fullPath))
+                throw new InvalidOperationException("Düz dosya SecureFileService karantinasına alınamaz; eski dosya geçişi ve LegacyFileCleanupService kullanılmalıdır.");
+            return;
+        }
+        var quarantinePath = GetQuarantinePath(fullPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(quarantinePath)!);
+        try
+        {
+            // Same-volume rename publishes the whole encrypted file atomically.
+            // Never overwrite a previous quarantined copy of the same path.
+            File.Move(fullPath, quarantinePath, overwrite: false);
+        }
+        catch (FileNotFoundException) when (File.Exists(quarantinePath)) { }
+        catch (DirectoryNotFoundException) when (File.Exists(quarantinePath)) { }
+        catch (FileNotFoundException) when (!File.Exists(fullPath)) { }
+        catch (DirectoryNotFoundException) when (!File.Exists(fullPath)) { }
     }
 
     private string ResolveFullPath(string relativePath)

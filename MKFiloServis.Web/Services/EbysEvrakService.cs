@@ -15,17 +15,20 @@ public class EbysEvrakService : IEbysEvrakService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly ISecureFileService _secureFileService;
+    private readonly FileCleanupJournal _cleanupJournal;
     private readonly AuthenticationStateProvider _authenticationStateProvider;
     private readonly ILogger<EbysEvrakService> _logger;
 
     public EbysEvrakService(
         IDbContextFactory<ApplicationDbContext> contextFactory,
         ISecureFileService secureFileService,
+        FileCleanupJournal cleanupJournal,
         AuthenticationStateProvider authenticationStateProvider,
         ILogger<EbysEvrakService> logger)
     {
         _contextFactory = contextFactory;
         _secureFileService = secureFileService;
+        _cleanupJournal = cleanupJournal;
         _authenticationStateProvider = authenticationStateProvider;
         _logger = logger;
     }
@@ -276,13 +279,19 @@ public class EbysEvrakService : IEbysEvrakService
     {
         await using var _context = await _contextFactory.CreateDbContextAsync();
         var dosya = await _context.EbysEvrakDosyalar.FindAsync(dosyaId);
-        if (dosya != null)
-        {
-            await _secureFileService.DeleteAsync(dosya.DosyaYolu);
-            dosya.IsDeleted = true;
-            await _context.SaveChangesAsync();
-            await HareketEkleAsync(dosya.EvrakId, await GetCurrentUserIdAsync(), EbysHareketTipi.DosyaSilindi, $"Dosya silindi: {dosya.DosyaAdi}");
-        }
+        if (dosya == null) return;
+
+        var dosyaYolu = dosya.DosyaYolu;
+        dosya.IsDeleted = true;
+        dosya.DeletedAt = DateTime.UtcNow;
+        dosya.UpdatedAt = dosya.DeletedAt;
+        await _context.SaveChangesAsync();
+
+        await HareketEkleAsync(dosya.EvrakId, await GetCurrentUserIdAsync(), EbysHareketTipi.DosyaSilindi, $"Dosya silindi: {dosya.DosyaAdi}");
+
+        // Soft-delete kaydı geri alınabilir; EBYS ekinin şifreli içeriği de
+        // restore için korunur. Fiziksel purge ayrı ve açık bir işlem olmalıdır.
+        _logger.LogInformation("EBYS eki soft-delete edildi; dosya geri alma için korundu. DosyaId={DosyaId}, Yol={Yol}", dosyaId, dosyaYolu);
     }
 
     public async Task<EbysEvrakDosya> DosyaGuncelleAsync(int dosyaId, IBrowserFile file, string? degisiklikNotu = null)
@@ -290,27 +299,73 @@ public class EbysEvrakService : IEbysEvrakService
         await using var _context = await _contextFactory.CreateDbContextAsync();
         var dosya = await _context.EbysEvrakDosyalar.FindAsync(dosyaId)
             ?? throw new InvalidOperationException("Dosya bulunamadi");
-
-        await _secureFileService.DeleteAsync(dosya.DosyaYolu);
+        var eskiDosyaYolu = dosya.DosyaYolu;
 
         await using var stream = file.OpenReadStream(50 * 1024 * 1024);
         using var ms = new MemoryStream();
         await stream.CopyToAsync(ms);
 
-        var relativePath = await _secureFileService.SaveEncryptedAsync(
+        var yeniDosyaYolu = await _secureFileService.SaveEncryptedAsync(
             $"ebys/{dosya.EvrakId}", file.Name, ms.ToArray());
 
+        var eskiDosyaAdi = dosya.DosyaAdi;
         dosya.DosyaAdi = file.Name;
-        dosya.DosyaYolu = relativePath;
+        dosya.DosyaYolu = yeniDosyaYolu;
         dosya.DosyaTipi = Path.GetExtension(file.Name).TrimStart('.');
         dosya.DosyaBoyutu = file.Size;
         dosya.SonDegisiklikNotu = degisiklikNotu;
         dosya.UpdatedAt = DateTime.UtcNow;
 
-        await _context.SaveChangesAsync();
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(eskiDosyaYolu) &&
+                !string.Equals(eskiDosyaYolu, yeniDosyaYolu, StringComparison.Ordinal))
+            {
+                await _cleanupJournal.EnqueueAsync(eskiDosyaYolu, waitForReferenceRemoval: true);
+            }
+            await _context.SaveChangesAsync();
+        }
+        catch (Exception saveException)
+        {
+            // Commit sonucu belirsizse önce DB'den yeni path'in başvurulup başvurulmadığını oku.
+            // Kontrol de başarısız olursa yeni dosyayı silmek yerine olası yetim dosya olarak bırak.
+            try
+            {
+                await using var verifyContext = await _contextFactory.CreateDbContextAsync();
+                var currentPath = await verifyContext.EbysEvrakDosyalar.AsNoTracking()
+                    .Where(x => x.Id == dosyaId)
+                    .Select(x => x.DosyaYolu)
+                    .FirstOrDefaultAsync();
+                if (!string.Equals(currentPath, yeniDosyaYolu, StringComparison.Ordinal))
+                {
+                    await _secureFileService.DeleteAsync(yeniDosyaYolu);
+                    if (string.Equals(currentPath, eskiDosyaYolu, StringComparison.Ordinal) &&
+                        !string.IsNullOrWhiteSpace(eskiDosyaYolu))
+                        await _cleanupJournal.CompleteAsync(eskiDosyaYolu);
+                }
+            }
+            catch (Exception compensationException)
+            {
+                throw new AggregateException("EBYS dosya güncellemesi kaydedilemedi; yeni dosyanın DB tarafından kullanılıp kullanılmadığı doğrulanamadı, dosya güvenlik için silinmedi.",
+                    saveException, compensationException);
+            }
+            throw;
+        }
+
         await HareketEkleAsync(dosya.EvrakId, await GetCurrentUserIdAsync(), EbysHareketTipi.Guncellendi,
-            $"Dosya guncellendi (v{dosya.VersiyonNo}): {file.Name}" +
+            $"Dosya guncellendi (v{dosya.VersiyonNo}): {eskiDosyaAdi} -> {file.Name}" +
             (!string.IsNullOrEmpty(degisiklikNotu) ? $" - {degisiklikNotu}" : ""));
+
+        if (!string.IsNullOrWhiteSpace(eskiDosyaYolu) &&
+            !string.Equals(eskiDosyaYolu, yeniDosyaYolu, StringComparison.Ordinal))
+        {
+            try { await _secureFileService.DeleteAsync(eskiDosyaYolu); }
+            catch (Exception cleanupException)
+            {
+                throw new FileCleanupPendingException(cleanupException);
+            }
+        }
+
         return dosya;
     }
     #endregion

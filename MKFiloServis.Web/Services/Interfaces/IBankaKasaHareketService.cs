@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Models;
 
 namespace MKFiloServis.Web.Services.Interfaces;
@@ -42,8 +42,8 @@ public interface IBankaKasaHareketService
     Task DeleteHesapAsync(int id);
 
     // Mahsup işlemleri
-    Task<MahsupSonuc> HesaplarArasiTransferAsync(int kaynakHesapId, int hedefHesapId, decimal tutar, DateTime tarih, string aciklama, string? belgeNo = null, string? muhasebeHesapKodu = null, string? kostMerkeziKodu = null, string? projeKodu = null);
-    Task<MahsupSonuc> CariMahsupAsync(int cariId, int hesapId, decimal tutar, DateTime tarih, string aciklama, bool caridenHesaba, string? belgeNo = null, string? muhasebeHesapKodu = null, string? kostMerkeziKodu = null, string? projeKodu = null);
+    Task<MahsupSonuc> HesaplarArasiTransferAsync(int kaynakHesapId, int hedefHesapId, decimal tutar, DateTime tarih, string aciklama, string? belgeNo = null, string? muhasebeHesapKodu = null, string? kostMerkeziKodu = null, string? projeKodu = null, string? islemKimligi = null);
+    Task<MahsupSonuc> CariMahsupAsync(int cariId, int hesapId, decimal tutar, DateTime tarih, string aciklama, bool caridenHesaba, string? belgeNo = null, string? muhasebeHesapKodu = null, string? kostMerkeziKodu = null, string? projeKodu = null, string? islemKimligi = null);
     Task<List<BankaKasaHareket>> GetMahsupHareketleriAsync(DateTime? baslangic = null, DateTime? bitis = null);
     Task MahsupIptalAsync(Guid mahsupGrupId);
     Task<decimal> GetHesapBakiyeAsync(int hesapId);
@@ -51,6 +51,11 @@ public interface IBankaKasaHareketService
 
     // Personel cebinden geri ödeme (kesin çözüm: tek noktadan kapanış)
     Task<PersonelGeriOdemeSonuc> PersonelGeriOdemeYapAsync(int personelId, IEnumerable<int> cebindenHareketIds, int? hesapId, DateTime odemeTarihi, string? aciklama = null);
+    /// <summary>
+    /// Cancels the entire shared bank repayment and reopens all linked expenses atomically.
+    /// An accountless paid marker is cancelled only for the selected expense.
+    /// Posted or otherwise matched bank repayments must be resolved through their source flow first.
+    /// </summary>
     Task PersonelGeriOdemeIptalAsync(int cebindenHareketId);
 
     // Dashboard optimized methods

@@ -83,9 +83,31 @@ public sealed class EvrakArsivService : IEvrakArsivService
         var sifreliDir = Path.Combine(_arsivRoot, "Sifreli", kategori, klasor);
         Directory.CreateDirectory(sifreliDir);
         var encrypted = _fileProtector.Protect(icerik);
-        var sifreliFileName = $"{dosyaAdiBase}{ext}.enc";
+        // Aynı evrakın yeni yüklemesi önceki sürüm dosyasının üzerine yazmamalı.
+        // DB yolları ayrı sürümleri gösterdiğinden her yazımda benzersiz dosya adı üret.
+        var sifreliFileName = $"{dosyaAdiBase}_{Guid.NewGuid():N}{ext}.enc";
         var sifreliPath = Path.Combine(sifreliDir, sifreliFileName);
-        await File.WriteAllBytesAsync(sifreliPath, encrypted, cancellationToken);
+        var temporaryPath = $"{sifreliPath}.{Guid.NewGuid():N}.tmp.enc";
+        try
+        {
+            await File.WriteAllBytesAsync(temporaryPath, encrypted, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(temporaryPath, sifreliPath);
+        }
+        catch
+        {
+            try
+            {
+                if (File.Exists(temporaryPath))
+                    File.Delete(temporaryPath);
+            }
+            catch (Exception cleanupException)
+            {
+                _logger.LogWarning(cleanupException, "Geçici evrak arşiv dosyası temizlenemedi: {TemporaryPath}", temporaryPath);
+            }
+
+            throw;
+        }
         _logger.LogDebug("Arsiv sifreli (KOA1): {Path}", sifreliPath);
 
         return Path.Combine("Arsiv", "Sifreli", kategori, klasor, sifreliFileName).Replace('\\', '/');

@@ -346,9 +346,11 @@ public class LicenseService
                 await db.LicenseInfos
                     .IgnoreQueryFilters()
                     .Where(l => l.IsActive)
-                    .ExecuteUpdateAsync(setters => setters
-                        .SetProperty(l => l.IsActive, false)
-                        .SetProperty(l => l.UpdatedAt, DateTime.UtcNow));
+                    .UpdateTrackedAsync(db, record =>
+                    {
+                        record.IsActive = false;
+                        record.UpdatedAt = DateTime.UtcNow;
+                    });
 
                 _cache.Clear();
 
@@ -471,9 +473,11 @@ public class LicenseService
         await db.LicenseInfos
             .IgnoreQueryFilters()
             .Where(l => l.IsActive)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(l => l.IsActive, false)
-                .SetProperty(l => l.UpdatedAt, DateTime.UtcNow));
+            .UpdateTrackedAsync(db, record =>
+            {
+                record.IsActive = false;
+                record.UpdatedAt = DateTime.UtcNow;
+            });
 
         var lic = await CreateTrialLicenseAsync(db, DemoButtonDays);
         MarkDemoUsed();
@@ -569,9 +573,11 @@ public class LicenseService
         await db.LicenseInfos
             .IgnoreQueryFilters()
             .Where(l => l.IsActive)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(l => l.IsActive, false)
-                .SetProperty(l => l.UpdatedAt, DateTime.UtcNow));
+            .UpdateTrackedAsync(db, record =>
+            {
+                record.IsActive = false;
+                record.UpdatedAt = DateTime.UtcNow;
+            });
 
         lic.IsActive = true;
         lic.LastValidatedAt = DateTime.UtcNow;

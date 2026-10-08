@@ -13,7 +13,7 @@ namespace MKFiloServis.Web.Data.Migrations
             // K9 GÜVENLİK: Eski NOT NULL FirmaId default=0 ile dolmuş satırları NULL'a çevir
             // (sonradan TenantFirmaIdBackfillMigrationHelper startup'ta varsayılan firma ile doldurur).
             // Restrict FK eklenmeden ÖNCE çalışmalı; aksi halde Firmalar.Id=0 yoksa FK violation.
-            migrationBuilder.Sql(@"
+            migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + @"
                 UPDATE ""Araclar""              SET ""FirmaId"" = NULL WHERE ""FirmaId"" = 0;
                 UPDATE ""BankaHesaplari""       SET ""FirmaId"" = NULL WHERE ""FirmaId"" = 0;
                 UPDATE ""BankaKasaHareketleri"" SET ""FirmaId"" = NULL WHERE ""FirmaId"" = 0;

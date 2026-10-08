@@ -445,11 +445,6 @@ public class EbysService : IEbysService
         var belge = await _personelOzlukService.GetPersonelEvrakByIdAsync(belgeId)
             ?? throw new InvalidOperationException("Personel belge kaydı bulunamadı.");
 
-        if (!string.IsNullOrWhiteSpace(belge.DosyaYolu))
-        {
-            await _secureFileService.DeleteAsync(belge.DosyaYolu);
-        }
-
         await using var stream = file.OpenReadStream(10 * 1024 * 1024);
         using var memoryStream = new MemoryStream();
         await stream.CopyToAsync(memoryStream);
@@ -459,7 +454,36 @@ public class EbysService : IEbysService
             file.Name,
             memoryStream.ToArray());
 
-        await _personelOzlukService.EvrakDosyaYukle(belge.SoforId, belge.EvrakTanimId, relativePath);
+        try
+        {
+            await _personelOzlukService.EvrakDosyaYukle(
+                belge.SoforId, belge.EvrakTanimId, relativePath,
+                file.Name, file.ContentType, memoryStream.Length);
+        }
+        catch (Exception saveException)
+        {
+            try
+            {
+                await using var verify = await _contextFactory.CreateDbContextAsync();
+                var isReferenced = await verify.PersonelOzlukEvraklar.AsNoTracking()
+                    .AnyAsync(x => x.DosyaYolu == relativePath) ||
+                    await verify.PersonelOzlukEvrakVersiyonlar.AsNoTracking()
+                        .AnyAsync(x => x.DosyaYolu == relativePath);
+                if (!isReferenced)
+                    await _secureFileService.DeleteAsync(relativePath);
+            }
+            catch (Exception compensationException)
+            {
+                throw new AggregateException(
+                    "Personel evrakı DB kaydı başarısız veya belirsiz; yeni dosyanın DB başvurusu doğrulanamadığından dosya güvenlik için korunuyor.",
+                    saveException, compensationException);
+            }
+
+            throw;
+        }
+
+        // Eski yol burada otomatik silinmez: geçmiş sürüm kayıtları eski dosyaya
+        // başvurabilir. Kalıcı, yarış güvenli temizleme kuyruğu bu dosyaları ele almalı.
     }
 
     private async Task<EbysBelgeKaydi> CreatePersonelBelgeAsync(EbysBelgeOlusturmaModeli model)

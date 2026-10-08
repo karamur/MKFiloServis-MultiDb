@@ -1,4 +1,5 @@
-@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:ebys")]
+﻿@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:ebys")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
 @page "/ayarlar/dosya-migrasyonu"
 @using MKFiloServis.Web.Services
 @inject DosyaMigrasyonService MigrasyonService
@@ -11,7 +12,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h3><i class="bi bi-shield-lock me-2"></i>Dosya Şifreleme Migrasyonu</h3>
-            <p class="text-muted mb-0">Eski düz metin dosyaları AES-256-GCM şifreli depolamaya taşır.</p>
+            <p class="text-muted mb-0">EBYS, araç, personel özlük, fatura ve eski e-Fatura/Luca webroot dosyaları dahil cari bağı doğrulanan tedarikçi/destek ve ortak evrak dosyalarını şifreli depoya taşır. EBYS firma bağı olmayan yönetici genel kapsamındadır; diğer modüller seçili firmayla sınırlandırılır. Silinmiş dosyalar ve sürüm geçmişi geri alma için taşınır. Eski düz dosyalar otomatik silinmez; geri alma için yerinde korunur.</p>
         </div>
         <button class="btn btn-outline-secondary" @onclick="OnizlemeYukleAsync" disabled="@calisıyor">
             <i class="bi bi-search me-1"></i>Tara
@@ -29,56 +30,53 @@
     @if (ozet != null)
     {
         <div class="row mb-4">
-            <div class="col-md-2">
-                <div class="card border-warning">
-                    <div class="card-body text-center">
-                        <div class="fs-2 fw-bold text-warning">@ozet.EbysAnaCount</div>
-                        <div class="text-muted small">EBYS Dosya</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-2">
-                <div class="card border-warning">
-                    <div class="card-body text-center">
-                        <div class="fs-2 fw-bold text-warning">@ozet.EbysVersiyonCount</div>
-                        <div class="text-muted small">EBYS Versiyon</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-2">
-                <div class="card border-info">
-                    <div class="card-body text-center">
-                        <div class="fs-2 fw-bold text-info">@ozet.AracEvrakCount</div>
-                        <div class="text-muted small">Araç Dosya</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-2">
-                <div class="card border-info">
-                    <div class="card-body text-center">
-                        <div class="fs-2 fw-bold text-info">@ozet.AracVersiyonCount</div>
-                        <div class="text-muted small">Araç Versiyon</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-2">
-                <div class="card border-primary">
-                    <div class="card-body text-center">
-                        <div class="fs-2 fw-bold text-primary">@ozet.Toplam</div>
-                        <div class="text-muted small">Toplam Bekleyen</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-2 d-flex align-items-center">
+            <div class="col-md-4 col-xl-3 mb-2"><div class="card border-warning h-100"><div class="card-body">
+                <h6 class="card-title">EBYS <span class="badge bg-warning text-dark">@(ozet.EbysAnaCount + ozet.SilinmisEbysAnaCount + ozet.EbysVersiyonCount + ozet.SilinmisEbysVersiyonCount)</span></h6>
+                <div class="small">Ana dosya: <strong>@ozet.EbysAnaCount aktif</strong> / @ozet.SilinmisEbysAnaCount silinmiş</div>
+                <div class="small">Sürümler: <strong>@ozet.EbysVersiyonCount aktif</strong> / @ozet.SilinmisEbysVersiyonCount silinmiş</div>
+            </div></div></div>
+            <div class="col-md-4 col-xl-3 mb-2"><div class="card border-info h-100"><div class="card-body">
+                <h6 class="card-title">Araç belgeleri <span class="badge bg-info text-dark">@(ozet.AracEvrakCount + ozet.SilinmisAracEvrakCount + ozet.AracVersiyonCount + ozet.SilinmisAracVersiyonCount)</span></h6>
+                <div class="small">Ana dosya: <strong>@ozet.AracEvrakCount aktif</strong> / @ozet.SilinmisAracEvrakCount silinmiş</div>
+                <div class="small">Sürümler: <strong>@ozet.AracVersiyonCount aktif</strong> / @ozet.SilinmisAracVersiyonCount silinmiş</div>
+            </div></div></div>
+            <div class="col-md-4 col-xl-3 mb-2"><div class="card border-primary h-100"><div class="card-body">
+                <h6 class="card-title">Personel özlük <span class="badge bg-primary">@(ozet.PersonelEvrakCount + ozet.SilinmisPersonelEvrakCount + ozet.PersonelVersiyonCount + ozet.SilinmisPersonelVersiyonCount)</span></h6>
+                <div class="small">Ana dosya: <strong>@ozet.PersonelEvrakCount aktif</strong> / @ozet.SilinmisPersonelEvrakCount silinmiş</div>
+                <div class="small">Sürümler: <strong>@ozet.PersonelVersiyonCount aktif</strong> / @ozet.SilinmisPersonelVersiyonCount silinmiş</div>
+            </div></div></div>
+            <div class="col-md-4 col-xl-3 mb-2"><div class="card border-success h-100"><div class="card-body">
+                <h6 class="card-title">Fatura dosyaları <span class="badge bg-success">@(ozet.FaturaPdfCount + ozet.SilinmisFaturaPdfCount + ozet.FaturaXmlCount + ozet.SilinmisFaturaXmlCount)</span></h6>
+                <div class="small">PDF: <strong>@ozet.FaturaPdfCount aktif</strong> / @ozet.SilinmisFaturaPdfCount silinmiş</div>
+                <div class="small">XML: <strong>@ozet.FaturaXmlCount aktif</strong> / @ozet.SilinmisFaturaXmlCount silinmiş</div>
+            </div></div></div>
+            <div class="col-md-4 col-xl-3 mb-2"><div class="card border-secondary h-100"><div class="card-body">
+                <h6 class="card-title">Ortak evrak <span class="badge bg-secondary">@(ozet.OrtakEvrakCount + ozet.SilinmisOrtakEvrakCount)</span></h6>
+                <div class="small"><strong>@ozet.OrtakEvrakCount aktif</strong> / @ozet.SilinmisOrtakEvrakCount silinmiş</div>
+            </div></div></div>
+            <div class="col-md-4 col-xl-3 mb-2"><div class="card border-warning h-100"><div class="card-body">
+                <h6 class="card-title">Tedarikçi ekleri <span class="badge bg-warning text-dark">@(ozet.TedarikciDosyaCount + ozet.SilinmisTedarikciDosyaCount)</span></h6>
+                <div class="small">Cari-firma bağı doğrulanan ortak kök dosyaları</div>
+                <div class="small"><strong>@ozet.TedarikciDosyaCount aktif</strong> / @ozet.SilinmisTedarikciDosyaCount silinmiş</div>
+            </div></div></div>
+            <div class="col-md-4 col-xl-3 mb-2"><div class="card border-danger h-100"><div class="card-body">
+                <h6 class="card-title">Destek ekleri <span class="badge bg-danger">@(ozet.DestekEkiCount + ozet.SilinmisDestekEkiCount)</span></h6>
+                <div class="small">Cari-firma bağı ve <code>uploads/destek</code> yolu doğrulananlar</div>
+                <div class="small"><strong>@ozet.DestekEkiCount aktif</strong> / @ozet.SilinmisDestekEkiCount silinmiş</div>
+            </div></div></div>
+            <div class="col-md-4 col-xl-3 mb-2"><div class="card border-dark h-100"><div class="card-body text-center">
+                <div class="fs-2 fw-bold">@ozet.Toplam</div><div class="text-muted small">Toplam bekleyen kayıt</div>
+            </div></div></div>
+            <div class="col-12 mt-2 d-flex justify-content-end">
                 @if (ozet.Toplam == 0)
                 {
-                    <div class="alert alert-success mb-0 w-100">
-                        <i class="bi bi-check-circle me-1"></i>Tüm dosyalar şifreli!
+                    <div class="alert alert-success mb-0">
+                        <i class="bi bi-check-circle me-1"></i>Bu kapsamda geçiş bekleyen kayıt yok.
                     </div>
                 }
                 else
                 {
-                    <button class="btn btn-danger w-100" @onclick="MigrasyonBaslatAsync" disabled="@calisıyor">
+                    <button class="btn btn-danger" @onclick="MigrasyonBaslatAsync" disabled="@calisıyor">
                         <i class="bi bi-play-fill me-1"></i>Migrasyonu Başlat
                     </button>
                 }
@@ -108,6 +106,7 @@
             <h6 class="mb-0">Sonuçlar</h6>
             <div>
                 <span class="badge bg-success me-1">@adimlar.Count(a => a.Durum == MigrasyonDurum.Basarili) başarılı</span>
+                <span class="badge bg-warning text-dark me-1">@adimlar.Count(a => a.Durum == MigrasyonDurum.TemizlikBekliyor) eski dosya doğrulaması bekliyor</span>
                 <span class="badge bg-secondary me-1">@adimlar.Count(a => a.Durum == MigrasyonDurum.Atildi) atlandı</span>
                 <span class="badge bg-danger">@adimlar.Count(a => a.Durum == MigrasyonDurum.Hata) hata</span>
             </div>
@@ -140,6 +139,9 @@
                                     case MigrasyonDurum.Hata:
                                         <span class="badge bg-danger"><i class="bi bi-x"></i> Hata</span>
                                         break;
+                                    case MigrasyonDurum.TemizlikBekliyor:
+                                        <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i> Temizlik Bekliyor</span>
+                                        break;
                                 }
                             </td>
                             <td class="small text-muted">@a.Mesaj</td>
@@ -171,6 +173,11 @@
         {
             ozet = await MigrasyonService.OnizlemeAsync();
         }
+        catch (Exception ex)
+        {
+            ozet = null;
+            ToastService.ShowWarning(ex.Message);
+        }
         finally
         {
             calisıyor = false;
@@ -197,18 +204,23 @@
             }
 
             var basarili = adimlar.Count(a => a.Durum == MigrasyonDurum.Basarili);
+            var temizlikBekliyor = adimlar.Count(a => a.Durum == MigrasyonDurum.TemizlikBekliyor);
             var hata = adimlar.Count(a => a.Durum == MigrasyonDurum.Hata);
 
-            if (hata == 0)
+            if (hata == 0 && temizlikBekliyor == 0)
                 ToastService.ShowSuccess($"Migrasyon tamamlandı: {basarili} dosya şifrelendi.");
             else
-                ToastService.ShowWarning($"Tamamlandı: {basarili} başarılı, {hata} hata.");
+                ToastService.ShowWarning($"Tamamlandı: {basarili} başarılı, {temizlikBekliyor} eski dosya doğrulaması bekliyor, {hata} hata.");
 
             ozet = await MigrasyonService.OnizlemeAsync();
         }
         catch (OperationCanceledException)
         {
             ToastService.ShowInfo("Migrasyon iptal edildi.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowWarning($"Migrasyon durdu: {ex.Message}");
         }
         finally
         {

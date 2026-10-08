@@ -24,7 +24,7 @@
             </button>
             @if (firmasizAracSayisi > 0)
             {
-                <button class="btn btn-warning" @onclick="FirmasizlariAktifFirmayaAta" title="FirmaId'si boş araçları aktif firmaya atar">
+                <button class="btn btn-warning" @onclick="FirmasizlariAktifFirmayaAta" disabled="@(isFirmaAtaniyor || isLoading)" title="FirmaId'si boş araçları aktif firmaya atar">
                     <i class="bi bi-building-fill-exclamation me-1"></i>Firmasız (@firmasizAracSayisi) → Aktif Firma
                 </button>
             }
@@ -442,9 +442,13 @@
                         Excel dosyasında şu sütunlar olmalı: <strong>Şase No | Plaka | Marka | Model | Model Yılı | Motor No | Renk | Koltuk Sayısı | Araç Tipi | KM</strong>
                     </div>
                     
+                    @if (isImporting)
+                    {
+                        <div class="alert alert-warning" role="status">Aktarım işlemi sürüyor. Pencereyi kapatmak başlamış kayıtları geri almaz; işlem bitene kadar yeni aktarım başlatılamaz.</div>
+                    }
                     <div class="mb-3">
                         <label class="form-label">Excel Dosyası Seç *</label>
-                        <InputFile class="form-control" OnChange="DosyaSecildi" accept=".xlsx,.xls" />
+                        <InputFile class="form-control" OnChange="DosyaSecildi" accept=".xlsx,.xls" disabled="@isImporting" />
                     </div>
                     
                     @if (importResult != null)
@@ -503,7 +507,7 @@
                         <i class="bi bi-download me-1"></i>Şablon İndir
                     </button>
                     <button type="button" class="btn btn-secondary" @onclick="ImportModalKapat">Kapat</button>
-                    <button type="button" class="btn btn-success" @onclick="ExcelImportYap" disabled="@(isImporting || importFile == null)">
+                    <button type="button" class="btn btn-success" @onclick="ExcelImportYap" disabled="@(isImporting || isLoading || importFile == null)">
                         @if (isImporting)
                         {
                             <span class="spinner-border spinner-border-sm me-1"></span>
@@ -673,6 +677,7 @@
     
     // Import
     private bool isImporting = false;
+    private long importModalSurumu;
     private IBrowserFile? importFile = null;
     private AracImportResult? importResult = null;
 
@@ -727,12 +732,14 @@
         System.Threading.Interlocked.Increment(ref listeYuklemeSurumu);
         System.Threading.Interlocked.Increment(ref plakaModalSurumu);
         System.Threading.Interlocked.Increment(ref silmeModalSurumu);
+        System.Threading.Interlocked.Increment(ref importModalSurumu);
         _ = InvokeAsync(async () =>
         {
             if (disposed) return;
             filtreFirmaId = 0;
             SilmeModalKapat();
             PlakaGecmisiKapat();
+            ImportModalKapat();
             await LoadData();
             if (!disposed) StateHasChanged();
         });
@@ -800,6 +807,7 @@
     public void Dispose()
     {
         disposed = true;
+        System.Threading.Interlocked.Increment(ref importModalSurumu);
         System.Threading.Interlocked.Increment(ref silmeModalSurumu);
         System.Threading.Interlocked.Increment(ref plakaModalSurumu);
         System.Threading.Interlocked.Increment(ref listeYuklemeSurumu);
@@ -807,30 +815,44 @@
     }
 
     private int firmasizAracSayisi = 0;
+    private bool isFirmaAtaniyor;
 
     private async Task FirmasizlariAktifFirmayaAta()
     {
-        if (AktifFirmaProvider.TumFirmalar || !AktifFirmaProvider.AktifFirmaId.HasValue || AktifFirmaProvider.AktifFirmaId.Value <= 0)
+        if (disposed || isLoading || isFirmaAtaniyor || firmasizAracSayisi <= 0) return;
+        if (AktifFirmaProvider.TumFirmalar || AktifFirmaProvider.AktifFirmaId is not > 0)
         {
-            ToastService.ShowWarning("Önce üst bardaki firma seçiciden bir firma seçin (Tüm Firmalar modunda toplu atama yapılamaz).");
+            ToastService.ShowWarning("Toplu atama için tek bir firma seçin.");
             return;
         }
-
-        var aktifFirma = FirmaService.GetAktifFirma();
-        var firmaId = AktifFirmaProvider.AktifFirmaId.Value;
-        var onay = await JS.InvokeAsync<bool>("confirm",
-            $"{firmasizAracSayisi} adet firmasız araç, '{aktifFirma.FirmaAdi}' firmasına atanacak. Devam edilsin mi?");
-        if (!onay) return;
-
+        var firmaId = AktifFirmaProvider.AktifFirmaId;
+        var surum = System.Threading.Volatile.Read(ref listeYuklemeSurumu);
+        var firmaAdi = FirmaService.GetAktifFirma()?.FirmaAdi ?? "Seçili firma";
+        isFirmaAtaniyor = true;
         try
         {
-            var sayi = await AracService.BackfillFirmaIdAsync(firmaId);
-            ToastService.ShowSuccess($"{sayi} araç '{aktifFirma.FirmaAdi}' firmasına atandı.");
+            var onay = await JS.InvokeAsync<bool>("confirm",
+                $"{firmasizAracSayisi} adet firmasız araç, '{firmaAdi}' firmasına atanacak. Devam edilsin mi?");
+            if (!onay || !ListeYuklemesiGuncel(surum, firmaId, false)) return;
+            var sayi = await AracService.BackfillFirmaIdAsync(firmaId!.Value);
+            if (!ListeYuklemesiGuncel(surum, firmaId, false)) return;
+            ToastService.ShowSuccess($"{sayi} araç '{firmaAdi}' firmasına atandı.");
             await LoadData();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Logger.LogWarning(ex, "Firmasız araç atama yetkisi reddedildi. Firma: {FirmaId}", firmaId);
+            if (ListeYuklemesiGuncel(surum, firmaId, false)) ToastService.ShowWarning("Bu işlem için aktif Admin yetkisi gerekir.");
         }
         catch (Exception ex)
         {
-            ToastService.ShowError($"Toplu firma atama hatası: {ex.GetBaseException().Message}");
+            Logger.LogError(ex, "Firmasız araç ataması başarısız. Firma: {FirmaId}", firmaId);
+            if (ListeYuklemesiGuncel(surum, firmaId, false)) ToastService.ShowError("Toplu atama tamamlanamadı. Firma seçimini kontrol edip listeyi yenileyin.");
+        }
+        finally
+        {
+            isFirmaAtaniyor = false;
+            if (!disposed) StateHasChanged();
         }
     }
 
@@ -1149,21 +1171,32 @@
 
     private void ExcelImportModalAc()
     {
-        importFile = null;
-        importResult = null;
+        if (disposed || isLoading || isImporting) return;
+        ImportModalKapat();
         showImportModal = true;
     }
 
     private void ImportModalKapat()
     {
+        System.Threading.Interlocked.Increment(ref importModalSurumu);
         showImportModal = false;
+        importFile = null;
+        importResult = null;
+        // isImporting tüm ekran için işlem kilididir; modal kapansa da devam eder.
     }
 
     private void DosyaSecildi(InputFileChangeEventArgs e)
     {
+        if (disposed || !showImportModal || isImporting) return;
+        System.Threading.Interlocked.Increment(ref importModalSurumu);
         importFile = e.File;
         importResult = null;
     }
+
+    private bool ImportIslemiGuncel(long surum, IBrowserFile dosya, int? firmaId, bool tumFirmalar)
+        => !disposed && showImportModal && ReferenceEquals(importFile, dosya) &&
+           surum == System.Threading.Volatile.Read(ref importModalSurumu) &&
+           AktifFirmaProvider.AktifFirmaId == firmaId && AktifFirmaProvider.TumFirmalar == tumFirmalar;
 
     private async Task SablonIndir()
     {
@@ -1181,39 +1214,70 @@
 
     private async Task ExcelImportYap()
     {
-        if (importFile == null) return;
-        
+        if (disposed || !showImportModal || isLoading || isImporting || importFile == null) return;
+        var dosya = importFile;
+        var surum = System.Threading.Volatile.Read(ref importModalSurumu);
+        var firmaId = AktifFirmaProvider.AktifFirmaId;
+        var tumFirmalar = AktifFirmaProvider.TumFirmalar;
+        if (tumFirmalar || firmaId is not > 0)
+        {
+            ToastService.ShowWarning("Araç aktarımı için tek bir firma seçin.");
+            return;
+        }
         isImporting = true;
         importResult = null;
         StateHasChanged();
-        
         try
         {
             using var stream = new MemoryStream();
-            await importFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024).CopyToAsync(stream);
-            var fileContent = stream.ToArray();
-            
-            importResult = await AracService.ImportFromExcelAsync(fileContent);
-            
-            if (importResult.Success)
+            await using var source = dosya.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            await source.CopyToAsync(stream);
+            // Dosya okunurken seçim değişmişse henüz servis yazımı başlatılmaz.
+            if (!ImportIslemiGuncel(surum, dosya, firmaId, tumFirmalar)) return;
+            var sonuc = await AracService.ImportFromExcelAsync(stream.ToArray());
+            var kayitVar = sonuc.ImportedCount > 0 || sonuc.UpdatedCount > 0;
+            if (!ImportIslemiGuncel(surum, dosya, firmaId, tumFirmalar))
             {
-                ToastService.ShowSuccess($"{importResult.ImportedCount} araç eklendi, {importResult.UpdatedCount} güncellendi.");
-                await LoadData();
+                // The dialog or company changed while the service was saving rows.
+                // Never write its result into a new dialog, but do report commits.
+                if (!disposed)
+                {
+                    ToastService.ShowWarning($"Önceki firma ({firmaId}) araç aktarımı bitti: {sonuc.ImportedCount} eklendi, {sonuc.UpdatedCount} güncellendi, {sonuc.ErrorCount} hata. İlgili firma listesini kontrol edin.");
+                    if (kayitVar) await LoadData();
+                }
+                return;
             }
+            importResult = sonuc;
+            if (!sonuc.Success || sonuc.ErrorCount > 0)
+                ToastService.ShowWarning($"Aktarım tamamı başarılı değil: {sonuc.ImportedCount} eklendi, {sonuc.UpdatedCount} güncellendi. Ayrıntıları kontrol edin.");
+            else
+                ToastService.ShowSuccess($"{sonuc.ImportedCount} araç eklendi, {sonuc.UpdatedCount} güncellendi.");
+            // Okuma sonunda hata olsa da daha önce commit edilen satırlar listeye yansıtılır.
+            if (kayitVar) await LoadData();
         }
         catch (Exception ex)
         {
-            importResult = new AracImportResult
+            Logger.LogError(ex, "Araç Excel aktarımı başarısız. Firma: {FirmaId}", firmaId);
+            if (ImportIslemiGuncel(surum, dosya, firmaId, tumFirmalar))
             {
-                Success = false,
-                Errors = new List<string> { $"Import hatası: {ex.Message}" }
-            };
-            ToastService.ShowError($"Hata: {ex.Message}");
+                importResult = new AracImportResult
+                {
+                    Success = false,
+                    Errors = new List<string> { "Aktarım tamamlanamadı. Dosyayı ve firma seçimini kontrol edin." }
+                };
+                ToastService.ShowError("Aktarım tamamlanamadı. Dosyayı ve firma seçimini kontrol edin.");
+            }
+            else if (!disposed)
+            {
+                ToastService.ShowWarning($"Önceki firma ({firmaId}) araç aktarımı hata verdi; bazı satırlar kaydedilmiş olabilir. İlgili firma listesini kontrol edin.");
+                await LoadData();
+            }
         }
         finally
         {
+            // Kilit tutulduğu sürece başka aktarım başlayamaz; yalnız bu işlem kilidi bırakır.
             isImporting = false;
-            StateHasChanged();
+            if (!disposed) StateHasChanged();
         }
     }
 

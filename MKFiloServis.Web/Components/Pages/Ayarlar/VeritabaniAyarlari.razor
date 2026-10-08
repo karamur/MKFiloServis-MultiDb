@@ -52,16 +52,18 @@
 
                                     <input type="radio" class="btn-check" name="dbProvider" id="btnSQLServer"
                                            checked="@(settings.Provider == DatabaseProvider.SQLServer)"
+                                           disabled
                                            @onchange="() => ProviderDegistir(DatabaseProvider.SQLServer)">
-                                    <label class="btn btn-outline-secondary" for="btnSQLServer">
-                                        <i class="bi bi-server me-1"></i>SQL Server
+                                    <label class="btn btn-outline-secondary @(settings.Provider != DatabaseProvider.SQLServer ? "disabled" : "")" for="btnSQLServer">
+                                        <i class="bi bi-server me-1"></i>SQL Server (desteklenmiyor)
                                     </label>
 
                                     <input type="radio" class="btn-check" name="dbProvider" id="btnMySQL"
                                            checked="@(settings.Provider == DatabaseProvider.MySQL)"
+                                           disabled
                                            @onchange="() => ProviderDegistir(DatabaseProvider.MySQL)">
-                                    <label class="btn btn-outline-warning" for="btnMySQL">
-                                        <i class="bi bi-hdd-network me-1"></i>MySQL
+                                    <label class="btn btn-outline-warning @(settings.Provider != DatabaseProvider.MySQL ? "disabled" : "")" for="btnMySQL">
+                                        <i class="bi bi-hdd-network me-1"></i>MySQL (desteklenmiyor)
                                     </label>
 
                                     <input type="radio" class="btn-check" name="dbProvider" id="btnSQLite"
@@ -71,14 +73,20 @@
                                         <i class="bi bi-file-earmark-binary me-1"></i>SQLite
                                     </label>
                                 </div>
-                                <small class="text-muted d-block mt-2">Kanonik migration ve veri modeli kaynagi her zaman PostgreSQL olarak korunur.</small>
+                                <small class="text-muted d-block mt-2">Bu sürümde otomatik şema geçişi PostgreSQL ve SQLite için desteklenir. SQL Server ve MySQL seçenekleri bağlantı sağlayıcısı olarak tanımlı olsa da kurulum/migration desteği tamamlanmadığı için kullanılamaz.</small>
+                                @if (settings.Provider is DatabaseProvider.SQLServer or DatabaseProvider.MySQL)
+                                {
+                                    <div class="alert alert-danger mt-3 mb-0">
+                                        Bu kurulumda @settings.Provider etkin. Uygulama bu sağlayıcıyla başlatılamaz; var olan veritabanına migration uygulanmadı. PostgreSQL veya SQLite ayarını seçip kaydetmeden önce veriniz için ayrıca geçiş planı hazırlayın.
+                                    </div>
+                                }
                             </div>
                         </div>
 
                         <div class="alert alert-secondary py-2">
                             <strong>Kanonik Veritabani:</strong> PostgreSQL
                             <br />
-                            <small>SQLite secildiginde dahi migration replay yerine gecis manifesti ve veri donusum akisi kullanilir.</small>
+                            <small>PostgreSQL migration zinciri kanonik şema kaynağıdır. SQLite için uygulanan migration uyumluluğu ayrıca yürütülür.</small>
                         </div>
 
                         @if (settings.Provider != DatabaseProvider.SQLite)

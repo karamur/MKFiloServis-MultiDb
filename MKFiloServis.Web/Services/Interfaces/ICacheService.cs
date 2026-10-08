@@ -37,6 +37,8 @@ public interface ICacheService
     
     /// <summary>
     /// Belirli prefix ile başlayan tüm key'leri sil
+    /// Ortak nesil kullanan uygulama, süreçler arası doğruluk için diğer cache
+    /// anahtarlarını da geçersizleştirebilir. Backend hatası çağırana iletilir.
     /// </summary>
     Task RemoveByPrefixAsync(string prefix, CancellationToken cancellationToken = default);
     

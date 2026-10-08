@@ -20,7 +20,7 @@ namespace MKFiloServis.Web.Data.Migrations
 
             // Backfill: parent Guzergah.FirmaId zaten zorunlu (Aşama C2), oradan al.
             // Eğer parent FirmaId NULL kalmışsa (olmamalı) varsayılan firmaya düş.
-            migrationBuilder.Sql(@"
+            migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + @"
 DO $$
 DECLARE
     v_default_firma_id integer;

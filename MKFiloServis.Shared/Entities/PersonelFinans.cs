@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations.Schema;
+﻿using System.ComponentModel.DataAnnotations.Schema;
 
 namespace MKFiloServis.Shared.Entities;
 
@@ -7,6 +7,9 @@ namespace MKFiloServis.Shared.Entities;
 /// </summary>
 public class PersonelAvans : BaseEntity, IFirmaTenant
 {
+    public string? IslemKimligi { get; set; } = Guid.NewGuid().ToString("N");
+    public string? IslemOzeti { get; set; }
+
     public int PersonelId { get; set; }
     public virtual Sofor Personel { get; set; } = null!;
 
@@ -48,6 +51,9 @@ public class PersonelAvans : BaseEntity, IFirmaTenant
 /// </summary>
 public class PersonelBorc : BaseEntity, IFirmaTenant
 {
+    public string? IslemKimligi { get; set; } = Guid.NewGuid().ToString("N");
+    public string? IslemOzeti { get; set; }
+
     public int PersonelId { get; set; }
     public virtual Sofor Personel { get; set; } = null!;
 
@@ -92,6 +98,10 @@ public class PersonelBorc : BaseEntity, IFirmaTenant
 /// </summary>
 public class PersonelAvansMahsup : BaseEntity
 {
+    // Aynı mantıksal işlem yeniden gönderilirken bu anahtar korunur.
+    public string? IslemKimligi { get; set; } = Guid.NewGuid().ToString("N");
+    public string? IslemOzeti { get; set; }
+
     public int AvansId { get; set; }
     public virtual PersonelAvans Avans { get; set; } = null!;
 
@@ -115,6 +125,10 @@ public class PersonelAvansMahsup : BaseEntity
 /// </summary>
 public class PersonelBorcOdeme : BaseEntity
 {
+    // Aynı mantıksal işlem yeniden gönderilirken bu anahtar korunur.
+    public string? IslemKimligi { get; set; } = Guid.NewGuid().ToString("N");
+    public string? IslemOzeti { get; set; }
+
     public int BorcId { get; set; }
     public virtual PersonelBorc Borc { get; set; } = null!;
 

@@ -14,8 +14,9 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:rentacar")]
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:muhasebe")]
 @page "/ayarlar/demo-veri"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
 @using MKFiloServis.Web.Data
-@inject TestDataSeeder TestDataSeeder
+@inject DemoDataService DemoService
 @inject IJSRuntime JS
 
 <PageTitle>Demo Veri Yönetimi - MK Filo Servis</PageTitle>
@@ -246,7 +247,10 @@
 
         try
         {
-            sonuc = await TestDataSeeder.SeedAllAsync(mevcutVeriTemizilensin);
+            var bakim = mevcutVeriTemizilensin
+                ? await DemoService.ResetAndSeedAsync()
+                : await DemoService.SeedDemoDataAsync();
+            sonuc = bakim.SeedDetails ?? new TestDataResult { Basarili = bakim.Basarili, Mesajlar = [bakim.Mesaj] };
         }
         catch (Exception ex)
         {
@@ -277,12 +281,8 @@
 
         try
         {
-            await TestDataSeeder.TemizleAsync();
-            sonuc = new TestDataResult
-            {
-                Basarili = true,
-                Mesajlar = { "Tüm demo veriler başarıyla temizlendi." }
-            };
+            var bakim = await DemoService.RemoveDemoDataAsync();
+            sonuc = new TestDataResult { Basarili = bakim.Basarili, Mesajlar = [bakim.Mesaj] };
         }
         catch (Exception ex)
         {

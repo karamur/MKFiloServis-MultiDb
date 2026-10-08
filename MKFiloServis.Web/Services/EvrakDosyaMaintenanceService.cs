@@ -14,16 +14,22 @@ public class EvrakDosyaMaintenanceService : IEvrakDosyaMaintenanceService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
     private readonly FileService _fileService;
+    private readonly ISecureFileService _secureFileService;
     private readonly ILogger<EvrakDosyaMaintenanceService> _logger;
+    private readonly IWebHostEnvironment _environment;
 
     public EvrakDosyaMaintenanceService(
         IDbContextFactory<ApplicationDbContext> dbFactory,
         FileService fileService,
-        ILogger<EvrakDosyaMaintenanceService> logger)
+        ISecureFileService secureFileService,
+        ILogger<EvrakDosyaMaintenanceService> logger,
+        IWebHostEnvironment environment)
     {
         _dbFactory = dbFactory;
         _fileService = fileService;
+        _secureFileService = secureFileService;
         _logger = logger;
+        _environment = environment;
     }
 
     public async Task<EvrakDosyaMaintenanceReport> AnalyzeAsync(CancellationToken ct = default)
@@ -63,6 +69,18 @@ public class EvrakDosyaMaintenanceService : IEvrakDosyaMaintenanceService
                 .Where(t => !t.IsDeleted && t.Aktif)
                 .ToListAsync(ct);
 
+            var databasePaths = await DatabaseFilePathInventory.ReadAllAsync(db, ct);
+            var storageRoot = AppStoragePaths.GetStorageRoot(_environment.ContentRootPath);
+            var yetimSifreliDosyalar = SecureFileOrphanScanner.FindOrphans(storageRoot, databasePaths).ToList();
+            var sifresizDosyaAdaylari = SecureFileOrphanScanner.FindLegacyPlaintextCandidates(storageRoot, databasePaths)
+                .Concat(SecureFileOrphanScanner.FindLegacyUploadCandidates(
+                    _fileService.UploadRootPath, databasePaths, fileServiceRoot: true))
+                .Concat(SecureFileOrphanScanner.FindLegacyUploadCandidates(
+                    Path.Combine(_environment.WebRootPath, "uploads"), databasePaths, fileServiceRoot: false))
+                .OrderBy(candidate => candidate.StoragePath, OperatingSystem.IsWindows()
+                    ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
+                .ToList();
+
             var kayiplar = new List<EvrakDosyaKayipOgesi>();
             var saglamlar = new List<EvrakDosyaKayipOgesi>();
 
@@ -70,8 +88,12 @@ public class EvrakDosyaMaintenanceService : IEvrakDosyaMaintenanceService
             {
                 ct.ThrowIfCancellationRequested();
 
-                var tamYol = _fileService.GetFullPath(evrakDosya.DosyaYolu);
-                var dosyaVar = File.Exists(tamYol);
+                var sifreli = evrakDosya.DosyaYolu.EndsWith(".enc", StringComparison.OrdinalIgnoreCase)
+                    && (evrakDosya.DosyaYolu.Contains('/') || evrakDosya.DosyaYolu.Contains('\\'));
+                var tamYol = sifreli ? evrakDosya.DosyaYolu : _fileService.GetFullPath(evrakDosya.DosyaYolu);
+                var dosyaVar = sifreli
+                    ? await _secureFileService.ExistsAsync(evrakDosya.DosyaYolu, ct)
+                    : File.Exists(tamYol);
                 var canonical = EvrakTipiCanonicalMapper.GetCanonicalName(evrakDosya.EvrakTipi);
 
                 // Personel adını bul
@@ -141,6 +163,10 @@ public class EvrakDosyaMaintenanceService : IEvrakDosyaMaintenanceService
                 SaglamSayisi = saglamlar.Count,
                 Kayiplar = kayiplar,
                 Saglamlar = saglamlar,
+                YetimSifreliDosyalar = yetimSifreliDosyalar,
+                YetimSifreliDosyaSayisi = yetimSifreliDosyalar.Count,
+                SifresizDosyaAdaylari = sifresizDosyaAdaylari,
+                SifresizDosyaAdaySayisi = sifresizDosyaAdaylari.Count,
                 DryRun = dryRun
             };
 
@@ -215,6 +241,7 @@ public class EvrakDosyaMaintenanceService : IEvrakDosyaMaintenanceService
             return new EvrakDosyaMaintenanceReport { HataMesaji = ex.Message };
         }
     }
+
 }
 
 

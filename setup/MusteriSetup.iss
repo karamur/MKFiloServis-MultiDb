@@ -82,6 +82,10 @@ Name: "{commondesktop}\{#MyShortcutName}"; Filename: "{app}\app\{#MyAppExeName}"
 Filename: "{app}\app\{#MyAppExeName}"; Description: "Uygulamayi Baslat"; Flags: nowait postinstall skipifsilent; WorkingDir: "{app}\app"
 
 [Code]
+var
+  DbProviderPage: TInputOptionWizardPage;
+  DbConnectionPage: TInputQueryWizardPage;
+
 function InitializeSetup(): Boolean;
 var Msg: String;
 begin
@@ -96,4 +100,122 @@ end;
 procedure InitializeWizard();
 begin
   WizardForm.Caption := '{#MyAppName} Musteri {#MyAppVersion} Kurulum Sihirbazi';
+  DbProviderPage := CreateInputOptionPage(wpSelectDir,
+    'Veritabani Secimi', 'Uygulamanin kullanacagi veritabanini secin',
+    'PostgreSQL ve SQLite bu kurulum paketinde desteklenir. SQL Server secenegi altyapi tamamlanana kadar kullanima acik degildir.',
+    True, False);
+  DbProviderPage.Add('PostgreSQL');
+  DbProviderPage.Add('SQLite');
+  DbProviderPage.Add('Microsoft SQL Server (MSSQL)');
+  DbProviderPage.SelectedValueIndex := 0;
+  DbConnectionPage := CreateInputQueryPage(DbProviderPage.ID,
+    'Veritabani Baglantisi', 'Secilen veritabani icin baglanti bilgilerini girin',
+    'PostgreSQL icin sunucu/parola; SQLite icin veritabani dosya yolu kullanilir.');
+  DbConnectionPage.Add('Host (PostgreSQL; SQLite icin kullanilmaz)', False);
+  DbConnectionPage.Add('Port (PostgreSQL; SQLite icin kullanilmaz)', False);
+  DbConnectionPage.Add('Veritabani adi (PostgreSQL) / DB dosya yolu (SQLite)', False);
+  DbConnectionPage.Add('Kullanici adi', False);
+  DbConnectionPage.Add('Parola', True);
+  DbConnectionPage.Values[0] := 'localhost';
+  DbConnectionPage.Values[1] := '5432';
+  DbConnectionPage.Values[2] := 'MKFiloServis';
+  DbConnectionPage.Values[3] := 'postgres';
+end;
+
+function JsonEscape(Value: String): String;
+begin
+  StringChangeEx(Value, '\', '\\', True);
+  StringChangeEx(Value, '"', '\"', True);
+  StringChangeEx(Value, #13, '\r', True);
+  StringChangeEx(Value, #10, '\n', True);
+  Result := Value;
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if CurPageID = DbProviderPage.ID then
+  begin
+    if DbProviderPage.SelectedValueIndex = 2 then
+    begin
+      MsgBox('MSSQL secildi; ancak otomatik sema/migration ve audit kurulumu henuz SQL Server icin desteklenmiyor. PostgreSQL veya SQLite secin. MSSQL destegi tamamlandiginda bu secenek acilacaktir.', mbError, MB_OK);
+      Result := False;
+    end
+    else if DbProviderPage.SelectedValueIndex = 1 then
+    begin
+      DbConnectionPage.Values[2] := 'App_Data/MKFiloServis.db';
+    end
+    else
+    begin
+      DbConnectionPage.Values[0] := 'localhost';
+      DbConnectionPage.Values[1] := '5432';
+      DbConnectionPage.Values[2] := 'MKFiloServis';
+      DbConnectionPage.Values[3] := 'postgres';
+    end;
+  end
+  else if CurPageID = DbConnectionPage.ID then
+  begin
+    if DbProviderPage.SelectedValueIndex = 0 then
+    begin
+      if (Trim(DbConnectionPage.Values[0]) = '') or
+         (Trim(DbConnectionPage.Values[2]) = '') or
+         (Trim(DbConnectionPage.Values[3]) = '') or
+         (StrToIntDef(DbConnectionPage.Values[1], 0) < 1) or
+         (StrToIntDef(DbConnectionPage.Values[1], 0) > 65535) then
+      begin
+        MsgBox('PostgreSQL sunucu, port, veritabani adi ve kullanici adi gecerli olmalidir.', mbError, MB_OK);
+        Result := False;
+      end;
+    end
+    else if Trim(DbConnectionPage.Values[2]) = '' then
+    begin
+      MsgBox('SQLite veritabani dosya yolu bos olamaz.', mbError, MB_OK);
+      Result := False;
+    end;
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ProviderValue, HostValue, PortValue, NameValue, UserValue, PasswordValue: String;
+  SettingsPath, JsonText: String;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    if DbProviderPage.SelectedValueIndex = 0 then
+    begin
+      ProviderValue := '2';
+      HostValue := JsonEscape(Trim(DbConnectionPage.Values[0]));
+      PortValue := IntToStr(StrToIntDef(DbConnectionPage.Values[1], 5432));
+      NameValue := JsonEscape(Trim(DbConnectionPage.Values[2]));
+      UserValue := JsonEscape(Trim(DbConnectionPage.Values[3]));
+      PasswordValue := JsonEscape(DbConnectionPage.Values[4]);
+    end
+    else
+    begin
+      ProviderValue := '1';
+      HostValue := '';
+      PortValue := '0';
+      NameValue := JsonEscape(Trim(DbConnectionPage.Values[2]));
+      UserValue := '';
+      PasswordValue := '';
+    end;
+    JsonText := '{' + #13#10 +
+      '  "Id": 0,' + #13#10 +
+      '  "Provider": ' + ProviderValue + ',' + #13#10 +
+      '  "CanonicalProvider": 2,' + #13#10 +
+      '  "Host": "' + HostValue + '",' + #13#10 +
+      '  "Port": ' + PortValue + ',' + #13#10 +
+      '  "DatabaseName": "' + NameValue + '",' + #13#10 +
+      '  "Username": "' + UserValue + '",' + #13#10 +
+      '  "Password": "' + PasswordValue + '",' + #13#10 +
+      '  "UseIntegratedSecurity": false,' + #13#10 +
+      '  "LastUpdated": "' + GetDateTimeString('yyyy-mm-dd"T"hh:nn:ss', '-', ':') + 'Z"' + #13#10 +
+      '}';
+    SettingsPath := ExpandConstant('{app}\app\dbsettings.json');
+    if not SaveStringToFile(SettingsPath, UTF8Encode(JsonText), False) then
+      RaiseException('dbsettings.json dosyasi yazilamadi: ' + SettingsPath);
+    if DbProviderPage.SelectedValueIndex = 1 then
+      ForceDirectories(ExpandConstant('{app}\app\App_Data'));
+  end;
 end;

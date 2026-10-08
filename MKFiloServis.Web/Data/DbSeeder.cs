@@ -252,50 +252,25 @@ public static class DbSeeder
     /// </summary>
     public static async Task UpdateGelenFaturalarToEFaturaAsync(ApplicationDbContext context)
     {
-        try
+        var gelenFaturalar = await context.Faturalar
+            .IgnoreQueryFilters()
+            .AsTracking()
+            .Where(f => !f.IsDeleted && f.FaturaYonu == FaturaYonu.Gelen && f.EFaturaTipi != EFaturaTipi.EFatura)
+            .ToListAsync();
+
+        // Firma aidiyeti olmayan eski kayıtlarda audit sessizce atlanamaz.
+        if (gelenFaturalar.Any(f => f.FirmaId is not > 0))
+            throw new InvalidOperationException("Gelen fatura onarımı için bütün kayıtların firma aidiyeti belirlenmelidir.");
+
+        foreach (var fatura in gelenFaturalar)
         {
-            if (context.Database.IsNpgsql())
-            {
-                var affected = await context.Database.ExecuteSqlRawAsync(@"
-                    UPDATE ""Faturalar""
-                    SET ""EFaturaTipi"" = @p0,
-                        ""UpdatedAt"" = @p1
-                    WHERE ""IsDeleted"" = false
-                      AND ""FaturaYonu"" = @p2
-                      AND ""EFaturaTipi"" <> @p3;",
-                    (int)EFaturaTipi.EFatura,
-                    DateTime.UtcNow,
-                    (int)FaturaYonu.Gelen,
-                    (int)EFaturaTipi.EFatura);
-
-                if (affected > 0)
-                {
-                    Console.WriteLine($"? {affected} adet gelen fatura E-Fatura olarak güncellendi!");
-                }
-
-                return;
-            }
-
-            var gelenFaturalar = await context.Faturalar
-                .IgnoreQueryFilters()
-                .Where(f => !f.IsDeleted && f.FaturaYonu == FaturaYonu.Gelen && f.EFaturaTipi != EFaturaTipi.EFatura)
-                .ToListAsync();
-
-            if (gelenFaturalar.Any())
-            {
-                foreach (var fatura in gelenFaturalar)
-                {
-                    fatura.EFaturaTipi = EFaturaTipi.EFatura;
-                    fatura.UpdatedAt = DateTime.Now;
-                }
-
-                await context.SaveChangesAsync();
-                Console.WriteLine($"? {gelenFaturalar.Count} adet gelen fatura E-Fatura olarak güncellendi!");
-            }
+            fatura.EFaturaTipi = EFaturaTipi.EFatura;
+            fatura.UpdatedAt = DateTime.UtcNow;
         }
-        catch (Exception ex)
+        if (gelenFaturalar.Count > 0)
         {
-            Console.WriteLine($"UpdateGelenFaturalarToEFatura atlandi: {ex.Message}");
+            await context.SaveChangesAsync();
+            Console.WriteLine($"{gelenFaturalar.Count} gelen fatura audit kaydıyla E-Fatura olarak güncellendi.");
         }
     }
 

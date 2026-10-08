@@ -1,33 +1,26 @@
-using System;
-using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
-using MKFiloServis.Web.Services.Interfaces;
 using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Logging;
+using MKFiloServis.Web.Services.Interfaces;
 
 namespace MKFiloServis.Web.Services;
 
 /// <summary>
-/// Distributed cache servisi implementasyonu
-/// IDistributedCache üzerinden Redis veya Memory cache ile çalışır
+/// Cache values belong to a generation held in the shared backend. Invalidations
+/// rotate that generation, so factories on other processes cannot revive old data.
 /// </summary>
 public class CacheService : ICacheService
 {
+    private const string GenerationKey = "__MKFiloServis.Cache.v2.generation";
     private readonly IDistributedCache _cache;
     private readonly ILogger<CacheService> _logger;
-    // CacheService Scoped kayitli ancak IDistributedCache deposu singleton'dir.
-    // Key takibi instance bazli olursa RemoveByPrefixAsync baska scope'larda
-    // yazilmis anahtarlari goremez ve firma-bazli listeler bayat kalir
-    // (orn. arac firma transferi sonrasi eski firmada gorunme sorunu).
-    // Bu nedenle tracker tum instance'lar arasinda paylasilir (static).
-    private static readonly ConcurrentDictionary<string, bool> _keyTracker = new();
-    // Factory bu kilidin dışında çalışır; yalnız yayınlama/temizleme sırası korunur.
-    private static readonly SemaphoreSlim MutationGate = new(1, 1);
-    private static long _invalidationVersion;
     private static readonly TimeSpan DefaultExpiration = TimeSpan.FromMinutes(5);
-    
+    // Business lists are changed by several services and external import paths. Until
+    // invalidation is committed with the database write, serving a cached copy can
+    // return stale or cross-tenant data after an invalidation failure.
+    private static bool RequiresFreshRead(string key) =>
+        key.StartsWith(CacheKeys.Prefix, StringComparison.Ordinal);
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = null,
@@ -42,20 +35,40 @@ public class CacheService : ICacheService
         _logger = logger;
     }
 
+    private async Task<string> GetGenerationAsync(CancellationToken ct)
+    {
+        var generation = await _cache.GetStringAsync(GenerationKey, ct);
+        if (!string.IsNullOrEmpty(generation))
+            return generation;
+
+        // A missing/evicted marker must never reuse an old namespace. Concurrent
+        // initializers may cause a cache miss, but cannot make old values visible.
+        generation = Guid.NewGuid().ToString("N");
+        await _cache.SetStringAsync(GenerationKey, generation, new DistributedCacheEntryOptions(), ct);
+        return generation;
+    }
+
+    private static string PhysicalKey(string key, string generation)
+        => "__MKFiloServis.Cache.v2." + generation + "." +
+           Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)));
+
+    private async Task<T?> ReadAsync<T>(string key, string generation, CancellationToken ct) where T : class
+    {
+        var data = await _cache.GetStringAsync(PhysicalKey(key, generation), ct);
+        if (string.IsNullOrEmpty(data) || generation != await GetGenerationAsync(ct))
+            return null;
+        return JsonSerializer.Deserialize<T>(data, JsonOptions);
+    }
+
     public async Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default) where T : class
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (RequiresFreshRead(key)) return null;
         try
         {
-            var data = await _cache.GetStringAsync(key, cancellationToken);
-            if (string.IsNullOrEmpty(data))
-            {
-                return null;
-            }
-            
-            var result = JsonSerializer.Deserialize<T>(data, JsonOptions);
-            _logger.LogDebug("Cache HIT: {Key}", key);
-            return result;
+            return await ReadAsync<T>(key, await GetGenerationAsync(cancellationToken), cancellationToken);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Cache GET hatası: {Key}", key);
@@ -63,10 +76,8 @@ public class CacheService : ICacheService
         }
     }
 
-    public async Task SetAsync<T>(string key, T value, CancellationToken cancellationToken = default) where T : class
-    {
-        await SetAsync(key, value, DefaultExpiration, cancellationToken);
-    }
+    public Task SetAsync<T>(string key, T value, CancellationToken cancellationToken = default) where T : class
+        => SetAsync(key, value, DefaultExpiration, cancellationToken);
 
     public Task SetAsync<T>(string key, T value, TimeSpan absoluteExpiration, CancellationToken cancellationToken = default) where T : class
         => SetCoreAsync(key, value, new DistributedCacheEntryOptions
@@ -77,112 +88,71 @@ public class CacheService : ICacheService
     public Task SetWithSlidingAsync<T>(string key, T value, TimeSpan slidingExpiration, CancellationToken cancellationToken = default) where T : class
         => SetCoreAsync(key, value, new DistributedCacheEntryOptions
         {
-            SlidingExpiration = slidingExpiration
+            SlidingExpiration = slidingExpiration,
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1)
         }, null, cancellationToken);
 
     private async Task SetCoreAsync<T>(string key, T value, DistributedCacheEntryOptions options,
-        long? expectedVersion, CancellationToken cancellationToken) where T : class
+        string? expectedGeneration, CancellationToken ct) where T : class
     {
-        string data;
+        ct.ThrowIfCancellationRequested();
+        if (RequiresFreshRead(key)) return;
         try
         {
-            data = JsonSerializer.Serialize(value, JsonOptions);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Cache serialize hatası: {Key}", key);
-            return;
-        }
-        await MutationGate.WaitAsync(cancellationToken);
-        try
-        {
-            if (expectedVersion.HasValue && expectedVersion.Value != _invalidationVersion)
-            {
-                _logger.LogDebug("Cache sonucu temizlik sonrası yayınlanmadı: {Key}", key);
+            var generation = await GetGenerationAsync(ct);
+            if (expectedGeneration is not null && expectedGeneration != generation)
                 return;
-            }
-            await _cache.SetStringAsync(key, data, options, cancellationToken);
-            _keyTracker.TryAdd(key, true);
-            _logger.LogDebug("Cache SET: {Key}", key);
+            var data = JsonSerializer.Serialize(value, JsonOptions);
+            // If invalidation races this write, it remains in the old namespace.
+            // Future readers use the new generation and cannot observe this value.
+            await _cache.SetStringAsync(PhysicalKey(key, generation), data, options, ct);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Cache SET hatası: {Key}", key);
         }
-        finally
-        {
-            MutationGate.Release();
-        }
     }
 
-    public async Task RemoveAsync(string key, CancellationToken cancellationToken = default)
+    public Task RemoveAsync(string key, CancellationToken cancellationToken = default)
+        => InvalidateAsync(key, cancellationToken);
+
+    public Task RemoveByPrefixAsync(string prefix, CancellationToken cancellationToken = default)
+        => InvalidateAsync(prefix, cancellationToken);
+
+    private async Task InvalidateAsync(string reason, CancellationToken ct)
     {
-        await MutationGate.WaitAsync(cancellationToken);
+        ct.ThrowIfCancellationRequested();
+        if (RequiresFreshRead(reason)) return;
         try
         {
-            Interlocked.Increment(ref _invalidationVersion);
-            await _cache.RemoveAsync(key, cancellationToken);
-            _keyTracker.TryRemove(key, out _);
-            _logger.LogDebug("Cache REMOVE: {Key}", key);
+            // IDistributedCache cannot enumerate keys or atomically maintain a
+            // prefix index. Conservatively invalidate the whole application cache.
+            // Old namespace entries expire with their existing TTL.
+            await _cache.SetStringAsync(GenerationKey, Guid.NewGuid().ToString("N"),
+                new DistributedCacheEntryOptions(), ct);
+            _logger.LogDebug("Ortak cache nesli yenilendi: {Reason}", reason);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Cache REMOVE hatası: {Key}", key);
-        }
-        finally
-        {
-            MutationGate.Release();
-        }
-    }
-
-    public async Task RemoveByPrefixAsync(string prefix, CancellationToken cancellationToken = default)
-    {
-        await MutationGate.WaitAsync(cancellationToken);
-        try
-        {
-            // İlk kez hesaplanan anahtar tracker'da olmasa bile eski factory geçersiz olsun.
-            Interlocked.Increment(ref _invalidationVersion);
-            var keysToRemove = _keyTracker.Keys.Where(k => k.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToList();
-            foreach (var key in keysToRemove)
-            {
-                try
-                {
-                    await _cache.RemoveAsync(key, cancellationToken);
-                    _keyTracker.TryRemove(key, out _);
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    // Başarısız anahtar takibi korunur; diğer anahtarları temizlemeye devam et.
-                    _logger.LogWarning(ex, "Cache prefix anahtarı silinemedi: {Key}", key);
-                }
-            }
-            _logger.LogDebug("Cache REMOVE BY PREFIX: {Prefix}, Attempted: {Count}", prefix, keysToRemove.Count);
-        }
-        finally
-        {
-            MutationGate.Release();
+            _logger.LogError(ex, "Cache geçersizleştirme başarısız: {Reason}", reason);
+            // A failed invalidation must not be reported as a successful removal.
+            throw;
         }
     }
 
     public async Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (RequiresFreshRead(key)) return false;
         try
         {
-            var data = await _cache.GetAsync(key, cancellationToken);
-            return data != null && data.Length > 0;
+            var generation = await GetGenerationAsync(cancellationToken);
+            var data = await _cache.GetAsync(PhysicalKey(key, generation), cancellationToken);
+            return data is { Length: > 0 } && generation == await GetGenerationAsync(cancellationToken);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Cache EXISTS hatası: {Key}", key);
@@ -190,40 +160,54 @@ public class CacheService : ICacheService
         }
     }
 
-    public async Task<T> GetOrSetAsync<T>(string key, Func<Task<T>> factory, TimeSpan? absoluteExpiration = null, CancellationToken cancellationToken = default) where T : class
+    public async Task<T> GetOrSetAsync<T>(string key, Func<Task<T>> factory, TimeSpan? absoluteExpiration = null,
+        CancellationToken cancellationToken = default) where T : class
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var version = Volatile.Read(ref _invalidationVersion);
-        var cached = await GetAsync<T>(key, cancellationToken);
-        cancellationToken.ThrowIfCancellationRequested();
-        if (cached != null && version == Volatile.Read(ref _invalidationVersion))
-            return cached;
+        if (RequiresFreshRead(key))
+        {
+            var fresh = await factory();
+            cancellationToken.ThrowIfCancellationRequested();
+            return fresh;
+        }
+        string? generation = null;
+        try
+        {
+            generation = await GetGenerationAsync(cancellationToken);
+            var cached = await ReadAsync<T>(key, generation, cancellationToken);
+            if (cached is not null)
+                return cached;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            generation = null;
+            _logger.LogWarning(ex, "Cache okunamadı, veri kaynağı kullanılacak: {Key}", key);
+        }
 
-        _logger.LogDebug("Cache MISS: {Key}, factory çağrılıyor", key);
         var value = await factory();
         cancellationToken.ThrowIfCancellationRequested();
-        if (value != null)
-        {
+        if (value is not null && generation is not null)
             await SetCoreAsync(key, value, new DistributedCacheEntryOptions
             {
                 AbsoluteExpirationRelativeToNow = absoluteExpiration ?? DefaultExpiration
-            }, version, cancellationToken);
-        }
+            }, generation, cancellationToken);
         return value!;
     }
 
     public async Task RefreshAsync(string key, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (RequiresFreshRead(key)) return;
         try
         {
-            await _cache.RefreshAsync(key, cancellationToken);
-            _logger.LogDebug("Cache REFRESH: {Key}", key);
+            var generation = await GetGenerationAsync(cancellationToken);
+            await _cache.RefreshAsync(PhysicalKey(key, generation), cancellationToken);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Cache REFRESH hatası: {Key}", key);
         }
     }
 }
-
-

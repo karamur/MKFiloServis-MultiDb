@@ -21,6 +21,7 @@
 @inject ITasimaTedarikciService TasimaTedarikciService
 @inject IFirmaService FirmaService
 @inject IDbContextFactory<MKFiloServis.Web.Data.ApplicationDbContext> DbContextFactory
+@inject ILogger<SoforForm> Logger
 @rendermode InteractiveServer
 
 <PageTitle>@(IsEdit ? "Personel Düzenle" : "Yeni Personel")</PageTitle>
@@ -2130,11 +2131,29 @@
             {
                 try
                 {
-                    await SecureFileService.DeleteAsync(yeniRelativePath);
+                    await using var verify = await DbContextFactory.CreateDbContextAsync();
+                    var isReferenced = await verify.PersonelOzlukEvraklar.AsNoTracking()
+                        .AnyAsync(x => x.DosyaYolu == yeniRelativePath) ||
+                        await verify.PersonelOzlukEvrakVersiyonlar.AsNoTracking()
+                            .AnyAsync(x => x.DosyaYolu == yeniRelativePath) ||
+                        await verify.EvrakDosyalari.AsNoTracking()
+                            .AnyAsync(x => x.DosyaYolu == yeniRelativePath);
+
+                    if (!isReferenced)
+                        await SecureFileService.DeleteAsync(yeniRelativePath);
+                    else
+                        Logger.LogWarning(
+                            "Personel evrak upload sonrası hata oluştu ancak yeni dosya DB'de referanslı; dosya korunuyor. PersonelId={PersonelId}, EvrakTanimId={EvrakTanimId}, Yol={Yol}",
+                            Id, yuklenenEvrakTanimId, yeniRelativePath);
                 }
-                catch
+                catch (Exception compensationException)
                 {
-                    // Rollback temizliği başarısız olsa da asıl hatayı gizleme.
+                    Logger.LogError(compensationException,
+                        "Personel evrak upload telafisinde referans doğrulanamadı; yeni dosya güvenlik için korundu. PersonelId={PersonelId}, EvrakTanimId={EvrakTanimId}, Yol={Yol}",
+                        Id, yuklenenEvrakTanimId, yeniRelativePath);
+                    ex = new AggregateException(
+                        "Personel evrak yükleme başarısız veya belirsiz; yeni dosyanın DB başvurusu doğrulanamadı ve dosya korunuyor.",
+                        ex, compensationException);
                 }
             }
 
@@ -2535,7 +2554,7 @@
                 dosya.PersonelEvrakId,
                 dosya.VersiyonId);
 
-            ToastService.ShowSuccess("Dosya silindi.");
+            ToastService.ShowSuccess("Dosya listeden kaldırıldı; geri alma için saklanıyor.");
             await EvrakDurumuYukle();
             await DetayDosyalariYukle(seciliDetayEvrak);
         }

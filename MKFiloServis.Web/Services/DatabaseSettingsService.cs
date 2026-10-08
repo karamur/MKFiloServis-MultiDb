@@ -60,6 +60,7 @@ public class DatabaseSettingsService : IDatabaseSettingsService
     public async Task SaveSettingsAsync(DatabaseSettings settings)
     {
         NormalizeSettings(settings);
+        EnsureSupportedRuntimeProvider(settings.Provider);
         settings.LastUpdated = DateTime.UtcNow;
         var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
         await File.WriteAllTextAsync(_settingsPath, json);
@@ -70,6 +71,7 @@ public class DatabaseSettingsService : IDatabaseSettingsService
         try
         {
             NormalizeSettings(settings);
+            EnsureSupportedRuntimeProvider(settings.Provider);
             var connectionString = settings.GetConnectionString();
 
             switch (settings.Provider)
@@ -132,6 +134,7 @@ public class DatabaseSettingsService : IDatabaseSettingsService
         try
         {
             NormalizeSettings(settings);
+            EnsureSupportedRuntimeProvider(settings.Provider);
 
             var testResult = await TestConnectionAsync(settings);
             if (!testResult.Success)
@@ -153,6 +156,16 @@ public class DatabaseSettingsService : IDatabaseSettingsService
         catch (Exception ex)
         {
             return (false, $"Ayarlar kaydedilemedi: {ex.Message}");
+        }
+    }
+
+    private static void EnsureSupportedRuntimeProvider(DatabaseProvider provider)
+    {
+        if (provider is not (DatabaseProvider.PostgreSQL or DatabaseProvider.SQLite))
+        {
+            throw new NotSupportedException(
+                $"{provider} için otomatik şema migration desteği bulunmuyor. Bu sürümde yalnız PostgreSQL ve SQLite seçilebilir. " +
+                "Ayar kaydedilmedi ve veritabanı geçişi başlatılmadı.");
         }
     }
 

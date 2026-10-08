@@ -3,7 +3,9 @@
 @page "/banka-hareketleri/{Id:int}"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
 @inject IBankaKasaHareketService HareketService
+@inject IKullaniciService KullaniciService
 @inject IBankaHesapService BankaHesapService
 @inject ICariService CariService
 @inject IToastService ToastService
@@ -322,6 +324,15 @@
     {
         if (isSaving)
             return;
+
+        var gerekliYetki = IsEdit ? Yetkiler.BankaHareketleriDuzenle : Yetkiler.BankaHareketleriYaz;
+        var aktifKullanici = await KullaniciService.GetAktifKullaniciAsync();
+        if (aktifKullanici is null || !await KullaniciService.YetkiVarMiAsync(aktifKullanici.Id, gerekliYetki))
+        {
+            saveErrorMessage = "Banka hareketi yazma yetkiniz yok veya oturumunuz artık etkin değil. Sayfayı yenileyip tekrar giriş yapın.";
+            ToastService.ShowError(saveErrorMessage);
+            return;
+        }
 
         if (hareket.BankaHesapId == 0 || hareket.Tutar <= 0)
         {

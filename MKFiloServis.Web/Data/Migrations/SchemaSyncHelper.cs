@@ -172,7 +172,9 @@ public static class SchemaSyncHelper
                 var firmaIdExists = false;
                 try
                 {
-                    await using var checkConn = context.Database.GetDbConnection();
+                    // Bağlantının sahibi DbContext'tir; burada dispose etmek SQLite
+                    // :memory: veritabanını ve çağıranın mevcut bağlantısını kapatır.
+                    var checkConn = context.Database.GetDbConnection();
                     if (checkConn.State != System.Data.ConnectionState.Open)
                         await checkConn.OpenAsync();
                     await using var checkCmd = checkConn.CreateCommand();
@@ -187,6 +189,7 @@ public static class SchemaSyncHelper
                         ALTER TABLE ""FisNoCounters"" ADD COLUMN ""FirmaId"" INTEGER NOT NULL DEFAULT 0;
                     ");
                 }
+                await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(context.Database.GetDbConnection());
                 // NULL FirmaId'leri düzelt
                 await context.Database.ExecuteSqlRawAsync(@"
                     UPDATE ""FisNoCounters"" SET ""FirmaId"" = 0 WHERE ""FirmaId"" IS NULL;

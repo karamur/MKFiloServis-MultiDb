@@ -122,8 +122,11 @@ public class BankaHareketImportService : IBankaHareketImportService
             foreach (var s in satirlar)
             {
                 s.SiraNo = i++;
-                if (s.Tutar == null || s.Tutar == 0) s.HataMesaji = "Tutar okunamadı";
-                else if (s.Tarih == null) s.HataMesaji = "Tarih okunamadı";
+                if (s.HataMesaji == null)
+                {
+                    if (s.Tutar == null || s.Tutar == 0) s.HataMesaji = "Tutar okunamadı";
+                    else if (s.Tarih == null) s.HataMesaji = "Tarih okunamadı";
+                }
             }
 
             _stage.AddRange(satirlar);
@@ -265,21 +268,7 @@ public class BankaHareketImportService : IBankaHareketImportService
             decimal? cikis = cikisCol.HasValue ? ReadDecimal(ws.Cell(r, cikisCol.Value)) : null;
             decimal? tutar = tutarCol.HasValue ? ReadDecimal(ws.Cell(r, tutarCol.Value)) : null;
 
-            if (giris.HasValue && giris.Value > 0)
-            {
-                satir.Tutar = giris.Value;
-                satir.HareketTipi = HareketTipi.Giris;
-            }
-            else if (cikis.HasValue && cikis.Value > 0)
-            {
-                satir.Tutar = cikis.Value;
-                satir.HareketTipi = HareketTipi.Cikis;
-            }
-            else if (tutar.HasValue && tutar.Value != 0)
-            {
-                satir.Tutar = Math.Abs(tutar.Value);
-                satir.HareketTipi = tutar.Value >= 0 ? HareketTipi.Giris : HareketTipi.Cikis;
-            }
+            SetAmountAndDirection(satir, giris, cikis, tutar);
 
             // Boş satırı atla
             if (satir.Tarih == null && satir.Tutar == null && string.IsNullOrWhiteSpace(satir.Aciklama))
@@ -332,19 +321,7 @@ public class BankaHareketImportService : IBankaHareketImportService
             decimal? cikis = cikisIdx >= 0 && cikisIdx < parts.Count ? TryParseDecimal(parts[cikisIdx]) : null;
             decimal? tutar = tutarIdx >= 0 && tutarIdx < parts.Count ? TryParseDecimal(parts[tutarIdx]) : null;
 
-            if (giris.HasValue && giris.Value > 0)
-            {
-                satir.Tutar = giris.Value; satir.HareketTipi = HareketTipi.Giris;
-            }
-            else if (cikis.HasValue && cikis.Value > 0)
-            {
-                satir.Tutar = cikis.Value; satir.HareketTipi = HareketTipi.Cikis;
-            }
-            else if (tutar.HasValue && tutar.Value != 0)
-            {
-                satir.Tutar = Math.Abs(tutar.Value);
-                satir.HareketTipi = tutar.Value >= 0 ? HareketTipi.Giris : HareketTipi.Cikis;
-            }
+            SetAmountAndDirection(satir, giris, cikis, tutar);
 
             satir.KaynakSatirOzeti = $"CSV satır {i + 1}";
             liste.Add(satir);
@@ -354,6 +331,46 @@ public class BankaHareketImportService : IBankaHareketImportService
             sonuc.Uyarilar.Add("CSV içinden veri satırı çıkarılamadı.");
 
         return liste;
+    }
+
+    private static void SetAmountAndDirection(BankaHareketImportSatir row,
+        decimal? incoming, decimal? outgoing, decimal? signedAmount)
+    {
+        if (incoming < 0 || outgoing < 0)
+        {
+            row.HataMesaji = "Giriş/çıkış sütunları negatif olamaz; banka satırını düzeltin.";
+            return;
+        }
+
+        var hasIncoming = incoming > 0;
+        var hasOutgoing = outgoing > 0;
+        if (hasIncoming && hasOutgoing)
+        {
+            row.HataMesaji = "Aynı satırda hem giriş hem çıkış tutarı var; yön belirsiz olduğu için aktarılmadı.";
+            return;
+        }
+
+        if (hasIncoming || hasOutgoing)
+        {
+            var explicitAmount = hasIncoming ? incoming!.Value : outgoing!.Value;
+            var explicitType = hasIncoming ? HareketTipi.Giris : HareketTipi.Cikis;
+            if (signedAmount is { } amount && amount != 0 &&
+                (Math.Abs(amount) != explicitAmount || (amount > 0) != hasIncoming))
+            {
+                row.HataMesaji = "Tutar ile giriş/çıkış sütunları birbiriyle uyuşmuyor; satır aktarılmadı.";
+                return;
+            }
+
+            row.Tutar = explicitAmount;
+            row.HareketTipi = explicitType;
+            return;
+        }
+
+        if (signedAmount is { } signed && signed != 0)
+        {
+            row.Tutar = Math.Abs(signed);
+            row.HareketTipi = signed > 0 ? HareketTipi.Giris : HareketTipi.Cikis;
+        }
     }
 
     private static List<BankaHareketImportSatir> ParsePdf(byte[] icerik, BankaHareketImportSonuc sonuc)

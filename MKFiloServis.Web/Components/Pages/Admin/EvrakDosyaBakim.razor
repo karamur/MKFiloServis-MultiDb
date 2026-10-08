@@ -3,6 +3,7 @@
 @attribute [Authorize(Roles = "Admin")]
 @using Microsoft.AspNetCore.Authorization
 @using MKFiloServis.Web.Services.Interfaces
+@using MKFiloServis.Web.Services
 @inject IEvrakDosyaMaintenanceService MaintenanceService
 @inject IToastService ToastService
 @inject IJSRuntime JS
@@ -33,22 +34,22 @@
         </div>
 
         <div class="row g-3 mb-4">
-            <div class="col-md-3">
+            <div class="col">
                 <div class="card border-secondary text-center">
                     <div class="card-body py-2"><small>Toplam Kayıt</small><h4>@report.ToplamEvrakDosya</h4></div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col">
                 <div class="card border-success text-center">
                     <div class="card-body py-2"><small>Sağlam</small><h4 class="text-success">@report.SaglamSayisi</h4></div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col">
                 <div class="card border-danger text-center">
                     <div class="card-body py-2"><small>Kayıp</small><h4 class="text-danger">@report.KayipSayisi</h4></div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col">
                 <div class="card border-primary text-center">
                     <div class="card-body py-2">
                         <small>Temizlenen</small>
@@ -56,7 +57,79 @@
                     </div>
                 </div>
             </div>
+            <div class="col">
+                <div class="card border-warning text-center">
+                    <div class="card-body py-2"><small>DB'de referanssız şifreli dosya</small><h4 class="text-warning">@report.YetimSifreliDosyaSayisi</h4></div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card border-warning text-center">
+                    <div class="card-body py-2"><small>DB'de yolu bulunmayan şifresiz aday</small><h4 class="text-warning">@report.SifresizDosyaAdaySayisi</h4></div>
+                </div>
+            </div>
         </div>
+
+        <div class="alert alert-warning py-2">
+            <i class="bi bi-shield-check me-1"></i>
+            Yetim dosyalar yalnız raporlanır. Bu ekranda fiziksel dosyalar otomatik silinmez.
+            Şifreli tarama uploads, Arsiv ve Depo altındaki <code>.enc</code> dosyalarını; şifresiz aday taraması depolama kökündeki uploads/Arsiv ile eski ortak evrak ve wwwroot/uploads klasörlerini kapsar. Sembolik bağlantılar izlenmez. Adaylar DB'de bilinen yol alanlarında bulunmayan dosyalardır; manuel inceleme gerekir.
+        </div>
+
+        @if (report.YetimSifreliDosyalar.Count > 0)
+        {
+            <div class="card mb-3">
+                <div class="card-header bg-warning bg-opacity-10">
+                    <strong><i class="bi bi-file-earmark-excel me-1"></i>DB'de Referanssız Şifreli Dosyalar (@report.YetimSifreliDosyalar.Count)</strong>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 400px;">
+                        <table class="table table-sm table-striped mb-0">
+                            <thead class="table-dark sticky-top">
+                                <tr><th>Dosya Yolu</th><th>Boyut</th><th>Son Değişiklik (UTC)</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var file in report.YetimSifreliDosyalar)
+                                {
+                                    <tr>
+                                        <td><code>@file.StoragePath</code></td>
+                                        <td>@file.Size.ToString("N0") bayt</td>
+                                        <td>@file.LastWriteTimeUtc.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (report.SifresizDosyaAdaylari.Count > 0)
+        {
+            <div class="card mb-3">
+                <div class="card-header bg-warning bg-opacity-10">
+                    <strong><i class="bi bi-file-earmark me-1"></i>DB'de Yolu Bulunmayan Şifresiz Dosya Adayları (@report.SifresizDosyaAdaylari.Count)</strong>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 400px;">
+                        <table class="table table-sm table-striped mb-0">
+                            <thead class="table-dark sticky-top">
+                                <tr><th>Dosya Yolu</th><th>Boyut</th><th>Son Değişiklik (UTC)</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var file in report.SifresizDosyaAdaylari)
+                                {
+                                    <tr>
+                                        <td><code>@file.StoragePath</code></td>
+                                        <td>@file.Size.ToString("N0") bayt</td>
+                                        <td>@file.LastWriteTimeUtc.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
 
         @if (report.Kayiplar.Count > 0)
         {

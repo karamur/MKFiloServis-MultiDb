@@ -1,3 +1,5 @@
+@implements IDisposable
+@inject ILogger<AracForm> TransferLogger
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:filoservis")]
 @page "/araclar/yeni"
 @page "/araclar/{Id:int}"
@@ -863,15 +865,20 @@
             <div class="modal-content">
                 <div class="modal-header bg-warning">
                     <h5 class="modal-title"><i class="bi bi-building-exclamation me-2"></i>Firma Değişikliği</h5>
-                    <button type="button" class="btn-close" @onclick="FirmaDegisiklikIptal"></button>
+                    <button type="button" class="btn-close" disabled="@transferWriting" @onclick="FirmaDegisiklikIptal"></button>
                 </div>
                 <div class="modal-body">
                     <p>Araç <strong>@orijinalFirmaAdi</strong> firmasından <strong>@yeniFirmaAdi</strong> firmasına taşınacak.</p>
 
+                    @if (transferBusy)
+                    {
+                        <p class="text-muted" role="status">@(transferWriting ? "Taşıma kaydediliyor; işlem bitene kadar bekleyin." : "Taşıma listesi hazırlanıyor...")</p>
+                    }
+
                     @if (transferItems == null)
                     {
                         <div class="d-grid gap-2">
-                            <button type="button" class="btn btn-primary" @onclick="FirmaTransferListele">
+                            <button type="button" class="btn btn-primary" disabled="@transferBusy" @onclick="FirmaTransferListele">
                                 <i class="bi bi-list-check me-1"></i>Taşınacak Verileri Listele
                             </button>
                         </div>
@@ -880,7 +887,7 @@
                     {
                         <p class="text-muted">Taşınacak ek veri bulunamadı. Sadece araç kaydı taşınacak.</p>
                         <div class="d-grid gap-2">
-                            <button type="button" class="btn btn-primary" @onclick="AracTasinsinOnay">
+                            <button type="button" class="btn btn-primary" disabled="@transferBusy" @onclick="AracTasinsinOnay">
                                 <i class="bi bi-check-lg me-1"></i>Onayla ve Taşı
                             </button>
                         </div>
@@ -891,23 +898,20 @@
                         @foreach (var item in transferItems)
                         {
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" checked="@item.Selected"
+                                <input class="form-check-input" type="checkbox" checked="@item.Selected" disabled="@(item.Required || transferBusy)"
                                        @onchange="e => item.Selected = (bool)(e.Value ?? false)" id="@item.Key" />
                                 <label class="form-check-label" for="@item.Key">@item.Label</label>
                             </div>
                         }
                         <div class="d-flex gap-2 mt-3">
-                            <button type="button" class="btn btn-primary" @onclick="AracTasinsinOnay">
+                            <button type="button" class="btn btn-primary" disabled="@transferBusy" @onclick="AracTasinsinOnay">
                                 <i class="bi bi-check-lg me-1"></i>Seçilenleri Taşı
-                            </button>
-                            <button type="button" class="btn btn-outline-primary" @onclick="BugundenOnay">
-                                <i class="bi bi-calendar-check me-1"></i>Bugünden Sonra Kopyala
                             </button>
                         </div>
                     }
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" @onclick="FirmaDegisiklikIptal">İptal</button>
+                    <button type="button" class="btn btn-secondary" disabled="@transferWriting" @onclick="FirmaDegisiklikIptal">İptal</button>
                 </div>
             </div>
         </div>
@@ -934,6 +938,29 @@
     private string orijinalFirmaAdi = "";
     private string yeniFirmaAdi = "";
     private bool showFirmaDegisiklikModal;
+    private bool transferBusy;
+    private bool transferWriting;
+    private bool transferDisposed;
+    private long transferVersion;
+
+    private void TransferFirmaDegisti()
+    {
+        System.Threading.Interlocked.Increment(ref transferVersion);
+        _ = InvokeAsync(() =>
+        {
+            if (transferDisposed) return;
+            showFirmaDegisiklikModal = false;
+            transferItems = null;
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        transferDisposed = true;
+        System.Threading.Interlocked.Increment(ref transferVersion);
+        AktifFirmaProvider.AktifFirmaDegisti -= TransferFirmaDegisti;
+    }
 
     // Evrak yönetimi
     private List<AracEvrak> aracEvraklari = new();
@@ -962,6 +989,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        AktifFirmaProvider.AktifFirmaDegisti += TransferFirmaDegisti;
         try
         {
             tedarikciCariler = await CariService.GetByTipAsync(CariTipi.Tedarikci);
@@ -994,6 +1022,9 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        System.Threading.Interlocked.Increment(ref transferVersion);
+        showFirmaDegisiklikModal = false;
+        transferItems = null;
         if (IsEdit)
         {
             try
@@ -1104,13 +1135,41 @@
 
     private List<TransferableItem>? transferItems;
 
+    private bool TransferGuncel(long version, int aracId, int? kaynakFirmaId, int? hedefFirmaId)
+        => !transferDisposed && showFirmaDegisiklikModal &&
+           System.Threading.Volatile.Read(ref transferVersion) == version && arac.Id == aracId &&
+           arac.FirmaId == hedefFirmaId && !AktifFirmaProvider.TumFirmalar &&
+           AktifFirmaProvider.AktifFirmaId == kaynakFirmaId;
+
     private async Task FirmaTransferListele()
     {
-        transferItems = await FirmaTransferService.GetAracTransferItemsAsync(arac.Id);
+        if (transferBusy || !showFirmaDegisiklikModal || transferDisposed) return;
+        transferBusy = true;
+        var version = System.Threading.Volatile.Read(ref transferVersion);
+        var aracId = arac.Id;
+        var kaynak = AktifFirmaProvider.AktifFirmaId;
+        var hedef = arac.FirmaId;
+        try
+        {
+            var items = await FirmaTransferService.GetAracTransferItemsAsync(aracId);
+            if (TransferGuncel(version, aracId, kaynak, hedef)) transferItems = items;
+        }
+        catch (Exception ex)
+        {
+            TransferLogger.LogWarning(ex, "Araç taşıma envanteri alınamadı. Araç: {AracId}", aracId);
+            if (TransferGuncel(version, aracId, kaynak, hedef))
+            {
+                transferItems = null;
+                ToastService.ShowError("Taşıma listesi alınamadı. Admin yetkinizi ve kaynak firma seçimini kontrol edin.");
+            }
+        }
+        finally { transferBusy = false; }
     }
 
     private void FirmaDegisiklikIptal()
     {
+        if (transferWriting) return;
+        System.Threading.Interlocked.Increment(ref transferVersion);
         showFirmaDegisiklikModal = false;
         arac.FirmaId = orijinalFirmaId;
         transferItems = null;
@@ -1118,48 +1177,42 @@
 
     private async Task AracTasinsinOnay()
     {
-        var selectedKeys = transferItems?.Where(t => t.Selected).Select(t => t.Key).ToList() ?? new List<string>();
-        showFirmaDegisiklikModal = false;
-        transferItems = null;
+        if (transferBusy || transferDisposed || !showFirmaDegisiklikModal || transferItems == null) return;
+        if (AktifFirmaProvider.TumFirmalar || AktifFirmaProvider.AktifFirmaId != orijinalFirmaId || arac.FirmaId is not > 0)
+        {
+            ToastService.ShowWarning("Kaynak firma seçimini kontrol edip taşıma penceresini yeniden açın.");
+            return;
+        }
+        transferBusy = transferWriting = true;
+        var version = System.Threading.Volatile.Read(ref transferVersion);
+        var aracId = arac.Id;
+        var kaynak = AktifFirmaProvider.AktifFirmaId;
+        var hedef = arac.FirmaId;
+        var selectedKeys = transferItems.Where(t => t.Required || t.Selected).Select(t => t.Key).ToList();
         try
         {
-            var (moved, errors) = await FirmaTransferService.MoveAracToFirmaAsync(arac.Id, arac.FirmaId!.Value, selectedKeys);
-            await AracService.UpdateAsync(arac);
+            var (moved, errors) = await FirmaTransferService.MoveAracToFirmaAsync(aracId, hedef!.Value, selectedKeys, arac);
+            if (!TransferGuncel(version, aracId, kaynak, hedef)) return;
             if (errors.Any())
-                ToastService.ShowError($"Taşıma hatası: {string.Join("; ", errors)}");
+            {
+                TransferLogger.LogWarning("Araç taşıma hazırlığı başarısız. Araç: {AracId}, Hatalar: {Errors}", aracId, string.Join("; ", errors));
+                ToastService.ShowError("Taşıma tamamlanamadı. İlişkili kayıtların firma bağlantılarını kontrol edin.");
+            }
             else
             {
-                ToastService.ShowSuccess($"Araç taşındı ({moved} kayıt).");
+                showFirmaDegisiklikModal = false;
+                transferItems = null;
+                ToastService.ShowSuccess($"Araç taşındı ({moved} ilişkili kayıt).");
                 Navigation.NavigateTo("/araclar");
             }
         }
         catch (Exception ex)
         {
-            ToastService.ShowError($"Kayıt hatası: {ex.InnerException?.Message ?? ex.Message}");
+            TransferLogger.LogWarning(ex, "Araç taşıması başarısız. Araç: {AracId}, Hedef: {Hedef}", aracId, hedef);
+            if (TransferGuncel(version, aracId, kaynak, hedef))
+                ToastService.ShowError("Araç taşınamadı. Yetki, firma seçimi ve ilişkili kayıtların hedef firma bağlantılarını kontrol edin.");
         }
-    }
-
-    private async Task BugundenOnay()
-    {
-        var selectedKeys = transferItems?.Where(t => t.Selected).Select(t => t.Key).ToList() ?? new List<string>();
-        showFirmaDegisiklikModal = false;
-        transferItems = null;
-        try
-        {
-            var (moved, errors) = await FirmaTransferService.MoveAracToFirmaAsync(arac.Id, arac.FirmaId!.Value, selectedKeys);
-            await AracService.UpdateAsync(arac);
-            if (errors.Any())
-                ToastService.ShowError($"Kopyalama hatası: {string.Join("; ", errors)}");
-            else
-            {
-                ToastService.ShowSuccess($"Araç kaydedildi ({moved} kayıt).");
-                Navigation.NavigateTo("/araclar");
-            }
-        }
-        catch (Exception ex)
-        {
-            ToastService.ShowError($"Kayıt hatası: {ex.InnerException?.Message ?? ex.Message}");
-        }
+        finally { transferBusy = transferWriting = false; }
     }
 
     private void OnSahiplikTipiChanged(ChangeEventArgs e)
@@ -1180,6 +1233,7 @@
 
     private async Task Kaydet()
     {
+        if (transferBusy || transferDisposed) return;
         if (string.IsNullOrWhiteSpace(arac.SaseNo))
         {
             ToastService.ShowError("Şase numarası zorunludur!");
@@ -1251,6 +1305,8 @@
         if (IsEdit && orijinalFirmaId.HasValue && arac.FirmaId != orijinalFirmaId)
         {
             yeniFirmaAdi = firmalar.FirstOrDefault(f => f.Id == arac.FirmaId)?.FirmaAdi ?? "?";
+            System.Threading.Interlocked.Increment(ref transferVersion);
+            transferItems = null;
             showFirmaDegisiklikModal = true;
             return;
         }

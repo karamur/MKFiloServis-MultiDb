@@ -10,6 +10,7 @@ public class TestDataSeeder
 {
     private readonly ApplicationDbContext _context;
     private readonly ILogger<TestDataSeeder> _logger;
+    private readonly int? _firmaId;
     private readonly Random _random = new();
 
     // Türkçe isimler
@@ -20,10 +21,11 @@ public class TestDataSeeder
     // İstanbul ilçeleri
     private readonly string[] _ilceler = { "Kadıköy", "Beşiktaş", "Şişli", "Bakırköy", "Ataşehir", "Üsküdar", "Maltepe", "Kartal", "Pendik", "Tuzla", "Beylikdüzü", "Esenyurt", "Başakşehir", "Sarıyer", "Beykoz" };
 
-    public TestDataSeeder(ApplicationDbContext context, ILogger<TestDataSeeder> logger)
+    public TestDataSeeder(ApplicationDbContext context, ILogger<TestDataSeeder> logger, int? firmaId = null)
     {
         _context = context;
         _logger = logger;
+        _firmaId = firmaId;
     }
 
     /// <summary>
@@ -32,6 +34,7 @@ public class TestDataSeeder
     public async Task<TestDataResult> SeedAllAsync(bool silinenleriTemizle = false)
     {
         var result = new TestDataResult();
+        RequireMaintenanceContext();
 
         try
         {
@@ -72,8 +75,11 @@ public class TestDataSeeder
     /// </summary>
     public async Task TemizleAsync()
     {
+        RequireMaintenanceContext();
         // Puantaj Kayıtları
         var puantajlar = await _context.PuantajKayitlar
+            .Where(x => x.IsverenFirmaId == _firmaId ||
+                (x.IsverenFirmaId == null && x.Guzergah != null && x.Guzergah.FirmaId == _firmaId))
             .Where(x => x.GuzergahAdi != null && x.GuzergahAdi.Contains("[TEST]"))
             .ToListAsync();
         _context.PuantajKayitlar.RemoveRange(puantajlar);
@@ -152,7 +158,7 @@ public class TestDataSeeder
         if (await _context.Cariler.AnyAsync(c => c.Notlar != null && c.Notlar.Contains("[TEST]")))
             return 0;
 
-        var firma = await _context.Firmalar.FirstOrDefaultAsync();
+        var firma = await _context.Firmalar.FirstAsync(f => f.Id == _firmaId && f.Aktif && !f.IsDeleted);
         var cariler = new List<Cari>();
 
         // 10 Müşteri
@@ -573,7 +579,7 @@ public class TestDataSeeder
         if (await _context.IhaleProjeleri.AnyAsync(p => p.Notlar != null && p.Notlar.Contains("[TEST]")))
             return 0;
 
-        var firma = await _context.Firmalar.FirstOrDefaultAsync();
+        var firma = await _context.Firmalar.FirstAsync(f => f.Id == _firmaId && f.Aktif && !f.IsDeleted);
         var musteriler = await _context.Cariler.Where(c => c.CariTipi == CariTipi.Musteri && c.Aktif).Take(5).ToListAsync();
         var guzergahlar = await _context.Guzergahlar.Where(g => g.Aktif).ToListAsync();
 
@@ -881,7 +887,7 @@ public class TestDataSeeder
         if (await _context.ProformaFaturalar.AnyAsync(p => p.Aciklama != null && p.Aciklama.Contains("[TEST]")))
             return 0;
 
-        var firma = await _context.Firmalar.FirstOrDefaultAsync();
+        var firma = await _context.Firmalar.FirstAsync(f => f.Id == _firmaId && f.Aktif && !f.IsDeleted);
         var musteriler = await _context.Cariler
             .Where(c => c.CariTipi == CariTipi.Musteri && c.Aktif)
             .Take(5).ToListAsync();
@@ -1030,7 +1036,9 @@ public class TestDataSeeder
     private async Task<int> SeedPuantajKayitlarAsync()
     {
         // Fatura kesilmemiş puantaj kayıtları (toplu fatura demo için)
-        if (await _context.PuantajKayitlar.AnyAsync(p => p.GuzergahAdi != null && p.GuzergahAdi.Contains("[TEST]")))
+        if (await _context.PuantajKayitlar.AnyAsync(p =>
+            (p.IsverenFirmaId == _firmaId || (p.IsverenFirmaId == null && p.Guzergah != null && p.Guzergah.FirmaId == _firmaId)) &&
+            p.GuzergahAdi != null && p.GuzergahAdi.Contains("[TEST]")))
             return 0;
 
         var musteriler = await _context.Cariler
@@ -1060,6 +1068,7 @@ public class TestDataSeeder
 
             var kayit = new PuantajKayit
             {
+                IsverenFirmaId = _firmaId,
                 Yil = yil,
                 Ay = ay,
                 Bolge = "Anadolu",
@@ -1117,6 +1126,7 @@ public class TestDataSeeder
 
             var kayit2 = new PuantajKayit
             {
+                IsverenFirmaId = _firmaId,
                 Yil = yil,
                 Ay = ay,
                 Bolge = "Avrupa",
@@ -1171,6 +1181,12 @@ public class TestDataSeeder
     }
 
     #endregion
+
+    private void RequireMaintenanceContext()
+    {
+        if (_firmaId is not > 0 || _context.Database.CurrentTransaction == null)
+            throw new InvalidOperationException("Demo yazımı yalnız firma ve transaction kapsamı belirlenmiş bakım servisi üzerinden yapılabilir.");
+    }
 
     #region Yardımcı Metodlar
 

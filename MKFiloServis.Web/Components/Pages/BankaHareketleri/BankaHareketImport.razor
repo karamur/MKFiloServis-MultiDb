@@ -2,8 +2,10 @@
 @page "/banka-hareketleri/import"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
 @using Microsoft.AspNetCore.Components.Forms
 @inject IBankaHareketImportService ImportService
+@inject IKullaniciService KullaniciService
 @inject IBankaHesapService BankaHesapService
 @inject ICariService CariService
 @inject IToastService ToastService
@@ -256,6 +258,13 @@
 
     private async Task Yansit()
     {
+        var aktifKullanici = await KullaniciService.GetAktifKullaniciAsync();
+        if (aktifKullanici is null || !await KullaniciService.YetkiVarMiAsync(aktifKullanici.Id, Yetkiler.BankaHareketleriYaz))
+        {
+            ToastService.ShowError("Banka hareketi içe aktarma yetkiniz yok veya oturumunuz artık etkin değil. Sayfayı yenileyip tekrar giriş yapın.");
+            return;
+        }
+
         if (hedefHesapId <= 0)
         {
             ToastService.ShowWarning("Önce hedef hesabı seçin.");

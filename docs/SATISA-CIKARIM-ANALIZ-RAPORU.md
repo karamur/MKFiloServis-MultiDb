@@ -4,7 +4,7 @@
 **Kapsam:** Tüm çözüm (Web, Shared, DataSync, LisansDesktop, Client, Testler, CI/CD, Docker)
 **Yöntem:** Statik kod analizi, yapılandırma incelemesi, dosya/konum bazlı doğrulama
 
-> **Yeniden analiz (2026-10-02):** Aşağıdaki bulgular ilk analiz kesitidir; güncel açık iş listesi olarak okunmamalıdır. İlk 39 maddenin kaynakla tekrar karşılaştırılması, yapılanlar, kabul bekleyenler ve üç yeni bulgu [yeniden analiz raporunda](SATISA-CIKARIM-YENIDEN-ANALIZ-2026-10-02.md) kayıtlıdır; ikinci denetimin Bölüm 23'ü güncellenmiştir.
+> **Yeniden analiz (2026-10-02):** Aşağıdaki bulgular ilk analiz kesitidir; güncel açık iş listesi olarak okunmamalıdır. O tarihteki 39 maddelik ayrı rapor çalışma ağacında bulunmuyor. Mevcut birleşik 31 görev için [2026-10-06 görev envanteri](SATISA-CIKARIM-GOREV-ENVANTERI-2026-10-06.md) esas alınır; tarihsel karşılaştırmanın özeti ikinci denetimin Bölüm 23'ündedir.
 
 > **K-1 güncellemesi (2026-10-02):** Bu rapor ilk analiz kesitini korur. Güncel lisans üretimi, anahtar saklama, şifreli yedek ve geri yükleme LisansDesktop programının **İmza Anahtarı** menüsüne alınmıştır; harici betik ve ortam değişkeni gereksinimi kaldırılmıştır. Web yalnız ortak açık anahtarla doğrular. Program kabulü ve müşteri v2 geçişi açıktır. Güncel durum: [LISANS-IMZA-GECIS.md](LISANS-IMZA-GECIS.md) ve [denetim raporu Bölüm 20](DUZELTME-DENETIM-RAPORU-2.md#20-k-1--lisans-yönetiminin-program-içine-alınması-2026-10-02).
 

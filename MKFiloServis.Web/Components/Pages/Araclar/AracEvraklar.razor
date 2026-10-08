@@ -915,7 +915,7 @@
             try
             {
                 await AracService.DeleteEvrakDosyaAsync(dosya.Id);
-                ToastService.ShowSuccess("Dosya silindi.");
+                ToastService.ShowSuccess("Dosya listeden kaldırıldı; geri alma için saklanıyor.");
                 await YenileAsync();
 
                 // Modal guncelle

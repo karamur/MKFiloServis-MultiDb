@@ -1,4 +1,4 @@
-﻿using MKFiloServis.Shared.Entities;
+using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Web.Services.Interfaces;
@@ -60,12 +60,25 @@ public class GuzergahSeferService : IGuzergahSeferService
     internal async Task ReplaceAllInCurrentDbAsync(
         ApplicationDbContext context, int guzergahId, List<GuzergahSefer> seferler, DateTime now)
     {
+        if (context.Database.CurrentTransaction == null)
+            throw new InvalidOperationException("Sefer yenileme işlemi açık transaction içinde yürütülmelidir.");
+        var firmaId = _aktifFirmaProvider.AktifFirmaId;
+        if (_aktifFirmaProvider.TumFirmalar || firmaId is not > 0 || guzergahId <= 0)
+            throw new InvalidOperationException("Sefer yenilemek için tek bir kaynak firma ve geçerli güzergâh seçin.");
+        void SecimiDogrula()
+        {
+            if (_aktifFirmaProvider.TumFirmalar || _aktifFirmaProvider.AktifFirmaId != firmaId)
+                throw new InvalidOperationException("Firma seçimi değişti; sefer yenilemeyi tekrar başlatın.");
+        }
         seferler ??= [];
         var target = seferler.Count;
 
         // Parent Guzergah doğrulaması
         var guzergah = await VerifyGuzergahAccessAsync(context, guzergahId);
         var parentFirmaId = guzergah.FirmaId;
+        if (parentFirmaId != firmaId)
+            throw new UnauthorizedAccessException("Güzergâh seçili kaynak firmaya ait olmalıdır.");
+        SecimiDogrula();
 
         // ── AŞAMA 1: BEFORE ──
         var beforeTotal = await AllSeferQuery(context, guzergahId).CountAsync();
@@ -76,15 +89,21 @@ public class GuzergahSeferService : IGuzergahSeferService
             "GUZERGAH_REPLACE Before GuzergahId={GuzergahId} Target={Target} Total={Total} Active={Active} Deleted={Deleted}",
             guzergahId, target, beforeTotal, beforeActive, beforeDeleted);
 
-        // ── AŞAMA 2: SOFT-DELETE ──
-        var affected = await AllSeferQuery(context, guzergahId)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(x => x.IsDeleted, true)
-                .SetProperty(x => x.UpdatedAt, now));
-
-        _logger.LogWarning(
-            "GUZERGAH_REPLACE SoftDeleteExecute GuzergahId={GuzergahId} Affected={Affected}",
-            guzergahId, affected);
+        // Aktif kayıtları tracking ile kapat; silinmiş geçmişi yeniden değiştirme.
+        var eskiSeferler = await ActiveSeferQuery(context, guzergahId).AsTracking().ToListAsync();
+        if (eskiSeferler.Any(x => x.FirmaId != parentFirmaId))
+            throw new InvalidOperationException("Mevcut seferlerin firma bağlantıları tutarsız; yenileme öncesinde düzeltilmelidir.");
+        foreach (var eski in eskiSeferler)
+        {
+            eski.IsDeleted = true;
+            eski.DeletedAt = now;
+            eski.UpdatedAt = now;
+        }
+        SecimiDogrula();
+        await context.SaveChangesAsync();
+        _logger.LogInformation(
+            "GUZERGAH_REPLACE SoftDeleteTracked GuzergahId={GuzergahId} Affected={Affected}",
+            guzergahId, eskiSeferler.Count);
 
         var afterSoftDeleteActive = await ActiveSeferQuery(context, guzergahId).CountAsync();
         _logger.LogWarning(
@@ -118,8 +137,8 @@ public class GuzergahSeferService : IGuzergahSeferService
             guzergahId, target, yeniEntities.Count);
 
         context.GuzergahSeferleri.AddRange(yeniEntities);
+        SecimiDogrula();
         await context.SaveChangesAsync();
-        context.ChangeTracker.Clear();
 
         // ── AŞAMA 4: AFTER INSERT GUARD ──
         var afterInsertActive = await ActiveSeferQuery(context, guzergahId).CountAsync();
@@ -135,6 +154,7 @@ public class GuzergahSeferService : IGuzergahSeferService
                 $"SEFER SAYISI UYUŞMAZLIĞI! GuzergahId={guzergahId}, Hedef={target}, DB_Aktif={afterInsertActive}. " +
                 $"Aktifler={string.Join(" | ", aktifler.Select(x => $"Id={x.Id},Sira={x.Sira}"))}");
         }
+        SecimiDogrula();
     }
 
     /// <summary>

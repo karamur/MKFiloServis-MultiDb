@@ -51,8 +51,10 @@ public static class SoforMaasMigrationHelper
                 ";
 
                 await context.Database.ExecuteSqlRawAsync(sql);
+                await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(context.Database.GetDbConnection());
                 await context.Database.ExecuteSqlRawAsync($@"UPDATE ""{tableName}"" SET ""ResmiNetMaas"" = ""NetMaas"" WHERE COALESCE(""ResmiNetMaas"", 0) = 0 AND COALESCE(""DigerMaas"", 0) = 0 AND COALESCE(""NetMaas"", 0) > 0");
                 // Mevcut ArgePersoneli = true olanları SGKBordroDahilMi = true, BordroTipiPersonel = 2 (Arge) yap
+                await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(context.Database.GetDbConnection());
                 await context.Database.ExecuteSqlRawAsync($@"UPDATE ""{tableName}"" SET ""SGKBordroDahilMi"" = TRUE, ""BordroTipiPersonel"" = 2 WHERE ""ArgePersoneli"" = TRUE AND ""SGKBordroDahilMi"" = FALSE");
                 return;
             }
@@ -65,6 +67,7 @@ public static class SoforMaasMigrationHelper
                 await EnsureSqliteColumnAsync(context, tableName, "ResmiNetMaas", "TEXT NOT NULL DEFAULT '0'");
                 await EnsureSqliteColumnAsync(context, tableName, "DigerMaas", "TEXT NOT NULL DEFAULT '0'");
                 await EnsureSqliteColumnAsync(context, tableName, "SgkCikisTarihi", "TEXT NULL");
+                await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(context.Database.GetDbConnection());
                 await context.Database.ExecuteSqlRawAsync($@"UPDATE ""{tableName}"" SET ""ResmiNetMaas"" = ""NetMaas"" WHERE IFNULL(""ResmiNetMaas"", '0') = '0' AND IFNULL(""DigerMaas"", '0') = '0' AND IFNULL(""NetMaas"", '0') <> '0'");
             }
         }

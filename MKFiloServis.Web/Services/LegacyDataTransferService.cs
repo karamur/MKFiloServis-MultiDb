@@ -1,4 +1,4 @@
-﻿using MKFiloServis.Web.Data;
+using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -225,6 +225,7 @@ public class LegacyDataTransferService
         var result = new TransferResult();
         using var source = await OpenSourceAsync();
         using var target = await OpenTargetAsync();
+        await using var transaction = await target.BeginTransactionAsync();
 
         using var cmd = new NpgsqlCommand(
             @"SELECT ""Id"", ""RolAdi"", ""Aciklama"", ""Renk"", ""SistemRolu"", ""IsDeleted"", ""CreatedAt"", ""UpdatedAt""
@@ -235,7 +236,7 @@ public class LegacyDataTransferService
         {
             try
             {
-                await InsertIfNotExistsAsync(target,
+                result.Transferred += await InsertIfNotExistsAsync(target, transaction,
                     @"INSERT INTO ""Roller"" (""Id"", ""RolAdi"", ""Aciklama"", ""Renk"", ""SistemRolu"", ""IsDeleted"", ""CreatedAt"", ""UpdatedAt"")
                       VALUES (@id,@ad,@aciklama,@renk,@sistem,@isdel,@ca,@ua)
                       ON CONFLICT (""RolAdi"") DO UPDATE SET
@@ -252,13 +253,14 @@ public class LegacyDataTransferService
                     new NpgsqlParameter("@isdel", reader.GetBoolean(5)),
                     new NpgsqlParameter("@ca", reader.GetDateTime(6)),
                     new NpgsqlParameter("@ua", reader.IsDBNull(7) ? DBNull.Value : reader.GetDateTime(7)));
-                result.Transferred++;
             }
             catch (PostgresException ex) when (ex.SqlState == "23505")
             {
                 // Farklı unique constraint (ör. Roller_pkey) çakışmalarında kayıt zaten mevcut kabul edilir.
             }
         }
+        await WriteTransferAuditAsync(target, transaction, "Roller", result.Transferred);
+        await transaction.CommitAsync();
         _logger.LogInformation("Roller: {Count} kayit", result.Transferred);
         return result;
     }
@@ -268,6 +270,7 @@ public class LegacyDataTransferService
         var result = new TransferResult();
         using var source = await OpenSourceAsync();
         using var target = await OpenTargetAsync();
+        await using var transaction = await target.BeginTransactionAsync();
 
         using var cmd = new NpgsqlCommand(
             @"SELECT ""Id"", ""KullaniciAdi"", ""AdSoyad"", ""SifreHash"", ""Email"", ""RolId"",
@@ -277,7 +280,7 @@ public class LegacyDataTransferService
 
         while (await reader.ReadAsync())
         {
-            await InsertIfNotExistsAsync(target,
+            result.Transferred += await InsertIfNotExistsAsync(target, transaction,
                 @"INSERT INTO ""Kullanicilar"" (""Id"", ""KullaniciAdi"", ""AdSoyad"", ""SifreHash"", ""Email"", ""RolId"",
                   ""Aktif"", ""Kilitli"", ""BasarisizGirisSayisi"", ""IsDeleted"", ""CreatedAt"", ""UpdatedAt"")
                   VALUES (@id,@ka,@ad,@sh,@em,@rid,@aktif,@kilit,@bgs,@isdel,@ca,@ua)
@@ -294,8 +297,9 @@ public class LegacyDataTransferService
                 new NpgsqlParameter("@isdel", reader.GetBoolean(9)),
                 new NpgsqlParameter("@ca", reader.GetDateTime(10)),
                 new NpgsqlParameter("@ua", reader.IsDBNull(11) ? DBNull.Value : reader.GetDateTime(11)));
-            result.Transferred++;
         }
+        await WriteTransferAuditAsync(target, transaction, "Kullanicilar", result.Transferred);
+        await transaction.CommitAsync();
         _logger.LogInformation("Kullanicilar: {Count} kayit", result.Transferred);
         return result;
     }
@@ -305,6 +309,7 @@ public class LegacyDataTransferService
         var result = new TransferResult();
         using var source = await OpenSourceAsync();
         using var target = await OpenTargetAsync();
+        await using var transaction = await target.BeginTransactionAsync();
 
         using var cmd = new NpgsqlCommand(
             @"SELECT ""Id"", ""RolId"", ""YetkiKodu"", ""Izin"", ""IsDeleted"", ""CreatedAt"", ""UpdatedAt""
@@ -313,7 +318,7 @@ public class LegacyDataTransferService
 
         while (await reader.ReadAsync())
         {
-            await InsertIfNotExistsAsync(target,
+            result.Transferred += await InsertIfNotExistsAsync(target, transaction,
                 @"INSERT INTO ""RolYetkileri"" (""Id"", ""RolId"", ""YetkiKodu"", ""Izin"", ""IsDeleted"", ""CreatedAt"", ""UpdatedAt"")
                   VALUES (@id,@rid,@yk,@izin,@isdel,@ca,@ua)
                   ON CONFLICT (""Id"") DO NOTHING",
@@ -324,8 +329,9 @@ public class LegacyDataTransferService
                 new NpgsqlParameter("@isdel", reader.GetBoolean(4)),
                 new NpgsqlParameter("@ca", reader.GetDateTime(5)),
                 new NpgsqlParameter("@ua", reader.IsDBNull(6) ? DBNull.Value : reader.GetDateTime(6)));
-            result.Transferred++;
         }
+        await WriteTransferAuditAsync(target, transaction, "RolYetkileri", result.Transferred);
+        await transaction.CommitAsync();
         _logger.LogInformation("RolYetkileri: {Count} kayit", result.Transferred);
         return result;
     }
@@ -337,6 +343,7 @@ public class LegacyDataTransferService
         var result = new TransferResult();
         using var source = await OpenSourceAsync();
         using var target = await OpenTargetAsync();
+        await using var transaction = await target.BeginTransactionAsync();
 
         var sourceCols = await GetColumnNamesAsync(source, tableName);
         if (sourceCols.Count == 0) return result;
@@ -387,8 +394,7 @@ public class LegacyDataTransferService
         {
             try
             {
-                await UpsertMuhasebeHesapAsync(target, commonCols, row);
-                result.Transferred++;
+                result.Transferred += await UpsertMuhasebeHesapAsync(target, transaction, commonCols, row);
             }
             catch (PostgresException ex) when (ex.SqlState == "23505" && commonCols.Any(c => c.targetName.Equals("Id", StringComparison.OrdinalIgnoreCase)))
             {
@@ -398,8 +404,7 @@ public class LegacyDataTransferService
                     .Where(c => !c.targetName.Equals("Id", StringComparison.OrdinalIgnoreCase))
                     .ToList();
 
-                await UpsertMuhasebeHesapAsync(target, withoutId, row);
-                result.Transferred++;
+                result.Transferred += await UpsertMuhasebeHesapAsync(target, transaction, withoutId, row);
             }
         }
 
@@ -440,6 +445,8 @@ public class LegacyDataTransferService
 
         await ResetSequenceAsync(target, tableName);
 
+        await WriteTransferAuditAsync(target, transaction, tableName, result.Transferred, parentUpdates);
+        await transaction.CommitAsync();
         _logger.LogInformation("{Table}: {Count} kayit, {ParentUpdates} ust hesap baglantisi", tableName, result.Transferred, parentUpdates);
         return result;
     }
@@ -454,6 +461,7 @@ public class LegacyDataTransferService
         var result = new TransferResult();
         using var source = await OpenSourceAsync();
         using var target = await OpenTargetAsync();
+        await using var transaction = await target.BeginTransactionAsync();
 
         try
         {
@@ -526,16 +534,14 @@ public class LegacyDataTransferService
 
                 try
                 {
-                    await InsertIfNotExistsAsync(target,
+                    result.Transferred += await InsertIfNotExistsAsync(target, transaction,
                         $"INSERT INTO \"{tableName}\" ({targetColList}) VALUES ({string.Join(",", values)}) ON CONFLICT (\"Id\") DO NOTHING",
                         parms.ToArray());
-                    result.Transferred++;
                 }
                 catch (PostgresException ex) when (ex.SqlState == "23505") { /* duplicate */ }
                 catch (PostgresException ex) when (ex.SqlState == "42703")
                 {
-                    _logger.LogWarning("{Table}: kolon uyusmazligi — {Msg}, ilk hatada durduruldu", tableName, ex.MessageText);
-                    break; // Kolon hatası tekrar edecek, döngüyü kır
+                    throw new InvalidOperationException($"Legacy {tableName} kolon uyuşmazlığı; tablo aktarımı geri alınacak.", ex);
                 }
             }
         }
@@ -544,6 +550,8 @@ public class LegacyDataTransferService
             _logger.LogInformation("{Table}: kaynak tablo yok", tableName);
         }
 
+        await WriteTransferAuditAsync(target, transaction, tableName, result.Transferred);
+        await transaction.CommitAsync();
         _logger.LogInformation("{Table}: {Count} kayit", tableName, result.Transferred);
         return result;
     }
@@ -601,14 +609,60 @@ public class LegacyDataTransferService
     {
         var conn = new NpgsqlConnection(_targetConnStr);
         await conn.OpenAsync();
+        try { await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(conn); }
+        catch { await conn.DisposeAsync(); throw; }
         return conn;
     }
 
-    private static async Task InsertIfNotExistsAsync(NpgsqlConnection conn, string sql, params NpgsqlParameter[] parameters)
+    private static async Task<int> InsertIfNotExistsAsync(NpgsqlConnection conn, NpgsqlTransaction transaction, string sql, params NpgsqlParameter[] parameters)
     {
-        using var cmd = new NpgsqlCommand(sql, conn);
+        using var cmd = new NpgsqlCommand(sql, conn, transaction);
         cmd.Parameters.AddRange(parameters);
-        await cmd.ExecuteNonQueryAsync();
+        return await ExecuteTransferRowAsync(cmd, transaction);
+    }
+
+    private static async Task<int> ExecuteTransferRowAsync(NpgsqlCommand command, NpgsqlTransaction transaction)
+    {
+        const string savepoint = "legacy_row";
+        await transaction.SaveAsync(savepoint);
+        try
+        {
+            var affected = await command.ExecuteNonQueryAsync();
+            await transaction.ReleaseAsync(savepoint);
+            return affected;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(savepoint);
+            await transaction.ReleaseAsync(savepoint);
+            throw;
+        }
+    }
+
+    private async Task WriteTransferAuditAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
+        string table, int affected, int parentUpdates = 0)
+    {
+        // Özet operasyon audit'i aynı transaction'dadır; kaynak satırları ve sırlar günlüğe kopyalanmaz.
+        var details = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            OperationId = Guid.NewGuid(), Table = table, Affected = affected, ParentUpdates = parentUpdates,
+            SourceDatabase = new NpgsqlConnectionStringBuilder(_sourceConnStr).Database,
+            TargetDatabase = new NpgsqlConnectionStringBuilder(_targetConnStr).Database,
+            TargetFirmaId = _targetFirmaId, Boundary = "TableTransaction"
+        });
+        using var command = new NpgsqlCommand("""
+            INSERT INTO "AktiviteLoglar"
+                ("IslemZamani", "IslemTipi", "Modul", "EntityTipi", "EntityAdi", "Aciklama",
+                 "YeniDeger", "KullaniciAdi", "FirmaId", "Seviye", "CreatedAt", "IsDeleted")
+            VALUES (@now, 'LegacyAktarim', 'Bakim', @table, @table, @description,
+                    @details, 'Sistem', @firma, 1, @now, FALSE)
+            """, connection, transaction);
+        command.Parameters.AddWithValue("now", DateTime.UtcNow);
+        command.Parameters.AddWithValue("table", table);
+        command.Parameters.AddWithValue("description", "Legacy tablo aktarımı tamamlandı; veri ve operasyon kaydı ortak transaction kapsamındadır.");
+        command.Parameters.AddWithValue("details", details);
+        command.Parameters.AddWithValue("firma", _targetFirmaId);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<List<string>> GetColumnNamesAsync(NpgsqlConnection conn, string tableName)
@@ -627,8 +681,9 @@ public class LegacyDataTransferService
         return columns;
     }
 
-    private static async Task UpsertMuhasebeHesapAsync(
+    private static async Task<int> UpsertMuhasebeHesapAsync(
         NpgsqlConnection target,
+        NpgsqlTransaction transaction,
         List<(string sourceName, string targetName)> columns,
         Dictionary<string, object?> row)
     {
@@ -647,7 +702,7 @@ public class LegacyDataTransferService
         using var cmd = new NpgsqlCommand(
             $@"INSERT INTO ""MuhasebeHesaplari"" ({insertColumns})
                VALUES ({string.Join(", ", valueNames)})
-               ON CONFLICT (""HesapKodu"") {conflictSql}", target);
+               ON CONFLICT (""HesapKodu"") {conflictSql}", target, transaction);
 
         for (var i = 0; i < columns.Count; i++)
         {
@@ -657,7 +712,7 @@ public class LegacyDataTransferService
             cmd.Parameters.Add(new NpgsqlParameter(valueNames[i], value));
         }
 
-        await cmd.ExecuteNonQueryAsync();
+        return await ExecuteTransferRowAsync(cmd, transaction);
     }
 
     private static async Task ResetSequenceAsync(NpgsqlConnection conn, string tableName)

@@ -13,7 +13,8 @@ public class LocalObjectStorageService : IObjectStorageService
 
     public LocalObjectStorageService(IWebHostEnvironment env, ILogger<LocalObjectStorageService> logger)
     {
-        _rootPath = AppStoragePaths.GetUploadsRoot(env.ContentRootPath);
+        _rootPath = Path.GetFullPath(AppStoragePaths.GetUploadsRoot(env.ContentRootPath))
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         _logger = logger;
     }
 
@@ -21,41 +22,81 @@ public class LocalObjectStorageService : IObjectStorageService
     {
         var fullPath = GetFullPath(key);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-        await File.WriteAllBytesAsync(fullPath, content, ct);
+        var temporaryPath = fullPath + ".uploading-" + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            await File.WriteAllBytesAsync(temporaryPath, content, ct);
+            ct.ThrowIfCancellationRequested();
+            File.Move(temporaryPath, fullPath, overwrite: true);
+        }
+        catch (Exception writeException)
+        {
+            try
+            {
+                File.Delete(temporaryPath);
+            }
+            catch (Exception cleanupException)
+            {
+                throw new AggregateException(
+                    "Yerel nesne deposu yüklemesi tamamlanamadı ve geçici dosya temizlenemedi.",
+                    writeException, cleanupException);
+            }
+
+            throw;
+        }
         _logger.LogDebug("LocalStorage: yüklendi {Key}", key);
         return key;
     }
 
     public async Task<byte[]?> DownloadAsync(string key, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var fullPath = GetFullPath(key);
-        if (!File.Exists(fullPath)) return null;
-        return await File.ReadAllBytesAsync(fullPath, ct);
+        try
+        {
+            return await File.ReadAllBytesAsync(fullPath, ct);
+        }
+        catch (FileNotFoundException) { return null; }
+        catch (DirectoryNotFoundException) { return null; }
     }
 
     public Task DeleteAsync(string key, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var fullPath = GetFullPath(key);
-        if (File.Exists(fullPath)) File.Delete(fullPath);
+        StorageFilePath.DeleteIdempotently(fullPath);
         return Task.CompletedTask;
     }
 
     public Task<bool> ExistsAsync(string key, CancellationToken ct = default)
-        => Task.FromResult(File.Exists(GetFullPath(key)));
+    {
+        ct.ThrowIfCancellationRequested();
+        var fullPath = GetFullPath(key);
+        try
+        {
+            return Task.FromResult(!File.GetAttributes(fullPath).HasFlag(FileAttributes.Directory));
+        }
+        catch (FileNotFoundException) { return Task.FromResult(false); }
+        catch (DirectoryNotFoundException) { return Task.FromResult(false); }
+    }
 
     /// <summary>
     /// Lokal depolamada presigned URL desteklenmez — dosyalar sadece SecureFileService üzerinden erişilebilir.
     /// Dış tüketiciler dosyayı DownloadAsync ile indirmeli veya kendi güvenli endpoint'lerini kullanmalıdır.
     /// </summary>
     public Task<string> GetPresignedUrlAsync(string key, int expiresInMinutes = 60)
-        => Task.FromResult(string.Empty);
+        => Task.FromException<string>(new NotSupportedException(
+            "Yerel depolamada imzalı indirme URL'si desteklenmiyor; dosyayı yetkili indirme uç noktasından alın."));
 
     public string GetStorageProvider() => "Local";
 
     private string GetFullPath(string key)
     {
-        var normalized = key.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
-        return Path.Combine(_rootPath, normalized);
+        if (string.IsNullOrWhiteSpace(key) || Path.IsPathRooted(key))
+            throw new InvalidOperationException("Yerel depo anahtarı göreli ve boş olmayan bir yol olmalıdır.");
+
+        var normalized = key.Replace('\\', '/');
+        return StorageFilePath.Resolve(_rootPath, normalized);
     }
 }
 

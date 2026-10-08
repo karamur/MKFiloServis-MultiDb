@@ -1,8 +1,10 @@
-@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:bankakasa")]
+﻿@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:bankakasa")]
 @page "/finans/personel-odenecekler"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
 @inject IBankaKasaHareketService HareketService
+@inject IKullaniciService KullaniciService
 @inject IBankaHesapService BankaHesapService
 @inject ISoforService SoforService
 @inject IAracService AracService
@@ -207,7 +209,7 @@
                                                 <i class="bi bi-arrow-counterclockwise"></i>
                                             </button>
                                         }
-                                        <button class="btn btn-outline-primary" @onclick="() => DuzenleAc(item)" title="Düzenle">
+                                        <button class="btn btn-outline-primary" @onclick="() => DuzenleAc(item)" disabled="@(item.PersoneleOdendi || item.AracMasrafId.HasValue || item.MuhasebeFisId.HasValue)" title="Düzenle (bağlı masraflar kaynak ekranından yönetilir)">
                                             <i class="bi bi-pencil"></i>
                                         </button>
                                         <button class="btn btn-outline-danger" @onclick="() => SilAsync(item)" title="Sil">
@@ -285,7 +287,7 @@
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label small text-muted">Personel</label>
-                        <select class="form-select" @bind="duzenleHareket.PersonelCebindenId">
+                        <select class="form-select" @bind="duzenleHareket.PersonelCebindenId" disabled>
                             <option value="">Seçiniz...</option>
                             @foreach (var p in personeller)
                             {
@@ -324,19 +326,9 @@
                         <label class="form-label small text-muted">Belge No</label>
                         <input type="text" class="form-control" @bind="duzenleHareket.BelgeNo" placeholder="Belge no..." />
                     </div>
-                    <div class="form-check">
-                        <input type="checkbox" class="form-check-input" id="chkOdendi" @bind="duzenleHareket.PersoneleOdendi" />
-                        <label class="form-check-label" for="chkOdendi">Personele Ödendi</label>
+                    <div class="alert alert-light mb-0 small">
+                        Ödeme durumu, ödeme ve iptal düğmeleriyle yönetilir. Personel ve kaynak bağlantısı düzenlenemez.
                     </div>
-                    @if (duzenleHareket.PersoneleOdendi)
-                    {
-                        <div class="mb-3 mt-2">
-                            <label class="form-label small text-muted">Ödeme Tarihi</label>
-                            <input type="date" class="form-control"
-                                   value="@(duzenleHareket.PersonelOdemeTarihi?.ToString("yyyy-MM-dd"))"
-                                   @onchange="(e) => duzenleHareket.PersonelOdemeTarihi = ParseDate(e.Value)" />
-                        </div>
-                    }
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @onclick="DuzenleKapat">İptal</button>
@@ -606,6 +598,11 @@
 
     private async Task OdemeKaydetAsync()
     {
+        if (!await GuncelYetkiVarMiAsync(Yetkiler.BankaHareketleriYaz))
+        {
+            ToastService.ShowError("Güncel banka hareketi yazma yetkiniz yok veya oturumunuz etkin değil.");
+            return;
+        }
         if (!odemeKayitlari.Any()) return;
         var personelId = odemeKayitlari.First().PersonelCebindenId ?? 0;
         if (personelId <= 0)
@@ -647,13 +644,18 @@
 
     private async Task OdemeIptalAsync(BankaKasaHareket item)
     {
-        var result = await JS.InvokeAsync<bool>("confirm", "Ödeme iptal edilsin mi? (Karşı kasa/banka hareketi de geri alınacaktır)");
+        if (!await GuncelYetkiVarMiAsync(Yetkiler.BankaHareketleriSil))
+        {
+            ToastService.ShowError("Güncel banka hareketi silme yetkiniz yok veya oturumunuz etkin değil.");
+            return;
+        }
+        var result = await JS.InvokeAsync<bool>("confirm", "Ödeme iptal edilsin mi? Aynı banka/kasa ödemesine bağlı tüm masraflar yeniden ödenecek duruma alınır ve ortak banka/kasa çıkışı geri alınır.");
         if (!result) return;
 
         try
         {
             await HareketService.PersonelGeriOdemeIptalAsync(item.Id);
-            ToastService.ShowInfo("Ödeme iptal edildi.");
+            ToastService.ShowInfo("Ödeme ve aynı ödemeye bağlı masrafların kapanışı iptal edildi.");
             await LoadDataAsync();
         }
         catch (Exception ex)
@@ -664,6 +666,11 @@
 
     private async Task SilAsync(BankaKasaHareket item)
     {
+        if (!await GuncelYetkiVarMiAsync(Yetkiler.BankaHareketleriSil))
+        {
+            ToastService.ShowError("Güncel banka hareketi silme yetkiniz yok veya oturumunuz etkin değil.");
+            return;
+        }
         var result = await JS.InvokeAsync<bool>("confirm", "Bu kayıt silinecek. Emin misiniz?");
         if (!result) return;
 
@@ -684,9 +691,21 @@
 
     private void DuzenleAc(BankaKasaHareket item)
     {
+        if (item.PersoneleOdendi || item.AracMasrafId.HasValue || item.MuhasebeFisId.HasValue)
+        {
+            ToastService.ShowWarning("Ödenmiş veya kaynak işleme bağlı kayıt bu ekrandan düzenlenemez.");
+            return;
+        }
         duzenleHareket = new BankaKasaHareket
         {
             Id = item.Id,
+            FirmaId = item.FirmaId,
+            UpdatedAt = item.UpdatedAt,
+            AracMasrafId = item.AracMasrafId,
+            MahsupGrupId = item.MahsupGrupId,
+            MahsupHareketId = item.MahsupHareketId,
+            PersonelOdemeHesapId = item.PersonelOdemeHesapId,
+            PersonelGeriOdemeHareketId = item.PersonelGeriOdemeHareketId,
             IslemNo = item.IslemNo,
             BelgeNo = item.BelgeNo,
             Tutar = item.Tutar,
@@ -713,6 +732,11 @@
 
     private async Task DuzenleKaydetAsync()
     {
+        if (!await GuncelYetkiVarMiAsync(Yetkiler.BankaHareketleriDuzenle))
+        {
+            ToastService.ShowError("Güncel banka hareketi düzenleme yetkiniz yok veya oturumunuz etkin değil.");
+            return;
+        }
         if (duzenleHareket == null) return;
         if (duzenleHareket.Tutar <= 0)
         {
@@ -724,15 +748,6 @@
             ToastService.ShowWarning("Personel seçiniz.");
             return;
         }
-        if (duzenleHareket.PersoneleOdendi && !duzenleHareket.PersonelOdemeTarihi.HasValue)
-        {
-            duzenleHareket.PersonelOdemeTarihi = DateTime.Today;
-        }
-        if (!duzenleHareket.PersoneleOdendi)
-        {
-            duzenleHareket.PersonelOdemeTarihi = null;
-        }
-
         isDuzenleniyor = true;
         try
         {
@@ -749,6 +764,19 @@
         finally
         {
             isDuzenleniyor = false;
+        }
+    }
+
+    private async Task<bool> GuncelYetkiVarMiAsync(string yetkiKodu)
+    {
+        try
+        {
+            var kullanici = await KullaniciService.GetAktifKullaniciAsync();
+            return kullanici is not null && await KullaniciService.YetkiVarMiAsync(kullanici.Id, yetkiKodu);
+        }
+        catch
+        {
+            return false;
         }
     }
 

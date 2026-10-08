@@ -223,7 +223,7 @@ public class DatabaseBackupService : IHostedService, IDisposable
         var builder = new NpgsqlConnectionStringBuilder(connectionString);
         
         var psi = PostgreSqlProcess(pgDumpPath, builder);
-        foreach (var argument in new[] { "--format=custom", "--compress=9", "--blobs", "--no-owner", "--no-privileges", "--encoding=UTF8", "-f", outputPath })
+        foreach (var argument in new[] { "--format=custom", "--compress=9", "--blobs", "--no-owner", "--no-privileges", "--exclude-schema=mk_audit", "--encoding=UTF8", "-f", outputPath })
             psi.ArgumentList.Add(argument);
         await RunPostgreSqlToolAsync(psi);
         if (!File.Exists(outputPath) || new FileInfo(outputPath).Length == 0)
@@ -338,6 +338,9 @@ public class DatabaseBackupService : IHostedService, IDisposable
         }
         var staging = Path.Combine(Path.GetTempPath(), "MKFiloServis-Restore-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(staging);
+        MKFiloServis.Shared.Auditing.RestoreOperationJournal? operationJournal = null;
+        BackupResult? recoveryBackup = null;
+        var restoreAttempted = false;
         try
         {
             using var archive = ZipFile.OpenRead(backupPath);
@@ -365,25 +368,77 @@ public class DatabaseBackupService : IHostedService, IDisposable
             var restoreTool = Path.Combine(Path.GetDirectoryName(FindPgDump()) ?? "", OperatingSystem.IsWindows() ? "pg_restore.exe" : "pg_restore");
             if (!File.Exists(restoreTool)) throw new FileNotFoundException("pg_restore bulunamadı.");
             // Geri dönüş için mevcut durumun yedeği tamamlanmadan restore başlatma.
-            var recoveryBackup = await CreateBackupAsync("BeforeRestore");
+            recoveryBackup = await CreateBackupAsync("BeforeRestore");
             if (!recoveryBackup.Success) throw new IOException("Geri dönüş yedeği alınamadı: " + recoveryBackup.ErrorMessage);
-            var info = PostgreSqlProcess(restoreTool, new NpgsqlConnectionStringBuilder(context.Database.GetConnectionString()));
-            foreach (var argument in new[] { "--single-transaction", "--exit-on-error", "--clean", "--if-exists", "--no-owner", "--no-privileges", dump })
-                info.ArgumentList.Add(argument);
-            await RunPostgreSqlToolAsync(info);
+            operationJournal = await MKFiloServis.Shared.Auditing.RestoreOperationJournal.StartAsync(backupPath,
+                context.Database.GetDbConnection().Database, "PostgreSQL");
+            await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(context.Database.GetDbConnection());
+            var connection = new NpgsqlConnectionStringBuilder(context.Database.GetConnectionString());
+            restoreAttempted = true;
+            await RestorePublicSchemaAsync(restoreTool, connection, dump);
+            await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(context.Database.GetDbConnection());
+            operationJournal.Complete();
             _logger.LogInformation("ZIP veritabanı geri yüklemesi tamamlandı. Geri dönüş yedeği: {RecoveryBackup}", recoveryBackup.FilePath);
             return true;
         }
         catch (Exception ex)
         {
+            if (restoreAttempted && operationJournal != null)
+            {
+                try
+                {
+                    if (string.IsNullOrWhiteSpace(recoveryBackup?.FilePath))
+                        throw new IOException("Geri dönüş yedeğinin yolu yok.");
+                    var rollbackDump = Path.Combine(staging, "before-restore.backup");
+                    await ExtractDatabaseDumpAsync(recoveryBackup.FilePath!, rollbackDump);
+                    using var scope = _scopeFactory.CreateScope();
+                    var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+                    await using var rollbackContext = await factory.CreateDbContextAsync();
+                    var rollbackConnection = new NpgsqlConnectionStringBuilder(rollbackContext.Database.GetConnectionString());
+                    var restoreTool = Path.Combine(Path.GetDirectoryName(FindPgDump()) ?? "", OperatingSystem.IsWindows() ? "pg_restore.exe" : "pg_restore");
+                    await RestorePublicSchemaAsync(restoreTool, rollbackConnection, rollbackDump);
+                    await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(rollbackContext.Database.GetDbConnection());
+                    operationJournal.RollbackCompleted("Restore did not reach verified completion; the prior public schema was restored.");
+                    _logger.LogWarning(ex, "ZIP DB restore başarısız oldu; önceki public şema geri yüklendi.");
+                }
+                catch (Exception rollbackException)
+                {
+                    _logger.LogCritical(rollbackException, "ZIP DB restore başarısız; geri dönüş de doğrulanamadı. Operasyon {Journal}", operationJournal.DirectoryPath);
+                }
+            }
             _logger.LogError(ex, "ZIP veritabanı geri yüklemesi başarısız");
             return false;
         }
         finally
         {
+            operationJournal?.Dispose();
             // staging sabit geçici kök altında bu çağrıya özel oluşturulmuştur.
             Directory.Delete(staging, recursive: true);
         }
+    }
+
+    private static async Task ExtractDatabaseDumpAsync(string archivePath, string destination)
+    {
+        using var archive = ZipFile.OpenRead(archivePath);
+        var entries = archive.Entries.Where(e => e.FullName == "database.backup").ToList();
+        if (entries.Count != 1 || entries[0].Length <= 5 || entries[0].Length > 20L * 1024 * 1024 * 1024)
+            throw new InvalidDataException("Geri dönüş arşivi geçerli tek database.backup kaydı içermelidir.");
+        await using (var input = entries[0].Open())
+        await using (var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            await input.CopyToAsync(output);
+        await using var verification = File.OpenRead(destination);
+        var magic = new byte[5];
+        await verification.ReadExactlyAsync(magic);
+        if (System.Text.Encoding.ASCII.GetString(magic) != "PGDMP")
+            throw new InvalidDataException("Geri dönüş yedeği PostgreSQL custom dump değil.");
+    }
+
+    private static async Task RestorePublicSchemaAsync(string restoreTool, NpgsqlConnectionStringBuilder connection, string dump)
+    {
+        var info = PostgreSqlProcess(restoreTool, connection);
+        foreach (var argument in new[] { "--single-transaction", "--exit-on-error", "--clean", "--if-exists", "--no-owner", "--no-privileges", "--schema=public", dump })
+            info.ArgumentList.Add(argument);
+        await RunPostgreSqlToolAsync(info);
     }
 
     public Task StopAsync(CancellationToken cancellationToken)

@@ -43,19 +43,25 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: 📦 Restore
-        run: dotnet restore
+        run: |
+          dotnet restore MKFiloServis.slnx
+          dotnet restore MKFiloServis.Web/Tests/RentACar/MKFiloServis.RentACarChecks.csproj
 
       - name: 🔬 Vulnerable Paketleri Tara (transitive dahil)
         id: vuln
         shell: bash
         run: |
-          set +e
-          OUTPUT=$(dotnet list package --vulnerable --include-transitive 2>&1)
+          set -euo pipefail
+          OUTPUT=$(dotnet package list --project MKFiloServis.slnx --vulnerable --include-transitive --no-restore --format json)
+          RENT_A_CAR=$(dotnet package list --project MKFiloServis.Web/Tests/RentACar/MKFiloServis.RentACarChecks.csproj --vulnerable --include-transitive --no-restore --format json)
           echo "$OUTPUT"
+          echo "$RENT_A_CAR"
+          COUNT=$(printf '%s\n%s\n' "$OUTPUT" "$RENT_A_CAR" | jq -s '[.. | objects | .vulnerabilities? | select(type == "array") | length] | add // 0')
           echo "report<<EOF" >> "$GITHUB_OUTPUT"
           echo "$OUTPUT" >> "$GITHUB_OUTPUT"
+          echo "$RENT_A_CAR" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
-          if echo "$OUTPUT" | grep -qE "has the following vulnerable packages"; then
+          if [ "$COUNT" -gt 0 ]; then
             echo "found=true" >> "$GITHUB_OUTPUT"
           else
             echo "found=false" >> "$GITHUB_OUTPUT"
