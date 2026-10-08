@@ -142,11 +142,13 @@
 
             <!-- DİSK -->
             <div class="col-md-4 mb-4">
-                <div class="card h-100 @(report.Disk.IsHealthy ? "" : "border-warning")">
+                <div class="card h-100 @(!report.Disk.IsHealthy ? "border-danger" : !string.IsNullOrEmpty(report.Disk.WarningMessage) ? "border-warning" : "")">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <span><i class="bi bi-hdd me-2"></i>Disk</span>
-                        <span class="badge @(report.Disk.IsHealthy ? "bg-success" : "bg-warning")">
-                            @(report.Disk.IsHealthy ? "Sağlıklı" : "Uyarı")
+                        <span class="badge @(!report.Disk.IsHealthy ? "bg-danger" : !string.IsNullOrEmpty(report.Disk.WarningMessage) ? "bg-warning" : "bg-success")">
+                            @(!report.Disk.IsHealthy
+                                ? (string.IsNullOrEmpty(report.Disk.ErrorMessage) ? "Kritik" : "Erişilemiyor")
+                                : !string.IsNullOrEmpty(report.Disk.WarningMessage) ? "Alan azalıyor" : "Sağlıklı")
                         </span>
                     </div>
                     <div class="card-body">
@@ -157,7 +159,7 @@
                         <div class="mb-3">
                             <small class="text-muted">Kullanım</small>
                             <div class="progress" style="height: 20px;">
-                                <div class="progress-bar @(report.Disk.UsedPercentage > 80 ? "bg-danger" : report.Disk.UsedPercentage > 60 ? "bg-warning" : "bg-success")" 
+                                <div class="progress-bar @(!report.Disk.IsHealthy ? "bg-danger" : !string.IsNullOrEmpty(report.Disk.WarningMessage) ? "bg-warning" : "bg-success")"
                                      style="width: @(report.Disk.UsedPercentage)%">
                                     %@report.Disk.UsedPercentage
                                 </div>
@@ -173,10 +175,10 @@
                                 <div class="fw-bold text-success">@report.Disk.FreeSpaceFormatted</div>
                             </div>
                         </div>
-                        @if (!string.IsNullOrEmpty(report.Disk.WarningMessage))
+                        @if (!string.IsNullOrEmpty(report.Disk.WarningMessage) || !string.IsNullOrEmpty(report.Disk.ErrorMessage))
                         {
-                            <div class="alert alert-warning mt-2 mb-0 py-1 px-2">
-                                <small><i class="bi bi-exclamation-triangle me-1"></i>@report.Disk.WarningMessage</small>
+                            <div class="alert @(!report.Disk.IsHealthy ? "alert-danger" : "alert-warning") mt-2 mb-0 py-1 px-2">
+                                <small><i class="bi bi-exclamation-triangle me-1"></i>@(string.IsNullOrEmpty(report.Disk.WarningMessage) ? report.Disk.ErrorMessage : report.Disk.WarningMessage)</small>
                             </div>
                         }
                     </div>
@@ -355,5 +357,3 @@
         _ => "Bilinmiyor"
     };
 }
-
-

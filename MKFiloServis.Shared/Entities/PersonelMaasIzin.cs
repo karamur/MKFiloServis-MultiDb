@@ -45,6 +45,7 @@ public class PersonelMaas : BaseEntity, IFirmaTenant
     [NotMapped]
     public decimal OdenecekTutar => NetMaas + ToplamEklemeler - Avans - IcraTakibi - DigerKesintiler;
 
+
     // Odeme Bilgileri
     public DateTime? OdemeTarihi { get; set; }
     public MaasOdemeDurum OdemeDurum { get; set; } = MaasOdemeDurum.Bekliyor;
