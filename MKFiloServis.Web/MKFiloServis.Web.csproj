@@ -60,8 +60,8 @@
 
   <!-- Gelistirme/test ciktilari ve yerel veriler kurulum paketine girmemeli. -->
   <ItemGroup>
-    <Content Remove="Tests\**;App_Data\**;Backups\**;artifacts\**;.artifacts\**;wwwroot\uploads\**;cookies.txt" />
-    <None Remove="Tests\**;App_Data\**;Backups\**;artifacts\**;.artifacts\**;wwwroot\uploads\**;cookies.txt" />
+    <Content Remove="Tests\**;App_Data\**;Backups\**;artifacts\**;.artifacts\**;wwwroot\uploads\**;cookies.txt;dbsettings.json;portalsettings.json;backup_settings.json;appsettings.Production.json" />
+    <None Remove="Tests\**;App_Data\**;Backups\**;artifacts\**;.artifacts\**;wwwroot\uploads\**;cookies.txt;dbsettings.json;portalsettings.json;backup_settings.json;appsettings.Production.json" />
   </ItemGroup>
 
   <ItemGroup>

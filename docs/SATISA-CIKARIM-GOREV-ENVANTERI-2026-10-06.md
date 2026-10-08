@@ -12,9 +12,9 @@ Bu dosya bundan sonraki satışa çıkarım düzeltmelerinin **görev bazlı tak
 
 | Durum | Adet | Anlam |
 |---|---:|---|
-| 🟢 Tamamlandı | 4 | Tanımlı teknik kapsam/karar tamamlandı; açık saha kabulü ayrıca belirtilir |
+| 🟢 Tamamlandı | 5 | Tanımlı teknik kapsam/karar tamamlandı; açık saha kabulü ayrıca belirtilir |
 | 🟡 Kısmi / kabul bekliyor | 21 | Ana teknik akış mevcut; geçiş veya çalışma zamanı kabulü açık |
-| 🔴 Açık uygulama | 6 | Temel uygulama, veri onarımı, kritik kurtarma kabulü veya teslim işi açık; bazı alt parçalar yapılmış olabilir |
+| 🔴 Açık uygulama | 5 | Temel uygulama, veri onarımı veya kritik kurtarma kabulü açık; bazı alt parçalar yapılmış olabilir |
 | ⚪ Karar bekliyor | 0 | Ürün/refactor kararları bu sürüm için kayda alındı |
 | **Toplam** | **31** | **Satış kabulü verilmedi** |
 
@@ -22,9 +22,9 @@ Bu dosya bundan sonraki satışa çıkarım düzeltmelerinin **görev bazlı tak
 
 | Renk | Görevler | Yeniden sınıflandırma gerekçesi |
 |---|---|---|
-| 🟢 | A-08, A-22, A-30, A-31 | A-08/A-22 teknik kapsamı kanıtlandı; A-30 refactor ertelendi, A-31 çevrimdışı/depolama kararları açıkça belirlendi. Saha kabuli gerektiren alt görevler bu renge dahil değildir. |
+| 🟢 | A-08, A-22, A-23, A-30, A-31 | A-23 belge/teslim ve kurulum girdisi temizliği kanıtlandı. A-08/A-22 teknik kapsamı tamamlandı; A-30/A-31 ürün kararları kaydedildi. Saha kabuli ayrı görevlerdedir. |
 | 🟡 | A-01, A-02, A-04, A-05, A-06, A-07, A-09, A-11, A-12, A-13, A-14, A-17, A-18, A-19, A-20, A-21, A-24, A-25, A-26, A-27, A-29 | Kod veya sınırlı kanıt mevcut; satırdaki geçiş, gerçek veri ya da çalışma zamanı kabulü açık. |
-| 🔴 | A-03, A-10, A-15, A-16, A-23, A-28 | Tam kurtarma kabulü, dosya yaşam döngüsü, veri bağı/onarımları, teslim veya DB sağlayıcı kapsamı satış öncesi açık. A-28’de desteklenmeyen SQL Server/MySQL yolu artık güvenli biçimde reddediliyor; destek kapsamı kararı ve PostgreSQL/SQLite hedef kurulum kabulü yok. A-16 önceki 🟡 durumundan 🔴 durumuna alındı; ön kontroller tam eski veri envanteri ve onarımı değildir. |
+| 🔴 | A-03, A-10, A-15, A-16, A-28 | Tam kurtarma kabulü, dosya yaşam döngüsü, veri bağı/onarımları veya DB sağlayıcı kapsamı satış öncesi açık. A-28’de desteklenmeyen SQL Server/MySQL yolu güvenli biçimde reddediliyor; sağlayıcı kararı ve PostgreSQL/SQLite hedef kurulum kabulü yok. |
 | ⚪ | — | Karar bekleyen kalem yok. |
 
 Renkler **görevin tamamı** içindir. Satır içinde yeşil kanıt bulunması, kırmızı veya sarı görevin kapandığı anlamına gelmez. Gerçek müşteri restore'u, sır rotasyonu, kurulum ve saha kabulü bu çalışma ağacında kanıtlanmış sayılmaz.
@@ -60,7 +60,7 @@ Renkler **görevin tamamı** içindir. Satır içinde yeşil kanıt bulunması, 
 | A-20 Tarih semantiği | 🟡 | Plaka tarihi senkronizasyonu ve legacy uyarısı | UTC/yerel saat sütun envanteri, geçiş ve geri dönüş planı |
 | A-21 Müşteri paketi | 🟡 | Lisans üreticisi müşteri paketinden ayrıldı; paketleme düzenlendi | Temiz hedef makinede kurulum, güncelleme ve lisans sürüm hakkı kabulü |
 | A-22 Bağımlılıklar | 🟢 | Yeni test projesi dahil çözümdeki yedi proje ve çözüm dışı Rent-a-Car kontrolü doğrudan/geçişli NuGet taraması kapsamındadır; LisansDesktop'un açık bildirimli SQLite kütüphanesi 2.1.13'e yükseltildi ve dahili EXE yenilendi; [tarama kaydı](A-22-BAGIMLILIK-TARAMASI-2026-10-06.md) | Tarama anında bilinen NuGet açıkları bulunmadı. Yeni bildirimler için CI taraması sürer; müşteri paketinin kurulum kabulü A-21'dedir |
-| A-23 Doküman/teslim | 🔴 | 31 görevlik güncel envanter oluşturuldu; eksik 2026-10-02 bağlantıları bu dosyaya yönlendirildi; bulunamayan ilk denetim dosyasının kırık bağlantısı kaldırıldı | Eski 39 bulguluk ve ilk denetim belgelerinin içeriği geri gelmedi; belge saklama/teslim kararı, çıktı temizliği ve gözden geçirilmiş teslim commit'i |
+| A-23 Doküman/teslim | 🟢 | [Belge/teslim kararı](A-23-TESLIM-KARARI-2026-10-08.md) ile güncel 31 görev kaynağı ve tarihsel belgelerin yeri sabitlendi. Yerel çalışma zamanı ayarları Git/publish/kurulum girdisinden çıkarıldı; Web publish çıktısında bulunmadıkları doğrulandı. | Hedef makine kurulum ve müşteri kabulü A-21, eski sırların rotasyonu A-06 kapsamında sürer. |
 
 ## P2/P3 — Ürün kapsamı ve sonraki kabul
 
@@ -78,7 +78,7 @@ Renkler **görevin tamamı** içindir. Satır içinde yeşil kanıt bulunması, 
 ## Çalışma sırası
 
 1. P0 bağımsız kurtarma ve müşteri lisans/sır geçişi kabulü.
-2. P1 açık uygulama: A-10, A-15, A-16 ve A-23; A-07 test kapsamını genişlet; ardından gerçek DB ve müşteri kurulum kabulü.
+2. P1 açık uygulama: A-10, A-15 ve A-16; A-07 test kapsamını genişlet; ardından gerçek DB ve müşteri kurulum kabulü.
 3. P2/P3 kararları [ürün kararları belgesinde](A-29-31-URUN-KARARLARI.md) sabitlendi; kalan uygulama ve saha kabuli görev bazında sürer.
 
 ## Değişiklik günlüğü
@@ -691,3 +691,9 @@ Kullanıcının bu oturumda verdiği test talebiyle son aşama kontrolleri başl
 🟢 Finans hareketleri için banka/karşı hareket/geri ödeme kaynak bağlarının firma eşleşmesi EF kaydetme sınırında doğrulanır; altı sync/async çapraz-firma regresyon senaryosu eklendi. Fatura ve banka hareketini bağlayan `OdemeEslestirme` kayıtlarında aynı firma zorunluluğu hem sync hem async kayıtta kontrol edilir; dört pozitif/negatif SQLite senaryosu geçti. SQLite dashboard hatasının kök nedeni olan tüm bekleyen migration'ları uygulandı diye kaydetme davranışı kaldırıldı. Eksik `BankaKasaHareketleri.IslemKimligi` ve `IslemOzeti` sütunları ile benzersiz indeks idempotent ve veri koruyucu biçimde açılışta onarılır. Üçüncü SQLite regresyon testi dashboard son hareket sorgusunun onarım sonrası çalıştığını doğrular. Son Release çözüm derlemesi 0 hata/uyarı; paket 96/96 başarılı. İzole SQLite test kanıtı `TEST-DOGRULAMA-2026-10-08.md` dosyasındadır.
 
 🟡 A-15 genel görev durumu değişmedi: tüm varlık ilişkilerinin envanteri, müşteri eski verilerinin denetimi ve hedef DB/migration kabulü hâlâ tamamlanmalıdır. Gerçek müşteri verisine müdahale yapılmadı.
+
+### 2026-10-08 — A-23 kaynak ve kurulum teslim temizliği
+
+- 🟢 [A-23 teslim kararı](A-23-TESLIM-KARARI-2026-10-08.md) geçerli raporları ve tarihsel belgelerin Git geçmişindeki yerini sabitler. Mevcut satış durumu 31 görevlik envanterle izlenir.
+- 🟢 Yerel `dbsettings.json`, `portalsettings.json` ve `backup_settings.json` korunarak Git takibinden çıkarıldı. Web publish ve ana/müşteri/güncelleme kurulum girdileri bu dosyaları dışlar; `setup/build.ps1` eski payload'da bulursa durur. Release Web publish çıktısında bu dosyalar, çerez ve `.db` bulunmadı. PowerShell betiği parser denetiminden geçti.
+- 🟡 Gerçek Inno EXE ve hedef kurulum A-21; eski kimlik bilgisi rotasyonu A-06 kapsamında. A-23 🟢 kapandı. Güncel sayım **5 yeşil / 21 sarı / 5 kırmızı / 0 beyaz**; satış kabulü verilmedi.

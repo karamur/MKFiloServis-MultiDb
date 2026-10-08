@@ -119,12 +119,6 @@ if (-not $SkipPublish) {
             }
         }
 
-        $dbSettingsSrc = Join-Path $RepoRoot 'MKFiloServis.Web\dbsettings.json'
-        if (Test-Path $dbSettingsSrc) {
-            Copy-Item $dbSettingsSrc "$Payload\Web\dbsettings.json" -Force
-            Write-Host "       dbsettings.json payload'a kopyalandi" -ForegroundColor DarkGray
-        }
-
         # JWT özel anahtarını ortak kurulum paketine koyma. Her müşteri kurulumunda
         # Jwt__Secret dağıtım ortamının gizli ayar deposundan ayrıca sağlanmalıdır.
     }
@@ -149,6 +143,20 @@ if (-not $SkipPublish) {
     }
 } else {
     Write-Host "[PUBLISH ATLANDI] -SkipPublish" -ForegroundColor Yellow
+}
+
+if (-not $LisansOnly) {
+    $webPayload = Join-Path $Payload 'Web'
+    if (-not (Test-Path $webPayload -PathType Container)) {
+        throw 'Web payload bulunamadı; kurulum paketi oluşturulamaz.'
+    }
+
+    # -SkipPublish kullanıldığında da eski payload içindeki yerel ayarları paketleme.
+    foreach ($fileName in @('dbsettings.json', 'portalsettings.json', 'backup_settings.json', 'appsettings.Production.json', 'cookies.txt')) {
+        if (Test-Path (Join-Path $webPayload $fileName)) {
+            throw "Yerel ayar/oturum dosyası Web payload'ında bulundu: $fileName"
+        }
+    }
 }
 
 if (-not $LisansOnly) {

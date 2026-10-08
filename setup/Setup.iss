@@ -61,7 +61,7 @@ Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
 
 [Files]
 ; Web uygulamasi (self-contained, Kestrel ile calisir)
-Source: "payload\Web\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "payload\Web\*"; DestDir: "{app}\app"; Excludes: "dbsettings.json,portalsettings.json,backup_settings.json,appsettings.Production.json,cookies.txt,*.db,*.db-shm,*.db-wal,logs\*,uploads\*,Backups\*,keys\*"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Veri Aktarim Araci
 Source: "payload\DataSync\*"; DestDir: "{app}\tools\datasync"; Flags: ignoreversion recursesubdirs createallsubdirs

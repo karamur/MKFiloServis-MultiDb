@@ -1363,4 +1363,10 @@ Dashboard finans verileri SQLite'ta `no such column: b.IslemKimligi` hatası ver
 
 🟢 `20261008130000_GuardInvoicePaymentMatchFirm` migration'ı SQLite ve PostgreSQL'de `OdemeEslestirmeleri` yazımlarını ve bağlı fatura/banka hareketi firma değişikliklerini DB seviyesinde korur. Altı SQLite migration SQL testi ve dört SaveChanges testi geçti. Ayrıca PostgreSQL 17 izole cluster'ında migration uygulandı ve çapraz-firma eşleştirme ile bağlı fatura taşıma denemeleri reddedildi. Release build **0 hata/uyarı**, tam test paketi **102/102**. Ayrıntı ve PASS kanıtı [test raporunda](TEST-DOGRULAMA-2026-10-08.md).
 
-🟡 PostgreSQL sunucusunda migration, eski müşteri verisi ve çoklu bağlantı eşzamanlılık kabulü yapılmadı; A-15'in diğer tenant ilişkileri de açık. A-15 kırmızı kalır.
+🟡 Migration izole PostgreSQL 17 sunucusunda çalıştı; müşteri verisi, tam migration zinciri ve çoklu bağlantı eşzamanlılık kabulü yapılmadı. A-15'in diğer tenant ilişkileri de açık. A-15 kırmızı kalır.
+
+### 2026-10-08 — A-23 belge ve teslim girdisi temizliği
+
+🟢 [Teslim kararında](A-23-TESLIM-KARARI-2026-10-08.md) güncel 31 görev kaynağı ve tarihsel raporların saklanma konumu açıklandı. `dbsettings.json`, `portalsettings.json` ve `backup_settings.json` yerel dosyalar korunarak Git takibinden çıkarıldı. Web publish ve üç Inno kurulum girdisi bu çalışma zamanı dosyalarını dışlıyor; paket betiği eski payload içeriğini de denetliyor. Gerçek Release Web publish çıktısında beş yasaklı ayar/oturum dosyası ve `.db` bulunmadı. A-23 🟢; güncel toplam **5 yeşil / 21 sarı / 5 kırmızı**.
+
+🟡 Gerçek Inno paketi ve hedef makine kurulumu A-21'de; Git geçmişindeki olası eski kimlik bilgilerinin rotasyonu A-06'da açık. Bu teslim düzeltmesi satışa çıkış onayı değildir.

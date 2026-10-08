@@ -118,6 +118,12 @@ archive/
 
 # AI agent / editor settings
 .claude/
+.kilo/
+
+# Runtime configuration is written per installation
+MKFiloServis.Web/dbsettings.json
+MKFiloServis.Web/portalsettings.json
+MKFiloServis.Web/backup_settings.json
 
 # Buyuk publish/kurulum dosyalari (GitHub 100MB limiti)
 publish/

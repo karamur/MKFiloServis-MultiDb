@@ -58,12 +58,10 @@ setup/
   output/            — Uretilen EXE'ler (.gitignore'da)
 ```
 
-## MultiDb Notlari
+## Veritabanı ve yerel ayarlar
 
-Bu surum **Database-Per-Firma** mimarisini kullanir:
-- `MKFiloServis_Master` — Kullanici, lisans, firma katalogu
-- `MK_[FirmaKodu]_[ID]` — Her firma icin ayri tenant DB
-- `MKFiloServis_Holding` — Konsolidasyon raporlari
+Uygulama seçilen sağlayıcıda ortak veritabanı kullanır; firma kapsamı kayıtların
+`FirmaId` bağıyla korunur. Her firma için otomatik ayrı veritabanı oluşturulmaz.
 
 Ana ve müşteri kurulum sihirbazı PostgreSQL, SQLite veya MSSQL seçimini sorar.
 PostgreSQL için bağlantı bilgileri, SQLite için dosya yolu alınır ve uygulama
@@ -73,6 +71,14 @@ SQL Server'ı henüz desteklemiyor. PostgreSQL veya SQLite seçilmelidir.
 Ana IIS kurulumunda bağlantı ayar dosyası yalnız yöneticiler ve uygulama havuzu
 tarafından okunabilir; SQLite veri klasörüne yazma izni uygulama havuzuna verilir.
 Güncelleme paketi mevcut `dbsettings.json` ayarını korur.
+
+`dbsettings.json`, `portalsettings.json` ve `backup_settings.json` kurulumun
+çalışma zamanı dosyalarıdır. Kaynak depoya ve publish/kurulum paketine alınmazlar;
+kurulum sihirbazı bağlantı ayarını yazar, diğer iki ayar uygulama varsayılanlarından
+başlar ve yönetim ekranından kaydedilebilir. Git ile eski bir çalışma kopyasını
+güncelleyen operatör, çekmeden önce yerel ayarlarının yedeğini almalıdır.
+`-SkipPublish` ile eski payload kullanılırsa paket betiği bu dosyaları bulduğunda
+işlemi durdurur.
 
 ## Masaustu ve Android istemcileri
 

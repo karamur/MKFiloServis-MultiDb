@@ -2,7 +2,7 @@
 
 **Son güncelleme:** 2026-10-08
 
-**Esas:** Yerel çalışma ağacı; müşteri dağıtımı veya teslim commit’i olarak değerlendirilmez.
+**Esas:** Kaynak teslim commit'i ve yerel doğrulama; müşteri dağıtımı yapılmış sayılmaz.
 
 **Kaynak:** Yerel kaynak ağacı, [2026-10-06 görev envanteri](SATISA-CIKARIM-GOREV-ENVANTERI-2026-10-06.md), [A-16 envanter belgesi](A-16-ESKI-VERI-ENVANTERI.md), ikinci denetim raporu ve aşağıdaki tarihli düzeltme kanıtları.
 
@@ -16,7 +16,7 @@ Her yeni düzeltmede bu dosyada ilgili görev satırı, tamamlanan kod/kabul ayr
 
 ## 1. Satışa hazırlık kararı
 
-**🔴 Satışa çıkarım için hazır değil.** 31 birleşik görevin 6'sı açık uygulama/veri/teslim işi, 21'i müşteri veya çalışma zamanı kabulü bekliyor. Özellikle tam kurtarma, dosya yaşam döngüsü, veri bütünlüğü, eski veri onarımı ve DB sağlayıcı kapsamı kapanmadı. Derleme ve sentetik DB kanıtları müşteri kabulünün yerine geçmez.
+**🔴 Satışa çıkarım için hazır değil.** 31 birleşik görevin 5'i açık uygulama/veri işi, 21'i müşteri veya çalışma zamanı kabulü bekliyor. Özellikle tam kurtarma, dosya yaşam döngüsü, veri bütünlüğü, eski veri onarımı ve DB sağlayıcı kapsamı kapanmadı. Derleme ve sentetik DB kanıtları müşteri kabulünün yerine geçmez.
 
 Bu belge tarihsel tekrarları tek görev listesine toplar. Eski raporlardaki “kalan” ifadesi sonradan kod olarak tamamlanmışsa tekrar açık kod işi yapılmaz; yalnız gerçek kalan kapsam listelenir. Başlamış servis yazımları modal kapatılmasıyla geri alınmış sayılmaz.
 
@@ -29,16 +29,16 @@ Bu belge tarihsel tekrarları tek görev listesine toplar. Eski raporlardaki “
 | 🔴 | Raporda açık kalan uygulama/kalıcı altyapı/doküman işi |
 | ⚪ | Ürün kapsamı veya düşük öncelikli düzenleme kararı |
 
-**Güncel görev renkleri (2026-10-08):** 31 birleşik görev: **4 🟢 tamamlandı/kararı verildi (A-08, A-22, A-30, A-31)**, **21 🟡 kabul/geçiş/uygulama denetimi bekliyor**, **6 🔴 açık uygulama/veri/teslim işi**, **⚪ karar bekleyen yok**. A-29 mali politikaları belgelendi ve kod düzeltmeleri yapıldı, ancak yazım anında rol yenileme kabulü açık olduğundan 🟡 kaldı. A-16 SQLite FK denetimleriyle genişledi; müşteri verisi ve onarım kanıtı olmadığı için 🔴 kaldı.
+**Güncel görev renkleri (2026-10-08):** 31 birleşik görev: **5 🟢 tamamlandı/kararı verildi (A-08, A-22, A-23, A-30, A-31)**, **21 🟡 kabul/geçiş/uygulama denetimi bekliyor**, **5 🔴 açık uygulama/veri işi**, **⚪ karar bekleyen yok**. A-23 belge ve kaynak teslim kararı tamamlandı. A-29 mali politikaları belgelendi ve kod düzeltmeleri yapıldı, ancak yazım anında rol yenileme kabulü açık olduğundan 🟡 kaldı. A-16 müşteri verisi ve onarım kanıtı olmadığı için 🔴 kaldı.
 
 | Renk | Sayı | Görevler |
 |---|---:|---|
-| 🟢 | 4 | A-08, A-22, A-30, A-31 |
+| 🟢 | 5 | A-08, A-22, A-23, A-30, A-31 |
 | 🟡 | 21 | A-01, A-02, A-04, A-05, A-06, A-07, A-09, A-11, A-12, A-13, A-14, A-17, A-18, A-19, A-20, A-21, A-24, A-25, A-26, A-27, A-29 |
-| 🔴 | 6 | A-03, A-10, A-15, A-16, A-23, A-28 |
+| 🔴 | 5 | A-03, A-10, A-15, A-16, A-28 |
 | ⚪ | 0 | — |
 
-**Toplam: 31 görev.** Görevlerin genel renkleri son düzeltmelerle değişmedi; tamamlanan alt parçalar aşağıda ayrı gösterilir.
+**Toplam: 31 görev.** A-23 teslim temizliği tamamlandı; diğer görevlerin kod ve kabul sınırları aşağıda ayrı gösterilir.
 
 - **A-29 🟡:** Fatura yazımları, manuel fiş oluşturma/düzenleme/silme/onay, hesap planı düzenleme/silme, araç masrafı ve kolay muhasebe kaydetme servislerine güncel izin kontrolü eklendi. Borç/alacak denetimi manuel oluşturma, düzenleme ve atomik fiş üretiminde var. Kalan otomatik/atomik çağrı sözleşmeleri, hesap oluşturma, puantaj ve çalışma zamanı doğrulaması açık.
 - **A-28 🔴:** SQL Server/MySQL güvenli biçimde reddediliyor. Sağlayıcı kapsam kararı ve PostgreSQL/SQLite hedef kurulum kabulü açık. Bu açıklama yalnız A-28'e aittir; diğer kırmızı görevlerin kapanış koşulları 3. bölümde yer alır.
@@ -95,7 +95,7 @@ Her satırın son sütunu yeşile geçiş ölçütüdür. Yalnız kodun derlenme
 | A-20 | P1 | 🟡 | Y-10 / plaka tarihi | **Tarih semantiği ve geçiş:** Legacy timestamp için sütunların gerçek UTC/yerel saat anlamını belirle; gün sınırı ve saat içeren plaka tarihlerinin politikasını yaz ve veri geçişini planla. | Saat kayması yaratmayan doğrulanmış dönüşüm/geri dönüş planı. Legacy anahtar yalnız uyarıyı susturmak için kapatılmaz. |
 | A-21 | P1 | 🟡 | R-3 / paketleme | **Müşteri kurulum ve güncelleme kabulü:** Temiz makinede müşteri paketi kurulumu/güncellemesi yap; lisans üreticinin pakete girmediğini, lisans sürüm hakkını ve güncel çıktıların kullanıldığını kontrol et. | Gerçek müşteri paketi içerik/kullanım kanıtı; dahili LisansDesktop publish tek başına yeterli değildir. |
 | A-22 | P1 | 🟢 | Y-11 | **Güncel bağımlılık taraması tamamlandı:** Yedi proje doğrudan/geçişli NuGet bildirimi için tarandı. LisansDesktop geçişli SQLite kütüphanesi 2.1.13'e yükseltildi, dahili EXE yenilendi; son taramada bilinen açık raporlanmadı. [Tarama kanıtı](A-22-BAGIMLILIK-TARAMASI-2026-10-06.md). | Bu tarihteki kaynak bağımlılığı taraması tamamlandı; ilerideki bildiriler CI'de izlenir. Müşteri paketi kurulum kabulü A-21'de kalır. |
-| A-23 | P1 | 🔴 | O-13 / R-8 / D-7 / D-8 | **Doküman ve teslim temizliği:** Eksik yeniden analiz bağlantıları [güncel envantere](SATISA-CIKARIM-GOREV-ENVANTERI-2026-10-06.md) yönlendirildi; bulunamayan ilk denetim bağlantısı kaldırıldı. Tarihsel belgelerin içeriği geri getirilmedi. Önceki denetimde silinmiş olarak kaydedilen raporlar ve Rent-a-Car belgesinin kararını gözden geçir; yerel çıktı/ham logların teslim durumunu kararlaştır. 2026-10-06 Git durumunda izlenen dosya silinmesi görünmüyor. | Gerekçeli belge kararı ve gözden geçirilmiş teslim commit’i. |
+| A-23 | P1 | 🟢 | O-13 / R-8 / D-7 / D-8 | **Belge ve kaynak teslim temizliği tamamlandı:** [Karar belgesi](A-23-TESLIM-KARARI-2026-10-08.md) güncel 31 görev kaynağını, 39 tarihsel bulgunun yerini ve eski raporların Git geçmişindeki konumunu açıklar. Yerel ayar dosyaları Git/publish/kurulum girdisinden çıkarıldı; Web publish çıktısı denetlendi. | Hedef kurulum ve müşteri kabulü A-21; geçmiş sır rotasyonu A-06 kapsamında sürer. |
 | A-24 | P2 | 🟡 | Cache / Redis | Üretim `CRMFilo:` anahtarlı iş listeleri/dashboard artık DB'den okunur; cache kesintisi veya eksik invalidation bu verilerde bayat sonuç üretemez. Jenerik cache nesli korunur. | Hedef hacimde DB sorgu yükü ve çoklu sunucu çalışma zamanı kabulü. Yeniden iş verisi cache'i kullanılacaksa transaction bağlı invalidation gerekir. |
 | A-25 | P2 | 🟡 | Cache / ekran yüklemesi | Ortak memory backend ile 4 yarış/hata/iptal regresyonu geçti; son tam Release paketi 42/42. | Gerçek Redis, ağ yeniden bağlanması, çok süreçli yük ve geniş invalidation maliyeti. |
 | A-26 | P2 | 🟡 | Personel banka / ihale / Y-2 | **Excel ve PDF çıktı kabulü:** Uzun metin, büyük/negatif tutar, çok sayfa, SGK ayrı/birleşik, boş risk listesi ve ekran/çıktı toplam eşitliğini kontrol et; proforma görsel kabulünü dahil et. | XLSX/PDF açılır ve baskıda kesilmez; Türkçe karakterler, başlık/filtre/toplamlar doğru. Çıktı kodu tamamlandı; görsel kabul bekliyor. |
@@ -119,7 +119,7 @@ Her satırın son sütunu yeşile geçiş ölçütüdür. Yalnız kodun derlenme
 - Son araç silme ve ihale çıktısı Web derlemeleri ayrı geçici klasörde `UseAppHost=false` ile 0 uyarı/0 hata tamamlandı. Normal personel banka raporu derlemesi çalışan EXE kilidi nedeniyle durdu; ayrı çıktı derlemesi başarılı oldu. Çalışan uygulamanın en son kaynakla yeniden başlatıldığına dair kabul yok.
 - Kök kritik birim test projesi açık olarak kayıtlıdır; çalışma ağacında Rent-a-Car kontrol projesi bulunması bu kapsamı kapatmaz. Bu tur test çalıştırılmadı.
 - **Eksik tarihsel kaynak:** `SATISA-CIKARIM-YENIDEN-ANALIZ-2026-10-02.md` çalışma ağacında bulunamadı; içeriği yeniden okunmuş gibi değerlendirilmedi. Ona giden belgeler [güncel 31 maddelik envantere](SATISA-CIKARIM-GOREV-ENVANTERI-2026-10-06.md) yönlendirildi.
-- Önceki denetim kesitinde bazı raporlar ve Rent-a-Car analiz belgesi silinmiş olarak kaydedilmişti. 2026-10-06 Git durumunda izlenen dosya silinmesi görünmüyor. Tarihsel belge ve teslim kararı A-23 kapsamında açık.
+- Tarihsel ilk denetim ve Rent-a-Car analiz belgeleri Git geçmişinde saklıdır; ayrı 2026-10-02 yeniden analiz dosyası bulunamadığı için güncel görev kaynağı 31 maddelik envanter olarak sabitlendi. [A-23 kararı](A-23-TESLIM-KARARI-2026-10-08.md).
 - K-1 anahtar butonları güncel LisansDesktop **Anahtar ve Yedek** sekmesindedir; eski “başlıkta dört buton” notları tarihsel ekranı anlatır. Tarihsel DPAPI yedeği, güncel parola korumalı .mkkey bağımsız kurtarma kabulü olarak kullanılmaz.
 - Ortak `LicenseIdentity` normalizasyonu tamamlandı; O-8’in açık kısmı kalan firma adı/introspeksiyon/seed tekrarlarıdır. “Tüm normalizasyon hâlâ açık” ifadesi kullanılmamalıdır.
 - Araç silme kaynak düzeltmesi tamamlandı; önceki modalların kalan iş listesindeki genel “araç silme açık” ifadesi artık yalnız runtime/ilişki kabulü anlamına gelir. Araç import UI sonuç koruması bu devamda tamamlandı; runtime kabulü A-12, import servisinin firma kapsamı denetimi A-13 olarak açık kalır.
@@ -1158,3 +1158,9 @@ Kullanıcının bu oturumda verdiği test talebiyle son aşama kontrolleri başl
 - 🟢 İzole SQLite regresyon testleri: 3 yeni test; mevcut satır korunması, iki kez onarım, yeni migration'ın baseline dışında kalması ve eski şemada dashboard son hareket sorgusunun onarım sonrası çalışması doğrulandı. A-15 için uygulama katmanındaki dört senaryoya ek olarak SQLite DB trigger migration'ı, eski çapraz-firma verisini ve doğrudan SQL üzerinden geçersiz eşleştirme/uç firma değişikliklerini reddeden altı testle doğrulandı. Release çözüm derlemesi **0 hata / 0 uyarı**, son paket **102/102 geçti, 0 atlandı**.
 - 🟡 Gerçek müşteri SQLite dosyası değiştirilmedi; düzeltme dağıtılmalı ve müşteri dashboard açılışı kabul edilmelidir. Satış görev renkleri müşteri/sağlayıcı kabulü kanıtı olmadan değiştirilmedi. [Teknik kanıt](TEST-DOGRULAMA-2026-10-08.md).
 - 🟡 A-15 PostgreSQL migration'ı izole PostgreSQL 17 sunucusunda çalıştırıldı; eski müşteri verisi, paralel bağlantı kabulü ve diğer tenant ilişkileri doğrulanmadı. A-15 🔴 kalır.
+
+### 2026-10-08 — A-23 belge ve kurulum girdisi kapanışı
+
+- 🟢 [Teslim kararı](A-23-TESLIM-KARARI-2026-10-08.md) güncel görev belgesini sabitledi; ilk denetim ve Rent-a-Car tarihsel içeriklerinin Git geçmişindeki konumu kaydedildi. Eksik ayrı yeniden analiz belgesinin içeriği uydurulmadı.
+- 🟢 Üç yerel ayar dosyası mevcut makinede korunarak Git takibinden çıkarıldı. Web publish, kurulum betiği ve Inno girdileri bu dosyaları paket dışı tutuyor. Release publish çıktısında ayar/oturum dosyaları ve `.db` bulunmadı.
+- 🟡 Inno EXE/temiz hedef kurulum A-21; eski sır rotasyonu A-06 kapsamındadır. A-23 🟢; güncel renk dağılımı **5 yeşil / 21 sarı / 5 kırmızı**. Satış kararı 🔴 kalır.

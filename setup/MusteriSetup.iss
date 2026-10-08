@@ -61,7 +61,7 @@ Name: "web"; Description: "MKFiloServis Web"; Types: full; Flags: fixed
 Name: "datasync"; Description: "Veri Aktarim Araci"; Types: full
 
 [Files]
-Source: "payload\Web\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: web
+Source: "payload\Web\*"; DestDir: "{app}\app"; Excludes: "dbsettings.json,portalsettings.json,backup_settings.json,appsettings.Production.json,cookies.txt,*.db,*.db-shm,*.db-wal,logs\*,uploads\*,Backups\*,keys\*"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: web
 Source: "payload\DataSync\*"; DestDir: "{app}\tools\datasync"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: datasync
 
 [Dirs]

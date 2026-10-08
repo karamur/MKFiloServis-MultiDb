@@ -54,7 +54,7 @@ Name: "webonly"; Description: "Sadece Web"
 
 [Files]
 Source: "payload\Web\*"; DestDir: "{app}\app"; \
-    Excludes: "dbsettings.json,appsettings.json,appsettings.Production.json,portalsettings.json,backup_settings.json,*.db,*.db-shm,*.db-wal,logs\*,uploads\*,Backups\*,keys\*"; \
+    Excludes: "dbsettings.json,appsettings.json,appsettings.Production.json,portalsettings.json,backup_settings.json,cookies.txt,*.db,*.db-shm,*.db-wal,logs\*,uploads\*,Backups\*,keys\*"; \
     Flags: ignoreversion recursesubdirs createallsubdirs; Components: web
 Source: "payload\DataSync\*"; DestDir: "{app}\tools\datasync"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: datasync
 
