@@ -10,88 +10,108 @@ public sealed class PuantajFinansService : IPuantajFinansService
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
     private readonly IFaturaService _faturaService;
     private readonly ILogger<PuantajFinansService> _logger;
+    private readonly IAktifFirmaProvider _aktifFirmaProvider;
 
-    public PuantajFinansService(IDbContextFactory<ApplicationDbContext> dbFactory, IFaturaService faturaService, ILogger<PuantajFinansService> logger)
+    public PuantajFinansService(IDbContextFactory<ApplicationDbContext> dbFactory, IFaturaService faturaService, ILogger<PuantajFinansService> logger, IAktifFirmaProvider aktifFirmaProvider)
     {
         _dbFactory = dbFactory;
         _faturaService = faturaService;
         _logger = logger;
+        _aktifFirmaProvider = aktifFirmaProvider;
+    }
+
+    private int RequireSelectedFirma()
+    {
+        if (_aktifFirmaProvider.TumFirmalar || _aktifFirmaProvider.AktifFirmaId is not > 0)
+            throw new UnauthorizedAccessException("Puantaj finans işlemi için tek bir firma seçilmelidir.");
+        return _aktifFirmaProvider.AktifFirmaId.Value;
     }
 
     public async Task<bool> FinansalKayitOlusturulabilirMiAsync(int hesapDonemiId, CancellationToken ct = default)
     {
+        var firmaId = RequireSelectedFirma();
         await using var db = await _dbFactory.CreateDbContextAsync();
-        var h = await db.PuantajHesapDonemleri.FindAsync(hesapDonemiId);
+        var h = await db.PuantajHesapDonemleri.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == hesapDonemiId && x.FirmaId == firmaId && !x.IsDeleted, ct);
         return h is { Durum: PuantajHesapDurum.Aktif, OnayDurum: PuantajDonemOnayDurum.Kilitli };
     }
 
     public async Task FinansalKayitOlusturAsync(int hesapDonemiId, CancellationToken ct = default)
     {
-        if (!await FinansalKayitOlusturulabilirMiAsync(hesapDonemiId, ct))
-            throw new InvalidOperationException("Finansal kayıt için hesap dönemi Kilitli olmalıdır.");
-
-        await using var db = await _dbFactory.CreateDbContextAsync();
-
-        var mevcut = await db.PuantajFinansalKayitlar
-            .Where(f => f.HesapDonemiId == hesapDonemiId && !f.IsDeleted)
-            .Select(f => f.PuantajKayitId)
-            .ToListAsync(ct);
-
-        var pkList = await db.PuantajKayitlar
-            .Where(p => p.HesapDonemiId == hesapDonemiId && !p.IsDeleted && !mevcut.Contains(p.Id))
-            .ToListAsync(ct);
-
-        var simdi = DateTime.UtcNow;
-        foreach (var pk in pkList)
+        var firmaId = RequireSelectedFirma();
+        await using var strategyDb = await _dbFactory.CreateDbContextAsync();
+        var strategy = strategyDb.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
         {
-            db.PuantajFinansalKayitlar.Add(new PuantajFinansalKayit
-            {
-                FirmaId = null,
-                PuantajKayitId = pk.Id,
-                HesapDonemiId = hesapDonemiId,
-                BirimGelir = pk.BirimGelir,
-                BirimGider = pk.BirimGider,
-                ToplamGelir = pk.ToplamGelir,
-                ToplamGider = pk.ToplamGider,
-                KdvTutar = pk.GelirKdvTutari,
-                GenelToplam = pk.Alinacak,
-                SeferGunu = (int)pk.Gun,
-                GelirCariId = pk.FaturaKesiciCariId ?? pk.KurumCariId,
-                GiderCariId = pk.OdemeYapilacakCariId,
-                KayitTarihi = simdi,
-                CreatedAt = simdi
-            });
-        }
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+            var donem = await db.PuantajHesapDonemleri.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == hesapDonemiId && x.FirmaId == firmaId && !x.IsDeleted, ct);
+            if (donem is not { Durum: PuantajHesapDurum.Aktif, OnayDurum: PuantajDonemOnayDurum.Kilitli })
+                throw new InvalidOperationException("Seçili firmada finansal kayıt için kilitli ve aktif hesap dönemi bulunamadı.");
 
-        await db.SaveChangesAsync(ct);
+            var pkList = await db.PuantajKayitlar
+                .Where(p => p.HesapDonemiId == hesapDonemiId && !p.IsDeleted &&
+                    !db.PuantajFinansalKayitlar.IgnoreQueryFilters()
+                        .Any(f => f.PuantajKayitId == p.Id && f.HesapDonemiId == hesapDonemiId))
+                .ToListAsync(ct);
+
+            var simdi = DateTime.UtcNow;
+            foreach (var pk in pkList)
+            {
+                db.PuantajFinansalKayitlar.Add(new PuantajFinansalKayit
+                {
+                    FirmaId = firmaId,
+                    PuantajKayitId = pk.Id,
+                    HesapDonemiId = hesapDonemiId,
+                    BirimGelir = pk.BirimGelir,
+                    BirimGider = pk.BirimGider,
+                    ToplamGelir = pk.ToplamGelir,
+                    ToplamGider = pk.ToplamGider,
+                    KdvTutar = pk.GelirKdvTutari,
+                    GenelToplam = pk.Alinacak,
+                    SeferGunu = (int)pk.Gun,
+                    GelirCariId = pk.FaturaKesiciCariId ?? pk.KurumCariId,
+                    GiderCariId = pk.OdemeYapilacakCariId,
+                    KayitTarihi = simdi,
+                    CreatedAt = simdi
+                });
+            }
+
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        });
     }
 
     public async Task<List<PuantajFinansalKayit>> FinansalKayitlariGetirAsync(int hesapDonemiId, CancellationToken ct = default)
     {
+        var firmaId = RequireSelectedFirma();
         await using var db = await _dbFactory.CreateDbContextAsync();
         return await db.PuantajFinansalKayitlar
             .Include(f => f.PuantajKayit).ThenInclude(p => p!.Guzergah)
             .Include(f => f.PuantajKayit).ThenInclude(p => p!.Arac)
-            .Where(f => f.HesapDonemiId == hesapDonemiId && !f.IsDeleted)
+            .Where(f => f.FirmaId == firmaId && f.HesapDonemiId == hesapDonemiId && !f.IsDeleted)
             .OrderBy(f => f.PuantajKayit!.Guzergah!.GuzergahAdi)
             .AsNoTracking().ToListAsync(ct);
     }
 
     public async Task<bool> FaturaUretilebilirMiAsync(int hesapDonemiId, CancellationToken ct = default)
     {
+        var firmaId = RequireSelectedFirma();
         await using var db = await _dbFactory.CreateDbContextAsync();
         var kayitVar = await db.PuantajFinansalKayitlar
-            .AnyAsync(f => f.HesapDonemiId == hesapDonemiId && !f.IsDeleted, ct);
+            .AnyAsync(f => f.FirmaId == firmaId && f.HesapDonemiId == hesapDonemiId && !f.IsDeleted, ct);
         return kayitVar;
     }
 
     public async Task<Fatura> GelirFaturasiUretAsync(int finansalKayitId, CancellationToken ct = default)
     {
+        var firmaId = RequireSelectedFirma();
         await using var db = await _dbFactory.CreateDbContextAsync();
         var fk = await db.PuantajFinansalKayitlar
             .Include(f => f.PuantajKayit).ThenInclude(p => p!.Guzergah)
             .Include(f => f.PuantajKayit).ThenInclude(p => p!.Arac)
-            .FirstOrDefaultAsync(f => f.Id == finansalKayitId && !f.IsDeleted, ct)
+            .FirstOrDefaultAsync(f => f.Id == finansalKayitId && f.FirmaId == firmaId && !f.IsDeleted, ct)
             ?? throw new InvalidOperationException("Finansal kayıt bulunamadı.");
 
         if (fk.GelirCariId == null)
@@ -151,11 +171,12 @@ public sealed class PuantajFinansService : IPuantajFinansService
 
     public async Task<Fatura> GiderFaturasiUretAsync(int finansalKayitId, CancellationToken ct = default)
     {
+        var firmaId = RequireSelectedFirma();
         await using var db = await _dbFactory.CreateDbContextAsync();
         var fk = await db.PuantajFinansalKayitlar
             .Include(f => f.PuantajKayit).ThenInclude(p => p!.Guzergah)
             .Include(f => f.PuantajKayit).ThenInclude(p => p!.Arac)
-            .FirstOrDefaultAsync(f => f.Id == finansalKayitId && !f.IsDeleted, ct)
+            .FirstOrDefaultAsync(f => f.Id == finansalKayitId && f.FirmaId == firmaId && !f.IsDeleted, ct)
             ?? throw new InvalidOperationException("Finansal kayıt bulunamadı.");
 
         if (fk.GiderCariId == null)
@@ -221,11 +242,12 @@ public sealed class PuantajFinansService : IPuantajFinansService
     /// </summary>
     public async Task<PuantajFinansSonuc> IsleAsync(Hakedis hakedis)
     {
+        var firmaId = RequireSelectedFirma();
         await using var db = await _dbFactory.CreateDbContextAsync();
 
         var kayit = await db.Hakedisler
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == hakedis.Id && !x.IsDeleted);
+            .FirstOrDefaultAsync(x => x.Id == hakedis.Id && x.FirmaId == firmaId && !x.IsDeleted);
 
         if (kayit == null)
             return new PuantajFinansSonuc { Mesaj = "Hakediş kaydı bulunamadı." };
@@ -236,11 +258,10 @@ public sealed class PuantajFinansService : IPuantajFinansService
         if (kayit.Tip == HakedisTipi.Arac)
             return new PuantajFinansSonuc { Mesaj = "Araç tipi hakedişler faturalanmaz (iç raporlama kaydı)." };
 
-        var cari = await ResolveCariForHakedisAsync(db, kayit);
+        var cari = await ResolveCariForHakedisAsync(db, kayit, firmaId);
         if (cari == null)
             return new PuantajFinansSonuc { Mesaj = "Hakediş için cari eşleşmesi bulunamadı." };
 
-        var firmaId = kayit.FirmaId ?? 0;
         var araToplam = kayit.Tutar > 0 ? kayit.Tutar : kayit.GenelToplam;
         if (araToplam <= 0)
             return new PuantajFinansSonuc { Mesaj = "Hakediş tutarı sıfır veya negatif olduğu için işlenemedi." };
@@ -288,12 +309,12 @@ public sealed class PuantajFinansService : IPuantajFinansService
         };
     }
 
-    private static async Task<Cari?> ResolveCariForHakedisAsync(ApplicationDbContext db, Hakedis hakedis)
+    private static async Task<Cari?> ResolveCariForHakedisAsync(ApplicationDbContext db, Hakedis hakedis, int firmaId)
     {
         if (hakedis.Tip == HakedisTipi.Kurum)
         {
             return await db.Cariler.AsNoTracking()
-                .FirstOrDefaultAsync(c => c.Id == hakedis.ReferansId && !c.IsDeleted);
+                .FirstOrDefaultAsync(c => c.Id == hakedis.ReferansId && c.FirmaId == firmaId && !c.IsDeleted);
         }
 
         if (hakedis.Tip == HakedisTipi.Tedarikci)
@@ -304,7 +325,7 @@ public sealed class PuantajFinansService : IPuantajFinansService
             if (tedarikci?.CariId is int cariId && cariId > 0)
             {
                 var cariById = await db.Cariler.AsNoTracking()
-                    .FirstOrDefaultAsync(c => c.Id == cariId && !c.IsDeleted);
+                    .FirstOrDefaultAsync(c => c.Id == cariId && c.FirmaId == firmaId && !c.IsDeleted);
                 if (cariById != null) return cariById;
             }
 
@@ -312,6 +333,7 @@ public sealed class PuantajFinansService : IPuantajFinansService
             {
                 return await db.Cariler.AsNoTracking()
                     .FirstOrDefaultAsync(c => !c.IsDeleted
+                        && c.FirmaId == firmaId
                         && c.CariTipi == CariTipi.Tedarikci
                         && c.Unvan == tedarikci.Unvan);
             }

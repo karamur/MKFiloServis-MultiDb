@@ -123,3 +123,9 @@ Ekranın ödeme durumu düzenleme alanı kaldırıldı, iptal izni servisle eşl
 Yedi yeni `BankTransactionSqliteTests` senaryosu, transfer/cari mahsupta aynı GUID'nin farklı yazımı ve aynı tutarın farklı decimal yazımıyla tekrarın aynı kaydı döndürmesini; farklı tutar/işlem türünün reddini; iptal edilmiş kimliğin tüketilmiş kalmasını; fiş INSERT hatasının kimliği de geri almasını ve aynı kimlikle sonraki başarılı denemeyi; kimliksiz/geçersiz/boş GUID çağrısının reddini denetler. `FinancePersistenceSqliteTests` yeni banka migration'ını EF SQLite SQL üreticisiyle minimal eski tabloya uygular; NULL eski kimlikler ve soft-delete sonrası benzersiz indeks reddi doğrulanır.
 
 Mahsup ekranı bekleyen kimliği sessionStorage'da saklayacak, aynı sekmede yeniden açma/yenilemede kullanacak ve yalnız başarılı cevapta temizleyecek şekilde düzenlendi. Razor derlendi; tarayıcı saklama/yenileme senaryosu çalıştırılmadı. Bütçe çağrısı sabit kaynak kimliği gönderecek şekilde derlendi; tam bütçe ödeme akışı bu koşuda test edilmedi. Bütçe kaydının hareketle atomik bağlanması ayrı açık iştir. Yeni banka migration'ı müşteri DB'sine veya PostgreSQL'e bu koşuda uygulanmadı; dağıtımda yeni kolon/indeksler uygulanmadan bu sürüm kullanılmamalıdır.
+
+## 2026-10-09 — Puantaj finans snapshot firma sınırı
+
+🟢 Web Release derlemesi **0 hata / 0 uyarı**. `PuantajFinansSnapshotSqliteTests` yabancı firma döneminin reddini, yerel dönem snapshot'ının doğru firmaya yazılmasını ve tekrar çağrıda ikinci kayıt oluşmamasını doğruladı. Ardından tam Release paketi **105/105 geçti, 0 atlandı**.
+
+🟡 Bu koşu puantajdan fatura/kalem/link üretiminin çok bağlantılı atomikliğini, hakedişin fatura/snapshot zincirini veya müşteri verisi kabulünü doğrulamaz. Bu akışlar A-29 kapsamında açık kalır.

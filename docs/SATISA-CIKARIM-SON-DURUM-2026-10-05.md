@@ -1179,3 +1179,9 @@ Kullanıcının bu oturumda verdiği test talebiyle son aşama kontrolleri başl
 - 🟢 İki SQLite regresyonu geçti: yabancı firma girişinde kayıt yok, seçili firmaya oluşturma başarılı; veritabanından Admin rolü kaldırılınca önceki oturum hesabı oluşturamaz.
 - 🟢 `5d1c4ed7` için [GitHub Tests koşusu](https://github.com/karamur/MKFiloServis-MultiDb/actions/runs/37835118724) başarılı: **104/104 test, 0 başarısız, 0 atlanan**. Yerel Release koşusu da 104/104 geçti.
 - 🟡 Diğer otomatik mali yazımlar, puantaj ve gerçek müşteri rol değişimi kabulü açık. A-29 🟡 ve genel satış kararı 🔴 kalır.
+
+### 2026-10-09 — A-29 puantaj finans snapshot firma ve işlem sınırı
+
+- 🟢 Puantaj finans snapshot'ı artık seçili firmada oluşturuluyor; dönemin aktif/kilitli durumu kayıtla aynı Serializable transaction içinde doğrulanıyor. Aynı dönem tekrar çağrıldığında ikinci satır üretilmiyor; silinmiş geçmiş satırın benzersiz anahtarı da korunuyor.
+- 🟢 Finansal kayıt okuma ve fatura üretim girişleri ile hakedişin cari eşleşmesi seçili firmaya sınırlandı. SQLite regresyonu yabancı dönemi reddetme, doğru firma atama ve tekrar çağrıyı doğruladı. Release Web derlemesi **0 hata / 0 uyarı**; otomatik paket **105/105 başarılı, 0 atlanan**.
+- 🟡 Puantaj fatura/kalem/link ve hakediş fatura/snapshot işlemleri henüz tek commit sınırında değil; diğer mali servis izinleri ve gerçek müşteri kabulü de açık. A-29 🟡, genel satış kararı 🔴 ve görev renk dağılımı değişmedi.
