@@ -50,22 +50,6 @@
                                         <i class="bi bi-database me-1"></i>PostgreSQL
                                     </label>
 
-                                    <input type="radio" class="btn-check" name="dbProvider" id="btnSQLServer"
-                                           checked="@(settings.Provider == DatabaseProvider.SQLServer)"
-                                           disabled
-                                           @onchange="() => ProviderDegistir(DatabaseProvider.SQLServer)">
-                                    <label class="btn btn-outline-secondary @(settings.Provider != DatabaseProvider.SQLServer ? "disabled" : "")" for="btnSQLServer">
-                                        <i class="bi bi-server me-1"></i>SQL Server (desteklenmiyor)
-                                    </label>
-
-                                    <input type="radio" class="btn-check" name="dbProvider" id="btnMySQL"
-                                           checked="@(settings.Provider == DatabaseProvider.MySQL)"
-                                           disabled
-                                           @onchange="() => ProviderDegistir(DatabaseProvider.MySQL)">
-                                    <label class="btn btn-outline-warning @(settings.Provider != DatabaseProvider.MySQL ? "disabled" : "")" for="btnMySQL">
-                                        <i class="bi bi-hdd-network me-1"></i>MySQL (desteklenmiyor)
-                                    </label>
-
                                     <input type="radio" class="btn-check" name="dbProvider" id="btnSQLite"
                                            checked="@(settings.Provider == DatabaseProvider.SQLite)"
                                            @onchange="() => ProviderDegistir(DatabaseProvider.SQLite)">
@@ -73,7 +57,7 @@
                                         <i class="bi bi-file-earmark-binary me-1"></i>SQLite
                                     </label>
                                 </div>
-                                <small class="text-muted d-block mt-2">Bu sürümde otomatik şema geçişi PostgreSQL ve SQLite için desteklenir. SQL Server ve MySQL seçenekleri bağlantı sağlayıcısı olarak tanımlı olsa da kurulum/migration desteği tamamlanmadığı için kullanılamaz.</small>
+                                <small class="text-muted d-block mt-2">Bu sürüm yalnız PostgreSQL ve SQLite için şema, migration, başlangıç ve denetim desteği sağlar.</small>
                                 @if (settings.Provider is DatabaseProvider.SQLServer or DatabaseProvider.MySQL)
                                 {
                                     <div class="alert alert-danger mt-3 mb-0">
@@ -206,12 +190,6 @@
                             <button class="btn btn-outline-primary" @onclick="() => HizliAyar(DatabaseProvider.PostgreSQL)">
                                 <i class="bi bi-database me-2"></i>PostgreSQL (Kanonik)
                             </button>
-                            <button class="btn btn-outline-secondary" @onclick="() => HizliAyar(DatabaseProvider.SQLServer)">
-                                <i class="bi bi-server me-2"></i>SQL Server
-                            </button>
-                            <button class="btn btn-outline-warning" @onclick="() => HizliAyar(DatabaseProvider.MySQL)">
-                                <i class="bi bi-hdd-network me-2"></i>MySQL
-                            </button>
                             <button class="btn btn-outline-info" @onclick="() => HizliAyar(DatabaseProvider.SQLite)">
                                 <i class="bi bi-file-earmark-binary me-2"></i>SQLite (Yerel Calisma)
                             </button>
@@ -280,8 +258,6 @@
                         <h6>Desteklenen Runtime Sağlayıcılar:</h6>
                         <ul class="list-unstyled mb-3">
                             <li><strong>PostgreSQL:</strong> Kanonik migration kaynağı</li>
-                            <li><strong>SQL Server:</strong> Sunucu tabanlı çalışma modu</li>
-                            <li><strong>MySQL:</strong> Sunucu tabanlı çalışma modu</li>
                             <li><strong>SQLite:</strong> Yerel/tek dosya çalışma modu; aktif sağlayıcı olarak seçilebilir</li>
                         </ul>
                         @if (!string.IsNullOrWhiteSpace(settings.TransitionManifestPath))
@@ -342,18 +318,6 @@
                 settings.Username = "postgres";
                 settings.UseIntegratedSecurity = false;
                 break;
-            case DatabaseProvider.SQLServer:
-                settings.Host = "localhost";
-                settings.DatabaseName = "MKFiloServis";
-                settings.Username = "sa";
-                settings.UseIntegratedSecurity = false;
-                break;
-            case DatabaseProvider.MySQL:
-                settings.Host = "localhost";
-                settings.DatabaseName = "MKFiloServis";
-                settings.Username = "root";
-                settings.UseIntegratedSecurity = false;
-                break;
             case DatabaseProvider.SQLite:
                 settings.DatabaseName = "MKFiloServis.db";
                 break;
@@ -373,20 +337,6 @@
                 settings.Host = "localhost";
                 settings.DatabaseName = "MKFiloServis";
                 settings.Username = "postgres";
-                settings.Password = "";
-                settings.UseIntegratedSecurity = false;
-                break;
-            case DatabaseProvider.SQLServer:
-                settings.Host = "localhost";
-                settings.DatabaseName = "MKFiloServis";
-                settings.Username = "sa";
-                settings.Password = "";
-                settings.UseIntegratedSecurity = true;
-                break;
-            case DatabaseProvider.MySQL:
-                settings.Host = "localhost";
-                settings.DatabaseName = "MKFiloServis";
-                settings.Username = "root";
                 settings.Password = "";
                 settings.UseIntegratedSecurity = false;
                 break;
@@ -496,4 +446,3 @@
         ToastService.ShowInfo("Baglanti dizesi kopyalandi.");
     }
 }
-

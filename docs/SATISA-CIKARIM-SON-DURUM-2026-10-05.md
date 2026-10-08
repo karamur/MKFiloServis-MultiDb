@@ -16,7 +16,7 @@ Her yeni düzeltmede bu dosyada ilgili görev satırı, tamamlanan kod/kabul ayr
 
 ## 1. Satışa hazırlık kararı
 
-**🔴 Satışa çıkarım için hazır değil.** 31 birleşik görevin 5'i açık uygulama/veri işi, 21'i müşteri veya çalışma zamanı kabulü bekliyor. Özellikle tam kurtarma, dosya yaşam döngüsü, veri bütünlüğü, eski veri onarımı ve DB sağlayıcı kapsamı kapanmadı. Derleme ve sentetik DB kanıtları müşteri kabulünün yerine geçmez.
+**🔴 Satışa çıkarım için hazır değil.** 31 birleşik görevin 4'ü açık uygulama/veri işi, 22'si müşteri veya çalışma zamanı kabulü bekliyor. Özellikle tam kurtarma, dosya yaşam döngüsü, veri bütünlüğü ve eski veri onarımı kapanmadı. Derleme ve sentetik DB kanıtları müşteri kabulünün yerine geçmez.
 
 Bu belge tarihsel tekrarları tek görev listesine toplar. Eski raporlardaki “kalan” ifadesi sonradan kod olarak tamamlanmışsa tekrar açık kod işi yapılmaz; yalnız gerçek kalan kapsam listelenir. Başlamış servis yazımları modal kapatılmasıyla geri alınmış sayılmaz.
 
@@ -29,19 +29,19 @@ Bu belge tarihsel tekrarları tek görev listesine toplar. Eski raporlardaki “
 | 🔴 | Raporda açık kalan uygulama/kalıcı altyapı/doküman işi |
 | ⚪ | Ürün kapsamı veya düşük öncelikli düzenleme kararı |
 
-**Güncel görev renkleri (2026-10-08):** 31 birleşik görev: **5 🟢 tamamlandı/kararı verildi (A-08, A-22, A-23, A-30, A-31)**, **21 🟡 kabul/geçiş/uygulama denetimi bekliyor**, **5 🔴 açık uygulama/veri işi**, **⚪ karar bekleyen yok**. A-23 belge ve kaynak teslim kararı tamamlandı. A-29 mali politikaları belgelendi ve kod düzeltmeleri yapıldı, ancak yazım anında rol yenileme kabulü açık olduğundan 🟡 kaldı. A-16 müşteri verisi ve onarım kanıtı olmadığı için 🔴 kaldı.
+**Güncel görev renkleri (2026-10-09):** 31 birleşik görev: **5 🟢 tamamlandı/kararı verildi (A-08, A-22, A-23, A-30, A-31)**, **22 🟡 kabul/geçiş/uygulama denetimi bekliyor**, **4 🔴 açık uygulama/veri işi**, **⚪ karar bekleyen yok**. A-23 belge ve kaynak teslim kararı tamamlandı. A-28 sağlayıcı kapsam kararı verildi ve ayar ekranında uygulandı; PostgreSQL/SQLite temiz kurulum ve yükseltme kabulü beklediğinden 🟡 durumuna alındı. A-16 müşteri verisi ve onarım kanıtı olmadığı için 🔴 kaldı.
 
 | Renk | Sayı | Görevler |
 |---|---:|---|
 | 🟢 | 5 | A-08, A-22, A-23, A-30, A-31 |
-| 🟡 | 21 | A-01, A-02, A-04, A-05, A-06, A-07, A-09, A-11, A-12, A-13, A-14, A-17, A-18, A-19, A-20, A-21, A-24, A-25, A-26, A-27, A-29 |
-| 🔴 | 5 | A-03, A-10, A-15, A-16, A-28 |
+| 🟡 | 22 | A-01, A-02, A-04, A-05, A-06, A-07, A-09, A-11, A-12, A-13, A-14, A-17, A-18, A-19, A-20, A-21, A-24, A-25, A-26, A-27, A-28, A-29 |
+| 🔴 | 4 | A-03, A-10, A-15, A-16 |
 | ⚪ | 0 | — |
 
 **Toplam: 31 görev.** A-23 teslim temizliği tamamlandı; diğer görevlerin kod ve kabul sınırları aşağıda ayrı gösterilir.
 
 - **A-29 🟡:** Fatura yazımları, manuel fiş oluşturma/düzenleme/silme/onay, hesap planı düzenleme/silme, araç masrafı ve kolay muhasebe kaydetme servislerine güncel izin kontrolü eklendi. Banka hesabı oluşturma seçili firma ve ortak Serializable yazım sınırında; iki SQLite testi geçti. Borç/alacak denetimi manuel oluşturma, düzenleme ve atomik fiş üretiminde var. Kalan otomatik/atomik çağrı sözleşmeleri, puantaj ve çalışma zamanı doğrulaması açık.
-- **A-28 🔴:** SQL Server/MySQL güvenli biçimde reddediliyor. Sağlayıcı kapsam kararı ve PostgreSQL/SQLite hedef kurulum kabulü açık. Bu açıklama yalnız A-28'e aittir; diğer kırmızı görevlerin kapanış koşulları 3. bölümde yer alır.
+- **A-28 🟡:** SQL Server/MySQL bu sürümde desteklenmiyor ve güvenli biçimde reddediliyor; ürün kapsamı kararı verilerek ayar ekranı buna göre daraltıldı. PostgreSQL/SQLite hedef kurulum kabulü açık. Bu açıklama yalnız A-28'e aittir; diğer kırmızı görevlerin kapanış koşulları 3. bölümde yer alır.
 
 ## 2. Kodla tamamlanan alt parçalar
 
@@ -100,7 +100,7 @@ Her satırın son sütunu yeşile geçiş ölçütüdür. Yalnız kodun derlenme
 | A-25 | P2 | 🟡 | Cache / ekran yüklemesi | Ortak memory backend ile 4 yarış/hata/iptal regresyonu geçti; son tam Release paketi 42/42. | Gerçek Redis, ağ yeniden bağlanması, çok süreçli yük ve geniş invalidation maliyeti. |
 | A-26 | P2 | 🟡 | Personel banka / ihale / Y-2 | **Excel ve PDF çıktı kabulü:** Uzun metin, büyük/negatif tutar, çok sayfa, SGK ayrı/birleşik, boş risk listesi ve ekran/çıktı toplam eşitliğini kontrol et; proforma görsel kabulünü dahil et. | XLSX/PDF açılır ve baskıda kesilmez; Türkçe karakterler, başlık/filtre/toplamlar doğru. Çıktı kodu tamamlandı; görsel kabul bekliyor. |
 | A-27 | P2 | 🟡 | Y-2 / Y-3 / Y-9 | **Luca ve dış entegrasyon kabulü:** Gerçek UBL/portal, eski credential geçişi, HTTPS/retry ve belirsiz POST hatalarını kabul et; diğer entegrasyonların kapsamını incele. | Tekrar deneme istekleri taze; belirsiz mali POST çift gönderilmez; eski sır dosyası geçişi ve portal uyumu kanıtlı. |
-| A-28 | P2 | 🔴 | O-1 | **DB sağlayıcı ürün kapsamı:** MSSQL kurulum seçeneği görünür, ancak migration/master/audit desteği tamamlanana kadar kurulum durdurulur. Web başlangıcı ve ayar yazma/test servisi PostgreSQL/SQLite dışındaki SQL Server/MySQL sağlayıcılarını migration öncesi reddeder; yeni seçim ayar ekranında kapalıdır. | Yetkili ürün kapsamı kararı ve PostgreSQL/SQLite temiz kurulum/yükseltme hedef kabulü; veya SQL Server/MySQL için tam şema/migration/audit zinciri ve hedef kabulü. |
+| A-28 | P2 | 🟡 | O-1 | **DB sağlayıcı kapsam kararı ve UI düzeltmesi:** Ürün kapsamı PostgreSQL ve SQLite olarak sınırlandı. SQL Server/MySQL bağlantı testi/kurulum seçenekleri ayar ekranı ve hızlı ayarlardan çıkarıldı; `UsesSupportedRuntimeProvider` yalnız PostgreSQL/SQLite kabul ediyor. Legacy enum/ayar ayrıştırması eski yapılandırmayı tanıyıp kontrollü geçiş uyarısını korumak için bırakıldı; uygulama başlangıcı, ayar kaydı ve sağlayıcı testi desteklenmeyen sağlayıcıyı reddediyor. | PostgreSQL/SQLite temiz kurulum ve yükseltme hedef kabulü, migration zinciri ve gerçek müşteri DB'lerinde kanıtlanmalı. |
 | A-29 | P2 | 🟡 | Banka / maaş | [Mali kararlar](A-29-31-URUN-KARARLARI.md): cari eşleşmesi isteğe bağlı; çelişkili tutar/yön satırı reddedilir; kilitli/fişli snapshot silinemez. Banka hesabı oluşturma seçili firmaya ve ortak işlem sınırına bağlandı. | Fatura, manuel fiş, hesap düzenleme/silme, masraf, kolay muhasebe kaydetme ve personel finans yazımlarında güncel servis izni eklendi. Kalan atomik/otomatik çağrılar, puantaj ve rol değişimi çalışma zamanı kabulü açık. |
 | A-30 | P3 | 🟢 | O-8 / O-9 / O-10 / D-2 / D-3 / D-4 | [Refactor kararı](A-29-31-URUN-KARARLARI.md): davranış değiştirmeyen temizlik satış sürümüne alınmıyor; hata düzeltmeleri sürüyor. | P3 kapsam kararı kapandı; refactor yeni planlama işi olarak backlog'da. |
 | A-31 | P3 | 🟢 | D-1 / D-6 | [Ürün kapsamı](A-29-31-URUN-KARARLARI.md): çevrimdışı kullanım yok; Local tek düğüm, S3 ortak yapılandırmalı depolama; yedek ve log/audit sınırı tanımlandı. | Ürün kararı kapandı; saha S3/restore kabulleri A-04/A-10/A-11'de izlenir. |
@@ -1193,3 +1193,20 @@ Kullanıcının bu oturumda verdiği test talebiyle son aşama kontrolleri başl
 - 🟢 Puantaj finans snapshot'ı artık seçili firmada oluşturuluyor; dönemin aktif/kilitli durumu kayıtla aynı Serializable transaction içinde doğrulanıyor. Aynı dönem tekrar çağrıldığında ikinci satır üretilmiyor; silinmiş geçmiş satırın benzersiz anahtarı da korunuyor.
 - 🟢 Finansal kayıt okuma ve fatura üretim girişleri ile hakedişin cari eşleşmesi seçili firmaya sınırlandı. SQLite regresyonu yabancı dönemi reddetme, doğru firma atama ve tekrar çağrıyı doğruladı. Release Web derlemesi **0 hata / 0 uyarı**; otomatik paket **105/105 başarılı, 0 atlanan**.
 - 🟡 Puantaj fatura/kalem/link ve hakediş fatura/snapshot işlemleri henüz tek commit sınırında değil; diğer mali servis izinleri ve gerçek müşteri kabulü de açık. A-29 🟡, genel satış kararı 🔴 ve görev renk dağılımı değişmedi.
+
+### 2026-10-09 — A-28 sağlayıcı kapsamının PostgreSQL/SQLite olarak sabitlenmesi
+
+- 🟢 Ürün kararı: bu sürümün desteklenen veritabanları PostgreSQL ve SQLite'tır; SQL Server/MySQL için migration, audit ve başlangıç zinciri geliştirilerek destek verilmeyecektir.
+- 🟢 Veritabanı ayarları ekranından SQL Server/MySQL sağlayıcı ve hızlı seçimleri kaldırıldı. Desteklenen runtime sağlayıcı kontrolü PostgreSQL/SQLite ile sınırlandı. Ayar servisinin bağlantı testi ve uygulama/kaydetme yolları eski desteklenmeyen sağlayıcıları reddediyor; yeni ayar veya geçiş manifesti yazmıyor. Legacy enum/ayar okuma, eski yapılandırmayı tanıyarak uygulama başlangıcındaki açık ret mesajını korumak için tutuldu; eski ayarlar sessizce başka sağlayıcıya çevrilmez.
+- 🟢 `dotnet build "C:\Users\muratk\Desktop\dyedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Web\MKFiloServis.Web.csproj" --no-restore -nologo` — **0 hata / 0 uyarı**.
+- 🟢 `dotnet test "C:\Users\muratk\Desktop\dyedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\MKFiloServis.Tests.csproj" --no-restore --filter "FullyQualifiedName~DatabaseProviderScopeTests" -nologo` — **6/6 başarılı**; desteklenen sağlayıcı listesi, eski SQL Server/MySQL ayarlarının test/uygulama reddi ve ayar dosyasına yazılmaması doğrulandı.
+- 🟢 A-03/A-10/A-15/A-28 hedefli regresyon paketi: `dotnet test "C:\Users\muratk\Desktop\dyedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\MKFiloServis.Tests.csproj" --no-restore --filter "FullyQualifiedName~BankMovementTenantMigrationTests|FullyQualifiedName~InvoicePaymentMatchFirmMigrationTests|FullyQualifiedName~FileCleanupJournalTests|FullyQualifiedName~SecureFileAtomicSaveTests|FullyQualifiedName~SecureFileReferenceCheckerSqliteTests|FullyQualifiedName~SecureFileOrphanScannerTests|FullyQualifiedName~DatabaseProviderScopeTests" -nologo` — **32/32 başarılı**.
+- 🟢 A-03 kurtarma/aktarim betikleri `00-aktar-baslat.ps1`, `01-db-restore.ps1`, `02-dosya-aktar.ps1`, `03-full-transfer-recover.ps1`, `05-recovery-archive-apply.ps1` ve `06-recovery-archive-rollback.ps1` PowerShell parser kontrolünden geçti.
+- 🟡 Bu yerel regresyon ve sözdizimi sonuçları gerçek PostgreSQL/SQLite temiz kurulum-yükseltme, IIS kurtarma, çoklu sunucu dosya yaşam döngüsü veya müşteri verisi kabulünün yerine geçmez. Kabul veritabanına erişim ve değişiklik yapılmadı; A-03, A-10, A-15 ve A-16 için görev renkleri değiştirilmedi.
+
+### 2026-10-09 — A-15 banka hareketi yardımcı firma bağlantıları
+
+- 🟢 A-15 incelemesinde `ApplicationDbContext` içindeki `SaveChanges` firma kontrollerinin `PersonelCebindenId`, `AracId`, `AracMasrafId`, `MahsupHareketId` ve `PersonelGeriOdemeHareketId` bağlantılarını doğruladığı; ancak veritabanı trigger katmanının bu bağlantıları kapsamadığı görüldü.
+- 🟢 Yeni `20261009150000_GuardBankMovementAuxiliaryTenantLinks` migration'ı SQLite/PostgreSQL için eski çapraz-firma bağlarında preflight, yeni/güncellenen hareketlerde firma eşleşmesi ve referans verilen araç/masraf/şoförün firma değişikliğine karşı koruma ekliyor. PostgreSQL'de ilgili tablolar `SHARE ROW EXCLUSIVE` kilidiyle tarama başlamadan sabitleniyor; böylece preflight ile trigger kurulumu arasındaki yeni-yazım yarışı engelleniyor. SQLite regresyonları preflight, aynı firma bağlantıları, çapraz-firma insert/update ve ebeveyn firma değişimini kapsıyor.
+- 🟢 İzole çıktı klasöründe test projesi ve referansları yeniden derlendi (**0 uyarı / 0 hata**); `BankMovementAuxiliaryTenantMigrationTests`, `BankMovementTenantMigrationTests`, `InvoicePaymentMatchFirmMigrationTests` ve `BankTransactionSqliteTests` birlikte **67/67** geçti. PostgreSQL kilit sırası regresyonla doğrulandı; `git diff --check` temiz.
+- 🟡 PostgreSQL credential'ı görev sürecine aktarılmadığı için migration gerçek PostgreSQL'de denenmedi ve hiçbir DB'ye bağlanılıp değişiklik yapılmadı. Diğer tenant ilişkileri, tüm eski verinin taranması ve müşteri migration/eşzamanlılık kabulü açık kaldığından A-15 🔴; görev renkleri/sayımı değişmedi.

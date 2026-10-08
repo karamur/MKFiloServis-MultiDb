@@ -60,7 +60,7 @@ public class DatabaseSettings
 
     public bool UsesSupportedRuntimeProvider()
     {
-        return Provider is DatabaseProvider.PostgreSQL or DatabaseProvider.SQLite or DatabaseProvider.MySQL or DatabaseProvider.SQLServer;
+        return Provider is DatabaseProvider.PostgreSQL or DatabaseProvider.SQLite;
     }
 
     public string GetNormalizedSqliteDatabaseName()
@@ -118,5 +118,4 @@ public enum DatabaseProvider
     MySQL = 3,
     SQLServer = 4
 }
-
 
