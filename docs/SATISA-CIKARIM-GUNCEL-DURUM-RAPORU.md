@@ -1370,3 +1370,9 @@ Dashboard finans verileri SQLite'ta `no such column: b.IslemKimligi` hatası ver
 🟢 [Teslim kararında](A-23-TESLIM-KARARI-2026-10-08.md) güncel 31 görev kaynağı ve tarihsel raporların saklanma konumu açıklandı. `dbsettings.json`, `portalsettings.json` ve `backup_settings.json` yerel dosyalar korunarak Git takibinden çıkarıldı. Web publish ve üç Inno kurulum girdisi bu çalışma zamanı dosyalarını dışlıyor; paket betiği eski payload içeriğini de denetliyor. Gerçek Release Web publish çıktısında beş yasaklı ayar/oturum dosyası ve `.db` bulunmadı. A-23 🟢; güncel toplam **5 yeşil / 21 sarı / 5 kırmızı**.
 
 🟡 Gerçek Inno paketi ve hedef makine kurulumu A-21'de; Git geçmişindeki olası eski kimlik bilgilerinin rotasyonu A-06'da açık. Bu teslim düzeltmesi satışa çıkış onayı değildir.
+
+### 2026-10-08 — GitHub CI ve eksik audit SQL kaynağı
+
+🟢 Git'te izlenmeyen `postgres-write-audit.sql` gömülü kaynağı depoya eklendi. GitHub Linux Web/test derlemesi ve **102/102** xUnit testi geçti. Linux/Windows yol harfi karşılaştırması test verisinde işletim sistemine göre ayrıldı; üretim dosya silme kuralı değiştirilmedi. Windows 2025 NuGet işi MAUI restore ve çözüm/Rent-a-Car zafiyet taramasını başarıyla tamamladı. [GitHub çalışma kanıtı ve kapsam](A-07-CI-DOGRULAMA-2026-10-08.md).
+
+🟡 CodeQL/Docker son sonucu ve gerçek müşteri kabulü açık. A-07 🟡, A-22 🟢; satış durumu değişmedi.

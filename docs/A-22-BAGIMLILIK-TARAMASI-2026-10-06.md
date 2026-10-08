@@ -31,3 +31,7 @@ Bu sonuç, tarama anında belirtilen NuGet kaynaklarının bildirdiği **bilinen
 ## Ek tarama — test projesi eklendikten sonra
 
 2026-10-06 tarihinde `MKFiloServis.Tests` projeye ve çözüme eklendi. `dotnet package list --project MKFiloServis.slnx --vulnerable --include-transitive --no-restore --format json` yeniden çalıştırıldı; çözümdeki **yedi** projenin hiçbirinde tarama anındaki NuGet kaynaklarının bildirdiği bilinen açık görünmedi. Yukarıdaki altı proje sayımı ilk taramanın tarihsel kapsamıdır. Çözüm dışı Rent-a-Car projesinin ilk tarama sonucu geçerlidir.
+
+## 2026-10-08 GitHub CI doğrulaması
+
+İlk GitHub Ubuntu audit çalışması Windows hedefli projeleri restore edemedi. İş akışı Windows 2025 çalıştırıcısına taşındı ve Client MAUI workload restore eklendi. [GitHub çalışması #37831503855](https://github.com/karamur/MKFiloServis-MultiDb/actions/runs/37831503855) çözüm ve Rent-a-Car restore, doğrudan/geçişli zafiyet taraması ve iş sonu adımlarını başarıyla tamamladı; açık bulundu koşulu tetiklenmedi. İş akışı dosyası değişince de denetim tetiklenir. Kapsam ve diğer CI sonuçları [A-07 kaydında](A-07-CI-DOGRULAMA-2026-10-08.md) yer alır.
