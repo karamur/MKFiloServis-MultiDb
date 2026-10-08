@@ -15,6 +15,6 @@
 | NuGet Vulnerability Audit | 🟢 Restore ve doğrudan/geçişli paket taraması başarılı; açık bulunmadı | [GitHub çalışması #37831503855](https://github.com/karamur/MKFiloServis-MultiDb/actions/runs/37831503855) |
 | Tests | 🟢 102/102 geçti, 0 başarısız, 0 atlanan; Web ve test projesi Release derlemesi geçti | [GitHub çalışması #37832806383](https://github.com/karamur/MKFiloServis-MultiDb/actions/runs/37832806383) |
 | Docker Image | 🟢 İmaj derleme, GHCR gönderimi, digest ile Trivy taraması ve SARIF yüklemesi başarılı | [GitHub çalışması #37833770053](https://github.com/karamur/MKFiloServis-MultiDb/actions/runs/37833770053) |
-| CodeQL | 🟡 Sonuç bekleniyor | [GitHub çalışması #37832806362](https://github.com/karamur/MKFiloServis-MultiDb/actions/runs/37832806362) |
+| CodeQL | 🟢 Windows tam çözüm derlemesi ve C# CodeQL analizi başarılı | [GitHub çalışması #37831761468](https://github.com/karamur/MKFiloServis-MultiDb/actions/runs/37831761468) |
 
-Bu kanıt sentetik CI kapsamıdır. Gerçek müşteri lisansı, PostgreSQL/tenant/audit, restore ve mali iş akışlarının saha kabulü A-07 ve ilgili görevlerde açıktır; A-07 genel rengi 🟡 kalır.
+Bu kanıt sentetik CI kapsamıdır. CodeQL işi başarıyla tamamlandı; bu sonuç depoda hiç güvenlik bulgusu olmadığı anlamına gelmez. Gerçek müşteri lisansı, PostgreSQL/tenant/audit, restore ve mali iş akışlarının saha kabulü A-07 ve ilgili görevlerde açıktır; A-07 genel rengi 🟡 kalır.

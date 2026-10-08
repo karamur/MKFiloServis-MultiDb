@@ -1377,4 +1377,6 @@ Dashboard finans verileri SQLite'ta `no such column: b.IslemKimligi` hatası ver
 
 🟢 Docker imajı/GHCR gönderimi ile digest üzerinden Trivy taraması ve SARIF yüklemesi geçti.
 
-🟡 CodeQL son sonucu ve gerçek müşteri kabulü açık. A-07 🟡, A-22 🟢; satış durumu değişmedi.
+🟢 Windows tam çözüm derlemesi ve CodeQL C# analizi GitHub'da başarıyla tamamlandı.
+
+🟡 Gerçek müşteri kabulü açık. A-07 🟡, A-22 🟢; satış durumu değişmedi.
