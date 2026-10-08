@@ -7,6 +7,19 @@ namespace MKFiloServis.Tests;
 public sealed class BankMovementTenantMigrationTests
 {
     [Fact]
+    public void PostgreSql_migration_locks_tenant_tables_before_preflight_and_trigger_creation()
+    {
+        var sql = MigrationSql("PostgresUp");
+        var lockIndex = sql.IndexOf("LOCK TABLE", StringComparison.Ordinal);
+        var preflightIndex = sql.IndexOf("DO $a15_preflight$", StringComparison.Ordinal);
+        var triggerIndex = sql.IndexOf("CREATE TRIGGER", StringComparison.Ordinal);
+
+        Assert.True(lockIndex >= 0 && lockIndex < preflightIndex && preflightIndex < triggerIndex);
+        Assert.Contains("\"BankaKasaHareketleri\", \"BankaHesaplari\", \"Cariler\"", sql, StringComparison.Ordinal);
+        Assert.Contains("IN SHARE ROW EXCLUSIVE MODE", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Migration_preflight_rejects_existing_cross_firm_movement()
     {
         using var db = CreateDatabase();

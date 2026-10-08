@@ -58,6 +58,9 @@ public sealed class GuardBankMovementTenantLinks : Migration
     }
 
     private const string PostgresUp = """
+        LOCK TABLE "BankaKasaHareketleri", "BankaHesaplari", "Cariler"
+        IN SHARE ROW EXCLUSIVE MODE;
+
         DO $a15_preflight$
         BEGIN
             IF EXISTS (
