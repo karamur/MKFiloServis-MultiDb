@@ -59,6 +59,7 @@ Desktop.ini
 # Database backups / local sensitive exports
 datayedek/
 *.sql
+!MKFiloServis.Shared/Auditing/postgres-write-audit.sql
 *.bak
 *.dump
 
