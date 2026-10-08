@@ -10,12 +10,14 @@ on:
       - '**/*.csproj'
       - '**/Directory.Packages.props'
       - '**/packages.lock.json'
+      - '.github/workflows/nuget-audit.yml'
   pull_request:
     branches: [main]
     paths:
       - '**/*.csproj'
       - '**/Directory.Packages.props'
       - '**/packages.lock.json'
+      - '.github/workflows/nuget-audit.yml'
   workflow_dispatch:
 
 permissions:
@@ -30,8 +32,8 @@ env:
 jobs:
   audit:
     name: 🔍 NuGet Audit
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    runs-on: windows-2025
+    timeout-minutes: 45
 
     steps:
       - name: 📥 Checkout
@@ -43,7 +45,9 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: 📦 Restore
+        shell: bash
         run: |
+          dotnet workload restore MKFiloServis.Client/MKFiloServis.Client.csproj
           dotnet restore MKFiloServis.slnx
           dotnet restore MKFiloServis.Web/Tests/RentACar/MKFiloServis.RentACarChecks.csproj
 
@@ -88,9 +92,11 @@ jobs:
       - name: 🐛 Issue Aç (sadece schedule + bulundu)
         if: steps.vuln.outputs.found == 'true' && github.event_name == 'schedule'
         uses: actions/github-script@v7
+        env:
+          AUDIT_REPORT: ${{ steps.vuln.outputs.report }}
         with:
           script: |
-            const report = `${{ steps.vuln.outputs.report }}`;
+            const report = process.env.AUDIT_REPORT;
             const title = `🛡️ NuGet vulnerability tespit edildi (${new Date().toISOString().split('T')[0]})`;
             const body = [
               '## 🛡️ Haftalık NuGet Güvenlik Taraması',
