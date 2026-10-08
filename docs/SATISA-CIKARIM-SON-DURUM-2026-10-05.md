@@ -1185,7 +1185,7 @@ Kullanıcının bu oturumda verdiği test talebiyle son aşama kontrolleri başl
 - 🟢 `Sofor.OzelKesintiToplami`, personel kartındaki icra, BES, sendika, hayat sigortası, bireysel emeklilik ve diğer özel kesinti alanlarının ortak toplamını verir. Maaş/Ödeme Yönetimi listesindeki Kesinti değeri bu toplamı kullanır; alanlar için tekrar eden toplama kaldırıldı.
 - 🟢 Bordro servisindeki kalem bazlı özel kesinti aktarımı ve SGK/vergi hesaplaması değiştirilmedi. Operasyonel puantaj koduna dokunulmadı.
 - 🟢 Web projesi derlemesi başarılı: `dotnet build "C:\Users\muratk\Desktop\dyedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Web\MKFiloServis.Web.csproj" -nologo` — **0 hata / 0 uyarı**.
-- 🟢 Hedefli otomatik regresyon testi `dotnet test "C:\Users\muratk\Desktop\dyedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\MKFiloServis.Tests.csproj" --no-restore --filter "FullyQualifiedName~SoforOzelKesintiTests" -nologo` — **1/1 başarılı**; altı personel kartı kesinti kaleminin toplamı doğrulandı.
+- 🟢 Hedefli otomatik regresyon testi `dotnet test "C:\Users\muratk\Desktop\dyedek\calisma\Claude-Code\MKFiloServis-MultiDb\MKFiloServis.Tests\MKFiloServis.Tests.csproj" --no-restore --filter "FullyQualifiedName~SoforOzelKesintiTests" -nologo` — **2/2 başarılı**; altı personel kartı kesinti kaleminin toplamı ve toplamın maaş hesaplamasında ödenecek tutardan düşülmesi doğrulandı.
 - 🟡 Maaş ekranında gerçek personel verisiyle görsel/iş akışı kabulü yapılmadı. Bu nedenle otomatik kod testi geçse de müşteri kabulü ve satışa hazırlık kararı değişmedi.
 
 ### 2026-10-09 — A-29 puantaj finans snapshot firma ve işlem sınırı
