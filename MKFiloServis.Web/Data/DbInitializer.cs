@@ -1,8 +1,7 @@
-﻿using MKFiloServis.Shared.Entities;
+using MKFiloServis.Shared.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
-using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 using System.Data;
@@ -288,7 +287,7 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
             pendingMigrations = (await context.Database.GetPendingMigrationsAsync()).ToList();
             if (context.Database.IsSqlite() && pendingMigrations.Any())
             {
-                await EnsureSqliteMigrationHistoryAsync(context, pendingMigrations);
+                await EnsureSqliteMigrationHistoryAsync(context);
                 pendingMigrations = (await context.Database.GetPendingMigrationsAsync()).ToList();
             }
 
@@ -1350,9 +1349,7 @@ WHERE IsDeleted = 0;");
         }
     }
 
-    private static async Task EnsureSqliteMigrationHistoryAsync(
-        ApplicationDbContext context,
-        List<string> pendingMigrations)
+    private static async Task EnsureSqliteMigrationHistoryAsync(ApplicationDbContext context)
     {
         var connection = context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -1396,58 +1393,39 @@ WHERE IsDeleted = 0;");
                     "Mevcut SQLite veritabanında migration geçmişi yok. Veri dönüşüm geçmişi yalnız şemadan kanıtlanamadığı için otomatik adoption/baseline yapılmadı; yedekli ve fixture ile doğrulanmış geçiş prosedürü olmadan başlangıç durduruldu.");
             }
 
-            var requiredLegacyMigrations = allMigrations
-                .Where(id => string.CompareOrdinal(id, SqliteLegacySchemaWatermark) <= 0)
-                .Where(id => !existingMigrationIds.Contains(id))
+            var unknownMigrationIds = existingMigrationIds
+                .Where(id => !allMigrations.Contains(id, StringComparer.OrdinalIgnoreCase))
                 .ToList();
-            if (hasMigrationHistory && requiredLegacyMigrations.Count > 0)
+            if (unknownMigrationIds.Count > 0)
             {
-                var sample = string.Join(", ", requiredLegacyMigrations.Take(8));
                 throw new InvalidOperationException(
-                    $"SQLite migration gecmisi legacy watermark oncesinde eksik ({requiredLegacyMigrations.Count} kayit; ornek: {sample}). Kismi migration gecmisi otomatik onarilmaz.");
+                    $"SQLite migration geçmişinde bu uygulama sürümünde tanınmayan kayıt var ({string.Join(", ", unknownMigrationIds.Take(8))}); otomatik değiştirilmedi.");
             }
 
-            var migrationsAssembly = context.GetService<IMigrationsAssembly>();
-            if (!migrationsAssembly.Migrations.TryGetValue(SqliteLegacySchemaWatermark, out var watermarkMigrationType))
+            var missingMigrationSeen = false;
+            var appliedAfterGap = new List<string>();
+            foreach (var migrationId in allMigrations)
             {
-                throw new InvalidOperationException(
-                    $"SQLite legacy schema watermark migration bulunamadi: {SqliteLegacySchemaWatermark}");
+                if (!existingMigrationIds.Contains(migrationId))
+                {
+                    missingMigrationSeen = true;
+                }
+                else if (missingMigrationSeen)
+                {
+                    appliedAfterGap.Add(migrationId);
+                }
             }
 
-            var watermarkMigration = migrationsAssembly.CreateMigration(
-                watermarkMigrationType,
-                context.Database.ProviderName!);
-            var missingColumns = await FindMissingSqliteMigrationTargetColumnsAsync(
-                connection,
-                watermarkMigration.TargetModel);
-            if (missingColumns.Count > 0)
+            if (appliedAfterGap.Count > 0)
             {
-                var sample = string.Join(", ", missingColumns.Take(8));
+                var sample = string.Join(", ", appliedAfterGap.Take(8));
                 throw new InvalidOperationException(
-                    $"SQLite veritabani legacy migration watermark semasi ile uyusmuyor; migration gecmisi otomatik doldurulmadi. Eksik kolonlar: {sample}");
+                    $"SQLite migration geçmişinde uygulanmamış migration'lardan sonra uygulanmış kayıt var; geçmiş zinciri sıralı değil (örnek: {sample}). Otomatik history düzeltmesi yapılmadı.");
             }
 
-            var missingIndexes = await FindMissingSqliteMigrationTargetIndexesAsync(
-                connection,
-                watermarkMigration.TargetModel);
-            if (missingIndexes.Count > 0)
-            {
-                var sample = string.Join(", ", missingIndexes.Take(8));
-                throw new InvalidOperationException(
-                    $"SQLite veritabani legacy migration watermark indeksleri ile uyusmuyor; migration gecmisi otomatik doldurulmadi. Eksik indeksler: {sample}");
-            }
-            var missingForeignKeys = await FindMissingSqliteMigrationTargetForeignKeysAsync(
-                connection,
-                watermarkMigration.TargetModel);
-            if (missingForeignKeys.Count > 0)
-            {
-                var sample = string.Join(", ", missingForeignKeys.Take(8));
-                throw new InvalidOperationException(
-                    $"SQLite veritabani legacy migration watermark iliskileri ile uyusmuyor; migration gecmisi otomatik doldurulmadi. Eksik iliskiler: {sample}");
-            }
-
-            // Existing databases have a verified history chain at this point. Let EF apply
-            // pending migrations normally; never infer historical DML from schema parity.
+            // Existing databases have a verified history chain through the SQLite cutoff.
+            // Let EF apply pending migrations normally; do not compare a newer database
+            // with an obsolete watermark model or infer historical DML from its schema.
         }
         finally
         {
@@ -1456,380 +1434,6 @@ WHERE IsDeleted = 0;");
                 await connection.CloseAsync();
             }
         }
-    }
-
-    private static async Task ReconcileSqliteLegacyDataBeforeBaselineAsync(
-        ApplicationDbContext context,
-        DbConnection connection)
-    {
-        var defaultFirmaId = await context.Firmalar
-            .IgnoreQueryFilters()
-            .Where(firma => firma.VarsayilanFirma && firma.Aktif)
-            .Select(firma => (int?)firma.Id)
-            .FirstOrDefaultAsync();
-        defaultFirmaId ??= await context.Firmalar
-            .IgnoreQueryFilters()
-            .Where(firma => firma.Aktif)
-            .OrderBy(firma => firma.Id)
-            .Select(firma => (int?)firma.Id)
-            .FirstOrDefaultAsync();
-        if (defaultFirmaId is null or 0)
-        {
-            throw new InvalidOperationException(
-                "SQLite legacy baseline icin aktif varsayilan firma bulunamadi; veri migration'lari uygulanmadi ve migration gecmisi yazilmadi.");
-        }
-
-        var transaction = context.Database.CurrentTransaction?.GetDbTransaction();
-        var vehicleColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        await using (var columnsCommand = connection.CreateCommand())
-        {
-            columnsCommand.Transaction = transaction;
-            columnsCommand.CommandText = "PRAGMA table_info(\"Araclar\")";
-            await using var reader = await columnsCommand.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                vehicleColumns.Add(reader.GetString(1));
-            }
-        }
-
-        if (vehicleColumns.Contains("Plaka"))
-        {
-            // Reapply the data-preserving part of AracSasePlakaYapisi before discarding its legacy source column.
-            await context.Database.ExecuteSqlRawAsync("DROP INDEX IF EXISTS \"IX_Araclar_Plaka\";");
-            await context.Database.ExecuteSqlRawAsync(@"
-                UPDATE ""Araclar""
-                SET ""SaseNo"" = ""Plaka""
-                WHERE TRIM(COALESCE(""SaseNo"", '')) = ''
-                  AND TRIM(COALESCE(""Plaka"", '')) <> '';
-
-                UPDATE ""Araclar""
-                SET ""AktifPlaka"" = ""Plaka""
-                WHERE TRIM(COALESCE(""Plaka"", '')) <> ''
-                  AND TRIM(COALESCE(""AktifPlaka"", '')) = '';
-
-                INSERT INTO ""AracPlakalar"" (""AracId"", ""Plaka"", ""GirisTarihi"", ""IslemTipi"", ""Aciklama"", ""CreatedAt"", ""IsDeleted"")
-                SELECT a.""Id"", a.""Plaka"", COALESCE(a.""CreatedAt"", datetime('now')), 1,
-                       'Mevcut kayıttan aktarıldı', COALESCE(a.""CreatedAt"", datetime('now')), 0
-                FROM ""Araclar"" a
-                WHERE TRIM(COALESCE(a.""Plaka"", '')) <> ''
-                  AND NOT EXISTS (
-                      SELECT 1 FROM ""AracPlakalar"" ap
-                      WHERE ap.""AracId"" = a.""Id"" AND ap.""Plaka"" = a.""Plaka""
-                        AND ap.""CikisTarihi"" IS NULL AND ap.""IsDeleted"" = 0
-                  );
-
-                ALTER TABLE ""Araclar"" DROP COLUMN ""Plaka"";");
-        }
-
-        await NormalizeSqliteLegacyEnumColumnAsync(
-            context, "RentACarOdemeHareketleri", "HareketTuru",
-            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["kiratahsilati"] = 0, ["depozitotahsilati"] = 1, ["kiraiadesi"] = 2,
-                ["depozitoiadesi"] = 3, ["kira tahsilatı"] = 0, ["depozito tahsilatı"] = 1,
-                ["kira iadesi"] = 2, ["depozito iadesi"] = 3
-            });
-        await NormalizeSqliteLegacyEnumColumnAsync(
-            context, "RentACarOdemeHareketleri", "OdemeYontemi",
-            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["nakit"] = 0, ["kredikarti"] = 1, ["kredi kartı"] = 1, ["bankakarti"] = 2,
-                ["banka kartı"] = 2, ["havale"] = 3, ["eft"] = 4, ["carimahsup"] = 5,
-                ["cari mahsup"] = 5, ["diger"] = 6, ["diğer"] = 6
-            });
-
-        var organizationSeeds = new (string Name, string Code)[]
-        {
-            ("Ustun Holding", "USTUNHOLDING"),
-            ("Ustun Grup", "USTUNGRUP"),
-            ("Ustun Filo", "USTUNFILO"),
-            ("Recep Ustun", "RECEPUSTUN")
-        };
-        foreach (var (name, code) in organizationSeeds)
-        {
-            if (!await context.Organizasyonlar.IgnoreQueryFilters().AnyAsync(item => item.Kod == code))
-            {
-                context.Organizasyonlar.Add(new Organizasyon { Adi = name, Kod = code });
-            }
-        }
-        await context.SaveChangesAsync();
-
-        var holdingId = await context.Organizasyonlar.IgnoreQueryFilters()
-            .Where(item => item.Kod == "USTUNHOLDING")
-            .Select(item => item.Id)
-            .SingleAsync();
-        await context.Database.ExecuteSqlRawAsync(@"
-            UPDATE ""Firmalar""
-            SET ""OrganizasyonId"" = {0}
-            WHERE ""OrganizasyonId"" IS NULL OR ""OrganizasyonId"" = 0
-               OR NOT EXISTS (SELECT 1 FROM ""Organizasyonlar"" o WHERE o.""Id"" = ""Firmalar"".""OrganizasyonId"");",
-            holdingId);
-
-        var tenantTables = new[]
-        {
-            "Cariler", "Kurumlar", "Guzergahlar", "Personeller", "Araclar", "BankaHesaplari",
-            "BankaKasaHareketleri", "StokKartlari", "StokKategoriler", "StokHareketler",
-            "MasrafKalemleri", "Faturalar", "ServisCalismalari", "Hakedisler", "HakedisDetaylari",
-            "GuzergahSeferleri", "Kapasiteler", "CariSeferUcretleri", "BakimPeriyotlar"
-        };
-        await context.Database.ExecuteSqlRawAsync(@"
-            UPDATE ""GuzergahSeferleri""
-            SET ""FirmaId"" = (SELECT g.""FirmaId"" FROM ""Guzergahlar"" g WHERE g.""Id"" = ""GuzergahSeferleri"".""GuzergahId"")
-            WHERE (""FirmaId"" IS NULL OR ""FirmaId"" = 0)
-              AND EXISTS (SELECT 1 FROM ""Guzergahlar"" g WHERE g.""Id"" = ""GuzergahSeferleri"".""GuzergahId"");");
-
-        foreach (var table in tenantTables)
-        {
-            var companyValue = context.Database.GetDbConnection().CreateCommand();
-            await using (companyValue)
-            {
-                companyValue.Transaction = transaction;
-                companyValue.CommandText = $"UPDATE \"{table}\" SET \"FirmaId\" = $firmaId WHERE \"FirmaId\" IS NULL OR \"FirmaId\" = 0";
-                var parameter = companyValue.CreateParameter();
-                parameter.ParameterName = "$firmaId";
-                parameter.Value = defaultFirmaId.Value;
-                companyValue.Parameters.Add(parameter);
-                await companyValue.ExecuteNonQueryAsync();
-            }
-        }
-
-        await using var foreignKeyCheck = connection.CreateCommand();
-        foreignKeyCheck.Transaction = transaction;
-        foreignKeyCheck.CommandText = "PRAGMA foreign_key_check";
-        await using var foreignKeyReader = await foreignKeyCheck.ExecuteReaderAsync();
-        if (await foreignKeyReader.ReadAsync())
-        {
-            var table = foreignKeyReader.GetString(0);
-            throw new InvalidOperationException(
-                $"SQLite legacy baseline durduruldu: veri onarimindan sonra foreign key ihlali var ({table}). Migration gecmisi yazilmadi.");
-        }
-    }
-
-    private static async Task NormalizeSqliteLegacyEnumColumnAsync(
-        ApplicationDbContext context,
-        string table,
-        string column,
-        IReadOnlyDictionary<string, int> labels)
-    {
-        var quotedTable = $"\"{table}\"";
-        var quotedColumn = $"\"{column}\"";
-        await using var invalidValueCheck = context.Database.GetDbConnection().CreateCommand();
-        invalidValueCheck.Transaction = context.Database.CurrentTransaction?.GetDbTransaction();
-        invalidValueCheck.CommandText = $@"
-            SELECT CAST({quotedColumn} AS TEXT)
-            FROM {quotedTable}
-            WHERE typeof({quotedColumn}) = 'text'
-              AND lower(trim(CAST({quotedColumn} AS TEXT))) NOT IN ({string.Join(",", labels.Keys.Select(label => "'" + label.Replace("'", "''", StringComparison.Ordinal) + "'"))})
-              AND (trim(CAST({quotedColumn} AS TEXT)) = '' OR trim(CAST({quotedColumn} AS TEXT)) GLOB '*[^0-9]*')
-            LIMIT 1;";
-        var invalid = await invalidValueCheck.ExecuteScalarAsync();
-        if (invalid is not null)
-        {
-            throw new InvalidOperationException(
-                $"SQLite legacy baseline durduruldu: {table}.{column} içinde tanınmayan enum değeri var. Migration geçmişi yazılmadı.");
-        }
-
-        var cases = string.Join(" ", labels.Select(pair =>
-            $"WHEN '{pair.Key.Replace("'", "''", StringComparison.Ordinal)}' THEN {pair.Value}"));
-        await using var normalizeCommand = context.Database.GetDbConnection().CreateCommand();
-        normalizeCommand.Transaction = context.Database.CurrentTransaction?.GetDbTransaction();
-        normalizeCommand.CommandText = $@"
-            UPDATE {quotedTable}
-            SET {quotedColumn} = CASE lower(trim(CAST({quotedColumn} AS TEXT)))
-                {cases}
-                ELSE CAST(trim(CAST({quotedColumn} AS TEXT)) AS INTEGER)
-            END
-            WHERE typeof({quotedColumn}) = 'text';";
-        await normalizeCommand.ExecuteNonQueryAsync();
-    }
-
-    private static async Task<List<string>> FindPendingSqliteMigrationConflictsAsync(
-        ApplicationDbContext context,
-        DbConnection connection,
-        IReadOnlyCollection<string> pendingMigrations)
-    {
-        var conflicts = new List<string>();
-        var migrationsAssembly = context.GetService<IMigrationsAssembly>();
-        var transaction = context.Database.CurrentTransaction?.GetDbTransaction();
-        foreach (var id in pendingMigrations.Where(id => string.CompareOrdinal(id, SqliteLegacySchemaWatermark) > 0))
-        {
-            if (!migrationsAssembly.Migrations.TryGetValue(id, out var migrationType))
-                continue;
-            var migration = migrationsAssembly.CreateMigration(migrationType, context.Database.ProviderName!);
-            foreach (var operation in migration.UpOperations)
-            {
-                switch (operation)
-                {
-                    case AddColumnOperation addColumn when await SqliteColumnExistsAsync(connection, addColumn.Table, addColumn.Name, transaction):
-                        conflicts.Add($"{id}: {addColumn.Table}.{addColumn.Name} zaten var");
-                        break;
-                    case CreateTableOperation createTable when await SqliteTableExistsAsync(connection, createTable.Name, transaction):
-                        conflicts.Add($"{id}: {createTable.Name} tablosu zaten var");
-                        break;
-                    case CreateIndexOperation createIndex when await SqliteIndexExistsAsync(connection, createIndex.Table!, createIndex.Name, transaction):
-                        conflicts.Add($"{id}: {createIndex.Name} indeksi zaten var");
-                        break;
-                    case DropTableOperation dropTable when !await SqliteTableExistsAsync(connection, dropTable.Name, transaction):
-                        conflicts.Add($"{id}: düşürülecek {dropTable.Name} tablosu yok");
-                        break;
-                    case DropColumnOperation dropColumn when !await SqliteColumnExistsAsync(connection, dropColumn.Table, dropColumn.Name, transaction):
-                        conflicts.Add($"{id}: düşürülecek {dropColumn.Table}.{dropColumn.Name} kolonu yok");
-                        break;
-                    case DropIndexOperation dropIndex when !await SqliteIndexExistsAsync(connection, dropIndex.Table!, dropIndex.Name, transaction):
-                        conflicts.Add($"{id}: düşürülecek {dropIndex.Name} indeksi yok");
-                        break;
-                    case SqlOperation sqlOperation:
-                        foreach (System.Text.RegularExpressions.Match match in
-                                 System.Text.RegularExpressions.Regex.Matches(
-                                     sqlOperation.Sql,
-                                     "CREATE\\s+TRIGGER\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?(?:\\\"(?<quoted>[^\\\"]+)\\\"|(?<plain>[A-Za-z_][A-Za-z0-9_]*))",
-                                     System.Text.RegularExpressions.RegexOptions.IgnoreCase))
-                        {
-                            var triggerName = match.Groups["quoted"].Success
-                                ? match.Groups["quoted"].Value
-                                : match.Groups["plain"].Value;
-                            if (await SqliteTriggerExistsAsync(connection, triggerName, transaction))
-                                conflicts.Add($"{id}: {triggerName} trigger zaten var");
-                        }
-                        break;
-                }
-            }
-        }
-        return conflicts;
-    }
-
-    private static async Task<bool> SqliteTableExistsAsync(DbConnection connection, string table, DbTransaction? transaction)
-        => await SqliteSchemaObjectExistsAsync(connection, "table", table, transaction);
-
-    private static async Task<bool> SqliteIndexExistsAsync(DbConnection connection, string table, string index, DbTransaction? transaction)
-    {
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'index' AND tbl_name = $table AND name = $name LIMIT 1";
-        AddSqliteNameParameters(command, table, index);
-        return await command.ExecuteScalarAsync() is not null;
-    }
-
-    private static async Task<bool> SqliteTriggerExistsAsync(DbConnection connection, string trigger, DbTransaction? transaction)
-        => await SqliteSchemaObjectExistsAsync(connection, "trigger", trigger, transaction);
-
-    private static async Task<bool> SqliteSchemaObjectExistsAsync(DbConnection connection, string type, string name, DbTransaction? transaction)
-    {
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = "SELECT 1 FROM sqlite_master WHERE type = $type AND name = $name LIMIT 1";
-        var typeParameter = command.CreateParameter();
-        typeParameter.ParameterName = "$type";
-        typeParameter.Value = type;
-        command.Parameters.Add(typeParameter);
-        var nameParameter = command.CreateParameter();
-        nameParameter.ParameterName = "$name";
-        nameParameter.Value = name;
-        command.Parameters.Add(nameParameter);
-        return await command.ExecuteScalarAsync() is not null;
-    }
-
-    private static async Task<bool> SqliteColumnExistsAsync(DbConnection connection, string table, string column, DbTransaction? transaction)
-    {
-        var escapedTable = table.Replace("'", "''", StringComparison.Ordinal);
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = $"PRAGMA table_info('{escapedTable}')";
-        await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-        return false;
-    }
-
-    private static void AddSqliteNameParameters(DbCommand command, string table, string name)
-    {
-        var tableParameter = command.CreateParameter();
-        tableParameter.ParameterName = "$table";
-        tableParameter.Value = table;
-        command.Parameters.Add(tableParameter);
-        var nameParameter = command.CreateParameter();
-        nameParameter.ParameterName = "$name";
-        nameParameter.Value = name;
-        command.Parameters.Add(nameParameter);
-    }
-
-    private static async Task<List<string>> FindMissingSqliteMigrationTargetColumnsAsync(
-        DbConnection connection,
-        Microsoft.EntityFrameworkCore.Metadata.IModel targetModel)
-    {
-        var missing = new List<string>();
-        var tableNames = targetModel.GetEntityTypes()
-            .Select(entityType => entityType.GetTableName())
-            .Where(tableName => !string.IsNullOrWhiteSpace(tableName))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Cast<string>();
-
-        foreach (var tableName in tableNames)
-        {
-            var tableLiteral = tableName.Replace("'", "''", StringComparison.Ordinal);
-            var actualColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            await using (var command = connection.CreateCommand())
-            {
-                command.CommandText = $"PRAGMA table_info('{tableLiteral}')";
-                await using var reader = await command.ExecuteReaderAsync();
-                while (await reader.ReadAsync())
-                    actualColumns.Add(reader.GetString(1));
-            }
-
-            if (actualColumns.Count == 0)
-            {
-                missing.Add($"{tableName}.* (tablo yok)");
-                continue;
-            }
-
-            foreach (var entityType in targetModel.GetEntityTypes()
-                         .Where(entityType => string.Equals(entityType.GetTableName(), tableName, StringComparison.OrdinalIgnoreCase)))
-            {
-                var storeObject = Microsoft.EntityFrameworkCore.Metadata.StoreObjectIdentifier.Table(
-                    tableName,
-                    entityType.GetSchema());
-                foreach (var property in entityType.GetProperties())
-                {
-                    var columnName = property.GetColumnName(storeObject);
-                    if (columnName is not null && !actualColumns.Contains(columnName))
-                        missing.Add($"{tableName}.{columnName}");
-                }
-            }
-        }
-
-        return missing;
-    }
-
-    private static async Task<List<string>> FindMissingSqliteMigrationTargetIndexesAsync(
-        DbConnection connection,
-        Microsoft.EntityFrameworkCore.Metadata.IModel targetModel)
-    {
-        var missing = new List<string>();
-        var expectedIndexes = targetModel.GetRelationalModel().Tables
-            .SelectMany(table => table.Indexes.Select(index => (table.Name, Index: index.Name)))
-            .Distinct();
-
-        foreach (var (tableName, indexName) in expectedIndexes)
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'index' AND tbl_name = $table AND name = $index LIMIT 1";
-            var tableParameter = command.CreateParameter();
-            tableParameter.ParameterName = "$table";
-            tableParameter.Value = tableName;
-            command.Parameters.Add(tableParameter);
-            var indexParameter = command.CreateParameter();
-            indexParameter.ParameterName = "$index";
-            indexParameter.Value = indexName;
-            command.Parameters.Add(indexParameter);
-
-            if (await command.ExecuteScalarAsync() is null)
-                missing.Add($"{tableName}.{indexName}");
-        }
-
-        return missing;
     }
 
     private static async Task<List<string>> FindMissingSqliteMigrationTargetForeignKeysAsync(
