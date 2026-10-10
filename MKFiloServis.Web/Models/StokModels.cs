@@ -19,7 +19,7 @@ public class StokDashboard
 public class StokOperasyonModel
 {
     public int StokKartiId { get; set; }
-    public DateTime IslemTarihi { get; set; } = DateTime.Today;
+    public DateTime IslemTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public StokHareketTipi HareketTipi { get; set; }
     public decimal Miktar { get; set; }
     public decimal BirimFiyat { get; set; }
@@ -35,7 +35,7 @@ public class UretimReceteModel
     public int MamulStokKartiId { get; set; }
     public decimal MamulMiktari { get; set; }
     public decimal MamulBirimMaliyeti { get; set; }
-    public DateTime IslemTarihi { get; set; } = DateTime.Today;
+    public DateTime IslemTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public string? BelgeNo { get; set; }
     public string? Aciklama { get; set; }
     public List<UretimReceteKalemModel> Kalemler { get; set; } = new();

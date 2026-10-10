@@ -314,8 +314,8 @@
                 ToplamBorc = cariler.Sum(c => c.Borc - c.Alacak),
                 BorcluCariSayisi = cariler.Count(c => c.Borc > c.Alacak),
                 AlacakliCariSayisi = cariler.Count(c => c.Alacak > c.Borc),
-                VadesiGecenFaturaSayisi = faturalar.Count(f => f.VadeTarihi.HasValue && f.VadeTarihi < DateTime.Today && f.KalanTutar > 0),
-                ToplamVadesiGecenTutar = faturalar.Where(f => f.VadeTarihi.HasValue && f.VadeTarihi < DateTime.Today && f.KalanTutar > 0).Sum(f => f.KalanTutar),
+                VadesiGecenFaturaSayisi = faturalar.Count(f => f.VadeTarihi.HasValue && f.VadeTarihi < MKFiloServis.Shared.Time.BusinessTime.Today && f.KalanTutar > 0),
+                ToplamVadesiGecenTutar = faturalar.Where(f => f.VadeTarihi.HasValue && f.VadeTarihi < MKFiloServis.Shared.Time.BusinessTime.Today && f.KalanTutar > 0).Sum(f => f.KalanTutar),
                 EnCokBorcluCariler = cariler
                     .Where(c => c.Borc > c.Alacak)
                     .OrderByDescending(c => c.Borc - c.Alacak)
@@ -371,7 +371,7 @@
         {
             Content = messageToSend,
             IsUser = true,
-            Timestamp = DateTime.Now
+            Timestamp = DateTime.UtcNow
         });
 
         isLoading = true;
@@ -400,7 +400,7 @@
             {
                 Content = streamingContent,
                 IsUser = false,
-                Timestamp = DateTime.Now
+                Timestamp = DateTime.UtcNow
             });
         }
         catch (OperationCanceledException) { }
@@ -410,7 +410,7 @@
             {
                 Content = $"❌ Hata: {ex.GetBaseException().Message}",
                 IsUser = false,
-                Timestamp = DateTime.Now
+                Timestamp = DateTime.UtcNow
             });
         }
         finally

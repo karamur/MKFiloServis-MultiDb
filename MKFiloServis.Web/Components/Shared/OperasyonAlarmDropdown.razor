@@ -1,4 +1,4 @@
-﻿@implements IAsyncDisposable
+@implements IAsyncDisposable
 @using MKFiloServis.Web.Services
 @using MKFiloServis.Web.Services.Interfaces
 @using Microsoft.Extensions.Logging
@@ -164,7 +164,7 @@
         StateHasChanged();
         try
         {
-            var bugun = DateTime.Today;
+            var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
             var liste = new List<AlarmItem>();
 
             // Belge uyarıları

@@ -184,7 +184,7 @@
                                 @foreach (var log in dashboard.SonIslemler)
                                 {
                                     <tr>
-                                        <td class="text-nowrap small">@log.IslemTarihi.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                        <td class="text-nowrap small">@MKFiloServis.Shared.Time.BusinessTime.LocalAt(log.IslemTarihi).ToString("dd.MM.yyyy HH:mm")</td>
                                         <td>
                                             <span class="badge @GetIslemTipiBadgeClass(log.IslemTipi)">
                                                 <i class="bi @GetIslemTipiIcon(log.IslemTipi) me-1"></i>@log.IslemTipi
@@ -337,7 +337,7 @@
                                 {
                                     <tr class="@(!log.Basarili ? "table-danger" : (log.Seviye == "Warning" ? "table-warning" : ""))">
                                         <td class="text-nowrap small">
-                                            @log.IslemTarihi.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")
+                                            @MKFiloServis.Shared.Time.BusinessTime.LocalAt(log.IslemTarihi).ToString("dd.MM.yyyy HH:mm:ss")
                                         </td>
                                         <td>
                                             <span class="badge @GetIslemTipiBadgeClass(log.IslemTipi)">
@@ -432,7 +432,7 @@
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <table class="table table-sm">
-                                <tr><th>Tarih:</th><td>@selectedLog.IslemTarihi.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</td></tr>
+                                <tr><th>Tarih:</th><td>@MKFiloServis.Shared.Time.BusinessTime.LocalAt(selectedLog.IslemTarihi).ToString("dd.MM.yyyy HH:mm:ss")</td></tr>
                                 <tr><th>İşlem Tipi:</th><td><span class="badge @GetIslemTipiBadgeClass(selectedLog.IslemTipi)">@selectedLog.IslemTipi</span></td></tr>
                                 <tr><th>Entity:</th><td>@selectedLog.EntityAdi</td></tr>
                                 <tr><th>Entity ID:</th><td>@(selectedLog.EntityId?.ToString() ?? "-")</td></tr>
@@ -558,8 +558,8 @@
     {
         Sayfa = 1,
         SayfaBoyutu = 50,
-        BaslangicTarihi = DateTime.Today.AddDays(-30),
-        BitisTarihi = DateTime.Today.AddDays(1)
+        BaslangicTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-30),
+        BitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(1)
     };
     
     private AuditLogPagedResult? result;
@@ -589,8 +589,8 @@
     private async Task LoadDashboard()
     {
         dashboard = await AuditLogService.GetDashboardAsync(
-            DateTime.Today.AddDays(-30),
-            DateTime.Today.AddDays(1));
+            MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-30),
+            MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(1));
     }
     
     private async Task GoToPage(int page)
@@ -614,8 +614,8 @@
         {
             Sayfa = 1,
             SayfaBoyutu = 50,
-            BaslangicTarihi = DateTime.Today.AddDays(-30),
-            BitisTarihi = DateTime.Today.AddDays(1)
+            BaslangicTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-30),
+            BitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(1)
         };
         filtreBasarili = "";
         await LoadData();

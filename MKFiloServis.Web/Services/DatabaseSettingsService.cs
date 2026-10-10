@@ -22,11 +22,13 @@ public class DatabaseSettingsService : IDatabaseSettingsService
     private readonly string _settingsPath;
     private readonly IConfiguration _configuration;
     private readonly IWebHostEnvironment _env;
+    private readonly ILogger<DatabaseSettingsService> _logger;
 
-    public DatabaseSettingsService(IConfiguration configuration, IWebHostEnvironment env)
+    public DatabaseSettingsService(IConfiguration configuration, IWebHostEnvironment env, ILogger<DatabaseSettingsService> logger)
     {
         _configuration = configuration;
         _env = env;
+        _logger = logger;
         _settingsPath = Path.Combine(_env.ContentRootPath, "dbsettings.json");
     }
 
@@ -68,6 +70,9 @@ public class DatabaseSettingsService : IDatabaseSettingsService
 
     public async Task<(bool Success, string Message)> TestConnectionAsync(DatabaseSettings settings)
     {
+        if (!settings.UsesSupportedRuntimeProvider())
+            return (false, GetUnsupportedProviderMessage(settings.Provider));
+
         try
         {
             NormalizeSettings(settings);
@@ -125,7 +130,8 @@ public class DatabaseSettingsService : IDatabaseSettingsService
         }
         catch (Exception ex)
         {
-            return (false, $"Baglanti hatasi: {ex.Message}");
+            _logger.LogWarning(ex, "Veritabanı bağlantı denemesi başarısız oldu.");
+            return (false, "Veritabanı bağlantısı kurulamadı. Sağlayıcı ve bağlantı ayarlarını kontrol edin.");
         }
     }
 
@@ -153,19 +159,26 @@ public class DatabaseSettingsService : IDatabaseSettingsService
             var providerLabel = settings.GetProviderDisplayName();
             return (true, $"{providerLabel} ayarlari kaydedildi. Kanonik migration kaynagi PostgreSQL olarak korunur. Uygulamayi yeniden baslatmaniz gerekiyor.");
         }
+        catch (NotSupportedException ex)
+        {
+            return (false, ex.Message);
+        }
         catch (Exception ex)
         {
-            return (false, $"Ayarlar kaydedilemedi: {ex.Message}");
+            _logger.LogError(ex, "Veritabanı bağlantı ayarları uygulanamadı.");
+            return (false, "Veritabanı ayarları uygulanamadı. Ayrıntı için sistem yöneticisine başvurun.");
         }
     }
+
+    private static string GetUnsupportedProviderMessage(DatabaseProvider provider) =>
+        $"{provider} için otomatik şema migration desteği bulunmuyor. Bu sürümde yalnız PostgreSQL ve SQLite seçilebilir. " +
+        "Ayar kaydedilmedi ve veritabanı geçişi başlatılmadı.";
 
     private static void EnsureSupportedRuntimeProvider(DatabaseProvider provider)
     {
         if (provider is not (DatabaseProvider.PostgreSQL or DatabaseProvider.SQLite))
         {
-            throw new NotSupportedException(
-                $"{provider} için otomatik şema migration desteği bulunmuyor. Bu sürümde yalnız PostgreSQL ve SQLite seçilebilir. " +
-                "Ayar kaydedilmedi ve veritabanı geçişi başlatılmadı.");
+            throw new NotSupportedException(GetUnsupportedProviderMessage(provider));
         }
     }
 

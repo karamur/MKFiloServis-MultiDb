@@ -1,4 +1,4 @@
-﻿@implements IAsyncDisposable
+@implements IAsyncDisposable
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
 @using Microsoft.Extensions.Logging
@@ -248,7 +248,7 @@
         if (fark.TotalHours < 24) return $"{(int)fark.TotalHours} sa once";
         if (fark.TotalDays < 7) return $"{(int)fark.TotalDays} gun once";
 
-        return tarih.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+        return MKFiloServis.Shared.Time.BusinessTime.LocalAt(tarih).ToString("dd.MM.yyyy HH:mm");
     }
 
     public ValueTask DisposeAsync()

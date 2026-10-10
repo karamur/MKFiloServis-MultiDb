@@ -286,8 +286,8 @@
 @code {
     private LucaSorguFiltre filtre = new()
     {
-        BaslangicTarihi = DateTime.Today.AddMonths(-1),
-        BitisTarihi = DateTime.Today,
+        BaslangicTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddMonths(-1),
+        BitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
         BelgeTipi = LucaBelgeTipi.EFatura,
         BelgeYonu = LucaBelgeYonu.Gelen
     };

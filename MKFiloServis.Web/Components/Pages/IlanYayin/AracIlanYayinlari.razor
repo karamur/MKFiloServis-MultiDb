@@ -191,7 +191,7 @@
                             <td>
                                 @if (yayin.SonGuncelleme.HasValue)
                                 {
-                                    @yayin.SonGuncelleme.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                                    @MKFiloServis.Shared.Time.BusinessTime.LocalAt(yayin.SonGuncelleme.Value).ToString("dd.MM.yyyy HH:mm")
                                 }
                                 else
                                 {

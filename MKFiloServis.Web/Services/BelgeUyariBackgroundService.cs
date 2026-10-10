@@ -106,7 +106,7 @@ public class BelgeUyariBackgroundService : BackgroundService
         if (emailAktif && emailService == null)
             _logger.LogWarning("Email servisi bulunamadı, belge uyarı emaili gönderilemedi");
 
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         // JSON ayar dosyası varsa oradan, yoksa appsettings'den oku
         var uyariGunleri = (jsonAyarlar?.UyariGunleri?.Length > 0)
             ? jsonAyarlar.UyariGunleri
@@ -202,7 +202,7 @@ public class BelgeUyariBackgroundService : BackgroundService
         // Son çalışma bilgisini güncelle
         if (ayarlariService != null)
         {
-            try { await ayarlariService.GuncelleSonCalismaAsync(DateTime.Now, toplamUyari); }
+            try { await ayarlariService.GuncelleSonCalismaAsync(DateTime.UtcNow, toplamUyari); }
             catch (Exception ex)
             {
                 // Yalnızca çalışma zamanı damgası; kritik değil ama kayıpsız da olmasın.
@@ -218,7 +218,7 @@ public class BelgeUyariBackgroundService : BackgroundService
     {
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"📋 *Belge Süresi Uyarısı*");
-        sb.AppendLine($"📅 {DateTime.Today:dd.MM.yyyy}");
+        sb.AppendLine($"📅 {MKFiloServis.Shared.Time.BusinessTime.Today:dd.MM.yyyy}");
         sb.AppendLine();
 
         if (aracBelgeleri.Any())
@@ -460,11 +460,11 @@ public class BelgeUyariBackgroundService : BackgroundService
         List<BelgeUyariItem> personelBelgeleri,
         List<BelgeUyariItem> firmaBelgeleri)
     {
-        var konu = $"[CRM Filo Servis] Belge Süresi Uyarısı - {DateTime.Today:dd.MM.yyyy}";
+        var konu = $"[CRM Filo Servis] Belge Süresi Uyarısı - {MKFiloServis.Shared.Time.BusinessTime.Today:dd.MM.yyyy}";
 
         var icerik = $@"
 <h2>Belge Süresi Uyarı Raporu</h2>
-<p>Tarih: {DateTime.Now:dd.MM.yyyy HH:mm}</p>
+<p>Tarih: {MKFiloServis.Shared.Time.BusinessTime.Now:dd.MM.yyyy HH:mm}</p>
 
 <h3 style='color: #0d6efd;'>🚗 Araç Belgeleri ({aracBelgeleri.Count} adet)</h3>
 {(aracBelgeleri.Any() ? OlusturBelgeTablosu(aracBelgeleri) : "<p>Uyarılacak araç belgesi yok.</p>")}

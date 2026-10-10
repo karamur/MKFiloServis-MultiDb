@@ -17,7 +17,7 @@ public class EbysEvrakDosyaVersiyon : BaseEntity
     
     // Kim oluşturdu
     public int? OlusturanKullaniciId { get; set; }
-    public DateTime OlusturmaTarihi { get; set; } = DateTime.Now;
+    public DateTime OlusturmaTarihi { get; set; } = DateTime.UtcNow;
     
     // Navigation
     public virtual EbysEvrakDosya? EvrakDosya { get; set; }
@@ -41,7 +41,7 @@ public class AracEvrakDosyaVersiyon : BaseEntity
     
     // Kim oluşturdu
     public int? OlusturanKullaniciId { get; set; }
-    public DateTime OlusturmaTarihi { get; set; } = DateTime.Now;
+    public DateTime OlusturmaTarihi { get; set; } = DateTime.UtcNow;
     
     // Navigation
     public virtual AracEvrakDosya? AracEvrakDosya { get; set; }
@@ -65,7 +65,7 @@ public class PersonelOzlukEvrakVersiyon : BaseEntity
     
     // Kim oluşturdu
     public int? OlusturanKullaniciId { get; set; }
-    public DateTime OlusturmaTarihi { get; set; } = DateTime.Now;
+    public DateTime OlusturmaTarihi { get; set; } = DateTime.UtcNow;
     
     // Navigation
     public virtual PersonelOzlukEvrak? PersonelOzlukEvrak { get; set; }

@@ -25,7 +25,7 @@
             <p class="text-muted mb-0">Tüm operasyonel raporlar için canlı özet ve hızlı erişim</p>
         </div>
         <div>
-            <small class="text-muted me-2">@DateTime.Now.ToString("dd MMMM yyyy HH:mm", new CultureInfo("tr-TR"))</small>
+            <small class="text-muted me-2">@MKFiloServis.Shared.Time.BusinessTime.Now.ToString("dd MMMM yyyy HH:mm", new CultureInfo("tr-TR"))</small>
             <button class="btn btn-outline-primary btn-sm" @onclick="LoadAsync" disabled="@yukleniyor">
                 <i class="bi bi-arrow-clockwise me-1"></i>Yenile
             </button>
@@ -193,7 +193,7 @@
         yukleniyor = true;
         try
         {
-            var bugun = DateTime.Today;
+            var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
             var ayBas = new DateTime(bugun.Year, bugun.Month, 1);
             var ayBit = ayBas.AddMonths(1).AddDays(-1);
 

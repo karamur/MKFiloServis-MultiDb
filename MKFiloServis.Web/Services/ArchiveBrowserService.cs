@@ -125,11 +125,7 @@ public sealed class ArchiveBrowserService
         => (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
 
     private static bool IsUnderRoot(string fullPath, string root)
-    {
-        var normalizedRoot = root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        return fullPath.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(fullPath, root, StringComparison.OrdinalIgnoreCase);
-    }
+        => StorageFilePath.IsWithinRoot(root, fullPath);
 
     private static ArchiveFileFormat DetectFormat(string fullPath)
     {

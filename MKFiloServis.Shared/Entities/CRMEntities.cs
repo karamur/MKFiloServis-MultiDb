@@ -509,7 +509,7 @@ public class CariIletisimNot : BaseEntity
 
     public IletisimTipi IletisimTipi { get; set; } = IletisimTipi.Not;
 
-    public DateTime IletisimTarihi { get; set; } = DateTime.Now;
+    public DateTime IletisimTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Now;
 
     [StringLength(100)]
     public string? IletisimYapanKisi { get; set; }

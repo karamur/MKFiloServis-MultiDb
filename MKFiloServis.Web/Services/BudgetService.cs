@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using System.Text;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
@@ -691,7 +691,7 @@ public class BudgetService : IBudgetService
         }
 
         // Ornek satirlar
-        worksheet.Cell(2, 1).Value = DateTime.Today.ToString("dd.MM.yyyy");
+        worksheet.Cell(2, 1).Value = MKFiloServis.Shared.Time.BusinessTime.Today.ToString("dd.MM.yyyy");
         worksheet.Cell(2, 2).Value = "Kira";
         worksheet.Cell(2, 3).Value = "Ocak ayi kirasi";
         worksheet.Cell(2, 4).Value = 5000;
@@ -1652,7 +1652,7 @@ public class BudgetService : IBudgetService
     public async Task<List<TekrarlayanOdeme>> GetAktifTekrarlayanOdemelerAsync(int? firmaId = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var query = context.TekrarlayanOdemeler
             .Where(t => !t.IsDeleted && t.Aktif);
 
@@ -2031,7 +2031,7 @@ public class BudgetService : IBudgetService
         var requestType = request.GetType();
         var masrafKalemi = requestType.GetProperty("MasrafKalemi")?.GetValue(request)?.ToString() ?? "";
         var aciklama = requestType.GetProperty("Aciklama")?.GetValue(request)?.ToString();
-        var baslangicTarihi = (DateTime)(requestType.GetProperty("BaslangicTarihi")?.GetValue(request) ?? DateTime.Today);
+        var baslangicTarihi = (DateTime)(requestType.GetProperty("BaslangicTarihi")?.GetValue(request) ?? MKFiloServis.Shared.Time.BusinessTime.Today);
         var taksitSayisi = (int)(requestType.GetProperty("TaksitSayisi")?.GetValue(request) ?? 1);
         var toplamTutar = (decimal)(requestType.GetProperty("ToplamTutar")?.GetValue(request) ?? 0);
 
@@ -2342,7 +2342,7 @@ public class BudgetService : IBudgetService
                 Tutar = odenecekTutar + masrafKesintisi + cezaKesintisi + digerKesinti,
                 IslemKaynak = IslemKaynak.Butce,
                 Aciklama = $"[Kısmi Ödeme] {odeme.MasrafKalemi} - {odeme.Aciklama}",
-                BelgeNo = $"KO-{odeme.Id}-{DateTime.Now:yyyyMMddHHmmss}",
+                BelgeNo = $"KO-{odeme.Id}-{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMddHHmmss}",
                 CariId = request.CariId,
                 CreatedAt = DateTime.UtcNow
             };

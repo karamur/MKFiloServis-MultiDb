@@ -247,7 +247,7 @@
                             </tr>
                             <tr>
                                 <th>Oluşturma</th>
-                                <td>@DateTime.Now.ToString("dd.MM.yyyy HH:mm")</td>
+                                <td>@MKFiloServis.Shared.Time.BusinessTime.Now.ToString("dd.MM.yyyy HH:mm")</td>
                             </tr>
                         </table>
                     </div>
@@ -346,7 +346,7 @@
                 </div>
                 <div class="text-center mt-3 text-muted">
                     <small>
-                        Bu mutabakat @DateTime.Now.ToString("dd.MM.yyyy") tarihinde oluşturulmuştur.
+                        Bu mutabakat @MKFiloServis.Shared.Time.BusinessTime.Now.ToString("dd.MM.yyyy") tarihinde oluşturulmuştur.
                         Yukarıdaki bakiye bilgileri tarafımızca doğrulanmıştır.
                     </small>
                 </div>
@@ -369,8 +369,8 @@
     private const string TasimaTedarikciHakedisKalemi = "Taşıma Tedarikçi Hakediş";
     private int seciliCariId = 0;
     private int seciliTedarikciId = 0;
-    private DateTime baslangicTarihi = new DateTime(DateTime.Today.Year, 1, 1);
-    private DateTime bitisTarihi = DateTime.Today;
+    private DateTime baslangicTarihi = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, 1, 1);
+    private DateTime bitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
     private MutabakatRapor? mutabakatRapor;
 
     protected override async Task OnInitializedAsync()

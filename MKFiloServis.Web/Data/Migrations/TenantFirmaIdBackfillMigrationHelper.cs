@@ -44,31 +44,24 @@ public static class TenantFirmaIdBackfillMigrationHelper
 
     public static async Task BackfillAsync(ApplicationDbContext context, ILogger logger)
     {
+        await using var transaction = await context.Database.BeginTransactionAsync();
+
         // Varsayılan firma id'sini bul. Yoksa hiç firma yok demektir; backfill atlanır
         // (uygulama ilk kez ayağa kalkıyor olabilir, DbSeeder/SeedVarsayilanFirma sonradan firma açar).
         int? varsayilanFirmaId = null;
-        try
-        {
-            varsayilanFirmaId = await context.Firmalar
-                .IgnoreQueryFilters()
-                .Where(f => f.VarsayilanFirma && f.Aktif)
-                .Select(f => (int?)f.Id)
-                .FirstOrDefaultAsync();
+        varsayilanFirmaId = await context.Firmalar
+            .IgnoreQueryFilters()
+            .Where(f => f.VarsayilanFirma && f.Aktif)
+            .Select(f => (int?)f.Id)
+            .FirstOrDefaultAsync();
 
-            // Varsayılan işaretli yoksa en eski aktif firmayı kullan.
-            varsayilanFirmaId ??= await context.Firmalar
-                .IgnoreQueryFilters()
-                .Where(f => f.Aktif)
-                .OrderBy(f => f.Id)
-                .Select(f => (int?)f.Id)
-                .FirstOrDefaultAsync();
-        }
-        catch (Exception ex)
-        {
-            // Firmalar tablosu daha oluşmamış olabilir (ilk migration). Sessiz geç.
-            logger.LogWarning(ex, "TenantC2 backfill: Firmalar tablosu okunamadı, atlanıyor.");
-            return;
-        }
+        // Varsayılan işaretli yoksa en eski aktif firmayı kullan.
+        varsayilanFirmaId ??= await context.Firmalar
+            .IgnoreQueryFilters()
+            .Where(f => f.Aktif)
+            .OrderBy(f => f.Id)
+            .Select(f => (int?)f.Id)
+            .FirstOrDefaultAsync();
 
         if (varsayilanFirmaId is null or 0)
         {
@@ -81,55 +74,49 @@ public static class TenantFirmaIdBackfillMigrationHelper
 
         foreach (var tablo in FirmaTenantTablolari)
         {
-            try
+            int etkilenen;
+            if (isNpgsql)
             {
-                int etkilenen;
-                if (isNpgsql)
-                {
-                    var sql = $@"
+                var sql = $@"
                         DO $$
                         BEGIN
                             IF EXISTS (
                                 SELECT 1 FROM information_schema.columns
-                                WHERE table_name = '{tablo}' AND column_name = 'FirmaId'
+                                WHERE table_schema = current_schema()
+                                  AND table_name = '{tablo}'
+                                  AND column_name = 'FirmaId'
                             ) THEN
                                 UPDATE ""{tablo}"" SET ""FirmaId"" = {varsayilanFirmaId}
                                 WHERE ""FirmaId"" IS NULL;
                             END IF;
                         END $$;";
-                    etkilenen = await context.Database.ExecuteSqlRawAsync(sql);
-                }
-                else if (isSqlite)
-                {
-                    // SQLite'ta kolon yoksa hata fırlatır → kontrol edip atlayalım.
-                    if (!await SqliteKolonVarMiAsync(context, tablo, "FirmaId"))
-                    {
-                        continue;
-                    }
-
-                    var sql = $"UPDATE \"{tablo}\" SET \"FirmaId\" = {varsayilanFirmaId} WHERE \"FirmaId\" IS NULL";
-                    etkilenen = await context.Database.ExecuteSqlRawAsync(sql);
-                }
-                else
-                {
-                    // Diğer provider'lar için generic dene.
-                    var sql = $"UPDATE [{tablo}] SET [FirmaId] = {varsayilanFirmaId} WHERE [FirmaId] IS NULL";
-                    etkilenen = await context.Database.ExecuteSqlRawAsync(sql);
-                }
-
-                if (etkilenen > 0)
-                {
-                    logger.LogInformation(
-                        "TenantC2 backfill: {Tablo} → {Etkilenen} kayıt FirmaId={FirmaId} ile dolduruldu.",
-                        tablo, etkilenen, varsayilanFirmaId);
-                }
+                etkilenen = await context.Database.ExecuteSqlRawAsync(sql);
             }
-            catch (Exception ex)
+            else if (isSqlite)
             {
-                logger.LogWarning(ex,
-                    "TenantC2 backfill: {Tablo} güncellenirken hata oluştu, atlanıyor.", tablo);
+                // Legacy şema parity kontrolü tablo/kolon yokluğunu migration'dan önce reddeder.
+                if (!await SqliteKolonVarMiAsync(context, tablo, "FirmaId"))
+                {
+                    throw new InvalidOperationException($"TenantC2 backfill: {tablo}.FirmaId kolonu yok; başlangıç kesildi.");
+                }
+
+                var sql = $"UPDATE \"{tablo}\" SET \"FirmaId\" = {varsayilanFirmaId} WHERE \"FirmaId\" IS NULL";
+                etkilenen = await context.Database.ExecuteSqlRawAsync(sql);
+            }
+            else
+            {
+                throw new NotSupportedException($"TenantC2 backfill desteklenmeyen sağlayıcıda çalıştırılamaz: {context.Database.ProviderName}");
+            }
+
+            if (etkilenen > 0)
+            {
+                logger.LogInformation(
+                    "TenantC2 backfill: {Tablo} → {Etkilenen} kayıt FirmaId={FirmaId} ile dolduruldu.",
+                    tablo, etkilenen, varsayilanFirmaId);
             }
         }
+
+        await transaction.CommitAsync();
     }
 
     private static async Task<bool> SqliteKolonVarMiAsync(ApplicationDbContext context, string tablo, string kolon)

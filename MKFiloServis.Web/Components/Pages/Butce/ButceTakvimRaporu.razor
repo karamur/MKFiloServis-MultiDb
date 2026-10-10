@@ -45,7 +45,7 @@
                     <div class="col-md-2">
                         <label class="form-label small mb-1">Yil</label>
                         <select class="form-select form-select-sm" @bind="seciliYil" @bind:after="Filtrele">
-                            @for (int y = DateTime.Today.Year; y >= DateTime.Today.Year - 5; y--)
+                            @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 5; y--)
                             {
                                 <option value="@y">@y</option>
                             }
@@ -66,7 +66,7 @@
                     <div class="col-md-2">
                         <label class="form-label small mb-1">Yil</label>
                         <select class="form-select form-select-sm" @bind="seciliYil" @bind:after="Filtrele">
-                            @for (int y = DateTime.Today.Year; y >= DateTime.Today.Year - 5; y--)
+                            @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 5; y--)
                             {
                                 <option value="@y">@y</option>
                             }
@@ -125,7 +125,7 @@
                         @($"{baslangicTarihi:dd.MM.yyyy} - {bitisTarihi:dd.MM.yyyy}")
                     }
                 </p>
-                <small class="text-muted">Olusturulma: @DateTime.Now.ToString("dd.MM.yyyy HH:mm")</small>
+                <small class="text-muted">Olusturulma: @MKFiloServis.Shared.Time.BusinessTime.Now.ToString("dd.MM.yyyy HH:mm")</small>
             </div>
 
             <!-- Ozet Kartlar -->
@@ -201,7 +201,7 @@
                                                         <div class="gun-odemeler d-flex flex-column gap-1">
                                                             @foreach (var odeme in gunOdemeleri.OrderBy(o => o.Durum))
                                                             {
-                                                                int kalanGun = (odeme.OdemeTarihi.Date - DateTime.Today).Days;
+                                                                int kalanGun = (odeme.OdemeTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
                                                                 string bgClass = "bg-light text-dark";
                                                                 string timeText = "Odenen";
 
@@ -269,7 +269,7 @@
                         <tbody>
                             @foreach (var odeme in filtrelenmisOdemeler.OrderBy(o => o.OdemeTarihi))
                             {
-                                int kalanGun = (odeme.OdemeTarihi.Date - DateTime.Today).Days;
+                                int kalanGun = (odeme.OdemeTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
                                 string timeText = "-";
                                 string timeClass = "text-muted";
                                 if (odeme.Durum == OdemeDurum.Bekliyor || odeme.Durum == OdemeDurum.Ertelendi)
@@ -309,10 +309,10 @@
 @code {
     private bool isLoading = true;
     private string raporTipi = "ay";
-    private int seciliYil = DateTime.Today.Year;
-    private int seciliAy = DateTime.Today.Month;
-    private DateTime baslangicTarihi = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-    private DateTime bitisTarihi = DateTime.Today;
+    private int seciliYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    private int seciliAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
+    private DateTime baslangicTarihi = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1);
+    private DateTime bitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
     private string filtreDurum = "";
 
     private List<BudgetOdeme> tumOdemeler = new();
@@ -424,7 +424,7 @@
             }).ToList();
 
             var bytes = ExcelService.CreateExcel(headers, data, "Butce Takvim Raporu");
-            var fileName = $"ButceTakvimRaporu_{DateTime.Now:yyyyMMdd}.xlsx";
+            var fileName = $"ButceTakvimRaporu_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.xlsx";
             await JS.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(bytes), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
             ToastService.ShowSuccess("Excel dosyasi indirildi!");
         }

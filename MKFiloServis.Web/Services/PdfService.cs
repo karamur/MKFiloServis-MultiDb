@@ -103,7 +103,7 @@ public class PdfService : IPdfService
             row.RelativeItem().AlignRight().Column(col =>
             {
                 col.Item().Text(title).Bold().FontSize(14).AlignRight();
-                col.Item().Text($"Tarih: {DateTime.Now:dd.MM.yyyy HH:mm}").FontSize(9).AlignRight();
+                col.Item().Text($"Tarih: {MKFiloServis.Shared.Time.BusinessTime.Now:dd.MM.yyyy HH:mm}").FontSize(9).AlignRight();
             });
         });
     }

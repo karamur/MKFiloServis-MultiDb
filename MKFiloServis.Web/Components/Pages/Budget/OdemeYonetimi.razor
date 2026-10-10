@@ -46,7 +46,7 @@
             <div class="row g-2 align-items-center">
                 <div class="col-md-2">
                     <select class="form-select form-select-sm" @bind="filtreYil">
-                        @for (int y = DateTime.Today.Year + 1; y >= DateTime.Today.Year - 3; y--)
+                        @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year + 1; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 3; y--)
                         {
                             <option value="@y">@y</option>
                         }
@@ -963,8 +963,8 @@
     private bool isKaydediliyor = false;
 
     // Filtreler
-    private int filtreYil = DateTime.Today.Year;
-    private int filtreAy = DateTime.Today.Month;
+    private int filtreYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    private int filtreAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
     private string filtreDurum = "";
     private string filtreTip = "";
     private string aramaMetni = "";
@@ -1132,7 +1132,7 @@
     private string BuildExportFileName(string extension)
     {
         var ayMetni = filtreAy > 0 ? $"_{filtreAy:D2}" : "_TumYil";
-        return $"ButceOdemeleri_{filtreYil}{ayMetni}_{DateTime.Now:yyyyMMddHHmmss}.{extension}";
+        return $"ButceOdemeleri_{filtreYil}{ayMetni}_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMddHHmmss}.{extension}";
     }
 
     private async Task LoadDataAsync()
@@ -1199,7 +1199,7 @@
 
     private async Task FiltreTemizle()
     {
-        filtreYil = DateTime.Today.Year;
+        filtreYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
         filtreAy = 0;
         filtreDurum = "";
         filtreTip = "";
@@ -1230,7 +1230,7 @@
     {
         editOdeme = new BudgetOdeme
         {
-            OdemeTarihi = DateTime.Today,
+            OdemeTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
             Durum = OdemeDurum.Bekliyor
         };
         showOdemeModal = true;
@@ -1302,9 +1302,9 @@
         odemeYapRequest = new OdemeYapRequest
         {
             OdemeTipi = BudgetOdemeTipi.Kasa,
-            OdemeTarihi = DateTime.Today,
-            KrediKartiOdemeAy = DateTime.Today.Month,
-            KrediKartiOdemeYil = DateTime.Today.Year
+            OdemeTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
+            KrediKartiOdemeAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month,
+            KrediKartiOdemeYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year
         };
         showOdemeYapModal = true;
     }
@@ -1426,7 +1426,7 @@
     {
         taksitRequest = new TaksitliOdemeRequest
         {
-            BaslangicTarihi = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1),
+            BaslangicTarihi = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1),
             TaksitSayisi = 12
         };
         showTaksitModal = true;
@@ -1583,7 +1583,7 @@
     { 
         if (o.Durum == OdemeDurum.Bekliyor || o.Durum == OdemeDurum.KismiOdendi) 
         { 
-            var gun = (o.OdemeTarihi.Date - DateTime.Today).Days; 
+            var gun = (o.OdemeTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
             if(gun < 0) return $"{-gun} Gün Gecikti"; 
             if(gun == 0) return "Bugün Son"; 
             return $"{gun} Gün Kaldı"; 
@@ -1602,7 +1602,7 @@
     { 
         if (o.Durum == OdemeDurum.Bekliyor || o.Durum == OdemeDurum.KismiOdendi) 
         { 
-            var gun = (o.OdemeTarihi.Date - DateTime.Today).Days; 
+            var gun = (o.OdemeTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
             if(gun < 0) return "bg-danger text-white"; 
             if(gun == 0) return "bg-warning text-dark"; 
             return o.Durum == OdemeDurum.KismiOdendi ? "bg-warning text-dark" : "bg-info text-white"; 

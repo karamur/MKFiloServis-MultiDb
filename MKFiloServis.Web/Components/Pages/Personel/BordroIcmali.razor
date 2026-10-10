@@ -45,7 +45,7 @@
                 <div class="col-md-2">
                     <label class="form-label small mb-1">Yıl</label>
                     <select class="form-select form-select-sm" @bind="secilenYil" @bind:after="YilDegisti">
-                        @for (int y = DateTime.Now.Year; y >= DateTime.Now.Year - 5; y--)
+                        @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 5; y--)
                         {
                             <option value="@y">@y</option>
                         }
@@ -247,7 +247,7 @@
                 </div>
                 <div class="text-end">
                     <strong>Yazdırma Tarihi</strong><br />
-                    <small>@DateTime.Now.ToString("dd.MM.yyyy")</small>
+                    <small>@MKFiloServis.Shared.Time.BusinessTime.Now.ToString("dd.MM.yyyy")</small>
                 </div>
             </div>
 
@@ -349,7 +349,7 @@
     private List<BordroDetay> yazdirmaListesi = new();
     private List<BordroKalanOdemeSatir> kalanOdemeRaporu = new();
     private Bordro? secilenBordro;
-    private int secilenYil = DateTime.Now.Year;
+    private int secilenYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
     private int secilenFirmaId = 0;
     private BordroTipi secilenTip = BordroTipi.Normal;
     private int secilenBordroId = 0;

@@ -10,6 +10,19 @@ public sealed class CurrentPermissionGuard(
     IHttpContextAccessor httpContextAccessor,
     AppAuthenticationStateProvider authenticationStateProvider)
 {
+    public async Task<bool> HasAnyAsync(params string[] permissions)
+    {
+        try
+        {
+            await RequireAnyAsync(permissions);
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     public async Task RequireAnyAsync(params string[] permissions)
     {
         var principal = httpContextAccessor.HttpContext?.User;
@@ -25,7 +38,9 @@ public sealed class CurrentPermissionGuard(
             .Include(k => k.Rol).ThenInclude(r => r.Yetkiler)
             .FirstOrDefaultAsync(k => k.Id == userId && k.Aktif && !k.IsDeleted);
 
-        if (permissions.Length == 0 || user?.Rol == null || user.Rol.IsDeleted ||
+        var lockedNow = user?.Kilitli == true &&
+            (user.KilitlenmeBitisUtc is null || user.KilitlenmeBitisUtc > DateTime.UtcNow);
+        if (permissions.Length == 0 || user?.Rol == null || user.Rol.IsDeleted || lockedNow ||
             (!string.Equals(user.Rol.RolAdi, "Admin", StringComparison.Ordinal) &&
              !user.Rol.Yetkiler.Any(y => !y.IsDeleted && y.Izin && permissions.Contains(y.YetkiKodu))))
             throw new UnauthorizedAccessException("Bu işlem için güncel yetkiniz bulunmuyor.");

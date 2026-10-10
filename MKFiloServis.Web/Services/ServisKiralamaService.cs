@@ -32,7 +32,7 @@ public class ServisKiralamaService : IServisKiralamaService
     public async Task<List<KiralamaArac>> GetAktifKiralamaAraclarAsync(int firmaId)
     {
         using var context = await _contextFactory.CreateDbContextAsync();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
 
         return await context.KiralamaAraclar
             .Include(k => k.KiralayiciCari)

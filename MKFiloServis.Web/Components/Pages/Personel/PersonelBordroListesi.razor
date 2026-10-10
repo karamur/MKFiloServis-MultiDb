@@ -31,7 +31,7 @@
         </div>
         <div class="d-flex gap-2">
             <select class="form-select form-select-sm" style="width:120px;" @bind="secilenYil" @bind:after="YukleAsync">
-                @for (int y = DateTime.Now.Year; y >= DateTime.Now.Year - 4; y--)
+                @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 4; y--)
                 {
                     <option value="@y">@y</option>
                 }
@@ -455,7 +455,7 @@
 
     private Sofor? personel;
     private List<BordroDetay> detaylar = new();
-    private int secilenYil = DateTime.Now.Year;
+    private int secilenYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
     private bool isLoading = true;
     private bool isIndiriliyor = false;
 

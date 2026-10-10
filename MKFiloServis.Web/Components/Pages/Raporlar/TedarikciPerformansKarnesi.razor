@@ -247,8 +247,8 @@
 
 @code {
     private bool yukleniyor = true;
-    private DateTime basTarih = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-    private DateTime bitTarih = DateTime.Today;
+    private DateTime basTarih = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1);
+    private DateTime bitTarih = MKFiloServis.Shared.Time.BusinessTime.Today;
     private string siralamaModu = "skor";
     private bool bosGizle = true;
 
@@ -265,7 +265,7 @@
 
     private void HizliSecim(string s)
     {
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         switch (s)
         {
             case "buAy":

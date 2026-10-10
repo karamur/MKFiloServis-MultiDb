@@ -325,7 +325,7 @@
 
     private string FormatTarih(DateTime tarih)
     {
-        var fark = DateTime.Now - tarih;
+        var fark = MKFiloServis.Shared.Time.BusinessTime.Now - tarih;
         
         if (fark.TotalMinutes < 1)
             return "Az önce";

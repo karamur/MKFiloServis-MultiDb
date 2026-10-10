@@ -262,7 +262,7 @@
                                     <td class="small">
                                         @if (is_.BitisTarihi.HasValue)
                                         {
-                                            <span class="@(is_.BitisTarihi < DateTime.Today ? "text-danger" : "")">
+                                            <span class="@(is_.BitisTarihi < MKFiloServis.Shared.Time.BusinessTime.Today ? "text-danger" : "")">
                                                 @is_.BitisTarihi.Value.ToString("dd.MM.yyyy")
                                             </span>
                                         }
@@ -335,7 +335,7 @@
     private DateTime? baslangicDan;
     private DateTime? baslangicE;
 
-    private TasimaTedarikciIs yeniIs = new() { BaslangicTarihi = DateTime.Today };
+    private TasimaTedarikciIs yeniIs = new() { BaslangicTarihi = MKFiloServis.Shared.Time.BusinessTime.Today };
 
     private int? duzenlenenIsId;
     private TasimaTedarikciIs? duzenlenenIs;
@@ -382,7 +382,7 @@
 
     private void YeniIsAc()
     {
-        yeniIs = new TasimaTedarikciIs { BaslangicTarihi = DateTime.Today, Durum = TasimaTedarikciIsDurum.Aktif };
+        yeniIs = new TasimaTedarikciIs { BaslangicTarihi = MKFiloServis.Shared.Time.BusinessTime.Today, Durum = TasimaTedarikciIsDurum.Aktif };
         formHata = null;
         yeniIsAcik = true;
     }
@@ -408,7 +408,7 @@
             var olusan = await TedarikciService.CreateIsAsync(yeniIs);
             tumIsler = await TedarikciService.GetIslerAsync();
             yeniIsAcik = false;
-            yeniIs = new TasimaTedarikciIs { BaslangicTarihi = DateTime.Today };
+            yeniIs = new TasimaTedarikciIs { BaslangicTarihi = MKFiloServis.Shared.Time.BusinessTime.Today };
         }
         catch (Exception ex)
         {

@@ -275,7 +275,7 @@
 @code {
     private MaliAnalizDashboard? dashboard;
     private bool isLoading = true;
-    private string seciliAy = DateTime.Now.ToString("yyyy-MM");
+    private string seciliAy = MKFiloServis.Shared.Time.BusinessTime.Now.ToString("yyyy-MM");
 
     protected override async Task OnInitializedAsync()
     {
@@ -284,7 +284,7 @@
 
     private async Task SeciliAyDegisti(ChangeEventArgs e)
     {
-        seciliAy = e.Value?.ToString() ?? DateTime.Now.ToString("yyyy-MM");
+        seciliAy = e.Value?.ToString() ?? MKFiloServis.Shared.Time.BusinessTime.Now.ToString("yyyy-MM");
         await VeriYukle();
     }
 

@@ -92,7 +92,7 @@ public class PythonScraperService : IPythonScraperService
                             Sehir = pyIlan.Sehir ?? "",
                             Ilce = pyIlan.Ilce ?? "",
                             Renk = pyIlan.Renk ?? "",
-                            ToplanmaTarihi = DateTime.Now,
+                            ToplanmaTarihi = DateTime.UtcNow,
                             AktifMi = true
                         };
 
@@ -102,7 +102,7 @@ public class PythonScraperService : IPythonScraperService
                         }
                         else
                         {
-                            ilan.IlanTarihi = DateTime.Today;
+                            ilan.IlanTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
                         }
 
                         ilanlar.Add(ilan);

@@ -284,8 +284,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        filtreBaslangic = new DateTime(DateTime.Today.Year, 1, 1);
-        filtreBitis = DateTime.Today;
+        filtreBaslangic = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, 1, 1);
+        filtreBitis = MKFiloServis.Shared.Time.BusinessTime.Today;
 
         if (StokIdParam.HasValue)
         {
@@ -349,7 +349,7 @@
         {
             StokKartiId = filtreStokId > 0 ? filtreStokId : (stokKartlari.FirstOrDefault()?.Id ?? 0),
             HareketTipi = StokHareketTipi.Giris,
-            IslemTarihi = DateTime.Today,
+            IslemTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
             Miktar = 1,
             BirimFiyat = 0
         };

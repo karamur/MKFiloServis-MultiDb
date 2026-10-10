@@ -1,3 +1,4 @@
+using MKFiloServis.Shared.Time;
 ﻿using System.ComponentModel.DataAnnotations.Schema;
 
 namespace MKFiloServis.Shared.Entities;
@@ -95,7 +96,7 @@ public class Arac : BaseEntity, IKopyalanabilirTenant, IFirmaTenant
     
     // Hesaplanan Özellik - Aktif plakayı döner (CikisTarihi null veya bugünden sonra)
     public AracPlaka? AktifPlakaKaydi => PlakaGecmisi?
-        .Where(p => !p.IsDeleted && (p.CikisTarihi == null || p.CikisTarihi > DateTime.Today))
+        .Where(p => !p.IsDeleted && (p.CikisTarihi == null || p.CikisTarihi > BusinessTime.Today))
         .OrderByDescending(p => p.GirisTarihi)
         .FirstOrDefault();
 }
@@ -126,7 +127,7 @@ public class AracPlaka : BaseEntity
     public virtual Cari? Cari { get; set; }
     
     // Aktif mi? (CikisTarihi null veya gelecek tarihli ise aktif)
-    public bool Aktif => CikisTarihi == null || CikisTarihi > DateTime.Today;
+    public bool Aktif => CikisTarihi == null || CikisTarihi > BusinessTime.Today;
 }
 
 public enum PlakaIslemTipi

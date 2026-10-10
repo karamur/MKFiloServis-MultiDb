@@ -97,7 +97,7 @@ public class BordroService : IBordroService
             Ay = ay,
             FirmaId = firmaId,
             BordroTipi = tip,
-            HesaplamaTarihi = DateTime.Now,
+            HesaplamaTarihi = DateTime.UtcNow,
             Onaylandi = false
         };
 
@@ -426,7 +426,7 @@ public class BordroService : IBordroService
             throw new InvalidOperationException("Detaysız bordro onaylanamaz!");
 
         bordro.Onaylandi = true;
-        bordro.OnayTarihi = DateTime.Now;
+        bordro.OnayTarihi = DateTime.UtcNow;
         bordro.OnaylayanKullanici = onaylayanKullanici;
 
         // Muhasebe fişi oluştur
@@ -1261,7 +1261,7 @@ public class BordroService : IBordroService
         var worksheet = workbook.Worksheets.Add("Bordro Özet");
 
         // Başlık
-        worksheet.Cell("A1").Value = $"{yil ?? DateTime.Now.Year} Yılı Bordro Özet Raporu";
+        worksheet.Cell("A1").Value = $"{yil ?? MKFiloServis.Shared.Time.BusinessTime.Today.Year} Yılı Bordro Özet Raporu";
         worksheet.Range("A1:I1").Merge().Style.Font.Bold = true;
         worksheet.Range("A1:I1").Style.Font.FontSize = 14;
         worksheet.Range("A1:I1").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
@@ -1499,7 +1499,7 @@ public class BordroService : IBordroService
         var personel = detay.Personel;
         var firma = detay.Firma ?? detay.Bordro?.Firma;
         var ayAdi = GetAyAdi(detay.Bordro?.Ay ?? 1);
-        var yil = detay.Bordro?.Yil ?? DateTime.Now.Year;
+        var yil = detay.Bordro?.Yil ?? MKFiloServis.Shared.Time.BusinessTime.Today.Year;
 
         // Sayfa adı (max 31 karakter)
         var sheetName = $"{personel.Ad} {personel.Soyad}".Length > 28 

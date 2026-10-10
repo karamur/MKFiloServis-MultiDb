@@ -22,7 +22,7 @@ public enum KolayIslemTuru
 public class KolayMuhasebeGiris
 {
     public KolayIslemTuru IslemTuru { get; set; } = KolayIslemTuru.GiderFatura;
-    public DateTime IslemTarihi { get; set; } = DateTime.Today;
+    public DateTime IslemTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public string? BelgeNo { get; set; }  // Fatura No, Fiş No vb.
     public DateTime? VadeTarihi { get; set; }
 

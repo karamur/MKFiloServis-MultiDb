@@ -98,12 +98,12 @@ public class CariHatirlatmaBackgroundService : BackgroundService
             return;
 
         // Bugün kontrolün yapılma saati geldi mi?
-        var simdi = DateTime.Now;
+        var simdi = MKFiloServis.Shared.Time.BusinessTime.Now;
         var kontrolSaati = new TimeSpan(ayarlar.KontrolSaati, 0, 0);
-        var bugunKontrolZamani = DateTime.Today.Add(kontrolSaati);
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
 
         // Bugün zaten kontrol yapıldı mı?
-        if (ayarlar.SonKontrolTarihi.HasValue && ayarlar.SonKontrolTarihi.Value.Date == DateTime.Today)
+        if (ayarlar.SonKontrolTarihi.HasValue && ayarlar.SonKontrolTarihi.Value.Date == bugun)
             return;
 
         // Kontrol saati henüz gelmedi mi?

@@ -34,6 +34,7 @@ public interface IMuhasebeService
 
     // Otomatik Fis Olusturma
     Task<MuhasebeFis> CreateFaturaFisiAsync(Fatura fatura);
+    Task<MuhasebeFis> CreateFaturaFisiAsync(ApplicationDbContext context, Fatura fatura);
     Task<MuhasebeFis> CreateTahsilatFisiAsync(BankaKasaHareket hareket, int faturaId);
     Task<MuhasebeFis> CreateTediyeFisiAsync(BankaKasaHareket hareket, int? faturaId = null);
 

@@ -151,7 +151,7 @@ public class EmailService : IEmailService
         </div>
         <div class='footer'>
             <p>Bu e-posta CRM Filo Servis sistemi tarafından otomatik olarak gönderilmiştir.</p>
-            <p>© {DateTime.Now.Year} CRM Filo Servis</p>
+            <p>© {MKFiloServis.Shared.Time.BusinessTime.Today.Year} CRM Filo Servis</p>
         </div>
     </div>
 </body>
@@ -214,7 +214,7 @@ public class EmailService : IEmailService
                    <p><strong>Talep No:</strong> {talepNo}</p>
                    <p><strong>Konu:</strong> {konu}</p>
                    <p><strong>Öncelik:</strong> {oncelik}</p>
-                   <p><strong>Tarih:</strong> {DateTime.Now:dd.MM.yyyy HH:mm}</p>
+                   <p><strong>Tarih:</strong> {MKFiloServis.Shared.Time.BusinessTime.Now:dd.MM.yyyy HH:mm}</p>
                </div>
                <p>Talebinizin durumunu sistem üzerinden takip edebilirsiniz.</p>");
 
@@ -306,7 +306,7 @@ public class EmailService : IEmailService
         </div>
         <div class='footer'>
             <p>Bu e-posta CRM Filo Servis sistemi tarafından otomatik olarak gönderilmiştir.</p>
-            <p>© {DateTime.Now.Year} CRM Filo Servis</p>
+            <p>© {MKFiloServis.Shared.Time.BusinessTime.Today.Year} CRM Filo Servis</p>
         </div>
     </div>
 </body>

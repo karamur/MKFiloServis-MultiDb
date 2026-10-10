@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Text;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
@@ -22,8 +22,8 @@ public partial class PuantajExcelGrid
     // baska bir tenant'in verisini okumak/yazmak yerine islem yapilmaz.
     private int _firmaId;
     private bool FirmaSecili => _firmaId > 0;
-    private int _yil = DateTime.Today.Year;
-    private int _ay = DateTime.Today.Month;
+    private int _yil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    private int _ay = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
     private int _gunSayisi => DateTime.DaysInMonth(_yil, _ay);
     private bool _yukleniyor;
     private bool _kaydediliyor;
@@ -636,7 +636,7 @@ public partial class PuantajExcelGrid
         {
             var csv = PuantajExcelService.BuildErrorsCsv(_importErrors);
             var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(csv));
-            var fileName = $"puantaj-import-hatalari-{DateTime.Now:yyyyMMdd-HHmmss}.csv";
+            var fileName = $"puantaj-import-hatalari-{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd-HHmmss}.csv";
             var script = $"(function(){{const a=document.createElement('a');a.href='data:text/csv;charset=utf-8;base64,{base64}';a.download='{fileName}';document.body.appendChild(a);a.click();a.remove();}})();";
             await JS.InvokeVoidAsync("eval", script);
             _mesaj = "Hata CSV dosyası indirildi.";

@@ -165,12 +165,12 @@
                     }
                     else
                     {
-                        var groupedMessages = aktifMesajlar.GroupBy(m => m.MesajTarihi.ToLocalTime().Date);
+                        var groupedMessages = aktifMesajlar.GroupBy(m => MKFiloServis.Shared.Time.BusinessTime.LocalAt(m.MesajTarihi).Date);
                         foreach (var dayGroup in groupedMessages)
                         {
                             <div class="text-center mb-4 mt-2">
                                 <span class="badge text-dark shadow-sm px-3 py-2 rounded-3" style="background-color: #fffaca; font-weight: normal; font-size: 0.8rem;">
-                                    @(dayGroup.Key == DateTime.Today ? "BUGÜN" : (dayGroup.Key == DateTime.Today.AddDays(-1) ? "DÜN" : dayGroup.Key.ToString("dd MMMM yyyy").ToUpper()))
+                                    @(dayGroup.Key == MKFiloServis.Shared.Time.BusinessTime.Today ? "BUGÜN" : (dayGroup.Key == MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-1) ? "DÜN" : dayGroup.Key.ToString("dd MMMM yyyy").ToUpper()))
                                 </span>
                             </div>
 
@@ -195,7 +195,7 @@
 
                                         <div class="text-break" style="white-space: pre-wrap; font-size: 0.95rem; line-height: 1.3; color: #111b21;">@msg.Icerik</div>
                                         <div class="d-flex justify-content-end align-items-center mt-1 float-end ms-3" style="font-size: 0.7rem; margin-bottom: -4px;">
-                                            <span class="text-muted me-1" style="font-size: 0.65rem;">@msg.MesajTarihi.ToLocalTime().ToString("HH:mm")</span>
+                                            <span class="text-muted me-1" style="font-size: 0.65rem;">@MKFiloServis.Shared.Time.BusinessTime.LocalAt(msg.MesajTarihi).ToString("HH:mm")</span>
                                             @if (isGiden)
                                             {
                                                 <i class="bi bi-check-all" style="font-size: 1rem; color: #53bdeb; margin-top: -2px;"></i>

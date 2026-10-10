@@ -1,4 +1,4 @@
-﻿using System.Net.Http.Headers;
+using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -56,7 +56,7 @@ public class WebhookService : IWebhookService
     public async Task<WebhookEndpoint> CreateEndpointAsync(WebhookEndpoint endpoint)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        endpoint.CreatedAt = DateTime.Now;
+        endpoint.CreatedAt = DateTime.UtcNow;
 
         // Secret yoksa otomatik oluştur
         if (string.IsNullOrEmpty(endpoint.Secret))
@@ -87,7 +87,7 @@ public class WebhookService : IWebhookService
         existing.OlayFiltresi = endpoint.OlayFiltresi;
         existing.HttpMethod = endpoint.HttpMethod;
         existing.Headers = endpoint.Headers;
-        existing.UpdatedAt = DateTime.Now;
+        existing.UpdatedAt = DateTime.UtcNow;
 
         // Secret değiştiyse güncelle
         if (!string.IsNullOrEmpty(endpoint.Secret) && endpoint.Secret != existing.Secret)
@@ -108,7 +108,7 @@ public class WebhookService : IWebhookService
         if (endpoint != null)
         {
             endpoint.IsDeleted = true;
-            endpoint.UpdatedAt = DateTime.Now;
+            endpoint.UpdatedAt = DateTime.UtcNow;
             await context.SaveChangesAsync();
 
             _logger.LogInformation("Webhook endpoint silindi: {Ad}", endpoint.Ad);
@@ -125,7 +125,7 @@ public class WebhookService : IWebhookService
         var testPayload = new
         {
             test = true,
-            timestamp = DateTime.Now,
+            timestamp = DateTime.UtcNow.ToString("o"),
             message = "MK Filo Servis webhook test mesajı"
         };
 
@@ -167,7 +167,7 @@ public class WebhookService : IWebhookService
                 Durum = WebhookLogDurum.Bekliyor,
                 IliskiliTablo = iliskiliTablo,
                 IliskiliKayitId = iliskiliKayitId,
-                CreatedAt = DateTime.Now
+                CreatedAt = DateTime.UtcNow
             };
 
             context.WebhookLoglar.Add(log);
@@ -242,13 +242,13 @@ public class WebhookService : IWebhookService
         if (success)
         {
             endpoint.BasariliGonderim++;
-            endpoint.SonBasariliTarih = DateTime.Now;
+            endpoint.SonBasariliTarih = DateTime.UtcNow;
         }
         else
         {
             endpoint.BasarisizGonderim++;
         }
-        endpoint.SonGonderimTarihi = DateTime.Now;
+        endpoint.SonGonderimTarihi = DateTime.UtcNow;
 
         await context.SaveChangesAsync();
     }
@@ -256,7 +256,7 @@ public class WebhookService : IWebhookService
     private async Task<bool> SendWebhookWithLoggingAsync(ApplicationDbContext context, WebhookLog log, WebhookEndpoint endpoint)
     {
         log.Durum = WebhookLogDurum.Gonderiliyor;
-        log.GonderimTarihi = DateTime.Now;
+        log.GonderimTarihi = DateTime.UtcNow;
         await context.SaveChangesAsync();
 
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -316,7 +316,7 @@ public class WebhookService : IWebhookService
             stopwatch.Stop();
             log.SureMilisaniye = (int)stopwatch.ElapsedMilliseconds;
             log.HttpStatusCode = (int)response.StatusCode;
-            log.YanitTarihi = DateTime.Now;
+            log.YanitTarihi = DateTime.UtcNow;
 
             try
             {
@@ -352,7 +352,7 @@ public class WebhookService : IWebhookService
             log.SureMilisaniye = (int)stopwatch.ElapsedMilliseconds;
             log.Durum = WebhookLogDurum.Basarisiz;
             log.HataMesaji = ex.Message;
-            log.YanitTarihi = DateTime.Now;
+            log.YanitTarihi = DateTime.UtcNow;
             await context.SaveChangesAsync();
 
             _logger.LogError(ex, "Webhook gönderim hatası: {OlayTipi} -> {Url}", log.OlayTipi, endpoint.Url);

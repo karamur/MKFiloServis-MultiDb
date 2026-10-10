@@ -241,11 +241,11 @@ public class TestDataSeeder
                 Adres = $"{_ilceler[_random.Next(_ilceler.Length)]} / İstanbul",
                 Gorev = PersonelGorev.Sofor,
                 EhliyetNo = $"{_random.Next(10, 99)}{ad.Substring(0, 2).ToUpper()}{_random.Next(10000, 99999)}",
-                EhliyetGecerlilikTarihi = DateTime.Today.AddMonths(_random.Next(6, 60)),
-                SrcBelgesiGecerlilikTarihi = _random.Next(100) < 80 ? DateTime.Today.AddMonths(_random.Next(6, 36)) : null,
-                PsikoteknikGecerlilikTarihi = DateTime.Today.AddMonths(_random.Next(6, 24)),
-                SaglikRaporuGecerlilikTarihi = DateTime.Today.AddMonths(_random.Next(6, 12)),
-                IseBaslamaTarihi = DateTime.Today.AddDays(-_random.Next(30, 1825)), // Son 5 yıl
+                EhliyetGecerlilikTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddMonths(_random.Next(6, 60)),
+                SrcBelgesiGecerlilikTarihi = _random.Next(100) < 80 ? MKFiloServis.Shared.Time.BusinessTime.Today.AddMonths(_random.Next(6, 36)) : null,
+                PsikoteknikGecerlilikTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddMonths(_random.Next(6, 24)),
+                SaglikRaporuGecerlilikTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddMonths(_random.Next(6, 12)),
+                IseBaslamaTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-_random.Next(30, 1825)), // Son 5 yıl
                 NetMaas = _random.Next(25, 45) * 1000m,
                 Aktif = _random.Next(100) < 90, // %90 aktif
                 Notlar = "[TEST] Demo şoför verisi",
@@ -288,9 +288,9 @@ public class TestDataSeeder
                 SahiplikTipi = sahiplikTipi,
                 KoltukSayisi = new[] { 9, 14, 16, 20, 27, 46 }[_random.Next(6)],
                 KmDurumu = _random.Next(10000, 350000),
-                TrafikSigortaBitisTarihi = DateTime.Today.AddMonths(_random.Next(-1, 12)),
-                KaskoBitisTarihi = _random.Next(100) < 70 ? DateTime.Today.AddMonths(_random.Next(-1, 12)) : null,
-                MuayeneBitisTarihi = DateTime.Today.AddMonths(_random.Next(-1, 24)),
+                TrafikSigortaBitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddMonths(_random.Next(-1, 12)),
+                KaskoBitisTarihi = _random.Next(100) < 70 ? MKFiloServis.Shared.Time.BusinessTime.Today.AddMonths(_random.Next(-1, 12)) : null,
+                MuayeneBitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddMonths(_random.Next(-1, 24)),
                 Aktif = _random.Next(100) < 90,
                 Notlar = "[TEST] Demo araç verisi",
                 CreatedAt = DateTime.Now.AddDays(-_random.Next(30, 365))
@@ -405,7 +405,7 @@ public class TestDataSeeder
         for (int i = 0; i < 30; i++)
         {
             var musteri = musteriler[_random.Next(musteriler.Count)];
-            var tarih = DateTime.Today.AddDays(-_random.Next(0, 180));
+            var tarih = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-_random.Next(0, 180));
             var kalemSayisi = _random.Next(1, 5);
 
             var fatura = new Fatura
@@ -417,8 +417,8 @@ public class TestDataSeeder
                 FaturaYonu = FaturaYonu.Giden,
                 FaturaTipi = FaturaTipi.SatisFaturasi,
                 EFaturaTipi = EFaturaTipi.EFatura,
-                Durum = tarih < DateTime.Today.AddDays(-45) ? FaturaDurum.Odendi : 
-                        tarih < DateTime.Today.AddDays(-15) ? FaturaDurum.KismiOdendi : FaturaDurum.Beklemede,
+                Durum = tarih < MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-45) ? FaturaDurum.Odendi :
+                        tarih < MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-15) ? FaturaDurum.KismiOdendi : FaturaDurum.Beklemede,
                 Aciklama = "[TEST] Demo satış faturası",
                 CreatedAt = tarih
             };
@@ -465,7 +465,7 @@ public class TestDataSeeder
             for (int i = 0; i < 15; i++)
             {
                 var tedarikci = tedarikciler[_random.Next(tedarikciler.Count)];
-                var tarih = DateTime.Today.AddDays(-_random.Next(0, 180));
+                var tarih = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-_random.Next(0, 180));
 
                 var fatura = new Fatura
                 {
@@ -476,7 +476,7 @@ public class TestDataSeeder
                     FaturaYonu = FaturaYonu.Gelen,
                     FaturaTipi = FaturaTipi.AlisFaturasi,
                     EFaturaTipi = EFaturaTipi.EFatura,
-                    Durum = tarih < DateTime.Today.AddDays(-30) ? FaturaDurum.Odendi : FaturaDurum.Beklemede,
+                    Durum = tarih < MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-30) ? FaturaDurum.Odendi : FaturaDurum.Beklemede,
                     Aciklama = "[TEST] Demo alış faturası",
                     CreatedAt = tarih
                 };
@@ -539,7 +539,7 @@ public class TestDataSeeder
         // Son 30 günlük servis çalışmaları
         for (int gun = 0; gun < 30; gun++)
         {
-            var tarih = DateTime.Today.AddDays(-gun);
+            var tarih = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-gun);
             if (tarih.DayOfWeek == DayOfWeek.Sunday) continue; // Pazar hariç
 
             // Her gün için 5-10 sefer
@@ -1054,8 +1054,8 @@ public class TestDataSeeder
             return 0;
         }
 
-        var yil = DateTime.Now.Year;
-        var ay = DateTime.Now.Month;
+        var yil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+        var ay = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
         var kayitlar = new List<PuantajKayit>();
 
         // Müşteri 1: 2 güzergah, fatura kesilmemiş

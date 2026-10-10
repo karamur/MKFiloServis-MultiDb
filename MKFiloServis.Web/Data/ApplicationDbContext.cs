@@ -3813,15 +3813,26 @@ public class ApplicationDbContext : DbContext
             {
                 if (property.CurrentValue is DateTime dateTime)
                 {
-                    if (dateTime.Kind != DateTimeKind.Utc)
+                    if (dateTime.Kind == DateTimeKind.Local)
                     {
+                        // A local timestamp denotes a real instant. Convert its value; relabeling
+                        // the same wall-clock ticks as UTC shifts the persisted instant by the host offset.
+                        property.CurrentValue = dateTime.ToUniversalTime();
+                    }
+                    else if (dateTime.Kind == DateTimeKind.Unspecified)
+                    {
+                        // Existing application convention: unspecified persisted timestamps are UTC.
                         property.CurrentValue = DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
                     }
                 }
                 else if (property.CurrentValue is DateTime?)
                 {
                     var nullableDateTime = (DateTime?)property.CurrentValue;
-                    if (nullableDateTime.HasValue && nullableDateTime.Value.Kind != DateTimeKind.Utc)
+                    if (nullableDateTime.HasValue && nullableDateTime.Value.Kind == DateTimeKind.Local)
+                    {
+                        property.CurrentValue = nullableDateTime.Value.ToUniversalTime();
+                    }
+                    else if (nullableDateTime.HasValue && nullableDateTime.Value.Kind == DateTimeKind.Unspecified)
                     {
                         property.CurrentValue = DateTime.SpecifyKind(nullableDateTime.Value, DateTimeKind.Utc);
                     }

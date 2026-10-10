@@ -113,8 +113,8 @@
                     <span><i class="bi bi-list-ol me-1"></i><strong>@FiltrelenmisListe.Count</strong> / @_liste.Count kayıt</span>
                     <span class="text-success"><i class="bi bi-check-circle me-1"></i>Eşleşen: <strong>@FiltrelenmisListe.Count(x => x.Arac != null && x.Arac.Aktif)</strong></span>
                     <span class="text-danger"><i class="bi bi-x-circle me-1"></i>Eşleşmeyen: <strong>@FiltrelenmisListe.Count(x => x.Arac == null || (x.Arac != null && !x.Arac.Aktif))</strong></span>
-                    <span class="text-danger"><i class="bi bi-clock-history me-1"></i>Süresi Geçen: <strong>@FiltrelenmisListe.Count(x => (x.BitisTarihi.Date - DateTime.Today).Days < 0)</strong></span>
-                    <span class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>7 Gün İçinde: <strong>@FiltrelenmisListe.Count(x => { var g = (x.BitisTarihi.Date - DateTime.Today).Days; return g >= 0 && g <= 7; })</strong></span>
+                    <span class="text-danger"><i class="bi bi-clock-history me-1"></i>Süresi Geçen: <strong>@FiltrelenmisListe.Count(x => (x.BitisTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days < 0)</strong></span>
+                    <span class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>7 Gün İçinde: <strong>@FiltrelenmisListe.Count(x => { var g = (x.BitisTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days; return g >= 0 && g <= 7; })</strong></span>
                     <span><i class="bi bi-cash-coin me-1"></i>Tamamı: <strong>@FiltrelenmisListe.Sum(x => x.ToplamOdeme > 0 ? x.ToplamOdeme : x.Toplam).ToString("N2")</strong> ₺</span>
                     <span class="text-info"><i class="bi bi-receipt me-1"></i>Kesilen Toplam Fatura: <strong>@FiltrelenmisListe.Sum(x => x.KesilenFaturaTutar).ToString("N2")</strong> ₺</span>
                     <span class="text-success"><i class="bi bi-cash-stack me-1"></i>Ödenen Toplam Fatura: <strong>@FiltrelenmisListe.Sum(x => Math.Min(x.OdenenTutar, x.KesilenFaturaTutar)).ToString("N2")</strong> ₺</span>
@@ -173,7 +173,7 @@
                             var item = liste[i];
                             var pasifAracBagli = item.Arac != null && !item.Arac.Aktif;
                             var eslesmedi = item.Arac == null || pasifAracBagli;
-                            var kalanGun = (item.BitisTarihi.Date - DateTime.Today).Days;
+                            var kalanGun = (item.BitisTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
                             var bitisClass = kalanGun < 0 ? "bg-danger text-white"
                                 : kalanGun <= 7 ? "bg-warning text-dark"
                                 : kalanGun <= 30 ? "bg-info text-dark"
@@ -342,8 +342,8 @@
                         <span class="badge bg-primary">Toplam: @FiltrelenmisListe.Count</span>
                         <span class="badge bg-success">Eşleşen: @FiltrelenmisListe.Count(x => x.Arac != null && x.Arac.Aktif)</span>
                         <span class="badge bg-danger">Eşleşmeyen: @FiltrelenmisListe.Count(x => x.Arac == null || (x.Arac != null && !x.Arac.Aktif))</span>
-                        <span class="badge bg-dark">Süresi Geçen: @FiltrelenmisListe.Count(x => (x.BitisTarihi.Date - DateTime.Today).Days < 0)</span>
-                        <span class="badge bg-warning text-dark">7 Gün İçinde: @FiltrelenmisListe.Count(x => { var g = (x.BitisTarihi.Date - DateTime.Today).Days; return g >= 0 && g <= 7; })</span>
+                        <span class="badge bg-dark">Süresi Geçen: @FiltrelenmisListe.Count(x => (x.BitisTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days < 0)</span>
+                        <span class="badge bg-warning text-dark">7 Gün İçinde: @FiltrelenmisListe.Count(x => { var g = (x.BitisTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days; return g >= 0 && g <= 7; })</span>
                         <span class="badge bg-info text-dark">Toplam Tutar: @FiltrelenmisListe.Sum(x => x.Toplam).ToString("N2") ₺</span>
                         <span class="badge bg-warning text-dark">Toplam Ödenen: @FiltrelenmisListe.Sum(x => x.OdenenTutar).ToString("N2") ₺</span>
                         <span class="badge bg-danger">Toplam Kalan: @FiltrelenmisListe.Sum(x => x.KalanFaturaTutar).ToString("N2") ₺</span>
@@ -427,7 +427,7 @@
                                 @{ var ix = 1; }
                                 @foreach (var item in FiltrelenmisListe)
                                 {
-                                    var pkalan = (item.BitisTarihi.Date - DateTime.Today).Days;
+                                    var pkalan = (item.BitisTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
                                     var pBitisClass = pkalan < 0 ? "bg-danger text-white"
                                         : pkalan <= 7 ? "bg-warning text-dark"
                                         : pkalan <= 30 ? "bg-info text-dark"
@@ -986,7 +986,7 @@
                                 <div class="card-body py-2">
                                     <table class="table table-sm table-borderless mb-0">
                                         @{
-                                            var bugun = DateTime.Today;
+                                            var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
                                             string SigortaBadge(DateTime? bitis)
                                             {
                                                 if (!bitis.HasValue) return "<span class=\"badge bg-secondary\">-</span>";
@@ -1101,7 +1101,7 @@
         .Where(x =>
         {
             if (string.IsNullOrEmpty(bitisFiltre)) return true;
-            var gun = (x.BitisTarihi.Date - DateTime.Today).Days;
+            var gun = (x.BitisTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
             return bitisFiltre switch
             {
                 "gecti" => gun < 0,
@@ -1317,7 +1317,7 @@
 
         var baslangic = item.BaslamaTarihi;
         var bitis = item.BitisTarihi;
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
 
         var faturaAyGruplari = faturalar
             .Where(f => f.FaturaTarihi.HasValue)
@@ -1664,7 +1664,7 @@ th {{ background:#eff6ff; color:#1e3a8a; text-align:left; }}
         try
         {
             var content = await TakipService.GetExcelSablonAsync();
-            var fileName = $"kiralik-c-plaka-sablon-{DateTime.Now:yyyyMMdd-HHmm}.xlsx";
+            var fileName = $"kiralik-c-plaka-sablon-{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd-HHmm}.xlsx";
             var base64 = Convert.ToBase64String(content);
             await JS.InvokeVoidAsync("downloadFileFromBytes", fileName, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", base64);
         }
@@ -1796,7 +1796,7 @@ th {{ background:#eff6ff; color:#1e3a8a; text-align:left; }}
             ozet.Cell(1, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
             ozet.Row(1).Height = 28;
 
-            ozet.Cell(2, 1).Value = $"Oluşturma Tarihi: {DateTime.Now:dd.MM.yyyy HH:mm}";
+            ozet.Cell(2, 1).Value = $"Oluşturma Tarihi: {MKFiloServis.Shared.Time.BusinessTime.Now:dd.MM.yyyy HH:mm}";
             ozet.Range(2, 1, 2, 4).Merge();
             ozet.Cell(2, 1).Style.Font.Italic = true;
             ozet.Cell(2, 1).Style.Font.FontColor = XLColor.Gray;
@@ -1821,10 +1821,10 @@ th {{ background:#eff6ff; color:#1e3a8a; text-align:left; }}
             ozet.Cell(r, 1).Style.Fill.BackgroundColor = XLColor.LightSteelBlue;
             r++;
 
-            var sureGecen = data.Count(x => (x.BitisTarihi.Date - DateTime.Today).Days < 0);
-            var yedi = data.Count(x => { var g = (x.BitisTarihi.Date - DateTime.Today).Days; return g >= 0 && g <= 7; });
-            var otuz = data.Count(x => { var g = (x.BitisTarihi.Date - DateTime.Today).Days; return g > 7 && g <= 30; });
-            var aktif = data.Count(x => (x.BitisTarihi.Date - DateTime.Today).Days > 30);
+            var sureGecen = data.Count(x => (x.BitisTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days < 0);
+            var yedi = data.Count(x => { var g = (x.BitisTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days; return g >= 0 && g <= 7; });
+            var otuz = data.Count(x => { var g = (x.BitisTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days; return g > 7 && g <= 30; });
+            var aktif = data.Count(x => (x.BitisTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days > 30);
 
             void Stat(string label, object value, XLColor? bg = null)
             {
@@ -1925,7 +1925,7 @@ th {{ background:#eff6ff; color:#1e3a8a; text-align:left; }}
             int sira = 1;
             foreach (var item in data)
             {
-                var kalan = (item.BitisTarihi.Date - DateTime.Today).Days;
+                var kalan = (item.BitisTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
                 ws.Cell(row, 1).Value = sira++;
                 ws.Cell(row, 2).Value = item.Plaka;
                 ws.Cell(row, 3).Value = item.Arac != null ? $"{item.Arac.AktifPlaka} - {item.Arac.Marka} {item.Arac.Model}" : "Eşleşmedi";
@@ -2024,7 +2024,7 @@ th {{ background:#eff6ff; color:#1e3a8a; text-align:left; }}
             using var ms = new MemoryStream();
             workbook.SaveAs(ms);
             var bytes = ms.ToArray();
-            var fileName = $"kiralik-c-plaka-rapor-{DateTime.Now:yyyyMMdd-HHmm}.xlsx";
+            var fileName = $"kiralik-c-plaka-rapor-{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd-HHmm}.xlsx";
             var base64 = Convert.ToBase64String(bytes);
             await JS.InvokeVoidAsync("downloadFileFromBytes", fileName, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", base64);
             ToastService.ShowSuccess("Excel raporu aktarıldı.");
@@ -2070,10 +2070,10 @@ th {{ background:#eff6ff; color:#1e3a8a; text-align:left; }}
 
             QuestPDF.Settings.License = LicenseType.Community;
 
-            var sureGecen = data.Count(x => (x.BitisTarihi.Date - DateTime.Today).Days < 0);
-            var yedi = data.Count(x => { var g = (x.BitisTarihi.Date - DateTime.Today).Days; return g >= 0 && g <= 7; });
-            var otuz = data.Count(x => { var g = (x.BitisTarihi.Date - DateTime.Today).Days; return g > 7 && g <= 30; });
-            var aktifSayi = data.Count(x => (x.BitisTarihi.Date - DateTime.Today).Days > 30);
+            var sureGecen = data.Count(x => (x.BitisTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days < 0);
+            var yedi = data.Count(x => { var g = (x.BitisTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days; return g >= 0 && g <= 7; });
+            var otuz = data.Count(x => { var g = (x.BitisTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days; return g > 7 && g <= 30; });
+            var aktifSayi = data.Count(x => (x.BitisTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days > 30);
             var eslesen = data.Count(x => x.Arac != null);
             var eslesmeyen = data.Count(x => x.Arac == null);
 
@@ -2111,7 +2111,7 @@ th {{ background:#eff6ff; color:#1e3a8a; text-align:left; }}
                         });
                         col.Item().PaddingTop(4).Row(row =>
                         {
-                            row.RelativeItem().Text($"Oluşturma: {DateTime.Now:dd.MM.yyyy HH:mm}").FontSize(8).FontColor(Colors.Grey.Darken2);
+                            row.RelativeItem().Text($"Oluşturma: {MKFiloServis.Shared.Time.BusinessTime.Now:dd.MM.yyyy HH:mm}").FontSize(8).FontColor(Colors.Grey.Darken2);
                             row.RelativeItem().AlignRight().Text($"Toplam Kayıt: {data.Count}").Bold().FontSize(9);
                         });
                         if (filtreler.Any())
@@ -2259,7 +2259,7 @@ th {{ background:#eff6ff; color:#1e3a8a; text-align:left; }}
                             int sira = 1;
                             foreach (var item in data)
                             {
-                                var kalan = (item.BitisTarihi.Date - DateTime.Today).Days;
+                                var kalan = (item.BitisTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
                                 string rowBg = kalan < 0 ? Colors.Red.Lighten4
                                     : kalan <= 7 ? Colors.Yellow.Lighten4
                                     : kalan <= 30 ? Colors.Cyan.Lighten4
@@ -2318,7 +2318,7 @@ th {{ background:#eff6ff; color:#1e3a8a; text-align:left; }}
             });
 
             var bytes = document.GeneratePdf();
-            var fileName = $"kiralik-c-plaka-rapor-{DateTime.Now:yyyyMMdd-HHmm}.pdf";
+            var fileName = $"kiralik-c-plaka-rapor-{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd-HHmm}.pdf";
             var base64 = Convert.ToBase64String(bytes);
             await JS.InvokeVoidAsync("downloadFileFromBytes", fileName, "application/pdf", base64);
             ToastService.ShowSuccess("PDF raporu aktarıldı.");

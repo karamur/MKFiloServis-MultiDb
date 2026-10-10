@@ -19,7 +19,7 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
             <h2 class="mb-1"><i class="bi bi-clipboard-data-fill me-2 text-primary"></i>Günlük Operasyon Brifingi</h2>
-            <p class="text-muted mb-0">@DateTime.Today.ToString("dd MMMM yyyy dddd", new CultureInfo("tr-TR")) — sabah/öğle tek ekran özeti</p>
+            <p class="text-muted mb-0">@MKFiloServis.Shared.Time.BusinessTime.Today.ToString("dd MMMM yyyy dddd", new CultureInfo("tr-TR")) — sabah/öğle tek ekran özeti</p>
         </div>
         <div>
             <button class="btn btn-outline-primary btn-sm" @onclick="LoadAsync" disabled="@yukleniyor">
@@ -241,7 +241,7 @@
                                     @foreach (var f in vadesiGecenFaturalar.Concat(vadesiYaklasanFaturalar)
                                                                           .OrderBy(x => x.VadeTarihi).Take(15))
                                     {
-                                        var gecmis = f.VadeTarihi.HasValue && f.VadeTarihi.Value.Date < DateTime.Today;
+                                        var gecmis = f.VadeTarihi.HasValue && f.VadeTarihi.Value.Date < MKFiloServis.Shared.Time.BusinessTime.Today;
                                         <tr>
                                             <td>
                                                 <span class="badge @(gecmis ? "bg-danger" : "bg-warning text-dark")">
@@ -349,7 +349,7 @@
         yukleniyor = true;
         try
         {
-            var bugun = DateTime.Today;
+            var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
             var dun = bugun.AddDays(-1);
 
             // Sefer verileri

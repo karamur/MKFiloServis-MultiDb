@@ -147,8 +147,8 @@
                     {
                         var kategoriEvraklari = GetKategoriEvraklari(kategori);
                         var oncelikliEvrak = GetKategoriOncelikliEvrak(kategoriEvraklari);
-                        var suresiDolacak = oncelikliEvrak?.BitisTarihi.HasValue == true && oncelikliEvrak.BitisTarihi!.Value <= DateTime.Today.AddDays(30);
-                        var suresiDolmus = oncelikliEvrak?.BitisTarihi.HasValue == true && oncelikliEvrak.BitisTarihi!.Value < DateTime.Today;
+                        var suresiDolacak = oncelikliEvrak?.BitisTarihi.HasValue == true && oncelikliEvrak.BitisTarihi!.Value <= MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(30);
+                        var suresiDolmus = oncelikliEvrak?.BitisTarihi.HasValue == true && oncelikliEvrak.BitisTarihi!.Value < MKFiloServis.Shared.Time.BusinessTime.Today;
 
                         <div class="col-md-6 col-lg-4">
                             <div class="card h-100 @(suresiDolmus ? "border-danger" : suresiDolacak ? "border-warning" : oncelikliEvrak != null ? "border-success" : "border-secondary")">
@@ -246,8 +246,8 @@
                     {
                         var kategoriEvraklari = GetKategoriEvraklari(kategori);
                         var oncelikliEvrak = GetKategoriOncelikliEvrak(kategoriEvraklari);
-                        var suresiDolacak = oncelikliEvrak?.BitisTarihi.HasValue == true && oncelikliEvrak.BitisTarihi!.Value <= DateTime.Today.AddDays(30);
-                        var suresiDolmus = oncelikliEvrak?.BitisTarihi.HasValue == true && oncelikliEvrak.BitisTarihi!.Value < DateTime.Today;
+                        var suresiDolacak = oncelikliEvrak?.BitisTarihi.HasValue == true && oncelikliEvrak.BitisTarihi!.Value <= MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(30);
+                        var suresiDolmus = oncelikliEvrak?.BitisTarihi.HasValue == true && oncelikliEvrak.BitisTarihi!.Value < MKFiloServis.Shared.Time.BusinessTime.Today;
 
                         <div class="col-md-6 col-lg-4">
                             <div class="card h-100 @(suresiDolmus ? "border-danger" : suresiDolacak ? "border-warning" : oncelikliEvrak != null ? "border-success" : "")">
@@ -754,7 +754,7 @@
 
     private int ToplamEvrakSayisi => evraklar.Count;
     private int AktifEvrakSayisi => FiltreliEvraklar.Count(e => e.Durum == EvrakDurum.Aktif);
-    private int SuresiDolmusEvrakSayisi => FiltreliEvraklar.Count(e => e.Durum == EvrakDurum.SuresiDolmus || (e.BitisTarihi.HasValue && e.BitisTarihi.Value.Date < DateTime.Today));
+    private int SuresiDolmusEvrakSayisi => FiltreliEvraklar.Count(e => e.Durum == EvrakDurum.SuresiDolmus || (e.BitisTarihi.HasValue && e.BitisTarihi.Value.Date < MKFiloServis.Shared.Time.BusinessTime.Today));
     private int EksikSurekliKategoriSayisi => SurekliGerekliKategoriler.Count(k => !FiltreliEvraklar.Any(e => string.Equals(e.EvrakKategorisi, k, StringComparison.OrdinalIgnoreCase)));
 
     protected override async Task OnInitializedAsync()
@@ -866,21 +866,39 @@
     private async Task DosyalariYukle()
     {
         if (dosyaEvrak == null || !secilenDosyalar.Any()) return;
+        var evrakId = dosyaEvrak.Id;
+        var secilenSayisi = secilenDosyalar.Count;
+        var basarili = 0;
+        var hataliDosyalar = new List<string>();
         isUploading = true;
         StateHasChanged();
         try
         {
             foreach (var file in secilenDosyalar)
-                await TedarikciService.UploadTedarikciEvrakDosyaAsync(dosyaEvrak.Id, file);
+            {
+                try
+                {
+                    await TedarikciService.UploadTedarikciEvrakDosyaAsync(evrakId, file);
+                    basarili++;
+                }
+                catch
+                {
+                    // Each file commits independently; report partial success after refresh.
+                    hataliDosyalar.Add(file.Name);
+                }
+            }
 
-            ToastService.ShowSuccess($"{secilenDosyalar.Count} dosya yüklendi.");
             secilenDosyalar.Clear();
             await YenileAsync();
-            dosyaEvrak = evraklar.FirstOrDefault(e => e.Id == dosyaEvrak.Id);
+            dosyaEvrak = evraklar.FirstOrDefault(e => e.Id == evrakId);
+            if (hataliDosyalar.Count == 0)
+                ToastService.ShowSuccess($"{basarili} dosya yüklendi.");
+            else
+                ToastService.ShowWarning($"{basarili}/{secilenSayisi} dosya yüklendi. Sonucu belirsiz/hatalı dosyalar: {string.Join(", ", hataliDosyalar.Take(5))}. Liste yenilendi; yeniden yüklemeden önce kayıtları kontrol edin.");
         }
         catch (Exception ex)
         {
-            ToastService.ShowError("Yükleme hatası: " + ex.Message);
+            ToastService.ShowError($"Dosya listesi yenilenemedi. {basarili} yükleme tamamlandı, {hataliDosyalar.Count} dosyada hata oluştu. Sayfayı yenileyip kayıtları kontrol edin. {ex.Message}");
         }
         finally
         {
@@ -1015,7 +1033,7 @@
             }
 
             var adEki = filtreli ? "filtreli_" : string.Empty;
-            var dosyaAdi = $"tedarikci_evraklari_{adEki}{TedarikciId}_{DateTime.Now:yyyyMMdd_HHmm}.zip";
+            var dosyaAdi = $"tedarikci_evraklari_{adEki}{TedarikciId}_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmm}.zip";
             await JS.InvokeVoidAsync("downloadFileFromBase64", dosyaAdi, Convert.ToBase64String(zipBytes));
             ToastService.ShowSuccess(filtreli
                 ? "Filtrelenmiş tedarikçi evrakları ZIP olarak indirildi."

@@ -679,7 +679,7 @@
 @code {
     [Parameter] public int? Id { get; set; }
 
-    private ServisKontrat kontrat = new() { BaslangicTarihi = DateTime.Today, Durum = ServisKontratDurum.Aktif };
+    private ServisKontrat kontrat = new() { BaslangicTarihi = MKFiloServis.Shared.Time.BusinessTime.Today, Durum = ServisKontratDurum.Aktif };
     private List<Cari> cariler = new();
     private List<Guzergah> guzergahlar = new();
     private List<Arac> araclar = new();
@@ -798,7 +798,7 @@
         await using var context = await DbContextFactory.CreateDbContextAsync();
         aktifAracSoforMap = await context.PersonelAracAtamalari
             .AsNoTracking()
-            .Where(x => !x.IsDeleted && x.Aktif && (x.BitisTarihi == null || x.BitisTarihi >= DateTime.Today))
+            .Where(x => !x.IsDeleted && x.Aktif && (x.BitisTarihi == null || x.BitisTarihi >= MKFiloServis.Shared.Time.BusinessTime.Today))
             .GroupBy(x => x.AracId)
             .Select(g => g.OrderByDescending(x => x.BaslangicTarihi).First())
             .ToDictionaryAsync(x => x.AracId, x => x.SoforId);
@@ -1089,8 +1089,8 @@
         yeniPuantaj = new ServisPuantaj
         {
             ServisKontratId = Id!.Value,
-            Yil = DateTime.Today.Year,
-            Ay = DateTime.Today.Month,
+            Yil = MKFiloServis.Shared.Time.BusinessTime.Today.Year,
+            Ay = MKFiloServis.Shared.Time.BusinessTime.Today.Month,
             TahsilatBirimFiyat = kontrat.TahsilatBirimFiyat ?? 0,
             OdemeBirimFiyat = kontrat.OdemeBirimFiyat
         };

@@ -92,8 +92,8 @@ public enum LucaBelgeYonu
 /// </summary>
 public class LucaSorguFiltre
 {
-    public DateTime BaslangicTarihi { get; set; } = DateTime.Today.AddMonths(-1);
-    public DateTime BitisTarihi { get; set; } = DateTime.Today;
+    public DateTime BaslangicTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today.AddMonths(-1);
+    public DateTime BitisTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public LucaBelgeTipi? BelgeTipi { get; set; }
     public LucaBelgeYonu? BelgeYonu { get; set; }
     public string? VknArama { get; set; }

@@ -17,7 +17,7 @@
         </div>
         <div class="d-flex gap-2 align-items-center">
             <select class="form-select form-select-sm" style="width:120px" @bind="secilenYil" @bind:after="LoadAsync">
-                @for (int y = DateTime.Now.Year; y >= DateTime.Now.Year - 3; y--)
+                @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 3; y--)
                 {
                     <option value="@y">@y</option>
                 }
@@ -222,7 +222,7 @@
 
 @code {
     private bool isLoading = true;
-    private int secilenYil = DateTime.Now.Year;
+    private int secilenYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
     private int secilenAy = 0; // 0 = tüm yıl
 
     private decimal toplamPlanlanan;

@@ -68,7 +68,7 @@ public class DatabaseBackupService : IHostedService, IDisposable
             Directory.CreateDirectory(_backupPath);
 
         // Her gün gece 03:00'te yedek al
-        var now = DateTime.Now;
+        var now = MKFiloServis.Shared.Time.BusinessTime.Now;
         var nextRun = new DateTime(now.Year, now.Month, now.Day, 3, 0, 0);
         if (now > nextRun)
             nextRun = nextRun.AddDays(1);
@@ -108,7 +108,7 @@ public class DatabaseBackupService : IHostedService, IDisposable
     /// <summary>
     /// Manuel yedekleme oluşturur
     /// </summary>
-    public async Task<BackupResult> CreateBackupAsync(string? customName = null)
+    public async Task<BackupResult> CreateBackupAsync(string? customName = null, string? customBackupFolder = null)
     {
         try
         {
@@ -116,12 +116,15 @@ public class DatabaseBackupService : IHostedService, IDisposable
                 _backupPath = AppStoragePaths.GetWritableBackupFolder(AppContext.BaseDirectory, AppStoragePaths.DefaultStorageRoot);
             if (!string.IsNullOrEmpty(customName) && (Path.GetFileName(customName) != customName || customName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0))
                 throw new ArgumentException("Yedek adı yalnız dosya adı olmalıdır.", nameof(customName));
-            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss") + "_" + Guid.NewGuid().ToString("N");
+            var backupRoot = string.IsNullOrWhiteSpace(customBackupFolder)
+                ? _backupPath : Path.GetFullPath(customBackupFolder);
+            Directory.CreateDirectory(backupRoot);
+            var timestamp = MKFiloServis.Shared.Time.BusinessTime.Now.ToString("yyyyMMdd_HHmmss") + "_" + Guid.NewGuid().ToString("N");
             var fileName = string.IsNullOrEmpty(customName) 
                 ? $"MKFiloServis_Backup_{timestamp}" 
                 : $"{customName}_{timestamp}";
 
-            var backupDir = Path.Combine(_backupPath, fileName);
+            var backupDir = Path.Combine(backupRoot, fileName);
             Directory.CreateDirectory(backupDir);
 
             // 1. Veritabanı yedeği (PostgreSQL full dump)
@@ -147,7 +150,7 @@ public class DatabaseBackupService : IHostedService, IDisposable
                 FileName = Path.GetFileName(zipPath),
                 FilePath = zipPath,
                 FileSizeBytes = fileInfo.Length,
-                CreatedAt = DateTime.Now
+                CreatedAt = DateTime.UtcNow
             };
         }
         catch (Exception ex)
@@ -281,7 +284,7 @@ public class DatabaseBackupService : IHostedService, IDisposable
     {
         try
         {
-            var cutoffDate = DateTime.Now.AddDays(-_retentionDays);
+            var cutoffDate = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-_retentionDays);
             var backupFiles = Directory.GetFiles(_backupPath, "*.zip");
 
             foreach (var file in backupFiles)

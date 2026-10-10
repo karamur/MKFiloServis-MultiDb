@@ -7,8 +7,12 @@
 #define MyAppPublisher   "MK Yazilim"
 #define MyAppURL         "https://github.com/karamur/MKFiloServis-MultiDb"
 #define MyAppExeName     "MKFiloServis.Web.exe"
+#ifndef MyInstallDirBase
 #define MyInstallDirBase "C:\MKFiloServis"
-#define MyBackupDirBase  "C:\MKFiloServis_yedekleme"
+#endif
+#ifndef MyBackupDirBase
+#define MyBackupDirBase "C:\MKFiloServis_yedekleme"
+#endif
 #define MyDataSyncExe    "MKFiloServis.DataSync.exe"
 #define MyIisSiteName    "MKFiloServis"
 #define MyIisAppPool     "MKFiloServis"
@@ -60,8 +64,8 @@ SetupLogging=yes
 Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
 
 [Files]
-; Web uygulamasi (self-contained, Kestrel ile calisir)
-Source: "payload\Web\*"; DestDir: "{app}\app"; Excludes: "dbsettings.json,portalsettings.json,backup_settings.json,appsettings.Production.json,cookies.txt,*.db,*.db-shm,*.db-wal,logs\*,uploads\*,Backups\*,keys\*"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Web uygulamasi (framework-dependent; Hosting Bundle asagida kurulur)
+Source: "payload\Web\*"; DestDir: "{app}\app"; Excludes: "dbsettings.json,portalsettings.json,backup_settings.json,appsettings.*.json,cookies.txt,*.db,*.db-shm,*.db-wal,logs\*,uploads\*,Backups\*,keys\*"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Veri Aktarim Araci
 Source: "payload\DataSync\*"; DestDir: "{app}\tools\datasync"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -101,11 +105,10 @@ begin
   WizardForm.Caption := '{#MyAppName} {#MyAppVersion} Kurulum Sihirbazi';
   DbProviderPage := CreateInputOptionPage(wpSelectDir,
     'Veritabani Secimi', 'Uygulamanin kullanacagi veritabanini secin',
-    'PostgreSQL ve SQLite bu kurulum paketinde desteklenir. SQL Server secenegi altyapi tamamlanana kadar kullanima acik degildir.',
+    'Bu surumde PostgreSQL ve SQLite desteklenir.',
     True, False);
   DbProviderPage.Add('PostgreSQL');
   DbProviderPage.Add('SQLite');
-  DbProviderPage.Add('Microsoft SQL Server (MSSQL)');
   DbProviderPage.SelectedValueIndex := 0;
 
   DbConnectionPage := CreateInputQueryPage(DbProviderPage.ID,
@@ -136,12 +139,7 @@ begin
   Result := True;
   if CurPageID = DbProviderPage.ID then
   begin
-    if DbProviderPage.SelectedValueIndex = 2 then
-    begin
-      MsgBox('MSSQL secildi; ancak otomatik sema/migration ve audit kurulumu henuz SQL Server icin desteklenmiyor. PostgreSQL veya SQLite secin. MSSQL destegi tamamlandiginda bu secenek acilacaktir.', mbError, MB_OK);
-      Result := False;
-    end
-    else if DbProviderPage.SelectedValueIndex = 1 then
+    if DbProviderPage.SelectedValueIndex = 1 then
     begin
       DbConnectionPage.Values[2] := 'App_Data/MKFiloServis.db';
     end
@@ -196,8 +194,11 @@ var
   ResultCode: Integer;
 begin
   WizardForm.StatusLabel.Caption := StatusMsg;
-  Exec(FileName, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if not Exec(FileName, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    RaiseException('Gerekli kurulum komutu baslatilamadi: ' + FileName);
   Log(Format('RunHidden: %s %s -> %d', [FileName, Params, ResultCode]));
+  if ResultCode <> 0 then
+    RaiseException(Format('Kurulum komutu basarisiz oldu (%d): %s', [ResultCode, FileName]));
 end;
 
 procedure ConfigureIIS();
@@ -220,21 +221,20 @@ begin
       '/install /quiet /norestart',
       '.NET Hosting Bundle kuruluyor...');
 
-  // 3) AppPool + Site olustur/guncelle (varsa hatalar yoksayilir)
+  // 3) AppPool + Site olustur/guncelle; hatalarda kurulum durdurulur.
   AppCmd := ExpandConstant('{sys}\inetsrv\appcmd.exe');
-  if FileExists(AppCmd) then
-  begin
-    RunHidden(AppCmd, 'add apppool /name:"{#MyIisAppPool}" /managedRuntimeVersion:"" /startMode:AlwaysRunning',
-      'IIS uygulama havuzu olusturuluyor...');
-    RunHidden(AppCmd, ExpandConstant('add site /name:"{#MyIisSiteName}" /physicalPath:"{app}\app" /bindings:http/*:{#MyIisPort}:'),
-      'IIS sitesi olusturuluyor...');
-    RunHidden(AppCmd, 'set site /site.name:"{#MyIisSiteName}" /[path=''/''].applicationPool:"{#MyIisAppPool}"',
-      'IIS sitesi yapilandiriliyor...');
-    RunHidden(AppCmd, ExpandConstant('set vdir "{#MyIisSiteName}/" /physicalPath:"{app}\app"'),
-      'IIS fiziksel yol guncelleniyor...');
-    RunHidden(AppCmd, 'start apppool /apppool.name:"{#MyIisAppPool}"', 'Uygulama havuzu baslatiliyor...');
-    RunHidden(AppCmd, 'start site /site.name:"{#MyIisSiteName}"', 'Site baslatiliyor...');
-  end;
+  if not FileExists(AppCmd) then
+    RaiseException('IIS appcmd.exe bulunamadi; kurulum tamamlanamadi.');
+  RunHidden(AppCmd, 'add apppool /name:"{#MyIisAppPool}" /managedRuntimeVersion:"" /startMode:AlwaysRunning',
+    'IIS uygulama havuzu olusturuluyor...');
+  RunHidden(AppCmd, ExpandConstant('add site /name:"{#MyIisSiteName}" /physicalPath:"{app}\app" /bindings:http/*:{#MyIisPort}:'),
+    'IIS sitesi olusturuluyor...');
+  RunHidden(AppCmd, 'set site /site.name:"{#MyIisSiteName}" /[path=''/''].applicationPool:"{#MyIisAppPool}"',
+    'IIS sitesi yapilandiriliyor...');
+  RunHidden(AppCmd, ExpandConstant('set vdir "{#MyIisSiteName}/" /physicalPath:"{app}\app"'),
+    'IIS fiziksel yol guncelleniyor...');
+  RunHidden(AppCmd, 'start apppool /apppool.name:"{#MyIisAppPool}"', 'Uygulama havuzu baslatiliyor...');
+  RunHidden(AppCmd, 'start site /site.name:"{#MyIisSiteName}"', 'Site baslatiliyor...');
 end;
 
 procedure ConfigureDatabaseFilePermissions(ProviderIndex: Integer);
@@ -301,8 +301,8 @@ begin
       RaiseException('dbsettings.json dosyasi yazilamadi: ' + SettingsPath);
     if DbProviderPage.SelectedValueIndex = 1 then
       ForceDirectories(ExpandConstant('{app}\app\App_Data'));
-    ConfigureIIS();
     ConfigureDatabaseFilePermissions(DbProviderPage.SelectedValueIndex);
+    ConfigureIIS();
   end;
 end;
 
@@ -311,10 +311,16 @@ var
   Msg: String;
 begin
   Result := True;
+  if FileExists('{#MyInstallDir}\app\dbsettings.json') or
+     FileExists('{#MyInstallDir}\app\{#MyAppExeName}') then
+  begin
+    MsgBox('Bu dizinde mevcut kurulum var. Ayarlari ve veriyi korumak icin guncelleme paketini kullanin.', mbError, MB_OK);
+    Result := False; Exit;
+  end;
   Msg := '{#MyAppName} {#MyAppVersion} ayri bir klasore kurulacaktir:' + #13#10 +
          '{#MyInstallDir}' + #13#10#13#10 +
          'IIS ve .NET Hosting Bundle otomatik kurulur; harici indirme gerekmez.' + #13#10 +
-         'Bu kurulum mevcut versiyonlara dokunmaz ve yan yana calisabilir.' + #13#10 +
+         'Mevcut kurulumlarin dizinine kurulmaz.' + #13#10 +
          'Devam etmek istiyor musunuz?';
   if MsgBox(Msg, mbConfirmation, MB_YESNO) = IDNO then
   begin Result := False; Exit; end;

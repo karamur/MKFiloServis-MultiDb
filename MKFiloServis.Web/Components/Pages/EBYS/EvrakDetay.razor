@@ -159,13 +159,13 @@ else
                             @if (evrak.CevapGerekli)
                             {
                                 <div class="col-12">
-                                    <div class="alert @(evrak.CevapSuresi < DateTime.Now && evrak.Durum != EbysEvrakDurum.Cevaplandi ? "alert-danger" : "alert-warning") mb-0 py-2">
+                                    <div class="alert @(evrak.CevapSuresi < MKFiloServis.Shared.Time.BusinessTime.Now && evrak.Durum != EbysEvrakDurum.Cevaplandi ? "alert-danger" : "alert-warning") mb-0 py-2">
                                         <i class="bi bi-reply-fill me-2"></i>
                                         <strong>Cevap Gerekli</strong>
                                         @if (evrak.CevapSuresi.HasValue)
                                         {
                                             <span class="ms-2">Son tarih: @evrak.CevapSuresi.Value.ToString("dd.MM.yyyy")</span>
-                                            @if (evrak.CevapSuresi.Value < DateTime.Now && evrak.Durum != EbysEvrakDurum.Cevaplandi)
+                                            @if (evrak.CevapSuresi.Value < MKFiloServis.Shared.Time.BusinessTime.Now && evrak.Durum != EbysEvrakDurum.Cevaplandi)
                                             {
                                                 <span class="badge bg-danger ms-2">GECİKMİŞ</span>
                                             }

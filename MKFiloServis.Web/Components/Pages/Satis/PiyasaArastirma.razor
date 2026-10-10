@@ -258,7 +258,7 @@
     private string aktifSekme = "arastirma";
     private bool isScanning = false;
 
-    private Kriter aramaKriter = new() { AracTuru = "Otomobil", MinYil = 2018, MaxYil = DateTime.Today.Year, MinKm = 0, MaxKm = 150000 };
+    private Kriter aramaKriter = new() { AracTuru = "Otomobil", MinYil = 2018, MaxYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year, MinKm = 0, MaxKm = 150000 };
     private List<TarananIlan> bulunanIlanlar = new();
 
     public class Kriter
@@ -334,7 +334,7 @@
             
             var source = r.Next(10) > 5 ? "Sahibinden" : "Arabam";
 
-            var uretimYili = r.Next(aramaKriter.MinYil, (aramaKriter.MaxYil ?? DateTime.Today.Year) + 1);
+            var uretimYili = r.Next(aramaKriter.MinYil, (aramaKriter.MaxYil ?? MKFiloServis.Shared.Time.BusinessTime.Today.Year) + 1);
 
             // Koltuk Kapasitesi
             int pKoltukMin = aramaKriter.MinKapasite ?? (aramaKriter.AracTuru == "Servis/Minibüs" ? 12 : (aramaKriter.AracTuru == "Ticari" ? 2 : 5));

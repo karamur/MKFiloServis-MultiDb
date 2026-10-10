@@ -43,9 +43,9 @@
                 {
                     <tr @key="kayit.Id">
                         <td>@(musteriler.FirstOrDefault(x => x.Id == kayit.MusteriId)?.Unvan ?? $"Müşteri #{kayit.MusteriId}")</td>
-                        <td>@kayit.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm") / #@kayit.EkleyenKullaniciId</td>
+                        <td>@MKFiloServis.Shared.Time.BusinessTime.LocalAt(kayit.CreatedAt).ToString("dd.MM.yyyy HH:mm") / #@kayit.EkleyenKullaniciId</td>
                         <td>@kayit.Neden</td>
-                        <td>@(kayit.KaldirmaTarihi.HasValue ? $"Kaldırıldı: {kayit.KaldirmaTarihi.Value.ToLocalTime():dd.MM.yyyy HH:mm}" : "Aktif engel")</td>
+                        <td>@(kayit.KaldirmaTarihi.HasValue ? $"Kaldırıldı: {MKFiloServis.Shared.Time.BusinessTime.LocalAt(kayit.KaldirmaTarihi.Value):dd.MM.yyyy HH:mm}" : "Aktif engel")</td>
                         <td>@kayit.KaldirmaNedeni</td>
                         <td>
                             @if (kayit.KaldirmaTarihi is null)

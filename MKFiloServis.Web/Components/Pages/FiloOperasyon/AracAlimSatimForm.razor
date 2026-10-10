@@ -383,7 +383,7 @@
             }
             else
             {
-                _model.IslemTarihi = DateTime.Today;
+                _model.IslemTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
                 
                 // URL'den tip parametresi varsa ayarla
                 if (!string.IsNullOrEmpty(Tip))

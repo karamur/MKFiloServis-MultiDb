@@ -70,22 +70,12 @@ if (Test-Path $EncryptedFilesDir) {
     Write-Host "⚠ Şifreli dosya dizini bulunamadı: $EncryptedFilesDir" -ForegroundColor Yellow
 }
 
-# 7. Çözüm önerileri
+# 7. Güvenli sonraki adımlar — bu betik tanılama amaçlı salt okunurdur.
 Write-Host ""
-Write-Host "💡 Çözüm Önerileri:" -ForegroundColor Green
-Write-Host ""
-Write-Host "OPSIYON 1: Yedekten master.key Restore Et"
-Write-Host "  - Eski makinedeki/yedeklemedeki master.key bul"
-Write-Host "  - Mevcut dosyayı sil: Remove-Item '$MasterKeyPath' -Force"
-Write-Host "  - Eski dosyayı kopyala: Copy-Item <eski-path>/master.key '$MasterKeyPath'"
-Write-Host "  - Uygulamayı yeniden başlat"
-Write-Host ""
-Write-Host "OPSIYON 2: Eski Dosyaları Ignore Et"
-Write-Host "  - Mevcut master.key'i koru (yeni dosyalar için olacak)"
-Write-Host "  - Eski şifreli dosyaları: Move-Item '$EncryptedFilesDir' '$EncryptedFilesDir.bak'"
-Write-Host "  - Yeni dosyalar normal şekilde şifrele"
-Write-Host ""
-Write-Host "OPSIYON 3: Environment Variable ile Key Sağla"
-Write-Host "  - Production: \$env:MK_MASTER_KEY_HEX or \$env:MK_MASTER_KEY_BASE64"
-Write-Host "  - Code: check DpapiMasterKeyProvider alternatifleri"
+Write-Host "Sonraki adımlar (bu betik hiçbir anahtarı veya dosyayı değiştirmez):" -ForegroundColor Green
+Write-Host "  - Bu çıktıyı ve dosya sayısını kaydedin; anahtar değerini hiçbir rapora eklemeyin."
+Write-Host "  - Mevcut master.key'i silmeyin/değiştirmeyin; şifreli evrakları taşımayın veya yeniden şifrelemeyin."
+Write-Host "  - Üretim kurtarması için güncel DOSYA_RECOVERY_KILAVUZU.md ve doğrulanmış recovery archive akışını kullanın."
+Write-Host "  - DataProtection key ring başka makine/profilde çözülmüyorsa kaynak sertifika/DPAPI hesabı ve yetkili anahtar yedeğiyle kurtarın."
+Write-Host "  - Legacy KOA1/master-key dosyaları söz konusuysa önce izole kopya ve yetkili key sahibiyle ayrı kurtarma planı hazırlayın."
 Write-Host ""

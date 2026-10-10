@@ -58,7 +58,7 @@ public class BildirimService : IBildirimService
     public async Task<Bildirim> CreateAsync(Bildirim bildirim)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        bildirim.CreatedAt = DateTime.Now;
+        bildirim.CreatedAt = DateTime.UtcNow;
         context.Bildirimler.Add(bildirim);
         await context.SaveChangesAsync();
         return bildirim;
@@ -71,7 +71,7 @@ public class BildirimService : IBildirimService
         if (bildirim != null)
         {
             bildirim.Okundu = true;
-            bildirim.OkunmaTarihi = DateTime.Now;
+            bildirim.OkunmaTarihi = DateTime.UtcNow;
             await context.SaveChangesAsync();
         }
     }
@@ -86,7 +86,7 @@ public class BildirimService : IBildirimService
         foreach (var bildirim in bildirimler)
         {
             bildirim.Okundu = true;
-            bildirim.OkunmaTarihi = DateTime.Now;
+            bildirim.OkunmaTarihi = DateTime.UtcNow;
         }
 
         await context.SaveChangesAsync();
@@ -119,12 +119,12 @@ public class BildirimService : IBildirimService
         await using var context = await _contextFactory.CreateDbContextAsync();
         if (ayar.Id == 0)
         {
-            ayar.CreatedAt = DateTime.Now;
+            ayar.CreatedAt = DateTime.UtcNow;
             context.BildirimAyarlari.Add(ayar);
         }
         else
         {
-            ayar.UpdatedAt = DateTime.Now;
+            ayar.UpdatedAt = DateTime.UtcNow;
             context.BildirimAyarlari.Update(ayar);
         }
         
@@ -170,7 +170,7 @@ public class BildirimService : IBildirimService
                         && b.Tip == ozet.Tip
                         && b.IliskiliTablo == ozet.IliskiliTablo
                         && b.IliskiliKayitId == ozet.IliskiliKayitId
-                        && b.CreatedAt > DateTime.Now.AddDays(-1)); // Son 1 günde aynı bildirim var mı?
+                        && b.CreatedAt > DateTime.UtcNow.AddDays(-1)); // Son 1 günde aynı bildirim var mı?
                 
                 if (mevcutBildirim)
                     continue;
@@ -187,7 +187,7 @@ public class BildirimService : IBildirimService
                     IliskiliKayitId = ozet.IliskiliKayitId,
                     Link = ozet.Link,
                     SonGosterimTarihi = ozet.BitisTarihi?.AddDays(7), // Bitiş tarihinden 7 gün sonraya kadar göster
-                    CreatedAt = DateTime.Now
+                    CreatedAt = DateTime.UtcNow
                 };
                 
                 context.Bildirimler.Add(bildirim);
@@ -204,7 +204,7 @@ public class BildirimService : IBildirimService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var ozetler = new List<BildirimOzet>();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var bitisTarihi = bugun.AddDays(gunSayisi);
         
         // Vadesi yaklaşan veya geçmiş ödenmemiş faturalar
@@ -252,7 +252,7 @@ public class BildirimService : IBildirimService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var ozetler = new List<BildirimOzet>();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var bitisTarihi = bugun.AddDays(gunSayisi);
         
         // ARAÇ BELGELERİ
@@ -426,12 +426,12 @@ public class BildirimService : IBildirimService
         dto.VadeYaklasanFatura = await context.Faturalar
             .CountAsync(f => !f.IsDeleted 
                 && f.VadeTarihi != null 
-                && f.VadeTarihi <= DateTime.Today.AddDays(7)
+                && f.VadeTarihi <= MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(7)
                 && f.Durum != FaturaDurum.Odendi
                 && f.KalanTutar > 0);
         
         // Süresi dolan belge sayısı
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var bitisTarihi = bugun.AddDays(30);
         
         var aracBelgeSayisi = await context.Araclar
@@ -500,7 +500,7 @@ public class BildirimService : IBildirimService
                         {
                             SahipAdi = "Fatura: " + o.Baslik.Replace("Fatura Vade Uyarısı: ", ""),
                             BelgeAdi = "Ödenmemiş Fatura",
-                            BitisTarihi = o.BitisTarihi ?? DateTime.Today,
+                            BitisTarihi = o.BitisTarihi ?? MKFiloServis.Shared.Time.BusinessTime.Today,
                             GunKaldi = o.KalanGun
                         }));
                     }
@@ -527,7 +527,7 @@ public class BildirimService : IBildirimService
                             {
                                 SahipAdi = ozet.Baslik.Replace(" Uyarısı: ", ": "),
                                 BelgeAdi = GetBelgeTipiAdi(ozet.Tip),
-                                BitisTarihi = ozet.BitisTarihi ?? DateTime.Today,
+                                BitisTarihi = ozet.BitisTarihi ?? MKFiloServis.Shared.Time.BusinessTime.Today,
                                 GunKaldi = ozet.KalanGun
                             });
                         }
@@ -538,7 +538,7 @@ public class BildirimService : IBildirimService
                     {
                         // Son 24 saatte aynı kullanıcıya e-posta gönderilmiş mi kontrol et
                         var sonGonderim = await context.Set<EpostaBildirimLog>()
-                            .Where(l => l.KullaniciId == ayar.KullaniciId && l.GonderimTarihi > DateTime.Now.AddHours(-24))
+                            .Where(l => l.KullaniciId == ayar.KullaniciId && l.GonderimTarihi > DateTime.UtcNow.AddHours(-24))
                             .AnyAsync();
 
                         if (!sonGonderim)
@@ -553,7 +553,7 @@ public class BildirimService : IBildirimService
                                     KullaniciId = ayar.KullaniciId,
                                     EpostaAdresi = ayar.EpostaAdresi!,
                                     UyariSayisi = uyarilar.Count,
-                                    GonderimTarihi = DateTime.Now,
+                                    GonderimTarihi = DateTime.UtcNow,
                                     Basarili = true
                                 });
 
@@ -600,9 +600,9 @@ public class BildirimService : IBildirimService
             // Test uyarısı oluştur
             var testUyarilar = new List<BelgeUyariEmail>
             {
-                new() { SahipAdi = "Test Araç: 34 ABC 123", BelgeAdi = "Trafik Sigortası", BitisTarihi = DateTime.Today.AddDays(5), GunKaldi = 5 },
-                new() { SahipAdi = "Test Şoför: Ahmet Yılmaz", BelgeAdi = "Ehliyet", BitisTarihi = DateTime.Today.AddDays(10), GunKaldi = 10 },
-                new() { SahipAdi = "Test Fatura: FTR-2025-001", BelgeAdi = "Ödenmemiş Fatura", BitisTarihi = DateTime.Today.AddDays(-2), GunKaldi = -2 }
+                new() { SahipAdi = "Test Araç: 34 ABC 123", BelgeAdi = "Trafik Sigortası", BitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(5), GunKaldi = 5 },
+                new() { SahipAdi = "Test Şoför: Ahmet Yılmaz", BelgeAdi = "Ehliyet", BitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(10), GunKaldi = 10 },
+                new() { SahipAdi = "Test Fatura: FTR-2025-001", BelgeAdi = "Ödenmemiş Fatura", BitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-2), GunKaldi = -2 }
             };
 
             return await _emailService.SendBelgeUyariEmailAsync(ayar.EpostaAdresi, testUyarilar);

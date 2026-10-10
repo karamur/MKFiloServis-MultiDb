@@ -1452,8 +1452,8 @@ else
     {
         editProje = new IhaleProje
         {
-            BaslangicTarihi = DateTime.Today,
-            BitisTarihi = DateTime.Today.AddMonths(12),
+            BaslangicTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
+            BitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddMonths(12),
             SozlesmeSuresiAy = 12,
             AylikCalismGunu = 22,
             GunlukCalismaSaati = 8,
@@ -1873,7 +1873,7 @@ else
             var baslik = "İhale Sonrası Operasyon Özeti";
             var bilgi = "Kazanılan projeler · Ekrandaki firma kapsamı";
             var bytes = pdf ? IhaleRaporExporter.Pdf(baslik, bilgi, tablolar) : IhaleRaporExporter.Excel(baslik, bilgi, tablolar);
-            await JS.InvokeVoidAsync("downloadFileFromBytes", $"IhaleOperasyon_{DateTime.Now:yyyyMMdd_HHmm}.{(pdf ? "pdf" : "xlsx")}",
+            await JS.InvokeVoidAsync("downloadFileFromBytes", $"IhaleOperasyon_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmm}.{(pdf ? "pdf" : "xlsx")}",
                 pdf ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes);
             ToastService.ShowSuccess("Operasyon raporu hazırlandı.");
         }
@@ -2263,7 +2263,7 @@ else
             var tablolar = IhaleRaporExporter.ProjeksiyonTablolari(ozet);
             var bytes = pdf ? IhaleRaporExporter.Pdf(baslik, bilgi, tablolar) : IhaleRaporExporter.Excel(baslik, bilgi, tablolar);
             var uzanti = pdf ? "pdf" : "xlsx";
-            await JS.InvokeVoidAsync("downloadFileFromBytes", $"IhaleProjeksiyon_{SanitizeFileNamePart(ozet.ProjeKodu)}_{DateTime.Now:yyyyMMdd_HHmm}.{uzanti}",
+            await JS.InvokeVoidAsync("downloadFileFromBytes", $"IhaleProjeksiyon_{SanitizeFileNamePart(ozet.ProjeKodu)}_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmm}.{uzanti}",
                 pdf ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes);
             ToastService.ShowSuccess("Rapor dosyası hazırlandı.");
         }
@@ -2352,7 +2352,7 @@ else
             var baslik = $"{secilenProje.ProjeAdi} — Gerçekleşen / Tekliflenen Analiz";
             var bilgi = $"Proje: {secilenProje.ProjeKodu} | Dönem: {gerceklesenAnaliz.AnalizBaslangicTarihi:dd.MM.yyyy} – {gerceklesenAnaliz.AnalizBitisTarihi:dd.MM.yyyy}";
             var bytes = pdf ? IhaleRaporExporter.Pdf(baslik, bilgi, tablolar) : IhaleRaporExporter.Excel(baslik, bilgi, tablolar);
-            await JS.InvokeVoidAsync("downloadFileFromBytes", $"IhaleGerceklesenAnaliz_{SanitizeFileNamePart(secilenProje.ProjeKodu)}_{DateTime.Now:yyyyMMdd_HHmm}.{(pdf ? "pdf" : "xlsx")}",
+            await JS.InvokeVoidAsync("downloadFileFromBytes", $"IhaleGerceklesenAnaliz_{SanitizeFileNamePart(secilenProje.ProjeKodu)}_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmm}.{(pdf ? "pdf" : "xlsx")}",
                 pdf ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes);
             ToastService.ShowSuccess("Gerçekleşen analiz raporu hazırlandı.");
         }
@@ -2375,7 +2375,7 @@ else
         editSozlesmeRevizyon = new IhaleSozlesmeRevizyon
         {
             IhaleProjeId = secilenProje.Id,
-            RevizyonTarihi = DateTime.Today,
+            RevizyonTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
             Aktif = true
         };
         sozlesmeRevizyonModalGoster = true;

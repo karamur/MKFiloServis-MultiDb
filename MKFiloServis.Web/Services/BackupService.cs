@@ -56,12 +56,12 @@ public class BackupService : IBackupService
         {
             var settings = GetSettings();
             var backupRoot = customBackupFolder ?? GetBackupFolderPath(settings);
-            var backupFolder = GetArchiveFolderPath(backupRoot, DateTime.Now);
+            var backupFolder = GetArchiveFolderPath(backupRoot, MKFiloServis.Shared.Time.BusinessTime.Now);
 
             if (!Directory.Exists(backupFolder))
                 Directory.CreateDirectory(backupFolder);
 
-            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var timestamp = MKFiloServis.Shared.Time.BusinessTime.Now.ToString("yyyyMMdd_HHmmss");
             string backupFileName;
             string backupFilePath;
 
@@ -123,7 +123,7 @@ public class BackupService : IBackupService
                     await CreateFirmaBazliYedeklemeAsync(backupFolder, timestamp);
                 }
 
-                settings.LastBackupTime = DateTime.Now;
+                settings.LastBackupTime = DateTime.UtcNow;
                 await SaveSettingsAsync(settings);
                 await CleanupOldBackupsAsync(settings.KeepBackupCount);
             }
@@ -744,7 +744,7 @@ public class BackupService : IBackupService
             FileName = Path.GetFileName(filePath),
             FilePath = filePath,
             FileSizeBytes = fileSize,
-            CreatedAt = DateTime.Now
+            CreatedAt = DateTime.UtcNow
         };
     }
 
@@ -969,12 +969,18 @@ public class BackupService : IBackupService
                 var restoreInfo = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = pgRestorePath,
-                    Arguments = $"-h {host} -p {port} -U {username} -d {database} --single-transaction --exit-on-error --clean --if-exists --no-owner --no-privileges --schema=public --verbose \"{backupFilePath}\"",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
                     CreateNoWindow = true
                 };
+                foreach (var argument in new[]
+                {
+                    "-h", host, "-p", port, "-U", username, "-d", database,
+                    "--single-transaction", "--exit-on-error", "--clean", "--if-exists",
+                    "--no-owner", "--no-privileges", "--schema=public", "--verbose", backupFilePath
+                })
+                    restoreInfo.ArgumentList.Add(argument);
 
                 restoreInfo.Environment["PGPASSWORD"] = password;
 
@@ -1874,7 +1880,7 @@ public class BackupService : IBackupService
         {
             var filesBackupDir = Path.Combine(GetBackupFolderPath(GetSettings()), "Files");
             Directory.CreateDirectory(filesBackupDir);
-            var zipPath = Path.Combine(filesBackupDir, $"files_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}.zip");
+            var zipPath = Path.Combine(filesBackupDir, $"files_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}.zip");
             var protection = _serviceProvider.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>();
             await RecoveryArchive.CreateAsync(zipPath, _environment.ContentRootPath, protection, null, cancellationToken);
             var result = CreateSuccessResult(zipPath);
@@ -1890,6 +1896,15 @@ public class BackupService : IBackupService
     }
     public async Task<BackupResult> CreateFullBackupAsync(CancellationToken cancellationToken = default)
     {
+        if (GetCurrentDatabaseProvider().Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase))
+        {
+            // PostgreSQL full recovery must be one manifest-verified archive. Separate
+            // DB and file archives can be selected from different moments by an operator.
+            var recovery = _serviceProvider.GetRequiredService<DatabaseBackupService>();
+            return await recovery.CreateBackupAsync("FullRecovery", GetBackupFolderPath(GetSettings()));
+        }
+
+        // Other providers retain their provider-specific DB backup plus file archive.
         var dbResult = await CreateBackupAsync();
         var fileResult = await CreateFileBackupAsync(cancellationToken);
 
@@ -1903,7 +1918,7 @@ public class BackupService : IBackupService
             FileSizeBytes = dbResult.FileSizeBytes + fileResult.FileSizeBytes,
             ErrorMessage = !dbResult.Success ? $"DB: {dbResult.ErrorMessage}" :
                            !fileResult.Success ? $"Dosya: {fileResult.ErrorMessage}" : null,
-            CreatedAt = DateTime.Now
+            CreatedAt = DateTime.UtcNow
         };
     }
 

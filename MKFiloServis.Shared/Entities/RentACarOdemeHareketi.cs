@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace MKFiloServis.Shared.Entities;
@@ -13,7 +13,7 @@ public class RentACarOdemeHareketi : BaseEntity, IFirmaTenant
     public int MusteriKiralamaId { get; set; }
     public virtual MusteriKiralama? MusteriKiralama { get; set; }
 
-    public DateTime IslemTarihi { get; set; } = DateTime.Now;
+    public DateTime IslemTarihi { get; set; } = DateTime.UtcNow;
     public RentACarOdemeHareketTuru HareketTuru { get; set; }
     public RentACarOdemeYontemi OdemeYontemi { get; set; }
 

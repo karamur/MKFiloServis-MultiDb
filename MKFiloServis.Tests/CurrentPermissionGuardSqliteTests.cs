@@ -15,6 +15,7 @@ public sealed class CurrentPermissionGuardSqliteTests
     [InlineData("user")]
     [InlineData("role")]
     [InlineData("admin")]
+    [InlineData("locked")]
     public async Task Existing_session_cannot_keep_revoked_database_authority(string revoke)
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
@@ -50,6 +51,12 @@ public sealed class CurrentPermissionGuardSqliteTests
         {
             if (revoke == "user")
                 (await db.Kullanicilar.SingleAsync(k => k.Id == userId)).Aktif = false;
+            else if (revoke == "locked")
+            {
+                var lockedUser = await db.Kullanicilar.SingleAsync(k => k.Id == userId);
+                lockedUser.Kilitli = true;
+                lockedUser.KilitlenmeBitisUtc = DateTime.UtcNow.AddMinutes(15);
+            }
             else if (revoke == "role")
                 (await db.Roller.SingleAsync(r => r.Id == roleId)).IsDeleted = true;
             else if (revoke == "admin")

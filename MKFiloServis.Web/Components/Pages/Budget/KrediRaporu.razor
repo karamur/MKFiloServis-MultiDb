@@ -15,7 +15,7 @@
         <h3><i class="bi bi-credit-card me-2"></i>Kredi Taksit Raporu</h3>
         <div class="d-flex gap-2">
             <select class="form-select" style="width: 100px;" @bind="secilenYil" @bind:after="YenileDataAsync">
-                @for (int y = DateTime.Today.Year + 2; y >= DateTime.Today.Year - 5; y--)
+                @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year + 2; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 5; y--)
                 {
                     <option value="@y">@y</option>
                 }
@@ -169,8 +169,8 @@
                                 <tbody>
                                     @foreach (var taksit in filtrelenmisListe)
                                     {
-                                        var gecikmisMi = (taksit.Durum == OdemeDurum.Bekliyor || taksit.Durum == OdemeDurum.KismiOdendi) && taksit.OdemeTarihi.Date < DateTime.Today;
-                                        var bugunMu = taksit.OdemeTarihi.Date == DateTime.Today;
+                                        var gecikmisMi = (taksit.Durum == OdemeDurum.Bekliyor || taksit.Durum == OdemeDurum.KismiOdendi) && taksit.OdemeTarihi.Date < MKFiloServis.Shared.Time.BusinessTime.Today;
+                                        var bugunMu = taksit.OdemeTarihi.Date == MKFiloServis.Shared.Time.BusinessTime.Today;
                                         <tr class="@(gecikmisMi ? "table-danger" : bugunMu ? "table-warning" : taksit.Durum == OdemeDurum.Odendi ? "table-success" : taksit.Durum == OdemeDurum.KismiOdendi ? "table-info" : "")">
                                             <td>
                                                 <strong>@taksit.OdemeTarihi.ToString("dd.MM.yyyy")</strong>
@@ -251,7 +251,7 @@
                                     @foreach (var ay in aylikRapor.Where(a => a.TaksitSayisi > 0))
                                     {
                                         var aktifMi = (secilenAy == 0 || secilenAy == ay.Ay);
-                                        var buAyMi = ay.Ay == DateTime.Today.Month && secilenYil == DateTime.Today.Year;
+                                        var buAyMi = ay.Ay == MKFiloServis.Shared.Time.BusinessTime.Today.Month && secilenYil == MKFiloServis.Shared.Time.BusinessTime.Today.Year;
                                         <tr class="@(buAyMi ? "table-primary" : "") @(!aktifMi ? "text-muted" : "")" 
                                             style="cursor: pointer;" @onclick="() => AySec(ay.Ay)">
                                             <td>
@@ -308,8 +308,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        secilenYil = DateTime.Today.Year;
-        secilenAy = DateTime.Today.Month;
+        secilenYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+        secilenAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
         await YenileDataAsync();
     }
 
@@ -396,14 +396,14 @@
 
     private decimal GetSecilenAyTaksit()
     {
-        var ay = secilenAy > 0 ? secilenAy : DateTime.Today.Month;
+        var ay = secilenAy > 0 ? secilenAy : MKFiloServis.Shared.Time.BusinessTime.Today.Month;
         var ayRapor = aylikRapor.FirstOrDefault(a => a.Ay == ay);
         return ayRapor?.ToplamTaksitTutari ?? 0;
     }
 
     private int GetSecilenAyTaksitSayisi()
     {
-        var ay = secilenAy > 0 ? secilenAy : DateTime.Today.Month;
+        var ay = secilenAy > 0 ? secilenAy : MKFiloServis.Shared.Time.BusinessTime.Today.Month;
         var ayRapor = aylikRapor.FirstOrDefault(a => a.Ay == ay);
         return ayRapor?.TaksitSayisi ?? 0;
     }

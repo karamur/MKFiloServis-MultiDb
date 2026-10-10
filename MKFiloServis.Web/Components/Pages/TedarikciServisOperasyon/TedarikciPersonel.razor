@@ -260,7 +260,7 @@
                                         {
                                             @if (p.EhliyetGecerlilikTarihi.HasValue)
                                             {
-                                                var gunKaldiE = (p.EhliyetGecerlilikTarihi.Value - DateTime.Today).Days;
+                                                var gunKaldiE = (p.EhliyetGecerlilikTarihi.Value - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
                                                 <span class="badge @(gunKaldiE < 30 ? "bg-danger" : gunKaldiE < 60 ? "bg-warning text-dark" : "bg-success")"
                                                       title="Ehliyet: @p.EhliyetGecerlilikTarihi.Value.ToString("dd.MM.yyyy")">
                                                     <i class="bi bi-card-text"></i>
@@ -268,7 +268,7 @@
                                             }
                                             @if (p.MykBelgesiGecerlilikTarihi.HasValue)
                                             {
-                                                var gunKaldiM = (p.MykBelgesiGecerlilikTarihi.Value - DateTime.Today).Days;
+                                                var gunKaldiM = (p.MykBelgesiGecerlilikTarihi.Value - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
                                                 <span class="badge @(gunKaldiM < 30 ? "bg-danger" : gunKaldiM < 60 ? "bg-warning text-dark" : "bg-success") ms-1"
                                                       title="MYK: @p.MykBelgesiGecerlilikTarihi.Value.ToString("dd.MM.yyyy")">
                                                     <i class="bi bi-award"></i>

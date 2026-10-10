@@ -1,4 +1,4 @@
-﻿@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:muhasebe")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:muhasebe")]
 @page "/muhasebe/mahsup"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
@@ -488,7 +488,7 @@
     private int transferKaynakHesapId = 0;
     private int transferHedefHesapId = 0;
     private decimal transferTutar = 0;
-    private DateTime transferTarih = DateTime.Today;
+    private DateTime transferTarih = MKFiloServis.Shared.Time.BusinessTime.Today;
     private string transferAciklama = "";
     private string transferBelgeNo = "";
     private string transferMuhasebeKodu = "";
@@ -500,7 +500,7 @@
     private int mahsupCariId = 0;
     private int mahsupHesapId = 0;
     private decimal mahsupTutar = 0;
-    private DateTime mahsupTarih = DateTime.Today;
+    private DateTime mahsupTarih = MKFiloServis.Shared.Time.BusinessTime.Today;
     private string mahsupAciklama = "";
     private string mahsupBelgeNo = "";
     private bool mahsupCaridenHesaba = true;
@@ -510,8 +510,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        filtreBaslangic = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-        filtreBitis = DateTime.Today;
+        filtreBaslangic = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1);
+        filtreBitis = MKFiloServis.Shared.Time.BusinessTime.Today;
         await YenileAsync();
     }
 
@@ -555,8 +555,8 @@
 
     private void FiltreTemizle()
     {
-        filtreBaslangic = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-        filtreBitis = DateTime.Today;
+        filtreBaslangic = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1);
+        filtreBitis = MKFiloServis.Shared.Time.BusinessTime.Today;
         filtreIslemTipi = "";
         filtreHesapId = 0;
         _ = YenileAsync();
@@ -583,7 +583,7 @@
         transferKaynakHesapId = 0;
         transferHedefHesapId = 0;
         transferTutar = 0;
-        transferTarih = DateTime.Today;
+        transferTarih = MKFiloServis.Shared.Time.BusinessTime.Today;
         transferAciklama = "";
         transferBelgeNo = "";
         transferMuhasebeKodu = "";
@@ -666,7 +666,7 @@
         mahsupCariId = 0;
         mahsupHesapId = 0;
         mahsupTutar = 0;
-        mahsupTarih = DateTime.Today;
+        mahsupTarih = MKFiloServis.Shared.Time.BusinessTime.Today;
         mahsupAciklama = "";
         mahsupBelgeNo = "";
         mahsupCaridenHesaba = true;

@@ -59,16 +59,17 @@ public class LicenseService
     public static bool HasDemoBeenUsed()
     {
         if (!OperatingSystem.IsWindows())
-            return false;
+            return true; // Demo lock has no durable registry backing on this platform.
 
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(RegistryPath);
             return key?.GetValue(DemoUsedValueName) != null;
         }
-        catch
+        catch (Exception ex)
         {
-            return false; // Registry erisilemezse demo'ya izin ver (ilk kurulum)
+            System.Diagnostics.Trace.WriteLine($"[LicenseService] Demo registry check failed: {ex.GetType().Name}");
+            return true; // Fail closed: an unavailable lock must not grant a fresh demo.
         }
     }
 
@@ -355,7 +356,7 @@ public class LicenseService
                 _cache.Clear();
 
                 return FailValidation(
-                    $"🛑 Lisans bu bilgisayara ait degil. Veritabani baska bir bilgisayara tasinmis olabilir. Lutfen bu makine icin yeni lisans anahtari girin. Lisans makinesi: {lic.MachineId}, Bu makine: {currentMachineId}");
+                    "🛑 Lisans bu bilgisayar için geçerli değil. Veritabanı başka bir bilgisayara taşınmış olabilir. Bu makine için yeni lisans anahtarı girin.");
             }
 
             // ── PART 4.1: CreatedAt tabanli (demo icin mutlak 30 gun) ──
@@ -425,7 +426,9 @@ public class LicenseService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Lisans dogrulama hatasi");
-            return FailValidation($"🛑 Lisans kontrol hatasi: {ex.Message}");
+            // Validation messages reach the login/authorization UI. Keep provider paths,
+            // connection details and cryptographic exception text in server logs only.
+            return FailValidation("Lisans doğrulanamadı. Sistem yöneticisine başvurun.");
         }
     }
 
@@ -464,7 +467,7 @@ public class LicenseService
             throw new InvalidOperationException("Demo modu yalnızca kurulumda seçilen bağımsız SQLite demo veritabanında kullanılabilir. Mevcut sunucu veritabanınız değiştirilmedi.");
 
         if (HasDemoBeenUsed())
-            throw new InvalidOperationException("Demo hakki zaten kullanildi. Lisans anahtarini girin.");
+            throw new InvalidOperationException("Demo hakkı kullanılmış veya doğrulanamıyor. Ticari lisans anahtarı girin.");
 
         await using var db = await _dbFactory.CreateDbContextAsync();
         if (await db.LicenseInfos.IgnoreQueryFilters().AnyAsync(l => !l.IsDeleted))
@@ -643,8 +646,8 @@ public class LicenseService
             Aktif = true,
             VarsayilanFirma = isFirstFirma,
             OrganizasyonId = organizationId,
-            AktifDonemYil = DateTime.Today.Year,
-            AktifDonemAy = DateTime.Today.Month,
+            AktifDonemYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year,
+            AktifDonemAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month,
             CreatedAt = DateTime.UtcNow
         };
 

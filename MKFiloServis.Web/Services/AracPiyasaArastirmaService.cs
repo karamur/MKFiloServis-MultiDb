@@ -229,7 +229,7 @@ public class AracPiyasaArastirmaService : IAracPiyasaArastirmaService
             MinFiyat = request.MinFiyat,
             MaxFiyat = request.MaxFiyat,
             Sehir = request.Sehir,
-            ArastirmaTarihi = DateTime.Now,
+            ArastirmaTarihi = DateTime.UtcNow,
             Durum = ArastirmaDurum.Devam
         };
 
@@ -420,7 +420,7 @@ public class AracPiyasaArastirmaService : IAracPiyasaArastirmaService
             MaxFiyat = ilanlar.Max(i => i.Fiyat),
             OrtalamaKilometre = (int)ilanlar.Average(i => i.Kilometre),
             AnalizMetni = analizMetni,
-            AnalizTarihi = DateTime.Now
+            AnalizTarihi = DateTime.UtcNow
         };
     }
 
@@ -440,7 +440,7 @@ public class AracPiyasaArastirmaService : IAracPiyasaArastirmaService
         var ilanlar = new List<PiyasaArastirmaIlan>();
         var baseFiyat = GetBaseFiyat(request.Marka, request.VasitaTuru);
         var minYil = request.YilBaslangic ?? 2018;
-        var maxYil = request.YilBitis ?? DateTime.Now.Year;
+        var maxYil = request.YilBitis ?? MKFiloServis.Shared.Time.BusinessTime.Today.Year;
         var vasitaTuru = request.VasitaTuru ?? "otomobil";
 
         for (int i = 0; i < random.Next(25, 40); i++)
@@ -483,9 +483,9 @@ public class AracPiyasaArastirmaService : IAracPiyasaArastirmaService
                 Ilce = "Merkez",
                 SaticiTipi = saticiTipleri[random.Next(saticiTipleri.Length)],
                 SaticiAdi = random.Next(2) == 0 ? "Auto Gallery" : "Bireysel Satici",
-                IlanTarihi = DateTime.Now.AddDays(-random.Next(1, 60)),
+                IlanTarihi = MKFiloServis.Shared.Time.BusinessTime.Now.AddDays(-random.Next(1, 60)),
                 AktifMi = true,
-                ToplanmaTarihi = DateTime.Now
+                ToplanmaTarihi = DateTime.UtcNow
             });
         }
 

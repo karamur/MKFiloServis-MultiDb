@@ -114,8 +114,8 @@
 
 @code {
     private bool isLoading = true;
-    private DateTime baslangic = new(DateTime.Today.Year, DateTime.Today.Month, 1);
-    private DateTime bitis = DateTime.Today;
+    private DateTime baslangic = new(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1);
+    private DateTime bitis = MKFiloServis.Shared.Time.BusinessTime.Today;
 
     private List<MutabakatSatir> satirlar = new();
     private decimal toplamSistem => satirlar.Sum(x => x.Sistem);

@@ -1,20 +1,28 @@
 # MKFiloServis — Satışa Çıkarım Güncel Durum Raporu
 
-> **Güncel görev takibi (2026-10-06):** [Satışa çıkarım görev envanteri](SATISA-CIKARIM-GOREV-ENVANTERI-2026-10-06.md). [2026-10-05 son durum](SATISA-CIKARIM-SON-DURUM-2026-10-05.md) ve bu dosya tarihsel uygulama/kanıt eklerini korur.
+> **Güncel görev takibi (2026-10-09 yeniden analiz):** [Satışa çıkarım görev envanteri](SATISA-CIKARIM-GOREV-ENVANTERI-2026-10-06.md): 14 yeşil / 17 sarı / 0 kırmızı. A-07 test/CI, A-13 fail-closed taşıma, A-19 izole DataSync iki sağlayıcı doğrulaması, A-28 sağlayıcı kapsamı ve A-29 mali kod kapsamı kapalıdır. A-18'in indeks geçiş/rollback'i PostgreSQL'de de doğrulandı; temiz DB startup migration zinciri engelli olduğu için sarı kaldı. Müşteri/üretim kabulü yapılmış sayılmaz.
 
 **Rapor tarihi:** 2026-10-02  
-**Son güncelleme:** 2026-10-06
+**Son güncelleme:** 2026-10-09
 **Kapsam:** Web, Shared, LisansDesktop, DataSync, Client, CI ve müşteri paketleme akışları.  
 **Esas alınan sürüm:** Yerel çalışma ağacı; commit ve müşteri dağıtımı tamamlanmış sayılmaz.  
-**Yöntem:** Kaynak incelemesi; rapordaki sonraki düzeltmeler, kayıtlı derleme/publish sonuçları ve izole çalışma zamanı kanıtlarıyla tüm sarı maddelerin karşılaştırılması. Bu renk güncellemesinde yeni test, derleme veya gerçek restore çalıştırılmadı.
+**Yöntem:** Kaynak ve kayıtlı kanıtlar incelendi; tüm görevlerin kod/ürün kapsamı ile dış kabul koşulları ayrıldı. Bu kapsam güncellemesinde yeni test, derleme veya gerçek restore çalıştırılmadı.
 
-**Test sırası (2026-10-08):** Kalan kod düzeltmeleri sonrası toplu nihai doğrulama; [son aşama test planı](SATISA-CIKARIM-SON-ASAMA-TEST-PLANI.md).
+**Dış kabul doğrulama:** Müşteri/üretim test planındaki senaryolar deployment sırasında yürütülür; [son aşama test planı](SATISA-CIKARIM-SON-ASAMA-TEST-PLANI.md).
 
 ## 1. Yönetici özeti
 
 İlk analizdeki önemli güvenlik ve veri bütünlüğü sorunları için kod düzeltmeleri uygulanmıştır. Lisanslama şirket içi LisansDesktop programında yürütülür; Web yalnız açık anahtarla ticari imzayı doğrular. Lisans programı **Lisanslar**, **Anahtar ve Yedek**, **Paketleme** sekmeleriyle sadeleştirilmiştir.
 
-**Satışa hazırlık kararı: 🟡 Kabul ve açık kod işleri tamamlanmalı.** Derleme başarısı mevcut; müşteri kurulumu, lisans geçişi, erişim/tenant izolasyonu ve şifreli belge kurtarma için uçtan uca kabul kanıtı tamamlanmamıştır. Yeniden analizdeki N-1/N-2/N-3 kaynak düzeltmeleri uygulanmıştır; bağımsız kabul sınırları ve diğer açık işler aşağıda belirtilir.
+**Görev listesi durumu: 14 yeşil / 17 sarı / 0 kırmızı.** A-07/A-13/A-19/A-28/A-29 kod ve tanımlı ürün teslimleri kapalıdır; kalan sarı maddelerde kabul kanıtları sürüyor. Bu belge canlıya çıkış onayı vermez; [güncel görev envanteri](SATISA-CIKARIM-GOREV-ENVANTERI-2026-10-06.md) esas alınır.
+
+### 2026-10-09 ek denetim — analitik rol izni
+
+`AnalitikController` veri uçlarında modül lisansının yanında güncel DB `raporlar.oku` rol izni de zorunludur; Grafana search anonim istisnası kaldırıldı. A-02'nin kod teslimi kapalı/yeşildir. OData, Grafana, Prometheus ve n8n için normal/Admin rol değişimi ile firma kapsamı runtime kabulü A-02/A-17 aşama 2 yayına çıkış kapısı olarak açıktır. Web Release build **0 uyarı / 0 hata**.
+
+Fatura grup şablonu API'sinde GET/Create/Update/Delete/varsayılan eylemleri `faturahazirlik.oku/yaz/duzenle` izinlerine bağlandı; servis katmanındaki firma geneli şablon kontrolü de sürüyor. İkinci Web Release build **0 uyarı / 0 hata**. A-02 kod teslimi tamamlandı; A-02 runtime ve A-17 müşteri rol/firma matrisi kabulleri yapılana kadar yayına çıkış kapısıdır.
+
+Eski PC2 dağıtım talimatındaki üretim sırlarını `appsettings.Production.json` içine kopyalama yönergesi kaldırıldı. Tarihsel publish betiği artık sır/ayar şablonu üretmiyor; güncel kurucu `dbsettings.json` dosyasını hedefte ACL ile oluşturur ve `Jwt__Secret` hedef secret deposundan verilmelidir. İki Inno kaynak sihirbazında SQL Server seçeneği de kaldırıldı; bu makinede Inno derleyicisi bulunmadığından EXE ve Windows kurulum kabulü yapılmadı. PowerShell parser geçti; aktif sır rotasyonu da yapılmadı (A-06/A-21 sarı).
 
 **Renkler:** 🟢 kaynak düzeltmesi/işlem için kanıt mevcut · 🟡 kısmi veya kabul bekliyor · 🔴 açık kod/iş · ⚪ ürün kararı veya düşük öncelikli takip. Yeşil durum, bütün çalışma zamanı senaryolarının geçtiği anlamına gelmez.
 
@@ -902,6 +910,11 @@ Dosyanın tamamındaki sarı maddeler sonraki ekler ve mevcut kaynakla karşıla
 - 🟡 **MSSQL açık:** Seçenek sihirbazda görünür, seçildiğinde neden ilerlenemediği bildirilir. DbInitializer.InitializeAsync yalnız PostgreSQL/SQLite desteklediğinden SQL Server otomatik migration/audit desteği eklenmeden MSSQL kurulumu tamamlanamaz; A-28 kırmızı kalır.
 - 🟢 Güncel Web/DataSync publish ile ana, güncelleme ve müşteri EXE paketleri v1.0.37 üretildi. Ana IIS kurulumunda dbsettings.json okuması yöneticiler ve yalnız ilgili uygulama havuzuyla sınırlandı; SQLite App_Data yazma izni uygulama havuzuna verilir. 🟡 Etkileşimli hedef makine kurulumu ve gerçek DB bağlantı kabulü yapılmadı.
 
+### 2026-10-09 düzeltmesi — kurulum sağlayıcı seçenekleri
+
+- Önceki 2026-10-06 kaydındaki “PostgreSQL / SQLite / MSSQL seçim adımı” güncel değildir. MSSQL ana ve müşteri kurulum sihirbazlarından çıkarıldı; kaynakta yalnız PostgreSQL ve SQLite sunulur. MSSQL/MySQL çalışma zamanı kapsamı desteklenmez.
+- Kaynakta iki `.iss` dosyası statik olarak kontrol edildi; MSSQL sağlayıcı seçeneği ve ona bağlı dal bulunmuyor. Inno Setup derleyicisi bu makinede olmadığından EXE üretimi ve hedef Windows kurulum kabulü yapılmadı. A-28 kapsam/UI kod teslimi yeşil; A-21 gerçek hedef kurulum kanıtı beklediğinden sarıdır.
+
 ## A-15 devamı — aktif araç plakası DB tekilliği — 2026-10-06
 
 - 🟢 Aktif ve silinmemiş `AracPlakalar` kayıtları için filtreli benzersiz indeks; model, snapshot ve migration ile eklendi. Migration öncesi yinelenen aktif plakalar denetleniyor ve varsa veri değiştirmeden duruyor.
@@ -1386,3 +1399,13 @@ Dashboard finans verileri SQLite'ta `no such column: b.IslemKimligi` hatası ver
 🟢 Banka hesabı oluşturma seçili firma zorunluluğu, güncel yazma izni ve Serializable işlem/commit sınırına alındı. Başka firma kimliği reddedilir. İki odaklı SQLite regresyonu geçti; yetki iptalinde veya yabancı firmada satır oluşmadı.
 
 🟡 Puantaj ve diğer otomatik mali yazımların atomiklik/yetki sınırı ile gerçek müşteri rol değişimi kabulü açık. A-29 🟡; satış durumu değişmedi.
+
+
+### 2026-10-09 — A-09/A-29 fatura ve otomatik fiş atomikliği
+
+Puantaj faturası/kalemi/fişi/finans bağlantısı aynı Serializable transaction içindedir. Muhasebe fişi hatası bu transaction varken sessizce yutulmaz. Sıradan fatura oluşturma yolunun genel fiş atomikliği A-09 altında açık kalır. Release build 0 uyarı/0 hata; test çalıştırılmadı.
+
+
+### 2026-10-09 — A-19/A-27 kaynak düzeltmeleri
+
+A-19 SQLite PRAGMA önceki ayarları hata yolunda da geri yükler; A-27 HTTP retry klonlarını dispose eder ve VersionPolicy'yi korur. Web ve DataSync Release derlemeleri 0 uyarı/0 hata. Runtime testleri çalıştırılmadı; saha kabulü sarıdır.

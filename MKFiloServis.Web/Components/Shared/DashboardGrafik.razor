@@ -20,7 +20,7 @@
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h6 class="mb-0"><i class="bi bi-graph-up me-2"></i>Aylik Gelir / Gider (@secilenYil)</h6>
                     <select class="form-select form-select-sm" style="width: 100px;" @bind="secilenYil" @bind:after="YenileGrafiklerAsync">
-                        @for (int y = DateTime.Today.Year; y >= DateTime.Today.Year - 3; y--)
+                        @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 3; y--)
                         {
                             <option value="@y">@y</option>
                         }
@@ -159,7 +159,7 @@
     [Parameter]
     public bool ParentLoaded { get; set; } = false;
     
-    private int secilenYil = DateTime.Today.Year;
+    private int secilenYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
     private AylikGrafikData? gelirGiderData;
     private AylikGrafikData? seferData;
     private List<AracPerformansData>? aracPerformans;
@@ -193,7 +193,7 @@
 
         try
         {
-            var buAy = DateTime.Today.Month;
+            var buAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
 
             gelirGiderData = await GrafikService.GetAylikGelirGiderAsync(secilenYil);
             await Task.Delay(10);
@@ -252,8 +252,8 @@
     {
         if (aracPerformans != null && aracPerformans.Any())
         {
-            var excelBytes = ExcelService.ExportAracPerformans(aracPerformans, secilenYil, DateTime.Today.Month);
-            var fileName = "AracPerformans_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".xlsx";
+            var excelBytes = ExcelService.ExportAracPerformans(aracPerformans, secilenYil, MKFiloServis.Shared.Time.BusinessTime.Today.Month);
+            var fileName = "AracPerformans_" + MKFiloServis.Shared.Time.BusinessTime.Now.ToString("yyyyMMdd_HHmmss") + ".xlsx";
             var base64 = Convert.ToBase64String(excelBytes);
             await JS.InvokeVoidAsync("downloadFile", fileName, base64, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         }
@@ -263,8 +263,8 @@
     {
         if (cariPerformans != null && cariPerformans.Any())
         {
-            var excelBytes = ExcelService.ExportCariPerformans(cariPerformans, secilenYil, DateTime.Today.Month);
-            var fileName = "MusteriPerformans_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".xlsx";
+            var excelBytes = ExcelService.ExportCariPerformans(cariPerformans, secilenYil, MKFiloServis.Shared.Time.BusinessTime.Today.Month);
+            var fileName = "MusteriPerformans_" + MKFiloServis.Shared.Time.BusinessTime.Now.ToString("yyyyMMdd_HHmmss") + ".xlsx";
             var base64 = Convert.ToBase64String(excelBytes);
             await JS.InvokeVoidAsync("downloadFile", fileName, base64, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         }

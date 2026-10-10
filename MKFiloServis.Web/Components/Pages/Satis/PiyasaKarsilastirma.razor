@@ -403,7 +403,7 @@
         yeniPiyasaIlan = new PiyasaIlan
         {
             AracIlanId = IlanId,
-            Yil = ilan?.ModelYili ?? DateTime.Today.Year,
+            Yil = ilan?.ModelYili ?? MKFiloServis.Shared.Time.BusinessTime.Today.Year,
             Kilometre = ilan?.Kilometre ?? 0,
             Kaynak = PiyasaKaynagi.Sahibinden
         };

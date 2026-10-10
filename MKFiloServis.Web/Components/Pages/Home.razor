@@ -1,6 +1,7 @@
 @inject LicenseService ModuleLicenses
 @page "/dashboard"
 @attribute [Authorize]
+@implements IDisposable
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
 @using MKFiloServis.Web.Models
@@ -26,6 +27,7 @@
 @rendermode InteractiveServer
 @using MKFiloServis.Web.Data
 @inject IServiceScopeFactory ScopeFactory
+@inject LicenseCache ModuleLicenseCache
 
 <PageTitle>CRM Filo Servis - Ana Sayfa</PageTitle>
 
@@ -55,7 +57,7 @@ else
             <i class="bi bi-speedometer2 me-2"></i>Dashboard
         </h3>
         <div class="d-flex align-items-center gap-2">
-            <small class="text-muted d-none d-md-inline">Son güncelleme: @DateTime.Now.ToString("dd.MM.yyyy HH:mm")</small>
+            <small class="text-muted d-none d-md-inline">Son güncelleme: @MKFiloServis.Shared.Time.BusinessTime.Now.ToString("dd.MM.yyyy HH:mm")</small>
             <button class="btn btn-sm btn-outline-secondary" @onclick="() => widgetAyarGoster = true" title="Widget ayarları">
                 <i class="bi bi-layout-wtf me-1"></i><span class="d-none d-md-inline">Düzenle</span>
             </button>
@@ -75,7 +77,10 @@ else
         </div>
     }
 
-    <MKFiloServis.Web.Components.Shared.OperasyonelOzetBandi />
+    @if (ModuleLicenses.HasModulePermission("filoservis"))
+    {
+        <MKFiloServis.Web.Components.Shared.OperasyonelOzetBandi />
+    }
 
     @if (HasYetki("rentacar.oku"))
     {
@@ -215,7 +220,7 @@ else
     @if (CanViewEbys && atananEvraklar != null && atananEvraklar.Count > 0)
     {
         var acilSayisi = atananEvraklar.Count(a => a.Evrak != null && a.Evrak.Oncelik == EvrakOncelik.Acil);
-        var gecikmisSayisi = atananEvraklar.Count(a => a.TeslimTarihi.HasValue && a.TeslimTarihi.Value.Date < DateTime.Today);
+        var gecikmisSayisi = atananEvraklar.Count(a => a.TeslimTarihi.HasValue && a.TeslimTarihi.Value.Date < MKFiloServis.Shared.Time.BusinessTime.Today);
         var alertClass = (acilSayisi > 0 || gecikmisSayisi > 0) ? "alert-danger" : "alert-info";
         var btnClass = (acilSayisi > 0 || gecikmisSayisi > 0) ? "btn-outline-danger" : "btn-outline-primary";
         <div class="alert @alertClass d-flex align-items-center mb-4" role="alert">
@@ -518,7 +523,7 @@ else
         <div class="col-md-8">
             <div class="card h-100">
                 <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0"><i class="bi bi-bar-chart-fill me-2"></i>Aylık Gelir/Gider (@DateTime.Today.Year)</h6>
+                    <h6 class="mb-0"><i class="bi bi-bar-chart-fill me-2"></i>Aylık Gelir/Gider (@MKFiloServis.Shared.Time.BusinessTime.Today.Year)</h6>
                 </div>
                 <div class="card-body">
                     <div style="height: 280px;">
@@ -1153,7 +1158,7 @@ else
                                             EvrakOncelik.Dusuk => "bg-secondary",
                                             _ => "bg-info"
                                         };
-                                        var gecikmis = atama.TeslimTarihi.HasValue && atama.TeslimTarihi.Value.Date < DateTime.Today;
+                                        var gecikmis = atama.TeslimTarihi.HasValue && atama.TeslimTarihi.Value.Date < MKFiloServis.Shared.Time.BusinessTime.Today;
                                         <tr>
                                             <td><span class="badge @oncelikBadge">@oncelik</span></td>
                                             <td><code>@(atama.Evrak?.EvrakNo ?? "-")</code></td>
@@ -1297,6 +1302,11 @@ else
     }
     private bool dashboardLoadInProgress;
     private readonly List<string> dashboardHatalari = new();
+    private string dashboardLicenseSnapshot = string.Empty;
+    private bool dashboardReady;
+    private bool dashboardLicenseRefreshPending;
+    private bool disposed;
+    private readonly CancellationTokenSource licenseWatchLifetime = new();
 
     // Grafik verileri
     private AylikGrafikData? gelirGiderData;
@@ -1328,7 +1338,9 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        ModuleLicenseCache.Changed += DashboardLicenseChanged;
         await LoadYetkilerAsync();
+        dashboardLicenseSnapshot = GetDashboardLicenseSnapshot();
         
         if (HasDashboardPermission)
         {
@@ -1338,6 +1350,99 @@ else
         {
             isLoading = false;
         }
+
+        dashboardReady = true;
+        await ReconcileDashboardLicenseAsync();
+        _ = WatchDashboardLicenseAsync();
+    }
+
+    private string GetDashboardLicenseSnapshot() => string.Join('|', new[]
+    {
+        ModuleLicenses.HasModulePermission("cari"),
+        ModuleLicenses.HasModulePermission("filoservis"),
+        ModuleLicenses.HasModulePermission("personel"),
+        ModuleLicenses.HasModulePermission("fatura"),
+        ModuleLicenses.HasModulePermission("bankakasa"),
+        ModuleLicenses.HasModulePermission("butce"),
+        ModuleLicenses.HasModulePermission("ebys"),
+        ModuleLicenses.HasModulePermission("rentacar")
+    });
+
+    private void DashboardLicenseChanged()
+    {
+        if (disposed) return;
+        _ = InvokeAsync(async () =>
+        {
+            if (disposed) return;
+            if (!dashboardReady)
+            {
+                dashboardLicenseRefreshPending = true;
+                return;
+            }
+
+            await ReconcileDashboardLicenseAsync();
+        });
+    }
+
+    private async Task ReconcileDashboardLicenseAsync()
+    {
+        if (disposed || !dashboardReady) return;
+        var currentSnapshot = GetDashboardLicenseSnapshot();
+        if (!dashboardLicenseRefreshPending && currentSnapshot == dashboardLicenseSnapshot) return;
+        if (dashboardLoadInProgress)
+        {
+            dashboardLicenseRefreshPending = true;
+            return;
+        }
+
+        dashboardLicenseSnapshot = currentSnapshot;
+        dashboardLicenseRefreshPending = false;
+        if (HasDashboardPermission)
+            await LoadDashboardDataAsync();
+        else
+        {
+            ResetDashboardData();
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task WatchDashboardLicenseAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(licenseWatchLifetime.Token))
+            {
+                if (disposed) return;
+
+                try
+                {
+                    await ModuleLicenses.ValidateAsync(persistValidation: false);
+                    var currentPermissions = await KullaniciService.GetCurrentUserYetkilerAsync();
+                    if (!kullaniciYetkileri.SetEquals(currentPermissions))
+                    {
+                        kullaniciYetkileri = currentPermissions;
+                        dashboardLicenseRefreshPending = true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Dashboard modül lisansı yeniden doğrulanamadı.");
+                }
+
+                await InvokeAsync(ReconcileDashboardLicenseAsync);
+            }
+        }
+        catch (OperationCanceledException) when (licenseWatchLifetime.IsCancellationRequested) { }
+    }
+
+    public void Dispose()
+    {
+        disposed = true;
+        ModuleLicenseCache.Changed -= DashboardLicenseChanged;
+        licenseWatchLifetime.Cancel();
+        licenseWatchLifetime.Dispose();
     }
     
     private async Task LoadYetkilerAsync()
@@ -1455,17 +1560,17 @@ else
                     toplamKasa = stats.ToplamKasa;
                     toplamBanka = stats.ToplamBanka;
                     sonHareketler = await bankaSvc.GetRecentAsync(5);
-                    butceOzet = await budgetSvc.GetAylikOzetAsync(DateTime.Today.Year, DateTime.Today.Month);
+                    butceOzet = await budgetSvc.GetAylikOzetAsync(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month);
                     var aktifFirma = FirmaService.GetAktifFirma();
                     gecmisOdenmemisBorclar = await budgetSvc.GetDevirBekleyenOdemelerAsync(
-                        new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1),
+                        new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1),
                         (aktifFirma.TumFirmalar || aktifFirma.FirmaId <= 0) ? null : aktifFirma.FirmaId);
                 }, "Finans verileri"));
 
                 tasks.Add(TryLoadDashboardSectionAsync(async sp =>
                 {
                     var svc = sp.GetRequiredService<IDashboardGrafikService>();
-                    var yil = DateTime.Today.Year;
+                    var yil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
                     gelirGiderData = await svc.GetAylikGelirGiderAsync(yil);
                     masrafDagilimi = await svc.GetMasrafKategoriDagilimiAsync(6);
                     cariDagilimi = await svc.GetCariTipDagilimiAsync();
@@ -1518,6 +1623,8 @@ else
             dashboardLoadInProgress = false;
             isLoading = false;
             StateHasChanged();
+            if (dashboardReady && dashboardLicenseRefreshPending)
+                await ReconcileDashboardLicenseAsync();
         }
     }
 
@@ -1525,11 +1632,11 @@ else
         ? new DateTime(2000, ay, 1).ToString("MMMM", new System.Globalization.CultureInfo("tr-TR"))
         : "-";
 
-    private static int GetGecikmeGun(DateTime odemeTarihi) => Math.Max(0, (DateTime.Today - odemeTarihi.Date).Days);
+    private static int GetGecikmeGun(DateTime odemeTarihi) => Math.Max(0, (MKFiloServis.Shared.Time.BusinessTime.Today - odemeTarihi.Date).Days);
 
     private static int GetDevirAySayisi(DateTime odemeTarihi)
     {
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var ayFarki = ((bugun.Year - odemeTarihi.Year) * 12) + bugun.Month - odemeTarihi.Month;
         return Math.Max(1, ayFarki + 1);
     }

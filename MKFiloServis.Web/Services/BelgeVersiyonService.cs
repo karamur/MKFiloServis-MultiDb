@@ -1,5 +1,6 @@
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
+using MKFiloServis.Web.Helpers;
 using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Web.Services.Interfaces;
 
@@ -73,7 +74,7 @@ public class BelgeVersiyonService : IBelgeVersiyonService
             Aciklama = dosya.Aciklama,
             DegisiklikNotu = degisiklikNotu ?? dosya.SonDegisiklikNotu,
             OlusturanKullaniciId = kullaniciId,
-            OlusturmaTarihi = DateTime.Now
+            OlusturmaTarihi = DateTime.UtcNow
         };
 
         context.EbysEvrakDosyaVersiyonlar.Add(versiyon);
@@ -118,9 +119,9 @@ public class BelgeVersiyonService : IBelgeVersiyonService
         if (storedContent != null) return storedContent;
 
         // Eski sürümlerin webroot içindeki açık dosya yolunu geriye dönük oku.
-        var webRoot = Path.GetFullPath(_environment.WebRootPath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        var fizikselYol = Path.GetFullPath(Path.Combine(webRoot, versiyon.DosyaYolu.TrimStart('/', '\\')));
-        if (!fizikselYol.StartsWith(webRoot, StringComparison.OrdinalIgnoreCase))
+        var webRoot = Path.GetFullPath(_environment.WebRootPath);
+        var fizikselYol = StorageFilePath.Resolve(webRoot, versiyon.DosyaYolu.TrimStart('/', '\\'));
+        if (!StorageFilePath.IsWithinRoot(webRoot, fizikselYol, allowRoot: false))
             throw new InvalidOperationException("Eski EBYS sürüm yolu webroot dışına çıkıyor.");
         return File.Exists(fizikselYol) ? await File.ReadAllBytesAsync(fizikselYol) : null;
     }
@@ -188,7 +189,7 @@ public class BelgeVersiyonService : IBelgeVersiyonService
             Aciklama = dosya.Aciklama,
             DegisiklikNotu = degisiklikNotu ?? dosya.SonDegisiklikNotu,
             OlusturanKullaniciId = kullaniciId,
-            OlusturmaTarihi = DateTime.Now
+            OlusturmaTarihi = DateTime.UtcNow
         };
 
         context.AracEvrakDosyaVersiyonlar.Add(versiyon);
@@ -280,7 +281,7 @@ public class BelgeVersiyonService : IBelgeVersiyonService
             Aciklama = evrak.Aciklama,
             DegisiklikNotu = degisiklikNotu ?? evrak.SonDegisiklikNotu,
             OlusturanKullaniciId = kullaniciId,
-            OlusturmaTarihi = DateTime.Now
+            OlusturmaTarihi = DateTime.UtcNow
         };
 
         context.PersonelOzlukEvrakVersiyonlar.Add(versiyon);
@@ -485,11 +486,7 @@ public class BelgeVersiyonService : IBelgeVersiyonService
 
     private string ResolveLegacyWebRootPath(string relativePath)
     {
-        var webRoot = Path.GetFullPath(_environment.WebRootPath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        var fullPath = Path.GetFullPath(Path.Combine(webRoot, relativePath.TrimStart('/', '\\')));
-        if (!fullPath.StartsWith(webRoot, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Eski belge yolu webroot dışına çıkıyor.");
-        return fullPath;
+        return StorageFilePath.Resolve(_environment.WebRootPath, relativePath.TrimStart('/', '\\'));
     }
 
     private async Task CompensateVersionCopyAsync(

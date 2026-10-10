@@ -1,4 +1,4 @@
-﻿using MKFiloServis.Web.Data;
+using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -38,7 +38,7 @@ public class ZamanliRaporService
         try
         {
             await using var ctx = await _contextFactory.CreateDbContextAsync(ct);
-            var bugun = DateTime.Today;
+            var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
 
             var faturaSayisi = await ctx.Faturalar.CountAsync(f => !f.IsDeleted, ct);
             var aracSayisi = await ctx.Araclar.CountAsync(a => !a.IsDeleted, ct);

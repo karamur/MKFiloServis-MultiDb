@@ -472,7 +472,7 @@
         var aktifFirma = FirmaService.GetAktifFirma();
         editAvans = new PersonelAvans
         {
-            AvansTarihi = DateTime.Today,
+            AvansTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
             OdemeSekli = AvansOdemeSekli.Nakit,
             FirmaId = (aktifFirma.TumFirmalar || aktifFirma.FirmaId <= 0) ? null : aktifFirma.FirmaId,
             PersonelId = secilenPersonelId > 0 ? secilenPersonelId : 0
@@ -531,7 +531,7 @@
         secilenAvans = avans;
         yeniMahsup = new PersonelAvansMahsup
         {
-            MahsupTarihi = DateTime.Today,
+            MahsupTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
             MahsupTutari = avans.Kalan,
             MahsupSekli = MahsupSekli.MaastanKesinti
         };
@@ -602,7 +602,7 @@
         try
         {
             var bytes = await FinansService.ExportAvansRaporAsync(avanslar);
-            var fileName = $"PersonelAvanslar_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+            var fileName = $"PersonelAvanslar_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmmss}.xlsx";
             await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, Convert.ToBase64String(bytes));
             ToastService.ShowSuccess("Excel dosyası indirildi!");
         }

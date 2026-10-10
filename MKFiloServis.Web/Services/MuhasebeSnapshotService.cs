@@ -214,7 +214,7 @@ public class MuhasebeSnapshotService
         var reverseFis = new MuhasebeFis
         {
             FisNo = fisNo,
-            FisTarihi = DateTime.Today,
+            FisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
             FisTipi = FisTipi.Mahsup,
             Aciklama = $"Maaş İptal Fişi — {ay:D2}/{yil} (Ters Kayıt: {orijinalFis.FisNo})",
             Kaynak = FisKaynak.Otomatik,
@@ -294,7 +294,7 @@ public class MuhasebeSnapshotService
     private static async Task<string> GenerateNextMaasFisNoAsync(ApplicationDbContext context, int firmaId)
     {
         var prefix = $"MAS-{firmaId}-";
-        var yil = DateTime.Now.Year;
+        var yil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
 
         var sonFis = await context.MuhasebeFisleri
             .AsNoTracking()

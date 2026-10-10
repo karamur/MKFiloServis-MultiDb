@@ -11,7 +11,7 @@ public sealed class PuantajFinansSnapshotSqliteTests
     public async Task Snapshot_creation_is_limited_to_selected_firm_and_is_repeat_safe()
     {
         await using var fixture = await PayrollWriteSqliteTests.Fixture.CreateAsync();
-        var service = new PuantajFinansService(fixture.Factory, null!,
+        var service = new PuantajFinansService(fixture.Factory, null!, null!,
             NullLogger<PuantajFinansService>.Instance, fixture.ActiveFirm);
 
         int localPeriodId;

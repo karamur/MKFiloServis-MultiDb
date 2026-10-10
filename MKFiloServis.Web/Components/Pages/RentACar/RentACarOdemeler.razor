@@ -219,7 +219,7 @@
     private async Task YukleAsync() { yukleniyor = true; try { ozetler = await OdemeServisi.GetOzetlerAsync(); hareketler = await OdemeServisi.GetHareketlerAsync(); bankaHesaplari = await OdemeServisi.GetBankaHesaplariAsync(); } catch (Exception ex) { basarili = false; mesaj = ex.Message; } finally { yukleniyor = false; } }
     private void SecimDegisti() { var o = SeciliOzet; if (o is not null) talep.Tutar = talep.HareketTuru == RentACarOdemeHareketTuru.DepozitoTahsilati ? Math.Max(0, o.DepozitoTutari - o.EmanettekiDepozito) : o.KalanKiraTutari; }
     private void OdemeYontemiDegisti() => talep.BankaHesapId = null;
-    private void OdemeFormunuAc(RentACarOdemeOzet ozet) { talep = new RentACarOdemeKayitTalebi { MusteriKiralamaId = ozet.KiralamaId, IslemTarihi = DateTime.Now, Tutar = ozet.KalanKiraTutari }; odemeFormuAcik = true; mesaj = null; }
+    private void OdemeFormunuAc(RentACarOdemeOzet ozet) { talep = new RentACarOdemeKayitTalebi { MusteriKiralamaId = ozet.KiralamaId, IslemTarihi = MKFiloServis.Shared.Time.BusinessTime.Now, Tutar = ozet.KalanKiraTutari }; odemeFormuAcik = true; mesaj = null; }
     private void OdemeFormunuKapat() { if (!kaydediliyor) odemeFormuAcik = false; }
     private void DetayAc(RentACarOdemeOzet ozet) => detayOzet = ozet;
     private void DetayKapat() => detayOzet = null;
@@ -262,7 +262,7 @@
             talep = new RentACarOdemeKayitTalebi
             {
                 MusteriKiralamaId = kiralamaId,
-                IslemTarihi = DateTime.Now
+                IslemTarihi = MKFiloServis.Shared.Time.BusinessTime.Now
             };
             await YukleAsync();
             SecimDegisti();

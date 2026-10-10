@@ -1,4 +1,4 @@
-﻿using MKFiloServis.Shared.Entities;
+using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Models;
 using ClosedXML.Excel;
@@ -509,7 +509,7 @@ public class MuhasebeService : IMuhasebeService
             FisTipi.Devir => "DV",
             _ => "MH"
         };
-        var yilAy = $"{DateTime.Now.Year}{DateTime.Now.Month:D2}";
+        var yilAy = $"{MKFiloServis.Shared.Time.BusinessTime.Today.Year}{MKFiloServis.Shared.Time.BusinessTime.Today.Month:D2}";
         // Kural 15: FirmaId bazlı atomik numara
         var sonNo = await NextFisNoCounterAsync(context, prefix, yilAy, firmaId);
         return $"{prefix}-{yilAy}-{sonNo:D4}";
@@ -623,7 +623,21 @@ public class MuhasebeService : IMuhasebeService
     /// </summary>
     public async Task<MuhasebeFis> CreateFaturaFisiAsync(Fatura fatura)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.MuhasebeFisleriYaz);
         await using var context = await _contextFactory.CreateDbContextAsync();
+        return await CreateFaturaFisiCoreAsync(context, fatura);
+    }
+
+    public async Task<MuhasebeFis> CreateFaturaFisiAsync(ApplicationDbContext context, Fatura fatura)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(fatura);
+        await _permissionGuard.RequireAnyAsync(Yetkiler.MuhasebeFisleriYaz);
+        return await CreateFaturaFisiCoreAsync(context, fatura);
+    }
+
+    private async Task<MuhasebeFis> CreateFaturaFisiCoreAsync(ApplicationDbContext context, Fatura fatura)
+    {
         // Ayarları al (KDV oran eşleştirmeleri dahil)
         var ayar = await context.MuhasebeAyarlari
             .Include(a => a.KdvHesapEslestirmeleri)
@@ -1832,7 +1846,7 @@ public class MuhasebeService : IMuhasebeService
         // Original and reversal both remain in the approved ledger: together they net to zero.
         var tersFis = new MuhasebeFis
         {
-            FisTarihi = DateTime.SpecifyKind(DateTime.Today, DateTimeKind.Utc),
+            FisTarihi = DateTime.SpecifyKind(MKFiloServis.Shared.Time.BusinessTime.Today, DateTimeKind.Utc),
             FisTipi = eskiFis.FisTipi,
             Aciklama = $"[İPTAL] {eskiFis.Aciklama} - Orijinal Fiş: {eskiFis.FisNo}",
             Kaynak = FisKaynak.Otomatik,
@@ -2200,7 +2214,7 @@ public class MuhasebeService : IMuhasebeService
 
             // Oluşturma tarihi
             wsKontrol.Cell(16, 1).Value = "Oluşturma Tarihi:";
-            wsKontrol.Cell(16, 2).Value = DateTime.Now.ToString("dd.MM.yyyy HH:mm");
+            wsKontrol.Cell(16, 2).Value = MKFiloServis.Shared.Time.BusinessTime.Now.ToString("dd.MM.yyyy HH:mm");
 
             using var stream = new MemoryStream();
             workbook.SaveAs(stream);

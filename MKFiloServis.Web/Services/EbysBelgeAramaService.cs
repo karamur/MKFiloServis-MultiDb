@@ -231,14 +231,14 @@ public class EbysBelgeAramaService : IEbysBelgeAramaService
 
         // Süresi dolmuş filtresi
         if (filtre.SadeceSuresiDolmuslar == true)
-            query = query.Where(x => x.BitisTarihi.HasValue && x.BitisTarihi.Value.Date < DateTime.Today);
+            query = query.Where(x => x.BitisTarihi.HasValue && x.BitisTarihi.Value.Date < MKFiloServis.Shared.Time.BusinessTime.Today);
 
         // Yaklaşan filtresi
         if (filtre.SadeceYaklasanlar == true)
         {
-            var sinirTarih = DateTime.Today.AddDays(filtre.YaklasanGunSayisi ?? 30);
+            var sinirTarih = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(filtre.YaklasanGunSayisi ?? 30);
             query = query.Where(x => x.BitisTarihi.HasValue && 
-                x.BitisTarihi.Value.Date >= DateTime.Today && 
+                x.BitisTarihi.Value.Date >= MKFiloServis.Shared.Time.BusinessTime.Today &&
                 x.BitisTarihi.Value.Date <= sinirTarih);
         }
 
@@ -268,9 +268,9 @@ public class EbysBelgeAramaService : IEbysBelgeAramaService
         return veriler.Select(x =>
         {
             var aktifDosya = x.Dosyalar.OrderByDescending(d => d.CreatedAt).FirstOrDefault();
-            var suresiDolmus = x.BitisTarihi.HasValue && x.BitisTarihi.Value.Date < DateTime.Today;
+            var suresiDolmus = x.BitisTarihi.HasValue && x.BitisTarihi.Value.Date < MKFiloServis.Shared.Time.BusinessTime.Today;
             var yaklasan = !suresiDolmus && x.BitisTarihi.HasValue && 
-                x.BitisTarihi.Value.Date <= DateTime.Today.AddDays(filtre.YaklasanGunSayisi ?? 30);
+                x.BitisTarihi.Value.Date <= MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(filtre.YaklasanGunSayisi ?? 30);
 
             return new EbysAramaSonucItem
             {
@@ -373,7 +373,7 @@ public class EbysBelgeAramaService : IEbysBelgeAramaService
         {
             var aktifDosya = x.Dosyalar.OrderByDescending(d => d.CreatedAt).FirstOrDefault();
             var cevapGecikmis = x.CevapGerekli && x.CevapSuresi.HasValue && 
-                x.CevapSuresi.Value < DateTime.Today &&
+                x.CevapSuresi.Value < MKFiloServis.Shared.Time.BusinessTime.Today &&
                 x.Durum != EbysEvrakDurum.Cevaplandi && x.Durum != EbysEvrakDurum.Tamamlandi;
 
             return new EbysAramaSonucItem
@@ -468,7 +468,7 @@ public class EbysBelgeAramaService : IEbysBelgeAramaService
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Set<EbysAramaGecmisi>()
             .AsNoTracking()
-            .Where(x => x.AramaTarihi > DateTime.Now.AddDays(-30))
+            .Where(x => x.AramaTarihi > DateTime.UtcNow.AddDays(-30))
             .GroupBy(x => x.AramaMetni.ToLower())
             .OrderByDescending(g => g.Count())
             .Take(adet)
@@ -520,12 +520,12 @@ public class EbysBelgeAramaService : IEbysBelgeAramaService
         var mevcutArama = await context.Set<EbysAramaGecmisi>()
             .Where(x => x.KullaniciId == kullaniciId && 
                 x.AramaMetni.ToLower() == filtre.AramaMetni.ToLower() &&
-                x.AramaTarihi > DateTime.Now.AddHours(-1))
+                x.AramaTarihi > DateTime.UtcNow.AddHours(-1))
             .FirstOrDefaultAsync();
 
         if (mevcutArama != null)
         {
-            mevcutArama.AramaTarihi = DateTime.Now;
+            mevcutArama.AramaTarihi = DateTime.UtcNow;
             mevcutArama.SonucSayisi = sonucSayisi;
         }
         else
@@ -536,7 +536,7 @@ public class EbysBelgeAramaService : IEbysBelgeAramaService
                 AramaMetni = filtre.AramaMetni.Trim(),
                 FiltreJson = FiltreToJson(filtre),
                 SonucSayisi = sonucSayisi,
-                AramaTarihi = DateTime.Now
+                AramaTarihi = DateTime.UtcNow
             };
             context.Set<EbysAramaGecmisi>().Add(gecmis);
         }
@@ -698,7 +698,7 @@ public class EbysBelgeAramaService : IEbysBelgeAramaService
     public async Task<int> GetRiskliBelgeSayisiAsync(int yaklasanGunSayisi = 30)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var sinirTarih = DateTime.Today.AddDays(yaklasanGunSayisi);
+        var sinirTarih = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(yaklasanGunSayisi);
 
         var aracRiskli = await context.AracEvraklari
             .CountAsync(x => !x.IsDeleted && x.BitisTarihi.HasValue && 

@@ -984,9 +984,9 @@ public class MainForm : Form
         }
     }
 
-    private bool ValidateMandatoryFields()
+    private bool ValidateMandatoryFields(bool requireModules = true)
     {
-        if (moduleSelection.CheckedItems.Count == 0)
+        if (requireModules && moduleSelection.CheckedItems.Count == 0)
         {
             MessageBox.Show("En az bir lisans modülü seçin. Eski kayıtlarda modül hakkını müşteri anlaşmasına göre belirleyin.", "Modül Seçimi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return false;
@@ -1695,13 +1695,26 @@ public class MainForm : Form
         }
 
         var selectedRow = GetSelectedGridRow();
-        if (selectedRow?.DataBoundItem is not DataRowView)
+        if (selectedRow?.DataBoundItem is not DataRowView rowView)
         {
             MessageBox.Show("Guncellemek icin gecerli bir kayit secin.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
-        if (!ValidateMandatoryFields())
+        var source = rowView.Row;
+        var sourceModules = source["Modules"]?.ToString()?.Trim() ?? string.Empty;
+        var selectedModules = moduleSelection.CheckedItems.Count == 0 ? string.Empty : SelectedModules();
+        var sourceVersion = source["AllowedVersion"]?.ToString()?.Trim() ?? string.Empty;
+        if (!string.Equals(sourceModules, selectedModules, StringComparison.Ordinal)
+            || !string.Equals(sourceVersion, GetMaximumVersion(), StringComparison.Ordinal))
+        {
+            MessageBox.Show(this,
+                "Satış kaydını düzenleme modül veya sürüm hakkını değiştirmez. Hakları imzalı lisansa geçirmek için 'Seçili Lisansı Modüllü Yeniden Bas' akışını kullanın.",
+                "İmzalı lisans yeniden basımı gerekli", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        if (!ValidateMandatoryFields(requireModules: false))
             return;
 
         using var con = new SqliteConnection($"Data Source={_dbPath}");

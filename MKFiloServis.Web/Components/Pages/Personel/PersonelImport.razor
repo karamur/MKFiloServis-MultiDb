@@ -618,7 +618,7 @@
             ws.Cell(2, 7).Value = "Şoför";
             ws.Cell(2, 8).Value = "Operasyon";
             ws.Cell(2, 9).Value = "Şoför";
-            ws.Cell(2, 10).Value = DateTime.Today.ToString("dd.MM.yyyy");
+            ws.Cell(2, 10).Value = MKFiloServis.Shared.Time.BusinessTime.Today.ToString("dd.MM.yyyy");
             ws.Cell(2, 11).Value = 35000;
             ws.Cell(2, 12).Value = 28000;
             ws.Cell(2, 13).Value = 22104;
@@ -635,7 +635,7 @@
             ws.Cell(3, 7).Value = "Muhasebe";
             ws.Cell(3, 8).Value = "Mali İşler";
             ws.Cell(3, 9).Value = "Muhasebe Uzmanı";
-            ws.Cell(3, 10).Value = DateTime.Today.AddYears(-1).ToString("dd.MM.yyyy");
+            ws.Cell(3, 10).Value = MKFiloServis.Shared.Time.BusinessTime.Today.AddYears(-1).ToString("dd.MM.yyyy");
             ws.Cell(3, 11).Value = 40000;
             ws.Cell(3, 12).Value = 32000;
             ws.Cell(3, 13).Value = 22104;

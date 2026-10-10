@@ -56,7 +56,7 @@ public class SemanticSearchService : ISemanticSearchService
                 mevcutEmbedding.MetinOzet = metin.Length > 500 ? metin[..500] : metin;
                 mevcutEmbedding.Embedding = embeddingVektor;
                 mevcutEmbedding.ModelAdi = _ollamaService.EmbeddingModelAdi;
-                mevcutEmbedding.GuncellemeTarihi = DateTime.Now;
+                mevcutEmbedding.GuncellemeTarihi = DateTime.UtcNow;
                 
                 context.EbysBelgeEmbeddingler.Update(mevcutEmbedding);
                 await context.SaveChangesAsync();
@@ -74,7 +74,7 @@ public class SemanticSearchService : ISemanticSearchService
                     MetinOzet = metin.Length > 500 ? metin[..500] : metin,
                     Embedding = embeddingVektor,
                     ModelAdi = _ollamaService.EmbeddingModelAdi,
-                    OlusturmaTarihi = DateTime.Now
+                    OlusturmaTarihi = DateTime.UtcNow
                 };
 
                 context.EbysBelgeEmbeddingler.Add(yeniEmbedding);
@@ -107,7 +107,7 @@ public class SemanticSearchService : ISemanticSearchService
             embedding.MetinOzet = yeniMetin.Length > 500 ? yeniMetin[..500] : yeniMetin;
             embedding.Embedding = embeddingVektor;
             embedding.ModelAdi = _ollamaService.EmbeddingModelAdi;
-            embedding.GuncellemeTarihi = DateTime.Now;
+            embedding.GuncellemeTarihi = DateTime.UtcNow;
 
             await context.SaveChangesAsync();
             return true;
@@ -250,7 +250,7 @@ public class SemanticSearchService : ISemanticSearchService
         await using var context = await _contextFactory.CreateDbContextAsync();
         var rapor = new EmbeddingIndekslemeRaporu
         {
-            BaslangicZamani = DateTime.Now
+            BaslangicZamani = DateTime.UtcNow
         };
 
         try
@@ -275,7 +275,7 @@ public class SemanticSearchService : ISemanticSearchService
             rapor.Hatalar.Add($"Genel hata: {ex.Message}");
         }
 
-        rapor.BitisZamani = DateTime.Now;
+        rapor.BitisZamani = DateTime.UtcNow;
         return rapor;
     }
 

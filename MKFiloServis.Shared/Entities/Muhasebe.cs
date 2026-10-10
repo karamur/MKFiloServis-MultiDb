@@ -136,7 +136,7 @@ public class MuhasebeFisKalem : BaseEntity
     public decimal Borc { get; set; }
     public decimal Alacak { get; set; }
 
-    public DateTime? Tarih { get; set; } = DateTime.Today;
+    public DateTime? Tarih { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
 
     public string? Aciklama { get; set; }
 

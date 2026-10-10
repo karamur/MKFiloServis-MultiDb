@@ -1,6 +1,8 @@
 using MKFiloServis.Shared.Entities;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using MKFiloServis.Web.Data;
 
 namespace MKFiloServis.Web.Services;
 
@@ -86,12 +88,18 @@ public sealed class AktifFirmaProvider : IAktifFirmaProvider
 
     private readonly ProtectedLocalStorage _storage;
     private readonly ILogger<AktifFirmaProvider> _logger;
+    private readonly AppAuthenticationStateProvider _authenticationStateProvider;
+    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private AktifFirmaBilgisi _mevcut = new();
 
-    public AktifFirmaProvider(ProtectedLocalStorage storage, ILogger<AktifFirmaProvider> logger)
+    public AktifFirmaProvider(ProtectedLocalStorage storage, ILogger<AktifFirmaProvider> logger,
+        AppAuthenticationStateProvider authenticationStateProvider,
+        IDbContextFactory<ApplicationDbContext> contextFactory)
     {
         _storage = storage;
         _logger = logger;
+        _authenticationStateProvider = authenticationStateProvider;
+        _contextFactory = contextFactory;
     }
 
     public int? AktifFirmaId => _mevcut.FirmaId > 0 ? _mevcut.FirmaId : null;
@@ -110,14 +118,89 @@ public sealed class AktifFirmaProvider : IAktifFirmaProvider
 
     public void Set(AktifFirmaBilgisi firma)
     {
-        _mevcut = firma ?? new AktifFirmaBilgisi();
+        firma ??= new AktifFirmaBilgisi();
+        var activeUser = _authenticationStateProvider.GetAktifKullanici();
+        if (firma.FirmaId > 0)
+        {
+            if (activeUser == null)
+            {
+                _logger.LogWarning("Oturumsuz kullanıcı için firma kapsamı seçimi reddedildi.");
+                return;
+            }
+
+            using var db = _contextFactory.CreateDbContext();
+            var user = db.Kullanicilar.AsNoTracking().Include(x => x.Rol)
+                .FirstOrDefault(x => x.Id == activeUser.Id && x.Aktif && !x.IsDeleted);
+            var locked = user?.Kilitli == true &&
+                (user.KilitlenmeBitisUtc is null || user.KilitlenmeBitisUtc > DateTime.UtcNow);
+            var isAdmin = string.Equals(user?.Rol?.RolAdi, "Admin", StringComparison.Ordinal);
+            int? defaultFirmId = null;
+            if (!isAdmin)
+            {
+                defaultFirmId = db.Firmalar.AsNoTracking()
+                    .Where(item => item.Aktif && !item.IsDeleted)
+                    .OrderByDescending(item => item.VarsayilanFirma)
+                    .ThenBy(item => item.SiraNo).ThenBy(item => item.FirmaAdi)
+                    .Select(item => (int?)item.Id).FirstOrDefault();
+            }
+
+            if (user == null || locked || user.Rol?.IsDeleted == true ||
+                !AuthenticationSessionPolicy.AllowsFirmScopeSelection(
+                    true, isAdmin, firma.FirmaId, defaultFirmId))
+            {
+                _logger.LogWarning("Kullanıcının yetkili firma kapsamı dışındaki seçim reddedildi. KullaniciId: {UserId}, FirmaId: {FirmId}",
+                    activeUser.Id, firma.FirmaId);
+                return;
+            }
+
+            var selectedFirm = db.Firmalar.AsNoTracking()
+                .FirstOrDefault(item => item.Id == firma.FirmaId && item.Aktif && !item.IsDeleted);
+            if (selectedFirm == null)
+            {
+                _logger.LogWarning("Etkin olmayan veya bulunmayan firma seçimi reddedildi. FirmaId: {FirmId}", firma.FirmaId);
+                return;
+            }
+
+            _mevcut = new AktifFirmaBilgisi
+            {
+                FirmaId = selectedFirm.Id,
+                FirmaKodu = selectedFirm.FirmaKodu,
+                FirmaAdi = selectedFirm.FirmaAdi,
+                AktifDonemYil = selectedFirm.AktifDonemYil,
+                AktifDonemAy = selectedFirm.AktifDonemAy,
+                DatabaseName = selectedFirm.DatabaseName,
+                TumFirmalar = false,
+                KullaniciId = user.Id
+            };
+        }
+        else
+        {
+            _mevcut = new AktifFirmaBilgisi { KullaniciId = activeUser?.Id };
+        }
         AktifFirmaDegisti?.Invoke();
         _ = PersistAsync();
     }
 
     public void SetTumFirmalar(bool tumFirmalar)
     {
+        var activeUser = _authenticationStateProvider.GetAktifKullanici();
+        if (tumFirmalar)
+        {
+            if (activeUser == null) return;
+            using var db = _contextFactory.CreateDbContext();
+            var currentUser = db.Kullanicilar.AsNoTracking().Include(x => x.Rol)
+                .FirstOrDefault(x => x.Id == activeUser.Id && x.Aktif && !x.IsDeleted);
+            var isLocked = currentUser?.Kilitli == true &&
+                (currentUser.KilitlenmeBitisUtc is null || currentUser.KilitlenmeBitisUtc > DateTime.UtcNow);
+            if (isLocked || currentUser?.Rol?.IsDeleted != false ||
+                !string.Equals(currentUser.Rol.RolAdi, "Admin", StringComparison.Ordinal))
+            {
+                _logger.LogWarning("Tüm-firmalar kapsamı güncel DB rolü Admin olmayan kullanıcı için reddedildi.");
+                return;
+            }
+        }
         _mevcut.TumFirmalar = tumFirmalar;
+        _mevcut.KullaniciId = activeUser?.Id;
         AktifFirmaDegisti?.Invoke();
         _ = PersistAsync();
     }
@@ -126,6 +209,7 @@ public sealed class AktifFirmaProvider : IAktifFirmaProvider
     {
         _mevcut.AktifDonemYil = yil;
         _mevcut.AktifDonemAy = ay;
+        _mevcut.KullaniciId = _authenticationStateProvider.GetAktifKullanici()?.Id;
         AktifFirmaDegisti?.Invoke();
         _ = PersistAsync();
     }
@@ -139,9 +223,43 @@ public sealed class AktifFirmaProvider : IAktifFirmaProvider
                 return false;
 
             var bilgi = sonuc.Value;
-            // Geçerli bir firma seçimi mi? FirmaId > 0 veya TumFirmalar modu olmalı.
-            if (bilgi.FirmaId <= 0 && !bilgi.TumFirmalar)
+            var activeUser = _authenticationStateProvider.GetAktifKullanici();
+            if (activeUser == null || bilgi.KullaniciId != activeUser.Id)
+            {
+                await _storage.DeleteAsync(StorageKey);
+                _mevcut = new AktifFirmaBilgisi();
+                AktifFirmaDegisti?.Invoke();
                 return false;
+            }
+
+            await using var db = await _contextFactory.CreateDbContextAsync();
+            var user = await db.Kullanicilar.AsNoTracking().Include(x => x.Rol)
+                .FirstOrDefaultAsync(x => x.Id == activeUser.Id && x.Aktif && !x.IsDeleted);
+            var locked = user?.Kilitli == true &&
+                (user.KilitlenmeBitisUtc is null || user.KilitlenmeBitisUtc > DateTime.UtcNow);
+            var isAdmin = string.Equals(user?.Rol?.RolAdi, "Admin", StringComparison.Ordinal);
+            int? defaultFirmaId = null;
+            if (!isAdmin)
+            {
+                defaultFirmaId = await db.Firmalar.AsNoTracking()
+                    .Where(firma => firma.Aktif && !firma.IsDeleted)
+                    .OrderByDescending(firma => firma.VarsayilanFirma)
+                    .ThenBy(firma => firma.SiraNo).ThenBy(firma => firma.FirmaAdi)
+                    .Select(firma => (int?)firma.Id)
+                    .FirstOrDefaultAsync();
+            }
+            var validUserScope = AuthenticationSessionPolicy.AllowsFirmScopeRestore(
+                isAdmin, bilgi.TumFirmalar, bilgi.FirmaId, defaultFirmaId);
+            var validFirm = bilgi.FirmaId <= 0 || await db.Firmalar.AsNoTracking()
+                .AnyAsync(x => x.Id == bilgi.FirmaId && x.Aktif && !x.IsDeleted);
+            if (user == null || locked || !validFirm || !validUserScope)
+            {
+                await _storage.DeleteAsync(StorageKey);
+                _mevcut = new AktifFirmaBilgisi();
+                AktifFirmaDegisti?.Invoke();
+                if (locked) await _authenticationStateProvider.CikisYapAsync();
+                return false;
+            }
 
             _mevcut = bilgi;
             AktifFirmaDegisti?.Invoke();
@@ -155,6 +273,7 @@ public sealed class AktifFirmaProvider : IAktifFirmaProvider
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "AktifFirmaProvider TryRestoreAsync hata");
+            _mevcut = new AktifFirmaBilgisi();
             return false;
         }
     }

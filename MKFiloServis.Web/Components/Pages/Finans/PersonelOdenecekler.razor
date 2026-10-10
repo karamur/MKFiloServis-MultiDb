@@ -1,4 +1,4 @@
-﻿@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:bankakasa")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:bankakasa")]
 @page "/finans/personel-odenecekler"
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
@@ -426,7 +426,7 @@
     private bool odemeModalGoster = false;
     private List<BankaHesap> odemeHesaplari = new();
     private int odemeHesapId = 0;
-    private DateTime odemeTarihi = DateTime.Today;
+    private DateTime odemeTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
     private string? odemeAciklama;
     private List<BankaKasaHareket> odemeKayitlari = new();
     private string odemePersonelAd = string.Empty;
@@ -585,7 +585,7 @@
         odemeKayitlari = kayitlar;
         odemePersonelAd = personelAd;
         odemeHesapId = odemeHesaplari.FirstOrDefault()?.Id ?? 0;
-        odemeTarihi = DateTime.Today;
+        odemeTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
         odemeAciklama = null;
         odemeModalGoster = true;
     }

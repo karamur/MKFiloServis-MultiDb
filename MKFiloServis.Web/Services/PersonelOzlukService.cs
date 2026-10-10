@@ -1084,7 +1084,7 @@ public class PersonelOzlukService : IPersonelOzlukService
                         .FontSize(14).Bold().AlignCenter();
                     col.Item().Text($"{durum.PersonelAdi} ({durum.PersonelKodu})")
                         .FontSize(12).AlignCenter();
-                    col.Item().Text($"Görev: {GetGorevAdi(durum.Gorev)} | Tarih: {DateTime.Now:dd.MM.yyyy}")
+                    col.Item().Text($"Görev: {GetGorevAdi(durum.Gorev)} | Tarih: {MKFiloServis.Shared.Time.BusinessTime.Now:dd.MM.yyyy}")
                         .FontSize(10).AlignCenter();
                     col.Item().PaddingBottom(10);
                 });
@@ -1268,7 +1268,7 @@ public class PersonelOzlukService : IPersonelOzlukService
                 {
                     col.Item().Text(personelBilgili ? "PERSONEL DOSYASI HAZIRLIK FORMU" : "BOŞ PERSONEL DOSYASI HAZIRLIK FORMU")
                         .FontSize(15).Bold().AlignCenter();
-                    col.Item().Text($"Tarih: {DateTime.Now:dd.MM.yyyy}").FontSize(9).AlignRight();
+                    col.Item().Text($"Tarih: {MKFiloServis.Shared.Time.BusinessTime.Now:dd.MM.yyyy}").FontSize(9).AlignRight();
                 });
 
                 page.Content().Column(col =>

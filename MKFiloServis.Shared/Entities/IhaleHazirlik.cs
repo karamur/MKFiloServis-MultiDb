@@ -115,7 +115,7 @@ public class IhaleSozlesmeRevizyon : BaseEntity
     [StringLength(2000)]
     public string? Aciklama { get; set; }
 
-    public DateTime RevizyonTarihi { get; set; } = DateTime.Today;
+    public DateTime RevizyonTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public DateTime? YurutmeTarihi { get; set; }
     public decimal BedelFarki { get; set; }
     public int SureFarkiAy { get; set; }

@@ -157,7 +157,7 @@
                     }
                     @foreach (var evrak in evraklar)
                     {
-                        <tr class="@(evrak.CevapGerekli && evrak.CevapSuresi < DateTime.Now && evrak.Durum != EbysEvrakDurum.Cevaplandi ? "table-danger" : "")">
+                        <tr class="@(evrak.CevapGerekli && evrak.CevapSuresi < MKFiloServis.Shared.Time.BusinessTime.Now && evrak.Durum != EbysEvrakDurum.Cevaplandi ? "table-danger" : "")">
                             <td>
                                 <a href="/ebys/evrak/@evrak.Id" class="text-decoration-none fw-medium">
                                     @evrak.EvrakNo
@@ -359,8 +359,8 @@
         yeniEvrak = new EbysEvrakOlusturModel
         {
             Yon = EvrakYonu.Gelen,
-            EvrakTarihi = DateTime.Today,
-            GelisTarihi = DateTime.Today,
+            EvrakTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
+            GelisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
             Oncelik = EvrakOncelik.Normal,
             Gizlilik = EvrakGizlilik.Normal
         };

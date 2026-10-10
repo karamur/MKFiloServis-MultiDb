@@ -415,15 +415,15 @@
     // Sayım yardımcıları
     private int SureGecmisSayisi => (aracBelgeTablosu ?? new())
         .SelectMany(GetTumTarihler)
-        .Count(t => t < DateTime.Today);
+        .Count(t => t < MKFiloServis.Shared.Time.BusinessTime.Today);
 
     private int YediGunSayisi => (aracBelgeTablosu ?? new())
         .SelectMany(GetTumTarihler)
-        .Count(t => t >= DateTime.Today && (t - DateTime.Today).Days <= 7);
+        .Count(t => t >= MKFiloServis.Shared.Time.BusinessTime.Today && (t - MKFiloServis.Shared.Time.BusinessTime.Today).Days <= 7);
 
     private int OtuzGunSayisi => (aracBelgeTablosu ?? new())
         .SelectMany(GetTumTarihler)
-        .Count(t => t >= DateTime.Today && (t - DateTime.Today).Days <= 30);
+        .Count(t => t >= MKFiloServis.Shared.Time.BusinessTime.Today && (t - MKFiloServis.Shared.Time.BusinessTime.Today).Days <= 30);
 
     private List<AracBelgeTabloKalemi> FiltrelenmisAracBelgeTablosu => (aracBelgeTablosu ?? new())
         .Where(p => string.IsNullOrWhiteSpace(aramaMetni)
@@ -440,15 +440,15 @@
         .Where(p => belgeFiltre switch
         {
             "eksik" => GetEksikSayisi(p) > 0,
-            "gecmis" => GetTumTarihler(p).Any(t => t < DateTime.Today),
-            "yaklasan" => GetTumTarihler(p).Any(t => t >= DateTime.Today && (t - DateTime.Today).Days <= 30),
+            "gecmis" => GetTumTarihler(p).Any(t => t < MKFiloServis.Shared.Time.BusinessTime.Today),
+            "yaklasan" => GetTumTarihler(p).Any(t => t >= MKFiloServis.Shared.Time.BusinessTime.Today && (t - MKFiloServis.Shared.Time.BusinessTime.Today).Days <= 30),
             _ => true
         })
         .Where(p => seviyeFiltre switch
         {
-            "gecmis" => GetTumTarihler(p).Any(t => t < DateTime.Today),
-            "yedi" => GetTumTarihler(p).Any(t => t >= DateTime.Today && (t - DateTime.Today).Days <= 7),
-            "otuz" => GetTumTarihler(p).Any(t => t >= DateTime.Today && (t - DateTime.Today).Days <= 30),
+            "gecmis" => GetTumTarihler(p).Any(t => t < MKFiloServis.Shared.Time.BusinessTime.Today),
+            "yedi" => GetTumTarihler(p).Any(t => t >= MKFiloServis.Shared.Time.BusinessTime.Today && (t - MKFiloServis.Shared.Time.BusinessTime.Today).Days <= 7),
+            "otuz" => GetTumTarihler(p).Any(t => t >= MKFiloServis.Shared.Time.BusinessTime.Today && (t - MKFiloServis.Shared.Time.BusinessTime.Today).Days <= 30),
             _ => true
         })
         .Where(p =>
@@ -782,7 +782,7 @@
                 ToastService.ShowWarning("İndirilebilecek belge bulunamadı.");
                 return;
             }
-            var dosyaAdi = $"AracBelgeler_{DateTime.Now:yyyyMMdd_HHmm}.zip";
+            var dosyaAdi = $"AracBelgeler_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmm}.zip";
             await JS.InvokeVoidAsync("downloadFile", dosyaAdi, Convert.ToBase64String(zipBytes), "application/zip");
             ToastService.ShowSuccess($"{secili.Count} aracın belgeleri ZIP olarak indirildi.");
         }
@@ -1075,7 +1075,7 @@
     private static string TarihYazi(DateTime? t)
     {
         if (!t.HasValue) return "<span class='badge bg-secondary'>Yok</span>";
-        var gun = (t.Value - DateTime.Today).Days;
+        var gun = (t.Value - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
         var cls = AracBelgeTabloKalemi.BelgeDurumClass(t);
         return $"<span class='badge {cls}'>{t.Value:dd.MM.yyyy} ({(gun < 0 ? $"{Math.Abs(gun)}g geçti" : $"{gun}g")})</span>";
     }

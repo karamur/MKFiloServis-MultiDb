@@ -115,7 +115,7 @@ public class StokHareket : BaseEntity, IFirmaTenant
     public int StokKartiId { get; set; }
     public virtual StokKarti StokKarti { get; set; } = null!;
 
-    public DateTime IslemTarihi { get; set; } = DateTime.Today;
+    public DateTime IslemTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
 
     [StringLength(50)]
     public string? BelgeNo { get; set; }
@@ -164,7 +164,7 @@ public class AracIslem : BaseEntity, IFirmaTenant
     public virtual Arac Arac { get; set; } = null!;
 
     public AracIslemTipi IslemTipi { get; set; }
-    public DateTime IslemTarihi { get; set; } = DateTime.Today;
+    public DateTime IslemTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
 
     // Cari (Kimden alindi / Kime satildi)
     public int? CariId { get; set; }
@@ -207,7 +207,7 @@ public class ServisKaydi : BaseEntity, IFirmaTenant
     public int AracId { get; set; }
     public virtual Arac Arac { get; set; } = null!;
 
-    public DateTime ServisTarihi { get; set; } = DateTime.Today;
+    public DateTime ServisTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
 
     // Servis veren firma
     public int? ServisciCariId { get; set; }

@@ -16,10 +16,12 @@ namespace MKFiloServis.Web.Controllers;
 public class CarilerController : ControllerBase
 {
     private readonly ICariService _cariService;
+    private readonly CurrentPermissionGuard _permissionGuard;
 
-    public CarilerController(ICariService cariService)
+    public CarilerController(ICariService cariService, CurrentPermissionGuard permissionGuard)
     {
         _cariService = cariService;
+        _permissionGuard = permissionGuard;
     }
 
     /// <summary>
@@ -28,6 +30,9 @@ public class CarilerController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] string? tip = null, [FromQuery] bool? aktif = null)
     {
+        try { await _permissionGuard.RequireAnyAsync(Yetkiler.CarilerOku); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+
         var cariler = await _cariService.GetAllAsync();
         
         if (!string.IsNullOrEmpty(tip) && Enum.TryParse<CariTipi>(tip, true, out var cariTipi))
@@ -65,6 +70,9 @@ public class CarilerController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
     {
+        try { await _permissionGuard.RequireAnyAsync(Yetkiler.CarilerOku); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+
         var cari = await _cariService.GetByIdAsync(id);
         if (cari == null)
             return NotFound(new { Error = "Cari bulunamadı" });
@@ -92,6 +100,9 @@ public class CarilerController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CariCreateDto dto)
     {
+        try { await _permissionGuard.RequireAnyAsync(Yetkiler.CarilerYaz); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+
         if (string.IsNullOrEmpty(dto.Unvan))
             return BadRequest(new { Error = "Ünvan gereklidir" });
 
@@ -138,6 +149,9 @@ public class CarilerController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] CariUpdateDto dto)
     {
+        try { await _permissionGuard.RequireAnyAsync(Yetkiler.CarilerDuzenle); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+
         var cari = await _cariService.GetByIdAsync(id);
         if (cari == null)
             return NotFound(new { Error = "Cari bulunamadı" });
@@ -200,6 +214,9 @@ public class CarilerController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
+        try { await _permissionGuard.RequireAnyAsync(Yetkiler.CarilerSil); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+
         var cari = await _cariService.GetByIdAsync(id);
         if (cari == null)
             return NotFound(new { Error = "Cari bulunamadı" });
@@ -214,6 +231,9 @@ public class CarilerController : ControllerBase
     [HttpGet("{id}/bakiye")]
     public async Task<IActionResult> GetBakiye(int id)
     {
+        try { await _permissionGuard.RequireAnyAsync(Yetkiler.CarilerOku); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+
         // GetAllWithBakiyeAsync ile bakiye hesaplanmış cariyi getir
         var cariler = await _cariService.GetAllWithBakiyeAsync();
         var cari = cariler.FirstOrDefault(c => c.Id == id);

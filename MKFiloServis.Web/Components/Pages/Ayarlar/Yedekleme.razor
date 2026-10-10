@@ -57,6 +57,7 @@
                     Tam Yedek
                 </button>
             </div>
+            <small class="text-muted d-block mt-2">PostgreSQL tam kurtarma yedeği DB ve dosyaları tek doğrulanmış ZIP'te toplar. DB dump ve dosya kopyası art arda alınır; birbirine bağlı verilerde tutarlılık için diğer yazımları bakım penceresinde durdurun. Bu işlem uygulamayı bakım kipine almaz.</small>
         </div>
     </div>
 
@@ -95,7 +96,7 @@
                             <td>
                                 @if (settings.LastBackupTime.HasValue)
                                 {
-                                    @settings.LastBackupTime.Value.ToString("dd.MM.yyyy HH:mm")
+                                    @MKFiloServis.Shared.Time.BusinessTime.LocalAt(DateTime.SpecifyKind(settings.LastBackupTime.Value, DateTimeKind.Utc)).ToString("dd.MM.yyyy HH:mm")
                                 }
                                 else
                                 {
@@ -821,7 +822,7 @@
             var extension = Path.GetExtension(uploadedName).ToLowerInvariant();
             if (!new[] { ".zip", ".backup", ".db", ".bak", ".sql", ".json" }.Contains(extension))
                 throw new InvalidDataException("Yedek dosya türü desteklenmiyor.");
-            var fileName = $"uploaded_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}{extension}";
+            var fileName = $"uploaded_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}{extension}";
             var filePath = Path.Combine(backupFolder, fileName);
 
             var partialPath = filePath + ".partial";

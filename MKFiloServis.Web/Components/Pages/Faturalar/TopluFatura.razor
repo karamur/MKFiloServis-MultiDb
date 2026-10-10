@@ -104,7 +104,7 @@
                 <div class="col-md-2">
                     <label class="form-label">Yıl</label>
                     <select class="form-select" @bind="filtre.Yil" @bind:after="OnFiltreChanged">
-                        @foreach (var yil in Enumerable.Range(DateTime.Now.Year - 2, 4).Reverse())
+                        @foreach (var yil in Enumerable.Range(MKFiloServis.Shared.Time.BusinessTime.Today.Year - 2, 4).Reverse())
                         {
                             <option value="@yil">@yil</option>
                         }

@@ -83,8 +83,8 @@ public class Firma : BaseEntity
     public virtual ICollection<Cari> Cariler { get; set; } = new List<Cari>();
 
     // Muhasebe Donem Bilgisi
-    public int AktifDonemYil { get; set; } = DateTime.Today.Year;
-    public int AktifDonemAy { get; set; } = DateTime.Today.Month;
+    public int AktifDonemYil { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    public int AktifDonemAy { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
 
     /// <summary>
     /// [LEGACY] Per-firma dedicated database adı.
@@ -101,11 +101,12 @@ public class Firma : BaseEntity
 /// </summary>
 public class AktifFirmaBilgisi
 {
+    public int? KullaniciId { get; set; }
     public int FirmaId { get; set; }
     public string FirmaKodu { get; set; } = "";
     public string FirmaAdi { get; set; } = "";
-    public int AktifDonemYil { get; set; } = DateTime.Today.Year;
-    public int AktifDonemAy { get; set; } = DateTime.Today.Month;
+    public int AktifDonemYil { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    public int AktifDonemAy { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
     public bool TumFirmalar { get; set; } = false;
     public string? DatabaseName { get; set; }
 }

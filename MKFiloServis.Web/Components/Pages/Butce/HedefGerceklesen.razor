@@ -34,7 +34,7 @@
                 <div class="col-md-2">
                     <label class="form-label small mb-1">Yıl</label>
                     <select class="form-select form-select-sm" @bind="seciliYil" @bind:after="Yenile">
-                        @for (int y = DateTime.Today.Year + 1; y >= DateTime.Today.Year - 3; y--)
+                        @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year + 1; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 3; y--)
                         {
                             <option value="@y">@y</option>
                         }
@@ -432,7 +432,7 @@
                         <div class="col-6">
                             <label class="form-label">Yıl</label>
                             <select class="form-select" @bind="editingHedef.Yil">
-                                @for (int y = DateTime.Today.Year + 1; y >= DateTime.Today.Year - 2; y--)
+                                @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year + 1; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 2; y--)
                                 {
                                     <option value="@y">@y</option>
                                 }
@@ -484,7 +484,7 @@
 
 @code {
     private bool isLoading = true;
-    private int seciliYil = DateTime.Today.Year;
+    private int seciliYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
     private int seciliAy = 0; // 0 = Tüm yıl
     private int? seciliFirmaId;
     private string gorunum = "ozet";

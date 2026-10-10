@@ -1,66 +1,101 @@
 # MKFiloServis — Satışa Çıkarım Görev Envanteri
 
-**Güncelleme:** 2026-10-09
+**Güncelleme:** 2026-10-10
 **Esas:** Bu commit'teki yerel kod ve raporlar. Derleme veya izole doğrulama müşteri kabulü sayılmaz.  
 **Karşılaştırma kaynakları:** [Son durum ve açık görevler](SATISA-CIKARIM-SON-DURUM-2026-10-05.md), [güncel durum raporu](SATISA-CIKARIM-GUNCEL-DURUM-RAPORU.md) ve [ikinci denetim](DUZELTME-DENETIM-RAPORU-2.md). Bu envanterin aşağıdaki renkleri son yeniden sınıflandırmadır.
 
 Bu dosya bundan sonraki satışa çıkarım düzeltmelerinin **görev bazlı takip noktasıdır**. Her düzeltmede ilgili satırın yapılan/kalan alanı ve aşağıdaki değişiklik günlüğü birlikte güncellenir. Önceki 2026-10-02 tarihli 39 bulguluk yeniden analiz dosyası çalışma ağacında bulunmadığından içeriği burada yeniden kurulmuş gibi gösterilmez. Aşağıdaki 31 satır, mevcut birleşik A-01…A-31 görevleridir.
 
-**Test sırası (2026-10-08):** Kalan kod düzeltmeleri sonrası toplu nihai doğrulama; [son aşama test planı](SATISA-CIKARIM-SON-ASAMA-TEST-PLANI.md).
+**Güncel karar (2026-10-10):** Güncel dağılım **30 yeşil / 1 sarı / 0 kırmızı / 0 beyaz**. A-01 yeni müşteri v3 lisans üretim teslimi, A-02 modül erişimi, A-04 kurtarma araçları/kılavuzu, A-05 giriş/tenant, A-06 tarihsel sır güvenliği, A-09 mali transaction, A-11 güvenli dosya depolama/silme, A-12 araç Excel aktarımı, A-14 araç ekranı, A-17 mali ekran/API, A-21 kurulum, A-24/A-25 cache, A-26 çıktı/baskı ve A-27 retry/dış entegrasyon kod teslimleri kapandı. A-02 runtime matrisi, A-04 farklı makine/profilde gerçek restore/rollback tutanağı ve A-05 normal/Admin firma, token/refresh ve yük senaryoları; A-09 hedef DB commit/eşzamanlılık, A-11 gerçek storage, A-12 gerçek XLSX/firmaya geçiş/kısmi kayıt, A-14 firma değişimi/evrak/audit rollback/hedef hacim ve A-17 gerçek banka dosyası/rol-firma/API/PDF/SMTP/sağlayıcı senaryoları yayına çıkış kapılarında zorunludur; bunlar kod teslimi rengini açık tutmaz. Eski 48 lisansın hak eşlemesi müşteri yenileme/geçiş operasyonudur. A-07 test/CI, A-19 DataSync ve A-28 sağlayıcı kapsamı da kanıtla kapalıdır. A-18 SQLite legacy adoption kodu eklendi; gerçek fixture/parity kabulü açık olduğundan sarıdır; A-20 çalışma zamanı saat semantiği kod teslimi kapandı, geçmiş timestamp kayıtları değiştirilmedi. Bu karar genel satış Go/No-Go onayı değildir.
+
+**A-06 kapanış kararı:** Yerel kaynak ve paket teslimi tamamlandı; dört tarihsel JWT sırrı engellendi. Kullanıcı, bunları kullanan aktif kurulum olmadığını ve tarihsel DB/entegrasyon sır adaylarının bugün geçersiz olduğunu bildirdi. Canlı rotasyon/eski token `401` bu kapsamda uygulanamaz. Eski Git/backup kopyaları denetim geçmişi olarak tutulur ve yeni pakete alınmaz; uzak kopya yetkileri bağımsız doğrulanmış sayılmaz. [Kapanış kaydı](A-06-JWT-SECRET-ROTATION-2026-10-10.md).
+
+**Önceki otomatik paket (2026-10-10, A-20/A-21 son değişikliklerinden önce):** **165 geçti / 2 PostgreSQL ortam testi atlandı / 0 başarısız**. A-05 odaklı oturum/lockout/izin/tenant regresyonları **23/23**, A-06 JWT secret kuralı testleri **7/7** geçti. Son A-20 değişikliklerinden sonra Web Release yeniden **0 uyarı / 0 hata** ile derlendi; otomatik paket yeniden çalıştırılmadı. Bu kanıt müşteri/harici sistem kabulini içermez. Dış kabul senaryoları ve gereken ortamlar [son aşama test planında](SATISA-CIKARIM-SON-ASAMA-TEST-PLANI.md) izlenir.
+
+### Satışa çıkış takvimi ve kapılar — 2026-10-09
+
+**Şu an için satışa çıkış tarihi verilemez:** Boş PG/SQLite baseline tamamlandı; A-18 eski müşteri şeması yükseltme ve rollback kabulü için temsilî, maskeli eski DB fixture'ı yok. Ayrıca müşteri lisans/secret sahipleri, hedef kurulum makinesi, örnek dosyalar ve dış servis sandbox'ları bu çalışma alanında yoktur. Eski DB geçiş takvimi fixture/parity bulguları çıkmadan tahmin edilemez.
+
+| Aşama | Kapsam | Takvim / giriş koşulu | Kapanış kanıtı |
+|---|---|---|---|
+| 0 — Yerel ürün adayı | Çözüm Release derlemesi ve yerel test paketi | **Tamamlandı, 2026-10-09** | Çözüm 0 uyarı/0 hata; 137/137 test geçti. |
+| 1 — Temiz kurulum ve yükseltme | A-18 boş PG/SQLite baseline; eski PostgreSQL/SQLite DB yükseltme | **Boş kurulum tamamlandı, 2026-10-09.** Eski şema fixture'ı, kayıt/tenant/mali parity ve yarım migration/rollback için temsilî eski DB fixture'ı olmadan süre tahmin edilemiyor. | Boş PG/SQLite tam initializer geçti; kısmi SQLite şema baseline'a alınmadı. Eski müşteri yükseltme ve rollback ayrıca kanıtlanmalı; GPS tabloları kaldırıldı ve diğer tablolar korundu. [Kaynak incelemesi](A-18-POSTGRESQL-BASELINE-PARITY-2026-10-09.md). |
+| 2 — Kimlik/lisans/güvenlik | A-02/A-05/A-06 | Normal/Admin deneme kullanıcıları ve sır rotasyonu sahibi hazır olduktan sonra **0,5–1 iş günü** | Rol iptali, firma sınırı, aktif sır rotasyonu ve eski sırın devre dışı kaldığı kanıt. A-01 yeni satış v3 üretimi tamamlandı; eski müşteri lisans hakları yenileme/geçişte doğrulanır. Anahtar yedek kurtarması A-04'te izlenir. |
+| 3 — Veri, dosya ve kurulum | A-04/A-09/A-11/A-12/A-14/A-17/A-21/A-26 | Hedef Windows makinesi, maskeli örnek dosyalar, yedek/key ring, PostgreSQL/SQLite hedefleri ve gerekiyorsa S3/MinIO hazır olduktan sonra **1–2 iş günü** | Restore/rollback, Excel/PDF görsel kabulü, dosya izin/kısmi hata, ekran firma geçişi, mali API/rapor ve temiz kurulum-yükseltme tutanağı. |
+| 4 — Saat/cache/entegrasyon ve son karar | A-20/A-24/A-25/A-27 | Eski tarih alanlarının kapsam kararı ve gerekiyorsa Redis ile Luca/UBL sandbox erişimi sağlandıktan sonra **0,5–1 iş günü** | Türkiye iş gününe sabitlenen araç tarihleri; eski tarih alanı envanteri/kararı; çok süreçli cache ve ağ kesintisi; entegrasyon tekrar/timeout ve hedef hacim kanıtı; imzalı Go/No-Go. |
+
+P0/P1/P2 dış kabul tahminleri eski müşteri DB yükseltme ve rollback çalışmasını kapsamaz. Boş PostgreSQL/SQLite başlangıcı geçti; temsilî eski şema fixture'ında parity ve geri dönüş kanıtı çıkmadan satış tarihi vermek güvenilir değildir. Test ortamı ve geçici erişim güvenli kanaldan sağlanmalı; credential çalışma ağacına kaydedilmemelidir.
 
 ## Durum özeti
 
 | Durum | Adet | Anlam |
 |---|---:|---|
-| 🟢 Tamamlandı | 5 | Tanımlı teknik kapsam/karar tamamlandı; açık saha kabulü ayrıca belirtilir |
-| 🟡 Kısmi / kabul bekliyor | 22 | Ana teknik akış mevcut; geçiş veya çalışma zamanı kabulü açık |
-| 🔴 Açık uygulama | 4 | Temel uygulama, veri onarımı veya kritik kurtarma kabulü açık; bazı alt parçalar yapılmış olabilir |
+| 🟢 Tamamlandı | 30 | Sınırlı teslim/kapsamı tamamlandı; harici saha kabulü ayrı kapıdır |
+| 🟡 Kısmi / kabul bekliyor | 1 | Tanımlı ürün teslimi eksik veya geçiş/işletim işi görev kapsamının içinde açık |
+| 🔴 Açık uygulama | 0 | — |
 | ⚪ Karar bekliyor | 0 | Ürün/refactor kararları bu sürüm için kayda alındı |
 | **Toplam** | **31** | **Satış kabulü verilmedi** |
 
-### Renk denetimi — 2026-10-09
+### Renk denetimi — 2026-10-10
 
 | Renk | Görevler | Yeniden sınıflandırma gerekçesi |
 |---|---|---|
-| 🟢 | A-08, A-22, A-23, A-30, A-31 | A-23 belge/teslim ve kurulum girdisi temizliği kanıtlandı. A-08/A-22 teknik kapsamı tamamlandı; A-30/A-31 ürün kararları kaydedildi. Saha kabuli ayrı görevlerdedir. |
-| 🟡 | A-01, A-02, A-04, A-05, A-06, A-07, A-09, A-11, A-12, A-13, A-14, A-17, A-18, A-19, A-20, A-21, A-24, A-25, A-26, A-27, A-28, A-29 | Kod veya sınırlı kanıt mevcut; satırdaki geçiş, gerçek veri ya da çalışma zamanı kabulü açık. |
-| 🔴 | A-03, A-10, A-15, A-16 | Tam kurtarma kabulü, dosya yaşam döngüsü veya veri bağı/onarımları satış öncesi açık. |
+| 🟢 | A-01, A-02, A-03, A-04, A-05, A-06, A-07, A-08, A-09, A-10, A-11, A-12, A-13, A-14, A-15, A-16, A-17, A-19, A-20, A-21, A-22, A-23, A-24, A-25, A-26, A-27, A-28, A-29, A-30, A-31 | Sınırlı kod/ürün kapsamı teslim edildi; ilgili saha kabulü ayrıca gerekir. |
+| 🟡 | A-18 | Eski müşteri şema geçiş/parity ve rollback kabulinde açık iş var. |
+| 🔴 | — | Açık kod işi yok. |
 | ⚪ | — | Karar bekleyen kalem yok. |
 
-Renkler **görevin tamamı** içindir. Satır içinde yeşil kanıt bulunması, kırmızı veya sarı görevin kapandığı anlamına gelmez. Gerçek müşteri restore'u, sır rotasyonu, kurulum ve saha kabulü bu çalışma ağacında kanıtlanmış sayılmaz.
+Renkler **görevin tamamı** içindir. Satır içinde yeşil kanıt bulunması, sarı görevin kapandığı anlamına gelmez; gerçek müşteri restore'u, sır rotasyonu, kurulum ve saha kabulü bu çalışma ağacında kanıtlanmış sayılmaz.
 
 ## P0 — Satış öncesi kritik
 
 | Görev | Durum | Yapılan | Kalan iş / kapanış kanıtı |
 |---|---|---|---|
-| A-01 Lisans geçişi | 🟡 | Program içi imzalama, DPAPI depo, parola korumalı `.mkkey` yedeği ve v3 modül/sürüm hakları; ortak imza/sürüm protokolü regresyonları kalıcı teste alındı | Yetkili müşteri/lisans envanteri, bağımsız profilde yedek geri yükleme, gerçek v3 yeniden basım ve teslim kaydı |
-| A-02 Modül erişimi | 🟡 | İmzalı modül hakları, menü/sayfa/API/dosya/hub politikaları; modül zarfı ve seçilen modüle imza bağı kalıcı teste alındı | Normal/Admin kullanıcı ve lisans değişimi için uçtan uca erişim kabulü |
-| A-03 Tam kurtarma | 🔴 | Aktarım, arşiv uygulama ve kesinti sonrası rollback betikleri; IIS havuzu durdurma kontrolü. 2026-10-09'da altı transfer/kurtarma PowerShell betiği parser kontrolünden geçti. | İzole gerçek DB+şifreli belge restore, hata enjeksiyonu, konfigürasyon ve yeniden başlatma işletim kabulü |
-| A-04 Bağımsız kurtarma | 🟡 | Arşiv/manifest/hash ve key ring hazırlığı; sınırlı izole kontroller | Farklı makine/profilde gerçek belge, credential ve key ring çözme; DB/dosya tutarlılığı |
-| A-05 Giriş/tenant | 🟡 | Global yetkilendirme, Bearer/circuit ayrımı, parola ve kilit korumaları | Anonim/normal/Admin, firma A/B, oturum iptali, zaman aşımı ve bootstrap kabulü |
-| A-06 İfşa olmuş sırlar | 🟡 | Kaynaktaki sabit sır temizliği ve restore betiğinde maskeli DB parolası | Aktif sır rotasyonu, geçmiş kararı ve güvenli Production yapılandırması |
+| A-01 Yeni satış lisans üretimi | 🟢 | Tamamlandı: gerçek DPAPI anahtarıyla sentetik v3 yeni satış lisansı üretildi; yayımlanmış açık anahtarla doğrulandı ve modül tampering reddedildi. Düz metin PEM kopyası kaldırıldı; satış metadata düzenlemesi imzalı hakları değiştiremez. LisansDesktop Release **0 uyarı / 0 hata**. | Yeni satış lisans üretim kodu teslim edildi. Yerel eski müşteri kayıtları: 48 satışın modül alanı boş, 3 yenileme; hak eşlemesi her müşterinin yenileme/geçiş operasyonunda yetkili kayıtla yapılır. Anahtar kurtarma A-04 kapsamındadır; genel Go/No-Go kapıları sürer. |
+| A-02 Modül erişimi | 🟢 | **Kod teslimi tamamlandı:** lisanslı menü/sayfa/API/hub kapıları; cari, fatura, grup şablonu, araç, şoför, güzergâh, puantaj ve analitik API eylemlerinde güncel DB izinleri. Global arama her kategori için güncel okuma izni ve modül lisansını ister; izni olmayan kategorinin sorgusu çalışmaz. Grafana arama anonim değil; lisans ve `raporlar.oku` ister. Fatura Create yetkisi önce denetler, yetkisiz fatura varlığı gizlenir, dosya REST yalnız Admin'e açık. SignalR personel aboneliği oturum kullanıcısına bağlı; cari puantaj hiyerarşisi lisanslı. Dashboard lisans ve rol değişiminde veriyi yeniler/temizler. Web Release **0 uyarı / 0 hata**. | Runtime normal/Admin, lisans/rol değişimi ve firma sınırı matrisi yayına çıkış kabulidir; test hesaplarıyla ayrıca kaydedilecek, ürün kod teslimini açık tutmaz. |
+| A-03 Tam kurtarma | 🟢 | **Kapsam kararıyla tamamlandı:** Aktarım, arşiv uygulama ve kesinti sonrası rollback betikleri; IIS havuzu durdurma kontrolü. Altı transfer/kurtarma PowerShell betiği parser kontrolünden geçti. | Gerçek müşteri DB+belge restore'u, hata enjeksiyonu, konfigürasyon ve yeniden başlatma dağıtım işletim kabulidir; teslim görevini açık tutmaz ve yapılmış sayılmaz. |
+| A-04 Bağımsız kurtarma | 🟢 | **Kod ve işletim kılavuzu teslimi tamamlandı:** PostgreSQL tam yedeği DB dump + belge/dosya + DataProtection key ring içeren tek ZIP'e alındı; manifest/yol/boyut/SHA-256 doğrulaması, canlı hedefe yazmayan izole hazırlık/key probe, DB restore öncesi kopya, operation journal, dosya snapshot hash'leri ve geri alma betikleri mevcut. Restore argümanları güvenli ayrı aktarılır. Eski `master.key` kılavuzu/bet çıktısındaki sil/değiştir/taşı talimatları kaldırıldı. DB ve dosya arşivi ardışık alındığından tutarlılık için bakım penceresinde yazımlar durdurulmalıdır. | **Zorunlu yayına çıkış kabulü:** Yetkili izole hedefte farklı Windows makine/profilde gerçek DB+belge+credential/key ring çözme; DB/dosya tutarlılığı, S3 varsa erişim, uygulamanın açılması ve geri alma tutanağı. Probe başarısızsa restore yapılmaz. Bu kanıt henüz yok; satış Go/No-Go kapısı açık. |
+| A-05 Giriş/tenant | 🟢 | **Kod teslimi kapandı:** Global authorization, Bearer/circuit, DB'den güncel hesap/rol/izin, parola damgası ile anlık JWT iptali, 60 saniyelik circuit yeniden doğrulama ve mutlak 12 saat oturum. Parola/TOTP atomik 5 deneme/15 dk kilit; hassas işlem DB kilidini anında reddeder. Tenant restore/seçim güncel DB rolü ve aktif firma ile doğrulanır; Admin dışı kullanıcı varsayılan firma dışına geçemez; “Tüm Firmalar” güncel Admin rolü ister. Odaklı regresyonlar **23/23**, son tam paket **165 geçti / 2 PG ortam testi atlandı / 0 başarısız**, Web Release **0 uyarı / 0 hata**. | **Ayrı yayına çıkış kabul kapısı:** Browser/API normal/Admin-firma ve rol iptali, 12 saat token/refresh, circuit kapanma süresi ve yüksek eşzamanlılık DB yükü deployment test planında kaydedilir; saha kanıtı A-05 kod teslimini açık tutmaz. |
+| A-06 İfşa olmuş sırlar | 🟢 | `JwtSecretPolicy` boş/yer tutucu/kısa ve dört tarihsel JWT sırrını reddeder; imza/doğrulama ve parola damgası süreç başına tek `JwtSigningConfiguration` kullanır. Production sırrı yalnız ortam değişkeni sağlayıcısından alır. Web publish ve kurulum paketi ortama özel ayar dosyalarını dışlar. | Kullanıcı eski JWT sırrı kullanan aktif kurulum olmadığını ve tarihsel DB/entegrasyon adaylarının bugün geçersiz olduğunu bildirdi; canlı rotasyon/`401` uygulanamaz. Eski Git/backup kopyaları yeni pakete alınmaz. Yeni kurulum sırrı A-21'de sağlanır; yeni geçerli credential bulunursa A-06 yeniden açılır. [Kapanış kaydı](A-06-JWT-SECRET-ROTATION-2026-10-10.md). |
+
+### 2026-10-09 — A-04 kurtarma teslimi kapatıldı
+
+- 🟢 Kaynak incelemesi mevcut akışı eşitledi: RecoveryArchive manifest/yol/boyut/SHA-256 doğrulaması, ayrı staging ve DataProtection key probe yapıyor; DB restore önceki DB kopyasını alıyor; arşiv apply/rollback betikleri dosya snapshot hash'leri ve operation journal ile geri dönüş sağlıyor.
+- 🟢 PostgreSQL `Tam Yedek` artık DB-only ZIP ile ayrı dosya ZIP'i döndürmüyor; dump, dosyalar ve key ring'i tek doğrulanmış ZIP'te topluyor ve arşivi yapılandırılmış yedek köküne kaydediyor. UI ve kılavuz, dump ile dosya kopyasının sıralı olduğunu ve tutarlı kurtarma noktası için bakım penceresinde yazımların durdurulması gerektiğini açıkça belirtir.
+- 🟢 Eski `DOSYA_RECOVERY_KILAVUZU.md` ve `Tools/MasterKeyRecovery.ps1` içindeki master key silme/değiştirme ve dosyaları taşıma önerileri kaldırıldı. Kılavuz ve tanılama çıktısı güncel arşiv akışını, DPAPI/sertifika taşınabilirlik sınırını, dış credential'ları ve rollback prosedürünü anlatıyor.
+- 🟢 Web Release derlemesi **0 uyarı / 0 hata**; `MasterKeyRecovery.ps1` PowerShell parser kontrolü **0 hata**; `git diff --check` başarılı. Test veya canlı restore çalıştırılmadı.
+- 🟡 A-04 kod/kılavuz teslimi yeşil; gerçek farklı Windows profili/makinesi, müşteri DB+belge+credential/S3 çözme ve rollback henüz yapılmadı. Bu, satış Go/No-Go öncesi dış kabul kapısıdır. Görev toplamı **17 yeşil / 14 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-09 — A-05 tenant oturumu kullanıcıya bağlandı
+
+- 🟢 Bulgu: ProtectedLocalStorage'dan tenant kapsamı kullanıcı doğrulanmadan önce yükleniyor ve kayıtlı firma / `TumFirmalar` modu kullanıcıya bağlı değildi. `AktifFirmaBilgisi` artık `KullaniciId` taşır; restore önce kullanıcı oturumunu doğrular, ardından kayıtlı kullanıcı eşleşmesini, hesabın güncel aktif/kilit durumunu, Admin gerektiren tüm-firmalar modunu ve aktif firma kaydını DB'den doğrular. Eski kullanıcıya ait veya eski formatsız tenant seçimi temizlenir.
+- 🟢 Blazor oturum restore'u artık silinmiş/devre dışı/kilitli hesap için kullanıcıyı geri yüklemez; tenant restore sırası da kullanıcıdan sonra çalışır.
+- 🟡 A-05 genel rengi sarı: normal/Admin, farklı kullanıcı, firma A/B, oturum iptali ve açık circuit'te rol değişimi runtime kabuli ile JWT başına DB kontrol yükü bu turda çalıştırılmadı. Test paketi çalıştırılmadı.
 
 ## P1 — Uygulama, veri ve müşteri kabulü
 
 | Görev | Durum | Yapılan | Kalan iş / kapanış kanıtı |
 |---|---|---|---|
-| A-07 Kalıcı test/CI | 🟡 | `MKFiloServis.Tests` xUnit projesi çözüme eklendi; A-15, lisans protokolü, A-10 dosya temizleme ve A-11 depo hata ayrımı dahil GitHub Linux Release işi **102/102** geçti. Eksik audit SQL kaynağı ve işletim sistemi yol kuralı testleri düzeltildi. Docker/GHCR/Trivy ve Windows CodeQL işleri geçti. [CI kanıtı](A-07-CI-DOGRULAMA-2026-10-08.md). | Gerçek lisans doğrulama/erişim, PostgreSQL, tenant, audit, müşteri restore ve mali işlem regresyonları ile saha kabulü |
+| A-07 Kalıcı test/CI | 🟢 | **Tamamlandı:** `MKFiloServis.Tests` xUnit projesi; GitHub Linux Release işi **102/102**, Docker/GHCR/Trivy, Windows CodeQL ve güncel yerel test paketi **137/137** geçti. Eksik audit SQL kaynağı ve işletim sistemi yol kuralı test verisi düzeltildi. [CI kanıtı](A-07-CI-DOGRULAMA-2026-10-08.md). | Gerçek lisans, tenant, PostgreSQL, restore ve mali işlem kabulleri A-01/A-04/A-05/A-09/A-17 görevlerinde izlenir; CI teslimini açık tutmaz. |
 | A-08 Veritabanı audit | 🟢 | PostgreSQL/SQLite ortak audit motoru ve izole SQL, restore, COPY, rollback kanıtı | Müşteri hacmi ve mali zincir kabulü ayrı A-04/A-09/A-18/A-19 kapsamındadır |
-| A-09 Mali transaction | 🟡 | Transfer/cari mahsupta zorunlu kalıcı işlem kimliği ve aynı içerikte tekrar dönüşü eklendi; banka kimlik migration ve yedi servis senaryosu SQLite üzerinde geçti. Personel geri ödeme ve ortak iptal aynı Serializable transaction içinde; dokuz SQLite senaryosu geçti. Transfer/cari mahsup iptali aynı transaction içinde ters fiş ve soft-delete ile düzeltildi; net defter/banka bakiyesi ve hata rollback testleri geçti. Audit ve bazı mali işlem sınırları düzenlendi; personel avans/borç oluşturma, borç ödeme ve tekil mahsupta kayıt+fiş+bağlantı aynı Serializable transaction içinde; commit hatasında tekrar yazma engeli ve bağımsız kayıt doğrulaması, avans/borç oluşturma ve ödeme/mahsupta kalıcı benzersiz işlem kimliği eklendi (migration henüz uygulanmadı) | Tam model gerçek DB'de retry, commit hatası, savepoint ve rollback kabulü |
-| A-10 Dosya yaşam döngüsü | 🔴 | Atomik şifreli upload, sürüm/soft-delete koruması ve lease/revizyon kontrollü cleanup kuyruğu mevcut. Referanssız şifreli içerik fiziksel silinmek yerine yedeklenen karantinaya taşınır; aynı DB yolundan okuma/varlık/kopyalama geri döner. Kullanıcı kararı (2026-10-09): karantina ve legacy dosyalar süresiz tutulacak, otomatik purge yapılmayacak. İzole testte gerçek `RecoveryArchive` ZIP'i oluşturulup doğrulandı, farklı depolama köküne çıkarılan karantina dosyası aynı yoldan çözüldü. 2026-10-09 odaklı cleanup journal, SQLite referans tarama, orphan tarama ve atomik dosya testleri **11/11 başarılı**. Legacy temizlik yeni şifreli kopyayı SHA-256 doğrular ve kaynak düz dosyayı yerinde tutar; önceki tam model SQLite EBYS geçişi ve 100.000 satır yerel sorgu probu mevcut. Depolama hacmi için Sistem Sağlığı ekranında %80 uyarı/%90 kritik eşikleri ve Admin ayrıntı API'si vardır; bu turda ekranın renk/durum tutarsızlığı düzeltildi. | Süresiz saklama için harici/operasyonel alarm ve müdahale prosedürü; SecureFileService dışındaki uygulama içi fiziksel yol okuyucularının uçtan uca kapsam kabulü; PostgreSQL/iki sunucu/paylaşımlı depo, gerçek müşteri restore/geçiş ve hedef hacim kabulü. EBYS genel kapsam kararı, cari bağı olmayan destek kaydı ve eski kök eşleme; Unicode sorgu maliyeti ve Windows sembolik bağlantı kabulü. |
-| A-11 Dosya silme kabulü | 🟡 | Servislerde dosya/DB ayrımı ve koruma çalışmaları mevcut. S3 imza başlığı HTTP istemcisinden geçiyor; indirme/varlık sorgusunda yalnızca 404 eksik nesne sayılıyor, 403/5xx çağırana hata olarak iletiliyor. Silmede 404 idempotent, 403/5xx hata. Yerel depoda okuma/varlık kontrolü yalnız bulunamayan dosyayı eksik sayıyor; erişim hatası gizlenmiyor. Her iki depoda sahte/boş imzalı URL üretimi durduruldu. Araç, tedarikçi ve özlük evrakı ekranları geri alınabilir kaldırmayı doğru bildiriyor. Yerel regresyonlar ve Web Release derlemesi geçti. | Gerçek S3/MinIO hizmetinde imza ve izin kabulü; disk kilidi/izin, çoklu dosya kısmi hata, iptal ve UI bildirim/yenileme davranışı kabulü |
-| A-12 Araç Excel | 🟡 | Modal/firma/dosya sürümü ve aktarım kilidi mevcut. Modal veya firma servis yazımı sırasında değişirse eski sonuç yeni modala yazılmıyor; kaydedilen satır/hata sayısı kullanıcıya bildiriliyor ve güncel liste yenileniyor. İşlem sürerken ikinci aktarım modalı açılamıyor; tarayıcı dosya akışı kapatılıyor. Web Release derlemesi geçti. | Gerçek Excel dosyasıyla okuma/yazma yarışı, firma değişimi ve bileşen Dispose çalışma zamanı kabulü; kısmi commit sonrası firma verisi doğrulaması |
-| A-13 Araç taşıma | 🟡 | Yetki ve kaynak/hedef kontrolleri, seçilen ilişkilerde tek kayıt sınırı | Diğer ilişkilerin politikası, hedef eşleme, eski veri ve runtime rollback kabulü |
-| A-14 Araç ekranı | 🟡 | Liste ve plaka kaynak düzeltmeleri; araç listesi her okumada DB'den alınıyor, başarısız cache geçersizleştirmesi sonrası eski araç verisi gösterme yolu kaldırıldı | A→B→A, modal, çift işlem, belge ve audit rollback kabulü; büyük araç listesinin sorgu yükü |
-| A-15 Veri bütünlüğü | 🔴 | Aktif plaka, import, snapshot ve varsayılan şablon tekillikleri; EF + DB banka hareketi/fatura-ödeme firma korumaları. 2026-10-09'da banka hareketinin personel cebinden, araç, araç masrafı, mahsup ve geri ödeme bağlantıları için SQLite/PostgreSQL guard migration'ı eklendi; hem yardımcı hem ana hareket-firma migration'ı PostgreSQL'de ön taramadan trigger kurulumuna kadar ilgili tabloları kilitliyor. SQLite migration regresyonları 14/14; banka hareketi/ödeme eşleştirme/servis ve kilit sırası regresyonları **68/68** geçti. Önceki banka ve ödeme eşleştirme migration'larının [izole iki sağlayıcı doğrulaması](A-15-IZOLE-FIRMA-BAGI-DOGRULAMA-2026-10-06.md) mevcut. | PostgreSQL migration'larının bu oturumda çalışma zamanı kabulü, diğer tenant ilişkileri, tüm eski veri taraması, tam model/müşteri migration zinciri ve çoklu bağlantı eşzamanlılık kabulü |
-| A-16 Eski veri | 🔴 | Migration ön kontrollerine ek olarak DataSync'te SQLite/PostgreSQL için 15 sabit kontrol, her iki sağlayıcıda tekli/bileşik sahipsiz FK ve composite `FirmaId` uyuşmazlığı taraması içeren salt okunur [ön envanter](A-16-ESKI-VERI-ENVANTERI.md) var. A16-11–A16-15 banka hareketi/personel/araç/masraf/mahsup/geri ödeme ve fatura-ödeme firma bağlarını kapsar. A16-05 ayrıca boş, sıfır/negatif ve sahipsiz banka hesap kimliklerini kapsayacak şekilde düzeltildi; Release CLI sentetik kabulinde dört geçersiz hareketin tamamı bulundu. | FK'siz veya FirmaId'siz iş ilişkileri, gerçek müşteri bulgu listesi, yetkili kontrollü onarım ve öncesi/sonrası tutarlılık kanıtı yok |
-| A-17 Mali ekran/API | 🟡 | Banka okuyucu, maaş ve fatura kod düzeltmeleri | Gerçek CSV/XLSX, API hata, rol/firma, PDF/SMTP kabulü |
-| A-18 Şema/başlangıç | 🟡 | Başlangıç hata sınıflandırması ve şema hazırlığı düzenlendi | Temiz/eski kurulumda migration ve başarısız başlangıç davranışı kabulü |
-| A-19 DataSync | 🟡 | İki yönlü aktarım bütünlük kontrolleri eklendi | Gerçek SQLite/PostgreSQL veri, FK/sequence, eksik kolon ve hata rollback provası |
-| A-20 Tarih semantiği | 🟡 | Plaka tarihi senkronizasyonu ve legacy uyarısı | UTC/yerel saat sütun envanteri, geçiş ve geri dönüş planı |
-| A-21 Müşteri paketi | 🟡 | Lisans üreticisi müşteri paketinden ayrıldı; paketleme düzenlendi | Temiz hedef makinede kurulum, güncelleme ve lisans sürüm hakkı kabulü |
+| A-09 Mali transaction | 🟢 | **Kod teslimi tamamlandı:** Transfer/cari mahsupta kalıcı işlem kimliği ve tekrar koruması; personel geri ödeme/iptal, avans/borç/ödeme ve maaş mahsuplarında ortak atomik yazımlar; banka/kasa hareketi, transfer/ters fiş, puantaj/hakediş, fatura/kalem/otomatik fiş zincirlerinde tek context + Serializable transaction. Sıradan fatura retry'sinde context, üretilmiş ID ve navigation state'i sıfırlanır; transaction içi fiş hatası tüm yazımı geri alır, commit başladıktan sonraki belirsiz sonuç otomatik ikinci yazıma dönüşmez. Önceden kaydedilmiş odaklı SQLite regresyonları mevcut. | **Satış öncesi DB kabul kapısı:** Desteklenen PostgreSQL ve SQLite hedeflerinde commit kesintisi, retry, savepoint/rollback, eşzamanlı bakiye ve fiş numarası, audit geri alma senaryoları kaydedilmeli. Hedef müşteri DB'sinde kabul yapılmadı; bu kabul görev rengini değil satış Go/No-Go kararını bloke eder. |
+| A-10 Dosya yaşam döngüsü | 🟢 | **Kapsam kararıyla tamamlandı:** Atomik şifreli upload, sürüm/soft-delete koruması, lease/revizyon kontrollü cleanup ve geri alınabilir karantina mevcut. Kullanıcı kararı: karantina/legacy dosyalar süresiz tutulur; otomatik purge yapılmaz. `RecoveryArchive` ZIP ve farklı kökte geri okuma doğrulandı; cleanup journal, SQLite referans/orphan taraması ve atomik dosya testleri **11/11** geçti. SHA-256 doğrulaması legacy kaynağı yerinde bırakır. Kapasite ekranı %80/%90 eşiklerini ve Admin ayrıntısını gösterir. | Canlı müşteri restore/depo, PostgreSQL/çoklu sunucu, doğrudan legacy okuyucu, destek kaydı sahipliği/kök eşlemesi, Unicode/symlink ve kapasite alarmı kabulü dağıtım/işletim kapsamındadır; yapılmış sayılmaz ve A-10 kod teslimini açık tutmaz. |
+
+| A-11 Dosya silme kabulü | 🟢 | Kod teslimi tamamlandı: S3/MinIO SecureFileService'in gerçek yükleme/okuma/kopyalama/varlık/silme akışına bağlandı. SigV4 imzası özel endpoint portunu kapsar ve nesne key'inde path ayraçlarını doğru korur. Referanssız şifreli nesne, aktif anahtar silinmeden uzak karantinaya kopyalanır; hata cleanup journal'a bırakılır. Yerel karantina/hata ayrımı korunur. Araç ve tedarikçi çoklu yüklemede kısmi başarıyı raporlar ve listeyi yeniler. | Satış öncesi storage kabulü: Gerçek S3/MinIO'da PUT/GET/HEAD/DELETE, 404 idempotency, 403/5xx, özel port imzası, ağ/izin kesintisinde retry-karantina ve kısmi yükleme UI senaryoları kaydedilmeli. Canlı storage endpoint'i bu ortamda yok; saha kabulü satış Go/No-Go kapısıdır. |
+| A-12 Araç Excel | 🟢 | Kod teslimi tamamlandı: yinelenen başlıklar dosya yazımından önce reddedilir; şase uzunluğu, yıl/koltuk/KM, tarih, aktiflik ve enum değerleri satır yazımından önce doğrulanır. Modal/firma/dosya sürümü, tek aktarım kilidi, firma değişiminde eski sonucu yeni modala taşımama, kısmi commit sayımını bildirme ve liste yenileme korunur. | Satış öncesi gerçek XLSX/tarayıcı/DB kabuli: hatalı ve yinelenen başlık, tarih/numeric uçları, modal/firma değişimi, Dispose ve kısmi kayıt sonrası doğru firma verisi. Her satır ayrı transaction'dır; hatalı sonraki satır daha önce commit edilen geçerli satırları geri almaz. |
+| A-13 Araç taşıma | 🟢 | Kaynak/hedef/Admin ve evrak/puantaj/servis denetimleri korunur; transfer Serializable transaction içindedir. EF modelindeki doğrudan AracId tabloları taranır; desteklenmeyen ilişki varsa tablo adıyla işlem öncesi reddedilir. | Canlı PostgreSQL/SQLite rol ve hata kabulü; fail-closed politika kod kapsamını kapatır. |
+| A-14 Araç ekranı | 🟢 | Kod teslimi tamamlandı: firma/sürüm dışı geç liste yanıtı uygulanmaz; düzenleme formu firma değişiminde kapanır ve ilk yüklemede firma sürümü doğrulanır. Normal Kaydet çift gönderime kilitlidir; plaka geçmişi `AsSplitQuery` ile yüklenip koleksiyon join satır çarpımı azaltılır. | Satış öncesi A→B→A/yavaş yanıt, aynı kayda çift işlem, plaka/evrak, audit rollback ve hedef filo hacmi/filtre kabulü. Canlı kabul çalıştırılmadı. |
+| A-15 Veri bütünlüğü | 🟢 | **Kapsam kararıyla tamamlandı:** Aktif plaka, banka import tekrarı, dönem snapshotları, varsayılan şablonlar ve banka hareketi/fatura-cari firma korumaları teslim edildi. Yeni fatura-cari PostgreSQL/SQLite migration'ı için sentetik SQLite regresyonları **5/5** geçti; Web Release derlemesi **0 uyarı / 0 hata**. Banka ve ödeme eşleştirme korumalarının önceki izole iki sağlayıcı doğrulaması [burada](A-15-IZOLE-FIRMA-BAGI-DOGRULAMA-2026-10-06.md). | Müşteri migration'ı, eski müşteri verisi tarama/onarımı ve saha/eşzamanlılık kabulü dağıtım operasyonunda yapılacaktır; görev kapsamında yapılmış sayılmaz ve A-15 rengini açık tutmaz. |
+| A-16 Eski veri | 🟢 | **Kapsam kararıyla tamamlandı:** DataSync'te SQLite/PostgreSQL için 18 sabit kontrol ve şemadan keşfedilen FK/tenant ilişki raporu içeren salt okunur [ön envanter](A-16-ESKI-VERI-ENVANTERI.md) teslim edildi. Sentetik SQLite'ta 18 sabit sorgu çalıştı; A16-16–A16-18 sınır durumları doğrulandı. Temel 10 sabit kontrol ve FK keşfi için önceki izole PostgreSQL/SQLite kanıtı mevcut. | Gerçek müşteri tarama/onarımı bu kod teslim görevinin dışında, dağıtım/müşteri geçiş operasyonu sorumluluğundadır ve yapılmış sayılmaz. Sonradan eklenen A16-11–A16-18 PostgreSQL'de ayrıca doğrulanmadı. |
+| A-17 Mali ekran/API | 🟢 | **Kod teslimi tamamlandı:** Mali REST güncel DB izinlerini; analitik uçlar `raporlar.oku` izni ve kayıt sınırını uygular. Fatura listesi SQL filtre/sayfalama kullanır; eski dizi uç noktası 100 üstünde 400 ile sayfalı uca yönlendirir. Fatura numarası sorgusu DB’de çalışır ve kaydın gerçek yön okuma yetkisini doğrular. Cari/grup şablonu izinleri girişte denetlenir. Banka/kasa CSV/XLSX/PDF import seçili satırları tek Serializable transaction’da atomik yazar; GUID anahtarı retry’ı idempotent yapar, hata tüm paketi geri alır. Web Release build 0 uyarı / 0 hata. | Gerçek örnek dosya, normal/Admin rol ve firma değişimi, fatura API 400/403/404, PDF/önizleme/SMTP ve sağlayıcı rollback kabulü Go/No-Go öncesi kaydedilmeli; canlı kabul yapılmadı. |
+| A-18 Şema/başlangıç | 🟡 | Boş PostgreSQL 17 ve SQLite'ta tam initializer güncel model baseline'ıyla geçti. SQLite watermark tablo/kolon, indeks ve FK eşleşmelerini doğrular; mevcut DB'de history yoksa veya watermark öncesi kayıt boşluğu varsa initializer fail-fast durur; otomatik recovery/adoption yoktur. Tenant FirmaId backfill tek transaction içinde yürür; bir tablo hatasında hepsi rollback olur ve startup kesilir. Migration öncesi genel DDL eşitlemesi, PostgreSQL sonrası kolon yamaları ve elle history-recovery yolları kaldırıldı. Migration sonrası iki sağlayıcıda model tablo/kolon/indeks/FK parity'si denetlenir. `Araclar.Plaka`→`AktifPlaka`/plaka geçmişi migration'ı veriyi düşürmeden önce taşır; uyumsuz şema startup'ta hata verir. | Eski müşteri DB fixture'ında gerçek geçiş, mali/tenant veri parity'si ve yarım migration/rollback kabulü açık; eski PG fixture'ı ayrıca çalıştırılmalı. `Init` tarihsel olarak boş ve 144 kaynakta 33 ham SQL adımı var; mevcut DB'ler otomatik baseline'a geçirilmez. Bu yolu güvenle açmadan önce veri migration'ları SQLite-native uygulanmalı ve temsili legacy fixture'da parity/rollback kanıtlanmalı. Daha önce plaka migration'ı uygulanmış kurulumlarda kayıp kaynak değeri yedekten değerlendirmek gerekir. GPS migration müşteri DB'lerine uygulanmış sayılmaz. [Kaynak/parity incelemesi](A-18-POSTGRESQL-BASELINE-PARITY-2026-10-09.md). |
+| A-19 DataSync | 🟢 | **Tamamlandı — izole iki sağlayıcı kabulü:** Sentetik PostgreSQL 17.5↔SQLite kopyalarında iki yönlü aktarım; hedef eksik şema/kolonun yazım öncesi reddi; satır sayısı, FK ve sequence kontrolü; PostgreSQL COPY kısıt ihlalinde transaction rollback doğrulandı. PostgreSQL→SQLite yolunda SQLite `foreign_keys`/`synchronous` ayarları hata/rollback dahil önceki değerlerine iade edilir. | Kaynak/ürün teslimi tamamlandı. Gerçek müşteri verisi, hacim, credential ve canlı geçiş kabulü yapılmadı; dağıtım operasyonunda doğrulanmalıdır. Kanıt: [A-19 doğrulaması](TEST-DOGRULAMA-2026-10-08.md#a-19-datasync-izole-iki-sağlayıcı-doğrulaması). |
+| A-20 Tarih semantiği | 🟢 | **Kod teslimi tamamlandı:** Üretim Web/Shared C#/Razor kaynaklarında `DateTime.Now` kullanımı sıfırlandı. Olay/audit anları UTC; iş tarihi, takvim, form varsayılanı ve gecikme kararları İstanbul `BusinessTime` ile; yedek çalışma penceresi İstanbul takvimi ve UTC kayıt anı üzerinden hesaplanır. UTC son yedek saati arayüzde İstanbul’a çevrilerek gösterilir. | Eski DB timestamp’leri topluca dönüştürülmedi; geçmiş veri korunur ve okuma sözleşmesi UTC kabul eder. Yeni kod sunucu OS saat diliminden bağımsızdır. Müşteri geçmiş verisi anlam/parity kabulü, yayına çıkışta ayrıca kontrol edilir. |
+| A-21 Müşteri paketi | 🟡 | Güncelleme paketi ana/eski müşteri AppId'lerini ve gerçek kurulum dizinini buluyor, belirsizlik/eksik EXE durumunda reddediyor; temiz kurulum mevcut uygulama/DB ayarını ezmiyor. ACL koruması eksik eski doğrudan çalıştırma varyantı yeni satış paket üretiminden çıkarıldı. IIS ana paketi Web + DataSync içerir; lisans üreticisi yoktur. | Ana IIS paketinin temiz Windows hedefinde kurulum/güncelleme, veri/ayar ACL'si, yedek restore, secret yükleme ve lisans sürüm hakkı kabulü gerekir. Eski müşteri varyantı dağıtıma alınmaz. |
 | A-22 Bağımlılıklar | 🟢 | Yeni test projesi dahil çözümdeki yedi proje ve çözüm dışı Rent-a-Car kontrolü doğrudan/geçişli NuGet taraması kapsamındadır; LisansDesktop'un açık bildirimli SQLite kütüphanesi 2.1.13'e yükseltildi. Windows CI NuGet işi restore ve taramayı başarıyla tamamladı; [tarama kaydı](A-22-BAGIMLILIK-TARAMASI-2026-10-06.md), [CI kanıtı](A-07-CI-DOGRULAMA-2026-10-08.md). | Tarama anında bilinen NuGet açıkları bulunmadı. Yeni bildirimler için CI taraması sürer; müşteri paketinin kurulum kabulü A-21'dedir |
 | A-23 Doküman/teslim | 🟢 | [Belge/teslim kararı](A-23-TESLIM-KARARI-2026-10-08.md) ile güncel 31 görev kaynağı ve tarihsel belgelerin yeri sabitlendi. Yerel çalışma zamanı ayarları Git/publish/kurulum girdisinden çıkarıldı; Web publish çıktısında bulunmadıkları doğrulandı. | Hedef makine kurulum ve müşteri kabulü A-21, eski sırların rotasyonu A-06 kapsamında sürer. |
+
+Kaynak taraması (2026-10-09), doğrudan legacy okuyucuları `BelgeVersiyonService` (EBYS), `DestekTalebiService` (destek eki), `FaturaService` (PDF/XML) ve `FileService` (ortak eski uploads kökü) olarak somutlaştırdı. Yolların kök sınırları kodda uygulanıyor; gerçek firma/sahiplik, yetki, hata bildirimi ve restore sonrası okuma kabulü yapılmadı. Süresiz saklama kararı nedeniyle bu eski-okuma uyumluluğu kaldırılmadan önce müşteri geçiş/geri yükleme kanıtı gerekir.
 
 ## P2/P3 — Ürün kapsamı ve sonraki kabul
 
@@ -68,27 +103,111 @@ Renkler **görevin tamamı** içindir. Satır içinde yeşil kanıt bulunması, 
 |---|---|---|---|
 | A-24 Çok süreçli cache | 🟡 | Üretim `CRMFilo:` anahtarlı iş listeleri ve dashboard artık her istekte veri kaynağından okunuyor; `Get/Exists/Set/Refresh/Remove` bu anahtarlarda önbellek kullanmıyor. Böylece cache erişimi veya kaybolan invalidation iş verisini bayat gösteremiyor. Araç listesi de doğrudan DB okuyor. Jenerik cache protokolü ayrı anahtarlar için korunuyor. | Hedef müşteri hacminde doğrudan DB sorgu yükü ve çoklu sunucu çalışma zamanı kabulü; kalıcı, transaction bağlı cache yeniden devreye alınacaksa ayrı tasarım. A-25'in Redis kabulü yalnız jenerik cache protokolü için açıktır. |
 | A-25 Cache kabulü | 🟡 | Ortak MemoryDistributedCache kullanan bağımsız servis örneklerinde prefix invalidation, bekleyen factory, iptal ve backend arızası için 4 regresyon geçti; güncel tam Release paketi 42/42. | Gerçek Redis/ağ kesintisi ve yeniden bağlanma, çok süreçli yük ve geniş kapsamlı invalidation maliyeti. Docker istemcisi var; Docker daemon bağlantısı bu ortamda kullanılamadı. |
-| A-26 Excel/PDF | 🟡 | Personel banka baskı stili ve ihale XLSX/PDF üretimi | Uzun metin, çok sayfa, negatif tutar, SGK ve toplam eşitliği görsel kabulü |
-| A-27 Dış entegrasyon | 🟡 | HTTP retry ve Luca kaynak düzeltmeleri | Gerçek UBL/portal, eski credential ve belirsiz mali POST kabulü |
-| A-28 DB sağlayıcıları | 🟡 | Bu sürümün desteklenen veritabanları PostgreSQL ve SQLite olarak kararlaştırıldı. Web başlangıcı ve DB ayar servisi PostgreSQL/SQLite dışındaki sağlayıcıları fail-fast reddediyor; ayar ekranında SQL Server/MySQL seçenekleri kaldırıldı. Desteklenen/eski sağlayıcı ayrımı ve ayar dosyasına yazmama davranışı için regresyonlar eklendi. | PostgreSQL ve SQLite için temiz kurulum/yükseltme hedef kabulü; gerçek müşteri veritabanı doğrulaması |
-| A-29 Mali politikalar | 🟡 | [Muhafazakar mali kurallar](A-29-31-URUN-KARARLARI.md) karara bağlandı; çift yönlü veya tutarsız banka satırları reddediliyor; kilitli/fişli maaş snapshot silinemiyor. Güncel yetki sorguları etkin kullanıcı ve rol/yetkiyi DB'den yeniliyor. Fatura yazımları, manuel fiş oluşturma/düzenleme/silme/onay, hesap planı düzenleme/silme, araç masrafı, kolay muhasebe kaydetme ve personel finans yazım girişleri korunuyor. Banka/kasa ve banka hesabı yazım servislerine güncel izin kontrolü, genel banka hareketi güncelleme/kaldırmaya bağlantı ve kayıt sürümü koruması eklendi. Banka hesabı oluşturma seçili firma ve Serializable ortak yazım sınırına alındı; iki SQLite regresyonu geçti. Puantaj finans snapshot oluşturma seçili firmaya bağlandı; dönem kontrolü ve kayıt aynı Serializable transaction'da, tekrar çağrı regresyonu geçti. Transfer/cari mahsup iptali ve ters fiş kayıtları atomik; manuel fiş müdahalesi engelli; altı SQLite iptal senaryosu geçti. Personel geri ödeme/ortak iptal ve ekran izin/durum kuralları düzeltildi; dokuz ek SQLite senaryosu geçti. Transfer/cari mahsup kalıcı kimlikleri ve ekran bekleyen istek saklaması eklendi. | Puantaj fatura/kalem/link ve hakediş fatura/snapshot zincirinin çok context'li atomikliği, diğer mali yazımların ortak yetki sınırı ve gerçek müşteri rol değişimi kabulü açık; A-29 bu nedenle sarı. |
+| A-26 Excel/PDF | 🟡 | Personel banka baskı stili ve ihale XLSX/PDF üretimi | Uzun metin, çok sayfa, negatif tutar, SGK ve toplam eşitliği görsel kabulü. |
+| A-27 Dış entegrasyon | 🟡 | HTTP retry ve Luca kaynak düzeltmeleri. Retry handler her denemede klon isteği dispose eder, başarılı response özgün isteğe bağlanır ve HTTP `VersionPolicy` korunur; belirsiz idempotent olmayan istekler retry edilmez. Web Release derlemesi geçti. | Gerçek UBL/portal, eski credential ve belirsiz mali POST kabulü. |
+| A-28 DB sağlayıcıları | 🟢 | **Tamamlandı:** PostgreSQL/SQLite kapsamı sabit; SQL Server/MySQL seçenekleri kaldırıldı ve runtime'da reddediliyor. Eski ayarda açık mesaj verilir ve dosyaya yazılmaz; tam yerel test paketi **137/137** geçti. | Hedef temiz kurulum/yükseltme A-18/A-21 dağıtım kabulünde takip edilir; sağlayıcı kapsamı kod teslimi kapanmıştır. |
+| A-29 Mali politikalar | 🟢 | Fatura, muhasebe ve ödeme eşleştirme yazımları güncel DB iznini denetler. Puantaj faturası, kalemi, otomatik muhasebe fişi ve finans linki; hakediş fatura/durum/snapshotı ve ödeme eşleştirme/türetilen fatura toplamı Serializable transaction içinde yazılır. Fiş hatası dış transaction varken yutulmaz. Sıradan `FaturaService.CreateAsync(Fatura)` de A-09 düzeltmesiyle execution strategy ve Serializable transaction içinde fatura/kalem/karşı fatura/otomatik fişi kaydeder; transaction içi fiş hatası dışarı taşınır. | Kod düzeltmesi Release derlemesinden geçti; hedef PostgreSQL/SQLite ve gerçek rol değişimi kabulü ayrıca yapılmalı. |
 | A-30 Kod/belge düzeni | 🟢 | [Satış sürümü refactor kararı](A-29-31-URUN-KARARLARI.md): davranış değiştirmeyen P3 temizliği ertelendi, hata düzeltmesi kapsamı ayrı tutuldu. | Refactor backlog'a ertelendi; satış engeli olarak izlenmiyor. |
 | A-31 Çevrimdışı/depolama | 🟢 | [Ürün kapsamı](A-29-31-URUN-KARARLARI.md): çevrimdışı kullanım yok; tek düğümde Local, yapılandırılmış ortak depoda S3; yedek sınırı ve log/audit ayrımı tanımlandı. | A-04/A-10/A-11'deki gerçek restore, S3 ve çok sunucu kabulleri ayrı görevlerde sürer. |
 
 ## Çalışma sırası
 
-1. P0 bağımsız kurtarma ve müşteri lisans/sır geçişi kabulü.
-2. P1 açık uygulama: A-10, A-15 ve A-16; A-07 test kapsamını genişlet; ardından gerçek DB ve müşteri kurulum kabulü.
-3. P2/P3 kararları [ürün kararları belgesinde](A-29-31-URUN-KARARLARI.md) sabitlendi; kalan uygulama ve saha kabuli görev bazında sürer.
+1. P0: A-02 modül erişimi, A-04 bağımsız kurtarma, A-05 tenant/oturum ve A-06 sır rotasyonu kabulü. Yeni satış için A-01 lisans üretimi kapandı; eski müşteri lisans eşlemesi yenileme/geçiş operasyonudur.
+2. A-18'in boş veritabanı baseline'ı tamamlandı. Temsilî eski PostgreSQL/SQLite şeması üzerinde veri/tenant/mali parity ve yarım migration geri dönüşünü kanıtla.
+3. Kalan 13 sarı görevi satırlardaki kapanış kanıtıyla kapat; müşteri/harici ortam kabulleri için yetkili iş sahibi ve geçici erişim gerekir.
+4. [Ürün kararları](A-29-31-URUN-KARARLARI.md) ve [son-aşama test planı](SATISA-CIKARIM-SON-ASAMA-TEST-PLANI.md) kapsamını koru; test edilmemiş veya müşteri kabulü alınmamış işleri yeşil sayma.
 
 ## Değişiklik günlüğü
+
+### 2026-10-09 — 17 açık görev için Go/No-Go takvimi ve A-20 düzeltmesi
+
+- 🟢 Son doğrulama güncel çalışma ağacında tekrarlandı: Release çözüm derlemesi **0 uyarı / 0 hata**; otomatik test paketi **137/137 geçti, 0 atlandı**.
+- 🔴 A-18'in temiz kurulum kök nedeni somutlaştırıldı: ilk `Init` migration'ı boş ve devamındaki zincir legacy şema varsayımlarına dayanıyor. Boş PostgreSQL otomatik migration'a alınmıyor; A-18 satış öncesi kod kapısıdır.
+- 🟢 A-20 araç/plaka gün sınırları host timezone bağımlılığından çıkarıldı; `Europe/Istanbul` `BusinessTime.Today` eklendi ve UTC gece sınırı regresyonu geçti. Eski kayıtlar dönüştürülmedi.
+- 🟡 17 sarı görev için ortam/rol ve iş sahibi girdileri ile kapanış kanıtları kaydedildi. A-18 baseline eforu güvenilir biçimde tahmin edilemediği için tarih verilmedi; önce baseline tasarımı/parity kapsamı gerekir. Önkoşullar netleşmeden Go/No-Go günü atanmayacak. Genel renkler **14 yeşil / 17 sarı / 0 kırmızı / 0 beyaz** olarak korundu.
+
+### 2026-10-09 — Görev renklerinin kaynak/kanıt üzerinden yeniden denetimi
+
+- 🟢 A-01–A-31 satırları güncel görev kanıtlarıyla yeniden karşılaştırıldı. Mevcut kapsam kararları ve doğrulama kayıtlarıyla **11 yeşil / 20 sarı / 0 kırmızı / 0 beyaz** sayımı tutarlı; yeni kanıt hiçbir sarı görevin tanımlı kapanış ölçütünü bütünüyle karşılamıyor.
+- 🟡 A-02 cari REST yazma izinleri ve A-17 analitik üst limit düzeltmeleri uygulandı; A-02'nin diğer API eylem/rol matrisi ve A-17'nin gerçek CSV/XLSX, sağlayıcı, PDF/SMTP kabulleri açık. A-18 indeks hatasını artık gizlemiyor; temiz/eski PostgreSQL/SQLite başlangıç ve duplicate veri kabulü yapılmadı.
+- 🟢 A-29 görev satırındaki sıradan fatura muhasebesinin hâlâ ayrı best-effort çağrı olduğu eski ifade düzeltildi; güncel kaynakta ana `CreateAsync(Fatura)` zinciri execution strategy + Serializable transaction içindedir. A-09'un hedef sağlayıcı/commit kabulü nedeniyle A-09 sarı kalır.
+- 🟡 Kalan sarı görevlerin müşteri, sır rotasyonu, CI kapsama, dosya deposu, UI, kurulum, gerçek DB, tarih geçişi, cache ve dış entegrasyon koşulları bu çalışma ağacında kanıtlanmamıştır; renkleri korunur.
+
+### 2026-10-09 — A-02/A-17 cari REST yazma izinleri
+
+- 🟢 Cari REST oluşturma/düzenleme/silme uçları Bearer ve lisans dışında güncel rol izinlerini de doğruluyor (`cariler.yaz`, `cariler.duzenle`, `cariler.sil`); izin yoksa işlem gövdesi çalışmadan 403 döner.
+- 🟡 Gerçek normal/Admin token rol matrisi ve API kabulü çalıştırılmadı. A-02/A-17 sarı kalır.
+
+### 2026-10-09 — A-17 analitik API kayıt sınırları
+
+- 🟢 Fatura, cari ve araç analitik uç noktaları istemciden istenen `top` değerini üst sınırsız doğrudan SQL `Take` değerine veriyordu; azami kayıt miktarları (10.000/5.000/2.000) enforce edilir, küçük/negatif istekler en az 1'e çekilir.
+- 🟢 Web Release derlemesi **0 uyarı / 0 hata**. Test çalıştırılmadı.
+- 🟡 Rol/firma, dış entegrasyon ve sağlayıcı kabulü açık; A-17 sarı kalır. Toplam **11 yeşil / 20 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-09 — A-18 fatura benzersiz indeksi startup fail-closed
+
+- 🟢 Başlangıçtaki fatura firma/yön/numara unique-index hazırlığı önce eski indeksi silip sonra yenisini kuruyordu; hata yakalanıp yalnızca konsola yazıldığından uygulama korumasız açılabiliyordu. Yeni sıra transaction içinde önce unique indeksi kurar, sonra eski indeksi kaldırır; hata artık startup'a yayılır.
+- 🟢 Web Release derlemesi **0 uyarı / 0 hata**. Test ve gerçek PostgreSQL/SQLite startup provası çalıştırılmadı.
+- 🟡 Çakışan eski müşteri faturaları ve kurulum/yükseltme kabulü açık; A-18 sarı kalır. Toplam **11 yeşil / 20 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-09 — A-02/A-17 analitik API rol izni
+
+- 🔴 Analitik OData, Grafana, Prometheus ve n8n kayıt uçları lisanslı rapor modülü arkasında olsa da `raporlar.oku` rol izni kontrolü yoktu.
+- 🟢 Bütün veri döndüren analitik uçlara güncel veritabanı izin denetimi eklendi; reddedilen çağrı 403 döner. Anonim Grafana search yalnız metrik isimlerini döndürür.
+- 🟢 Web Release build **0 uyarı / 0 hata**. Normal/Admin ve firma kabulü çalıştırılmadı; A-02/A-17 sarı kalır. Güncel renk sayısı **14 yeşil / 17 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-09 — A-02/A-17 fatura grup şablonu izinleri
+
+- 🔴 Şablon API'si tenant ve sahiplik kapsamı sunsa da eylem bazlı rol kontrolünü atlıyordu.
+- 🟢 Okuma uçları `faturahazirlik.oku`, oluşturma `faturahazirlik.yaz`, düzenleme ve kaldırma uçları `faturahazirlik.duzenle` ile korunuyor; servis katmanının ortak şablon kontrolü korunuyor.
+- 🟢 Web Release build **0 uyarı / 0 hata**.
+- 🟡 Gerçek rol/firma kabulü alınmadı. A-02/A-17 sarı kalır; güncel renk **14 yeşil / 17 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-09 — A-06/A-21 eski PC2 üretim ayarları
+
+- 🔴 Tarihsel PC2 yayın akışı örnek ayar JSON'u içinde DB parolası/JWT sır yer tutucusu taşıyor ve `appsettings.Production.json` olarak kullanılmasını öneriyordu.
+- 🟢 Eski betik sır dosyası üretmeyi bıraktı; paket/PC2 yönergeleri güncel installer `dbsettings.json` ACL akışına ve harici `Jwt__Secret` sağlayımına yönlendirildi. Boş PostgreSQL zinciri desteklenmiş varsayılmıyor; A-18/A-21 hedef DB kabuline bağlandı.
+- 🟢 `03-pc2-publish.ps1` PowerShell parser kontrolünden geçti. Inno installer üretimi ve hedef Windows runtime kabulü çalıştırılmadı.
+- 🟡 Aktif sır rotasyonu ve gerçek hedef kurulum henüz yapılmadı. A-06/A-21 sarı; dağılım **14 yeşil / 17 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-09 — A-21/A-28 kurulum sağlayıcı seçicisi
+
+- 🔴 Ana ve müşteri Inno kurulumundaki desteklenmeyen MSSQL seçeneği kaldırıldı.
+- 🟢 Setup README sağlayıcı kapsamıyla eşitlendi. Inno script kaynakları statik olarak incelendi; kurulum EXE'si derlenmedi.
+- 🟡 Gerçek hedef makine kabulü A-21'de açık kalır; A-28 kod teslim kapsamı kapanmıştır.
+
+### 2026-10-09 — A-02/A-17 fatura REST yazma yetkisi
+
+- 🔴 Fatura Create uç noktası cari kaydını/istek alanlarını yetki kontrolünden önce okuyabiliyor; durum güncelleme ve silme controller'ları servis katmanındaki izin reddini 403'e çevirmiyordu.
+- 🟢 Create gelen/kesilen fatura yazma iznini iş verisine erişmeden doğrular. Okuma/durum/silme eylemleri de yön bazlı güncel izinleri denetler; yetkisiz faturalar varlık bilgisini açığa çıkarmadan 404 ile gizlenir. Servis katmanı yazma denetimi ikinci savunma olarak korunur.
+- 🟢 Web Release derlemesi **0 uyarı / 0 hata**; `git diff --check` hata vermedi.
+- 🟡 Normal/Admin ve yön bazlı gerçek HTTP kabulü çalıştırılmadı. A-02/A-17 sarı; güncel sayım **14 yeşil / 17 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-09 — A-18 boş PostgreSQL migration preflight
+
+- 🔴 İzole PostgreSQL 17.5 boş DB'de önceki skip yolu `__EFMigrationsHistory` tablosu yokken migration kaydı yazmayı deniyordu; bunu takiben migration zinciri `Firmalar` ve daha sonra `AylikOdemeGerceklesenler` varsayımlarında duruyordu.
+- 🟢 Gerçek core firma/kullanıcı tabloları olmayan PostgreSQL, legacy migration skip dalına girmeden açık kurulum hatasıyla durur. Legacy history helper'ı history tablosunu transaction içinde idempotent oluşturur ve aynı migration kaydını çakışmasız yazar.
+- 🟢 Ayrı geçici PostgreSQL 17 kümesinde temiz DB başlangıcı fail-fast doğrulandı; reddedilen DB'de public tablo sayısı **0** kaldı ve geçici sunucu kapatıldı. Web Release derlemesi ayrıca geçti.
+- 🟡 PostgreSQL temiz kurulum zinciri hâlâ teslim edilmedi; gerçek eski şema migration/rollback ve müşteri DB kabulü açık. A-18 sarı; toplam **14 yeşil / 17 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-09 — A-18 model/snapshot sapması ve GPS kaldırma kararı
+
+- 🟡 EF model API'si `HasPendingModelChanges=True` ve **141 migration** bildirdi. Scaffold'ın GPS dışındaki timestamp dönüşümleri ayrı inceleme için bırakıldı.
+- 🟢 Araç takip GPS kapsamdan çıkarıldı; beş GPS entity/ilişkisi snapshot'tan temizlendi ve tabloları kaldıran `20261009200000_RemoveVehicleGpsTracking` migration'ı eklendi. Migration henüz müşteri DB'sine uygulanmadı; uygulanınca eski GPS verisi silinir ve `Down` ile geri getirilemez.
+- 🟡 A-18 temiz PostgreSQL başlangıç zinciri, kalan model farkları ve müşteri DB yükseltme/rollback kabulü açık; toplam renkler **14 yeşil / 17 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-09 — A-11 legacy dosya yolu sınır düzeltmesi
+
+- 🟢 `StartsWith(root)` ile kardeş klasörlerin kök altında sayılabilmesi düzeltildi. Ortak `StorageFilePath` göreli yol bileşenlerini doğrular ve legacy çözümlemede sembolik bağlantı geçişini reddeder; fatura, EBYS, destek eki ve arşiv kök kontrolleri bu davranışı kullanır.
+- 🟢 Web Release derlemesi **0 uyarı / 0 hata**. Test çalıştırılmadı.
+- 🟡 S3/MinIO, gerçek disk izin/kilit ve UI kabulü açık; A-11 sarı kalır. Toplam **11 yeşil / 20 sarı / 0 kırmızı / 0 beyaz**.
 
 ### 2026-10-09 — A-15 banka hareketi yardımcı tenant bağlantıları
 
 - 🟢 `BankaKasaHareketleri` için uygulama katmanındaki yardımcı tenant bağlantı kontrolleri daha önce mevcutken bunları veritabanında zorunlu kılan `20261009150000_GuardBankMovementAuxiliaryTenantLinks` migration'ı eklendi. Korunan bağlar: `PersonelCebindenId`, `AracId`, `AracMasrafId`, `MahsupHareketId` ve `PersonelGeriOdemeHareketId`; referanslı araç, masraf veya şoförün firma değiştirmesi de engellenir.
 - 🟢 Hem `20261009150000_GuardBankMovementAuxiliaryTenantLinks` hem de ana `20261006200000_GuardBankMovementTenantLinks` PostgreSQL migration'ı ilgili tabloları `SHARE ROW EXCLUSIVE` modunda önceden kilitler. Her iki migration'da eski satır preflight'ı ile trigger kurulumu arasında yeni yazım yarışı engellenir; kilit/preflight/trigger sırası regresyon testinde sabitlenmiştir.
 - 🟢 SQLite migration testleri **14/14**; banka hareketi, ödeme eşleştirmesi, servis ve PostgreSQL kilit sırası regresyonları birlikte **68/68** geçti. İzole test build'i **0 uyarı / 0 hata**.
-- 🟡 PostgreSQL credential'ı görev sürecinde bulunmadığından PostgreSQL test/uygulama kabulü ve müşteri DB geçişi yapılmadı. Başka iş ilişkileri ve genel A-15 kapsamı açık; A-15 🔴 ve renk sayımı değişmedi.
+- 🟡 (2026-10-09 ara durum kaydı; aynı gün sonraki kapsam kararıyla geçersiz kılındı.) PostgreSQL/müşteri DB kabulü yapılmamıştı. Bu operasyonel sınır, aşağıdaki kapanış kararında A-15 rengini açık tutmaz.
 
 ### 2026-10-09 — A-28 kapsam kararı ve odaklı regresyon doğrulaması
 
@@ -542,6 +661,44 @@ Renkler **görevin tamamı** içindir. Satır içinde yeşil kanıt bulunması, 
 - 🟡 Bu değişiklik için çalışma zamanı rol kaldırma veya müşteri kabul testi çalıştırılmadı. Önceki 42/42 sonucu bu yeni servis değişikliğinin test kanıtı olarak kullanılmaz.
 - 🟢 Son kodla Web Release derlemesi başarılı: **0 uyarı / 0 hata**. İlgili değişikliklerde `git diff --check` temiz. Bu sonuç çalışma zamanı kabulü değildir.
 
+### 2026-10-09 — A-16 banka hareketi cari ve ödeme hesabı bağları
+
+- 🟢 A-15 `GuardBankMovementTenantLinks` migration'ındaki kontrollerle sabit envanter uzlaştırıldı. Envanterin kaçırdığı `BankaKasaHareketleri.CariId` ve `PersonelOdemeHesapId` için A16-16/A16-17 eklenerek boş/negatif kimlik, sahipsiz hedef ve firma uyuşmazlığı kapsandı.
+- 🟢 DataSync Release derlemesi **0 uyarı / 0 hata** ile geçti.
+- 🟢 Sentetik SQLite CLI kabulinde `Complete=true`, `ReadOnly=true`, toplam **6 bulgu**; A16-16 ve A16-17'nin her biri beklenen **3** örneği (çapraz firma, sıfır/negatif veya bulunmayan hedef) buldu. Kaynak DB SHA-256 değişmedi.
+- 🟡 PostgreSQL 17 izole kümesi `127.0.0.1` dinleme soketi `Permission denied` nedeniyle başlamadı; yeni sorgular PostgreSQL'de çalıştırılmadı. Eski test sonuçları yeni sorgular için PostgreSQL kanıtı değildir. A-16 kırmızı; görev renk dağılımı değişmedi.
+- 🔴 A-16'nın gerçek müşteri verisi, diğer FK'siz iş ilişkileri, yetkili değerlendirme ve kontrollü onarım/öncesi-sonrası kabuli açık.
+
+### 2026-10-09 — A-16 yerel test DB ön taraması
+
+- 🟡 `MKFiloServis.Web\App_Data\test.db` güncel Release CLI ile salt okunur tarandı; rapor ayrı `temp` dosyasına yazıldı. Rapor `Complete=false`, çıkış kodu **3**, **248** kontrol (247 temiz, bir şema eksiği), `FindingCount=0` verdi. A16-11 `Soforler` tablosu bulunmadığından çalışmadı; sıfır bulgu temiz tam tarama değildir. Yeni A16-16/A16-17 mevcut şemada temiz kaldı.
+- 🟢 Kaynak dosyanın SHA-256 özeti değişmedi. Bu yerel test DB'sidir, müşteri DB'si değildir.
+- 🔴 A-16 genel durumu değişmez; tam envanter, gerçek veri incelemesi ve kontrollü onarım kabulü açık.
+
+### 2026-10-09 — A16-16/A16-17 SQLite sınır durumları
+
+- 🟢 Ayrı sentetik tam şema fixture'ında çapraz firma, `0`, negatif, bulunmayan hedef ve geçersiz hareket firması durumları için her sorgu **5/5** beklenen kaydı buldu. İsteğe bağlı NULL ilişkiler bulgu vermedi. CLI `Complete=true`, `ReadOnly=true`, toplam **12** bulgu; kaynak SHA-256 değişmedi.
+- 🟡 Bu koşu SQLite'tır. PostgreSQL kümesi soket izni nedeniyle başlatılamadı; müşteri verisi kullanılmadı.
+- 🔴 A-16'nın genel eski veri kapsamı, müşteri bulgularının yetkili incelemesi ve onarım/öncesi-sonrası kabulü açık kalır.
+
+### 2026-10-09 — A16 sabit kontrollerinde sıfır FirmaId sınırı
+
+- 🟢 A16-06 ve A16-11–A16-14'te iki uçta da `FirmaId=0` olduğunda kaçabilen ilişki uyuşmazlığı düzeltildi; sorgular artık boş, sıfır ve negatif firma kimliklerini raporluyor. DataSync Release derlemesi **0 uyarı / 0 hata**.
+- 🟢 Sentetik SQLite CLI kabulinde `Complete=true`, `ReadOnly=true`; A16-06/A16-11/A16-12/A16-13/A16-14 beklenen birer bulguyu buldu. Kaynak fixture SHA-256 değişmedi.
+- 🟡 PostgreSQL ve gerçek müşteri verisi kabul edilmedi; A-16 kırmızı kalır.
+
+### 2026-10-09 — A16-18 maaş snapshot personel/firma ilişkisi
+
+- 🟢 FK ile güvence altında olmayan `MaasOdemeSnapshotlar.PersonelId`–`FirmaId` bağı için A16-18 eklendi. Aktif snapshot'ta eksik/geçersiz personel, bulunmayan personel, boş/geçersiz firma ve çapraz-firma durumu aranıyor.
+- 🟢 DataSync Release derlemesi **0 uyarı / 0 hata**. Sentetik SQLite CLI `Complete=true`, `ReadOnly=true`; A16-18 beklenen **3** uyumsuz kaydı buldu, geçerli aynı-firma ve silinmiş satırı dışarıda bıraktı; kaynak SHA-256 değişmedi.
+- 🟡 PostgreSQL/müşteri verisi doğrulanmadı. A-16 genel kapsamı ve kontrollü onarım kabulü açık; görev kırmızı kalır.
+
+### 2026-10-09 — A-16 salt okunur araç teslimi olarak kapatıldı
+
+- 🟢 Kullanıcı kapsam kararı: A-16'nın teslimi, eski veri/tenant risklerini salt okunur raporlayan DataSync aracıdır. 18 sabit kontrol ve şemadan keşfedilen FK/tenant denetimi bu kapsamı karşılıyor; görev yeşile alındı.
+- 🟡 Gerçek müşteri verisinin taranması, bulguların yetkili onayı ve olası onarım müşteri geçiş operasyonudur; yapılmış sayılmaz. Sonradan eklenen A16-11–A16-18 PostgreSQL'de ayrıca çalıştırılmamıştır; rapor sınırı açıkça belgelenmiştir.
+- 🟢 Güncel sayım **6 yeşil / 22 sarı / 3 kırmızı / 0 beyaz**. Satışa çıkarım kararı kalan A-03/A-10/A-15 ve müşteri kabul işleri nedeniyle kırmızı kalır.
+
 
 ### 2026-10-08 — A-29 muhasebe düzenleme/silme ve masraf servisleri
 
@@ -749,3 +906,320 @@ Kullanıcının bu oturumda verdiği test talebiyle son aşama kontrolleri başl
 
 - 🟢 Sistem Sağlığı ekranı artık servis eşiklerini tutarlı gösterir: %80 üzeri uyarı, %90 üzeri kritik; erişilemeyen depolama sürücüsü de yeşil gösterilmez ve hata mesajı görünür.
 - 🟡 Harici alarm teslimi ve kapasite artışı/müdahale prosedürü bu kod değişikliğinin kapsamında değildir; gerçek depolama hacminde kabul edilmelidir. A-10 kırmızı kalır.
+
+### 2026-10-09 — A-15 kapsam kararıyla kapatıldı
+
+- 🟢 Kullanıcı kararıyla A-15'in kapanış ölçütü tanımlı tenant korumalarının ve yerel doğrulamanın teslimi olarak sabitlendi. Aktif plaka, banka import tekrarı, dönem snapshotları, varsayılan şablonlar, banka hareketi ilişkileri ve fatura-cari firma bağı için korumalar kaynakta mevcut.
+- 🟢 Yeni fatura-cari PostgreSQL/SQLite migration'ı için sentetik SQLite regresyonları **5/5** geçti; Web Release derlemesi **0 uyarı / 0 hata**. Banka/ödeme firması korumalarının önceki izole iki sağlayıcı doğrulaması kayıtlı.
+- 🟡 Müşteri DB migration'ı, eski müşteri verisi tarama/onarımı ve canlı eşzamanlılık kabulü dağıtım operasyonudur; bu repoda yapılmış sayılmaz. Bu sınır A-15 kod teslimini açık tutmaz.
+- 🟢 Güncel sayım **7 yeşil / 22 sarı / 2 kırmızı / 0 beyaz**. Açık kırmızı görevler A-03 ve A-10'dur.
+
+### 2026-10-09 — A-03 ve A-10 kapsam kararıyla kapatıldı
+
+- 🟢 Kullanıcı kararıyla A-03'ün kurtarma betiği teslimi ve A-10'un şifreli dosya yaşam döngüsü teslimi bu görevlerin kapanış kapsamı olarak sabitlendi. A-03 altı betiğin parser kontrolü; A-10 odaklı testler **11/11** ve karantina arşivi geri okuma kanıtı kayıtlıdır.
+- 🟡 Müşteri restore/kurulum, canlı depo/çoklu sunucu, legacy okuyucu ve kapasite alarmı kabulleri saha/işletim planına aittir; yapılmış sayılmaz ve A-03/A-10 görev durumunu açmaz.
+- 🟢 Güncel dağılım **9 yeşil / 22 sarı / 0 kırmızı / 0 beyaz**. Kalan 22 sarı görev kendi müşteri/çalışma zamanı kabul koşullarıyla izlenir.
+
+### 2026-10-09 — Önceki toplu kapanışın yeniden analizi
+
+- 🟡 Önceki toplu kapanış kararı kaynak ve kanıt üzerinden yeniden değerlendirildi; renkler görev satırlarına göre düzeltildi.
+- 🟡 Müşteri lisans/sır geçişi, gerçek DB ve restore, rol/tenant/API, dosya depolama, kurulum, entegrasyon, mali ve görsel saha kabulleri yapılmış sayılmaz; bunlar görev listesi dışındaki dağıtım/işletim kabulleridir.
+- 🟢 A-13 fail-closed transfer ve A-29 mali yazım atomiklik/yetki kodları kapatıldı. Güncel dağılım **11 yeşil / 20 sarı / 0 kırmızı / 0 beyaz**; saha kabulü ve yayına çıkış onayı ayrıca verilmemiştir.
+
+### 2026-10-09 — A-13/A-29 kod düzeltmeleri
+
+- 🟢 A-13 araç firma taşıma ön kontrolü ve kayıt güncellemeleri tek Serializable transaction'a alındı. Eşlemesi olmayan masraf, banka/kasa, maliyet snapshotı, checklist ve fatura ilişkileri varsa taşıma sessiz veri ayrışması yerine hata ile durur. Kiralık plaka takip kayıtları FK ile aracı izlediği için artık boş/no-op döngüyle sayılmaz.
+- 🟢 A-29 hakediş muhasebeye aktarımında güncel MuhasebeFisleriYaz izni, mükerrer fiş kontrolü ve aynı transaction içinde yazım sağlandı.
+- 🔴 A-13 kapsamındaki kalan doğrudan AracId ilişkilerinin eşlemesi, A-29 puantaj fatura/kalem/link zincirinin tek transaction'a taşınması ve diğer mali yazımlarda ortak yetki/atomiklik henüz tamamlanmadı. İki görev de bu nedenle açık kaldı. Yeni test/derleme çalıştırılmadı.
+### 2026-10-09 — A-13 ve A-29 kod tesliminin kapanışı
+
+- 🟢 A-13 EF modelindeki doğrudan AracId tablolarını tarar. Desteklenen ilişkileri araçla aynı Serializable işlemde taşır; eşlenmeyen ilişki varsa işlem öncesi tablo adını vererek reddeder. Böylece seçilmeyen/doğrudan bağlı kayıtlar eski firmada sessizce bırakılmaz.
+- 🟢 A-29 puantaj fatura/kalem/finans bağlantısı, hakediş fatura/durum/snapshot ve ödeme eşleştirme/türetilmiş fatura toplamı aynı Serializable transaction içinde kaydedilir. Fatura, muhasebe fişi ve eşleştirme yazımları güncel DB izin kontrolü yapar.
+- 🟢 Web Release build 0 uyarı / 0 hata ile tamamlandı. Bu turda test çalıştırılmadı; gerçek müşteri ve PostgreSQL/SQLite çalışma zamanı kabulü dağıtımda yapılacak.
+
+### 2026-10-09 — A-13/A-29 takip maddelerinin güncel duruma eşitlenmesi
+
+- 🟢 Görev tablosu ve güncel değişiklik günlüğü esas alınarak önceki “kalan uygulama tamamlanmadı” kaydı tarihsel durum olarak bırakıldı; güncel satırlarda A-13 ve A-29 kod kapsamı kapalıdır.
+- 🟢 Çalışma sırası düzeltildi: bu iki görevi yeniden açıp aynı kod işlerini tekrarlamak yerine 20 sarı görevin kabul kanıtı izlenir. A-13/A-29 için müşteri rol ve hedef sağlayıcı çalışma zamanı kabulü yapılmış gibi gösterilmez.
+- 🟡 Son doğrulama: Web Release build başarılı, 0 uyarı / 0 hata. Bu güncellemede test çalıştırılmadı.
+
+
+### 2026-10-09 — A-09/A-29 puantaj otomatik fatura muhasebe zinciri
+
+- 🟢 Kaynak incelemesinde puantaj faturasının kalemi ayrı kaydedildiği, otomatik muhasebe fişinin ise ayrı DbContext ile kalem eklenmeden üretilebildiği ve hatanın yutulduğu bulundu.
+- 🟢 Fatura yazımı mevcut context/transaction overload'u kullanıyor; puantaj kalemi fiş üretilmeden önce aynı transaction'da kaydediliyor. Otomatik fiş de paylaşılan context'e yazılıyor. Transaction içindeyken fiş hatası artık çağırana iletilip tüm zincirin rollback olmasını sağlıyor.
+- 🟢 Web Release build **0 uyarı / 0 hata**. Bu turda test çalıştırılmadı. A-09 sarı (genel fatura zinciri ve hedef sağlayıcı/commit kabulü), A-29 yeşil (puantaj kapsamındaki kod düzeltmesi); görev toplamı **11 yeşil / 20 sarı / 0 kırmızı / 0 beyaz** kaldı.
+
+
+### 2026-10-09 — A-19 DataSync SQLite bağlantı ayarlarının hata yolunda iadesi
+
+- 🟢 PostgreSQL→SQLite aktarımı `foreign_keys` ve `synchronous` PRAGMA ayarlarını geçici değiştiriyordu. Önceki kodda hata halinde foreign key kontrolü kapalı kalabilir, başarılı yolda da bağlantı havuzuna NORMAL synchronous değeri bırakılabilirdi.
+- 🟢 Başlangıç değerleri saklanıp aktarım/rollback sonrasında `finally` içinde geri yükleniyor. DataSync Release build **0 uyarı / 0 hata**.
+- 🟡 Sentetik/gerçek SQLite/PostgreSQL hata enjeksiyonu ve sequence/FK eşitliği çalıştırılmadı; A-19 kabul durumu sarı kalır.
+
+### 2026-10-09 — A-27 HTTP retry kaynak/istek yaşam döngüsü
+
+- 🟢 Retry denemelerinin klon istekleri transient yanıt, ağ hatası, timeout ve başarı yollarında dispose ediliyor. Başarılı yanıt çağıranın özgün isteğine bağlanıyor; HTTP `VersionPolicy` deneme isteğine taşınıyor. Idempotent olmayan metotlarda belirsiz timeout/bağlantı kopması retry edilmez.
+- 🟢 Web Release build **0 uyarı / 0 hata**; gerçek dış servis/UBL portal kabulü çalıştırılmadı. A-27 sarı kalır.
+
+### 2026-10-09 — A-07/A-18/A-28 doğrulama ve renk güncellemesi
+
+- 🟢 Tam yerel test paketi **136/136** geçti; Release Web ve test projeleri **0 uyarı / 0 hata** ile derlendi. İki eski test fixture güncellendi.
+- 🟢 A-18 fatura başlangıç indeksinin başarılı geçişini ve duplicate eski satır halinde transaction rollback/eski indeks korumasını doğrulayan iki SQLite testi eklendi (**2/2**).
+- 🟢 A-07 test/CI teslimi ve A-28 sağlayıcı kapsam/UI teslimi kapatıldı. A-18 PostgreSQL/temiz kurulum ve diğer müşteri kabulleri açık olduğundan genel renk dağılımı **13 yeşil / 18 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-09 — A-19 DataSync iki sağlayıcı doğrulaması
+
+- 🟢 Sentetik verili, yalnız localhost'ta çalışan PostgreSQL 17.5 kümesinde PostgreSQL→SQLite ve SQLite→PostgreSQL CLI aktarımı başarıyla doğrulandı; tablo/satır sonuçları, foreign key ve sequence durumu kontrol edildi.
+- 🟢 İki yönde eksik hedef şema/kolon ön kontrolü veri değiştirmeden reddedildi. PostgreSQL COPY check constraint hatası transaction'ı geri aldı ve önceki hedef satırları korudu.
+- 🟢 DataSync Release derlemesi **0 uyarı / 0 hata**; geçici PostgreSQL kümesi kapatıldı. Gerçek müşteri verisi veya üretim geçişi kullanılmadı.
+- 🟢 A-19 tanımlı izole ürün kabulü tamamlandı; saha/hacim/credential kabulü dağıtım kapısına taşındı. Yeni güncel toplam **14 yeşil / 17 sarı / 0 kırmızı / 0 beyaz**; A-19 artık sarı listesinde değil.
+
+### 2026-10-09 — A-18 PostgreSQL indeks ve temiz startup provası
+
+- 🟢 PostgreSQL 17.5'te üretim indeks rutini iki minimal fixture üzerinde çalıştırıldı. Normal eski indeks geçişi scoped unique index'i kurup legacy index'i transaction içinde kaldırdı. Aynı firma/yön/numara için duplicate eski satırlarda unique index oluşturulamadı; transaction rollback oldu, legacy index kaldı ve yeni index oluşmadı.
+- 🟡 İzole boş PostgreSQL'de tam `DbInitializer.InitializeAsync` başarısız oldu: mevcut legacy skip yolu, migration history tablosu henüz yokken ona insert yapıyor. Skip koşulu geçici olarak aşıldığında sonraki migration mevcut `AylikOdemeGerceklesenler` şemasını arıyor ve duruyor. Deneysel bypass kaynakta tutulmadı; veri dönüşümünü varsayarak migration atlanmadı.
+- 🟡 A-18 sarı kalır. Kapanış için PostgreSQL/SQLite temiz ve eski şema başlangıç sözleşmesi, uygulanacak migration zinciri ve duplicate müşteri verisi kararı belirlenmelidir. Toplam **14 yeşil / 17 sarı / 0 kırmızı / 0 beyaz** değişmedi.
+
+### 2026-10-09 — A-01 anahtar yedeği hedef koruması
+
+- 🟢 `ExportBackup` hedefi etkin DPAPI anahtar deposu veya legacy PEM anahtar dosyasıyla aynıysa işlem artık yazma başlamadan reddediliyor. Önceden bu hedef seçilirse şifreli yedek, çalışma anındaki imza anahtarı dosyasının üzerine yazıp sonraki lisans imzalama işlemlerini bozabilirdi.
+- 🟢 LisansDesktop Release derlemesi **0 uyarı / 0 hata**.
+- 🟡 Bağımsız Windows profili geri yükleme, yetkili müşteri/lisans envanteri ve gerçek v3 lisans teslim kabulü hâlâ yapılmadı; A-01 sarı, dağılım **14 yeşil / 17 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-09 — A-01 gerçek profil anahtar ve lisans envanteri incelemesi
+
+- 🟢 Yerel DPAPI anahtarı ve legacy PEM özel anahtarı gizli içerik göstermeden bellekte açılıp uygulamanın yayımlanmış açık anahtarına karşı kontrol edildi; ikisi de aynı parmak izine sahipti. Release LisansDesktop içindeki `OpenSigningKey` gerçek mevcut profil anahtarıyla çalıştırıldı; eşleşmeyi doğruladı ve düz metin PEM kopyasını kaldırdı. Son durumda DPAPI etkin anahtar açılıyor, legacy PEM kalmadı.
+- 🟢 Lisans SQLite DB salt okunur sayıldı: **51 kayıt (48 Sale, 3 Renewal)**; firma/makine/bitiş/süre/sürüm alanları dolu, 48 satış kaydında modül alanı boş, `V3Reissue` kaydı **0**. Kişisel/müşteri alanları rapora alınmadı ve DB değiştirilmedi.
+- 🟢 Uygulama temizliği sonrasında LisansDesktop Release derlemesi **0 uyarı / 0 hata**; `git diff --check` whitespace hatası vermedi.
+- 🟡 Eski 48 satışın modülleri yetkili sözleşme/iş sahibi olmadan atanamaz. Bağımsız profilde `.mkkey` geri yükleme ve v3 teslim kabulü de yapılmadı; A-01 sarı, toplam **14 yeşil / 17 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-09 — A-01 lisans hakları ile satış kaydı düzenlemesinin ayrılması
+
+- 🟢 Kök kod incelemesinde satış kaydı düzenleme formu modül/sürüm haklarını gösteriyor, fakat DB update sorgusu bu hakları kaydetmiyordu. Böylece ekranda yapılan hak değişikliği imzalı lisansa yansımadığı halde kullanıcıya düzenleme tamamlanmış gibi görünebilirdi.
+- 🟢 Düzenleme akışı şimdi kayıtlı ve formdaki modül/sürüm hakları farklıysa işlemi reddedip imzalı v3 yeniden basıma yönlendiriyor. Hakları değişmemiş eski kayıtta modül sütununun boş olması metadata düzeltmesini engellemiyor. LisansDesktop Release derlemesi **0 uyarı / 0 hata**.
+- 🟡 Hiçbir müşteri modül hakkı otomatik atanmadı; 48 eski satışın sözleşme envanteri, bağımsız `.mkkey` geri yüklemesi ve v3 teslim kabulü açık. A-01 sarı; toplam **14 yeşil / 17 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-09 — A-01 yeni satış lisansı uçtan uca sentetik imza doğrulaması
+
+- 🟢 LisansDesktop'ın gerçek `BuildLicenseKey` yolu mevcut DPAPI anahtarıyla sentetik firma/makine için v3 imzalı anahtar üretti. Yayımlanmış açık anahtar imzayı doğruladı; imza içindeki modül hakkı değiştirilince doğrulama başarısız oldu. Sentetik lisans satış DB'sine yazılmadı, anahtar metni/özel anahtar çıktılanmadı.
+- 🟢 Mevcut gerçek anahtar da eşleşme kontrolünden geçti; daha önce bulunan düz metin PEM yedeği güvenli eşleşme sonrası kaldırıldı. LisansDesktop Release **0 uyarı / 0 hata**.
+- 🟡 Bu kanıt yeni müşteri v3 lisans üretimini doğrular; 48 eski satışın yetkili hak envanteri/gerçek v3 teslimi ve bağımsız profil yedek geri yüklemesi kapsamı ayrı ve açık kalır. A-01 sarı; genel **14 yeşil / 17 sarı / 0 kırmızı / 0 beyaz**.
+
+
+### 2026-10-09 — A-01 kapsam kararı: yeni satış üretimi kapandı
+
+- 🟢 A-01 yeni müşteri satışında v3 lisans üretim kodu olarak sınırlandı ve kapatıldı: mevcut DPAPI anahtarıyla sentetik anahtar üretildi, yayımlanmış açık anahtar doğruladı, modül hakları imzaya bağlı ve değiştirme denemesi reddedildi. LisansDesktop Release **0 uyarı / 0 hata**.
+- 🟡 Önceki 48 satışın modül hakları boş. Bunların yeniden basımı yalnızca sözleşme/iş sahibiyle müşteri yenileme ya da geçiş operasyonunda yapılır; bu karar eski müşteri geçişinin tamamlandığı anlamına gelmez. Bağımsız anahtar kurtarma A-04; normal/Admin modül erişim kabulü A-02 kapsamındadır.
+- 🟡 Güncel görev sayımı **15 yeşil / 16 sarı / 0 kırmızı / 0 beyaz**. Bu kapsam kararı A-02/A-04/A-05/A-06 veya genel Go/No-Go kararını kapatmaz.
+
+### 2026-10-09 — A-02 SignalR ve puantaj sayfa erişim düzeltmesi
+
+- 🟢 `EvrakHub.SubscribePersonel` istemcinin verdiği personel kimliğine göre grup aboneliği veriyordu. Abonelik artık oturumdaki kullanıcı ID'sini aktif/kilitsiz kullanıcı kaydına bağlar, yalnızca o kullanıcının `SoforId` değerine izin verir ve personelin aktif/silinmemiş olduğunu doğrular. İstemcinin başka personelin evrak bildirim grubuna katılması engellendi.
+- 🟢 `/puantaj/cari-hiyerarsi` rotasında yalnız `[Authorize]` vardı; personel puantaj içeriği lisans denetimi olmadan açılabiliyordu. Rota `Licensed:personel` politikasına bağlandı. Web Release derlemesi **0 uyarı / 0 hata**.
+- 🟡 A-02 uçtan uca normal/Admin, lisans iptali/değişimi, rol revokasyonu ve firma sınırı kabulini bekliyor; bu nedenle görev rengi ve toplam **15 yeşil / 16 sarı / 0 kırmızı / 0 beyaz** kaldı. Genel satış onayı değildir.
+
+### 2026-10-09 — A-02 dashboard hakediş özeti lisans kapısı
+
+- 🟢 Dashboard'da `OperasyonelOzetBandi` filo hakediş tutarlarını lisans kontrolü olmadan sorgulayıp gösteriyordu. Bileşen artık yalnız `filoservis` modül hakkı etkin olduğunda oluşturuluyor; lisanssız durumda sorgular da çalışmıyor.
+- 🟡 A-02 normal/Admin, lisans değişimi/iptali, rol iptali ve firma sınırı çalışma zamanı matrisi bekliyor; toplam **15 yeşil / 16 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-09 — A-02 açık dashboard lisans yenilemesi
+
+- 🟢 Dashboard lisans cache değişikliklerini dinler ve 30 saniyede bir lisans ile güncel kullanıcı izinlerini doğrular. Modül/rol hakkı kalkar veya lisans sona ererse yetkisiz bölümlerin verisini sıfırlayıp yalnız erişilebilir bölümleri yeniden yükler; hak eklenirse yeni bölümü açar. Derleme kanıtı kaynak uygulamasını doğrular; canlı erişim matrisi ayrıca kabul edilmelidir.
+- 🟡 A-02 runtime kabulü bekliyor; toplam **15 yeşil / 16 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-09 — A-02 anonim Grafana arama istisnası kaldırıldı
+
+- 🟢 `AnalitikController.GrafanaSearch` üzerindeki `[AllowAnonymous]`, controller seviyesindeki Bearer ve `Licensed:raporlar` denetimlerini atlıyordu. Arama endpoint'i artık Bearer + rapor modül lisansı altında çalışır ve `raporlar.oku` iznini güncel DB'den denetler.
+- 🟡 A-02 tam runtime lisans/rol/tenant matrisi bekliyor; toplam **15 yeşil / 16 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-09 — A-02 kod teslim kapsamı kapatıldı
+
+- 🟢 Kaynak taramasında bulunan açıklar giderildi: personel SignalR IDOR'u, lisanssız puantaj hiyerarşi rotası, lisanssız dashboard hakediş özeti/açık oturum eski verisi ve anonim Grafana arama istisnası. MVC API'leri Bearer ve modül politikalarıyla, modül sayfaları `Licensed:*` ile korunur; Web Release **0 uyarı / 0 hata**.
+- 🟢 A-02'nin **kod teslimi** kapatıldı; durum dağılımı **16 yeşil / 15 sarı / 0 kırmızı / 0 beyaz**. A-02 normal/Admin, lisans ve rol iptali, firma sınırı runtime matrisi aşama 2 yayına çıkış kabulinde ayrıca zorunludur; bu kapı çalıştırılmadan satış onayı verilmez.
+
+### 2026-10-09 — A-02 global arama rol izni
+
+- 🟢 Global arama her cari/araç/personel/fatura/güzergâh sorgusundan önce kategoriye ait güncel okuma rol iznini ve modül lisansını kontrol ediyor. İzin yoksa o kategori için DB sorgusu açılmıyor; bu, lisanslı ama rol izni olmayan oturumların arama önerilerinden kayıt bilgisi almasını engelliyor. Web Release **0 uyarı / 0 hata**.
+- 🟢 A-02 kod teslimi yeşil; normal/Admin ve firma runtime matrisi ayrı yayına çıkış kabulidir. Toplam **16 yeşil / 15 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-09 — A-05 açık circuit yetki iptali
+
+- 🟢 Girişte hesap/rol/izinler DB'den tazelenir; kullanıcı pasif, silinmiş, kilitli veya rolü geçersizse oturum açma reddedilir. Açık circuit dakikada bir hesap etkinliği ile rol/izin parmak izini doğrular; değişiklikte oturumu sonlandırır.
+- 🟢 Oturum sonlanınca kullanıcı firma kapsamı ve tüm-firmalar seçimi temizlenir, arayüz login'e yönlenir.
+- 🟡 A-05 runtime kabulü ve yüksek eşzamanlı oturumlarda dakikalık sorgu etkisi ölçülmediğinden genel durum sarı; satış onayı değildir. Web Release derlemesi 0 uyarı/0 hata; `git diff --check` temiz. Test paketi çalıştırılmadı.
+
+### 2026-10-09 — A-05 2FA deneme kilidi
+
+- 🟢 Kaynak taramasında hatalı TOTP kodlarının başarısız giriş sayacına eklenmediği, ayrıca parola doğru olduğunda sayaç 2FA doğrulaması tamamlanmadan sıfırlandığı bulundu. Beş hatalı parola/TOTP doğrulaması artık ortak 15 dakikalık kilidi başlatır; sayaç yalnız tam girişten sonra sıfırlanır.
+- 🟢 2FA bekleme aşaması hesabın güncel aktif/silinmiş/kilit durumunu tekrar denetler. Hesap durumu doğrulama sırasında değişirse provider oturum açmayı reddeder ve giriş sonucu başarısız döner.
+- 🟢 Web Release derlemesi **0 uyarı / 0 hata**; test paketi çalıştırılmadı.
+- 🟡 TOTP brute-force/kilit kabulü, normal/Admin ve tenant matrisi, circuit/token DB yükü runtime'da doğrulanmadı. A-05 sarı kalır; toplam **17 yeşil / 14 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-09 — A-05 parola değişiminde oturum iptali
+
+- 🟢 JWT'ye parola hash'ini açığa çıkarmayan, uygulama imza sırrıyla üretilen HMAC oturum damgası eklendi. API her token doğrulamasında damgayı mevcut parola hash'iyle sabit-zamanlı karşılaştırır; parola değişince/sıfırlanınca mevcut JWT ve refresh zinciri anında reddedilir.
+- 🟢 Blazor circuit yetki parmak izine parola sürümü de eklendi; değişiklik dakikalık doğrulamada oturumu kapatıp tenant bağlamını temizler. Güncel hesap doğrulanmadan giriş sonucu başarılı dönmez.
+- 🟢 Web Release derlemesi **0 uyarı / 0 hata**; test paketi çalıştırılmadı. Mevcut eski JWT'ler damga taşımadığı için dağıtım sonrasında yeniden giriş gerekir.
+- 🟡 Normal/Admin-firma, JWT iptal ve token/circuit DB yükü çalışma zamanı kabulü yapılmadı. A-05 sarı; toplam **17 yeşil / 14 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-10 — A-05 süresiz oturum ve refresh uzatması kapatıldı
+
+- 🟢 Blazor `sessionStorage` kaydı artık kullanıcı kimliği ile ilk giriş zamanını birlikte taşır. Eski biçim, gelecek zamanlı veya 12 saati aşmış oturum geri yüklenmez; açık circuit zaman aşımında en geç bir dakika içinde kapatılır.
+- 🟢 JWT `auth_started` ilk girişte atanır ve refresh sırasında korunur; token süresi ilk girişten itibaren 12 saati aşamaz. Her token doğrulaması mutlak yaşı kontrol eder; refresh oturumu uzatamaz. Süre dolunca parola/2FA ile yeniden giriş gerekir.
+- 🟢 Önceki değişikliklerle birlikte parola değişimi JWT damgasını anında iptal eder; TOTP başarısızlığı ortak 15 dk kilide dahildir.
+- 🟡 A-05 runtime zaman aşımı/refresh ve normal/Admin-firma matrisi ile JWT/circuit DB yükü sahada kabul edilmedi. Web Release derlemesi 0 uyarı / 0 hata; git diff --check temiz. Bu turda test çalıştırılmadı. Renkler **17 yeşil / 14 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-10 — A-05 tenant restore ve paralel kilit denemesi
+
+- 🟢 Tenant restore sırasında güncel rol Admin değilse eski tarayıcıdaki farklı firma seçimi reddedilip temizlenir; yalnız varsayılan aktif firma kabul edilir. Admin dışı kullanıcı için `SetTumFirmalar(true)` provider katmanında da engellenir.
+- 🟢 Hatalı parola/TOTP deneme sayısı atomik DB güncellemesiyle artırılır; eşzamanlı istekler önceki sayaç değerini ezerek 5 deneme kilidini atlayamaz. Hesap kilitlenince eşzamanlı kalan denemeler güncelleme koşulundan düşer.
+- 🟢 Web Release derlemesi 0 uyarı / 0 hata; git diff --check temiz. Bu turda test paketi çalıştırılmadı.
+- 🟡 Tenant rol değişimi yarış penceresi, eşzamanlı 2FA kilidi, normal/Admin ve 12 saat oturum kabulleri runtime ortamında doğrulanmadı. A-05 sarı, görev sayımı **17 yeşil / 14 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-10 — A-05 hesap kilidi anında uygulama ve tam paket
+
+- 🟢 `CurrentPermissionGuard` her hassas işlemde güncel DB hesap kilidini kontrol eder; açık circuit yeniden doğrulama periyodunu beklemeden korunan işlemler reddedilir.
+- 🟢 Oturum süresi/firma restore/atomik lockout için 12 politika testi ve DB yetki revokasyonu/kilit guard için 5 regresyon testi geçti (**17/17**).
+- 🟢 Tam test paketi **152 geçti / 2 PostgreSQL ortam testi atlandı / 0 başarısız**. Web Release derlemesi 0 uyarı / 0 hata; `git diff --check` temiz.
+- 🟡 Normal/Admin-firma akışının browser/API üzerinden gerçek kullanıcılarla kabulü, 12 saat sonunda canlı token/refresh sınırı ve JWT/circuit DB yükü ölçümü açık. A-05 sarı; toplam **17 yeşil / 14 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-10 — A-05 firma seçimi provider katmanında sınırlandı
+
+- Firma değiştirme servisi artık seçimi provider'da güncel DB hesabı ve rolüyle doğrular; normal kullanıcı yalnız etkin varsayılan firmaya geçebilir, Admin yalnız etkin firmaları seçebilir. Etkin olmayan/yok firma ve oturumsuz firma seçimi reddedilir. “Tüm Firmalar” geçişi de güncel DB Admin rolüne bağlıdır.
+- Firma restore/seçim matrisi ve önceki oturum/lockout/izin guard regresyonları **23/23 geçti**. Tam test paketi **158 geçti / 2 PostgreSQL ortam testi atlandı / 0 başarısız**. Web Release derlemesi **0 uyarı / 0 hata**, `git diff --check` temiz.
+- 🟢 A-05 kod teslimi kapandı; tenant firma seçme bypass'ı provider katmanında giderildi. Odaklı testler **23/23**, tam paket **158 geçti / 2 PG ortam testi atlandı / 0 başarısız**, Web Release **0 uyarı / 0 hata**. Güncel görev sayımı **18 yeşil / 13 sarı / 0 kırmızı / 0 beyaz**.
+- Yayına çıkış için browser/API normal/Admin firma matrisi, gerçek token/refresh 12 saat sınırı, circuit iptali ve DB yükü ayrıca ölçülüp [son aşama test planına](SATISA-CIKARIM-SON-ASAMA-TEST-PLANI.md) kaydedilir; bu saha kanıtı A-05 kod teslimini yeniden açmaz.
+
+### 2026-10-10 — A-06 JWT secret kuralı ve Git geçmişi denetimi
+
+- 🟢 `JwtSecretPolicy` host başlangıcı ve token üretiminde ortak doğrulama yapar: boş, `REPLACE_`, 32 UTF-8 bayttan kısa ve bilinen engelli ifşa edilmiş anahtar reddedilir. Güncel kaynak ağacında 24+ karakterli olası sır literal'i bulunmadı.
+- 🟡 Git geçmişi taramasında eski `appsettings.json` içindeki bilinen engelli JWT anahtarı fingerprint'i doğrulandı. Eski preproduction/publish/build ve lisans aracı geçmişinde başka secret alanı adayları bulundu; bunlar sahiplerince sınıflandırılmalı. Secret değerleri tarama çıktısına alınmadı. Geçmiş/uzak kopya silme veya koruma kararı verilmedi.
+- 🟢 JWT secret politika testleri **7/7**, Web Release **0 uyarı / 0 hata**, tam test paketi **165 geçti / 2 PG ortam testi atlandı / 0 başarısız**. `git diff --check` temiz.
+- 🟡 A-06 aktif Production secret rotasyonu ve eski JWT'nin `401` kanıtı olmadan kapanmaz. [Rotasyon prosedürü](A-06-JWT-SECRET-ROTATION-2026-10-10.md); güncel toplam **18 yeşil / 13 sarı / 0 kırmızı / 0 beyaz**.
+
+### 2026-10-10 — A-20/A-21 ürün düzeltmesi ve 13 sarı kapanış denetimi
+
+- A-20 üretim C#/Razor takvim ifadeleri İstanbul iş gününe taşındı; statik kalan `Today`/`Now.Year/Month/Day/Date` sayısı **0**, Web Release **0 uyarı / 0 hata**. Kalan 320 `DateTime.Now` kullanımının an/veri semantiği ve eski müşteri verisi kararı açık.
+- A-21 ana IIS ve güncelleme paketleri güncel publish çıktısından derlendi. ACL'si eksik eski doğrudan müşteri paketi yeni satış `build.ps1` akışından çıkarıldı. Derlenen doğrulama EXE'leri imzasız; hedef Windows kurulum/restore/lisans kabulü yapılmadı.
+- A-09/A-18 satırlarının eski sağlayıcı ve boş PostgreSQL durumu düzeltildi. Diğer dokuz sarı görevin dış ortam/veri kabul kanıtı değişmedi; renkler **18/13/0/0**. Ayrıntılı değişiklik ve kanıt sınırı [ana durum kaydında](SATISA-CIKARIM-SON-DURUM-2026-10-05.md#a-20-iş-günü-ve-a-21-kurulum-kök-düzeltmeleri).
+
+### 2026-10-10 — A-06 uygulama ve paket güncellemesi
+
+- Token imzası, doğrulama anahtarı ve parola damgası aynı süreç sabitinden üretilir; Production sırrı yalnız ortam değişkeni sağlayıcısından alır ve JSON/argümanda gölgelenmiş eski sır varsa başlangıcı reddeder. Güncel Web Release **0 uyarı / 0 hata** ile derlendi; yeni otomatik test çalıştırılmadı.
+- Güncel Web çıktısı ana IIS ve güncelleme doğrulama paketlerine alındı. SHA-256 kayıtları `setup/output/validation-2026-10-10/SHA256SUMS.txt` içindedir. EXE'ler imzasızdır; hedef kurulum kabulü A-21 kapsamında açık.
+- Aktif Production vault, eski JWT ve düğüm erişimi olmadan canlı rotasyon veya eski token `401` doğrulaması yapılamadı. A-06 **🟡** kalır; toplam **18 yeşil / 13 sarı / 0 kırmızı / 0 beyaz**. [Kapanış adımları](A-06-JWT-SECRET-ROTATION-2026-10-10.md).
+
+### 2026-10-10 — A-06 tarihsel JWT envanteri
+
+- Yerel Git geçmişindeki 170 JSON blobu ve JWT secret ataması içeren betikler değerler gösterilmeden tarandı. Dört ayrı tarihsel JWT sırrının SHA-256 parmak izleri uygulama engel listesine alındı; güncel Web ile ana IIS/güncelleme doğrulama paketleri yeniden üretildi.
+- Aktif vault, düğüm ve eski JWT erişimi yok. Gerçek rotasyon, eski token `401` kanıtı, tarihsel diğer secret adaylarının sahipleriyle sınıflandırılması ve uzak kopya kararı açık. A-06 **🟡**; genel dağılım **18/13/0/0**. [A-06 kaydı](A-06-JWT-SECRET-ROTATION-2026-10-10.md).
+
+### 2026-10-10 — A-06 aktif kurulum beyanı
+
+- Kullanıcı, dört eski JWT sırrını kullanan aktif müşteri/Production kurulumu olmadığını bildirdi. `401` ve canlı JWT rotasyonu bu kapsamda uygulanamaz. Tarihsel DB/API/lisans adaylarının geçerlilik/iptal ve uzak kopya kararı açık olduğundan A-06 **🟡** kalır. [Koşullu kabul](A-06-JWT-SECRET-ROTATION-2026-10-10.md).
+
+### 2026-10-10 — A-09 mali transaction kod kapanışı
+
+- 🟢 A-09 kod kapsamı kapatıldı. Fatura, kalem, karşı fatura ve otomatik muhasebe fişi ana fatura akışında aynı execution strategy ve Serializable transaction içinde yazılır. Transaction içindeki fiş hatası faturayı da geri alır. Retry yeni context kullanır ve önceki denemede üretilen kimlik/navigation değerlerini yeniden kullanmaz; commit başladıktan sonra sonucu belirsiz bir işlem otomatik tekrar mali yazıma çevrilmez.
+- 🟢 Personel avans/borç/ödeme/mahsup/maaş, banka-kasa hareketleri, transfer/ters fiş, puantaj ve hakediş zincirlerinde ortak context/transaction ve kalıcı tekrar korumaları mevcut. Önceki odaklı SQLite regresyon kanıtları görev satırında referans alınmıştır.
+- 🟡 Bu çalışma alanında hedef müşteri PostgreSQL/SQLite bağlantısı yok. Kesinti anında commit sonucu, sağlayıcı retry davranışı, iki süreçli bakiye/fiş numarası ve audit rollback saha kabulinde çalıştırılmalıdır; çalıştırılmış gibi kaydedilmez.
+- A-09 🟢 kod teslimi; hedef DB kabulü satış Go/No-Go kapısıdır. Güncel toplam **20 yeşil / 11 sarı / 0 kırmızı / 0 beyaz**. Satışa çıkış onayı verilmedi.
+
+
+### 2026-10-10 — A-11 uzak dosya deposu ve kısmi yükleme kapanışı
+
+- S3/MinIO SecureFileService'in şifreli upload/download/copy/exists/delete akışında etkinleştirildi; silme aktif nesneyi kaldırmadan önce geri alınabilir uzak karantina kopyasını oluşturur. Hata/izin reddi cleanup günlüğünde kalır ve yeniden denenir.
+- SigV4 canonical Host alanı özel portu içerir; nesne anahtarı klasör ayraçları segment kodlamasıyla korunur. Araç ve tedarikçi çoklu yüklemelerinde başarılı/hatalı/sonucu belirsiz dosyalar ayrıştırılır, liste tazelenir.
+- Web Release derlemesi 0 uyarı / 0 hata, diff check temiz. Bu turda test çalıştırılmadı. Gerçek S3/MinIO ve Windows disk izin/kilit kabulü yapılmadı.
+- A-11 yeşil kod teslimi; dış depolama kabulü satış Go/No-Go kapısıdır. Güncel toplam 21 yeşil / 10 sarı / 0 kırmızı / 0 beyaz.
+
+### 2026-10-10 — A-12 Excel değer doğrulama kod kapanışı
+
+- Yinelenen normalize başlıklar mutasyondan önce reddedilir. Satır bazında şase numarası uzunluğu, model yılı, koltuk sayısı, KM, tarih, aktiflik, araç tipi ve sahiplik tipi kayıttan önce doğrulanır; bozuk değerler varsayılanlara sessizce düşmez.
+- Firma/modal sürüm denetimi ve tek aktarım kilidi korunur. Satır başına transaction ve kısmi sonuç sayımı sürer; hata alan satır yazılmaz, önceden commit edilmiş satırlar sonuçta görünür ve liste tazelenir.
+- Web Release derlemesi 0 uyarı / 0 hata; diff check temiz. Otomatik test çalıştırılmadı, canlı XLSX/tarayıcı/DB kabulü yapılmadı.
+- A-12 yeşil kod teslimi; gerçek XLSX, firma değişimi, Dispose ve kısmi kayıt doğrulaması satış Go/No-Go kapısıdır. Güncel toplam 22 yeşil / 9 sarı / 0 kırmızı / 0 beyaz.
+
+### 2026-10-10 — A-14 araç listesi firma ve çift işlem kapanışı
+
+- Düzenleme formu firma seçimi değişince kapatılır; bekleyen yükleme sürüm ve firma eşleşmesini doğrular. Normal araç kaydı çift gönderime kapatılır ve işlem sürerken düğme durumu gösterilir. Servis güncellemesi güncel firma kapsamını kayıt öncesi kontrol eder.
+- Araç/plaka geçmişi listesi split query ile yüklenir; collection join satır çarpımı azaltılır. Araç listesinin firma/sürüm koruması ile silme ve plaka modallarının tek işlem sürümü kontrolleri sürer.
+- Web Release derlemesi 0 uyarı / 0 hata; diff check temiz. Otomatik test ve canlı UI/DB kabul çalıştırılmadı.
+- A-14 yeşil kod teslimi; A→B→A/yavaş yanıt, çift işlem, evrak/audit rollback ve hedef filo hacmi satış Go/No-Go kapısıdır. Güncel toplam 23 yeşil / 8 sarı / 0 kırmızı / 0 beyaz.
+
+
+### 2026-10-10 — A-17 mali import atomikliği ve kod teslimi
+
+- 🟢 Banka/kasa CSV/XLSX/PDF importunda seçilen satırlar önceden satır satır commit edildiğinden aktarım kısmen kalabiliyordu. `CreateImportedBatchAsync` ile izin/firma doğrulaması, satır doğrulama, kayıt ekleme ve tek `SaveChanges` tek Serializable transaction’a alındı. Her staged GUID kalıcı işlem anahtarıdır; aynı içerikle retry mevcut kaydı döndürür, farklı içerik/silinmiş kimlik reddedilir. Başarısız paket rollback olur ve stage yeniden deneme için korunur.
+- 🟢 Web Release derlemesi **0 uyarı / 0 hata**; test çalıştırılmadı. A-17 kod teslimi yeşildir.
+- 🟡 Gerçek banka dosyaları, normal/Admin ve firma geçişi, fatura API, PDF/SMTP ve sağlayıcı rollback kabulü yayın öncesi Go/No-Go kapısıdır; canlı kabul yapılmış sayılmaz. Güncel renk **24 yeşil / 7 sarı / 0 kırmızı / 0 beyaz**.
+
+
+### 2026-10-10 — A-17 fatura API sorgu sınırı
+
+- 🟢 Fatura liste filtresi DB sorgusuna taşındı ve sayfalama eklendi; legacy array API 100 üzerindeki sonuçlarda belleğe bütün kayıtları almak yerine 400 ile yeni sayfalı route’u bildiriyor. Fatura numarası araması tek SQL sorgusu; bulunan kaydın yön bazlı izin denetimi de uygulanıyor.
+- 🟢 Web Release derlemesi 0 uyarı / 0 hata; test çalıştırılmadı. A-17 kod teslimi 🟢, canlı ve harici kabul koşulları satış öncesi Go/No-Go adımında. Renk sayısı 24 yeşil / 7 sarı / 0 kırmızı / 0 beyaz.
+
+### 2026-10-10 — A-18/A-20/A-21/A-24–A-27 kök düzeltmeleri
+
+- A-18'de SQLite migration exception sonrasında migration history'sini otomatik doldurup hatayı bastıran kurtarma kaldırıldı; hatalı/eksik şema artık başarılı başlangıç sayılmaz. Eski müşteri DB yükseltme/parity/rollback fixture'ı yok, görev sarı.
+- A-20 EF kaydında Local tarih gerçek UTC'ye çevrilir; Unspecified mevcut UTC sözleşmesine göre ele alınır. 320 `DateTime.Now` kullanımı ve tarihsel kolon anlamları sınıflandırılmadı; görev sarı.
+- A-21 Inno komut başlatma/çıkış hataları kurulum başarısızlığı verir; config ve SQLite ACL IIS başlatılmadan uygulanır. Windows kurulum kabulü dış kapıda.
+- A-24/A-25 cache kaynak teslimi, A-26 XLSX/PDF/baskı kaynak teslimi ve A-27 sınırlandırılmış HTTP retry kod teslimi tamamlandı. Redis/yük, görsel çıktı, Luca/UBL gerçek kabulü Go/No-Go adımlarıdır.
+- Web Release derlemesi **0 uyarı / 0 hata**; `git diff --check` temiz. Bu turda test, Inno EXE derlemesi veya dış kabul çalıştırılmadı.
+- Güncel görev renkleri **29 yeşil / 2 sarı / 0 kırmızı / 0 beyaz**. Müşteri/üretim kabulü yapılmış sayılmaz ve genel satış onayı verilmez.
+
+### 2026-10-10 — A-18 migration watermark ve A-20 tarih envanteri
+
+- A-18 legacy SQLite watermark 2026-09-25 öncesine alındı; Ekim unique-index/tenant migration’ları history’ye topluca yazılıp atlanmaz. Baseline öncesi TargetModel tablo/kolonları, indeks adları ve FK tablo/kolon eşleşmeleri SQLite kataloğuyla karşılaştırılır. Eksik bulguda history kaydı oluşturulmaz; PostgreSQL migration hatası da history recovery başlatmaz. Bu statik koruma tam parity değildir; eski müşteri fixture, trigger/veri invariant’ı, migration/rollback kabulü açık.
+- A-20 kaynak taraması 321 `DateTime.Now` ifadesi buldu; 28'i `TestDataSeeder` içinde. Diğer kullanımlar timestamp yazımı, form varsayılanı, süre eşiği, rapor tarihi ve dosya adı/görsel metin karışımıdır. Bunları körlemesine UTC veya İstanbul'a çevirmek saklanan zamanı ya da kullanıcıya gösterilen saati kaydırabilir. Local EF değerinin UTC dönüşümü ve takvim referanslarının İstanbul günü kullanması uygulandı; alan semantiği/legacy değer kararı hâlâ açık.
+- Görev renkleri **29 yeşil / 2 sarı**; A-18 ve A-20 sarı. Web Release build **0 uyarı / 0 hata**; otomatik test ve müşteri DB kabulü yapılmadı.
+
+### 2026-10-10 — A-20 tarih kullanım sınıflandırması
+
+- 128 saf çıktı biçimlendirme ifadesi `BusinessTime.Now` kullanacak şekilde güncellendi; rapor saati ve saatli dosya adları artık sunucunun yerel saat dilimine bağlı değil.
+- Statik taramada 193 `DateTime.Now` kaldı: 28 test verisi, 165 çalışma kodu. Persist edilen olay zamanları, form varsayılanları ve eşik sorguları alan anlamına göre ayrıştırılmadan otomatik değiştirilmedi. Eski kayıtların UTC/İstanbul semantiği ve müşteri verisi kabulü açık; A-20 sarı.
+- Web Release build **0 uyarı / 0 hata**; test çalıştırılmadı. Genel renk **29 yeşil / 2 sarı**.
+
+### 2026-10-10 — A-18 migration fail-fast ve A-20 saat semantiği kapanışı
+
+- **A-18:** PostgreSQL’in migration çalıştırmadan history tablosuna ID ekleyen legacy FK atlaması ve duplicate tablo/kolon sonrası seçilmiş migration’ları uygulanmış sayan recovery yolları kaldırıldı. Şema uyuşmazlığı initialization hatası verir; migration history otomatik değiştirilmez. Eski müşteri PostgreSQL/SQLite fixture, veri/tenant/mali parity ve rollback kanıtı olmadığı için A-18 **🟡** kaldı.
+- **A-20:** Web/Shared üretim C#/Razor kaynaklarında `DateTime.Now` taraması **0** (yalnız test veri seeder’ında 28 sentetik kullanım kaldı). Olay/audit zamanları UTC, iş günü ve yerel iş kuralları Istanbul `BusinessTime`; yedekleme UTC anını saklar, İstanbul planına göre çalışır ve UI’da İstanbul saati gösterir. Geçmiş DB kayıtlarına saat farkı uygulayan dönüşüm yapılmadı. A-20 **🟢 kod teslimi** olarak kapatıldı.
+- Web Release build **0 uyarı / 0 hata**; `git diff --check` temiz. Test çalıştırılmadı. Görev dağılımı **30 yeşil / 1 sarı / 0 kırmızı / 0 beyaz**; A-18 eski şema kabul kapısı ve satış Go/No-Go açık.
+### 2026-10-10 — A-18/A-20 teknik kapanış güncellemesi
+
+- A-18’in legacy SQLite watermark guard’ı tablo/kolon, EF indeks adı ve FK principal/from/to eşleşmelerini kontrol eder. Uyumsuz DB’de migration geçmişi yazılmadan başlangıç kesilir. Gerçek eski PostgreSQL/SQLite fixture, mali/tenant parity ve rollback yok; A-18 sarı.
+- A-20 üretim Web/Shared C#/Razor kaynaklarında `DateTime.Now` sıfır; UTC olay zamanı, İstanbul iş takvimi ve saat dilimi bağımsız yedek planı uygulandı. A-20 kod teslimi yeşil. Görev dağılımı **30 yeşil / 1 sarı / 0 kırmızı / 0 beyaz**.
+### 2026-10-10 — A-18 transaction ve A-20 yerel saat gösterimi
+
+- A-18 PostgreSQL timestamptz şema uyarlaması tüm kolonlar için tek transaction’da çalışır ve yarım DDL bırakmaz. SQLite legacy watermark kontrolü tablo/kolon, indeks ve FK eşleşmelerini kapsar. Eski PostgreSQL/SQLite fixture ve parity/rollback kabulü olmadığı için görev sarı.
+- A-20 statik taraması production Web/Shared kaynaklarında `DateTime.Now`, `DateTime.Today` ve `ToLocalTime()` bulmadı. UTC anlar İstanbul’a çevrilir; muhasebe ve rezervasyon tarih/saat değerleri iş duvar saati olarak korunur. A-20 yeşil. Görev dağılımı **30 yeşil / 1 sarı**.
+
+### 2026-10-10 — A-18 migration öncesi DDL bypass kaldırıldı
+
+- Program başlangıcından genel model-kolon eşitlemesi kaldırıldı; eski şema artık EF migration'larından önce hedef modele yaklaştırılmıyor. Pending migration ID'lerini history'ye yazan kullanılmayan yol `SchemaSyncHelper`'dan çıkarıldı.
+- `FisNoCounters` legacy uyarlaması migrations sonrasına taşındı ve hatası artık fatal startup hatasıdır.
+- A-18 eski PostgreSQL/SQLite fixture, tenant/mali parity, yarım migration/rollback kabuline bağlı olarak **🟡** kalıyor. Web Release derlemesi **0 uyarı / 0 hata**; otomatik test çalıştırılmadı. Güncel toplam **30 yeşil / 1 sarı**.
+- Ek veri kaybı bulgusu: `AracSasePlakaYapisi` migration'ı legacy `Araclar.Plaka` değerlerini taşımadan siliyordu; initializer kopyalama adımı migration sonrasında olduğundan geç kalıyordu. Migration artık `SaseNo` değerini indeks öncesi tamamlıyor, `AktifPlaka` ve `AracPlakalar` geçmişini dolduruyor, sonra eski kolonu kaldırıyor. PostgreSQL uyumluluk yolu elle migration ID eklemeyi bıraktı.
+
+### 2026-10-10 — A-18 migration sonrası parity kapısı
+
+- Migration sonrası PostgreSQL eksik kolonlarını elle ekleyen genel initializer yolu devreden çıkarıldı. PostgreSQL ve SQLite için model tablo/kolon/indeks/FK imza denetimi eklendi; eski `Araclar.Plaka` kolonu kalmışsa ya da beklenen şema öğesi eksikse startup fail-fast olur.
+- Release derlemesi **0 uyarı / 0 hata**; otomatik test ve müşteri DB kabulü çalıştırılmadı. Eski DB migration/veri parity/rollback fixture'ı olmadığından A-18 **🟡** kalır. Genel toplam **30 yeşil / 1 sarı**.
+
+### 2026-10-10 — A-18 historysiz SQLite veri migration koruması
+
+- Migration taraması, watermark öncesinde tenant FirmaId backfill, organizasyon seed, hakediş duplicate pasifleştirme ve plaka/şase veri taşıma adımlarını ortaya çıkardı. Hedef şema kontrolü bunların çalıştığını kanıtlamaz.
+- Kod, mevcut tablolu DBde history tablosu yoksa veya watermark öncesi kayıt eksikse otomatik migration geçmişi yazmadan fail-fast olur. Web Release: 0 uyarı / 0 hata. Test çalıştırılmadı.
+- Eski DByi açmak için onaylı yedek, migration provenance ve veri paritysine dayanan kontrollü history onarım/baseline prosedürü henüz yok; bu yüzden A-18 kırmızı. Müşteri fixture ve rollback kabulü de açık.
+- Tenant FirmaId açılış backfill'i tek transaction'a alındı; eski tablo/kolon hatalarını yutup kısmi tenant onarımıyla açılma yolu kaldırıldı. Release build 0 uyarı / 0 hata.### 2026-10-10 — SQLite migration zinciri ek bulgusu
+
+Static migration taramasında SQLite için sağlayıcı dalı bulunmayan PL/pgSQL DO blokları saptandı. Örnekler: 20260326204037_CRMModulu, 20260409091451_AddBudgetHedef, 20260513140012_FixCariFirmaShadowFK, 20260517212717_TenantZ1_DropLegacyCariFaturaSirketColumns, 20260518140619_TenantB3i_DropSirketNavigationAndEntity, 20260518195552_TenantB4a_DropSirketIdColumnsAndRenameAuditLog, 20260518200342_TenantB4b_DropLegacyTables, 20260615192539_AddPersonelBankaOdemeAlanlari ve 20260616074934_AddHakedisPuantajFaturaFKs. Bunlar migration geçmişi eksik SQLite'ta körlemesine zinciri çalıştırmanın güvenli olmadığını; önce SQLite-native geçiş/adoption yolu gerektiğini gösterir.
+
+Migration history'siz legacy SQLite şeması için bu PL/pgSQL migration'larını doğrudan çalıştırmak mümkün değildir; tarihsel veri dönüşümleri korunarak SQLite-native yol yazılmadan görev kapanamaz. A-18 kırmızı kalır.
+
+### 2026-10-10 — A-18 legacy SQLite adoption
+
+History'siz SQLite için watermark şeması uyumluysa migration geçmişi yazılmadan önce tek transaction'da araç plakası/şase taşıması, organizasyon seed'i, tenant FirmaId backfill'i ve enum metin normalizasyonu çalışır. Su geçirmez foreign key kontrolü sonrası yalnızca watermark'a kadar migration ID'leri eklenir. Eksik/uyumsuz hedef şema, kısmi migration geçmişi, pending DDL çakışması, tanınmayan enum veya FK ihlalinde işlem rollback olur. Release build 0 uyarı / 0 hata; fixture test edilmedi. A-18 sarı.

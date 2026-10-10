@@ -26,7 +26,20 @@ internal static class LicenseSigningKeyStore
         }
         var encrypted = ReadKeyFile(ActivePath);
         var plain = ProtectedData.Unprotect(encrypted, Entropy, DataProtectionScope.CurrentUser);
-        try { return ReadPrivateKey(plain); }
+        try
+        {
+            var activeKey = ReadPrivateKey(plain);
+            try
+            {
+                RetireLegacyPrivateKey(activeKey);
+                return activeKey;
+            }
+            catch
+            {
+                activeKey.Dispose();
+                throw;
+            }
+        }
         finally { CryptographicOperations.ZeroMemory(plain); }
     }
 
@@ -40,6 +53,7 @@ internal static class LicenseSigningKeyStore
     {
         if (password.Length < 16) throw new ArgumentException("Yedek parolası en az 16 karakter olmalıdır.");
         EnsureOutsideRepository(path);
+        EnsureBackupPathIsNotKeyStore(path);
         using var rsa = OpenSigningKey();
         var encrypted = rsa.ExportEncryptedPkcs8PrivateKey(password,
             new PbeParameters(PbeEncryptionAlgorithm.Aes256Cbc, HashAlgorithmName.SHA256, 600_000));
@@ -143,6 +157,44 @@ internal static class LicenseSigningKeyStore
             throw new CryptographicException("İmzalama anahtarı bu sürümün açık anahtarıyla eşleşmiyor. Mevcut anahtar değiştirilmedi.");
     }
 
+    private static void RetireLegacyPrivateKey(RSA activeKey)
+    {
+        var legacyPath = Path.Combine(DirectoryPath, "license-signing-private.pem");
+        if (!File.Exists(legacyPath)) return;
+        if ((File.GetAttributes(legacyPath) & FileAttributes.ReparsePoint) != 0)
+            throw new IOException("Eski imzalama anahtarı sembolik bağlantı; otomatik temizleme durduruldu.");
+
+        var legacyBytes = ReadKeyFile(legacyPath);
+        var legacyChars = new UTF8Encoding(false, true).GetChars(legacyBytes);
+        try
+        {
+            using var legacyKey = RSA.Create();
+            legacyKey.ImportFromPem(legacyChars);
+            VerifyPrivateKey(legacyKey);
+            var activePublicKey = activeKey.ExportSubjectPublicKeyInfo();
+            var legacyPublicKey = legacyKey.ExportSubjectPublicKeyInfo();
+            try
+            {
+                if (!CryptographicOperations.FixedTimeEquals(activePublicKey, legacyPublicKey))
+                    throw new CryptographicException("Eski ve etkin imzalama anahtarları farklı; eski dosya korunarak işlem durduruldu.");
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(activePublicKey);
+                CryptographicOperations.ZeroMemory(legacyPublicKey);
+            }
+
+            File.Delete(legacyPath);
+            if (File.Exists(legacyPath))
+                throw new IOException("Eski düz metin imzalama anahtarı kaldırılamadı.");
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(legacyBytes);
+            Array.Clear(legacyChars);
+        }
+    }
+
     private static byte[] ReadKeyFile(string path)
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -195,4 +247,17 @@ internal static class LicenseSigningKeyStore
             if (Directory.Exists(Path.Combine(current.FullName, ".git")) || File.Exists(Path.Combine(current.FullName, ".git")))
                 throw new IOException("Anahtar yedeğini Git çalışma alanına kaydetmeyin.");
     }
+
+    private static void EnsureBackupPathIsNotKeyStore(string path)
+    {
+        var target = Path.GetFullPath(path);
+        if (PathEquals(target, ActivePath)
+            || PathEquals(target, Path.Combine(DirectoryPath, "license-signing-private.pem")))
+            throw new IOException("Yedek hedefi etkin imzalama anahtarı deposuyla aynı olamaz.");
+    }
+
+    private static bool PathEquals(string left, string right)
+        => string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(left)),
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(right)),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 }

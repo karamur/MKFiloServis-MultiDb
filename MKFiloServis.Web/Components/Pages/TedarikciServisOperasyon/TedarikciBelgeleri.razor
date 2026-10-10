@@ -390,7 +390,7 @@
     private string GetDurum(TedarikciEvrak e)
     {
         if (!e.BitisTarihi.HasValue) return "Eksik";
-        var gun = (e.BitisTarihi.Value.Date - DateTime.Today).Days;
+        var gun = (e.BitisTarihi.Value.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
         if (gun < 0) return "Dolmus";
         if (gun <= 30) return "Yaklasan";
         return "Gecerli";

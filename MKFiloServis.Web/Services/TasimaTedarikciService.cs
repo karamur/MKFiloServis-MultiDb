@@ -544,7 +544,7 @@ public class TasimaTedarikciService : ITasimaTedarikciService
 
         var ozet = new StringBuilder();
         ozet.AppendLine($"Tedarikçi: {tedarikci.Unvan}");
-        ozet.AppendLine($"Tarih: {DateTime.Now:dd.MM.yyyy HH:mm}");
+        ozet.AppendLine($"Tarih: {MKFiloServis.Shared.Time.BusinessTime.Now:dd.MM.yyyy HH:mm}");
         ozet.AppendLine($"Toplam Evrak Kaydı: {evraklar.Count}");
         ozet.AppendLine();
 

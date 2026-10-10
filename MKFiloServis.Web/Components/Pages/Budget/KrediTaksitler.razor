@@ -31,7 +31,7 @@
                 <div class="col-md-2">
                     <select class="form-select form-select-sm" @bind="secilenYil">
                         <option value="0">Tüm Yıllar</option>
-                        @for (int y = DateTime.Today.Year + 1; y >= DateTime.Today.Year - 5; y--)
+                        @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year + 1; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 5; y--)
                         {
                             <option value="@y">@y</option>
                         }
@@ -308,7 +308,7 @@
                                     <tbody>
                                         @foreach (var taksit in secilenKrediTaksitler)
                                         {
-                                            var gecikmisMi = (taksit.Durum == OdemeDurum.Bekliyor || taksit.Durum == OdemeDurum.KismiOdendi) && taksit.OdemeTarihi < DateTime.Today;
+                                            var gecikmisMi = (taksit.Durum == OdemeDurum.Bekliyor || taksit.Durum == OdemeDurum.KismiOdendi) && taksit.OdemeTarihi < MKFiloServis.Shared.Time.BusinessTime.Today;
                                             <tr class="@(taksit.Durum == OdemeDurum.Odendi ? "table-success" : taksit.Durum == OdemeDurum.KismiOdendi ? "table-info" : gecikmisMi ? "table-danger" : "")" style="@(taksit.Durum == OdemeDurum.Odendi ? "border-left: 3px solid #198754;" : taksit.Durum == OdemeDurum.KismiOdendi ? "border-left: 3px solid #0dcaf0;" : gecikmisMi ? "border-left: 3px solid #dc3545;" : "border-left: 3px solid #ffc107;")">
                                                 <td>
                                                     <span class="badge @(taksit.Durum == OdemeDurum.Odendi ? "bg-success" : gecikmisMi ? "bg-danger" : "bg-secondary")">
@@ -319,7 +319,7 @@
                                                     @taksit.OdemeTarihi.ToString("dd.MM.yyyy")
                                                     @if (gecikmisMi)
                                                     {
-                                                        <br /><small class="text-danger">@((DateTime.Today - taksit.OdemeTarihi).Days) gün gecikmiş</small>
+                                                        <br /><small class="text-danger">@((MKFiloServis.Shared.Time.BusinessTime.Today - taksit.OdemeTarihi).Days) gün gecikmiş</small>
                                                     }
                                                 </td>
                                                 <td class="text-end">
@@ -967,7 +967,7 @@
     private KrediOzet? secilenKredi;
     private KrediTaksitDetay? secilenTaksit;
     private KrediTaksitDetay? duzenlenenTaksit;
-    private DateTime duzenlenenTaksitTarihi = DateTime.Today;
+    private DateTime duzenlenenTaksitTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
     private decimal duzenlenenTaksitTutar;
 
     private bool isLoading = true;
@@ -1026,7 +1026,7 @@
     // Ödeme yap form
     private string odemeTipi = "Banka";
     private int secilenHesapId = 0;
-    private DateTime odemeTarihi = DateTime.Today;
+    private DateTime odemeTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
 
     protected override async Task OnInitializedAsync()
     {
@@ -1119,14 +1119,14 @@
         
         tekrarlayanProjeksiyonListesi = new();
         
-        DateTime baslangic = odeme.BaslangicTarihi > DateTime.Today ? odeme.BaslangicTarihi : DateTime.Today;
+        DateTime baslangic = odeme.BaslangicTarihi > MKFiloServis.Shared.Time.BusinessTime.Today ? odeme.BaslangicTarihi : MKFiloServis.Shared.Time.BusinessTime.Today;
         int artisAyi = GetAyCarpani(odeme.Periyod);
         
         DateTime siradakiTarih = new DateTime(baslangic.Year, baslangic.Month, Math.Min(odeme.OdemeGunu, DateTime.DaysInMonth(baslangic.Year, baslangic.Month)));
         
-        if (siradakiTarih < DateTime.Today)
+        if (siradakiTarih < MKFiloServis.Shared.Time.BusinessTime.Today)
         {
-            var nextMonth = DateTime.Today.AddMonths(1);
+            var nextMonth = MKFiloServis.Shared.Time.BusinessTime.Today.AddMonths(1);
             siradakiTarih = new DateTime(nextMonth.Year, nextMonth.Month, Math.Min(odeme.OdemeGunu, DateTime.DaysInMonth(nextMonth.Year, nextMonth.Month)));
         }
         
@@ -1192,15 +1192,15 @@
         {
             "Odendi" => taksit.Durum == OdemeDurum.Odendi,
             "Bekliyor" => taksit.Durum == OdemeDurum.Bekliyor || taksit.Durum == OdemeDurum.KismiOdendi,
-            "Gecikmis" => (taksit.Durum == OdemeDurum.Bekliyor || taksit.Durum == OdemeDurum.KismiOdendi) && taksit.OdemeTarihi.Date < DateTime.Today,
+            "Gecikmis" => (taksit.Durum == OdemeDurum.Bekliyor || taksit.Durum == OdemeDurum.KismiOdendi) && taksit.OdemeTarihi.Date < MKFiloServis.Shared.Time.BusinessTime.Today,
             _ => true
         };
     }
 
     private decimal GetBuAyOdenecek()
     {
-        var buAy = DateTime.Today.Month;
-        var buYil = DateTime.Today.Year;
+        var buAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
+        var buYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
         return secilenKrediTaksitler
             .Where(t => t.OdemeTarihi.Month == buAy && t.OdemeTarihi.Year == buYil && (t.Durum == OdemeDurum.Bekliyor || t.Durum == OdemeDurum.KismiOdendi))
             .Sum(t => t.Durum == OdemeDurum.KismiOdendi ? t.KalanTutar : t.Tutar);
@@ -1213,7 +1213,7 @@
     {
         taksitRequest = new TaksitliOdemeRequest
         {
-            BaslangicTarihi = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(1),
+            BaslangicTarihi = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1).AddMonths(1),
             TaksitSayisi = 12,
             ToplamTutar = 0
         };
@@ -1279,7 +1279,7 @@
     private void OdemeYapModalAc(KrediTaksitDetay taksit)
     {
         secilenTaksit = taksit;
-        odemeTarihi = DateTime.Today;
+        odemeTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
         odemeTipi = "Banka";
         secilenHesapId = 0;
         showOdemeModal = true;

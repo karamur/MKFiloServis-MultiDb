@@ -51,7 +51,7 @@ public class PiyasaKaynak
 
     public bool Aktif { get; set; } = true;
 
-    public DateTime OlusturmaTarihi { get; set; } = DateTime.Now;
+    public DateTime OlusturmaTarihi { get; set; } = DateTime.UtcNow;
 
     public DateTime? GuncellemeTarihi { get; set; }
 

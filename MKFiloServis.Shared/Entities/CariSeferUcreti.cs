@@ -25,7 +25,7 @@ public class CariSeferUcreti : BaseEntity, IFirmaTenant
     public decimal SeferUcreti { get; set; }
 
     /// <summary>Geçerlilik başlangıcı.</summary>
-    public DateTime GecerlilikBaslangic { get; set; } = DateTime.Today;
+    public DateTime GecerlilikBaslangic { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
 
     /// <summary>Geçerlilik bitişi (null = açık uçlu).</summary>
     public DateTime? GecerlilikBitis { get; set; }

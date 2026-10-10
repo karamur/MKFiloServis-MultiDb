@@ -182,7 +182,7 @@
                                             @* Ehliyet durumu *@
                                             @if (personel.EhliyetGecerlilikTarihi.HasValue)
                                             {
-                                                var gunKaldi = (personel.EhliyetGecerlilikTarihi.Value - DateTime.Today).Days;
+                                                var gunKaldi = (personel.EhliyetGecerlilikTarihi.Value - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
                                                 <span class="badge @(gunKaldi < 30 ? "bg-danger" : gunKaldi < 60 ? "bg-warning text-dark" : "bg-success")" 
                                                       title="Ehliyet: @personel.EhliyetGecerlilikTarihi.Value.ToString("dd.MM.yyyy")">
                                                     <i class="bi bi-card-text"></i>
@@ -191,7 +191,7 @@
                                             @* MYK durumu *@
                                             @if (personel.MykBelgesiGecerlilikTarihi.HasValue)
                                             {
-                                                var gunKaldi = (personel.MykBelgesiGecerlilikTarihi.Value - DateTime.Today).Days;
+                                                var gunKaldi = (personel.MykBelgesiGecerlilikTarihi.Value - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
                                                 <span class="badge @(gunKaldi < 30 ? "bg-danger" : gunKaldi < 60 ? "bg-warning text-dark" : "bg-success") ms-1" 
                                                       title="MYK: @personel.MykBelgesiGecerlilikTarihi.Value.ToString("dd.MM.yyyy")">
                                                     <i class="bi bi-award"></i>
@@ -669,7 +669,7 @@
         try
         {
             var bytes = await SoforService.ExportToExcelAsync();
-            var dosyaAdi = $"personel_listesi_{DateTime.Now:yyyyMMdd}.xlsx";
+            var dosyaAdi = $"personel_listesi_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.xlsx";
             await JS.InvokeVoidAsync("downloadFileFromBase64", dosyaAdi, Convert.ToBase64String(bytes));
             ToastService.ShowSuccess("Personel listesi Excel'e aktarıldı.");
         }
@@ -771,7 +771,7 @@
         {
             var bytes = await OzlukService.ExportPersonelDosyaPdfAsync(personelId);
             var personel = personeller?.FirstOrDefault(p => p.Id == personelId);
-            var dosyaAdi = $"personel_dosyasi_{personel?.SoforKodu ?? personelId.ToString()}_{DateTime.Now:yyyyMMdd}.pdf";
+            var dosyaAdi = $"personel_dosyasi_{personel?.SoforKodu ?? personelId.ToString()}_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.pdf";
             await JS.InvokeVoidAsync("downloadFileFromBase64", dosyaAdi, Convert.ToBase64String(bytes));
             ToastService.ShowSuccess("Personel dosyası indirildi.");
         }
@@ -786,7 +786,7 @@
         try
         {
             var bytes = await OzlukService.ExportBosPersonelDosyaPdfAsync();
-            var dosyaAdi = $"bos_personel_dosyasi_{DateTime.Now:yyyyMMdd}.pdf";
+            var dosyaAdi = $"bos_personel_dosyasi_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.pdf";
             await JS.InvokeVoidAsync("downloadFileFromBase64", dosyaAdi, Convert.ToBase64String(bytes));
             ToastService.ShowSuccess("Boş personel dosyası indirildi.");
         }

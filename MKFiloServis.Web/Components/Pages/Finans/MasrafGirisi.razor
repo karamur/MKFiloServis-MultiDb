@@ -507,7 +507,7 @@
 @code {
     private BankaKasaHareket hareket = new()
     {
-        IslemTarihi = DateTime.Today,
+        IslemTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
         HareketTipi = HareketTipi.Cikis
     };
 
@@ -706,7 +706,7 @@
             var eskiKaynak = odemeKaynagi;
             hareket = new BankaKasaHareket
             {
-                IslemTarihi = DateTime.Today,
+                IslemTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
                 HareketTipi = HareketTipi.Cikis,
                 BankaHesapId = eskiKaynak != OdemeKaynakTipi.PersonelCebinden ? eskiHesapId : 0
             };

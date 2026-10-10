@@ -21,4 +21,4 @@ SQLite senaryoları ayrıca `MKFiloServis.Tests/BankMovementTenantMigrationTests
 
 ## Sınır
 
-Bu çalışma migration SQL'ini **asgari tablo şeması** üzerinde uyguladı. Gerçek uygulamanın tüm migration zinciri, mevcut müşteri verisi, audit tetikleyicileriyle birlikte çalışma, yüksek hacim ve eşzamanlı işlem yarışı henüz kabul edilmedi. Diğer Banka/Kasa hareketi tenant ilişkileri A-15 kapsamında açık. Görev 🔴 kalır.
+Bu çalışma migration SQL'ini **asgari tablo şeması** üzerinde uyguladı. Gerçek uygulamanın tüm migration zinciri, mevcut müşteri verisi, audit tetikleyicileriyle birlikte çalışma, yüksek hacim ve eşzamanlı işlem yarışı bu kanıtın kapsamı dışındadır. Bu belge 2026-10-06 tarihli ara kanıttır; 2026-10-09 kullanıcı kapsam kararıyla A-15 kod teslimi kapatılmıştır. Müşteri DB ve canlı eşzamanlılık kabulü dağıtım operasyonunda kalır, görev rengini açık tutmaz.

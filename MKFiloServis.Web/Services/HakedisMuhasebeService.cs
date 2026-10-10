@@ -15,22 +15,26 @@ public class HakedisMuhasebeService : IHakedisMuhasebeService
     private readonly IDbContextFactory<ApplicationDbContext> _cf;
     private readonly IMuhasebeService _ms;
     private readonly ILogger<HakedisMuhasebeService> _logger;
+    private readonly CurrentPermissionGuard _permissionGuard;
 
-    public HakedisMuhasebeService(IDbContextFactory<ApplicationDbContext> cf, IMuhasebeService ms, ILogger<HakedisMuhasebeService> logger)
+    public HakedisMuhasebeService(IDbContextFactory<ApplicationDbContext> cf, IMuhasebeService ms, ILogger<HakedisMuhasebeService> logger, CurrentPermissionGuard permissionGuard)
     {
         _cf = cf;
         _ms = ms;
         _logger = logger;
+        _permissionGuard = permissionGuard;
     }
 
     public async Task MuhasebeyeAktarAsync(int hakedisId)
     {
+        await _permissionGuard.RequireAnyAsync(Yetkiler.MuhasebeFisleriYaz);
         await using var tempContext = await _cf.CreateDbContextAsync();
         var strategy = tempContext.Database.CreateExecutionStrategy();
 
         await strategy.ExecuteAsync(async () =>
         {
             await using var context = await _cf.CreateDbContextAsync();
+            await using var tx = await context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
 
             var hakedis = await context.Hakedisler
                 .Include(h => h.Fatura)
@@ -81,8 +85,6 @@ public class HakedisMuhasebeService : IHakedisMuhasebeService
 
             var fisTarihi = fatura?.FaturaTarihi.Date ?? new DateTime(hakedis.Yil, hakedis.Ay, DateTime.DaysInMonth(hakedis.Yil, hakedis.Ay));
             var donemAdi = $"{hakedis.Ay:D2}/{hakedis.Yil}";
-
-            await using var tx = await context.Database.BeginTransactionAsync();
 
             try
             {

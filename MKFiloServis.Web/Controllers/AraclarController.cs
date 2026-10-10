@@ -16,10 +16,12 @@ namespace MKFiloServis.Web.Controllers;
 public class AraclarController : ControllerBase
 {
     private readonly IAracService _aracService;
+    private readonly CurrentPermissionGuard _permissionGuard;
 
-    public AraclarController(IAracService aracService)
+    public AraclarController(IAracService aracService, CurrentPermissionGuard permissionGuard)
     {
         _aracService = aracService;
+        _permissionGuard = permissionGuard;
     }
 
     /// <summary>
@@ -28,6 +30,7 @@ public class AraclarController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] bool? aktif = null, [FromQuery] string? sahiplikTipi = null)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.AraclarOku)) return Forbid();
         var araclar = await _aracService.GetAllAsync();
         
         if (aktif.HasValue)
@@ -69,6 +72,7 @@ public class AraclarController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.AraclarOku)) return Forbid();
         var arac = await _aracService.GetByIdAsync(id);
         if (arac == null)
             return NotFound(new { Error = "Araç bulunamadı" });
@@ -100,6 +104,7 @@ public class AraclarController : ControllerBase
     [HttpGet("plaka/{plaka}")]
     public async Task<IActionResult> GetByPlaka(string plaka)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.AraclarOku)) return Forbid();
         var arac = await _aracService.GetByPlakaAsync(plaka);
         if (arac == null)
             return NotFound(new { Error = "Araç bulunamadı" });
@@ -131,6 +136,7 @@ public class AraclarController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] AracCreateDto dto)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.AraclarYaz)) return Forbid();
         if (string.IsNullOrEmpty(dto.AktifPlaka) && string.IsNullOrEmpty(dto.SaseNo))
             return BadRequest(new { Error = "Plaka veya şase numarası gereklidir" });
 
@@ -185,6 +191,7 @@ public class AraclarController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] AracUpdateDto dto)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.AraclarDuzenle)) return Forbid();
         var arac = await _aracService.GetByIdAsync(id);
         if (arac == null)
             return NotFound(new { Error = "Araç bulunamadı" });
@@ -260,6 +267,7 @@ public class AraclarController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.AraclarSil)) return Forbid();
         var arac = await _aracService.GetByIdAsync(id);
         if (arac == null)
             return NotFound(new { Error = "Araç bulunamadı" });
@@ -274,6 +282,7 @@ public class AraclarController : ControllerBase
     [HttpPatch("{id}/km")]
     public async Task<IActionResult> UpdateKm(int id, [FromBody] KmUpdateDto dto)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.AraclarDuzenle)) return Forbid();
         var arac = await _aracService.GetByIdAsync(id);
         if (arac == null)
             return NotFound(new { Error = "Araç bulunamadı" });
@@ -293,6 +302,7 @@ public class AraclarController : ControllerBase
     [HttpGet("belge-uyari")]
     public async Task<IActionResult> GetBelgeUyarilari([FromQuery] int gun = 30)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.AraclarOku)) return Forbid();
         var simdi = DateTime.UtcNow;
         var sinirTarih = simdi.AddDays(gun);
 

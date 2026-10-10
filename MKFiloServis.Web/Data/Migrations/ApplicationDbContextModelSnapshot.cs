@@ -274,7 +274,7 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.Property<int>("KoltukSayisi")
                         .HasColumnType("integer");
 
-                    b.Property<DateTime?>("KoltukSigortasiBaslangiçTarihi")
+                    b.Property<DateTime?>("KoltukSigortasiBaslangiÃ§Tarihi")
                         .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("KoltukSigortasiBitisTarihi")
@@ -583,106 +583,6 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.HasIndex("FirmaId");
 
                     b.ToTable("AracBakimUyarilari");
-                });
-
-            modelBuilder.Entity("MKFiloServis.Shared.Entities.AracBolge", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<bool>("Aktif")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("BolgeAdi")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<bool>("CikisBildirimi")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<int?>("DeletedBy")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("GirisBildirimi")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<double?>("MerkezLatitude")
-                        .HasColumnType("double precision");
-
-                    b.Property<double?>("MerkezLongitude")
-                        .HasColumnType("double precision");
-
-                    b.Property<string>("Notlar")
-                        .HasColumnType("text");
-
-                    b.Property<string>("PoligonKoordinatlari")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Renk")
-                        .HasColumnType("text");
-
-                    b.Property<int>("Tip")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<double?>("YaricapMetre")
-                        .HasColumnType("double precision");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("AracBolgeler");
-                });
-
-            modelBuilder.Entity("MKFiloServis.Shared.Entities.AracBolgeAtama", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AracBolgeId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("AracId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<int?>("DeletedBy")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AracBolgeId");
-
-                    b.HasIndex("AracId");
-
-                    b.ToTable("AracBolgeAtamalar");
                 });
 
             modelBuilder.Entity("MKFiloServis.Shared.Entities.AracEvrak", b =>
@@ -1310,81 +1210,6 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.HasIndex("AracId", "IslemTarihi");
 
                     b.ToTable("AracIslemler");
-                });
-
-            modelBuilder.Entity("MKFiloServis.Shared.Entities.AracKonum", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Adres")
-                        .HasColumnType("text");
-
-                    b.Property<int>("AracTakipCihazId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<int?>("DeletedBy")
-                        .HasColumnType("integer");
-
-                    b.Property<double?>("Hassasiyet")
-                        .HasColumnType("double precision");
-
-                    b.Property<double?>("Hiz")
-                        .HasColumnType("double precision");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("KayitZamani")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<int?>("Kilometre")
-                        .HasColumnType("integer");
-
-                    b.Property<bool?>("KontakDurumu")
-                        .HasColumnType("boolean");
-
-                    b.Property<double>("Latitude")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("Longitude")
-                        .HasColumnType("double precision");
-
-                    b.Property<bool?>("MotorDurumu")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("OlayTipi")
-                        .HasColumnType("integer");
-
-                    b.Property<double?>("Rakım")
-                        .HasColumnType("double precision");
-
-                    b.Property<double?>("Sicaklik")
-                        .HasColumnType("double precision");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<int?>("YakitSeviyesi")
-                        .HasColumnType("integer");
-
-                    b.Property<double?>("Yon")
-                        .HasColumnType("double precision");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AracTakipCihazId");
-
-                    b.ToTable("AracKonumlar");
                 });
 
             modelBuilder.Entity("MKFiloServis.Shared.Entities.AracMaliyetSnapshot", b =>
@@ -2045,130 +1870,6 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.HasIndex("SatisPersoneliId");
 
                     b.ToTable("AracSatislari");
-                });
-
-            modelBuilder.Entity("MKFiloServis.Shared.Entities.AracTakipAlarm", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AlarmTipi")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("AlarmZamani")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<int>("AracTakipCihazId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<double?>("Deger")
-                        .HasColumnType("double precision");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<int?>("DeletedBy")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("Islendi")
-                        .HasColumnType("boolean");
-
-                    b.Property<double?>("Latitude")
-                        .HasColumnType("double precision");
-
-                    b.Property<double?>("Longitude")
-                        .HasColumnType("double precision");
-
-                    b.Property<string>("Mesaj")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Notlar")
-                        .HasColumnType("text");
-
-                    b.Property<bool>("Okundu")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AracTakipCihazId");
-
-                    b.ToTable("AracTakipAlarmlar");
-                });
-
-            modelBuilder.Entity("MKFiloServis.Shared.Entities.AracTakipCihaz", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<bool>("Aktif")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("AracId")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("BataryaSeviyesi")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("CihazId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("CihazMarka")
-                        .HasColumnType("text");
-
-                    b.Property<string>("CihazModel")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<int?>("DeletedBy")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("KurulumTarihi")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<string>("Notlar")
-                        .HasColumnType("text");
-
-                    b.Property<string>("SimKartNo")
-                        .HasColumnType("text");
-
-                    b.Property<int?>("SinyalGucu")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("SonIletisimZamani")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AracId");
-
-                    b.ToTable("AracTakipCihazlar");
                 });
 
             modelBuilder.Entity("MKFiloServis.Shared.Entities.AuditLog", b =>
@@ -16583,25 +16284,6 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.Navigation("Firma");
                 });
 
-            modelBuilder.Entity("MKFiloServis.Shared.Entities.AracBolgeAtama", b =>
-                {
-                    b.HasOne("MKFiloServis.Shared.Entities.AracBolge", "AracBolge")
-                        .WithMany("Atamalar")
-                        .HasForeignKey("AracBolgeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("MKFiloServis.Shared.Entities.Arac", "Arac")
-                        .WithMany()
-                        .HasForeignKey("AracId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Arac");
-
-                    b.Navigation("AracBolge");
-                });
-
             modelBuilder.Entity("MKFiloServis.Shared.Entities.AracEvrak", b =>
                 {
                     b.HasOne("MKFiloServis.Shared.Entities.Arac", "Arac")
@@ -16758,17 +16440,6 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.Navigation("StokHareket");
                 });
 
-            modelBuilder.Entity("MKFiloServis.Shared.Entities.AracKonum", b =>
-                {
-                    b.HasOne("MKFiloServis.Shared.Entities.AracTakipCihaz", "AracTakipCihaz")
-                        .WithMany("Konumlar")
-                        .HasForeignKey("AracTakipCihazId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("AracTakipCihaz");
-                });
-
             modelBuilder.Entity("MKFiloServis.Shared.Entities.AracMaliyetSnapshot", b =>
                 {
                     b.HasOne("MKFiloServis.Shared.Entities.Arac", "Arac")
@@ -16919,28 +16590,6 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.Navigation("AracIlan");
 
                     b.Navigation("SatisPersoneli");
-                });
-
-            modelBuilder.Entity("MKFiloServis.Shared.Entities.AracTakipAlarm", b =>
-                {
-                    b.HasOne("MKFiloServis.Shared.Entities.AracTakipCihaz", "AracTakipCihaz")
-                        .WithMany()
-                        .HasForeignKey("AracTakipCihazId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("AracTakipCihaz");
-                });
-
-            modelBuilder.Entity("MKFiloServis.Shared.Entities.AracTakipCihaz", b =>
-                {
-                    b.HasOne("MKFiloServis.Shared.Entities.Arac", "Arac")
-                        .WithMany()
-                        .HasForeignKey("AracId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Arac");
                 });
 
             modelBuilder.Entity("MKFiloServis.Shared.Entities.AuditLog", b =>
@@ -20205,11 +19854,6 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.Navigation("ServisCalismalari");
                 });
 
-            modelBuilder.Entity("MKFiloServis.Shared.Entities.AracBolge", b =>
-                {
-                    b.Navigation("Atamalar");
-                });
-
             modelBuilder.Entity("MKFiloServis.Shared.Entities.AracEvrak", b =>
                 {
                     b.Navigation("Dosyalar");
@@ -20233,11 +19877,6 @@ namespace MKFiloServis.Web.Data.Migrations
             modelBuilder.Entity("MKFiloServis.Shared.Entities.AracPiyasaArastirma", b =>
                 {
                     b.Navigation("Ilanlar");
-                });
-
-            modelBuilder.Entity("MKFiloServis.Shared.Entities.AracTakipCihaz", b =>
-                {
-                    b.Navigation("Konumlar");
                 });
 
             modelBuilder.Entity("MKFiloServis.Shared.Entities.AylikChecklist", b =>

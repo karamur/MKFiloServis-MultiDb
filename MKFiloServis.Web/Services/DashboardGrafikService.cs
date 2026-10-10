@@ -168,7 +168,7 @@ public class DashboardGrafikService : IDashboardGrafikService
     public async Task<List<MasrafKategoriDagilimi>> GetMasrafKategoriDagilimiAsync(int aySayisi = 6)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var baslangic = new DateTime(bugun.Year, bugun.Month, 1).AddMonths(-aySayisi + 1);
         var bitis = new DateTime(bugun.Year, bugun.Month, 1).AddMonths(1).AddDays(-1);
 
@@ -252,7 +252,7 @@ public class DashboardGrafikService : IDashboardGrafikService
     public async Task<List<AylikButceVeri>> GetAylikButceAsync(int aySayisi = 6)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var baslangic = new DateTime(bugun.Year, bugun.Month, 1).AddMonths(-aySayisi + 1);
         var bitis = new DateTime(bugun.Year, bugun.Month, 1).AddMonths(1).AddDays(-1);
 

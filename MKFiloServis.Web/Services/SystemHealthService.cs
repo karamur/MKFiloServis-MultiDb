@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Web.Services.Interfaces;
@@ -40,7 +40,7 @@ public class SystemHealthService : ISystemHealthService
     {
         var report = new SystemHealthReport
         {
-            CheckedAt = DateTime.Now,
+            CheckedAt = DateTime.UtcNow,
             MachineName = Environment.MachineName,
             OsVersion = Environment.OSVersion.ToString(),
             ProcessorCount = Environment.ProcessorCount,
@@ -58,7 +58,7 @@ public class SystemHealthService : ISystemHealthService
         await Task.WhenAll(tasks);
 
         // Uygulama bilgileri
-        report.Uptime = DateTime.Now - Process.GetCurrentProcess().StartTime;
+        report.Uptime = DateTime.UtcNow - Process.GetCurrentProcess().StartTime.ToUniversalTime();
         report.ThreadCount = Process.GetCurrentProcess().Threads.Count;
 
         // Genel durum belirleme

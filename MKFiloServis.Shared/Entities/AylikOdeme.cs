@@ -32,7 +32,7 @@ public class AylikOdemePlani : BaseEntity, IFirmaTenant
     /// <summary>
     /// Ba�lang�� tarihi
     /// </summary>
-    public DateTime BaslangicTarihi { get; set; } = DateTime.Today;
+    public DateTime BaslangicTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
 
     /// <summary>
     /// Biti� tarihi (null ise s�resiz)

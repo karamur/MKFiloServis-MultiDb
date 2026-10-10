@@ -30,8 +30,10 @@ public sealed class ResilientHttpMessageHandler : DelegatingHandler
         ILogger<ResilientHttpMessageHandler> logger,
         bool retryNonIdempotent = false)
     {
-        _maxRetries = Math.Max(0, maxRetries);
-        _baseDelay = baseDelay;
+        _maxRetries = Math.Clamp(maxRetries, 0, 10);
+        // Bound caller configuration so exponential backoff cannot overflow TimeSpan or
+        // accidentally stall an outbound request for an unreasonable duration.
+        _baseDelay = TimeSpan.FromMilliseconds(Math.Clamp(baseDelay.TotalMilliseconds, 0, 5_000));
         _retryNonIdempotent = retryNonIdempotent;
         _logger = logger;
     }
@@ -60,12 +62,15 @@ public sealed class ResilientHttpMessageHandler : DelegatingHandler
                         "Gecici HTTP hatasi ({StatusCode}); {Attempt}/{Max} denemede tekrar deneniyor. Url: {Url}",
                         (int)response.StatusCode, attempt + 1, _maxRetries, request.RequestUri);
                     response.Dispose();
+                    deneme.Dispose();
                     await Task.Delay(BeklemeSuresi(attempt), cancellationToken).ConfigureAwait(false);
                     continue;
                 }
 
                 // Başarılı yanıt: deneme kopyasının yaşam döngüsü çağırana bırakılır, çünkü
-                // dönen HttpResponseMessage bu isteğe bağlıdır.
+                // dönen yanıtın RequestMessage alanında çağıranın özgün isteğini tutuyoruz.
+                response.RequestMessage = request;
+                deneme.Dispose();
                 return response;
             }
             catch (HttpRequestException ex) when (attempt < _maxRetries && !cancellationToken.IsCancellationRequested)
@@ -79,6 +84,7 @@ public sealed class ResilientHttpMessageHandler : DelegatingHandler
                 _logger.LogWarning(ex,
                     "Ag hatasi; {Attempt}/{Max} denemede tekrar deneniyor. Url: {Url}",
                     attempt + 1, _maxRetries, request.RequestUri);
+                deneme.Dispose();
                 await Task.Delay(BeklemeSuresi(attempt), cancellationToken).ConfigureAwait(false);
             }
             catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -95,6 +101,7 @@ public sealed class ResilientHttpMessageHandler : DelegatingHandler
                 _logger.LogWarning(
                     "Istek zaman asimina ugradi; {Attempt}/{Max} denemede tekrar deneniyor. Url: {Url}",
                     attempt + 1, _maxRetries, request.RequestUri);
+                deneme.Dispose();
                 await Task.Delay(BeklemeSuresi(attempt), cancellationToken).ConfigureAwait(false);
             }
             catch
@@ -110,7 +117,8 @@ public sealed class ResilientHttpMessageHandler : DelegatingHandler
     {
         var kopya = new HttpRequestMessage(kaynak.Method, kaynak.RequestUri)
         {
-            Version = kaynak.Version
+            Version = kaynak.Version,
+            VersionPolicy = kaynak.VersionPolicy
         };
 
         if (govde is not null)

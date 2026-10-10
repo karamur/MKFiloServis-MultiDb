@@ -238,7 +238,7 @@
                                         @foreach (var mesaj in gonderilenMesajlar)
                                         {
                                             <tr>
-                                                <td><small>@mesaj.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</small></td>
+                                                <td><small>@MKFiloServis.Shared.Time.BusinessTime.LocalAt(mesaj.CreatedAt).ToString("dd.MM.yyyy HH:mm")</small></td>
                                                 <td><strong>@mesaj.DisAlici</strong></td>
                                                 <td>
                                                     <span class="badge @GetDurumBadge(mesaj.Durum)">@GetDurumAdi(mesaj.Durum)</span>
@@ -265,7 +265,7 @@
                                         @foreach (var mail in AktifEmailListesi)
                                         {
                                             <tr class="@(!mail.Okundu && emailListeTab == "gelen" ? "table-light" : "")">
-                                                <td><small>@mail.Tarih.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</small></td>
+                                                <td><small>@MKFiloServis.Shared.Time.BusinessTime.LocalAt(mail.Tarih).ToString("dd.MM.yyyy HH:mm")</small></td>
                                                 <td><strong>@(emailListeTab == "gelen" ? mail.Kimden : mail.Kime)</strong></td>
                                                 <td>@mail.Baslik</td>
                                                 <td>

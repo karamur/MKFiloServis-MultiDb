@@ -1,4 +1,4 @@
-﻿@page "/setup"
+@page "/setup"
 @layout EmptyLayout
 @attribute [AllowAnonymous]
 @using MKFiloServis.Shared.Entities
@@ -543,8 +543,8 @@
             firma.Adres = string.IsNullOrWhiteSpace(firmaAdres) ? null : firmaAdres.Trim();
             firma.VarsayilanFirma = true;
             firma.Aktif = true;
-            firma.AktifDonemYil = DateTime.Today.Year;
-            firma.AktifDonemAy = DateTime.Today.Month;
+            firma.AktifDonemYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+            firma.AktifDonemAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
             await ctx.SaveChangesAsync();
 
             // 2. Roller

@@ -1,4 +1,4 @@
-﻿using MKFiloServis.Shared.Entities;
+using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Web.Services.Interfaces;
@@ -398,7 +398,7 @@ public class PersonelMaasIzinService : IPersonelMaasIzinService
         {
             izin.Durum = IzinDurum.Onaylandi;
             izin.OnaylayanKisi = onaylayanKisi;
-            izin.OnayTarihi = DateTime.Now;
+            izin.OnayTarihi = DateTime.UtcNow;
 
             // Yıllık izinse kullanımı güncelle
             if (izin.IzinTipi == IzinTipi.YillikIzin)
@@ -625,8 +625,8 @@ public class PersonelMaasIzinService : IPersonelMaasIzinService
     public async Task<List<PersonelOzet>> GetPersonelOzetListesiAsync()
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var buAy = DateTime.Today.Month;
-        var buYil = DateTime.Today.Year;
+        var buAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
+        var buYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
 
         var donemBaslangic = new DateTime(buYil, buAy, 1);
         var soforler = await context.Soforler

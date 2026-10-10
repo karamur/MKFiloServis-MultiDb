@@ -97,7 +97,7 @@ public class CariHatirlatmaService : ICariHatirlatmaService
         var hedefFirmaId = firmaId ?? aktifFirma?.FirmaId;
         
         var ayarlar = await GetAyarlarAsync(hedefFirmaId);
-        var rapor = new CariHatirlatmaRapor { RaporTarihi = DateTime.Now };
+        var rapor = new CariHatirlatmaRapor { RaporTarihi = DateTime.UtcNow };
         
         await using var context = await _contextFactory.CreateDbContextAsync();
         
@@ -185,7 +185,7 @@ public class CariHatirlatmaService : ICariHatirlatmaService
         }
         
         // Ayarları güncelle
-        ayarlar.SonKontrolTarihi = DateTime.Now;
+        ayarlar.SonKontrolTarihi = MKFiloServis.Shared.Time.BusinessTime.Now;
         ayarlar.SonKontrolUyariSayisi = rapor.ToplamUyariSayisi;
         await SaveAyarlarAsync(ayarlar, hedefFirmaId);
         
@@ -213,7 +213,7 @@ public class CariHatirlatmaService : ICariHatirlatmaService
     private async Task<List<CariHatirlatmaDetay>> VadeYaklasanFaturalariGetirInternalAsync(
         ApplicationDbContext context, int? firmaId, CariHatirlatmaSettings ayarlar)
     {
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var maxGun = ayarlar.VadeYaklasanGunleri.Max();
         var sonTarih = bugun.AddDays(maxGun);
         
@@ -270,7 +270,7 @@ public class CariHatirlatmaService : ICariHatirlatmaService
     private async Task<List<CariHatirlatmaDetay>> VadeGecmisFaturalariGetirInternalAsync(
         ApplicationDbContext context, int? firmaId, CariHatirlatmaSettings ayarlar)
     {
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         
         var faturalar = await context.Faturalar
             .Include(f => f.Cari)
@@ -430,7 +430,7 @@ public class CariHatirlatmaService : ICariHatirlatmaService
     private async Task<List<CariHatirlatmaDetay>> HareketsizCarileriGetirInternalAsync(
         ApplicationDbContext context, int? firmaId, CariHatirlatmaSettings ayarlar)
     {
-        var esikTarih = DateTime.Now.AddDays(-ayarlar.HareketsizCariGunSayisi);
+        var esikTarih = MKFiloServis.Shared.Time.BusinessTime.Now.AddDays(-ayarlar.HareketsizCariGunSayisi);
         
         // Son hareket tarihi esik tarihinden önce olan cariler
         var cariler = await context.Cariler
@@ -466,7 +466,7 @@ public class CariHatirlatmaService : ICariHatirlatmaService
             .Select(c => 
             {
                 var sonHareket = c.SonFaturaTarihi > c.SonHareketTarihi ? c.SonFaturaTarihi : c.SonHareketTarihi;
-                var gecenGun = (DateTime.Now - sonHareket!.Value).Days;
+                var gecenGun = (MKFiloServis.Shared.Time.BusinessTime.Now - sonHareket!.Value).Days;
                 
                 return new CariHatirlatmaDetay
                 {
@@ -493,7 +493,7 @@ public class CariHatirlatmaService : ICariHatirlatmaService
     {
         var aktifFirma = _firmaService.GetAktifFirma();
         var hedefFirmaId = firmaId ?? aktifFirma?.FirmaId;
-        var baslangic = DateTime.Now.AddDays(-sonKacGun);
+        var baslangic = MKFiloServis.Shared.Time.BusinessTime.Now.AddDays(-sonKacGun);
         
         await using var context = await _contextFactory.CreateDbContextAsync();
         
@@ -807,7 +807,7 @@ public class CariHatirlatmaService : ICariHatirlatmaService
         
         await using var context = await _contextFactory.CreateDbContextAsync();
         
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var haftaBasi = bugun.AddDays(-(int)bugun.DayOfWeek);
         
         var ozet = new CariHatirlatmaOzet

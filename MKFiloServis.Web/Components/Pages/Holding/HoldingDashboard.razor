@@ -31,7 +31,7 @@ else
             <div>
                 <div class="d-flex gap-2 align-items-center">
                     <select class="form-select form-select-sm" style="width:80px" @bind="seciliYil">
-                        @for (int y = DateTime.Now.Year; y >= DateTime.Now.Year - 3; y--)
+                        @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 3; y--)
                         {
                             <option value="@y">@y</option>
                         }
@@ -163,8 +163,8 @@ else
     private bool isLoading = true;
     private bool toplaniyor;
     private List<HoldingVeri> veriler = new();
-    private int seciliYil = DateTime.Now.Year;
-    private int seciliAy = DateTime.Now.Month;
+    private int seciliYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    private int seciliAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
 
     protected override async Task OnInitializedAsync()
     {

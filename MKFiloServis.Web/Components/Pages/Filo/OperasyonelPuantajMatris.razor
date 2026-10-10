@@ -49,7 +49,7 @@
                 <div class="col-md-1">
                     <label class="form-label small mb-1">Yıl</label>
                     <select class="form-select form-select-sm" @bind="seciliYil" @bind:after="YukleAsync">
-                        @for (var yil = DateTime.Today.Year + 1; yil >= DateTime.Today.Year - 3; yil--)
+                        @for (var yil = MKFiloServis.Shared.Time.BusinessTime.Today.Year + 1; yil >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 3; yil--)
                         {
                             <option value="@yil">@yil</option>
                         }
@@ -249,8 +249,8 @@
 
     private bool isBusy;
     private string? hataMesaji;
-    private int seciliAy = DateTime.Today.Month;
-    private int seciliYil = DateTime.Today.Year;
+    private int seciliAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
+    private int seciliYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
 
     private string filtreKurum = string.Empty;
     private string filtreGuzergah = string.Empty;

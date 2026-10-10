@@ -50,6 +50,8 @@ public class S3ObjectStorageService : IObjectStorageService
         }
         catch (Exception ex)
         {
+            if (ex is OperationCanceledException && ct.IsCancellationRequested)
+                throw;
             _logger.LogError(ex, "S3: yükleme başarısız {Key}", key);
             throw;
         }
@@ -86,6 +88,8 @@ public class S3ObjectStorageService : IObjectStorageService
         }
         catch (Exception ex)
         {
+            if (ex is OperationCanceledException && ct.IsCancellationRequested)
+                throw;
             _logger.LogError(ex, "S3: silme başarısız {Key}", key);
             throw;
         }
@@ -124,11 +128,13 @@ public class S3ObjectStorageService : IObjectStorageService
     {
         var date = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ");
         var dateShort = date[..8];
-        var url = $"{_serviceUrl}/{_bucket}/{Uri.EscapeDataString(key)}";
+        var url = $"{_serviceUrl.TrimEnd('/')}/{Uri.EscapeDataString(_bucket)}/{EscapeObjectKey(key)}";
 
         var request = new HttpRequestMessage(method, url);
         request.Headers.Add("x-amz-date", date);
-        request.Headers.Add("Host", new Uri(_serviceUrl).Host);
+        var requestUri = request.RequestUri!;
+        var hostHeader = requestUri.IsDefaultPort ? requestUri.Host : requestUri.Authority;
+        request.Headers.Host = hostHeader;
 
         if (body != null)
         {
@@ -140,7 +146,7 @@ public class S3ObjectStorageService : IObjectStorageService
         var payloadHash = ComputeSha256Hex(body ?? Array.Empty<byte>());
         request.Headers.Add("x-amz-content-sha256", payloadHash);
 
-        var authHeader = BuildAuthorizationHeader(method.Method, key, date, dateShort, payloadHash, contentType);
+        var authHeader = BuildAuthorizationHeader(method.Method, requestUri, date, dateShort, payloadHash);
         // HttpHeaders' Authorization parser does not recognize AWS SigV4's
         // comma-separated Credential/SignedHeaders/Signature parameter syntax.
         request.Headers.TryAddWithoutValidation("Authorization", authHeader);
@@ -148,12 +154,13 @@ public class S3ObjectStorageService : IObjectStorageService
         return request;
     }
 
-    private string BuildAuthorizationHeader(string method, string key, string date, string dateShort, string payloadHash, string contentType)
+    private string BuildAuthorizationHeader(string method, Uri requestUri, string date, string dateShort, string payloadHash)
     {
-        var host = new Uri(_serviceUrl).Host;
+        var host = requestUri.IsDefaultPort ? requestUri.Host : requestUri.Authority;
         var canonicalHeaders = $"host:{host}\nx-amz-content-sha256:{payloadHash}\nx-amz-date:{date}\n";
         var signedHeaders = "host;x-amz-content-sha256;x-amz-date";
-        var canonicalRequest = $"{method}\n/{_bucket}/{Uri.EscapeDataString(key)}\n\n{canonicalHeaders}\n{signedHeaders}\n{payloadHash}";
+        var canonicalUri = "/" + requestUri.GetComponents(UriComponents.Path, UriFormat.UriEscaped).TrimStart('/');
+        var canonicalRequest = $"{method}\n{canonicalUri}\n\n{canonicalHeaders}\n{signedHeaders}\n{payloadHash}";
 
         var scope = $"{dateShort}/{_region}/s3/aws4_request";
         var stringToSign = $"AWS4-HMAC-SHA256\n{date}\n{scope}\n{ComputeSha256Hex(Encoding.UTF8.GetBytes(canonicalRequest))}";
@@ -162,6 +169,14 @@ public class S3ObjectStorageService : IObjectStorageService
         var signature = ComputeHmacHex(signingKey, stringToSign);
 
         return $"AWS4-HMAC-SHA256 Credential={_accessKey}/{scope}, SignedHeaders={signedHeaders}, Signature={signature}";
+    }
+
+    private static string EscapeObjectKey(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key) || key.StartsWith('/') || key.Contains('\\'))
+            throw new InvalidOperationException("S3 nesne anahtarı göreli ve geçerli bir yol olmalıdır.");
+
+        return string.Join('/', key.Split('/').Select(Uri.EscapeDataString));
     }
 
     private byte[] GetSigningKey(string dateShort)

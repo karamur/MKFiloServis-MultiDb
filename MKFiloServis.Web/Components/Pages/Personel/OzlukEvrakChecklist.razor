@@ -1397,7 +1397,7 @@
         {
             var bytes = await OzlukService.ExportPersonelDosyaPdfAsync(soforId);
             var personel = durumlar?.FirstOrDefault(d => d.SoforId == soforId);
-            var dosyaAdi = $"personel_dosyasi_{personel?.PersonelKodu ?? soforId.ToString()}_{DateTime.Now:yyyyMMdd}.pdf";
+            var dosyaAdi = $"personel_dosyasi_{personel?.PersonelKodu ?? soforId.ToString()}_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.pdf";
             await JS.InvokeVoidAsync("downloadFileFromBase64", dosyaAdi, Convert.ToBase64String(bytes));
             ToastService.ShowSuccess("Personel dosyası indirildi.");
         }
@@ -1413,7 +1413,7 @@
         {
             var bytes = await OzlukService.ExportChecklistPdfAsync(soforId);
             var personel = durumlar?.FirstOrDefault(d => d.SoforId == soforId);
-            var dosyaAdi = $"ozluk_checklist_{personel?.PersonelKodu ?? soforId.ToString()}_{DateTime.Now:yyyyMMdd}.pdf";
+            var dosyaAdi = $"ozluk_checklist_{personel?.PersonelKodu ?? soforId.ToString()}_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.pdf";
             await JS.InvokeVoidAsync("downloadFileFromBase64", dosyaAdi, Convert.ToBase64String(bytes));
             ToastService.ShowSuccess("PDF indirildi.");
         }
@@ -1428,7 +1428,7 @@
         try
         {
             var bytes = await OzlukService.ExportTumChecklistExcelAsync();
-            var dosyaAdi = $"personel_ozluk_checklist_{DateTime.Now:yyyyMMdd}.xlsx";
+            var dosyaAdi = $"personel_ozluk_checklist_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.xlsx";
             await JS.InvokeVoidAsync("downloadFileFromBase64", dosyaAdi, Convert.ToBase64String(bytes));
             ToastService.ShowSuccess("Excel indirildi.");
         }
@@ -1443,7 +1443,7 @@
         try
         {
             var bytes = await OzlukService.ExportBosPersonelDosyaPdfAsync();
-            var dosyaAdi = $"bos_personel_dosyasi_{DateTime.Now:yyyyMMdd}.pdf";
+            var dosyaAdi = $"bos_personel_dosyasi_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.pdf";
             await JS.InvokeVoidAsync("downloadFileFromBase64", dosyaAdi, Convert.ToBase64String(bytes));
             ToastService.ShowSuccess("Boş personel dosyası indirildi.");
         }

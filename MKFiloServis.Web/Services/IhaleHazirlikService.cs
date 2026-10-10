@@ -181,7 +181,7 @@ public class IhaleHazirlikService : IIhaleHazirlikService
     public async Task<string> GenerateProjeKoduAsync()
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var yil = DateTime.Now.Year;
+        var yil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
         var sonProje = await context.IhaleProjeleri
             .Where(p => p.ProjeKodu.StartsWith($"IHL-{yil}-"))
             .OrderByDescending(p => p.ProjeKodu)
@@ -596,7 +596,7 @@ public class IhaleHazirlikService : IIhaleHazirlikService
             throw new Exception("Proje bulunamadı.");
 
         var analizBaslangic = proje.BaslangicTarihi.Date;
-        var analizBitis = proje.BitisTarihi.Date < DateTime.Today ? proje.BitisTarihi.Date : DateTime.Today;
+        var analizBitis = proje.BitisTarihi.Date < MKFiloServis.Shared.Time.BusinessTime.Today ? proje.BitisTarihi.Date : MKFiloServis.Shared.Time.BusinessTime.Today;
 
         if (analizBitis < analizBaslangic)
         {
@@ -1150,7 +1150,7 @@ public class IhaleHazirlikService : IIhaleHazirlikService
     public async Task<decimal> GetGecmisMasrafOrtalamaAsync(int? aracId, MasrafKategori kategori, int aySayisi = 12)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var baslangic = DateTime.Today.AddMonths(-aySayisi);
+        var baslangic = MKFiloServis.Shared.Time.BusinessTime.Today.AddMonths(-aySayisi);
         var query = context.AracMasraflari
             .Include(m => m.MasrafKalemi)
             .Where(m => !m.IsDeleted && m.MasrafTarihi >= baslangic && m.MasrafKalemi.Kategori == kategori);
@@ -1223,7 +1223,7 @@ public class IhaleHazirlikService : IIhaleHazirlikService
         await using var context = await _contextFactory.CreateDbContextAsync();
         // Rastgele değerler için
         var random = new Random();
-        var simdi = DateTime.Now;
+        var simdi = MKFiloServis.Shared.Time.BusinessTime.Now;
 
         // Önce örnek güzergah oluştur (veritabanında yoksa)
         var ornekGuzergah = await context.Guzergahlar

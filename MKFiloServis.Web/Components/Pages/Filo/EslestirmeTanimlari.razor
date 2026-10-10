@@ -372,7 +372,7 @@
 
         await LoadLookups();
         await ListeYenile();
-        sonGuncellemeZamani = DateTime.Now;
+        sonGuncellemeZamani = MKFiloServis.Shared.Time.BusinessTime.Now;
         ToastService.ShowSuccess("Araç, şoför ve güzergah eşleme havuzu güncellendi.");
     }
 

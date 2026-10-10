@@ -1010,7 +1010,7 @@ public class StokService : IStokService
         await using var context = await _contextFactory.CreateDbContextAsync();
         var dashboard = new StokDashboard();
 
-        var buAyBaslangic = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+        var buAyBaslangic = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1);
         var buAyBitis = buAyBaslangic.AddMonths(1).AddDays(-1);
 
         dashboard.ToplamStokKarti = await context.StokKartlari.CountAsync();

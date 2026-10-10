@@ -1,5 +1,6 @@
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
+using MKFiloServis.Web.Helpers;
 using MKFiloServis.Web.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -378,7 +379,7 @@ public class DestekTalebiService : IDestekTalebiService
         talep.UpdatedAt = DateTime.UtcNow;
         
         if (!string.IsNullOrEmpty(kapatmaNotu))
-            talep.DahiliNotlar = (talep.DahiliNotlar ?? "") + $"\n[Kapatma Notu - {DateTime.Now:dd.MM.yyyy HH:mm}]: {kapatmaNotu}";
+            talep.DahiliNotlar = (talep.DahiliNotlar ?? "") + $"\n[Kapatma Notu - {MKFiloServis.Shared.Time.BusinessTime.Now:dd.MM.yyyy HH:mm}]: {kapatmaNotu}";
         
         await context.SaveChangesAsync();
 
@@ -434,7 +435,7 @@ public class DestekTalebiService : IDestekTalebiService
         birlestirilecekTalep.Durum = DestekDurum.Kapali;
         birlestirilecekTalep.KapatilmaTarihi = DateTime.UtcNow;
         birlestirilecekTalep.DahiliNotlar = (birlestirilecekTalep.DahiliNotlar ?? "") + 
-            $"\n[Birleştirildi - {DateTime.Now:dd.MM.yyyy HH:mm}]: #{anaTalep.TalepNo} ile birleştirildi";
+            $"\n[Birleştirildi - {MKFiloServis.Shared.Time.BusinessTime.Now:dd.MM.yyyy HH:mm}]: #{anaTalep.TalepNo} ile birleştirildi";
         birlestirilecekTalep.UpdatedAt = DateTime.UtcNow;
         
         await context.SaveChangesAsync();
@@ -687,11 +688,10 @@ public class DestekTalebiService : IDestekTalebiService
 
     private string ResolveLegacyAttachmentPath(string path)
     {
-        var uploadRoot = Path.GetFullPath(_uploadPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-            + Path.DirectorySeparatorChar;
         var fullPath = Path.GetFullPath(path);
-        if (!fullPath.StartsWith(uploadRoot, StringComparison.OrdinalIgnoreCase))
+        if (!StorageFilePath.IsWithinRoot(_uploadPath, fullPath, allowRoot: false))
             throw new InvalidOperationException("Destek eki yolu izin verilen yükleme dizininin dışında.");
+        _ = StorageFilePath.Resolve(_uploadPath, Path.GetRelativePath(_uploadPath, fullPath));
         return fullPath;
     }
 

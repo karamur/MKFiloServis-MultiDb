@@ -523,13 +523,13 @@
             <div class="row mb-3 g-2">
                 <div class="col">
                     <div class="card border-danger text-center py-2">
-                        <div class="fw-bold text-danger fs-4">@belgeTablosu.SelectMany(GetTumBelgeTarihleri).Count(t => t < DateTime.Today)</div>
+                        <div class="fw-bold text-danger fs-4">@belgeTablosu.SelectMany(GetTumBelgeTarihleri).Count(t => t < MKFiloServis.Shared.Time.BusinessTime.Today)</div>
                         <small class="text-muted">Süresi Geçmiş</small>
                     </div>
                 </div>
                 <div class="col">
                     <div class="card border-warning text-center py-2">
-                        <div class="fw-bold text-warning fs-4">@belgeTablosu.SelectMany(GetTumBelgeTarihleri).Count(t => t >= DateTime.Today && (t - DateTime.Today).Days <= 30)</div>
+                        <div class="fw-bold text-warning fs-4">@belgeTablosu.SelectMany(GetTumBelgeTarihleri).Count(t => t >= MKFiloServis.Shared.Time.BusinessTime.Today && (t - MKFiloServis.Shared.Time.BusinessTime.Today).Days <= 30)</div>
                         <small class="text-muted">30 Gün İçinde</small>
                     </div>
                 </div>
@@ -735,13 +735,13 @@
             <div class="row mb-3 g-2">
                 <div class="col">
                     <div class="card border-danger text-center py-2">
-                        <div class="fw-bold text-danger fs-4">@ozmalAraclar.SelectMany(GetTumAracBelgeTarihleri).Count(t => t < DateTime.Today)</div>
+                        <div class="fw-bold text-danger fs-4">@ozmalAraclar.SelectMany(GetTumAracBelgeTarihleri).Count(t => t < MKFiloServis.Shared.Time.BusinessTime.Today)</div>
                         <small class="text-muted">Süresi Geçmiş</small>
                     </div>
                 </div>
                 <div class="col">
                     <div class="card border-warning text-center py-2">
-                        <div class="fw-bold text-warning fs-4">@ozmalAraclar.SelectMany(GetTumAracBelgeTarihleri).Count(t => t >= DateTime.Today && (t - DateTime.Today).Days <= 30)</div>
+                        <div class="fw-bold text-warning fs-4">@ozmalAraclar.SelectMany(GetTumAracBelgeTarihleri).Count(t => t >= MKFiloServis.Shared.Time.BusinessTime.Today && (t - MKFiloServis.Shared.Time.BusinessTime.Today).Days <= 30)</div>
                         <small class="text-muted">30 Gün İçinde</small>
                     </div>
                 </div>
@@ -1665,7 +1665,7 @@
         if (FiltrelenmisTumUyarilar.Any())
         {
             var excelBytes = ExcelService.ExportBelgeUyarilari(FiltrelenmisTumUyarilar);
-            var fileName = "BelgeUyarilari_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".xlsx";
+            var fileName = "BelgeUyarilari_" + MKFiloServis.Shared.Time.BusinessTime.Now.ToString("yyyyMMdd_HHmmss") + ".xlsx";
             var base64 = Convert.ToBase64String(excelBytes);
             await JS.InvokeVoidAsync("downloadFile", fileName, base64, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         }
@@ -1676,7 +1676,7 @@
         if (FiltrelenmisTumUyarilar.Any())
         {
             var pdfBytes = PdfService.GenerateBelgeUyariRaporuPdf(FiltrelenmisTumUyarilar);
-            var fileName = "BelgeUyarilari_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".pdf";
+            var fileName = "BelgeUyarilari_" + MKFiloServis.Shared.Time.BusinessTime.Now.ToString("yyyyMMdd_HHmmss") + ".pdf";
             var base64 = Convert.ToBase64String(pdfBytes);
             await JS.InvokeVoidAsync("downloadFile", fileName, base64, "application/pdf");
         }
@@ -1763,8 +1763,8 @@
         .Where(p => tabloBelgeFiltre switch
         {
             "eksik" => GetEksikBelgeSayisi(p) > 0,
-            "gecmis" => GetTumBelgeTarihleri(p).Any(t => t < DateTime.Today),
-            "yaklasan" => GetTumBelgeTarihleri(p).Any(t => t >= DateTime.Today && (t - DateTime.Today).Days <= 30),
+            "gecmis" => GetTumBelgeTarihleri(p).Any(t => t < MKFiloServis.Shared.Time.BusinessTime.Today),
+            "yaklasan" => GetTumBelgeTarihleri(p).Any(t => t >= MKFiloServis.Shared.Time.BusinessTime.Today && (t - MKFiloServis.Shared.Time.BusinessTime.Today).Days <= 30),
             _ => true
         })
         .ToList();
@@ -2075,7 +2075,7 @@
             if (zipBytes.Length == 0) { ToastService.ShowWarning("İndirilebilecek belge bulunamadı."); return; }
             var dosyaAdi = seciliDosyalar.Count == 1
                 ? (seciliDosyalar[0].DosyaAdi ?? $"{seciliDosyalar[0].EvrakAdi}{GercekUzantiAl(seciliDosyalar[0].DosyaYolu)}") 
-                : $"{ozlukModalItem.PersonelKodu}_Belgeler_{DateTime.Now:yyyyMMdd_HHmm}.zip";
+                : $"{ozlukModalItem.PersonelKodu}_Belgeler_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmm}.zip";
             var contentType = seciliDosyalar.Count == 1
                 ? MimeTipiAl(GercekUzantiAl(seciliDosyalar[0].DosyaYolu))
                 : "application/zip";
@@ -2162,7 +2162,7 @@
                 ToastService.ShowWarning("İndirilebilecek belge bulunamadı.");
                 return;
             }
-            var dosyaAdi = $"PersonelBelgeler_{DateTime.Now:yyyyMMdd_HHmm}.zip";
+            var dosyaAdi = $"PersonelBelgeler_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmm}.zip";
             await JS.InvokeVoidAsync("downloadFile", dosyaAdi, Convert.ToBase64String(zipBytes), "application/zip");
             ToastService.ShowSuccess($"{dosyasiOlanlar.Count} personelin belgeleri ZIP olarak indirildi.");
         }
@@ -2305,8 +2305,8 @@
         .Where(p => aracTabloBelgeFiltre switch
         {
             "eksik" => GetEksikAracBelgeSayisi(p) > 0,
-            "gecmis" => GetTumAracBelgeTarihleri(p).Any(t => t < DateTime.Today),
-            "yaklasan" => GetTumAracBelgeTarihleri(p).Any(t => t >= DateTime.Today && (t - DateTime.Today).Days <= 30),
+            "gecmis" => GetTumAracBelgeTarihleri(p).Any(t => t < MKFiloServis.Shared.Time.BusinessTime.Today),
+            "yaklasan" => GetTumAracBelgeTarihleri(p).Any(t => t >= MKFiloServis.Shared.Time.BusinessTime.Today && (t - MKFiloServis.Shared.Time.BusinessTime.Today).Days <= 30),
             _ => true
         })
         .ToList();
@@ -2590,7 +2590,7 @@
             var aracKod = string.IsNullOrEmpty(aracBelgeModalItem.Plaka) ? aracBelgeModalItem.SaseNo : aracBelgeModalItem.Plaka;
             var dosyaAdi = seciliDosyalar.Count == 1
                 ? (seciliDosyalar[0].DosyaAdi ?? $"{seciliDosyalar[0].EvrakKategorisi}{GercekUzantiAl(seciliDosyalar[0].DosyaYolu)}")
-                : $"{aracKod}_Belgeler_{DateTime.Now:yyyyMMdd_HHmm}.zip";
+                : $"{aracKod}_Belgeler_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmm}.zip";
             var contentType = seciliDosyalar.Count == 1
                 ? MimeTipiAl(GercekUzantiAl(seciliDosyalar[0].DosyaYolu))
                 : "application/zip";
@@ -2624,7 +2624,7 @@
                 ToastService.ShowWarning("İndirilebilecek belge bulunamadı.");
                 return;
             }
-            var dosyaAdi = $"AracBelgeler_{DateTime.Now:yyyyMMdd_HHmm}.zip";
+            var dosyaAdi = $"AracBelgeler_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmm}.zip";
             await JS.InvokeVoidAsync("downloadFile", dosyaAdi, Convert.ToBase64String(zipBytes), "application/zip");
             ToastService.ShowSuccess($"{dosyasiOlanlar.Count} aracın belgeleri ZIP olarak indirildi.");
         }
@@ -2919,8 +2919,8 @@
         .Where(p => tedarikciTabloBelgeFiltre switch
         {
             "eksik" => p.Belgeler.Values.Any(t => t == null),
-            "gecmis" => p.Belgeler.Values.Any(t => t.HasValue && t.Value < DateTime.Today),
-            "yaklasan" => p.Belgeler.Values.Any(t => t.HasValue && t.Value >= DateTime.Today && (t.Value - DateTime.Today).Days <= 30),
+            "gecmis" => p.Belgeler.Values.Any(t => t.HasValue && t.Value < MKFiloServis.Shared.Time.BusinessTime.Today),
+            "yaklasan" => p.Belgeler.Values.Any(t => t.HasValue && t.Value >= MKFiloServis.Shared.Time.BusinessTime.Today && (t.Value - MKFiloServis.Shared.Time.BusinessTime.Today).Days <= 30),
             _ => true
         })
         .ToList();
@@ -2941,8 +2941,8 @@
         .Where(p => tedarikciPersonelBelgeFiltre switch
         {
             "eksik" => GetEksikBelgeSayisi(p) > 0,
-            "gecmis" => GetTumBelgeTarihleri(p).Any(t => t < DateTime.Today),
-            "yaklasan" => GetTumBelgeTarihleri(p).Any(t => t >= DateTime.Today && (t - DateTime.Today).Days <= 30),
+            "gecmis" => GetTumBelgeTarihleri(p).Any(t => t < MKFiloServis.Shared.Time.BusinessTime.Today),
+            "yaklasan" => GetTumBelgeTarihleri(p).Any(t => t >= MKFiloServis.Shared.Time.BusinessTime.Today && (t - MKFiloServis.Shared.Time.BusinessTime.Today).Days <= 30),
             _ => true
         })
         .ToList();
@@ -2964,8 +2964,8 @@
         .Where(p => tedarikciAracBelgeFiltre switch
         {
             "eksik" => GetEksikAracBelgeSayisi(p) > 0,
-            "gecmis" => GetTumAracBelgeTarihleri(p).Any(t => t < DateTime.Today),
-            "yaklasan" => GetTumAracBelgeTarihleri(p).Any(t => t >= DateTime.Today && (t - DateTime.Today).Days <= 30),
+            "gecmis" => GetTumAracBelgeTarihleri(p).Any(t => t < MKFiloServis.Shared.Time.BusinessTime.Today),
+            "yaklasan" => GetTumAracBelgeTarihleri(p).Any(t => t >= MKFiloServis.Shared.Time.BusinessTime.Today && (t - MKFiloServis.Shared.Time.BusinessTime.Today).Days <= 30),
             _ => true
         })
         .ToList();

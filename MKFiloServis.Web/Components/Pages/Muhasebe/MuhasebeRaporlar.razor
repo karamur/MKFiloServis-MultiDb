@@ -127,7 +127,7 @@
                         <div class="col-6">
                             <label class="form-label">Yil</label>
                             <select class="form-select" @bind="gelirGiderYil">
-                                @for (int y = DateTime.Today.Year; y >= DateTime.Today.Year - 5; y--)
+                                @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 5; y--)
                                 {
                                     <option value="@y">@y</option>
                                 }
@@ -589,35 +589,35 @@
 @code {
     // Muavin
     private string muavinHesapKodu = "100";
-    private DateTime muavinBaslangic = new DateTime(DateTime.Today.Year, 1, 1);
-    private DateTime muavinBitis = DateTime.Today;
+    private DateTime muavinBaslangic = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, 1, 1);
+    private DateTime muavinBitis = MKFiloServis.Shared.Time.BusinessTime.Today;
     private MuavinRapor? muavinRapor;
     private bool showMuavinModal = false;
 
     // Yevmiye
-    private DateTime yevmiyeBaslangic = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-    private DateTime yevmiyeBitis = DateTime.Today;
+    private DateTime yevmiyeBaslangic = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1);
+    private DateTime yevmiyeBitis = MKFiloServis.Shared.Time.BusinessTime.Today;
 
     // Mizan
-    private DateTime mizanBaslangic = new DateTime(DateTime.Today.Year, 1, 1);
-    private DateTime mizanBitis = DateTime.Today;
+    private DateTime mizanBaslangic = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, 1, 1);
+    private DateTime mizanBitis = MKFiloServis.Shared.Time.BusinessTime.Today;
     private MizanRapor? mizanRapor;
     private bool showMizanModal = false;
 
     // Gelir/Gider
-    private int gelirGiderYil = DateTime.Today.Year;
+    private int gelirGiderYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
     private int gelirGiderAy = 0;
     private GelirGiderRapor? gelirGiderRapor;
     private bool showGelirGiderModal = false;
 
     // Bilanco
-    private DateTime bilancoTarih = DateTime.Today;
+    private DateTime bilancoTarih = MKFiloServis.Shared.Time.BusinessTime.Today;
     private BilancoRapor? bilancoRapor;
     private bool showBilancoModal = false;
 
     // Zirve Muhasebe Export
-    private DateTime zirveBaslangic = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-    private DateTime zirveBitis = DateTime.Today;
+    private DateTime zirveBaslangic = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1);
+    private DateTime zirveBitis = MKFiloServis.Shared.Time.BusinessTime.Today;
 
     private async Task MuavinRaporuOlustur()
     {

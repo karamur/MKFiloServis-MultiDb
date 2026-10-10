@@ -142,7 +142,7 @@
                                 <tbody>
                                     @foreach (var f in yaklasanTahsilatlar)
                                     {
-                                        var kalan = (f.VadeTarihi!.Value.Date - DateTime.Today).Days;
+                                        var kalan = (f.VadeTarihi!.Value.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
                                         <tr>
                                             <td>
                                                 <small>@f.VadeTarihi.Value.ToString("dd.MM")</small>
@@ -250,7 +250,7 @@
         isLoading = true;
         try
         {
-            var bugun = DateTime.Today;
+            var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
             var bitis = bugun.AddDays(projeksiyonGun);
 
             // Banka/Kasa

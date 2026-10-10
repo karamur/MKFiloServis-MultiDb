@@ -9,11 +9,16 @@ public class GlobalSearchService : IGlobalSearchService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly LicenseService _licenses;
+    private readonly IKullaniciService _kullaniciService;
 
-    public GlobalSearchService(IDbContextFactory<ApplicationDbContext> contextFactory, LicenseService licenses)
+    public GlobalSearchService(
+        IDbContextFactory<ApplicationDbContext> contextFactory,
+        LicenseService licenses,
+        IKullaniciService kullaniciService)
     {
         _contextFactory = contextFactory;
         _licenses = licenses;
+        _kullaniciService = kullaniciService;
     }
 
     public async Task<GlobalSearchResult> SearchAsync(string searchTerm, int maxResults = 10)
@@ -23,42 +28,42 @@ public class GlobalSearchService : IGlobalSearchService
 
         var result = new GlobalSearchResult();
         var term = searchTerm.ToLower().Trim();
+        var permissions = await _kullaniciService.GetCurrentUserYetkilerAsync();
+
+        bool CanSearch(string permission, string module) =>
+            _licenses.HasModulePermission(module) &&
+            (permissions.Contains(permission) || permissions.Contains("*"));
 
         // Her paralel çağrı için ayrı DbContext kullan (thread-safe)
-        var cariTask = Task.Run(async () =>
+        var cariTask = CanSearch(Yetkiler.CarilerOku, "cari") ? Task.Run(async () =>
         {
             await using var context = await _contextFactory.CreateDbContextAsync();
-            return _licenses.HasModulePermission("cari")
-                ? await SearchCarilerAsync(context, term, maxResults) : new List<SearchResultItem>();
-        });
+            return await SearchCarilerAsync(context, term, maxResults);
+        }) : Task.FromResult(new List<SearchResultItem>());
 
-        var aracTask = Task.Run(async () =>
+        var aracTask = CanSearch(Yetkiler.AraclarOku, "filoservis") ? Task.Run(async () =>
         {
             await using var context = await _contextFactory.CreateDbContextAsync();
-            return _licenses.HasModulePermission("filoservis")
-                ? await SearchAraclarAsync(context, term, maxResults) : new List<SearchResultItem>();
-        });
+            return await SearchAraclarAsync(context, term, maxResults);
+        }) : Task.FromResult(new List<SearchResultItem>());
 
-        var personelTask = Task.Run(async () =>
+        var personelTask = CanSearch(Yetkiler.PersonelOku, "personel") ? Task.Run(async () =>
         {
             await using var context = await _contextFactory.CreateDbContextAsync();
-            return _licenses.HasModulePermission("personel")
-                ? await SearchPersonellerAsync(context, term, maxResults) : new List<SearchResultItem>();
-        });
+            return await SearchPersonellerAsync(context, term, maxResults);
+        }) : Task.FromResult(new List<SearchResultItem>());
 
-        var faturaTask = Task.Run(async () =>
+        var faturaTask = CanSearch(Yetkiler.FaturalarOku, "fatura") ? Task.Run(async () =>
         {
             await using var context = await _contextFactory.CreateDbContextAsync();
-            return _licenses.HasModulePermission("fatura")
-                ? await SearchFaturalarAsync(context, term, maxResults) : new List<SearchResultItem>();
-        });
+            return await SearchFaturalarAsync(context, term, maxResults);
+        }) : Task.FromResult(new List<SearchResultItem>());
 
-        var guzergahTask = Task.Run(async () =>
+        var guzergahTask = CanSearch(Yetkiler.GuzergahlarOku, "filoservis") ? Task.Run(async () =>
         {
             await using var context = await _contextFactory.CreateDbContextAsync();
-            return _licenses.HasModulePermission("filoservis")
-                ? await SearchGuzergahlarAsync(context, term, maxResults) : new List<SearchResultItem>();
-        });
+            return await SearchGuzergahlarAsync(context, term, maxResults);
+        }) : Task.FromResult(new List<SearchResultItem>());
 
         await Task.WhenAll(cariTask, aracTask, personelTask, faturaTask, guzergahTask);
 

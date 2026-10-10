@@ -372,7 +372,7 @@
             csvContent += $"{durum};{uyari.Kaynak};{uyari.Baslik};{uyari.BelgeTuru};{uyari.BitisTarihi:dd.MM.yyyy};{uyari.KalanGun}\n";
         }
 
-        var fileName = $"BelgeUyarilari_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+        var fileName = $"BelgeUyarilari_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmmss}.csv";
         var bytes = System.Text.Encoding.UTF8.GetBytes(csvContent);
         var base64 = Convert.ToBase64String(bytes);
 

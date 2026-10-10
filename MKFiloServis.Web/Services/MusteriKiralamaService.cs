@@ -1,4 +1,4 @@
-﻿using MKFiloServis.Shared.Entities;
+using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Web.Services.Interfaces;
@@ -121,9 +121,9 @@ public class MusteriKiralamaService : IMusteriKiralamaService
         kiralama.ToplamTutar = ToplamTutarHesapla(kiralama.BaslangicTarihi, kiralama.PlanlananBitisTarihi, kiralama.GunlukFiyat);
 
         // S�zle�me numaras� olu�tur
-        kiralama.SozlesmeNo = $"KR-{DateTime.Now:yyyyMMdd}-{Guid.NewGuid().ToString().Substring(0, 4).ToUpper()}";
+        kiralama.SozlesmeNo = $"KR-{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}-{Guid.NewGuid().ToString().Substring(0, 4).ToUpper()}";
 
-        kiralama.CreatedAt = DateTime.Now;
+        kiralama.CreatedAt = DateTime.UtcNow;
         context.MusteriKiralamalar.Add(kiralama);
         await context.SaveChangesAsync();
 
@@ -156,7 +156,7 @@ public class MusteriKiralamaService : IMusteriKiralamaService
         // Toplam tutar� yeniden hesapla
         kiralama.ToplamTutar = ToplamTutarHesapla(kiralama.BaslangicTarihi, kiralama.PlanlananBitisTarihi, kiralama.GunlukFiyat);
 
-        kiralama.UpdatedAt = DateTime.Now;
+        kiralama.UpdatedAt = DateTime.UtcNow;
         context.MusteriKiralamalar.Update(kiralama);
         await context.SaveChangesAsync();
 
@@ -179,7 +179,7 @@ public class MusteriKiralamaService : IMusteriKiralamaService
         kiralama.Notlar = string.IsNullOrEmpty(kiralama.Notlar) 
             ? $"�ptal nedeni: {iptalNedeni}" 
             : $"{kiralama.Notlar}\n�ptal nedeni: {iptalNedeni}";
-        kiralama.UpdatedAt = DateTime.Now;
+        kiralama.UpdatedAt = DateTime.UtcNow;
 
         await context.SaveChangesAsync();
         _logger.LogInformation("Kiralama iptal edildi: {Id}", id);
@@ -204,8 +204,8 @@ public class MusteriKiralamaService : IMusteriKiralamaService
         kiralama.Durum = KiralamaDurumu.Aktif;
         kiralama.BaslangicKm = baslangicKm;
         kiralama.TeslimEdenPersonelId = personelId;
-        kiralama.BaslangicTarihi = DateTime.Now; // Ger�ek ba�lang�� zaman�
-        kiralama.UpdatedAt = DateTime.Now;
+        kiralama.BaslangicTarihi = DateTime.UtcNow; // Ger�ek ba�lang�� zaman�
+        kiralama.UpdatedAt = DateTime.UtcNow;
 
         await context.SaveChangesAsync();
         _logger.LogInformation("Ara� teslim al�nd�: Kiralama {Id}, KM: {Km}", kiralamaId, baslangicKm);
@@ -233,10 +233,10 @@ public class MusteriKiralamaService : IMusteriKiralamaService
         }
 
         kiralama.Durum = KiralamaDurumu.Tamamlandi;
-        kiralama.GercekBitisTarihi = DateTime.Now;
+        kiralama.GercekBitisTarihi = DateTime.UtcNow;
         kiralama.BitisKm = bitisKm;
         kiralama.TeslimAlanPersonelId = personelId;
-        kiralama.UpdatedAt = DateTime.Now;
+        kiralama.UpdatedAt = DateTime.UtcNow;
 
         // Ger�ek s�reye g�re tutar� yeniden hesapla
         kiralama.ToplamTutar = ToplamTutarHesapla(kiralama.BaslangicTarihi, kiralama.GercekBitisTarihi.Value, kiralama.GunlukFiyat);

@@ -1,4 +1,4 @@
-﻿using MKFiloServis.Shared.Entities;
+using MKFiloServis.Shared.Entities;
 
 namespace MKFiloServis.Web.Services.Interfaces;
 
@@ -24,7 +24,7 @@ public sealed class RentACarKiralamaRaporModel
     public string RaporTarihAraligi { get; set; } = string.Empty;
     public string DurumFiltresi { get; set; } = string.Empty;
     public string AramaFiltresi { get; set; } = string.Empty;
-    public DateTime RaporOlusturmaTarihi { get; set; } = DateTime.Now;
+    public DateTime RaporOlusturmaTarihi { get; set; } = DateTime.UtcNow;
     public List<RentACarPdfKiralamaSatiri> Satirlar { get; set; } = new();
 }
 

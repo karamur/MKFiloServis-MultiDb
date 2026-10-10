@@ -38,7 +38,7 @@
                 <div>
                     <label class="form-label small mb-1">Yıl</label>
                     <select class="form-select" style="width:120px" @bind="SeciliYil" @bind:after="AyDegisti">
-                        @for (var yil = DateTime.Today.Year - 1; yil <= DateTime.Today.Year + 1; yil++)
+                        @for (var yil = MKFiloServis.Shared.Time.BusinessTime.Today.Year - 1; yil <= MKFiloServis.Shared.Time.BusinessTime.Today.Year + 1; yil++)
                         {
                             <option value="@yil">@yil</option>
                         }
@@ -329,8 +329,8 @@
 </div>
 
 @code {
-    private int SeciliAy = DateTime.Today.Month;
-    private int SeciliYil = DateTime.Today.Year;
+    private int SeciliAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
+    private int SeciliYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
     private List<OperasyonPlanSatiri> Planlar = new();
     private int AktifEslestirmeSayisi;
     private HashSet<int> SecilenIdler = new();

@@ -18,7 +18,7 @@ AppName={#MyAppName} Guncelleme
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher=MK Yazilim
-DefaultDirName={#MyInstallDir}
+DefaultDirName={code:GetInstallPath}
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 OutputBaseFilename=MKFiloServisGuncelle-{#MyAppVersion}
@@ -54,35 +54,57 @@ Name: "webonly"; Description: "Sadece Web"
 
 [Files]
 Source: "payload\Web\*"; DestDir: "{app}\app"; \
-    Excludes: "dbsettings.json,appsettings.json,appsettings.Production.json,portalsettings.json,backup_settings.json,cookies.txt,*.db,*.db-shm,*.db-wal,logs\*,uploads\*,Backups\*,keys\*"; \
+    Excludes: "dbsettings.json,appsettings.json,appsettings.*.json,portalsettings.json,backup_settings.json,cookies.txt,*.db,*.db-shm,*.db-wal,logs\*,uploads\*,Backups\*,keys\*"; \
     Flags: ignoreversion recursesubdirs createallsubdirs; Components: web
 Source: "payload\DataSync\*"; DestDir: "{app}\tools\datasync"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: datasync
 
 [Code]
-function GetInstallPath(): String;
-var sPrevPath: String;
+function FindInstallPath(): String;
+var MainPath, CustomerPath: String;
 begin
-  if RegQueryStringValue(HKLM,
-        'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#SetupSetting("AppId")}_is1',
-        'InstallLocation', sPrevPath) then
-    Result := sPrevPath
-  else Result := '';
+  MainPath := '';
+  CustomerPath := '';
+  RegQueryStringValue(HKLM,
+    'Software\Microsoft\Windows\CurrentVersion\Uninstall\A1B2C3D4-E5F6-7890-ABCD-EF1234567890-USTUN_is1',
+    'InstallLocation', MainPath);
+  RegQueryStringValue(HKLM,
+    'Software\Microsoft\Windows\CurrentVersion\Uninstall\A1B2C3D4-E5F6-7890-ABCD-EF1234567890-MUSTERI-USTUN_is1',
+    'InstallLocation', CustomerPath);
+  if (MainPath <> '') and (CustomerPath <> '') then
+    Result := ''
+  else if MainPath <> '' then
+    Result := MainPath
+  else
+    Result := CustomerPath;
+end;
+
+function GetInstallPath(Param: String): String;
+begin
+  Result := FindInstallPath();
 end;
 
 function InitializeSetup(): Boolean;
 var PrevPath, AppVer, Msg: String;
 begin
   Result := True;
-  PrevPath := GetInstallPath();
+  PrevPath := FindInstallPath();
   if PrevPath = '' then
   begin
-    MsgBox('{#MyAppName} sistemde kurulu degil.' + #13#10#13#10 +
-           'Bu paket GUNCELLEME icindir. Once ana kurulum paketini calistirin.', mbError, MB_OK);
+    MsgBox('Tek bir desteklenen kurulum bulunamadi. Kurulum yoksa once ana veya musteri paketini calistirin; iki kurulum varsa guncelleme hedefini ayristirin.', mbError, MB_OK);
     Result := False; Exit;
   end;
-  RegQueryStringValue(HKLM,
-    'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#SetupSetting("AppId")}_is1',
-    'DisplayVersion', AppVer);
+  if not FileExists(AddBackslash(PrevPath) + 'app\{#MyAppExeName}') then
+  begin
+    MsgBox('Kurulu uygulama dosyasi hedef dizinde bulunamadi: ' + PrevPath, mbError, MB_OK);
+    Result := False; Exit;
+  end;
+  AppVer := '';
+  if not RegQueryStringValue(HKLM,
+    'Software\Microsoft\Windows\CurrentVersion\Uninstall\A1B2C3D4-E5F6-7890-ABCD-EF1234567890-USTUN_is1',
+    'DisplayVersion', AppVer) then
+    RegQueryStringValue(HKLM,
+      'Software\Microsoft\Windows\CurrentVersion\Uninstall\A1B2C3D4-E5F6-7890-ABCD-EF1234567890-MUSTERI-USTUN_is1',
+      'DisplayVersion', AppVer);
   Msg := 'Mevcut kurulum: ' + PrevPath;
   if AppVer <> '' then Msg := Msg + #13#10 + 'Kurulu versiyon : ' + AppVer;
   Msg := Msg + #13#10 + 'Yeni versiyon   : {#MyAppVersion}' + #13#10#13#10 +

@@ -175,8 +175,8 @@
 </div>
 
 @code {
-    private DateTime baslangic = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-    private DateTime bitis = DateTime.Today;
+    private DateTime baslangic = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1);
+    private DateTime bitis = MKFiloServis.Shared.Time.BusinessTime.Today;
     private string? seciliSahiplikTipi;
     private int? seciliAracId;
     private int? seciliGuzergahId;

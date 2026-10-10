@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using MKFiloServis.Web.Services;
 using MKFiloServis.Web.Services.Interfaces;
 using MKFiloServis.Shared.Entities;
+using MKFiloServis.Web.Models;
 
 namespace MKFiloServis.Web.Controllers;
 
@@ -17,11 +18,13 @@ public class FaturalarController : ControllerBase
 {
     private readonly IFaturaService _faturaService;
     private readonly ICariService _cariService;
+    private readonly CurrentPermissionGuard _permissionGuard;
 
-    public FaturalarController(IFaturaService faturaService, ICariService cariService)
+    public FaturalarController(IFaturaService faturaService, ICariService cariService, CurrentPermissionGuard permissionGuard)
     {
         _faturaService = faturaService;
         _cariService = cariService;
+        _permissionGuard = permissionGuard;
     }
 
     /// <summary>
@@ -37,45 +40,37 @@ public class FaturalarController : ControllerBase
         [FromQuery] int? cariId = null,
         [FromQuery] int? firmaId = null)
     {
-        var faturalar = await _faturaService.GetAllAsync();
-        
-        if (!string.IsNullOrEmpty(tip) && Enum.TryParse<FaturaTipi>(tip, true, out var faturaTipi))
-        {
-            faturalar = faturalar.Where(f => f.FaturaTipi == faturaTipi).ToList();
-        }
+        if (!await HasReadPermissionAsync(yon)) return Forbid();
+        var filter = BuildFilter(tip, yon, durum, baslangic, bitis, cariId, firmaId, pageNumber: 1, pageSize: 100);
+        var page = await _faturaService.GetPagedAsync(filter);
+        if (page.TotalCount > filter.PageSize)
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Fatura listesi sayfalama gerektiriyor",
+                Detail = "Bu sonuç 100 kaydı aşıyor. GET /api/faturalar/sayfali?PageNumber=1&PageSize=100 uç noktasını kullanın."
+            });
+        return Ok(page.Items.Select(MapFaturaDto));
+    }
 
-        if (!string.IsNullOrEmpty(durum) && Enum.TryParse<FaturaDurum>(durum, true, out var faturaDurum))
-        {
-            faturalar = faturalar.Where(f => f.Durum == faturaDurum).ToList();
-        }
-
-        if (!string.IsNullOrEmpty(yon) && Enum.TryParse<FaturaYonu>(yon, true, out var faturaYonu))
-        {
-            faturalar = faturalar.Where(f => f.FaturaYonu == faturaYonu).ToList();
-        }
-
-        if (baslangic.HasValue)
-        {
-            faturalar = faturalar.Where(f => f.FaturaTarihi >= baslangic.Value).ToList();
-        }
-
-        if (bitis.HasValue)
-        {
-            faturalar = faturalar.Where(f => f.FaturaTarihi <= bitis.Value).ToList();
-        }
-
-        if (cariId.HasValue)
-        {
-            faturalar = faturalar.Where(f => f.CariId == cariId.Value).ToList();
-        }
-
-        if (firmaId.HasValue)
-        {
-            faturalar = faturalar.Where(f => f.FirmaId == firmaId.Value).ToList();
-        }
-
-        var result = faturalar.Select(MapFaturaDto);
-
+    /// <summary>Filtreleri veritabanında uygulayarak fatura listesini sayfalar.</summary>
+    [HttpGet("sayfali")]
+    public async Task<IActionResult> GetPaged(
+        [FromQuery] string? tip = null,
+        [FromQuery] string? yon = null,
+        [FromQuery] string? durum = null,
+        [FromQuery] DateTime? baslangic = null,
+        [FromQuery] DateTime? bitis = null,
+        [FromQuery] int? cariId = null,
+        [FromQuery] int? firmaId = null,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 25)
+    {
+        if (!await HasReadPermissionAsync(yon)) return Forbid();
+        var filter = BuildFilter(tip, yon, durum, baslangic, bitis, cariId, firmaId, pageNumber, pageSize);
+        var page = await _faturaService.GetPagedAsync(filter);
+        var result = new PagedResult<FaturaDto>(page.Items.Select(MapFaturaDto).ToList(), page.TotalCount,
+            page.PageNumber, page.PageSize);
         return Ok(result);
     }
 
@@ -88,6 +83,8 @@ public class FaturalarController : ControllerBase
         var fatura = await _faturaService.GetByIdWithKalemlerAsync(id);
         if (fatura == null)
             return NotFound(new { Error = "Fatura bulunamadı" });
+        if (!await HasReadPermissionAsync(fatura.FaturaYonu.ToString()))
+            return NotFound(new { Error = "Fatura bulunamadı" });
 
         return Ok(MapFaturaDetayDto(fatura));
     }
@@ -98,21 +95,15 @@ public class FaturalarController : ControllerBase
     [HttpGet("no/{faturaNo}")]
     public async Task<IActionResult> GetByNo(string faturaNo, [FromQuery] string? yon = null, [FromQuery] int? firmaId = null)
     {
-        var faturalar = await _faturaService.GetAllAsync();
-        if (!string.IsNullOrEmpty(yon) && Enum.TryParse<FaturaYonu>(yon, true, out var faturaYonu))
-        {
-            faturalar = faturalar.Where(f => f.FaturaYonu == faturaYonu).ToList();
-        }
-
-        if (firmaId.HasValue)
-        {
-            faturalar = faturalar.Where(f => f.FirmaId == firmaId.Value).ToList();
-        }
-
-        var fatura = faturalar.FirstOrDefault(f =>
-            f.FaturaNo != null && f.FaturaNo.Equals(faturaNo, StringComparison.OrdinalIgnoreCase));
+        if (!await HasReadPermissionAsync(yon)) return Forbid();
+        var requestedDirection = Enum.TryParse<FaturaYonu>(yon, true, out var parsedDirection)
+            ? parsedDirection
+            : (FaturaYonu?)null;
+        var fatura = await _faturaService.GetByNoAsync(faturaNo, requestedDirection, firmaId);
         
         if (fatura == null)
+            return NotFound(new { Error = "Fatura bulunamadı" });
+        if (!await HasReadPermissionAsync(fatura.FaturaYonu.ToString()))
             return NotFound(new { Error = "Fatura bulunamadı" });
 
         return Ok(MapFaturaDto(fatura));
@@ -124,6 +115,16 @@ public class FaturalarController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] FaturaCreateDto dto)
     {
+        if (!Enum.TryParse<FaturaTipi>(dto.FaturaTipi, true, out var faturaTipi))
+            faturaTipi = FaturaTipi.SatisFaturasi;
+
+        if (!Enum.TryParse<FaturaYonu>(dto.FaturaYonu, true, out var faturaYonu))
+            faturaYonu = faturaTipi == FaturaTipi.AlisFaturasi || faturaTipi == FaturaTipi.AlisIadeFaturasi
+                ? FaturaYonu.Gelen
+                : FaturaYonu.Giden;
+
+        if (!await HasActionPermissionAsync(faturaYonu, "yaz")) return Forbid();
+
         if (!dto.FirmaId.HasValue || dto.FirmaId.Value <= 0)
             return BadRequest(new { Error = "Firma seçimi gereklidir" });
 
@@ -133,14 +134,6 @@ public class FaturalarController : ControllerBase
         var cari = await _cariService.GetByIdAsync(dto.CariId);
         if (cari == null)
             return BadRequest(new { Error = "Geçersiz cari" });
-
-        if (!Enum.TryParse<FaturaTipi>(dto.FaturaTipi, true, out var faturaTipi))
-            faturaTipi = FaturaTipi.SatisFaturasi;
-
-        if (!Enum.TryParse<FaturaYonu>(dto.FaturaYonu, true, out var faturaYonu))
-            faturaYonu = faturaTipi == FaturaTipi.AlisFaturasi || faturaTipi == FaturaTipi.AlisIadeFaturasi
-                ? FaturaYonu.Gelen
-                : FaturaYonu.Giden;
 
         if (dto.FirmalarArasiFatura && (!dto.KarsiFirmaId.HasValue || dto.KarsiFirmaId == dto.FirmaId))
             return BadRequest(new { Error = "Firmalar arası faturada farklı bir karşı firma seçilmelidir" });
@@ -194,6 +187,8 @@ public class FaturalarController : ControllerBase
         var fatura = await _faturaService.GetByIdAsync(id);
         if (fatura == null)
             return NotFound(new { Error = "Fatura bulunamadı" });
+        if (!await HasActionPermissionAsync(fatura.FaturaYonu, "duzenle"))
+            return NotFound(new { Error = "Fatura bulunamadı" });
 
         if (!Enum.TryParse<FaturaDurum>(dto.Durum, true, out var yeniDurum))
             return BadRequest(new { Error = "Geçersiz durum" });
@@ -221,6 +216,8 @@ public class FaturalarController : ControllerBase
         var fatura = await _faturaService.GetByIdAsync(id);
         if (fatura == null)
             return NotFound(new { Error = "Fatura bulunamadı" });
+        if (!await HasActionPermissionAsync(fatura.FaturaYonu, "sil"))
+            return NotFound(new { Error = "Fatura bulunamadı" });
 
         await _faturaService.DeleteAsync(id);
         return NoContent();
@@ -232,6 +229,7 @@ public class FaturalarController : ControllerBase
     [HttpGet("vadesi-gecmis")]
     public async Task<IActionResult> GetVadesiGecmis()
     {
+        if (!await HasReadPermissionAsync(yon: null)) return Forbid();
         var simdi = DateTime.UtcNow.Date;
         var faturalar = await _faturaService.GetAllAsync();
         
@@ -264,6 +262,7 @@ public class FaturalarController : ControllerBase
     [HttpGet("istatistikler")]
     public async Task<IActionResult> GetIstatistikler([FromQuery] int? yil = null, [FromQuery] int? ay = null)
     {
+        if (!await HasReadPermissionAsync(yon: null)) return Forbid();
         var hedefYil = yil ?? DateTime.UtcNow.Year;
         var hedefAy = ay ?? DateTime.UtcNow.Month;
 
@@ -288,6 +287,66 @@ public class FaturalarController : ControllerBase
             OdenmemisFatura = aylikFaturalar.Count(f => f.Durum != FaturaDurum.Odendi),
             OdenmemisTutar = aylikFaturalar.Where(f => f.Durum != FaturaDurum.Odendi).Sum(f => f.GenelToplam - f.OdenenTutar)
         });
+    }
+
+    private async Task<bool> HasReadPermissionAsync(string? yon)
+    {
+        var permissions = new List<string> { Yetkiler.FaturalarOku };
+        if (Enum.TryParse<FaturaYonu>(yon, true, out var direction))
+            permissions.Add(direction == FaturaYonu.Giden ? Yetkiler.KesilenFaturalarOku : Yetkiler.GelenFaturalarOku);
+        else if (!string.IsNullOrWhiteSpace(yon))
+            return false;
+
+        try
+        {
+            await _permissionGuard.RequireAnyAsync(permissions.ToArray());
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static FaturaFilterParams BuildFilter(string? tip, string? yon, string? durum,
+        DateTime? baslangic, DateTime? bitis, int? cariId, int? firmaId, int pageNumber, int pageSize)
+    {
+        return new FaturaFilterParams
+        {
+            FaturaTipi = Enum.TryParse<FaturaTipi>(tip, true, out var parsedTip) ? parsedTip : null,
+            Yon = Enum.TryParse<FaturaYonu>(yon, true, out var parsedYon) ? parsedYon : null,
+            Durum = Enum.TryParse<FaturaDurum>(durum, true, out var parsedDurum) ? parsedDurum : null,
+            BaslangicTarih = baslangic,
+            BitisTarih = bitis,
+            CariId = cariId,
+            FirmaId = firmaId,
+            PageNumber = Math.Clamp(pageNumber, 1, int.MaxValue / 100),
+            PageSize = Math.Clamp(pageSize, 1, 100)
+        };
+    }
+
+    private Task<bool> HasActionPermissionAsync(FaturaYonu yon, string action)
+    {
+        var general = action switch
+        {
+            "yaz" => Yetkiler.FaturalarYaz,
+            "sil" => Yetkiler.FaturalarSil,
+            _ => Yetkiler.FaturalarDuzenle
+        };
+        var directional = (yon, action) switch
+        {
+            (FaturaYonu.Giden, "yaz") => Yetkiler.KesilenFaturalarYaz,
+            (FaturaYonu.Giden, "sil") => Yetkiler.KesilenFaturalarSil,
+            (FaturaYonu.Giden, _) => Yetkiler.KesilenFaturalarDuzenle,
+            (FaturaYonu.Gelen, "yaz") => Yetkiler.GelenFaturalarYaz,
+            (FaturaYonu.Gelen, "sil") => Yetkiler.GelenFaturalarSil,
+            (FaturaYonu.Gelen, _) => Yetkiler.GelenFaturalarDuzenle,
+            _ => (string?)null
+        };
+
+        return directional is null
+            ? Task.FromResult(false)
+            : _permissionGuard.HasAnyAsync(general, directional);
     }
 
     private static FaturaDto MapFaturaDto(Fatura fatura)

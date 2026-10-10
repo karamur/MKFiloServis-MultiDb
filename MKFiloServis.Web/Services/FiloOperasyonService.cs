@@ -327,7 +327,7 @@ public class FiloOperasyonService : IFiloOperasyonService
     public async Task<FiloOzetRaporu> GetFiloOzetRaporuAsync(DateTime? tarih = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var bugun = tarih ?? DateTime.Today;
+        var bugun = tarih ?? MKFiloServis.Shared.Time.BusinessTime.Today;
         var yil = bugun.Year;
         var ay = bugun.Month;
 

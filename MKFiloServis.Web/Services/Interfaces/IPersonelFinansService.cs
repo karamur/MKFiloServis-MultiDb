@@ -105,7 +105,7 @@ public class AvansRequest
     public int? Id { get; set; }
     public int PersonelId { get; set; }
     public int? FirmaId { get; set; }
-    public DateTime AvansTarihi { get; set; } = DateTime.Today;
+    public DateTime AvansTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public decimal Tutar { get; set; }
     public string? Aciklama { get; set; }
     public AvansOdemeSekli OdemeSekli { get; set; }
@@ -121,7 +121,7 @@ public class BorcRequest
     public int? Id { get; set; }
     public int PersonelId { get; set; }
     public int? FirmaId { get; set; }
-    public DateTime BorcTarihi { get; set; } = DateTime.Today;
+    public DateTime BorcTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public decimal Tutar { get; set; }
     public string BorcNedeni { get; set; } = string.Empty;
     public string? Aciklama { get; set; }

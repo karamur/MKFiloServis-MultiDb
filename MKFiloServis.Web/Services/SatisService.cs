@@ -157,7 +157,7 @@ public class SatisService : ISatisService
     public async Task<AracIlan> CreateAracIlanAsync(AracIlan ilan)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        ilan.IlanTarihi = DateTime.Today;
+        ilan.IlanTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
         ilan.CreatedAt = DateTime.UtcNow;
         context.AracIlanlari.Add(ilan);
         await context.SaveChangesAsync();
@@ -224,7 +224,7 @@ public class SatisService : ISatisService
 
         // Satis kaydini olustur
         satisInfo.AracIlanId = ilanId;
-        satisInfo.SatisTarihi = DateTime.Today;
+        satisInfo.SatisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
         satisInfo.CreatedAt = DateTime.UtcNow;
 
         // Komisyon hesapla
@@ -241,7 +241,7 @@ public class SatisService : ISatisService
 
         // Ilani guncelle
         ilan.IlanDurum = IlanDurum.Satildi;
-        ilan.SatisTarihi = DateTime.Today;
+        ilan.SatisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
         ilan.UpdatedAt = DateTime.UtcNow;
 
         await context.SaveChangesAsync();
@@ -264,7 +264,7 @@ public class SatisService : ISatisService
     public async Task<PiyasaIlan> AddPiyasaIlanAsync(PiyasaIlan piyasaIlan)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        piyasaIlan.TaramaTarihi = DateTime.Now;
+        piyasaIlan.TaramaTarihi = DateTime.UtcNow;
         piyasaIlan.CreatedAt = DateTime.UtcNow;
         context.PiyasaIlanlari.Add(piyasaIlan);
         await context.SaveChangesAsync();
@@ -458,7 +458,7 @@ public class SatisService : ISatisService
     public async Task<SatisDashboardData> GetDashboardDataAsync(int yil, int? ay = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var buAy = ay ?? DateTime.Today.Month;
+        var buAy = ay ?? MKFiloServis.Shared.Time.BusinessTime.Today.Month;
         var ilanlar = await context.AracIlanlari.ToListAsync();
         var satislar = await context.AracSatislari
             .Include(s => s.SatisPersoneli)

@@ -68,12 +68,12 @@ public class SmsService : ISmsService
 
         if (ayar.Id == 0)
         {
-            ayar.CreatedAt = DateTime.Now;
+            ayar.CreatedAt = DateTime.UtcNow;
             context.Set<SmsAyar>().Add(ayar);
         }
         else
         {
-            ayar.UpdatedAt = DateTime.Now;
+            ayar.UpdatedAt = DateTime.UtcNow;
             context.Set<SmsAyar>().Update(ayar);
         }
 
@@ -111,7 +111,7 @@ public class SmsService : ISmsService
         if (bakiye.HasValue)
         {
             ayar.Bakiye = bakiye;
-            ayar.SonBakiyeSorguTarihi = DateTime.Now;
+            ayar.SonBakiyeSorguTarihi = DateTime.UtcNow;
             await context.SaveChangesAsync();
         }
 
@@ -177,7 +177,7 @@ public class SmsService : ISmsService
             IliskiliTablo = iliskiliTablo,
             IliskiliKayitId = iliskiliKayitId,
             Durum = SmsGonderimDurum.Bekliyor,
-            CreatedAt = DateTime.Now
+            CreatedAt = DateTime.UtcNow
         };
         context.Set<SmsLog>().Add(log);
         await context.SaveChangesAsync();
@@ -197,13 +197,13 @@ public class SmsService : ISmsService
             log.Durum = sonuc.Basarili ? SmsGonderimDurum.Gonderildi : SmsGonderimDurum.Basarisiz;
             log.ProviderMesajId = sonuc.MesajId;
             log.HataMesaji = sonuc.HataMesaji;
-            log.GonderimTarihi = DateTime.Now;
+            log.GonderimTarihi = DateTime.UtcNow;
 
             // Ayar istatistiklerini güncelle
             if (sonuc.Basarili)
             {
                 ayar.ToplamGonderilenSms++;
-                ayar.SonGonderimTarihi = DateTime.Now;
+                ayar.SonGonderimTarihi = DateTime.UtcNow;
             }
             else
             {
@@ -317,8 +317,8 @@ public class SmsService : ISmsService
     public async Task<SmsIstatistik> GetIstatistikAsync(DateTime? baslangic = null, DateTime? bitis = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        baslangic ??= DateTime.Today.AddDays(-30);
-        bitis ??= DateTime.Now;
+        baslangic ??= MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-30);
+        bitis ??= DateTime.UtcNow;
 
         var loglar = await context.Set<SmsLog>()
             .Where(l => !l.IsDeleted && l.CreatedAt >= baslangic && l.CreatedAt <= bitis)
@@ -337,7 +337,7 @@ public class SmsService : ISmsService
                 .GroupBy(l => l.Tip)
                 .ToDictionary(g => g.Key, g => g.Count()),
             GunlukGonderim = loglar
-                .Where(l => l.CreatedAt >= DateTime.Today.AddDays(-7))
+                .Where(l => l.CreatedAt >= MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-7))
                 .GroupBy(l => l.CreatedAt.Date.ToString("dd.MM"))
                 .ToDictionary(g => g.Key, g => g.Count())
         };
@@ -390,12 +390,12 @@ public class SmsService : ISmsService
 
         if (sablon.Id == 0)
         {
-            sablon.CreatedAt = DateTime.Now;
+            sablon.CreatedAt = DateTime.UtcNow;
             context.Set<SmsSablon>().Add(sablon);
         }
         else
         {
-            sablon.UpdatedAt = DateTime.Now;
+            sablon.UpdatedAt = DateTime.UtcNow;
             context.Set<SmsSablon>().Update(sablon);
         }
 

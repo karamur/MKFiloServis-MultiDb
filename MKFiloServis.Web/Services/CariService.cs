@@ -955,7 +955,7 @@ public class CariService : ICariService
     public async Task<List<CariVadeUyari>> GetVadeUyarilariAsync(int? cariId = null, int yaklasmaSuresiGun = 7)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var uyarilar = new List<CariVadeUyari>();
 
         var query = context.Faturalar

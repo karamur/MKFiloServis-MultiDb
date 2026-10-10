@@ -16,10 +16,12 @@ namespace MKFiloServis.Web.Controllers;
 public class SoforlerController : ControllerBase
 {
     private readonly ISoforService _soforService;
+    private readonly CurrentPermissionGuard _permissionGuard;
 
-    public SoforlerController(ISoforService soforService)
+    public SoforlerController(ISoforService soforService, CurrentPermissionGuard permissionGuard)
     {
         _soforService = soforService;
+        _permissionGuard = permissionGuard;
     }
 
     /// <summary>
@@ -28,6 +30,7 @@ public class SoforlerController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] bool? aktif = null, [FromQuery] string? gorev = null)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.PersonelOku)) return Forbid();
         var soforler = await _soforService.GetAllAsync();
 
         if (aktif.HasValue)
@@ -72,6 +75,7 @@ public class SoforlerController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.PersonelOku)) return Forbid();
         var sofor = await _soforService.GetByIdAsync(id);
         if (sofor == null)
             return NotFound(new { Error = "Şoför bulunamadı" });
@@ -106,6 +110,7 @@ public class SoforlerController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] SoforCreateDto dto)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.PersonelYaz)) return Forbid();
         if (string.IsNullOrEmpty(dto.Ad) || string.IsNullOrEmpty(dto.Soyad))
             return BadRequest(new { Error = "Ad ve soyad gereklidir" });
 
@@ -166,6 +171,7 @@ public class SoforlerController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] SoforUpdateDto dto)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.PersonelDuzenle)) return Forbid();
         var sofor = await _soforService.GetByIdAsync(id);
         if (sofor == null)
             return NotFound(new { Error = "Şoför bulunamadı" });
@@ -258,6 +264,7 @@ public class SoforlerController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.PersonelSil)) return Forbid();
         var sofor = await _soforService.GetByIdAsync(id);
         if (sofor == null)
             return NotFound(new { Error = "Şoför bulunamadı" });
@@ -272,6 +279,7 @@ public class SoforlerController : ControllerBase
     [HttpGet("belge-uyari")]
     public async Task<IActionResult> GetBelgeUyarilari([FromQuery] int gun = 30)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.PersonelOku)) return Forbid();
         var simdi = DateTime.UtcNow;
         var sinirTarih = simdi.AddDays(gun);
 

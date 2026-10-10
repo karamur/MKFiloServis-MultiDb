@@ -1,4 +1,4 @@
-﻿using System.IO.Compression;
+using System.IO.Compression;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Helpers;
@@ -34,7 +34,7 @@ public class BelgeUyariService : IBelgeUyariService
 
         try
         {
-            var bugun = DateTime.Today;
+            var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
             var limitTarih = bugun.AddDays(yaklasanGunSayisi);
 
             // Aktif tüm personeli al

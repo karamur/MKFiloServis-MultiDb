@@ -239,7 +239,7 @@
                                     <td>
                                         @if (arac.MuayeneBitisTarihi.HasValue)
                                         {
-                                            var gunKaldi = (arac.MuayeneBitisTarihi.Value - DateTime.Today).Days;
+                                            var gunKaldi = (arac.MuayeneBitisTarihi.Value - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
                                             <span class="badge @(gunKaldi < 30 ? "bg-danger" : gunKaldi < 60 ? "bg-warning text-dark" : "bg-success")">
                                                 @arac.MuayeneBitisTarihi.Value.ToString("dd.MM.yyyy")
                                             </span>
@@ -615,7 +615,7 @@
             ozet.Cell(1, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
             ozet.Row(1).Height = 28;
 
-            ozet.Cell(2, 1).Value = $"Oluşturma: {DateTime.Now:dd.MM.yyyy HH:mm}";
+            ozet.Cell(2, 1).Value = $"Oluşturma: {MKFiloServis.Shared.Time.BusinessTime.Now:dd.MM.yyyy HH:mm}";
             ozet.Range(2, 1, 2, 4).Merge();
             ozet.Cell(2, 1).Style.Font.Italic = true;
 
@@ -697,7 +697,7 @@
                 {
                     ws.Cell(row, 13).Value = a.MuayeneBitisTarihi.Value;
                     ws.Cell(row, 13).Style.DateFormat.Format = "dd.MM.yyyy";
-                    var gun = (a.MuayeneBitisTarihi.Value - DateTime.Today).Days;
+                    var gun = (a.MuayeneBitisTarihi.Value - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
                     if (gun < 0) ws.Cell(row, 13).Style.Fill.BackgroundColor = XLColor.LightPink;
                     else if (gun < 30) ws.Cell(row, 13).Style.Fill.BackgroundColor = XLColor.LightYellow;
                 }
@@ -714,7 +714,7 @@
             using var ms = new MemoryStream();
             workbook.SaveAs(ms);
             var bytes = ms.ToArray();
-            var fileName = $"tedarikci-arac-rapor-{DateTime.Now:yyyyMMdd-HHmm}.xlsx";
+            var fileName = $"tedarikci-arac-rapor-{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd-HHmm}.xlsx";
             var base64 = Convert.ToBase64String(bytes);
             await JS.InvokeVoidAsync("downloadFileFromBytes", fileName, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", base64);
             ToastService.ShowSuccess("Excel raporu aktarıldı.");
@@ -756,7 +756,7 @@
                         });
                         col.Item().PaddingTop(4).Row(row =>
                         {
-                            row.RelativeItem().Text($"Oluşturma: {DateTime.Now:dd.MM.yyyy HH:mm}").FontSize(8).FontColor(Colors.Grey.Darken2);
+                            row.RelativeItem().Text($"Oluşturma: {MKFiloServis.Shared.Time.BusinessTime.Now:dd.MM.yyyy HH:mm}").FontSize(8).FontColor(Colors.Grey.Darken2);
                             row.RelativeItem().AlignRight().Text($"Toplam Kayıt: {data.Count}").Bold().FontSize(9);
                         });
                     });
@@ -879,7 +879,7 @@
             });
 
             var bytes = document.GeneratePdf();
-            var fileName = $"tedarikci-arac-rapor-{DateTime.Now:yyyyMMdd-HHmm}.pdf";
+            var fileName = $"tedarikci-arac-rapor-{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd-HHmm}.pdf";
             var base64 = Convert.ToBase64String(bytes);
             await JS.InvokeVoidAsync("downloadFileFromBytes", fileName, "application/pdf", base64);
             ToastService.ShowSuccess("PDF raporu aktarıldı.");

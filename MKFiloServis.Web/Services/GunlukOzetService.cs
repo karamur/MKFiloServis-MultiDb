@@ -65,7 +65,7 @@ public class GunlukOzetService
     private async Task<GunlukOzetDto> HazirlaOzetAsync()
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var yedi = bugun.AddDays(7);
 
         var bugunSeferSayisi = await context.ServisCalismalari

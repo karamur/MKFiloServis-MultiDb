@@ -199,7 +199,7 @@
         yukleniyor = true;
         try
         {
-            var bugun = DateTime.Today;
+            var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
             var kesim = onumuzdekiGun >= 9999 ? DateTime.MaxValue : bugun.AddDays(onumuzdekiGun);
 
             var liste = new List<SozlesmeSatir>();
@@ -349,7 +349,7 @@
             using var ms = new MemoryStream();
             wb.SaveAs(ms);
             await JS.InvokeVoidAsync("downloadFileFromBytes",
-                $"Sozlesme_Takvimi_{DateTime.Today:yyyyMMdd}.xlsx",
+                $"Sozlesme_Takvimi_{MKFiloServis.Shared.Time.BusinessTime.Today:yyyyMMdd}.xlsx",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 Convert.ToBase64String(ms.ToArray()));
             ToastService.ShowSuccess("Excel indirildi");

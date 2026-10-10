@@ -75,7 +75,7 @@
                 <div class="col-md-2">
                     <label class="form-label small mb-1 fw-bold">Yıl</label>
                     <select class="form-select form-select-sm" @bind="filtreYil" @bind:after="YenileAsync">
-                        @for (int y = DateTime.Today.Year + 1; y >= DateTime.Today.Year - 2; y--)
+                        @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year + 1; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 2; y--)
                         {
                             <option value="@y">@y</option>
                         }
@@ -1143,8 +1143,8 @@
     private bool disposed = false;
     private bool degisiklikVar = false;
     private int filtreFirmaId = 1;
-    private int filtreYil = DateTime.Today.Year;
-    private int filtreAy = DateTime.Today.Month;
+    private int filtreYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    private int filtreAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
     private string aramaMetni = "";
 
     // Modal

@@ -931,7 +931,7 @@
                             <label class="form-label">Tarih</label>
                             <input type="date" class="form-control form-control-sm"
                                    value="@hizliTarih.ToString("yyyy-MM-dd")"
-                                   @onchange="e => hizliTarih = DateTime.TryParse(e.Value?.ToString(), out var d2) ? d2 : DateTime.Today" />
+                                   @onchange="e => hizliTarih = DateTime.TryParse(e.Value?.ToString(), out var d2) ? d2 : MKFiloServis.Shared.Time.BusinessTime.Today" />
                         </div>
 
                         <!-- KM -->
@@ -1021,7 +1021,7 @@
     private int? hizliTakilanStokId;
     private int? hizliHedefDepoId;
     private string hizliAkibet = "depo";
-    private DateTime hizliTarih = DateTime.Today;
+    private DateTime hizliTarih = MKFiloServis.Shared.Time.BusinessTime.Today;
     private int? hizliKm;
     private string hizliYer = string.Empty;
     private string hizliNeden = string.Empty;
@@ -1171,7 +1171,7 @@
         editDegisim = new LastikDegisim
         {
             AracId = aracId,
-            DegisimTarihi = DateTime.Today,
+            DegisimTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
             DegisimTipi = LastikDegisimTipi.Mevsimlik
         };
         degisimGirisSekli = "standart";
@@ -1217,7 +1217,7 @@
         hizliTakilanStokId = null;
         hizliHedefDepoId = null;
         hizliAkibet = "depo";
-        hizliTarih = DateTime.Today;
+        hizliTarih = MKFiloServis.Shared.Time.BusinessTime.Today;
         hizliKm = null;
         hizliYer = string.Empty;
         hizliNeden = string.Empty;
@@ -1361,7 +1361,7 @@
     {
         editDegisim = new LastikDegisim
         {
-            DegisimTarihi = DateTime.Today,
+            DegisimTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
             DegisimTipi = LastikDegisimTipi.Mevsimlik
         };
         degisimGirisSekli = "standart";

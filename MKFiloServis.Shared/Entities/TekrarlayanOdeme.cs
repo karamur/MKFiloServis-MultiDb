@@ -37,7 +37,7 @@ public class TekrarlayanOdeme : BaseEntity, IFirmaTenant
     /// Baslangic tarihi
     /// </summary>
     [Required]
-    public DateTime BaslangicTarihi { get; set; } = DateTime.Today;
+    public DateTime BaslangicTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
 
     /// <summary>
     /// Bitis tarihi (null ise suresiz devam eder)

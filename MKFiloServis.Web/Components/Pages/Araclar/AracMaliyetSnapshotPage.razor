@@ -41,7 +41,7 @@
                 <div class="col-md-2">
                     <label class="form-label small">Yıl</label>
                     <select class="form-select form-select-sm" @bind="filtreYil" @bind:after="LoadAsync">
-                        @for (int y = DateTime.Now.Year + 1; y >= 2020; y--)
+                        @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year + 1; y >= 2020; y--)
                         {
                             <option value="@y">@y</option>
                         }
@@ -233,7 +233,7 @@
                         <div class="col-6">
                             <label class="form-label small">Yıl</label>
                             <select class="form-select form-select-sm" @bind="uretYil">
-                                @for (int y = DateTime.Now.Year + 1; y >= 2020; y--)
+                                @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year + 1; y >= 2020; y--)
                                 {
                                     <option value="@y">@y</option>
                                 }
@@ -423,17 +423,17 @@
     private Func<Task>? onayEylemi;
 
     // --- Filtre ---
-    private int filtreYil = DateTime.Now.Year;
-    private int filtreAy = DateTime.Now.Month;
+    private int filtreYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    private int filtreAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
     private int filtreAracId = 0;
 
     // --- Tek araç üretim ---
-    private int uretYil = DateTime.Now.Year;
-    private int uretAy = DateTime.Now.Month;
+    private int uretYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    private int uretAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
     private int uretAracId = 0;
 
     // --- Fullpet modal alanları ---
-    private DateTime fp_tarih = DateTime.Today;
+    private DateTime fp_tarih = MKFiloServis.Shared.Time.BusinessTime.Today;
     private string? fp_faturaNo;
     private string? fp_aciklama;
     private decimal fp_toplamTutar = 0m;
@@ -468,8 +468,8 @@
 
     private async Task FiltreyiTemizle()
     {
-        filtreYil = DateTime.Now.Year;
-        filtreAy = DateTime.Now.Month;
+        filtreYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+        filtreAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
         filtreAracId = 0;
         await LoadAsync();
     }

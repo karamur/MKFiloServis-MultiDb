@@ -137,7 +137,7 @@
                     <tbody>
                         @foreach (var item in filtrelenmisListe)
                         {
-                            <tr class="@(item.GecerlilikTarihi < DateTime.Now && item.Durum == ProformaDurum.Gonderildi ? "table-warning" : "")">
+                            <tr class="@(item.GecerlilikTarihi < MKFiloServis.Shared.Time.BusinessTime.Now && item.Durum == ProformaDurum.Gonderildi ? "table-warning" : "")">
                                 <td>
                                     <a href="/proforma-fatura/@item.Id" class="fw-bold text-decoration-none">
                                         @item.ProformaNo
@@ -152,7 +152,7 @@
                                 <td>@item.ProformaTarihi.ToString("dd.MM.yyyy")</td>
                                 <td>
                                     @item.GecerlilikTarihi.ToString("dd.MM.yyyy")
-                                    @if (item.GecerlilikTarihi < DateTime.Now && item.Durum == ProformaDurum.Gonderildi)
+                                    @if (item.GecerlilikTarihi < MKFiloServis.Shared.Time.BusinessTime.Now && item.Durum == ProformaDurum.Gonderildi)
                                     {
                                         <span class="badge bg-danger ms-1">Süresi Doldu</span>
                                     }
@@ -327,7 +327,7 @@
         try
         {
             var bytes = await ProformaService.ExportToExcelAsync(filtrelenmisListe);
-            var fileName = $"ProformaFaturalar_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+            var fileName = $"ProformaFaturalar_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmmss}.xlsx";
             await JS.InvokeVoidAsync("downloadFileFromBytes", fileName, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes);
         }
         catch (Exception ex)

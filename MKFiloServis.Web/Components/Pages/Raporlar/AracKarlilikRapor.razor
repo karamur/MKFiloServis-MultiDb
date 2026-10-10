@@ -513,8 +513,8 @@ else
 
 @code {
     private List<Arac> araclar = [];
-    private DateTime baslangicTarihi = new DateTime(DateTime.Today.Year, 1, 1);
-    private DateTime bitisTarihi = DateTime.Today;
+    private DateTime baslangicTarihi = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, 1, 1);
+    private DateTime bitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
     private int seciliAracId = 0;
     private int[] seciliAracIds = [];
     private string seciliSahiplikTipi = "";

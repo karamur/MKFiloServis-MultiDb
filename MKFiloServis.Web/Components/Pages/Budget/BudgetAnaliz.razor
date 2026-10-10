@@ -47,7 +47,7 @@
                 <button class="btn @(secilenPeriyod == "yillik" ? "btn-primary" : "btn-outline-primary")" @onclick="PeriyodYillikSec">Yillik</button>
             </div>
             <select class="form-select form-select-sm" style="width: 90px;" @bind="secilenYil" @bind:after="YenileDataAsync">
-                @for (int y = DateTime.Today.Year + 2; y >= DateTime.Today.Year - 5; y--)
+                @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year + 2; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 5; y--)
                 {
                     <option value="@y">@y</option>
                 }
@@ -162,7 +162,7 @@
                                             {
                                                 var currentGun = gun;
                                                 var gunData = takvimData?.FirstOrDefault(t => t.Gun == currentGun);
-                                                var bugun = DateTime.Today.Day == currentGun && DateTime.Today.Month == aktifTakvimAy && DateTime.Today.Year == secilenYil;
+                                                var bugun = MKFiloServis.Shared.Time.BusinessTime.Today.Day == currentGun && MKFiloServis.Shared.Time.BusinessTime.Today.Month == aktifTakvimAy && MKFiloServis.Shared.Time.BusinessTime.Today.Year == secilenYil;
                                                 var seciliMi = secilenGun == currentGun;
                                                 var gunTarihi = new DateTime(secilenYil, aktifTakvimAy, currentGun);
                                                 var gunRenk = GetGunVadeRenk(gunTarihi);
@@ -383,7 +383,7 @@
                                                     <small>@odeme.OdemeTarihi.ToString("dd.MM")</small>
                                                     <br />
                                                     @{
-                                                        var kalanGun = (odeme.OdemeTarihi.Date - DateTime.Today).Days;
+                                                        var kalanGun = (odeme.OdemeTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
                                                     }
                                                     <span class="badge" style="font-size: 0.6rem; background-color: @vadeRenk; color: white;">
                                                         @if (kalanGun < 0)
@@ -1423,7 +1423,7 @@
                             TekrarPeriyodu.Yillik => 12,
                             _ => 1
                         };
-                        var bas = editTekrarlayan.BaslangicTarihi == default ? DateTime.Today : editTekrarlayan.BaslangicTarihi;
+                        var bas = editTekrarlayan.BaslangicTarihi == default ? MKFiloServis.Shared.Time.BusinessTime.Today : editTekrarlayan.BaslangicTarihi;
                         var gun = editTekrarlayan.OdemeGunu > 0 ? editTekrarlayan.OdemeGunu : bas.Day;
                     }
                     @if (editTekrarlayan.Tutar > 0)
@@ -1539,7 +1539,7 @@
                                                            {
                                                                foreach(var o in gunData.Odemeler.Where(x => x.Durum == OdemeDurum.Bekliyor || x.Durum == OdemeDurum.Ertelendi).OrderBy(x => x.Durum))
                                                                {
-                                                                   int kalanGun = (o.OdemeTarihi.Date - DateTime.Today).Days;
+                                                                   int kalanGun = (o.OdemeTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
                                                                    string blockClass = "";
                                                                    string timeText = "";
 
@@ -1603,7 +1603,7 @@
                                 <tbody>
                                     @foreach (var odeme in AktifRaporOdemeleri)
                                     {
-                                        int kGun2 = (odeme.OdemeTarihi.Date - DateTime.Today).Days;
+                                        int kGun2 = (odeme.OdemeTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
                                         string trColorClass = "";
                                         string timeText2 = "";
                                         
@@ -1769,8 +1769,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        secilenYil = DateTime.Today.Year;
-        secilenAy = DateTime.Today.Month;
+        secilenYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+        secilenAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
         aktifTakvimAy = secilenAy;
 
         firmalar = await FirmaService.GetAktifFirmalarAsync();
@@ -2038,7 +2038,7 @@
         odemeYapRequest = new OdemeYapRequest
         {
             OdemeTipi = BudgetOdemeTipi.Kasa,
-            OdemeTarihi = DateTime.Today,
+            OdemeTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
             MasrafKesintisi = 0,
             CezaKesintisi = 0,
             DigerKesinti = 0,
@@ -2292,7 +2292,7 @@
         var aktifFirma = FirmaService.GetAktifFirma();
         editOdeme = new BudgetOdeme
         {
-            OdemeTarihi = secilenGun.HasValue ? secilenGunTarih : DateTime.Today,
+            OdemeTarihi = secilenGun.HasValue ? secilenGunTarih : MKFiloServis.Shared.Time.BusinessTime.Today,
             Durum = OdemeDurum.Bekliyor,
             FirmaId = (aktifFirma.TumFirmalar || aktifFirma.FirmaId <= 0) ? null : aktifFirma.FirmaId
         };
@@ -2406,7 +2406,7 @@
         var aktifFirma = FirmaService.GetAktifFirma();
         taksitRequest = new TaksitliOdemeRequest
         {
-            BaslangicTarihi = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1),
+            BaslangicTarihi = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1),
             TaksitSayisi = 12,
             FirmaId = (aktifFirma.TumFirmalar || aktifFirma.FirmaId <= 0) ? null : aktifFirma.FirmaId
         };
@@ -2670,7 +2670,7 @@
         var aktifFirma = FirmaService.GetAktifFirma();
         editTekrarlayan = new TekrarlayanOdeme
         {
-            BaslangicTarihi = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1),
+            BaslangicTarihi = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1),
             OdemeGunu = 1,
             Periyod = TekrarPeriyodu.Aylik,
             Aktif = true,
@@ -2789,7 +2789,7 @@
 
     private string GetGunVadeRenk(DateTime gunTarihi)
     {
-        var fark = (gunTarihi.Date - DateTime.Today).Days;
+        var fark = (gunTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
 
         if (fark < 0)
             return "#dc3545"; // Gecmis - kirmizi
@@ -2801,7 +2801,7 @@
 
     private string GetOdemeVadeRenk(BudgetOdeme odeme)
     {
-        var kalanGun = (odeme.OdemeTarihi.Date - DateTime.Today).Days;
+        var kalanGun = (odeme.OdemeTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
 
         if (kalanGun < 0)
             return "#dc3545"; // Gecmis - kirmizi

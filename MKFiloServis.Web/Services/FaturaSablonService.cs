@@ -493,7 +493,7 @@ public class FaturaSablonService : IFaturaSablonService
             });
 
             var pdfData = document.GeneratePdf();
-            var dosyaAdi = $"Fatura_{fatura.FaturaNo}_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+            var dosyaAdi = $"Fatura_{fatura.FaturaNo}_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmmss}.pdf";
 
             _logger.LogInformation("Fatura PDF oluşturuldu: {FaturaNo}", fatura.FaturaNo);
 
@@ -522,8 +522,8 @@ public class FaturaSablonService : IFaturaSablonService
         var ornekFatura = new Fatura
         {
             FaturaNo = "FTR-2025-0001",
-            FaturaTarihi = DateTime.Today,
-            VadeTarihi = DateTime.Today.AddDays(30),
+            FaturaTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
+            VadeTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(30),
             AraToplam = 10000m,
             KdvOrani = 20,
             KdvTutar = 2000m,

@@ -93,7 +93,7 @@ public class AracIlan : BaseEntity
 
     // Ilan Bilgileri
     public IlanDurum IlanDurum { get; set; } = IlanDurum.Aktif;
-    public DateTime IlanTarihi { get; set; } = DateTime.Today;
+    public DateTime IlanTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public DateTime? SatisTarihi { get; set; }
 
     public string? Aciklama { get; set; }
@@ -142,7 +142,7 @@ public class PiyasaIlan : BaseEntity
     public bool TramerVar { get; set; }
     public decimal? TramerTutari { get; set; }
 
-    public DateTime TaramaTarihi { get; set; } = DateTime.Now;
+    public DateTime TaramaTarihi { get; set; } = DateTime.UtcNow;
 
     public string? EkBilgiler { get; set; } // JSON
 }
@@ -161,7 +161,7 @@ public class AracSatis : BaseEntity
     public int? SatisPersoneliId { get; set; }
     public virtual SatisPersoneli? SatisPersoneli { get; set; }
 
-    public DateTime SatisTarihi { get; set; } = DateTime.Today;
+    public DateTime SatisTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
 
     public decimal SatisFiyati { get; set; }
     public decimal KomisyonTutari { get; set; }

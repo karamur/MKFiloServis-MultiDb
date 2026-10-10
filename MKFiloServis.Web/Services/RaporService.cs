@@ -114,7 +114,7 @@ public class RaporService : IRaporService
             OdenenTutar = f.OdenenTutar,
             KalanTutar = f.KalanTutar,
             VadeGunu = f.VadeTarihi.HasValue 
-                ? (f.VadeTarihi.Value - DateTime.Today).Days 
+                ? (f.VadeTarihi.Value - MKFiloServis.Shared.Time.BusinessTime.Today).Days
                 : 0
         }).ToList();
     }
@@ -700,7 +700,7 @@ public class RaporService : IRaporService
         bool sadeceBorcluCariler = false)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var bugun = raporTarihi?.Date ?? DateTime.Today;
+        var bugun = raporTarihi?.Date ?? MKFiloServis.Shared.Time.BusinessTime.Today;
 
         // Tüm carileri al
         var carilerQuery = context.Cariler
@@ -816,7 +816,7 @@ public class RaporService : IRaporService
         DateTime? raporTarihi = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var bugun = raporTarihi?.Date ?? DateTime.Today;
+        var bugun = raporTarihi?.Date ?? MKFiloServis.Shared.Time.BusinessTime.Today;
 
         var cari = await context.Cariler
             .Include(c => c.Faturalar.Where(f => !f.IsDeleted))

@@ -70,7 +70,7 @@ public class EbysEvrakFiltre
 public class EbysEvrakOlusturModel
 {
     public EvrakYonu Yon { get; set; } = EvrakYonu.Gelen;
-    public DateTime EvrakTarihi { get; set; } = DateTime.Today;
+    public DateTime EvrakTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public string Konu { get; set; } = string.Empty;
     public string? Ozet { get; set; }
     public string? GonderenKurum { get; set; }

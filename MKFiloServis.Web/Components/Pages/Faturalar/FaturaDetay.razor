@@ -129,7 +129,7 @@
                                         <td>
                                             @if (fatura.VadeTarihi.HasValue)
                                             {
-                                                var vadeGunu = (fatura.VadeTarihi.Value - DateTime.Today).Days;
+                                                var vadeGunu = (fatura.VadeTarihi.Value - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
                                                 <span>@fatura.VadeTarihi.Value.ToString("dd.MM.yyyy")</span>
                                                 @if (fatura.KalanTutar > 0)
                                                 {

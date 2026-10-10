@@ -282,7 +282,7 @@
             // 6. Guncelleme logunu kaydet
             var log = new GuncellemeLog
             {
-                Tarih = DateTime.Now,
+                Tarih = DateTime.UtcNow,
                 DosyaAdi = secilenDosya.Name,
                 Boyut = FormatDosyaBoyutu(secilenDosya.Size),
                 Basarili = true
@@ -309,7 +309,7 @@
 
             var log = new GuncellemeLog
             {
-                Tarih = DateTime.Now,
+                Tarih = DateTime.UtcNow,
                 DosyaAdi = secilenDosya?.Name ?? "Bilinmiyor",
                 Boyut = secilenDosya != null ? FormatDosyaBoyutu(secilenDosya.Size) : "-",
                 Basarili = false

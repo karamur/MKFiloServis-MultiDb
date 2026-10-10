@@ -20,11 +20,16 @@ public class FaturaGrupSablonuController : ControllerBase
 {
     private readonly IFaturaGrupSablonuService _sablonService;
     private readonly IFirmaService _firmaService;
+    private readonly CurrentPermissionGuard _permissionGuard;
 
-    public FaturaGrupSablonuController(IFaturaGrupSablonuService sablonService, IFirmaService firmaService)
+    public FaturaGrupSablonuController(
+        IFaturaGrupSablonuService sablonService,
+        IFirmaService firmaService,
+        CurrentPermissionGuard permissionGuard)
     {
         _sablonService = sablonService;
         _firmaService = firmaService;
+        _permissionGuard = permissionGuard;
     }
 
     private int AktifFirmaId => _firmaService.GetAktifFirma().FirmaId;
@@ -33,6 +38,7 @@ public class FaturaGrupSablonuController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery, Range(1, int.MaxValue)] int? kullaniciId = null)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.FaturaHazirlikOku)) return Forbid();
         var sablonlar = await _sablonService.GetByFirmaAsync(AktifFirmaId, kullaniciId, HttpContext.RequestAborted);
         return Ok(sablonlar);
     }
@@ -41,6 +47,7 @@ public class FaturaGrupSablonuController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById([Range(1, int.MaxValue)] int id)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.FaturaHazirlikOku)) return Forbid();
         var sablon = await _sablonService.GetByIdAsync(id, HttpContext.RequestAborted);
         if (sablon == null) return NotFound();
         return Ok(sablon);
@@ -50,6 +57,7 @@ public class FaturaGrupSablonuController : ControllerBase
     [HttpGet("varsayilan")]
     public async Task<IActionResult> GetVarsayilan([FromQuery, Range(1, int.MaxValue)] int? kullaniciId = null)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.FaturaHazirlikOku)) return Forbid();
         var sablon = await _sablonService.GetVarsayilanAsync(AktifFirmaId, kullaniciId, HttpContext.RequestAborted);
         if (sablon == null) return NoContent();
         return Ok(sablon);
@@ -59,6 +67,7 @@ public class FaturaGrupSablonuController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] FaturaGrupSablonuRequest request)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.FaturaHazirlikYaz)) return Forbid();
         var sablon = new FaturaGrupSablonu
         {
             FirmaId = AktifFirmaId,
@@ -75,6 +84,7 @@ public class FaturaGrupSablonuController : ControllerBase
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update([Range(1, int.MaxValue)] int id, [FromBody] FaturaGrupSablonuRequest request)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.FaturaHazirlikDuzenle)) return Forbid();
         var existing = await _sablonService.GetByIdAsync(id, HttpContext.RequestAborted);
         if (existing == null) return NotFound();
 
@@ -90,6 +100,7 @@ public class FaturaGrupSablonuController : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete([Range(1, int.MaxValue)] int id)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.FaturaHazirlikDuzenle)) return Forbid();
         var deleted = await _sablonService.DeleteAsync(id, HttpContext.RequestAborted);
         if (!deleted) return NotFound();
         return NoContent();
@@ -99,6 +110,7 @@ public class FaturaGrupSablonuController : ControllerBase
     [HttpPost("{id:int}/varsayilan-yap")]
     public async Task<IActionResult> SetVarsayilan([Range(1, int.MaxValue)] int id)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.FaturaHazirlikDuzenle)) return Forbid();
         var result = await _sablonService.SetVarsayilanAsync(id, HttpContext.RequestAborted);
         if (!result) return NotFound();
         return Ok();

@@ -82,7 +82,7 @@
                             }
                         </select>
                         <select class="form-select" @bind="secilenYil" @bind:after="DonemDegisti">
-                            @for (int i = DateTime.Today.Year - 1; i <= DateTime.Today.Year + 2; i++)
+                            @for (int i = MKFiloServis.Shared.Time.BusinessTime.Today.Year - 1; i <= MKFiloServis.Shared.Time.BusinessTime.Today.Year + 2; i++)
                             {
                                 <option value="@i">@i</option>
                             }
@@ -155,7 +155,7 @@
                                 {
                                     int gun = odeme.Plan?.OdemeGunu ?? 1;
                                     var odemeTarihi = new DateTime(secilenYil, secilenAy, Math.Min(gun, DateTime.DaysInMonth(secilenYil, secilenAy)));
-                                    int kalanGun = (odemeTarihi.Date - DateTime.Today).Days;
+                                    int kalanGun = (odemeTarihi.Date - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
                                     
                                     string timeText = "-";
                                     string timeClass = "text-muted";
@@ -275,8 +275,8 @@
 @code {
     private List<AylikOdemePlani> aktifPlanlar = new();
     private List<AylikOdemeGerceklesen> odemeler = new();
-    private int secilenYil = DateTime.Today.Year;
-    private int secilenAy = DateTime.Today.Month;
+    private int secilenYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    private int secilenAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
     private string gorunumModu = "takvim";
     private bool isLoading = false;
 

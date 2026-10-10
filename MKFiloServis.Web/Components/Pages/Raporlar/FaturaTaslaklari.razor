@@ -300,7 +300,7 @@
         editTaslak = new Fatura
         {
             FaturaNo = $"TASLAK-{nextNum:D3}",
-            FaturaTarihi = DateTime.Today,
+            FaturaTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
             FaturaYonu = FaturaYonu.Giden,
             FaturaTipi = FaturaTipi.SatisFaturasi,
             EFaturaTipi = EFaturaTipi.EFatura,
@@ -394,7 +394,7 @@
     private void FaturayaDonusturOnay(Fatura taslak)
     {
         donusturulecekTaslak = taslak;
-        yeniFaturaNo = $"F-{DateTime.Today:yyyy}-{taslaklar.IndexOf(taslak) + 1:D3}";
+        yeniFaturaNo = $"F-{MKFiloServis.Shared.Time.BusinessTime.Today:yyyy}-{taslaklar.IndexOf(taslak) + 1:D3}";
         showDonusturModal = true;
     }
 

@@ -15,8 +15,8 @@ public class KiralikPlakaTakip : BaseEntity
     [Required, StringLength(100)]
     public string IsimSoyisim { get; set; } = string.Empty;
 
-    public DateTime BaslamaTarihi { get; set; } = DateTime.Today;
-    public DateTime BitisTarihi { get; set; } = DateTime.Today.AddYears(1);
+    public DateTime BaslamaTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
+    public DateTime BitisTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today.AddYears(1);
 
     [StringLength(50)]
     public string Durum { get; set; } = "ÖNÜ AÇIK";

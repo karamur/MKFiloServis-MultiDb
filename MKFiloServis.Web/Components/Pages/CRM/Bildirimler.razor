@@ -226,7 +226,7 @@
         if (fark.TotalHours < 24) return $"{(int)fark.TotalHours} saat önce";
         if (fark.TotalDays < 7) return $"{(int)fark.TotalDays} Gün önce";
 
-        return tarih.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+        return MKFiloServis.Shared.Time.BusinessTime.LocalAt(tarih).ToString("dd.MM.yyyy HH:mm");
     }
 }
 

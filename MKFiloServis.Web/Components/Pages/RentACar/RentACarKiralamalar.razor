@@ -546,7 +546,7 @@
                                 <div class="col-6"><div class="border-top pt-2">Kiracı / yetkili imza<br />Ad soyad: ____________________</div></div>
                                 <div class="col-6"><div class="border-top pt-2">Kiraya veren / teslim eden<br />Ad soyad: ____________________</div></div>
                             </div>
-                            <footer class="small text-muted text-center mt-4">Belge oluşturma tarihi: @DateTime.Now.ToString("dd.MM.yyyy HH:mm")</footer>
+                            <footer class="small text-muted text-center mt-4">Belge oluşturma tarihi: @MKFiloServis.Shared.Time.BusinessTime.Now.ToString("dd.MM.yyyy HH:mm")</footer>
                         </article>
                     </div>
                     <div class="modal-footer d-print-none">
@@ -795,8 +795,8 @@
     private int musaitlikSorguSurumu;
     private RentACarRezervasyonTalebi rezervasyon = new()
     {
-        BaslangicTarihi = DateTime.Now,
-        PlanlananBitisTarihi = DateTime.Now.AddDays(1)
+        BaslangicTarihi = MKFiloServis.Shared.Time.BusinessTime.Now,
+        PlanlananBitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Now.AddDays(1)
     };
     private bool yukleniyor = true;
     private bool musaitlikYukleniyor;
@@ -974,7 +974,7 @@
                 query = query.Where(x => x.AracId == aracFiltreId);
             }
 
-            var simdi = DateTime.Now;
+            var simdi = MKFiloServis.Shared.Time.BusinessTime.Now;
             switch (iadeZamaniFiltresi)
             {
                 case 1:
@@ -1251,8 +1251,8 @@
             rezervasyonBasarili = true;
             rezervasyon = new RentACarRezervasyonTalebi
             {
-                BaslangicTarihi = DateTime.Now,
-                PlanlananBitisTarihi = DateTime.Now.AddDays(1)
+                BaslangicTarihi = MKFiloServis.Shared.Time.BusinessTime.Now,
+                PlanlananBitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Now.AddDays(1)
             };
             musteriKaraListede = false;
             musteriKaraListeKontrolEdiliyor = false;
@@ -1318,7 +1318,7 @@
         }).ToList();
 
         var excelBytes = ExcelService.ExportToExcel(satirlar, "Rent a Car");
-        var dosyaAdi = $"RentACar_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+        var dosyaAdi = $"RentACar_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmmss}.xlsx";
         await JS.InvokeVoidAsync("downloadFile", dosyaAdi, Convert.ToBase64String(excelBytes),
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }
@@ -1341,7 +1341,7 @@
             RaporTarihAraligi = TarihAraligiMetni(),
             DurumFiltresi = durumFiltresi < 0 ? "Tüm durumlar" : ((KiralamaDurumu)durumFiltresi).ToString(),
             AramaFiltresi = arama,
-            RaporOlusturmaTarihi = DateTime.Now,
+            RaporOlusturmaTarihi = MKFiloServis.Shared.Time.BusinessTime.Now,
             Satirlar = liste.Select(x => new RentACarPdfKiralamaSatiri
             {
                 SozlesmeNo = x.SozlesmeNo,
@@ -1358,7 +1358,7 @@
         };
 
         var pdfBytes = PdfService.GenerateRentACarKiralamaRaporPdf(model);
-        var dosyaAdi = $"RentACar_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+        var dosyaAdi = $"RentACar_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmmss}.pdf";
         await JS.InvokeVoidAsync("downloadFile", dosyaAdi, Convert.ToBase64String(pdfBytes), "application/pdf");
     }
 

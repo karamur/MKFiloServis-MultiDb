@@ -132,7 +132,7 @@ else
                         }
                     </div>
                     <div class="card-footer bg-light small text-muted">
-                        <i class="bi bi-clock me-1"></i>Oluşturulma: @talep.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                        <i class="bi bi-clock me-1"></i>Oluşturulma: @MKFiloServis.Shared.Time.BusinessTime.LocalAt(talep.CreatedAt).ToString("dd.MM.yyyy HH:mm")
                         @if (talep.OlusturanKullanici != null)
                         {
                             <span class="ms-2">| <i class="bi bi-person me-1"></i>@talep.OlusturanKullanici.AdSoyad</span>
@@ -206,7 +206,7 @@ else
                                                     }
                                                 </strong>
                                                 <small class="text-muted ms-2">
-                                                    @yanit.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                                                    @MKFiloServis.Shared.Time.BusinessTime.LocalAt(yanit.CreatedAt).ToString("dd.MM.yyyy HH:mm")
                                                 </small>
                                             </div>
                                         </div>
@@ -249,7 +249,7 @@ else
                                             </span>
                                             <span>@aktivite.Aciklama</span>
                                             <small class="text-muted ms-auto">
-                                                @aktivite.CreatedAt.ToLocalTime().ToString("dd.MM HH:mm")
+                                                @MKFiloServis.Shared.Time.BusinessTime.LocalAt(aktivite.CreatedAt).ToString("dd.MM HH:mm")
                                                 @if (aktivite.Kullanici != null)
                                                 {
                                                     <span class="ms-1">- @aktivite.Kullanici.AdSoyad</span>
@@ -325,13 +325,13 @@ else
                             </tr>
                             <tr>
                                 <td class="text-muted">Oluşturulma:</td>
-                                <td>@talep.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                <td>@MKFiloServis.Shared.Time.BusinessTime.LocalAt(talep.CreatedAt).ToString("dd.MM.yyyy HH:mm")</td>
                             </tr>
                             @if (talep.KapatilmaTarihi.HasValue)
                             {
                                 <tr>
                                     <td class="text-muted">Kapatılma:</td>
-                                    <td>@talep.KapatilmaTarihi.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                    <td>@MKFiloServis.Shared.Time.BusinessTime.LocalAt(talep.KapatilmaTarihi.Value).ToString("dd.MM.yyyy HH:mm")</td>
                                 </tr>
                             }
                             @if (talep.CozumSuresiDakika.HasValue)
@@ -386,7 +386,7 @@ else
                                 </tr>
                                 <tr>
                                     <td class="text-muted">Bitiş:</td>
-                                    <td>@talep.SlaBitisTarihi.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                    <td>@MKFiloServis.Shared.Time.BusinessTime.LocalAt(talep.SlaBitisTarihi.Value).ToString("dd.MM.yyyy HH:mm")</td>
                                 </tr>
                                 <tr>
                                     <td class="text-muted">Durum:</td>

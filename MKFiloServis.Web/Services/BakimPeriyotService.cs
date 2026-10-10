@@ -152,7 +152,7 @@ public class BakimPeriyotService : IBakimPeriyotService
             {
                 ct.ThrowIfCancellationRequested();
                 var arac = periyot.Arac;
-                var bugun = DateTime.Today;
+                var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
 
                 // --- Km bazlı kontrol ---
                 if (periyot.PeriyotKm.HasValue && periyot.SonrakiBakimKm.HasValue && arac.KmDurumu.HasValue)
@@ -214,7 +214,7 @@ public class BakimPeriyotService : IBakimPeriyotService
             query = query.Where(b => b.AracId == aracId.Value);
 
         var periyotlar = await query.ToListAsync();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var ozet = new List<BakimDurumOzet>();
 
         foreach (var p in periyotlar)

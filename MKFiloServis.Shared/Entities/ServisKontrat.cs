@@ -90,7 +90,7 @@ public class ServisKontrat : BaseEntity
     public virtual TasimaTedarikciIs? TasimaTedarikciIs { get; set; }
 
     // ── Sözleşme tarihleri ──
-    public DateTime BaslangicTarihi { get; set; } = DateTime.Today;
+    public DateTime BaslangicTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public DateTime? BitisTarihi { get; set; }
 
     // ── Tahsilat (kurumdan alınacak) ──
@@ -158,7 +158,7 @@ public class ServisOdeme : BaseEntity
     public int ServisPuantajId { get; set; }
     public virtual ServisPuantaj? ServisPuantaj { get; set; }
 
-    public DateTime OdemeTarihi { get; set; } = DateTime.Today;
+    public DateTime OdemeTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public decimal Tutar { get; set; }
     public OdemeVeTahsilatSekli OdemeSekli { get; set; }
     public string? BelgeNo { get; set; }
@@ -177,7 +177,7 @@ public class ServisTahsilat : BaseEntity
     public int ServisPuantajId { get; set; }
     public virtual ServisPuantaj? ServisPuantaj { get; set; }
 
-    public DateTime TahsilatTarihi { get; set; } = DateTime.Today;
+    public DateTime TahsilatTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public decimal Tutar { get; set; }
     public OdemeVeTahsilatSekli TahsilatSekli { get; set; }
     public string? BelgeNo { get; set; }

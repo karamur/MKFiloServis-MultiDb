@@ -362,7 +362,7 @@
     </div>
     
     <div style="margin-top: 30px; font-size: 10px; text-align: center; color: #666;">
-        Rapor Tarihi: @DateTime.Now.ToString("dd.MM.yyyy HH:mm") | © 2025 Allbatros Global Teknoloji
+        Rapor Tarihi: @MKFiloServis.Shared.Time.BusinessTime.Now.ToString("dd.MM.yyyy HH:mm") | © 2025 Allbatros Global Teknoloji
     </div>
 </div>
 
@@ -485,8 +485,8 @@
     private HashSet<int> secilenCariler = new();
     private Firma? firma;
     private string cariArama = "";
-    private DateTime baslangicTarihi = DateTime.Today.AddMonths(-1);
-    private DateTime bitisTarihi = DateTime.Today;
+    private DateTime baslangicTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddMonths(-1);
+    private DateTime bitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
     private bool showOnIzleme = false;
     private bool raporGetirildimi = false;
 
@@ -610,14 +610,14 @@
 
     private void HizliTarih(int gun)
     {
-        bitisTarihi = DateTime.Today;
-        baslangicTarihi = DateTime.Today.AddDays(-gun);
+        bitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
+        baslangicTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-gun);
     }
 
     private void BuYil()
     {
-        baslangicTarihi = new DateTime(DateTime.Today.Year, 1, 1);
-        bitisTarihi = DateTime.Today;
+        baslangicTarihi = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, 1, 1);
+        bitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
     }
 
     private void OnIzleme()
@@ -783,7 +783,7 @@
 
             var bytes = package.GetAsByteArray();
             var base64 = Convert.ToBase64String(bytes);
-            var fileName = $"CariEkstre_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+            var fileName = $"CariEkstre_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmmss}.xlsx";
 
             await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, base64);
         }

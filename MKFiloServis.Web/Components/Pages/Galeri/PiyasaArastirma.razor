@@ -91,7 +91,7 @@
                             <label class="form-label">Min Yil</label>
                             <select class="form-select form-select-sm" @bind="request.YilBaslangic">
                                 <option value="">Tumu</option>
-                                @for (int y = DateTime.Now.Year; y >= 2000; y--)
+                                @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year; y >= 2000; y--)
                                 {
                                     <option value="@y">@y</option>
                                 }
@@ -101,7 +101,7 @@
                             <label class="form-label">Max Yil</label>
                             <select class="form-select form-select-sm" @bind="request.YilBitis">
                                 <option value="">Tumu</option>
-                                @for (int y = DateTime.Now.Year + 1; y >= 2000; y--)
+                                @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year + 1; y >= 2000; y--)
                                 {
                                     <option value="@y">@y</option>
                                 }
@@ -1062,7 +1062,7 @@
             using var stream = new MemoryStream();
             workbook.SaveAs(stream);
             var base64 = Convert.ToBase64String(stream.ToArray());
-            var fileName = $"Piyasa_{selectedMarka}_{selectedModel}_{DateTime.Now:yyyyMMdd}.xlsx";
+            var fileName = $"Piyasa_{selectedMarka}_{selectedModel}_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.xlsx";
 
             await JS.InvokeVoidAsync("eval", $@"
                 var b = atob('{base64}');

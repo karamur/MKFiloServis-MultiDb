@@ -1,4 +1,5 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@implements IDisposable
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.Extensions.Logging
 @using MKFiloServis.Shared
@@ -69,7 +70,7 @@
                             <div class="vr d-none d-md-block"></div>
                             <div class="text-muted d-none d-md-block">
                                 <i class="bi bi-calendar3 me-2"></i>
-                                @DateTime.Now.ToString("dd MMMM yyyy, dddd", TrCulture)
+                                @MKFiloServis.Shared.Time.BusinessTime.Now.ToString("dd MMMM yyyy, dddd", TrCulture)
                             </div>
                             @if (kalanLisansGunu <= 30)
                             {
@@ -255,8 +256,8 @@
     private int aktifFirmaId;
     private string aktifFirmaAdi = "Firma";
     private string aktifFirmaKodu = "";
-    private int aktifDonemYil = DateTime.Today.Year;
-    private int aktifDonemAy = DateTime.Today.Month;
+    private int aktifDonemYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    private int aktifDonemAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
     private bool tumFirmalarMod = false;
     private bool isDarkMode = false;
     private bool IsFirmaYoneticisi => aktifKullanici?.Rol?.RolAdi == "Admin";
@@ -275,20 +276,7 @@
                 Logger.LogWarning(ex, "MainLayout dark mode baslatilirken hata olustu");
             }
 
-            // Aktif firmayı ProtectedLocalStorage'dan geri yükle (circuit reset / refresh sonrası).
-            // Bu çağrı interaktif circuit'te yapılmalı; OnInitializedAsync prerender olabileceği için
-            // burada yapıyoruz.
-            var firmaRestored = false;
-            try
-            {
-                firmaRestored = await AktifFirmaProvider.TryRestoreAsync();
-            }
-            catch (Exception ex)
-            {
-                Logger.LogWarning(ex, "MainLayout aktif firma restore sirasinda hata olustu");
-            }
-
-            // Circuit yeniden bağlandığında storage'dan kullanıcıyı geri yükle
+            // Circuit yeniden bağlandığında önce kullanıcı kimliğini ve durumunu doğrula.
             if (!AuthProvider.IsAuthenticated)
             {
                 var restored = await AuthProvider.TryRestoreFromStorageAsync();
@@ -315,14 +303,32 @@
                     }
                 }
             }
-            else if (firmaRestored)
+
+            // Tenant kapsamını ancak doğrulanmış kullanıcı geri yüklendikten sonra getir.
+            var firmaRestored = false;
+            try
             {
-                // Auth zaten vardı ama firma yeni restore edildi → üst bardaki firma adını tazele.
+                firmaRestored = await AktifFirmaProvider.TryRestoreAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "MainLayout aktif firma restore sirasinda hata olustu");
+            }
+
+            if (firmaRestored)
+            {
                 try { await FirmalariYukle(); }
                 catch (Exception ex) { Logger.LogWarning(ex, "MainLayout firmalar yuklenirken hata olustu (firma restore)"); }
             }
 
-            aktifKullanici ??= AuthProvider.GetAktifKullanici();
+            aktifKullanici = AuthProvider.GetAktifKullanici();
+            if (aktifKullanici == null)
+            {
+                var uri = Navigation.Uri;
+                if (!uri.Contains("/login", StringComparison.OrdinalIgnoreCase))
+                    Navigation.NavigateTo("/login", forceLoad: false);
+                return;
+            }
             await EnforceFirmaScopeAsync();
 
             // Kural 11: Aktif firma zorunludur. Firma seçilmemişse /firma-sec'e yönlendir.
@@ -346,6 +352,39 @@
         }
     }
 
+    private void OnAuthenticationStateChanged(Task<AuthenticationState> authenticationStateTask)
+    {
+        _ = HandleAuthenticationStateChangedAsync(authenticationStateTask);
+    }
+
+    private async Task HandleAuthenticationStateChangedAsync(Task<AuthenticationState> authenticationStateTask)
+    {
+        try
+        {
+            var authenticationState = await authenticationStateTask;
+            if (authenticationState.User.Identity?.IsAuthenticated == true)
+                return;
+
+            await InvokeAsync(() =>
+            {
+                aktifKullanici = null;
+                AktifFirmaProvider.Set(new MKFiloServis.Shared.Entities.AktifFirmaBilgisi());
+                AktifFirmaProvider.SetTumFirmalar(false);
+                if (!Navigation.Uri.Contains("/login", StringComparison.OrdinalIgnoreCase))
+                    Navigation.NavigateTo("/login", forceLoad: false);
+                StateHasChanged();
+            });
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "MainLayout kimlik dogrulama durumu degisirken hata olustu");
+        }
+    }
+
+    public void Dispose()
+    {
+        AuthProvider.AuthenticationStateChanged -= OnAuthenticationStateChanged;
+    }
     private async Task ToggleDarkMode()
     {
         isDarkMode = !isDarkMode;
@@ -355,6 +394,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        AuthProvider.AuthenticationStateChanged += OnAuthenticationStateChanged;
         try
         {
             var currentUri = Navigation.Uri;

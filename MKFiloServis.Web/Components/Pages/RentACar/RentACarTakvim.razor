@@ -88,7 +88,7 @@
                             @foreach (var gun in TakvimGunleri)
                             {
                                 var gunKayitlari = GununKayitlari(gun);
-                                <div class="calendar-day @(gun.Month == goruntulenenAy.Month ? "" : "outside-month") @(gun.Date == DateTime.Today ? "today" : "")">
+                                <div class="calendar-day @(gun.Month == goruntulenenAy.Month ? "" : "outside-month") @(gun.Date == MKFiloServis.Shared.Time.BusinessTime.Today ? "today" : "")">
                                     <div class="calendar-day-number">@gun.Day</div>
                                     @if (gunKayitlari.Count == 0)
                                     {
@@ -158,7 +158,7 @@
 @code {
     private static readonly string[] GunAdlari = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
     private IReadOnlyList<RentACarKiralamaSatiri> kayitlar = Array.Empty<RentACarKiralamaSatiri>();
-    private DateTime goruntulenenAy = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime goruntulenenAy = new(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1);
     private string arama = string.Empty;
     private string? hata;
     private bool yukleniyor;
@@ -247,16 +247,16 @@
 
     private static DateTime BitisTarihi(RentACarKiralamaSatiri kayit)
         => kayit.GercekBitisTarihi
-            ?? (IadeGeciktiMi(kayit) ? DateTime.Now : kayit.PlanlananBitisTarihi);
+            ?? (IadeGeciktiMi(kayit) ? MKFiloServis.Shared.Time.BusinessTime.Now : kayit.PlanlananBitisTarihi);
 
     private static bool IadeGeciktiMi(RentACarKiralamaSatiri kayit)
         => kayit.Durum == KiralamaDurumu.Aktif
             && !kayit.GercekBitisTarihi.HasValue
-            && kayit.PlanlananBitisTarihi < DateTime.Now;
+            && kayit.PlanlananBitisTarihi < MKFiloServis.Shared.Time.BusinessTime.Now;
 
     private static string GecikmeMetni(DateTime planlananIade)
     {
-        var gecikme = DateTime.Now - planlananIade;
+        var gecikme = MKFiloServis.Shared.Time.BusinessTime.Now - planlananIade;
         if (gecikme.TotalDays >= 1) return $"{(int)gecikme.TotalDays} gün {(int)gecikme.Hours} saat";
         if (gecikme.TotalHours >= 1) return $"{(int)gecikme.TotalHours} saat {(int)gecikme.Minutes} dakika";
         return $"{Math.Max(1, (int)gecikme.TotalMinutes)} dakika";
@@ -288,7 +288,7 @@
 
     private void OncekiAy() => goruntulenenAy = goruntulenenAy.AddMonths(-1);
     private void SonrakiAy() => goruntulenenAy = goruntulenenAy.AddMonths(1);
-    private void BuAyaGit() => goruntulenenAy = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private void BuAyaGit() => goruntulenenAy = new(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1);
     private void KayitSec(RentACarKiralamaSatiri kayit) => seciliKayit = kayit;
     private void KayitKapat() => seciliKayit = null;
 

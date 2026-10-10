@@ -357,8 +357,16 @@
                 </div>
 
                 <div class="d-flex gap-2">
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-check-lg me-1"></i>Kaydet
+                    <button type="submit" class="btn btn-primary" disabled="@(isSaving || transferBusy)">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                            <span>Kaydediliyor…</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check-lg me-1"></i><span>Kaydet</span>
+                        }
                     </button>
                     <button type="button" class="btn btn-secondary" @onclick="Geri">
                         <i class="bi bi-x-lg me-1"></i>İptal
@@ -477,7 +485,7 @@
                                                     @(evrak.BitisTarihi?.ToString("dd.MM.yyyy") ?? "-")
                                                     @if (evrak.EvrakKategorisi != EvrakKategorileri.Ruhsat && evrak.BitisTarihi.HasValue)
                                                     {
-                                                        var gunKaldi = (evrak.BitisTarihi.Value - DateTime.Today).Days;
+                                                        var gunKaldi = (evrak.BitisTarihi.Value - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
                                                         if (gunKaldi < 0)
                                                         {
                                                             <span class="badge bg-danger ms-1">Süresi Doldu</span>
@@ -941,6 +949,7 @@
     private bool transferBusy;
     private bool transferWriting;
     private bool transferDisposed;
+    private bool isSaving;
     private long transferVersion;
 
     private void TransferFirmaDegisti()
@@ -951,6 +960,12 @@
             if (transferDisposed) return;
             showFirmaDegisiklikModal = false;
             transferItems = null;
+            if (IsEdit)
+            {
+                ToastService.ShowWarning("Firma seçimi değişti; eski firma kapsamındaki araç formu kapatıldı.");
+                Navigation.NavigateTo("/araclar");
+                return;
+            }
             StateHasChanged();
         });
     }
@@ -1029,7 +1044,16 @@
         {
             try
             {
+                var loadVersion = System.Threading.Volatile.Read(ref transferVersion);
+                var loadFirmaId = AktifFirmaProvider.AktifFirmaId;
+                var loadTumFirmalar = AktifFirmaProvider.TumFirmalar;
                 var existing = await AracService.GetByIdAsync(Id!.Value);
+                if (transferDisposed || loadVersion != System.Threading.Volatile.Read(ref transferVersion) ||
+                    AktifFirmaProvider.AktifFirmaId != loadFirmaId || AktifFirmaProvider.TumFirmalar != loadTumFirmalar)
+                {
+                    if (!transferDisposed) Navigation.NavigateTo("/araclar");
+                    return;
+                }
                 if (existing != null)
                 {
                     arac = existing;
@@ -1233,7 +1257,7 @@
 
     private async Task Kaydet()
     {
-        if (transferBusy || transferDisposed) return;
+        if (isSaving || transferBusy || transferDisposed) return;
         if (string.IsNullOrWhiteSpace(arac.SaseNo))
         {
             ToastService.ShowError("Şase numarası zorunludur!");
@@ -1292,7 +1316,7 @@
             arac.Aktif = false;
             if (arac.SatisaAcilmaTarihi == null)
             {
-                arac.SatisaAcilmaTarihi = DateTime.Now;
+                arac.SatisaAcilmaTarihi = MKFiloServis.Shared.Time.BusinessTime.Now;
             }
         }
         else
@@ -1313,6 +1337,8 @@
 
         try
         {
+            isSaving = true;
+            StateHasChanged();
             if (IsEdit)
             {
                 await AracService.UpdateAsync(arac);
@@ -1331,6 +1357,11 @@
         catch (Exception ex)
         {
             ToastService.ShowError($"Kayıt sırasında hata oluştu: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+            if (!transferDisposed) StateHasChanged();
         }
     }
 
@@ -1726,7 +1757,7 @@
     {
         if (evrak.EvrakKategorisi == EvrakKategorileri.Ruhsat) return "";
         if (!evrak.BitisTarihi.HasValue) return "";
-        var gunKaldi = (evrak.BitisTarihi.Value - DateTime.Today).Days;
+        var gunKaldi = (evrak.BitisTarihi.Value - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
         if (gunKaldi < 0) return "text-danger fw-bold";
         if (gunKaldi <= 30) return "text-warning fw-bold";
         return "";

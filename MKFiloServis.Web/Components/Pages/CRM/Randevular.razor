@@ -26,7 +26,7 @@
         <div class="col-md-4">
             <div class="card shadow-sm mb-3">
                 <div class="card-header bg-danger text-white">
-                    <h6 class="mb-0"><i class="bi bi-alarm me-2"></i>Bugün (@DateTime.Now.ToString("dd MMMM"))</h6>
+                    <h6 class="mb-0"><i class="bi bi-alarm me-2"></i>Bugün (@MKFiloServis.Shared.Time.BusinessTime.Now.ToString("dd MMMM"))</h6>
                 </div>
                 <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
                     @if (!bugunkuHatirlaticilar.Any())
@@ -46,7 +46,7 @@
                                         <i class="bi @GetHatirlaticiIcon(h.Tip) me-1" style="color: @h.Renk"></i>
                                         @h.Baslik
                                     </div>
-                                    <small class="text-muted">@h.BaslangicTarihi.ToLocalTime().ToString("HH:mm")</small>
+                                    <small class="text-muted">@h.BaslangicTarihi.ToString("HH:mm")</small>
                                 </div>
                                 <button class="btn btn-sm btn-success" @onclick="() => HatirlaticiTamamla(h.Id)">
                                     <i class="bi bi-check"></i>
@@ -88,7 +88,7 @@
                                     @foreach (var gun in hafta)
                                     {
                                         var hatirlaticiVar = hatirlaticilar.Any(h => h.BaslangicTarihi.Date == gun.Date);
-                                        <td class="@(gun.Month != secilenTarih.Month ? "text-muted" : "") @(gun.Date == DateTime.Today ? "bg-primary text-white" : "") @(gun.Date == secilenTarih.Date ? "bg-info text-white" : "")"
+                                        <td class="@(gun.Month != secilenTarih.Month ? "text-muted" : "") @(gun.Date == MKFiloServis.Shared.Time.BusinessTime.Today ? "bg-primary text-white" : "") @(gun.Date == secilenTarih.Date ? "bg-info text-white" : "")"
                                             style="cursor: pointer; position: relative;"
                                             @onclick="() => GunSec(gun)">
                                             @gun.Day
@@ -167,10 +167,10 @@
                                                 }
                                                 else
                                                 {
-                                                    @h.BaslangicTarihi.ToLocalTime().ToString("HH:mm")
+                                                    @h.BaslangicTarihi.ToString("HH:mm")
                                                     @if (h.BitisTarihi.HasValue)
                                                     {
-                                                        <span> - @h.BitisTarihi.Value.ToLocalTime().ToString("HH:mm")</span>
+                                                        <span> - @h.BitisTarihi.Value.ToString("HH:mm")</span>
                                                     }
                                                 }
                                             </td>
@@ -370,7 +370,7 @@
     private bool isLoading = true;
     private bool isSaving = false;
     private bool showModal = false;
-    private DateTime secilenTarih = DateTime.Today;
+    private DateTime secilenTarih = MKFiloServis.Shared.Time.BusinessTime.Today;
     private List<Hatirlatici> hatirlaticilar = new();
     private List<Hatirlatici> bugunkuHatirlaticilar = new();
     private List<Cari> cariler = new();
@@ -379,7 +379,7 @@
 
     // Modal
     private Hatirlatici? editingHatirlatici;
-    private DateTime baslangicTarihi = DateTime.Today;
+    private DateTime baslangicTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
     private string baslangicSaatStr = "09:00";
     private string bitisSaatStr = "10:00";
 

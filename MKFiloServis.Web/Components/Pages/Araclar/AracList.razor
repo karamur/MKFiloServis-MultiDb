@@ -2,6 +2,7 @@
 @page "/araclar"
 @implements IDisposable
 @using MKFiloServis.Shared.Entities
+@using MKFiloServis.Shared.Time
 @using MKFiloServis.Web.Services
 @using Microsoft.AspNetCore.Components.Forms
 @inject ILogger<AracList> Logger
@@ -686,7 +687,7 @@
     private Arac? seciliArac;
     private List<AracPlaka>? plakaGecmisi;
     private AracPlaka yeniPlaka = new();
-    private DateTime yeniPlakaGirisTarihi = DateTime.Today;
+    private DateTime yeniPlakaGirisTarihi = BusinessTime.Today;
     private DateTime? yeniPlakaCikisTarihi;
     private bool isPlakaKaydediliyor = false;
     private long plakaModalSurumu;
@@ -1294,7 +1295,7 @@
         seciliArac = guncelArac;
         plakaGecmisi = new List<AracPlaka>(guncelArac.PlakaGecmisi);
         yeniPlaka = new AracPlaka();
-        yeniPlakaGirisTarihi = DateTime.Today;
+        yeniPlakaGirisTarihi = BusinessTime.Today;
         yeniPlakaCikisTarihi = null;
         showPlakaGecmisiModal = true;
     }
@@ -1343,7 +1344,7 @@
     {
         if (!PlakaSecimeAit(plaka)) return Task.CompletedTask;
         var plakaId = plaka.Id;
-        var cikisTarihi = DateTime.Today;
+        var cikisTarihi = BusinessTime.Today;
         return PlakaIsleminiYurut(async () =>
         {
             await AracService.ClosePlakaAsync(plakaId, cikisTarihi);
@@ -1395,7 +1396,7 @@
             if (formuTemizle)
             {
                 yeniPlaka = new AracPlaka();
-                yeniPlakaGirisTarihi = DateTime.Today;
+                yeniPlakaGirisTarihi = BusinessTime.Today;
                 yeniPlakaCikisTarihi = null;
             }
         }

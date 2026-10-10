@@ -1,4 +1,4 @@
-﻿using MKFiloServis.Web.Components;
+using MKFiloServis.Web.Components;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Helpers;
 using MKFiloServis.Web.Jobs;
@@ -619,21 +619,21 @@ if (string.IsNullOrWhiteSpace(jwtSecret) && builder.Environment.IsDevelopment())
     Console.WriteLine("JWT: Development ortamında geçici bir anahtar üretildi. Uygulama yeniden başlayınca API tokenları geçersiz olur.");
 }
 
-if (string.IsNullOrWhiteSpace(jwtSecret) || jwtSecret.StartsWith("REPLACE_", StringComparison.OrdinalIgnoreCase) || jwtSecret.Length < 32)
+try
+{
+    jwtSecret = builder.Environment.IsDevelopment()
+        ? JwtSecretPolicy.EnsureValid(jwtSecret)
+        : JwtSecretPolicy.GetProductionSecret(builder.Configuration);
+}
+catch (InvalidOperationException ex)
 {
     throw new InvalidOperationException(
-        "JWT Secret yapılandırılmamış veya geçersiz. " +
-        "Production ortamında Jwt__Secret ortam değişkenini en az 32 karakterli rastgele bir değerle yapılandırın. " +
-        "Örnek üretim komutu: openssl rand -base64 48");
-}
-var jwtSecretFingerprint = Convert.ToHexString(
-    System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(jwtSecret)));
-if (jwtSecretFingerprint == "F96583977D82A77C0DC5DEE3B5EBB60911C9380D662EF7DC24EEC50828B397BC")
-{
-    throw new InvalidOperationException("JWT Secret, kaynak kodda ifşa edilmiş eski anahtardır. Yeni ve rastgele bir Jwt__Secret belirleyin.");
+        $"{ex.Message} Production ortamında Jwt__Secret değerini hedef secret deposundan sağlayın.", ex);
 }
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "MKFiloServis";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "MKFiloServis-API";
+var jwtSigning = new JwtSigningConfiguration(jwtSecret, jwtIssuer, jwtAudience);
+builder.Services.AddSingleton(jwtSigning);
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -648,10 +648,61 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtIssuer,
-        ValidAudience = jwtAudience,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+        ValidIssuer = jwtSigning.Issuer,
+        ValidAudience = jwtSigning.Audience,
+        IssuerSigningKey = jwtSigning.SigningKey,
         ClockSkew = TimeSpan.Zero
+    };
+    // JWT role/active claims otherwise remain usable until token expiry after an
+    // administrator disables an account or changes its role. Recheck current DB state
+    // for each validated API token and fail closed when the state cannot be confirmed.
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =>
+        {
+            var idValue = context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(idValue, out var userId))
+            {
+                context.Fail("Token user is invalid.");
+                return;
+            }
+
+            try
+            {
+                var users = context.HttpContext.RequestServices
+                    .GetRequiredService<MKFiloServis.Web.Services.Interfaces.IKullaniciService>();
+                var user = await users.GetByIdAsync(userId);
+                var tokenRole = context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+                var currentRole = user?.Rol?.RolAdi ?? "Kullanici";
+                var isLockedNow = user?.Kilitli == true &&
+                    (user.KilitlenmeBitisUtc is null || user.KilitlenmeBitisUtc > DateTime.UtcNow);
+                var sessionStartedValue = context.Principal?.FindFirst("auth_started")?.Value;
+                var validSessionAge = long.TryParse(sessionStartedValue, out var sessionStartedUnixSeconds);
+                if (validSessionAge)
+                {
+                    var sessionStartedAt = DateTimeOffset.FromUnixTimeSeconds(sessionStartedUnixSeconds);
+                    validSessionAge = AuthenticationSessionPolicy.IsWithinLifetime(sessionStartedAt, DateTimeOffset.UtcNow);
+                }
+
+                var tokenAuthStamp = context.Principal?.FindFirst("auth_stamp")?.Value;
+                var expectedAuthStamp = user == null
+                    ? null
+                    : jwtSigning.CreateAuthStamp(user.SifreHash);
+                if (user is not { Aktif: true, IsDeleted: false } || isLockedNow ||
+                    !string.Equals(tokenRole, currentRole, StringComparison.Ordinal) ||
+                    !validSessionAge || tokenAuthStamp == null || expectedAuthStamp == null ||
+                    !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                        Encoding.UTF8.GetBytes(tokenAuthStamp), Encoding.UTF8.GetBytes(expectedAuthStamp)))
+                    context.Fail("User authorization state changed.");
+            }
+            catch (Exception ex)
+            {
+                context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("JwtAuthorizationState")
+                    .LogWarning(ex, "JWT kullanıcı durumu doğrulanamadı; istek reddedildi.");
+                context.Fail("User authorization state could not be confirmed.");
+            }
+        }
     };
 });
 
@@ -796,33 +847,18 @@ await RunScopedSafeAsync(app, "MasterDatabase", async services =>
     await DbInitializer.EnsureMasterDatabaseAsync(configuration);
 });
 
+// A genuinely empty application database is bootstrapped from the current EF model
+// before the audit journal creates its own table. Existing databases stay on migrations.
+await RunScopedSafeAsync(app, "FreshDatabaseBaseline", async services =>
+{
+    var context = services.GetRequiredService<ApplicationDbContext>();
+    await DbInitializer.InitializeFreshDatabaseBaselineIfEmptyAsync(context);
+});
+
 await RunScopedSafeAsync(app, "WriteAuditBootstrap", async services =>
 {
     var context = services.GetRequiredService<ApplicationDbContext>();
     await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(context.Database.GetDbConnection());
-});
-
-// Otomatik schema sync: EF modelindeki TÜM eksik kolonları tespit edip ekler
-// Not: DeletedAtColumnMigrationHelper kaldırıldı — SchemaSyncHelper tüm kolon + DeletedAt işlemlerini kapsar
-await RunScopedSafeAsync(app, "SchemaSync", async services =>
-{
-    var context = services.GetRequiredService<ApplicationDbContext>();
-    // 1) Model bazlı eksik kolon taraması
-    await MKFiloServis.Web.Data.Migrations.SchemaSyncHelper.EnsureAllColumnsExistAsync(context);
-    // 2) FisNoCounters: eski 2-kolon PK → 3-kolon unique index geçişi (42P10 hatasını önler)
-    await MKFiloServis.Web.Data.Migrations.SchemaSyncHelper.EnsureFisNoCountersSchemaAsync(context);
-    // Not: Pending migration'ları otomatik "uygulandı" işaretlemek bazı ortamlarda tablo oluşturmayı engelleyip
-    // runtime'da relation does not exist hatalarına yol açabiliyor. Migration yönetimi DbInitializer tarafında yapılır.
-});
-
-// Legacy veri aktarımı (Talimat Bölüm 16-23): LegacySourceConnection (örn. eski kaynak DB) → MKFiloServis
-await RunScopedSafeAsync(app, "LegacyDataTransfer", async services =>
-{
-    var transferService = services.GetRequiredService<LegacyDataTransferService>();
-    await transferService.EnsureSchemaAsync();
-    var result = await transferService.TransferAllAsync();
-    var logger = services.GetRequiredService<ILogger<Program>>();
-    logger.LogInformation("Veri aktarimi tamamlandi: {Count} kayit aktarildi", result.TotalTransferred);
 });
 
 // Seed Database
@@ -831,6 +867,37 @@ await RunScopedSafeAsync(app, "DbInitializer", async services =>
     var context = services.GetRequiredService<ApplicationDbContext>();
     var configuration = services.GetRequiredService<IConfiguration>();
     await DbInitializer.InitializeAsync(context, configuration);
+});
+
+// Legacy counter compatibility runs only after EF migrations. Running model-driven
+// column creation before migrations can make an old schema look partially upgraded
+// and collide with migration DDL.
+await RunScopedSafeAsync(app, "FisNoCountersCompatibility", async services =>
+{
+    var context = services.GetRequiredService<ApplicationDbContext>();
+    await MKFiloServis.Web.Data.Migrations.SchemaSyncHelper.EnsureFisNoCountersSchemaAsync(context);
+    if (context.Database.IsNpgsql())
+    {
+        await context.Database.ExecuteSqlRawAsync(@"
+INSERT INTO ""FisNoCounters"" (""Prefix"", ""FirmaId"", ""YilAy"", ""SonNo"")
+SELECT SPLIT_PART(""FisNo"", '-', 1), 0, SPLIT_PART(""FisNo"", '-', 2),
+       MAX(CAST(SPLIT_PART(""FisNo"", '-', 3) AS INTEGER))
+FROM ""MuhasebeFisleri""
+WHERE ""FisNo"" ~ '^[A-Z]+-[0-9]{6}-[0-9]{4}$'
+GROUP BY SPLIT_PART(""FisNo"", '-', 1), SPLIT_PART(""FisNo"", '-', 2)
+ON CONFLICT (""Prefix"", ""FirmaId"", ""YilAy"")
+DO UPDATE SET ""SonNo"" = GREATEST(""FisNoCounters"".""SonNo"", EXCLUDED.""SonNo"");");
+    }
+});
+
+// Legacy veri aktarımı: ana veritabanı migration/seed akışı tamamlandıktan sonra çalışır.
+// Bu adım hedef şemayı önceden üretmez; boş kurulum A-18 migration akışından geçmelidir.
+await RunScopedSafeAsync(app, "LegacyDataTransfer", async services =>
+{
+    var transferService = services.GetRequiredService<LegacyDataTransferService>();
+    var result = await transferService.TransferAllAsync();
+    var logger = services.GetRequiredService<ILogger<Program>>();
+    logger.LogInformation("Veri aktarimi tamamlandi: {Count} kayit aktarildi", result.TotalTransferred);
 });
 
 await RunScopedSafeAsync(app, "PersonelTableMigration", async services =>
@@ -1208,7 +1275,7 @@ await RunScopedSafeAsync(app, "ApplyMigrations", async services =>
 
     } // if (dbProvider == "PostgreSQL")
 
-    // Kural 15: FisNoCounters schema sync → SchemaSyncHelper.EnsureFisNoCountersSchemaAsync (yukarıda çağrıldı)
+    // Kural 15: FisNoCounters compatibility runs after EF migrations.
 
     logger.LogInformation("Migration helper'lar tek veritabaninda uygulandi.");
 });

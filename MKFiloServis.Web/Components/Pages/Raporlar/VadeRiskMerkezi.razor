@@ -427,7 +427,7 @@
             using var wb = new XLWorkbook();
             var ws = wb.Worksheets.Add("Vade Risk");
 
-            ws.Cell(1, 1).Value = $"Vade Risk Merkezi — {DateTime.Today:dd.MM.yyyy} (Pencere: {ufukGun} gün)";
+            ws.Cell(1, 1).Value = $"Vade Risk Merkezi — {MKFiloServis.Shared.Time.BusinessTime.Today:dd.MM.yyyy} (Pencere: {ufukGun} gün)";
             ws.Cell(1, 1).Style.Font.Bold = true;
             ws.Cell(1, 1).Style.Font.FontSize = 13;
             ws.Range(1, 1, 1, 8).Merge();
@@ -491,7 +491,7 @@
 
             using var stream = new MemoryStream();
             wb.SaveAs(stream);
-            var fileName = $"vade_risk_merkezi_{DateTime.Today:yyyyMMdd}.xlsx";
+            var fileName = $"vade_risk_merkezi_{MKFiloServis.Shared.Time.BusinessTime.Today:yyyyMMdd}.xlsx";
             await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, Convert.ToBase64String(stream.ToArray()));
             ToastService.ShowSuccess("Excel indirildi.");
         }

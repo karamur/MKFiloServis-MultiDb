@@ -101,7 +101,7 @@
                                 <td class="text-muted">Geçerlilik:</td>
                                 <td>
                                     @proforma.GecerlilikTarihi.ToString("dd.MM.yyyy")
-                                    @if (proforma.GecerlilikTarihi < DateTime.Now && !proforma.FaturayaDonusturuldu)
+                                    @if (proforma.GecerlilikTarihi < MKFiloServis.Shared.Time.BusinessTime.Now && !proforma.FaturayaDonusturuldu)
                                     {
                                         <span class="badge bg-danger ms-1">Süresi Doldu</span>
                                     }

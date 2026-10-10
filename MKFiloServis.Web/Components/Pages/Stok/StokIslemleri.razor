@@ -170,13 +170,13 @@
 
     private StokOperasyonModel operasyon = new()
     {
-        IslemTarihi = DateTime.Today,
+        IslemTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
         HareketTipi = StokHareketTipi.SayimFazlasi
     };
 
     private UretimReceteModel recete = new()
     {
-        IslemTarihi = DateTime.Today,
+        IslemTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
         MamulMiktari = 1,
         Kalemler = new() { new UretimReceteKalemModel() }
     };
@@ -216,7 +216,7 @@
             isSaving = true;
             await StokService.CreateStokOperasyonAsync(operasyon);
             ToastService.ShowSuccess("Stok işlemi ve muhasebe fişi oluşturuldu.");
-            operasyon = new StokOperasyonModel { IslemTarihi = DateTime.Today, HareketTipi = StokHareketTipi.SayimFazlasi };
+            operasyon = new StokOperasyonModel { IslemTarihi = MKFiloServis.Shared.Time.BusinessTime.Today, HareketTipi = StokHareketTipi.SayimFazlasi };
             mevcutStok = 0;
         }
         catch (Exception ex)
@@ -246,7 +246,7 @@
             recete.Kalemler = recete.Kalemler.Where(k => k.StokKartiId > 0 && k.Miktar > 0).ToList();
             await StokService.CreateUretimRecetesiAsync(recete);
             ToastService.ShowSuccess("Üretim reçetesi ve muhasebe fişi oluşturuldu.");
-            recete = new UretimReceteModel { IslemTarihi = DateTime.Today, MamulMiktari = 1, Kalemler = new() { new UretimReceteKalemModel() } };
+            recete = new UretimReceteModel { IslemTarihi = MKFiloServis.Shared.Time.BusinessTime.Today, MamulMiktari = 1, Kalemler = new() { new UretimReceteKalemModel() } };
         }
         catch (Exception ex)
         {

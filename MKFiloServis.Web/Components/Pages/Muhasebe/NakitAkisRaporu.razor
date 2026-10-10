@@ -12,7 +12,7 @@
         <h3><i class="bi bi-cash-stack me-2"></i>Nakit Akış Raporu</h3>
         <div class="d-flex gap-2">
             <select class="form-select" style="width: 100px;" @bind="secilenYil" @bind:after="LoadRapor">
-                @for (int y = DateTime.Now.Year; y >= DateTime.Now.Year - 5; y--)
+                @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 5; y--)
                 {
                     <option value="@y">@y</option>
                 }
@@ -263,7 +263,7 @@
 
 @code {
     private bool isLoading = true;
-    private int secilenYil = DateTime.Now.Year;
+    private int secilenYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
     private int secilenAy = 0; // 0 = Tüm yıl
     
     private NakitAkisRapor? rapor;

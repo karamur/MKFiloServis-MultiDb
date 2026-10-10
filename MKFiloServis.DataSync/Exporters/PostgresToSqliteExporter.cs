@@ -48,6 +48,15 @@ public sealed class PostgresToSqliteExporter
         await using var sqlite = new SqliteConnection(sqliteConnString);
         await sqlite.OpenAsync();
         await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(sqlite);
+        int foreignKeysBefore;
+        int synchronousBefore;
+        await using (var pragmaState = sqlite.CreateCommand())
+        {
+            pragmaState.CommandText = "PRAGMA foreign_keys;";
+            foreignKeysBefore = Convert.ToInt32(await pragmaState.ExecuteScalarAsync());
+            pragmaState.CommandText = "PRAGMA synchronous;";
+            synchronousBefore = Convert.ToInt32(await pragmaState.ExecuteScalarAsync());
+        }
 
         // 1) Hedef SQLite'da bulunan kullanici tablolarini listele (sqlite_% haric)
         var sqliteTables = await ListSqliteUserTablesAsync(sqlite);
@@ -78,55 +87,59 @@ public sealed class PostgresToSqliteExporter
                 "Once MKFiloServis.Web uygulamasini baslatip semayi olusturun, sonra aktarimi tekrarlayin.");
         }
 
-        // 4) Foreign key kontrollerini gecici kapatalim ve her tabloyu temizleyip dolduralim
-        await using (var pragmaOff = sqlite.CreateCommand())
-        {
-            pragmaOff.CommandText = "PRAGMA foreign_keys = OFF; PRAGMA synchronous = FULL;";
-            await pragmaOff.ExecuteNonQueryAsync();
-        }
-
-        await using var tx = (SqliteTransaction)await sqlite.BeginTransactionAsync();
-
-        int tabloIndex = 0;
+        // 4) Foreign key kontrollerini gecici kapat. Her hata yolunda bağlantıyı normal
+        // FK kipine döndür; aksi halde havuzlanan bağlantı sonraki işlemlerde FK'siz kalabilir.
         long toplamSatir = 0;
-        foreach (var tablo in ortakTablolar)
+        try
         {
-            tabloIndex++;
-            try
+            await using (var pragmaOff = sqlite.CreateCommand())
             {
-                // Mevcut satirlari temizle
-                await using (var del = sqlite.CreateCommand())
+                pragmaOff.CommandText = "PRAGMA foreign_keys = OFF; PRAGMA synchronous = FULL;";
+                await pragmaOff.ExecuteNonQueryAsync();
+            }
+
+            await using var tx = (SqliteTransaction)await sqlite.BeginTransactionAsync();
+
+            int tabloIndex = 0;
+            foreach (var tablo in ortakTablolar)
+            {
+                tabloIndex++;
+                try
                 {
-                    del.Transaction = tx;
-                    del.CommandText = $"DELETE FROM \"{tablo}\";";
-                    await del.ExecuteNonQueryAsync();
+                    // Mevcut satirlari temizle
+                    await using (var del = sqlite.CreateCommand())
+                    {
+                        del.Transaction = tx;
+                        del.CommandText = $"DELETE FROM \"{tablo}\";";
+                        await del.ExecuteNonQueryAsync();
+                    }
+
+                    var kopyalanan = await KopyalaTabloAsync(pg, sqlite, tx, tablo);
+                    toplamSatir += kopyalanan;
+                    _progress($"  [{tabloIndex}/{ortakTablolar.Count}] {tablo}: {kopyalanan} satir");
                 }
-
-                var kopyalanan = await KopyalaTabloAsync(pg, sqlite, tx, tablo);
-                toplamSatir += kopyalanan;
-                _progress($"  [{tabloIndex}/{ortakTablolar.Count}] {tablo}: {kopyalanan} satir");
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException($"{tablo} aktarımı başarısız; tüm hedef değişiklikleri geri alınacak.", ex);
+                }
             }
-            catch (Exception ex)
+
+            await ResetSqliteSequencesAsync(sqlite, tx);
+            await using (var check = sqlite.CreateCommand())
             {
-                throw new InvalidOperationException($"{tablo} aktarımı başarısız; tüm hedef değişiklikleri geri alınacak.", ex);
+                check.Transaction = tx;
+                check.CommandText = "PRAGMA foreign_key_check;";
+                await using var reader = await check.ExecuteReaderAsync();
+                if (await reader.ReadAsync())
+                    throw new InvalidOperationException($"SQLite yabancı anahtar ihlali: {reader.GetString(0)}. Aktarım geri alınacak.");
             }
+            await tx.CommitAsync();
+            await sourceSnapshot.CommitAsync();
         }
-
-        await ResetSqliteSequencesAsync(sqlite, tx);
-        await using (var check = sqlite.CreateCommand())
+        finally
         {
-            check.Transaction = tx;
-            check.CommandText = "PRAGMA foreign_key_check;";
-            await using var reader = await check.ExecuteReaderAsync();
-            if (await reader.ReadAsync())
-                throw new InvalidOperationException($"SQLite yabancı anahtar ihlali: {reader.GetString(0)}. Aktarım geri alınacak.");
-        }
-        await tx.CommitAsync();
-        await sourceSnapshot.CommitAsync();
-
-        await using (var pragmaOn = sqlite.CreateCommand())
-        {
-            pragmaOn.CommandText = "PRAGMA foreign_keys = ON;";
+            await using var pragmaOn = sqlite.CreateCommand();
+            pragmaOn.CommandText = $"PRAGMA foreign_keys = {foreignKeysBefore}; PRAGMA synchronous = {synchronousBefore};";
             await pragmaOn.ExecuteNonQueryAsync();
         }
 

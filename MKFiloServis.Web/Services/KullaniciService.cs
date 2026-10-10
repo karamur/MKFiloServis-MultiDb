@@ -355,15 +355,9 @@ public class KullaniciService : IKullaniciService
 
         if (!parolaDogru)
         {
-            kullanici.BasarisizGirisSayisi++;
-            if (kullanici.BasarisizGirisSayisi >= 5)
-            {
-                kullanici.Kilitli = true;
-                kullanici.KilitlenmeBitisUtc = nowUtc.Add(LoginLockoutDuration);
-                _logger.LogWarning("Kullanici kilitlendi (5 basarisiz deneme): {KullaniciAdi}", kullaniciAdi);
-            }
-            context.Kullanicilar.Update(kullanici);
-            await context.SaveChangesAsync();
+            await RegisterFailedAuthenticationAttemptAsync(context, kullanici, nowUtc);
+            if (kullanici.Kilitli)
+                _logger.LogWarning("Kullanici kilitlendi (basarisiz parola/2FA denemesi): {KullaniciAdi}", kullaniciAdi);
 
             _logger.LogWarning("Giris basarisiz - sifre hatali: {KullaniciAdi}", kullaniciAdi);
             return new KullaniciGirisSonuc
@@ -375,11 +369,8 @@ public class KullaniciService : IKullaniciService
             };
         }
 
-        // Basarili giris
-        kullanici.SonGirisTarihi = DateTime.UtcNow;
-        kullanici.BasarisizGirisSayisi = 0;
-        kullanici.KilitlenmeBitisUtc = null;
-
+        // 2FA etkinse parola tek başına tamamlanmış giriş sayılmaz; başarısız sayaç
+        // doğrulama kodu da başarıyla onaylanana kadar korunmalıdır.
         if (kullanici.IkiFaktorAktif && !string.IsNullOrWhiteSpace(kullanici.IkiFaktorSecretKey))
         {
             context.Kullanicilar.Update(kullanici);
@@ -395,11 +386,16 @@ public class KullaniciService : IKullaniciService
             };
         }
 
+        kullanici.SonGirisTarihi = DateTime.UtcNow;
+        kullanici.BasarisizGirisSayisi = 0;
+        kullanici.KilitlenmeBitisUtc = null;
         context.Kullanicilar.Update(kullanici);
         await context.SaveChangesAsync();
 
         // Authentication state guncelle - async versiyon
         await _authProvider.GirisYapAsync(kullanici);
+        if (!_authProvider.IsAuthenticated)
+            return new KullaniciGirisSonuc { Basarili = false, Mesaj = "Hesap durumu değişti. Yeniden giriş yapın." };
 
         _logger.LogInformation("Basarili giris: {KullaniciAdi}, Rol: {Rol}",
             kullaniciAdi, kullanici.Rol?.RolAdi);
@@ -414,25 +410,57 @@ public class KullaniciService : IKullaniciService
             .Include(k => k.Rol)
             .FirstOrDefaultAsync(k => !k.IsDeleted && k.Id == kullaniciId);
 
-        if (kullanici == null)
-            return new KullaniciGirisSonuc { Basarili = false, Mesaj = "Kullanıcı bulunamadı." };
+        if (kullanici is not { Aktif: true, IsDeleted: false })
+            return new KullaniciGirisSonuc { Basarili = false, Mesaj = "Kullanıcı hesabı kullanılamıyor." };
+
+        var nowUtc = DateTime.UtcNow;
+        if (kullanici.Kilitli &&
+            (kullanici.KilitlenmeBitisUtc is null || kullanici.KilitlenmeBitisUtc > nowUtc))
+            return new KullaniciGirisSonuc { Basarili = false, Mesaj = "Hesap geçici olarak kullanılamıyor." };
 
         if (!kullanici.IkiFaktorAktif || string.IsNullOrWhiteSpace(kullanici.IkiFaktorSecretKey))
             return new KullaniciGirisSonuc { Basarili = false, Mesaj = "İki faktörlü doğrulama etkin değil." };
 
         if (!TwoFactorAuthenticatorHelper.ValidateCode(kullanici.IkiFaktorSecretKey, dogrulamaKodu))
-            return new KullaniciGirisSonuc { Basarili = false, Mesaj = "Doğrulama kodu geçersiz." };
+        {
+            await RegisterFailedAuthenticationAttemptAsync(context, kullanici, nowUtc);
+            _logger.LogWarning("2FA doğrulama başarısız; hesap başarısız giriş sayısı {FailureCount}. KullaniciId: {KullaniciId}",
+                kullanici.BasarisizGirisSayisi, kullanici.Id);
+            return new KullaniciGirisSonuc
+            {
+                Basarili = false,
+                Mesaj = kullanici.Kilitli
+                    ? "Çok sayıda hatalı doğrulama nedeniyle hesap 15 dakika kilitlendi."
+                    : "Doğrulama kodu geçersiz."
+            };
+        }
 
+        kullanici.SonGirisTarihi = nowUtc;
+        kullanici.BasarisizGirisSayisi = 0;
+        kullanici.KilitlenmeBitisUtc = null;
         context.Kullanicilar.Update(kullanici);
         await context.SaveChangesAsync();
 
         await _authProvider.GirisYapAsync(kullanici);
+        if (!_authProvider.IsAuthenticated)
+            return new KullaniciGirisSonuc { Basarili = false, Mesaj = "Hesap durumu değişti. Yeniden giriş yapın." };
 
         _logger.LogInformation("2FA ile basarili giris: {KullaniciAdi}", kullanici.KullaniciAdi);
 
         return new KullaniciGirisSonuc { Basarili = true, Kullanici = kullanici };
     }
 
+    private async Task RegisterFailedAuthenticationAttemptAsync(
+        ApplicationDbContext context,
+        Kullanici user,
+        DateTime nowUtc)
+    {
+        // Atomic database-side increment prevents concurrent guesses from overwriting
+        // each other's counters and bypassing the lockout threshold.
+        await context.SaveChangesAsync();
+        await AuthenticationLockoutPolicy.RegisterFailedAttemptAsync(context, user.Id, nowUtc, LoginLockoutDuration);
+        await context.Entry(user).ReloadAsync();
+    }
     public async Task CikisYapAsync()
     {
         var aktifKullanici = _authProvider.GetAktifKullanici();

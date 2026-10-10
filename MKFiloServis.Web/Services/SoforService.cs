@@ -195,7 +195,7 @@ public class SoforService : ISoforService
         await _cache.RemoveByPrefixAsync(CacheKeys.SoforPrefix);
 
         // Personel değişince mevcut ayın snapshot'ını GÜNCELLE (silme — veri bütünlüğü)
-        var now = DateTime.Now;
+        var now = MKFiloServis.Shared.Time.BusinessTime.Now;
         var firmaId = sofor.FirmaId ?? existing.FirmaId;
         if (firmaId.HasValue && firmaId.Value > 0)
         {
@@ -554,7 +554,7 @@ public class SoforService : ISoforService
         ws.Cell(2, 7).Value = "Sofor";
         ws.Cell(2, 8).Value = "Operasyon";
         ws.Cell(2, 9).Value = "Şoför";
-        ws.Cell(2, 10).Value = DateTime.Now.ToString("dd.MM.yyyy");
+        ws.Cell(2, 10).Value = MKFiloServis.Shared.Time.BusinessTime.Now.ToString("dd.MM.yyyy");
         ws.Cell(2, 11).Value = 50000;
         ws.Cell(2, 12).Value = 35000;
         ws.Cell(2, 13).Value = "Evet";
@@ -771,7 +771,7 @@ public class SoforService : ISoforService
         ws.Cell(1, 1).Style.Font.FontSize = 14;
         ws.Range(1, 1, 1, 15).Merge();
 
-        ws.Cell(2, 1).Value = $"Oluşturma Tarihi: {DateTime.Now:dd.MM.yyyy HH:mm}";
+        ws.Cell(2, 1).Value = $"Oluşturma Tarihi: {MKFiloServis.Shared.Time.BusinessTime.Now:dd.MM.yyyy HH:mm}";
         ws.Range(2, 1, 2, 15).Merge();
 
         // Tablo başlıkları

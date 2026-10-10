@@ -314,7 +314,7 @@
         {
             hesaplar = await BankaHesapService.GetActiveAsync();
             hareket.IslemNo = await HareketService.GenerateNextIslemNoAsync();
-            hareket.IslemTarihi = DateTime.Today;
+            hareket.IslemTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
             hareket.HareketTipi = HareketTipi.Giris;
             hareket.IslemKaynak = IslemKaynak.Manuel;
         }

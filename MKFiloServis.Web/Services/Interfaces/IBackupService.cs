@@ -1,4 +1,4 @@
-﻿namespace MKFiloServis.Web.Services.Interfaces;
+namespace MKFiloServis.Web.Services.Interfaces;
 
 public interface IBackupService
 {
@@ -40,7 +40,7 @@ public class BackupResult
     public string? FilePath { get; set; }
     public long FileSizeBytes { get; set; }
     public string? ErrorMessage { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.Now;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
 public class BackupInfo
@@ -81,7 +81,7 @@ public class BackupSettings
         if (!AutoBackupEnabled)
             return null;
 
-        var now = referenceTime ?? DateTime.Now;
+        var now = referenceTime ?? MKFiloServis.Shared.Time.BusinessTime.Now;
 
         return ScheduleType switch
         {
@@ -96,7 +96,7 @@ public class BackupSettings
         if (!AutoBackupEnabled)
             return false;
 
-        var now = referenceTime ?? DateTime.Now;
+        var now = referenceTime ?? MKFiloServis.Shared.Time.BusinessTime.Now;
 
         return ScheduleType switch
         {
@@ -110,13 +110,13 @@ public class BackupSettings
     {
         var intervalHours = Math.Max(1, AutoBackupIntervalHours);
         return LastBackupTime.HasValue
-            ? LastBackupTime.Value.AddHours(intervalHours)
+            ? GetLastBackupBusinessTime()!.Value.AddHours(intervalHours)
             : now;
     }
 
     private bool ShouldRunInterval(DateTime now)
     {
-        return !LastBackupTime.HasValue || now >= LastBackupTime.Value.AddHours(Math.Max(1, AutoBackupIntervalHours));
+        return !LastBackupTime.HasValue || now >= GetLastBackupBusinessTime()!.Value.AddHours(Math.Max(1, AutoBackupIntervalHours));
     }
 
     private DateTime GetNextDailyTime(DateTime now)
@@ -126,7 +126,7 @@ public class BackupSettings
         if (!LastBackupTime.HasValue)
             return now <= todayRun ? todayRun : todayRun.AddDays(1);
 
-        if (LastBackupTime.Value.Date < now.Date && now >= todayRun)
+        if (GetLastBackupBusinessTime()!.Value.Date < now.Date && now >= todayRun)
             return now;
 
         return now < todayRun ? todayRun : todayRun.AddDays(1);
@@ -138,7 +138,7 @@ public class BackupSettings
         if (now < scheduledTime)
             return false;
 
-        return !LastBackupTime.HasValue || LastBackupTime.Value < scheduledTime;
+        return !LastBackupTime.HasValue || GetLastBackupBusinessTime()!.Value < scheduledTime;
     }
 
     private DateTime GetNextWeeklyTime(DateTime now)
@@ -150,7 +150,7 @@ public class BackupSettings
         if (!LastBackupTime.HasValue)
             return now <= nextRun ? nextRun : nextRun.AddDays(7);
 
-        if (daysUntilTarget == 0 && now >= scheduledTime && LastBackupTime.Value < scheduledTime)
+        if (daysUntilTarget == 0 && now >= scheduledTime && GetLastBackupBusinessTime()!.Value < scheduledTime)
             return now;
 
         return now < nextRun ? nextRun : nextRun.AddDays(7);
@@ -165,9 +165,25 @@ public class BackupSettings
         if (now < scheduledTime)
             return false;
 
-        return !LastBackupTime.HasValue || LastBackupTime.Value < scheduledTime;
+        return !LastBackupTime.HasValue || GetLastBackupBusinessTime()!.Value < scheduledTime;
     }
 
+    private DateTime? GetLastBackupBusinessTime()
+    {
+        if (!LastBackupTime.HasValue)
+            return null;
+
+        var recordedTime = LastBackupTime.Value;
+        var utcInstant = recordedTime.Kind switch
+        {
+            DateTimeKind.Utc => recordedTime,
+            DateTimeKind.Local => recordedTime.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(recordedTime, DateTimeKind.Utc)
+        };
+
+        var turkeyTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul");
+        return TimeZoneInfo.ConvertTimeFromUtc(utcInstant, turkeyTimeZone);
+    }
     private static int ClampHour(int hour) => Math.Clamp(hour, 0, 23);
     private static int ClampMinute(int minute) => Math.Clamp(minute, 0, 59);
 }

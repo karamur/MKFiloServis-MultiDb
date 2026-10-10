@@ -58,7 +58,7 @@
                 <div class="card"><div class="card-body"><small class="text-muted">Fiş No</small><div class="fw-bold">@fis.FisNo</div></div></div>
             </div>
             <div class="col-md-3">
-                <div class="card"><div class="card-body"><small class="text-muted">Tarih</small><div class="fw-bold">@fis.FisTarihi.ToLocalTime().ToString("dd.MM.yyyy")</div></div></div>
+                <div class="card"><div class="card-body"><small class="text-muted">Tarih</small><div class="fw-bold">@fis.FisTarihi.ToString("dd.MM.yyyy")</div></div></div>
             </div>
             <div class="col-md-3">
                 <div class="card"><div class="card-body"><small class="text-muted">Tip</small><div class="fw-bold">@GetFisTipAdi(fis.FisTipi)</div></div></div>

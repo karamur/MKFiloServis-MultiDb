@@ -231,6 +231,61 @@ public class BankaKasaHareketService : IBankaKasaHareketService
         return hareket;
     }
 
+    public async Task<BankaKasaHareket> CreateImportedAsync(BankaKasaHareket hareket, string islemKimligi)
+    {
+        var result = await CreateImportedBatchAsync(new[] { (hareket, islemKimligi) });
+        return result[0];
+    }
+
+    public Task<IReadOnlyList<BankaKasaHareket>> CreateImportedBatchAsync(
+        IReadOnlyCollection<(BankaKasaHareket Hareket, string IslemKimligi)> hareketler)
+    {
+        if (hareketler == null || hareketler.Count == 0)
+            throw new ArgumentException("İçe aktarılacak hareket bulunamadı.", nameof(hareketler));
+        var entries = hareketler.Select(item => (item.Hareket, Key: NormalizeBankOperationKey(item.IslemKimligi))).ToList();
+        if (entries.Select(item => item.Key).Distinct(StringComparer.Ordinal).Count() != entries.Count)
+            throw new InvalidOperationException("Aktarım paketinde yinelenen işlem kimliği var.");
+
+        return WriteBankAsync(Yetkiler.BankaHareketleriYaz, async context =>
+        {
+            RequireSelectedFinanceFirma(_aktifFirmaProvider.AktifFirmaId);
+            var firmaId = _aktifFirmaProvider.AktifFirmaId!.Value;
+            var results = new List<BankaKasaHareket>(entries.Count);
+            foreach (var (hareket, key) in entries)
+            {
+                if (hareket.Id != 0 || hareket.IsDeleted || hareket.MuhasebeFisId.HasValue ||
+                    hareket.MahsupGrupId.HasValue || hareket.MahsupHareketId.HasValue ||
+                    hareket.PersoneleOdendi || hareket.PersonelGeriOdemeHareketId.HasValue ||
+                    hareket.PersonelOdemeTarihi.HasValue || hareket.PersonelOdemeHesapId.HasValue)
+                    throw new InvalidOperationException("İçe aktarılan yeni hareket işlenmiş/bağlı olamaz.");
+
+                var summary = BankImportOperationSummary(firmaId, hareket);
+                var existing = await context.BankaKasaHareketleri.IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(h => h.FirmaId == firmaId && h.IslemKimligi == key);
+                if (existing != null)
+                {
+                    if (existing.IsDeleted || existing.IslemOzeti != summary)
+                        throw new InvalidOperationException("İçe aktarma işlem kimliği daha önce farklı içerikle kullanılmış; yeni hareket oluşturulmadı.");
+                    results.Add(existing);
+                    continue;
+                }
+
+                hareket.IslemKimligi = key;
+                hareket.IslemOzeti = summary;
+                hareket.FirmaId = firmaId;
+                hareket.IslemKaynak = IslemKaynak.Manuel;
+                NormalizeHareket(hareket);
+                await ValidateHareketAsync(context, hareket);
+                await ApplyMuhasebeDefaultsAsync(context, hareket);
+                hareket.BankaHesap = null!;
+                hareket.Cari = null;
+                context.BankaKasaHareketleri.Add(hareket);
+                results.Add(hareket);
+            }
+            return (IReadOnlyList<BankaKasaHareket>)results;
+        });
+    }
+
     public async Task<BankaKasaHareket> UpdateAsync(BankaKasaHareket hareket)
     {
         return await WriteBankAsync(Yetkiler.BankaHareketleriDuzenle, async context =>
@@ -802,6 +857,25 @@ public class BankaKasaHareketService : IBankaKasaHareketService
             amount = amount.ToString("G29", CultureInfo.InvariantCulture),
             date = DateTime.SpecifyKind(date, DateTimeKind.Utc).ToString("O", CultureInfo.InvariantCulture),
             texts = texts.Select(t => t?.Trim() ?? "").ToArray()
+        });
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(payload)));
+    }
+
+    private static string BankImportOperationSummary(int firma, BankaKasaHareket movement)
+    {
+        var payload = JsonSerializer.Serialize(new
+        {
+            operation = "BankaImport",
+            firma,
+            movement.BankaHesapId,
+            date = DateTime.SpecifyKind(movement.IslemTarihi, DateTimeKind.Utc).ToString("O", CultureInfo.InvariantCulture),
+            movement.HareketTipi,
+            amount = movement.Tutar.ToString("G29", CultureInfo.InvariantCulture),
+            movement.CariId,
+            movement.AracId,
+            movement.MuhasebeHesapKodu,
+            movement.KostMerkeziKodu,
+            texts = new[] { movement.Aciklama?.Trim() ?? "", movement.BelgeNo?.Trim() ?? "" }
         });
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(payload)));
     }

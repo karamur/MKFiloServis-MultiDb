@@ -507,7 +507,7 @@
         var atamalar = await context.PersonelAracAtamalari
             .AsNoTracking()
             .Where(a => !a.IsDeleted && a.Aktif)
-            .Where(a => a.BitisTarihi == null || a.BitisTarihi >= DateTime.Today)
+            .Where(a => a.BitisTarihi == null || a.BitisTarihi >= MKFiloServis.Shared.Time.BusinessTime.Today)
             .Include(a => a.Sofor)
                 .ThenInclude(s => s.Firma)
             .OrderByDescending(a => a.BaslangicTarihi)

@@ -27,7 +27,7 @@
                 <div class="col-md-2">
                     <label class="form-label">Yıl</label>
                     <select class="form-select" @bind="secilenYil">
-                        @for (int yil = DateTime.Today.Year; yil >= DateTime.Today.Year - 5; yil--)
+                        @for (int yil = MKFiloServis.Shared.Time.BusinessTime.Today.Year; yil >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 5; yil--)
                         {
                             <option value="@yil">@yil</option>
                         }
@@ -234,7 +234,7 @@
 }
 
 @code {
-    private int secilenYil = DateTime.Today.Year;
+    private int secilenYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
     private string aramaMetni = string.Empty;
     private string filtreDurumu = "Tumu";
     private bool isLoading = true;

@@ -12,7 +12,7 @@
         <h3><i class="bi bi-file-earmark-ruled me-2"></i>KDV Beyanname Raporu</h3>
         <div class="d-flex gap-2">
             <select class="form-select" style="width: 100px;" @bind="secilenYil" @bind:after="LoadRapor">
-                @for (int y = DateTime.Now.Year; y >= DateTime.Now.Year - 5; y--)
+                @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 5; y--)
                 {
                     <option value="@y">@y</option>
                 }
@@ -259,8 +259,8 @@
 
 @code {
     private bool isLoading = true;
-    private int secilenYil = DateTime.Now.Year;
-    private int secilenAy = DateTime.Now.Month;
+    private int secilenYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    private int secilenAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
     
     private KdvBeyanRapor? rapor;
     private List<KdvAylikOzet>? yillikOzet;

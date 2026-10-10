@@ -1,4 +1,4 @@
-﻿using MKFiloServis.Shared.Entities;
+using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Helpers;
 using MKFiloServis.Web.Models;
@@ -134,6 +134,20 @@ public class FaturaService : IFaturaService
         return new PagedResult<Fatura>(items, totalCount, filter.PageNumber, filter.PageSize);
     }
 
+    public async Task<Fatura?> GetByNoAsync(string faturaNo, FaturaYonu? yon = null, int? firmaId = null)
+    {
+        if (string.IsNullOrWhiteSpace(faturaNo)) return null;
+        var normalized = faturaNo.Trim().ToUpperInvariant();
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var query = context.Faturalar.AsNoTracking()
+            .Include(f => f.Cari)
+            .Include(f => f.KarsiFirma)
+            .Where(f => f.FaturaNo != null && f.FaturaNo.ToUpper() == normalized);
+        if (yon.HasValue) query = query.Where(f => f.FaturaYonu == yon.Value);
+        if (firmaId.HasValue) query = query.Where(f => f.FirmaId == firmaId.Value);
+        return await query.OrderByDescending(f => f.FaturaTarihi).FirstOrDefaultAsync();
+    }
+
     public async Task<List<Fatura>> GetByCariIdAsync(int cariId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
@@ -232,8 +246,65 @@ public class FaturaService : IFaturaService
 
     public async Task<Fatura> CreateAsync(Fatura fatura)
     {
+        ArgumentNullException.ThrowIfNull(fatura);
+        if (fatura.Id != 0 || fatura.FaturaKalemleri.Any(k => k.Id != 0))
+            throw new InvalidOperationException("Yeni fatura oluşturma mevcut fatura/kalem kimliklerini kabul etmez.");
+
+        await using var strategyContext = await _contextFactory.CreateDbContextAsync();
+        var strategy = strategyContext.Database.CreateExecutionStrategy();
+        var commitStarted = false;
+        try
+        {
+            return await strategy.ExecuteAsync(async () =>
+            {
+                if (commitStarted)
+                    throw new InvalidOperationException("Fatura kaydının commit sonucu belirsiz; yeniden göndermeden önce faturayı numarasıyla kontrol edin.");
+
+                ResetNewInvoiceGraphForRetry(fatura);
+                await using var context = await _contextFactory.CreateDbContextAsync();
+                await using var transaction = await context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+                await CreateAsync(context, fatura);
+                commitStarted = true;
+                await transaction.CommitAsync();
+                return fatura;
+            });
+        }
+        catch
+        {
+            if (!commitStarted)
+                ResetNewInvoiceGraphForRetry(fatura);
+            throw;
+        }
+    }
+
+    private static void ResetNewInvoiceGraphForRetry(Fatura fatura)
+    {
+        // SaveChanges may assign generated keys before a transient failure causes the
+        // execution strategy to retry. Reuse the request graph only after clearing those
+        // generated identities and detached navigation objects from the prior context.
+        fatura.Id = 0;
+        fatura.MuhasebeFisId = null;
+        fatura.MuhasebeFisiOlusturuldu = false;
+        fatura.Cari = null!;
+        fatura.Firma = null;
+        fatura.KarsiFirma = null;
+        foreach (var item in fatura.FaturaKalemleri)
+        {
+            item.Id = 0;
+            item.FaturaId = 0;
+            item.Fatura = null!;
+            item.Firma = null;
+            item.MuhasebeHesap = null;
+            item.Arac = null;
+        }
+    }
+
+    /// <summary>Faturayı çağıranın transaction'ı içinde oluşturur; çok adımlı mali zincirler bunu kullanır.</summary>
+    public async Task<Fatura> CreateAsync(ApplicationDbContext context, Fatura fatura, CancellationToken cancellationToken = default, bool createAutomaticAccounting = true)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(fatura);
         await RequireFaturaPermissionAsync(fatura.FaturaYonu, "yaz");
-        await using var context = await _contextFactory.CreateDbContextAsync();
         try
         {
             await PrepareFaturaForSaveAsync(context, fatura);
@@ -242,7 +313,7 @@ public class FaturaService : IFaturaService
             CalculateTotals(fatura);
 
             context.Faturalar.Add(fatura);
-            await context.SaveChangesAsync();
+            await context.SaveChangesAsync(cancellationToken);
 
             // Firmalar arası fatura ise karşı firmada eşleşen fatura oluştur
             if (fatura.FirmalarArasiFatura && fatura.KarsiFirmaId.HasValue)
@@ -251,7 +322,8 @@ public class FaturaService : IFaturaService
             }
 
             // Otomatik muhasebe fişi oluştur (ayarlara göre)
-            await TryCreateMuhasebeFisiAsync(context, fatura);
+            if (createAutomaticAccounting)
+                await TryCreateMuhasebeFisiAsync(context, fatura);
 
             return fatura;
         }
@@ -407,7 +479,7 @@ public class FaturaService : IFaturaService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var stats = new DashboardFaturaStats();
-        var today = DateTime.Today;
+        var today = MKFiloServis.Shared.Time.BusinessTime.Today;
         var buAyBaslangic = new DateTime(today.Year, today.Month, 1);
 
         // Single optimized query for invoices needed for dashboard
@@ -826,7 +898,7 @@ public class FaturaService : IFaturaService
 
                 if (!DateTime.TryParse(issueDateStr, out var faturaTarihi))
                 {
-                    faturaTarihi = DateTime.Today;
+                    faturaTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
                 }
                 faturaTarihi = DateTime.SpecifyKind(faturaTarihi.Date, DateTimeKind.Utc);
 
@@ -1756,10 +1828,17 @@ public class FaturaService : IFaturaService
             .Replace('/', Path.DirectorySeparatorChar);
 
         var uploadsRoot = AppStoragePaths.GetUploadsRoot(_env.ContentRootPath);
-        var fullPath = Path.GetFullPath(Path.Combine(uploadsRoot, relativePath));
-        var normalizedRoot = Path.GetFullPath(uploadsRoot);
+        string fullPath;
+        try
+        {
+            fullPath = StorageFilePath.Resolve(uploadsRoot, relativePath);
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
 
-        if (!fullPath.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase) || !File.Exists(fullPath))
+        if (!File.Exists(fullPath))
             return null;
 
         return await File.ReadAllBytesAsync(fullPath);
@@ -1902,11 +1981,17 @@ public class FaturaService : IFaturaService
             if (fatura.Cari == null)
                 await context.Entry(fatura).Reference(f => f.Cari).LoadAsync();
 
-            // Muhasebe fişini oluştur (MuhasebeService tam muhasebe kaydını oluşturur)
-            await _muhasebeService.CreateFaturaFisiAsync(fatura);
+            // Çağıranın transaction'ı varsa fiş de aynı context/transaction içinde kalmalı.
+            if (context.Database.CurrentTransaction != null)
+                await _muhasebeService.CreateFaturaFisiAsync(context, fatura);
+            else
+                await _muhasebeService.CreateFaturaFisiAsync(fatura);
         }
         catch (Exception ex)
         {
+            if (context.Database.CurrentTransaction != null)
+                throw new InvalidOperationException($"Fatura {fatura.FaturaNo} kaydedildi ancak otomatik muhasebe fişi oluşturulamadı; işlem geri alınmalıdır.", ex);
+
             // Muhasebe fişi oluşturma hatası fatura kaydını engellemesin, loglansın
             System.Diagnostics.Debug.WriteLine($"[UYARI] Otomatik muhasebe fişi oluşturulamadı (Fatura: {fatura.FaturaNo}): {ex.Message}");
         }
@@ -2612,8 +2697,8 @@ public class FaturaService : IFaturaService
         ws.Cells[2, 1].Value = "ÖRNEK FİRMA A.Ş.";
         ws.Cells[2, 2].Value = "1234567890";
         ws.Cells[2, 3].Value = yon == FaturaYonu.Giden ? "SATIS" : "ALIS";
-        ws.Cells[2, 4].Value = DateTime.Today.ToString("dd.MM.yyyy");
-        ws.Cells[2, 5].Value = $"FTR{DateTime.Now:yyyyMM}000001";
+        ws.Cells[2, 4].Value = MKFiloServis.Shared.Time.BusinessTime.Today.ToString("dd.MM.yyyy");
+        ws.Cells[2, 5].Value = $"FTR{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMM}000001";
         ws.Cells[2, 10].Value = "1000,00";
         ws.Cells[2, 13].Value = "200,00";
         ws.Cells[2, 14].Value = "1200,00";

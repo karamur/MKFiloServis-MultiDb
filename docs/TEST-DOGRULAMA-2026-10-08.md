@@ -33,6 +33,22 @@ pg_isready -h 127.0.0.1 -p 5432
 - `CurrentPermissionGuardSqliteTests`: mevcut oturumla yetki, aktif kullanıcı, rol ve Admin statüsü DB'den kaldırılınca sonraki çağrının reddi; token içindeki Admin rolü DB iznini aşamaz.
 - `PayrollWriteSqliteTests`: gerçek tam EF SQLite modelinde maaş servis çağrıları; eski UpdatedAt ile kesintiyi ezme girişimi; aynı ödeme tarihi/açıklamasını tekrar gönderme; farklı ödeme içeriğini reddetme; ödenmiş maaşı değiştirme, kaldırma ve yeniden hesaplama retleri; ödenmemiş maaşın fiziksel satırı korunarak soft-delete edilmesi.
 
+## A-19 DataSync izole iki sağlayıcı doğrulaması
+
+**Tarih:** 2026-10-09 (Europe/Istanbul)
+**Amaç:** A-19 görev satırındaki aktarım bütünlüğü ve rollback ölçütlerini sentetik SQLite ve PostgreSQL 17.5 üzerinde doğrulamak.
+**İzolasyon:** Geçici PostgreSQL kümesi yalnız `127.0.0.1:55441` üzerinde dinledi; müşteri verisi kullanılmadı ve küme doğrulama sonunda kapatıldı. Yerel ayrıntılı kanıt/artifact dizini: `TestResults/a19-postgres-smoke-c26b5deb9f63441587abb60404778b88/` (çalışma ağacında ignore edilen yerel çıktı).
+
+| Senaryo | Sonuç |
+|---|---|
+| PostgreSQL→SQLite | 2 tablo, toplam 4 sentetik satır aktarıldı; var olan hedef satırlar yenilendi. |
+| SQLite→PostgreSQL | Ebeveyn ve çocuk tablolarında 3'er satır aktarıldı; FK kontrolü geçti, sequence sonraki değere doğru ilerledi. |
+| Eksik hedef şema/kolon | Her iki yönde ön kontrol aktarımı durdurdu; var olan hedef kayıtlar korundu. |
+| PostgreSQL COPY kısıt ihlali | Check constraint hatası tüm transaction'ı geri aldı; önceki hedef satırlar değişmeden kaldı. |
+| DataSync Release derlemesi | Başarılı, 0 uyarı / 0 hata. |
+
+**Sınır:** Bu, sentetik izole sağlayıcı kabulüdür. Müşteri verisi, üretim hacmi/credential, gerçek geçiş provası veya iş sahibi kabulü değildir. A-19'un tanımlı kaynak ve izole doğrulama teslimi kapatıldı; canlı geçiş ilgili dağıtım kapısında yapılmalıdır.
+
 İlk ek maaş testleri test fixture'ındaki eksik Organizasyon FK'sı ve async fixture'dan taşınmayan HttpContext nedeniyle kurulamadı. Fixture'a organizasyon eklendi ve test HttpContext erişimi doğrudan fixture nesnesine bağlandı. Bu test kurulum düzeltmeleri sonrası paket tekrar çalıştırıldı; son sonuç 54/54'tür. Üretim kodu sırf test geçsin diye gevşetilmedi.
 
 ## Sonucun sınırı ve kalan doğrulama
@@ -69,7 +85,7 @@ PASS: A-15 PostgreSQL linked invoice firm update rejected
 PASS: isolated PostgreSQL migration/trigger probe
 ```
 
-Son Release çözüm derlemesi 0 hata/uyarı; tam test paketi **102/102 geçti, 0 atlandı**. Müşteri DB'sinde migration, çok sunuculu eşzamanlılık kabulü ve A-15'in diğer ilişkileri açık olduğundan A-15 genel durumu 🔴 kalır.
+Son Release çözüm derlemesi 0 hata/uyarı; tam test paketi **102/102 geçti, 0 atlandı**. Bu 2026-10-08 tarihli notta A-15'in PostgreSQL/müşteri DB migration'ı ve saha kabulü açık görünüyordu. 2026-10-09 kullanıcı kapsam kararıyla A-15 kod teslimi kapatılmıştır; müşteri migration'ı ve saha kabulü operasyonel takip olarak kalır, görev rengini açık tutmaz.
 
 
 ## İkinci test koşusu — 2026-10-08
@@ -129,3 +145,91 @@ Mahsup ekranı bekleyen kimliği sessionStorage'da saklayacak, aynı sekmede yen
 🟢 Web Release derlemesi **0 hata / 0 uyarı**. `PuantajFinansSnapshotSqliteTests` yabancı firma döneminin reddini, yerel dönem snapshot'ının doğru firmaya yazılmasını ve tekrar çağrıda ikinci kayıt oluşmamasını doğruladı. Ardından tam Release paketi **105/105 geçti, 0 atlandı**.
 
 🟡 Bu koşu puantajdan fatura/kalem/link üretiminin çok bağlantılı atomikliğini, hakedişin fatura/snapshot zincirini veya müşteri verisi kabulünü doğrulamaz. Bu akışlar A-29 kapsamında açık kalır.
+
+## 2026-10-09 — Tam yerel test paketi
+
+🟢 `dotnet test MKFiloServis.Tests/MKFiloServis.Tests.csproj --no-restore -nologo` **134/134 geçti, 0 başarısız, 0 atlandı**. İlk derleme eski servis kurucularına göre kalan iki fixture'ı gösterdi; fixture'lar güncellendi. Koşu A-28 sağlayıcı kapsam regresyonlarını da içerdi. Test paketi SQLite ve yerel kaynak doğrulamasıdır; PostgreSQL/SQLite müşteri kurulum-yükseltme, kimlik/rol saha matrisi, gerçek lisans/restore/S3 ve harici portal kabullerini içermez.
+
+## 2026-10-09 — GPS kapsam değişikliği sonrası son doğrulama
+
+🟢 Güncel çalışma ağacında `dotnet test MKFiloServis.Tests/MKFiloServis.Tests.csproj -c Release --no-restore --nologo -v minimal`: **137/137 geçti, 0 başarısız, 0 atlandı**. A-20 için UTC gece sınırının İstanbul iş gününe çevrildiği regresyon pakete eklendi. `dotnet build MKFiloServis.slnx -c Release --no-restore --nologo -v minimal`: **0 uyarı / 0 hata**; Android Release trimming dahil tamamlandı. `git diff --check` hata vermedi.
+
+🟡 Bu yerel doğrulama GPS kaldırma migration'ını müşteri DB'sinde çalıştırmaz ve A-01/A-02/A-04/A-05/A-06/A-09/A-11/A-12/A-14/A-17/A-18/A-20/A-21/A-24/A-25/A-26/A-27 dış kabulini kapatmaz. A-18 temiz PostgreSQL baseline eforu/parity kapsamı belli olmadığından Go/No-Go tarihi henüz belirlenmedi; önkoşullar [görev envanterinde](SATISA-CIKARIM-GOREV-ENVANTERI-2026-10-06.md#satışa-çıkış-takvimi-ve-kapılar--2026-10-09).
+
+## 2026-10-09 — A-18 fatura indeksi ve güncel tam test paketi
+
+🟢 `InvoiceStartupIndexTests` iki SQLite başlangıç senaryosunu doğruluyor: indeks geçişi başarılıysa yeni indeks kurulur ve eski kaldırılır; eski kayıtlardaki yinelenme unique indeks kurulumunu bozarsa transaction rollback olur ve eski indeks korunur. Hedef PostgreSQL startup ve gerçek eski müşteri verisi kapsam dışıdır.
+
+🟢 Ardından tüm yerel paket yeniden çalıştırıldı: **136/136 geçti, 0 başarısız, 0 atlandı**. A-18 genel görevi temiz/eski kurulum migration kabulü nedeniyle sarı kalır.
+
+## A-18 PostgreSQL indeks ve temiz başlangıç provası
+
+**Tarih:** 2026-10-09 (Europe/Istanbul)
+**Sağlayıcı:** İzole PostgreSQL 17.5; yalnız sentetik invoice satırları. Geçici cluster localhost'ta çalıştı ve sonunda kapatıldı. Harness ve PostgreSQL logları yerel/ignore edilen `TestResults/a18-postgres-clean-7923367ad46d42debb1089b82514235e/` altındadır.
+
+| Senaryo | Sonuç |
+|---|---|
+| Gerçek başlangıç indeks rutini, uyumlu eski veri | Yeni `FirmaId/FaturaYonu/FaturaNo` unique indeksi kuruldu; eski `IX_Faturalar_FaturaNo` kaldırıldı. |
+| Gerçek başlangıç indeks rutini, yinelenen eski veri | Unique indeks hatası transaction'ı geri aldı; eski indeks korundu ve yeni indeks kurulmadı. |
+| Tam boş PostgreSQL `DbInitializer.InitializeAsync` | Başarısız. Legacy migration atlama yolu mevcut olmayan `__EFMigrationsHistory` tablosuna insert ediyor. Bu atlama geçici devre dışı bırakıldığında migration `AylikOdemeGerceklesenler` tablosunu varsayarak başarısız oldu. Deneysel değişiklik geri alındı. |
+
+**Karar:** İndeks taşıma/rollback davranışı iki sağlayıcıda kanıtlandı; A-18 kapanmadı. Temiz ve eski PostgreSQL şema başlangıcının destek sözleşmesi ve migration zinciri düzeltilmeden satış öncesi kurulum kabulü verilemez. PostgreSQL müşteri verisi kullanılmadı.
+
+## 2026-10-09 — Legacy aktarımın migration öncesi şema üretme yolu kaldırıldı
+
+- 🔴 Kaynak izinde `LegacyDataTransferService.EnsureSchemaAsync()` çağrısının `DbInitializer` öncesinde ve aktarım kapalı olsa bile çalıştığı bulundu. PostgreSQL model DDL'ini ve `EnsureCreatedAsync()` yolunu kullanarak boş hedefi EF migration zincirinin dışında önceden oluşturabiliyordu.
+- 🟢 Yan yol ve kullanılmayan şema üretim metotları kaldırıldı. Legacy aktarım `DbInitializer` migration/seed adımından sonra çalışıyor.
+- 🟢 `dotnet build MKFiloServis.Web/MKFiloServis.Web.csproj -c Release --no-restore --nologo -v minimal`: **0 uyarı / 0 hata**.
+- 🟡 Bu değişiklik migration baseline üretmez. İzole boş PostgreSQL/SQLite başlangıç testi ve eski şema yükseltme kabulü bu düzenlemeden sonra henüz çalıştırılmadı; A-18 açık kalır.
+
+### 2026-10-09 takip — boş PostgreSQL için fail-fast ve history helper
+
+🟢 `DbInitializer` boş PostgreSQL'i core `Firmalar`/`Kullanicilar` tabloları üzerinden legacy DB'den ayırır; boş kurulum legacy migration'ı geçmişe kaydetmeden açıkça reddedilir. Eski, mevcut şemalı DB'de history helper `__EFMigrationsHistory` tablosunu transaction içinde idempotent oluşturup `ON CONFLICT DO NOTHING` ile yazar.
+
+🟢 Ayrı geçici PostgreSQL 17 kümesinde gerçek boş DB ile initializer çalıştırıldı. Önceki history-table exception yerine açık preflight reddi alındı; reddedilen DB'de public tablo sayısı **0** kaldı. Test cluster kapatıldı; müşteri verisi kullanılmadı.
+
+🟡 Bu A-18 temiz PostgreSQL kurulumunu çözmez: desteklenen başlangıç/migration baseline zinciri hâlâ eksik ve eski müşteri şemasında history recovery/yükseltme kabulü ayrıca yapılmadı.
+
+### 2026-10-09 takip — model snapshot karşılaştırması ve GPS kapsamı
+
+🔴 `ApplicationDbContext` için `Database.HasPendingModelChanges()` **true** verdi; migration assembly **141** migration listeliyor. Otomatik scaffold beş araç GPS tablosunu ve çok sayıda timestamp tür dönüşümünü bir araya getirmişti. Timestamp dönüşümleri kabul edilmedi ve ayrı incelenecek.
+
+🟢 Ürün kapsam kararıyla araç takip GPS kaldırıldı. Snapshot'tan beş GPS entity/ilişkisi silindi; `20261009200000_RemoveVehicleGpsTracking` migration'ı bu tabloları child-first sırayla düşürür. Bu migration müşteri veritabanlarına henüz uygulanmadı; çalıştırıldığında GPS tablolarındaki veri silinir ve `Down` tarafından geri yüklenmez.
+
+🟡 Snapshot'ta GPS farkı giderildi; diğer model/snapshot farkları ve boş PostgreSQL başlangıç zinciri hâlâ incelenmelidir. Temiz kurulum kabulü verilmedi.
+
+## 2026-10-09 — A-02/A-17 analitik API rol kontrolü derlemesi
+
+🔴 Kaynak incelemesinde rapor lisanslı OData, Grafana, Prometheus ve n8n uçlarında güncel rol izni kontrolü bulunmadı. Veri döndüren eylemlere `CurrentPermissionGuard` üzerinden `raporlar.oku` denetimi eklendi; metrik adı listesi döndüren anonim Grafana search istisna olarak kaldı.
+
+🟢 `dotnet build MKFiloServis.Web/MKFiloServis.Web.csproj -c Release --no-restore -nologo`: **başarılı, 0 uyarı / 0 hata**. Bu düzeltme için rol/tenant runtime testi çalıştırılmadı; bu kayıt yalnız derleme ve kaynak kapsamını kanıtlar.
+
+## 2026-10-09 — A-02/A-17 fatura grup şablonu izinleri
+
+🔴 Fatura grup şablonu REST endpoint'leri kullanıcı/firma sahiplik kapsamını uyguluyor, ancak modül rol izinlerini istemiyordu. GET uçlarına `faturahazirlik.oku`, Create'e `faturahazirlik.yaz`, Update/Delete/SetVarsayilan'a `faturahazirlik.duzenle` güncel DB kontrolü eklendi.
+
+🟢 `dotnet build MKFiloServis.Web/MKFiloServis.Web.csproj -c Release --no-restore -nologo`: **başarılı, 0 uyarı / 0 hata**. Test ve normal/Admin runtime matrisi çalıştırılmadı.
+
+## 2026-10-09 — A-06/A-21 PC2 kurulum betiği kaynak denetimi
+
+🟢 Eski PC2 publish betiği `appsettings.PC2.json` üretmeyecek ve üretim sırlarını pakete yazmayacak şekilde değiştirildi. `03-pc2-publish.ps1` PowerShell parser kontrolü geçti. PC2 talimatları ve setup README güncel paket akışı, PostgreSQL/SQLite kapsamı, ACL korumalı `dbsettings.json` ve harici `Jwt__Secret` ayarıyla eşitlendi.
+
+🟢 `setup/Setup.iss` ve `setup/MusteriSetup.iss` kaynaklarında sağlayıcı seçenekleri statik olarak tarandı: PostgreSQL ve SQLite var; MSSQL seçeneği ve eski seçim dalı yok. `git diff --check` hata vermedi (yalnızca mevcut dosyalar için LF/CRLF normalizasyon uyarıları gösterildi).
+
+🟡 Inno Setup EXE üretimi, hedef Windows/IIS kurulum-yükseltme, yedek restore, sır yükleme ve lisans aktivasyonu çalıştırılmadı. Bu kaynak düzenlemesi A-06/A-21'in operasyonel kabulini kapatmaz.
+
+## 2026-10-09 — A-02/A-17 fatura API yazma izin sırası
+
+🟢 `FaturalarController` Create eylemi fatura yönüne bağlı genel ve gelen/kesilen yazma izinlerini cari doğrulamasından önce denetler. Get/Update/Delete eylemleri yöne uygun izinleri kontrol eder ve yetkisiz faturayı 404 ile gizler; servis katmanındaki izin kontrolü de kalır.
+
+🟢 `dotnet build MKFiloServis.Web/MKFiloServis.Web.csproj -c Release --no-restore -nologo` başarılı: **0 uyarı / 0 hata**. `git diff --check` hata vermedi; çalışma ağacındaki satır sonu normalizasyon uyarıları devam ediyor.
+
+🟡 HTTP normal/Admin/yön matrisi çalıştırılmadı; A-02/A-17 saha kabulinin kalan kanıtı budur.
+
+## 2026-10-09 — A-18 boş PG/SQLite baseline ve kısmi şema koruması
+
+- 🟢 Boş SQLite `:memory:` veritabanında tam `DbInitializer.InitializeAsync` geçti; migration beklemedi ve dört varsayılan organizasyon oluşturuldu.
+- 🟢 Ayrı, geçici PostgreSQL 17 cluster'ında boş DB için tam initializer geçti; migration beklemedi ve dört organizasyon bulundu. Kısmi PG şema fixture'ında baseline reddedildi, satır korundu ve migration history yaratılmadı. İki koşullu PG testi ayrı çalıştırmada **2/2 geçti**; cluster kapatıldı.
+- 🟢 Kısmi SQLite eski şema fixture'ında baseline reddedildi, mevcut satır korundu ve migration history tablosu yaratılmadı.
+- 🟢 Kalıcı test paketi **139 geçti / 2 PostgreSQL özel ortamı olmadığı için atlandı**. Release çözüm derlemesi **0 uyarı / 0 hata**.
+- 🟡 Mevcut müşteri şema yükseltmesi ve rollback fixture'ı bu testlerin kapsamı dışındadır; A-18 genel görevi sarı kalır.

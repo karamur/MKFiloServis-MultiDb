@@ -52,7 +52,7 @@
         </button>
         <ul class="dropdown-menu dropdown-menu-end" style="max-height: 300px; overflow-y: auto;">
             <li><h6 class="dropdown-header">Aktif Donem</h6></li>
-            @for (int yil = DateTime.Today.Year; yil >= DateTime.Today.Year - 3; yil--)
+            @for (int yil = MKFiloServis.Shared.Time.BusinessTime.Today.Year; yil >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 3; yil--)
             {
                 <li><h6 class="dropdown-header small">@yil</h6></li>
                 @for (int ay = 12; ay >= 1; ay--)

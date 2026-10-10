@@ -201,7 +201,7 @@
                             <td class="small">
                                 @if (k.BitisTarihi.HasValue)
                                 {
-                                    <span class="@(k.BitisTarihi < DateTime.Today ? "text-danger" : "")">
+                                    <span class="@(k.BitisTarihi < MKFiloServis.Shared.Time.BusinessTime.Today ? "text-danger" : "")">
                                         @k.BitisTarihi.Value.ToString("dd.MM.yyyy")
                                     </span>
                                 }
@@ -307,7 +307,7 @@
             q = q.Where(k => k.BaslangicTarihi <= baslangicE.Value);
         if (!string.IsNullOrEmpty(bitisTarihiFiltre))
         {
-            var bugun = DateTime.Today;
+            var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
             q = bitisTarihiFiltre switch
             {
                 "gecmis" => q.Where(k => k.BitisTarihi.HasValue && k.BitisTarihi.Value < bugun),

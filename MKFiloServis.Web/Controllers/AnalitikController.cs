@@ -1,4 +1,6 @@
 using MKFiloServis.Web.Data;
+using MKFiloServis.Web.Services;
+using MKFiloServis.Shared.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -16,10 +18,12 @@ namespace MKFiloServis.Web.Controllers;
 public class AnalitikController : ControllerBase
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+    private readonly CurrentPermissionGuard _permissionGuard;
 
-    public AnalitikController(IDbContextFactory<ApplicationDbContext> contextFactory)
+    public AnalitikController(IDbContextFactory<ApplicationDbContext> contextFactory, CurrentPermissionGuard permissionGuard)
     {
         _contextFactory = contextFactory;
+        _permissionGuard = permissionGuard;
     }
 
     // ──────────────────────────────────────────────────────────────────────────────
@@ -37,6 +41,7 @@ public class AnalitikController : ControllerBase
         [FromQuery] DateTime? bitis = null,
         [FromQuery] int? top = null)
     {
+        if (!await CanReadReportsAsync()) return Forbid();
         await using var ctx = await _contextFactory.CreateDbContextAsync();
         var q = ctx.Faturalar
             .Where(f => !f.IsDeleted)
@@ -47,7 +52,7 @@ public class AnalitikController : ControllerBase
 
         var liste = await q
             .OrderByDescending(f => f.FaturaTarihi)
-            .Take(top ?? 10000)
+            .Take(ClampTop(top, defaultValue: 10000, maxValue: 10000))
             .Select(f => new
             {
                 f.Id,
@@ -69,12 +74,13 @@ public class AnalitikController : ControllerBase
     [HttpGet("odata/cariler")]
     public async Task<IActionResult> OdataCariler([FromQuery] int? top = null)
     {
+        if (!await CanReadReportsAsync()) return Forbid();
         await using var ctx = await _contextFactory.CreateDbContextAsync();
         var liste = await ctx.Cariler
             .Where(c => !c.IsDeleted)
             .AsNoTracking()
             .OrderBy(c => c.Unvan)
-            .Take(top ?? 5000)
+            .Take(ClampTop(top, defaultValue: 5000, maxValue: 5000))
             .Select(c => new
             {
                 c.Id,
@@ -94,12 +100,13 @@ public class AnalitikController : ControllerBase
     [HttpGet("odata/araclar")]
     public async Task<IActionResult> OdataAraclar([FromQuery] int? top = null)
     {
+        if (!await CanReadReportsAsync()) return Forbid();
         await using var ctx = await _contextFactory.CreateDbContextAsync();
         var liste = await ctx.Araclar
             .Where(a => !a.IsDeleted)
             .AsNoTracking()
             .OrderBy(a => a.Plaka)
-            .Take(top ?? 2000)
+            .Take(ClampTop(top, defaultValue: 2000, maxValue: 2000))
             .Select(a => new
             {
                 a.Id,
@@ -122,9 +129,9 @@ public class AnalitikController : ControllerBase
     /// <summary>Grafana search endpoint — kullanılabilir metrik listesi</summary>
     [HttpPost("grafana/search")]
     [HttpGet("grafana/search")]
-    [AllowAnonymous]
-    public IActionResult GrafanaSearch()
+    public async Task<IActionResult> GrafanaSearch()
     {
+        if (!await CanReadReportsAsync()) return Forbid();
         return Ok(new[]
         {
             "fatura_sayisi", "cari_sayisi", "arac_sayisi", "sofor_sayisi",
@@ -136,8 +143,9 @@ public class AnalitikController : ControllerBase
     [HttpPost("grafana/query")]
     public async Task<IActionResult> GrafanaQuery()
     {
+        if (!await CanReadReportsAsync()) return Forbid();
         await using var ctx = await _contextFactory.CreateDbContextAsync();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var ayBasi = new DateTime(bugun.Year, bugun.Month, 1);
 
         var faturaSayisi = await ctx.Faturalar.CountAsync(f => !f.IsDeleted);
@@ -175,8 +183,9 @@ public class AnalitikController : ControllerBase
     [HttpGet("metrics")]
     public async Task<IActionResult> Metrics()
     {
+        if (!await CanReadReportsAsync()) return Forbid();
         await using var ctx = await _contextFactory.CreateDbContextAsync();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var ayBasi = new DateTime(bugun.Year, bugun.Month, 1);
 
         var faturaSayisi = await ctx.Faturalar.CountAsync(f => !f.IsDeleted);
@@ -215,8 +224,9 @@ koa_fatura_vadesi_gecmis {vadesiGecmis}
     [HttpGet("n8n/ozet")]
     public async Task<IActionResult> N8nOzet()
     {
+        if (!await CanReadReportsAsync()) return Forbid();
         await using var ctx = await _contextFactory.CreateDbContextAsync();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var ayBasi = new DateTime(bugun.Year, bugun.Month, 1);
 
         var vadesiGecmisFaturalar = await ctx.Faturalar
@@ -244,6 +254,7 @@ koa_fatura_vadesi_gecmis {vadesiGecmis}
     [HttpGet("n8n/faturalar/yeni")]
     public async Task<IActionResult> N8nYeniFaturalar([FromQuery] DateTime? sonTarihten = null)
     {
+        if (!await CanReadReportsAsync()) return Forbid();
         await using var ctx = await _contextFactory.CreateDbContextAsync();
         var baslangic = sonTarihten ?? DateTime.UtcNow.AddHours(-1);
 
@@ -265,6 +276,11 @@ koa_fatura_vadesi_gecmis {vadesiGecmis}
 
         return Ok(new { count = liste.Count, items = liste });
     }
+
+    private static int ClampTop(int? requested, int defaultValue, int maxValue)
+        => requested.HasValue ? Math.Clamp(requested.Value, 1, maxValue) : defaultValue;
+
+    private Task<bool> CanReadReportsAsync() => _permissionGuard.HasAnyAsync(Yetkiler.RaporlarOku);
 }
 
 

@@ -1,6 +1,8 @@
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.AspNetCore.Components.Authorization;
 using System.Security.Claims;
 
@@ -169,6 +171,8 @@ public class FirmaTransferService
             SecimiDogrula();
             await using var db = await _dbFactory.CreateDbContextAsync();
             SecimiDogrula();
+            // Taşıma ön kontrolü ile bütün tenant güncellemeleri tek seri işlemde yürür.
+            await using var transferTx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
             var principal = _httpContextAccessor.HttpContext is { } http ? http.User : (await _auth.GetAuthenticationStateAsync()).User;
             if (principal.Identity?.IsAuthenticated != true ||
                 !int.TryParse(principal.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? principal.FindFirst("KullaniciId")?.Value, out var userId) || userId <= 0 ||
@@ -184,6 +188,12 @@ public class FirmaTransferService
                     throw new InvalidOperationException("Taşıma öncesinde kira/komisyon cari bağlantıları hedef firmaya uygun olarak düzenlenmelidir.");
             if (selectedKeys.Any(k => k is not ("AracEvrak" or "PuantajKayit" or "ServisCalisma" or "KiralikPlakaTakip")))
                 throw new ArgumentException("Geçersiz taşıma seçimi.", nameof(selectedKeys));
+
+            // Modeldeki tüm doğrudan AracId ilişkilerini tara. Taşımayı desteklemeyen ilişkiyi
+            // sessizce kaynak firmada bırakmak yerine adını vererek reddet.
+            var blockers = await FindUnmanagedVehicleReferencesAsync(db, transferTx, aracId);
+            if (blockers.Count > 0)
+                throw new InvalidOperationException($"Araç taşınamadı. Hedef firma eşlemesi bu akışta tanımlanmayan bağlı kayıtlar var: {string.Join(", ", blockers)}. Önce bağlantıları güvenli biçimde çözün.");
             if (alanlar != null && await db.Araclar.IgnoreQueryFilters().AnyAsync(a => a.Id != aracId && !a.IsDeleted && a.SaseNo.ToUpper() == alanlar.SaseNo))
                 throw new InvalidOperationException("Şase numarası kullanımda.");
             SecimiDogrula();
@@ -231,6 +241,10 @@ public class FirmaTransferService
                 foreach (var p in puantajlar) { p.IsverenFirmaId = targetFirmaId; p.UpdatedAt = DateTime.UtcNow; }
                 moved += puantajlar.Count;
             }
+            else if (await db.PuantajKayitlar.IgnoreQueryFilters().AnyAsync(p => p.AracId == aracId && !p.IsDeleted))
+            {
+                throw new InvalidOperationException("Araca bağlı puantaj kayıtları var; firma bütünlüğü için Puantaj Kayıtları seçimini işaretleyin.");
+            }
 
             if (selectedKeys.Contains("ServisCalisma"))
             {
@@ -249,16 +263,13 @@ public class FirmaTransferService
                 foreach (var servis in servisler) { servis.FirmaId = targetFirmaId; servis.UpdatedAt = DateTime.UtcNow; }
                 moved += servisler.Count;
             }
-
-            if (selectedKeys.Contains("KiralikPlakaTakip"))
+            else if (await db.ServisCalismalari.IgnoreQueryFilters().AnyAsync(s => s.AracId == aracId && !s.IsDeleted))
             {
-                try
-                {
-                    var takipler = await db.KiralikPlakaTakipler.IgnoreQueryFilters().Where(k => k.AracId == aracId && !k.IsDeleted).ToListAsync();
-                    foreach (var t in takipler) { /* KiralikPlakaTakip'te FirmaId yok, skip */ }
-                }
-                catch (Exception ex) { errors.Add($"Plaka Takip: {ex.Message}"); }
+                throw new InvalidOperationException("Araca bağlı servis çalışmaları var; firma bütünlüğü için Servis Çalışmaları seçimini işaretleyin.");
             }
+
+            // KiralikPlakaTakip FirmaId taşımadığından FK araç üzerinden takip eder; satırlar
+            // değiştirilmez ve taşınan kayıt adedine dahil edilmez.
 
             if (errors.Any()) return (0, errors); // Hazırlık hatasında tracked değişiklikler kaydedilmez.
             SecimiDogrula();
@@ -282,6 +293,7 @@ public class FirmaTransferService
             SecimiDogrula();
             // SaveChanges iş ve audit değişikliklerini aynı transaction'da kaydeder.
             await db.SaveChangesAsync();
+            await transferTx.CommitAsync();
 
             // Arac listeleri firma bazli cache'leniyor; tasima sonrasi eski firmada
             // gorunmemesi icin tum arac cache'leri temizlenir.
@@ -291,6 +303,52 @@ public class FirmaTransferService
             return (moved, errors);
         }
         finally { _firmaProvider.AktifFirmaDegisti -= FirmaDegisimi; }
+    }
+
+    private static async Task<List<string>> FindUnmanagedVehicleReferencesAsync(
+        ApplicationDbContext db, IDbContextTransaction transaction, int aracId)
+    {
+        var supported = new HashSet<Type>
+        {
+            typeof(AracEvrak), typeof(AracEvrakDosya), typeof(PuantajKayit), typeof(ServisCalisma),
+            typeof(AracPlaka), typeof(KiralikPlakaTakip)
+        };
+        var checkedTables = new HashSet<string>(StringComparer.Ordinal);
+        var blockers = new List<string>();
+        var connection = db.Database.GetDbConnection();
+        await db.Database.OpenConnectionAsync();
+        foreach (var entityType in db.Model.GetEntityTypes())
+        {
+            if (supported.Contains(entityType.ClrType) || entityType.FindProperty("AracId") is not { } property)
+                continue;
+            var table = entityType.GetTableName();
+            if (string.IsNullOrWhiteSpace(table)) continue;
+            var schema = entityType.GetSchema();
+            var store = StoreObjectIdentifier.Table(table, schema);
+            var column = property.GetColumnName(store);
+            if (string.IsNullOrWhiteSpace(column)) continue;
+            var key = $"{schema}.{table}.{column}";
+            if (!checkedTables.Add(key)) continue;
+
+            static string Quote(string identifier) => $"\"{identifier.Replace("\"", "\"\"")}\"";
+            var tableSql = string.IsNullOrWhiteSpace(schema)
+                ? Quote(table)
+                : $"{Quote(schema)}.{Quote(table)}";
+            var where = $"{Quote(column)} = @aracId";
+            if (entityType.FindProperty("IsDeleted") is { } deletedProperty && deletedProperty.GetColumnName(store) is { } deletedColumn)
+                where += $" AND {Quote(deletedColumn)} = FALSE";
+
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction.GetDbTransaction();
+            command.CommandText = $"SELECT EXISTS (SELECT 1 FROM {tableSql} WHERE {where})";
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "@aracId";
+            parameter.Value = aracId;
+            command.Parameters.Add(parameter);
+            if (Convert.ToBoolean(await command.ExecuteScalarAsync()))
+                blockers.Add(entityType.ClrType.Name);
+        }
+        return blockers.Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToList();
     }
 }
 

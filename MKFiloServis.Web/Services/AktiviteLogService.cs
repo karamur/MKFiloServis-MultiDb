@@ -45,7 +45,7 @@ public class AktiviteLogService : IAktiviteLogService
 
             var log = new AktiviteLog
             {
-                IslemZamani = DateTime.Now,
+                IslemZamani = DateTime.UtcNow,
                 IslemTipi = islemTipi,
                 Modul = modul,
                 EntityTipi = entityTipi,
@@ -199,8 +199,8 @@ public class AktiviteLogService : IAktiviteLogService
     public async Task<AktiviteLogOzet> GetOzetAsync(int gunSayisi = 7)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync();
-        var baslangic = DateTime.Today.AddDays(-gunSayisi);
-        var bugun = DateTime.Today;
+        var baslangic = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-gunSayisi);
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
 
         var logs = await context.AktiviteLoglar
             .Where(l => l.IslemZamani >= baslangic)
@@ -227,7 +227,7 @@ public class AktiviteLogService : IAktiviteLogService
         // Günlük aktiviteler
         for (int i = gunSayisi; i >= 0; i--)
         {
-            var tarih = DateTime.Today.AddDays(-i);
+            var tarih = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-i);
             ozet.GunlukAktiviteler.Add(new GunlukAktivite
             {
                 Tarih = tarih,

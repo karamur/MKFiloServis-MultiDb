@@ -149,7 +149,7 @@ public class TasimaTedarikciIs : BaseEntity
     public int? SoforId { get; set; }
     public virtual Sofor? Sofor { get; set; }
 
-    public DateTime BaslangicTarihi { get; set; } = DateTime.Today;
+    public DateTime BaslangicTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public DateTime? BitisTarihi { get; set; }
 
     public decimal? SeferUcreti { get; set; }

@@ -31,7 +31,7 @@
                 <div class="col-md-2">
                     <label class="form-label small">Yıl</label>
                     <select class="form-select form-select-sm" @bind="yil" @bind:after="LoadAsync">
-                        @for (int y = DateTime.Today.Year - 3; y <= DateTime.Today.Year + 1; y++)
+                        @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year - 3; y <= MKFiloServis.Shared.Time.BusinessTime.Today.Year + 1; y++)
                         {
                             <option value="@y">@y</option>
                         }
@@ -41,7 +41,7 @@
                     <label class="form-label small">Karşılaştırma Yılı</label>
                     <select class="form-select form-select-sm" @bind="onceYil" @bind:after="LoadAsync">
                         <option value="0">— Yok —</option>
-                        @for (int y = DateTime.Today.Year - 3; y <= DateTime.Today.Year + 1; y++)
+                        @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year - 3; y <= MKFiloServis.Shared.Time.BusinessTime.Today.Year + 1; y++)
                         {
                             <option value="@y">@y</option>
                         }
@@ -244,7 +244,7 @@
 
 @code {
     private bool yukleniyor = true;
-    private int yil = DateTime.Today.Year;
+    private int yil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
     private int onceYil = 0;
     private string metrik = "tutar";
     private bool bosFirmaGizle = true;

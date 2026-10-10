@@ -287,7 +287,7 @@ public class PlaywrightScraperService : IPlaywrightScraperService
             _logger.LogInformation("Sahibinden: {Count} satir bulundu", rows.Count);
             
             // Tarih filtresi icin min tarih
-            var minTarih = request.IlanTarihGun > 0 ? DateTime.Today.AddDays(-request.IlanTarihGun) : DateTime.MinValue;
+            var minTarih = request.IlanTarihGun > 0 ? MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-request.IlanTarihGun) : DateTime.MinValue;
 
             foreach (var row in rows.Take(30))
             {
@@ -298,7 +298,7 @@ public class PlaywrightScraperService : IPlaywrightScraperService
                     var ilan = new PiyasaArastirmaIlan
                     {
                         Kaynak = kaynak.Ad,
-                        ToplanmaTarihi = DateTime.Now,
+                        ToplanmaTarihi = DateTime.UtcNow,
                         AktifMi = true,
                         Marka = request.Marka,
                         Model = request.Model
@@ -365,7 +365,7 @@ public class PlaywrightScraperService : IPlaywrightScraperService
                         var dateText = await row.Locator("td.searchResultsDateValue").TextContentAsync() ?? "";
                         ilan.IlanTarihi = ParseTarih(dateText);
                     }
-                    catch { ilan.IlanTarihi = DateTime.Today; }
+                    catch { ilan.IlanTarihi = MKFiloServis.Shared.Time.BusinessTime.Today; }
 
                     // Tarih filtresi uygula
                     if (ilan.IlanTarihi < minTarih)
@@ -456,7 +456,7 @@ public class PlaywrightScraperService : IPlaywrightScraperService
             }
 
             var processedIlanNos = new HashSet<string>();
-            var minTarih = request.IlanTarihGun > 0 ? DateTime.Today.AddDays(-request.IlanTarihGun) : DateTime.MinValue;
+            var minTarih = request.IlanTarihGun > 0 ? MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-request.IlanTarihGun) : DateTime.MinValue;
 
             foreach (var row in ilanRows.Take(30))
             {
@@ -529,7 +529,7 @@ public class PlaywrightScraperService : IPlaywrightScraperService
                     var ilan = new PiyasaArastirmaIlan
                     {
                         Kaynak = kaynak.Ad,
-                        ToplanmaTarihi = DateTime.Now,
+                        ToplanmaTarihi = DateTime.UtcNow,
                         AktifMi = true,
                         Marka = request.Marka,
                         Model = request.Model,
@@ -540,7 +540,7 @@ public class PlaywrightScraperService : IPlaywrightScraperService
                         Fiyat = ParseFiyat(rowText),
                         ModelYili = ParseYil(rowText),
                         Kilometre = ParseKilometre(rowText),
-                        IlanTarihi = DateTime.Today
+                        IlanTarihi = MKFiloServis.Shared.Time.BusinessTime.Today
                     };
 
                     if (ilan.Fiyat > 0)
@@ -605,7 +605,7 @@ public class PlaywrightScraperService : IPlaywrightScraperService
                     var ilan = new PiyasaArastirmaIlan
                     {
                         Kaynak = kaynak.Ad,
-                        ToplanmaTarihi = DateTime.Now,
+                        ToplanmaTarihi = DateTime.UtcNow,
                         AktifMi = true,
                         Marka = request.Marka,
                         Model = request.Model,
@@ -652,7 +652,7 @@ public class PlaywrightScraperService : IPlaywrightScraperService
                     }
                     catch { }
 
-                    ilan.IlanTarihi = DateTime.Today;
+                    ilan.IlanTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
 
                     if (ilan.Fiyat > 0)
                         ilanlar.Add(ilan);
@@ -845,19 +845,19 @@ public class PlaywrightScraperService : IPlaywrightScraperService
 
     private DateTime ParseTarih(string text)
     {
-        if (string.IsNullOrEmpty(text)) return DateTime.Today;
+        if (string.IsNullOrEmpty(text)) return MKFiloServis.Shared.Time.BusinessTime.Today;
 
         var lowerText = text.ToLower().Trim();
 
         if (lowerText.Contains("bugun") || lowerText.Contains("bugün"))
-            return DateTime.Today;
+            return MKFiloServis.Shared.Time.BusinessTime.Today;
 
         if (lowerText.Contains("dun") || lowerText.Contains("dün"))
-            return DateTime.Today.AddDays(-1);
+            return MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-1);
 
         var gunMatch = Regex.Match(lowerText, @"(\d+)\s*gun\s*once");
         if (gunMatch.Success && int.TryParse(gunMatch.Groups[1].Value, out var gun))
-            return DateTime.Today.AddDays(-gun);
+            return MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-gun);
 
         var tarihMatch = Regex.Match(text, @"(\d{2})[./](\d{2})[./](\d{4})");
         if (tarihMatch.Success)
@@ -876,7 +876,7 @@ public class PlaywrightScraperService : IPlaywrightScraperService
             }
         }
 
-        return DateTime.Today;
+        return MKFiloServis.Shared.Time.BusinessTime.Today;
     }
 
     private string Slugify(string text)

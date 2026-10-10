@@ -1,4 +1,4 @@
-﻿using OpenQA.Selenium;
+using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
 using WebDriverManager;
 using WebDriverManager.DriverConfigs.Impl;
@@ -241,7 +241,7 @@ public class SeleniumScraperService : ISeleniumScraperService
                     var ilan = new PiyasaArastirmaIlan
                     {
                         Kaynak = kaynak.Ad,
-                        ToplanmaTarihi = DateTime.Now,
+                        ToplanmaTarihi = DateTime.UtcNow,
                         AktifMi = true,
                         Marka = request.Marka,
                         Model = request.Model
@@ -317,7 +317,7 @@ public class SeleniumScraperService : ISeleniumScraperService
                         var dateEl = el.FindElement(By.CssSelector("td.searchResultsDateValue"));
                         ilan.IlanTarihi = ParseTarih(dateEl.Text);
                     }
-                    catch { ilan.IlanTarihi = DateTime.Today; }
+                    catch { ilan.IlanTarihi = MKFiloServis.Shared.Time.BusinessTime.Today; }
 
                     if (ilan.Fiyat > 0 && !string.IsNullOrEmpty(ilan.IlanUrl))
                         ilanlar.Add(ilan);
@@ -411,7 +411,7 @@ public class SeleniumScraperService : ISeleniumScraperService
                     var ilan = new PiyasaArastirmaIlan
                     {
                         Kaynak = kaynak.Ad,
-                        ToplanmaTarihi = DateTime.Now,
+                        ToplanmaTarihi = DateTime.UtcNow,
                         AktifMi = true,
                         Marka = request.Marka,
                         Model = request.Model,
@@ -485,7 +485,7 @@ public class SeleniumScraperService : ISeleniumScraperService
                     }
                     catch { }
 
-                    ilan.IlanTarihi = DateTime.Today;
+                    ilan.IlanTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
 
                     if (ilan.Fiyat > 0)
                     {
@@ -692,7 +692,7 @@ public class SeleniumScraperService : ISeleniumScraperService
             var ilan = new PiyasaArastirmaIlan
             {
                 Kaynak = kaynak.Ad,
-                ToplanmaTarihi = DateTime.Now,
+                ToplanmaTarihi = DateTime.UtcNow,
                 AktifMi = true,
                 Marka = request.Marka,
                 Model = request.Model,
@@ -739,7 +739,7 @@ public class SeleniumScraperService : ISeleniumScraperService
             }
             catch { }
 
-            ilan.IlanTarihi = DateTime.Today;
+            ilan.IlanTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
 
             return ilan.Fiyat > 0 ? ilan : null;
         }
@@ -961,19 +961,19 @@ public class SeleniumScraperService : ISeleniumScraperService
 
     private DateTime ParseTarih(string text)
     {
-        if (string.IsNullOrEmpty(text)) return DateTime.Today;
+        if (string.IsNullOrEmpty(text)) return MKFiloServis.Shared.Time.BusinessTime.Today;
 
         var lowerText = text.ToLower().Trim();
 
         if (lowerText.Contains("bugün") || lowerText.Contains("bugun"))
-            return DateTime.Today;
+            return MKFiloServis.Shared.Time.BusinessTime.Today;
 
         if (lowerText.Contains("dün") || lowerText.Contains("dun"))
-            return DateTime.Today.AddDays(-1);
+            return MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-1);
 
         var gunMatch = Regex.Match(lowerText, @"(\d+)\s*gün\s*önce");
         if (gunMatch.Success && int.TryParse(gunMatch.Groups[1].Value, out var gun))
-            return DateTime.Today.AddDays(-gun);
+            return MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-gun);
 
         var tarihMatch = Regex.Match(text, @"(\d{2})[./](\d{2})[./](\d{4})");
         if (tarihMatch.Success)
@@ -992,7 +992,7 @@ public class SeleniumScraperService : ISeleniumScraperService
             }
         }
 
-        return DateTime.Today;
+        return MKFiloServis.Shared.Time.BusinessTime.Today;
     }
 
     private async Task TryClickAsync(ChromeDriver driver, By selector)

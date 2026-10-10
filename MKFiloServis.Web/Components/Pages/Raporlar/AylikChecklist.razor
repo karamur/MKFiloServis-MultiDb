@@ -12,7 +12,7 @@
         <h3><i class="bi bi-clipboard-check me-2"></i>Aylık Checklist</h3>
         <div class="d-flex gap-2">
             <select class="form-select" style="width: 120px;" @bind="secilenYil" @bind:after="YenileData">
-                @for (int y = DateTime.Today.Year; y >= DateTime.Today.Year - 3; y--)
+                @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 3; y--)
                 {
                     <option value="@y">@y</option>
                 }
@@ -225,8 +225,8 @@
 </div>
 
 @code {
-    private int secilenYil = DateTime.Today.Year;
-    private int secilenAy = DateTime.Today.Month;
+    private int secilenYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    private int secilenAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
     private Models.ChecklistOzet? ozet;
     private bool isLoading = false;
 

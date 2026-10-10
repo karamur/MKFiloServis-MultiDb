@@ -159,9 +159,9 @@ public class HttpScraperService : IHttpScraperService
                         IlanUrl = ilanUrl,
                         Marka = request.Marka,
                         Model = request.Model,
-                        ToplanmaTarihi = DateTime.Now,
+                        ToplanmaTarihi = DateTime.UtcNow,
                         AktifMi = true,
-                        IlanTarihi = DateTime.Today
+                        IlanTarihi = MKFiloServis.Shared.Time.BusinessTime.Today
                     };
 
                     // Baslik - classifiedTitle icindeki text
@@ -374,9 +374,9 @@ public class HttpScraperService : IHttpScraperService
                 Kaynak = "Arabam.com",
                 Marka = request.Marka,
                 Model = request.Model,
-                ToplanmaTarihi = DateTime.Now,
+                ToplanmaTarihi = DateTime.UtcNow,
                 AktifMi = true,
-                IlanTarihi = DateTime.Today
+                IlanTarihi = MKFiloServis.Shared.Time.BusinessTime.Today
             };
 
             // ID - farkli property isimleri dene
@@ -604,9 +604,9 @@ public class HttpScraperService : IHttpScraperService
                     Marka = request.Marka,
                     Model = request.Model,
                     IlanBasligi = $"{request.Marka} {request.Model}",
-                    ToplanmaTarihi = DateTime.Now,
+                    ToplanmaTarihi = DateTime.UtcNow,
                     AktifMi = true,
-                    IlanTarihi = DateTime.Today,
+                    IlanTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
                     Fiyat = ParseFiyat(blockContent),
                     ModelYili = ParseYil(blockContent),
                     Kilometre = ParseKilometre(blockContent),
@@ -666,9 +666,9 @@ public class HttpScraperService : IHttpScraperService
                         Kaynak = "Otoshops",
                         Marka = request.Marka,
                         Model = request.Model,
-                        ToplanmaTarihi = DateTime.Now,
+                        ToplanmaTarihi = DateTime.UtcNow,
                         AktifMi = true,
-                        IlanTarihi = DateTime.Today
+                        IlanTarihi = MKFiloServis.Shared.Time.BusinessTime.Today
                     };
 
                     // URL ve ID
@@ -759,9 +759,9 @@ public class HttpScraperService : IHttpScraperService
                         Kaynak = "Cardata",
                         Marka = request.Marka,
                         Model = request.Model,
-                        ToplanmaTarihi = DateTime.Now,
+                        ToplanmaTarihi = DateTime.UtcNow,
                         AktifMi = true,
-                        IlanTarihi = DateTime.Today,
+                        IlanTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
                         SaticiTipi = "Galeri"
                     };
 
@@ -926,19 +926,19 @@ public class HttpScraperService : IHttpScraperService
 
     private DateTime ParseTarih(string text)
     {
-        if (string.IsNullOrEmpty(text)) return DateTime.Today;
+        if (string.IsNullOrEmpty(text)) return MKFiloServis.Shared.Time.BusinessTime.Today;
 
         var lowerText = text.ToLower().Trim();
 
         if (lowerText.Contains("bug�n") || lowerText.Contains("bugun"))
-            return DateTime.Today;
+            return MKFiloServis.Shared.Time.BusinessTime.Today;
 
         if (lowerText.Contains("d�n") || lowerText.Contains("dun"))
-            return DateTime.Today.AddDays(-1);
+            return MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-1);
 
         var gunMatch = Regex.Match(lowerText, @"(\d+)\s*(?:g�n|gun)\s*(?:�nce|once)");
         if (gunMatch.Success && int.TryParse(gunMatch.Groups[1].Value, out var gun))
-            return DateTime.Today.AddDays(-gun);
+            return MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-gun);
 
         var tarihMatch = Regex.Match(text, @"(\d{2})[\./](\d{2})[\./](\d{4})");
         if (tarihMatch.Success)
@@ -957,7 +957,7 @@ public class HttpScraperService : IHttpScraperService
             }
         }
 
-        return DateTime.Today;
+        return MKFiloServis.Shared.Time.BusinessTime.Today;
     }
 
     #endregion

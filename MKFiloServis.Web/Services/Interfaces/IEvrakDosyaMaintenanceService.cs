@@ -20,7 +20,7 @@ public interface IEvrakDosyaMaintenanceService
 
 public sealed record EvrakDosyaMaintenanceReport
 {
-    public DateTime OlusturmaTarihi { get; init; } = DateTime.Now;
+    public DateTime OlusturmaTarihi { get; init; } = DateTime.UtcNow;
     public int ToplamEvrakDosya { get; init; }
     public int KayipSayisi { get; init; }
     public int SaglamSayisi { get; init; }

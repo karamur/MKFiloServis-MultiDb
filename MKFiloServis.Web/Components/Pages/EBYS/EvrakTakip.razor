@@ -176,7 +176,7 @@
                 <div class="card-body p-2" style="max-height:500px; overflow-y:auto;">
                     @foreach (var evrak in cevapBekleyenEvraklar.Take(10))
                     {
-                        var gecikmisMi = evrak.CevapSuresi.HasValue && evrak.CevapSuresi.Value < DateTime.Now;
+                        var gecikmisMi = evrak.CevapSuresi.HasValue && evrak.CevapSuresi.Value < MKFiloServis.Shared.Time.BusinessTime.Now;
                         <div class="card mb-2 border-start border-4 @(gecikmisMi ? "border-danger" : "border-warning")">
                             <div class="card-body py-2 px-3">
                                 <div class="d-flex justify-content-between align-items-start">

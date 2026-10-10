@@ -34,7 +34,7 @@ public class AylikOdemeService : IAylikOdemeService
     public async Task<List<AylikOdemePlani>> GetAktifPlanlariAsync(int firmaId)
     {
         using var context = await _contextFactory.CreateDbContextAsync();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
 
         return await context.AylikOdemePlanlari
             .Include(p => p.Cari)
@@ -115,7 +115,7 @@ public class AylikOdemeService : IAylikOdemeService
     public async Task<List<AylikOdemeGerceklesen>> GetGecikmiOdemeleriAsync(int firmaId)
     {
         using var context = await _contextFactory.CreateDbContextAsync();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         
         var veriler = await context.AylikOdemeGerceklesenler
             .Include(o => o.Plan)
@@ -166,7 +166,7 @@ public class AylikOdemeService : IAylikOdemeService
         }
 
         gerceklesen.OdenenTutar += tutar;
-        gerceklesen.OdemeTarihi = odemeTarihi ?? DateTime.Now;
+        gerceklesen.OdemeTarihi = odemeTarihi ?? MKFiloServis.Shared.Time.BusinessTime.Now;
         gerceklesen.Durum = gerceklesen.OdenenTutar >= gerceklesen.PlanlananTutar 
             ? OdemeDurumu.Odendi 
             : OdemeDurumu.KismiOdendi;
@@ -273,7 +273,7 @@ public class AylikOdemeService : IAylikOdemeService
 
     public async Task<decimal> GetBuAyOdenecekTutarAsync(int firmaId)
     {
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         return await GetAylikToplamTutarAsync(firmaId, bugun.Year, bugun.Month);
     }
 

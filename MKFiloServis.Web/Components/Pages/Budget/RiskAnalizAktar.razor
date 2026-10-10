@@ -25,7 +25,7 @@
                 }
             </select>
             <select class="form-select form-select-sm" style="width: 100px;" @bind="secilenYil" @bind:after="YenileAsync">
-                @for (int y = DateTime.Today.Year + 1; y >= DateTime.Today.Year - 3; y--)
+                @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year + 1; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 3; y--)
                 {
                     <option value="@y">@y</option>
                 }
@@ -400,7 +400,7 @@
 @code {
     private BudgetRiskAnalizi? analiz;
     private List<Firma> firmalar = new();
-    private int secilenYil = DateTime.Today.Year;
+    private int secilenYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
     private int? secilenAy;
     private int secilenFirmaId = 0;
     private bool isLoading = false;
@@ -562,7 +562,7 @@
 
             var bytes = System.Text.Encoding.UTF8.GetBytes(csv.ToString());
             var base64 = Convert.ToBase64String(bytes);
-            var fileName = $"ButceRiskAnalizi_{secilenYil}_{DateTime.Now:yyyyMMdd}.csv";
+            var fileName = $"ButceRiskAnalizi_{secilenYil}_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.csv";
 
             await JS.InvokeVoidAsync("eval", $@"
                 var a = document.createElement('a');

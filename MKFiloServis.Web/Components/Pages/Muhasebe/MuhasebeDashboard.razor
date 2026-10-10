@@ -317,8 +317,8 @@
             hesapSayisi = await context.MuhasebeHesaplari.CountAsync();
             hesapPlaniVar = hesapSayisi > 0;
 
-            var buAy = DateTime.Today.Month;
-            var buYil = DateTime.Today.Year;
+            var buAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
+            var buYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
             var baslangic = new DateTime(buYil, buAy, 1);
             var bitis = baslangic.AddMonths(1);
             var fisler = await context.MuhasebeFisleri

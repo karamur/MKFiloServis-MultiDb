@@ -202,7 +202,7 @@
         {
             Aktif = true,
             KomisyonOrani = 2,
-            PersonelKodu = $"SP{DateTime.Now:yyMMdd}{new Random().Next(100, 999)}"
+            PersonelKodu = $"SP{MKFiloServis.Shared.Time.BusinessTime.Now:yyMMdd}{new Random().Next(100, 999)}"
         };
         showModal = true;
     }

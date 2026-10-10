@@ -156,7 +156,7 @@
                                     </div>
                                     <div>
                                         <span class="badge bg-secondary me-2">@islem.ErisimSayisi kez</span>
-                                        <small class="text-muted">@islem.ErisimZamani.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</small>
+                                        <small class="text-muted">@MKFiloServis.Shared.Time.BusinessTime.LocalAt(islem.ErisimZamani).ToString("dd.MM.yyyy HH:mm")</small>
                                     </div>
                                 </a>
                             }

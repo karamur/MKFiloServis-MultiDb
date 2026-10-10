@@ -531,7 +531,7 @@
         {
             Provider = SmsProvider.NetGsm,
             Aktif = false,
-            CreatedAt = DateTime.Now
+            CreatedAt = DateTime.UtcNow
         };
         showAyarModal = true;
     }
@@ -671,7 +671,7 @@
         {
             Tip = SmsTipi.Bildirim,
             Aktif = true,
-            CreatedAt = DateTime.Now
+            CreatedAt = DateTime.UtcNow
         };
         showSablonModal = true;
     }

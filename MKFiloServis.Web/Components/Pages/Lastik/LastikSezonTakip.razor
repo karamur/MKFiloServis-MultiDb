@@ -514,7 +514,7 @@
     private static int? GetGecenGun(DateTime? tarih)
     {
         if (!tarih.HasValue) return null;
-        return Math.Max(0, (DateTime.Today - tarih.Value.Date).Days);
+        return Math.Max(0, (MKFiloServis.Shared.Time.BusinessTime.Today - tarih.Value.Date).Days);
     }
 }
 

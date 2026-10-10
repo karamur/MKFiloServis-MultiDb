@@ -32,7 +32,7 @@
                 <div class="col-md-2">
                     <label class="form-label small">Yıl</label>
                     <select class="form-select form-select-sm" @bind="yil" @bind:after="LoadAsync">
-                        @for (int y = DateTime.Today.Year + 1; y >= DateTime.Today.Year - 5; y--)
+                        @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year + 1; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 5; y--)
                         {
                             <option value="@y">@y</option>
                         }
@@ -223,8 +223,8 @@
 
 @code {
     private bool yukleniyor = true;
-    private int yil = DateTime.Today.Year;
-    private int ay = DateTime.Today.Month;
+    private int yil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    private int ay = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
 
     private decimal genelSkor;
     private List<KontrolItem> kontroller = new();
@@ -239,13 +239,13 @@
 
     private async Task BuAy()
     {
-        yil = DateTime.Today.Year; ay = DateTime.Today.Month;
+        yil = MKFiloServis.Shared.Time.BusinessTime.Today.Year; ay = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
         await LoadAsync();
     }
 
     private async Task OncekiAy()
     {
-        var d = DateTime.Today.AddMonths(-1);
+        var d = MKFiloServis.Shared.Time.BusinessTime.Today.AddMonths(-1);
         yil = d.Year; ay = d.Month;
         await LoadAsync();
     }
@@ -329,12 +329,12 @@
                 }).ToList();
 
             // Eksik puantaj girişi (sefer tarihinde durum hala Planlı olanlar)
-            var eksikDurumlu = seferler.Count(s => s.Durum == CalismaDurum.Planli && s.CalismaTarihi <= DateTime.Today);
+            var eksikDurumlu = seferler.Count(s => s.Durum == CalismaDurum.Planli && s.CalismaTarihi <= MKFiloServis.Shared.Time.BusinessTime.Today);
 
             // Vadesi geçen alacaklar
             var odenmemis = (await FaturaService.GetOdenmemisFaturalarAsync()) ?? new();
             var vadesiGecen = odenmemis.Count(f => f.VadeTarihi.HasValue
-                                                   && f.VadeTarihi.Value.Date < DateTime.Today
+                                                   && f.VadeTarihi.Value.Date < MKFiloServis.Shared.Time.BusinessTime.Today
                                                    && f.KalanTutar > 0
                                                    && f.Durum != FaturaDurum.IptalEdildi);
 

@@ -28,8 +28,8 @@ public enum TopluFaturaDurum
 /// </summary>
 public class TopluFaturaFiltre
 {
-    public int Yil { get; set; } = DateTime.Now.Year;
-    public int Ay { get; set; } = DateTime.Now.Month;
+    public int Yil { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    public int Ay { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
     public TopluFaturaKaynak Kaynak { get; set; } = TopluFaturaKaynak.Puantaj;
     public FaturaYonu FaturaYonu { get; set; } = FaturaYonu.Giden; // Giden = Satış, Gelen = Alış
     public int? CariId { get; set; } // Belirli bir cari için
@@ -53,7 +53,7 @@ public class TopluFaturaOnizleme
     // Fatura bilgileri
     public FaturaTipi FaturaTipi { get; set; } = FaturaTipi.SatisFaturasi;
     public EFaturaTipi EFaturaTipi { get; set; } = EFaturaTipi.EArsiv;
-    public DateTime FaturaTarihi { get; set; } = DateTime.Now;
+    public DateTime FaturaTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Now;
     public DateTime? VadeTarihi { get; set; }
     public int KdvOrani { get; set; } = 20;
     

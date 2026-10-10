@@ -455,7 +455,7 @@
 
     private void FaturaSatiriEkle()
     {
-        _faturaSatirlari.Add(new FaturaSatiri { FaturaTarihi = DateTime.Today });
+        _faturaSatirlari.Add(new FaturaSatiri { FaturaTarihi = MKFiloServis.Shared.Time.BusinessTime.Today });
     }
 
     private void FaturaSatiriSil(int index)
@@ -632,7 +632,7 @@
     private List<OdemePlanSatiri> OdemePlaniHesapla()
     {
         var liste = new List<OdemePlanSatiri>();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
 
         var faturaAyGruplari = _faturaSatirlari
             .Where(x => x.FaturaTarihi.HasValue)

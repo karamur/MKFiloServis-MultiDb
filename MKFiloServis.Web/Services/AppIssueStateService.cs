@@ -22,7 +22,7 @@ public class AppIssueStateService
     {
         LastReport = new AppIssueReport
         {
-            ErrorTime = DateTime.Now,
+            ErrorTime = DateTime.UtcNow,
             CurrentPage = CurrentPage,
             PreviousPage = PreviousPage,
             ErrorMessage = exception.Message,

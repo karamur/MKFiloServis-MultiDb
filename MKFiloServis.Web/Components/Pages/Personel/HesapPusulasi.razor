@@ -32,7 +32,7 @@
                 <div class="col-md-2">
                     <label class="form-label small mb-1">Yıl</label>
                     <select class="form-select form-select-sm" @bind="secilenYil" @bind:after="YilDegisti">
-                        @for (int y = DateTime.Now.Year; y >= DateTime.Now.Year - 5; y--)
+                        @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 5; y--)
                         {
                             <option value="@y">@y</option>
                         }
@@ -561,7 +561,7 @@
                 }
 
                 <div class="pusula-footer">
-                    <small>Düzenlenme Tarihi: @DateTime.Now.ToString("dd.MM.yyyy") | @(secilenBordro.Onaylandi ? $"Onay: {secilenBordro.OnayTarihi?.ToString("dd.MM.yyyy")} - {secilenBordro.OnaylayanKullanici}" : "Onay Bekliyor")</small>
+                    <small>Düzenlenme Tarihi: @MKFiloServis.Shared.Time.BusinessTime.Now.ToString("dd.MM.yyyy") | @(secilenBordro.Onaylandi ? $"Onay: {secilenBordro.OnayTarihi?.ToString("dd.MM.yyyy")} - {secilenBordro.OnaylayanKullanici}" : "Onay Bekliyor")</small>
                 </div>
             </div>
         }
@@ -596,7 +596,7 @@
     private List<BordroDetay> yazdirmaListesi = new();
     private Bordro? secilenBordro;
 
-    private int secilenYil = DateTime.Now.Year;
+    private int secilenYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
     private int secilenFirmaId = 0;
     private BordroTipi secilenTip = BordroTipi.Normal;
     private int secilenBordroId = 0;

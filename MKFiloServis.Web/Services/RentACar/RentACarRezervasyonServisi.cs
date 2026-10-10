@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
@@ -284,7 +284,7 @@ public sealed class RentACarRezervasyonServisi : IRentACarRezervasyonServisi
             }
 
             await KaraListeKontrolAsync(context, firmaId, kiralama.MusteriId, cancellationToken);
-            kiralama.GercekBaslangicTarihi = DateTime.Now;
+            kiralama.GercekBaslangicTarihi = DateTime.UtcNow;
             kiralama.BaslangicKm = bilgi.Kilometre;
             kiralama.TeslimYakitSeviyesi = bilgi.YakitSeviyesi.Trim();
             kiralama.TeslimHasarNotlari = Temizle(bilgi.HasarNotlari);
@@ -333,7 +333,7 @@ public sealed class RentACarRezervasyonServisi : IRentACarRezervasyonServisi
                 throw new InvalidOperationException("Kiralama kaydına bağlı araç bulunamadı.");
             }
 
-            kiralama.GercekBitisTarihi = DateTime.Now;
+            kiralama.GercekBitisTarihi = DateTime.UtcNow;
             kiralama.BitisKm = bilgi.Kilometre;
             kiralama.IadeYakitSeviyesi = bilgi.YakitSeviyesi.Trim();
             kiralama.IadeHasarNotlari = Temizle(bilgi.HasarNotlari);

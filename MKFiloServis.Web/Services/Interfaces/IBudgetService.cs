@@ -120,7 +120,7 @@ public class OdemeYapRequest
     public MKFiloServis.Shared.Entities.BudgetOdemeTipi OdemeTipi { get; set; }
     public int? BankaHesapId { get; set; }
     public string? Aciklama { get; set; }
-    public DateTime OdemeTarihi { get; set; } = DateTime.Today;
+    public DateTime OdemeTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public decimal? KismiOdemeTutari { get; set; }
     public Guid? KrediTaksitGrupId { get; set; } // Kredi kartı için ilişkili kredi
     public int? KrediKartiOdemeAy { get; set; }
@@ -265,7 +265,7 @@ public class KrediTaksitDetay
 public class KismiOdemeRequest
 {
     public decimal OdenecekTutar { get; set; }
-    public DateTime OdemeTarihi { get; set; } = DateTime.Today;
+    public DateTime OdemeTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public int? BankaHesapId { get; set; }
     public MKFiloServis.Shared.Entities.BudgetOdemeTipi OdemeTipi { get; set; } = MKFiloServis.Shared.Entities.BudgetOdemeTipi.Kasa;
     public string? Aciklama { get; set; }
@@ -288,7 +288,7 @@ public class BudgetRiskAnalizi
 {
     public int Yil { get; set; }
     public int? Ay { get; set; }
-    public DateTime AnalizTarihi { get; set; } = DateTime.Now;
+    public DateTime AnalizTarihi { get; set; } = DateTime.UtcNow;
 
     // Genel Özet
     public decimal ToplamBekleyen { get; set; }

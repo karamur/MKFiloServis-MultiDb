@@ -265,7 +265,7 @@
         cariler = await CariService.GetAllAsync();
         hesaplar = await BankaHesapService.GetActiveAsync();
 
-        var endDate = DateTime.Today;
+        var endDate = MKFiloServis.Shared.Time.BusinessTime.Today;
         var startDate = endDate.AddDays(-30);
         servisCalismalar = await ServisCalismaService.GetByDateRangeAsync(startDate, endDate);
 
@@ -281,7 +281,7 @@
             if (aracId.HasValue)
                 masraf.AracId = aracId.Value;
 
-            masraf.MasrafTarihi = DateTime.Today;
+            masraf.MasrafTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
         }
         else
         {

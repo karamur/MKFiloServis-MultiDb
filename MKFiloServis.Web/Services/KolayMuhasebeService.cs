@@ -1,4 +1,4 @@
-﻿using MKFiloServis.Shared.Entities;
+using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Models;
 using Microsoft.EntityFrameworkCore;
@@ -1716,7 +1716,7 @@ public class KolayMuhasebeService : IKolayMuhasebeService
 
     private async Task<string> GenerateFaturaNo(ApplicationDbContext context, string prefix)
     {
-        var yil = DateTime.Now.Year;
+        var yil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
         var lastNo = await context.Faturalar
             .Where(f => f.FaturaNo.StartsWith($"{prefix}{yil}"))
             .OrderByDescending(f => f.FaturaNo)
@@ -1732,8 +1732,8 @@ public class KolayMuhasebeService : IKolayMuhasebeService
 
     private async Task<string> GenerateIslemNo(ApplicationDbContext context)
     {
-        var yil = DateTime.Now.Year;
-        var ay = DateTime.Now.Month;
+        var yil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+        var ay = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
         var prefix = $"ISL{yil}{ay:D2}";
 
         var lastNo = await context.BankaKasaHareketleri
@@ -1774,7 +1774,7 @@ public class KolayMuhasebeService : IKolayMuhasebeService
             };
 
         // Yeni stok kodu üret
-        var yil = DateTime.Now.Year;
+        var yil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
         var sayi = await context.StokKartlari.CountAsync() + 1;
         var stokKodu = $"STK{yil % 100:D2}{sayi:D5}";
 

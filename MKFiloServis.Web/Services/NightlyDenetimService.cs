@@ -21,7 +21,7 @@ public class NightlyDenetimService : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // İlk çalıştırmayı 02:00'a kadar bekle
-        var now = DateTime.Now;
+        var now = MKFiloServis.Shared.Time.BusinessTime.Now;
         var nextRun = new DateTime(now.Year, now.Month, now.Day, 2, 0, 0);
         if (now > nextRun) nextRun = nextRun.AddDays(1);
         var delay = nextRun - now;
@@ -54,7 +54,7 @@ public class NightlyDenetimService : BackgroundService
 
         // Tüm aktif firmalar için çalıştır
         var firmalar = await db.Firmalar.Where(f => !f.IsDeleted).Select(f => f.Id).ToListAsync(ct);
-        var now = DateTime.Now;
+        var now = MKFiloServis.Shared.Time.BusinessTime.Now;
         int ay = now.Month, yil = now.Year;
 
         _logger.LogInformation("Gece denetimi başladı: {FirmaCount} firma, {Yil}/{Ay}", firmalar.Count, yil, ay);

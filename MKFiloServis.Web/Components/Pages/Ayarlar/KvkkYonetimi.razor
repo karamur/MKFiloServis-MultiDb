@@ -244,7 +244,7 @@
             var json = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(veri,
                 new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
             var b64 = Convert.ToBase64String(json);
-            await JS.InvokeVoidAsync("downloadBase64File", b64, $"kvkk-veri-{seciliTur}-{DateTime.Now:yyyyMMddHHmm}.json", "application/json");
+            await JS.InvokeVoidAsync("downloadBase64File", b64, $"kvkk-veri-{seciliTur}-{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMddHHmm}.json", "application/json");
             Toast.ShowSuccess("Veri başarıyla dışa aktarıldı.");
         }
         catch (Exception ex)

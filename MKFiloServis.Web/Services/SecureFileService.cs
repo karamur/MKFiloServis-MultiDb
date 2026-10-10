@@ -11,6 +11,8 @@ public sealed class SecureFileService : ISecureFileService
 {
     private readonly IFileProtector _fileProtector;
     private readonly IFileProtector _legacyAesProtector;
+    private readonly IObjectStorageService _objectStorage;
+    private readonly bool _usesRemoteObjectStorage;
     // Eski IDataProtector ile sifrelenmis dosyalar icin fallback (gecis donemi)
     private readonly IDataProtector _legacyProtector;
     private readonly string _storageRoot;        // C:\KOAFiloServis_yedekleme\uploads
@@ -28,9 +30,13 @@ public sealed class SecureFileService : ISecureFileService
         ILogger<SecureFileService> logger,
         IDecryptionRecoveryTracker recoveryTracker,
         FileCleanupJournal cleanupJournal,
-        IServiceScopeFactory scopeFactory)
+        IServiceScopeFactory scopeFactory,
+        IObjectStorageService? objectStorage = null)
     {
         _fileProtector = fileProtector;
+        _objectStorage = objectStorage ?? new LocalObjectStorageService(
+            environment, Microsoft.Extensions.Logging.Abstractions.NullLogger<LocalObjectStorageService>.Instance);
+        _usesRemoteObjectStorage = string.Equals(_objectStorage.GetStorageProvider(), "S3", StringComparison.OrdinalIgnoreCase);
         _legacyAesProtector = new AesGcmFileProtector(legacyMasterKeyProvider);
         _legacyProtector = dataProtectionProvider.CreateProtector("MKFiloServis.SecureFileStorage.v1");
         _storageRoot = AppStoragePaths.GetUploadsRoot(environment.ContentRootPath);
@@ -57,6 +63,13 @@ public sealed class SecureFileService : ISecureFileService
         var fullPath = ResolveFullPath(relativePath);
 
         var encrypted = _fileProtector.Protect(content);
+
+        if (_usesRemoteObjectStorage)
+        {
+            await _objectStorage.UploadAsync(relativePath, encrypted, "application/octet-stream", cancellationToken);
+            _logger.LogInformation("Şifreli dosya S3 deposuna kaydedildi: {RelativePath} ({Size} bytes)", relativePath, content.Length);
+            return relativePath;
+        }
 
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         var temporaryPath = fullPath + ".uploading-" + Guid.NewGuid().ToString("N") + ".tmp";
@@ -207,6 +220,13 @@ public sealed class SecureFileService : ISecureFileService
                 }
             }
             cancellationToken.ThrowIfCancellationRequested();
+            if (_usesRemoteObjectStorage)
+            {
+                await QuarantineRemoteIfPresentAsync(pendingPath, fullPath, cancellationToken);
+                await _cleanupJournal.CompleteRequestAsync(request, cancellationToken);
+                _logger.LogInformation("Referanssız S3 nesnesi geri alınabilir karantinaya taşındı: {RelativePath}", pendingPath);
+                return;
+            }
             QuarantineIfPresent(fullPath);
             _logger.LogInformation("Referanssız şifreli dosya geri alınabilir karantinaya taşındı: {RelativePath}", relativePath);
             await _cleanupJournal.CompleteRequestAsync(request, cancellationToken);
@@ -233,6 +253,11 @@ public sealed class SecureFileService : ISecureFileService
             return false;
 
         cancellationToken.ThrowIfCancellationRequested();
+        if (_usesRemoteObjectStorage)
+        {
+            await QuarantineRemoteIfPresentAsync(pendingPath, fullPath, cancellationToken);
+            return true;
+        }
         QuarantineIfPresent(fullPath);
         return true;
     }
@@ -244,10 +269,6 @@ public sealed class SecureFileService : ISecureFileService
         CancellationToken cancellationToken = default)
     {
         var originalSourceFull = ResolveFullPath(NormalizeRelativePath(sourceRelativePath));
-        var sourceFull = ResolveReadableFullPath(originalSourceFull);
-        if (!File.Exists(sourceFull))
-            throw new FileNotFoundException($"Kaynak dosya bulunamadı: {sourceRelativePath}");
-
         var targetDir = NormalizeRelativePath(targetDirectory);
         var safeName = string.Concat(Path.GetFileNameWithoutExtension(targetFileName)
             .Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
@@ -256,6 +277,21 @@ public sealed class SecureFileService : ISecureFileService
 
         var relativeResult = NormalizeRelativePath(Path.Combine(targetDir, fileName));
         var targetFull = ResolveFullPath(relativeResult);
+
+        if (_usesRemoteObjectStorage)
+        {
+            var sourceKey = NormalizeRelativePath(sourceRelativePath);
+            var raw = await ReadRemoteOrLocalRawAsync(sourceKey, originalSourceFull, cancellationToken)
+                ?? throw new FileNotFoundException($"Kaynak dosya bulunamadı: {sourceRelativePath}");
+            await _objectStorage.UploadAsync(relativeResult, raw, "application/octet-stream", cancellationToken);
+            _logger.LogInformation("Şifreli S3 nesnesi kopyalandı: {Source} -> {Target}", sourceRelativePath, relativeResult);
+            return relativeResult;
+        }
+
+        var sourceFull = ResolveReadableFullPath(originalSourceFull);
+
+        if (!File.Exists(sourceFull))
+            throw new FileNotFoundException($"Kaynak dosya bulunamadı: {sourceRelativePath}");
 
         Directory.CreateDirectory(Path.GetDirectoryName(targetFull)!);
 
@@ -297,12 +333,22 @@ public sealed class SecureFileService : ISecureFileService
             return Task.FromResult(false);
 
         var fullPath = ResolveFullPath(NormalizeRelativePath(relativePath));
-        return Task.FromResult(File.Exists(fullPath) || File.Exists(GetQuarantinePath(fullPath)));
+        if (_usesRemoteObjectStorage)
+        {
+            var key = NormalizeRelativePath(relativePath);
+            return ExistsRemoteOrLocalAsync(key, fullPath, cancellationToken);
+        }
+        return Task.FromResult(LocalFileExistsOrThrow(fullPath) || LocalFileExistsOrThrow(GetQuarantinePath(fullPath)));
     }
 
     private async Task<byte[]?> ReadRawAsync(string relativePath, CancellationToken cancellationToken)
     {
         var fullPath = ResolveFullPath(NormalizeRelativePath(relativePath));
+        if (_usesRemoteObjectStorage)
+        {
+            var key = NormalizeRelativePath(relativePath);
+            return await ReadRemoteOrLocalRawAsync(key, fullPath, cancellationToken);
+        }
         try
         {
             return await File.ReadAllBytesAsync(fullPath, cancellationToken);
@@ -316,6 +362,71 @@ public sealed class SecureFileService : ISecureFileService
         }
         catch (FileNotFoundException) { return null; }
         catch (DirectoryNotFoundException) { return null; }
+    }
+
+    private async Task<bool> ExistsRemoteOrLocalAsync(string key, string localPath, CancellationToken cancellationToken)
+    {
+        if (await _objectStorage.ExistsAsync(key, cancellationToken))
+            return true;
+        if (await _objectStorage.ExistsAsync(GetRemoteQuarantineKey(key), cancellationToken))
+            return true;
+        return LocalFileExistsOrThrow(localPath) || LocalFileExistsOrThrow(GetQuarantinePath(localPath));
+    }
+
+    private async Task<byte[]?> ReadRemoteOrLocalRawAsync(string key, string localPath, CancellationToken cancellationToken)
+    {
+        var remoteContent = await _objectStorage.DownloadAsync(key, cancellationToken)
+            ?? await _objectStorage.DownloadAsync(GetRemoteQuarantineKey(key), cancellationToken);
+        if (remoteContent is not null)
+            return remoteContent;
+
+        try
+        {
+            return await File.ReadAllBytesAsync(localPath, cancellationToken);
+        }
+        catch (FileNotFoundException) { }
+        catch (DirectoryNotFoundException) { }
+
+        try
+        {
+            return await File.ReadAllBytesAsync(GetQuarantinePath(localPath), cancellationToken);
+        }
+        catch (FileNotFoundException) { return null; }
+        catch (DirectoryNotFoundException) { return null; }
+    }
+
+    private async Task QuarantineRemoteIfPresentAsync(string key, string localPath, CancellationToken cancellationToken)
+    {
+        if (!key.EndsWith(".enc", StringComparison.OrdinalIgnoreCase))
+        {
+            if (await _objectStorage.ExistsAsync(key, cancellationToken) || LocalFileExistsOrThrow(localPath))
+                throw new InvalidOperationException("Düz dosya S3 SecureFileService karantinasına alınamaz; legacy dosya geçişi ayrı yürütülmelidir.");
+            return;
+        }
+
+        var quarantineKey = GetRemoteQuarantineKey(key);
+        var content = await _objectStorage.DownloadAsync(key, cancellationToken);
+        if (content is null)
+        {
+            if (LocalFileExistsOrThrow(localPath))
+                QuarantineIfPresent(localPath);
+            return;
+        }
+
+        if (!await _objectStorage.ExistsAsync(quarantineKey, cancellationToken))
+            await _objectStorage.UploadAsync(quarantineKey, content, "application/octet-stream", cancellationToken);
+
+        // Quarantine is durable before the active key is removed. If removal fails,
+        // the cleanup journal retries and keeps the recoverable copy intact.
+        await _objectStorage.DeleteAsync(key, cancellationToken);
+    }
+
+    private static string GetRemoteQuarantineKey(string key)
+    {
+        var normalized = NormalizeRelativePath(key);
+        if (string.IsNullOrWhiteSpace(normalized) || normalized.Split('/').Any(part => part is "." or ".."))
+            throw new InvalidOperationException("S3 karantina anahtarı geçersiz.");
+        return ".deleted-file-quarantine-v1/" + normalized;
     }
 
     // Kalıcı DB yoluna yeni bir referans, referans kontrolü ile silme arasına girebilir.
@@ -334,13 +445,13 @@ public sealed class SecureFileService : ISecureFileService
     }
 
     private string ResolveReadableFullPath(string fullPath) =>
-        File.Exists(fullPath) ? fullPath : GetQuarantinePath(fullPath);
+        LocalFileExistsOrThrow(fullPath) ? fullPath : GetQuarantinePath(fullPath);
 
     private void QuarantineIfPresent(string fullPath)
     {
         if (!fullPath.EndsWith(".enc", StringComparison.OrdinalIgnoreCase))
         {
-            if (File.Exists(fullPath))
+            if (LocalFileExistsOrThrow(fullPath))
                 throw new InvalidOperationException("Düz dosya SecureFileService karantinasına alınamaz; eski dosya geçişi ve LegacyFileCleanupService kullanılmalıdır.");
             return;
         }
@@ -356,6 +467,16 @@ public sealed class SecureFileService : ISecureFileService
         catch (DirectoryNotFoundException) when (File.Exists(quarantinePath)) { }
         catch (FileNotFoundException) when (!File.Exists(fullPath)) { }
         catch (DirectoryNotFoundException) when (!File.Exists(fullPath)) { }
+    }
+
+    private static bool LocalFileExistsOrThrow(string path)
+    {
+        try
+        {
+            return !File.GetAttributes(path).HasFlag(FileAttributes.Directory);
+        }
+        catch (FileNotFoundException) { return false; }
+        catch (DirectoryNotFoundException) { return false; }
     }
 
     private string ResolveFullPath(string relativePath)

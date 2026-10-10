@@ -354,7 +354,7 @@
 </div>
 
 @code {
-    private DateTime raporTarihi = DateTime.Today;
+    private DateTime raporTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
     private string seciliCariTipi = "";
     private int seciliCariId = 0;
     private bool sadeceBorcluCariler = true;

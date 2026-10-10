@@ -57,7 +57,7 @@ public sealed class EvrakArsivBackfillService : IEvrakArsivBackfillService
     {
         var rapor = new EvrakArsivBackfillRaporu
         {
-            Baslangic = DateTime.Now,
+            Baslangic = DateTime.UtcNow,
             DryRun = dryRun
         };
 
@@ -270,7 +270,7 @@ public sealed class EvrakArsivBackfillService : IEvrakArsivBackfillService
             rapor.Satirlar.Add(satir);
         }
 
-        rapor.Bitis = DateTime.Now;
+        rapor.Bitis = DateTime.UtcNow;
         _logger.LogInformation(
             "Backfill tamamlandı. DryRun={DryRun}. Arac: {AracOk}/{AracTotal}, Personel: {PersonelOk}/{PersonelTotal}",
             dryRun, rapor.AracBasarili, rapor.AracToplam, rapor.PersonelBasarili, rapor.PersonelToplam);

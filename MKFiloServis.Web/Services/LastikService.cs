@@ -608,7 +608,7 @@ public class LastikService : ILastikService
             .ToDictionary(g => g.Key, g => g.ToList());
 
         // Aktif sezon ayarını belirle (Dönem sütunu için)
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var sezonAyarlari = await ctx.LastikSezonAyarlari
             .AsNoTracking()
             .Where(a => !a.IsDeleted && a.Aktif)
@@ -1191,7 +1191,7 @@ public class LastikService : ILastikService
             .Where(a => !a.IsDeleted && a.Aktif)
             .ToListAsync();
 
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         LastikSezonAyar? aktif = null;
         LastikSezonAyar? sonraki = null;
         int? kalanGun = null;

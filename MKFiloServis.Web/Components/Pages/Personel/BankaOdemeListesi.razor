@@ -49,7 +49,7 @@
         </div>
         <div class="d-flex gap-2">
             <select class="form-select form-select-sm" style="width: 120px;" @bind="secilenYil" @bind:after="YenileData">
-                @for (int y = DateTime.Now.Year; y >= DateTime.Now.Year - 3; y--)
+                @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 3; y--)
                 {
                     <option value="@y">@y</option>
                 }
@@ -503,8 +503,8 @@
 }
 
 @code {
-    private int secilenYil = DateTime.Now.Year;
-    private int secilenAy = DateTime.Now.Month;
+    private int secilenYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    private int secilenAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
     private string secilenGorev = "";
     private string sgkBordroFiltre = "";
     private bool sgkAyriListedeGoster = false;
@@ -521,14 +521,14 @@
 
     // Toplu Tahakkuk Modal
     private bool showTahakkukModal = false;
-    private DateTime tahakkukTarihi = DateTime.Today;
+    private DateTime tahakkukTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
     private string tahakkukAciklama = "";
 
     // Toplu Ödeme Modal
     private bool showOdemeModal = false;
     private List<BankaHesap> bankaHesaplari = new();
     private int secilenBankaHesapId = 0;
-    private DateTime odemeTarihi = DateTime.Today;
+    private DateTime odemeTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
     private string odemeBelgeNo = "";
     private string odemeAciklama = "";
 
@@ -912,7 +912,7 @@
 
     private async Task TopluOdemeModalAc()
     {
-        odemeTarihi = DateTime.Today;
+        odemeTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
         odemeAciklama = $"{new DateTime(secilenYil, secilenAy, 1):MMMM yyyy} maaş ödemesi";
         odemeBelgeNo = $"MAAS-{secilenYil}{secilenAy:00}";
         // IBAN'ı olan personelleri otomatik seç (BankayaYatan=0 olsa da SGK'lılar listede)
@@ -1055,7 +1055,7 @@
 
             // Toplu ödeme için grup ID oluştur
             var odemeGrupId = Guid.NewGuid();
-            var islemNoBase = $"MAAS-{secilenYil}{secilenAy:00}-{DateTime.Now:HHmm}";
+            var islemNoBase = $"MAAS-{secilenYil}{secilenAy:00}-{MKFiloServis.Shared.Time.BusinessTime.Now:HHmm}";
 
             await using var db = await DbContextFactory.CreateDbContextAsync();
 

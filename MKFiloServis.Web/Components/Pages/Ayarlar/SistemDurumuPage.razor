@@ -267,7 +267,7 @@
             durum.SonYedekTarihi = backupSettings.LastBackupTime;
             if (backupSettings.LastBackupTime.HasValue)
             {
-                durum.SonYedekGunu = (int)(DateTime.Now - backupSettings.LastBackupTime.Value).TotalDays;
+                durum.SonYedekGunu = (int)(MKFiloServis.Shared.Time.BusinessTime.Now - backupSettings.LastBackupTime.Value).TotalDays;
             }
             else
             {
@@ -277,7 +277,7 @@
         catch { }
 
         // Çalışma Süresi
-        var uptime = DateTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime;
+        var uptime = MKFiloServis.Shared.Time.BusinessTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime;
         durum.CalismaSuresi = $"{(int)uptime.TotalDays}g {uptime.Hours}s {uptime.Minutes}dk";
 
         return durum;

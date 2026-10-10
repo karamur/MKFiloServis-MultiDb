@@ -407,8 +407,8 @@
     private bool _tumunuSec = false;
 
     // Filtreler
-    private DateTime _baslangicTarihi = DateTime.Today.AddMonths(-1);
-    private DateTime _bitisTarihi = DateTime.Today;
+    private DateTime _baslangicTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddMonths(-1);
+    private DateTime _bitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
     private FaturaTipi? _faturaTipi;
     private string _xmlDurum = "";
     private string _gibDurum = "";

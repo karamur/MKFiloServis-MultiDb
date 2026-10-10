@@ -1,11 +1,11 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using MKFiloServis.Web.Services;
 using MKFiloServis.Web.Services.Interfaces;
+using MKFiloServis.Web.Services.Security;
 using MKFiloServis.Shared.Entities;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text;
 
 namespace MKFiloServis.Web.Controllers;
 
@@ -18,14 +18,14 @@ namespace MKFiloServis.Web.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IKullaniciService _kullaniciService;
-    private readonly IConfiguration _configuration;
+    private readonly JwtSigningConfiguration _jwtSigning;
 
     public AuthController(
         IKullaniciService kullaniciService,
-        IConfiguration configuration)
+        JwtSigningConfiguration jwtSigning)
     {
         _kullaniciService = kullaniciService;
-        _configuration = configuration;
+        _jwtSigning = jwtSigning;
     }
 
     /// <summary>
@@ -45,16 +45,17 @@ public class AuthController : ControllerBase
         var sonuc = await _kullaniciService.GirisYapAsync(request.KullaniciAdi, request.Sifre);
         if (!sonuc.Basarili || sonuc.Kullanici == null)
         {
-            return Unauthorized(new { Error = sonuc.Mesaj ?? "Geçersiz kullanıcı adı veya şifre" });
+            return Unauthorized(new { Error = "Kullanıcı adı veya şifre geçersiz ya da hesap kullanılamıyor." });
         }
 
         var kullanici = sonuc.Kullanici;
         if (!kullanici.Aktif)
         {
-            return Unauthorized(new { Error = "Kullanıcı hesabı devre dışı" });
+            return Unauthorized(new { Error = "Kullanıcı adı veya şifre geçersiz ya da hesap kullanılamıyor." });
         }
 
-        var token = GenerateJwtToken(kullanici);
+        var sessionStartedAt = DateTimeOffset.UtcNow;
+        var token = GenerateJwtToken(kullanici, sessionStartedAt);
 
         return Ok(new LoginResponse
         {
@@ -63,7 +64,7 @@ public class AuthController : ControllerBase
             KullaniciAdi = kullanici.KullaniciAdi,
             AdSoyad = kullanici.AdSoyad,
             Rol = kullanici.Rol?.RolAdi ?? "Kullanici",
-            ExpiresAt = DateTime.UtcNow.AddHours(24)
+            ExpiresAt = sessionStartedAt.Add(AuthenticationSessionPolicy.MaximumLifetime).UtcDateTime
         });
     }
 
@@ -79,13 +80,21 @@ public class AuthController : ControllerBase
             return Unauthorized(new { Error = "Geçersiz token" });
         }
 
+        var startedValue = User.FindFirst("auth_started")?.Value;
+        if (!long.TryParse(startedValue, out var startedUnixSeconds))
+            return Unauthorized(new { Error = "Oturum süresi sona erdi. Yeniden giriş yapın." });
+        var sessionStartedAt = DateTimeOffset.FromUnixTimeSeconds(startedUnixSeconds);
+        if (!AuthenticationSessionPolicy.IsWithinLifetime(sessionStartedAt, DateTimeOffset.UtcNow))
+            return Unauthorized(new { Error = "Oturum süresi sona erdi. Yeniden giriş yapın." });
         var kullanici = await _kullaniciService.GetByIdAsync(kullaniciId);
-        if (kullanici == null || !kullanici.Aktif)
+        var kilitli = kullanici?.Kilitli == true &&
+            (kullanici.KilitlenmeBitisUtc is null || kullanici.KilitlenmeBitisUtc > DateTime.UtcNow);
+        if (kullanici is not { Aktif: true, IsDeleted: false } || kilitli)
         {
-            return Unauthorized(new { Error = "Kullanıcı bulunamadı veya devre dışı" });
+            return Unauthorized(new { Error = "Oturum artık geçerli değil. Yeniden giriş yapın." });
         }
 
-        var token = GenerateJwtToken(kullanici);
+        var token = GenerateJwtToken(kullanici, sessionStartedAt);
 
         return Ok(new LoginResponse
         {
@@ -94,7 +103,7 @@ public class AuthController : ControllerBase
             KullaniciAdi = kullanici.KullaniciAdi,
             AdSoyad = kullanici.AdSoyad,
             Rol = kullanici.Rol?.RolAdi ?? "Kullanici",
-            ExpiresAt = DateTime.UtcNow.AddHours(24)
+            ExpiresAt = sessionStartedAt.Add(AuthenticationSessionPolicy.MaximumLifetime).UtcDateTime
         });
     }
 
@@ -118,21 +127,8 @@ public class AuthController : ControllerBase
         });
     }
 
-    private string GenerateJwtToken(Kullanici kullanici)
+    private string GenerateJwtToken(Kullanici kullanici, DateTimeOffset sessionStartedAt)
     {
-        var jwtSecret = _configuration["Jwt:Secret"];
-        if (string.IsNullOrEmpty(jwtSecret) || jwtSecret.StartsWith("REPLACE_") || jwtSecret.Length < 32)
-        {
-            throw new InvalidOperationException(
-                "JWT Secret yapılandırılmamış veya geçersiz. " +
-                "appsettings.Production.json → Jwt:Secret alanına en az 32 karakterli güçlü bir değer girin.");
-        }
-        var jwtIssuer = _configuration["Jwt:Issuer"] ?? "MKFiloServis";
-        var jwtAudience = _configuration["Jwt:Audience"] ?? "MKFiloServis-API";
-
-        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret));
-        var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
-
         var rolAdi = kullanici.Rol?.RolAdi ?? "Kullanici";
 
         var claims = new[]
@@ -142,15 +138,17 @@ public class AuthController : ControllerBase
             new Claim(ClaimTypes.Role, rolAdi),
             new Claim("AdSoyad", kullanici.AdSoyad ?? ""),
             new Claim("Email", kullanici.Email ?? ""),
+            new Claim("auth_stamp", _jwtSigning.CreateAuthStamp(kullanici.SifreHash)),
+            new Claim("auth_started", sessionStartedAt.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture)),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
 
         var token = new JwtSecurityToken(
-            issuer: jwtIssuer,
-            audience: jwtAudience,
+            issuer: _jwtSigning.Issuer,
+            audience: _jwtSigning.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddHours(24),
-            signingCredentials: credentials
+            expires: sessionStartedAt.Add(AuthenticationSessionPolicy.MaximumLifetime).UtcDateTime,
+            signingCredentials: _jwtSigning.SigningCredentials
         );
 
         return new JwtSecurityTokenHandler().WriteToken(token);

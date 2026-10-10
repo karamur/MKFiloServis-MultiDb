@@ -6,7 +6,9 @@
 #define MyAppPublisher   "MK Yazilim"
 #define MyAppURL         "https://github.com/karamur/MKFiloServis-MultiDb"
 #define MyAppExeName     "MKFiloServis.Web.exe"
-#define MyInstallDirBase "C:\MKFiloServis"
+#ifndef MyInstallDirBase
+#define MyInstallDirBase "C:\MKFiloServis_Musteri"
+#endif
 #define MyDataSyncExe    "MKFiloServis.DataSync.exe"
 
 #ifndef MyAppVersion
@@ -61,8 +63,9 @@ Name: "web"; Description: "MKFiloServis Web"; Types: full; Flags: fixed
 Name: "datasync"; Description: "Veri Aktarim Araci"; Types: full
 
 [Files]
-Source: "payload\Web\*"; DestDir: "{app}\app"; Excludes: "dbsettings.json,portalsettings.json,backup_settings.json,appsettings.Production.json,cookies.txt,*.db,*.db-shm,*.db-wal,logs\*,uploads\*,Backups\*,keys\*"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: web
+Source: "payload\Web\*"; DestDir: "{app}\app"; Excludes: "dbsettings.json,portalsettings.json,backup_settings.json,appsettings.*.json,cookies.txt,*.db,*.db-shm,*.db-wal,logs\*,uploads\*,Backups\*,keys\*"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: web
 Source: "payload\DataSync\*"; DestDir: "{app}\tools\datasync"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: datasync
+Source: "payload\redist\dotnet-hosting-win.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Dirs]
 Name: "{app}\data"; Permissions: users-modify
@@ -79,20 +82,37 @@ Name: "{group}\{#MyShortcutName} - Kaldir"; Filename: "{uninstallexe}"
 Name: "{commondesktop}\{#MyShortcutName}"; Filename: "{app}\app\{#MyAppExeName}"; WorkingDir: "{app}\app"
 
 [Run]
-Filename: "{app}\app\{#MyAppExeName}"; Description: "Uygulamayi Baslat"; Flags: nowait postinstall skipifsilent; WorkingDir: "{app}\app"
+Filename: "{app}\app\{#MyAppExeName}"; Description: "Uygulamayi Baslat"; Flags: nowait postinstall skipifsilent; WorkingDir: "{app}\app"; Check: CanLaunchApp
 
 [Code]
 var
   DbProviderPage: TInputOptionWizardPage;
   DbConnectionPage: TInputQueryWizardPage;
+  HostingRestartRequired: Boolean;
+
+function CanLaunchApp(): Boolean;
+begin
+  Result := not HostingRestartRequired;
+end;
+
+function NeedRestart(): Boolean;
+begin
+  Result := HostingRestartRequired;
+end;
 
 function InitializeSetup(): Boolean;
 var Msg: String;
 begin
   Result := True;
+  if FileExists('{#MyInstallDir}\app\dbsettings.json') or
+     FileExists('{#MyInstallDir}\app\{#MyAppExeName}') then
+  begin
+    MsgBox('Bu dizinde mevcut kurulum var. Ayarlari ve veriyi korumak icin guncelleme paketini kullanin.', mbError, MB_OK);
+    Result := False; Exit;
+  end;
   Msg := '{#MyAppName} Musteri {#MyAppVersion} ayri bir klasore kurulacaktir:' + #13#10 +
          '{#MyInstallDir}' + #13#10#13#10 +
-         'Bu kurulum mevcut versiyonlara dokunmaz ve yan yana calisabilir.' + #13#10 +
+         'Mevcut kurulumlarin dizinine kurulmaz.' + #13#10 +
          'Devam etmek istiyor musunuz?';
   if MsgBox(Msg, mbConfirmation, MB_YESNO) = IDNO then begin Result := False; Exit; end;
 end;
@@ -102,11 +122,10 @@ begin
   WizardForm.Caption := '{#MyAppName} Musteri {#MyAppVersion} Kurulum Sihirbazi';
   DbProviderPage := CreateInputOptionPage(wpSelectDir,
     'Veritabani Secimi', 'Uygulamanin kullanacagi veritabanini secin',
-    'PostgreSQL ve SQLite bu kurulum paketinde desteklenir. SQL Server secenegi altyapi tamamlanana kadar kullanima acik degildir.',
+    'Bu surumde PostgreSQL ve SQLite desteklenir.',
     True, False);
   DbProviderPage.Add('PostgreSQL');
   DbProviderPage.Add('SQLite');
-  DbProviderPage.Add('Microsoft SQL Server (MSSQL)');
   DbProviderPage.SelectedValueIndex := 0;
   DbConnectionPage := CreateInputQueryPage(DbProviderPage.ID,
     'Veritabani Baglantisi', 'Secilen veritabani icin baglanti bilgilerini girin',
@@ -136,12 +155,7 @@ begin
   Result := True;
   if CurPageID = DbProviderPage.ID then
   begin
-    if DbProviderPage.SelectedValueIndex = 2 then
-    begin
-      MsgBox('MSSQL secildi; ancak otomatik sema/migration ve audit kurulumu henuz SQL Server icin desteklenmiyor. PostgreSQL veya SQLite secin. MSSQL destegi tamamlandiginda bu secenek acilacaktir.', mbError, MB_OK);
-      Result := False;
-    end
-    else if DbProviderPage.SelectedValueIndex = 1 then
+    if DbProviderPage.SelectedValueIndex = 1 then
     begin
       DbConnectionPage.Values[2] := 'App_Data/MKFiloServis.db';
     end
@@ -179,9 +193,16 @@ procedure CurStepChanged(CurStep: TSetupStep);
 var
   ProviderValue, HostValue, PortValue, NameValue, UserValue, PasswordValue: String;
   SettingsPath, JsonText: String;
+  ResultCode: Integer;
 begin
   if CurStep = ssPostInstall then
   begin
+    if not Exec(ExpandConstant('{tmp}\dotnet-hosting-win.exe'), '/quiet /norestart', '',
+      SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+      RaiseException('.NET Hosting Bundle baslatilamadi.');
+    if (ResultCode <> 0) and (ResultCode <> 3010) then
+      RaiseException('.NET Hosting Bundle kurulumu basarisiz: ' + IntToStr(ResultCode));
+    HostingRestartRequired := ResultCode = 3010;
     if DbProviderPage.SelectedValueIndex = 0 then
     begin
       ProviderValue := '2';

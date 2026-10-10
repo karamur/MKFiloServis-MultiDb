@@ -1,222 +1,30 @@
-# 🔄 Şifrelenmiş Dosya Recovery Kılavuzu
+# Dosya ve veritabanı kurtarma
 
-## Problem: Master Key Değişikliği
+Bu kılavuz, güncel `RecoveryArchive` yedeğinin hazırlanması ve kontrollü geri yüklenmesi içindir. Eski `master.key` / KOA1 toplu yeniden şifreleme talimatları bu akışın parçası değildir. Yedek içindeki DataProtection key ring'i tek başına başka Windows makinesinde/profilinde çözülebilir kabul edilmez.
 
-Uygulamanın **master.key** dosyası regenerate olduğunda, eski anahtarla şifrelenmiş tüm dosyalar artık açılamaz:
+## Kurtarma yedeği oluşturma ve ön kontrol
 
-```
-❌ Dosya decrypt edilemedi: desteklenen KOA1 formatları veya anahtar eşleşmiyor.
-```
+1. Yönetim arayüzünde **Ayarlar → Yedekleme** bölümünden tam kurtarma yedeği oluşturun. PostgreSQL için tek ZIP, `database.backup` ile dosya arşivini birlikte içerir. DB dump ve dosyalar art arda kopyalanır; aralarında yazım olursa birbirine bağlı DB/dosya durumu aynı ana ait olmayabilir. Uygulama bu işlemle otomatik bakım kipine geçmez. Tutarlı kurtarma noktası gerekiyorsa yedek öncesinde diğer uygulama ve arka plan yazımlarını bakım penceresinde durdurun.
+2. Yedek dosyasını uygulama ve kaynak depolamadan ayrı, erişimi sınırlandırılmış bir ortama kopyalayın. İçinde Production ayarları ve hassas dosyalar bulunabileceğinden ZIP'i gizli bilgi gibi koruyun; e-posta veya herkese açık dosya paylaşımıyla taşımayın.
+3. Hedef kurulumda **Kurtarmayı hazırla** işlemini çalıştırın. Bu işlem ZIP manifesti, izin verilen yollar, boyutlar ve SHA-256 değerlerini doğrular; içeriği canlı hedefe dokunmadan izole `RecoveryStaging` klasörüne açar ve arşiv key ring'iyle DataProtection probunu dener.
+4. `Anahtar probu: Doğrulanamadı` ise uygulama verisini geri yüklemeyin. Kaynakta kullanılan DataProtection koruyucu sertifika/DPAPI hesabını ve key ring erişimini yetkili sistem sahibiyle kurtarın; ardından hazırlığı yeniden çalıştırıp probun doğrulandığını görün. Key XML dosyalarının arşivde bulunması başarılı çözme kanıtı değildir.
+5. DB-only yedek dosya ağacını geri yüklemez. Tam geri yükleme için aynı bakım penceresinde alınmış DB dump'ı, belge/dosya arşivi ve çözebilen key ring'i birlikte kullanın. Luca/entegrasyon credential'ları, S3 erişimi ve hedef Production DB bağlantı ayarları ortama özel yapılandırmadan güvenli kanalla sağlanır; `application/*.json` yedekten hedefe kopyalanmaz.
 
-## Çözüm: Batch Recovery (Re-encrypt Workflow)
+## Kontrollü uygulama ve geri alma
 
-Recovery işlemi:
-1. **Eski master key'i kaynak olarak sağla** (HEX string)
-2. **Eski key ile dosyaları decrypt et**
-3. **Yeni key ile yeniden şifrele (re-encrypt)**
-4. **Orijinal dosya konumlarında güncelle**
+`Deploy/Migrate/05-recovery-archive-apply.ps1` yalnızca doğrulanmış hazırlık klasörüne uygulanır. Script manifestteki dosya boyutu/hash değerlerini yeniden denetler, hedef depolamanın mevcut dosyalarını ve DB durumunu operation journal'a alır, DB/dosya hedeflerini kaydeder ve adlandırılmış IIS havuzunu durdurur. Arka plan yazımlarının durduğunu ve anahtar kurtarma malzemesinin hazır olduğunu açıkça onaylamadan devam etmez.
 
-## Adım Adım Kurtarma
+Kısmi hata veya kabul başarısızlığında IIS'i kapalı tutun ve `Deploy/Migrate/06-recovery-archive-rollback.ps1`'i aynı operation journal ile çalıştırın. Geri alma öncesi dosya snapshot'larının SHA-256 değerlerini ve DB dump makbuzunu denetler. Geri alma da başarısızsa journal'ı silmeyin; elle müdahale ve tutarlılık kontrolü tamamlanana kadar uygulamayı başlatmayın.
 
-### 1. Eski Master Key'i Bul
+DB-only restore servisi kendi içinde hedef DB'nin önceki durumunu alır ve restore doğrulanamazsa geri yüklemeyi dener. Bu mekanizma tam dosya+DB operasyon journal'ının yerine geçmez.
 
-Eski key genelde backup konumunda saklanır:
+## Taşınabilirlik ve işletim sınırı
 
-```powershell
-# Standart backup konumu
-Get-Content "C:\MKFiloServis_yedekleme\keys\raw-key.txt.bak" -Raw
-```
+- Gerçek restore öncesi yedeği ve operation journal'ı ayrı bir hedefte koruyun. Üretim verisinde ilk prova yapmayın; izole ve yetkili kopya kullanın.
+- Başka makine/profilde `KeyProbeVerified=true` olmadan şifreli evrakların çözülebileceğini kabul etmeyin. Sertifika/DPAPI koruyucusu taşınabilir değilse key ring'i kaynak makineden kopyalamak yeterli olmaz.
+- Veritabanı, dosyalar, belge şifre çözme, harici credential/S3 erişimi ve uygulamanın yeniden açılması aynı prova tutanağında yer almalıdır. Önce/sonra kayıt sayıları ile örnek belgeler iş sahibi tarafından kabul edilmelidir.
+- Canlı müşteri verisi, credential veya sır çalışma ağacına/doc dosyasına yazılmaz. Bu kılavuzun düzeltilmesi gerçek ortam restore kabulinin yapıldığı anlamına gelmez.
 
-**Çıktı örneği:**
-```
-EE4461E47C5DDF6C5750EE9403735642171A5399FD9292F0C7631B2F181B8415
-```
+## Eski master-key notu
 
-Bu 64 karakterlik HEX string'i saklayın.
-
-### 2. Admin Dashboard'a Git
-
-```
-http://localhost:5000/admin/system-health
-```
-
-Sayfada "Şifrelenmiş Dosya Recovery" kartını bulun.
-
-### 3. Eski Key'i Yapıştır
-
-"Eski Master Key (HEX)" alanına HEX string'i yapıştırın:
-
-```
-EE4461E47C5DDF6C5750EE9403735642171A5399FD9292F0C7631B2F181B8415
-```
-
-### 4. Recovery Başlat
-
-"🔄 Recovery Başlat" butonuna tıklayın.
-
-**Tahmini Zaman:** 100 dosya = ~10-30 saniye
-
-### 5. Sonuç Raporu
-
-Recovery sonrası:
-- ✅ **Başarılı**: Re-encrypt edilen dosya sayısı
-- ❌ **Başarısız**: Decrypt edilemeyen dosya sayısı (format hatası vs.)
-- ⏭️ **Skip**: Zaten yeni key ile şifrelenmiş dosyalar
-
-Başarılı dosyalar listesi aşağıda gösterilir.
-
----
-
-## REST API (Programmatik Kullanım)
-
-### Endpoint
-
-```
-POST /api/system/recover-encrypted-files
-```
-
-### Request Body
-
-```json
-{
-  "oldMasterKeyHex": "EE4461E47C5DDF6C5750EE9403735642171A5399FD9292F0C7631B2F181B8415",
-  "targetDirectory": null
-}
-```
-
-- **oldMasterKeyHex** (required): 64 char HEX string (32 byte)
-- **targetDirectory** (optional): Taranacak dizin (Arsiv/ relative). Null = tüm Personel + Arac
-
-### Response (200 OK)
-
-```json
-{
-  "successCount": 245,
-  "failedCount": 0,
-  "skippedCount": 3,
-  "recoveredFiles": [
-    "Arsiv/Sifreli/Araclar/06C0640Ruhsat_20260429_073253.enc",
-    "Arsiv/Sifreli/Personeller/ASDF_20260410_115423.enc",
-    ...
-  ],
-  "failedFiles": [],
-  "isSuccess": true
-}
-```
-
-### PowerShell Örneği
-
-```powershell
-$oldKey = 'EE4461E47C5DDF6C5750EE9403735642171A5399FD9292F0C7631B2F181B8415'
-$request = @{
-    'oldMasterKeyHex' = $oldKey
-    'targetDirectory' = $null
-} | ConvertTo-Json
-
-$response = Invoke-RestMethod -Uri 'http://localhost:5000/api/system/recover-encrypted-files' `
-    -Method POST `
-    -Headers @{ 'Content-Type' = 'application/json' } `
-    -Body $request
-
-Write-Host "Başarılı: $($response.successCount)"
-Write-Host "Başarısız: $($response.failedCount)"
-```
-
----
-
-## Teknik Detaylar
-
-### AES-256-GCM Format Uyumluluğu
-
-**FileRecoveryService** aşağıdaki KOA1 varyantlarını destekler:
-
-1. **Yeni Format (v1)**: `KOA1 | VER(0x01) | NONCE(12B) | TAG(16B) | CIPHER`
-2. **Eski Format (Versiyonsuz)**: `KOA1 | NONCE(12B) | TAG(16B) | CIPHER`
-3. **Legacy Varyant**: `KOA1 | NONCE(12B) | CIPHER | TAG(16B)`
-
-**DpapiMasterKeyProvider** ayrıca eski raw-key backup dosyalarını otomatik olarak tarar:
-- `raw-key.txt`
-- `raw-key.txt.bak`
-- `master.key.raw`
-- `master.key.txt`
-
-Bulunursa, yeni anahtarla DPAPI LocalMachine'de yeniden kaydedilir (self-healing).
-
-### Tarama Dizinleri
-
-Recovery varsayılan olarak şu dizinleri tarar:
-- `C:\MKFiloServis_yedekleme\Arsiv\Sifreli\Personeller\` → Personel evrakları
-- `C:\MKFiloServis_yedekleme\Arsiv\Sifreli\Araclar\` → Araç evrakları
-
----
-
-## Sorun Giderme
-
-### "Master key HEX string'i boş olamaz"
-
-**Çözüm**: Eski key dosyasının doğru konumunu kontrol edin.
-
-```powershell
-Test-Path "C:\MKFiloServis_yedekleme\keys\raw-key.txt.bak"
-```
-
-### "Eski key hex string 64 karakter olmalıdır"
-
-**Çözüm**: Key 32 byte = 64 HEX karakter olmalıdır. Format kontrol edin:
-
-```powershell
-$key = Get-Content "C:\MKFiloServis_yedekleme\keys\raw-key.txt.bak"
-Write-Host "Uzunluk: $($key.Trim().Length)"  # 64 olmalı
-```
-
-### "Recovery başarısız: desteklenen KOA1 formatları veya anahtar eşleşmiyor"
-
-**Çözüm**: Sağlanan eski key, dosyaları şifreleyen key ile eşleşmiyor olabilir:
-
-1. Backup konumlarında başka key dosyası arayın
-2. Dosya format varyantını kontrol edin (legacy layout)
-3. Dosya bozulmuş olabilir (system crash vs.)
-
-### Dosyalar hala açılamıyor
-
-**Sonraki adımlar**:
-1. Recovery log'larını kontrol edin: `C:\MKFiloServis_yedekleme\logs\`
-2. Failed files detaylarını kontrol edin (response'de listelenir)
-3. FileRecoveryService tanılama çıkışını gözden geçirin
-
----
-
-## Dosya Yapısı
-
-### Recovery Service Kodu
-
-```
-MKFiloServis.Web/
-  Services/
-    FileRecoveryService.cs          ← Batch recovery engine
-    Security/
-      DpapiMasterKeyProvider.cs     ← Eski key fallback + re-saving
-      AesGcmFileProtector.cs        ← AES-256-GCM şifreleme
-    SecureFileService.cs            ← Override-key overload eklendi
-  Controllers/
-    SystemHealthController.cs       ← POST /api/system/recover-encrypted-files
-  Components/Pages/
-    AdminSystemHealth.razor         ← Admin UI dashboard
-    AdminSystemHealth.razor.cs      ← Recovery logic
-```
-
-### DI Registration
-
-```csharp
-// Program.cs
-builder.Services.AddScoped<FileRecoveryService>();
-```
-
----
-
-## İlgili Belgeler
-
-- MASTER_KEY_STRATEGY.md — Master key yönetim stratejisi
-- ENCRYPTION_FORMATS.md — KOA1 format detayları
-- SECURITY_ARCHITECTURE.md — Genel güvenlik mimarisi
-
+Eski `master.key`/KOA1 kurtarma araçları yalnızca gerçekten bu legacy formatla şifrelenmiş dosyaların ayrı ve yetkili bir kurtarma işi için değerlendirilebilir. Anahtarı terminale, rapora veya kaynak koda koymayın; mevcut anahtarı silmeyin/değiştirmeyin ve dosyaları topluca yeniden şifrelemeyin. Gerekirse önce kopya üzerinde, eski ve yeni anahtarların sahibi doğrulandıktan sonra ilerleyin.

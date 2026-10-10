@@ -48,8 +48,8 @@
                 var kategoriEvraklari = evraklar.Where(e => e.EvrakKategorisi == kategori).ToList();
                 var aktifEvrak = kategoriEvraklari.FirstOrDefault(e => e.Durum == EvrakDurum.Aktif);
                 var oncelikliDosya = GetOncelikliDosya(aktifEvrak);
-                var suresiDolacak = aktifEvrak?.BitisTarihi.HasValue == true && aktifEvrak.BitisTarihi.Value <= DateTime.Today.AddDays(30);
-                var suresiDolmus = aktifEvrak?.BitisTarihi.HasValue == true && aktifEvrak.BitisTarihi.Value < DateTime.Today;
+                var suresiDolacak = aktifEvrak?.BitisTarihi.HasValue == true && aktifEvrak.BitisTarihi.Value <= MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(30);
+                var suresiDolmus = aktifEvrak?.BitisTarihi.HasValue == true && aktifEvrak.BitisTarihi.Value < MKFiloServis.Shared.Time.BusinessTime.Today;
 
                 <div class="col-md-6 col-lg-4">
                     <div class="card h-100 @(suresiDolmus ? "border-danger" : suresiDolacak ? "border-warning" : aktifEvrak != null ? "border-success" : "")">
@@ -671,6 +671,10 @@
     {
         if (dosyaEvrak == null || !secilenDosyalar.Any()) return;
 
+        var evrakId = dosyaEvrak.Id;
+        var secilenSayisi = secilenDosyalar.Count;
+        var basarili = 0;
+        var hataliDosyalar = new List<string>();
         isUploading = true;
         StateHasChanged();
 
@@ -678,19 +682,29 @@
         {
             foreach (var file in secilenDosyalar)
             {
-                await AracService.UploadEvrakDosyaAsync(dosyaEvrak.Id, file);
+                try
+                {
+                    await AracService.UploadEvrakDosyaAsync(evrakId, file);
+                    basarili++;
+                }
+                catch
+                {
+                    // Each file commits independently; report partial success after refresh.
+                    hataliDosyalar.Add(file.Name);
+                }
             }
 
-            ToastService.ShowSuccess($"{secilenDosyalar.Count} dosya yuklendi.");
             secilenDosyalar.Clear();
             await YenileAsync();
-
-            // Dosya modalini guncelle
-            dosyaEvrak = evraklar.FirstOrDefault(e => e.Id == dosyaEvrak.Id);
+            dosyaEvrak = evraklar.FirstOrDefault(e => e.Id == evrakId);
+            if (hataliDosyalar.Count == 0)
+                ToastService.ShowSuccess($"{basarili} dosya yüklendi.");
+            else
+                ToastService.ShowWarning($"{basarili}/{secilenSayisi} dosya yüklendi. Sonucu belirsiz/hatalı dosyalar: {string.Join(", ", hataliDosyalar.Take(5))}. Liste yenilendi; yeniden yüklemeden önce kayıtları kontrol edin.");
         }
         catch (Exception ex)
         {
-            ToastService.ShowError("Yukleme hatasi: " + ex.Message);
+            ToastService.ShowError($"Dosya listesi yenilenemedi. {basarili} yükleme tamamlandı, {hataliDosyalar.Count} dosyada hata oluştu. Sayfayı yenileyip kayıtları kontrol edin. {ex.Message}");
         }
         finally
         {

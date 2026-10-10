@@ -271,7 +271,7 @@
         yukleniyor = true;
         try
         {
-            var bugun = DateTime.Today;
+            var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
             var liste = new List<Alarm>();
 
             // 1) Belge uyarıları
@@ -535,7 +535,7 @@
             using var ms = new MemoryStream();
             wb.SaveAs(ms);
             await JS.InvokeVoidAsync("downloadFileFromBytes",
-                $"Bildirim_Merkezi_{DateTime.Today:yyyyMMdd}.xlsx",
+                $"Bildirim_Merkezi_{MKFiloServis.Shared.Time.BusinessTime.Today:yyyyMMdd}.xlsx",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 Convert.ToBase64String(ms.ToArray()));
             ToastService.ShowSuccess("Excel indirildi");

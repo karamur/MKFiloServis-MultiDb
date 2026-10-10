@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
@@ -9,7 +9,7 @@ public sealed class RentACarOdemeKayitTalebi : IValidatableObject
 {
     [Range(1, int.MaxValue, ErrorMessage = "Kiralama seçilmelidir.")]
     public int MusteriKiralamaId { get; set; }
-    public DateTime IslemTarihi { get; set; } = DateTime.Now;
+    public DateTime IslemTarihi { get; set; } = DateTime.UtcNow;
     public RentACarOdemeHareketTuru HareketTuru { get; set; }
     public RentACarOdemeYontemi OdemeYontemi { get; set; }
     public int? BankaHesapId { get; set; }

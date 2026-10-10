@@ -274,7 +274,7 @@
                                 }
                             </td>
                             <td>
-                                <small title="@talep.SonAktiviteTarihi.ToLocalTime().ToString("dd.MM.yyyy HH:mm")">
+                                <small title="@MKFiloServis.Shared.Time.BusinessTime.LocalAt(talep.SonAktiviteTarihi).ToString("dd.MM.yyyy HH:mm")">
                                     @GetRelativeTime(talep.SonAktiviteTarihi)
                                 </small>
                             </td>
@@ -758,7 +758,7 @@
         if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes} dk önce";
         if (diff.TotalHours < 24) return $"{(int)diff.TotalHours} saat önce";
         if (diff.TotalDays < 7) return $"{(int)diff.TotalDays} gün önce";
-        return dateTime.ToLocalTime().ToString("dd.MM.yyyy");
+        return MKFiloServis.Shared.Time.BusinessTime.LocalAt(dateTime).ToString("dd.MM.yyyy");
     }
 }
 

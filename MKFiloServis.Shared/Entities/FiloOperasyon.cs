@@ -29,7 +29,7 @@ public class AracAlimSatim : BaseEntity
     public string? KarsiTarafTelefon { get; set; }
 
     // İşlem Bilgileri
-    public DateTime IslemTarihi { get; set; } = DateTime.Today;
+    public DateTime IslemTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public decimal IslemTutari { get; set; }
     public decimal KDVTutari { get; set; }
     public decimal ToplamTutar { get; set; }
@@ -102,7 +102,7 @@ public class PlakaDonusum : BaseEntity
 
     // İşlem Durumu
     public PlakaDonusumDurum Durum { get; set; } = PlakaDonusumDurum.BasvuruYapildi;
-    public DateTime BasvuruTarihi { get; set; } = DateTime.Today;
+    public DateTime BasvuruTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public DateTime? OnayTarihi { get; set; }
     public DateTime? TamamlanmaTarihi { get; set; }
 

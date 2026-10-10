@@ -160,7 +160,7 @@
                                     {
                                         <span>Alıcı: <strong>@(seciliMesaj.Alici?.AdSoyad ?? "Tüm Kullanıcılar")</strong></span>
                                     }
-                                    <span class="ms-3"><i class="bi bi-clock me-1"></i>@seciliMesaj.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
+                                    <span class="ms-3"><i class="bi bi-clock me-1"></i>@MKFiloServis.Shared.Time.BusinessTime.LocalAt(seciliMesaj.CreatedAt).ToString("dd.MM.yyyy HH:mm")</span>
                                 </small>
                             </div>
                             <div>
@@ -428,10 +428,10 @@
     {
         var fark = DateTime.UtcNow - tarih;
 
-        if (fark.TotalDays < 1) return tarih.ToLocalTime().ToString("HH:mm");
-        if (fark.TotalDays < 7) return tarih.ToLocalTime().ToString("ddd");
+        if (fark.TotalDays < 1) return MKFiloServis.Shared.Time.BusinessTime.LocalAt(tarih).ToString("HH:mm");
+        if (fark.TotalDays < 7) return MKFiloServis.Shared.Time.BusinessTime.LocalAt(tarih).ToString("ddd");
 
-        return tarih.ToLocalTime().ToString("dd.MM");
+        return MKFiloServis.Shared.Time.BusinessTime.LocalAt(tarih).ToString("dd.MM");
     }
 }
 

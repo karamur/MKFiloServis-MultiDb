@@ -452,8 +452,8 @@
     private string? hataMesaji;
     private string? bilgiMesaji;
 
-    private int yil = DateTime.Today.Year;
-    private int ay = DateTime.Today.Month;
+    private int yil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    private int ay = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
     private HakedisTipi seciliTip = HakedisTipi.Kurum;
 
     private string _selectedGrouping = "cari";
@@ -904,7 +904,7 @@
         isBusy = true;
         try
         {
-            var fatura = await HakedisService.FaturayaDonustureAsync(hakedisId, DateTime.Today);
+            var fatura = await HakedisService.FaturayaDonustureAsync(hakedisId, MKFiloServis.Shared.Time.BusinessTime.Today);
             bilgiMesaji = $"Hakediş faturaya dönüştürüldü. Fatura No: {fatura.FaturaNo}";
             await YukleHakedisVeMutabakatAsync();
             seciliHakedisIds.Remove(hakedisId);
@@ -1028,7 +1028,7 @@
         isBusy = true;
         try
         {
-            var sonuc = await HakedisService.TopluFaturalaAsync(ids, DateTime.Today);
+            var sonuc = await HakedisService.TopluFaturalaAsync(ids, MKFiloServis.Shared.Time.BusinessTime.Today);
             bilgiMesaji = $"Toplu faturalama tamamlandı. Başarılı: {sonuc.BasariliAdet}, Atlanan: {sonuc.AtlananAdet}, Hatalı: {sonuc.HataliAdet}";
             await YukleHakedisVeMutabakatAsync();
             seciliHakedisIds.Clear();

@@ -19,7 +19,7 @@
         </div>
         <div class="d-flex gap-2 align-items-center">
             <select class="form-select form-select-sm" style="width: 120px;" @bind="secilenYil" @bind:after="LoadDataAsync">
-                @for (int y = DateTime.Today.Year + 1; y >= DateTime.Today.Year - 5; y--)
+                @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year + 1; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 5; y--)
                 {
                     <option value="@y">@y</option>
                 }
@@ -86,7 +86,7 @@
                         @foreach (var fis in fisler)
                         {
                             <tr style="cursor: pointer;" @onclick="() => FisDetayAc(fis.Id)">
-                                <td>@fis.FisTarihi.ToLocalTime().ToString("dd.MM.yyyy")</td>
+                                <td>@fis.FisTarihi.ToString("dd.MM.yyyy")</td>
                                 <td><strong>@fis.FisNo</strong></td>
                                 <td>@GetFisTipAdi(fis.FisTipi)</td>
                                 <td>@fis.Aciklama</td>
@@ -261,8 +261,8 @@
 
     private List<MuhasebeFis> fisler = new();
     private List<MuhasebeHesap> hesaplar = new();
-    private int secilenYil = DateTime.Today.Year;
-    private int secilenAy = DateTime.Today.Month;
+    private int secilenYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    private int secilenAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
     private bool isLoading = true;
     private bool isSaving;
     private bool showYeniFisModal;
@@ -308,7 +308,7 @@
         yeniFis = new MuhasebeFis
         {
             Id = 0,
-            FisTarihi = DateTime.Today,
+            FisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
             FisTipi = FisTipi.Mahsup,
             FisNo = string.Empty,
             Kalemler = new List<MuhasebeFisKalem>
@@ -340,7 +340,7 @@
             {
                 Id = fis.Id,
                 FisNo = fis.FisNo,
-                FisTarihi = fis.FisTarihi.ToLocalTime(),
+                FisTarihi = fis.FisTarihi,
                 FisTipi = fis.FisTipi,
                 Aciklama = fis.Aciklama,
                 Durum = fis.Durum,
@@ -354,7 +354,7 @@
                         SiraNo = k.SiraNo,
                         Borc = k.Borc,
                         Alacak = k.Alacak,
-                        Tarih = k.Tarih?.ToLocalTime() ?? fis.FisTarihi.ToLocalTime(),
+                        Tarih = k.Tarih ?? fis.FisTarihi,
                         Aciklama = k.Aciklama,
                         CariId = k.CariId
                     })

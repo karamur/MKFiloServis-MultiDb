@@ -95,7 +95,7 @@ public class BelgeUyariAyarlariService
     public async Task<List<BelgeUyariItem>> GetYaklasanBelgelerAsync(int[] uyariGunleri)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var sonrakiAy = bugun.AddDays(uyariGunleri.Length > 0 ? uyariGunleri.Max() : 30);
         var uyarilar = new List<BelgeUyariItem>();
 

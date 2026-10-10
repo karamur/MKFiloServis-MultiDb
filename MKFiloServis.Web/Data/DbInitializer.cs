@@ -1,5 +1,9 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations.Operations;
+using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 using System.Data;
 using System.Data.Common;
@@ -8,23 +12,12 @@ namespace MKFiloServis.Web.Data;
 
 public static class DbInitializer
 {
-    private const string AracSasePlakaMigrationId = "20260326224724_AracSasePlakaYapisi";
-    private const string PersonelBordroGuncellemeMigrationId = "20260416191435_PersonelBordroGuncelleme";
-    private const string AddPersonelAracAtamaMigrationId = "20260420111658_AddPersonelAracAtama";
-    private const string AddLastikTakipModuluMigrationId = "20260421110504_AddLastikTakipModulu";
-    private const string LastikStokBireyselTakipMigrationId = "20260421133935_LastikStokBireyselTakip";
-    private const string AddLastikSezonAyarMigrationId = "20260507144644_AddLastikSezonAyar";
-    private const string AddHakedisVeAracMaliyetSnapshotMigrationId = "20260512072224_AddHakedisVeAracMaliyetSnapshot";
-    private const string AddResimUrlToPiyasaIlanMigrationId = "20260325200834_AddResimUrlToPiyasaIlan";
-    private const string AddPiyasaArastirmaModuleMigrationId = "20260324195453_AddPiyasaArastirmaModule";
-    private const string CRMModuluMigrationId = "20260326204037_CRMModulu";
-    private const string TekrarlayanOdemeMigrationId = "20260326090740_TekrarlayanOdeme";
     private const string UniqueActiveVehiclePlateMigrationId = "20261006190000_AddUniqueActiveVehiclePlateIndex";
     private const string UniqueMonthlyPayrollSnapshotMigrationId = "20261006192000_AddUniqueMonthlyPayrollSnapshotIndex";
     private const string UniqueDefaultInvoiceTemplatesMigrationId = "20261006194000_AddUniqueDefaultInvoiceTemplateIndexes";
-    // Legacy SQLite databases without migration history are only baselined through
-    // this known schema watermark. Newer migrations must execute their DDL.
-    private const string SqliteLegacySchemaWatermark = UniqueDefaultInvoiceTemplatesMigrationId;
+    // The supported legacy SQLite schema ends before the October 2026 hardening migrations.
+    // Those migrations must execute against the real database instead of being marked applied.
+    private const string SqliteLegacySchemaWatermark = "20260925192810_NormalizeRentACarOdemeEnumColumns";
 
     public static async Task EnsureMasterDatabaseAsync(IConfiguration configuration)
     {
@@ -273,7 +266,6 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
             : context.Database.IsSqlite()
                 ? "SQLite"
                 : configuration.GetValue<string>("DatabaseProvider") ?? context.Database.ProviderName ?? "PostgreSQL";
-        var migrationRecovered = false;
         List<string> pendingMigrations = new();
         
         try
@@ -284,8 +276,11 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
                 throw new Exception("Veritabani baglantisi kurulamadi!");
             }
 
+            await InitializeFreshDatabaseBaselineIfEmptyAsync(context);
+
             if (context.Database.IsNpgsql())
             {
+                await EnsurePostgreSqlMigrationHistoryAsync(context);
                 await NormalizePostgreSqlAuditTimestampColumnsAsync(context, configuration);
             }
 
@@ -316,190 +311,18 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
             {
                 Console.WriteLine($"Bekleyen migration sayisi: {pendingMigrations.Count()}");
 
-                // AylikOdemeGerceklesenler tablosu/FK'leri olmayan eski tenant DB'lerinde
-                // bu migration DropForeignKey ile baslar ve 42P01 / 42704 hatasina neden olur.
-                // Legacy yapi migration'in bekledigi eski FK'leri icermiyorsa migration'i gecmise kaydet.
-                if (context.Database.IsNpgsql()
-                    && pendingMigrations.Contains(AddResimUrlToPiyasaIlanMigrationId))
-                {
-                    var aylikOdemeGerceklesenlerExists = await PostgreSqlTableExistsAsync(context, configuration, "AylikOdemeGerceklesenler");
-                    var aylikOdemePlanlariFkExists = aylikOdemeGerceklesenlerExists
-                        && await PostgreSqlConstraintExistsAsync(context, configuration, "AylikOdemeGerceklesenler", "FK_AylikOdemeGerceklesenler_AylikOdemePlanlari_AylikOdemePlaniId");
-                    var bankaKasaHareketFkExists = aylikOdemeGerceklesenlerExists
-                        && await PostgreSqlConstraintExistsAsync(context, configuration, "AylikOdemeGerceklesenler", "FK_AylikOdemeGerceklesenler_BankaKasaHareketleri_BankaKasaHareketId");
-
-                    if (!aylikOdemeGerceklesenlerExists || !aylikOdemePlanlariFkExists || !bankaKasaHareketFkExists)
-                    {
-                        await EnsurePostgreSqlMigrationHistoryEntryAsync(context, configuration, AddResimUrlToPiyasaIlanMigrationId);
-                        Console.WriteLine($"AylikOdemeGerceklesenler legacy FK yapisi migration ile uyumlu degil; migration atlandi: {AddResimUrlToPiyasaIlanMigrationId}");
-                        pendingMigrations = (await context.Database.GetPendingMigrationsAsync()).ToList();
-                    }
-                }
-
-                if (pendingMigrations.Any())
-                {
-                    await context.Database.MigrateAsync();
-                    Console.WriteLine("Migration'lar basariyla uygulandi.");
-                }
+                await context.Database.MigrateAsync();
+                Console.WriteLine("Migration'lar basariyla uygulandi.");
             }
+
+            await EnsureModelTableAndColumnParityAsync(context);
         }
         catch (Exception ex)
         {
-            if (context.Database.IsSqlite())
-            {
-                try
-                {
-                    pendingMigrations = (await context.Database.GetPendingMigrationsAsync()).ToList();
-                    if (pendingMigrations.Any())
-                    {
-                        await EnsureSqliteMigrationHistoryAsync(context, pendingMigrations);
-                        pendingMigrations = (await context.Database.GetPendingMigrationsAsync()).ToList();
-                        if (!pendingMigrations.Any())
-                        {
-                            migrationRecovered = true;
-                            Console.WriteLine("SQLite migration gecmisi mevcut tablo yapisina gore duzeltildi.");
-                        }
-                    }
-                }
-                catch (Exception sqliteFixEx)
-                {
-                    Console.WriteLine($"SQLite migration duzeltme hatasi: {sqliteFixEx.Message}");
-                }
-            }
-
-            else if (context.Database.IsNpgsql()
-                && ex.GetBaseException() is PostgresException pgEx
-                && pgEx.SqlState == PostgresErrorCodes.DuplicateColumn
-                && pgEx.MessageText.Contains("column \"FirmaId\"", StringComparison.OrdinalIgnoreCase)
-                && pgEx.MessageText.Contains("relation \"Personeller\"", StringComparison.OrdinalIgnoreCase))
-            {
-                try
-                {
-                    var recoverableDuplicateColumnMigrations = pendingMigrations
-                        .Where(migrationId => migrationId == PersonelBordroGuncellemeMigrationId
-                            || migrationId == AddLastikTakipModuluMigrationId
-                            || (migrationId == CRMModuluMigrationId
-                                && pgEx.MessageText.Contains("column \"Renk\"", StringComparison.OrdinalIgnoreCase)
-                                && pgEx.MessageText.Contains("relation \"Roller\"", StringComparison.OrdinalIgnoreCase)))
-                        .ToList();
-
-                    if (recoverableDuplicateColumnMigrations.Any())
-                    {
-                        foreach (var migrationId in recoverableDuplicateColumnMigrations)
-                        {
-                            await EnsurePostgreSqlMigrationHistoryEntryAsync(context, configuration, migrationId);
-                        }
-
-                        migrationRecovered = true;
-                        Console.WriteLine($"PostgreSQL duplicate-column nedeniyle migration gecmisi duzeltildi: {string.Join(", ", recoverableDuplicateColumnMigrations)}");
-                    }
-                }
-                catch (Exception npgsqlFixEx)
-                {
-                    Console.WriteLine($"PostgreSQL migration duzeltme hatasi: {npgsqlFixEx.Message}");
-                }
-            }
-
-            else if (context.Database.IsNpgsql()
-                && ex.GetBaseException() is PostgresException duplicateTableEx
-                && duplicateTableEx.SqlState == PostgresErrorCodes.DuplicateTable)
-            {
-                try
-                {
-                    var recoverableMigrations = new List<string>();
-
-                    if (pendingMigrations.Contains(AddPersonelAracAtamaMigrationId)
-                        && await PostgreSqlTableExistsAsync(context, configuration, "PersonelAracAtamalari"))
-                    {
-                        recoverableMigrations.Add(AddPersonelAracAtamaMigrationId);
-                    }
-
-                    if (pendingMigrations.Contains(AddLastikTakipModuluMigrationId)
-                        && await PostgreSqlTableExistsAsync(context, configuration, "LastikDepolar")
-                        && await PostgreSqlTableExistsAsync(context, configuration, "LastikStoklar")
-                        && await PostgreSqlTableExistsAsync(context, configuration, "LastikDegisimler"))
-                    {
-                        recoverableMigrations.Add(AddLastikTakipModuluMigrationId);
-                    }
-
-                    if (pendingMigrations.Contains(LastikStokBireyselTakipMigrationId)
-                        && await PostgreSqlColumnExistsAsync(context, configuration, "LastikStoklar", "Aktif")
-                        && await PostgreSqlColumnExistsAsync(context, configuration, "LastikStoklar", "AracId")
-                        && await PostgreSqlColumnExistsAsync(context, configuration, "LastikStoklar", "YedekMi"))
-                    {
-                        recoverableMigrations.Add(LastikStokBireyselTakipMigrationId);
-                    }
-
-                    if (pendingMigrations.Contains(AddPiyasaArastirmaModuleMigrationId)
-                        && await PostgreSqlTableExistsAsync(context, configuration, "AracMarkaModeller")
-                        && await PostgreSqlTableExistsAsync(context, configuration, "PiyasaArastirmalar")
-                        && await PostgreSqlTableExistsAsync(context, configuration, "PiyasaArastirmaIlanlar"))
-                    {
-                        recoverableMigrations.Add(AddPiyasaArastirmaModuleMigrationId);
-                    }
-
-                    if (pendingMigrations.Contains(AddLastikSezonAyarMigrationId)
-                        && await PostgreSqlTableExistsAsync(context, configuration, "LastikSezonAyarlari"))
-                    {
-                        recoverableMigrations.Add(AddLastikSezonAyarMigrationId);
-                    }
-
-                    if (pendingMigrations.Contains(AddHakedisVeAracMaliyetSnapshotMigrationId)
-                        && await PostgreSqlTableExistsAsync(context, configuration, "Hakedisler")
-                        && await PostgreSqlTableExistsAsync(context, configuration, "HakedisDetaylari")
-                        && await PostgreSqlTableExistsAsync(context, configuration, "AracMaliyetSnapshotlari"))
-                    {
-                        recoverableMigrations.Add(AddHakedisVeAracMaliyetSnapshotMigrationId);
-                    }
-
-                    if (pendingMigrations.Contains(TekrarlayanOdemeMigrationId)
-                        && await PostgreSqlTableExistsAsync(context, configuration, "TekrarlayanOdemeler"))
-                    {
-                        recoverableMigrations.Add(TekrarlayanOdemeMigrationId);
-                    }
-
-                    if (recoverableMigrations.Any())
-                    {
-                        foreach (var migrationId in recoverableMigrations)
-                        {
-                            await EnsurePostgreSqlMigrationHistoryEntryAsync(context, configuration, migrationId);
-                        }
-
-                        migrationRecovered = true;
-                        Console.WriteLine($"PostgreSQL duplicate-table nedeniyle migration gecmisi duzeltildi: {string.Join(", ", recoverableMigrations)}");
-                    }
-                }
-                catch (Exception npgsqlFixEx)
-                {
-                    Console.WriteLine($"PostgreSQL duplicate-table migration duzeltme hatasi: {npgsqlFixEx.Message}");
-                }
-            }
-
-            if (migrationRecovered)
-            {
-                Console.WriteLine("Migration kurtarma islemi tamamlandi, startup yardimcilari calistiriliyor.");
-
-                pendingMigrations = (await context.Database.GetPendingMigrationsAsync()).ToList();
-                if (pendingMigrations.Any())
-                {
-                    Console.WriteLine($"Kurtarma sonrasi kalan migration sayisi: {pendingMigrations.Count}");
-                    await context.Database.MigrateAsync();
-                    Console.WriteLine("Kalan migration'lar basariyla uygulandi.");
-                }
-            }
-            else
-            {
-                throw new InvalidOperationException("Veritabanı migration tamamlanamadı; uygulama başlatılmadı.", ex);
-            }
+            throw new InvalidOperationException("Veritabanı migration tamamlanamadı; uygulama başlatılmadı.", ex);
         }
 
         await EnsureSqliteBankOperationKeySchemaAsync(context);
-
-        // PostgreSQL için eksik kolonları ekle
-        if (dbProvider == "PostgreSQL")
-        {
-            await EnsurePostgreSqlMissingColumnsAsync(context, configuration);
-        }
 
         // Fatura benzersiz index'ini firma+yön+numara bazında güvence altına al
         await EnsureFaturaFirmaYonUniqueIndexAsync(context, dbProvider, configuration);
@@ -540,6 +363,335 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
 
         // EBYS örnek veri ve test senaryoları
         await SeedEbysOrnekVerileriAsync(context);
+    }
+
+    /// <summary>
+    /// Creates the current model only for a genuinely empty database. Existing or partial
+    /// schemas continue through the historical migration path and are never baselined here.
+    /// </summary>
+    private static async Task EnsureModelTableAndColumnParityAsync(ApplicationDbContext context)
+    {
+        var modelTables = context.Model.GetRelationalModel().Tables.ToList();
+        var expected = modelTables
+            .SelectMany(table => table.Columns.Select(column => (Table: table.Name, Column: column.Name)))
+            .ToList();
+        var actual = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var actualIndexes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var actualForeignKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var connection = context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            if (context.Database.IsSqlite())
+            {
+                foreach (var table in modelTables)
+                {
+                    var escapedName = table.Name.Replace("\"", "\"\"", StringComparison.Ordinal);
+                    await using var command = connection.CreateCommand();
+                    command.CommandText = $"PRAGMA table_info(\"{escapedName}\")";
+                    await using (var reader = await command.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                            actual.Add($"{table.Name}|{reader.GetString(1)}");
+                    }
+
+                    await using var indexCommand = connection.CreateCommand();
+                    indexCommand.CommandText = "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = $table";
+                    var tableParameter = indexCommand.CreateParameter();
+                    tableParameter.ParameterName = "$table";
+                    tableParameter.Value = table.Name;
+                    indexCommand.Parameters.Add(tableParameter);
+                    await using var indexReader = await indexCommand.ExecuteReaderAsync();
+                    while (await indexReader.ReadAsync())
+                        actualIndexes.Add($"{table.Name}|{indexReader.GetString(0)}");
+                }
+
+                var missingForeignKeys = await FindMissingSqliteMigrationTargetForeignKeysAsync(
+                    connection,
+                    context.Model);
+                var expectedForeignKeys = modelTables
+                    .SelectMany(table => table.ForeignKeyConstraints.Select(foreignKey =>
+                        $"{table.Name}|{foreignKey.PrincipalTable.Name}|" +
+                        $"{string.Join(",", foreignKey.Columns.Select(column => column.Name))}|" +
+                        string.Join(",", foreignKey.PrincipalColumns.Select(column => column.Name))))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                actualForeignKeys.UnionWith(expectedForeignKeys.Where(expectedKey =>
+                    !missingForeignKeys.Any(missingKey => missingKey.StartsWith(
+                        expectedKey.Split('|')[0] + "->", StringComparison.OrdinalIgnoreCase))));
+            }
+            else if (context.Database.IsNpgsql())
+            {
+                await using var command = connection.CreateCommand();
+                command.CommandText = @"
+SELECT table_name, column_name
+FROM information_schema.columns
+WHERE table_schema = current_schema();";
+                await using (var reader = await command.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                        actual.Add($"{reader.GetString(0)}|{reader.GetString(1)}");
+                }
+
+                await using var indexCommand = connection.CreateCommand();
+                indexCommand.CommandText = @"
+SELECT tablename, indexname
+FROM pg_indexes
+WHERE schemaname = current_schema();";
+                await using (var indexReader = await indexCommand.ExecuteReaderAsync())
+                {
+                    while (await indexReader.ReadAsync())
+                        actualIndexes.Add($"{indexReader.GetString(0)}|{indexReader.GetString(1)}");
+                }
+
+                var foreignKeyParts = new Dictionary<(string Table, string Name), List<(string Principal, string From, string To, int Ordinal)>>();
+                await using var foreignKeyCommand = connection.CreateCommand();
+                foreignKeyCommand.CommandText = @"
+SELECT tc.table_name, tc.constraint_name, ccu.table_name,
+       kcu.column_name, ccu.column_name, kcu.ordinal_position
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu
+  ON kcu.constraint_schema = tc.constraint_schema
+ AND kcu.constraint_name = tc.constraint_name
+ AND kcu.table_name = tc.table_name
+JOIN information_schema.constraint_column_usage ccu
+  ON ccu.constraint_schema = tc.constraint_schema
+ AND ccu.constraint_name = tc.constraint_name
+WHERE tc.constraint_schema = current_schema()
+  AND tc.constraint_type = 'FOREIGN KEY'
+ORDER BY tc.table_name, tc.constraint_name, kcu.ordinal_position;";
+                await using (var foreignKeyReader = await foreignKeyCommand.ExecuteReaderAsync())
+                {
+                    while (await foreignKeyReader.ReadAsync())
+                    {
+                        var key = (foreignKeyReader.GetString(0), foreignKeyReader.GetString(1));
+                        if (!foreignKeyParts.TryGetValue(key, out var parts))
+                            foreignKeyParts[key] = parts = new();
+                        parts.Add((foreignKeyReader.GetString(2), foreignKeyReader.GetString(3),
+                            foreignKeyReader.GetString(4), foreignKeyReader.GetInt32(5)));
+                    }
+                }
+
+                foreach (var ((tableName, _), parts) in foreignKeyParts)
+                {
+                    var ordered = parts.OrderBy(part => part.Ordinal).ToList();
+                    actualForeignKeys.Add(
+                        $"{tableName}|{ordered[0].Principal}|" +
+                        $"{string.Join(",", ordered.Select(part => part.From))}|" +
+                        string.Join(",", ordered.Select(part => part.To)));
+                }
+            }
+            else
+            {
+                throw new NotSupportedException("Şema parity denetimi yalnız PostgreSQL ve SQLite için desteklenir.");
+            }
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+
+        var missing = expected
+            .Where(item => !actual.Contains($"{item.Table}|{item.Column}"))
+            .Select(item => $"{item.Table}.{item.Column}")
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var expectedIndexes = modelTables
+            .SelectMany(table => table.Indexes.Select(index => $"{table.Name}|{index.Name}"))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+        missing.AddRange(expectedIndexes
+            .Where(index => !actualIndexes.Contains(index))
+            .Select(index => $"index {index.Replace('|', '.') }"));
+
+        var expectedForeignKeySignatures = modelTables
+            .SelectMany(table => table.ForeignKeyConstraints.Select(foreignKey =>
+                $"{table.Name}|{foreignKey.PrincipalTable.Name}|" +
+                $"{string.Join(",", foreignKey.Columns.Select(column => column.Name))}|" +
+                string.Join(",", foreignKey.PrincipalColumns.Select(column => column.Name))))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+        missing.AddRange(expectedForeignKeySignatures
+            .Where(signature => !actualForeignKeys.Contains(signature))
+            .Select(signature => $"foreign key {signature.Replace('|', '.') }"));
+
+        if (actual.Contains("Araclar|Plaka"))
+            missing.Add("Araclar.Plaka (legacy kolonu migration sonrası duruyor)");
+
+        if (missing.Count > 0)
+        {
+            var sample = string.Join(", ", missing.Take(12));
+            throw new InvalidOperationException(
+                $"Migration sonrası veritabanı EF model tablo/kolon parity denetimini geçemedi. " +
+                $"Eksik sayısı: {missing.Count}. Örnekler: {sample}. Otomatik DDL yaması uygulanmadı.");
+        }
+    }
+
+    public static async Task<bool> InitializeFreshDatabaseBaselineIfEmptyAsync(ApplicationDbContext context)
+    {
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        if (!await HasNoApplicationTablesAsync(context))
+        {
+            await transaction.RollbackAsync();
+            return false;
+        }
+
+        try
+        {
+            await context.Database.ExecuteSqlRawAsync(context.Database.GenerateCreateScript());
+
+        var historyRepository = context.GetService<IHistoryRepository>();
+        await context.Database.ExecuteSqlRawAsync(historyRepository.GetCreateIfNotExistsScript());
+        await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(
+            context.Database.GetDbConnection(), transaction.GetDbTransaction());
+
+        var productVersion = Microsoft.EntityFrameworkCore.Infrastructure.ProductInfo.GetVersion();
+        foreach (var migrationId in context.Database.GetMigrations())
+        {
+            await context.Database.ExecuteSqlRawAsync(
+                historyRepository.GetInsertScript(new HistoryRow(migrationId, productVersion)));
+        }
+
+        var seedOrganizations = new (string Name, string Code)[]
+        {
+            ("Ustun Holding", "USTUNHOLDING"),
+            ("Ustun Grup", "USTUNGRUP"),
+            ("Ustun Filo", "USTUNFILO"),
+            ("Recep Ustun", "RECEPUSTUN")
+        };
+
+        foreach (var (name, code) in seedOrganizations)
+        {
+            if (!await context.Organizasyonlar.IgnoreQueryFilters().AnyAsync(item => item.Kod == code))
+                context.Organizasyonlar.Add(new Organizasyon { Adi = name, Kod = code });
+        }
+
+            await context.SaveChangesAsync();
+            await transaction.CommitAsync();
+            Console.WriteLine($"Fresh database baseline initialized for {context.Database.ProviderName}; {context.Database.GetMigrations().Count()} migrations recorded.");
+            return true;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    private static async Task EnsurePostgreSqlMigrationHistoryAsync(ApplicationDbContext context)
+    {
+        var connection = context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose) await connection.OpenAsync();
+
+        try
+        {
+            await using var applicationTablesCommand = connection.CreateCommand();
+            applicationTablesCommand.CommandText = """
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = current_schema()
+                  AND table_type = 'BASE TABLE'
+                  AND table_name NOT IN ('__EFMigrationsHistory', '__MKWriteJournal');
+                """;
+            if (Convert.ToInt32(await applicationTablesCommand.ExecuteScalarAsync()) == 0)
+                return;
+
+            await using var historyExistsCommand = connection.CreateCommand();
+            historyExistsCommand.CommandText = """
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.tables
+                    WHERE table_schema = current_schema()
+                      AND table_name = '__EFMigrationsHistory');
+                """;
+            if (await historyExistsCommand.ExecuteScalarAsync() is not true)
+            {
+                throw new InvalidOperationException(
+                    "PostgreSQL'de uygulama tabloları mevcut ancak __EFMigrationsHistory yok. Migration geçmişi otomatik üretilmedi; eski şema için doğrulanmış yedek/parity ve kontrollü geçiş gerekir.");
+            }
+
+            var appliedMigrations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using (var historyCommand = connection.CreateCommand())
+            {
+                historyCommand.CommandText = "SELECT \"MigrationId\" FROM \"__EFMigrationsHistory\"";
+                await using var reader = await historyCommand.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                    appliedMigrations.Add(reader.GetString(0));
+            }
+
+            var allMigrations = context.Database.GetMigrations().ToList();
+            if (appliedMigrations.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "PostgreSQL'de uygulama tabloları mevcut ancak migration geçmişi boş. Mevcut şema yeni baseline olarak varsayılmadı; provenance doğrulanmadan başlangıç reddedildi.");
+            }
+
+            var missingLegacyMigrations = allMigrations
+                .Where(id => string.CompareOrdinal(id, SqliteLegacySchemaWatermark) <= 0)
+                .Where(id => !appliedMigrations.Contains(id))
+                .ToList();
+            if (missingLegacyMigrations.Count > 0)
+            {
+                var sample = string.Join(", ", missingLegacyMigrations.Take(8));
+                throw new InvalidOperationException(
+                    $"PostgreSQL migration geçmişi legacy watermark öncesinde eksik ({missingLegacyMigrations.Count} kayıt; örnek: {sample}). Veri taşıma/backfill adımlarının uygulandığı kanıtlanamadığından history otomatik onarılmadı.");
+            }
+        }
+        finally
+        {
+            if (shouldClose) await connection.CloseAsync();
+        }
+    }
+
+    private static async Task<bool> HasNoApplicationTablesAsync(ApplicationDbContext context)
+    {
+        var connection = context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose) await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            if (context.Database.IsSqlite())
+            {
+                command.CommandText = @"
+                    SELECT COUNT(*) FROM sqlite_master
+                    WHERE type = 'table'
+                      AND name NOT LIKE 'sqlite_%'
+                      AND name <> '__MKWriteJournal'
+                      AND name <> '__EFMigrationsHistory';";
+            }
+            else
+            {
+                command.CommandText = @"
+                    SELECT COUNT(*) FROM information_schema.tables
+                    WHERE table_schema = 'public'
+                      AND table_type = 'BASE TABLE'
+                      AND table_name <> '__EFMigrationsHistory';";
+            }
+
+            var applicationTableCount = Convert.ToInt32(await command.ExecuteScalarAsync());
+            if (applicationTableCount != 0)
+                return false;
+
+            await using var historyCommand = connection.CreateCommand();
+            historyCommand.CommandText = context.Database.IsSqlite()
+                ? "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '__EFMigrationsHistory'"
+                : "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '__EFMigrationsHistory'";
+            if (Convert.ToInt32(await historyCommand.ExecuteScalarAsync()) == 0)
+                return true;
+
+            await using var historyCountCommand = connection.CreateCommand();
+            historyCountCommand.CommandText = "SELECT COUNT(*) FROM \"__EFMigrationsHistory\"";
+            return Convert.ToInt32(await historyCountCommand.ExecuteScalarAsync()) == 0;
+        }
+        finally
+        {
+            if (shouldClose) await connection.CloseAsync();
+        }
     }
 
     private static async Task EnsureNoDuplicateActiveVehiclePlatesAsync(ApplicationDbContext context)
@@ -653,91 +805,12 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
             ?? throw new InvalidOperationException("DefaultConnection bulunamadi.");
     }
 
-    private static async Task EnsurePostgreSqlMigrationHistoryEntryAsync(ApplicationDbContext context, IConfiguration configuration, string migrationId)
-    {
-        var connectionString = GetDefaultConnectionString(context, configuration);
-        await using var conn = new NpgsqlConnection(connectionString);
-        await conn.OpenAsync();
-
-        const string sql = @"
-INSERT INTO ""__EFMigrationsHistory"" (""MigrationId"", ""ProductVersion"")
-SELECT @migrationId,
-       COALESCE((SELECT ""ProductVersion"" FROM ""__EFMigrationsHistory"" ORDER BY ""MigrationId"" DESC LIMIT 1), '10.0.0')
-WHERE NOT EXISTS (
-    SELECT 1 FROM ""__EFMigrationsHistory"" WHERE ""MigrationId"" = @migrationId
-);";
-
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("migrationId", migrationId);
-        await cmd.ExecuteNonQueryAsync();
-    }
-
-    private static async Task<bool> PostgreSqlTableExistsAsync(ApplicationDbContext context, IConfiguration configuration, string tableName)
-    {
-        var connectionString = GetDefaultConnectionString(context, configuration);
-        await using var conn = new NpgsqlConnection(connectionString);
-        await conn.OpenAsync();
-
-        const string sql = @"
-SELECT EXISTS (
-    SELECT 1
-    FROM information_schema.tables
-    WHERE table_schema = current_schema()
-      AND table_name = @tableName
-);";
-
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("tableName", tableName);
-        return (bool)(await cmd.ExecuteScalarAsync() ?? false);
-    }
-
-    private static async Task<bool> PostgreSqlColumnExistsAsync(ApplicationDbContext context, IConfiguration configuration, string tableName, string columnName)
-    {
-        var connectionString = GetDefaultConnectionString(context, configuration);
-        await using var conn = new NpgsqlConnection(connectionString);
-        await conn.OpenAsync();
-
-        const string sql = @"
-SELECT EXISTS (
-    SELECT 1
-    FROM information_schema.columns
-    WHERE table_schema = current_schema()
-      AND table_name = @tableName
-      AND column_name = @columnName
-);";
-
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("tableName", tableName);
-        cmd.Parameters.AddWithValue("columnName", columnName);
-        return (bool)(await cmd.ExecuteScalarAsync() ?? false);
-    }
-
-    private static async Task<bool> PostgreSqlConstraintExistsAsync(ApplicationDbContext context, IConfiguration configuration, string tableName, string constraintName)
-    {
-        var connectionString = GetDefaultConnectionString(context, configuration);
-        await using var conn = new NpgsqlConnection(connectionString);
-        await conn.OpenAsync();
-
-        const string sql = @"
-SELECT EXISTS (
-    SELECT 1
-    FROM information_schema.table_constraints
-    WHERE constraint_schema = current_schema()
-      AND table_name = @tableName
-      AND constraint_name = @constraintName
-);";
-
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("tableName", tableName);
-        cmd.Parameters.AddWithValue("constraintName", constraintName);
-        return (bool)(await cmd.ExecuteScalarAsync() ?? false);
-    }
-
     private static async Task NormalizePostgreSqlAuditTimestampColumnsAsync(ApplicationDbContext context, IConfiguration configuration)
     {
         var connectionString = GetDefaultConnectionString(context, configuration);
         await using var conn = new NpgsqlConnection(connectionString);
         await conn.OpenAsync();
+        await using var transaction = await conn.BeginTransactionAsync();
 
         const string findColumnsSql = @"
 SELECT c.table_name, c.column_name, c.column_default
@@ -753,7 +826,7 @@ ORDER BY CASE WHEN c.table_name IN ('Soforler', 'Personeller') THEN 0 ELSE 1 END
          c.ordinal_position;";
 
         var targets = new List<(string TableName, string ColumnName, string? ColumnDefault)>();
-        await using (var findCmd = new NpgsqlCommand(findColumnsSql, conn))
+        await using (var findCmd = new NpgsqlCommand(findColumnsSql, conn, transaction))
         await using (var reader = await findCmd.ExecuteReaderAsync())
         {
             while (await reader.ReadAsync())
@@ -775,7 +848,7 @@ ORDER BY CASE WHEN c.table_name IN ('Soforler', 'Personeller') THEN 0 ELSE 1 END
                 var dropDefaultSql = $@"ALTER TABLE ""{escapedTableName}""
 ALTER COLUMN ""{escapedColumnName}"" DROP DEFAULT;";
 
-                await using var dropDefaultCmd = new NpgsqlCommand(dropDefaultSql, conn);
+                await using var dropDefaultCmd = new NpgsqlCommand(dropDefaultSql, conn, transaction);
                 await dropDefaultCmd.ExecuteNonQueryAsync();
             }
 
@@ -783,7 +856,7 @@ ALTER COLUMN ""{escapedColumnName}"" DROP DEFAULT;";
 ALTER COLUMN ""{escapedColumnName}"" TYPE timestamp without time zone
 USING ""{escapedColumnName}"" AT TIME ZONE 'UTC';";
 
-            await using (var alterCmd = new NpgsqlCommand(alterSql, conn))
+            await using (var alterCmd = new NpgsqlCommand(alterSql, conn, transaction))
             {
                 await alterCmd.ExecuteNonQueryAsync();
             }
@@ -794,14 +867,16 @@ USING ""{escapedColumnName}"" AT TIME ZONE 'UTC';";
                 var setDefaultSql = $@"ALTER TABLE ""{escapedTableName}""
 ALTER COLUMN ""{escapedColumnName}"" SET DEFAULT {normalizedDefaultSql};";
 
-                await using var setDefaultCmd = new NpgsqlCommand(setDefaultSql, conn);
+                await using var setDefaultCmd = new NpgsqlCommand(setDefaultSql, conn, transaction);
                 await setDefaultCmd.ExecuteNonQueryAsync();
             }
         }
 
+        await transaction.CommitAsync();
+
         if (targets.Count > 0)
         {
-            Console.WriteLine($"PostgreSQL timestamp kolonlari normalize edildi: {targets.Count}");
+            Console.WriteLine($"PostgreSQL timestamp kolonlari normalize edildi atomik olarak: {targets.Count}");
         }
     }
 
@@ -825,36 +900,36 @@ ALTER COLUMN ""{escapedColumnName}"" SET DEFAULT {normalizedDefaultSql};";
 
     private static async Task EnsureFaturaFirmaYonUniqueIndexAsync(ApplicationDbContext context, string dbProvider, IConfiguration configuration)
     {
-        try
+        if (dbProvider == "PostgreSQL")
         {
-            if (dbProvider == "PostgreSQL")
-            {
-                var connectionString = GetDefaultConnectionString(context, configuration);
-                await using var conn = new NpgsqlConnection(connectionString);
-                await conn.OpenAsync();
+            var connectionString = GetDefaultConnectionString(context, configuration);
+            await using var conn = new NpgsqlConnection(connectionString);
+            await conn.OpenAsync();
+            await using var transaction = await conn.BeginTransactionAsync();
 
-                const string sql = @"
-DROP INDEX IF EXISTS ""IX_Faturalar_FaturaNo"";
+            await using (var create = new NpgsqlCommand(@"
 CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Faturalar_FirmaId_FaturaYonu_FaturaNo""
 ON ""Faturalar"" (""FirmaId"", ""FaturaYonu"", ""FaturaNo"")
-WHERE ""IsDeleted"" = false;";
+WHERE ""IsDeleted"" = false;", conn, transaction))
+                await create.ExecuteNonQueryAsync();
 
-                await using var cmd = new NpgsqlCommand(sql, conn);
-                await cmd.ExecuteNonQueryAsync();
-            }
-            else if (dbProvider == "SQLite")
-            {
-                await context.Database.ExecuteSqlRawAsync(@"
-DROP INDEX IF EXISTS IX_Faturalar_FaturaNo;
+            await using (var drop = new NpgsqlCommand("DROP INDEX IF EXISTS \"IX_Faturalar_FaturaNo\";", conn, transaction))
+                await drop.ExecuteNonQueryAsync();
+
+            await transaction.CommitAsync();
+        }
+        else if (dbProvider == "SQLite")
+        {
+            await using var transaction = await context.Database.BeginTransactionAsync();
+            await context.Database.ExecuteSqlRawAsync(@"
 CREATE UNIQUE INDEX IF NOT EXISTS IX_Faturalar_FirmaId_FaturaYonu_FaturaNo
 ON Faturalar (FirmaId, FaturaYonu, FaturaNo)
 WHERE IsDeleted = 0;");
-            }
+            await context.Database.ExecuteSqlRawAsync("DROP INDEX IF EXISTS IX_Faturalar_FaturaNo;");
+            await transaction.CommitAsync();
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Fatura benzersiz index düzeltmesi uygulanamadı: {ex.Message}");
-        }
+        else
+            throw new NotSupportedException($"Fatura benzersiz indeksi {dbProvider} sağlayıcısında desteklenmiyor.");
     }
 
     private static async Task EnsurePiyasaKaynaklarTableAsync(ApplicationDbContext context, string dbProvider, IConfiguration configuration)
@@ -1275,7 +1350,9 @@ WHERE IsDeleted = 0;");
         }
     }
 
-    private static async Task EnsureSqliteMigrationHistoryAsync(ApplicationDbContext context, List<string> pendingMigrations)
+    private static async Task EnsureSqliteMigrationHistoryAsync(
+        ApplicationDbContext context,
+        List<string> pendingMigrations)
     {
         var connection = context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -1295,17 +1372,15 @@ WHERE IsDeleted = 0;");
                 return;
             }
 
-            await using var historyCreate = connection.CreateCommand();
-            historyCreate.CommandText = @"
-                CREATE TABLE IF NOT EXISTS ""__EFMigrationsHistory"" (
-                    ""MigrationId"" TEXT NOT NULL CONSTRAINT ""PK___EFMigrationsHistory"" PRIMARY KEY,
-                    ""ProductVersion"" TEXT NOT NULL
-                );";
-            await historyCreate.ExecuteNonQueryAsync();
+            var allMigrations = context.Database.GetMigrations().ToList();
+            await using var historyTableCheck = connection.CreateCommand();
+            historyTableCheck.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = '__EFMigrationsHistory' LIMIT 1";
+            var hasMigrationHistoryTable = await historyTableCheck.ExecuteScalarAsync() is not null;
 
             var existingMigrationIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            await using (var historyReader = connection.CreateCommand())
+            if (hasMigrationHistoryTable)
             {
+                await using var historyReader = connection.CreateCommand();
                 historyReader.CommandText = "SELECT \"MigrationId\" FROM \"__EFMigrationsHistory\"";
                 await using var reader = await historyReader.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
@@ -1313,36 +1388,66 @@ WHERE IsDeleted = 0;");
                     existingMigrationIds.Add(reader.GetString(0));
                 }
             }
+            var hasMigrationHistory = existingMigrationIds.Count > 0;
 
-            var allMigrations = context.Database.GetMigrations().ToList();
-            var migrationsToBaseline = SelectSqliteLegacyMigrationsToBaseline(
-                allMigrations, pendingMigrations, existingMigrationIds);
-
-            if (migrationsToBaseline.Count == 0)
+            if (!hasMigrationHistory)
             {
-                return;
+                throw new InvalidOperationException(
+                    "Mevcut SQLite veritabanında migration geçmişi yok. Veri dönüşüm geçmişi yalnız şemadan kanıtlanamadığı için otomatik adoption/baseline yapılmadı; yedekli ve fixture ile doğrulanmış geçiş prosedürü olmadan başlangıç durduruldu.");
             }
 
-            await using var insertHistory = connection.CreateCommand();
-            insertHistory.CommandText = "INSERT INTO \"__EFMigrationsHistory\" (\"MigrationId\", \"ProductVersion\") VALUES ($id, $version)";
-
-            var idParameter = insertHistory.CreateParameter();
-            idParameter.ParameterName = "$id";
-            idParameter.Value = string.Empty;
-            insertHistory.Parameters.Add(idParameter);
-
-            var versionParameter = insertHistory.CreateParameter();
-            versionParameter.ParameterName = "$version";
-            versionParameter.Value = "10.0.5";
-            insertHistory.Parameters.Add(versionParameter);
-
-            foreach (var migrationId in migrationsToBaseline)
+            var requiredLegacyMigrations = allMigrations
+                .Where(id => string.CompareOrdinal(id, SqliteLegacySchemaWatermark) <= 0)
+                .Where(id => !existingMigrationIds.Contains(id))
+                .ToList();
+            if (hasMigrationHistory && requiredLegacyMigrations.Count > 0)
             {
-                idParameter.Value = migrationId;
-                await insertHistory.ExecuteNonQueryAsync();
+                var sample = string.Join(", ", requiredLegacyMigrations.Take(8));
+                throw new InvalidOperationException(
+                    $"SQLite migration gecmisi legacy watermark oncesinde eksik ({requiredLegacyMigrations.Count} kayit; ornek: {sample}). Kismi migration gecmisi otomatik onarilmaz.");
             }
 
-            Console.WriteLine($"SQLite migration history baselined: {migrationsToBaseline.Count} migration");
+            var migrationsAssembly = context.GetService<IMigrationsAssembly>();
+            if (!migrationsAssembly.Migrations.TryGetValue(SqliteLegacySchemaWatermark, out var watermarkMigrationType))
+            {
+                throw new InvalidOperationException(
+                    $"SQLite legacy schema watermark migration bulunamadi: {SqliteLegacySchemaWatermark}");
+            }
+
+            var watermarkMigration = migrationsAssembly.CreateMigration(
+                watermarkMigrationType,
+                context.Database.ProviderName!);
+            var missingColumns = await FindMissingSqliteMigrationTargetColumnsAsync(
+                connection,
+                watermarkMigration.TargetModel);
+            if (missingColumns.Count > 0)
+            {
+                var sample = string.Join(", ", missingColumns.Take(8));
+                throw new InvalidOperationException(
+                    $"SQLite veritabani legacy migration watermark semasi ile uyusmuyor; migration gecmisi otomatik doldurulmadi. Eksik kolonlar: {sample}");
+            }
+
+            var missingIndexes = await FindMissingSqliteMigrationTargetIndexesAsync(
+                connection,
+                watermarkMigration.TargetModel);
+            if (missingIndexes.Count > 0)
+            {
+                var sample = string.Join(", ", missingIndexes.Take(8));
+                throw new InvalidOperationException(
+                    $"SQLite veritabani legacy migration watermark indeksleri ile uyusmuyor; migration gecmisi otomatik doldurulmadi. Eksik indeksler: {sample}");
+            }
+            var missingForeignKeys = await FindMissingSqliteMigrationTargetForeignKeysAsync(
+                connection,
+                watermarkMigration.TargetModel);
+            if (missingForeignKeys.Count > 0)
+            {
+                var sample = string.Join(", ", missingForeignKeys.Take(8));
+                throw new InvalidOperationException(
+                    $"SQLite veritabani legacy migration watermark iliskileri ile uyusmuyor; migration gecmisi otomatik doldurulmadi. Eksik iliskiler: {sample}");
+            }
+
+            // Existing databases have a verified history chain at this point. Let EF apply
+            // pending migrations normally; never infer historical DML from schema parity.
         }
         finally
         {
@@ -1351,6 +1456,434 @@ WHERE IsDeleted = 0;");
                 await connection.CloseAsync();
             }
         }
+    }
+
+    private static async Task ReconcileSqliteLegacyDataBeforeBaselineAsync(
+        ApplicationDbContext context,
+        DbConnection connection)
+    {
+        var defaultFirmaId = await context.Firmalar
+            .IgnoreQueryFilters()
+            .Where(firma => firma.VarsayilanFirma && firma.Aktif)
+            .Select(firma => (int?)firma.Id)
+            .FirstOrDefaultAsync();
+        defaultFirmaId ??= await context.Firmalar
+            .IgnoreQueryFilters()
+            .Where(firma => firma.Aktif)
+            .OrderBy(firma => firma.Id)
+            .Select(firma => (int?)firma.Id)
+            .FirstOrDefaultAsync();
+        if (defaultFirmaId is null or 0)
+        {
+            throw new InvalidOperationException(
+                "SQLite legacy baseline icin aktif varsayilan firma bulunamadi; veri migration'lari uygulanmadi ve migration gecmisi yazilmadi.");
+        }
+
+        var transaction = context.Database.CurrentTransaction?.GetDbTransaction();
+        var vehicleColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await using (var columnsCommand = connection.CreateCommand())
+        {
+            columnsCommand.Transaction = transaction;
+            columnsCommand.CommandText = "PRAGMA table_info(\"Araclar\")";
+            await using var reader = await columnsCommand.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                vehicleColumns.Add(reader.GetString(1));
+            }
+        }
+
+        if (vehicleColumns.Contains("Plaka"))
+        {
+            // Reapply the data-preserving part of AracSasePlakaYapisi before discarding its legacy source column.
+            await context.Database.ExecuteSqlRawAsync("DROP INDEX IF EXISTS \"IX_Araclar_Plaka\";");
+            await context.Database.ExecuteSqlRawAsync(@"
+                UPDATE ""Araclar""
+                SET ""SaseNo"" = ""Plaka""
+                WHERE TRIM(COALESCE(""SaseNo"", '')) = ''
+                  AND TRIM(COALESCE(""Plaka"", '')) <> '';
+
+                UPDATE ""Araclar""
+                SET ""AktifPlaka"" = ""Plaka""
+                WHERE TRIM(COALESCE(""Plaka"", '')) <> ''
+                  AND TRIM(COALESCE(""AktifPlaka"", '')) = '';
+
+                INSERT INTO ""AracPlakalar"" (""AracId"", ""Plaka"", ""GirisTarihi"", ""IslemTipi"", ""Aciklama"", ""CreatedAt"", ""IsDeleted"")
+                SELECT a.""Id"", a.""Plaka"", COALESCE(a.""CreatedAt"", datetime('now')), 1,
+                       'Mevcut kayıttan aktarıldı', COALESCE(a.""CreatedAt"", datetime('now')), 0
+                FROM ""Araclar"" a
+                WHERE TRIM(COALESCE(a.""Plaka"", '')) <> ''
+                  AND NOT EXISTS (
+                      SELECT 1 FROM ""AracPlakalar"" ap
+                      WHERE ap.""AracId"" = a.""Id"" AND ap.""Plaka"" = a.""Plaka""
+                        AND ap.""CikisTarihi"" IS NULL AND ap.""IsDeleted"" = 0
+                  );
+
+                ALTER TABLE ""Araclar"" DROP COLUMN ""Plaka"";");
+        }
+
+        await NormalizeSqliteLegacyEnumColumnAsync(
+            context, "RentACarOdemeHareketleri", "HareketTuru",
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["kiratahsilati"] = 0, ["depozitotahsilati"] = 1, ["kiraiadesi"] = 2,
+                ["depozitoiadesi"] = 3, ["kira tahsilatı"] = 0, ["depozito tahsilatı"] = 1,
+                ["kira iadesi"] = 2, ["depozito iadesi"] = 3
+            });
+        await NormalizeSqliteLegacyEnumColumnAsync(
+            context, "RentACarOdemeHareketleri", "OdemeYontemi",
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["nakit"] = 0, ["kredikarti"] = 1, ["kredi kartı"] = 1, ["bankakarti"] = 2,
+                ["banka kartı"] = 2, ["havale"] = 3, ["eft"] = 4, ["carimahsup"] = 5,
+                ["cari mahsup"] = 5, ["diger"] = 6, ["diğer"] = 6
+            });
+
+        var organizationSeeds = new (string Name, string Code)[]
+        {
+            ("Ustun Holding", "USTUNHOLDING"),
+            ("Ustun Grup", "USTUNGRUP"),
+            ("Ustun Filo", "USTUNFILO"),
+            ("Recep Ustun", "RECEPUSTUN")
+        };
+        foreach (var (name, code) in organizationSeeds)
+        {
+            if (!await context.Organizasyonlar.IgnoreQueryFilters().AnyAsync(item => item.Kod == code))
+            {
+                context.Organizasyonlar.Add(new Organizasyon { Adi = name, Kod = code });
+            }
+        }
+        await context.SaveChangesAsync();
+
+        var holdingId = await context.Organizasyonlar.IgnoreQueryFilters()
+            .Where(item => item.Kod == "USTUNHOLDING")
+            .Select(item => item.Id)
+            .SingleAsync();
+        await context.Database.ExecuteSqlRawAsync(@"
+            UPDATE ""Firmalar""
+            SET ""OrganizasyonId"" = {0}
+            WHERE ""OrganizasyonId"" IS NULL OR ""OrganizasyonId"" = 0
+               OR NOT EXISTS (SELECT 1 FROM ""Organizasyonlar"" o WHERE o.""Id"" = ""Firmalar"".""OrganizasyonId"");",
+            holdingId);
+
+        var tenantTables = new[]
+        {
+            "Cariler", "Kurumlar", "Guzergahlar", "Personeller", "Araclar", "BankaHesaplari",
+            "BankaKasaHareketleri", "StokKartlari", "StokKategoriler", "StokHareketler",
+            "MasrafKalemleri", "Faturalar", "ServisCalismalari", "Hakedisler", "HakedisDetaylari",
+            "GuzergahSeferleri", "Kapasiteler", "CariSeferUcretleri", "BakimPeriyotlar"
+        };
+        await context.Database.ExecuteSqlRawAsync(@"
+            UPDATE ""GuzergahSeferleri""
+            SET ""FirmaId"" = (SELECT g.""FirmaId"" FROM ""Guzergahlar"" g WHERE g.""Id"" = ""GuzergahSeferleri"".""GuzergahId"")
+            WHERE (""FirmaId"" IS NULL OR ""FirmaId"" = 0)
+              AND EXISTS (SELECT 1 FROM ""Guzergahlar"" g WHERE g.""Id"" = ""GuzergahSeferleri"".""GuzergahId"");");
+
+        foreach (var table in tenantTables)
+        {
+            var companyValue = context.Database.GetDbConnection().CreateCommand();
+            await using (companyValue)
+            {
+                companyValue.Transaction = transaction;
+                companyValue.CommandText = $"UPDATE \"{table}\" SET \"FirmaId\" = $firmaId WHERE \"FirmaId\" IS NULL OR \"FirmaId\" = 0";
+                var parameter = companyValue.CreateParameter();
+                parameter.ParameterName = "$firmaId";
+                parameter.Value = defaultFirmaId.Value;
+                companyValue.Parameters.Add(parameter);
+                await companyValue.ExecuteNonQueryAsync();
+            }
+        }
+
+        await using var foreignKeyCheck = connection.CreateCommand();
+        foreignKeyCheck.Transaction = transaction;
+        foreignKeyCheck.CommandText = "PRAGMA foreign_key_check";
+        await using var foreignKeyReader = await foreignKeyCheck.ExecuteReaderAsync();
+        if (await foreignKeyReader.ReadAsync())
+        {
+            var table = foreignKeyReader.GetString(0);
+            throw new InvalidOperationException(
+                $"SQLite legacy baseline durduruldu: veri onarimindan sonra foreign key ihlali var ({table}). Migration gecmisi yazilmadi.");
+        }
+    }
+
+    private static async Task NormalizeSqliteLegacyEnumColumnAsync(
+        ApplicationDbContext context,
+        string table,
+        string column,
+        IReadOnlyDictionary<string, int> labels)
+    {
+        var quotedTable = $"\"{table}\"";
+        var quotedColumn = $"\"{column}\"";
+        await using var invalidValueCheck = context.Database.GetDbConnection().CreateCommand();
+        invalidValueCheck.Transaction = context.Database.CurrentTransaction?.GetDbTransaction();
+        invalidValueCheck.CommandText = $@"
+            SELECT CAST({quotedColumn} AS TEXT)
+            FROM {quotedTable}
+            WHERE typeof({quotedColumn}) = 'text'
+              AND lower(trim(CAST({quotedColumn} AS TEXT))) NOT IN ({string.Join(",", labels.Keys.Select(label => "'" + label.Replace("'", "''", StringComparison.Ordinal) + "'"))})
+              AND (trim(CAST({quotedColumn} AS TEXT)) = '' OR trim(CAST({quotedColumn} AS TEXT)) GLOB '*[^0-9]*')
+            LIMIT 1;";
+        var invalid = await invalidValueCheck.ExecuteScalarAsync();
+        if (invalid is not null)
+        {
+            throw new InvalidOperationException(
+                $"SQLite legacy baseline durduruldu: {table}.{column} içinde tanınmayan enum değeri var. Migration geçmişi yazılmadı.");
+        }
+
+        var cases = string.Join(" ", labels.Select(pair =>
+            $"WHEN '{pair.Key.Replace("'", "''", StringComparison.Ordinal)}' THEN {pair.Value}"));
+        await using var normalizeCommand = context.Database.GetDbConnection().CreateCommand();
+        normalizeCommand.Transaction = context.Database.CurrentTransaction?.GetDbTransaction();
+        normalizeCommand.CommandText = $@"
+            UPDATE {quotedTable}
+            SET {quotedColumn} = CASE lower(trim(CAST({quotedColumn} AS TEXT)))
+                {cases}
+                ELSE CAST(trim(CAST({quotedColumn} AS TEXT)) AS INTEGER)
+            END
+            WHERE typeof({quotedColumn}) = 'text';";
+        await normalizeCommand.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<List<string>> FindPendingSqliteMigrationConflictsAsync(
+        ApplicationDbContext context,
+        DbConnection connection,
+        IReadOnlyCollection<string> pendingMigrations)
+    {
+        var conflicts = new List<string>();
+        var migrationsAssembly = context.GetService<IMigrationsAssembly>();
+        var transaction = context.Database.CurrentTransaction?.GetDbTransaction();
+        foreach (var id in pendingMigrations.Where(id => string.CompareOrdinal(id, SqliteLegacySchemaWatermark) > 0))
+        {
+            if (!migrationsAssembly.Migrations.TryGetValue(id, out var migrationType))
+                continue;
+            var migration = migrationsAssembly.CreateMigration(migrationType, context.Database.ProviderName!);
+            foreach (var operation in migration.UpOperations)
+            {
+                switch (operation)
+                {
+                    case AddColumnOperation addColumn when await SqliteColumnExistsAsync(connection, addColumn.Table, addColumn.Name, transaction):
+                        conflicts.Add($"{id}: {addColumn.Table}.{addColumn.Name} zaten var");
+                        break;
+                    case CreateTableOperation createTable when await SqliteTableExistsAsync(connection, createTable.Name, transaction):
+                        conflicts.Add($"{id}: {createTable.Name} tablosu zaten var");
+                        break;
+                    case CreateIndexOperation createIndex when await SqliteIndexExistsAsync(connection, createIndex.Table!, createIndex.Name, transaction):
+                        conflicts.Add($"{id}: {createIndex.Name} indeksi zaten var");
+                        break;
+                    case DropTableOperation dropTable when !await SqliteTableExistsAsync(connection, dropTable.Name, transaction):
+                        conflicts.Add($"{id}: düşürülecek {dropTable.Name} tablosu yok");
+                        break;
+                    case DropColumnOperation dropColumn when !await SqliteColumnExistsAsync(connection, dropColumn.Table, dropColumn.Name, transaction):
+                        conflicts.Add($"{id}: düşürülecek {dropColumn.Table}.{dropColumn.Name} kolonu yok");
+                        break;
+                    case DropIndexOperation dropIndex when !await SqliteIndexExistsAsync(connection, dropIndex.Table!, dropIndex.Name, transaction):
+                        conflicts.Add($"{id}: düşürülecek {dropIndex.Name} indeksi yok");
+                        break;
+                    case SqlOperation sqlOperation:
+                        foreach (System.Text.RegularExpressions.Match match in
+                                 System.Text.RegularExpressions.Regex.Matches(
+                                     sqlOperation.Sql,
+                                     "CREATE\\s+TRIGGER\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?(?:\\\"(?<quoted>[^\\\"]+)\\\"|(?<plain>[A-Za-z_][A-Za-z0-9_]*))",
+                                     System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                        {
+                            var triggerName = match.Groups["quoted"].Success
+                                ? match.Groups["quoted"].Value
+                                : match.Groups["plain"].Value;
+                            if (await SqliteTriggerExistsAsync(connection, triggerName, transaction))
+                                conflicts.Add($"{id}: {triggerName} trigger zaten var");
+                        }
+                        break;
+                }
+            }
+        }
+        return conflicts;
+    }
+
+    private static async Task<bool> SqliteTableExistsAsync(DbConnection connection, string table, DbTransaction? transaction)
+        => await SqliteSchemaObjectExistsAsync(connection, "table", table, transaction);
+
+    private static async Task<bool> SqliteIndexExistsAsync(DbConnection connection, string table, string index, DbTransaction? transaction)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'index' AND tbl_name = $table AND name = $name LIMIT 1";
+        AddSqliteNameParameters(command, table, index);
+        return await command.ExecuteScalarAsync() is not null;
+    }
+
+    private static async Task<bool> SqliteTriggerExistsAsync(DbConnection connection, string trigger, DbTransaction? transaction)
+        => await SqliteSchemaObjectExistsAsync(connection, "trigger", trigger, transaction);
+
+    private static async Task<bool> SqliteSchemaObjectExistsAsync(DbConnection connection, string type, string name, DbTransaction? transaction)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "SELECT 1 FROM sqlite_master WHERE type = $type AND name = $name LIMIT 1";
+        var typeParameter = command.CreateParameter();
+        typeParameter.ParameterName = "$type";
+        typeParameter.Value = type;
+        command.Parameters.Add(typeParameter);
+        var nameParameter = command.CreateParameter();
+        nameParameter.ParameterName = "$name";
+        nameParameter.Value = name;
+        command.Parameters.Add(nameParameter);
+        return await command.ExecuteScalarAsync() is not null;
+    }
+
+    private static async Task<bool> SqliteColumnExistsAsync(DbConnection connection, string table, string column, DbTransaction? transaction)
+    {
+        var escapedTable = table.Replace("'", "''", StringComparison.Ordinal);
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = $"PRAGMA table_info('{escapedTable}')";
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
+    private static void AddSqliteNameParameters(DbCommand command, string table, string name)
+    {
+        var tableParameter = command.CreateParameter();
+        tableParameter.ParameterName = "$table";
+        tableParameter.Value = table;
+        command.Parameters.Add(tableParameter);
+        var nameParameter = command.CreateParameter();
+        nameParameter.ParameterName = "$name";
+        nameParameter.Value = name;
+        command.Parameters.Add(nameParameter);
+    }
+
+    private static async Task<List<string>> FindMissingSqliteMigrationTargetColumnsAsync(
+        DbConnection connection,
+        Microsoft.EntityFrameworkCore.Metadata.IModel targetModel)
+    {
+        var missing = new List<string>();
+        var tableNames = targetModel.GetEntityTypes()
+            .Select(entityType => entityType.GetTableName())
+            .Where(tableName => !string.IsNullOrWhiteSpace(tableName))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Cast<string>();
+
+        foreach (var tableName in tableNames)
+        {
+            var tableLiteral = tableName.Replace("'", "''", StringComparison.Ordinal);
+            var actualColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using (var command = connection.CreateCommand())
+            {
+                command.CommandText = $"PRAGMA table_info('{tableLiteral}')";
+                await using var reader = await command.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                    actualColumns.Add(reader.GetString(1));
+            }
+
+            if (actualColumns.Count == 0)
+            {
+                missing.Add($"{tableName}.* (tablo yok)");
+                continue;
+            }
+
+            foreach (var entityType in targetModel.GetEntityTypes()
+                         .Where(entityType => string.Equals(entityType.GetTableName(), tableName, StringComparison.OrdinalIgnoreCase)))
+            {
+                var storeObject = Microsoft.EntityFrameworkCore.Metadata.StoreObjectIdentifier.Table(
+                    tableName,
+                    entityType.GetSchema());
+                foreach (var property in entityType.GetProperties())
+                {
+                    var columnName = property.GetColumnName(storeObject);
+                    if (columnName is not null && !actualColumns.Contains(columnName))
+                        missing.Add($"{tableName}.{columnName}");
+                }
+            }
+        }
+
+        return missing;
+    }
+
+    private static async Task<List<string>> FindMissingSqliteMigrationTargetIndexesAsync(
+        DbConnection connection,
+        Microsoft.EntityFrameworkCore.Metadata.IModel targetModel)
+    {
+        var missing = new List<string>();
+        var expectedIndexes = targetModel.GetRelationalModel().Tables
+            .SelectMany(table => table.Indexes.Select(index => (table.Name, Index: index.Name)))
+            .Distinct();
+
+        foreach (var (tableName, indexName) in expectedIndexes)
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'index' AND tbl_name = $table AND name = $index LIMIT 1";
+            var tableParameter = command.CreateParameter();
+            tableParameter.ParameterName = "$table";
+            tableParameter.Value = tableName;
+            command.Parameters.Add(tableParameter);
+            var indexParameter = command.CreateParameter();
+            indexParameter.ParameterName = "$index";
+            indexParameter.Value = indexName;
+            command.Parameters.Add(indexParameter);
+
+            if (await command.ExecuteScalarAsync() is null)
+                missing.Add($"{tableName}.{indexName}");
+        }
+
+        return missing;
+    }
+
+    private static async Task<List<string>> FindMissingSqliteMigrationTargetForeignKeysAsync(
+        DbConnection connection,
+        Microsoft.EntityFrameworkCore.Metadata.IModel targetModel)
+    {
+        var missing = new List<string>();
+        foreach (var table in targetModel.GetRelationalModel().Tables)
+        {
+            var expected = table.ForeignKeyConstraints.Select(foreignKey =>
+                string.Join("|",
+                    foreignKey.PrincipalTable.Name,
+                    string.Join(",", foreignKey.Columns.Select(column => column.Name)),
+                    string.Join(",", foreignKey.PrincipalColumns.Select(column => column.Name))))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (expected.Count == 0)
+                continue;
+
+            var escapedTableName = table.Name.Replace("\"", "\"\"", StringComparison.Ordinal);
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"PRAGMA foreign_key_list(\"{escapedTableName}\")";
+            var actualRows = new Dictionary<int, List<(int Sequence, string PrincipalTable, string FromColumn, string ToColumn)>>();
+            await using (var reader = await command.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    var id = reader.GetInt32(0);
+                    if (!actualRows.TryGetValue(id, out var rows))
+                        actualRows[id] = rows = new List<(int, string, string, string)>();
+                    rows.Add((
+                        reader.GetInt32(1),
+                        reader.GetString(2),
+                        reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                        reader.IsDBNull(4) ? string.Empty : reader.GetString(4)));
+                }
+            }
+
+            var actual = actualRows.Values.Select(rows =>
+            {
+                var ordered = rows.OrderBy(row => row.Sequence).ToList();
+                return string.Join("|",
+                    ordered[0].PrincipalTable,
+                    string.Join(",", ordered.Select(row => row.FromColumn)),
+                    string.Join(",", ordered.Select(row => row.ToColumn)));
+            }).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var expectedSignature in expected)
+            {
+                if (!actual.Contains(expectedSignature))
+                    missing.Add($"{table.Name}->{expectedSignature.Replace('|', ':')}");
+            }
+        }
+
+        return missing;
     }
 
     internal static IReadOnlyList<string> SelectSqliteLegacyMigrationsToBaseline(
@@ -3035,19 +3568,19 @@ WHERE IsDeleted = 0;");
                     {
                         EvrakNo = "GE-2025-00001",
                         Yon = EvrakYonu.Gelen,
-                        EvrakTarihi = DateTime.Today.AddDays(-30),
-                        KayitTarihi = DateTime.Today.AddDays(-29),
+                        EvrakTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-30),
+                        KayitTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-29),
                         Konu = "2025 Yılı Personel Servis Hizmeti İhale Daveti",
                         Ozet = "Belediye tarafından gönderilen personel servis hizmeti ihale daveti",
                         GonderenKurum = "Belediye Başkanlığı",
                         GelisNo = "BEL-2025-1234",
-                        GelisTarihi = DateTime.Today.AddDays(-30),
+                        GelisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-30),
                         KategoriId = ihaleKat?.Id,
                         Oncelik = EvrakOncelik.Yuksek,
                         Gizlilik = EvrakGizlilik.Normal,
                         Durum = EbysEvrakDurum.Isleniyor,
                         CevapGerekli = true,
-                        CevapSuresi = DateTime.Today.AddDays(15),
+                        CevapSuresi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(15),
                         Aciklama = "İhale şartnamesine göre teklif hazırlanacak",
                         CreatedAt = DateTime.UtcNow
                     },
@@ -3055,13 +3588,13 @@ WHERE IsDeleted = 0;");
                     {
                         EvrakNo = "GE-2025-00002",
                         Yon = EvrakYonu.Gelen,
-                        EvrakTarihi = DateTime.Today.AddDays(-25),
-                        KayitTarihi = DateTime.Today.AddDays(-24),
+                        EvrakTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-25),
+                        KayitTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-24),
                         Konu = "SGK Denetim Bildirimi",
                         Ozet = "SGK müfettişi tarafından yapılacak denetim hakkında bildirim",
                         GonderenKurum = "Sosyal Güvenlik Kurumu",
                         GelisNo = "SGK-2025-56789",
-                        GelisTarihi = DateTime.Today.AddDays(-25),
+                        GelisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-25),
                         KategoriId = sgkKat?.Id,
                         Oncelik = EvrakOncelik.Acil,
                         Gizlilik = EvrakGizlilik.Gizli,
@@ -3074,19 +3607,19 @@ WHERE IsDeleted = 0;");
                     {
                         EvrakNo = "GE-2025-00003",
                         Yon = EvrakYonu.Gelen,
-                        EvrakTarihi = DateTime.Today.AddDays(-20),
-                        KayitTarihi = DateTime.Today.AddDays(-19),
+                        EvrakTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-20),
+                        KayitTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-19),
                         Konu = "Sözleşme Yenileme Talebi",
                         Ozet = "Mevcut servis sözleşmesinin yenilenmesi talebi",
                         GonderenKurum = "ABC Sanayi A.Ş.",
                         GelisNo = "ABC-2025-0123",
-                        GelisTarihi = DateTime.Today.AddDays(-20),
+                        GelisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-20),
                         KategoriId = sozlesmeKat?.Id,
                         Oncelik = EvrakOncelik.Normal,
                         Gizlilik = EvrakGizlilik.Normal,
                         Durum = EbysEvrakDurum.CevapBekliyor,
                         CevapGerekli = true,
-                        CevapSuresi = DateTime.Today.AddDays(10),
+                        CevapSuresi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(10),
                         Aciklama = "Yeni fiyat teklifi hazırlanıyor",
                         CreatedAt = DateTime.UtcNow
                     },
@@ -3094,13 +3627,13 @@ WHERE IsDeleted = 0;");
                     {
                         EvrakNo = "GE-2025-00004",
                         Yon = EvrakYonu.Gelen,
-                        EvrakTarihi = DateTime.Today.AddDays(-15),
-                        KayitTarihi = DateTime.Today.AddDays(-14),
+                        EvrakTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-15),
+                        KayitTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-14),
                         Konu = "Araç Muayene Hatırlatması",
                         Ozet = "Araç muayene süresi dolmak üzere hatırlatma",
                         GonderenKurum = "TÜVTÜRK",
                         GelisNo = "TUV-2025-9876",
-                        GelisTarihi = DateTime.Today.AddDays(-15),
+                        GelisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-15),
                         KategoriId = resmiYazismaKat?.Id,
                         Oncelik = EvrakOncelik.Normal,
                         Gizlilik = EvrakGizlilik.Normal,
@@ -3115,13 +3648,13 @@ WHERE IsDeleted = 0;");
                     {
                         EvrakNo = "GI-2025-00001",
                         Yon = EvrakYonu.Giden,
-                        EvrakTarihi = DateTime.Today.AddDays(-28),
-                        KayitTarihi = DateTime.Today.AddDays(-28),
+                        EvrakTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-28),
+                        KayitTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-28),
                         Konu = "2025 Yılı Personel Servis Hizmeti Teklif",
                         Ozet = "Belediye ihalesine verilen fiyat teklifi",
                         AliciKurum = "Belediye Başkanlığı",
                         GidisNo = "TEK-2025-0001",
-                        GonderimTarihi = DateTime.Today.AddDays(-28),
+                        GonderimTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-28),
                         GonderimYontemi = GonderimYontemi.KEP,
                         KategoriId = ihaleKat?.Id,
                         Oncelik = EvrakOncelik.Yuksek,
@@ -3134,13 +3667,13 @@ WHERE IsDeleted = 0;");
                     {
                         EvrakNo = "GI-2025-00002",
                         Yon = EvrakYonu.Giden,
-                        EvrakTarihi = DateTime.Today.AddDays(-10),
-                        KayitTarihi = DateTime.Today.AddDays(-10),
+                        EvrakTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-10),
+                        KayitTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-10),
                         Konu = "Aylık Fatura Gönderimi - Ocak 2025",
                         Ozet = "Ocak 2025 dönemi servis hizmeti faturası",
                         AliciKurum = "XYZ Holding A.Ş.",
                         GidisNo = "FAT-2025-0015",
-                        GonderimTarihi = DateTime.Today.AddDays(-10),
+                        GonderimTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-10),
                         GonderimYontemi = GonderimYontemi.Email,
                         KategoriId = faturaKat?.Id,
                         Oncelik = EvrakOncelik.Normal,
@@ -3153,13 +3686,13 @@ WHERE IsDeleted = 0;");
                     {
                         EvrakNo = "GI-2025-00003",
                         Yon = EvrakYonu.Giden,
-                        EvrakTarihi = DateTime.Today.AddDays(-5),
-                        KayitTarihi = DateTime.Today.AddDays(-5),
+                        EvrakTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-5),
+                        KayitTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-5),
                         Konu = "Sözleşme Yenileme Cevabı",
                         Ozet = "ABC Sanayi sözleşme yenileme talebine cevap",
                         AliciKurum = "ABC Sanayi A.Ş.",
                         GidisNo = "CVP-2025-0003",
-                        GonderimTarihi = DateTime.Today.AddDays(-5),
+                        GonderimTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-5),
                         GonderimYontemi = GonderimYontemi.Elden,
                         KategoriId = sozlesmeKat?.Id,
                         Oncelik = EvrakOncelik.Normal,
@@ -3418,7 +3951,6 @@ WHERE IsDeleted = 0;");
 
         if (!legacyPlakaExists && aktifPlakaExists && aracPlakalarExists)
         {
-            await EnsureMigrationHistoryEntryAsync(connection, AracSasePlakaMigrationId);
             return;
         }
 
@@ -3426,13 +3958,6 @@ WHERE IsDeleted = 0;");
 
         try
         {
-            await ExecuteNonQueryAsync(connection, transaction, @"
-                CREATE TABLE IF NOT EXISTS ""__EFMigrationsHistory"" (
-                    ""MigrationId"" character varying(150) NOT NULL,
-                    ""ProductVersion"" character varying(32) NOT NULL,
-                    CONSTRAINT ""PK___EFMigrationsHistory"" PRIMARY KEY (""MigrationId"")
-                );");
-
             await ExecuteNonQueryAsync(connection, transaction, @"
                 ALTER TABLE ""Araclar"" ADD COLUMN IF NOT EXISTS ""AktifPlaka"" character varying(15);
                 ALTER TABLE ""Araclar"" ADD COLUMN IF NOT EXISTS ""SatisaAcik"" boolean NOT NULL DEFAULT false;
@@ -3488,7 +4013,8 @@ WHERE IsDeleted = 0;");
             {
                 await ExecuteNonQueryAsync(connection, transaction, @"
                     INSERT INTO ""AracPlakalar"" (""AracId"", ""Plaka"", ""GirisTarihi"", ""IslemTipi"", ""Aciklama"", ""CreatedAt"", ""IsDeleted"")
-                    SELECT a.""Id"", a.""Plaka"", COALESCE(a.""CreatedAt"", CURRENT_TIMESTAMP), 1, 'Mevcut kayıttan aktarıldı', CURRENT_TIMESTAMP, false
+                    SELECT a.""Id"", a.""Plaka"", COALESCE(a.""CreatedAt"", CURRENT_TIMESTAMP AT TIME ZONE 'UTC'), 1,
+                           'Mevcut kayıttan aktarıldı', COALESCE(a.""CreatedAt"", CURRENT_TIMESTAMP AT TIME ZONE 'UTC'), false
                     FROM ""Araclar"" a
                     WHERE a.""Plaka"" IS NOT NULL
                       AND BTRIM(a.""Plaka"") <> ''
@@ -3497,17 +4023,13 @@ WHERE IsDeleted = 0;");
                           FROM ""AracPlakalar"" ap
                           WHERE ap.""AracId"" = a.""Id""
                             AND ap.""Plaka"" = a.""Plaka""
+                            AND ap.""CikisTarihi"" IS NULL
                             AND ap.""IsDeleted"" = false
                       );
 
                     DROP INDEX IF EXISTS ""IX_Araclar_Plaka"";
                     ALTER TABLE ""Araclar"" DROP COLUMN IF EXISTS ""Plaka"";");
             }
-
-            await ExecuteNonQueryAsync(connection, transaction, @"
-                INSERT INTO ""__EFMigrationsHistory"" (""MigrationId"", ""ProductVersion"")
-                VALUES ('20260326224724_AracSasePlakaYapisi', '10.0.5')
-                ON CONFLICT (""MigrationId"") DO NOTHING;");
 
             await transaction.CommitAsync();
         }
@@ -3578,24 +4100,6 @@ WHERE IsDeleted = 0;");
         command.Parameters.AddWithValue("tableName", tableName);
         command.Parameters.AddWithValue("columnName", columnName);
         return (bool)(await command.ExecuteScalarAsync() ?? false);
-    }
-
-    private static async Task EnsureMigrationHistoryEntryAsync(NpgsqlConnection connection, string migrationId)
-    {
-        await ExecuteNonQueryAsync(connection, null, @"
-            CREATE TABLE IF NOT EXISTS ""__EFMigrationsHistory"" (
-                ""MigrationId"" character varying(150) NOT NULL,
-                ""ProductVersion"" character varying(32) NOT NULL,
-                CONSTRAINT ""PK___EFMigrationsHistory"" PRIMARY KEY (""MigrationId"")
-            );");
-
-        await using var insertCommand = new NpgsqlCommand(@"
-            INSERT INTO ""__EFMigrationsHistory"" (""MigrationId"", ""ProductVersion"")
-            VALUES (@migrationId, @productVersion)
-            ON CONFLICT (""MigrationId"") DO NOTHING;", connection);
-        insertCommand.Parameters.AddWithValue("migrationId", migrationId);
-        insertCommand.Parameters.AddWithValue("productVersion", "10.0.5");
-        await insertCommand.ExecuteNonQueryAsync();
     }
 
     private static async Task ExecuteNonQueryAsync(NpgsqlConnection connection, NpgsqlTransaction? transaction, string sql)

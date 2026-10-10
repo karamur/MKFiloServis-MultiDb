@@ -36,7 +36,7 @@
                 <div class="col-md-2">
                     <label class="form-label small">Yıl</label>
                     <select class="form-select form-select-sm" @bind="filtreYil" @bind:after="LoadAsync">
-                        @for (int y = DateTime.Now.Year + 1; y >= 2020; y--)
+                        @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year + 1; y >= 2020; y--)
                         {
                             <option value="@y">@y</option>
                         }
@@ -355,7 +355,7 @@
 @code {
     private bool yukleniyor = true;
 
-    private int filtreYil = DateTime.Now.Year;
+    private int filtreYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
     private int filtreAyBaslangic = 1;
     private int filtreAyBitis = 12;
     private string aktifSekme = "ozet";

@@ -26,7 +26,7 @@ public class AracPiyasaArastirma : BaseEntity
     public decimal MedianFiyat { get; set; }
     public int OrtalamaKilometre { get; set; }
 
-    public DateTime ArastirmaTarihi { get; set; } = DateTime.Now;
+    public DateTime ArastirmaTarihi { get; set; } = DateTime.UtcNow;
     public ArastirmaDurum Durum { get; set; } = ArastirmaDurum.Bekliyor;
     public string? HataMesaji { get; set; }
     public string? AIAnalizi { get; set; }
@@ -76,7 +76,7 @@ public class PiyasaArastirmaIlan : BaseEntity
     public string? SaticiAdi { get; set; }
 
     public DateTime? IlanTarihi { get; set; }
-    public DateTime ToplanmaTarihi { get; set; } = DateTime.Now;
+    public DateTime ToplanmaTarihi { get; set; } = DateTime.UtcNow;
     public bool AktifMi { get; set; } = true;
     public string? Notlar { get; set; }
 

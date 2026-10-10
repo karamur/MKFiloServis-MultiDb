@@ -609,8 +609,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        filtreBaslangic = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-        filtreBitis = DateTime.Today;
+        filtreBaslangic = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1);
+        filtreBitis = MKFiloServis.Shared.Time.BusinessTime.Today;
         stokKartlari = await StokService.GetStokKartlariAsync();
         firmalar = await FirmaService.GetAllAsync();
         araclar = await AracService.GetAllAsync();  // Araçları yükle
@@ -1223,7 +1223,7 @@
     }
 
     // Yansıtma için değişkenler
-    private DateTime yansitmaFaturaTarihi = DateTime.Today;
+    private DateTime yansitmaFaturaTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
     private string yansitmaFaturaNotu = "";
 
     // Masraf Yansıtma kontrolü
@@ -1286,14 +1286,14 @@
                 Plaka = arac?.AktifPlaka ?? "Araç Seçilmedi",
                 AracMarkaModel = arac != null ? $"{arac.Marka} {arac.Model}" : "",
                 Aciklama = $"Yansıtma: {k.Aciklama}",
-                FaturaTarihi = k.Fatura?.FaturaTarihi ?? DateTime.Today,
+                FaturaTarihi = k.Fatura?.FaturaTarihi ?? MKFiloServis.Shared.Time.BusinessTime.Today,
                 Tutar = k.ToplamTutar,
                 KdvOrani = k.KdvOrani,
                 Secili = true
             };
         }).ToList();
 
-        yansitmaFaturaTarihi = DateTime.Today;
+        yansitmaFaturaTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
         yansitmaFaturaNotu = "Araç masrafı yansıtma faturası";
         showYansitmaModal = true;
     }

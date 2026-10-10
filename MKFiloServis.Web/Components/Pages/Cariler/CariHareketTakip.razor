@@ -218,12 +218,12 @@
         if (CariId.HasValue && cariDetay != null)
         {
             bytes = await HareketTakipService.ExportCariDetayToExcelAsync(cariDetay);
-            dosyaAdi = $"Cari_Detay_{cariDetay.CariKodu}_{DateTime.Now:yyyyMMdd}.xlsx";
+            dosyaAdi = $"Cari_Detay_{cariDetay.CariKodu}_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.xlsx";
         }
         else if (ozetRapor != null)
         {
             bytes = await HareketTakipService.ExportToExcelAsync(ozetRapor);
-            dosyaAdi = $"Cari_BorcAlacak_{DateTime.Now:yyyyMMdd}.xlsx";
+            dosyaAdi = $"Cari_BorcAlacak_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.xlsx";
         }
         else return;
 

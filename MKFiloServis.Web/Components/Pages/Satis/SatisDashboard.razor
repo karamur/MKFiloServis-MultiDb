@@ -16,7 +16,7 @@
         <h3><i class="bi bi-car-front me-2"></i>Arac Satis Modulu</h3>
         <div class="d-flex gap-2">
             <select class="form-select form-select-sm" style="width: 100px;" @bind="secilenYil" @bind:after="LoadDataAsync">
-                @for (int y = DateTime.Today.Year; y >= DateTime.Today.Year - 3; y--)
+                @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 3; y--)
                 {
                     <option value="@y">@y</option>
                 }
@@ -299,7 +299,7 @@
 
 @code {
     private bool isLoading = true;
-    private int secilenYil = DateTime.Today.Year;
+    private int secilenYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
     private string filtreDurum = "";
     private string aramaText = "";
 

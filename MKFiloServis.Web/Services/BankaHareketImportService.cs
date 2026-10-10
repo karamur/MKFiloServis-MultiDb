@@ -172,8 +172,9 @@ public class BankaHareketImportService : IBankaHareketImportService
             return sonuc;
         }
 
+        var selectedIds = satirIds?.ToHashSet() ?? new HashSet<Guid>();
         var seciliSatirlar = _stage
-            .Where(s => satirIds.Contains(s.Id) && s.HataMesaji == null)
+            .Where(s => selectedIds.Contains(s.Id) && s.HataMesaji == null)
             .ToList();
 
         if (seciliSatirlar.Count == 0)
@@ -182,9 +183,9 @@ public class BankaHareketImportService : IBankaHareketImportService
             return sonuc;
         }
 
-        foreach (var s in seciliSatirlar)
+        try
         {
-            try
+            var movements = seciliSatirlar.Select(s =>
             {
                 var hareket = new BankaKasaHareket
                 {
@@ -200,14 +201,17 @@ public class BankaHareketImportService : IBankaHareketImportService
                     KostMerkeziKodu = s.KostMerkeziKodu,
                     IslemKaynak = IslemKaynak.Manuel
                 };
-                await _hareketService.CreateAsync(hareket);
-                sonuc.YazilanKayit++;
+                // Stage row identity is durable in this scoped stage and makes commit retries idempotent.
+                return (hareket, s.Id.ToString("N"));
+            }).ToList();
+            var written = await _hareketService.CreateImportedBatchAsync(movements);
+            sonuc.YazilanKayit = written.Count;
+            foreach (var s in seciliSatirlar)
                 _stage.Remove(s);
-            }
-            catch (Exception ex)
-            {
-                sonuc.Hatalar.Add($"#{s.SiraNo} {s.Aciklama}: {ex.Message}");
-            }
+        }
+        catch (Exception ex)
+        {
+            sonuc.Hatalar.Add($"Seçilen {seciliSatirlar.Count} satır tek işlem olarak yazılamadı; hiçbir satır aktarılmadı. {ex.Message}");
         }
 
         return sonuc;

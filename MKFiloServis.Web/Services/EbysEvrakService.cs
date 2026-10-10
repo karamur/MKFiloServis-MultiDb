@@ -113,7 +113,7 @@ public class EbysEvrakService : IEbysEvrakService
             EvrakNo = evrakNo,
             Yon = model.Yon,
             EvrakTarihi = model.EvrakTarihi,
-            KayitTarihi = DateTime.Now,
+            KayitTarihi = DateTime.UtcNow,
             Konu = model.Konu,
             Ozet = model.Ozet,
             GonderenKurum = model.GonderenKurum,
@@ -166,7 +166,7 @@ public class EbysEvrakService : IEbysEvrakService
         evrak.Aciklama = model.Aciklama;
         evrak.Notlar = model.Notlar;
         evrak.UpdatedAt = DateTime.UtcNow;
-        evrak.SonIslemTarihi = DateTime.Now;
+        evrak.SonIslemTarihi = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
 
@@ -384,7 +384,7 @@ public class EbysEvrakService : IEbysEvrakService
             AtananKullaniciId = model.AtananKullaniciId,
             AtananDepartmanId = model.AtananDepartmanId,
             AtayanKullaniciId = await GetCurrentUserIdAsync(),
-            AtamaTarihi = DateTime.Now,
+            AtamaTarihi = DateTime.UtcNow,
             Talimat = model.Talimat,
             TeslimTarihi = model.TeslimTarihi,
             Durum = AtamaDurum.Beklemede
@@ -396,7 +396,7 @@ public class EbysEvrakService : IEbysEvrakService
         evrak.AtananKullaniciId = model.AtananKullaniciId;
         evrak.AtananDepartmanId = model.AtananDepartmanId;
         evrak.Durum = EbysEvrakDurum.AtamaBekliyor;
-        evrak.SonIslemTarihi = DateTime.Now;
+        evrak.SonIslemTarihi = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
 
@@ -421,7 +421,7 @@ public class EbysEvrakService : IEbysEvrakService
         if (atama.Evrak != null)
         {
             atama.Evrak.Durum = EbysEvrakDurum.Tamamlandi;
-            atama.Evrak.SonIslemTarihi = DateTime.Now;
+            atama.Evrak.SonIslemTarihi = DateTime.UtcNow;
         }
 
         await _context.SaveChangesAsync();
@@ -445,7 +445,7 @@ public class EbysEvrakService : IEbysEvrakService
         if (atama.Evrak != null)
         {
             atama.Evrak.Durum = EbysEvrakDurum.Beklemede;
-            atama.Evrak.SonIslemTarihi = DateTime.Now;
+            atama.Evrak.SonIslemTarihi = DateTime.UtcNow;
         }
 
         await _context.SaveChangesAsync();
@@ -488,7 +488,7 @@ public class EbysEvrakService : IEbysEvrakService
 
         var eskiDurum = evrak.Durum;
         evrak.Durum = yeniDurum;
-        evrak.SonIslemTarihi = DateTime.Now;
+        evrak.SonIslemTarihi = DateTime.UtcNow;
         evrak.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
@@ -534,7 +534,7 @@ public class EbysEvrakService : IEbysEvrakService
             KullaniciId = kullaniciId,
             HareketTipi = hareketTipi,
             Aciklama = aciklama,
-            IslemTarihi = DateTime.Now,
+            IslemTarihi = DateTime.UtcNow,
             EskiDeger = eskiDeger,
             YeniDeger = yeniDeger
         };
@@ -550,7 +550,7 @@ public class EbysEvrakService : IEbysEvrakService
     public async Task<EbysEvrakIstatistik> GetIstatistiklerAsync()
     {
         await using var _context = await _contextFactory.CreateDbContextAsync();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
 
         var evraklar = await _context.EbysEvraklar.ToListAsync();
 
@@ -567,7 +567,7 @@ public class EbysEvrakService : IEbysEvrakService
             BugunGelenSayisi = evraklar.Count(e => e.Yon == EvrakYonu.Gelen && e.EvrakTarihi == bugun),
             BugunGidenSayisi = evraklar.Count(e => e.Yon == EvrakYonu.Giden && e.EvrakTarihi == bugun),
             GecikmisCevap = evraklar.Count(e => e.CevapGerekli &&
-                e.CevapSuresi.HasValue && e.CevapSuresi.Value < DateTime.Now &&
+                e.CevapSuresi.HasValue && e.CevapSuresi.Value < MKFiloServis.Shared.Time.BusinessTime.Now &&
                 e.Durum != EbysEvrakDurum.Cevaplandi && e.Durum != EbysEvrakDurum.Tamamlandi)
         };
 
@@ -612,7 +612,7 @@ public class EbysEvrakService : IEbysEvrakService
     public async Task<string> YeniEvrakNoOlusturAsync(EvrakYonu yon)
     {
         await using var _context = await _contextFactory.CreateDbContextAsync();
-        var yil = DateTime.Now.Year;
+        var yil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
         var prefix = yon == EvrakYonu.Gelen ? "GE" : "GI";
 
         var sonEvrak = await _context.EbysEvraklar

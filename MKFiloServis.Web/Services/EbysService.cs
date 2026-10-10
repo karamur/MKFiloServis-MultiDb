@@ -206,8 +206,8 @@ public class EbysService : IEbysService
                 .OrderByDescending(d => d.CreatedAt)
                 .FirstOrDefault();
 
-            var suresiDolmus = x.BitisTarihi.HasValue && x.BitisTarihi.Value.Date < DateTime.Today;
-            var yaklasan = !suresiDolmus && x.BitisTarihi.HasValue && x.BitisTarihi.Value.Date <= DateTime.Today.AddDays(30);
+            var suresiDolmus = x.BitisTarihi.HasValue && x.BitisTarihi.Value.Date < MKFiloServis.Shared.Time.BusinessTime.Today;
+            var yaklasan = !suresiDolmus && x.BitisTarihi.HasValue && x.BitisTarihi.Value.Date <= MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(30);
             var riskDurumu = aktifDosya == null
                 ? "Dosya Eksik"
                 : suresiDolmus

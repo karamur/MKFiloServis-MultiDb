@@ -1308,7 +1308,7 @@
     private List<Arac> aktifAraclar = new();
     private bool showAtamaModal = false;
     private int yeniAtamaAracId = 0;
-    private DateTime yeniAtamaBaslangic = DateTime.Today;
+    private DateTime yeniAtamaBaslangic = MKFiloServis.Shared.Time.BusinessTime.Today;
     private string yeniAtamaNot = "";
     private bool atamaSaving = false;
     private string modalPlakaArama = string.Empty;
@@ -1475,7 +1475,7 @@
         await BrutMaasHesaplaAsync();
         sofor.DigerMaas = Math.Max(0, gercekMaas - sofor.ResmiNetMaas);
         sofor.NetMaas = sofor.ResmiNetMaas + sofor.DigerMaas;
-        sofor.SrcBelgesiGecerlilikTarihi = _srcBelgesiVarMi ? DateTime.Today : null;
+        sofor.SrcBelgesiGecerlilikTarihi = _srcBelgesiVarMi ? MKFiloServis.Shared.Time.BusinessTime.Today : null;
 
         try
         {
@@ -1690,7 +1690,7 @@
         if (!aktifAraclar.Any())
             aktifAraclar = await AracService.GetActiveAsync();
         yeniAtamaAracId = 0;
-        yeniAtamaBaslangic = DateTime.Today;
+        yeniAtamaBaslangic = MKFiloServis.Shared.Time.BusinessTime.Today;
         yeniAtamaNot = "";
         modalPlakaArama = string.Empty;
         modalFiltreliAraclar = aktifAraclar;
@@ -1793,7 +1793,7 @@
             }
 
             atama.Aktif = false;
-            atama.BitisTarihi = DateTime.Today;
+            atama.BitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
             atama.UpdatedAt = DateTime.UtcNow;
             await ctx.SaveChangesAsync();
 
@@ -1920,7 +1920,7 @@
 
             atama.IsDeleted = true;
             atama.Aktif = false;
-            atama.BitisTarihi = DateTime.Today;
+            atama.BitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
             atama.DeletedAt = DateTime.UtcNow;
             atama.UpdatedAt = DateTime.UtcNow;
             await ctx.SaveChangesAsync();

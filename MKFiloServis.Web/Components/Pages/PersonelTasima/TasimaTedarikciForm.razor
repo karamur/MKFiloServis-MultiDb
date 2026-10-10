@@ -681,7 +681,7 @@
                                 <td class="small">
                                     @if (i.BitisTarihi.HasValue)
                                     {
-                                        <span class="@(i.BitisTarihi < DateTime.Today ? "text-danger" : "")">
+                                        <span class="@(i.BitisTarihi < MKFiloServis.Shared.Time.BusinessTime.Today ? "text-danger" : "")">
                                             @i.BitisTarihi.Value.ToString("dd.MM.yyyy")
                                         </span>
                                     }
@@ -851,7 +851,7 @@
         yeniIs = new TasimaTedarikciIs
         {
             TasimaTedarikciId = Id ?? 0,
-            BaslangicTarihi = DateTime.Today,
+            BaslangicTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
             Durum = TasimaTedarikciIsDurum.Aktif
         };
         yeniIsAcik = true;
@@ -1004,7 +1004,7 @@
                 }
             }
 
-            var fileName = $"tedarikci_{Id}_personel_{DateTime.Now:yyyyMMdd_HHmm}.zip";
+            var fileName = $"tedarikci_{Id}_personel_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmm}.zip";
             await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, Convert.ToBase64String(ms.ToArray()));
             ToastService.ShowSuccess(PersonelFiltreAktifMi ? "Filtreli personel listesi ZIP olarak indirildi." : "Personel listesi ZIP olarak indirildi.");
         }
@@ -1039,7 +1039,7 @@
                 }
             }
 
-            var fileName = $"tedarikci_{Id}_arac_{DateTime.Now:yyyyMMdd_HHmm}.zip";
+            var fileName = $"tedarikci_{Id}_arac_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmm}.zip";
             await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, Convert.ToBase64String(ms.ToArray()));
             ToastService.ShowSuccess(AracFiltreAktifMi ? "Filtreli araç listesi ZIP olarak indirildi." : "Araç listesi ZIP olarak indirildi.");
         }
@@ -1074,7 +1074,7 @@
                 }
             }
 
-            var fileName = $"tedarikci_{Id}_is_guzergah_{DateTime.Now:yyyyMMdd_HHmm}.zip";
+            var fileName = $"tedarikci_{Id}_is_guzergah_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmm}.zip";
             await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, Convert.ToBase64String(ms.ToArray()));
             ToastService.ShowSuccess(IsFiltreAktifMi ? "Filtreli iş/güzergah listesi ZIP olarak indirildi." : "İş/Güzergah listesi ZIP olarak indirildi.");
         }

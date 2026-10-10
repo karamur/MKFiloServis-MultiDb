@@ -6,7 +6,7 @@ namespace MKFiloServis.Shared.Entities;
 public class ProformaFatura : BaseEntity, IFirmaTenant
 {
     public string ProformaNo { get; set; } = string.Empty;
-    public DateTime ProformaTarihi { get; set; } = DateTime.Now;
+    public DateTime ProformaTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Now;
     public DateTime GecerlilikTarihi { get; set; } // Teklifin geçerlilik süresi
     
     public ProformaDurum Durum { get; set; } = ProformaDurum.Taslak;

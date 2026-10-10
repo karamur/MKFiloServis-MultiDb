@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using MKFiloServis.Shared.Entities;
 
 namespace MKFiloServis.Web.Components.Pages.Filo;
@@ -6,7 +6,7 @@ namespace MKFiloServis.Web.Components.Pages.Filo;
 public partial class OperasyonPlanPage
 {
     private bool EkSeferFormuAcik;
-    private DateTime EkSeferTarihi = DateTime.Today;
+    private DateTime EkSeferTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
     private int EkSeferGuzergahId;
     private int EkSeferAracId;
     private int EkSeferSoforId;
@@ -24,8 +24,8 @@ public partial class OperasyonPlanPage
     private void EkSeferFormunuAc()
     {
         EkSeferFormuAcik = true;
-        EkSeferTarihi = AyBaslangic >= DateTime.Today.AddMonths(-1) && AyBaslangic <= DateTime.Today.AddMonths(1)
-            ? DateTime.Today
+        EkSeferTarihi = AyBaslangic >= MKFiloServis.Shared.Time.BusinessTime.Today.AddMonths(-1) && AyBaslangic <= MKFiloServis.Shared.Time.BusinessTime.Today.AddMonths(1)
+            ? MKFiloServis.Shared.Time.BusinessTime.Today
             : AyBaslangic;
         EkSeferGuzergahId = Planlar.Select(p => p.GuzergahId).Distinct().FirstOrDefault();
         EkSeferAracId = 0;

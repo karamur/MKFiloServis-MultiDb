@@ -409,8 +409,8 @@
     private SoforPerformansOzet? performansOzet;
     private List<SoforKarsilastirmaOzeti>? karsilastirma;
 
-    private DateTime baslangicTarihi = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-    private DateTime bitisTarihi = DateTime.Today;
+    private DateTime baslangicTarihi = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1);
+    private DateTime bitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
     private int secilenSoforId = 0;
     private string secilenSahiplikTipi = "";
     private bool isLoading = false;

@@ -134,7 +134,7 @@ public class PersonelAracAtama : BaseEntity
     public int AracId { get; set; }
     public virtual Arac Arac { get; set; } = null!;
 
-    public DateTime BaslangicTarihi { get; set; } = DateTime.Today;
+    public DateTime BaslangicTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public DateTime? BitisTarihi { get; set; }
     public bool Aktif { get; set; } = true;
     public string? Notlar { get; set; }

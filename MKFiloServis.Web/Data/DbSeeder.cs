@@ -21,8 +21,8 @@ public static class DbSeeder
                 Email = "info@firma.com",
                 VarsayilanFirma = true,
                 Aktif = true,
-                AktifDonemYil = DateTime.Today.Year,
-                AktifDonemAy = DateTime.Today.Month,
+                AktifDonemYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year,
+                AktifDonemAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month,
                 CreatedAt = DateTime.UtcNow
             };
             context.Firmalar.Add(firma);

@@ -216,7 +216,7 @@
             return;
 
         var excelBytes = ExcelService.ExportFaturaOdemeRaporu(raporData);
-        var fileName = "FaturaOdemeRaporu_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".xlsx";
+        var fileName = "FaturaOdemeRaporu_" + MKFiloServis.Shared.Time.BusinessTime.Now.ToString("yyyyMMdd_HHmmss") + ".xlsx";
 
         await JS.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(excelBytes), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }

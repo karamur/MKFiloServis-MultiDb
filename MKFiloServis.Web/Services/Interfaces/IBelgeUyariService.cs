@@ -81,7 +81,7 @@ public class BelgeUyari
     // Tedarikçi bilgisi (alt yüklenici personel/aracı için doldurulur; kendi kaynağımızda null kalır)
     public int? TasimaTedarikciId { get; set; }
     public string? TasimaTedarikciUnvan { get; set; }
-    public int KalanGun => (BitisTarihi - DateTime.Today).Days;
+    public int KalanGun => (BitisTarihi - MKFiloServis.Shared.Time.BusinessTime.Today).Days;
     public BelgeUyariSeviye Seviye => KalanGun switch
     {
         < 0 => BelgeUyariSeviye.Kritik,
@@ -132,7 +132,7 @@ public class PersonelBelgeDetay
     public string DetayUrl { get; set; } = string.Empty;
 
     public int? KalanGun => GecerlilikBitisTarihi.HasValue
-        ? (GecerlilikBitisTarihi.Value - DateTime.Today).Days
+        ? (GecerlilikBitisTarihi.Value - MKFiloServis.Shared.Time.BusinessTime.Today).Days
         : null;
 
     public string DurumClass
@@ -202,7 +202,7 @@ public class PersonelBelgeTabloKalemi
 
     // Yardımcı: belge durumu rengi
     public static string BelgeDurumClass(DateTime? tarih) => tarih == null ? "bg-secondary"
-        : (tarih.Value - DateTime.Today).Days switch
+        : (tarih.Value - MKFiloServis.Shared.Time.BusinessTime.Today).Days switch
         {
             < 0 => "bg-danger",
             <= 7 => "bg-warning text-dark",
@@ -211,7 +211,7 @@ public class PersonelBelgeTabloKalemi
         };
 
     public static string BelgeDurumMetin(DateTime? tarih) => tarih == null ? "Yok"
-        : (tarih.Value - DateTime.Today).Days switch
+        : (tarih.Value - MKFiloServis.Shared.Time.BusinessTime.Today).Days switch
         {
             var d when d < 0 => $"{Math.Abs(d)}g geçti",
             var d when d <= 30 => $"{d}g kaldı",
@@ -266,7 +266,7 @@ public class AracBelgeTabloKalemi
     public string? FirmaAdi { get; set; }
 
     public static string BelgeDurumClass(DateTime? tarih) => tarih == null ? "bg-secondary"
-        : (tarih.Value - DateTime.Today).Days switch
+        : (tarih.Value - MKFiloServis.Shared.Time.BusinessTime.Today).Days switch
         {
             < 0 => "bg-danger",
             <= 7 => "bg-warning text-dark",
@@ -275,7 +275,7 @@ public class AracBelgeTabloKalemi
         };
 
     public static string BelgeDurumMetin(DateTime? tarih) => tarih == null ? "Yok"
-        : (tarih.Value - DateTime.Today).Days switch
+        : (tarih.Value - MKFiloServis.Shared.Time.BusinessTime.Today).Days switch
         {
             var d when d < 0 => $"{Math.Abs(d)}g geçti",
             var d when d <= 30 => $"{d}g kaldı",
@@ -307,7 +307,7 @@ public class TedarikciEvrakTabloKalemi
     public Dictionary<string, DateTime?> Belgeler { get; set; } = new();
 
     public static string BelgeDurumClass(DateTime? tarih) => tarih == null ? "bg-secondary"
-        : (tarih.Value - DateTime.Today).Days switch
+        : (tarih.Value - MKFiloServis.Shared.Time.BusinessTime.Today).Days switch
         {
             < 0 => "bg-danger",
             <= 7 => "bg-warning text-dark",
@@ -316,7 +316,7 @@ public class TedarikciEvrakTabloKalemi
         };
 
     public static string BelgeDurumMetin(DateTime? tarih) => tarih == null ? "Yok"
-        : (tarih.Value - DateTime.Today).Days switch
+        : (tarih.Value - MKFiloServis.Shared.Time.BusinessTime.Today).Days switch
         {
             var d when d < 0 => $"{Math.Abs(d)}g geçti",
             var d when d <= 30 => $"{d}g kaldı",

@@ -25,7 +25,7 @@
         </div>
         <div class="d-flex gap-2">
             <select class="form-select form-select-sm" style="width: 150px;" @bind="secilenYil" @bind:after="YenileData">
-                @for (int y = DateTime.Now.Year; y >= DateTime.Now.Year - 5; y--)
+                @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 5; y--)
                 {
                     <option value="@y">@y</option>
                 }
@@ -736,7 +736,7 @@
                             <div class="mb-3">
                                 <label class="form-label">Yıl *</label>
                                 <select class="form-select" @bind="yeniYil">
-                                    @for (int y = DateTime.Now.Year; y >= DateTime.Now.Year - 2; y--)
+                                    @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 2; y--)
                                     {
                                         <option value="@y">@y</option>
                                     }
@@ -794,7 +794,7 @@
     private List<BordroKalanOdemeSatir>? kalanOdemeRaporu;
     private BordroOzet ozet = new();
 
-    private int secilenYil = DateTime.Now.Year;
+    private int secilenYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
     private int secilenFirmaId = 0;
     private bool isLoading = true;
     private bool isSaving = false;
@@ -809,13 +809,13 @@
     private int odemeTab = 1;
 
     // Yeni bordro
-    private int yeniYil = DateTime.Now.Year;
-    private int yeniAy = DateTime.Now.Month;
+    private int yeniYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    private int yeniAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
     private int yeniFirmaId = 0;
 
     // Ödeme
-    private DateTime bankaOdemeTarihi = DateTime.Today;
-    private DateTime ekOdemeTarihi = DateTime.Today;
+    private DateTime bankaOdemeTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
+    private DateTime ekOdemeTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
     private OdemeSekli ekOdemeSekli = OdemeSekli.Nakit;
 
     protected override async Task OnInitializedAsync()
@@ -857,8 +857,8 @@
 
     private void YeniBordroAc()
     {
-        yeniYil = DateTime.Now.Year;
-        yeniAy = DateTime.Now.Month;
+        yeniYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+        yeniAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
         yeniFirmaId = secilenFirmaId;
         showYeniBordroModal = true;
     }
@@ -1092,7 +1092,7 @@
         try
         {
             var bytes = await BordroService.ExportBankaOdemeListesiAsync(bordroId);
-            var fileName = $"BankaOdemeListesi_{bordroId}_{DateTime.Now:yyyyMMdd}.xlsx";
+            var fileName = $"BankaOdemeListesi_{bordroId}_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.xlsx";
             await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, Convert.ToBase64String(bytes));
             ToastService.ShowSuccess("Excel dosyası indirildi!");
         }
@@ -1107,7 +1107,7 @@
         try
         {
             var bytes = await BordroService.ExportEkOdemeListesiAsync(bordroId);
-            var fileName = $"EkOdemeListesi_{bordroId}_{DateTime.Now:yyyyMMdd}.xlsx";
+            var fileName = $"EkOdemeListesi_{bordroId}_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.xlsx";
             await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, Convert.ToBase64String(bytes));
             ToastService.ShowSuccess("Excel dosyası indirildi!");
         }
@@ -1122,7 +1122,7 @@
         try
         {
             var bytes = await BordroService.ExportTumBordroAsync(bordroId);
-            var fileName = $"Bordro_{bordroId}_{DateTime.Now:yyyyMMdd}.xlsx";
+            var fileName = $"Bordro_{bordroId}_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.xlsx";
             await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, Convert.ToBase64String(bytes));
             ToastService.ShowSuccess("Excel dosyası indirildi!");
         }
@@ -1137,7 +1137,7 @@
         try
         {
             var bytes = await BordroService.ExportKalanOdemeRaporuAsync(bordroId);
-            var fileName = $"KalanOdemeRaporu_{bordroId}_{DateTime.Now:yyyyMMdd}.xlsx";
+            var fileName = $"KalanOdemeRaporu_{bordroId}_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.xlsx";
             await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, Convert.ToBase64String(bytes));
             ToastService.ShowSuccess("Excel dosyası indirildi!");
         }
@@ -1215,7 +1215,7 @@
         try
         {
             var bytes = await BordroService.ExportUcretBordrosuAsync(detayId);
-            var fileName = $"UcretBordrosu_{detayId}_{DateTime.Now:yyyyMMdd}.pdf";
+            var fileName = $"UcretBordrosu_{detayId}_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.pdf";
             await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, Convert.ToBase64String(bytes));
             ToastService.ShowSuccess("Ücret bordrosu indirildi!");
         }
@@ -1237,7 +1237,7 @@
         try
         {
             var bytes = await BordroService.ExportTopluUcretBordrosuAsync(seciliIds);
-            var fileName = $"UcretBordrolari_{DateTime.Now:yyyyMMdd}.pdf";
+            var fileName = $"UcretBordrolari_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.pdf";
             await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, Convert.ToBase64String(bytes));
             ToastService.ShowSuccess("Ücret bordroları indirildi!");
         }
@@ -1252,7 +1252,7 @@
         try
         {
             var bytes = await BordroService.ExportTumUcretBordrolariAsync(bordroId);
-            var fileName = $"TumUcretBordrolari_{bordroId}_{DateTime.Now:yyyyMMdd}.pdf";
+            var fileName = $"TumUcretBordrolari_{bordroId}_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.pdf";
             await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, Convert.ToBase64String(bytes));
             ToastService.ShowSuccess("Tüm ücret bordroları indirildi!");
         }

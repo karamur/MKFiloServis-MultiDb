@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace MKFiloServis.Shared.Entities;
 
@@ -16,7 +16,7 @@ public class PersonelAvans : BaseEntity, IFirmaTenant
     public int? FirmaId { get; set; }
     public virtual Firma? Firma { get; set; }
 
-    public DateTime AvansTarihi { get; set; } = DateTime.Today;
+    public DateTime AvansTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public decimal Tutar { get; set; }
     public string? Aciklama { get; set; }
     
@@ -60,7 +60,7 @@ public class PersonelBorc : BaseEntity, IFirmaTenant
     public int? FirmaId { get; set; }
     public virtual Firma? Firma { get; set; }
 
-    public DateTime BorcTarihi { get; set; } = DateTime.Today;
+    public DateTime BorcTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public decimal Tutar { get; set; }
     public string BorcNedeni { get; set; } = string.Empty;
     public string? Aciklama { get; set; }
@@ -105,7 +105,7 @@ public class PersonelAvansMahsup : BaseEntity
     public int AvansId { get; set; }
     public virtual PersonelAvans Avans { get; set; } = null!;
 
-    public DateTime MahsupTarihi { get; set; } = DateTime.Today;
+    public DateTime MahsupTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public decimal MahsupTutari { get; set; }
     public string? Aciklama { get; set; }
     
@@ -132,7 +132,7 @@ public class PersonelBorcOdeme : BaseEntity
     public int BorcId { get; set; }
     public virtual PersonelBorc Borc { get; set; } = null!;
 
-    public DateTime OdemeTarihi { get; set; } = DateTime.Today;
+    public DateTime OdemeTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
     public decimal OdemeTutari { get; set; }
     public string? Aciklama { get; set; }
     

@@ -166,8 +166,8 @@
 @code {
     private HakedisDashboardKpi? kpi;
     private bool isLoading;
-    private int Yil = DateTime.Now.Year;
-    private int Ay = DateTime.Now.Month;
+    private int Yil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    private int Ay = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
 
     private decimal OrtalamaMaliyet =>
         kpi == null || kpi.ToplamSefer == 0 ? 0 : kpi.ToplamGider / kpi.ToplamSefer;

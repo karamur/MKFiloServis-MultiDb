@@ -191,8 +191,8 @@
 </div>
 
 @code {
-    private DateTime baslangicTarihi = DateTime.Today.AddDays(-30);
-    private DateTime bitisTarihi = DateTime.Today;
+    private DateTime baslangicTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-30);
+    private DateTime bitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
     private int secilenCariId = 0;
     private int secilenAracId = 0;
     private int secilenSoforId = 0;
@@ -242,7 +242,7 @@
             return;
 
         var excelBytes = ExcelService.ExportServisCalismaRaporu(raporData);
-        var fileName = $"ServisCalismaRaporu_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+        var fileName = $"ServisCalismaRaporu_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmmss}.xlsx";
 
         await JS.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(excelBytes), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }

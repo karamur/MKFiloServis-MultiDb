@@ -1,9 +1,9 @@
-﻿@page "/puantaj/cari-hiyerarsi"
+@page "/puantaj/cari-hiyerarsi"
 @using MKFiloServis.Shared.DTOs.Puantaj
 @using Microsoft.AspNetCore.Authorization
 @using MKFiloServis.Shared.Services.Contracts
 @using Microsoft.Extensions.Logging
-@attribute [Authorize]
+@attribute [Authorize(Policy = "Licensed:personel")]
 @inject ICariKurumPuantajService CariKurumService
 @inject ILogger<PuantajCariHiyerarsi> _logger
 
@@ -177,20 +177,20 @@
                                         <div class="row mb-3">
                                             <div class="col-md-4">
                                                 <label class="form-label">Yıl:</label>
-                                                <select class="form-select form-select-sm" @onchange="@((ChangeEventArgs e) => SeciliYil = int.Parse(e.Value?.ToString() ?? DateTime.Now.Year.ToString()))">
-                                                    @for (int y = DateTime.Now.Year - 1; y <= DateTime.Now.Year + 1; y++)
+                                                <select class="form-select form-select-sm" @onchange="@((ChangeEventArgs e) => SeciliYil = int.Parse(e.Value?.ToString() ?? MKFiloServis.Shared.Time.BusinessTime.Today.Year.ToString()))">
+                                                    @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year - 1; y <= MKFiloServis.Shared.Time.BusinessTime.Today.Year + 1; y++)
                                                     {
-                                                        <option value="@y" selected="@(y == DateTime.Now.Year)">@y</option>
+                                                        <option value="@y" selected="@(y == MKFiloServis.Shared.Time.BusinessTime.Today.Year)">@y</option>
                                                     }
                                                 </select>
                                             </div>
                                             <div class="col-md-4">
                                                 <label class="form-label">Ay:</label>
-                                                <select class="form-select form-select-sm" @onchange="@((ChangeEventArgs e) => SeciliAy = int.Parse(e.Value?.ToString() ?? DateTime.Now.Month.ToString()))">
+                                                <select class="form-select form-select-sm" @onchange="@((ChangeEventArgs e) => SeciliAy = int.Parse(e.Value?.ToString() ?? MKFiloServis.Shared.Time.BusinessTime.Today.Month.ToString()))">
                                                     @for (int ay = 1; ay <= 12; ay++)
                                                     {
-                                                        var ayAdi = new DateTime(DateTime.Now.Year, ay, 1).ToString("MMMM");
-                                                        <option value="@ay" selected="@(ay == DateTime.Now.Month)">@ayAdi</option>
+                                                        var ayAdi = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, ay, 1).ToString("MMMM");
+                                                        <option value="@ay" selected="@(ay == MKFiloServis.Shared.Time.BusinessTime.Today.Month)">@ayAdi</option>
                                                     }
                                                 </select>
                                             </div>
@@ -225,8 +225,8 @@
     private int SeciliCariId = 0;
     private KurumPuantajAylikDTO? YuklenenAylikGrid;
 
-    private int SeciliYil = DateTime.Now.Year;
-    private int SeciliAy = DateTime.Now.Month;
+    private int SeciliYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    private int SeciliAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
 
     private bool YuklenivorMu = false;
     private bool HataVar = false;
@@ -246,8 +246,8 @@
         {
             // Real service çağrısı - Tüm Cariler için özeti al, sonra ilk 5'ini göster
             var ozetler = await CariKurumService.GetCarilarPuantajOzetiAsync(
-                DateTime.Now.AddMonths(-1), 
-                DateTime.Now.AddMonths(1)
+                MKFiloServis.Shared.Time.BusinessTime.Now.AddMonths(-1),
+                MKFiloServis.Shared.Time.BusinessTime.Now.AddMonths(1)
             );
 
             CariListesi = new List<CariKurumHiyerarsiDto>();

@@ -40,7 +40,7 @@ public class ToastMessage
     public ToastType Type { get; }
     public string Message { get; }
     public string Title { get; }
-    public DateTime CreatedAt { get; } = DateTime.Now;
+    public DateTime CreatedAt { get; } = DateTime.UtcNow;
 
     public ToastMessage(ToastType type, string message, string title)
     {

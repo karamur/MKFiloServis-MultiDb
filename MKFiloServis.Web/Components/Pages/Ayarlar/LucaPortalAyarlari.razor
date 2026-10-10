@@ -421,22 +421,22 @@
         {
             var progress = new Progress<string>(mesaj =>
             {
-                senkronLog.Add($"[{DateTime.Now:HH:mm:ss}] {mesaj}");
+                senkronLog.Add($"[{MKFiloServis.Shared.Time.BusinessTime.Now:HH:mm:ss}] {mesaj}");
                 InvokeAsync(StateHasChanged);
             });
             
-            var baslangic = DateTime.Today.AddMonths(-1);
-            var bitis = DateTime.Today;
+            var baslangic = MKFiloServis.Shared.Time.BusinessTime.Today.AddMonths(-1);
+            var bitis = MKFiloServis.Shared.Time.BusinessTime.Today;
             
             var aktarilanSayi = await LucaService.TumBelgeleriSenkronizeEtAsync(baslangic, bitis, progress);
             
-            senkronLog.Add($"[{DateTime.Now:HH:mm:ss}] Tamamlandi. {aktarilanSayi} belge aktarildi.");
+            senkronLog.Add($"[{MKFiloServis.Shared.Time.BusinessTime.Now:HH:mm:ss}] Tamamlandi. {aktarilanSayi} belge aktarildi.");
             ToastService.ShowSuccess($"Senkronizasyon tamamlandi! {aktarilanSayi} belge aktarildi.");
         }
         catch (Exception ex)
         {
             hataMesaji = $"Senkron hatasi: {ex.Message}";
-            senkronLog.Add($"[{DateTime.Now:HH:mm:ss}] HATA: {ex.Message}");
+            senkronLog.Add($"[{MKFiloServis.Shared.Time.BusinessTime.Now:HH:mm:ss}] HATA: {ex.Message}");
         }
         finally
         {

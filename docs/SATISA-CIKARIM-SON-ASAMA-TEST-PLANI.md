@@ -20,9 +20,29 @@
 | Personel finans | Avans/borç/ödeme/mahsup yazım izinleri; kalıcı borç silme yetkisi; bağlı fişte silme izni ve taslak durumu; kalem koruma; sıfır/negatif tutar; firma kapsamı; otomatik fiş üretme hatası; bağlı fişli mali alan düzenleme; ödeme/mahsup sonrası iptal; tekrarlı iptal; mahsup fişinin aynı transaction içinde kaldırılması; iptal kayda yeni ödeme/mahsup engeli; eşzamanlı işlemler |
 | Hesap/cari/stok | Başlangıç hesap hazırlığı ile kullanıcı seed ayrımı; Excel için yazma+düzenleme izinleri; hızlı oluşturma izinleri; aynı unvanlı farklı firma carileri |
 | Lisans/oturum | İmzalı modül/sürüm/makine hakları; normal/Admin erişimi; çıkış/iptal ve tenant izolasyonu |
+| A-06 sır politikası | Boş/yer tutucu/kısa/engelli JWT secret ile Production başlangıcı reddi. Dört tarihsel JWT sırrını kullanan aktif kurulum olmadığı ve tarihsel DB/entegrasyon sır adaylarının geçersiz olduğu kullanıcı beyanıyla kaydedildi; bu A-06 dalında canlı rotasyon/401 uygulanamaz. Yeni kurulum sırrı A-21'de hedef secret deposundan sağlanır. |
+| A-09 mali işlem kabulü | PostgreSQL ve SQLite hedeflerinde normal fatura + kalem + otomatik fiş hata enjeksiyonu/rollback; execution strategy geçici hatada yeniden deneme; commit bağlantı kesintisinde tekrar kayıt oluşmaması; transfer/mahsup/banka hareketinde iki eşzamanlı istek ve bakiye/fiş numarası tutarlılığı; audit kaydının aynı transaction'da geri alınması. Sonuçlarda sayaç ve korelasyon kimliği kullan; gerçek müşteri verisini rapora alma. |
+| A-11 dosya depolama/silme | İzole S3/MinIO'da PUT/GET/HEAD/DELETE imzası, özel servis portu ve klasörlü nesne anahtarı; 404 idempotent sonuç; 403/5xx ve timeout görünür hata; silme sırasında karantina yüklemesi başarılı ama etkin anahtar silinmesi başarısız olduğunda retry ve dosya okunabilirliği; çoklu yüklemede bir dosya hatası ile liste güncelleme ve doğru başarılı/hatalı dosya bildirimi. Windows yerel depoda erişim reddi/kilit ve karantina retry. |
+| A-12 araç Excel aktarımı | Yinelenen normalize başlık dosya yazımından önce reddedilir; satır bazında VIN uzunluğu, yıl/koltuk/KM sınırları, tarih/boolean/enum doğrulaması; geçerli ve hatalı satırların kısmi sonuç sayımı; firma/modal değişimi, Dispose, dosya okuma hatası ve kaydedilen satırların doğru firmada doğrulanması. |
+| A-14 araç listesi/formu | A→B→A ve geciken liste yanıtı; eski firma aracının yeni firma formuna yazılmaması; çift Kaydet; plaka/eşzamanlı işlem; evrak upload/update/delete, DB hata ve audit rollback; hedef filoda sorgu süresi, bellek ve filtre doğruluğu. |
 | Veri/dosyalar | SQLite/PostgreSQL ilişki denetimi; eşzamanlı yazım/cleanup; soft-delete ve geri alma; migration; hedef veri hacmi |
 | Kurtarma/kurulum | Gerçek izole DB ve belge restore; kesinti/rollback; farklı profil/key ring; desteklenen sağlayıcılarda temiz hedef kurulum |
 | Rapor/entegrasyon | Çok sayfa/uzun metin/negatif tutar ve toplamlar; Excel/PDF; S3/SMTP/Luca için uygun test ortamı |
+
+### A-05 yayına çıkış kabul senaryoları
+
+Bu bölüm ürün kodu teslimini yeniden açmaz. Üretim öncesi izole deployment kabulinde normal/Admin test hesapları ve iki sentetik aktif firma ile yürüt; parola, token ve müşteri verisini rapora koyma.
+
+| Senaryo | Beklenen sonuç | Kanıt |
+|---|---|---|
+| Anonim istek korumalı API'ye erişir | 401; korumalı kaynak/işlem çalışmaz | HTTP status ve sunucu log korelasyon kimliği |
+| Normal kullanıcı varsayılan firma dışını seçer veya eski firma kapsamıyla restore olur | Seçim/restore reddedilir; varsayılan kapsam korunur ve tenant verisi karışmaz | Kullanıcı/rol/firma kimlikleri maskeli; A/B sayaçları |
+| Admin firma A, firma B ve “Tüm Firmalar” seçer; Admin rolü düşürülür | Aktif firmalar seçilir; tüm-firmalar yalnız Admin iken açılır; rol düşürmede sonraki hassas işlem reddedilir | API/UI sonucu, rol değişim zamanı ve işlem sonucu |
+| Parola değiştirilir veya hesap kilitlenir; eski API token ve açık circuit kullanılır | API isteği reddedilir; hassas circuit yazımı anında reddedilir ve açık circuit en geç 60 sn içinde kapatılır | 401/403, UTC zaman damgaları ve audit kaydı |
+| Oturum yaşı 11:59, 12:00 ve refresh denenir | 12 saat dolmadan oturum geçerli; sınırda/sonrasında token reddedilir; refresh başlangıç zamanını sıfırlamaz | Token claim'leri/response; token değeri rapordan çıkarılır |
+| Hedef eşzamanlılıkta API çağrısı ve açık circuit yeniden doğrulaması | DB gecikmesi/hedef CPU ve hata eşiği aşılmaz; doğrulama DB hatasında fail-closed olur | Eşzamanlı kullanıcı sayısı, p95/p99 gecikme, DB CPU/bağlantı ve hata oranı |
+
+**Durum (2026-10-10):** Uygulama/politika regresyonları 23/23 ve tam test paketi 158 geçti / 2 PostgreSQL ortam testi atlandı. Yukarıdaki browser/API deployment kabul senaryoları bu makinede çalıştırılmadı; A-05 kod teslimi yeşil, satış Go/No-Go kapısı bu kanıtlar kaydedilene kadar açık.
 
 ## Sonuç kaydı
 

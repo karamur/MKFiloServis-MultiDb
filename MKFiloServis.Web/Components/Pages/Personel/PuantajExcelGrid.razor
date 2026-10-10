@@ -52,7 +52,7 @@
                 <div class="col-auto">
                     <label class="form-label small mb-1">Yıl</label>
                     <select class="form-select form-select-sm" @bind="_yil" @bind:after="Yukle">
-                        @for (int y = DateTime.Today.Year - 1; y <= DateTime.Today.Year + 1; y++)
+                        @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year - 1; y <= MKFiloServis.Shared.Time.BusinessTime.Today.Year + 1; y++)
                         {
                             <option value="@y">@y</option>
                         }

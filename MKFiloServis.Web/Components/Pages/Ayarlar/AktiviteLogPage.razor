@@ -422,8 +422,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        filter.BaslangicTarihi = DateTime.Today.AddDays(-7);
-        filter.BitisTarihi = DateTime.Today;
+        filter.BaslangicTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-7);
+        filter.BitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
         await YenileAsync();
     }
 
@@ -456,8 +456,8 @@
     {
         filter = new AktiviteLogFilter
         {
-            BaslangicTarihi = DateTime.Today.AddDays(-7),
-            BitisTarihi = DateTime.Today,
+            BaslangicTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(-7),
+            BitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
             SayfaBoyutu = 50,
             Sayfa = 1
         };

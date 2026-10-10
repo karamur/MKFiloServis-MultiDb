@@ -58,7 +58,7 @@ public class FirmalarArasiTransfer : BaseEntity, IFirmaTenant
     public decimal Tutar { get; set; }
 
     [Required]
-    public DateTime TransferTarihi { get; set; } = DateTime.Today;
+    public DateTime TransferTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
 
     [StringLength(500)]
     public string? Aciklama { get; set; }

@@ -882,7 +882,7 @@
         {
             var bytes = await MuhasebeService.ExportMuhasbelestirmeKontrolExcelAsync(faturaIdleri: seciliIdler);
             var base64 = Convert.ToBase64String(bytes);
-            await JS.InvokeVoidAsync("downloadFileFromBase64", $"Fatura_Kontrol_{DateTime.Now:yyyyMMdd}.xlsx", base64);
+            await JS.InvokeVoidAsync("downloadFileFromBase64", $"Fatura_Kontrol_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.xlsx", base64);
         }
         catch (Exception ex)
         {
@@ -899,7 +899,7 @@
         {
             var bytes = await MuhasebeService.ExportMuhasbelestirmeKontrolExcelAsync(masrafIdleri: seciliIdler);
             var base64 = Convert.ToBase64String(bytes);
-            await JS.InvokeVoidAsync("downloadFileFromBase64", $"Masraf_Kontrol_{DateTime.Now:yyyyMMdd}.xlsx", base64);
+            await JS.InvokeVoidAsync("downloadFileFromBase64", $"Masraf_Kontrol_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.xlsx", base64);
         }
         catch (Exception ex)
         {

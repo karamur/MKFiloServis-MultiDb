@@ -12,8 +12,8 @@ private List<Firma> _firmalar = [];
     // asla sabit bir firma kimliğine düşülmez.
     private int _firmaId;
     private bool FirmaSecili => _firmaId > 0;
-    private int _yil = DateTime.Today.Year;
-    private int _ay = DateTime.Today.Month;
+    private int _yil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    private int _ay = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
     private bool _calisiyor;
     private string? _durumMesaji;
     private RebuildOnizleme? _onizleme;

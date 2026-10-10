@@ -274,8 +274,8 @@
 
     private ProformaFatura proforma = new()
     {
-        ProformaTarihi = DateTime.Now,
-        GecerlilikTarihi = DateTime.Now.AddDays(15),
+        ProformaTarihi = MKFiloServis.Shared.Time.BusinessTime.Now,
+        GecerlilikTarihi = MKFiloServis.Shared.Time.BusinessTime.Now.AddDays(15),
         KdvOrani = 20,
         VadeGun = 30
     };

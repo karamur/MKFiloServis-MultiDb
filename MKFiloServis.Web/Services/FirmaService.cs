@@ -1,4 +1,4 @@
-﻿using MKFiloServis.Shared.Entities;
+using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Web.Services.Interfaces;
@@ -186,8 +186,8 @@ public class FirmaService : IFirmaService
                 FirmaId = 0,
                 FirmaKodu = "VARSAYILAN",
                 FirmaAdi = "Firma Yok",
-                AktifDonemYil = DateTime.Today.Year,
-                AktifDonemAy = DateTime.Today.Month,
+                AktifDonemYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year,
+                AktifDonemAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month,
                 DatabaseName = null,
                 TumFirmalar = false
             };
@@ -336,8 +336,8 @@ public class FirmaService : IFirmaService
             UnvanTam = "Ana Firma Ltd. Sti.",
             Aktif = true,
             VarsayilanFirma = true,
-            AktifDonemYil = DateTime.Today.Year,
-            AktifDonemAy = DateTime.Today.Month,
+            AktifDonemYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year,
+            AktifDonemAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month,
             CreatedAt = DateTime.UtcNow
         };
 

@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Helpers;
@@ -31,7 +31,7 @@ public class ArchiveMigrationService
 
     public class MigrationReport
     {
-        public DateTime GeneratedAt { get; set; } = DateTime.Now;
+        public DateTime GeneratedAt { get; set; } = DateTime.UtcNow;
         public bool IsDryRun { get; set; }
         public PersonelStats Personel { get; set; } = new();
         public AracStats Arac { get; set; } = new();
@@ -111,7 +111,7 @@ public class ArchiveMigrationService
         var evrakAdi = evrak.EvrakTanim?.EvrakAdi ?? "Evrak";
         var uzanti = Path.GetExtension((evrak.DosyaYolu ?? ".pdf").Replace(".enc", ""));
         if (string.IsNullOrEmpty(uzanti)) uzanti = ".pdf";
-        var ts = (evrak.CreatedAt == default ? DateTime.Now : evrak.CreatedAt).ToString("yyyyMMdd_HHmmss");
+        var ts = (evrak.CreatedAt == default ? MKFiloServis.Shared.Time.BusinessTime.Now : evrak.CreatedAt).ToString("yyyyMMdd_HHmmss");
         var dosyaAdi = $"{Norm(ad, true)}{Norm(soyad, true)}{Norm(evrakAdi, true)}_{ts}{uzanti}.enc";
         return $"{AppStoragePaths.PersonelEvrakRelativeRoot}/{klasor}/{dosyaAdi}";
     }
@@ -127,7 +127,7 @@ public class ArchiveMigrationService
         var kategori = dosya.AracEvrak?.EvrakKategorisi ?? "Evrak";
         var uzanti = Path.GetExtension((dosya.DosyaYolu ?? ".pdf").Replace(".enc", ""));
         if (string.IsNullOrEmpty(uzanti)) uzanti = ".pdf";
-        var ts = (dosya.CreatedAt == default ? DateTime.Now : dosya.CreatedAt).ToString("yyyyMMdd_HHmmss");
+        var ts = (dosya.CreatedAt == default ? MKFiloServis.Shared.Time.BusinessTime.Now : dosya.CreatedAt).ToString("yyyyMMdd_HHmmss");
         var dosyaAdi = $"{Norm(plaka, true)}{Norm(kategori, true)}_{ts}{uzanti}.enc";
         return $"{AppStoragePaths.AracEvrakRelativeRoot}/{klasor}/{dosyaAdi}";
     }
@@ -437,7 +437,7 @@ public class ArchiveMigrationService
     {
         var reportDir = Path.Combine(AppStoragePaths.DefaultStorageRoot, "Arsiv", "MigrationReports");
         Directory.CreateDirectory(reportDir);
-        var fileName = $"archive_migration_{DateTime.Now:yyyyMMdd_HHmmss}.json";
+        var fileName = $"archive_migration_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmmss}.json";
         var filePath = Path.Combine(reportDir, fileName);
         var json = JsonSerializer.Serialize(report, new JsonSerializerOptions
         {

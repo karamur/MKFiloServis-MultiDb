@@ -96,7 +96,7 @@ public enum CariHatirlatmaTipi
 /// </summary>
 public class CariHatirlatmaRapor
 {
-    public DateTime RaporTarihi { get; set; } = DateTime.Now;
+    public DateTime RaporTarihi { get; set; } = DateTime.UtcNow;
     public int ToplamUyariSayisi { get; set; }
     public decimal ToplamVadeGecmisTutar { get; set; }
     public int VadeYaklasanFaturaSayisi { get; set; }

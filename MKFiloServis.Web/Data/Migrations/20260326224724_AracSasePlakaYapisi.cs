@@ -16,10 +16,6 @@ namespace MKFiloServis.Web.Data.Migrations
                 name: "IX_Araclar_Plaka",
                 table: "Araclar");
 
-            migrationBuilder.DropColumn(
-                name: "Plaka",
-                table: "Araclar");
-
             migrationBuilder.AlterColumn<string>(
                 name: "SaseNo",
                 table: "Araclar",
@@ -30,6 +26,24 @@ namespace MKFiloServis.Web.Data.Migrations
                 oldClrType: typeof(string),
                 oldType: "text",
                 oldNullable: true);
+
+            // Populate the required chassis value before its unique index is built.
+            if (migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL")
+            {
+                migrationBuilder.Sql(@"
+UPDATE ""Araclar""
+SET ""SaseNo"" = ""Plaka""
+WHERE NULLIF(BTRIM(COALESCE(""SaseNo"", '')), '') IS NULL
+  AND NULLIF(BTRIM(COALESCE(""Plaka"", '')), '') IS NOT NULL;");
+            }
+            else if (migrationBuilder.ActiveProvider == "Microsoft.EntityFrameworkCore.Sqlite")
+            {
+                migrationBuilder.Sql(@"
+UPDATE ""Araclar""
+SET ""SaseNo"" = ""Plaka""
+WHERE TRIM(COALESCE(""SaseNo"", '')) = ''
+  AND TRIM(COALESCE(""Plaka"", '')) <> '';");
+            }
 
             migrationBuilder.AlterColumn<string>(
                 name: "Renk",
@@ -142,6 +156,51 @@ namespace MKFiloServis.Web.Data.Migrations
                 table: "AracPlakalar",
                 columns: new[] { "Plaka", "CikisTarihi" },
                 filter: "\"CikisTarihi\" IS NULL AND \"IsDeleted\" = false");
+
+            // Keep the old plate before removing the source column. The former
+            // startup repair ran after MigrateAsync and therefore could not read it.
+            if (migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL")
+            {
+                migrationBuilder.Sql(@"
+UPDATE ""Araclar""
+SET ""AktifPlaka"" = ""Plaka""
+WHERE NULLIF(BTRIM(COALESCE(""Plaka"", '')), '') IS NOT NULL
+  AND NULLIF(BTRIM(COALESCE(""AktifPlaka"", '')), '') IS NULL;
+
+INSERT INTO ""AracPlakalar"" (""AracId"", ""Plaka"", ""GirisTarihi"", ""IslemTipi"", ""Aciklama"", ""CreatedAt"", ""IsDeleted"")
+SELECT a.""Id"", a.""Plaka"", COALESCE(a.""CreatedAt"", CURRENT_TIMESTAMP AT TIME ZONE 'UTC'), 1,
+       'Mevcut kayıttan aktarıldı', COALESCE(a.""CreatedAt"", CURRENT_TIMESTAMP AT TIME ZONE 'UTC'), false
+FROM ""Araclar"" a
+WHERE NULLIF(BTRIM(COALESCE(a.""Plaka"", '')), '') IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM ""AracPlakalar"" ap
+      WHERE ap.""AracId"" = a.""Id"" AND ap.""Plaka"" = a.""Plaka""
+        AND ap.""CikisTarihi"" IS NULL AND ap.""IsDeleted"" = false
+  );");
+            }
+            else if (migrationBuilder.ActiveProvider == "Microsoft.EntityFrameworkCore.Sqlite")
+            {
+                migrationBuilder.Sql(@"
+UPDATE ""Araclar""
+SET ""AktifPlaka"" = ""Plaka""
+WHERE TRIM(COALESCE(""Plaka"", '')) <> ''
+  AND TRIM(COALESCE(""AktifPlaka"", '')) = '';
+
+INSERT INTO ""AracPlakalar"" (""AracId"", ""Plaka"", ""GirisTarihi"", ""IslemTipi"", ""Aciklama"", ""CreatedAt"", ""IsDeleted"")
+SELECT a.""Id"", a.""Plaka"", COALESCE(a.""CreatedAt"", datetime('now')), 1,
+       'Mevcut kayıttan aktarıldı', COALESCE(a.""CreatedAt"", datetime('now')), 0
+FROM ""Araclar"" a
+WHERE TRIM(COALESCE(a.""Plaka"", '')) <> ''
+  AND NOT EXISTS (
+      SELECT 1 FROM ""AracPlakalar"" ap
+      WHERE ap.""AracId"" = a.""Id"" AND ap.""Plaka"" = a.""Plaka""
+        AND ap.""CikisTarihi"" IS NULL AND ap.""IsDeleted"" = 0
+  );");
+            }
+
+            migrationBuilder.DropColumn(
+                name: "Plaka",
+                table: "Araclar");
         }
 
         /// <inheritdoc />

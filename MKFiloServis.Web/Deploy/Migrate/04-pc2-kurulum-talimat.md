@@ -1,7 +1,6 @@
 # MK Filo Servis — 2. PC Kurulum Talimatı
 
-> **Hazırlayan:** Otomatik oluşturuldu (`03-pc2-publish.ps1`)  
-> **Versiyon:** .NET 10 · PostgreSQL 16 · IIS (in-process)
+> **Durum:** Tarihsel PC2 geçiş notu. Üretim kurulumu için güncel `setup` paketini ve [setup/README.md](../../../setup/README.md) belgesini kullanın. Bu not tek başına satış paketi veya kurulum kabulü değildir.
 
 ---
 
@@ -17,13 +16,16 @@
 
 ---
 
-## ADIM 1 — Dosyaları 2. PC'ye Taşıma
+## ADIM 1 — Kaynak yedeğini ve anahtarları hazırlama
 
-1. 1. PC'de oluşturulan ZIP paketini 2. PC'ye kopyalayın:
+1. Kaynak makinede uygulama tutarlı yedeğini ve gerekli Data Protection anahtarlarını hazırlayın. Paketleme betiğinin ürettiği ZIP yalnızca tarihsel publish dosyalarını taşır; üretim için güncel setup EXE'sini oluşturup hedefe aktarın.
+2. Kaynak veritabanı `.backup` dosyasını ve şifreli dosya/kilit materyalini ayrı, erişimi sınırlandırılmış kanaldan aktarın.
+
+Eski sürümdeki ZIP adı:
    ```
    MKFiloServis-PC2-YYYYMMDD_HHmm.zip
    ```
-2. ZIP'i `C:\MKFiloServis\IIS` klasörüne **çıkartın**.
+Bu ZIP'i tek başına üretim kurulumu olarak kullanmayın.
 
 ---
 
@@ -62,41 +64,17 @@ Betik çalışırken veritabanı parolasını gizli giriş istemine yazın. Paro
 
 ---
 
-## ADIM 4 — appsettings Yapılandırması
+## ADIM 4 — Üretim ayarları ve sırlar
 
-`C:\MKFiloServis\IIS\appsettings.PC2.json` dosyasını açın ve düzenleyin:
+Eski `03-pc2-publish.ps1` betiği artık `appsettings.PC2.json` üretmez. Üretim bağlantı bilgilerini `appsettings.Production.json` içine kopyalamayın. Güncel setup kurucusu `dbsettings.json` dosyasını sağlayıcı sihirbazında oluşturur ve erişimini Administrators/SYSTEM ile IIS uygulama havuzuna sınırlar. Hedef kurulumda bu sihirbazı PostgreSQL bağlantısıyla yapılandırın.
 
-```json
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "Host=localhost;Port=5432;Database=MKFiloServis;Username=postgres;Password=SIFRESINIZ;"
-  },
-  "Jwt": {
-    "Secret": "EN_AZ_32_KARAKTER_GIZLI_ANAHTAR_YAZIN_BURAYA"
-  },
-  "Backup": {
-    "Path": "C:\\MKFiloServis_yedekleme\\database"
-  }
-}
-```
+`Jwt__Secret` en az 32 karakterli rastgele bir sır olmalıdır. Kurulum EXE'sine, ZIP'e, kaynak depoya veya komut satırına koymayın; ilk IIS başlangıcından önce hedef sunucudaki onaylı korumalı secret deposundan uygulama ortam değişkeni olarak verin. Ortam sırrı yapılandırılamıyorsa uygulamayı Production'da başlatmayın.
 
-Sonra **`appsettings.Production.json`** olarak kaydedin (varsa üzerine yazın).
+## ADIM 5 — Güncel kurulum paketini çalıştırma
 
----
+PostgreSQL yedeği geri yüklendikten ve `Jwt__Secret` hedefte tanımlandıktan sonra güncel `MKFiloServisKurulum-<sürüm>.exe` kurucusunu yönetici olarak çalıştırın. Sağlayıcı sihirbazında PostgreSQL'i seçip veritabanı bağlantısını girin. Kurucu IIS ve erişim izinlerini ayarlar.
 
-## ADIM 5 — IIS Kurulumu
-
-IIS'de yeni site oluşturmak için **Yönetici olarak** çalıştırın:
-
-```batch
-C:\MKFiloServis\IIS\kur.bat "C:\MKFiloServis\IIS" "C:\MKFiloServis_yedekleme\deploy" "" "Install"
-```
-
-veya IIS Manager'dan:
-- **Site Adı:** MKFiloServis
-- **Fiziksel Yol:** `C:\MKFiloServis\IIS`
-- **Port:** 80 (veya boş 443 + sertifika)
-- **Uygulama Havuzu:** `No Managed Code`, 64-bit
+Hedef makinede daha önce üretilmiş `appsettings.Production.json` varsa kurulumdan önce inceleyip güvenli şekilde kaldırın. Güncelleme paketi mevcut `dbsettings.json` dosyasını korur; bağlantı değişikliği gerektiğinde ayarı ayrıca gözden geçirin.
 
 ---
 
@@ -178,7 +156,8 @@ PostgreSQL parolasını istemde girin. Diğer yazımların durduğunu `ARKAPLAN-
 
 ### Veritabanı bağlantı hatası
 - PostgreSQL servisinin çalıştığını kontrol edin: `Get-Service postgresql*`
-- `appsettings.Production.json` dosyasındaki şifreyi kontrol edin.
+- Kurucunun ürettiği `dbsettings.json` bağlantısını ve dosya ACL'sini kontrol edin.
+- JWT yapılandırma hatasında hedef uygulama ortamında `Jwt__Secret` bulunduğunu kontrol edin; değeri loga, komut satırına veya destek kaydına kopyalamayın.
 
 ### Lisans makine kodu uyuşmuyor
 - 2. PC için `Lisans/MKFiloServisLisans.exe` ile yeni makine kodunu alın.
@@ -194,7 +173,7 @@ C:\
 │   └── IIS\                       ← Uygulama dosyaları (kur.bat ile kurulur)
 │       ├── MKFiloServis.Web.dll
 │       ├── appsettings.json
-│       ├── appsettings.Production.json  ← Siz düzenlediniz
+│       ├── dbsettings.json              ← Kurucu üretir; erişimi sınırlandırılır
 │       └── web.config
 │
 └── MKFiloServis_yedekleme\

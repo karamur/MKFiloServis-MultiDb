@@ -244,8 +244,8 @@
 
 @code {
     private bool yukleniyor = true;
-    private DateTime bas = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-    private DateTime bit = DateTime.Today;
+    private DateTime bas = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1);
+    private DateTime bit = MKFiloServis.Shared.Time.BusinessTime.Today;
     private int sahiplikFiltre = -1;
     private bool bosAracGizle = true;
 

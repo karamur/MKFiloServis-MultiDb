@@ -1,3 +1,4 @@
+using MKFiloServis.Shared.Time;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Services.Interfaces;
@@ -74,7 +75,7 @@ public class AracService : IAracService
                     SecimiDogrula();
                     await using var context = await _contextFactory.CreateDbContextAsync();
                     SecimiDogrula();
-                    var query = context.Araclar.AsNoTracking()
+                    var query = context.Araclar.AsNoTracking().AsSplitQuery()
                         .Include(a => a.PlakaGecmisi.Where(p => !p.IsDeleted))
                         .Include(a => a.Firma)
                         .Where(a => !a.IsDeleted && (!sadeceAktif || a.Aktif));
@@ -82,7 +83,7 @@ public class AracService : IAracService
                         query = query.Where(a => a.FirmaId == firmaId);
                     var araclar = await query.ToListAsync();
                     SecimiDogrula();
-                    var bugun = DateTime.Today;
+                    var bugun = BusinessTime.Today;
                     foreach (var arac in araclar)
                     {
                         var aktifPlaka = arac.PlakaGecmisi
@@ -132,7 +133,7 @@ public class AracService : IAracService
         {
             // Aktif plakayı güncelle
             var aktifPlaka = arac.PlakaGecmisi
-                .Where(p => p.CikisTarihi == null || p.CikisTarihi > DateTime.Today)
+                .Where(p => p.CikisTarihi == null || p.CikisTarihi > BusinessTime.Today)
                 .OrderByDescending(p => p.GirisTarihi)
                 .FirstOrDefault();
 
@@ -154,7 +155,7 @@ public class AracService : IAracService
             .Include(ap => ap.Arac)
             .FirstOrDefaultAsync(ap => ap.Plaka == plaka &&
                                        !ap.IsDeleted &&
-                                       (ap.CikisTarihi == null || ap.CikisTarihi > DateTime.Today));
+                                       (ap.CikisTarihi == null || ap.CikisTarihi > BusinessTime.Today));
 
         return aracPlaka?.Arac;
     }
@@ -181,7 +182,7 @@ public class AracService : IAracService
     public async Task<bool> PlakaMevcutMu(string plaka, int? haricAracPlakaId = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var bugun = DateTime.UtcNow.Date;
+        var bugun = BusinessTime.Today;
 
         // Aktif plaka kontrolü (CikisTarihi null veya gelecek tarihli)
         return await context.AracPlakalar
@@ -241,7 +242,7 @@ public class AracService : IAracService
             var aracPlaka = new AracPlaka
             {
                 Plaka = plaka,
-                GirisTarihi = DateTime.SpecifyKind(DateTime.Today, DateTimeKind.Utc),
+                GirisTarihi = DateTime.SpecifyKind(BusinessTime.Today, DateTimeKind.Utc),
                 IslemTipi = islemTipi,
                 IslemTutari = islemTutari,
                 CariId = cariId,
@@ -383,9 +384,9 @@ public class AracService : IAracService
             ?? throw new InvalidOperationException("Araç bulunamadı veya seçili firmaya ait değil.");
 
         var simdi = DateTime.UtcNow;
-        foreach (var aktifPlaka in arac.PlakaGecmisi.Where(p => p.CikisTarihi == null || p.CikisTarihi > DateTime.Today))
+        foreach (var aktifPlaka in arac.PlakaGecmisi.Where(p => p.CikisTarihi == null || p.CikisTarihi > BusinessTime.Today))
         {
-            aktifPlaka.CikisTarihi = DateTime.SpecifyKind(DateTime.Today, DateTimeKind.Utc);
+            aktifPlaka.CikisTarihi = DateTime.SpecifyKind(BusinessTime.Today, DateTimeKind.Utc);
             aktifPlaka.UpdatedAt = simdi;
         }
         arac.AktifPlaka = null;
@@ -500,7 +501,7 @@ public class AracService : IAracService
 
         if (mevcutAktif != null)
         {
-            mevcutAktif.CikisTarihi = DateTime.UtcNow;
+            mevcutAktif.CikisTarihi = BusinessTime.Today;
             mevcutAktif.UpdatedAt = DateTime.UtcNow;
         }
 
@@ -509,7 +510,7 @@ public class AracService : IAracService
         {
             AracId = aracId,
             Plaka = yeniPlaka,
-            GirisTarihi = DateTime.UtcNow,
+            GirisTarihi = BusinessTime.Today,
             IslemTipi = islemTipi,
             IslemTutari = islemTutari,
             CariId = cariId,
@@ -542,13 +543,13 @@ public class AracService : IAracService
             throw new InvalidOperationException("Araç bulunamadı.");
 
         await PlakaCarisiniDogrulaAsync(context, yeniPlaka.CariId, firmaId);
-        var girisTarihi = yeniPlaka.GirisTarihi == default ? DateTime.Today : yeniPlaka.GirisTarihi;
+        var girisTarihi = yeniPlaka.GirisTarihi == default ? BusinessTime.Today : yeniPlaka.GirisTarihi.Date;
         var yeniKayit = new AracPlaka
         {
             AracId = yeniPlaka.AracId,
             Plaka = plakaText,
             GirisTarihi = girisTarihi,
-            CikisTarihi = yeniPlaka.CikisTarihi,
+            CikisTarihi = yeniPlaka.CikisTarihi?.Date,
             IslemTipi = yeniPlaka.IslemTipi,
             IslemTutari = yeniPlaka.IslemTutari,
             CariId = yeniPlaka.CariId,
@@ -588,7 +589,7 @@ public class AracService : IAracService
         if (plakaKaydi == null)
             throw new InvalidOperationException("Plaka kaydı bulunamadı.");
 
-        plakaKaydi.CikisTarihi = cikisTarihi;
+        plakaKaydi.CikisTarihi = cikisTarihi.Date;
         plakaKaydi.UpdatedAt = DateTime.UtcNow;
         await GuncelleAktifPlaka(context, plakaKaydi.AracId, firmaId);
         await context.SaveChangesAsync();
@@ -611,7 +612,7 @@ public class AracService : IAracService
             throw new InvalidOperationException("Bu plaka zaten kapatılmış.");
 
         await PlakaCarisiniDogrulaAsync(context, cariId ?? plakaKaydi.CariId, firmaId);
-        plakaKaydi.CikisTarihi = DateTime.UtcNow;
+        plakaKaydi.CikisTarihi = BusinessTime.Today;
         plakaKaydi.IslemTipi = cikisIslemTipi;
         if (islemTutari.HasValue) plakaKaydi.IslemTutari = islemTutari;
         if (cariId.HasValue) plakaKaydi.CariId = cariId;
@@ -643,7 +644,7 @@ public class AracService : IAracService
 
     private static Task<bool> PlakaKullaniminiKontrolEtAsync(ApplicationDbContext context, string plaka, int firmaId)
     {
-        var bugun = DateTime.UtcNow.Date;
+        var bugun = BusinessTime.Today;
         return context.AracPlakalar.AnyAsync(ap => ap.Plaka == plaka && !ap.IsDeleted &&
             (ap.CikisTarihi == null || ap.CikisTarihi > bugun) &&
             context.Araclar.Any(a => a.Id == ap.AracId && a.FirmaId == firmaId && !a.IsDeleted));
@@ -664,7 +665,7 @@ public class AracService : IAracService
             if (entry.State == EntityState.Deleted)
                 adaylar.Remove(entry.Entity);
         }
-        var bugun = DateTime.Today;
+        var bugun = BusinessTime.Today;
         var aktifPlaka = adaylar
             .Where(ap => !ap.IsDeleted && ap.Id != kapatilanPlakaId && (ap.CikisTarihi == null || ap.CikisTarihi > bugun))
             .OrderByDescending(ap => ap.GirisTarihi)
@@ -1009,7 +1010,7 @@ public class AracService : IAracService
     public async Task<List<AracEvrak>> GetSuresiDolacakEvraklarAsync(int gunSayisi = 30)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var bugun = DateTime.UtcNow.Date;
+        var bugun = BusinessTime.Today;
         var bitisTarihi = bugun.AddDays(gunSayisi);
 
         return await context.AracEvraklari
@@ -1056,9 +1057,9 @@ public class AracService : IAracService
         ws.Cell(2, 9).Value = "Minibüs";
         ws.Cell(2, 10).Value = "Özmal";
         ws.Cell(2, 11).Value = 15000;
-        ws.Cell(2, 12).Value = DateTime.Today.AddYears(1);
-        ws.Cell(2, 13).Value = DateTime.Today.AddYears(1);
-        ws.Cell(2, 14).Value = DateTime.Today.AddYears(1);
+        ws.Cell(2, 12).Value = BusinessTime.Today.AddYears(1);
+        ws.Cell(2, 13).Value = BusinessTime.Today.AddYears(1);
+        ws.Cell(2, 14).Value = BusinessTime.Today.AddYears(1);
         ws.Cell(2, 15).Value = "Evet";
         ws.Cell(2, 16).Value = "Excel şablon örnek kaydı";
 
@@ -1115,16 +1116,27 @@ public class AracService : IAracService
             var lastRow = ws.LastRowUsed()?.RowNumber() ?? 1;
             var lastColumn = ws.Row(1).LastCellUsed()?.Address.ColumnNumber ?? 0;
             var kolonlar = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var yinelenenBasliklar = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             // Debug: Başlıkları logla
             for (int col = 1; col <= lastColumn; col++)
             {
                 var rawHeader = ws.Cell(1, col).GetString();
                 var header = NormalizeExcelHeader(rawHeader);
-                if (!string.IsNullOrWhiteSpace(header) && !kolonlar.ContainsKey(header))
+                if (string.IsNullOrWhiteSpace(header))
+                    continue;
+                if (!kolonlar.TryAdd(header, col))
                 {
-                    kolonlar[header] = col;
+                    yinelenenBasliklar.Add(header);
                 }
+            }
+
+            if (yinelenenBasliklar.Count > 0)
+            {
+                result.Errors.Add($"Excel başlıkları yineleniyor: {string.Join(", ", yinelenenBasliklar)}. Her başlık yalnız bir kez bulunmalı.");
+                result.ErrorCount++;
+                result.Success = false;
+                return result;
             }
 
             // Şase No kolonunu bul - birden fazla varyant dene
@@ -1153,7 +1165,7 @@ public class AracService : IAracService
                 .Where(ap => !ap.IsDeleted &&
                              ap.Arac != null &&
                              !ap.Arac.IsDeleted && ap.Arac.FirmaId == firmaId.Value &&
-                             (ap.CikisTarihi == null || ap.CikisTarihi > DateTime.Today))
+                             (ap.CikisTarihi == null || ap.CikisTarihi > BusinessTime.Today))
                 .Select(ap => new { ap.Plaka, ap.AracId })
                 .ToListAsync();
             var aktifPlakaAracMap = aktifPlakalar
@@ -1172,8 +1184,10 @@ public class AracService : IAracService
                         continue;
 
                     // Açıklama satırlarını atla
-                    if (saseNo.StartsWith("*") || saseNo.StartsWith("AÇIKLAMA") || saseNo.Length < 5)
+                    if (saseNo.StartsWith("*") || saseNo.StartsWith("AÇIKLAMA"))
                         continue;
+
+                    ValidateImportRow(ws, row, kolonlar, saseNo);
 
                     var plaka = GetCellValue(ws, row, kolonlar, "PLAKA")?.Trim().ToUpperInvariant();
                     var marka = GetCellValue(ws, row, kolonlar, "MARKA");
@@ -1272,7 +1286,7 @@ public class AracService : IAracService
                                                     !ap.IsDeleted &&
                                                     ap.Arac != null &&
                                                     !ap.Arac.IsDeleted && ap.Arac.FirmaId == firmaId.Value &&
-                                                    (ap.CikisTarihi == null || ap.CikisTarihi > DateTime.Today) &&
+                                                    (ap.CikisTarihi == null || ap.CikisTarihi > BusinessTime.Today) &&
                                                     ap.AracId != mevcutArac.Id);
 
                                 if (plakaKullanimda)
@@ -1280,7 +1294,7 @@ public class AracService : IAracService
 
                                 foreach (var aktifPlakaKaydi in mevcutArac.PlakaGecmisi.Where(p => p.CikisTarihi == null))
                                 {
-                                    aktifPlakaKaydi.CikisTarihi = DateTime.SpecifyKind(DateTime.Today, DateTimeKind.Utc);
+                                    aktifPlakaKaydi.CikisTarihi = DateTime.SpecifyKind(BusinessTime.Today, DateTimeKind.Utc);
                                 }
 
                                 mevcutArac.AktifPlaka = plaka;
@@ -1288,7 +1302,7 @@ public class AracService : IAracService
                                 mevcutArac.PlakaGecmisi.Add(new AracPlaka
                                 {
                                     Plaka = plaka,
-                                    GirisTarihi = DateTime.SpecifyKind(DateTime.Today, DateTimeKind.Utc),
+                                    GirisTarihi = DateTime.SpecifyKind(BusinessTime.Today, DateTimeKind.Utc),
                                     IslemTipi = PlakaIslemTipi.PlakaDevir,
                                     Aciklama = "Excel'den güncellendi",
                                     CreatedAt = DateTime.UtcNow
@@ -1312,7 +1326,7 @@ public class AracService : IAracService
                                                 !ap.IsDeleted &&
                                                 ap.Arac != null &&
                                                 !ap.Arac.IsDeleted && ap.Arac.FirmaId == firmaId.Value &&
-                                                (ap.CikisTarihi == null || ap.CikisTarihi > DateTime.Today));
+                                                (ap.CikisTarihi == null || ap.CikisTarihi > BusinessTime.Today));
 
                             if (plakaKullanimda)
                                 throw new InvalidOperationException($"Plaka başka bir araçta aktif: {plaka}");
@@ -1346,7 +1360,7 @@ public class AracService : IAracService
                             yeniArac.PlakaGecmisi.Add(new AracPlaka
                             {
                                 Plaka = plaka,
-                                GirisTarihi = DateTime.SpecifyKind(DateTime.Today, DateTimeKind.Utc),
+                                GirisTarihi = DateTime.SpecifyKind(BusinessTime.Today, DateTimeKind.Utc),
                                 IslemTipi = PlakaIslemTipi.Alis,
                                 Aciklama = "Excel'den aktarıldı",
                                 CreatedAt = DateTime.UtcNow
@@ -1397,8 +1411,11 @@ public class AracService : IAracService
                     _logger.LogError(ex, "Araç Excel satırı kaydedilemedi. Satır: {Row}, Firma: {FirmaId}", row, firmaId);
                     var secimDegisti = System.Threading.Volatile.Read(ref secimSurumu) != 0 ||
                         _aktifFirmaProvider.AktifFirmaId != firmaId || _aktifFirmaProvider.TumFirmalar;
+                    var hataDetayi = ex is InvalidDataException
+                        ? ex.Message
+                        : "Kayıt tamamlanamadı; satır verilerini veya veritabanı erişimini kontrol edin.";
                     result.Errors.Add($"Satır {row} ({saseNoHata} / {plakaHata}): " +
-                        (secimDegisti ? "Firma seçimi değişti; kalan aktarım durduruldu." : "Kayıt tamamlanamadı; satır verilerini kontrol edin."));
+                        (secimDegisti ? "Firma seçimi değişti; kalan aktarım durduruldu." : hataDetayi));
                     result.ErrorCount++;
                     if (secimDegisti) break;
                 }
@@ -1430,6 +1447,95 @@ public class AracService : IAracService
             return ws.Cell(row, col).GetString()?.Trim();
         }
         return null;
+    }
+
+    private static void ValidateImportRow(
+        ClosedXML.Excel.IXLWorksheet ws,
+        int row,
+        Dictionary<string, int> kolonlar,
+        string saseNo)
+    {
+        if (saseNo.Length is < 5 or > 100)
+            throw new InvalidDataException("Şase No 5–100 karakter arasında olmalı.");
+
+        ValidateIntegerCell(ws, row, kolonlar, "MODEL YILI", 1886, 2100);
+        ValidateIntegerCell(ws, row, kolonlar, "KOLTUK SAYISI", 0, 200);
+        var km = GetCellValue(ws, row, kolonlar, "KM");
+        if (!string.IsNullOrWhiteSpace(km))
+        {
+            var normalizedKm = km.Replace(".", string.Empty).Replace(",", string.Empty).Replace(" ", string.Empty);
+            if (!int.TryParse(normalizedKm, System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture, out var kmValue) || kmValue < 0)
+                throw new InvalidDataException("KM alanı sıfır veya daha büyük tam sayı olmalı.");
+        }
+
+        var aracTipi = NormalizeExcelHeader(GetCellValue(ws, row, kolonlar, "ARAC TIPI"));
+        if (!string.IsNullOrWhiteSpace(aracTipi) && aracTipi is not
+            ("MINIBUS" or "MIDIBUS" or "OTOBUS" or "OTOMOBIL" or "PANELVAN"))
+            throw new InvalidDataException("Araç Tipi tanınmıyor; şablondaki değerlerden birini kullanın.");
+
+        var sahiplik = NormalizeExcelHeader(GetCellValue(ws, row, kolonlar, "SAHIPLIK TIPI"));
+        if (!string.IsNullOrWhiteSpace(sahiplik) && sahiplik is not ("OZMAL" or "KIRALIK" or "KOMISYON" or "DIGER"))
+            throw new InvalidDataException("Sahiplik Tipi tanınmıyor; şablondaki değerlerden birini kullanın.");
+
+        var aktif = NormalizeExcelHeader(GetCellValue(ws, row, kolonlar, "AKTIF"));
+        if (!string.IsNullOrWhiteSpace(aktif) && aktif is not ("EVET" or "E" or "TRUE" or "1" or "AKTIF" or "HAYIR" or "H" or "FALSE" or "0" or "PASIF"))
+            throw new InvalidDataException("Aktif alanı Evet/Hayır, Aktif/Pasif veya True/False olmalı.");
+
+        ValidateDateCell(ws, row, kolonlar, "MUAYENE BITIS TARIHI");
+        ValidateDateCell(ws, row, kolonlar, "TRAFIK SIGORTASI BITIS TARIHI");
+        ValidateDateCell(ws, row, kolonlar, "KASKO BITIS TARIHI");
+    }
+
+    private static void ValidateIntegerCell(
+        ClosedXML.Excel.IXLWorksheet ws,
+        int row,
+        Dictionary<string, int> kolonlar,
+        string header,
+        int minimum,
+        int maximum)
+    {
+        var value = GetCellValue(ws, row, kolonlar, header);
+        if (string.IsNullOrWhiteSpace(value))
+            return;
+
+        if (!int.TryParse(value, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.GetCultureInfo("tr-TR"), out var parsed) ||
+            parsed < minimum || parsed > maximum)
+            throw new InvalidDataException($"{header} alanı {minimum}–{maximum} arasında tam sayı olmalı.");
+    }
+
+    private static void ValidateDateCell(ClosedXML.Excel.IXLWorksheet ws, int row, Dictionary<string, int> kolonlar, string header)
+    {
+        if (!kolonlar.TryGetValue(NormalizeExcelHeader(header), out var column))
+            return;
+
+        var cell = ws.Cell(row, column);
+        if (cell.IsEmpty() || string.IsNullOrWhiteSpace(cell.GetString()))
+            return;
+
+        try
+        {
+            if (cell.DataType == ClosedXML.Excel.XLDataType.DateTime)
+            {
+                _ = cell.GetDateTime();
+                return;
+            }
+            if (cell.DataType == ClosedXML.Excel.XLDataType.Number)
+            {
+                _ = DateTime.FromOADate(cell.GetDouble());
+                return;
+            }
+            if (DateTime.TryParse(cell.GetString(), System.Globalization.CultureInfo.GetCultureInfo("tr-TR"),
+                    System.Globalization.DateTimeStyles.AllowWhiteSpaces, out _))
+                return;
+        }
+        catch (ArgumentException)
+        {
+            // Report a stable, row-level validation message below.
+        }
+
+        throw new InvalidDataException($"{header} alanında geçerli bir tarih yok.");
     }
 
     private static DateTime? GetCellDateValue(ClosedXML.Excel.IXLWorksheet ws, int row, Dictionary<string, int> kolonlar, string baslik)

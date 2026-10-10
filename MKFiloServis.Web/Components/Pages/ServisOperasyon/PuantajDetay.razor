@@ -216,7 +216,7 @@
                 <div class="card shadow-sm">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <span><i class="bi bi-cash-stack me-1"></i>Tahsilatlar (Kurumdan)</span>
-                        <button class="btn btn-sm btn-outline-success" @onclick='() => { yeniTahsilat = new ServisTahsilat { ServisPuantajId = Id, TahsilatTarihi = DateTime.Today }; tahsilatFormAcik = true; }'>
+                        <button class="btn btn-sm btn-outline-success" @onclick='() => { yeniTahsilat = new ServisTahsilat { ServisPuantajId = Id, TahsilatTarihi = MKFiloServis.Shared.Time.BusinessTime.Today }; tahsilatFormAcik = true; }'>
                             <i class="bi bi-plus-circle"></i>
                         </button>
                     </div>
@@ -315,7 +315,7 @@
                     <div class="card shadow-sm">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <span><i class="bi bi-wallet2 me-1"></i>Ödemeler (Tedarikçiye)</span>
-                            <button class="btn btn-sm btn-outline-danger" @onclick='() => { yeniOdeme = new ServisOdeme { ServisPuantajId = Id, OdemeTarihi = DateTime.Today }; odemeFormAcik = true; }'>
+                            <button class="btn btn-sm btn-outline-danger" @onclick='() => { yeniOdeme = new ServisOdeme { ServisPuantajId = Id, OdemeTarihi = MKFiloServis.Shared.Time.BusinessTime.Today }; odemeFormAcik = true; }'>
                                 <i class="bi bi-plus-circle"></i>
                             </button>
                         </div>
@@ -590,8 +590,8 @@
             var fatura = new Fatura
             {
                 FaturaNo = faturaNo,
-                FaturaTarihi = DateTime.Today,
-                VadeTarihi = DateTime.Today.AddDays(30),
+                FaturaTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
+                VadeTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(30),
                 FaturaTipi = tip,
                 FaturaYonu = yon,
                 EFaturaTipi = EFaturaTipi.EArsiv,

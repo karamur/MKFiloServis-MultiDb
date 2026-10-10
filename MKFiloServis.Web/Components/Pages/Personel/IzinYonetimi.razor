@@ -13,7 +13,7 @@
         <h3><i class="bi bi-calendar-check me-2"></i>Personel İzin Yönetimi</h3>
         <div class="d-flex gap-2">
             <select class="form-select" style="width: 120px;" @bind="secilenYil" @bind:after="YenileData">
-                @for (int y = DateTime.Today.Year; y >= DateTime.Today.Year - 3; y--)
+                @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 3; y--)
                 {
                     <option value="@y">@y</option>
                 }
@@ -325,7 +325,7 @@
 }
 
 @code {
-    private int secilenYil = DateTime.Today.Year;
+    private int secilenYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
     private IzinRaporOzet? izinRapor;
     private List<PersonelIzin> bekleyenIzinler = new();
     private List<Sofor> soforler = new();
@@ -364,8 +364,8 @@
     {
         yeniIzin = new PersonelIzin
         {
-            BaslangicTarihi = DateTime.Today,
-            BitisTarihi = DateTime.Today,
+            BaslangicTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
+            BitisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
             IzinTipi = IzinTipi.YillikIzin,
             Durum = IzinDurum.Beklemede
         };

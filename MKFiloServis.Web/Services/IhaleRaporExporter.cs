@@ -68,7 +68,7 @@ public static class IhaleRaporExporter
             ws.Range(2, 1, 2, cols).Merge().Value = bilgi;
             ws.Range(2, 1, 2, cols).Style.Alignment.WrapText = true;
             ws.Row(2).Height = 34;
-            ws.Range(3, 1, 3, cols).Merge().Value = $"{tablo.Ad} · {DateTime.Now:dd.MM.yyyy HH:mm} · Para birimi: TL";
+            ws.Range(3, 1, 3, cols).Merge().Value = $"{tablo.Ad} · {MKFiloServis.Shared.Time.BusinessTime.Now:dd.MM.yyyy HH:mm} · Para birimi: TL";
             for (int c = 0; c < cols; c++) ws.Cell(5, c + 1).Value = tablo.Basliklar[c];
             for (int r = 0; r < tablo.Satirlar.Count; r++)
             {
@@ -148,7 +148,7 @@ public static class IhaleRaporExporter
                     });
                     page.Footer().PaddingTop(10).Row(row =>
                     {
-                        row.RelativeItem().Text($"Oluşturma: {DateTime.Now:dd.MM.yyyy HH:mm} · MKFiloServis · İhale raporu").FontSize(8).FontColor(Colors.Grey.Darken1);
+                        row.RelativeItem().Text($"Oluşturma: {MKFiloServis.Shared.Time.BusinessTime.Now:dd.MM.yyyy HH:mm} · MKFiloServis · İhale raporu").FontSize(8).FontColor(Colors.Grey.Darken1);
                         row.ConstantItem(95).AlignRight().Text(t => { t.Span("Sayfa "); t.CurrentPageNumber(); t.Span(" / "); t.TotalPages(); });
                     });
                 });

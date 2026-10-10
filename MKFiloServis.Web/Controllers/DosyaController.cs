@@ -67,6 +67,7 @@ public class DosyaController : ControllerBase
     /// </summary>
     /// <param name="path">Dosya yolu (SecureFileService relative path)</param>
     [HttpGet("download")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DownloadAsync([FromQuery] string path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -98,6 +99,7 @@ public class DosyaController : ControllerBase
     /// İstemci tarafı indirmeden önce ön kontrol için.
     /// </summary>
     [HttpGet("preview")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> PreviewAsync([FromQuery] string path)
     {
         if (string.IsNullOrWhiteSpace(path))

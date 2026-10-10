@@ -23,7 +23,7 @@ public class CariRiskService : ICariRiskService
     {
         using var context = await _contextFactory.CreateDbContextAsync();
         
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         
         // Tüm aktif cariler
         var cariler = await context.Cariler
@@ -75,7 +75,7 @@ public class CariRiskService : ICariRiskService
         using var context = await _contextFactory.CreateDbContextAsync();
         
         filtre ??= new CariRiskFilterParams();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         
         // Tüm aktif carileri al
         var cariQuery = context.Cariler
@@ -228,7 +228,7 @@ public class CariRiskService : ICariRiskService
     {
         using var context = await _contextFactory.CreateDbContextAsync();
         
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var minVadeTarihi = minGecikmeGunu.HasValue ? bugun.AddDays(-minGecikmeGunu.Value) : bugun;
         
         // NOT: KalanTutar hesaplanmış property, LINQ'da (GenelToplam - OdenenTutar) kullanılmalı
@@ -272,7 +272,7 @@ public class CariRiskService : ICariRiskService
         using var context = await _contextFactory.CreateDbContextAsync();
         
         var trendItems = new List<RiskTrendItem>();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         
         for (int i = aylikDonemSayisi - 1; i >= 0; i--)
         {

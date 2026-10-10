@@ -272,8 +272,8 @@
             fatura.FaturaYonu = FaturaYonu.Giden;
             fatura.FirmaId = firmalar.FirstOrDefault()?.Id;
             fatura.FaturaNo = await FaturaService.GenerateNextFaturaNoAsync(FaturaTipi.SatisFaturasi, fatura.FaturaYonu, fatura.FirmaId);
-            fatura.FaturaTarihi = DateTime.Today;
-            fatura.VadeTarihi = DateTime.Today.AddDays(30);
+            fatura.FaturaTarihi = MKFiloServis.Shared.Time.BusinessTime.Today;
+            fatura.VadeTarihi = MKFiloServis.Shared.Time.BusinessTime.Today.AddDays(30);
             fatura.Durum = FaturaDurum.Beklemede;
             KalemEkle();
         }

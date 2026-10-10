@@ -7,7 +7,7 @@
     2) MKFiloServis.DataSync      -> publish (self-contained, win-x64, SingleFile)
     4) Inno Setup - Setup.iss      -> MKFiloServisKurulum-<version>.exe (tam paket)
     5) Inno Setup - GuncelleSetup.iss-> MKFiloServisGuncelle-<version>.exe
-    6) Inno Setup - MusteriSetup.iss-> MKFiloServisKurulumMusteri-<version>.exe
+    Eski MusteriSetup.iss varyanti ACL korumasi eksik oldugu icin satis paketinde uretilmez.
     Internal license utility is built only with -LisansOnly or -IncludeInternalLicenseTool.
 
 .PARAMETER Version
@@ -42,6 +42,11 @@ $RepoRoot  = Split-Path -Parent $Root
 $Payload   = Join-Path $Root 'payload'
 $Output    = Join-Path $Root "output\v$Version"
 $BuildLicenseTool = $LisansOnly -or $IncludeInternalLicenseTool
+$LegacyCustomerPackage = Join-Path $Output "MKFiloServisKurulumMusteri-$Version.exe"
+
+if (-not $LisansOnly -and (Test-Path -LiteralPath $LegacyCustomerPackage)) {
+    throw "Eski MusteriSetup paketi ayni surum cikti klasorunde bulundu; ACL korumasi olmadigi icin yayin klasorunu temizleyip yeni surumle tekrar olusturun: $LegacyCustomerPackage"
+}
 
 if ($LisansOnly -and $IncludeInternalLicenseTool) {
     throw "-LisansOnly ile -IncludeInternalLicenseTool birlikte kullanilamaz."
@@ -157,6 +162,10 @@ if (-not $LisansOnly) {
             throw "Yerel ayar/oturum dosyası Web payload'ında bulundu: $fileName"
         }
     }
+    $environmentConfigs = @(Get-ChildItem -LiteralPath $webPayload -Filter 'appsettings.*.json' -File)
+    if ($environmentConfigs.Count -gt 0) {
+        throw "Ortama özel appsettings dosyası Web payload'ında bulundu: $($environmentConfigs.Name -join ', ')"
+    }
 }
 
 if (-not $LisansOnly) {
@@ -187,9 +196,6 @@ if (-not $LisansOnly) {
     & $IsccExe "/DMyAppVersion=$Version" "/DOutputDir=$Output" (Join-Path $Root 'GuncelleSetup.iss')
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup (GuncelleSetup.iss) basarisiz." }
 
-    Write-Host "[6/7] Inno Setup - Musteri paketi..." -ForegroundColor Green
-    & $IsccExe "/DMyAppVersion=$Version" "/DOutputDir=$Output" "/DMyInstallDirBase=C:\MKFiloServis_ustun" (Join-Path $Root 'MusteriSetup.iss')
-    if ($LASTEXITCODE -ne 0) { throw "Inno Setup (MusteriSetup.iss) basarisiz." }
 }
 
 if ($BuildLicenseTool) {
@@ -204,8 +210,6 @@ if (-not $LisansOnly) {
     if (Test-Path $p1) { $s = [math]::Round((Get-Item $p1).Length/1MB,2); $sonuclar += "  Ana paket : $p1 ($s MB)" }
     $p2 = Join-Path $Output "MKFiloServisGuncelle-$Version.exe"
     if (Test-Path $p2) { $s = [math]::Round((Get-Item $p2).Length/1MB,2); $sonuclar += "  Guncelleme: $p2 ($s MB)" }
-    $p3 = Join-Path $Output "MKFiloServisKurulumMusteri-$Version.exe"
-    if (Test-Path $p3) { $s = [math]::Round((Get-Item $p3).Length/1MB,2); $sonuclar += "  Musteri    : $p3 ($s MB)" }
 }
 if ($BuildLicenseTool) {
     $p4 = Join-Path $Output "MKLisansArac-$Version.exe"

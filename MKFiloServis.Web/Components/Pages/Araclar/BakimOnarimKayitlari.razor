@@ -1189,7 +1189,7 @@
     {
         editingServis = new ServisKaydi
         {
-            ServisTarihi = DateTime.Today,
+            ServisTarihi = MKFiloServis.Shared.Time.BusinessTime.Today,
             ServisTipi = ServisTipi.PeriyodikBakim,
             KdvOrani = 20,
             Durum = ServisDurum.Tamamlandi,
@@ -1421,7 +1421,7 @@
             }).ToList();
 
             var bytes = ExcelService.ExportToExcel(rows, "BakimOnarim");
-            var ad = $"BakimOnarim_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
+            var ad = $"BakimOnarim_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd_HHmm}.xlsx";
             await JS.InvokeVoidAsync("downloadFile", ad, Convert.ToBase64String(bytes), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         }
         catch (Exception ex)

@@ -29,7 +29,7 @@ public class CariHareketTakipService : ICariHareketTakipService
         bool sadeceRiskli = false)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var baslangic = baslangicTarihi ?? DateTime.MinValue;
         var bitis = bitisTarihi ?? DateTime.MaxValue;
 
@@ -163,7 +163,7 @@ public class CariHareketTakipService : ICariHareketTakipService
         DateTime? bitisTarihi = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var baslangic = baslangicTarihi ?? DateTime.MinValue;
         var bitis = bitisTarihi ?? DateTime.MaxValue;
 
@@ -368,7 +368,7 @@ public class CariHareketTakipService : ICariHareketTakipService
     public async Task<List<CariAcikFatura>> GetAcikFaturalarAsync(int cariId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
 
         // NOT: KalanTutar hesaplanmış property, EF Core'da (GenelToplam - OdenenTutar) kullanılmalı
         var faturalar = await context.Faturalar
@@ -394,7 +394,7 @@ public class CariHareketTakipService : ICariHareketTakipService
         bool sadeceVadesiGecmis = false)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
 
         var sorgu = context.Faturalar
             .AsNoTracking()
@@ -428,7 +428,7 @@ public class CariHareketTakipService : ICariHareketTakipService
     public async Task<List<CariAylikTrend>> GetAylikTrendAsync(int cariId, int aySayisi = 12)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var baslangic = new DateTime(bugun.Year, bugun.Month, 1).AddMonths(-aySayisi + 1);
 
         var faturalar = await context.Faturalar
@@ -478,7 +478,7 @@ public class CariHareketTakipService : ICariHareketTakipService
 
     private async Task<List<GenelAylikTrend>> GetGenelAylikTrendAsync(ApplicationDbContext context, DateTime baslangic, DateTime bitis)
     {
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var trendBaslangic = baslangic == DateTime.MinValue 
             ? new DateTime(bugun.Year, bugun.Month, 1).AddMonths(-11)
             : new DateTime(baslangic.Year, baslangic.Month, 1);
@@ -620,7 +620,7 @@ public class CariHareketTakipService : ICariHareketTakipService
             {
                 FaturaId = fatura.FaturaId,
                 FaturaNo = fatura.FaturaNo,
-                PlanTarihi = fatura.VadesiGecmisMi ? DateTime.Today : (fatura.VadeTarihi ?? DateTime.Today),
+                PlanTarihi = fatura.VadesiGecmisMi ? MKFiloServis.Shared.Time.BusinessTime.Today : (fatura.VadeTarihi ?? MKFiloServis.Shared.Time.BusinessTime.Today),
                 PlanTutar = fatura.KalanTutar,
                 Aciklama = fatura.VadesiGecmisMi 
                     ? $"{fatura.GecikmeGunu} gün gecikmiş - ACİL TAHSİL"

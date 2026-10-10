@@ -186,7 +186,7 @@ public class EbysAramaGecmisi : BaseEntity
     
     public int SonucSayisi { get; set; }
     
-    public DateTime AramaTarihi { get; set; } = DateTime.Now;
+    public DateTime AramaTarihi { get; set; } = DateTime.UtcNow;
     
     [ForeignKey(nameof(KullaniciId))]
     public virtual Kullanici? Kullanici { get; set; }
@@ -290,7 +290,7 @@ public class EbysBelgeEmbedding : BaseEntity
     /// <summary>
     /// Embedding oluşturulma tarihi
     /// </summary>
-    public DateTime OlusturmaTarihi { get; set; } = DateTime.Now;
+    public DateTime OlusturmaTarihi { get; set; } = DateTime.UtcNow;
 
     /// <summary>
     /// Son güncelleme tarihi

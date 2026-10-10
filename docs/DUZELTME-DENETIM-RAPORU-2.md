@@ -1,5 +1,7 @@
 # MKFiloServis — İkinci Düzeltme Denetim Raporu
 
+> **Güncel durum notu (2026-10-09):** Son yeniden analiz dağılımı 11 yeşil / 20 sarı / 0 kırmızıdır. A-13/A-29 kod kapsamı kapalıdır; 20 maddede analiz ve düzeltme sürüyor; güncel durum için [görev envanterini](SATISA-CIKARIM-GOREV-ENVANTERI-2026-10-06.md) esas alın.
+
 **Denetim tarihi:** 2026-10-02 (önceki denetimin ~2 saat sonrası)
 **Önceki denetim:** `DUZELTME-DENETIM-RAPORU.md` tarihsel kaynak dosyası çalışma ağacında bulunmuyor; bu bağlantı kaldırıldı. Güncel takip için [görev envanteri](SATISA-CIKARIM-GOREV-ENVANTERI-2026-10-06.md) kullanılır.
 **İlk rapor kesitinin kapsamı:** İlk denetimden sonra yapılan 27 dosyalık değişiklik (+297 / −828 satır). Sonraki değişiklikler Bölüm 8–26'te kayıtlıdır.

@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using System.Text.Json;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
@@ -523,7 +523,7 @@ public class PersonelFinansService : IPersonelFinansService
                 throw new InvalidOperationException("Mahsup edilecek açık avans bulunamadı.");
 
             toplamMahsup = 0m;
-            var islemTarihi = mahsupTarihi?.Date ?? DateTime.Today;
+            var islemTarihi = mahsupTarihi?.Date ?? MKFiloServis.Shared.Time.BusinessTime.Today;
 
             foreach (var avans in acikAvanslar)
             {

@@ -237,7 +237,7 @@
 
     private static DateTime BuPazartesi()
     {
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         int diff = ((int)bugun.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
         return bugun.AddDays(-diff);
     }

@@ -83,45 +83,12 @@ if (Test-Path $DeployIis) {
 }
 
 # ---------------------------------------------------------------------------
-# 4. 2. PC için appsettings.PC2.json şablonu oluştur
+# 4. Güvenli ayar hatırlatması
 # ---------------------------------------------------------------------------
-Write-Step "[4/5] 2. PC için appsettings şablonu oluşturuluyor..."
-
-$pc2AppSettings = @'
-{
-  "DatabaseProvider": "PostgreSQL",
-  "ConnectionStrings": {
-    "DefaultConnection": "Host=localhost;Port=5432;Database=MKFiloServis;Username=postgres;Password=BURAYA_SIFRE;Pooling=true;MinPoolSize=2;MaxPoolSize=50;"
-  },
-  "Jwt": {
-    "Secret": "BURAYA_MIN_32_KARAKTER_GIZLI_ANAHTAR_YAZIN",
-    "Issuer": "MKFiloServis",
-    "Audience": "MKFiloServis-API",
-    "ExpirationHours": 8
-  },
-  "Backup": {
-    "Enabled": true,
-    "Path": "C:\\MKFiloServis_yedekleme\\database",
-    "RetentionDays": 30,
-    "ScheduleHour": 3
-  },
-  "Storage": {
-    "Provider": "Local"
-  },
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
-    }
-  },
-  "AllowedHosts": "*"
-}
-'@
-
-$pc2SettingsPath = Join-Path $packageDir "appsettings.PC2.json"
-$pc2AppSettings | Set-Content $pc2SettingsPath -Encoding UTF8
-Write-OK "appsettings.PC2.json şablonu oluşturuldu."
-Write-Host "  !! 2. PC'de bu dosyayı appsettings.Production.json olarak kaydedin !!" -ForegroundColor Yellow
+Write-Step "[4/5] Üretim sırları pakete yazılmıyor."
+Write-Host "  Bu legacy paket appsettings.PC2.json veya üretim sırrı üretmez." -ForegroundColor Yellow
+Write-Host "  Kurulumu güncel setup/Setup.iss sihirbazıyla yapın; JWT sırrını" -ForegroundColor Yellow
+Write-Host "  hedef sunucunun korumalı ortam değişkeni deposunda Jwt__Secret olarak sağlayın." -ForegroundColor Yellow
 
 # ---------------------------------------------------------------------------
 # 5. ZIP oluştur (opsiyonel — ZIP araçları varsa)
@@ -156,9 +123,10 @@ Write-Host "  4. Şifreli evrakları C:\MKFiloServis_yedekleme\uploads klasörü
 Write-Host "  5. Anahtar ve evrak aktarımı için kaynak makinede 02-dosya-aktar.ps1 çalıştır" -ForegroundColor White
 Write-Host "     (master.key dosyasını başka makineye doğrudan kopyalama)" -ForegroundColor Yellow
 Write-Host "  6. DB restore: 01-db-restore.ps1 ile PostgreSQL'e aktar" -ForegroundColor White
-Write-Host "  7. appsettings.PC2.json içeriğini appsettings.Production.json olarak kaydet" -ForegroundColor White
-Write-Host "  8. IIS'de site ekle → kur.bat ile kur (Mode=Install)" -ForegroundColor White
-Write-Host "  9. Lisansı app üzerinden aktiflestir" -ForegroundColor White
+Write-Host "  7. Güncel setup\MKFiloServisKurulum-<sürüm>.exe paketini kullan; bu legacy ZIP tek başına kurulum paketi değildir" -ForegroundColor White
+Write-Host "  8. dbsettings.json dosyasını güncel kurulum sihirbazıyla üret; Jwt__Secret değerini sunucunun korumalı secret deposundan sağla" -ForegroundColor White
+Write-Host "  9. IIS uygulama havuzunu başlatmadan önce DB restore ve ayar/ACL doğrulamasını tamamla" -ForegroundColor White
+Write-Host " 10. Lisansı uygulama üzerinden etkinleştir" -ForegroundColor White
 Write-Host ""
 Write-Host "  Detaylar için: Deploy\Migrate\04-pc2-kurulum-talimat.md" -ForegroundColor Cyan
 Write-Host ""

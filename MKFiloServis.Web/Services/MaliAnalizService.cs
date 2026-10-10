@@ -426,7 +426,7 @@ public class MaliAnalizService : IMaliAnalizService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var ozet = new ChecklistOzet { Yil = yil, Ay = ay };
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         var uyariGunSayisi = 30; // 30 gün kala uyarı
 
         // Şoför Checklist
@@ -553,7 +553,7 @@ public class MaliAnalizService : IMaliAnalizService
             var ayBaslangic = new DateTime(yil, ay, 1);
             var ayBitis = ayBaslangic.AddMonths(1).AddDays(-1);
 
-            if (ayBaslangic > DateTime.Today)
+            if (ayBaslangic > MKFiloServis.Shared.Time.BusinessTime.Today)
                 break;
 
             var gelir = await context.ServisCalismalari

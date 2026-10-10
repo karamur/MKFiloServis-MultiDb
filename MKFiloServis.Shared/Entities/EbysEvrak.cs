@@ -7,8 +7,8 @@ public class EbysEvrak : BaseEntity
 {
     public string EvrakNo { get; set; } = string.Empty;
     public EvrakYonu Yon { get; set; } = EvrakYonu.Gelen;
-    public DateTime EvrakTarihi { get; set; } = DateTime.Today;
-    public DateTime? KayitTarihi { get; set; } = DateTime.Now;
+    public DateTime EvrakTarihi { get; set; } = MKFiloServis.Shared.Time.BusinessTime.Today;
+    public DateTime? KayitTarihi { get; set; } = DateTime.UtcNow;
     
     public string Konu { get; set; } = string.Empty;
     public string? Ozet { get; set; }
@@ -170,7 +170,7 @@ public class EbysEvrakAtama : BaseEntity
     public int? AtananKullaniciId { get; set; }
     public int? AtananDepartmanId { get; set; }
     public int AtayanKullaniciId { get; set; }
-    public DateTime AtamaTarihi { get; set; } = DateTime.Now;
+    public DateTime AtamaTarihi { get; set; } = DateTime.UtcNow;
     public string? Talimat { get; set; }
     public DateTime? TeslimTarihi { get; set; }
     public AtamaDurum Durum { get; set; } = AtamaDurum.Beklemede;
@@ -202,7 +202,7 @@ public class EbysEvrakHareket : BaseEntity
     public int KullaniciId { get; set; }
     public EbysHareketTipi HareketTipi { get; set; }
     public string Aciklama { get; set; } = string.Empty;
-    public DateTime IslemTarihi { get; set; } = DateTime.Now;
+    public DateTime IslemTarihi { get; set; } = DateTime.UtcNow;
     public string? EskiDeger { get; set; }
     public string? YeniDeger { get; set; }
     

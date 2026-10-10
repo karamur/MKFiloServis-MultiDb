@@ -1,4 +1,5 @@
 using MKFiloServis.Shared.Entities;
+using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Models;
 
 namespace MKFiloServis.Web.Services.Interfaces;
@@ -7,6 +8,7 @@ public interface IFaturaService
 {
     Task<List<Fatura>> GetAllAsync();
     Task<PagedResult<Fatura>> GetPagedAsync(FaturaFilterParams filter); // Sayfalı ve filtrelenmiş
+    Task<Fatura?> GetByNoAsync(string faturaNo, FaturaYonu? yon = null, int? firmaId = null);
     Task<List<Fatura>> GetByCariIdAsync(int cariId);
     Task<List<Fatura>> GetByTipAsync(FaturaTipi tip);
     Task<List<Fatura>> GetByDurumAsync(FaturaDurum durum);
@@ -16,6 +18,7 @@ public interface IFaturaService
     Task<Fatura?> GetByIdAsync(int id);
     Task<Fatura?> GetByIdWithKalemlerAsync(int id);
     Task<Fatura> CreateAsync(Fatura fatura);
+    Task<Fatura> CreateAsync(ApplicationDbContext context, Fatura fatura, CancellationToken cancellationToken = default, bool createAutomaticAccounting = true);
     Task<Fatura> UpdateAsync(Fatura fatura);
     Task DeleteAsync(int id);
     Task<string> GenerateNextFaturaNoAsync(FaturaTipi tip, FaturaYonu? yon = null, int? firmaId = null);

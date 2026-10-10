@@ -39,6 +39,19 @@ internal static class StorageFilePath
         return fullPath;
     }
 
+    public static bool IsWithinRoot(string storageRoot, string fullPath, bool allowRoot = true)
+    {
+        var root = Path.GetFullPath(storageRoot);
+        var candidate = Path.GetFullPath(fullPath);
+        var relative = Path.GetRelativePath(root, candidate);
+        if (Path.IsPathRooted(relative) || relative == ".." ||
+            relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) ||
+            relative.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal))
+            return false;
+
+        return allowRoot || relative != ".";
+    }
+
     private static void EnsureNoSymbolicLinkTraversal(string root, string fullPath)
     {
         var relativePath = Path.GetRelativePath(root, fullPath);

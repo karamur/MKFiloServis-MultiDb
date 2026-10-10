@@ -26,7 +26,7 @@
                 <div class="col-md-2">
                     <label class="form-label small mb-1 fw-bold">Yıl</label>
                     <select class="form-select form-select-sm" @bind="secilenYil">
-                        @for (int i = DateTime.Today.Year - 1; i <= DateTime.Today.Year + 1; i++)
+                        @for (int i = MKFiloServis.Shared.Time.BusinessTime.Today.Year - 1; i <= MKFiloServis.Shared.Time.BusinessTime.Today.Year + 1; i++)
                         {
                             <option value="@i">@i</option>
                         }
@@ -151,8 +151,8 @@
 </div>
 
 @code {
-    private int secilenYil = DateTime.Today.Year;
-    private int secilenAy = DateTime.Today.Month;
+    private int secilenYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    private int secilenAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
     private string secilenServisTuru = string.Empty;
     private string aramaMetni = string.Empty;
     private bool isLoading;

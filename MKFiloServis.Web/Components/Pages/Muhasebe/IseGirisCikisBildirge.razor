@@ -172,8 +172,8 @@
 </div>
 
 @code {
-    private DateTime baslangicTarihi = new(DateTime.Today.Year, DateTime.Today.Month, 1);
-    private DateTime bitisTarihi = new(DateTime.Today.Year, DateTime.Today.Month, DateTime.DaysInMonth(DateTime.Today.Year, DateTime.Today.Month));
+    private DateTime baslangicTarihi = new(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1);
+    private DateTime bitisTarihi = new(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, DateTime.DaysInMonth(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month));
     private IseGirisCikisFiltreTipi filtreTipi = IseGirisCikisFiltreTipi.Tumu;
     private int? seciliGorevInt;
     private IseGirisCikisBildirgeRaporu? rapor;
@@ -206,7 +206,7 @@
         try
         {
             var bytes = await RaporService.ExportIseGirisCikisBildirgeExcelAsync(baslangicTarihi, bitisTarihi, filtreTipi, seciliGorevInt.HasValue ? (PersonelGorev)seciliGorevInt.Value : null);
-            await JS.InvokeVoidAsync("downloadFileFromBase64", $"ise_giris_cikis_bildirge_{DateTime.Now:yyyyMMdd}.xlsx", Convert.ToBase64String(bytes));
+            await JS.InvokeVoidAsync("downloadFileFromBase64", $"ise_giris_cikis_bildirge_{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMdd}.xlsx", Convert.ToBase64String(bytes));
             ToastService.ShowSuccess("Excel indirildi.");
         }
         catch (Exception ex)

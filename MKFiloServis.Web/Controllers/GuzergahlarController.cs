@@ -20,13 +20,16 @@ public class GuzergahlarController : ControllerBase
 {
     private readonly IGuzergahService _guzergahService;
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+    private readonly CurrentPermissionGuard _permissionGuard;
 
     public GuzergahlarController(
         IGuzergahService guzergahService,
-        IDbContextFactory<ApplicationDbContext> contextFactory)
+        IDbContextFactory<ApplicationDbContext> contextFactory,
+        CurrentPermissionGuard permissionGuard)
     {
         _guzergahService = guzergahService;
         _contextFactory = contextFactory;
+        _permissionGuard = permissionGuard;
     }
 
     /// <summary>
@@ -35,6 +38,7 @@ public class GuzergahlarController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] bool? aktif = null)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.GuzergahlarOku)) return Forbid();
         var guzergahlar = await _guzergahService.GetAllAsync();
         
         if (aktif.HasValue)
@@ -72,6 +76,7 @@ public class GuzergahlarController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.GuzergahlarOku)) return Forbid();
         var guzergah = await _guzergahService.GetByIdAsync(id);
         if (guzergah == null)
             return NotFound(new { Error = "Güzergah bulunamadı" });
@@ -104,6 +109,7 @@ public class GuzergahlarController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] GuzergahCreateDto dto)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.GuzergahlarYaz)) return Forbid();
         if (string.IsNullOrEmpty(dto.GuzergahAdi))
             return BadRequest(new { Error = "Güzergah adı gereklidir" });
 
@@ -157,6 +163,7 @@ public class GuzergahlarController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] GuzergahUpdateDto dto)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.GuzergahlarDuzenle)) return Forbid();
         var guzergah = await _guzergahService.GetByIdAsync(id);
         if (guzergah == null)
             return NotFound(new { Error = "Güzergah bulunamadı" });
@@ -240,6 +247,7 @@ public class GuzergahlarController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> ImportExcel(IFormFile file, [FromQuery] int firmaId)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.GuzergahlarYaz)) return Forbid();
         if (firmaId <= 0)
             return BadRequest(new { Error = "Geçerli bir firmaId belirtilmelidir." });
 
@@ -266,6 +274,7 @@ public class GuzergahlarController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
+        if (!await _permissionGuard.HasAnyAsync(Yetkiler.GuzergahlarSil)) return Forbid();
         var guzergah = await _guzergahService.GetByIdAsync(id);
         if (guzergah == null)
             return NotFound(new { Error = "Güzergah bulunamadı" });

@@ -28,7 +28,7 @@
                 <div class="col-md-3">
                     <label class="form-label">Yıl</label>
                     <select class="form-select" @bind="seciliYil">
-                        @for (int y = DateTime.Today.Year; y >= DateTime.Today.Year - 5; y--)
+                        @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 5; y--)
                         {
                             <option value="@y">@y</option>
                         }
@@ -442,8 +442,8 @@
 </div>
 
 @code {
-    private int seciliYil = DateTime.Today.Year;
-    private int seciliAy = DateTime.Today.Month;
+    private int seciliYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+    private int seciliAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
 
     // e-Defter
     private bool eDefterYevmiye = true;
@@ -464,7 +464,7 @@
     private DamgaVergisiOzet? damgaVergisiOzet;
 
     // Geçici Vergi
-    private int geciciVergiDonem = (DateTime.Today.Month - 1) / 3 + 1;
+    private int geciciVergiDonem = (MKFiloServis.Shared.Time.BusinessTime.Today.Month - 1) / 3 + 1;
     private GeciciVergiOzet? geciciVergiOzet;
 
     private void SetBaBsSecim(ChangeEventArgs e)
@@ -543,7 +543,7 @@
         xml.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
         xml.AppendLine("<edefter xmlns=\"http://www.gib.gov.tr/edefter\">");
         xml.AppendLine($"  <donem yil=\"{seciliYil}\" ay=\"{seciliAy}\" />");
-        xml.AppendLine($"  <olusturmaTarihi>{DateTime.Now:yyyy-MM-ddTHH:mm:ss}</olusturmaTarihi>");
+        xml.AppendLine($"  <olusturmaTarihi>{MKFiloServis.Shared.Time.BusinessTime.Now:yyyy-MM-ddTHH:mm:ss}</olusturmaTarihi>");
 
         if (eDefterYevmiye)
         {

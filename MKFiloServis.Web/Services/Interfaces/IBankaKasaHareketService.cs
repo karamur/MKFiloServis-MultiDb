@@ -29,6 +29,9 @@ public interface IBankaKasaHareketService
     Task<List<BankaKasaHareket>> GetEslestirmeyeUygunHareketlerAsync(int cariId, HareketTipi tip);
     Task<BankaKasaHareket?> GetByIdAsync(int id);
     Task<BankaKasaHareket> CreateAsync(BankaKasaHareket hareket);
+    Task<BankaKasaHareket> CreateImportedAsync(BankaKasaHareket hareket, string islemKimligi);
+    Task<IReadOnlyList<BankaKasaHareket>> CreateImportedBatchAsync(
+        IReadOnlyCollection<(BankaKasaHareket Hareket, string IslemKimligi)> hareketler);
     Task<BankaKasaHareket> UpdateAsync(BankaKasaHareket hareket);
     Task DeleteAsync(int id);
     Task<string> GenerateNextIslemNoAsync(int firmaId = 0);

@@ -287,8 +287,8 @@
 
     private bool yukleniyor = true;
     private string hizliSecim = "buay";
-    private DateTime bas = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-    private DateTime bit = DateTime.Today;
+    private DateTime bas = new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1);
+    private DateTime bit = MKFiloServis.Shared.Time.BusinessTime.Today;
 
     // Ana KPI'lar
     private int aktifAracSayisi, aktifSoforSayisi, toplamSefer;
@@ -320,7 +320,7 @@
 
     private async Task HizliSecimUygula()
     {
-        var bugun = DateTime.Today;
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
         switch (hizliSecim)
         {
             case "buay":

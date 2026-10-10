@@ -2,6 +2,7 @@ using MKFiloServis.Shared.Entities;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Logging.Abstractions;
 using MKFiloServis.Web.Services;
 
 namespace MKFiloServis.Tests;
@@ -32,7 +33,8 @@ public sealed class DatabaseProviderScopeTests
         {
             var service = new DatabaseSettingsService(
                 new ConfigurationBuilder().Build(),
-                new TestEnvironment(root));
+                new TestEnvironment(root),
+                NullLogger<DatabaseSettingsService>.Instance);
             var settings = new DatabaseSettings { Provider = provider };
 
             var connection = await service.TestConnectionAsync(settings);
@@ -41,6 +43,7 @@ public sealed class DatabaseProviderScopeTests
             Assert.False(connection.Success);
             Assert.Contains("migration desteği", connection.Message, StringComparison.OrdinalIgnoreCase);
             Assert.False(apply.Success);
+            Assert.Contains("migration desteği", apply.Message, StringComparison.OrdinalIgnoreCase);
             Assert.False(File.Exists(Path.Combine(root, "dbsettings.json")));
         }
         finally
