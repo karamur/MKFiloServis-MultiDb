@@ -1092,13 +1092,6 @@ await RunScopedSafeAsync(app, "PuantajSlotMigration", async services =>
     await MKFiloServis.Web.Data.Migrations.PuantajSlotMigrationHelper.ApplyAsync(context, logger);
 });
 
-await RunScopedSafeAsync(app, "GuzergahSeferFirmaIdConstraint", async services =>
-{
-    var context = services.GetRequiredService<ApplicationDbContext>();
-    var logger = services.GetRequiredService<ILogger<Program>>();
-    await MKFiloServis.Web.Data.Migrations.GuzergahSeferFirmaIdConstraintHelper.ApplyAsync(context, logger);
-});
-
 await RunScopedSafeAsync(app, "KiralikPlakaFaturaMigration", async services =>
 {
     var context = services.GetRequiredService<ApplicationDbContext>();
@@ -1136,7 +1129,6 @@ await RunScopedSafeAsync(app, "ApplyMigrations", async services =>
     await MKFiloServis.Web.Data.Migrations.PuantajSlotMigrationHelper.ApplyAsync(ctx, logger);
     await MKFiloServis.Web.Data.Migrations.KiralikPlakaFaturaMigrationHelper.ApplyAsync(ctx, logger);
     await MKFiloServis.Web.Data.Migrations.KiralikPlakaTakipFaturaPlanMigrationHelper.ApplyAsync(ctx, logger);
-    await MKFiloServis.Web.Data.Migrations.GuzergahSeferFirmaIdConstraintHelper.ApplyAsync(ctx, logger);
     await MKFiloServis.Web.Data.Migrations.SyncPuantajSchemaMigrationHelper.ApplyAsync(ctx, logger);
     await MKFiloServis.Web.Data.Migrations.PuantajCarpaniMigrationHelper.ApplyAsync(ctx, logger);
     await MKFiloServis.Web.Data.Migrations.GuzergahKdvOraniMigrationHelper.ApplyAsync(ctx, logger);
@@ -1349,6 +1341,12 @@ if (dbProvider == "PostgreSQL")
         logger.LogInformation("PostgreSQL sequence reset tamamlandi: {Count} tablo.", fixed_);
     });
 }
+
+await RunScopedSafeAsync(app, "FinalSchemaParity", async services =>
+{
+    var context = services.GetRequiredService<ApplicationDbContext>();
+    await DbInitializer.VerifyCurrentModelParityAsync(context);
+});
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

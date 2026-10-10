@@ -20,6 +20,74 @@ namespace MKFiloServis.Web.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            if (migrationBuilder.ActiveProvider == "Microsoft.EntityFrameworkCore.Sqlite")
+            {
+                // A contiguous migration history fixes the schema version here. SQLite's
+                // EF generator rebuilds affected tables for FK removal while copying rows.
+                var legacyForeignKeys = new (string Table, string Name)[]
+                {
+                    ("Araclar", "FK_Araclar_Sirketler_SirketId"),
+                    ("AracMaliyetSnapshotlari", "FK_AracMaliyetSnapshotlari_Sirketler_SirketId"),
+                    ("AuditLoglar", "FK_AuditLoglar_Sirketler_SirketId"),
+                    ("BankaHesaplari", "FK_BankaHesaplari_Sirketler_SirketId"),
+                    ("BankaKasaHareketleri", "FK_BankaKasaHareketleri_Sirketler_SirketId"),
+                    ("CariSeferUcretleri", "FK_CariSeferUcretleri_Sirketler_SirketId"),
+                    ("Guzergahlar", "FK_Guzergahlar_Sirketler_SirketId"),
+                    ("Hakedisler", "FK_Hakedisler_Sirketler_SirketId"),
+                    ("Kapasiteler", "FK_Kapasiteler_Sirketler_SirketId"),
+                    ("Kullanicilar", "FK_Kullanicilar_Sirketler_SirketId"),
+                    ("LastikDegisimler", "FK_LastikDegisimler_Sirketler_SirketId"),
+                    ("LastikDepolar", "FK_LastikDepolar_Sirketler_SirketId"),
+                    ("LastikStoklar", "FK_LastikStoklar_Sirketler_SirketId"),
+                    ("Personeller", "FK_Personeller_Sirketler_SirketId"),
+                    ("ServisKontratlar", "FK_ServisKontratlar_Sirketler_SirketId"),
+                    ("ServisOdemeler", "FK_ServisOdemeler_Sirketler_SirketId"),
+                    ("ServisPuantajlar", "FK_ServisPuantajlar_Sirketler_SirketId"),
+                    ("ServisTahsilatlar", "FK_ServisTahsilatlar_Sirketler_SirketId"),
+                    ("TasimaTedarikciIsler", "FK_TasimaTedarikciIsler_Sirketler_SirketId"),
+                    ("TasimaTedarikciler", "FK_TasimaTedarikciler_Sirketler_SirketId")
+                };
+
+                foreach (var foreignKey in legacyForeignKeys)
+                {
+                    migrationBuilder.DropForeignKey(name: foreignKey.Name, table: foreignKey.Table);
+                }
+
+                var legacyIndexes = new (string Table, string Name)[]
+                {
+                    ("Araclar", "IX_Araclar_SirketId"),
+                    ("AracMaliyetSnapshotlari", "IX_AracMaliyetSnapshotlari_SirketId"),
+                    ("AuditLoglar", "IX_AuditLoglar_SirketId"),
+                    ("BankaHesaplari", "IX_BankaHesaplari_SirketId"),
+                    ("BankaKasaHareketleri", "IX_BankaKasaHareketleri_SirketId"),
+                    ("BankaKasaHareketleri", "IX_BankaKasaHareketleri_SirketId_IslemTarihi"),
+                    ("CariSeferUcretleri", "IX_CariSeferUcretleri_SirketId"),
+                    ("Guzergahlar", "IX_Guzergahlar_SirketId"),
+                    ("Hakedisler", "IX_Hakedisler_SirketId"),
+                    ("Kapasiteler", "IX_Kapasiteler_SirketId_KapasiteAdi"),
+                    ("Kullanicilar", "IX_Kullanicilar_SirketId"),
+                    ("LastikDegisimler", "IX_LastikDegisimler_SirketId"),
+                    ("LastikDepolar", "IX_LastikDepolar_SirketId"),
+                    ("LastikStoklar", "IX_LastikStoklar_SirketId"),
+                    ("Personeller", "IX_Personeller_SirketId"),
+                    ("ServisKontratlar", "IX_ServisKontratlar_SirketId"),
+                    ("ServisOdemeler", "IX_ServisOdemeler_SirketId"),
+                    ("ServisPuantajlar", "IX_ServisPuantajlar_SirketId"),
+                    ("ServisTahsilatlar", "IX_ServisTahsilatlar_SirketId"),
+                    ("TasimaTedarikciIsler", "IX_TasimaTedarikciIsler_SirketId"),
+                    ("TasimaTedarikciler", "IX_TasimaTedarikciler_SirketId")
+                };
+
+                foreach (var index in legacyIndexes)
+                {
+                    migrationBuilder.DropIndex(name: index.Name, table: index.Table);
+                }
+
+                migrationBuilder.RenameTable(name: "SirketTransferLoglari", newName: "_LEGACY_SirketTransferLoglari");
+                migrationBuilder.RenameTable(name: "Sirketler", newName: "_LEGACY_Sirketler");
+                return;
+            }
+
             // ─── 1) Foreign Key'leri drop et (21 tablo) ───
             migrationBuilder.Sql(@"
                 DO $$
@@ -78,6 +146,13 @@ namespace MKFiloServis.Web.Data.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            if (migrationBuilder.ActiveProvider == "Microsoft.EntityFrameworkCore.Sqlite")
+            {
+                migrationBuilder.RenameTable(name: "_LEGACY_Sirketler", newName: "Sirketler");
+                migrationBuilder.RenameTable(name: "_LEGACY_SirketTransferLoglari", newName: "SirketTransferLoglari");
+                return;
+            }
+
             // Sadece tabloları geri rename eder. FK ve indeksler manuel kurulmalıdır
             // (önceki migration'ların Down'larından çekilebilir).
             migrationBuilder.Sql(@"

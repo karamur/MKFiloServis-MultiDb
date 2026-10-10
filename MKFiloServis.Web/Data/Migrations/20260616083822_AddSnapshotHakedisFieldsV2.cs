@@ -10,6 +10,19 @@ namespace MKFiloServis.Web.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            if (migrationBuilder.ActiveProvider == "Microsoft.EntityFrameworkCore.Sqlite")
+            {
+                // SQLite cannot parse PostgreSQL's ADD COLUMN IF NOT EXISTS. At this
+                // migration boundary the preceding snapshot migrations own table creation.
+                migrationBuilder.AddColumn<decimal>(
+                    name: "HakedisGelir", table: "MaasOdemeSnapshotlar",
+                    type: "TEXT", nullable: false, defaultValue: 0m);
+                migrationBuilder.AddColumn<decimal>(
+                    name: "HakedisGider", table: "MaasOdemeSnapshotlar",
+                    type: "TEXT", nullable: false, defaultValue: 0m);
+                return;
+            }
+
             // Tablo henüz oluşmamış olabilir (önceki migration applied ama DB yok)
             // Idempotent: önce tabloyu oluştur, sonra kolon ekle
             migrationBuilder.Sql(@"
@@ -62,6 +75,13 @@ namespace MKFiloServis.Web.Data.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            if (migrationBuilder.ActiveProvider == "Microsoft.EntityFrameworkCore.Sqlite")
+            {
+                migrationBuilder.DropColumn(name: "HakedisGider", table: "MaasOdemeSnapshotlar");
+                migrationBuilder.DropColumn(name: "HakedisGelir", table: "MaasOdemeSnapshotlar");
+                return;
+            }
+
             migrationBuilder.Sql(@"
                 ALTER TABLE ""MaasOdemeSnapshotlar"" DROP COLUMN IF EXISTS ""HakedisGelir"";
             ");

@@ -12,7 +12,27 @@ namespace MKFiloServis.Web.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // CariId1 shadow property temizligi - IF EXISTS ile guvenlice
+            if (migrationBuilder.ActiveProvider == "Microsoft.EntityFrameworkCore.Sqlite")
+            {
+                // This migration follows the snapshot that introduced CariId1. Remove
+                // that shadow FK and add the 34 PuantajKayitlar columns via EF operations.
+                migrationBuilder.DropForeignKey(
+                    name: "FK_Hatirlaticilar_Cariler_CariId1",
+                    table: "Hatirlaticilar");
+                migrationBuilder.DropIndex(name: "IX_Hatirlaticilar_CariId1", table: "Hatirlaticilar");
+                migrationBuilder.DropColumn(name: "CariId1", table: "Hatirlaticilar");
+
+                migrationBuilder.AddColumn<string>(name: "AitFirmaAdi", table: "PuantajKayitlar", type: "TEXT", nullable: true);
+                migrationBuilder.AddColumn<string>(name: "Bolge", table: "PuantajKayitlar", type: "TEXT", nullable: true);
+                migrationBuilder.AddColumn<int>(name: "SiraNo", table: "PuantajKayitlar", type: "INTEGER", nullable: false, defaultValue: 0);
+                for (var gun = 1; gun <= 31; gun++)
+                {
+                    migrationBuilder.AddColumn<int>(name: $"Gun{gun:D2}", table: "PuantajKayitlar", type: "INTEGER", nullable: false, defaultValue: 0);
+                }
+            }
+            else
+            {
+                // CariId1 shadow property cleanup and Puantaj columns for PostgreSQL.
             migrationBuilder.Sql(@"
                 DO $$ BEGIN
                     IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'FK_Hatirlaticilar_Cariler_CariId1' AND table_name = 'Hatirlaticilar') THEN
@@ -36,6 +56,7 @@ namespace MKFiloServis.Web.Data.Migrations
             for (var gun = 1; gun <= 31; gun++)
             {
                 migrationBuilder.Sql($@"ALTER TABLE ""PuantajKayitlar"" ADD COLUMN IF NOT EXISTS ""Gun{gun:D2}"" integer NOT NULL DEFAULT 0;");
+            }
             }
 
             migrationBuilder.CreateTable(

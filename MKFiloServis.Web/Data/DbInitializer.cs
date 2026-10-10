@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage;
+using MKFiloServis.Web.Data.Migrations;
 using Npgsql;
 using System.Data;
 using System.Data.Common;
@@ -14,9 +15,6 @@ public static class DbInitializer
     private const string UniqueActiveVehiclePlateMigrationId = "20261006190000_AddUniqueActiveVehiclePlateIndex";
     private const string UniqueMonthlyPayrollSnapshotMigrationId = "20261006192000_AddUniqueMonthlyPayrollSnapshotIndex";
     private const string UniqueDefaultInvoiceTemplatesMigrationId = "20261006194000_AddUniqueDefaultInvoiceTemplateIndexes";
-    // The supported legacy SQLite schema ends before the October 2026 hardening migrations.
-    // Those migrations must execute against the real database instead of being marked applied.
-    private const string SqliteLegacySchemaWatermark = "20260925192810_NormalizeRentACarOdemeEnumColumns";
 
     public static async Task EnsureMasterDatabaseAsync(IConfiguration configuration)
     {
@@ -265,8 +263,6 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
             : context.Database.IsSqlite()
                 ? "SQLite"
                 : configuration.GetValue<string>("DatabaseProvider") ?? context.Database.ProviderName ?? "PostgreSQL";
-        List<string> pendingMigrations = new();
-        
         try
         {
             // Veritabani baglantisini kontrol et
@@ -275,53 +271,12 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
                 throw new Exception("Veritabani baglantisi kurulamadi!");
             }
 
-            await InitializeFreshDatabaseBaselineIfEmptyAsync(context);
-
-            if (context.Database.IsNpgsql())
-            {
-                await EnsurePostgreSqlMigrationHistoryAsync(context);
-                await NormalizePostgreSqlAuditTimestampColumnsAsync(context, configuration);
-            }
-
-            // Bekleyen migration'lari uygula (yeni tablolar icin)
-            pendingMigrations = (await context.Database.GetPendingMigrationsAsync()).ToList();
-            if (context.Database.IsSqlite() && pendingMigrations.Any())
-            {
-                await EnsureSqliteMigrationHistoryAsync(context);
-                pendingMigrations = (await context.Database.GetPendingMigrationsAsync()).ToList();
-            }
-
-            if (pendingMigrations.Contains(UniqueActiveVehiclePlateMigrationId))
-            {
-                await EnsureNoDuplicateActiveVehiclePlatesAsync(context);
-            }
-
-            if (pendingMigrations.Contains(UniqueMonthlyPayrollSnapshotMigrationId))
-            {
-                await EnsureNoDuplicatePayrollSnapshotsAsync(context);
-            }
-
-            if (pendingMigrations.Contains(UniqueDefaultInvoiceTemplatesMigrationId))
-            {
-                await EnsureNoDuplicateDefaultInvoiceTemplatesAsync(context);
-            }
-
-            if (pendingMigrations.Any())
-            {
-                Console.WriteLine($"Bekleyen migration sayisi: {pendingMigrations.Count()}");
-
-                await context.Database.MigrateAsync();
-                Console.WriteLine("Migration'lar basariyla uygulandi.");
-            }
-
-            await EnsureModelTableAndColumnParityAsync(context);
+            await ApplyDatabaseMigrationsAsync(context, configuration);
         }
         catch (Exception ex)
         {
             throw new InvalidOperationException("Veritabanı migration tamamlanamadı; uygulama başlatılmadı.", ex);
         }
-
-        await EnsureSqliteBankOperationKeySchemaAsync(context);
 
         // Fatura benzersiz index'ini firma+yön+numara bazında güvence altına al
         await EnsureFaturaFirmaYonUniqueIndexAsync(context, dbProvider, configuration);
@@ -347,11 +302,12 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
         // Destek modulu eksik kolonlarini tamamla
         await EnsureDestekModuluColumnsAsync(context, dbProvider, configuration);
 
-        // Multi-tenant / Sirket semasinda eksik kalan tablo ve kolonlari tamamla
-        await MKFiloServis.Web.Data.Migrations.SirketSchemaFixMigrationHelper.ApplySirketSchemaFixAsync(context);
-
         // SQLite eski kurulumlarinda seed oncesi kritik kolonlari tamamla
         await EnsureSqliteSeedCompatibilityAsync(context, dbProvider);
+
+        // Provider-specific compatibility helpers may touch schema; verify the final
+        // application shape after all of them, before seeding or serving requests.
+        await VerifyCurrentModelParityAsync(context);
 
         // Budget masraf kalemleri her zaman kontrol et
         await SeedBudgetMasrafKalemleriAsync(context);
@@ -364,11 +320,68 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
         await SeedEbysOrnekVerileriAsync(context);
     }
 
+    public static async Task ApplyDatabaseMigrationsAsync(ApplicationDbContext context, IConfiguration? configuration = null)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (!context.Database.IsNpgsql() && !context.Database.IsSqlite())
+            throw new NotSupportedException("Otomatik şema geçişi PostgreSQL ve SQLite için uygulanmıştır.");
+
+        if (!await context.Database.CanConnectAsync())
+            throw new InvalidOperationException("Migration öncesi veritabanı bağlantısı kurulamadı.");
+
+        await InitializeFreshDatabaseBaselineIfEmptyAsync(context);
+
+        if (context.Database.IsNpgsql())
+        {
+            await EnsurePostgreSqlMigrationHistoryAsync(context);
+            if (configuration is not null)
+                await NormalizePostgreSqlAuditTimestampColumnsAsync(context, configuration);
+        }
+
+        if (context.Database.IsSqlite())
+            await EnsureSqliteMigrationHistoryAsync(context);
+
+        var pendingMigrations = (await context.Database.GetPendingMigrationsAsync()).ToList();
+        if (pendingMigrations.Contains(UniqueActiveVehiclePlateMigrationId))
+            await EnsureNoDuplicateActiveVehiclePlatesAsync(context);
+        if (pendingMigrations.Contains(UniqueMonthlyPayrollSnapshotMigrationId))
+            await EnsureNoDuplicatePayrollSnapshotsAsync(context);
+        if (pendingMigrations.Contains(UniqueDefaultInvoiceTemplatesMigrationId))
+            await EnsureNoDuplicateDefaultInvoiceTemplatesAsync(context);
+
+        if (pendingMigrations.Count > 0)
+            Console.WriteLine($"Bekleyen migration sayisi: {pendingMigrations.Count}");
+        await ApplyPendingMigrationsAsync(context, pendingMigrations);
+        await EnsureSqliteBankOperationKeySchemaAsync(context);
+        await VerifyCurrentModelParityAsync(context);
+    }
+
+    private static async Task ApplyPendingMigrationsAsync(ApplicationDbContext context, IReadOnlyCollection<string> pendingMigrations)
+    {
+        if (!context.Database.IsSqlite() || !pendingMigrations.Contains(NihaiMimariSqliteMigrationHelper.MigrationId))
+        {
+            await context.Database.MigrateAsync();
+            return;
+        }
+
+        var migrations = context.Database.GetMigrations().ToList();
+        var targetIndex = migrations.FindIndex(id => id == NihaiMimariSqliteMigrationHelper.MigrationId);
+        if (targetIndex <= 0)
+            throw new InvalidOperationException("SQLite organizasyon migration'ı için önceki migration sırası bulunamadı.");
+
+        // Reach the exact historical boundary first. The catalog-aware SQLite equivalent
+        // then runs transactionally; only after it succeeds does EF record the migration.
+        await context.GetService<IMigrator>().MigrateAsync(migrations[targetIndex - 1]);
+        await NihaiMimariSqliteMigrationHelper.ApplyAsync(context);
+        await context.Database.MigrateAsync();
+    }
+
     /// <summary>
     /// Creates the current model only for a genuinely empty database. Existing or partial
     /// schemas continue through the historical migration path and are never baselined here.
     /// </summary>
-    private static async Task EnsureModelTableAndColumnParityAsync(ApplicationDbContext context)
+    public static async Task VerifyCurrentModelParityAsync(ApplicationDbContext context)
     {
         var modelTables = context.Model.GetRelationalModel().Tables.ToList();
         var expected = modelTables
@@ -621,22 +634,38 @@ ORDER BY tc.table_name, tc.constraint_name, kcu.ordinal_position;";
                     appliedMigrations.Add(reader.GetString(0));
             }
 
-            var allMigrations = context.Database.GetMigrations().ToList();
+            var allMigrations = context.Database.GetMigrations()
+                .OrderBy(id => id, StringComparer.Ordinal)
+                .ToList();
             if (appliedMigrations.Count == 0)
             {
                 throw new InvalidOperationException(
                     "PostgreSQL'de uygulama tabloları mevcut ancak migration geçmişi boş. Mevcut şema yeni baseline olarak varsayılmadı; provenance doğrulanmadan başlangıç reddedildi.");
             }
 
-            var missingLegacyMigrations = allMigrations
-                .Where(id => string.CompareOrdinal(id, SqliteLegacySchemaWatermark) <= 0)
-                .Where(id => !appliedMigrations.Contains(id))
+            var unknownMigrationIds = appliedMigrations
+                .Where(id => !allMigrations.Contains(id, StringComparer.OrdinalIgnoreCase))
                 .ToList();
-            if (missingLegacyMigrations.Count > 0)
+            if (unknownMigrationIds.Count > 0)
             {
-                var sample = string.Join(", ", missingLegacyMigrations.Take(8));
                 throw new InvalidOperationException(
-                    $"PostgreSQL migration geçmişi legacy watermark öncesinde eksik ({missingLegacyMigrations.Count} kayıt; örnek: {sample}). Veri taşıma/backfill adımlarının uygulandığı kanıtlanamadığından history otomatik onarılmadı.");
+                    $"PostgreSQL migration geçmişinde bu uygulama sürümünde tanınmayan kayıt var ({string.Join(", ", unknownMigrationIds.Take(8))}); otomatik değiştirilmedi.");
+            }
+
+            var missingMigrationSeen = false;
+            var appliedAfterGap = new List<string>();
+            foreach (var migrationId in allMigrations)
+            {
+                if (!appliedMigrations.Contains(migrationId))
+                    missingMigrationSeen = true;
+                else if (missingMigrationSeen)
+                    appliedAfterGap.Add(migrationId);
+            }
+
+            if (appliedAfterGap.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"PostgreSQL migration geçmişinde eksik migration'lardan sonra uygulanmış kayıt var; zincir sıralı değil ({string.Join(", ", appliedAfterGap.Take(8))}). Otomatik history düzeltmesi yapılmadı.");
             }
         }
         finally
@@ -1369,7 +1398,9 @@ WHERE IsDeleted = 0;");
                 return;
             }
 
-            var allMigrations = context.Database.GetMigrations().ToList();
+            var allMigrations = context.Database.GetMigrations()
+                .OrderBy(id => id, StringComparer.Ordinal)
+                .ToList();
             await using var historyTableCheck = connection.CreateCommand();
             historyTableCheck.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = '__EFMigrationsHistory' LIMIT 1";
             var hasMigrationHistoryTable = await historyTableCheck.ExecuteScalarAsync() is not null;
@@ -1482,26 +1513,37 @@ WHERE IsDeleted = 0;");
 
             foreach (var expectedSignature in expected)
             {
-                if (!actual.Contains(expectedSignature))
-                    missing.Add($"{table.Name}->{expectedSignature.Replace('|', ':')}");
+                if (actual.Contains(expectedSignature)) continue;
+
+                var signatureParts = expectedSignature.Split('|');
+                if (signatureParts.Length == 3)
+                {
+                    var triggerPrefix = NihaiMimariSqliteMigrationHelper.TriggerName(
+                        table.Name, signatureParts[1], signatureParts[0]);
+                    var allTriggerOperationsExist = true;
+                    foreach (var operation in new[] { "_ins", "_upd", "_del" })
+                    {
+                        await using var triggerCommand = connection.CreateCommand();
+                        triggerCommand.CommandText = "SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=$name LIMIT 1";
+                        var name = triggerCommand.CreateParameter();
+                        name.ParameterName = "$name";
+                        name.Value = triggerPrefix + operation;
+                        triggerCommand.Parameters.Add(name);
+                        if (await triggerCommand.ExecuteScalarAsync() is null)
+                        {
+                            allTriggerOperationsExist = false;
+                            break;
+                        }
+                    }
+
+                    if (allTriggerOperationsExist) continue;
+                }
+
+                missing.Add($"{table.Name}->{expectedSignature.Replace('|', ':')}");
             }
         }
 
         return missing;
-    }
-
-    internal static IReadOnlyList<string> SelectSqliteLegacyMigrationsToBaseline(
-        IEnumerable<string> allMigrations,
-        IEnumerable<string> pendingMigrations,
-        IEnumerable<string> existingMigrationIds)
-    {
-        var pending = pendingMigrations.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var existing = existingMigrationIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return allMigrations
-            .Where(pending.Contains)
-            .Where(id => !existing.Contains(id))
-            .Where(id => string.CompareOrdinal(id, SqliteLegacySchemaWatermark) <= 0)
-            .ToList();
     }
 
     internal static async Task EnsureSqliteBankOperationKeySchemaAsync(ApplicationDbContext context)
@@ -1553,8 +1595,7 @@ WHERE IsDeleted = 0;");
     {
         try
         {
-            await context.Database.MigrateAsync();
-            await EnsureSqliteBankOperationKeySchemaAsync(context);
+            await ApplyDatabaseMigrationsAsync(context);
         }
         catch (Exception ex)
         {

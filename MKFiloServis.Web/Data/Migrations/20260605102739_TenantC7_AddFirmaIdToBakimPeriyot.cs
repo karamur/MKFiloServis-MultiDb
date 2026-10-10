@@ -21,14 +21,9 @@ namespace MKFiloServis.Web.Data.Migrations
 
             // Backfill: FirmaId=0 → ilk gecerli firma
             migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + @"
-                DO $$ DECLARE first_firma_id integer;
-                BEGIN
-                    SELECT ""Id"" INTO first_firma_id FROM ""Firmalar"" WHERE NOT ""IsDeleted"" ORDER BY ""Id"" LIMIT 1;
-                    IF first_firma_id IS NOT NULL THEN
-                        UPDATE ""BakimPeriyotlar"" SET ""FirmaId"" = first_firma_id WHERE ""FirmaId"" IS NULL OR ""FirmaId"" = 0;
-                    END IF;
-                EXCEPTION WHEN others THEN NULL;
-                END; $$;
+                UPDATE ""BakimPeriyotlar""
+                SET ""FirmaId"" = (SELECT ""Id"" FROM ""Firmalar"" WHERE NOT ""IsDeleted"" ORDER BY ""Id"" LIMIT 1)
+                WHERE ""FirmaId"" IS NULL OR ""FirmaId"" = 0;
             ");
 
             migrationBuilder.CreateIndex(

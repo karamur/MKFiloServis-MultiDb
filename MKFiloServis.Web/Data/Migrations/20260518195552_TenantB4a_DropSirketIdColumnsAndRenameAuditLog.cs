@@ -41,6 +41,23 @@ namespace MKFiloServis.Web.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            if (migrationBuilder.ActiveProvider == "Microsoft.EntityFrameworkCore.Sqlite")
+            {
+                // B3i already removed the legacy Sirket FK/index constraints. Apply the
+                // known linear-chain column changes through EF so SQLite can rebuild each
+                // table and copy all remaining columns/rows safely.
+                foreach (var table in SirketIdDropTables)
+                {
+                    migrationBuilder.DropColumn(name: "SirketId", table: table);
+                }
+
+                migrationBuilder.RenameColumn(
+                    name: "SirketId",
+                    table: "AuditLoglar",
+                    newName: "FirmaId");
+                return;
+            }
+
             // 1) 20 tablodan SirketId kolonu drop — FK ve index'ler dinamik temizlenir.
             foreach (var table in SirketIdDropTables)
             {

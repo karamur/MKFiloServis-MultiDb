@@ -78,17 +78,14 @@ namespace MKFiloServis.Web.Data.Migrations
                 "AuditLoglar"
             };
 
-            migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + $@"
-                DO $$ DECLARE first_firma_id integer;
-                BEGIN
-                    SELECT ""Id"" INTO first_firma_id FROM ""Firmalar"" WHERE NOT ""IsDeleted"" ORDER BY ""Id"" LIMIT 1;
-                    IF first_firma_id IS NOT NULL THEN
-                        {string.Join(" ", backfillTablolari.Select(t =>
-                            $"UPDATE \"{t}\" SET \"FirmaId\" = first_firma_id WHERE \"FirmaId\" IS NULL OR \"FirmaId\" = 0;"))}
-                    END IF;
-                EXCEPTION WHEN others THEN NULL;
-                END; $$;
-            ");
+            foreach (var table in backfillTablolari)
+            {
+                migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + $@"
+                    UPDATE ""{table}""
+                    SET ""FirmaId"" = (SELECT ""Id"" FROM ""Firmalar"" WHERE NOT ""IsDeleted"" ORDER BY ""Id"" LIMIT 1)
+                    WHERE ""FirmaId"" IS NULL OR ""FirmaId"" = 0;
+                ");
+            }
 
             migrationBuilder.CreateIndex(
                 name: "IX_ServisParcalar_FirmaId",

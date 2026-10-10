@@ -16,6 +16,16 @@ namespace MKFiloServis.Web.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            if (migrationBuilder.ActiveProvider == "Microsoft.EntityFrameworkCore.Sqlite")
+            {
+                // SQLite has no PL/pgSQL or information_schema. This migration is
+                // the terminal cleanup step after B3i renamed these tables; issue
+                // native conditional drops so a missing legacy table is harmless.
+                migrationBuilder.Sql("DROP TABLE IF EXISTS \"_LEGACY_SirketTransferLoglari\";");
+                migrationBuilder.Sql("DROP TABLE IF EXISTS \"_LEGACY_Sirketler\";");
+                return;
+            }
+
             migrationBuilder.Sql(@"
 DO $$
 BEGIN

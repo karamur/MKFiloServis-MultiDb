@@ -18,45 +18,25 @@ namespace MKFiloServis.Web.Data.Migrations
                 type: "integer",
                 nullable: true);
 
-            // Backfill: parent Guzergah.FirmaId zaten zorunlu (Aşama C2), oradan al.
-            // Eğer parent FirmaId NULL kalmışsa (olmamalı) varsayılan firmaya düş.
-            migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + @"
-DO $$
-DECLARE
-    v_default_firma_id integer;
-BEGIN
-    SELECT ""Id"" INTO v_default_firma_id
-    FROM ""Firmalar""
-    WHERE ""VarsayilanFirma"" = TRUE AND ""Aktif"" = TRUE
-    ORDER BY ""Id""
-    LIMIT 1;
+            // Backfill from the parent route; use scalar subqueries supported by both providers.
+            if (migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL")
+            {
+                migrationBuilder.Sql(MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql);
+            }
 
-    IF v_default_firma_id IS NULL THEN
-        SELECT ""Id"" INTO v_default_firma_id
-        FROM ""Firmalar""
-        WHERE ""Aktif"" = TRUE
-        ORDER BY ""Id""
-        LIMIT 1;
-    END IF;
+            migrationBuilder.Sql(@"
+                UPDATE ""GuzergahSeferleri""
+                   SET ""FirmaId"" = (SELECT g.""FirmaId"" FROM ""Guzergahlar"" g WHERE g.""Id"" = ""GuzergahSeferleri"".""GuzergahId"")
+                 WHERE ""FirmaId"" IS NULL
+                   AND EXISTS (SELECT 1 FROM ""Guzergahlar"" g WHERE g.""Id"" = ""GuzergahSeferleri"".""GuzergahId"" AND g.""FirmaId"" IS NOT NULL);
 
-    IF v_default_firma_id IS NULL THEN
-        RAISE NOTICE 'TenantG1: aktif firma bulunamadı, GuzergahSeferleri backfill atlandı.';
-    ELSE
-        -- 1) Parent Guzergah'tan miras al.
-        UPDATE ""GuzergahSeferleri"" gs
-           SET ""FirmaId"" = g.""FirmaId""
-          FROM ""Guzergahlar"" g
-         WHERE gs.""GuzergahId"" = g.""Id""
-           AND gs.""FirmaId"" IS NULL
-           AND g.""FirmaId"" IS NOT NULL;
-
-        -- 2) Hâlâ NULL kalan varsa varsayılan firmaya çek.
-        UPDATE ""GuzergahSeferleri""
-           SET ""FirmaId"" = v_default_firma_id
-         WHERE ""FirmaId"" IS NULL;
-    END IF;
-END $$;
-");
+                UPDATE ""GuzergahSeferleri""
+                   SET ""FirmaId"" = COALESCE(
+                       (SELECT ""Id"" FROM ""Firmalar"" WHERE ""VarsayilanFirma"" = TRUE AND ""Aktif"" = TRUE ORDER BY ""Id"" LIMIT 1),
+                       (SELECT ""Id"" FROM ""Firmalar"" WHERE ""Aktif"" = TRUE ORDER BY ""Id"" LIMIT 1))
+                 WHERE ""FirmaId"" IS NULL
+                   AND EXISTS (SELECT 1 FROM ""Firmalar"" WHERE ""Aktif"" = TRUE);
+            ");
 
             // NOT NULL'a al (IFirmaTenant marker'ı için ApplicationDbContext zorlar).
             migrationBuilder.AlterColumn<int>(

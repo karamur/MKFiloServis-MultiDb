@@ -10,6 +10,18 @@ namespace MKFiloServis.Web.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            if (migrationBuilder.ActiveProvider == "Microsoft.EntityFrameworkCore.Sqlite")
+            {
+                // The previous ordered migration snapshot has none of these four
+                // Personeller columns. Add them with SQLite-native EF DDL; unknown
+                // hand-patched/text legacy shapes fail instead of guessing conversions.
+                migrationBuilder.AddColumn<string>(name: "BankaSube", table: "Personeller", type: "TEXT", nullable: true);
+                migrationBuilder.AddColumn<string>(name: "BankaSubeKodu", table: "Personeller", type: "TEXT", nullable: true);
+                migrationBuilder.AddColumn<string>(name: "BankaHesapNo", table: "Personeller", type: "TEXT", nullable: true);
+                migrationBuilder.AddColumn<int>(name: "MaasOdemeTipi", table: "Personeller", type: "INTEGER", nullable: false, defaultValue: 0);
+                return;
+            }
+
             // BankaSube
             migrationBuilder.Sql(@"
                 DO $$
@@ -88,6 +100,15 @@ namespace MKFiloServis.Web.Data.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            if (migrationBuilder.ActiveProvider == "Microsoft.EntityFrameworkCore.Sqlite")
+            {
+                migrationBuilder.DropColumn(name: "BankaHesapNo", table: "Personeller");
+                migrationBuilder.DropColumn(name: "BankaSube", table: "Personeller");
+                migrationBuilder.DropColumn(name: "BankaSubeKodu", table: "Personeller");
+                migrationBuilder.DropColumn(name: "MaasOdemeTipi", table: "Personeller");
+                return;
+            }
+
             migrationBuilder.Sql(@"
                 ALTER TABLE ""Personeller"" DROP COLUMN IF EXISTS ""BankaHesapNo"";
                 ALTER TABLE ""Personeller"" DROP COLUMN IF EXISTS ""BankaSube"";

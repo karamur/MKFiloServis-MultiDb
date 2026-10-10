@@ -10,6 +10,13 @@ namespace MKFiloServis.Web.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            if (migrationBuilder.ActiveProvider == "Microsoft.EntityFrameworkCore.Sqlite")
+            {
+                // SQLite applies the same migration through DbInitializer's catalog-aware
+                // helper. That path must inspect optional legacy tables/columns before DDL.
+                return;
+            }
+
             // ================================================================
             // Nihai Mimari (2026): Organizasyon, Sube, HoldingVeri, HoldingRapor
             // Idempotent SQL — her ortamda guvenle calisir.
@@ -301,6 +308,9 @@ namespace MKFiloServis.Web.Data.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            if (migrationBuilder.ActiveProvider == "Microsoft.EntityFrameworkCore.Sqlite")
+                throw new NotSupportedException("NihaiMimari SQLite geçişi yalnızca ileri yönlüdür; veri kaybı riski taşıyan holding/organizasyon geri alımı desteklenmez.");
+
             // Down migrasyonu: idempotent degil — geri alma istege bagli.
             // Tablolari sil, kolonlari kaldir.
             migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + @"DROP TABLE IF EXISTS ""HoldingRaporlar"" CASCADE;");

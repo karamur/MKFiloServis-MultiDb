@@ -10,6 +10,16 @@ namespace MKFiloServis.Web.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            if (migrationBuilder.ActiveProvider == "Microsoft.EntityFrameworkCore.Sqlite")
+            {
+                // In the ordered migration chain B3/B2 history created these columns.
+                // EF's SQLite generator rebuilds the tables while preserving other data,
+                // indexes and relationships from the migration model.
+                migrationBuilder.DropColumn(name: "SirketId", table: "Faturalar");
+                migrationBuilder.DropColumn(name: "SirketId", table: "Cariler");
+                return;
+            }
+
             // PostgreSQL üzerinde geçmişte üretilmiş FK/Index isimleri farklı olabilir
             // (örn. snake_case veya başka migration tarafından oluşturulmuş). Bu yüzden
             // önce SirketId kolonuna bağlı tüm FK ve index'leri PL/pgSQL ile güvenli sil,

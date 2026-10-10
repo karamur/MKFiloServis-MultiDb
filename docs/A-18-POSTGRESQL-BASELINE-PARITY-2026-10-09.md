@@ -92,3 +92,41 @@ History tablosu olmayan mevcut SQLite DB için adoption kod yolu kaldırıldı v
 ### 2026-10-10 — A-18 eski watermark şema kıyası kaldırıldı
 
 History zinciri doğrulanmış mevcut SQLite DB, güncel `__EFMigrationsHistory` kayıtları üzerinden ilerler. Önceki kod ayrıca DB'yi 2026-09-25 watermark migration'ının eski `TargetModel`'iyle kıyaslıyordu; daha sonra uygulanmış migration'ların meşru biçimde kaldırdığı/yenilediği kolon ve indeksleri “eksik” sayıp upgrade'i engelleyebilirdi. Watermark `TargetModel` kıyası kaldırıldı. Artık history yok/boş, watermark öncesi history boşluğu veya tanınmayan history ID varsa işlem fail-fast durur; geçerli zincirde pending migration'lar EF ile çalışır ve tamamlandığında güncel model parity kontrol edilir. Web Release derlemesi 0 uyarı / 0 hata; otomatik test ve müşteri DB çalıştırılmadı. Legacy historyless migration/parity/rollback kabulü açık, A-18 sarı.
+
+Bir sonraki incelemede aynı cutoff sorunu PostgreSQL için de bulundu: tam migration prefix'i daha eski bir sürümde biten meşru DB, watermark'a kadar gelecek migration ID'leri eksik diye reddediliyordu. İki sağlayıcıda da artık tüm bilinen migration listesine göre bilinmeyen ID ve arada uygulanmış kayıt olmayan sıralı prefix kontrol edilir; EF eksik suffix'i normal uygular. Doğrulama SQLite'ta pending listesi boşken de çalışır. History'siz DB'lerde provenance olmadığı için otomatik doldurma yapılmaz.
+
+### 2026-10-10 — Sağlayıcı uyumluluğu kod düzeltmeleri
+
+İncelenen 10 eski provider-özel migration yolundan yedisine SQLite dalı eklendi: `CRMModulu`, `TenantCExt2_AddFirmaIdToKapasite`, `TenantZ1_DropLegacyCariFaturaSirketColumns`, `TenantB3i_DropSirketNavigationAndEntity`, `TenantB4a_DropSirketIdColumnsAndRenameAuditLog`, `TenantB4b_DropLegacyTables` ve `AddHakedisPuantajFaturaFKs`. SQLite tarafı EF migration operations, native DDL veya taşınabilir UPDATE kullanır; PostgreSQL yolu korunur.
+
+Sonraki düzeltmeler `AddBudgetHedef` ve `AddPersonelBankaOdemeAlanlari` yollarını da SQLite uyumlu hale getirdi. Kalan kaynak inceleme bulguları `FixCariFirmaShadowFK`'daki koşullu FirmaId1 varyantı ile `NihaiMimari_OrganizasyonSubeHolding` içindeki idempotent DDL/DML bloklarıdır. Eski müşteri PostgreSQL/SQLite fixture, tenant/mali kayıt parity ve yarım migration rollback kabulü de yoktur; A-18 kırmızı kalır.
+
+### 2026-10-10 — SQLite provider migration yolları, devam
+
+İncelenen 10 provider-özel migration yolundan dokuzuna SQLite dalı eklendi veya redundant PG DDL kaldırıldı: CRMModulu, TenantCExt2_AddFirmaIdToKapasite, TenantZ1_DropLegacyCariFaturaSirketColumns, TenantB3i_DropSirketNavigationAndEntity, TenantB4a_DropSirketIdColumnsAndRenameAuditLog, TenantB4b_DropLegacyTables, AddBudgetHedef, AddPersonelBankaOdemeAlanlari ve AddHakedisPuantajFaturaFKs.
+
+İlk gruptan `FixCariFirmaShadowFK` için SQLite yolu eklendi: native idempotent FirmaId index'i sağlanır, opsiyonel FirmaId1 korunur ve FK parity ile doğrulanır. `NihaiMimari_OrganizasyonSubeHolding` için daha sonra catalog-aware helper eklendi. Schema drift sessizce geçilmez; A-18 kırmızı kalır. Eski DB migration parity/rollback fixture kabulü açık; bu turda test çalıştırılmadı.
+
+### 2026-10-10 — Tenant C4–C7 backfill uyumluluğu
+
+`TenantC4_MakeFirmaIdNotNullable` içindeki yedi tabloya ait procedural backfill/nullability SQL'i taşınabilir UPDATE ve EF `AlterColumn` işlemlerine dönüştürüldü. `TenantC5`, `TenantC6` ve `TenantC7` FirmaId backfill'leri de scalar-subquery UPDATE'e alındı. Web Release derlemesi **0 uyarı / 0 hata** verdi. Migration davranışı çalıştırılmadı; A-18 🔴.
+
+### 2026-10-10 — Organizasyon/holding SQLite yolu
+
+`NihaiMimari_OrganizasyonSubeHolding` migration'ı SQLite'ta catalog-aware helper'a bağlandı. Başlangıç, bekleyen migration olduğunda önceki migration ID'sine kadar ilerler, helper organizasyon/şube/holding şemasını ve seed'leri; mevcut optional tablo/kolonları; FirmaId backfill ve index'lerini tek transaction'da işler, sonra EF migration'ı history'ye kaydeder. Eksik FK'ler trigger eşdeğeriyle uygulanır ve schema parity bu trigger adını sadece eşleşen principal/from/to imzası için kabul eder. Orphan veri transaction'ı durdurur. SQLite Down açıkça reddedilir çünkü holding/organizasyon verisini silmek kayıplıdır. Derleme doğrulandı; fixture/migration davranışı/rollback testi çalıştırılmadı. Bu nedenle kod yolu teslim edildi ancak A-18 kabulü hâlâ kırmızı.
+### 2026-10-10 — A-18 migration giriş yolları ve snapshot SQLite uyumu
+
+Startup, yedek servisindeki migration eylemi ve PostgreSQL dökümünden SQLite'a dönüştürme hedefi ayrı şema kurulum davranışları kullanıyordu: biri migration çağırıyor, biri `EnsureCreated`, diğeri sınırlı migration yolu kullanıyordu. Bunlar `DbInitializer.ApplyDatabaseMigrationsAsync` orkestratöründe birleştirildi. Orkestratör boş DB baseline'ı, provider history/provenance kontrolleri, unique migration duplicate ön-kontrolleri, bekleyen migration'lar (SQLite organizasyon/holding özel yolu dahil) ve migration sonrası tam model tablo/kolon/index/FK parity denetimini aynı sırada uygular. Eski tek argümanlı initializer overload'ı da aynı girişe bağlandı. Conversion hedefi boşsa current model baseline + history ile hazırlanır; mevcut fakat history'siz hedef otomatik sahiplenilmez.
+
+Son kaynak denetiminde `SirketSchemaFixMigrationHelper`'ın `FirmaId` geçişinden sonra her startup'ta legacy `Sirketler/SirketId` şemasını yeniden oluşturduğu ve DDL hatalarını yutup uygulamayı sürdürdüğü bulundu. Güncel modelde kullanılmayan bu helper'ın startup çağrısı kaldırıldı ve sınıf silindi. SQLite seed uyumluluk adımlarından sonra model parity tekrar çalışıyor; bu ek kontrol eksik gereken şemanın uyarısız biçimde kullanılmasını önler.
+
+SQLite FK-trigger parity kontrolü de insert trigger'ı varlığını tek başına yeterli sayıyordu. Artık helper tarafından kurulan insert, update ve parent-delete trigger adımlarının üçü de aranıyor; eksik herhangi biri varsa parity hatası verilir. Trigger etkisi ve legacy veri kabulinin yerini fixture çalışması almadığı için A-18 **🔴** kalır.
+
+Program startup'ındaki `GuzergahSeferFirmaIdConstraintHelper` PostgreSQL'de `Guzergahlar.FirmaId` FK'sini düşürüyordu; bu eski yardımcı ve çağrıları kaldırıldı. Tüm startup migration helper'ları bittikten ve uygulama HTTP pipeline'ı açılmadan önce güncel model parity'si zorunlu denetleniyor. Böylece sonradan çalışan helper'ın migration sonrası FK/index/kolon eksiltmesi başlangıç başarısı olarak kalmaz.
+
+`AddSnapshotHakedisFieldsV2` içindeki PostgreSQL `ADD COLUMN IF NOT EXISTS` SQLite’ta geçersizdi. SQLite dalı `AddColumn`/`DropColumn` migration operasyonlarına çevrildi; tabloyu önceki snapshot migration'ları oluşturur. Web Release build **0 uyarı / 0 hata** ve `git diff --check` temiz. Migration çalıştırma, restore senaryosu ve eski DB parity/rollback fixture'ı bu turda çalıştırılmadı; A-18 🔴 ve satış Go/No-Go kapısı açık kalır.
+
+
+### 2026-10-10 — A-18 kapsam kararı: eski DB ve kayıt geçişi yok
+
+Kullanıcı kararıyla eski müşteri veritabanı yükseltme, geçmiş kayıtları taşıma ve bu veriler için parity/rollback kabulü ürün kapsamından çıkarıldı. A-18 bu sürümde temiz PostgreSQL/SQLite veritabanını güncel modele başlatma teslimidir. Yeni müşteri kurulumu boş veritabanı kullanır. Geçmiş kaydı olmayan veya uyumsuz eski DB fail-fast reddedilir; uygulama onu baseline etmeye, otomatik düzeltmeye veya eski kaydı silmeye çalışmaz. Eski veriyi koruma ya da taşıma taahhüdü verilmez. A-18 görev rengi 🟢 kapsam kararı olarak güncellendi; gerçek DB silinmedi ve eski DB migrasyonu test edilmiş gibi gösterilmedi. Diğer görevlerin bağımsız satış kabul kapıları sürer.

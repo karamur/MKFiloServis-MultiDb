@@ -10,6 +10,16 @@ namespace MKFiloServis.Web.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            if (migrationBuilder.ActiveProvider == "Microsoft.EntityFrameworkCore.Sqlite")
+            {
+                // SQLite cannot conditionally drop a column/constraint when legacy
+                // databases may or may not contain the shadow column. Preserve that
+                // optional legacy data; the model parity gate verifies the required FK.
+                migrationBuilder.Sql(
+                    "CREATE INDEX IF NOT EXISTS \"IX_Cariler_FirmaId\" ON \"Cariler\" (\"FirmaId\");");
+                return;
+            }
+
             // NOT: Bu migration, EF model snapshot'ında oluşmuş olan ancak veritabanında
             // hiç var olmamış olabilen "FirmaId1" shadow FK sütununu temizler.
             // DB'ye göre durum farklı olabileceği için tüm DROP işlemleri IF EXISTS ile yapılır.
@@ -37,6 +47,12 @@ namespace MKFiloServis.Web.Data.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            if (migrationBuilder.ActiveProvider == "Microsoft.EntityFrameworkCore.Sqlite")
+            {
+                migrationBuilder.Sql("DROP INDEX IF EXISTS \"IX_Cariler_FirmaId\";");
+                return;
+            }
+
             // Geri alma: shadow FK'yi yeniden oluşturmuyoruz; sadece eklediğimiz FK'yi düşürüyoruz.
             migrationBuilder.Sql("ALTER TABLE \"Cariler\" DROP CONSTRAINT IF EXISTS \"FK_Cariler_Firmalar_FirmaId\";");
             migrationBuilder.Sql("DROP INDEX IF EXISTS \"IX_Cariler_FirmaId\";");

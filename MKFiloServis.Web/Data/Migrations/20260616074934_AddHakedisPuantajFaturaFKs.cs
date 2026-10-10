@@ -10,23 +10,9 @@ namespace MKFiloServis.Web.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // GelirFaturaId ve GiderFaturaId kolonları zaten AddMissingTables ile eklendi.
-            // Bu migration sadece index ve FK constraint'lerini oluşturur.
-            // Kolon yoksa ekle (yeni kurulum), varsa atla.
-            // SQLite/PG idempotent kontrolü: kolon kontrolü yapmadan index dene,
-            // eğer kolon yoksa hata alırız. O yüzden önce kolon garantisi:
-
-            // Idempotent: önce kolonu dene (varsa zaten var), sonra index ve FK
-            migrationBuilder.Sql(@"
-                DO $$ BEGIN
-                    ALTER TABLE ""HakedisPuantajlar"" ADD COLUMN IF NOT EXISTS ""GelirFaturaId"" integer NULL;
-                EXCEPTION WHEN duplicate_column THEN NULL;
-                END $$;
-                DO $$ BEGIN
-                    ALTER TABLE ""HakedisPuantajlar"" ADD COLUMN IF NOT EXISTS ""GiderFaturaId"" integer NULL;
-                EXCEPTION WHEN duplicate_column THEN NULL;
-                END $$;
-            ");
+            // AddMissingTables introduces both nullable columns earlier in the ordered
+            // migration chain. Repeating the guarded PostgreSQL-only ALTER TABLE here
+            // broke SQLite upgrades and made a normal non-idempotent chain look partial.
 
             migrationBuilder.CreateIndex(
                 name: "IX_HakedisPuantajlar_GelirFaturaId",

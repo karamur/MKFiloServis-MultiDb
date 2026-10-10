@@ -1304,22 +1304,9 @@ public class BackupService : IBackupService
             using var scope = _serviceProvider.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-            var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
-            var pendingCount = pendingMigrations.Count();
-
-            if (pendingCount > 0)
-            {
-                _logger.LogInformation("{Count} adet migration uygulanacak", pendingCount);
-                await context.Database.MigrateAsync();
-                _logger.LogInformation("Migration basariyla uygulandi");
-                return true;
-            }
-            else
-            {
-                _logger.LogInformation("Uygulanacak migration yok, EnsureCreated deneniyor");
-                await context.Database.EnsureCreatedAsync();
-                return true;
-            }
+            await DbInitializer.ApplyDatabaseMigrationsAsync(context, _configuration);
+            _logger.LogInformation("Migration ve model parity kontrolü başarıyla tamamlandı");
+            return true;
         }
         catch (Exception ex)
         {
@@ -1490,7 +1477,7 @@ public class BackupService : IBackupService
 
             await using var context = new ApplicationDbContext(optionsBuilder.Options);
             context.SetServiceProvider(scope.ServiceProvider);
-            await context.Database.EnsureCreatedAsync();
+            await DbInitializer.ApplyDatabaseMigrationsAsync(context, _configuration);
 
             await context.Database.OpenConnectionAsync();
             await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(context.Database.GetDbConnection());

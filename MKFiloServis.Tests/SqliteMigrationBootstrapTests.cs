@@ -172,20 +172,6 @@ public sealed class SqliteMigrationBootstrapTests
     }
 
     [Fact]
-    public void Legacy_baseline_never_marks_newer_schema_changes_as_applied()
-    {
-        var supportedLegacyWatermark = "20260925192810_NormalizeRentACarOdemeEnumColumns";
-        var postWatermarkMigration = "20261006190000_AddUniqueActiveVehiclePlateIndex";
-
-        var selected = DbInitializer.SelectSqliteLegacyMigrationsToBaseline(
-            [supportedLegacyWatermark, postWatermarkMigration],
-            [supportedLegacyWatermark, postWatermarkMigration],
-            []);
-
-        Assert.Equal([supportedLegacyWatermark], selected);
-    }
-
-    [Fact]
     public async Task Bank_key_schema_repair_adds_missing_columns_and_index_without_changing_rows()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

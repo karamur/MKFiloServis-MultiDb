@@ -34,25 +34,19 @@ namespace MKFiloServis.Web.Data.Migrations
                 name: "FK_StokKategoriler_Firmalar_FirmaId",
                 table: "StokKategoriler");
 
-            // K9 backfill (C3-a tabloları): startup helper'ı atlanırsa diye migration kendi başına da güvenli olsun.
-            migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + @"
-                DO $$
-                DECLARE def_firma_id int;
-                BEGIN
-                    SELECT COALESCE(
-                        (SELECT ""Id"" FROM ""Firmalar"" WHERE ""VarsayilanFirma"" = true AND ""Aktif"" = true ORDER BY ""Id"" LIMIT 1),
-                        (SELECT ""Id"" FROM ""Firmalar"" WHERE ""Aktif"" = true ORDER BY ""Id"" LIMIT 1)
-                    ) INTO def_firma_id;
-                    IF def_firma_id IS NOT NULL THEN
-                        UPDATE ""StokKartlari""        SET ""FirmaId"" = def_firma_id WHERE ""FirmaId"" IS NULL;
-                        UPDATE ""StokKategoriler""     SET ""FirmaId"" = def_firma_id WHERE ""FirmaId"" IS NULL;
-                        UPDATE ""StokHareketler""      SET ""FirmaId"" = def_firma_id WHERE ""FirmaId"" IS NULL;
-                        UPDATE ""MasrafKalemleri""     SET ""FirmaId"" = def_firma_id WHERE ""FirmaId"" IS NULL;
-                        UPDATE ""Faturalar""           SET ""FirmaId"" = def_firma_id WHERE ""FirmaId"" IS NULL;
-                        UPDATE ""ServisCalismalari""   SET ""FirmaId"" = def_firma_id WHERE ""FirmaId"" IS NULL;
-                    END IF;
-                END $$;
-            ");
+            // K9 backfill (C3-a tabloları): provider-neutral SQL replaces PL/pgSQL.
+            if (migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL")
+            {
+                migrationBuilder.Sql(MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql);
+            }
+
+            var firmaIdExpression = @"COALESCE(
+                (SELECT ""Id"" FROM ""Firmalar"" WHERE ""VarsayilanFirma"" = TRUE AND ""Aktif"" = TRUE ORDER BY ""Id"" LIMIT 1),
+                (SELECT ""Id"" FROM ""Firmalar"" WHERE ""Aktif"" = TRUE ORDER BY ""Id"" LIMIT 1))";
+            foreach (var table in new[] { "StokKartlari", "StokKategoriler", "StokHareketler", "MasrafKalemleri", "Faturalar", "ServisCalismalari" })
+            {
+                migrationBuilder.Sql($@"UPDATE ""{table}"" SET ""FirmaId"" = {firmaIdExpression} WHERE ""FirmaId"" IS NULL;");
+            }
 
             migrationBuilder.AlterColumn<int>(
                 name: "FirmaId",

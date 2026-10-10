@@ -30,26 +30,20 @@ namespace MKFiloServis.Web.Data.Migrations
                 name: "FK_Kurumlar_Firmalar_FirmaId",
                 table: "Kurumlar");
 
-            // K9 backfill: NULL/0 FirmaId satırlarını varsayılan firma ile doldur.
-            migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + @"
-                DO $$
-                DECLARE def_firma_id int;
-                BEGIN
-                    SELECT COALESCE(
-                        (SELECT ""Id"" FROM ""Firmalar"" WHERE ""VarsayilanFirma"" = true AND ""Aktif"" = true ORDER BY ""Id"" LIMIT 1),
-                        (SELECT ""Id"" FROM ""Firmalar"" WHERE ""Aktif"" = true ORDER BY ""Id"" LIMIT 1)
-                    ) INTO def_firma_id;
-                    IF def_firma_id IS NOT NULL THEN
-                        UPDATE ""Personeller""           SET ""FirmaId"" = def_firma_id WHERE ""FirmaId"" IS NULL OR ""FirmaId"" = 0;
-                        UPDATE ""Kurumlar""              SET ""FirmaId"" = def_firma_id WHERE ""FirmaId"" IS NULL OR ""FirmaId"" = 0;
-                        UPDATE ""Guzergahlar""           SET ""FirmaId"" = def_firma_id WHERE ""FirmaId"" IS NULL OR ""FirmaId"" = 0;
-                        UPDATE ""Cariler""               SET ""FirmaId"" = def_firma_id WHERE ""FirmaId"" IS NULL OR ""FirmaId"" = 0;
-                        UPDATE ""BankaKasaHareketleri""  SET ""FirmaId"" = def_firma_id WHERE ""FirmaId"" IS NULL OR ""FirmaId"" = 0;
-                        UPDATE ""BankaHesaplari""        SET ""FirmaId"" = def_firma_id WHERE ""FirmaId"" IS NULL OR ""FirmaId"" = 0;
-                        UPDATE ""Araclar""               SET ""FirmaId"" = def_firma_id WHERE ""FirmaId"" IS NULL OR ""FirmaId"" = 0;
-                    END IF;
-                END $$;
-            ");
+            // K9 backfill: provider-neutral scalar subqueries preserve the same default
+            // firm choice on PostgreSQL and SQLite without procedural SQL.
+            if (migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL")
+            {
+                migrationBuilder.Sql(MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql);
+            }
+
+            var firmaIdExpression = @"COALESCE(
+                (SELECT ""Id"" FROM ""Firmalar"" WHERE ""VarsayilanFirma"" = TRUE AND ""Aktif"" = TRUE ORDER BY ""Id"" LIMIT 1),
+                (SELECT ""Id"" FROM ""Firmalar"" WHERE ""Aktif"" = TRUE ORDER BY ""Id"" LIMIT 1))";
+            foreach (var table in new[] { "Personeller", "Kurumlar", "Guzergahlar", "Cariler", "BankaKasaHareketleri", "BankaHesaplari", "Araclar" })
+            {
+                migrationBuilder.Sql($@"UPDATE ""{table}"" SET ""FirmaId"" = {firmaIdExpression} WHERE ""FirmaId"" IS NULL OR ""FirmaId"" = 0;");
+            }
 
             migrationBuilder.AlterColumn<int>(
                 name: "FirmaId",

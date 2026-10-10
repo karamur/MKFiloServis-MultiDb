@@ -17,21 +17,12 @@ namespace MKFiloServis.Web.Data.Migrations
             foreach (var table in tables)
             {
                 migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + $@"
-                    DO $$ DECLARE first_firma_id integer;
-                    BEGIN
-                        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = '{table}') THEN
-                            -- NULL FirmaId'leri ilk gecerli firma ile doldur
-                            SELECT ""Id"" INTO first_firma_id FROM ""Firmalar"" WHERE NOT ""IsDeleted"" ORDER BY ""Id"" LIMIT 1;
-                            IF first_firma_id IS NOT NULL THEN
-                                EXECUTE 'UPDATE ""{table}"" SET ""FirmaId"" = ' || first_firma_id || ' WHERE ""FirmaId"" IS NULL OR ""FirmaId"" = 0';
-                            END IF;
-                            -- NOT NULL constraint ekle (zaten NOT NULL ise hata vermez)
-                            EXECUTE 'ALTER TABLE ""{table}"" ALTER COLUMN ""FirmaId"" SET NOT NULL';
-                        END IF;
-                    EXCEPTION WHEN others THEN
-                        -- Zaten NOT NULL veya tablo yok — gec
-                    END; $$;
+                    UPDATE ""{table}""
+                    SET ""FirmaId"" = (SELECT ""Id"" FROM ""Firmalar"" WHERE NOT ""IsDeleted"" ORDER BY ""Id"" LIMIT 1)
+                    WHERE ""FirmaId"" IS NULL OR ""FirmaId"" = 0;
                 ");
+                migrationBuilder.AlterColumn<int>(name: "FirmaId", table: table, type: "integer", nullable: false,
+                    oldClrType: typeof(int), oldType: "integer", oldNullable: true);
             }
         }
 
@@ -43,13 +34,8 @@ namespace MKFiloServis.Web.Data.Migrations
 
             foreach (var table in tables)
             {
-                migrationBuilder.Sql((migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL" ? MKFiloServis.Shared.Auditing.DatabaseWriteAudit.PostgreSqlInstallSql : "") + "\n" + $@"
-                    DO $$ BEGIN
-                        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = '{table}') THEN
-                            EXECUTE 'ALTER TABLE ""{table}"" ALTER COLUMN ""FirmaId"" DROP NOT NULL';
-                        END IF;
-                    EXCEPTION WHEN others THEN END; $$;
-                ");
+                migrationBuilder.AlterColumn<int>(name: "FirmaId", table: table, type: "integer", nullable: true,
+                    oldClrType: typeof(int), oldType: "integer");
             }
         }
     }
