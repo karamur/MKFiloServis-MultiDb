@@ -117,7 +117,19 @@
                             <tr>
                                 <th style="width: 70px;">Sıra No</th>
                                 <th>Personel Kodu</th>
-                                <th>Ad Soyad</th>
+                                <th aria-sort="@(adSoyadSiralamasiEtkin ? (adSoyadAzalan ? "descending" : "ascending") : "none")">
+                                    <button type="button"
+                                            class="btn btn-link link-light p-0 text-decoration-none"
+                                            @onclick="AdSoyadSiralamasiniDegistir"
+                                            title="Ad ve soyada göre sırala">
+                                        Ad Soyad
+                                        @if (adSoyadSiralamasiEtkin)
+                                        {
+                                            <i class="bi @(adSoyadAzalan ? "bi-sort-alpha-down-alt" : "bi-sort-alpha-down") ms-1" aria-hidden="true"></i>
+                                            <span class="visually-hidden">@(adSoyadAzalan ? "azalan" : "artan") sıralama</span>
+                                        }
+                                    </button>
+                                </th>
                                 <th>Görev</th>
                                 <th>Firma / Tedarikçi</th>
                                 <th>Telefon</th>
@@ -132,7 +144,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var personel in personeller.OrderBy(p => p.SiralamaNo == 0 ? int.MaxValue : p.SiralamaNo).ThenBy(p => p.Ad))
+                            @foreach (var personel in SiraliPersoneller)
                             {
                                 <tr>
                                     <td>
@@ -453,6 +465,36 @@
     private int secilenFirmaId = 0;
     private int secilenTedarikciId = 0;
     private string secilenPersonelKaynak = "";
+    private bool adSoyadSiralamasiEtkin;
+    private bool adSoyadAzalan;
+
+    private IEnumerable<Sofor> SiraliPersoneller
+    {
+        get
+        {
+            var kaynak = personeller ?? Enumerable.Empty<Sofor>();
+            var turkceKarsilastirici = StringComparer.Create(
+                System.Globalization.CultureInfo.GetCultureInfo("tr-TR"),
+                ignoreCase: true);
+
+            if (adSoyadSiralamasiEtkin)
+            {
+                return adSoyadAzalan
+                    ? kaynak.OrderByDescending(p => p.Ad ?? "", turkceKarsilastirici)
+                        .ThenByDescending(p => p.Soyad ?? "", turkceKarsilastirici)
+                        .ThenBy(p => p.Id)
+                    : kaynak.OrderBy(p => p.Ad ?? "", turkceKarsilastirici)
+                        .ThenBy(p => p.Soyad ?? "", turkceKarsilastirici)
+                        .ThenBy(p => p.Id);
+            }
+
+            return kaynak
+                .OrderBy(p => p.SiralamaNo == 0 ? int.MaxValue : p.SiralamaNo)
+                .ThenBy(p => p.Ad ?? "", turkceKarsilastirici)
+                .ThenBy(p => p.Soyad ?? "", turkceKarsilastirici)
+                .ThenBy(p => p.Id);
+        }
+    }
 
     // Import değişkenleri
     private bool showImportModal = false;
@@ -497,6 +539,17 @@
     {
         secilenAktifDurum = durum;
         UygulaFiltre();
+    }
+
+    private void AdSoyadSiralamasiniDegistir()
+    {
+        if (adSoyadSiralamasiEtkin)
+            adSoyadAzalan = !adSoyadAzalan;
+        else
+        {
+            adSoyadSiralamasiEtkin = true;
+            adSoyadAzalan = false;
+        }
     }
 
     private static IQueryable<Sofor> PersonelListeSorgusu(ApplicationDbContext ctx)
