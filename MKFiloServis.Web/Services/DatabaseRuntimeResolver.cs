@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using MKFiloServis.Shared.Entities;
+using Microsoft.Data.Sqlite;
 
 namespace MKFiloServis.Web.Services;
 
@@ -33,7 +34,7 @@ public static class DatabaseRuntimeResolver
 
         if (!File.Exists(settingsPath))
         {
-            return CreateFallbackInfo(fallbackProvider, fallbackConnectionString, settingsPath);
+            return CreateFallbackInfo(fallbackProvider, fallbackConnectionString, settingsPath, environment.ContentRootPath);
         }
 
         try
@@ -42,51 +43,56 @@ public static class DatabaseRuntimeResolver
             var dbSettings = JsonSerializer.Deserialize<DatabaseSettings>(dbSettingsJson);
             if (dbSettings is null)
             {
-                return CreateFallbackInfo(fallbackProvider, fallbackConnectionString, settingsPath);
+                throw new InvalidOperationException("dbsettings.json boş veya geçersiz.");
             }
 
             var runtimeProvider = DatabaseSettings.NormalizeRuntimeProvider(dbSettings.Provider);
             // Kanonik sağlayıcı aktif bağlantı sağlayıcısı değildir; şema migration hedefidir.
             // dbsettings.json bunu tanımlıyorsa ona saygı gösterilir, yoksa PostgreSQL varsayılanı kullanılır.
             var canonicalProvider = DatabaseSettings.NormalizeCanonicalProvider(dbSettings.CanonicalProvider);
-            var connectionString = runtimeProvider == DatabaseProvider.SQLite && string.IsNullOrWhiteSpace(dbSettings.DatabaseName)
-                ? new DatabaseSettings { Provider = DatabaseProvider.SQLite, DatabaseName = "MKFiloServis.db" }.GetConnectionString()
-                : dbSettings.GetConnectionString();
+            var connectionString = dbSettings.GetConnectionString();
+            if (runtimeProvider == DatabaseProvider.SQLite)
+                connectionString = ResolveSqlitePath(connectionString, environment.ContentRootPath);
 
-            // dbsettings.json'dan üretilen bağlantı geçersizse (Host boş veya Port=0)
-            // appsettings.json DefaultConnection'a geri dön
+            // A saved runtime target must never silently fall back to another database.
             if (!IsConnectionStringValid(connectionString, runtimeProvider))
             {
-                var fallback = configuration.GetConnectionString("DefaultConnection") ?? string.Empty;
-                var fallbackProvider2 = DatabaseSettings.ParseProvider(configuration.GetValue<string>("DatabaseProvider"));
-                if (IsConnectionStringValid(fallback, fallbackProvider2))
-                    return CreateInfo(fallbackProvider2, canonicalProvider, fallback, "appsettings.json (fallback)", settingsPath);
-
                 throw new InvalidOperationException(
-                    $"dbsettings.json ayarı geçersiz ve appsettings.json içindeki {fallbackProvider2} bağlantısı bu sağlayıcı için uygun değil.");
+                    $"dbsettings.json içindeki {runtimeProvider} hedefi geçersiz. Başka veritabanına sessizce geçilmeyecek.");
             }
 
             return CreateInfo(runtimeProvider, canonicalProvider, connectionString, "dbsettings.json", settingsPath);
         }
         catch (Exception ex)
         {
-            if (IsConnectionStringValid(fallbackConnectionString, fallbackProvider))
-                return CreateInfo(fallbackProvider, VARSAYILAN_KANONIK_SAGLAYICI, fallbackConnectionString, "appsettings.json (fallback)", settingsPath);
-
             throw new InvalidOperationException(
-                $"Veritabanı ayarları okunamadı ve appsettings.json içindeki {fallbackProvider} bağlantısı geçersiz.", ex);
+                "Kaydedilmiş veritabanı ayarları okunamadı. Yanlış veritabanına bağlanmamak için uygulama başlatılmadı.", ex);
         }
     }
 
     private static DatabaseRuntimeInfo CreateFallbackInfo(
         DatabaseProvider provider,
         string connectionString,
-        string settingsPath)
+        string settingsPath,
+        string contentRootPath)
     {
+        if (provider == DatabaseProvider.SQLite)
+            connectionString = ResolveSqlitePath(connectionString, contentRootPath);
+
         if (!IsConnectionStringValid(connectionString, provider))
             throw new InvalidOperationException($"appsettings.json içindeki {provider} veritabanı bağlantısı geçersiz.");
 
         return CreateInfo(provider, VARSAYILAN_KANONIK_SAGLAYICI, connectionString, "appsettings.json", settingsPath);
+    }
+
+    private static string ResolveSqlitePath(string connectionString, string contentRootPath)
+    {
+        var builder = new SqliteConnectionStringBuilder(connectionString);
+        if (string.IsNullOrWhiteSpace(builder.DataSource))
+            builder.DataSource = "MKFiloServis.db";
+        if (!Path.IsPathRooted(builder.DataSource))
+            builder.DataSource = Path.GetFullPath(Path.Combine(contentRootPath, builder.DataSource));
+        return builder.ToString();
     }
 
     private static bool IsConnectionStringValid(string connectionString, DatabaseProvider provider)

@@ -551,7 +551,6 @@ public class LicenseService
 
         // DB'ye kaydet — eski lisanslari pasif yap
         await using var db = await _dbFactory.CreateDbContextAsync();
-        await using var activationTransaction = await db.Database.BeginTransactionAsync();
 
         // Mevcut kurulumda firma kodu eşleşmiyorsa lisansı başka firmaya bağlama.
         // Yalnızca henüz hiç firma kaydı olmayan temiz kurulum lisans bilgisiyle ilk firmayı kurabilir.
@@ -561,8 +560,20 @@ public class LicenseService
             var mevcutFirmaVar = await db.Firmalar.IgnoreQueryFilters()
                 .AnyAsync(f => !f.IsDeleted);
             if (mevcutFirmaVar)
+            {
+                var activeCompanyCodes = await db.Firmalar.IgnoreQueryFilters()
+                    .Where(f => !f.IsDeleted && f.Aktif && f.FirmaKodu != null && f.FirmaKodu != "")
+                    .OrderBy(f => f.FirmaAdi)
+                    .Select(f => f.FirmaKodu)
+                    .Distinct()
+                    .ToListAsync();
+                var expectedCodes = activeCompanyCodes.Count == 0
+                    ? "kayıtlı aktif firma kodu yok"
+                    : string.Join(", ", activeCompanyCodes);
                 throw new InvalidOperationException(
-                    $"Lisans firma kodu ('{lic.FirmaKodu}') mevcut aktif firmalarla eşleşmiyor. Firma kodunu doğrulayın veya doğru lisansı kullanın.");
+                    $"Lisans firma kodu ('{lic.FirmaKodu}') aktif bir firma koduyla eşleşmiyor. " +
+                    $"Bu kurulumdaki aktif firma kodları: {expectedCodes}. Lisansın bu kodlardan biri ve bu makine kodu için yeniden üretilmesi gerekir.");
+            }
 
             firma = await CreateFirmaFromLicenseAsync(db, lic);
         }
@@ -573,20 +584,38 @@ public class LicenseService
         // Sadece FirmaId iliskisini kur.
         lic.FirmaId = firma.Id;
 
-        await db.LicenseInfos
+        var activeLicenses = await db.LicenseInfos
             .IgnoreQueryFilters()
             .Where(l => l.IsActive)
-            .UpdateTrackedAsync(db, record =>
-            {
-                record.IsActive = false;
-                record.UpdatedAt = DateTime.UtcNow;
-            });
+            .ToListAsync();
+        foreach (var activeLicense in activeLicenses)
+        {
+            activeLicense.IsActive = false;
+            activeLicense.UpdatedAt = DateTime.UtcNow;
+        }
+
+        // Re-uploading the same signed key reuses its row. That keeps activation
+        // idempotent if a transient database retry happens around SaveChanges.
+        var existingLicense = await db.LicenseInfos
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(l => !l.IsDeleted && l.Signature == lic.Signature && l.MachineId == lic.MachineId);
+        if (existingLicense is not null)
+        {
+            var existingId = existingLicense.Id;
+            db.Entry(existingLicense).CurrentValues.SetValues(lic);
+            existingLicense.Id = existingId;
+            lic = existingLicense;
+        }
 
         lic.IsActive = true;
         lic.LastValidatedAt = DateTime.UtcNow;
-        db.LicenseInfos.Add(lic);
+        lic.UpdatedAt = DateTime.UtcNow;
+        if (existingLicense is null)
+        {
+            lic.Id = 0;
+            db.LicenseInfos.Add(lic);
+        }
         await db.SaveChangesAsync();
-        await activationTransaction.CommitAsync();
 
         // DB cache güncelle — lisans anında okunur
         await db.Entry(lic).ReloadAsync();
@@ -611,9 +640,7 @@ public class LicenseService
         if (!string.IsNullOrWhiteSpace(normalizedLicenseValue))
         {
             var matches = firmalar.Where(f => f.Aktif &&
-                (NormalizeFirmaMatchValue(f.FirmaKodu) == normalizedLicenseValue ||
-                 NormalizeFirmaMatchValue(f.FirmaAdi) == normalizedLicenseValue ||
-                 NormalizeFirmaMatchValue(f.UnvanTam) == normalizedLicenseValue)).ToList();
+                NormalizeFirmaMatchValue(f.FirmaKodu) == normalizedLicenseValue).ToList();
             if (matches.Count > 1)
                 throw new InvalidOperationException("Lisans firma bilgisi birden fazla aktif firmayla eşleşiyor. Benzersiz firma kodunu kullanın.");
             if (matches.Count == 1) return matches[0];

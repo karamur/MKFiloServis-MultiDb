@@ -8,6 +8,17 @@ public partial class AddRentACarKiralamaPlani : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
+        // Older PostgreSQL installations may already have one or both compatibility
+        // columns even though this migration is absent from __EFMigrationsHistory.
+        // Add them independently so the migration can safely reconcile that partial
+        // schema without changing existing values.
+        if (migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL")
+        {
+            migrationBuilder.Sql("ALTER TABLE IF EXISTS \"MusteriKiralamalar\" ADD COLUMN IF NOT EXISTS \"KiralamaPlani\" integer NOT NULL DEFAULT 0;");
+            migrationBuilder.Sql("ALTER TABLE IF EXISTS \"MusteriKiralamalar\" ADD COLUMN IF NOT EXISTS \"SaatlikFiyat\" numeric(18,2) NOT NULL DEFAULT 0;");
+            return;
+        }
+
         migrationBuilder.AddColumn<int>(
             name: "KiralamaPlani",
             table: "MusteriKiralamalar",

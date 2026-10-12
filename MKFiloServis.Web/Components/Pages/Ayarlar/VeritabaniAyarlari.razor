@@ -7,6 +7,7 @@
 @inject DatabaseRuntimeInfo ActiveDatabase
 @inject IToastService ToastService
 @inject NavigationManager Navigation
+@inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment HostEnvironment
 @rendermode InteractiveServer
 
 <PageTitle>Veritabani Ayarlari</PageTitle>
@@ -24,12 +25,12 @@
     }
     else
     {
-        <div class="alert @(settings.Provider == ActiveDatabase.Provider ? "alert-info" : "alert-warning") mb-3">
-            <strong>Uygulamanın aktif veritabanı:</strong> @ActiveDatabase.Provider
+        <div class="alert @(SavedTargetIsActive ? "alert-info" : "alert-warning") mb-3">
+            <strong>Uygulamanın aktif veritabanı:</strong> @ActiveTargetLabel
             <span class="ms-2">(kaynak: @ActiveDatabase.Source)</span>
-            @if (settings.Provider != ActiveDatabase.Provider)
+            @if (!SavedTargetIsActive)
             {
-                <div class="mt-1">Kaydedilmiş sağlayıcı @settings.Provider; uygulama şu anda @ActiveDatabase.Provider kullanıyor. Değişikliğin etkinleşmesi için uygulamayı yeniden başlatın.</div>
+                <div class="mt-1">Kaydedilmiş hedef @SavedTargetLabel; çalışan uygulama hâlâ @ActiveTargetLabel kullanıyor. Tüm servislerin seçilen veritabanına geçmesi için uygulamayı yeniden başlatın.</div>
             }
         </div>
         <div class="row">
@@ -92,11 +93,12 @@
                             @if (settings.Provider == DatabaseProvider.SQLite)
                             {
                                 <input type="text" class="form-control" @bind="settings.DatabaseName" placeholder="MKFiloServis.db" />
-                                <small class="text-muted">SQLite icin dosya adi girin. Manifest ve sonraki gecis bilgileri App_Data/db-transitions altinda saklanir.</small>
+                                <small class="text-muted">SQLite için dosya adı girin. Dosya yoksa uygulama oluşturur; şema migration'ları yeniden başlatmada uygulanır.</small>
                             }
                             else
                             {
                                 <input type="text" class="form-control" @bind="settings.DatabaseName" placeholder="MKFiloServis" />
+                                <small class="text-muted">Veritabanı yoksa Kaydet ve Uygula PostgreSQL'de oluşturur. Şema migration'ları uygulama yeniden başlatıldığında uygulanır.</small>
                             }
                         </div>
 
@@ -293,6 +295,76 @@
         !string.IsNullOrWhiteSpace(selectedPostgreSqlBackupFile) &&
         sqliteImportConfirm &&
         !isImportingBackup;
+
+    private string ActiveTargetLabel => FormatTargetLabel(ActiveDatabase.Provider, ActiveDatabase.ConnectionString);
+    private string SavedTargetLabel => FormatTargetLabel(settings.Provider, settings.GetConnectionString());
+    private bool SavedTargetIsActive => SameTarget(ActiveDatabase.Provider, ActiveDatabase.ConnectionString,
+        settings.Provider, settings.GetConnectionString());
+
+    private static string FormatTargetLabel(DatabaseProvider provider, string connectionString)
+    {
+        try
+        {
+            if (provider == DatabaseProvider.SQLite)
+            {
+                var dataSource = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder(connectionString).DataSource;
+                return $"{provider} ({Path.GetFileName(dataSource)})";
+            }
+
+            if (provider == DatabaseProvider.PostgreSQL)
+            {
+                var target = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
+                return $"{provider} ({target.Host}:{target.Port}/{target.Database})";
+            }
+        }
+        catch
+        {
+            // Keep the diagnostic safe: never render or log credentials from a malformed string.
+        }
+
+        return provider.ToString();
+    }
+
+    private bool SameTarget(DatabaseProvider activeProvider, string activeConnection,
+        DatabaseProvider savedProvider, string savedConnection)
+    {
+        if (activeProvider != savedProvider)
+            return false;
+
+        try
+        {
+            return activeProvider switch
+            {
+                DatabaseProvider.SQLite => string.Equals(
+                    ResolveSqlitePath(new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder(activeConnection).DataSource),
+                    ResolveSqlitePath(new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder(savedConnection).DataSource),
+                    OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal),
+                DatabaseProvider.PostgreSQL => SamePostgreSqlTarget(activeConnection, savedConnection),
+                _ => string.Equals(activeConnection, savedConnection, StringComparison.Ordinal)
+            };
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private string ResolveSqlitePath(string dataSource)
+    {
+        return Path.GetFullPath(Path.IsPathRooted(dataSource)
+            ? dataSource
+            : Path.Combine(HostEnvironment.ContentRootPath, dataSource));
+    }
+
+    private static bool SamePostgreSqlTarget(string left, string right)
+    {
+        var a = new Npgsql.NpgsqlConnectionStringBuilder(left);
+        var b = new Npgsql.NpgsqlConnectionStringBuilder(right);
+        return string.Equals(a.Host, b.Host, StringComparison.OrdinalIgnoreCase)
+            && a.Port == b.Port
+            && string.Equals(a.Database, b.Database, StringComparison.Ordinal)
+            && string.Equals(a.Username, b.Username, StringComparison.Ordinal);
+    }
 
     protected override async Task OnInitializedAsync()
     {

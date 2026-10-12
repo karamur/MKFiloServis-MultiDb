@@ -144,7 +144,7 @@ public class BackupService : IBackupService
     {
         try
         {
-            var connStr = _configuration.GetConnectionString("DefaultConnection");
+            var connStr = _databaseRuntime.IsPostgreSql ? _databaseRuntime.ConnectionString : null;
             if (string.IsNullOrWhiteSpace(connStr)) return;
 
             var parts = ParseConnectionString(connStr);

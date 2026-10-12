@@ -200,10 +200,8 @@ builder.Services.AddPooledDbContextFactory<ApplicationDbContext>((sp, options) =
     {
         w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning);
         w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.MultipleCollectionIncludeWarning);
-        // PendingModelChangesWarning varsayılan olarak HATA seviyesindedir ve model ile migration
-        // uyuşmazlığında başlatmayı düşürür. Burada bastırılmadan önce uyarı seviyesine indirilir:
-        // başlatma akışı kırılmaz ama şema kayması gizli kalmaz, loga düşer.
-        w.Log(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning);
+        // PendingModelChangesWarning özellikle log seviyesine indirilmez. EF varsayılan
+        // davranışı, model/snapshot farkında migration başlangıcını durdurur.
     });
 
 });
@@ -263,7 +261,7 @@ builder.Services.AddSingleton<IPortalProjectCatalogService, PortalProjectCatalog
 builder.Services.AddSingleton<FileCleanupJournal>();
 builder.Services.AddScoped<LegacyFileCleanupService>();
 builder.Services.AddScoped<ISecureFileReferenceChecker, SecureFileReferenceChecker>();
-builder.Services.AddSingleton<ISecureFileService, SecureFileService>();
+builder.Services.AddScoped<ISecureFileService, SecureFileService>();
 builder.Services.AddHostedService<FileCleanupRetryWorker>();
 builder.Services.AddScoped<DosyaMigrasyonService>();
 builder.Services.AddScoped<ArchiveMigrationService>();
@@ -843,8 +841,9 @@ await RunScopedSafeAsync(app, "MasterDatabase", async services =>
 {
     var runtime = services.GetRequiredService<DatabaseRuntimeInfo>();
     if (!runtime.IsPostgreSql) return;
+    await DbInitializer.EnsureDatabaseExistsAsync(runtime.ConnectionString);
     var configuration = services.GetRequiredService<IConfiguration>();
-    await DbInitializer.EnsureMasterDatabaseAsync(configuration);
+    await DbInitializer.EnsureMasterDatabaseAsync(configuration, runtime.ConnectionString);
 });
 
 // A genuinely empty application database is bootstrapped from the current EF model
@@ -883,7 +882,7 @@ INSERT INTO ""FisNoCounters"" (""Prefix"", ""FirmaId"", ""YilAy"", ""SonNo"")
 SELECT SPLIT_PART(""FisNo"", '-', 1), 0, SPLIT_PART(""FisNo"", '-', 2),
        MAX(CAST(SPLIT_PART(""FisNo"", '-', 3) AS INTEGER))
 FROM ""MuhasebeFisleri""
-WHERE ""FisNo"" ~ '^[A-Z]+-[0-9]{6}-[0-9]{4}$'
+WHERE ""FisNo"" ~ '^[A-Z]+-[0-9]{{6}}-[0-9]{{4}}$'
 GROUP BY SPLIT_PART(""FisNo"", '-', 1), SPLIT_PART(""FisNo"", '-', 2)
 ON CONFLICT (""Prefix"", ""FirmaId"", ""YilAy"")
 DO UPDATE SET ""SonNo"" = GREATEST(""FisNoCounters"".""SonNo"", EXCLUDED.""SonNo"");");
@@ -995,6 +994,17 @@ await RunScopedSafeAsync(app, "SeedAdmin", async services =>
     var kullaniciService = services.GetRequiredService<IKullaniciService>();
     await kullaniciService.SeedAdminAsync();
 });
+
+// Sabit test/test123 hesabı yalnızca yerel Development SQLite veritabanında oluşturulur.
+// Üretim kurulumlarına tahmin edilebilir parola eklenmez; mevcut hesap hiçbir zaman sıfırlanmaz.
+if (app.Environment.IsDevelopment() && string.Equals(dbProvider, "SQLite", StringComparison.OrdinalIgnoreCase))
+{
+    await RunScopedSafeAsync(app, "DevelopmentTestUserSeed", async services =>
+    {
+        var kullaniciService = services.GetRequiredService<IKullaniciService>();
+        await kullaniciService.SeedDevelopmentTestUserAsync();
+    });
+}
 
 // LisansSeed kaldirildi — LicenseService.ValidateAsync() ilk cagrildiginda otomatik demo olusturur
 

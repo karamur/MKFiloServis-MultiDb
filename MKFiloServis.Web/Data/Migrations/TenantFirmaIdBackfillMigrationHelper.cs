@@ -44,6 +44,9 @@ public static class TenantFirmaIdBackfillMigrationHelper
 
     public static async Task BackfillAsync(ApplicationDbContext context, ILogger logger)
     {
+        var executionStrategy = context.Database.CreateExecutionStrategy();
+        await executionStrategy.ExecuteAsync(async () =>
+        {
         await using var transaction = await context.Database.BeginTransactionAsync();
 
         // Varsayılan firma id'sini bul. Yoksa hiç firma yok demektir; backfill atlanır
@@ -117,6 +120,7 @@ public static class TenantFirmaIdBackfillMigrationHelper
         }
 
         await transaction.CommitAsync();
+        });
     }
 
     private static async Task<bool> SqliteKolonVarMiAsync(ApplicationDbContext context, string tablo, string kolon)

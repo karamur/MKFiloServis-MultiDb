@@ -103,7 +103,7 @@ if (-not $SkipPublish) {
         dotnet publish $Web -c Release -o "$Payload\Web" /p:Version=$Version /p:UseAppHost=true --nologo | Out-Host
         if ($LASTEXITCODE -ne 0) { throw "Web publish basarisiz." }
 
-        foreach ($relativePath in @('Tests', 'App_Data', 'Backups', 'artifacts', '.artifacts', 'wwwroot\uploads')) {
+        foreach ($relativePath in @('Tests', 'App_Data', 'Backups', 'artifacts', '.artifacts', 'setup\output', 'wwwroot\uploads')) {
             if (Test-Path (Join-Path $Payload "Web\$relativePath")) {
                 throw "Yerel veri/test klasoru publish ciktisinda bulundu: $relativePath"
             }

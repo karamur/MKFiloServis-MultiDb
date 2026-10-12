@@ -22,6 +22,11 @@
         <div class="d-flex gap-2 flex-wrap">
             <input type="text" class="form-control" style="width: 200px;" placeholder="Ad, kod, telefon ara..." 
                    @bind="aramaMetni" @bind:after="FiltreleAsync" />
+            <select class="form-select" style="width: 180px;" @bind="secilenSiralam" aria-label="Personel sıralaması" title="Personeli ada, soyada veya sıra numarasına göre sırala">
+                <option value="sira">Sıra No (Varsayılan)</option>
+                <option value="ad">Ada göre (A-Z)</option>
+                <option value="soyad">Soyada göre (A-Z)</option>
+            </select>
             <select class="form-select" style="width: 160px;" @bind="secilenGorev" @bind:after="FiltreleAsync">
                 <option value="">Tüm Görevler</option>
                 @foreach (PersonelGorev gorev in Enum.GetValues(typeof(PersonelGorev)))
@@ -117,19 +122,7 @@
                             <tr>
                                 <th style="width: 70px;">Sıra No</th>
                                 <th>Personel Kodu</th>
-                                <th aria-sort="@(adSoyadSiralamasiEtkin ? (adSoyadAzalan ? "descending" : "ascending") : "none")">
-                                    <button type="button"
-                                            class="btn btn-link link-light p-0 text-decoration-none"
-                                            @onclick="AdSoyadSiralamasiniDegistir"
-                                            title="Ad ve soyada göre sırala">
-                                        Ad Soyad
-                                        @if (adSoyadSiralamasiEtkin)
-                                        {
-                                            <i class="bi @(adSoyadAzalan ? "bi-sort-alpha-down-alt" : "bi-sort-alpha-down") ms-1" aria-hidden="true"></i>
-                                            <span class="visually-hidden">@(adSoyadAzalan ? "azalan" : "artan") sıralama</span>
-                                        }
-                                    </button>
-                                </th>
+                                <th>Ad Soyad</th>
                                 <th>Görev</th>
                                 <th>Firma / Tedarikçi</th>
                                 <th>Telefon</th>
@@ -465,8 +458,7 @@
     private int secilenFirmaId = 0;
     private int secilenTedarikciId = 0;
     private string secilenPersonelKaynak = "";
-    private bool adSoyadSiralamasiEtkin;
-    private bool adSoyadAzalan;
+    private string secilenSiralam = "sira";
 
     private IEnumerable<Sofor> SiraliPersoneller
     {
@@ -477,22 +469,20 @@
                 System.Globalization.CultureInfo.GetCultureInfo("tr-TR"),
                 ignoreCase: true);
 
-            if (adSoyadSiralamasiEtkin)
+            return secilenSiralam switch
             {
-                return adSoyadAzalan
-                    ? kaynak.OrderByDescending(p => p.Ad ?? "", turkceKarsilastirici)
-                        .ThenByDescending(p => p.Soyad ?? "", turkceKarsilastirici)
-                        .ThenBy(p => p.Id)
-                    : kaynak.OrderBy(p => p.Ad ?? "", turkceKarsilastirici)
-                        .ThenBy(p => p.Soyad ?? "", turkceKarsilastirici)
-                        .ThenBy(p => p.Id);
-            }
-
-            return kaynak
-                .OrderBy(p => p.SiralamaNo == 0 ? int.MaxValue : p.SiralamaNo)
-                .ThenBy(p => p.Ad ?? "", turkceKarsilastirici)
-                .ThenBy(p => p.Soyad ?? "", turkceKarsilastirici)
-                .ThenBy(p => p.Id);
+                "ad" => kaynak
+                    .OrderBy(p => p.Ad ?? "", turkceKarsilastirici)
+                    .ThenBy(p => p.Soyad ?? "", turkceKarsilastirici)
+                    .ThenBy(p => p.Id),
+                "soyad" => kaynak
+                    .OrderBy(p => p.Soyad ?? "", turkceKarsilastirici)
+                    .ThenBy(p => p.Ad ?? "", turkceKarsilastirici)
+                    .ThenBy(p => p.Id),
+                _ => kaynak
+                    .OrderBy(p => p.SiralamaNo == 0 ? int.MaxValue : p.SiralamaNo)
+                    .ThenBy(p => p.Id)
+            };
         }
     }
 
@@ -539,17 +529,6 @@
     {
         secilenAktifDurum = durum;
         UygulaFiltre();
-    }
-
-    private void AdSoyadSiralamasiniDegistir()
-    {
-        if (adSoyadSiralamasiEtkin)
-            adSoyadAzalan = !adSoyadAzalan;
-        else
-        {
-            adSoyadSiralamasiEtkin = true;
-            adSoyadAzalan = false;
-        }
     }
 
     private static IQueryable<Sofor> PersonelListeSorgusu(ApplicationDbContext ctx)

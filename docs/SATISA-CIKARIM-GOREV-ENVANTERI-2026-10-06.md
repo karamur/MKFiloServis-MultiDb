@@ -119,6 +119,13 @@ Kaynak taraması (2026-10-09), doğrudan legacy okuyucuları `BelgeVersiyonServi
 
 ## Değişiklik günlüğü
 
+### 2026-10-12 — güncel satış sayımı ve A-18 temiz kurulum kapısı
+
+- Güncel karar tekleştirildi: **30 yeşil / 0 sarı / 1 kırmızı / 0 beyaz; NO-GO**. A-18, eski müşteri DB yükseltmesi değil, satılacak temiz PostgreSQL/SQLite kurulumunda güncel migration zincirinin kabulidir.
+- EF snapshot'taki bozuk `KoltukSigortasiBaslangiçTarihi` adlandırması düzeltildi; eksik `KilitlenmeBitisUtc` migration'ı eklendi. PostgreSQL migration mevcut geliştirme DB'sindeki kolonu güvenle benimseyip history'ye kaydetti; startup `FinalSchemaParity` geçti ve `has-pending-model-changes` temiz.
+- Bu geliştirme DB'si kanıtı boş PostgreSQL/SQLite temiz kurulum kabulü değildir. A-18 kırmızı ve satış NO-GO kalır. Önceki 2026-10-09/10 tarihli renk ve baseline ifadeleri kendi tarihsel kayıtlarıdır; güncel karar yerine kullanılmamalıdır.
+- Web Release build 0 uyarı/0 hata; v1.0.38 kurulum/güncelleme EXE'leri yeniden üretildi ve hash manifesti güncellendi. İmzalama sertifikası yok, paketler imzasız; otomatik testler bu güncellemede çalıştırılmadı.
+
 ### 2026-10-09 — 17 açık görev için Go/No-Go takvimi ve A-20 düzeltmesi
 
 - 🟢 Son doğrulama güncel çalışma ağacında tekrarlandı: Release çözüm derlemesi **0 uyarı / 0 hata**; otomatik test paketi **137/137 geçti, 0 atlandı**.

@@ -6,6 +6,7 @@
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
 @inject IKullaniciService KullaniciService
+@inject IFirmaService FirmaService
 @inject MKFiloServis.Web.Services.LicenseService LicenseSvc
 @inject IPortalProjectCatalogService PortalProjectCatalogService
 @inject AuthenticationStateProvider AuthenticationStateProvider
@@ -74,7 +75,7 @@
                         </div>
                         <div class="d-flex align-items-start gap-2 mb-2">
                             <span class="badge bg-primary rounded-pill mt-1">2</span>
-                            <span>Bu kodu <strong>yetkili kişiye gönderin</strong></span>
+                            <span>Makine kodunu ve aşağıdaki <strong>firma kodunu birlikte yetkili kişiye gönderin</strong></span>
                         </div>
                         <div class="d-flex align-items-start gap-2">
                             <span class="badge bg-primary rounded-pill mt-1">3</span>
@@ -97,6 +98,26 @@
                             @(_makineKoduKopyalandi ? "Kopyalandı" : "Kopyala")
                         </button>
                     </div>
+                </div>
+
+                <div class="license-machine-code mb-3">
+                    <label class="form-label text-muted small mb-1">Aktif Firma Kodu — lisans bu kodla eşleşmeli</label>
+                    @if (aktifFirmalar.Count == 0)
+                    {
+                        <div class="alert alert-warning py-2 small mb-0">Aktif firma kodu bulunamadı. Firma Yönetimi'nde firmaya benzersiz bir kod verin.</div>
+                    }
+                    else
+                    {
+                        @foreach (var firma in aktifFirmalar)
+                        {
+                            <div class="input-group mb-1" @key="firma.Id">
+                                <input type="text" class="form-control font-monospace" value="@firma.FirmaKodu" readonly aria-label="Firma kodu: @firma.FirmaAdi" />
+                                <button class="btn btn-outline-primary" @onclick="() => FirmaKoduKopyalaAsync(firma.FirmaKodu)">Kopyala</button>
+                            </div>
+                            <small class="text-muted d-block mb-2">@firma.FirmaAdi</small>
+                        }
+                        <small class="text-muted">Lisans firma adıyla değil, firma koduyla eşleştirilir. Yenilenecek anahtarda yukarıdaki kodlardan biri kullanılmalıdır.</small>
+                    }
                 </div>
 
                 @* Lisans girişi *@
@@ -571,6 +592,7 @@
     // Lisans kontrol alanlari
     private bool lisansSuresiDoldu = false;
     private string makineKodu = "";
+    private List<MKFiloServis.Shared.Entities.Firma> aktifFirmalar = new();
     private string yeniLisansAnahtari = "";
     private string? lisansHataMesaji;
     private string? lisansBasariMesaji;
@@ -591,6 +613,18 @@
         // Lisans gecerlilik kontrolu
         // Gecerli demo lisansi da normal giris akisina izin verir.
         makineKodu = LicenseService.GetMachineId();
+        if (lisans is null || LicenseService.IsDemoExpired(lisans) || DateTime.UtcNow > lisans.ExpireDate)
+        {
+            try
+            {
+                aktifFirmalar = await FirmaService.GetAktifFirmalarAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Lisans ekranı için aktif firma kodları yüklenemedi.");
+            }
+        }
+
         if (lisans == null)
         {
             lisansSuresiDoldu = true;
@@ -985,6 +1019,12 @@
         {
             Logger.LogDebug(ex, "Login makine kodu panoya kopyalanirken hata olustu");
         }
+    }
+
+    private async Task FirmaKoduKopyalaAsync(string firmaKodu)
+    {
+        if (string.IsNullOrWhiteSpace(firmaKodu)) return;
+        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", firmaKodu);
     }
 
     private sealed class RememberedLoginInfo

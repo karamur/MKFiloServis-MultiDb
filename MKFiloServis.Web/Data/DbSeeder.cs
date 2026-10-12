@@ -13,6 +13,7 @@ public static class DbSeeder
         {
             var firma = new Firma
             {
+                FirmaKodu = "ANA",
                 FirmaAdi = "Ana Firma",
                 VergiDairesi = "Merkez VD",
                 VergiNo = "1234567890",
@@ -28,6 +29,15 @@ public static class DbSeeder
             context.Firmalar.Add(firma);
             await context.SaveChangesAsync();
         }
+
+        var seedFirmaId = await context.Firmalar.IgnoreQueryFilters()
+            .Where(firma => firma.VarsayilanFirma && firma.Aktif)
+            .Select(firma => (int?)firma.Id)
+            .FirstOrDefaultAsync()
+            ?? await context.Firmalar.IgnoreQueryFilters()
+                .Select(firma => (int?)firma.Id)
+                .FirstOrDefaultAsync()
+            ?? throw new InvalidOperationException("Varsayılan seed verileri için firma bulunamadı.");
 
         // Roller
         if (!await context.Roller.IgnoreQueryFilters().AnyAsync())
@@ -215,6 +225,7 @@ public static class DbSeeder
             {
                 new BankaHesap 
                 { 
+                    FirmaId = seedFirmaId,
                     HesapKodu = "KASA01",
                     HesapAdi = "Nakit Kasa", 
                     HesapTipi = HesapTipi.Kasa,
@@ -224,6 +235,7 @@ public static class DbSeeder
                 },
                 new BankaHesap 
                 { 
+                    FirmaId = seedFirmaId,
                     HesapKodu = "BANKA01",
                     HesapAdi = "Ziraat Bankası Ticari Hesap", 
                     HesapTipi = HesapTipi.VadesizHesap,

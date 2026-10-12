@@ -142,6 +142,12 @@ public class DatabaseSettingsService : IDatabaseSettingsService
             NormalizeSettings(settings);
             EnsureSupportedRuntimeProvider(settings.Provider);
 
+            var createdDatabase = false;
+            if (settings.Provider == DatabaseProvider.PostgreSQL)
+            {
+                createdDatabase = await EnsurePostgreSqlDatabaseExistsAsync(settings);
+            }
+
             var testResult = await TestConnectionAsync(settings);
             if (!testResult.Success)
             {
@@ -154,19 +160,75 @@ public class DatabaseSettingsService : IDatabaseSettingsService
             settings.LastTransitionAtUtc = DateTime.UtcNow;
 
             await SaveSettingsAsync(settings);
-            await UpdateAppSettingsAsync(settings);
 
             var providerLabel = settings.GetProviderDisplayName();
-            return (true, $"{providerLabel} ayarlari kaydedildi. Kanonik migration kaynagi PostgreSQL olarak korunur. Uygulamayi yeniden baslatmaniz gerekiyor.");
+            var databaseMessage = createdDatabase
+                ? $" '{settings.DatabaseName}' veritabanı oluşturuldu; uygulama şema migration'larını yeniden başlatmada uygulayacak."
+                : string.Empty;
+            return (true, $"{providerLabel} ayarları kaydedildi.{databaseMessage} Kanonik migration kaynağı PostgreSQL olarak korunur. Tüm uygulama servislerinin bu veritabanını kullanması için uygulamayı yeniden başlatın. Eski veritabanındaki veriler otomatik kopyalanmaz.");
         }
         catch (NotSupportedException ex)
         {
             return (false, ex.Message);
         }
+        catch (PostgresException ex) when (ex.SqlState == "42501")
+        {
+            _logger.LogWarning("PostgreSQL hedef veritabanı oluşturulamadı: CREATE DATABASE yetkisi eksik.");
+            return (false, "Hedef PostgreSQL veritabanı mevcut değil ve bu kullanıcıda CREATE DATABASE yetkisi yok. DBA yetkisiyle veritabanını oluşturun veya yetki verin; ayarlar kaydedilmedi.");
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Veritabanı bağlantı ayarları uygulanamadı.");
             return (false, "Veritabanı ayarları uygulanamadı. Ayrıntı için sistem yöneticisine başvurun.");
+        }
+    }
+
+    private static async Task<bool> EnsurePostgreSqlDatabaseExistsAsync(DatabaseSettings settings)
+    {
+        var databaseName = settings.DatabaseName?.Trim();
+        if (string.IsNullOrWhiteSpace(databaseName))
+            throw new InvalidOperationException("PostgreSQL veritabanı adı boş olamaz.");
+        if (Encoding.UTF8.GetByteCount(databaseName) > 63 || databaseName.Contains('\0'))
+            throw new InvalidOperationException("PostgreSQL veritabanı adı 63 UTF-8 baytı aşamaz veya NULL karakter içeremez.");
+
+        var targetConnection = new NpgsqlConnectionStringBuilder
+        {
+            Host = settings.Host,
+            Port = settings.Port,
+            Database = databaseName,
+            Username = settings.Username,
+            Password = settings.Password,
+            Pooling = true,
+            MinPoolSize = 1,
+            MaxPoolSize = 20
+        };
+        var maintenanceConnection = new NpgsqlConnectionStringBuilder(targetConnection.ConnectionString)
+        {
+            Database = "postgres",
+            Pooling = false,
+            MinPoolSize = 0,
+            MaxPoolSize = 1
+        };
+
+        await using var connection = new NpgsqlConnection(maintenanceConnection.ConnectionString);
+        await connection.OpenAsync();
+        await using var existsCommand = new NpgsqlCommand(
+            "SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = @databaseName)", connection);
+        existsCommand.Parameters.AddWithValue("databaseName", databaseName);
+        if (Equals(await existsCommand.ExecuteScalarAsync(), true))
+            return false;
+
+        var quotedName = new NpgsqlCommandBuilder().QuoteIdentifier(databaseName);
+        await using var createCommand = new NpgsqlCommand($"CREATE DATABASE {quotedName}", connection);
+        try
+        {
+            await createCommand.ExecuteNonQueryAsync();
+            return true;
+        }
+        catch (PostgresException ex) when (ex.SqlState == "42P04")
+        {
+            // Another app instance may have created it after the existence check.
+            return false;
         }
     }
 
@@ -180,60 +242,6 @@ public class DatabaseSettingsService : IDatabaseSettingsService
         {
             throw new NotSupportedException(GetUnsupportedProviderMessage(provider));
         }
-    }
-
-    private async Task UpdateAppSettingsAsync(DatabaseSettings settings)
-    {
-        var appSettingsPath = Path.Combine(_env.ContentRootPath, "appsettings.json");
-        var json = await File.ReadAllTextAsync(appSettingsPath);
-        using var doc = JsonDocument.Parse(json);
-
-        using var stream = new MemoryStream();
-        await using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
-        {
-            writer.WriteStartObject();
-            var hasConnectionStrings = false;
-            var hasDatabaseProvider = false;
-
-            foreach (var element in doc.RootElement.EnumerateObject())
-            {
-                if (element.NameEquals("ConnectionStrings"))
-                {
-                    hasConnectionStrings = true;
-                    writer.WritePropertyName("ConnectionStrings");
-                    writer.WriteStartObject();
-                    writer.WriteString("DefaultConnection", settings.GetConnectionString());
-                    writer.WriteEndObject();
-                }
-                else if (element.NameEquals("DatabaseProvider"))
-                {
-                    hasDatabaseProvider = true;
-                    writer.WriteString("DatabaseProvider", settings.GetProviderDisplayName());
-                }
-                else
-                {
-                    element.WriteTo(writer);
-                }
-            }
-
-            if (!hasDatabaseProvider)
-            {
-                writer.WriteString("DatabaseProvider", settings.GetProviderDisplayName());
-            }
-
-            if (!hasConnectionStrings)
-            {
-                writer.WritePropertyName("ConnectionStrings");
-                writer.WriteStartObject();
-                writer.WriteString("DefaultConnection", settings.GetConnectionString());
-                writer.WriteEndObject();
-            }
-
-            writer.WriteEndObject();
-        }
-
-        var newJson = Encoding.UTF8.GetString(stream.ToArray());
-        await File.WriteAllTextAsync(appSettingsPath, newJson);
     }
 
     private async Task<string> WriteTransitionManifestAsync(DatabaseSettings previousSettings, DatabaseSettings nextSettings)

@@ -1,6 +1,10 @@
 # MKFiloServis — Satışa Çıkarım Son Durum ve Açık Görevler
 
-**Son güncelleme:** 2026-10-10
+**Son güncelleme:** 2026-10-12
+
+## Güncel satış kararı — 2026-10-12
+
+**NO-GO:** v1.0.38 satış/kurulum adayı henüz onaylanmadı. 12 Ekimde görülen EF Core `PendingModelChangesWarning` kök nedeni snapshot kodlaması ve eksik lockout expiry migration'ıydı; snapshot düzeltildi, sağlayıcıya uygun yeni migration eklendi, uyarı log seviyesine bastırılmıyor. Web Release build 0 uyarı/0 hata ve EF `has-pending-model-changes` temiz; mevcut geliştirme PostgreSQL migration'ı ve final schema parity başarılı, boş PostgreSQL/SQLite temiz DB kabulü henüz yapılmadı. Kurulum/güncelleme EXE'leri son migration düzeltmesini içerecek şekilde yeniden üretildi ve SHA-256 manifesti oluşturuldu; imzasızdır ve bu makinede özel anahtarlı Code Signing sertifikası bulunamadı. Analiz anında kaynak ağacında 26 değiştirilmiş/kayıtsız yol vardı. Sabitlenmiş kaynak, imza ve zorunlu saha Go/No-Go senaryoları tamamlanmadan eski görev renkleri genel satış onayı sayılmaz. Ayrıntı ve kapanış adımları [2026-10-12 satışa hazırlık analizinde](SATISA-HAZIRLIK-ANALIZI-2026-10-12.md) ve [renkli yapılacaklar listesinde](../SATIS_HAZIRLIK.md).
 
 **Esas:** Kaynak teslim commit'i ve yerel doğrulama; müşteri dağıtımı yapılmış sayılmaz.
 

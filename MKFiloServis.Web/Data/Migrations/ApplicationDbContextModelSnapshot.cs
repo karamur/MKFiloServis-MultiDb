@@ -274,7 +274,7 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.Property<int>("KoltukSayisi")
                         .HasColumnType("integer");
 
-                    b.Property<DateTime?>("KoltukSigortasiBaslangiÃ§Tarihi")
+                    b.Property<DateTime?>("KoltukSigortasiBaslangiçTarihi")
                         .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("KoltukSigortasiBitisTarihi")
@@ -724,9 +724,9 @@ namespace MKFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DosyaYolu");
-
                     b.HasIndex("AracEvrakId");
+
+                    b.HasIndex("DosyaYolu");
 
                     b.HasIndex("FirmaId");
 
@@ -790,9 +790,9 @@ namespace MKFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DosyaYolu");
-
                     b.HasIndex("AracEvrakDosyaId");
+
+                    b.HasIndex("DosyaYolu");
 
                     b.HasIndex("OlusturanKullaniciId");
 
@@ -1290,8 +1290,8 @@ namespace MKFiloServis.Web.Data.Migrations
 
                     b.HasIndex("AracId", "Yil", "Ay")
                         .IsUnique()
-                        .HasFilter("\"IsDeleted\" = false")
-                        .HasDatabaseName("IX_AracMaliyetSnapshot_Arac_Donem");
+                        .HasDatabaseName("IX_AracMaliyetSnapshot_Arac_Donem")
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("AracMaliyetSnapshotlari");
                 });
@@ -2374,10 +2374,18 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.Property<int>("IslemKaynak")
                         .HasColumnType("integer");
 
+                    b.Property<string>("IslemKimligi")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string>("IslemNo")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
+
+                    b.Property<string>("IslemOzeti")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<DateTime>("IslemTarihi")
                         .HasColumnType("timestamp without time zone");
@@ -2434,6 +2442,9 @@ namespace MKFiloServis.Web.Data.Migrations
 
                     b.HasIndex("FirmaId");
 
+                    b.HasIndex("IslemKimligi")
+                        .IsUnique();
+
                     b.HasIndex("IslemNo")
                         .IsUnique();
 
@@ -2448,10 +2459,6 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.HasIndex("HareketTipi", "IslemTarihi");
 
                     b.HasIndex("PersonelCebindenId", "PersoneleOdendi");
-
-                    b.Property<string>("IslemKimligi").HasMaxLength(32).HasColumnType("character varying(32)");
-                    b.Property<string>("IslemOzeti").HasMaxLength(64).HasColumnType("character varying(64)");
-                    b.HasIndex("IslemKimligi").IsUnique();
 
                     b.ToTable("BankaKasaHareketleri");
                 });
@@ -4454,9 +4461,9 @@ namespace MKFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DosyaYolu");
-
                     b.HasIndex("DestekTalebiId");
+
+                    b.HasIndex("DosyaYolu");
 
                     b.HasIndex("YanitId");
 
@@ -5494,10 +5501,6 @@ namespace MKFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("PdfDosyaYolu");
-
-                    b.HasIndex("XmlDosyaYolu");
-
                     b.HasIndex("AracId");
 
                     b.HasIndex("EslesenFaturaId");
@@ -5505,6 +5508,10 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.HasIndex("FaturaTarihi");
 
                     b.HasIndex("KarsiFirmaId");
+
+                    b.HasIndex("PdfDosyaYolu");
+
+                    b.HasIndex("XmlDosyaYolu");
 
                     b.HasIndex("CariId", "FaturaTarihi");
 
@@ -5561,17 +5568,13 @@ namespace MKFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("FirmaId");
-
-                    b.HasIndex("FirmaId")
+                    b.HasIndex(new[] { "FirmaId" }, "IX_FaturaGrupSablonlari_FirmaId_FirmaVarsayilan")
                         .IsUnique()
-                        .HasFilter("\"IsDeleted\" = false AND \"VarsayilanMi\" = true AND \"KullaniciId\" IS NULL")
-                        .HasDatabaseName("IX_FaturaGrupSablonlari_FirmaId_FirmaVarsayilan");
+                        .HasFilter("\"IsDeleted\" = false AND \"VarsayilanMi\" = true AND \"KullaniciId\" IS NULL");
 
-                    b.HasIndex("FirmaId", "KullaniciId")
+                    b.HasIndex(new[] { "FirmaId", "KullaniciId" }, "IX_FaturaGrupSablonlari_FirmaId_KullaniciId_Varsayilan")
                         .IsUnique()
-                        .HasFilter("\"IsDeleted\" = false AND \"VarsayilanMi\" = true AND \"KullaniciId\" IS NOT NULL")
-                        .HasDatabaseName("IX_FaturaGrupSablonlari_FirmaId_KullaniciId_Varsayilan");
+                        .HasFilter("\"IsDeleted\" = false AND \"VarsayilanMi\" = true AND \"KullaniciId\" IS NOT NULL");
 
                     b.ToTable("FaturaGrupSablonlari");
                 });
@@ -5907,12 +5910,9 @@ namespace MKFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("FirmaId");
-
-                    b.HasIndex("FirmaId")
+                    b.HasIndex(new[] { "FirmaId" }, "IX_FaturaSablonlari_FirmaId_Varsayilan")
                         .IsUnique()
-                        .HasFilter("\"IsDeleted\" = false AND \"Varsayilan\" = true")
-                        .HasDatabaseName("IX_FaturaSablonlari_FirmaId_Varsayilan");
+                        .HasFilter("\"IsDeleted\" = false AND \"Varsayilan\" = true");
 
                     b.ToTable("FaturaSablonlari");
                 });
@@ -6141,10 +6141,6 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.Property<string>("DosyaHash")
                         .HasColumnType("text");
 
-                    b.Property<string>("IthalatTekillikAnahtari")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
                     b.Property<int>("FirmaId")
                         .HasColumnType("integer");
 
@@ -6156,6 +6152,10 @@ namespace MKFiloServis.Web.Data.Migrations
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("IthalatTekillikAnahtari")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<int>("KarsiHesapId")
                         .HasColumnType("integer");
@@ -6188,11 +6188,11 @@ namespace MKFiloServis.Web.Data.Migrations
 
                     b.HasIndex("KarsiHesapId");
 
-                    b.HasIndex("FirmaId", "Tarih");
-
                     b.HasIndex("FirmaId", "IthalatTekillikAnahtari")
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false AND \"IthalatTekillikAnahtari\" IS NOT NULL");
+
+                    b.HasIndex("FirmaId", "Tarih");
 
                     b.ToTable("FinansHareketler");
                 });
@@ -8600,6 +8600,9 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<DateTime?>("KilitlenmeBitisUtc")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<bool>("Kilitli")
                         .HasColumnType("boolean");
 
@@ -10858,6 +10861,14 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("IslemKimligi")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("IslemOzeti")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("MahsupAciklamasi")
                         .HasColumnType("text");
 
@@ -10882,21 +10893,14 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp without time zone");
 
-                    b.Property<string>("IslemKimligi")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("IslemOzeti")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.HasIndex("IslemKimligi").IsUnique();
-
                     b.HasKey("Id");
 
                     b.HasIndex("BankaHesapId");
 
                     b.HasIndex("FirmaId");
+
+                    b.HasIndex("IslemKimligi")
+                        .IsUnique();
 
                     b.HasIndex("MuhasebeFisId");
 
@@ -10934,6 +10938,14 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("IslemKimligi")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("IslemOzeti")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<int?>("MaasId")
                         .HasColumnType("integer");
 
@@ -10949,21 +10961,14 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp without time zone");
 
-                    b.Property<string>("IslemKimligi")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("IslemOzeti")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.HasIndex("IslemKimligi").IsUnique();
-
                     b.HasKey("Id");
 
                     b.HasIndex("AvansId");
 
                     b.HasIndex("BankaHesapId");
+
+                    b.HasIndex("IslemKimligi")
+                        .IsUnique();
 
                     b.HasIndex("MaasId");
 
@@ -11012,6 +11017,14 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("IslemKimligi")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("IslemOzeti")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<int?>("MuhasebeFisId")
                         .HasColumnType("integer");
 
@@ -11036,21 +11049,14 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp without time zone");
 
-                    b.Property<string>("IslemKimligi")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("IslemOzeti")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.HasIndex("IslemKimligi").IsUnique();
-
                     b.HasKey("Id");
 
                     b.HasIndex("BankaHesapId");
 
                     b.HasIndex("FirmaId");
+
+                    b.HasIndex("IslemKimligi")
+                        .IsUnique();
 
                     b.HasIndex("MuhasebeFisId");
 
@@ -11088,6 +11094,14 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("IslemKimligi")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("IslemOzeti")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<int?>("MuhasebeFisId")
                         .HasColumnType("integer");
 
@@ -11103,21 +11117,14 @@ namespace MKFiloServis.Web.Data.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp without time zone");
 
-                    b.Property<string>("IslemKimligi")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("IslemOzeti")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.HasIndex("IslemKimligi").IsUnique();
-
                     b.HasKey("Id");
 
                     b.HasIndex("BankaHesapId");
 
                     b.HasIndex("BorcId");
+
+                    b.HasIndex("IslemKimligi")
+                        .IsUnique();
 
                     b.HasIndex("MuhasebeFisId");
 
@@ -12195,13 +12202,13 @@ namespace MKFiloServis.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("PdfDosyaYolu");
-
                     b.HasIndex("CariId");
 
                     b.HasIndex("FaturaId");
 
                     b.HasIndex("FirmaId");
+
+                    b.HasIndex("PdfDosyaYolu");
 
                     b.HasIndex("ProformaNo")
                         .IsUnique();

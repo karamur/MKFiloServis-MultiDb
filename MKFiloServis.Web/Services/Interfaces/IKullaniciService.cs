@@ -43,6 +43,7 @@ public interface IKullaniciService
     
     // Seed
     Task SeedAdminAsync();
+    Task SeedDevelopmentTestUserAsync();
 }
 
 public class KullaniciGirisSonuc

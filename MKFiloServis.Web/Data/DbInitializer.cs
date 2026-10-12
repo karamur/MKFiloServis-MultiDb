@@ -16,10 +16,14 @@ public static class DbInitializer
     private const string UniqueMonthlyPayrollSnapshotMigrationId = "20261006192000_AddUniqueMonthlyPayrollSnapshotIndex";
     private const string UniqueDefaultInvoiceTemplatesMigrationId = "20261006194000_AddUniqueDefaultInvoiceTemplateIndexes";
 
-    public static async Task EnsureMasterDatabaseAsync(IConfiguration configuration)
+    public static async Task EnsureDatabaseExistsAsync(string selectedConnectionString)
     {
-        var masterConnStr = configuration.GetConnectionString("MasterConnection")
-            ?? configuration.GetConnectionString("DefaultConnection");
+        await EnsurePostgreSqlDatabaseExistsAsync(selectedConnectionString);
+    }
+
+    public static async Task EnsureMasterDatabaseAsync(IConfiguration configuration, string selectedRuntimeConnectionString)
+    {
+        var masterConnStr = configuration.GetConnectionString("MasterConnection") ?? selectedRuntimeConnectionString;
         if (string.IsNullOrWhiteSpace(masterConnStr)) return;
 
         // SQLite veya PostgreSQL olmayan bağlantı dizileri için atla
@@ -34,19 +38,23 @@ public static class DbInitializer
         // Master DB'yi olustur (postgres DB'sine baglanarak)
         var serverConnStr = new NpgsqlConnectionStringBuilder(masterConnStr)
         {
-            Database = "postgres"
+            Database = "postgres",
+            Pooling = false,
+            MinPoolSize = 0,
+            MaxPoolSize = 1
         }.ConnectionString;
 
         await using var serverConn = new NpgsqlConnection(serverConnStr);
         await serverConn.OpenAsync();
 
-        var checkDbSql = $"SELECT 1 FROM pg_database WHERE datname = '{masterDbName}'";
-        await using var checkCmd = new NpgsqlCommand(checkDbSql, serverConn);
+        await using var checkCmd = new NpgsqlCommand("SELECT 1 FROM pg_database WHERE datname = @databaseName", serverConn);
+        checkCmd.Parameters.AddWithValue("databaseName", masterDbName);
         var dbExists = await checkCmd.ExecuteScalarAsync() != null;
 
         if (!dbExists)
         {
-            await using var createCmd = new NpgsqlCommand($"CREATE DATABASE \"{masterDbName}\"", serverConn);
+            var quotedDatabaseName = new NpgsqlCommandBuilder().QuoteIdentifier(masterDbName);
+            await using var createCmd = new NpgsqlCommand($"CREATE DATABASE {quotedDatabaseName}", serverConn);
             await createCmd.ExecuteNonQueryAsync();
             Console.WriteLine($"[MasterDb] '{masterDbName}' veritabani olusturuldu.");
         }
@@ -183,12 +191,50 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
         Console.WriteLine("[MasterDb] Tablolar kontrol edildi / olusturuldu.");
 
         // Veri kopyala: Mevcut shared DB'deki verileri Master DB'ye tasi
-        await CopyMasterDataFromSharedAsync(masterConnStr, configuration);
+        await CopyMasterDataFromSharedAsync(masterConnStr, selectedRuntimeConnectionString);
     }
 
-    private static async Task CopyMasterDataFromSharedAsync(string masterConnStr, IConfiguration configuration)
+    private static async Task EnsurePostgreSqlDatabaseExistsAsync(string connectionString)
     {
-        var sharedConnStr = configuration.GetConnectionString("DefaultConnection");
+        if (string.IsNullOrWhiteSpace(connectionString))
+            throw new InvalidOperationException("PostgreSQL bağlantı dizesi boş.");
+
+        var target = new NpgsqlConnectionStringBuilder(connectionString);
+        var databaseName = target.Database;
+        if (string.IsNullOrWhiteSpace(databaseName)
+            || System.Text.Encoding.UTF8.GetByteCount(databaseName) > 63
+            || databaseName.Contains('\0'))
+            throw new InvalidOperationException("PostgreSQL veritabanı adı geçersiz.");
+
+        var maintenance = new NpgsqlConnectionStringBuilder(target.ConnectionString)
+        {
+            Database = "postgres",
+            Pooling = false,
+            MinPoolSize = 0,
+            MaxPoolSize = 1
+        };
+        await using var connection = new NpgsqlConnection(maintenance.ConnectionString);
+        await connection.OpenAsync();
+        await using var existsCommand = new NpgsqlCommand(
+            "SELECT 1 FROM pg_database WHERE datname = @databaseName", connection);
+        existsCommand.Parameters.AddWithValue("databaseName", databaseName);
+        if (await existsCommand.ExecuteScalarAsync() is not null)
+            return;
+
+        var quotedName = new NpgsqlCommandBuilder().QuoteIdentifier(databaseName);
+        await using var createCommand = new NpgsqlCommand($"CREATE DATABASE {quotedName}", connection);
+        try
+        {
+            await createCommand.ExecuteNonQueryAsync();
+        }
+        catch (PostgresException ex) when (ex.SqlState == "42P04")
+        {
+            // Another startup may have created the target after the existence check.
+        }
+    }
+
+    private static async Task CopyMasterDataFromSharedAsync(string masterConnStr, string sharedConnStr)
+    {
         if (string.IsNullOrWhiteSpace(sharedConnStr)) return;
         if (string.Equals(masterConnStr, sharedConnStr, StringComparison.OrdinalIgnoreCase)) return;
 
@@ -353,8 +399,101 @@ CREATE TABLE IF NOT EXISTS ""AppAyarlari"" (
         if (pendingMigrations.Count > 0)
             Console.WriteLine($"Bekleyen migration sayisi: {pendingMigrations.Count}");
         await ApplyPendingMigrationsAsync(context, pendingMigrations);
+        if (context.Database.IsNpgsql())
+            await EnsurePostgreSqlRuntimeSchemaCompatibilityAsync(context);
         await EnsureSqliteBankOperationKeySchemaAsync(context);
         await VerifyCurrentModelParityAsync(context);
+    }
+
+    private static async Task EnsurePostgreSqlRuntimeSchemaCompatibilityAsync(ApplicationDbContext context)
+    {
+        // A few long-lived PostgreSQL installations predate the corresponding model
+        // updates. Complete only additive, data-preserving schema changes; every FK is
+        // checked for orphan rows before it is installed.
+        await context.Database.ExecuteSqlRawAsync(
+            "ALTER TABLE IF EXISTS \"Kullanicilar\" ADD COLUMN IF NOT EXISTS \"KilitlenmeBitisUtc\" timestamp without time zone NULL;");
+
+        await EnsurePostgreSqlForeignKeyAsync(context, "Guzergahlar", "FirmaId", "Firmalar", "Id",
+            "FK_Guzergahlar_Firmalar_FirmaId");
+        await EnsurePostgreSqlForeignKeyAsync(context, "GuzergahSeferleri", "FirmaId", "Firmalar", "Id",
+            "FK_GuzergahSeferleri_Firmalar_FirmaId");
+        await EnsurePostgreSqlForeignKeyAsync(context, "RentACarKaraListeKayitlari", "MusteriId", "Cariler", "Id",
+            "FK_RentACarKaraListeKayitlari_Cariler_MusteriId");
+        await EnsurePostgreSqlForeignKeyAsync(context, "RentACarKaraListeKayitlari", "FirmaId", "Firmalar", "Id",
+            "FK_RentACarKaraListeKayitlari_Firmalar_FirmaId");
+    }
+
+    private static async Task EnsurePostgreSqlForeignKeyAsync(
+        ApplicationDbContext context,
+        string table,
+        string column,
+        string principalTable,
+        string principalColumn,
+        string constraintName)
+    {
+        var connection = context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose) await connection.OpenAsync();
+
+        try
+        {
+            await using var existsCommand = connection.CreateCommand();
+            existsCommand.CommandText = """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pg_constraint c
+                    JOIN pg_attribute child_column
+                      ON child_column.attrelid = c.conrelid AND child_column.attnum = c.conkey[1]
+                    JOIN pg_attribute parent_column
+                      ON parent_column.attrelid = c.confrelid AND parent_column.attnum = c.confkey[1]
+                    WHERE c.contype = 'f'
+                      AND c.conrelid = to_regclass(@table_name)
+                      AND c.confrelid = to_regclass(@principal_table)
+                      AND cardinality(c.conkey) = 1
+                      AND cardinality(c.confkey) = 1
+                      AND child_column.attname = @column_name
+                      AND parent_column.attname = @principal_column);
+                """;
+            AddParameter(existsCommand, "table_name", $"public.\"{table}\"");
+            AddParameter(existsCommand, "principal_table", $"public.\"{principalTable}\"");
+            AddParameter(existsCommand, "column_name", column);
+            AddParameter(existsCommand, "principal_column", principalColumn);
+            if (await existsCommand.ExecuteScalarAsync() is true) return;
+
+            await using var orphanCommand = connection.CreateCommand();
+            orphanCommand.CommandText = $"""
+                SELECT COUNT(*)
+                FROM "{table}" source
+                LEFT JOIN "{principalTable}" target ON target."{principalColumn}" = source."{column}"
+                WHERE source."{column}" IS NOT NULL AND target."{principalColumn}" IS NULL;
+                """;
+            var orphanCount = Convert.ToInt64(await orphanCommand.ExecuteScalarAsync());
+            if (orphanCount > 0)
+                throw new InvalidOperationException(
+                    $"PostgreSQL şema uyumluluğu durduruldu: {table}.{column} alanında {orphanCount} yetim ilişki var; {constraintName} eklenmedi.");
+
+            await using var addCommand = connection.CreateCommand();
+            addCommand.CommandText = $"""
+                ALTER TABLE "{table}"
+                ADD CONSTRAINT "{constraintName}"
+                FOREIGN KEY ("{column}") REFERENCES "{principalTable}" ("{principalColumn}")
+                ON DELETE RESTRICT NOT VALID;
+                ALTER TABLE "{table}" VALIDATE CONSTRAINT "{constraintName}";
+                """;
+            await addCommand.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            if (shouldClose) await connection.CloseAsync();
+        }
+
+        static void AddParameter(DbCommand command, string name, object value)
+        {
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = name;
+            parameter.Value = value;
+            command.Parameters.Add(parameter);
+        }
     }
 
     private static async Task ApplyPendingMigrationsAsync(ApplicationDbContext context, IReadOnlyCollection<string> pendingMigrations)
@@ -514,11 +653,29 @@ ORDER BY tc.table_name, tc.constraint_name, kcu.ordinal_position;";
             .ToList();
 
         var expectedIndexes = modelTables
-            .SelectMany(table => table.Indexes.Select(index => $"{table.Name}|{index.Name}"))
-            .Distinct(StringComparer.OrdinalIgnoreCase);
+            .SelectMany(table => table.Indexes.Select(index => (Table: table.Name, Name: index.Name)))
+            .Distinct()
+            .ToList();
         missing.AddRange(expectedIndexes
-            .Where(index => !actualIndexes.Contains(index))
-            .Select(index => $"index {index.Replace('|', '.') }"));
+            .Where(expectedIndex =>
+            {
+                var expectedName = context.Database.IsNpgsql()
+                    ? TruncatePostgreSqlIdentifier(expectedIndex.Name)
+                    : expectedIndex.Name;
+                var exactKey = $"{expectedIndex.Table}|{expectedName}";
+                if (actualIndexes.Contains(exactKey)) return false;
+
+                // EF marks shortened relational identifiers with '~'; PostgreSQL
+                // stores the same identifier without that marker. Match the stable
+                // prefix on the same table when the provider shortened the name.
+                if (!context.Database.IsNpgsql()) return true;
+                var stablePrefix = expectedName.TrimEnd('~');
+                if (stablePrefix.Length > 62) stablePrefix = stablePrefix[..62];
+                var prefix = $"{expectedIndex.Table}|{stablePrefix}";
+                return !actualIndexes.Any(actualIndex =>
+                    actualIndex.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+            })
+            .Select(index => $"index {index.Table}.{index.Name}"));
 
         var expectedForeignKeySignatures = modelTables
             .SelectMany(table => table.ForeignKeyConstraints.Select(foreignKey =>
@@ -540,6 +697,15 @@ ORDER BY tc.table_name, tc.constraint_name, kcu.ordinal_position;";
                 $"Migration sonrası veritabanı EF model tablo/kolon parity denetimini geçemedi. " +
                 $"Eksik sayısı: {missing.Count}. Örnekler: {sample}. Otomatik DDL yaması uygulanmadı.");
         }
+    }
+
+    private static string TruncatePostgreSqlIdentifier(string identifier)
+    {
+        // PostgreSQL stores identifiers at a maximum of 63 UTF-8 bytes.
+        var length = identifier.Length;
+        while (length > 0 && System.Text.Encoding.UTF8.GetByteCount(identifier.AsSpan(0, length)) > 63)
+            length--;
+        return identifier[..length];
     }
 
     public static async Task<bool> InitializeFreshDatabaseBaselineIfEmptyAsync(ApplicationDbContext context)

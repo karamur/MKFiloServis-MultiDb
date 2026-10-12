@@ -37,7 +37,7 @@ public sealed class GuardBankMovementAuxiliaryTenantLinks : Migration
                 DROP TRIGGER IF EXISTS "TR_A15_BankaKasaHareket_YardimciFirma" ON "BankaKasaHareketleri";
                 DROP TRIGGER IF EXISTS "TR_A15_Arac_Firma_BankaHareketi" ON "Araclar";
                 DROP TRIGGER IF EXISTS "TR_A15_AracMasraf_Firma_BankaHareketi" ON "AracMasraflari";
-                DROP TRIGGER IF EXISTS "TR_A15_Sofor_Firma_BankaHareketi" ON "Soforler";
+                DROP TRIGGER IF EXISTS "TR_A15_Sofor_Firma_BankaHareketi" ON "Personeller";
                 DROP FUNCTION IF EXISTS a15_guard_banka_hareket_yardimci_firma();
                 DROP FUNCTION IF EXISTS a15_guard_arac_firma_banka_hareketi();
                 DROP FUNCTION IF EXISTS a15_guard_arac_masraf_firma_banka_hareketi();
@@ -62,14 +62,14 @@ public sealed class GuardBankMovementAuxiliaryTenantLinks : Migration
     }
 
     private const string PostgresUp = """
-        LOCK TABLE "BankaKasaHareketleri", "Soforler", "Araclar", "AracMasraflari"
+        LOCK TABLE "BankaKasaHareketleri", "Personeller", "Araclar", "AracMasraflari"
         IN SHARE ROW EXCLUSIVE MODE;
 
         DO $a15_aux_preflight$
         BEGIN
             IF EXISTS (
                 SELECT 1 FROM "BankaKasaHareketleri" h
-                LEFT JOIN "Soforler" s ON s."Id" = h."PersonelCebindenId"
+                LEFT JOIN "Personeller" s ON s."Id" = h."PersonelCebindenId"
                 LEFT JOIN "Araclar" a ON a."Id" = h."AracId"
                 LEFT JOIN "AracMasraflari" m ON m."Id" = h."AracMasrafId"
                 LEFT JOIN "BankaKasaHareketleri" mahsup ON mahsup."Id" = h."MahsupHareketId"
@@ -88,7 +88,7 @@ public sealed class GuardBankMovementAuxiliaryTenantLinks : Migration
         DECLARE target_firm integer;
         BEGIN
             IF NEW."PersonelCebindenId" IS NOT NULL THEN
-                SELECT "FirmaId" INTO target_firm FROM "Soforler" WHERE "Id" = NEW."PersonelCebindenId" FOR SHARE;
+                SELECT "FirmaId" INTO target_firm FROM "Personeller" WHERE "Id" = NEW."PersonelCebindenId" FOR SHARE;
                 IF NOT FOUND OR target_firm IS DISTINCT FROM NEW."FirmaId" THEN
                     RAISE EXCEPTION 'A-15: Personel cebinden kaydı farklı firmada.';
                 END IF;
@@ -153,7 +153,7 @@ public sealed class GuardBankMovementAuxiliaryTenantLinks : Migration
             END IF;
             RETURN NEW;
         END $a15_driver$;
-        CREATE TRIGGER "TR_A15_Sofor_Firma_BankaHareketi" BEFORE UPDATE OF "FirmaId" ON "Soforler"
+        CREATE TRIGGER "TR_A15_Sofor_Firma_BankaHareketi" BEFORE UPDATE OF "FirmaId" ON "Personeller"
         FOR EACH ROW EXECUTE FUNCTION a15_guard_sofor_firma_banka_hareketi();
         """;
 
@@ -162,7 +162,7 @@ public sealed class GuardBankMovementAuxiliaryTenantLinks : Migration
         INSERT INTO "__a15_aux_preflight" ("Valid")
         SELECT CASE WHEN EXISTS (
             SELECT 1 FROM "BankaKasaHareketleri" h
-            LEFT JOIN "Soforler" s ON s."Id" = h."PersonelCebindenId"
+            LEFT JOIN "Personeller" s ON s."Id" = h."PersonelCebindenId"
             LEFT JOIN "Araclar" a ON a."Id" = h."AracId"
             LEFT JOIN "AracMasraflari" m ON m."Id" = h."AracMasrafId"
             LEFT JOIN "BankaKasaHareketleri" mahsup ON mahsup."Id" = h."MahsupHareketId"
@@ -181,7 +181,7 @@ public sealed class GuardBankMovementAuxiliaryTenantLinks : Migration
         BEGIN
             SELECT RAISE(ABORT, 'A-15: Personel cebinden kaydı farklı firmada.')
             WHERE NEW."PersonelCebindenId" IS NOT NULL AND NOT EXISTS
-                (SELECT 1 FROM "Soforler" WHERE "Id" = NEW."PersonelCebindenId" AND "FirmaId" IS NEW."FirmaId");
+                (SELECT 1 FROM "Personeller" WHERE "Id" = NEW."PersonelCebindenId" AND "FirmaId" IS NEW."FirmaId");
             SELECT RAISE(ABORT, 'A-15: Araç farklı firmada.')
             WHERE NEW."AracId" IS NOT NULL AND NOT EXISTS
                 (SELECT 1 FROM "Araclar" WHERE "Id" = NEW."AracId" AND "FirmaId" IS NEW."FirmaId");
@@ -204,7 +204,7 @@ public sealed class GuardBankMovementAuxiliaryTenantLinks : Migration
         BEGIN
             SELECT RAISE(ABORT, 'A-15: Personel cebinden kaydı farklı firmada.')
             WHERE NEW."PersonelCebindenId" IS NOT NULL AND NOT EXISTS
-                (SELECT 1 FROM "Soforler" WHERE "Id" = NEW."PersonelCebindenId" AND "FirmaId" IS NEW."FirmaId");
+                (SELECT 1 FROM "Personeller" WHERE "Id" = NEW."PersonelCebindenId" AND "FirmaId" IS NEW."FirmaId");
             SELECT RAISE(ABORT, 'A-15: Araç farklı firmada.')
             WHERE NEW."AracId" IS NOT NULL AND NOT EXISTS
                 (SELECT 1 FROM "Araclar" WHERE "Id" = NEW."AracId" AND "FirmaId" IS NEW."FirmaId");
@@ -239,7 +239,7 @@ public sealed class GuardBankMovementAuxiliaryTenantLinks : Migration
         """;
 
     private const string SqliteDriverUpdate = """
-        CREATE TRIGGER "TR_A15_Sofor_Firma_BankaHareketi" BEFORE UPDATE OF "FirmaId" ON "Soforler"
+        CREATE TRIGGER "TR_A15_Sofor_Firma_BankaHareketi" BEFORE UPDATE OF "FirmaId" ON "Personeller"
         WHEN NEW."FirmaId" IS NOT OLD."FirmaId"
         BEGIN
             SELECT RAISE(ABORT, 'A-15: Banka/Kasa hareketine bağlı personelin firması değiştirilemez.')
