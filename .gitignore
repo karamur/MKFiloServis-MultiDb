@@ -61,6 +61,7 @@ datayedek/
 *.sql
 !MKFiloServis.Shared/Auditing/postgres-write-audit.sql
 !setup/scripts/undo-a15-invoice-cari-repair-20261013.sql
+!setup/scripts/restore-missing-fks-not-valid-20261013.sql
 *.bak
 *.dump
 
