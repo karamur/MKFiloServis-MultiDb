@@ -34,7 +34,7 @@ veya PowerShell ile:
 
 | Parametre | Aciklama |
 |-----------|----------|
-| `-Version` | Dağıtım sürümü (belirtilmesi önerilir; script varsayılanı 1.0.37) |
+| `-Version` | Dağıtım sürümü (belirtilmesi önerilir; script varsayılanı 1.0.39) |
 | `-SkipPublish` | Publish atla, sadece Inno Setup calistir |
 | `-LisansOnly` | Sadece lisans araci EXE'si uret |
 | `-IncludeInternalLicenseTool` | Sunucu paketleriyle birlikte ayrıca dahili lisans aracını üret; müşteri kurulumuna eklemez |
@@ -58,6 +58,9 @@ setup/
 ```
 
 ## Veritabanı ve yerel ayarlar
+
+Ana kurulumun hedefi `C:\MKFiloServis`; IIS uygulama kökü
+`C:\MKFiloServis\app` ve stdout log klasörü `C:\MKFiloServis\app\logs` olur.
 
 Uygulama seçilen sağlayıcıda ortak veritabanı kullanır; firma kapsamı kayıtların
 `FirmaId` bağıyla korunur. Her firma için otomatik ayrı veritabanı oluşturulmaz.
@@ -84,11 +87,16 @@ Ortama özel `appsettings.*.json` dosyaları da Web publish/kurulum paketine al�
 eski payload'da bulunurlarsa `setup/build.ps1` paketlemeyi reddeder. Pakette yalnız
 sır içermeyen temel `appsettings.json` yer alır.
 
-`Jwt__Secret` en az 32 karakterli rastgele üretim sırrıdır. Kurulum paketi bu sırrı
-oluşturmaz veya saklamaz. İlk uygulama başlangıcından önce hedef Windows/IIS
-ortamının onaylı gizli ayar deposunda tanımlanmalıdır. Değeri ZIP'e, `appsettings`
-dosyasına, kaynak depoya veya komut satırına koymayın. Sır yapılandırılmamışsa
-Production uygulaması başlamayı reddeder.
+`Jwt__Secret` en az 32 baytlık rastgele üretim sırrıdır. Tam kurulum sihirbazı bunu
+hedef bilgisayarda üretip yalnız `MKFiloServis` IIS uygulama havuzunun ortam
+değişkenine yazar; mevcut geçerli değeri korur. Sır EXE paketine, `appsettings`
+dosyasına veya komut satırına konmaz. Kurulum, IIS stdout log klasörünü de
+uygulama havuzuna yazılabilir şekilde hazırlar. Daha önce kurulmuş bir bilgisayarı
+düzeltmek için `setup/scripts/configure-iis-startup.ps1` betiğini hedefe kopyalayıp
+yönetici PowerShell'de `powershell -NoProfile -ExecutionPolicy Bypass -File .\configure-iis-startup.ps1 -AppPath 'C:\MKFiloServis\app' -Port 5050 -RestartAppPool`
+komutuyla çalıştırın. Betik mevcut IIS sitesinin HTTP bağını 5050 olarak ayarlar.
+Güncelleme paketi de bu ayarı uygular. Dağıtım klasörüne ayrıca kopyalanır. IIS yapılandırmasına
+erişimi yalnız yetkili yöneticilerle sınırlandırın.
 
 Güncel PC2 geçişi için önce sağlayıcı/bağlantı ayarını oluşturun, onaylı DB yedeğini
 izole hedefe geri yükleyin ve `Jwt__Secret` değerini sağlayın. Boş PostgreSQL ve

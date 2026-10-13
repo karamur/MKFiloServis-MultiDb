@@ -20,7 +20,7 @@ Test veritabanında ayrıca oluşturulmuş, minimum 12 karakterli bir hesap kull
 Uygulama çalışırken aşağıdaki komut kullanılabilir:
 
 ```powershell
-dotnet run --project CRMFiloServis.Web\Tests\PlaywrightSmoke\CRMFiloServis.PlaywrightSmoke.csproj -- http://127.0.0.1:5190
+dotnet run --project CRMFiloServis.Web\Tests\PlaywrightSmoke\CRMFiloServis.PlaywrightSmoke.csproj -- http://127.0.0.1:5050
 ```
 
 ## Ortam değişkenleri

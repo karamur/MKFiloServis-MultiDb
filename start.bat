@@ -23,9 +23,9 @@ if errorlevel 1 (
 
 REM Uygulamayı başlat
 echo Uygulama baslatiliyor...
-echo Web Adresi: http://localhost:5000
+echo Web Adresi: http://localhost:5050
 echo.
-start http://localhost:5000
-dotnet CRMFiloServis.Web.dll
+start http://localhost:5050
+dotnet MKFiloServis.Web.dll --urls http://localhost:5050
 
 pause

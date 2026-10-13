@@ -436,9 +436,9 @@ public class FaturaSablonService : IFaturaSablonService
         var fatura = await context.Faturalar.AsNoTracking()
             .Include(f => f.Cari).Include(f => f.Firma).Include(f => f.FaturaKalemleri)
             .FirstOrDefaultAsync(f => f.Id == faturaId && f.FirmaId == firmaId && !f.IsDeleted);
-        // Eski bozuk ilişkiler farklı firmanın başlık/müşteri/kalem bilgilerini PDF'ye taşımasın.
+        // Fatura ve kalemler seçili firmada kalır; cari farklı firmada olabilir.
         if (fatura == null || fatura.Firma == null || fatura.Firma.IsDeleted ||
-            fatura.Cari == null || fatura.Cari.IsDeleted || fatura.Cari.FirmaId != firmaId ||
+            fatura.Cari == null || fatura.Cari.IsDeleted ||
             fatura.FaturaKalemleri.Any(k => k.FirmaId != firmaId || k.IsDeleted))
             return null;
         return fatura;

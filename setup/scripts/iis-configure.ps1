@@ -1,9 +1,9 @@
-﻿<#
+<#
     MKFiloServis — IIS otomatik yapilandirma (v1.0.2)
     - IIS site + AppPool olusturur/gunceller (idempotent)
     - ACL: IIS AppPool\<SiteName> -> Modify (data/uploads/logs/Backups)
     - iisreset (AspNetCoreModule cache yenilemesi icin)
-    - Port dolu mu kontrol + 3 deneme ile alternatif port (5191, 5192)
+    - Port dolu mu kontrol + 3 deneme ile alternatif port (5051, 5052)
     - Smoke test: http://localhost:<port>
 #>
 [CmdletBinding()]

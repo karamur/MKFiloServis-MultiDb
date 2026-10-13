@@ -1,4 +1,4 @@
-﻿---
+---
 title: "Puantaj Prototip - VERİ SORUNU ÇÖZÜM REHBERİ"
 author: "Claude Copilot"
 date: 2025-01-14
@@ -54,7 +54,7 @@ VALUES
 
 **Seçenek B: Admin Panelinden (Daha Anlaşılır)**
 ```
-1. http://localhost:5190 açılır
+1. http://localhost:5050 açılır
 2. Menü → Müşteri Yönetimi
 3. + Yeni Cari ekle
    - Ad: "TRT Ankara"
@@ -94,7 +94,7 @@ VALUES
 ### **ADIM 2: SAYFAYı YENİLE**
 
 ```
-http://localhost:5190/puantaj/cari-hiyerarsi
+http://localhost:5050/puantaj/cari-hiyerarsi
 
 ❌ F5 basma (Browser cache)
 ✅ Ctrl+Shift+R basma (Hard refresh)

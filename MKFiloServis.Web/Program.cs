@@ -116,7 +116,7 @@ static int UygunPortSec(int baslangicPortu, int denemeSayisi)
 
 if (!hasExplicitUrls && !isIisHosted)
 {
-    var baslangicPortu = 5191;
+    var baslangicPortu = 5050;
     var secilenPort = UygunPortSec(baslangicPortu, 20);
     builder.WebHost.UseUrls($"http://0.0.0.0:{secilenPort}");
     Environment.SetEnvironmentVariable("MKFILOSERVIS_ACTIVE_PORT", secilenPort.ToString());

@@ -134,7 +134,7 @@ Tüm dağıtım paketleri `setup/build.ps1` ile üretilir:
 
 ```powershell
 cd setup
-.\build.ps1 -Version 1.0.30
+.\build.ps1 -Version 1.0.38
 ```
 
 Kurulum paketleri için `setup/README.md` ve `setup/build.ps1` yönergelerini izleyin. Paket türleri, sürüm ve kullanılabilir dağıtım seçenekleri kurulum profiline bağlıdır. Üretim dağıtımından önce veritabanı yedeği, ortam sırları, lisans, ağ erişimi ve geri dönüş planı doğrulanmalıdır.

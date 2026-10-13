@@ -24,7 +24,7 @@
     IIS site ve AppPool adi. Varsayilan: MKFiloServis
 
 .PARAMETER Port
-    Smoke test icin port. Varsayilan: 5190
+    Smoke test icin port. Varsayilan: 5050
 
 .PARAMETER NoBackup
     Veritabani yedegini atla (tavsiye edilmez).
@@ -41,7 +41,7 @@ param(
     [Parameter(Mandatory)] [string] $ZipPath,
     [string] $InstallPath = 'C:\MKFiloServis',
     [string] $SiteName    = 'MKFiloServis',
-    [int]    $Port        = 5190,
+    [int]    $Port        = 5050,
     [switch] $NoBackup,
     [switch] $NoSmokeTest
 )

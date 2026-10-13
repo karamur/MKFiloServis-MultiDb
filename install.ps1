@@ -5,8 +5,8 @@
 param(
     [string]$InstallPath = "C:\Apps\MKFiloServis",
     [string]$ServiceName = "MKFiloServis",
-    [int]$HttpPort = 5000,
-    [int]$HttpsPort = 5001,
+    [int]$HttpPort = 5050,
+    [int]$HttpsPort = 5051,
     [switch]$InstallService,
     [switch]$StartService
 )

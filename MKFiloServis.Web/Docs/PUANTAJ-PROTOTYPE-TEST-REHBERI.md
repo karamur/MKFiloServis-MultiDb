@@ -1,4 +1,4 @@
-﻿---
+---
 title: "Puantaj Hiyerarşi Prototip - Test Rehberi"
 author: "Claude Copilot"
 date: 2025-01-14
@@ -11,9 +11,9 @@ version: "2.0"
 ## 📌 Test Ortamı
 
 ### Server Bilgisi
-- **URL**: http://localhost:5190
+- **URL**: http://localhost:5050
 - **Durumu**: ✅ Çalışıyor
-- **Port**: 5190
+- **Port**: 5050
 - **Environment**: Development
 
 ---
@@ -29,7 +29,7 @@ version: "2.0"
 
 ### **Adım 2: Sayfaya Git**
 ```
-http://localhost:5190/puantaj/cari-hiyerarsi
+http://localhost:5050/puantaj/cari-hiyerarsi
 ```
 
 ### **Adım 3: Test Et**
@@ -47,7 +47,7 @@ http://localhost:5190/puantaj/cari-hiyerarsi
 
 #### ✅ Seviye 1: Sayfa Erişim
 ```
-1. Tarayıcıda açmak: http://localhost:5190
+1. Tarayıcıda açmak: http://localhost:5050
 2. Kontrol Noktaları:
    ✓ Uygulama açılıyor mı?
    ✓ Login gerekli mi?
@@ -56,7 +56,7 @@ http://localhost:5190/puantaj/cari-hiyerarsi
 
 #### ✅ Seviye 2: Rota Erişim
 ```
-1. Adres: http://localhost:5190/puantaj/cari-hiyerarsi
+1. Adres: http://localhost:5050/puantaj/cari-hiyerarsi
 2. Kontrol Noktaları:
    ✓ 404 hatası alınmıyor mu?
    ✓ Sayfa [Authorize] koruması çalışıyor mu?
@@ -122,7 +122,7 @@ cd MKFiloServis.Web/Tests/PlaywrightSmoke
 dotnet run
 
 # Ortam değişkenleriyle
-$env:CRMFILO_BASE_URL = "http://localhost:5190"
+$env:CRMFILO_BASE_URL = "http://localhost:5050"
 $env:CRMFILO_TEST_USER = "<test kullanıcı adı>"
 $env:CRMFILO_TEST_PASSWORD = "<gizli test parolası>"
 dotnet run
@@ -180,7 +180,7 @@ dotnet run
         ↓
 2. Admin panelden veri ekle VEYA SQL çalıştır
         ↓
-3. http://localhost:5190/puantaj/cari-hiyerarsi 'ye gir
+3. http://localhost:5050/puantaj/cari-hiyerarsi 'ye gir
         ↓
 4. Service → GetCariKurumHiyerarsiAsync() çağrılır
         ↓

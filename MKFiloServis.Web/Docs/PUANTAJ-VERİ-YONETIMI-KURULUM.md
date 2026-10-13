@@ -1,4 +1,4 @@
-﻿---
+---
 title: "Puantaj Veri Yönetimi - Kurulum & Veri Giriş Rehberi"
 author: "Claude Copilot"
 date: 2025-01-14
@@ -43,7 +43,7 @@ ApplicationDbContext'te:
 ### **Yöntem 1: Admin Paneli Üzerinden (Kolay) ⭐**
 
 ```
-Adım 1: http://localhost:5190 'ye gir
+Adım 1: http://localhost:5050 'ye gir
 Adım 2: Menü → Müşteri Yönetimi (veya Cari)
 Adım 3: + Yeni Cari oluştur
         - Ad: "TRT Ankara"
@@ -179,13 +179,13 @@ VALUES
 ```powershell
 # 1. DB'ye bağlan (pgAdmin veya psql)
 # 2. Yukarıdaki SQL script'ini çalıştır
-# 3. http://localhost:5190/puantaj/cari-hiyerarsi 'ye gir
+# 3. http://localhost:5050/puantaj/cari-hiyerarsi 'ye gir
 # 4. Veri görünüyor mu kontrol et
 ```
 
 ### **Seçenek B: Admin Paneli ile Gir**
 ```
-1. http://localhost:5190 açık
+1. http://localhost:5050 açık
 2. Menü'nde Cari/Kurum/Araç/Şoför yönetimi ara
 3. Yeni kayıtlar ekle
 4. Puantaj sayfasına geri dön

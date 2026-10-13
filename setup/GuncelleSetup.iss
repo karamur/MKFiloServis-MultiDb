@@ -9,7 +9,7 @@
 #define MyDataSyncExe "MKFiloServis.DataSync.exe"
 
 #ifndef MyAppVersion
-#define MyAppVersion "1.0.37"
+#define MyAppVersion "1.0.39"
 #endif
 
 [Setup]
@@ -57,6 +57,7 @@ Source: "payload\Web\*"; DestDir: "{app}\app"; \
     Excludes: "dbsettings.json,appsettings.json,appsettings.*.json,portalsettings.json,backup_settings.json,cookies.txt,*.db,*.db-shm,*.db-wal,logs\*,uploads\*,Backups\*,keys\*"; \
     Flags: ignoreversion recursesubdirs createallsubdirs; Components: web
 Source: "payload\DataSync\*"; DestDir: "{app}\tools\datasync"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: datasync
+Source: "scripts\configure-iis-startup.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 
 [Code]
 function FindInstallPath(): String;
@@ -117,3 +118,18 @@ end;
 
 procedure InitializeWizard();
 begin WizardForm.Caption := '{#MyAppName} {#MyAppVersion} - Guncelleme Sihirbazi'; end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
+  Params: String;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    Params := ExpandConstant('-NoProfile -ExecutionPolicy Bypass -File "{app}\tools\configure-iis-startup.ps1" -AppPoolName "MKFiloServis" -SiteName "MKFiloServis" -Port 5050 -AppPath "{app}\app" -RestartAppPool');
+    WizardForm.StatusLabel.Caption := 'IIS sitesi 5050 portunda yapilandiriliyor...';
+    if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+      Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+      RaiseException(Format('IIS port ve baslangic ayarlari yapilandirilamadi (%d).', [ResultCode]));
+  end;
+end;

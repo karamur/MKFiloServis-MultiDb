@@ -19,7 +19,7 @@
 #define MyIisPort        "5050"
 
 #ifndef MyAppVersion
-#define MyAppVersion "1.0.37"
+#define MyAppVersion "1.0.39"
 #endif
 
 #define MyVersionToken StringChange(MyAppVersion, ".", "_")
@@ -72,6 +72,7 @@ Source: "payload\DataSync\*"; DestDir: "{app}\tools\datasync"; Flags: ignorevers
 
 ; ASP.NET Core Hosting Bundle (gomulu; hedef makinede internet gerekmez)
 Source: "payload\redist\dotnet-hosting-win.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
+Source: "scripts\configure-iis-startup.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 
 [Dirs]
 Name: "{app}\data"; Permissions: users-modify
@@ -89,7 +90,7 @@ Name: "{group}\{#MyShortcutName} - Kaldir"; Filename: "{uninstallexe}"
 Name: "{commondesktop}\{#MyShortcutName}"; Filename: "{app}\app\{#MyAppExeName}"; WorkingDir: "{app}\app"
 
 [Run]
-Filename: "{app}\app\{#MyAppExeName}"; Description: "Uygulamayi Baslat"; Flags: nowait postinstall skipifsilent; WorkingDir: "{app}\app"
+Filename: "http://localhost:{#MyIisPort}"; Description: "Uygulamayi Tarayicida Ac"; Flags: shellexec nowait postinstall skipifsilent
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\app\wwwroot\_framework"
@@ -189,7 +190,7 @@ begin
     FindClose(FindRec);
 end;
 
-procedure RunHidden(const FileName, Params, StatusMsg: String);
+procedure RunHiddenEx(const FileName, Params, StatusMsg: String; IgnoreAlreadyExists: Boolean);
 var
   ResultCode: Integer;
 begin
@@ -197,8 +198,18 @@ begin
   if not Exec(FileName, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
     RaiseException('Gerekli kurulum komutu baslatilamadi: ' + FileName);
   Log(Format('RunHidden: %s %s -> %d', [FileName, Params, ResultCode]));
-  if ResultCode <> 0 then
-    RaiseException(Format('Kurulum komutu basarisiz oldu (%d): %s', [ResultCode, FileName]));
+  if (ResultCode <> 0) and not (IgnoreAlreadyExists and (ResultCode = 183)) then
+    RaiseException(Format('Kurulum komutu basarisiz oldu (%d): %s. Asama: %s', [ResultCode, FileName, StatusMsg]));
+end;
+
+procedure RunHidden(const FileName, Params, StatusMsg: String);
+begin
+  RunHiddenEx(FileName, Params, StatusMsg, False);
+end;
+
+procedure RunHiddenAllowAlreadyExists(const FileName, Params, StatusMsg: String);
+begin
+  RunHiddenEx(FileName, Params, StatusMsg, True);
 end;
 
 procedure ConfigureIIS();
@@ -225,14 +236,23 @@ begin
   AppCmd := ExpandConstant('{sys}\inetsrv\appcmd.exe');
   if not FileExists(AppCmd) then
     RaiseException('IIS appcmd.exe bulunamadi; kurulum tamamlanamadi.');
-  RunHidden(AppCmd, 'add apppool /name:"{#MyIisAppPool}" /managedRuntimeVersion:"" /startMode:AlwaysRunning',
+  RunHiddenAllowAlreadyExists(AppCmd, 'add apppool /name:"{#MyIisAppPool}" /managedRuntimeVersion:"" /startMode:AlwaysRunning',
     'IIS uygulama havuzu olusturuluyor...');
-  RunHidden(AppCmd, ExpandConstant('add site /name:"{#MyIisSiteName}" /physicalPath:"{app}\app" /bindings:http/*:{#MyIisPort}:'),
+  RunHidden(AppCmd, 'set apppool /apppool.name:"{#MyIisAppPool}" /managedRuntimeVersion:"" /startMode:AlwaysRunning /processModel.identityType:ApplicationPoolIdentity /enable32BitAppOnWin64:false',
+    'IIS uygulama havuzu yapilandiriliyor...');
+  RunHiddenAllowAlreadyExists(AppCmd, ExpandConstant('add site /name:"{#MyIisSiteName}" /physicalPath:"{app}\app" /bindings:http/*:{#MyIisPort}:'),
     'IIS sitesi olusturuluyor...');
   RunHidden(AppCmd, 'set site /site.name:"{#MyIisSiteName}" /[path=''/''].applicationPool:"{#MyIisAppPool}"',
     'IIS sitesi yapilandiriliyor...');
   RunHidden(AppCmd, ExpandConstant('set vdir "{#MyIisSiteName}/" /physicalPath:"{app}\app"'),
     'IIS fiziksel yol guncelleniyor...');
+end;
+
+procedure StartIIS();
+var
+  AppCmd: String;
+begin
+  AppCmd := ExpandConstant('{sys}\inetsrv\appcmd.exe');
   RunHidden(AppCmd, 'start apppool /apppool.name:"{#MyIisAppPool}"', 'Uygulama havuzu baslatiliyor...');
   RunHidden(AppCmd, 'start site /site.name:"{#MyIisSiteName}"', 'Site baslatiliyor...');
 end;
@@ -245,7 +265,7 @@ begin
   SettingsPath := ExpandConstant('{app}\app\dbsettings.json');
   IisIdentity := 'IIS AppPool\{#MyIisAppPool}';
   if not Exec(ExpandConstant('{sys}\icacls.exe'),
-      '"' + SettingsPath + '" /inheritance:r /grant "SYSTEM:F" "BUILTIN\Administrators:F" "' + IisIdentity + ':R"',
+      '"' + SettingsPath + '" /inheritance:r /grant "*S-1-5-18:F" "*S-1-5-32-544:F" "' + IisIdentity + ':R"',
       '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
     RaiseException('Veritabani ayar dosyasinin erisim izinleri sinirlanamadi. Kurulum guvenli sekilde durduruldu.');
 
@@ -301,8 +321,12 @@ begin
       RaiseException('dbsettings.json dosyasi yazilamadi: ' + SettingsPath);
     if DbProviderPage.SelectedValueIndex = 1 then
       ForceDirectories(ExpandConstant('{app}\app\App_Data'));
-    ConfigureDatabaseFilePermissions(DbProviderPage.SelectedValueIndex);
     ConfigureIIS();
+    ConfigureDatabaseFilePermissions(DbProviderPage.SelectedValueIndex);
+    RunHidden(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+      ExpandConstant('-NoProfile -ExecutionPolicy Bypass -File "{app}\tools\configure-iis-startup.ps1" -AppPoolName "{#MyIisAppPool}" -SiteName "{#MyIisSiteName}" -Port {#MyIisPort} -AppPath "{app}\app"'),
+      'IIS baslangic sirri ve log klasoru yapilandiriliyor...');
+    StartIIS();
   end;
 end;
 

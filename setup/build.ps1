@@ -28,7 +28,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $Version = '1.0.37',
+    [string] $Version = '1.0.39',
     [switch] $SkipPublish,
     [switch] $LisansOnly,
     [switch] $IncludeInternalLicenseTool
@@ -124,8 +124,8 @@ if (-not $SkipPublish) {
             }
         }
 
-        # JWT özel anahtarını ortak kurulum paketine koyma. Her müşteri kurulumunda
-        # Jwt__Secret dağıtım ortamının gizli ayar deposundan ayrıca sağlanmalıdır.
+        # JWT özel anahtarını ortak kurulum paketine koyma. Tam kurulum sihirbazı
+        # hedef bilgisayardaki IIS havuzu için rastgele bir anahtar üretir.
     }
 
     if ($BuildLicenseTool) {
@@ -188,8 +188,9 @@ New-Item -ItemType Directory -Force $Output | Out-Null
 Write-Host "Output klasoru : $Output" -ForegroundColor DarkGray
 
 if (-not $LisansOnly) {
+    Copy-Item (Join-Path $Root 'scripts\configure-iis-startup.ps1') (Join-Path $Output 'configure-iis-startup.ps1') -Force
     Write-Host "[4/7] Inno Setup - Ana paket..." -ForegroundColor Green
-    & $IsccExe "/DMyAppVersion=$Version" "/DOutputDir=$Output" "/DMyInstallDirBase=C:\MKFiloServis_ustun" "/DMyBackupDirBase=C:\MKFiloServis_yedekleme_ustun" (Join-Path $Root 'Setup.iss')
+    & $IsccExe "/DMyAppVersion=$Version" "/DOutputDir=$Output" (Join-Path $Root 'Setup.iss')
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup (Setup.iss) basarisiz." }
 
     Write-Host "[5/7] Inno Setup - Guncelleme paketi..." -ForegroundColor Green

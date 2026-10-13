@@ -11,7 +11,7 @@ Bu prosedürler, Blazor tabanlı `CRMFiloServis.Web` uygulamasında login, yetki
 3. `Beni Hatırla` işaretliyken çıkış sonrası kullanıcı adı tekrar doldurulur.
 
 ## Yerel çalışma notu
-Bu testler GitHub'a göndermeden yerelde çalıştırılabilir. Testler uygulama `http://127.0.0.1:5190` üzerinde açık değilse uygulamayı kendisi başlatmayı dener.
+Bu testler GitHub'a göndermeden yerelde çalıştırılabilir. Testler uygulama `http://127.0.0.1:5050` üzerinde açık değilse uygulamayı kendisi başlatmayı dener.
 
 ## Test kullanıcısı
 Test veritabanında ayrıca oluşturulmuş, minimum 12 karakterli bir hesap kullanın. Uygulama varsayılan test hesabı oluşturmaz.
