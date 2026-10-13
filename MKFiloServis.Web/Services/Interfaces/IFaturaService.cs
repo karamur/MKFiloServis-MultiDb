@@ -35,6 +35,7 @@ public interface IFaturaService
     Task<EFaturaImportResult> ImportFromXmlAsync(List<XmlFileContent> xmlFiles, FaturaYonu yon, int? firmaId = null, EFaturaTipi? eFaturaTipi = null);
     Task<EFaturaImportResult> ImportFromXmlWithPdfAsync(List<XmlPdfFileContent> files, FaturaYonu yon, int? firmaId = null, EFaturaTipi? eFaturaTipi = null);
     Task<bool> UploadFaturaPdfAsync(int faturaId, string fileName, byte[] pdfContent);
+    Task<bool> UploadFaturaXmlAsync(int faturaId, string fileName, byte[] xmlContent);
     Task<FaturaStoredFile?> GetFaturaDosyaAsync(int faturaId, FaturaDosyaTuru dosyaTuru);
 
     // Excel Sablon ve Export - Yeni format (ornek dosya ile uyumlu)

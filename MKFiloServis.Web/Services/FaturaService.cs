@@ -31,6 +31,23 @@ public class FaturaService : IFaturaService
         _legacyFileCleanupService = legacyFileCleanupService;
     }
 
+    // Fatura sorgusu tenant filtresini uygular. Yalnız görülebilen faturaların
+    // bağlı carilerini ayrıca yükle: arşivlenmiş veya başka firmadaki cari,
+    // zorunlu INNER JOIN yüzünden faturayı listeden düşürmemelidir.
+    private static async Task AttachReferencedCarisAsync(ApplicationDbContext context, IReadOnlyCollection<Fatura> invoices)
+    {
+        var cariIds = invoices.Select(f => f.CariId).Distinct().ToArray();
+        if (cariIds.Length == 0) return;
+
+        var caris = await context.Cariler
+            .IgnoreQueryFilters(["SoftDelete", "Tenant"])
+            .AsNoTracking()
+            .Where(c => cariIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id);
+        foreach (var invoice in invoices)
+            if (caris.TryGetValue(invoice.CariId, out var cari)) invoice.Cari = cari;
+    }
+
     private Task RequireFaturaPermissionAsync(FaturaYonu yon, string action)
     {
         var general = action switch
@@ -55,12 +72,13 @@ public class FaturaService : IFaturaService
     public async Task<List<Fatura>> GetAllAsync()
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.Faturalar
+        var invoices = await context.Faturalar
             .AsNoTracking()
-            .Include(f => f.Cari)
             .Include(f => f.KarsiFirma)
             .OrderByDescending(f => f.FaturaTarihi)
             .ToListAsync();
+        await AttachReferencedCarisAsync(context, invoices);
+        return invoices;
     }
 
     public async Task<PagedResult<Fatura>> GetPagedAsync(FaturaFilterParams filter)
@@ -68,7 +86,6 @@ public class FaturaService : IFaturaService
         await using var context = await _contextFactory.CreateDbContextAsync();
         var query = context.Faturalar
             .AsNoTracking()
-            .Include(f => f.Cari)
             .Include(f => f.Firma)
             .Include(f => f.KarsiFirma)
             .AsQueryable();
@@ -77,9 +94,14 @@ public class FaturaService : IFaturaService
         if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
         {
             var searchLower = filter.SearchTerm.ToLower();
+            var matchingCariIds = await context.Cariler
+                .IgnoreQueryFilters(["SoftDelete", "Tenant"])
+                .Where(c => c.Unvan != null && c.Unvan.ToLower().Contains(searchLower))
+                .Select(c => c.Id)
+                .ToArrayAsync();
             query = query.Where(f =>
                 (f.FaturaNo != null && f.FaturaNo.ToLower().Contains(searchLower)) ||
-                (f.Cari != null && f.Cari.Unvan != null && f.Cari.Unvan.ToLower().Contains(searchLower)));
+                matchingCariIds.Contains(f.CariId));
         }
 
         // Tip filtresi
@@ -131,6 +153,8 @@ public class FaturaService : IFaturaService
             .Take(filter.PageSize)
             .ToListAsync();
 
+        await AttachReferencedCarisAsync(context, items);
+
         return new PagedResult<Fatura>(items, totalCount, filter.PageNumber, filter.PageSize);
     }
 
@@ -140,101 +164,110 @@ public class FaturaService : IFaturaService
         var normalized = faturaNo.Trim().ToUpperInvariant();
         await using var context = await _contextFactory.CreateDbContextAsync();
         var query = context.Faturalar.AsNoTracking()
-            .Include(f => f.Cari)
             .Include(f => f.KarsiFirma)
             .Where(f => f.FaturaNo != null && f.FaturaNo.ToUpper() == normalized);
         if (yon.HasValue) query = query.Where(f => f.FaturaYonu == yon.Value);
         if (firmaId.HasValue) query = query.Where(f => f.FirmaId == firmaId.Value);
-        return await query.OrderByDescending(f => f.FaturaTarihi).FirstOrDefaultAsync();
+        var invoice = await query.OrderByDescending(f => f.FaturaTarihi).FirstOrDefaultAsync();
+        if (invoice != null) await AttachReferencedCarisAsync(context, [invoice]);
+        return invoice;
     }
 
     public async Task<List<Fatura>> GetByCariIdAsync(int cariId)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.Faturalar
+        var invoices = await context.Faturalar
             .AsNoTracking()
-            .Include(f => f.Cari)
             .Include(f => f.KarsiFirma)
             .Where(f => f.CariId == cariId)
             .OrderByDescending(f => f.FaturaTarihi)
             .ToListAsync();
+        await AttachReferencedCarisAsync(context, invoices);
+        return invoices;
     }
 
     public async Task<List<Fatura>> GetByTipAsync(FaturaTipi tip)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.Faturalar
+        var invoices = await context.Faturalar
             .AsNoTracking()
-            .Include(f => f.Cari)
             .Include(f => f.KarsiFirma)
             .Where(f => f.FaturaTipi == tip)
             .OrderByDescending(f => f.FaturaTarihi)
             .ToListAsync();
+        await AttachReferencedCarisAsync(context, invoices);
+        return invoices;
     }
 
     public async Task<List<Fatura>> GetByDurumAsync(FaturaDurum durum)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.Faturalar
+        var invoices = await context.Faturalar
             .AsNoTracking()
-            .Include(f => f.Cari)
             .Include(f => f.KarsiFirma)
             .Where(f => f.Durum == durum)
             .OrderByDescending(f => f.FaturaTarihi)
             .ToListAsync();
+        await AttachReferencedCarisAsync(context, invoices);
+        return invoices;
     }
 
     public async Task<List<Fatura>> GetOdenmemisFaturalarAsync()
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.Faturalar
+        var invoices = await context.Faturalar
             .AsNoTracking()
-            .Include(f => f.Cari)
             .Include(f => f.KarsiFirma)
             .Where(f => f.Durum == FaturaDurum.Beklemede || f.Durum == FaturaDurum.KismiOdendi)
             .OrderBy(f => f.VadeTarihi)
             .ToListAsync();
+        await AttachReferencedCarisAsync(context, invoices);
+        return invoices;
     }
 
     public async Task<List<Fatura>> GetOdenmisFaturalarAsync()
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.Faturalar
+        var invoices = await context.Faturalar
             .AsNoTracking()
-            .Include(f => f.Cari)
             .Include(f => f.KarsiFirma)
             .Where(f => f.Durum == FaturaDurum.Odendi)
             .OrderByDescending(f => f.FaturaTarihi)
             .ToListAsync();
+        await AttachReferencedCarisAsync(context, invoices);
+        return invoices;
     }
 
     public async Task<List<Fatura>> GetByDateRangeAsync(DateTime startDate, DateTime endDate)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.Faturalar
+        var invoices = await context.Faturalar
             .AsNoTracking()
-            .Include(f => f.Cari)
             .Include(f => f.KarsiFirma)
             .Where(f => f.FaturaTarihi >= startDate && f.FaturaTarihi <= endDate)
             .OrderByDescending(f => f.FaturaTarihi)
             .ToListAsync();
+        await AttachReferencedCarisAsync(context, invoices);
+        return invoices;
     }
 
     public async Task<Fatura?> GetByIdAsync(int id)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.Faturalar
-            .Include(f => f.Cari)
+        var invoice = await context.Faturalar
+            .AsNoTracking()
             .Include(f => f.Firma)
             .Include(f => f.KarsiFirma)
             .FirstOrDefaultAsync(f => f.Id == id);
+        if (invoice != null) await AttachReferencedCarisAsync(context, [invoice]);
+        return invoice;
     }
 
     public async Task<Fatura?> GetByIdWithKalemlerAsync(int id)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.Faturalar
-            .Include(f => f.Cari)
+        var invoice = await context.Faturalar
+            .AsNoTracking()
             .Include(f => f.Firma)
             .Include(f => f.KarsiFirma)
             .Include(f => f.FaturaKalemleri)
@@ -242,6 +275,8 @@ public class FaturaService : IFaturaService
                 .ThenInclude(o => o.BankaKasaHareket)
                     .ThenInclude(h => h.BankaHesap)
             .FirstOrDefaultAsync(f => f.Id == id);
+        if (invoice != null) await AttachReferencedCarisAsync(context, [invoice]);
+        return invoice;
     }
 
     public async Task<Fatura> CreateAsync(Fatura fatura)
@@ -561,20 +596,22 @@ public class FaturaService : IFaturaService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var query = context.Faturalar
-            .Include(f => f.Cari)
+            .AsNoTracking()
             .Where(f => f.FaturaYonu == yon);
 
         if (firmaId.HasValue)
             query = query.Where(f => f.FirmaId == firmaId.Value);
 
-        return await query.OrderByDescending(f => f.FaturaTarihi).ToListAsync();
+        var invoices = await query.OrderByDescending(f => f.FaturaTarihi).ToListAsync();
+        await AttachReferencedCarisAsync(context, invoices);
+        return invoices;
     }
 
     public async Task<List<Fatura>> GetByYonAndDateRangeAsync(FaturaYonu yon, DateTime? baslangic, DateTime? bitis, int? firmaId = null)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var query = context.Faturalar
-            .Include(f => f.Cari)
+            .AsNoTracking()
             .Where(f => f.FaturaYonu == yon);
 
         if (firmaId.HasValue)
@@ -586,7 +623,9 @@ public class FaturaService : IFaturaService
         if (bitis.HasValue)
             query = query.Where(f => f.FaturaTarihi <= bitis.Value);
 
-        return await query.OrderByDescending(f => f.FaturaTarihi).ToListAsync();
+        var invoices = await query.OrderByDescending(f => f.FaturaTarihi).ToListAsync();
+        await AttachReferencedCarisAsync(context, invoices);
+        return invoices;
     }
 
     public async Task<List<Fatura>> GetByEFaturaTipiAsync(EFaturaTipi tip)
@@ -1545,6 +1584,26 @@ public class FaturaService : IFaturaService
 
     public Task<bool> UploadFaturaPdfAsync(int faturaId, string fileName, byte[] pdfContent)
         => UploadFaturaPdfCoreAsync(faturaId, fileName, pdfContent, "duzenle");
+
+    public async Task<bool> UploadFaturaXmlAsync(int faturaId, string fileName, byte[] xmlContent)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var fatura = await context.Faturalar.FindAsync(faturaId);
+        if (fatura == null) return false;
+        await RequireFaturaPermissionAsync(fatura.FaturaYonu, "duzenle");
+        try
+        {
+            ValidateStoredXmlFileExtension(fileName);
+            using var stream = new MemoryStream(xmlContent, writable: false);
+            System.Xml.Linq.XDocument.Load(stream);
+            await SaveInvoiceXmlAsync(context, fatura, fileName, xmlContent);
+            return true;
+        }
+        catch (System.Xml.XmlException)
+        {
+            throw new InvalidOperationException("Seçilen XML dosyasının içeriği geçerli değil.");
+        }
+    }
 
     private async Task<bool> UploadFaturaPdfCoreAsync(int faturaId, string fileName, byte[] pdfContent, string action)
     {

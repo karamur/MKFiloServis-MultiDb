@@ -434,13 +434,17 @@ public class FaturaSablonService : IFaturaSablonService
     {
         if (faturaId <= 0) return null;
         var fatura = await context.Faturalar.AsNoTracking()
-            .Include(f => f.Cari).Include(f => f.Firma).Include(f => f.FaturaKalemleri)
+            .Include(f => f.Firma).Include(f => f.FaturaKalemleri)
             .FirstOrDefaultAsync(f => f.Id == faturaId && f.FirmaId == firmaId && !f.IsDeleted);
-        // Fatura ve kalemler seçili firmada kalır; cari farklı firmada olabilir.
+        // Fatura ve kalemler seçili firmada kalır; tarihî cari arşivlenmiş veya
+        // başka firmada olabilir. Yalnız faturanın bağlı olduğu cari yüklenir.
         if (fatura == null || fatura.Firma == null || fatura.Firma.IsDeleted ||
-            fatura.Cari == null || fatura.Cari.IsDeleted ||
             fatura.FaturaKalemleri.Any(k => k.FirmaId != firmaId || k.IsDeleted))
             return null;
+        var cari = await context.Cariler.IgnoreQueryFilters(["SoftDelete", "Tenant"])
+            .AsNoTracking().FirstOrDefaultAsync(c => c.Id == fatura.CariId);
+        if (cari == null) return null;
+        fatura.Cari = cari;
         return fatura;
     }
 

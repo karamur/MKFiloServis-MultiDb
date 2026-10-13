@@ -386,6 +386,10 @@ public class KullaniciService : IKullaniciService
             };
         }
 
+        var lisansDogrulama = await _licenseService.ValidateAsync();
+        if (!lisansDogrulama.IsValid)
+            return new KullaniciGirisSonuc { Basarili = false, Mesaj = lisansDogrulama.Message };
+
         kullanici.SonGirisTarihi = DateTime.UtcNow;
         kullanici.BasarisizGirisSayisi = 0;
         kullanici.KilitlenmeBitisUtc = null;
@@ -434,6 +438,10 @@ public class KullaniciService : IKullaniciService
                     : "Doğrulama kodu geçersiz."
             };
         }
+
+        var lisansDogrulama = await _licenseService.ValidateAsync();
+        if (!lisansDogrulama.IsValid)
+            return new KullaniciGirisSonuc { Basarili = false, Mesaj = lisansDogrulama.Message };
 
         kullanici.SonGirisTarihi = nowUtc;
         kullanici.BasarisizGirisSayisi = 0;

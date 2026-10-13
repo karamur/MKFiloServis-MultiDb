@@ -8,7 +8,7 @@ set "SCRIPT_DIR=%~dp0"
 if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
 
 set "VERSION=%~1"
-if "%VERSION%"=="" set "VERSION=1.0.22"
+if "%VERSION%"=="" set "VERSION=1.0.47"
 
 net session >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (

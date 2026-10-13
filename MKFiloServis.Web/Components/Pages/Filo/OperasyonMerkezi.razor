@@ -2,6 +2,7 @@
 @page "/operasyon-merkezi"
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
+@inject IJSRuntime JS
 @rendermode InteractiveServer
 
 <PageTitle>Operasyon Merkezi</PageTitle>
@@ -80,9 +81,25 @@
     private enum Sekme { Plan, Eslestirme, Puantaj, Hakedis, Matris }
 
     private Sekme aktifSekme = Sekme.Plan;
+    private bool sekmeDurumuYuklendi;
 
-    private void SekmeDegistir(Sekme sekme)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !sekmeDurumuYuklendi)
+        {
+            sekmeDurumuYuklendi = true;
+            var saklananSekme = await JS.InvokeAsync<string?>("sessionStorage.getItem", "mkfilo.operasyonMerkezi.sekme");
+            if (Enum.TryParse<Sekme>(saklananSekme, out var sekme) && sekme != aktifSekme)
+            {
+                aktifSekme = sekme;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task SekmeDegistir(Sekme sekme)
     {
         aktifSekme = sekme;
+        await JS.InvokeVoidAsync("sessionStorage.setItem", "mkfilo.operasyonMerkezi.sekme", sekme.ToString());
     }
 }

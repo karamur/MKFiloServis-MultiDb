@@ -8,7 +8,6 @@
 @using MKFiloServis.Web.Models
 @using Microsoft.JSInterop
 @inject IOperasyonelHakedisService HakedisService
-@inject IFirmaService FirmaService
 @inject ITasimaTedarikciService TedarikciService
 @inject IAracService AracService
 @inject ICariService CariService
@@ -116,14 +115,14 @@
             {
                 <div class="row g-2 align-items-end mt-1">
                     <div class="col-md-4">
-                        <label class="form-label small mb-1">Firmalar</label>
+                        <label class="form-label small mb-1">Cari Kartı / Firma</label>
                         <select class="form-select form-select-sm" multiple size="3" @onchange="KurumFiltresiDegisti">
                             @foreach (var kurum in KurumFiltreSecenekleri)
                             {
                                 <option value="@kurum.Id">@kurum.Ad</option>
                             }
                         </select>
-                        <div class="form-text">Boş bırakılırsa tüm firmalar alınır.</div>
+                        <div class="form-text">Seçilen cari kartına ve etkin firmaya bağlı güzergâhlar gösterilir. Boş bırakılırsa etkin firmadaki tüm cariler alınır.</div>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label small mb-1">Güzergâh</label>
@@ -488,26 +487,37 @@
     private string durumFiltre = "";
     private string aramaMetni = "";
 
-    private IEnumerable<(int Id, string Ad)> KurumFiltreSecenekleri => hakedisler
+    private int EtkinFirmaId => AktifFirmaProvider.AktifFirmaId ?? AktifFirmaProvider.Mevcut.FirmaId;
+
+    private IEnumerable<Hakedis> EtkinFirmaKurumHakedisleri => hakedisler
         .Where(h => h.Tip == HakedisTipi.Kurum)
+        .Where(h => EtkinFirmaId <= 0 || h.FirmaId == EtkinFirmaId);
+
+    private IEnumerable<(int Id, string Ad)> KurumFiltreSecenekleri => EtkinFirmaKurumHakedisleri
+        .Where(h => cariDetaylari.TryGetValue(h.ReferansId, out var cari)
+            && (EtkinFirmaId <= 0 || cari.FirmaId == EtkinFirmaId))
         .Select(h => (h.ReferansId, GetReferansAd(h)))
         .DistinctBy(x => x.ReferansId)
         .OrderBy(x => x.Item2)
         .Select(x => (x.ReferansId, x.Item2));
 
-    private IEnumerable<(int Id, string Ad)> GuzergahFiltreSecenekleri => hakedisler
-        .Where(h => h.Tip == HakedisTipi.Kurum)
-        .SelectMany(h => h.Detaylar)
-        .Where(d => d.GuzergahId.HasValue)
-        .Select(d => (d.GuzergahId!.Value, d.Guzergah?.GuzergahAdi ?? $"Güzergâh #{d.GuzergahId}"))
+    private IEnumerable<(int Id, string Ad)> GuzergahFiltreSecenekleri => EtkinFirmaKurumHakedisleri
+        .Where(h => seciliKurumIdleri.Count == 0 || seciliKurumIdleri.Contains(h.ReferansId))
+        .SelectMany(h => h.Detaylar
+            .Where(d => d.GuzergahId.HasValue && d.Guzergah != null
+                && d.Guzergah.CariId == h.ReferansId
+                && (EtkinFirmaId <= 0 || d.Guzergah.FirmaId == EtkinFirmaId)))
+        .Select(d => (d.GuzergahId!.Value, d.Guzergah!.GuzergahAdi ?? $"Güzergâh #{d.GuzergahId}"))
         .DistinctBy(x => x.Item1)
         .OrderBy(x => x.Item2)
         .Select(x => (x.Item1, x.Item2));
 
-    private List<DetayliHakedisRaporSatiri> FiltreliRaporSatirlari => hakedisler
-        .Where(h => h.Tip == HakedisTipi.Kurum)
+    private List<DetayliHakedisRaporSatiri> FiltreliRaporSatirlari => EtkinFirmaKurumHakedisleri
         .Where(h => seciliKurumIdleri.Count == 0 || seciliKurumIdleri.Contains(h.ReferansId))
         .SelectMany(h => h.Detaylar.Select(d => new { Hakedis = h, Detay = d }))
+        .Where(x => x.Detay.Guzergah != null
+            && x.Detay.Guzergah.CariId == x.Hakedis.ReferansId
+            && (EtkinFirmaId <= 0 || x.Detay.Guzergah.FirmaId == EtkinFirmaId))
         .Where(x => seciliGuzergahId == 0 || x.Detay.GuzergahId == seciliGuzergahId)
         .GroupBy(x => new
         {
@@ -583,6 +593,8 @@
             string secim when int.TryParse(secim, out var id) => new List<int> { id },
             _ => new List<int>()
         };
+        if (seciliGuzergahId > 0 && !GuzergahFiltreSecenekleri.Any(g => g.Id == seciliGuzergahId))
+            seciliGuzergahId = 0;
     }
 
     private bool TumSeciliMi => FiltreliHakedisler.Any() && FiltreliHakedisler.All(h => seciliHakedisIds.Contains(h.Id));
@@ -1101,20 +1113,13 @@
                 var kurumCariler = await CariService.GetAllAsync();
                 kurumAdlari.Clear();
                 cariDetaylari.Clear();
-                foreach (var c in kurumCariler.Where(c => referansIdler.Contains(c.Id)))
+                foreach (var c in kurumCariler.Where(c => referansIdler.Contains(c.Id)
+                    && (EtkinFirmaId <= 0 || c.FirmaId == EtkinFirmaId)))
                 {
                     kurumAdlari[c.Id] = c.Unvan;
                     cariDetaylari[c.Id] = c;
                 }
 
-                // Cari'de bulunamayanlar için Firma tablosuna geri düş
-                var eksikIdler = referansIdler.Where(id => !kurumAdlari.ContainsKey(id)).ToList();
-                if (eksikIdler.Any())
-                {
-                    var firmalar = await FirmaService.GetAllAsync();
-                    foreach (var f in firmalar.Where(f => eksikIdler.Contains(f.Id)))
-                        kurumAdlari[f.Id] = f.FirmaAdi;
-                }
                 break;
 
             case HakedisTipi.Tedarikci:

@@ -49,13 +49,15 @@ window.darkMode = {
  */
 // Keyboard Shortcuts
 window.keyboardShortcuts = {
-    _handlers: {},
+    _handler: null,
     _dotnet: null,
     init: function (dotnetRef) {
+        this.dispose();
         this._dotnet = dotnetRef;
         var self = this;
-        document.addEventListener('keydown', function (e) {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
+        this._handler = function (e) {
+            var target = e.target instanceof Element ? e.target : null;
+            if (target && target.closest('input, textarea, select, [contenteditable], [role="textbox"]')) {
                 if (e.key === 'Escape') {
                     self._dotnet && self._dotnet.invokeMethodAsync('OnShortcut', 'Escape');
                 }
@@ -84,9 +86,14 @@ window.keyboardShortcuts = {
                 e.preventDefault();
                 self._dotnet && self._dotnet.invokeMethodAsync('OnShortcut', 'ToggleSidebar');
             }
-        });
+        };
+        document.addEventListener('keydown', this._handler);
     },
-    dispose: function () { this._dotnet = null; }
+    dispose: function () {
+        if (this._handler) document.removeEventListener('keydown', this._handler);
+        this._handler = null;
+        this._dotnet = null;
+    }
 };
 
 window.downloadBase64File = function (base64, fileName, mimeType) {

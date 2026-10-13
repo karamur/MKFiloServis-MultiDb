@@ -8,6 +8,7 @@
 
 @inject IFirmaService FirmaService
 @inject IKullaniciService KullaniciService
+@inject IJSRuntime JS
 @inject IToastService ToastService
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @rendermode InteractiveServer
@@ -179,7 +180,7 @@
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label">Kurum (Müşteri) Kartları <span class="text-danger">*</span></label>
-                            <select class="form-select" @bind="model.KurumFirmaId" @bind:after="KurumSecimiDegistiAsync">
+                            <select class="form-select" @bind="model.KurumFirmaId" @bind:after="KurumSecimiDegistiVeTaslagiKaydetAsync">
                                 <option value="0">-- Kurum (Müşteri) Seçin --</option>
                                 @foreach(var k in kurumFirmaListesi) {
                                     <option value="@k.Id">@k.Unvan</option>
@@ -188,7 +189,7 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Güzergah <span class="text-danger">*</span></label>
-                            <select class="form-select" @bind="model.GuzergahId" @bind:after="GuzergahSecimiDegistiAsync">
+                            <select class="form-select" @bind="model.GuzergahId" @bind:after="GuzergahSecimiDegistiVeTaslagiKaydetAsync">
                                 <option value="0">-- Güzergah Seçin --</option>
                                 @foreach(var g in guzergahListesi) {
                                     <option value="@g.Id">@g.GuzergahAdi</option>
@@ -197,7 +198,7 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Çalışacak Araç <span class="text-danger">*</span></label>
-                            <select class="form-select" @bind="model.AracId" @bind:after="AracSecimiDegistiAsync">
+                            <select class="form-select" @bind="model.AracId" @bind:after="AracSecimiDegistiVeTaslagiKaydetAsync">
                                 <option value="0">-- Araç Seçin --</option>
                                 @foreach(var a in aracListesi) {
                                     <option value="@a.Id">@(a.AktifPlaka ?? a.AktifPlakaKaydi?.Plaka ?? a.SaseNo)</option>
@@ -206,7 +207,7 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Görevli Şoför <span class="text-danger">*</span></label>
-                            <select class="form-select" @bind="model.SoforId">
+                            <select class="form-select" @bind="model.SoforId" @bind:after="TaslagiKaydetAsync">
                                 <option value="0">-- Şoför Seçin --</option>
                                 @foreach(var s in soforListesi) {
                                     <option value="@s.Id">@s.TamAd</option>
@@ -215,11 +216,11 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label text-success fw-bold">Kuruma Kesilecek Ücret (1 Sefer) ₺</label>
-                            <input type="number" step="0.01" class="form-control text-success fw-bold" @bind="model.KurumaKesilecekUcret" />
+                            <input type="number" step="0.01" class="form-control text-success fw-bold" @bind="model.KurumaKesilecekUcret" @bind:event="oninput" @bind:after="TaslagiKaydetAsync" />
                         </div>
                         <div class="col-md-6">
                             <label class="form-label text-danger fw-bold">Taşerona/Şoföre Ödenen Ücret ₺</label>
-                            <input type="number" step="0.01" class="form-control text-danger fw-bold" @bind="model.TaseronaOdenenUcret" />
+                            <input type="number" step="0.01" class="form-control text-danger fw-bold" @bind="model.TaseronaOdenenUcret" @bind:event="oninput" @bind:after="TaslagiKaydetAsync" />
                             <small class="text-muted">Bu alan tüm araç tiplerinde kullanılabilir.</small>
                         </div>
                         <div class="col-md-12">
@@ -230,7 +231,7 @@
                                 </div>
                             }
                             <div class="form-check form-switch mt-2">
-                                <input class="form-check-input" type="checkbox" id="flexSwitchCheckChecked" @bind="model.IsActive">
+                                <input class="form-check-input" type="checkbox" id="flexSwitchCheckChecked" @bind="model.IsActive" @bind:after="TaslagiKaydetAsync">
                                 <label class="form-check-label" for="flexSwitchCheckChecked">Bu Eşleşme Aktif Çalışıyor Mu?</label>
                             </div>
                             <small class="text-muted">Pasif konumdaki eşleşmelere puantaj dağılımı yansıtılmaz.</small>
@@ -317,6 +318,64 @@
     private List<Sofor> soforListesi = new();
 
     private FiloGuzergahEslestirme model = new();
+    private bool taslakYuklemeDenendi;
+    private const string TaslakAnahtari = "mkfilo.operasyonMerkezi.eslestirmeTaslagi";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || taslakYuklemeDenendi) return;
+        taslakYuklemeDenendi = true;
+        var json = await JS.InvokeAsync<string?>("sessionStorage.getItem", TaslakAnahtari);
+        if (string.IsNullOrWhiteSpace(json)) return;
+        try
+        {
+            var taslak = System.Text.Json.JsonSerializer.Deserialize<EslestirmeTaslagi>(json);
+            if (taslak is null) return;
+            model = new FiloGuzergahEslestirme
+            {
+                Id = taslak.Id, FirmaId = taslak.FirmaId, KurumFirmaId = taslak.KurumFirmaId,
+                GuzergahId = taslak.GuzergahId, AracId = taslak.AracId, SoforId = taslak.SoforId,
+                KurumaKesilecekUcret = taslak.KurumaKesilecekUcret,
+                TaseronaOdenenUcret = taslak.TaseronaOdenenUcret, IsActive = taslak.IsActive
+            };
+            isModalOpen = true;
+            StateHasChanged();
+        }
+        catch
+        {
+            await JS.InvokeVoidAsync("sessionStorage.removeItem", TaslakAnahtari);
+        }
+    }
+
+    private sealed record EslestirmeTaslagi(int Id, int FirmaId, int KurumFirmaId, int GuzergahId, int AracId, int SoforId,
+        decimal KurumaKesilecekUcret, decimal TaseronaOdenenUcret, bool IsActive);
+
+    private async Task TaslagiKaydetAsync()
+    {
+        if (!isModalOpen) return;
+        var taslak = new EslestirmeTaslagi(model.Id, model.FirmaId, model.KurumFirmaId, model.GuzergahId,
+            model.AracId, model.SoforId, model.KurumaKesilecekUcret, model.TaseronaOdenenUcret, model.IsActive);
+        await JS.InvokeVoidAsync("sessionStorage.setItem", TaslakAnahtari,
+            System.Text.Json.JsonSerializer.Serialize(taslak));
+    }
+
+    private async Task KurumSecimiDegistiVeTaslagiKaydetAsync()
+    {
+        await KurumSecimiDegistiAsync();
+        await TaslagiKaydetAsync();
+    }
+
+    private async Task GuzergahSecimiDegistiVeTaslagiKaydetAsync()
+    {
+        await GuzergahSecimiDegistiAsync();
+        await TaslagiKaydetAsync();
+    }
+
+    private async Task AracSecimiDegistiVeTaslagiKaydetAsync()
+    {
+        await AracSecimiDegistiAsync();
+        await TaslagiKaydetAsync();
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -382,6 +441,7 @@
         await KurumSecimiDegistiAsync();
         VarsayilanSoforuAta();
         isModalOpen = true;
+        await TaslagiKaydetAsync();
     }
 
     private async Task DuzenleModalAc(FiloGuzergahEslestirme esleme)
@@ -403,11 +463,13 @@
         // Düzenlemede mevcut değerler korunmalı; sadece güzergah listesi tazelenir.
         guzergahListesi = await FiloKomisyonService.GetGuzergahlarAsync();
         isModalOpen = true;
+        await TaslagiKaydetAsync();
     }
 
-    private void ModalKapat()
+    private async Task ModalKapat()
     {
         isModalOpen = false;
+        await JS.InvokeVoidAsync("sessionStorage.removeItem", TaslakAnahtari);
     }
 
     private async Task SilModalAc(FiloGuzergahEslestirme esleme)
@@ -440,6 +502,7 @@
 
             ToastService.ShowSuccess("Eşleştirme Kaydedildi!");
             isModalOpen = false;
+            await JS.InvokeVoidAsync("sessionStorage.removeItem", TaslakAnahtari);
             await ListeYenile();
         }
         catch (Exception ex)

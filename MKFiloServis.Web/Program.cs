@@ -1006,7 +1006,7 @@ if (app.Environment.IsDevelopment() && string.Equals(dbProvider, "SQLite", Strin
     });
 }
 
-// LisansSeed kaldirildi — LicenseService.ValidateAsync() ilk cagrildiginda otomatik demo olusturur
+// LisansSeed kaldirildi — demo lisansı yalnız giriş ekranından başlatılır.
 
 await RunScopedSafeAsync(app, "MarkaModelSeed", async services =>
 {
@@ -1515,39 +1515,6 @@ using (var scope = app.Services.CreateScope())
     catch (Exception ex)
     {
         logger.LogWarning(ex, "⚠️ Auto lisans aktivasyonu basarisiz oldu.");
-    }
-}
-
-// ══════════════════════════════════════════════
-// LISANS KONTROL — lisans yoksa demo lisansı kendiliğinden oluşturulmaz.
-// ══════════════════════════════════════════════
-using (var scope = app.Services.CreateScope())
-{
-    var licSvc = scope.ServiceProvider.GetRequiredService<LicenseService>();
-    var licCache = scope.ServiceProvider.GetRequiredService<LicenseCache>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-
-    // Her uygulama başlangıcında cache temizlenir ve lisans DB üzerinden yeniden doğrulanır.
-    licCache.Clear();
-
-    try
-    {
-        var val = await licSvc.ValidateAsync();
-        if (!val.IsValid)
-        {
-            MKFiloServis.Shared.AppMode.EnterDemoMode(val.Message);
-            logger.LogWarning("🔶 DEMO MODE: {Reason}", val.Message);
-        }
-        else
-        {
-            MKFiloServis.Shared.AppMode.ExitDemoMode();
-            logger.LogInformation("✅ FULL MODE: Lisans geçerli (DB doğrulandı).");
-        }
-    }
-    catch (Exception ex)
-    {
-        MKFiloServis.Shared.AppMode.EnterDemoMode($"Lisans kontrol hatası: {ex.Message}");
-        logger.LogWarning(ex, "🔶 DEMO MODE (hata): {Reason}", ex.Message);
     }
 }
 

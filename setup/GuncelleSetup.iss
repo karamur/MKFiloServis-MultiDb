@@ -6,10 +6,12 @@
 #define MyAppName     "MKFiloServis"
 #define MyAppExeName  "MKFiloServis.Web.exe"
 #define MyInstallDir  "C:\MKFiloServis"
+#define MyBackupDir  "C:\MKFiloServis_yedekleme"
+#define MyIisPort     "5050"
 #define MyDataSyncExe "MKFiloServis.DataSync.exe"
 
 #ifndef MyAppVersion
-#define MyAppVersion "1.0.39"
+#define MyAppVersion "1.0.47"
 #endif
 
 [Setup]
@@ -60,6 +62,22 @@ Source: "payload\DataSync\*"; DestDir: "{app}\tools\datasync"; Flags: ignorevers
 Source: "scripts\configure-iis-startup.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 
 [Code]
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+  Params: String;
+begin
+  Result := '';
+  Params := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $listeners = @(Get-NetTCPConnection -State Listen -LocalPort {#MyIisPort} -ErrorAction Stop | Where-Object { $_.OwningProcess -ne 4 }); if ($listeners.Count -gt 0) { exit 32 }; exit 0 } catch { exit 64 }"';
+  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+      Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    ResultCode := 64;
+  if ResultCode = 32 then
+    Result := '5050 portu baska bir uygulama tarafindan kullaniliyor. Yerel MKFiloServis uygulamasini kapatin ve guncellemeyi yeniden baslatin.'
+  else if ResultCode <> 0 then
+    Result := '5050 portunun kullanilabilirligi denetlenemedi. Guncellemeye devam edilmedi.';
+end;
+
 function FindInstallPath(): String;
 var MainPath, CustomerPath: String;
 begin
@@ -113,7 +131,10 @@ begin
          '  * Konfigurasyonlar KORUNACAK' + #13#10 +
          '  * Uygulama yeniden baslatilacak' + #13#10#13#10 +
          'Devam etmek istiyor musunuz?';
-  if MsgBox(Msg, mbConfirmation, MB_YESNO) = IDNO then Result := False;
+  { Sessiz kip yalnızca kullanıcı tarafından özellikle başlatılan güncellemelerde
+    kullanılır; etkileşimli kurulumda mevcut onay penceresini göstermeye devam et. }
+  if (not WizardSilent) and (MsgBox(Msg, mbConfirmation, MB_YESNO) = IDNO) then
+    Result := False;
 end;
 
 procedure InitializeWizard();
@@ -123,13 +144,17 @@ procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
   Params: String;
+  ExtraInfo: String;
 begin
   if CurStep = ssPostInstall then
   begin
-    Params := ExpandConstant('-NoProfile -ExecutionPolicy Bypass -File "{app}\tools\configure-iis-startup.ps1" -AppPoolName "MKFiloServis" -SiteName "MKFiloServis" -Port 5050 -AppPath "{app}\app" -RestartAppPool');
+    Params := ExpandConstant('-NoProfile -ExecutionPolicy Bypass -File "{app}\tools\configure-iis-startup.ps1" -AppPoolName "MKFiloServis" -SiteName "MKFiloServis" -Port {#MyIisPort} -AppPath "{app}\app" -StorageRoot "{#MyBackupDir}" -RestartAppPool');
     WizardForm.StatusLabel.Caption := 'IIS sitesi 5050 portunda yapilandiriliyor...';
     if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
       Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
-      RaiseException(Format('IIS port ve baslangic ayarlari yapilandirilamadi (%d).', [ResultCode]));
+    begin
+      ExtraInfo := ExpandConstant('{app}\app\logs\configure-iis-startup.log');
+      RaiseException(Format('IIS port ve baslangic ayarlari yapilandirilamadi (%d). Betik ayrintisi: %s', [ResultCode, ExtraInfo]));
+    end;
   end;
 end;

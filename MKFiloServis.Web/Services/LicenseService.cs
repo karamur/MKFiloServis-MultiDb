@@ -426,9 +426,10 @@ public class LicenseService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Lisans dogrulama hatasi");
-            // Validation messages reach the login/authorization UI. Keep provider paths,
-            // connection details and cryptographic exception text in server logs only.
-            return FailValidation("Lisans doğrulanamadı. Sistem yöneticisine başvurun.");
+            // Veritabanı erişimi gibi geçici bir hata, önceden doğrulanmış lisansı
+            // silip açık formların tüm kullanıcılarda kapanmasına neden olmamalı.
+            // Yeni giriş başarısız döner; mevcut oturum kendi durumunu korur.
+            return LicenseValidationResult.Unavailable("Lisans doğrulanamadı. Sistem yöneticisine başvurun.");
         }
     }
 
@@ -1070,11 +1071,13 @@ public class LicenseService
 public class LicenseValidationResult
 {
     public bool IsValid { get; set; }
+    public bool IsTransientFailure { get; set; }
     public string Message { get; set; } = string.Empty;
     public LicenseInfo? License { get; set; }
 
     public static LicenseValidationResult Ok(LicenseInfo lic) => new() { IsValid = true, License = lic };
     public static LicenseValidationResult Fail(string msg) => new() { IsValid = false, Message = msg };
+    public static LicenseValidationResult Unavailable(string msg) => new() { IsValid = false, IsTransientFailure = true, Message = msg };
 }
 
 

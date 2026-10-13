@@ -34,7 +34,7 @@ veya PowerShell ile:
 
 | Parametre | Aciklama |
 |-----------|----------|
-| `-Version` | Dağıtım sürümü (belirtilmesi önerilir; script varsayılanı 1.0.39) |
+| `-Version` | Dağıtım sürümü (belirtilmesi önerilir; script varsayılanı 1.0.47) |
 | `-SkipPublish` | Publish atla, sadece Inno Setup calistir |
 | `-LisansOnly` | Sadece lisans araci EXE'si uret |
 | `-IncludeInternalLicenseTool` | Sunucu paketleriyle birlikte ayrıca dahili lisans aracını üret; müşteri kurulumuna eklemez |
@@ -61,6 +61,13 @@ setup/
 
 Ana kurulumun hedefi `C:\MKFiloServis`; IIS uygulama kökü
 `C:\MKFiloServis\app` ve stdout log klasörü `C:\MKFiloServis\app\logs` olur.
+Tam kurulum `C:\MKFiloServis_yedekleme` altındaki `uploads`, `Arsiv`, `Depo`,
+`data`, `database`, `keys` ve `logs` klasörlerini oluşturur. IIS sitesinin fiziksel
+yolu `C:\MKFiloServis\app`, portu 5050 olarak ayarlanır. `MKFiloServis` uygulama
+havuzuna `CRMFILO_STORAGE_ROOT=C:\MKFiloServis_yedekleme` ortam değişkeni ve
+depolama klasörüne yazma izni verilir. Güncelleme paketi aynı yol ve izinleri
+yeniden uygular. Mevcut şifreli dosyalar ve anahtarlar kurulum paketine eklenmez;
+eski makineden taşınırken birlikte korunmalıdır.
 
 Uygulama seçilen sağlayıcıda ortak veritabanı kullanır; firma kapsamı kayıtların
 `FirmaId` bağıyla korunur. Her firma için otomatik ayrı veritabanı oluşturulmaz.

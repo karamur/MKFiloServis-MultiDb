@@ -35,6 +35,17 @@
         return arr;
     }
 
+    function createPdfPreviewUrl(base64Content) {
+        const bytes = base64ToUint8Array(base64Content);
+        const blob = new Blob([bytes], { type: 'application/pdf' });
+        return URL.createObjectURL(blob);
+    }
+
+    function revokePdfPreviewUrl(url) {
+        if (typeof url === 'string' && url.startsWith('blob:'))
+            URL.revokeObjectURL(url);
+    }
+
     function downloadFileFromBytes(filename, contentType, bytes) {
         try {
             let byteArray;
@@ -304,6 +315,8 @@
 
     // window scope'a açıkça bağla — Blazor IJSRuntime bu globalleri arar.
     window.downloadFile = downloadFile;
+    window.createPdfPreviewUrl = createPdfPreviewUrl;
+    window.revokePdfPreviewUrl = revokePdfPreviewUrl;
     window.downloadFileFromBytes = downloadFileFromBytes;
     window.downloadFileFromBase64 = downloadFileFromBase64;
     window.downloadFileFromStream = downloadFileFromStream;

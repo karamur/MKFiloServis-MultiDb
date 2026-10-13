@@ -1,6 +1,4 @@
 using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using Microsoft.EntityFrameworkCore;
@@ -15,7 +13,7 @@ namespace MKFiloServis.Web.Services;
 /// NOT: Bu provider static degisken KULLANMAZ - her circuit bagimsizdir.
 /// ProtectedSessionStorage ile circuit yeniden baglantisinda kullanici geri yuklenir.
 /// </summary>
-public class AppAuthenticationStateProvider : AuthenticationStateProvider, IDisposable
+public class AppAuthenticationStateProvider : AuthenticationStateProvider
 {
     private const string StorageKey = "koa_session.v2";
 
@@ -23,25 +21,25 @@ public class AppAuthenticationStateProvider : AuthenticationStateProvider, IDisp
     private readonly ICurrentUserAccessor _currentUserAccessor;
     private readonly ProtectedSessionStorage _sessionStorage;
     private readonly IDbContextFactory<ApplicationDbContext> _dbContextFactory;
+    private readonly LicenseService _licenseService;
 
     private ClaimsPrincipal _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
     private Kullanici? _aktifKullanici;
     private string? _sessionId;
     private bool _restoreAttempted = false;
-    private CancellationTokenSource? _revalidationCts;
-    private string? _authorizationFingerprint;
-    private DateTimeOffset? _sessionStartedAtUtc;
 
     public AppAuthenticationStateProvider(
         ILogger<AppAuthenticationStateProvider> logger,
         ICurrentUserAccessor currentUserAccessor,
         ProtectedSessionStorage sessionStorage,
-        IDbContextFactory<ApplicationDbContext> dbContextFactory)
+        IDbContextFactory<ApplicationDbContext> dbContextFactory,
+        LicenseService licenseService)
     {
         _logger = logger;
         _currentUserAccessor = currentUserAccessor;
         _sessionStorage = sessionStorage;
         _dbContextFactory = dbContextFactory;
+        _licenseService = licenseService;
     }
 
     public override Task<AuthenticationState> GetAuthenticationStateAsync()
@@ -93,6 +91,11 @@ public class AppAuthenticationStateProvider : AuthenticationStateProvider, IDisp
                 await _sessionStorage.DeleteAsync(StorageKey);
                 return false;
             }
+
+            // Storage'dan geri dönmek yeni bir oturum açılışıdır; lisansı burada bir kez doğrula.
+            var licenseValidation = await _licenseService.ValidateAsync();
+            if (!licenseValidation.IsValid)
+                return false;
 
             // Geri yukle (SessionId'yi yenile)
             await GirisYapAsync(kullanici, sessionStartedAtUtc);
@@ -163,11 +166,8 @@ public class AppAuthenticationStateProvider : AuthenticationStateProvider, IDisp
                 return;
             }
             kullanici = current;
-            _authorizationFingerprint = CreateAuthorizationFingerprint(current);
         }
 
-        StopRevalidation();
-        _sessionStartedAtUtc = sessionStarted;
         GirisYap(kullanici);
         try
         {
@@ -178,67 +178,6 @@ public class AppAuthenticationStateProvider : AuthenticationStateProvider, IDisp
             _logger.LogWarning(ex, "Kullanici session storage'a kaydedilemedi");
         }
 
-        _revalidationCts = new CancellationTokenSource();
-        _ = RevalidateSessionAsync(kullanici.Id, _revalidationCts.Token);
-    }
-
-    private static string CreateAuthorizationFingerprint(Kullanici user)
-    {
-        var permissions = user.Rol?.Yetkiler
-            .Where(permission => !permission.IsDeleted && permission.Izin)
-            .Select(permission => permission.YetkiKodu)
-            .OrderBy(code => code, StringComparer.Ordinal) ?? Enumerable.Empty<string>();
-        var value = $"{user.RolId}|{user.Rol?.RolAdi}|{user.SifreHash}|{string.Join('|', permissions)}";
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
-    }
-
-    private async Task RevalidateSessionAsync(int expectedUserId, CancellationToken cancellationToken)
-    {
-        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
-        try
-        {
-            while (await timer.WaitForNextTickAsync(cancellationToken))
-            {
-                if (_aktifKullanici?.Id != expectedUserId)
-                    return;
-                if (_sessionStartedAtUtc is not { } startedAt ||
-                    !AuthenticationSessionPolicy.IsWithinLifetime(startedAt, DateTimeOffset.UtcNow))
-                {
-                    _logger.LogInformation("Authentication session reached its maximum lifetime. UserId: {UserId}", expectedUserId);
-                    await CikisYapAsync();
-                    return;
-                }
-
-                await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-                var current = await db.Kullanicilar.AsNoTracking()
-                    .Include(user => user.Rol).ThenInclude(role => role.Yetkiler)
-                    .FirstOrDefaultAsync(user => user.Id == expectedUserId && user.Aktif && !user.IsDeleted && !user.Kilitli, cancellationToken);
-                if (current?.Rol == null || current.Rol.IsDeleted ||
-                    !string.Equals(_authorizationFingerprint, CreateAuthorizationFingerprint(current), StringComparison.Ordinal))
-                {
-                    _logger.LogInformation("Oturum guncel hesap/rol yetkileriyle eslesmedigi icin kapatiliyor. KullaniciId: {KullaniciId}", expectedUserId);
-                    await CikisYapAsync();
-                    return;
-                }
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // Normal cikis veya circuit kapanisi.
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Oturum yetkileri yeniden dogrulanamadi; oturum kapatiliyor. KullaniciId: {KullaniciId}", expectedUserId);
-            await CikisYapAsync();
-        }
-    }
-
-    private void StopRevalidation()
-    {
-        if (_revalidationCts == null) return;
-        _revalidationCts.Cancel();
-        _revalidationCts.Dispose();
-        _revalidationCts = null;
     }
 
     /// <summary>
@@ -247,9 +186,6 @@ public class AppAuthenticationStateProvider : AuthenticationStateProvider, IDisp
     public void CikisYap()
     {
         var kullaniciAdi = _aktifKullanici?.KullaniciAdi;
-        StopRevalidation();
-        _authorizationFingerprint = null;
-        _sessionStartedAtUtc = null;
 
         _aktifKullanici = null;
         _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
@@ -296,7 +232,6 @@ public class AppAuthenticationStateProvider : AuthenticationStateProvider, IDisp
     /// </summary>
     public string? GetSessionId() => _sessionId;
 
-    public void Dispose() => StopRevalidation();
 }
 
 

@@ -1,7 +1,6 @@
 @inject LicenseService ModuleLicenses
 @page "/dashboard"
 @attribute [Authorize]
-@implements IDisposable
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
 @using MKFiloServis.Web.Models
@@ -27,7 +26,6 @@
 @rendermode InteractiveServer
 @using MKFiloServis.Web.Data
 @inject IServiceScopeFactory ScopeFactory
-@inject LicenseCache ModuleLicenseCache
 
 <PageTitle>CRM Filo Servis - Ana Sayfa</PageTitle>
 
@@ -1302,11 +1300,6 @@ else
     }
     private bool dashboardLoadInProgress;
     private readonly List<string> dashboardHatalari = new();
-    private string dashboardLicenseSnapshot = string.Empty;
-    private bool dashboardReady;
-    private bool dashboardLicenseRefreshPending;
-    private bool disposed;
-    private readonly CancellationTokenSource licenseWatchLifetime = new();
 
     // Grafik verileri
     private AylikGrafikData? gelirGiderData;
@@ -1338,9 +1331,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        ModuleLicenseCache.Changed += DashboardLicenseChanged;
         await LoadYetkilerAsync();
-        dashboardLicenseSnapshot = GetDashboardLicenseSnapshot();
         
         if (HasDashboardPermission)
         {
@@ -1351,98 +1342,6 @@ else
             isLoading = false;
         }
 
-        dashboardReady = true;
-        await ReconcileDashboardLicenseAsync();
-        _ = WatchDashboardLicenseAsync();
-    }
-
-    private string GetDashboardLicenseSnapshot() => string.Join('|', new[]
-    {
-        ModuleLicenses.HasModulePermission("cari"),
-        ModuleLicenses.HasModulePermission("filoservis"),
-        ModuleLicenses.HasModulePermission("personel"),
-        ModuleLicenses.HasModulePermission("fatura"),
-        ModuleLicenses.HasModulePermission("bankakasa"),
-        ModuleLicenses.HasModulePermission("butce"),
-        ModuleLicenses.HasModulePermission("ebys"),
-        ModuleLicenses.HasModulePermission("rentacar")
-    });
-
-    private void DashboardLicenseChanged()
-    {
-        if (disposed) return;
-        _ = InvokeAsync(async () =>
-        {
-            if (disposed) return;
-            if (!dashboardReady)
-            {
-                dashboardLicenseRefreshPending = true;
-                return;
-            }
-
-            await ReconcileDashboardLicenseAsync();
-        });
-    }
-
-    private async Task ReconcileDashboardLicenseAsync()
-    {
-        if (disposed || !dashboardReady) return;
-        var currentSnapshot = GetDashboardLicenseSnapshot();
-        if (!dashboardLicenseRefreshPending && currentSnapshot == dashboardLicenseSnapshot) return;
-        if (dashboardLoadInProgress)
-        {
-            dashboardLicenseRefreshPending = true;
-            return;
-        }
-
-        dashboardLicenseSnapshot = currentSnapshot;
-        dashboardLicenseRefreshPending = false;
-        if (HasDashboardPermission)
-            await LoadDashboardDataAsync();
-        else
-        {
-            ResetDashboardData();
-            isLoading = false;
-            StateHasChanged();
-        }
-    }
-
-    private async Task WatchDashboardLicenseAsync()
-    {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
-        try
-        {
-            while (await timer.WaitForNextTickAsync(licenseWatchLifetime.Token))
-            {
-                if (disposed) return;
-
-                try
-                {
-                    await ModuleLicenses.ValidateAsync(persistValidation: false);
-                    var currentPermissions = await KullaniciService.GetCurrentUserYetkilerAsync();
-                    if (!kullaniciYetkileri.SetEquals(currentPermissions))
-                    {
-                        kullaniciYetkileri = currentPermissions;
-                        dashboardLicenseRefreshPending = true;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogError(ex, "Dashboard modül lisansı yeniden doğrulanamadı.");
-                }
-
-                await InvokeAsync(ReconcileDashboardLicenseAsync);
-            }
-        }
-        catch (OperationCanceledException) when (licenseWatchLifetime.IsCancellationRequested) { }
-    }
-
-    public void Dispose()
-    {
-        disposed = true;
-        ModuleLicenseCache.Changed -= DashboardLicenseChanged;
-        licenseWatchLifetime.Cancel();
-        licenseWatchLifetime.Dispose();
     }
     
     private async Task LoadYetkilerAsync()
@@ -1623,8 +1522,6 @@ else
             dashboardLoadInProgress = false;
             isLoading = false;
             StateHasChanged();
-            if (dashboardReady && dashboardLicenseRefreshPending)
-                await ReconcileDashboardLicenseAsync();
         }
     }
 

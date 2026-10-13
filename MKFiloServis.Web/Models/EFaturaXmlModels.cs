@@ -594,6 +594,25 @@ public static class GibTevkifatKodlari
 /// </summary>
 public static class UblBirimKodlari
 {
+    // XML'deki standart kodlar saklanır; kullanıcıya Türkçe adları gösterilir.
+    private static readonly Dictionary<string, string> TurkceBirimAdlari = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["NIU"] = "Adet", ["EA"] = "Adet", ["C62"] = "Adet",
+        ["DAY"] = "Gün", ["MON"] = "Ay", ["ANN"] = "Yıl", ["HUR"] = "Saat",
+        ["KGM"] = "Kilogram", ["LTR"] = "Litre", ["MTR"] = "Metre",
+        ["MTK"] = "Metrekare", ["MTQ"] = "Metreküp", ["TNE"] = "Ton",
+        ["PA"] = "Paket", ["PK"] = "Paket", ["BX"] = "Kutu",
+        ["CS"] = "Koli", ["SET"] = "Takım", ["KWH"] = "Kilovatsaat",
+        ["MIU"] = "Milyon Uluslararası Birim"
+    };
+
+    public static string GetTurkceAd(string? birim)
+    {
+        if (string.IsNullOrWhiteSpace(birim)) return "Adet";
+        var normalized = birim.Trim();
+        return TurkceBirimAdlari.TryGetValue(normalized, out var ad) ? ad : normalized;
+    }
+
     public static readonly Dictionary<string, string> BirimEslestirme = new()
     {
         { "Adet", "C62" },
@@ -642,6 +661,7 @@ public static class UblBirimKodlari
 
     public static string GetUblKod(string birim)
     {
+        if (TurkceBirimAdlari.ContainsKey(birim)) return birim.Trim().ToUpperInvariant();
         return BirimEslestirme.TryGetValue(birim, out var kod) ? kod : "C62"; // Varsayılan: Adet
     }
 }

@@ -19,7 +19,7 @@
 #define MyIisPort        "5050"
 
 #ifndef MyAppVersion
-#define MyAppVersion "1.0.39"
+#define MyAppVersion "1.0.47"
 #endif
 
 #define MyVersionToken StringChange(MyAppVersion, ".", "_")
@@ -80,7 +80,14 @@ Name: "{app}\uploads"; Permissions: users-modify
 Name: "{app}\logs"; Permissions: users-modify
 Name: "{app}\database"; Permissions: users-modify
 Name: "{app}\Backups"; Permissions: users-modify
-Name: "{#MyBackupDir}"; Permissions: users-modify
+Name: "{#MyBackupDir}"
+Name: "{#MyBackupDir}\uploads"
+Name: "{#MyBackupDir}\Arsiv"
+Name: "{#MyBackupDir}\Depo"
+Name: "{#MyBackupDir}\data"
+Name: "{#MyBackupDir}\database"
+Name: "{#MyBackupDir}\keys"
+Name: "{#MyBackupDir}\logs"
 
 [Icons]
 Name: "{group}\{#MyShortcutName}"; Filename: "{app}\app\{#MyAppExeName}"; WorkingDir: "{app}\app"
@@ -190,16 +197,40 @@ begin
     FindClose(FindRec);
 end;
 
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+  Params: String;
+begin
+  Result := '';
+  Params := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $listeners = @(Get-NetTCPConnection -State Listen -LocalPort {#MyIisPort} -ErrorAction Stop | Where-Object { $_.OwningProcess -ne 4 }); if ($listeners.Count -gt 0) { exit 32 }; exit 0 } catch { exit 64 }"';
+  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+      Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    ResultCode := 64;
+  if ResultCode = 32 then
+    Result := '5050 portu baska bir uygulama tarafindan kullaniliyor. Yerel MKFiloServis uygulamasini kapatin ve kurulumu yeniden baslatin.'
+  else if ResultCode <> 0 then
+    Result := '5050 portunun kullanilabilirligi denetlenemedi. Kuruluma devam edilmedi.';
+end;
+
 procedure RunHiddenEx(const FileName, Params, StatusMsg: String; IgnoreAlreadyExists: Boolean);
 var
   ResultCode: Integer;
+  ExtraInfo: String;
 begin
   WizardForm.StatusLabel.Caption := StatusMsg;
   if not Exec(FileName, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
     RaiseException('Gerekli kurulum komutu baslatilamadi: ' + FileName);
   Log(Format('RunHidden: %s %s -> %d', [FileName, Params, ResultCode]));
   if (ResultCode <> 0) and not (IgnoreAlreadyExists and (ResultCode = 183)) then
-    RaiseException(Format('Kurulum komutu basarisiz oldu (%d): %s. Asama: %s', [ResultCode, FileName, StatusMsg]));
+  begin
+    if (ResultCode = 32) and (Pos('Site baslatiliyor', StatusMsg) > 0) then
+      RaiseException('5050 portu baska bir uygulama tarafindan kullaniliyor. Yerel MKFiloServis uygulamasini kapatin ve kurulumu yeniden deneyin.');
+    ExtraInfo := '';
+    if Pos('IIS baslangic sirri', StatusMsg) > 0 then
+      ExtraInfo := ' Betik ayrintisi: {app}\app\logs\configure-iis-startup.log';
+    RaiseException(Format('Kurulum komutu basarisiz oldu (%d): %s. Asama: %s.%s', [ResultCode, FileName, StatusMsg, ExtraInfo]));
+  end;
 end;
 
 procedure RunHidden(const FileName, Params, StatusMsg: String);
@@ -324,7 +355,7 @@ begin
     ConfigureIIS();
     ConfigureDatabaseFilePermissions(DbProviderPage.SelectedValueIndex);
     RunHidden(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-      ExpandConstant('-NoProfile -ExecutionPolicy Bypass -File "{app}\tools\configure-iis-startup.ps1" -AppPoolName "{#MyIisAppPool}" -SiteName "{#MyIisSiteName}" -Port {#MyIisPort} -AppPath "{app}\app"'),
+      ExpandConstant('-NoProfile -ExecutionPolicy Bypass -File "{app}\tools\configure-iis-startup.ps1" -AppPoolName "{#MyIisAppPool}" -SiteName "{#MyIisSiteName}" -Port {#MyIisPort} -AppPath "{app}\app" -StorageRoot "{#MyBackupDir}"'),
       'IIS baslangic sirri ve log klasoru yapilandiriliyor...');
     StartIIS();
   end;

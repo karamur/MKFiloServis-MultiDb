@@ -7,7 +7,6 @@ namespace MKFiloServis.Web.Components.Shared;
 
 public class AppErrorBoundary : ErrorBoundary
 {
-    [Inject] public NavigationManager Navigation { get; set; } = null!;
     [Inject] public AppIssueStateService AppIssueState { get; set; } = null!;
     [Inject] public ILogger<AppErrorBoundary> Logger { get; set; } = null!;
 
@@ -23,12 +22,8 @@ public class AppErrorBoundary : ErrorBoundary
             return Task.CompletedTask;
         }
 
-        if (!Navigation.Uri.Contains("/ters-giden-bir-sey", StringComparison.OrdinalIgnoreCase) &&
-            !Navigation.Uri.Contains("/error", StringComparison.OrdinalIgnoreCase))
-        {
-            Navigation.NavigateTo("/ters-giden-bir-sey", forceLoad: false);
-        }
-
+        // Hata kayda geçer; kullanıcıyı başka bir adrese otomatik taşıma.
+        // ErrorBoundary aynı adreste hata durumunu gösterir.
         return Task.CompletedTask;
     }
 }

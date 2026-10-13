@@ -16,7 +16,9 @@ function handleReconnectStateChanged(event) {
     } else if (event.detail.state === "failed") {
         document.addEventListener("visibilitychange", retryWhenDocumentBecomesVisible);
     } else if (event.detail.state === "rejected") {
-        location.reload();
+        // A full reload discards unsaved form values. Keep the current DOM in place
+        // and let the user retry the connection explicitly.
+        showReconnectFailed();
     }
 }
 
@@ -34,7 +36,7 @@ async function retry() {
             // We'll reload the page so the user can continue using the app as quickly as possible.
             const resumeSuccessful = await Blazor.resumeCircuit();
             if (!resumeSuccessful) {
-                location.reload();
+                showReconnectFailed();
             } else {
                 reconnectModal.close();
             }
@@ -49,10 +51,18 @@ async function resume() {
     try {
         const successful = await Blazor.resumeCircuit();
         if (!successful) {
-            location.reload();
+            showReconnectFailed();
         }
     } catch {
-        reconnectModal.classList.replace("components-reconnect-paused", "components-reconnect-resume-failed");
+        showReconnectFailed();
+    }
+}
+
+function showReconnectFailed() {
+    reconnectModal.classList.remove("components-reconnect-show", "components-reconnect-retrying", "components-reconnect-paused", "components-reconnect-resume-failed");
+    reconnectModal.classList.add("components-reconnect-failed");
+    if (!reconnectModal.open) {
+        reconnectModal.showModal();
     }
 }
 

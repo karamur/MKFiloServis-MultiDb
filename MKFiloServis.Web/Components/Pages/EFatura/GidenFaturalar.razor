@@ -5,6 +5,7 @@
 @using Microsoft.AspNetCore.Components.Forms
 @inject IFaturaService FaturaService
 @inject ICariService CariService
+@inject IAktifFirmaProvider AktifFirmaProvider
 @inject IBankaKasaHareketService BankaKasaService
 @inject IFirmaService FirmaService
 @inject IMuhasebeService MuhasebeService
@@ -54,6 +55,7 @@
                 <div class="col-md-2">
                     <label class="form-label small mb-1">Yil</label>
                     <select class="form-select form-select-sm" @bind="filtreYil" @bind:after="YilAyDegisti">
+                        <option value="0">Tum Yillar</option>
                         @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 5; y--)
                         {
                             <option value="@y">@y</option>
@@ -711,6 +713,26 @@
                             <strong>ETTN:</strong> @detayFatura.EttnNo
                         </div>
                     }
+
+                    <div class="alert alert-light border mt-3 mb-2">
+                        <strong><i class="bi bi-paperclip me-1"></i>Fatura Dosyaları</strong>
+                        <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                            @if (!string.IsNullOrWhiteSpace(detayFatura.PdfDosyaYolu))
+                            {
+                                <span class="badge bg-success">PDF eklendi</span>
+                                <button class="btn btn-outline-danger btn-sm" @onclick="() => FaturaDosyasiIndirAsync(FaturaDosyaTuru.Pdf)"><i class="bi bi-download me-1"></i>PDF indir</button>
+                            }
+                            else { <span class="badge bg-secondary">PDF yok</span> }
+                            <InputFile class="form-control form-control-sm" style="max-width:280px" OnChange="e => PdfYukle(e, detayFatura.Id)" accept=".pdf" />
+                            @if (!string.IsNullOrWhiteSpace(detayFatura.XmlDosyaYolu))
+                            {
+                                <span class="badge bg-success">XML eklendi</span>
+                                <button class="btn btn-outline-primary btn-sm" @onclick="() => FaturaDosyasiIndirAsync(FaturaDosyaTuru.Xml)"><i class="bi bi-download me-1"></i>XML indir</button>
+                            }
+                            else { <span class="badge bg-secondary">XML yok</span> }
+                            <InputFile class="form-control form-control-sm" style="max-width:280px" OnChange="e => XmlYukle(e, detayFatura.Id)" accept=".xml,.xlm" />
+                        </div>
+                    </div>
                     
                     <!-- Fatura Kalemleri -->
                     @if (detayFatura.FaturaKalemleri != null && detayFatura.FaturaKalemleri.Any())
@@ -739,7 +761,7 @@
                                                 <td><small>@kalem.UrunKodu</small></td>
                                                 <td>@kalem.Aciklama</td>
                                                 <td class="text-center">@kalem.Miktar</td>
-                                                <td>@kalem.Birim</td>
+                                                <td>@MKFiloServis.Web.Models.UblBirimKodlari.GetTurkceAd(kalem.Birim)</td>
                                                 <td class="text-end">@FormatPara(kalem.BirimFiyat)</td>
                                                 <td class="text-end">%@kalem.KdvOrani</td>
                                                 <td class="text-end"><strong>@FormatPara(kalem.ToplamTutar)</strong></td>
@@ -1158,8 +1180,8 @@
     private int filtreFirmaId = 0;
     private string filtreVergiNo = "";
     private string filtreVergiDairesi = "";
-    private int filtreYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
-    private int filtreAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
+    private int filtreYil = 0;
+    private int filtreAy = 0;
 
     // Modal state
     private bool showFaturaModal = false;
@@ -1218,6 +1240,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        filtreYil = AktifFirmaProvider.Mevcut.AktifDonemYil;
+        filtreAy = AktifFirmaProvider.Mevcut.AktifDonemAy;
         cariler = await CariService.GetAllAsync();
         bankaHesaplari = await BankaKasaService.GetAktifHesaplarAsync();
         firmalar = await FirmaService.GetAllAsync();
@@ -1251,6 +1275,17 @@
 
     private void YilAyDegisti()
     {
+        if (filtreYil == 0 && filtreAy > 0)
+            filtreYil = AktifFirmaProvider.Mevcut.AktifDonemYil;
+        if (filtreYil == 0)
+        {
+            filtreAy = 0;
+            filtreBaslangic = null;
+            filtreBitis = null;
+            Filtrele();
+            return;
+        }
+
         if (filtreAy > 0)
         {
             filtreBaslangic = new DateTime(filtreYil, filtreAy, 1);
@@ -1261,6 +1296,7 @@
             filtreBaslangic = new DateTime(filtreYil, 1, 1);
             filtreBitis = new DateTime(filtreYil, 12, 31);
         }
+        Filtrele();
     }
 
     private void Filtrele()
@@ -1305,8 +1341,8 @@
 
     private void FiltreTemizle()
     {
-        filtreYil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
-        filtreAy = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
+        filtreYil = AktifFirmaProvider.Mevcut.AktifDonemYil;
+        filtreAy = AktifFirmaProvider.Mevcut.AktifDonemAy;
         filtreEFaturaTipi = "";
         filtreDurum = "";
         aramaMetni = "";
@@ -1612,6 +1648,7 @@
 
             ToastService.ShowSuccess("Fatura kaydedildi.");
             ModalKapat();
+            cariler = await CariService.GetAllAsync();
             await YenileAsync();
         }
         catch (InvalidOperationException ex)
@@ -1770,6 +1807,8 @@
 
             if (importResult != null && importResult.Success)
             {
+                if (importResult.ImportedCount > 0)
+                    cariler = await CariService.GetAllAsync();
                 ToastService.ShowSuccess($"{importResult.ImportedCount} fatura aktarıldı.");
                 await YenileAsync();
             }
@@ -2050,9 +2089,9 @@
 
     private string GetAyAdi(int ay) => ay switch
     {
-        1 => "Ocak", 2 => "Subat", 3 => "Mart", 4 => "Nisan",
-        5 => "Mayis", 6 => "Haziran", 7 => "Temmuz", 8 => "Agustos",
-        9 => "Eylul", 10 => "Ekim", 11 => "Kasim", 12 => "Aralik",
+        1 => "Ocak", 2 => "Şubat", 3 => "Mart", 4 => "Nisan",
+        5 => "Mayıs", 6 => "Haziran", 7 => "Temmuz", 8 => "Ağustos",
+        9 => "Eylül", 10 => "Ekim", 11 => "Kasım", 12 => "Aralık",
         _ => ""
     };
 
@@ -2100,13 +2139,20 @@
         await PdfOnizlemeYukleAsync(fatura);
     }
 
-    private void PdfOnizlemeKapat()
+    private async Task PdfOnizlemeKapat()
     {
+        await PdfOnizlemeUrlTemizleAsync();
         pdfOnizlemeFatura = null;
-        pdfOnizlemeUrl = null;
         pdfOnizlemeBase64 = null;
         pdfOnizlemeDosyaAdi = null;
         pdfOnizlemeYukleniyor = false;
+    }
+
+    private async Task PdfOnizlemeUrlTemizleAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(pdfOnizlemeUrl) && pdfOnizlemeUrl.StartsWith("blob:", StringComparison.Ordinal))
+            await JS.InvokeVoidAsync("revokePdfPreviewUrl", pdfOnizlemeUrl);
+        pdfOnizlemeUrl = null;
     }
 
     private async Task PdfYukle(InputFileChangeEventArgs e, int faturaId)
@@ -2122,6 +2168,8 @@
             {
                 ToastService.ShowSuccess("PDF yüklendi.");
                 await YenileAsync();
+                if (detayFatura?.Id == faturaId)
+                    detayFatura = await FaturaService.GetByIdWithKalemlerAsync(faturaId);
                 // Seçili faturayı güncelle
                 pdfOnizlemeFatura = filtreliFaturalar.FirstOrDefault(f => f.Id == faturaId);
                 if (pdfOnizlemeFatura != null)
@@ -2138,9 +2186,38 @@
         }
     }
 
+    private async Task XmlYukle(InputFileChangeEventArgs e, int faturaId)
+    {
+        try
+        {
+            using var stream = new MemoryStream();
+            await e.File.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024).CopyToAsync(stream);
+            if (await FaturaService.UploadFaturaXmlAsync(faturaId, e.File.Name, stream.ToArray()))
+            {
+                ToastService.ShowSuccess("XML dosyası eklendi.");
+                await YenileAsync();
+                detayFatura = await FaturaService.GetByIdWithKalemlerAsync(faturaId);
+            }
+            else ToastService.ShowError("XML dosyası eklenemedi.");
+        }
+        catch (Exception ex) { ToastService.ShowError($"Hata: {ex.Message}"); }
+    }
+
+    private async Task FaturaDosyasiIndirAsync(FaturaDosyaTuru tur)
+    {
+        if (detayFatura == null) return;
+        try
+        {
+            var dosya = await FaturaService.GetFaturaDosyaAsync(detayFatura.Id, tur);
+            if (dosya == null) { ToastService.ShowWarning("Dosya bulunamadı."); return; }
+            await JS.InvokeVoidAsync("downloadFile", dosya.FileName, Convert.ToBase64String(dosya.Content), dosya.ContentType);
+        }
+        catch (Exception ex) { ToastService.ShowError($"Dosya indirilemedi: {ex.Message}"); }
+    }
+
     private async Task PdfOnizlemeYukleAsync(Fatura fatura)
     {
-        pdfOnizlemeUrl = null;
+        await PdfOnizlemeUrlTemizleAsync();
         pdfOnizlemeBase64 = null;
         pdfOnizlemeDosyaAdi = null;
 
@@ -2158,7 +2235,7 @@
 
             pdfOnizlemeBase64 = Convert.ToBase64String(dosya.Content);
             pdfOnizlemeDosyaAdi = dosya.FileName;
-            pdfOnizlemeUrl = $"data:{dosya.ContentType};base64,{pdfOnizlemeBase64}";
+            pdfOnizlemeUrl = await JS.InvokeAsync<string>("createPdfPreviewUrl", pdfOnizlemeBase64);
         }
         catch (Exception ex)
         {

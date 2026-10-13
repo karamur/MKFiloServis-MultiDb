@@ -2,15 +2,10 @@
 @using System.Reflection
 @using MKFiloServis.Web.Services
 @inject LicenseService Licenses
-@inject LicenseCache Cache
-@inject ILogger<LicenseModuleRouteGuard> Logger
-@implements IDisposable
 
 @if (allowed)
 {
-    <CascadingValue Value="licenseIdentity" IsFixed="true" @key="licenseIdentity">
-        @ChildContent
-    </CascadingValue>
+    @ChildContent
 }
 else
 {
@@ -34,68 +29,11 @@ else
     [Parameter] public RenderFragment? ChildContent { get; set; }
     private string[] modules = [];
     private bool allowed;
-    private string licenseIdentity = "";
-    private bool disposed;
-    private readonly CancellationTokenSource lifetime = new();
-
-    protected override void OnInitialized()
-    {
-        Cache.Changed += LicenseChanged;
-        _ = WatchExpiryAsync();
-    }
-
-    protected override async Task OnParametersSetAsync()
+    protected override void OnParametersSet()
     {
         modules = PageType.GetCustomAttributes<AuthorizeAttribute>(true)
             .Select(x => x.Policy).Where(x => x?.StartsWith("Licensed:", StringComparison.Ordinal) == true)
             .Select(x => x![9..]).Distinct().ToArray();
-        if (modules.Length > 0 && !Cache.HasValidLicense())
-            await Licenses.ValidateAsync(persistValidation: false);
-        licenseIdentity = (Cache.Get()?.Signature ?? "") + ":" + Cache.HasValidLicense();
         allowed = modules.All(Licenses.HasModulePermission);
-    }
-
-    private void LicenseChanged()
-    {
-        if (disposed) return;
-        _ = InvokeAsync(() =>
-        {
-            if (disposed) return;
-            licenseIdentity = (Cache.Get()?.Signature ?? "") + ":" + Cache.HasValidLicense();
-            allowed = modules.All(Licenses.HasModulePermission);
-            StateHasChanged();
-        });
-    }
-
-    private async Task WatchExpiryAsync()
-    {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
-        try
-        {
-            while (await timer.WaitForNextTickAsync(lifetime.Token))
-                await InvokeAsync(async () =>
-                {
-                    if (disposed || modules.Length == 0) return;
-                    LicenseValidationResult validation;
-                    try { validation = await Licenses.ValidateAsync(persistValidation: false); }
-                    catch (Exception ex)
-                    {
-                        Logger.LogError(ex, "Açık sayfanın modül lisansı doğrulanamadı.");
-                        validation = LicenseValidationResult.Fail("Lisans doğrulanamadı.");
-                    }
-                    if (disposed) return;
-                    allowed = validation.IsValid && modules.All(Licenses.HasModulePermission);
-                    StateHasChanged();
-                });
-        }
-        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
-    }
-
-    public void Dispose()
-    {
-        disposed = true;
-        Cache.Changed -= LicenseChanged;
-        lifetime.Cancel();
-        lifetime.Dispose();
     }
 }
