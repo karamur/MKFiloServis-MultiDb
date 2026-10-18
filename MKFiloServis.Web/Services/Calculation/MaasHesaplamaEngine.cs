@@ -9,7 +9,8 @@ public static class MaasHesaplamaEngine
 {
     /// <summary>
     /// Elden ödenecek tutarı hesaplar.
-    /// Formül: GercekMaas - BankayaYatan - Avans - Kesinti + Harcama
+    /// Formül: GercekMaas - BankayaYatan - Avans - Kesinti + Harcama + GecenAydanKalan
+    /// (GecenAydanKalan verilmezse 0 sayılır; muhasebe tahakkuku için geçen aydan kalan hariç tutar BuAyOdenecek'tir.)
     /// </summary>
     public static MaasHesapSonuc Hesapla(MaasInput input)
     {
@@ -18,8 +19,9 @@ public static class MaasHesaplamaEngine
         var avans = input.Avans ?? 0;
         var kesinti = input.Kesinti ?? 0;
         var harcama = input.Harcama ?? 0;
+        var gecenAydanKalan = input.GecenAydanKalan ?? 0;
 
-        var odenecek =
+        var buAyOdenecek =
             gercekMaas
             - bankayaYatan
             - avans
@@ -33,7 +35,9 @@ public static class MaasHesaplamaEngine
             Avans = avans,
             Kesinti = kesinti,
             Harcama = harcama,
-            Odenecek = odenecek
+            GecenAydanKalan = gecenAydanKalan,
+            BuAyOdenecek = buAyOdenecek,
+            Odenecek = buAyOdenecek + gecenAydanKalan
         };
     }
 

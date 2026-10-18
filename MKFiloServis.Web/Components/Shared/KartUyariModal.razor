@@ -1,0 +1,100 @@
+﻿@* Puantajda karttaki saat/gün ile fark olduğunda gösterilen uyarı: kullanıcı düzeltebilir ya da yine de devam edebilir. *@
+@if (Goster)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.55); z-index: 1070;" tabindex="-1" role="dialog" aria-modal="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2 bg-warning bg-opacity-25">
+                    <h6 class="modal-title"><i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>@Baslik</h6>
+                    <button type="button" class="btn-close" aria-label="Kapat" @onclick="VazgecAsync"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrWhiteSpace(Aciklama))
+                    {
+                        <p class="small text-muted mb-2">@Aciklama</p>
+                    }
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-2">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Personel</th>
+                                    <th>Ücret türü</th>
+                                    <th class="text-end">Kartta</th>
+                                    <th class="text-end">Puantajda</th>
+                                    <th class="text-end">Fark</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var satir in Satirlar)
+                                {
+                                    var sonuc = satir.Sonuc;
+                                    var az = sonuc.Durum == KartKontrolDurumu.Az;
+                                    <tr>
+                                        <td class="fw-semibold">@satir.Personel</td>
+                                        <td><small class="text-muted">@(sonuc.Birim == KartKontrolBirimi.Saat ? "Saatlik" : "Günlük")</small></td>
+                                        <td class="text-end">@Sayi(sonuc.KartDegeri) @sonuc.BirimAdi</td>
+                                        <td class="text-end">@Sayi(sonuc.PuantajDegeri) @sonuc.BirimAdi</td>
+                                        <td class="text-end fw-bold @(az ? "text-danger" : "text-warning-emphasis")">
+                                            <i class="bi @(az ? "bi-arrow-down" : "bi-arrow-up") me-1"></i>@(sonuc.Fark > 0 ? "+" : "")@Sayi(sonuc.Fark) @sonuc.BirimAdi
+                                            <div class="fw-normal small text-muted">@(az ? "eksik" : "fazla")@(sonuc.FazlaMesai > 0 ? $" · {Sayi(sonuc.FazlaMesai)} saat fazla mesai dahil" : "")</div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="small text-muted">
+                        <i class="bi bi-info-circle me-1"></i>Karttaki değer, personel kartındaki "Çalışılan Saat / Gün" alanıdır. Kart saati hafta tatili veya resmî tatil ücretlerini de içeriyorsa fark beklenen bir durumdur.
+                        İsterseniz kayıtları düzeltebilir veya yine de devam edebilirsiniz.
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="VazgecAsync" disabled="@isleniyor">
+                        <i class="bi bi-pencil me-1"></i>Düzelt
+                    </button>
+                    <button type="button" class="btn btn-warning btn-sm" @onclick="DevamAsync" disabled="@isleniyor">
+                        @if (isleniyor)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check2-circle me-1"></i>
+                        }
+                        @DevamMetni
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Goster { get; set; }
+    [Parameter] public string Baslik { get; set; } = "Kart ile puantaj farklı";
+    [Parameter] public string? Aciklama { get; set; }
+    [Parameter] public IReadOnlyList<KartUyariSatiri> Satirlar { get; set; } = [];
+    [Parameter] public string DevamMetni { get; set; } = "Yine de devam et";
+    [Parameter] public EventCallback OnDevam { get; set; }
+    [Parameter] public EventCallback OnVazgec { get; set; }
+
+    private bool isleniyor;
+
+    private static string Sayi(decimal deger) => deger.ToString("0.##", System.Globalization.CultureInfo.GetCultureInfo("tr-TR"));
+
+    private async Task DevamAsync()
+    {
+        if (isleniyor) return;
+        isleniyor = true;
+        try
+        {
+            await OnDevam.InvokeAsync();
+        }
+        finally
+        {
+            isleniyor = false;
+        }
+    }
+
+    private Task VazgecAsync() => isleniyor ? Task.CompletedTask : OnVazgec.InvokeAsync();
+}

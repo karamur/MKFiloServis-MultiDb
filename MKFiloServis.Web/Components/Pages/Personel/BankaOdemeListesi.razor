@@ -682,6 +682,10 @@
                 snapshotUyari = "Liste gösteriliyor; dönem kaydı oluşturmak için tek bir firma seçin.";
             else if (!string.IsNullOrEmpty(yuklemeGorev) || !string.IsNullOrEmpty(yuklemeBordroFiltre))
                 snapshotUyari = "Filtreli liste dönem kaydı olarak kaydedilmedi. Dönem kaydı için görev ve bordro filtrelerini kaldırıp listeyi yenileyin.";
+            else if (new DateTime(yuklemeYil, yuklemeAy, 1) > new DateTime(MKFiloServis.Shared.Time.BusinessTime.Today.Year, MKFiloServis.Shared.Time.BusinessTime.Today.Month, 1))
+            {
+                // Gelecek ayın dönem kaydı alınmaz: ay gelince eski tutarlarla kilitli kayıt gibi görünmesin.
+            }
             else
             {
                 try

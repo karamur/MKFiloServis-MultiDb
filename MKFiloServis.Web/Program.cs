@@ -320,6 +320,7 @@ builder.Services.AddScoped<IExcelService, ExcelService>();
 builder.Services.AddScoped<IMaliAnalizService, MaliAnalizService>();
 builder.Services.AddScoped<IPersonelMaasIzinService, PersonelMaasIzinService>();
 builder.Services.AddScoped<IMaasSnapshotService, MaasSnapshotService>();
+builder.Services.AddScoped<IMaasDonemService, MaasDonemService>(); // Aylık maaş/ödeme listesi: avans/harcama/devir dönem özeti
 builder.Services.AddScoped<MuhasebeSnapshotService>();
 builder.Services.AddScoped<FinansDashboardService>();
 builder.Services.AddScoped<BankaImportService>();

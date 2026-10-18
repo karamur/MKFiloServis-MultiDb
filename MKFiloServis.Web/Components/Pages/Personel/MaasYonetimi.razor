@@ -14,6 +14,7 @@
 @inject IKullaniciService KullaniciService
 @inject IBankaHesapService BankaHesapService
 @inject IMaasSnapshotService SnapshotService
+@inject IMaasDonemService MaasDonemService
 @inject IAktifFirmaProvider AktifFirmaProvider
 @inject IJSRuntime JS
 @inject IDbContextFactory<MKFiloServis.Web.Data.ApplicationDbContext> DbContextFactory
@@ -40,6 +41,17 @@
                     <option value="@gorev">@GetGorevAdi(gorev)</option>
                 }
             </select>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Dönem">
+                <button type="button" class="btn btn-outline-secondary" title="Önceki ay" @onclick="OncekiAyaGit" disabled="@(isLoading || !OncekiAyVar)">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+                <button type="button" class="btn btn-outline-secondary" title="Bu aya dön" @onclick="BuAyaGit" disabled="@(isLoading || BuAydaMi)">
+                    <i class="bi bi-calendar-check me-1"></i>Bu Ay
+                </button>
+                <button type="button" class="btn btn-outline-secondary" title="Sonraki ay" @onclick="SonrakiAyaGit" disabled="@(isLoading || !SonrakiAyVar)">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
             <select class="form-select form-select-sm" style="width: 110px;" @bind="durYil" @bind:after="YenileDurumData">
                 @for (int y = MKFiloServis.Shared.Time.BusinessTime.Today.Year; y >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 3; y--)
                 {
@@ -68,8 +80,21 @@
         </div>
     </div>
 
-    <div class="mb-3 text-muted small">
-        <i class="bi bi-person-lines-fill me-1"></i>Ödeme / Durum
+    <div class="mb-3 d-flex flex-wrap align-items-center gap-2">
+        <span class="text-muted small"><i class="bi bi-person-lines-fill me-1"></i>Ödeme / Durum</span>
+        <span class="badge text-bg-primary fs-6 fw-semibold">@DonemAdi</span>
+        @if (OncekiDonemAdi is not null)
+        {
+            <span class="text-muted small" title="Geçen aydan kalan tutar bu dönemin kayıtlarından hesaplanır">
+                <i class="bi bi-arrow-return-right me-1"></i>Önceki dönem: @OncekiDonemAdi
+            </span>
+        }
+        @if (!string.IsNullOrWhiteSpace(durKayitBilgisi))
+        {
+            <span class="badge @(durKayitKilitli ? "text-bg-secondary" : "text-bg-info")" title="@durKayitAciklama">
+                <i class="bi @(durKayitKilitli ? "bi-lock-fill" : "bi-info-circle") me-1"></i>@durKayitBilgisi
+            </span>
+        }
     </div>
 
     @if (isLoading)
@@ -131,6 +156,14 @@
                             </div>
                         </div>
                         <div class="col">
+                            <div class="card border-0 bg-dark bg-opacity-10" title="Önceki aylardan kapanmamış avans (-) ile şirketin personele borcu ve ödenmemiş harcamaları (+). Ödenecek tutara dahildir.">
+                                <div class="card-body py-2 text-center">
+                                    <small class="text-muted">Geçen Aydan Kalan</small>
+                                    <h6 class="mb-0 @(DurFiltreliSatirlar.Sum(s => s.GecenAydanKalan) < 0 ? "text-warning-emphasis" : "text-success")">@FormatPara(DurFiltreliSatirlar.Sum(s => s.GecenAydanKalan), true)</h6>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col">
                             <div class="card border-0 bg-danger bg-opacity-10">
                                 <div class="card-body py-2 text-center">
                                     <small class="text-muted">Ödenecek</small>
@@ -139,26 +172,41 @@
                             </div>
                         </div>
                     </div>
+                    <!-- Durum süzgeçleri -->
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2" role="group" aria-label="Durum süzgeci">
+                        @foreach (var (anahtar, etiket, simge, adet) in DurumSuzgecleri)
+                        {
+                            <button type="button" class="btn btn-sm @(durDurumFiltre == anahtar ? "btn-primary" : "btn-outline-secondary")"
+                                    @onclick="() => DurumSuzgeciSec(anahtar)">
+                                <i class="bi @simge me-1"></i>@etiket <span class="badge @(durDurumFiltre == anahtar ? "text-bg-light" : "text-bg-secondary") ms-1">@adet</span>
+                            </button>
+                        }
+                    </div>
                     <!-- Ana Tablo -->
                     <div class="card shadow-sm">
                         <div class="card-body p-0">
                             <div class="table-responsive" style="max-height: 75vh;">
-                                <table class="table table-hover table-sm mb-0 align-middle">
+                                @{ var kompakt = durSecilenPersonelId > 0; }
+                                <table class="table table-hover table-sm mb-0 align-middle" style="@(kompakt ? "font-size:.82rem;" : "")">
                                     <thead class="table-light sticky-top">
-                                        <tr>
+                                        <tr class="text-nowrap">
                                             <th style="width:30px;">#</th>
                                             <th>Personel</th>
-                                            <th>Görev</th>
+                                            @if (!kompakt)
+                                            {
+                                                <th>Görev</th>
+                                            }
                                             <th class="text-end" title="Personelin gerçek net maaşı">Gerçek Maaş</th>
                                             <th class="text-end" title="Bordrodan bankaya yatan resmi net maaş">Bankaya Yatan</th>
-                                            <th class="text-end text-warning" title="Mahsup edilecek açık avans">Avans (-)</th>
+                                            <th class="text-end text-warning" title="Seçili ayda verilen avans; maaştan düşülür">Avans (-)</th>
                                             <th class="text-end text-danger" title="Borç / kesinti">Kesinti (-)</th>
-                                            <th class="text-end text-success" title="Personelin şirket adına cebinden yaptığı harcama">Harcaması (+)</th>
-                                            <th class="text-end fw-bold" title="Gerçek Maaş - Bankaya Yatan - Avans - Kesinti + Harcaması">Ödenecek</th>
-                                                    <th>Durum</th>
-                                                    <th style="width:50px;"></th>
-                                                </tr>
-                                            </thead>
+                                            <th class="text-end text-success" title="Seçili ayda personelin şirket adına cebinden yaptığı harcama ve şirketin personele borcu">Harcaması (+)</th>
+                                            <th class="text-end" title="Önceki aylardan kapanmamış bakiye: personelin avans borcu (-), personelin alacağı (+)">Geçen Aydan Kalan</th>
+                                            <th class="text-end fw-bold" title="Gerçek Maaş - Bankaya Yatan - Avans - Kesinti + Harcaması + Geçen Aydan Kalan">Ödenecek</th>
+                                            <th>Durum</th>
+                                            <th style="width:50px;"></th>
+                                        </tr>
+                                    </thead>
                                     <tbody>
                                         @{ int durSira = 0; }
                                         @foreach (var s in DurFiltreliSatirlar)
@@ -166,69 +214,96 @@
                                             durSira++;
                                             var secili = s.PersonelId == durSecilenPersonelId;
                                             <tr class="@(secili ? "table-active" : "")" style="cursor:pointer;" @onclick="() => DurumPersonelSec(s.PersonelId)">
-                                                <td class="text-muted small">@(s.SiralamaNo > 0 ? s.SiralamaNo : durSira)</td>
+                                                <td class="text-muted small">@(s.SiralamaNo > 0 && !durKayitKilitli ? s.SiralamaNo : durSira)</td>
                                                 <td>
                                                     <strong class="@(secili ? "text-primary" : "")">@s.AdSoyad</strong>
+                                                    @if (s.KartBulunamadi)
+                                                    {
+                                                        <span class="badge text-bg-light border ms-1" style="font-size:0.6rem;" title="Personel kartı artık bulunmuyor; bilgiler dönem kaydından alındı">Kayıtlı değil</span>
+                                                    }
                                                     <br />
-                                                    <small class="text-muted">@s.SoforKodu</small>
+                                                    <small class="text-muted">@s.SoforKodu@(kompakt ? " · " + s.GorevAdi : "")</small>
                                                 </td>
-                                                <td><small>@s.GorevAdi</small></td>
-                                                <td class="text-end">@FormatPara(s.GercekMaas)</td>
-                                                <td class="text-end">
+                                                @if (!kompakt)
+                                                {
+                                                    <td><small>@s.GorevAdi</small></td>
+                                                }
+                                                <td class="text-end text-nowrap">@FormatPara(s.GercekMaas)</td>
+                                                <td class="text-end text-nowrap">
                                                     @if (s.BankayaYatan > 0) { @FormatPara(s.BankayaYatan) }
                                                     else { <span class="text-muted">-</span> }
                                                 </td>
-                                                <td class="text-end text-warning">
+                                                <td class="text-end text-nowrap text-warning">
                                                     @if (s.Avans > 0) { <span>-@FormatPara(s.Avans)</span> }
                                                     else { <span class="text-muted">-</span> }
                                                 </td>
-                                                <td class="text-end text-danger">
+                                                <td class="text-end text-nowrap text-danger">
                                                     @if (s.Kesinti > 0) { <span>-@FormatPara(s.Kesinti)</span> }
                                                     else { <span class="text-muted">-</span> }
                                                 </td>
-                                                <td class="text-end text-success">
+                                                <td class="text-end text-nowrap text-success">
                                                     @if (s.Harcamasi > 0) { <span>+@FormatPara(s.Harcamasi)</span> }
                                                     else { <span class="text-muted">-</span> }
                                                 </td>
-                                                <td class="text-end fw-bold @(s.Odenecek >= 0 ? "text-success" : "text-danger")">
+                                                <td class="text-end text-nowrap @(s.GecenAydanKalan < 0 ? "text-warning-emphasis" : "text-success")" title="@DevirAciklamasi(s)">
+                                                    @if (s.GecenAydanKalan != 0)
+                                                    {
+                                                        <span><i class="bi bi-arrow-return-right me-1 small"></i>@FormatPara(s.GecenAydanKalan, true)</span>
+                                                    }
+                                                    else { <span class="text-muted">-</span> }
+                                                </td>
+                                                <td class="text-end text-nowrap fw-bold @(s.Odenecek >= 0 ? "text-success" : "text-danger")"
+                                                    title="@OdenecekAciklamasi(s)">
                                                     @FormatPara(s.Odenecek)
                                                 </td>
-                                                        <td>
-                                                            @if (s.Odenecek > 0)
-                                                            {
-                                                                <span class="badge bg-warning text-dark" style="font-size:0.65rem;">Elden Ödenecek</span>
-                                                            }
-                                                            else if (s.BankayaYatan > 0)
-                                                            {
-                                                                <span class="badge bg-success" style="font-size:0.65rem;">Banka Ödemesi</span>
-                                                            }
-                                                            else
-                                                            {
-                                                                <span class="badge bg-secondary" style="font-size:0.65rem;">Ödeme Yok</span>
-                                                            }
-                                                        </td>
-                                                        <td>
-                                                            <button class="btn btn-sm btn-outline-primary py-0 px-2" title="Detay" @onclick:stopPropagation="true"
-                                                                    @onclick="() => DurumPersonelSec(s.PersonelId)">
-                                                                <i class="bi bi-person-lines-fill"></i>
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                }
+                                                <td>
+                                                    <div class="d-flex flex-wrap gap-1">
+                                                        @if (s.BankayaYatan > 0)
+                                                        {
+                                                            <span class="badge bg-success" style="font-size:0.65rem;">Banka Ödemesi</span>
+                                                        }
+                                                        @if (s.Odenecek > 0)
+                                                        {
+                                                            <span class="badge bg-warning text-dark" style="font-size:0.65rem;">Elden Ödenecek</span>
+                                                        }
+                                                        else if (s.Odenecek < 0)
+                                                        {
+                                                            <span class="badge bg-danger" style="font-size:0.65rem;" title="Personelin şirkete borcu var; bir sonraki aya devreder">Personelden Alacak</span>
+                                                        }
+                                                        else if (s.BankayaYatan <= 0)
+                                                        {
+                                                            <span class="badge bg-secondary" style="font-size:0.65rem;">Ödeme Yok</span>
+                                                        }
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-primary py-0 px-2" title="Detay" @onclick:stopPropagation="true"
+                                                            @onclick="() => DurumPersonelSec(s.PersonelId)">
+                                                        <i class="bi bi-person-lines-fill"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
                                     </tbody>
                                     <tfoot class="table-dark">
-                                        <tr>
-                                            <td colspan="3"><strong>TOPLAM (@DurFiltreliSatirlar.Count() personel)</strong></td>
+                                        @{
+                                            var toplamAvans = DurFiltreliSatirlar.Sum(s => s.Avans);
+                                            var toplamKesinti = DurFiltreliSatirlar.Sum(s => s.Kesinti);
+                                            var toplamHarcama = DurFiltreliSatirlar.Sum(s => s.Harcamasi);
+                                        }
+                                        <tr class="text-nowrap">
+                                            <td colspan="@(kompakt ? 2 : 3)"><strong>TOPLAM (@DurFiltreliSatirlar.Count() personel)</strong></td>
                                             <td class="text-end"><strong>@FormatPara(DurFiltreliSatirlar.Sum(s => s.GercekMaas))</strong></td>
                                             <td class="text-end"><strong>@FormatPara(DurFiltreliSatirlar.Sum(s => s.BankayaYatan))</strong></td>
-                                            <td class="text-end text-warning"><strong>-@FormatPara(DurFiltreliSatirlar.Sum(s => s.Avans))</strong></td>
-                                            <td class="text-end text-danger"><strong>-@FormatPara(DurFiltreliSatirlar.Sum(s => s.Kesinti))</strong></td>
-                                            <td class="text-end text-success"><strong>+@FormatPara(DurFiltreliSatirlar.Sum(s => s.Harcamasi))</strong></td>
-                                                    <td class="text-end"><strong>@FormatPara(DurFiltreliSatirlar.Sum(s => s.Odenecek))</strong></td>
-                                                    <td></td>
-                                                    <td></td>
-                                                </tr>
-                                            </tfoot>
+                                            <td class="text-end text-warning"><strong>@(toplamAvans > 0 ? "-" : "")@FormatPara(toplamAvans)</strong></td>
+                                            <td class="text-end text-danger"><strong>@(toplamKesinti > 0 ? "-" : "")@FormatPara(toplamKesinti)</strong></td>
+                                            <td class="text-end text-success"><strong>@(toplamHarcama > 0 ? "+" : "")@FormatPara(toplamHarcama)</strong></td>
+                                            <td class="text-end"><strong>@FormatPara(DurFiltreliSatirlar.Sum(s => s.GecenAydanKalan), true)</strong></td>
+                                            <td class="text-end"><strong>@FormatPara(DurFiltreliSatirlar.Sum(s => s.Odenecek))</strong></td>
+                                            <td></td>
+                                            <td></td>
+                                        </tr>
+                                    </tfoot>
                                 </table>
                             </div>
                         </div>
@@ -257,9 +332,49 @@
                                 </div>
                             </div>
                             <div class="card-body p-0" style="max-height: 75vh; overflow-y: auto;">
+                                <!-- Dönem Özeti (seçili ay) -->
+                                @if (DurSecilenSatir is { } donemSatir)
+                                {
+                                    <div class="p-3 border-bottom bg-light">
+                                        <h6 class="text-primary mb-2"><i class="bi bi-calendar3 me-1"></i>@DonemAdi Dönem Özeti</h6>
+                                        <table class="table table-sm table-borderless mb-0 align-middle">
+                                            <tr><td class="text-muted">Gerçek Maaş</td><td class="text-end">@FormatPara(donemSatir.GercekMaas)</td></tr>
+                                            <tr><td class="text-muted">Bankaya Yatan</td><td class="text-end">@(donemSatir.BankayaYatan > 0 ? "-" + FormatPara(donemSatir.BankayaYatan) : "-")</td></tr>
+                                            <tr><td class="text-muted">Avans <small>(bu ay)</small></td><td class="text-end text-warning-emphasis">@(donemSatir.Avans > 0 ? "-" + FormatPara(donemSatir.Avans) : "-")</td></tr>
+                                            <tr><td class="text-muted">Kesinti</td><td class="text-end text-danger">@(donemSatir.Kesinti > 0 ? "-" + FormatPara(donemSatir.Kesinti) : "-")</td></tr>
+                                            <tr><td class="text-muted">Harcaması <small>(bu ay)</small></td><td class="text-end text-success">@(donemSatir.Harcamasi > 0 ? "+" + FormatPara(donemSatir.Harcamasi) : "-")</td></tr>
+                                            <tr>
+                                                <td class="text-muted">Geçen Aydan Kalan</td>
+                                                <td class="text-end @(donemSatir.GecenAydanKalan < 0 ? "text-warning-emphasis" : donemSatir.GecenAydanKalan > 0 ? "text-success" : "")">@(donemSatir.GecenAydanKalan != 0 ? FormatPara(donemSatir.GecenAydanKalan, true) : "-")</td>
+                                            </tr>
+                                            @if (donemSatir.DevirAvans > 0)
+                                            {
+                                                <tr><td class="ps-3 text-muted small">Önceki aylardan kapanmamış avans</td><td class="text-end small text-warning-emphasis">-@FormatPara(donemSatir.DevirAvans)</td></tr>
+                                            }
+                                            @if (donemSatir.DevirBorc > 0)
+                                            {
+                                                <tr><td class="ps-3 text-muted small">Şirketin personele borcu</td><td class="text-end small text-success">+@FormatPara(donemSatir.DevirBorc)</td></tr>
+                                            }
+                                            @if (donemSatir.DevirHarcama > 0)
+                                            {
+                                                <tr><td class="ps-3 text-muted small">Geri ödenmemiş harcama</td><td class="text-end small text-success">+@FormatPara(donemSatir.DevirHarcama)</td></tr>
+                                            }
+                                            <tr class="border-top">
+                                                <td class="fw-bold">Ödenecek</td>
+                                                <td class="text-end fw-bold @(donemSatir.Odenecek >= 0 ? "text-success" : "text-danger")">@FormatPara(donemSatir.Odenecek)</td>
+                                            </tr>
+                                        </table>
+                                        @if (donemSatir.KayitOdenecek is { } kayitTutari && Math.Abs(kayitTutari - donemSatir.BuAyOdenecek) > 0.005m)
+                                        {
+                                            <div class="small text-muted mt-2">
+                                                <i class="bi bi-info-circle me-1"></i>Dönem kaydındaki tutar <strong>@FormatPara(kayitTutari)</strong>; avans/harcama kayıtları ayın tarihlerine göre yeniden hesaplandığı için fark olabilir.
+                                            </div>
+                                        }
+                                    </div>
+                                }
                                 <!-- Maaş Özet -->
                                 <div class="p-3 border-bottom">
-                                    <h6 class="text-primary mb-2"><i class="bi bi-wallet2 me-1"></i>Maaş Bilgileri</h6>
+                                    <h6 class="text-primary mb-2"><i class="bi bi-wallet2 me-1"></i>Maaş Bilgileri <small class="text-muted fw-normal">(güncel kart)</small></h6>
                                     <div class="row g-2 text-center">
                                         <div class="col-4">
                                             <div class="bg-light rounded p-2">
@@ -1262,6 +1377,11 @@
     private List<EkstreHareket> durEkstreHareketler = new();
     private BordroDetay? durBordroDetay;
     private List<PersonelCebindenHarcamaItem> durCebHarcamalar = new();
+    private string durDurumFiltre = string.Empty; // "" | elden | banka | devir | alacak | yok
+    private (int Yil, int Ay)? durYuklenenDonem;
+    private string? durKayitBilgisi;
+    private string? durKayitAciklama;
+    private bool durKayitKilitli;
     private bool CanBorcKaydiKaliciSil => kullaniciYetkileri.Contains("*") || kullaniciYetkileri.Contains(Yetkiler.PersonelBorcSil);
     // Firma seçimi (Ekran/Excel/Yazdır için)
     private int ciktiFirmaSecim = 0; // 0=Aktif, 1=Tüm Firmalar
@@ -1273,12 +1393,58 @@
         .ThenBy(s => s.Ad)
         .ThenBy(s => s.Soyad)
         .ToList();
-    private IEnumerable<PersonelDurumSatir> DurFiltreliSatirlar => durSatirlar
+    // Arama ve görev süzgeci; durum düğmelerindeki adetler bu kümeden sayılır.
+    private IEnumerable<PersonelDurumSatir> DurAramaGorevSatirlari => durSatirlar
         .Where(s => (string.IsNullOrWhiteSpace(durAramaMetni)
                 || s.AdSoyad.Contains(durAramaMetni, StringComparison.OrdinalIgnoreCase)
                 || s.SoforKodu.Contains(durAramaMetni, StringComparison.OrdinalIgnoreCase))
             && (string.IsNullOrWhiteSpace(durSecilenGorev)
                 || s.GorevEnum.ToString() == durSecilenGorev));
+    private IEnumerable<PersonelDurumSatir> DurFiltreliSatirlar => DurAramaGorevSatirlari
+        .Where(s => DurumUyar(s, durDurumFiltre));
+    private PersonelDurumSatir? DurSecilenSatir => durSecilenPersonelId > 0
+        ? durSatirlar.FirstOrDefault(s => s.PersonelId == durSecilenPersonelId)
+        : null;
+
+    private string DonemAdi => new DateTime(durYil, durAy, 1).ToString("MMMM yyyy");
+    private string? OncekiDonemAdi => OncekiAyVar ? new DateTime(durYil, durAy, 1).AddMonths(-1).ToString("MMMM yyyy") : null;
+    private bool BuAydaMi => durYil == MKFiloServis.Shared.Time.BusinessTime.Today.Year && durAy == MKFiloServis.Shared.Time.BusinessTime.Today.Month;
+    private bool OncekiAyVar => new DateTime(durYil, durAy, 1).AddMonths(-1).Year >= MKFiloServis.Shared.Time.BusinessTime.Today.Year - 3;
+    private bool SonrakiAyVar => new DateTime(durYil, durAy, 1).AddMonths(1).Year <= MKFiloServis.Shared.Time.BusinessTime.Today.Year;
+
+    private IEnumerable<(string Anahtar, string Etiket, string Simge, int Adet)> DurumSuzgecleri
+    {
+        get
+        {
+            var satirlar = DurAramaGorevSatirlari.ToList();
+            var tanimlar = new[]
+            {
+                ("", "Tümü", "bi-list-ul"),
+                ("elden", "Elden ödenecek", "bi-hand-index-thumb"),
+                ("banka", "Banka ödemesi", "bi-bank"),
+                ("devir", "Geçen aydan kalan var", "bi-arrow-return-right"),
+                ("alacak", "Personelden alacak", "bi-exclamation-triangle"),
+                ("yok", "Ödeme yok", "bi-dash-circle")
+            };
+            foreach (var (anahtar, etiket, simge) in tanimlar)
+            {
+                var adet = satirlar.Count(s => DurumUyar(s, anahtar));
+                // Boş kategoriler gizlenir; seçili olan ve "Tümü" her zaman görünür.
+                if (adet > 0 || anahtar.Length == 0 || anahtar == durDurumFiltre)
+                    yield return (anahtar, etiket, simge, adet);
+            }
+        }
+    }
+
+    private static bool DurumUyar(PersonelDurumSatir satir, string anahtar) => anahtar switch
+    {
+        "elden" => satir.Odenecek > 0,
+        "banka" => satir.BankayaYatan > 0,
+        "devir" => satir.GecenAydanKalan != 0,
+        "alacak" => satir.Odenecek < 0,
+        "yok" => satir.Odenecek == 0 && satir.BankayaYatan <= 0,
+        _ => true
+    };
 
     // ===== LIFECYCLE =====
     protected override async Task OnInitializedAsync()
@@ -2039,6 +2205,7 @@
             var filtreliler = DurFiltreliSatirlar.ToList();
             if (!filtreliler.Any()) { BildirimGoster("Dışa aktarılacak kayıt bulunamadı.", false); return; }
 
+            const int kolonSayisi = 16;
             using var workbook = new XLWorkbook();
             var ws = workbook.Worksheets.Add("MaasOdeme");
             var excelFirmaAdi = ciktiFirmaSecim == 0
@@ -2046,125 +2213,93 @@
                 : "Tüm Firmalar";
             ws.Cell("A1").Value = excelFirmaAdi;
             ws.Cell("A2").Value = "Maaş / Ödeme Yönetimi";
-            ws.Cell("A3").Value = $"Dönem: {new DateTime(durYil, durAy, 1):MMMM yyyy}  |  {MKFiloServis.Shared.Time.BusinessTime.Now:dd.MM.yyyy HH:mm}";
-            ws.Range("A1:O1").Merge().Style.Font.Bold = true;
-            ws.Range("A1:O1").Style.Font.FontSize = 14;
-            ws.Range("A1:O1").Style.Fill.BackgroundColor = XLColor.DarkRed;
-            ws.Range("A1:O1").Style.Font.FontColor = XLColor.White;
-            ws.Range("A2:O3").Merge();
+            ws.Cell("A3").Value = $"Dönem: {DonemAdi}  |  {MKFiloServis.Shared.Time.BusinessTime.Now:dd.MM.yyyy HH:mm}";
+            ws.Range(1, 1, 1, kolonSayisi).Merge().Style.Font.Bold = true;
+            ws.Range(1, 1, 1, kolonSayisi).Style.Font.FontSize = 14;
+            ws.Range(1, 1, 1, kolonSayisi).Style.Fill.BackgroundColor = XLColor.DarkRed;
+            ws.Range(1, 1, 1, kolonSayisi).Style.Font.FontColor = XLColor.White;
+            ws.Range(2, 1, 2, kolonSayisi).Merge();
+            ws.Range(3, 1, 3, kolonSayisi).Merge();
 
             var header = ws.Row(5);
-            var basliklar = new[] { "S.NO", "PLAKA", "AD SOYAD", "TELEFON", "ADRES", "GERÇEK MAAŞ", "BANKAYA YATAN", "AVANS (-)", "KESİNTİ (-)", "HARCAMASI (+)", "FARK / ÖDENECEK", "FİRMA", "SGK", "İŞE GİRİŞ", "İŞTEN ÇIKIŞ" };
+            var basliklar = new[] { "S.NO", "PLAKA", "AD SOYAD", "TELEFON", "ADRES", "GERÇEK MAAŞ", "BANKAYA YATAN", "AVANS (-)", "KESİNTİ (-)", "HARCAMASI (+)", "GEÇEN AYDAN KALAN (±)", "FARK / ÖDENECEK", "FİRMA", "SGK", "İŞE GİRİŞ", "İŞTEN ÇIKIŞ" };
             for (int i = 0; i < basliklar.Length; i++)
                 header.Cell(i + 1).Value = basliklar[i];
             header.Style.Font.Bold = true;
             header.Style.Fill.BackgroundColor = XLColor.Red;
             header.Style.Font.FontColor = XLColor.White;
 
-            var row = 6; var sira = 0; decimal genelToplamGercek = 0, genelToplamBankaya = 0, genelToplamAvans = 0, genelToplamKesinti = 0, genelToplamHarcama = 0, genelToplamFark = 0;
+            var row = 6;
+
+            void SatirYaz(PersonelDurumSatir item, int sira)
+            {
+                ws.Cell(row, 1).Value = item.SiralamaNo > 0 && !durKayitKilitli ? item.SiralamaNo : sira;
+                ws.Cell(row, 2).Value = item.Plaka ?? "-";
+                ws.Cell(row, 3).Value = item.AdSoyad;
+                ws.Cell(row, 4).Value = item.Telefon ?? "-";
+                ws.Cell(row, 5).Value = item.Adres ?? "-";
+                ws.Cell(row, 6).Value = item.GercekMaas;
+                ws.Cell(row, 7).Value = item.BankayaYatan;
+                ws.Cell(row, 8).Value = item.Avans;
+                ws.Cell(row, 9).Value = item.Kesinti;
+                ws.Cell(row, 10).Value = item.Harcamasi;
+                ws.Cell(row, 11).Value = item.GecenAydanKalan;
+                ws.Cell(row, 12).Value = item.Odenecek;
+                ws.Cell(row, 13).Value = item.FirmaAdi ?? "-";
+                ws.Cell(row, 14).Value = item.SgkDurum ?? "-";
+                ws.Cell(row, 15).Value = item.IseGirisTarihi?.ToString("dd.MM.yyyy") ?? "-";
+                ws.Cell(row, 16).Value = item.IstenCikisTarihi?.ToString("dd.MM.yyyy") ?? "-";
+                row++;
+            }
+
+            void ToplamYaz(string etiket, IReadOnlyCollection<PersonelDurumSatir> satirlar, XLColor arkaPlan)
+            {
+                ws.Cell(row, 1).Value = etiket;
+                ws.Cell(row, 6).Value = satirlar.Sum(s => s.GercekMaas);
+                ws.Cell(row, 7).Value = satirlar.Sum(s => s.BankayaYatan);
+                ws.Cell(row, 8).Value = satirlar.Sum(s => s.Avans);
+                ws.Cell(row, 9).Value = satirlar.Sum(s => s.Kesinti);
+                ws.Cell(row, 10).Value = satirlar.Sum(s => s.Harcamasi);
+                ws.Cell(row, 11).Value = satirlar.Sum(s => s.GecenAydanKalan);
+                ws.Cell(row, 12).Value = satirlar.Sum(s => s.Odenecek);
+                ws.Range(row, 1, row, kolonSayisi).Style.Fill.BackgroundColor = arkaPlan;
+                for (int c = 1; c <= kolonSayisi; c++) ws.Cell(row, c).Style.Font.Bold = true;
+                row++;
+            }
 
             if (ciktiFirmaSecim == 1) // Tüm Firmalar → firmalara göre blokla
             {
-                var firmaGruplari = filtreliler.GroupBy(i => i.FirmaId ?? 0).ToList();
-                foreach (var grup in firmaGruplari)
+                foreach (var grup in filtreliler.GroupBy(i => i.FirmaId ?? 0))
                 {
                     var firmaAdi = grup.First().FirmaAdi ?? "Bilinmeyen Firma";
                     // Firma alt başlık satırı
-                    ws.Range(row, 1, row, 15).Merge();
+                    ws.Range(row, 1, row, kolonSayisi).Merge();
                     ws.Cell(row, 1).Value = firmaAdi;
                     ws.Cell(row, 1).Style.Font.Bold = true;
                     ws.Cell(row, 1).Style.Font.FontSize = 11;
-                    ws.Range(row, 1, row, 15).Style.Fill.BackgroundColor = XLColor.LightGray;
+                    ws.Range(row, 1, row, kolonSayisi).Style.Fill.BackgroundColor = XLColor.LightGray;
                     row++;
 
-                    var firmaSira = 0; decimal fGercek = 0, fBankaya = 0, fAvans = 0, fKesinti = 0, fHarcama = 0, fFark = 0;
-                    foreach (var item in grup)
-                    {
-                        sira++; firmaSira++;
-                        var sonuc = MaasHesaplamaEngine.Hesapla(new MaasInput { GercekMaas = item.GercekMaas, BankayaYatan = item.BankayaYatan, Avans = item.Avans, Kesinti = item.Kesinti, Harcama = item.Harcamasi });
-                    var farkOdenecek = sonuc.Odenecek;
-                        fGercek += item.GercekMaas; fBankaya += item.BankayaYatan; fAvans += item.Avans;
-                        fKesinti += item.Kesinti; fHarcama += item.Harcamasi; fFark += farkOdenecek;
+                    var firmaSatirlari = grup.ToList();
+                    var firmaSira = 0;
+                    foreach (var item in firmaSatirlari)
+                        SatirYaz(item, ++firmaSira);
 
-                        ws.Cell(row, 1).Value = item.SiralamaNo > 0 ? item.SiralamaNo : firmaSira;
-                        ws.Cell(row, 2).Value = item.Plaka ?? "-";
-                        ws.Cell(row, 3).Value = item.AdSoyad;
-                        ws.Cell(row, 4).Value = item.Telefon ?? "-";
-                        ws.Cell(row, 5).Value = item.Adres ?? "-";
-                        ws.Cell(row, 6).Value = item.GercekMaas;
-                        ws.Cell(row, 7).Value = item.BankayaYatan;
-                        ws.Cell(row, 8).Value = item.Avans;
-                        ws.Cell(row, 9).Value = item.Kesinti;
-                        ws.Cell(row, 10).Value = item.Harcamasi;
-                        ws.Cell(row, 11).Value = farkOdenecek;
-                        ws.Cell(row, 12).Value = item.FirmaAdi ?? "-";
-                        ws.Cell(row, 13).Value = item.SgkDurum ?? "-";
-                        ws.Cell(row, 14).Value = item.IseGirisTarihi?.ToString("dd.MM.yyyy") ?? "-";
-                        ws.Cell(row, 15).Value = item.IstenCikisTarihi?.ToString("dd.MM.yyyy") ?? "-";
-                        row++;
-                    }
                     // Firma alt toplam
-                    ws.Cell(row, 1).Value = $"{firmaAdi} Toplam ({firmaSira})";
-                    ws.Cell(row, 1).Style.Font.Bold = true;
-                    ws.Cell(row, 6).Value = fGercek;
-                    ws.Cell(row, 7).Value = fBankaya;
-                    ws.Cell(row, 8).Value = fAvans;
-                    ws.Cell(row, 9).Value = fKesinti;
-                    ws.Cell(row, 10).Value = fHarcama;
-                    ws.Cell(row, 11).Value = fFark;
-                    ws.Range(row, 1, row, 15).Style.Fill.BackgroundColor = XLColor.LightYellow;
-                    for (int c = 1; c <= 15; c++) ws.Cell(row, c).Style.Font.Bold = true;
-                    row++;
-
-                    genelToplamGercek += fGercek; genelToplamBankaya += fBankaya; genelToplamAvans += fAvans;
-                    genelToplamKesinti += fKesinti; genelToplamHarcama += fHarcama; genelToplamFark += fFark;
+                    ToplamYaz($"{firmaAdi} Toplam ({firmaSatirlari.Count})", firmaSatirlari, XLColor.LightYellow);
                 }
             }
             else // Aktif Firma — tek firma, bloklama yok
             {
+                var sira = 0;
                 foreach (var item in filtreliler)
-                {
-                    sira++;
-                    var sonuc = MaasHesaplamaEngine.Hesapla(new MaasInput { GercekMaas = item.GercekMaas, BankayaYatan = item.BankayaYatan, Avans = item.Avans, Kesinti = item.Kesinti, Harcama = item.Harcamasi });
-                    var farkOdenecek = sonuc.Odenecek;
-                    genelToplamGercek += item.GercekMaas;
-                    genelToplamBankaya += item.BankayaYatan;
-                    genelToplamAvans += item.Avans;
-                    genelToplamKesinti += item.Kesinti;
-                    genelToplamHarcama += item.Harcamasi;
-                    genelToplamFark += farkOdenecek;
-
-                    ws.Cell(row, 1).Value = item.SiralamaNo > 0 ? item.SiralamaNo : sira;
-                    ws.Cell(row, 2).Value = item.Plaka ?? "-";
-                    ws.Cell(row, 3).Value = item.AdSoyad;
-                    ws.Cell(row, 4).Value = item.Telefon ?? "-";
-                    ws.Cell(row, 5).Value = item.Adres ?? "-";
-                    ws.Cell(row, 6).Value = item.GercekMaas;
-                    ws.Cell(row, 7).Value = item.BankayaYatan;
-                    ws.Cell(row, 8).Value = item.Avans;
-                    ws.Cell(row, 9).Value = item.Kesinti;
-                    ws.Cell(row, 10).Value = item.Harcamasi;
-                    ws.Cell(row, 11).Value = farkOdenecek;
-                    ws.Cell(row, 12).Value = item.FirmaAdi ?? "-";
-                    ws.Cell(row, 13).Value = item.SgkDurum ?? "-";
-                    ws.Cell(row, 14).Value = item.IseGirisTarihi?.ToString("dd.MM.yyyy") ?? "-";
-                    ws.Cell(row, 15).Value = item.IstenCikisTarihi?.ToString("dd.MM.yyyy") ?? "-";
-                    row++;
-                }
+                    SatirYaz(item, ++sira);
             }
 
             // Genel Toplam satırı
-            ws.Cell(row, 1).Value = "GENEL TOPLAM"; ws.Cell(row, 1).Style.Font.Bold = true;
-            ws.Cell(row, 6).Value = genelToplamGercek;
-            ws.Cell(row, 7).Value = genelToplamBankaya;
-            ws.Cell(row, 8).Value = genelToplamAvans;
-            ws.Cell(row, 9).Value = genelToplamKesinti;
-            ws.Cell(row, 10).Value = genelToplamHarcama;
-            ws.Cell(row, 11).Value = genelToplamFark;
-            ws.Range(row, 1, row, 15).Style.Fill.BackgroundColor = XLColor.LightGray;
-            for (int c = 1; c <= 15; c++) ws.Cell(row, c).Style.Font.Bold = true;
+            ToplamYaz("GENEL TOPLAM", filtreliler, XLColor.LightGray);
 
-            for (int c = 6; c <= 11; c++) ws.Column(c).Style.NumberFormat.Format = "#,##0.00";
+            for (int c = 6; c <= 12; c++) ws.Column(c).Style.NumberFormat.Format = "#,##0.00";
             ws.Columns().AdjustToContents();
 
             using var stream = new MemoryStream();
@@ -2184,94 +2319,80 @@
         var filtreliler = DurFiltreliSatirlar.ToList();
         if (!filtreliler.Any()) { BildirimGoster("Yazdırılacak kayıt bulunamadı.", false); return; }
 
-        var donemAdi = new DateTime(durYil, durAy, 1).ToString("MMMM yyyy");
+        const int kolonSayisi = 16;
+        var donemAdi = DonemAdi;
         var satirlarHtml = new System.Text.StringBuilder();
-        var sira = 0;
-        decimal genelToplamGercek = 0, genelToplamBankaya = 0, genelToplamAvans = 0, genelToplamKesinti = 0, genelToplamHarcama = 0, genelToplamFark = 0;
+
+        static string Enc(string? metin) => System.Net.WebUtility.HtmlEncode(metin ?? "-");
+        static string Tutar(decimal deger, bool kalin = false) =>
+            $"<td style=\"text-align:right;{(kalin ? " font-weight:bold;" : "")}\">{deger:N2}</td>";
+
+        void SatirYaz(PersonelDurumSatir item, int sira)
+        {
+            satirlarHtml.Append("<tr>");
+            satirlarHtml.Append($"<td>{(item.SiralamaNo > 0 && !durKayitKilitli ? item.SiralamaNo : sira)}</td>");
+            satirlarHtml.Append($"<td>{Enc(item.Plaka)}</td>");
+            satirlarHtml.Append($"<td>{Enc(item.AdSoyad)}</td>");
+            satirlarHtml.Append($"<td>{Enc(item.Telefon)}</td>");
+            satirlarHtml.Append($"<td>{Enc(item.Adres)}</td>");
+            satirlarHtml.Append(Tutar(item.GercekMaas));
+            satirlarHtml.Append(Tutar(item.BankayaYatan));
+            satirlarHtml.Append(Tutar(item.Avans));
+            satirlarHtml.Append(Tutar(item.Kesinti));
+            satirlarHtml.Append(Tutar(item.Harcamasi));
+            satirlarHtml.Append(Tutar(item.GecenAydanKalan));
+            satirlarHtml.Append(Tutar(item.Odenecek, kalin: true));
+            satirlarHtml.Append($"<td>{Enc(item.FirmaAdi)}</td>");
+            satirlarHtml.Append($"<td>{Enc(item.SgkDurum)}</td>");
+            satirlarHtml.Append($"<td>{item.IseGirisTarihi?.ToString("dd.MM.yyyy") ?? "-"}</td>");
+            satirlarHtml.Append($"<td>{item.IstenCikisTarihi?.ToString("dd.MM.yyyy") ?? "-"}</td>");
+            satirlarHtml.Append("</tr>");
+        }
 
         if (ciktiFirmaSecim == 1) // Tüm Firmalar → firmalara göre blokla
         {
-            var firmaGruplari = filtreliler.GroupBy(i => i.FirmaId ?? 0).ToList();
-            foreach (var grup in firmaGruplari)
+            foreach (var grup in filtreliler.GroupBy(i => i.FirmaId ?? 0))
             {
-                var firmaAdi = System.Net.WebUtility.HtmlEncode(grup.First().FirmaAdi ?? "Bilinmeyen Firma");
-                satirlarHtml.Append($"<tr style=\"background:#e0e0e0;\"><td colspan=\"15\" style=\"font-weight:bold; font-size:11px; padding:6px 4px;\">{firmaAdi}</td></tr>");
+                var firmaAdi = Enc(grup.First().FirmaAdi ?? "Bilinmeyen Firma");
+                satirlarHtml.Append($"<tr style=\"background:#e0e0e0;\"><td colspan=\"{kolonSayisi}\" style=\"font-weight:bold; font-size:11px; padding:6px 4px;\">{firmaAdi}</td></tr>");
 
-                var firmaSira = 0; decimal fGercek = 0, fBankaya = 0, fAvans = 0, fKesinti = 0, fHarcama = 0, fFark = 0;
-                foreach (var item in grup)
-                {
-                    sira++; firmaSira++;
-                    var sonuc = MaasHesaplamaEngine.Hesapla(new MaasInput { GercekMaas = item.GercekMaas, BankayaYatan = item.BankayaYatan, Avans = item.Avans, Kesinti = item.Kesinti, Harcama = item.Harcamasi });
-                    var farkOdenecek = sonuc.Odenecek;
-                    fGercek += item.GercekMaas; fBankaya += item.BankayaYatan; fAvans += item.Avans;
-                    fKesinti += item.Kesinti; fHarcama += item.Harcamasi; fFark += farkOdenecek;
+                var firmaSatirlari = grup.ToList();
+                var firmaSira = 0;
+                foreach (var item in firmaSatirlari)
+                    SatirYaz(item, ++firmaSira);
 
-                    satirlarHtml.Append("<tr>");
-                    satirlarHtml.Append($"<td>{(item.SiralamaNo > 0 ? item.SiralamaNo : firmaSira)}</td>");
-                    satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.Plaka ?? "-")}</td>");
-                    satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.AdSoyad)}</td>");
-                    satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.Telefon ?? "-")}</td>");
-                    satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.Adres ?? "-")}</td>");
-                    satirlarHtml.Append($"<td style=\"text-align:right;\">{item.GercekMaas:N2}</td>");
-                    satirlarHtml.Append($"<td style=\"text-align:right;\">{item.BankayaYatan:N2}</td>");
-                    satirlarHtml.Append($"<td style=\"text-align:right;\">{item.Avans:N2}</td>");
-                    satirlarHtml.Append($"<td style=\"text-align:right;\">{item.Kesinti:N2}</td>");
-                    satirlarHtml.Append($"<td style=\"text-align:right;\">{item.Harcamasi:N2}</td>");
-                    satirlarHtml.Append($"<td style=\"text-align:right; font-weight:bold;\">{farkOdenecek:N2}</td>");
-                    satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.FirmaAdi ?? "-")}</td>");
-                    satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.SgkDurum ?? "-")}</td>");
-                    satirlarHtml.Append($"<td>{item.IseGirisTarihi?.ToString("dd.MM.yyyy") ?? "-"}</td>");
-                    satirlarHtml.Append($"<td>{item.IstenCikisTarihi?.ToString("dd.MM.yyyy") ?? "-"}</td>");
-                    satirlarHtml.Append("</tr>");
-                }
                 // Firma alt toplam
-                satirlarHtml.Append($"<tr style=\"background:#fffde7; font-weight:bold;\">");
-                satirlarHtml.Append($"<td colspan=\"5\">{firmaAdi} Toplam ({firmaSira})</td>");
-                satirlarHtml.Append($"<td style=\"text-align:right;\">{fGercek:N2}</td>");
-                satirlarHtml.Append($"<td style=\"text-align:right;\">{fBankaya:N2}</td>");
-                satirlarHtml.Append($"<td style=\"text-align:right;\">{fAvans:N2}</td>");
-                satirlarHtml.Append($"<td style=\"text-align:right;\">{fKesinti:N2}</td>");
-                satirlarHtml.Append($"<td style=\"text-align:right;\">{fHarcama:N2}</td>");
-                satirlarHtml.Append($"<td style=\"text-align:right;\">{fFark:N2}</td>");
-                satirlarHtml.Append($"<td colspan=\"4\"></td>");
+                satirlarHtml.Append("<tr style=\"background:#fffde7; font-weight:bold;\">");
+                satirlarHtml.Append($"<td colspan=\"5\">{firmaAdi} Toplam ({firmaSatirlari.Count})</td>");
+                satirlarHtml.Append(Tutar(firmaSatirlari.Sum(s => s.GercekMaas)));
+                satirlarHtml.Append(Tutar(firmaSatirlari.Sum(s => s.BankayaYatan)));
+                satirlarHtml.Append(Tutar(firmaSatirlari.Sum(s => s.Avans)));
+                satirlarHtml.Append(Tutar(firmaSatirlari.Sum(s => s.Kesinti)));
+                satirlarHtml.Append(Tutar(firmaSatirlari.Sum(s => s.Harcamasi)));
+                satirlarHtml.Append(Tutar(firmaSatirlari.Sum(s => s.GecenAydanKalan)));
+                satirlarHtml.Append(Tutar(firmaSatirlari.Sum(s => s.Odenecek)));
+                satirlarHtml.Append("<td colspan=\"4\"></td>");
                 satirlarHtml.Append("</tr>");
-
-                genelToplamGercek += fGercek; genelToplamBankaya += fBankaya; genelToplamAvans += fAvans;
-                genelToplamKesinti += fKesinti; genelToplamHarcama += fHarcama; genelToplamFark += fFark;
             }
         }
         else // Aktif Firma
         {
+            var sira = 0;
             foreach (var item in filtreliler)
-            {
-                sira++;
-                var farkOdenecek = item.GercekMaas - item.BankayaYatan - item.Avans - item.Kesinti + item.Harcamasi;
-                genelToplamGercek += item.GercekMaas; genelToplamBankaya += item.BankayaYatan; genelToplamAvans += item.Avans;
-                genelToplamKesinti += item.Kesinti; genelToplamHarcama += item.Harcamasi; genelToplamFark += farkOdenecek;
-
-                satirlarHtml.Append("<tr>");
-                satirlarHtml.Append($"<td>{(item.SiralamaNo > 0 ? item.SiralamaNo : sira)}</td>");
-                satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.Plaka ?? "-")}</td>");
-                satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.AdSoyad)}</td>");
-                satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.Telefon ?? "-")}</td>");
-                satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.Adres ?? "-")}</td>");
-                satirlarHtml.Append($"<td style=\"text-align:right;\">{item.GercekMaas:N2}</td>");
-                satirlarHtml.Append($"<td style=\"text-align:right;\">{item.BankayaYatan:N2}</td>");
-                satirlarHtml.Append($"<td style=\"text-align:right;\">{item.Avans:N2}</td>");
-                satirlarHtml.Append($"<td style=\"text-align:right;\">{item.Kesinti:N2}</td>");
-                satirlarHtml.Append($"<td style=\"text-align:right;\">{item.Harcamasi:N2}</td>");
-                satirlarHtml.Append($"<td style=\"text-align:right; font-weight:bold;\">{farkOdenecek:N2}</td>");
-                satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.FirmaAdi ?? "-")}</td>");
-                satirlarHtml.Append($"<td>{System.Net.WebUtility.HtmlEncode(item.SgkDurum ?? "-")}</td>");
-                satirlarHtml.Append($"<td>{item.IseGirisTarihi?.ToString("dd.MM.yyyy") ?? "-"}</td>");
-                satirlarHtml.Append($"<td>{item.IstenCikisTarihi?.ToString("dd.MM.yyyy") ?? "-"}</td>");
-                satirlarHtml.Append("</tr>");
-            }
+                SatirYaz(item, ++sira);
         }
 
-        var printBaslik = ciktiFirmaSecim == 0
+        var printBaslik = System.Net.WebUtility.HtmlEncode(ciktiFirmaSecim == 0
             ? (AktifFirmaProvider.Mevcut?.FirmaAdi ?? "Maaş / Ödeme Yönetimi")
-            : "Tüm Firmalar";
+            : "Tüm Firmalar");
+
+        var genelToplamGercek = filtreliler.Sum(s => s.GercekMaas);
+        var genelToplamBankaya = filtreliler.Sum(s => s.BankayaYatan);
+        var genelToplamAvans = filtreliler.Sum(s => s.Avans);
+        var genelToplamKesinti = filtreliler.Sum(s => s.Kesinti);
+        var genelToplamHarcama = filtreliler.Sum(s => s.Harcamasi);
+        var genelToplamDevir = filtreliler.Sum(s => s.GecenAydanKalan);
+        var genelToplamFark = filtreliler.Sum(s => s.Odenecek);
 
         var html = $@"<!DOCTYPE html><html><head><meta charset=""utf-8""><title>Maaş / Ödeme</title>
 <style>
@@ -2288,7 +2409,7 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
 <table><thead><tr>
 <th>S.NO</th><th>PLAKA</th><th>AD SOYAD</th><th>TELEFON</th><th>ADRES</th>
 <th>GERÇEK MAAŞ</th><th>BANKAYA YATAN</th><th>AVANS (-)</th><th>KESİNTİ (-)</th><th>HARCAMASI (+)</th>
-<th>FARK / ÖDENECEK</th><th>FİRMA</th><th>SGK</th><th>İŞE GİRİŞ</th><th>İŞTEN ÇIKIŞ</th>
+<th>GEÇEN AYDAN KALAN (±)</th><th>FARK / ÖDENECEK</th><th>FİRMA</th><th>SGK</th><th>İŞE GİRİŞ</th><th>İŞTEN ÇIKIŞ</th>
 </tr></thead><tbody>{satirlarHtml}</tbody>
 <tfoot><tr style=""font-weight:bold; background:#f0f0f0;"">
 <td colspan=""5"">GENEL TOPLAM ({filtreliler.Count} personel)</td>
@@ -2297,6 +2418,7 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
 <td style=""text-align:right;"">{genelToplamAvans:N2}</td>
 <td style=""text-align:right;"">{genelToplamKesinti:N2}</td>
 <td style=""text-align:right;"">{genelToplamHarcama:N2}</td>
+<td style=""text-align:right;"">{genelToplamDevir:N2}</td>
 <td style=""text-align:right;"">{genelToplamFark:N2}</td>
 <td colspan=""4""></td>
 </tr></tfoot></table></body></html>";
@@ -2322,10 +2444,27 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
         bool YuklemeGuncelMi() => !componentDisposed && surum == yuklemeSurumu && yuklemeYil == durYil && yuklemeAy == durAy && yuklemeCiktiFirmaSecim == ciktiFirmaSecim &&
             yuklemeFirmaId == AktifFirmaProvider.AktifFirmaId && yuklemeTumFirmalar == AktifFirmaProvider.TumFirmalar;
 
+        // Dönem değişince önceki dönemin durum süzgeci yeni listeyi boş göstermesin.
+        if (durYuklenenDonem != (yuklemeYil, yuklemeAy))
+        {
+            durDurumFiltre = string.Empty;
+            durYuklenenDonem = (yuklemeYil, yuklemeAy);
+        }
+
         snapshotUyari = null;
+        durKayitBilgisi = null;
+        durKayitAciklama = null;
+        durKayitKilitli = false;
         try
         {
             var donemBaslangic = new DateTime(yuklemeYil, yuklemeAy, 1);
+            var donemSonrasi = donemBaslangic.AddMonths(1);
+            var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
+            var buAyBaslangic = new DateTime(bugun.Year, bugun.Month, 1);
+            var gecmisDonem = donemBaslangic < buAyBaslangic;
+            var gelecekDonem = donemBaslangic > buAyBaslangic;
+            // Dönem kaydı (snapshot) yalnızca tek aktif firma görünümünde okunur/yazılır.
+            var tekFirmaGorunumu = yuklemeCiktiFirmaSecim != 1 && !yuklemeTumFirmalar && yuklemeFirmaId is > 0;
 
             // Firma kapsamı: Aktif Firma → normal tenant filter yeterli.
             // Tüm Firmalar → IgnoreQueryFilters + firmaIds güvenli sınırlama.
@@ -2336,16 +2475,42 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
                 yuklemeFirmaId,
                 string.Join(",", firmaIds));
 
+            // Geçmiş ayın kilitli dönem kaydı varsa o ayın personel listesi ve maaş bilgileri (gerçek maaş,
+            // bankaya yatan, kesinti) oradan alınır; böylece sonradan değişen kartlar eski ayı bozmaz.
+            var donemKaydi = new List<MaasOdemeSnapshot>();
+            if (gecmisDonem && tekFirmaGorunumu)
+            {
+                try
+                {
+                    donemKaydi = await SnapshotService.GetAsync(yuklemeYil, yuklemeAy, yuklemeFirmaId!.Value);
+                }
+                catch (Exception ex)
+                {
+                    // Kayıt okunamazsa liste güncel kartlarla hesaplanmaya devam eder.
+                    _logger?.LogError(ex, "Maaş dönem kaydı okunamadı. Yıl={Yil}, Ay={Ay}", yuklemeYil, yuklemeAy);
+                }
+                if (!YuklemeGuncelMi()) return;
+            }
+            var kayitMap = donemKaydi.GroupBy(k => k.PersonelId).ToDictionary(g => g.Key, g => g.First());
+            var kayitModu = kayitMap.Count > 0;
+            var kayitPersonelIdleri = kayitMap.Keys.ToList();
+
             await using var ctx = await DbContextFactory.CreateDbContextAsync();
             IQueryable<Sofor> personelQuery = ctx.Soforler;
             if (yuklemeCiktiFirmaSecim == 1)
                 personelQuery = personelQuery.IgnoreQueryFilters().Where(s => firmaIds.Contains(s.FirmaId!.Value));
 
+            personelQuery = personelQuery.Where(s => !s.IsDeleted);
+            personelQuery = kayitModu
+                ? personelQuery.Where(s => kayitPersonelIdleri.Contains(s.Id))
+                : personelQuery
+                    .Where(s => s.Aktif)
+                    .Where(s => s.IstenAyrilmaTarihi == null || s.IstenAyrilmaTarihi >= donemBaslangic)
+                    .Where(s => s.IseBaslamaTarihi == null || s.IseBaslamaTarihi < donemSonrasi);
+
             var yeniTumPersoneller = await personelQuery
                 .Include(s => s.Firma)
                 .Include(s => s.AracAtamalari.Where(a => a.Aktif)).ThenInclude(a => a.Arac)
-                .Where(s => !s.IsDeleted && s.Aktif)
-                .Where(s => s.IstenAyrilmaTarihi == null || s.IstenAyrilmaTarihi >= donemBaslangic)
                 .OrderBy(s => s.Firma != null ? s.Firma.FirmaAdi : "")
                 .ThenBy(s => s.SiralamaNo == 0 ? int.MaxValue : s.SiralamaNo)
                 .ThenBy(s => s.Ad)
@@ -2358,65 +2523,116 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
                 yeniTumPersoneller.Count,
                 string.Join(",", yeniTumPersoneller.Select(x => x.FirmaId).Distinct()));
 
-            var aktifler = yeniTumPersoneller
-                .OrderBy(p => p.SiralamaNo == 0 ? int.MaxValue : p.SiralamaNo)
-                .ThenBy(p => p.Ad)
-                .ToList();
-
-            var donemMaasKayitlari = await PersonelService.GetMaaslarAsync(yuklemeYil, yuklemeAy);
-            var donemMaasMap = donemMaasKayitlari
-                .GroupBy(m => m.SoforId)
-                .ToDictionary(g => g.Key, g => g.First());
-
             var yeniSatirlar = new List<PersonelDurumSatir>();
-            foreach (var p in aktifler)
+            if (kayitModu)
             {
-                PersonelFinansOzet? finansOzet = null;
-                try
+                var kartMap = yeniTumPersoneller.ToDictionary(p => p.Id);
+                foreach (var kayit in donemKaydi)
                 {
-                    finansOzet = await PersonelFinansService.GetPersonelFinansOzetAsync(p.Id);
+                    kartMap.TryGetValue(kayit.PersonelId, out var kart);
+                    yeniSatirlar.Add(new PersonelDurumSatir
+                    {
+                        PersonelId = kayit.PersonelId,
+                        AdSoyad = kart?.TamAd ?? kayit.PersonelAdSoyad,
+                        SoforKodu = kart?.SoforKodu ?? kayit.PersonelKodu ?? "",
+                        GorevAdi = kart != null ? GetGorevAdi(kart.Gorev) : kayit.GorevAdi ?? "-",
+                        GorevEnum = kart?.Gorev ?? PersonelGorev.Diger,
+                        SiralamaNo = kart?.SiralamaNo ?? 0,
+                        GercekMaas = kayit.GercekMaas,
+                        BankayaYatan = kayit.BankayaYatan,
+                        Kesinti = kayit.Kesinti,
+                        KayitOdenecek = kayit.Odenecek,
+                        KartBulunamadi = kart is null,
+                        Plaka = kart?.AracAtamalari?.FirstOrDefault(a => a.Aktif)?.Arac?.AktifPlaka ?? kayit.AracPlakasi,
+                        Telefon = kart?.Telefon,
+                        Adres = kart?.Adres,
+                        FirmaId = kart?.FirmaId ?? kayit.FirmaId,
+                        FirmaAdi = kart?.Firma?.FirmaAdi,
+                        SgkDurum = kart is null ? null : kart.SGKBordroDahilMi ? "SGK'lı" : "SGK'sız",
+                        IseGirisTarihi = kart?.IseBaslamaTarihi,
+                        IstenCikisTarihi = kart?.IstenAyrilmaTarihi
+                    });
                 }
-                catch (InvalidOperationException)
-                {
-                    // Personel farklı firmaya aitse veya tenant filter dışındaysa
-                    // finans özeti alınamaz — atla, maaş satırı oluşturmaya devam et.
-                }
-                donemMaasMap.TryGetValue(p.Id, out var donemMaas);
 
-                var bankayaYatan = p.ResmiNetMaas;
-                var gercekMaas = donemMaas != null
-                    ? donemMaas.NetMaas + donemMaas.ToplamEklemeler
-                    : p.ResmiNetMaas + p.DigerMaas;
-
-                var satir = new PersonelDurumSatir
-                {
-                    PersonelId = p.Id,
-                    AdSoyad = p.TamAd,
-                    SoforKodu = p.SoforKodu,
-                    GorevAdi = GetGorevAdi(p.Gorev),
-                    GorevEnum = p.Gorev,
-                    SiralamaNo = p.SiralamaNo,
-                    GercekMaas = gercekMaas,
-                    BankayaYatan = bankayaYatan,
-                    Avans = finansOzet?.KalanAvans ?? 0,
-                    Kesinti = p.OzelKesintiToplami,
-                    Harcamasi = (finansOzet?.ToplamHarcama ?? 0) + (finansOzet?.KalanBorc > 0 ? finansOzet!.KalanBorc : 0),
-                    // Excel / yazdirma ek kolonlar
-                    Plaka = p.AracAtamalari?.FirstOrDefault(a => a.Aktif)?.Arac?.AktifPlaka,
-                    Telefon = p.Telefon,
-                    Adres = p.Adres,
-                    AsgariUcret = 0,
-                    FirmaId = p.FirmaId,
-                    FirmaAdi = p.Firma?.FirmaAdi,
-                    SgkDurum = p.SGKBordroDahilMi ? "SGK'lı" : "SGK'sız",
-                    IseGirisTarihi = p.IseBaslamaTarihi,
-                    IstenCikisTarihi = p.IstenAyrilmaTarihi
-                };
-                satir.Fark = satir.GercekMaas - satir.AsgariUcret;
-                var odenecekSonuc = MaasHesaplamaEngine.Hesapla(new MaasInput { GercekMaas = satir.GercekMaas, BankayaYatan = satir.BankayaYatan, Avans = satir.Avans, Kesinti = satir.Kesinti, Harcama = satir.Harcamasi });
-                satir.Odenecek = odenecekSonuc.Odenecek;
-                yeniSatirlar.Add(satir);
+                yeniSatirlar = yeniSatirlar
+                    .OrderBy(s => s.KartBulunamadi ? 1 : 0)
+                    .ThenBy(s => s.SiralamaNo == 0 ? int.MaxValue : s.SiralamaNo)
+                    .ThenBy(s => s.AdSoyad, StringComparer.CurrentCultureIgnoreCase)
+                    .ToList();
             }
+            else
+            {
+                var aktifler = yeniTumPersoneller
+                    .OrderBy(p => p.SiralamaNo == 0 ? int.MaxValue : p.SiralamaNo)
+                    .ThenBy(p => p.Ad)
+                    .ToList();
+
+                var donemMaasKayitlari = await PersonelService.GetMaaslarAsync(yuklemeYil, yuklemeAy);
+                var donemMaasMap = donemMaasKayitlari
+                    .GroupBy(m => m.SoforId)
+                    .ToDictionary(g => g.Key, g => g.First());
+
+                foreach (var p in aktifler)
+                {
+                    donemMaasMap.TryGetValue(p.Id, out var donemMaas);
+                    yeniSatirlar.Add(new PersonelDurumSatir
+                    {
+                        PersonelId = p.Id,
+                        AdSoyad = p.TamAd,
+                        SoforKodu = p.SoforKodu,
+                        GorevAdi = GetGorevAdi(p.Gorev),
+                        GorevEnum = p.Gorev,
+                        SiralamaNo = p.SiralamaNo,
+                        GercekMaas = donemMaas != null
+                            ? donemMaas.NetMaas + donemMaas.ToplamEklemeler
+                            : p.ResmiNetMaas + p.DigerMaas,
+                        BankayaYatan = p.ResmiNetMaas,
+                        Kesinti = p.OzelKesintiToplami,
+                        // Excel / yazdirma ek kolonlar
+                        Plaka = p.AracAtamalari?.FirstOrDefault(a => a.Aktif)?.Arac?.AktifPlaka,
+                        Telefon = p.Telefon,
+                        Adres = p.Adres,
+                        FirmaId = p.FirmaId,
+                        FirmaAdi = p.Firma?.FirmaAdi,
+                        SgkDurum = p.SGKBordroDahilMi ? "SGK'lı" : "SGK'sız",
+                        IseGirisTarihi = p.IseBaslamaTarihi,
+                        IstenCikisTarihi = p.IstenAyrilmaTarihi
+                    });
+                }
+            }
+
+            // Avans, harcama ve geçen aydan kalan: seçili ayın tarihli kayıtlarından hesaplanır (tüm zamanların açık bakiyesi değil).
+            var donemFinans = await MaasDonemService.GetDonemFinansAsync(
+                yeniSatirlar.Select(s => s.PersonelId).ToList(),
+                yuklemeYil,
+                yuklemeAy,
+                tumFirmalar: yuklemeCiktiFirmaSecim == 1,
+                firmaIds: yuklemeCiktiFirmaSecim == 1 ? firmaIds : null);
+            if (!YuklemeGuncelMi()) return;
+
+            foreach (var satir in yeniSatirlar)
+            {
+                donemFinans.TryGetValue(satir.PersonelId, out var finans);
+                satir.Avans = finans?.Avans ?? 0;
+                satir.Harcamasi = finans?.Harcama ?? 0;
+                satir.DevirAvans = finans?.DevirAvans ?? 0;
+                satir.DevirBorc = finans?.DevirBorc ?? 0;
+                satir.DevirHarcama = finans?.DevirHarcama ?? 0;
+                satir.GecenAydanKalan = finans?.GecenAydanKalan ?? 0;
+                satir.Fark = satir.GercekMaas - satir.AsgariUcret;
+                var odenecekSonuc = MaasHesaplamaEngine.Hesapla(new MaasInput
+                {
+                    GercekMaas = satir.GercekMaas,
+                    BankayaYatan = satir.BankayaYatan,
+                    Avans = satir.Avans,
+                    Kesinti = satir.Kesinti,
+                    Harcama = satir.Harcamasi,
+                    GecenAydanKalan = satir.GecenAydanKalan
+                });
+                satir.BuAyOdenecek = odenecekSonuc.BuAyOdenecek;
+                satir.Odenecek = odenecekSonuc.Odenecek;
+            }
+
             if (!YuklemeGuncelMi()) return;
             durTumPersoneller = yeniTumPersoneller;
             durSatirlar = yeniSatirlar;
@@ -2431,10 +2647,25 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
 
             if (!YuklemeGuncelMi()) return;
 
+            if (kayitModu)
+            {
+                var kayitTarihi = MKFiloServis.Shared.Time.BusinessTime.LocalAt(donemKaydi.Min(k => k.HesaplamaTarihi));
+                durKayitBilgisi = $"Dönem kaydı · {kayitTarihi:dd.MM.yyyy}";
+                durKayitKilitli = true;
+                durKayitAciklama = "Bu ayın personel listesi ve maaş bilgileri (gerçek maaş, bankaya yatan, kesinti) kilitli dönem kaydından alındı. "
+                    + "Avans, harcama ve geçen aydan kalan tutarlar ayın tarihli kayıtlarından hesaplanır.";
+                return;
+            }
+
+            durKayitBilgisi = gelecekDonem ? "Gelecek dönem · önizleme" : "Canlı hesap";
+            durKayitAciklama = gelecekDonem
+                ? "Gelecek ayların dönem kaydı alınmaz; liste güncel personel kartlarına göre önizlenir."
+                : "Liste güncel personel kartları ve ayın tarihli avans/harcama kayıtlarıyla hesaplanır.";
+
             // Tüm firma raporu tek firmanın dönem kaydı olarak yazılamaz.
-            if (yuklemeCiktiFirmaSecim == 1 || yuklemeTumFirmalar || yuklemeFirmaId is not > 0)
+            if (!tekFirmaGorunumu)
                 snapshotUyari = "Liste gösteriliyor; dönem kaydı oluşturmak için tek bir firma seçin ve Aktif Firma görünümüne geçin.";
-            else
+            else if (!gelecekDonem)
             {
                 try
                 {
@@ -2452,6 +2683,8 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
                                 return;
                             }
 
+                            // Muhasebe tahakkuku dönem kaydındaki Odenecek ile çalışır; geçen aydan kalan önceki ayda
+                            // tahakkuk ettiği için kayda yalnızca o ayın kendi tutarı (BuAyOdenecek) yazılır.
                             var snapshotData = snapshotPersoneller.Select(s => (
                                 PersonelId: s.PersonelId,
                                 AdSoyad: s.AdSoyad,
@@ -2463,7 +2696,7 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
                                 Avans: s.Avans,
                                 Kesinti: s.Kesinti,
                                 Harcama: s.Harcamasi,
-                                Odenecek: s.Odenecek,
+                                Odenecek: s.BuAyOdenecek,
                                 HakedisGelir: 0m,
                                 HakedisGider: 0m
                             )).ToList();
@@ -2482,12 +2715,62 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
         catch (Exception ex)
         {
             if (!YuklemeGuncelMi()) return;
+            _logger?.LogError(ex, "Maaş durum tablosu yüklenemedi. Yıl={Yil}, Ay={Ay}", yuklemeYil, yuklemeAy);
+            // Başka aya ait eski liste yeni dönemmiş gibi görünmesin.
+            durSatirlar = new();
+            durTumPersoneller = new();
+            DurumPaneliKapat();
             BildirimGoster($"Durum tablosu yüklenirken hata: {ex.Message}", false);
         }
         finally
         {
             if (surum == yuklemeSurumu) isLoading = false;
         }
+    }
+
+    // ===== DÖNEM GEZİNTİSİ VE SÜZGEÇLER =====
+    private async Task AyaGit(DateTime hedef)
+    {
+        if (isLoading) return;
+        durYil = hedef.Year;
+        durAy = hedef.Month;
+        await YenileDurumData();
+    }
+
+    private Task OncekiAyaGit() => OncekiAyVar ? AyaGit(new DateTime(durYil, durAy, 1).AddMonths(-1)) : Task.CompletedTask;
+
+    private Task SonrakiAyaGit() => SonrakiAyVar ? AyaGit(new DateTime(durYil, durAy, 1).AddMonths(1)) : Task.CompletedTask;
+
+    private Task BuAyaGit()
+    {
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
+        return AyaGit(new DateTime(bugun.Year, bugun.Month, 1));
+    }
+
+    private void DurumSuzgeciSec(string anahtar) => durDurumFiltre = anahtar;
+
+    private string DevirAciklamasi(PersonelDurumSatir satir)
+    {
+        if (!satir.DevirVar)
+            return "Önceki aylardan devreden bakiye yok";
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append("Geçen aydan kalan: ").Append(FormatPara(satir.GecenAydanKalan, true));
+        if (satir.DevirAvans > 0)
+            sb.Append("\n• Önceki aylardan kapanmamış avans: -").Append(FormatPara(satir.DevirAvans));
+        if (satir.DevirBorc > 0)
+            sb.Append("\n• Şirketin personele borcu: +").Append(FormatPara(satir.DevirBorc));
+        if (satir.DevirHarcama > 0)
+            sb.Append("\n• Geri ödenmemiş harcama: +").Append(FormatPara(satir.DevirHarcama));
+        return sb.ToString();
+    }
+
+    private static string OdenecekAciklamasi(PersonelDurumSatir satir)
+    {
+        var metin = "Gerçek Maaş - Bankaya Yatan - Avans - Kesinti + Harcaması + Geçen Aydan Kalan";
+        if (satir.KayitOdenecek is { } kayit && Math.Abs(kayit - satir.BuAyOdenecek) > 0.005m)
+            metin += $"\nDönem kaydındaki tutar: {FormatPara(kayit)}";
+        return metin;
     }
 
     private async Task DurumPersonelSec(int personelId)
@@ -2498,6 +2781,12 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
             return;
         }
         var personel = durTumPersoneller.FirstOrDefault(p => p.Id == personelId);
+        if (personel is null && !componentDisposed)
+        {
+            // Dönem kaydında olup personel kartı bulunmayan satır: detay sekmeleri kart gerektirir.
+            BildirimGoster("Bu personelin kartı artık bulunmuyor; yalnızca dönem kaydındaki tutarlar gösteriliyor.", false);
+            return;
+        }
         if (personel is null || componentDisposed) return;
         durSecilenPersonelId = personelId;
         durSecilenPersonel = personel;
@@ -2687,6 +2976,9 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
     // ===== SHARED HELPERS =====
     private static string FormatPara(decimal tutar) => tutar.ToString("N2") + " ₺";
 
+    /// <summary>İşaretli gösterim: pozitif tutarın önüne "+" koyar (negatif tutar zaten "-" ile başlar).</summary>
+    private static string FormatPara(decimal tutar, bool isaretli) => (isaretli && tutar > 0 ? "+" : "") + FormatPara(tutar);
+
     private static string GetGorevAdi(PersonelGorev gorev) => gorev switch
     {
         PersonelGorev.Sofor => "Şoför",
@@ -2798,7 +3090,25 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
         public decimal Avans { get; set; }
         public decimal Kesinti { get; set; }
         public decimal Harcamasi { get; set; }
+
+        /// <summary>Önceki aylardan devreden net bakiye (+ personelin alacağı, - personelin borcu).</summary>
+        public decimal GecenAydanKalan { get; set; }
+        public decimal DevirAvans { get; set; }
+        public decimal DevirBorc { get; set; }
+        public decimal DevirHarcama { get; set; }
+        public bool DevirVar => DevirAvans != 0 || DevirBorc != 0 || DevirHarcama != 0;
+
+        /// <summary>Geçen aydan kalan dahil, personele ödenecek toplam tutar.</summary>
         public decimal Odenecek { get; set; }
+
+        /// <summary>Yalnızca o aya ait ödenecek tutar (geçen aydan kalan hariç); dönem kaydına bu tutar yazılır.</summary>
+        public decimal BuAyOdenecek { get; set; }
+
+        /// <summary>Kilitli dönem kaydındaki (eski hesapla alınmış) ödenecek tutar; yalnızca dönem kaydından gelen satırlarda dolu.</summary>
+        public decimal? KayitOdenecek { get; set; }
+
+        /// <summary>Dönem kaydında olup artık personel kartı bulunmayan satır.</summary>
+        public bool KartBulunamadi { get; set; }
         // Excel / yazdirma ek kolonlar
         public string? Plaka { get; set; }
         public string? Telefon { get; set; }
