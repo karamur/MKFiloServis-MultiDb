@@ -23,9 +23,15 @@
                 </ol>
             </nav>
         </div>
-        <button class="btn btn-primary" @onclick="YeniCari">
-            <i class="bi bi-plus-lg me-1"></i>Yeni Cari
-        </button>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary" @onclick="() => showSenkronModal = true"
+                    title="Seçilen tarih aralığındaki faturaları cariye ve Borç/Alacak hesaplarına yeniden yansıtır">
+                <i class="bi bi-arrow-repeat me-1"></i>Faturalardan Güncelle
+            </button>
+            <button class="btn btn-primary" @onclick="YeniCari">
+                <i class="bi bi-plus-lg me-1"></i>Yeni Cari
+            </button>
+        </div>
     </div>
 
     <!-- Filtreler -->
@@ -330,9 +336,14 @@
     </div>
 }
 
+<FaturaCariSenkronModal Goster="showSenkronModal"
+                        OnKapat="() => showSenkronModal = false"
+                        OnTamamlandi="LoadData" />
+
 @code {
     private PagedResult<Cari>? pagedResult;
     private bool isLoading = true;
+    private bool showSenkronModal = false;
     private bool showDeleteModal = false;
     private bool showDetayModal = false;
     private Cari? silinecekCari;

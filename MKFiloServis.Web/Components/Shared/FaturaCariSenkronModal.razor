@@ -1,0 +1,343 @@
+﻿@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services.Interfaces
+@inject IFaturaCariSenkronService CariSenkron
+
+@* Faturaları seçilen tarih aralığı için cariye ve Borç/Alacak hesaplarına yeniden yansıtır (önizleme + uygula). *@
+@if (Goster)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1" role="dialog" aria-modal="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-arrow-repeat me-2 text-primary"></i>Cari ve Borç/Alacak Güncelle</h5>
+                    <button type="button" class="btn-close" @onclick="KapatAsync" disabled="@mesgul" aria-label="Kapat"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-3">
+                        Cari Listesi ve Borç/Alacak Takip bakiyeleri faturalardan hesaplanır. Aktarma sırasında bu güncelleme kendiliğinden yapılır;
+                        daha önce aktarılmış ya da sonradan değişen faturalar için seçtiğiniz tarih aralığını buradan yeniden güncelleyebilirsiniz.
+                        İşlem tekrar çalıştırılabilir, aynı kayıtları çoğaltmaz.
+                    </p>
+
+                    <div class="row g-2 align-items-end mb-2">
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small mb-1">Başlangıç</label>
+                            <input type="date" class="form-control form-control-sm" @bind="baslangic" @bind:after="SonucuSifirla" disabled="@mesgul" />
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small mb-1">Bitiş</label>
+                            <input type="date" class="form-control form-control-sm" @bind="bitis" @bind:after="SonucuSifirla" disabled="@mesgul" />
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="form-label small mb-1">Fatura yönü</label>
+                            <select class="form-select form-select-sm" @bind="yonSecimi" @bind:after="SonucuSifirla" disabled="@mesgul">
+                                <option value="0">Kesilen + Gelen</option>
+                                <option value="1">Yalnız kesilen (satış)</option>
+                                <option value="2">Yalnız gelen (alış)</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <div class="btn-group btn-group-sm w-100" role="group" aria-label="Hızlı aralık">
+                                <button type="button" class="btn btn-outline-secondary" @onclick="() => AralikSec(0)" disabled="@mesgul">Bu ay</button>
+                                <button type="button" class="btn btn-outline-secondary" @onclick="() => AralikSec(1)" disabled="@mesgul">Geçen ay</button>
+                                <button type="button" class="btn btn-outline-secondary" @onclick="() => AralikSec(2)" disabled="@mesgul">Bu yıl</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-column gap-1 mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="fcs-tip" @bind="cariTipiGuncelle" @bind:after="SonucuSifirla" disabled="@mesgul" />
+                            <label class="form-check-label small" for="fcs-tip">
+                                Cari tiplerini faturalarına göre düzelt
+                                <span class="text-muted">(örn. müşteri carisinden fatura alındıysa "Müşteri + Tedarikçi" olur; hiçbir cari daraltılmaz)</span>
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="fcs-fis" @bind="eksikFisOlustur" @bind:after="SonucuSifirla" disabled="@mesgul" />
+                            <label class="form-check-label small" for="fcs-fis">
+                                Muhasebe fişi oluşmamış faturalar için fiş oluştur
+                                <span class="text-muted">(muhasebe ayarlarında otomatik fatura fişi açıksa)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(hata))
+                    {
+                        <div class="alert alert-danger py-2 small"><i class="bi bi-x-octagon me-1"></i>@hata</div>
+                    }
+
+                    @if (mesgul)
+                    {
+                        <div class="text-center py-3">
+                            <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                            <span class="text-muted small">Faturalar taranıyor...</span>
+                        </div>
+                    }
+                    else if (sonuc == null)
+                    {
+                        <div class="alert alert-light border py-2 small mb-0">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Önce <strong>Önizle</strong> ile neyin değişeceğini görebilir, ardından <strong>Güncelle</strong> ile uygulayabilirsiniz.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert @(sonuc.Uygulandi ? "alert-success" : "alert-info") py-2 small">
+                            @if (sonuc.Uygulandi)
+                            {
+                                <i class="bi bi-check-circle me-1"></i>
+                                <span>Güncelleme tamamlandı.</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-eye me-1"></i>
+                                <span>Önizleme — henüz hiçbir kayıt değişmedi.</span>
+                            }
+                            <span class="ms-1">@baslangic.ToString("dd.MM.yyyy") – @bitis.ToString("dd.MM.yyyy") arasındaki faturalar tarandı.</span>
+                        </div>
+
+                        <div class="row g-2 mb-3 text-center">
+                            <div class="col-6 col-md-3">
+                                <div class="border rounded py-2">
+                                    <div class="small text-muted">Taranan fatura</div>
+                                    <div class="fs-5 fw-bold">@sonuc.TaranFatura</div>
+                                    <div class="small text-muted">@sonuc.TaranCari cari</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="border rounded py-2">
+                                    <div class="small text-muted">Kesilen toplamı</div>
+                                    <div class="fs-6 fw-bold text-success">@sonuc.GidenToplam.ToString("N2") ₺</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="border rounded py-2">
+                                    <div class="small text-muted">Gelen toplamı</div>
+                                    <div class="fs-6 fw-bold text-danger">@sonuc.GelenToplam.ToString("N2") ₺</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="border rounded py-2">
+                                    <div class="small text-muted">@(sonuc.Uygulandi ? "Tipi güncellenen cari" : "Tipi güncellenecek cari")</div>
+                                    <div class="fs-5 fw-bold @(sonuc.CariTipiGuncellenen > 0 ? "text-primary" : "")">@sonuc.CariTipiGuncellenen</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (eksikFisOlustur || sonuc.EksikFisSayisi > 0)
+                        {
+                            <div class="small mb-2">
+                                <i class="bi bi-journal-text me-1"></i>
+                                Muhasebe fişi olmayan fatura: <strong>@sonuc.EksikFisSayisi</strong>
+                                @if (sonuc.Uygulandi && eksikFisOlustur)
+                                {
+                                    <span> · oluşturulan fiş: <strong>@sonuc.OlusturulanFis</strong></span>
+                                }
+                                else if (!eksikFisOlustur && sonuc.EksikFisSayisi > 0)
+                                {
+                                    <span class="text-muted"> (yukarıdaki seçenek kapalı olduğu için dokunulmadı)</span>
+                                }
+                            </div>
+                        }
+
+                        @foreach (var uyari in sonuc.Uyarilar)
+                        {
+                            <div class="alert alert-warning py-1 px-2 small mb-1"><i class="bi bi-exclamation-triangle me-1"></i>@uyari</div>
+                        }
+
+                        @if (sonuc.Satirlar.Count > 0)
+                        {
+                            <div class="table-responsive border rounded mt-2" style="max-height: 280px; overflow-y: auto;">
+                                <table class="table table-sm table-striped mb-0 small align-middle">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th>Cari / Fatura</th>
+                                            <th style="width: 190px;">İşlem</th>
+                                            <th>Ayrıntı</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var satir in sonuc.Satirlar.Take(SatirSiniri))
+                                        {
+                                            <tr>
+                                                <td class="fw-semibold">@satir.Baslik</td>
+                                                <td><span class="badge @IslemRozeti(satir.Islem)">@IslemAdi(satir.Islem, sonuc.Uygulandi)</span></td>
+                                                <td>@satir.Aciklama</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            @if (sonuc.Satirlar.Count > SatirSiniri)
+                            {
+                                <div class="small text-muted mt-1">… ve @(sonuc.Satirlar.Count - SatirSiniri) satır daha.</div>
+                            }
+                        }
+                        else if (!sonuc.DegisiklikVar)
+                        {
+                            <div class="small text-muted mt-2">
+                                <i class="bi bi-check2-all me-1"></i>Bu aralıkta güncellenecek bir kayıt yok; cari tipleri faturalarla uyumlu.
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="KapatAsync" disabled="@mesgul">Kapat</button>
+                    <button type="button" class="btn btn-outline-primary" @onclick="() => CalistirAsync(false)" disabled="@mesgul">
+                        <i class="bi bi-eye me-1"></i>Önizle
+                    </button>
+                    <button type="button" class="btn btn-primary" @onclick="() => CalistirAsync(true)" disabled="@mesgul">
+                        <i class="bi bi-arrow-repeat me-1"></i>Güncelle
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private const int SatirSiniri = 200;
+
+    [Parameter] public bool Goster { get; set; }
+
+    /// <summary>Pencere açılırken önerilen aralık; boşsa içinde bulunulan ay.</summary>
+    [Parameter] public DateTime? VarsayilanBaslangic { get; set; }
+    [Parameter] public DateTime? VarsayilanBitis { get; set; }
+
+    /// <summary>Pencere açılırken seçili gelecek fatura yönü; boşsa kesilen + gelen.</summary>
+    [Parameter] public FaturaYonu? VarsayilanYon { get; set; }
+
+    [Parameter] public EventCallback OnKapat { get; set; }
+
+    /// <summary>Güncelleme uygulandıktan sonra çağrılır; sayfa listesini yenilemek için.</summary>
+    [Parameter] public EventCallback OnTamamlandi { get; set; }
+
+    private DateTime baslangic;
+    private DateTime bitis;
+    private int yonSecimi;
+    private bool cariTipiGuncelle = true;
+    private bool eksikFisOlustur;
+    private bool mesgul;
+    private string? hata;
+    private FaturaCariSenkronSonucu? sonuc;
+    private bool oncekiGoster;
+
+    protected override void OnParametersSet()
+    {
+        if (Goster && !oncekiGoster)
+        {
+            var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
+            baslangic = (VarsayilanBaslangic ?? new DateTime(bugun.Year, bugun.Month, 1)).Date;
+            bitis = (VarsayilanBitis ?? new DateTime(bugun.Year, bugun.Month, 1).AddMonths(1).AddDays(-1)).Date;
+            if (bitis < baslangic)
+                bitis = baslangic;
+            yonSecimi = VarsayilanYon.HasValue ? (int)VarsayilanYon.Value : 0;
+            cariTipiGuncelle = true;
+            eksikFisOlustur = false;
+            sonuc = null;
+            hata = null;
+            mesgul = false;
+        }
+
+        oncekiGoster = Goster;
+    }
+
+    private FaturaYonu? SecilenYon => yonSecimi switch
+    {
+        1 => FaturaYonu.Giden,
+        2 => FaturaYonu.Gelen,
+        _ => null
+    };
+
+    private void SonucuSifirla()
+    {
+        // Ayarlar değişince eski önizleme geçerliliğini yitirir.
+        sonuc = null;
+        hata = null;
+    }
+
+    private void AralikSec(int secim)
+    {
+        var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
+        switch (secim)
+        {
+            case 0:
+                baslangic = new DateTime(bugun.Year, bugun.Month, 1);
+                bitis = baslangic.AddMonths(1).AddDays(-1);
+                break;
+            case 1:
+                baslangic = new DateTime(bugun.Year, bugun.Month, 1).AddMonths(-1);
+                bitis = baslangic.AddMonths(1).AddDays(-1);
+                break;
+            default:
+                baslangic = new DateTime(bugun.Year, 1, 1);
+                bitis = new DateTime(bugun.Year, 12, 31);
+                break;
+        }
+
+        SonucuSifirla();
+    }
+
+    private async Task CalistirAsync(bool uygula)
+    {
+        if (mesgul)
+            return;
+
+        if (bitis.Date < baslangic.Date)
+        {
+            hata = "Bitiş tarihi başlangıç tarihinden önce olamaz.";
+            return;
+        }
+
+        mesgul = true;
+        hata = null;
+        sonuc = null;
+        StateHasChanged();
+
+        try
+        {
+            sonuc = await CariSenkron.GuncelleAsync(new FaturaCariSenkronIstegi
+            {
+                Baslangic = baslangic.Date,
+                Bitis = bitis.Date,
+                Yon = SecilenYon,
+                CariTipiGuncelle = cariTipiGuncelle,
+                EksikMuhasebeFisiOlustur = eksikFisOlustur,
+                Uygula = uygula
+            });
+
+            if (uygula)
+                await OnTamamlandi.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            hata = ex.InnerException?.Message ?? ex.Message;
+        }
+        finally
+        {
+            mesgul = false;
+        }
+    }
+
+    private async Task KapatAsync()
+    {
+        if (!mesgul)
+            await OnKapat.InvokeAsync();
+    }
+
+    private static string IslemAdi(FaturaCariSenkronIslemi islem, bool uygulandi) => islem switch
+    {
+        FaturaCariSenkronIslemi.CariTipiGuncellendi => uygulandi ? "Cari tipi güncellendi" : "Cari tipi güncellenecek",
+        FaturaCariSenkronIslemi.MuhasebeFisiOlusturuldu => "Muhasebe fişi oluşturuldu",
+        FaturaCariSenkronIslemi.MuhasebeFisiOlusturulamadi => "Fiş oluşturulamadı",
+        _ => islem.ToString()
+    };
+
+    private static string IslemRozeti(FaturaCariSenkronIslemi islem) => islem switch
+    {
+        FaturaCariSenkronIslemi.CariTipiGuncellendi => "bg-primary",
+        FaturaCariSenkronIslemi.MuhasebeFisiOlusturuldu => "bg-success",
+        _ => "bg-danger"
+    };
+}

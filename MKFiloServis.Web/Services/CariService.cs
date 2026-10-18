@@ -1,6 +1,7 @@
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Models;
+using MKFiloServis.Web.Services.Calculation;
 using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Web.Services.Interfaces;
 
@@ -198,26 +199,8 @@ public class CariService : ICariService
         var odemeler = data.Odemeler.GetValueOrDefault(cari.Id, 0);
         var tahsilatlar = data.Tahsilatlar.GetValueOrDefault(cari.Id, 0);
 
-        if (cari.CariTipi == CariTipi.Musteri)
-        {
-            cari.Alacak = gidenFaturalar;
-            cari.Borc = tahsilatlar;
-        }
-        else if (cari.CariTipi == CariTipi.Tedarikci)
-        {
-            cari.Borc = gelenFaturalar;
-            cari.Alacak = odemeler;
-        }
-        else if (cari.CariTipi == CariTipi.Personel)
-        {
-            cari.Borc = gelenFaturalar;
-            cari.Alacak = odemeler;
-        }
-        else // MusteriTedarikci
-        {
-            cari.Alacak = gidenFaturalar + odemeler;
-            cari.Borc = gelenFaturalar + tahsilatlar;
-        }
+        // Fatura yönü cari tipine bakmaksızın hesaba girer (bkz. CariBakiyeHesaplayici).
+        CariBakiyeHesaplayici.Uygula(cari, gidenFaturalar, gelenFaturalar, odemeler, tahsilatlar);
     }
 
     /// <summary>
@@ -252,26 +235,7 @@ public class CariService : ICariService
             .Where(h => h.CariId == cari.Id && h.HareketTipi == HareketTipi.Giris)
             .SumAsync(h => (decimal?)h.Tutar) ?? 0;
 
-        if (cari.CariTipi == CariTipi.Musteri)
-        {
-            cari.Alacak = gidenFaturalar;
-            cari.Borc = tahsilatlar;
-        }
-        else if (cari.CariTipi == CariTipi.Tedarikci)
-        {
-            cari.Borc = gelenFaturalar;
-            cari.Alacak = odemeler;
-        }
-        else if (cari.CariTipi == CariTipi.Personel)
-        {
-            cari.Borc = gelenFaturalar;
-            cari.Alacak = odemeler;
-        }
-        else // MusteriTedarikci
-        {
-            cari.Alacak = gidenFaturalar + odemeler;
-            cari.Borc = gelenFaturalar + tahsilatlar;
-        }
+        CariBakiyeHesaplayici.Uygula(cari, gidenFaturalar, gelenFaturalar, odemeler, tahsilatlar);
     }
 
     public async Task<Cari?> GetByIdAsync(int id)

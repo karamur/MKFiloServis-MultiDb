@@ -32,6 +32,10 @@
             <button class="btn btn-primary" @onclick="YeniFaturaAc">
                 <i class="bi bi-plus-lg me-1"></i>Yeni Fatura
             </button>
+            <button class="btn btn-outline-primary" @onclick="() => showSenkronModal = true"
+                    title="Seçilen tarih aralığındaki faturaları cariye ve Borç/Alacak hesaplarına yeniden yansıtır">
+                <i class="bi bi-arrow-repeat me-1"></i>Cari / Borç-Alacak Güncelle
+            </button>
             <div class="btn-group">
                 <button class="btn btn-outline-info" @onclick="SablonIndir" title="Excel Şablon İndir">
                     <i class="bi bi-download"></i>
@@ -563,6 +567,14 @@
     </div>
 }
 
+<!-- Cari ve Borç/Alacak güncelleme (tarih aralığı) -->
+<FaturaCariSenkronModal Goster="showSenkronModal"
+                        VarsayilanBaslangic="filtreBaslangic"
+                        VarsayilanBitis="filtreBitis"
+                        VarsayilanYon="FaturaYonu.Gelen"
+                        OnKapat="() => showSenkronModal = false"
+                        OnTamamlandi="YenileAsync" />
+
 <!-- Import Modal -->
 @if (showImportModal)
 {
@@ -676,6 +688,30 @@
                                 </div>
                             </div>
                         </div>
+
+                        @if (importResult.ImportedCount > 0 || importResult.SkippedCount > 0)
+                        {
+                            <div class="alert alert-info py-2 small">
+                                <i class="bi bi-arrow-repeat me-1"></i>
+                                <strong>Cari ve Borç/Alacak güncellendi.</strong>
+                                @if (importResult.ImportedCount > 0)
+                                {
+                                    <span> Aktarılan @importResult.ImportedCount fatura Cari Listesi ve Borç/Alacak Takip hesabına dahil edildi.</span>
+                                }
+                                @if (importResult.GuncellenenCariSayisi > 0)
+                                {
+                                    <span> @importResult.GuncellenenCariSayisi carinin tipi faturalarına göre güncellendi (@string.Join("; ", importResult.GuncellenenCariler.Take(3))@(importResult.GuncellenenCariSayisi > 3 ? "…" : "")).</span>
+                                }
+                                @if (importResult.GuncellenenFaturaSayisi > 0)
+                                {
+                                    <span> Zaten kayıtlı @importResult.GuncellenenFaturaSayisi faturanın eksik PDF/XML dosyası tamamlandı.</span>
+                                }
+                                @if (importResult.SkippedCount > 0)
+                                {
+                                    <span> Atlanan (zaten kayıtlı) faturaların carileri de yeniden kontrol edildi.</span>
+                                }
+                            </div>
+                        }
 
                         <!-- Hatalar Listesi -->
                         @if (importResult.Errors.Any())
@@ -1094,6 +1130,7 @@
     // Modals
     private bool showFaturaModal = false;
     private bool showImportModal = false;
+    private bool showSenkronModal = false;
     private bool showDetayModal = false;
     private bool showOdemeModal = false;
     private bool showOdemeTarihiModal = false;
@@ -1631,7 +1668,15 @@
             }
             else if (importResult != null && importResult.ImportedCount == 0 && importResult.SkippedCount > 0)
             {
-                ToastService.ShowWarning($"{importResult.SkippedCount} fatura zaten mevcut.");
+                if (importResult.GuncellenenFaturaSayisi > 0)
+                {
+                    ToastService.ShowSuccess($"{importResult.SkippedCount} fatura zaten mevcut; {importResult.GuncellenenFaturaSayisi} faturanın eksik PDF/XML dosyası tamamlandı.");
+                    await YenileAsync();
+                }
+                else
+                {
+                    ToastService.ShowWarning($"{importResult.SkippedCount} fatura zaten mevcut.");
+                }
             }
             else if (importResult?.Errors?.Any() == true)
             {

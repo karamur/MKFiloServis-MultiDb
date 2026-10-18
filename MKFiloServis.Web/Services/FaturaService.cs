@@ -18,9 +18,11 @@ public class FaturaService : IFaturaService
     private readonly ISecureFileService _secureFileService;
     private readonly FileCleanupJournal _cleanupJournal;
     private readonly LegacyFileCleanupService _legacyFileCleanupService;
+    private readonly IFaturaCariSenkronService _cariSenkron;
 
-    public FaturaService(IDbContextFactory<ApplicationDbContext> contextFactory, IMuhasebeService muhasebeService, NumaraSerisiService numaraSerisi, IWebHostEnvironment env, ISecureFileService secureFileService, FileCleanupJournal cleanupJournal, LegacyFileCleanupService legacyFileCleanupService, CurrentPermissionGuard permissionGuard)
+    public FaturaService(IDbContextFactory<ApplicationDbContext> contextFactory, IMuhasebeService muhasebeService, NumaraSerisiService numaraSerisi, IWebHostEnvironment env, ISecureFileService secureFileService, FileCleanupJournal cleanupJournal, LegacyFileCleanupService legacyFileCleanupService, CurrentPermissionGuard permissionGuard, IFaturaCariSenkronService cariSenkron)
     {
+        _cariSenkron = cariSenkron;
         _permissionGuard = permissionGuard;
         _contextFactory = contextFactory;
         _muhasebeService = muhasebeService;
@@ -678,6 +680,9 @@ public class FaturaService : IFaturaService
             // Bu importta olusturulan carileri takip et
             var importCarileri = new Dictionary<string, Cari>(StringComparer.OrdinalIgnoreCase);
 
+            // Aktarmada dokunulan (yeni fatura ya da zaten kayıtlı fatura) cariler: sonunda faturalarına göre güncellenir.
+            var etkilenenCariIdleri = new HashSet<int>();
+
             for (int row = 2; row <= rowCount; row++)
             {
                 try
@@ -711,6 +716,8 @@ public class FaturaService : IFaturaService
                     {
                         result.SkippedCount++;
                         result.Errors.Add($"Satir {row}: '{faturaNo}' zaten mevcut.");
+                        result.MevcutItems.Add(existingFatura);
+                        etkilenenCariIdleri.Add(existingFatura.CariId);
                         continue;
                     }
 
@@ -848,6 +855,7 @@ public class FaturaService : IFaturaService
                     await CreateStokHareketleriFromFaturaAsync(context, fatura, yon);
 
                     result.ImportedItems.Add(fatura);
+                    etkilenenCariIdleri.Add(cari.Id);
                     result.ImportedCount++;
                 }
                 catch (Exception ex)
@@ -868,6 +876,7 @@ public class FaturaService : IFaturaService
                 }
             }
 
+            await AktarimSonrasiCarileriGuncelleAsync(etkilenenCariIdleri, result);
             result.Success = result.ImportedCount > 0;
         }
         catch (Exception ex)
@@ -886,6 +895,9 @@ public class FaturaService : IFaturaService
         var defaultEFaturaTipi = eFaturaTipi ?? EFaturaTipi.EFatura;
         int nextCariNum = await GetNextCariNumAsync(context);
         var importCarileri = new Dictionary<string, Cari>(StringComparer.OrdinalIgnoreCase);
+
+        // Aktarmada dokunulan (yeni fatura ya da zaten kayıtlı fatura) cariler: sonunda faturalarına göre güncellenir.
+        var etkilenenCariIdleri = new HashSet<int>();
 
         // Ayarları al
         var ayar = await context.MuhasebeAyarlari.FirstOrDefaultAsync();
@@ -1011,6 +1023,9 @@ public class FaturaService : IFaturaService
                 {
                     result.Errors.Add($"{file.FileName}: {faturaNo} no'lu {(yon == FaturaYonu.Giden ? "kesilen" : "gelen")} fatura seçilen firma için zaten var.");
                     result.SkippedCount++;
+                    result.MevcutItems.Add(existingFatura);
+                    result.FaturaXmlMapping[existingFatura.Id] = file.FileName;
+                    etkilenenCariIdleri.Add(existingFatura.CariId);
                     continue;
                 }
 
@@ -1526,6 +1541,7 @@ public class FaturaService : IFaturaService
 
                 result.ImportedItems.Add(fatura);
                 result.FaturaXmlMapping[fatura.Id] = file.FileName; // XML dosya adını kaydet
+                etkilenenCariIdleri.Add(fatura.CariId);
                 result.ImportedCount++;
             }
             catch (Exception ex)
@@ -1543,8 +1559,31 @@ public class FaturaService : IFaturaService
             }
         }
 
+        await AktarimSonrasiCarileriGuncelleAsync(etkilenenCariIdleri, result);
         result.Success = result.ImportedCount > 0;
         return result;
+    }
+
+    /// <summary>
+    /// Aktarmada dokunulan carilerin tipini faturalarının yönüne göre günceller: müşteri carisine gelen fatura (ya da
+    /// tedarikçiye kesilen fatura) işlenince cari Müşteri + Tedarikçi olur. Cari Listesi ve Borç/Alacak Takip bakiyeleri
+    /// faturalardan canlı hesaplandığı için ayrıca bir bakiye yazımı gerekmez. Güncelleme başarısız olsa da aktarma bozulmaz.
+    /// </summary>
+    private async Task AktarimSonrasiCarileriGuncelleAsync(IReadOnlyCollection<int> cariIdleri, EFaturaImportResult result)
+    {
+        if (cariIdleri.Count == 0)
+            return;
+
+        try
+        {
+            var guncellenenler = new List<string>();
+            result.GuncellenenCariSayisi = await _cariSenkron.CariTipleriniGuncelleAsync(cariIdleri, guncellenenler);
+            result.GuncellenenCariler = guncellenenler;
+        }
+        catch (Exception ex)
+        {
+            result.Errors.Add($"Cari güncelleme: {ex.InnerException?.Message ?? ex.Message}");
+        }
     }
 
     public async Task<EFaturaImportResult> ImportFromXmlWithPdfAsync(List<XmlPdfFileContent> files, FaturaYonu yon, int? firmaId = null, EFaturaTipi? eFaturaTipi = null)
@@ -1579,18 +1618,46 @@ public class FaturaService : IFaturaService
             }
         }
 
+        // Yeniden aktarma: sistemde zaten kayıtlı faturalarda eksik PDF / XML dosyası varsa tamamla
+        foreach (var fatura in result.MevcutItems)
+        {
+            if (!result.FaturaXmlMapping.TryGetValue(fatura.Id, out var mevcutXmlAdi)
+                || !xmlFileMap.TryGetValue(mevcutXmlAdi.ToLowerInvariant(), out var mevcutDosya))
+                continue;
+
+            var guncellendi = false;
+            try
+            {
+                if (string.IsNullOrWhiteSpace(fatura.PdfDosyaYolu) && !string.IsNullOrEmpty(mevcutDosya.PdfFileName) && mevcutDosya.PdfContent != null)
+                    guncellendi |= await UploadFaturaPdfCoreAsync(fatura.Id, mevcutDosya.PdfFileName, mevcutDosya.PdfContent, "yaz");
+
+                if (string.IsNullOrWhiteSpace(fatura.XmlDosyaYolu))
+                    guncellendi |= await UploadFaturaXmlCoreAsync(fatura.Id, mevcutDosya.XmlFileName, mevcutDosya.XmlContent, "yaz");
+            }
+            catch (Exception ex)
+            {
+                result.Errors.Add($"{mevcutDosya.XmlFileName}: mevcut faturaya dosya eklenemedi ({ex.InnerException?.Message ?? ex.Message})");
+            }
+
+            if (guncellendi)
+                result.GuncellenenFaturaSayisi++;
+        }
+
         return result;
     }
 
     public Task<bool> UploadFaturaPdfAsync(int faturaId, string fileName, byte[] pdfContent)
         => UploadFaturaPdfCoreAsync(faturaId, fileName, pdfContent, "duzenle");
 
-    public async Task<bool> UploadFaturaXmlAsync(int faturaId, string fileName, byte[] xmlContent)
+    public Task<bool> UploadFaturaXmlAsync(int faturaId, string fileName, byte[] xmlContent)
+        => UploadFaturaXmlCoreAsync(faturaId, fileName, xmlContent, "duzenle");
+
+    private async Task<bool> UploadFaturaXmlCoreAsync(int faturaId, string fileName, byte[] xmlContent, string action)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var fatura = await context.Faturalar.FindAsync(faturaId);
         if (fatura == null) return false;
-        await RequireFaturaPermissionAsync(fatura.FaturaYonu, "duzenle");
+        await RequireFaturaPermissionAsync(fatura.FaturaYonu, action);
         try
         {
             ValidateStoredXmlFileExtension(fileName);

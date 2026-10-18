@@ -36,6 +36,10 @@
                     <i class="bi bi-arrow-left me-1"></i> Tüm Cariler
                 </button>
             }
+            <button class="btn btn-outline-primary me-2" @onclick="() => showSenkronModal = true" disabled="@yukleniyor"
+                    title="Seçilen tarih aralığındaki faturaları cariye ve Borç/Alacak hesaplarına yeniden yansıtır">
+                <i class="bi bi-arrow-repeat me-1"></i> Faturalardan Güncelle
+            </button>
             <button class="btn btn-success" @onclick="ExcelExport" disabled="@yukleniyor">
                 <i class="bi bi-file-earmark-excel me-1"></i> Excel
             </button>
@@ -62,6 +66,12 @@
         @TumCarilerGoruntule()
     }
 </div>
+
+<FaturaCariSenkronModal Goster="showSenkronModal"
+                        VarsayilanBaslangic="baslangicTarihi"
+                        VarsayilanBitis="bitisTarihi"
+                        OnKapat="() => showSenkronModal = false"
+                        OnTamamlandi="YenileAsync" />
 
 <!-- Hareket Detay Modal -->
 <div class="modal fade" id="hareketModal" tabindex="-1">
@@ -141,6 +151,7 @@
     [Parameter] public int? CariId { get; set; }
 
     private bool yukleniyor = true;
+    private bool showSenkronModal = false;
     private CariBorcAlacakOzet? ozetRapor;
     private CariHareketTakipRapor? cariDetay;
     private List<Cari> cariler = [];

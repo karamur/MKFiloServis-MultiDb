@@ -311,6 +311,7 @@ builder.Services.AddScoped<IAracMasrafService, AracMasrafService>();
 builder.Services.AddScoped<IServisCalismaService, ServisCalismaService>();
 builder.Services.AddScoped<CurrentPermissionGuard>();
 builder.Services.AddScoped<IFaturaService, FaturaService>();
+builder.Services.AddScoped<IFaturaCariSenkronService, FaturaCariSenkronService>(); // Fatura aktarımı sonrası / tarih aralığı için cari ve Borç-Alacak güncelleme
 builder.Services.AddScoped<IBankaHesapService, BankaHesapService>();
 builder.Services.AddScoped<IBankaKasaHareketService, BankaKasaHareketService>();
 builder.Services.AddScoped<IBankaHareketImportService, BankaHareketImportService>();

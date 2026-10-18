@@ -86,6 +86,16 @@ public class EFaturaImportResult
     public List<string> Errors { get; set; } = new();
     public List<Fatura> ImportedItems { get; set; } = new();
     public Dictionary<int, string> FaturaXmlMapping { get; set; } = new(); // FaturaId -> XmlFileName
+
+    /// <summary>Dosyada olup sistemde zaten kayıtlı çıkan faturalar (yeniden aktarma): eksik PDF/XML tamamlanır, carisi güncel tutulur.</summary>
+    public List<Fatura> MevcutItems { get; set; } = new();
+
+    /// <summary>Yeniden aktarmada eksik PDF/XML dosyası tamamlanan mevcut fatura sayısı.</summary>
+    public int GuncellenenFaturaSayisi { get; set; }
+
+    /// <summary>Aktarma sonrası faturalarının yönüne göre tipi güncellenen cari sayısı (ör. Müşteri → Müşteri + Tedarikçi).</summary>
+    public int GuncellenenCariSayisi { get; set; }
+    public List<string> GuncellenenCariler { get; set; } = new();
 }
 
 public class XmlFileContent
