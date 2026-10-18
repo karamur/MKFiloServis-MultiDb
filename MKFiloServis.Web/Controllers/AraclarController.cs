@@ -142,6 +142,8 @@ public class AraclarController : ControllerBase
 
         Enum.TryParse<AracSahiplikTipi>(dto.SahiplikTipi, true, out var sahiplikTipi);
         Enum.TryParse<AracTipi>(dto.AracTipi, true, out var aracTipi);
+        if (AracKurallari.KiralikSahipEksik(sahiplikTipi, dto.KiralikCariId))
+            return BadRequest(new { Error = AracKurallari.KiralikSahipZorunluMesaji });
 
         var arac = new Arac
         {
@@ -156,6 +158,7 @@ public class AraclarController : ControllerBase
             AracTipi = aracTipi,
             KmDurumu = dto.KmDurumu,
             SahiplikTipi = sahiplikTipi,
+            KiralikCariId = sahiplikTipi == AracSahiplikTipi.Kiralik ? dto.KiralikCariId : null,
             TrafikSigortaBitisTarihi = dto.TrafikSigortaBitisTarihi,
             KaskoBitisTarihi = dto.KaskoBitisTarihi,
             MuayeneBitisTarihi = dto.MuayeneBitisTarihi,
@@ -196,6 +199,9 @@ public class AraclarController : ControllerBase
         if (arac == null)
             return NotFound(new { Error = "Araç bulunamadı" });
 
+        var eskiSahiplikTipi = arac.SahiplikTipi;
+        var eskiKiralikCariId = arac.KiralikCariId;
+
         if (dto.Marka != null)
             arac.Marka = dto.Marka;
 
@@ -226,6 +232,9 @@ public class AraclarController : ControllerBase
         if (!string.IsNullOrEmpty(dto.SahiplikTipi) && Enum.TryParse<AracSahiplikTipi>(dto.SahiplikTipi, true, out var sahiplikTipi))
             arac.SahiplikTipi = sahiplikTipi;
 
+        if (dto.KiralikCariId.HasValue)
+            arac.KiralikCariId = dto.KiralikCariId;
+
         if (dto.TrafikSigortaBitisTarihi.HasValue)
             arac.TrafikSigortaBitisTarihi = dto.TrafikSigortaBitisTarihi;
 
@@ -237,6 +246,9 @@ public class AraclarController : ControllerBase
 
         if (dto.Aktif.HasValue)
             arac.Aktif = dto.Aktif.Value;
+
+        if (AracKurallari.GuncellemeSahipsizKiralikBirakiyor(eskiSahiplikTipi, eskiKiralikCariId, arac.SahiplikTipi, arac.KiralikCariId))
+            return BadRequest(new { Error = AracKurallari.KiralikSahipZorunluMesaji });
 
         await _aracService.UpdateAsync(arac);
 
@@ -366,6 +378,8 @@ public class AracCreateDto
     public string? AracTipi { get; set; }
     public int? KmDurumu { get; set; }
     public string? SahiplikTipi { get; set; }
+    /// <summary>Kiralık araçlarda zorunlu: araç (plaka) sahibi carinin kimliği.</summary>
+    public int? KiralikCariId { get; set; }
     public DateTime? TrafikSigortaBitisTarihi { get; set; }
     public DateTime? KaskoBitisTarihi { get; set; }
     public DateTime? MuayeneBitisTarihi { get; set; }
@@ -384,6 +398,8 @@ public class AracUpdateDto
     public string? AracTipi { get; set; }
     public int? KmDurumu { get; set; }
     public string? SahiplikTipi { get; set; }
+    /// <summary>Sahiplik tipi Kiralık yapılırken veya sahip değiştirilirken gönderilir.</summary>
+    public int? KiralikCariId { get; set; }
     public DateTime? TrafikSigortaBitisTarihi { get; set; }
     public DateTime? KaskoBitisTarihi { get; set; }
     public DateTime? MuayeneBitisTarihi { get; set; }

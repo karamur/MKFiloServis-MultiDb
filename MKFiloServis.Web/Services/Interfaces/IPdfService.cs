@@ -11,6 +11,9 @@ public interface IPdfService
     byte[] GenerateMutabakatPdf(MutabakatPdfModel model);
     byte[] GenerateHakedisPdf(Hakedis hakedis, string? referansAd = null);
     byte[] GenerateHakedisDetayRaporPdf(HakedisDetayRaporModel model);
+
+    /// <summary>Kapsamlı hakediş önizlemesinin (gruplama ve kolonlar kullanıcıya göre değişen) PDF çıktısı.</summary>
+    byte[] GenerateHakedisRaporTablosuPdf(HakedisRaporTablosu tablo);
     byte[] GenerateRentACarKiralamaRaporPdf(RentACarKiralamaRaporModel model);
 }
 

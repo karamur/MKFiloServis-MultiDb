@@ -51,7 +51,7 @@ public class HakedisRaporService : IHakedisRaporService
             .Select(g =>
             {
                 var gelir = g.Where(x => x.Tip == HakedisTipi.Kurum).Sum(x => x.Tutar);
-                var gider = g.Where(x => x.Tip == HakedisTipi.Tedarikci).Sum(x => x.Tutar);
+                var gider = g.Where(x => x.Tip.GiderMi()).Sum(x => x.Tutar);
                 var seferDec = g.Where(x => x.Tip == HakedisTipi.Kurum).Sum(x => x.SeferSayisi);
                 if (seferDec <= 0)
                     seferDec = g.Where(x => x.Tip != HakedisTipi.Arac).Sum(x => x.SeferSayisi);
@@ -109,7 +109,7 @@ public class HakedisRaporService : IHakedisRaporService
                 if (seferDec <= 0)
                     seferDec = g.Where(x => x.Tip != HakedisTipi.Arac).Sum(x => x.SeferSayisi);
 
-                var kazanc = g.Where(x => x.Tip == HakedisTipi.Tedarikci).Sum(x => x.Tutar);
+                var kazanc = g.Where(x => x.Tip.GiderMi()).Sum(x => x.Tutar);
                 if (kazanc <= 0)
                     kazanc = g.Where(x => x.Tip == HakedisTipi.Kurum).Sum(x => x.Tutar);
 
@@ -161,7 +161,7 @@ public class HakedisRaporService : IHakedisRaporService
             .Select(g =>
             {
                 var gelir = g.Where(x => x.Tip == HakedisTipi.Kurum).Sum(x => x.Tutar);
-                var gider = g.Where(x => x.Tip == HakedisTipi.Tedarikci).Sum(x => x.Tutar);
+                var gider = g.Where(x => x.Tip.GiderMi()).Sum(x => x.Tutar);
                 var seferDec = g.Where(x => x.Tip == HakedisTipi.Kurum).Sum(x => x.SeferSayisi);
                 if (seferDec <= 0)
                     seferDec = g.Where(x => x.Tip != HakedisTipi.Arac).Sum(x => x.SeferSayisi);
@@ -218,7 +218,7 @@ public class HakedisRaporService : IHakedisRaporService
                     Gun = g.Key,
                     ToplamSefer = (int)Math.Round(seferDec, MidpointRounding.AwayFromZero),
                     GunlukGelir = g.Where(x => x.Tip == HakedisTipi.Kurum).Sum(x => x.Tutar),
-                    GunlukGider = g.Where(x => x.Tip == HakedisTipi.Tedarikci).Sum(x => x.Tutar),
+                    GunlukGider = g.Where(x => x.Tip.GiderMi()).Sum(x => x.Tutar),
                     MesaiSefer = 0,
                     EkSefer = 0
                 };
@@ -247,7 +247,7 @@ public class HakedisRaporService : IHakedisRaporService
 
         var toplamSefer = (int)Math.Round(toplamSeferDec, MidpointRounding.AwayFromZero);
         var toplamGelir = hakedisler.Where(h => h.Tip == HakedisTipi.Kurum).Sum(h => h.GenelToplam);
-        var toplamGider = hakedisler.Where(h => h.Tip == HakedisTipi.Tedarikci).Sum(h => h.GenelToplam);
+        var toplamGider = hakedisler.Where(h => h.Tip.GiderMi()).Sum(h => h.GenelToplam);
         var toplamKar = toplamGelir - toplamGider;
 
         var detaylar = await context.HakedisDetaylari
@@ -279,7 +279,7 @@ public class HakedisRaporService : IHakedisRaporService
                     Gun = g.Key,
                     Sefer = (int)Math.Round(seferDec, MidpointRounding.AwayFromZero),
                     Gelir = g.Where(x => x.Tip == HakedisTipi.Kurum).Sum(x => x.Tutar),
-                    Gider = g.Where(x => x.Tip == HakedisTipi.Tedarikci).Sum(x => x.Tutar)
+                    Gider = g.Where(x => x.Tip.GiderMi()).Sum(x => x.Tutar)
                 };
             })
             .OrderBy(t => t.Gun)

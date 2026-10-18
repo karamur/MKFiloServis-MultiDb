@@ -551,7 +551,7 @@ public class PdfService : IPdfService
 
     public byte[] GenerateHakedisPdf(Hakedis hakedis, string? referansAd = null)
     {
-        var baslik = $"HAKEDİŞ - {hakedis.Tip.ToString().ToUpper()}\n{hakedis.Yil}/{hakedis.Ay:D2}";
+        var baslik = $"HAKEDİŞ - {hakedis.Tip.Metin().ToUpper(new System.Globalization.CultureInfo("tr-TR"))}\n{hakedis.Yil}/{hakedis.Ay:D2}";
         var document = Document.Create(container =>
         {
             container.Page(page =>
@@ -585,6 +585,82 @@ public class PdfService : IPdfService
         });
 
         return document.GeneratePdf();
+    }
+
+    public byte[] GenerateHakedisRaporTablosuPdf(HakedisRaporTablosu tablo)
+    {
+        var document = Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4.Landscape());
+                page.Margin(25);
+                page.DefaultTextStyle(x => x.FontSize(8));
+                page.Header().Element(c => ComposeHeader(c, tablo.Baslik));
+                page.Content().Element(c => ComposeHakedisRaporTablosuContent(c, tablo));
+                page.Footer().Element(ComposeFooter);
+            });
+        });
+
+        return document.GeneratePdf();
+    }
+
+    private static void ComposeHakedisRaporTablosuContent(IContainer container, HakedisRaporTablosu tablo)
+    {
+        container.Column(col =>
+        {
+            col.Item().Text(tablo.AltBaslik).Bold().FontSize(11);
+            col.Item().Text(tablo.KapsamOzeti).FontSize(8).FontColor(Colors.Grey.Darken1);
+            col.Item().PaddingVertical(4);
+
+            col.Item().Table(table =>
+            {
+                table.ColumnsDefinition(columns =>
+                {
+                    foreach (var kolon in tablo.Kolonlar)
+                        columns.RelativeColumn(kolon.Genislik);
+                });
+
+                table.Header(header =>
+                {
+                    foreach (var kolon in tablo.Kolonlar)
+                    {
+                        var hucre = header.Cell().Background(Colors.Grey.Lighten2).Padding(4);
+                        if (kolon.Sayisal)
+                            hucre.AlignRight().Text(kolon.Baslik).Bold();
+                        else
+                            hucre.Text(kolon.Baslik).Bold();
+                    }
+                });
+
+                void SatirYaz(object?[] degerler, Func<IContainer, IContainer> bicim, bool kalin)
+                {
+                    for (var i = 0; i < tablo.Kolonlar.Count; i++)
+                    {
+                        var hucre = bicim(table.Cell()).Padding(3);
+                        var metin = HakedisRaporOlusturucu.Metin(i < degerler.Length ? degerler[i] : null);
+                        var yazi = tablo.Kolonlar[i].Sayisal ? hucre.AlignRight().Text(metin) : hucre.Text(metin);
+                        if (kalin)
+                            yazi.Bold();
+                    }
+                }
+
+                foreach (var grup in tablo.Gruplar)
+                {
+                    if (!string.IsNullOrWhiteSpace(grup.Baslik))
+                        table.Cell().ColumnSpan((uint)tablo.Kolonlar.Count).Background(Colors.Blue.Lighten4).Padding(4)
+                            .Text(grup.Baslik).Bold();
+
+                    foreach (var degerler in grup.Satirlar)
+                        SatirYaz(degerler, c => c.BorderBottom(1).BorderColor(Colors.Grey.Lighten2), kalin: false);
+
+                    if (grup.AraToplam != null)
+                        SatirYaz(grup.AraToplam, c => c.Background(Colors.Grey.Lighten3), kalin: true);
+                }
+
+                SatirYaz(tablo.GenelToplam, c => c.Background(Colors.Grey.Lighten2), kalin: true);
+            });
+        });
     }
 
     public byte[] GenerateRentACarKiralamaRaporPdf(RentACarKiralamaRaporModel model)
@@ -767,7 +843,7 @@ public class PdfService : IPdfService
                     c.Item().PaddingTop(5).Text("Dönem:").Bold();
                     c.Item().Text($"{h.Yil} / {h.Ay:D2}");
                     c.Item().PaddingTop(5).Text("Tip:").Bold();
-                    c.Item().Text(h.Tip.ToString());
+                    c.Item().Text(h.Tip.Metin());
                     c.Item().PaddingTop(5).Text("Durum:").Bold();
                     c.Item().Text(h.Durum.ToString());
                 });

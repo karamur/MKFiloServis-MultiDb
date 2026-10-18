@@ -269,6 +269,7 @@ public class FiloKomisyonService : IFiloKomisyonService
         var puantajlar = await context.FiloGunlukPuantajlar
             .Include(p => p.MusteriCari)
             .Include(p => p.Guzergah)
+                .ThenInclude(g => g!.Cari)
             .Include(p => p.Arac)
                 .ThenInclude(a => a!.KiralikCari)
             .Include(p => p.Arac)

@@ -17,9 +17,9 @@ public interface IOperasyonelHakedisService
 
     /// <summary>
     /// Kurum bazlı gelir hakedişi üretir.
-    /// FiloGunlukPuantaj kayıtlarından (KurumFirmaId == kurumFirmaId) toplulaştırır.
+    /// FiloGunlukPuantaj kayıtlarını güzergâhın bağlı olduğu CariId değerine göre toplulaştırır.
     /// </summary>
-    Task<Hakedis> KurumHakedisiUretAsync(int kurumFirmaId, int yil, int ay);
+    Task<Hakedis> KurumHakedisiUretAsync(int cariId, int yil, int ay);
 
     /// <summary>
     /// Tedarikçi bazlı gider hakedişi üretir.
@@ -67,6 +67,22 @@ public interface IOperasyonelHakedisService
     /// Faturalanmış / Taslak / İptal kayıtlar atlanır.
     /// </summary>
     Task<TopluIslemSonuc> TopluFaturalaAsync(IEnumerable<int> hakedisIds, DateTime faturaTarihi);
+
+    /// <summary>
+    /// Seçilen kapsama (araç sahibi, güzergâh, eşleştirme, cari, araç, şoför, servis türü, gün aralığı)
+    /// göre hakediş kaynağı puantajları özetler ve filtre seçeneklerini döner. Veritabanına yazmaz.
+    /// </summary>
+    Task<HakedisKapsamOnizleme> KapsamOnizleAsync(HakedisTipi tip, HakedisKapsami kapsam);
+
+    /// <summary>
+    /// Kapsama uyan puantajlardan, hakediş türünün referansı (cari / tedarikçi / araç) başına bir taslak üretir.
+    /// Aynı kapsamdaki taslak yerinde yenilenir; farklı kapsamdaki taslaklar korunur.
+    /// Onaylı / faturalı bir hakedişte zaten bulunan puantajlar dışarıda bırakılır (çifte faturalama olmaz).
+    /// </summary>
+    Task<TopluHakedisSonuc> KapsamliUretAsync(HakedisTipi tip, HakedisKapsami kapsam);
+
+    /// <summary>Seçili taslakları, üretildikleri kapsamla (kapsam kaydı yoksa tüm dönem) güncel puantajdan yeniler.</summary>
+    Task<TopluIslemSonuc> TaslaklariYenileAsync(IEnumerable<int> hakedisIds);
 }
 
 /// <summary>Hakediş üretim önizleme sonucu.</summary>

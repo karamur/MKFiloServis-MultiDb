@@ -1,0 +1,145 @@
+﻿.hakedis-donem {
+    flex: 0 0 auto;
+    width: 340px;
+    max-width: 100%;
+}
+
+.hakedis-yil {
+    max-width: 5.5rem;
+}
+
+.hakedis-arama {
+    min-width: 240px;
+}
+
+/* ── Hakediş türü kartları ─────────────────────────────────────────────── */
+.tur-karti {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.65rem 0.9rem;
+    text-align: left;
+    color: inherit;
+    background: var(--crm-surface, #fff);
+    border: 1px solid var(--crm-border, #dee2e6);
+    border-radius: 0.75rem;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.tur-karti:hover:not(:disabled) {
+    border-color: var(--crm-primary, #2563eb);
+}
+
+.tur-karti:disabled {
+    opacity: 0.65;
+}
+
+.tur-karti.aktif {
+    border-color: var(--crm-primary, #2563eb);
+    box-shadow: 0 0 0 1px var(--crm-primary, #2563eb) inset;
+    background: color-mix(in srgb, var(--crm-primary, #2563eb) 9%, var(--crm-surface, #fff));
+}
+
+.tur-ikon {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1.3rem;
+    border-radius: 0.6rem;
+    color: var(--crm-primary, #2563eb);
+    background: color-mix(in srgb, var(--crm-primary, #2563eb) 14%, transparent);
+}
+
+/* ── Filtre grupları ───────────────────────────────────────────────────── */
+.filtre-grup-baslik {
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.3rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--crm-text-muted, #64748b);
+    border-bottom: 1px solid var(--crm-border, #e2e8f0);
+}
+
+/* ── Özet kutuları ─────────────────────────────────────────────────────── */
+.ozet-kutu {
+    --kutu-renk: var(--crm-primary, #2563eb);
+    height: 100%;
+    padding: 0.5rem 0.75rem;
+    background: var(--crm-surface, #fff);
+    border: 1px solid var(--crm-border, #e2e8f0);
+    border-left: 4px solid var(--kutu-renk);
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.ozet-kutu .etiket {
+    font-size: 0.74rem;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.ozet-kutu .deger {
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.ozet-kutu .alt {
+    font-size: 0.72rem;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.ozet-basari { --kutu-renk: #198754; }
+.ozet-tehlike { --kutu-renk: #dc3545; }
+.ozet-uyari { --kutu-renk: #f59e0b; }
+
+.olustur-cubugu {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: color-mix(in srgb, var(--crm-primary, #2563eb) 8%, var(--crm-surface, #fff));
+    border: 1px solid color-mix(in srgb, var(--crm-primary, #2563eb) 35%, var(--crm-border, #e2e8f0));
+    border-radius: 0.6rem;
+}
+
+/* ── Tablolar ──────────────────────────────────────────────────────────── */
+.onizleme-tablo {
+    max-height: 62vh;
+    overflow: auto;
+}
+
+.onizleme-tablo thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--crm-surface-alt, #f8f9fa);
+    white-space: nowrap;
+}
+
+.onizleme-tablo tfoot td {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    background: var(--crm-surface-alt, #f8f9fa);
+    border-top: 2px solid var(--crm-border, #dee2e6);
+}
+
+.grup-satiri {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.grup-satiri > td {
+    background: color-mix(in srgb, var(--crm-primary, #2563eb) 7%, var(--crm-surface, #fff));
+}
+
+.satir-hakedistede {
+    opacity: 0.7;
+}

@@ -383,14 +383,14 @@
             var kurumGelir = donemHakedis.Where(h => h.Tip == HakedisTipi.Kurum &&
                 (h.Durum == HakedisDurum.Faturalandi || h.Durum == HakedisDurum.TahsilEdildi))
                 .Sum(h => h.Tutar);
-            var tedarikciGider = donemHakedis.Where(h => h.Tip == HakedisTipi.Tedarikci &&
+            var tedarikciGider = donemHakedis.Where(h => h.Tip.GiderMi() &&
                 h.Durum != HakedisDurum.Iptal && h.Durum != HakedisDurum.Taslak)
                 .Sum(h => h.Tutar);
             netKar = kurumGelir - tedarikciGider - toplamYakit;
 
             // ===== Hakediş tipi grafik verisi =====
             hakedisTipTutarlari[0] = donemHakedis.Where(h => h.Tip == HakedisTipi.Kurum).Sum(h => h.Tutar);
-            hakedisTipTutarlari[1] = donemHakedis.Where(h => h.Tip == HakedisTipi.Tedarikci).Sum(h => h.Tutar);
+            hakedisTipTutarlari[1] = donemHakedis.Where(h => h.Tip.GiderMi()).Sum(h => h.Tutar);
             hakedisTipTutarlari[2] = donemHakedis.Where(h => h.Tip == HakedisTipi.Arac).Sum(h => h.Tutar);
 
             // ===== Trend (günlük sefer) =====
@@ -454,7 +454,7 @@
             {
                 await JS.InvokeVoidAsync("filoKpiCharts.renderHakedisTip",
                     "kpiHakedisTipChart",
-                    new[] { "Kurum (Gelir)", "Tedarikçi (Gider)", "Araç (İç)" },
+                    new[] { "Kurum (Gelir)", "Tedarikçi / Araç sahibi (Gider)", "Araç (İç)" },
                     hakedisTipTutarlari);
 
                 await JS.InvokeVoidAsync("filoKpiCharts.renderSeferTrend",

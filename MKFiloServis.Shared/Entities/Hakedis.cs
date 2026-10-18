@@ -25,9 +25,10 @@ public class Hakedis : BaseEntity, IFirmaTenant
 
     /// <summary>
     /// Tip'e göre referans:
-    /// - Kurum     -> Cari.Id (kurum cari)
-    /// - Tedarikci -> TasimaTedarikci.Id
-    /// - Arac      -> Arac.Id
+    /// - Kurum      -> Cari.Id (kurum cari)
+    /// - Tedarikci  -> TasimaTedarikci.Id
+    /// - Arac       -> Arac.Id
+    /// - AracSahibi -> Cari.Id (komisyoncu / kiralık plaka sahibi)
     /// </summary>
     public int ReferansId { get; set; }
 
@@ -105,7 +106,30 @@ public enum HakedisTipi
     /// <summary>Tedarikçiye ödenecek gider hakedişi</summary>
     Tedarikci = 2,
     /// <summary>Araç bazında iç maliyet/karlılık hakedişi (faturalanmaz)</summary>
-    Arac = 3
+    Arac = 3,
+    /// <summary>Komisyon / kiralık araç sahibine (cari) ödenecek gider hakedişi</summary>
+    AracSahibi = 4
+}
+
+public static class HakedisTipiExtensions
+{
+    /// <summary>Dışarıya ödenen gider hakedişleri: tedarikçi ve araç sahibi (komisyon / kiralık).</summary>
+    public static bool GiderMi(this HakedisTipi tip) => tip is HakedisTipi.Tedarikci or HakedisTipi.AracSahibi;
+
+    /// <summary>Kuruma kesilecek gelir hakedişi.</summary>
+    public static bool GelirMi(this HakedisTipi tip) => tip == HakedisTipi.Kurum;
+
+    /// <summary>Faturaya dönüşebilen (gelir veya gider) hakedişler; araç hakedişi iç rapordur.</summary>
+    public static bool FaturalanirMi(this HakedisTipi tip) => tip != HakedisTipi.Arac;
+
+    public static string Metin(this HakedisTipi tip) => tip switch
+    {
+        HakedisTipi.Kurum => "Kurum",
+        HakedisTipi.Tedarikci => "Tedarikçi",
+        HakedisTipi.Arac => "Araç",
+        HakedisTipi.AracSahibi => "Araç sahibi",
+        _ => tip.ToString()
+    };
 }
 
 public enum HakedisDurum

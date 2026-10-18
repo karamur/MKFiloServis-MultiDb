@@ -38,6 +38,7 @@ public class HakedisMuhasebeService : IHakedisMuhasebeService
 
             var hakedis = await context.Hakedisler
                 .Include(h => h.Fatura)
+                .Include(h => h.Detaylar).ThenInclude(d => d.Guzergah)
                 .FirstOrDefaultAsync(h => h.Id == hakedisId && !h.IsDeleted)
                 ?? throw new InvalidOperationException("Hakediş bulunamadı.");
 
@@ -192,7 +193,7 @@ public class HakedisMuhasebeService : IHakedisMuhasebeService
                         Alacak = hakedis.GenelToplam,
                         Tarih = fisTarihi,
                         CariId = cariId,
-                        Aciklama = "Tedarikçiye borç",
+                        Aciklama = hakedis.Tip == HakedisTipi.AracSahibi ? "Araç sahibine borç" : "Tedarikçiye borç",
                         CreatedAt = DateTime.UtcNow
                     });
                 }
@@ -224,16 +225,30 @@ public class HakedisMuhasebeService : IHakedisMuhasebeService
 
     private static async Task<int> ResolveCariIdAsync(ApplicationDbContext context, Hakedis h)
     {
+        // Müşteri kurumu eşleştirmeden alınan Kurum hakedişinde ve araç sahibi hakedişinde ReferansId doğrudan cari kartıdır.
+        if (h.Tip == HakedisTipi.AracSahibi
+            || (h.Tip == HakedisTipi.Kurum && HakedisUretimParametreleri.MusteriEslestirmedenMi(h.GenerationParams)))
+        {
+            if (!await context.Cariler.AnyAsync(c => c.Id == h.ReferansId && !c.IsDeleted))
+                throw new InvalidOperationException($"Hakedişin bağlı olduğu Cari #{h.ReferansId} bulunamadı.");
+            return h.ReferansId;
+        }
+
         if (h.Tip == HakedisTipi.Kurum)
         {
-            var firma = await context.Firmalar.FirstOrDefaultAsync(f => f.Id == h.ReferansId)
-                        ?? throw new InvalidOperationException("Kurum (Firma) bulunamadı.");
+            var cariIdleri = h.Detaylar
+                .Where(d => d.Guzergah != null && d.Guzergah.CariId > 0)
+                .Select(d => d.Guzergah!.CariId)
+                .Distinct()
+                .ToList();
+            if (cariIdleri.Count != 1)
+                throw new InvalidOperationException(cariIdleri.Count == 0
+                    ? "Hakediş güzergâhlarında cari kartı tanımlı değil."
+                    : "Hakediş birden fazla cari kartın güzergâhını içeriyor; carileri ayrı hakedişlere ayırın.");
 
-            if (firma.CariId.HasValue && firma.CariId.Value > 0)
-                return firma.CariId.Value;
-
-            var cari = await context.Cariler.FirstOrDefaultAsync(c => !c.IsDeleted && (c.Unvan == firma.FirmaAdi || c.Unvan == firma.UnvanTam));
-            return cari?.Id ?? throw new InvalidOperationException("Kurum için Cari kaydı bulunamadı.");
+            if (!await context.Cariler.AnyAsync(c => c.Id == cariIdleri[0] && !c.IsDeleted))
+                throw new InvalidOperationException($"Güzergâhın bağlı olduğu Cari #{cariIdleri[0]} bulunamadı.");
+            return cariIdleri[0];
         }
 
         if (h.Tip == HakedisTipi.Tedarikci)

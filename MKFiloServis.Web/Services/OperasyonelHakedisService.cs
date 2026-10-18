@@ -9,7 +9,7 @@ namespace MKFiloServis.Web.Services;
 /// Operasyonel hakediş servisi: yeni Hakediş entity'si üzerinden çalışır.
 /// FiloGunlukPuantaj kayıtlarından dönemsel hakediş üretir.
 /// </summary>
-public class OperasyonelHakedisService : IOperasyonelHakedisService
+public partial class OperasyonelHakedisService : IOperasyonelHakedisService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
 
@@ -25,6 +25,9 @@ public class OperasyonelHakedisService : IOperasyonelHakedisService
             .Include(h => h.Detaylar)
                 .ThenInclude(d => d.Guzergah)
                 .ThenInclude(g => g!.Kurum)
+            .Include(h => h.Detaylar)
+                .ThenInclude(d => d.Guzergah)
+                .ThenInclude(g => g!.Cari)
             .Include(h => h.Detaylar)
                 .ThenInclude(d => d.Arac)
             .Include(h => h.Detaylar)
@@ -53,11 +56,14 @@ public class OperasyonelHakedisService : IOperasyonelHakedisService
             .Include(h => h.Detaylar)
                 .ThenInclude(d => d.Guzergah)
                 .ThenInclude(g => g!.Kurum)
+            .Include(h => h.Detaylar)
+                .ThenInclude(d => d.Guzergah)
+                .ThenInclude(g => g!.Cari)
             .FirstOrDefaultAsync(h => h.Id == id);
     }
 
-    public Task<Hakedis> KurumHakedisiUretAsync(int kurumFirmaId, int yil, int ay) =>
-        UretInternalAsync(HakedisTipi.Kurum, kurumFirmaId, yil, ay);
+    public Task<Hakedis> KurumHakedisiUretAsync(int cariId, int yil, int ay) =>
+        UretInternalAsync(HakedisTipi.Kurum, cariId, yil, ay);
 
     public Task<Hakedis> TedarikciHakedisiUretAsync(int tasimaTedarikciId, int yil, int ay) =>
         UretInternalAsync(HakedisTipi.Tedarikci, tasimaTedarikciId, yil, ay);
@@ -69,6 +75,9 @@ public class OperasyonelHakedisService : IOperasyonelHakedisService
     {
         if (yil < 2000 || ay < 1 || ay > 12)
             throw new ArgumentException("Geçersiz dönem (yıl/ay).");
+
+        if (tip == HakedisTipi.AracSahibi)
+            throw new NotSupportedException("Araç sahibi hakedişi kapsamlı üretimle (KapsamliUretAsync) oluşturulur.");
 
         await using var context = await _contextFactory.CreateDbContextAsync();
 
@@ -85,7 +94,7 @@ public class OperasyonelHakedisService : IOperasyonelHakedisService
         switch (tip)
         {
             case HakedisTipi.Kurum:
-                q = q.Where(p => p.KurumFirmaId == referansId);
+                q = q.Where(p => p.Guzergah != null && p.Guzergah.CariId == referansId);
                 break;
             case HakedisTipi.Tedarikci:
                 q = q.Where(p => p.Arac != null
@@ -113,6 +122,21 @@ public class OperasyonelHakedisService : IOperasyonelHakedisService
             .FirstOrDefaultAsync(h => h.Tip == tip && h.ReferansId == referansId
                                       && h.Yil == yil && h.Ay == ay
                                       && h.Durum == HakedisDurum.Taslak);
+
+        // Eski taslaklar kurum FirmaId'siyle anahtarlanmış olabilir. Güzergâh
+        // bağlantısından cari bulunursa taslağı bu cari için yeniden kullan.
+        if (hakedis == null && tip == HakedisTipi.Kurum)
+        {
+            hakedis = await context.Hakedisler
+                .Include(h => h.Detaylar)
+                .Where(h => h.Tip == tip && h.Yil == yil && h.Ay == ay
+                    && h.Durum == HakedisDurum.Taslak
+                    && h.Detaylar.Any(d => d.Guzergah != null && d.Guzergah.CariId == referansId))
+                .OrderBy(h => h.Id)
+                .FirstOrDefaultAsync();
+            if (hakedis != null)
+                hakedis.ReferansId = referansId;
+        }
 
         if (hakedis == null)
         {
@@ -196,6 +220,10 @@ public class OperasyonelHakedisService : IOperasyonelHakedisService
         if (h.Durum != HakedisDurum.Taslak)
             throw new InvalidOperationException("Sadece Taslak hakediş onaylanabilir.");
 
+        var cakismalar = await OnayCakismalariniBulAsync(context, new[] { h });
+        if (cakismalar.TryGetValue(h.Id, out var cakismaMesaji))
+            throw new InvalidOperationException(cakismaMesaji);
+
         h.Durum = HakedisDurum.Onaylandi;
         h.OnaylayanKisi = onaylayanKisi;
         h.OnayTarihi = DateTime.UtcNow;
@@ -233,16 +261,31 @@ public class OperasyonelHakedisService : IOperasyonelHakedisService
         if (h.Tip == HakedisTipi.Arac)
             throw new InvalidOperationException("Araç tipi hakediş faturalanmaz (iç maliyet/karlılık raporu).");
 
-        // Cari'yi belirle
+        // Kurum hakedişinin cari hedefi, içindeki güzergâh kartlarından alınır. Müşteri kurum eşleştirmeden alınarak
+        // hazırlanan Kurum hakedişinde ve araç sahibi hakedişinde ise ReferansId doğrudan cari kartıdır.
         int? cariId = null;
-        if (h.Tip == HakedisTipi.Kurum)
+        if (h.Tip == HakedisTipi.Kurum && !HakedisUretimParametreleri.MusteriEslestirmedenMi(h.GenerationParams))
         {
-            // Kurum = Firma; Firma'nın varsayılan cari kaydını ara
-            var firma = await context.Firmalar.FirstOrDefaultAsync(f => f.Id == h.ReferansId);
-            if (firma == null) throw new InvalidOperationException("Kurum (Firma) bulunamadı.");
-            // İsim üzerinden eşleşen cariyi al (basit varsayım)
-            var cari = await context.Cariler.FirstOrDefaultAsync(c => c.Unvan == firma.FirmaAdi || c.Unvan == firma.UnvanTam);
-            cariId = cari?.Id;
+            var hedefCariIdleri = await context.HakedisDetaylari
+                .Where(d => d.HakedisId == h.Id && d.Guzergah != null)
+                .Select(d => d.Guzergah!.CariId)
+                .Distinct()
+                .ToListAsync();
+            if (hedefCariIdleri.Count != 1)
+                throw new InvalidOperationException(hedefCariIdleri.Count == 0
+                    ? "Hakediş güzergâhlarında cari kartı tanımlı değil. Güzergâh cari bağlantısını tamamlayın."
+                    : "Hakediş birden fazla cari kartın güzergâhını içeriyor. Her cari için ayrı hakediş üretin.");
+
+            cariId = hedefCariIdleri[0];
+            if (!await context.Cariler.AnyAsync(c => c.Id == cariId.Value))
+                throw new InvalidOperationException($"Güzergâhta bağlı Cari #{cariId} bulunamadı.");
+        }
+        else if (h.Tip is HakedisTipi.Kurum or HakedisTipi.AracSahibi)
+        {
+            var kisi = h.Tip == HakedisTipi.Kurum ? "Müşteri kurum" : "Araç sahibi";
+            if (!await context.Cariler.AnyAsync(c => c.Id == h.ReferansId))
+                throw new InvalidOperationException($"{kisi} cari kartı (#{h.ReferansId}) bulunamadı.");
+            cariId = h.ReferansId;
         }
         else if (h.Tip == HakedisTipi.Tedarikci)
         {
@@ -268,7 +311,7 @@ public class OperasyonelHakedisService : IOperasyonelHakedisService
             KdvTutar = h.KdvTutar,
             GenelToplam = h.GenelToplam,
             HakedisId = h.Id,
-            Aciklama = $"{h.Yil}/{h.Ay:D2} dönemi {h.Tip} hakedişi (#{h.Id})",
+            Aciklama = $"{h.Yil}/{h.Ay:D2} dönemi {h.Tip.Metin()} hakedişi (#{h.Id})",
             ImportKaynak = "Hakedis",
             CreatedAt = DateTime.UtcNow
         };
@@ -306,6 +349,9 @@ public class OperasyonelHakedisService : IOperasyonelHakedisService
         if (yil < 2000 || ay < 1 || ay > 12)
             throw new ArgumentException("Geçersiz dönem (yıl/ay).");
 
+        if (tip == HakedisTipi.AracSahibi)
+            throw new NotSupportedException("Araç sahibi hakedişi için KapsamOnizleAsync kullanılır.");
+
         await using var context = await _contextFactory.CreateDbContextAsync();
 
         var donemBas = new DateTime(yil, ay, 1);
@@ -317,7 +363,7 @@ public class OperasyonelHakedisService : IOperasyonelHakedisService
         switch (tip)
         {
             case HakedisTipi.Kurum:
-                q = q.Where(p => p.KurumFirmaId == referansId);
+                q = q.Where(p => p.Guzergah != null && p.Guzergah.CariId == referansId);
                 break;
             case HakedisTipi.Tedarikci:
                 q = q.Where(p => p.Arac != null
@@ -369,6 +415,10 @@ public class OperasyonelHakedisService : IOperasyonelHakedisService
         if (yil < 2000 || ay < 1 || ay > 12)
             throw new ArgumentException("Geçersiz dönem (yıl/ay).");
 
+        // Araç sahibi hakedişi yalnız kapsamlı üretim hattından geçer.
+        if (tip == HakedisTipi.AracSahibi)
+            return await KapsamliUretAsync(tip, HakedisKapsami.Donem(yil, ay));
+
         var donemBas = new DateTime(yil, ay, 1);
         var donemSon = donemBas.AddMonths(1);
 
@@ -382,13 +432,14 @@ public class OperasyonelHakedisService : IOperasyonelHakedisService
             {
                 case HakedisTipi.Kurum:
                     referansIds = await ctx.FiloGunlukPuantajlar
-                        .Where(p => p.Tarih >= donemBas && p.Tarih < donemSon && !p.IsDeleted && p.SeferSayisi > 0)
-                        .Select(p => p.KurumFirmaId)
+                        .Where(p => p.Tarih >= donemBas && p.Tarih < donemSon && !p.IsDeleted && p.SeferSayisi > 0
+                            && p.Guzergah != null && p.Guzergah.CariId > 0)
+                        .Select(p => p.Guzergah!.CariId)
                         .Distinct()
                         .ToListAsync();
-                    referansAdlari = await ctx.Firmalar
+                    referansAdlari = await ctx.Cariler
                         .Where(f => referansIds.Contains(f.Id))
-                        .ToDictionaryAsync(f => f.Id, f => f.FirmaAdi);
+                        .ToDictionaryAsync(f => f.Id, f => f.Unvan);
                     break;
 
                 case HakedisTipi.Tedarikci:
@@ -438,6 +489,17 @@ public class OperasyonelHakedisService : IOperasyonelHakedisService
                                 && h.Durum != HakedisDurum.Iptal && h.Durum != HakedisDurum.Taslak)
                     .Select(h => new { h.Id, h.Durum })
                     .FirstOrDefaultAsync();
+
+                if (mevcut == null && tip == HakedisTipi.Kurum)
+                {
+                    var eskiCariHakedisi = await ctx.Hakedisler
+                        .Where(h => h.Tip == tip && h.Yil == yil && h.Ay == ay
+                            && h.Durum != HakedisDurum.Iptal && h.Durum != HakedisDurum.Taslak
+                            && h.Detaylar.Any(d => d.Guzergah != null && d.Guzergah.CariId == refId))
+                        .Select(h => new { h.Id, h.Durum })
+                        .FirstOrDefaultAsync();
+                    mevcut = eskiCariHakedisi;
+                }
 
                 if (mevcut != null)
                 {
@@ -497,6 +559,8 @@ public class OperasyonelHakedisService : IOperasyonelHakedisService
             satirlar.Add(new TopluIslemSatir(eksikId, "Hata", "Hakediş bulunamadı."));
         }
 
+        var cakismalar = await OnayCakismalariniBulAsync(context, hakedisler.Where(x => x.Durum == HakedisDurum.Taslak).ToList());
+
         var simdi = DateTime.UtcNow;
         foreach (var h in hakedisler)
         {
@@ -504,6 +568,13 @@ public class OperasyonelHakedisService : IOperasyonelHakedisService
             {
                 atlanan++;
                 satirlar.Add(new TopluIslemSatir(h.Id, "Atlandı", $"Durum {h.Durum}; sadece Taslak onaylanabilir."));
+                continue;
+            }
+
+            if (cakismalar.TryGetValue(h.Id, out var cakismaMesaji))
+            {
+                atlanan++;
+                satirlar.Add(new TopluIslemSatir(h.Id, "Atlandı", cakismaMesaji));
                 continue;
             }
 

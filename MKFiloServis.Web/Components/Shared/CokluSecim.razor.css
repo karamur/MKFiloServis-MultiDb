@@ -1,0 +1,48 @@
+﻿.coklu-secim {
+    position: relative;
+}
+
+.coklu-secim-dugme {
+    overflow: hidden;
+}
+
+.coklu-secim-dolu {
+    border-color: var(--crm-primary, #2563eb);
+    box-shadow: 0 0 0 1px var(--crm-primary, #2563eb) inset;
+}
+
+/* Panelin dışına tıklayınca kapanması için sayfayı kaplayan şeffaf katman. */
+.coklu-secim-perde {
+    position: fixed;
+    inset: 0;
+    z-index: 1040;
+}
+
+.coklu-secim-panel {
+    display: block;
+    position: absolute;
+    z-index: 1050;
+    top: 100%;
+    left: 0;
+    min-width: 100%;
+    width: max-content;
+    max-width: min(420px, 90vw);
+    margin-top: 0.25rem;
+}
+
+.coklu-secim-liste {
+    max-height: 260px;
+    overflow: auto;
+}
+
+.coklu-secim-satir {
+    margin: 0;
+    padding: 0.25rem 0.4rem;
+    border-radius: 0.3rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.coklu-secim-satir:hover {
+    background: var(--crm-surface-alt, rgba(0, 0, 0, 0.05));
+}

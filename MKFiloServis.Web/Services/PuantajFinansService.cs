@@ -217,7 +217,7 @@ public sealed class PuantajFinansService : IPuantajFinansService
             await tx.CommitAsync();
 
             var gelir = kayit.Tip == HakedisTipi.Kurum ? araToplam : 0m;
-            var gider = kayit.Tip == HakedisTipi.Tedarikci ? araToplam : 0m;
+            var gider = kayit.Tip.GiderMi() ? araToplam : 0m;
             return new PuantajFinansSonuc
             {
                 Basarili = true, GelirTutar = gelir, GiderTutar = gider, Kar = gelir - gider,
@@ -229,7 +229,8 @@ public sealed class PuantajFinansService : IPuantajFinansService
 
     private static async Task<Cari?> ResolveCariForHakedisAsync(ApplicationDbContext db, Hakedis hakedis, int firmaId)
     {
-        if (hakedis.Tip == HakedisTipi.Kurum)
+        // Kurum ve araç sahibi hakedişlerinde ReferansId doğrudan cari kartıdır.
+        if (hakedis.Tip is HakedisTipi.Kurum or HakedisTipi.AracSahibi)
         {
             return await db.Cariler.AsNoTracking()
                 .FirstOrDefaultAsync(c => c.Id == hakedis.ReferansId && c.FirmaId == firmaId && !c.IsDeleted);
@@ -274,7 +275,7 @@ public sealed class PuantajFinansService : IPuantajFinansService
 
             var hakedisTutar = hakedis.GenelToplam > 0 ? hakedis.GenelToplam : hakedis.Tutar;
             var deltaGelir = hakedis.Tip == HakedisTipi.Kurum ? hakedisTutar : 0m;
-            var deltaGider = hakedis.Tip == HakedisTipi.Tedarikci ? hakedisTutar : 0m;
+            var deltaGider = hakedis.Tip.GiderMi() ? hakedisTutar : 0m;
 
             db.SnapshotTransactions.Add(new SnapshotTransaction
             {

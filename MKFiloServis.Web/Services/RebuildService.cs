@@ -275,7 +275,7 @@ public class RebuildService
             .ToListAsync();
 
         var finansalHakedisler = hakedisler
-            .Where(h => h.Tip == HakedisTipi.Kurum || h.Tip == HakedisTipi.Tedarikci)
+            .Where(h => h.Tip.FaturalanirMi())
             .ToList();
 
         return new RebuildOnizleme
@@ -290,7 +290,7 @@ public class RebuildService
                 .Where(h => h.Tip == HakedisTipi.Kurum)
                 .Sum(h => h.GenelToplam > 0 ? h.GenelToplam : h.Tutar),
             HakedisGiderToplam = finansalHakedisler
-                .Where(h => h.Tip == HakedisTipi.Tedarikci)
+                .Where(h => h.Tip.GiderMi())
                 .Sum(h => h.GenelToplam > 0 ? h.GenelToplam : h.Tutar),
         };
     }

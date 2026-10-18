@@ -1,4 +1,4 @@
-@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:filoservis")]
+﻿@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:filoservis")]
 @page "/operasyon/plan"
 @attribute [Authorize]
 @rendermode InteractiveServer
@@ -210,11 +210,38 @@
     {
         <div class="alert alert-danger border-danger">
             <div class="fw-bold"><i class="bi bi-exclamation-triangle-fill me-1"></i>@CakismaSayisi çakışmalı plan bulundu.</div>
-            <div class="small mt-1">Kırmızı hücreler aynı gün araç-güzergâh tekrarını veya aynı servis zamanında şoför tekrarını gösterir. Teyit etmeden önce kontrol edin.</div>
+            <div class="small mt-1">Yalnız işaretli ve daha önce aktarılmış kayıtlar denetlenir. Aynı gün ve güzergâh tekrarları mavi, diğer şoför çakışmaları kırmızı gösterilir.</div>
             <ul class="small mb-0 mt-2">
                 @foreach (var grup in CakismaGruplari)
                 {
-                    <li><strong>@grup.Guzergah</strong> - <strong>@grup.Plaka</strong> - <strong>@grup.Sofor</strong>: @string.Join(", ", grup.Planlar.Select(p => p.Tarih.ToString("dd.MM.yyyy")))</li>
+                    <li><strong>@grup.Guzergah</strong> - <strong>@grup.Plaka</strong> - <strong>@grup.Sofor</strong>: @string.Join(", ", grup.Planlar.Where(CakismaVarMi).Select(p => p.Tarih.ToString("dd.MM.yyyy")).Distinct())</li>
+                }
+            </ul>
+        </div>
+    }
+
+    @if (AyniGuzergahSatirlari.Any())
+    {
+        <div class="alert alert-info border-info">
+            <div class="fw-bold"><i class="bi bi-signpost-split me-1"></i>Aynı güzergâh birden fazla satırda bulunuyor.</div>
+            <ul class="small mb-0 mt-2">
+                @foreach (var grup in AyniGuzergahSatirlari)
+                {
+                    <li><strong>@GetGuzergahAd(grup.Key)</strong> — @string.Join("; ", grup.GroupBy(p => (p.AracId, p.SoforId)).Select(g => $"{GetAracAd(g.Key.AracId)} / {GetSoforAd(g.Key.SoforId)}"))</li>
+                }
+            </ul>
+        </div>
+    }
+
+    @if (BirdenFazlaAyniGuzergahGunleri.Any())
+    {
+        <div class="alert alert-warning border-warning" role="alert">
+            <div class="fw-bold"><i class="bi bi-exclamation-triangle-fill me-1"></i>Aynı gün ve aynı güzergâhta birden fazla plan işaretlenmiş veya aktarılmış.</div>
+            <div class="small">Mavi gün başlıkları ve mavi çerçeveli hücreler tekrarları gösterir. Aktarımdan sonra da tekrar sürdüğü sürece bu uyarı kalır.</div>
+            <ul class="small mb-0 mt-2">
+                @foreach (var grup in BirdenFazlaAyniGuzergahGunleri)
+                {
+                    <li><strong>@grup.Key.Tarih.ToString("dd.MM.yyyy") — @GetGuzergahAd(grup.Key.GuzergahId)</strong>: @string.Join(", ", grup.Select(p => GetAracAd(p.AracId)))</li>
                 }
             </ul>
         </div>
@@ -224,7 +251,7 @@
     {
         <div class="alert alert-warning border-warning">
             <div class="fw-bold"><i class="bi bi-shield-exclamation me-1"></i>Çakışmalı planları teyit etmek üzeresiniz</div>
-            <div class="small mb-2">Seçtiğiniz planlarda araç-güzergâh veya şoför-servis zamanı çakışması var. Kullanıcı onayı olmadan aktarım yapılmayacaktır.</div>
+            <div class="small mb-2">Seçtiğiniz planlarda aynı gün ve güzergâh tekrarı veya şoför-servis zamanı çakışması var. Kullanıcı onayı olmadan aktarım yapılmayacaktır.</div>
             <div class="form-check mb-2">
                 <input id="cakismaOnay" class="form-check-input" type="checkbox" @bind="CakismaOnayiVerildi" />
                 <label class="form-check-label" for="cakismaOnay">Çakışmaları kontrol ettim, yine de teyit etmek istiyorum.</label>
@@ -276,15 +303,18 @@
                         @for (var gun = 1; gun <= AyGunSayisi; gun++)
                         {
                             var tarih = new DateTime(SeciliYil, SeciliAy, gun);
-                            <th class="text-center @(tarih.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday ? "table-secondary" : "")" style="min-width:42px;" title="@tarih.ToString("dd.MM.yyyy dddd", TrKultur)">@gun</th>
+                            var ayniGuzergahGunu = BirdenFazlaAyniGuzergahGunleri.Any(g => g.Key.Tarih == tarih.Date);
+                            <th class="text-center @(tarih.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday ? "table-secondary" : "")" style="min-width:42px;@(ayniGuzergahGunu ? AyniGuzergahBaslikStili : "")" title="@(ayniGuzergahGunu ? "Bu gün aynı güzergâh birden fazla kez işaretlenmiş veya aktarılmış" : tarih.ToString("dd.MM.yyyy dddd", TrKultur))">@gun</th>
                         }
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var grup in MatrisSatirlari)
                     {
+                        var guzergahId = grup.Planlar[0].GuzergahId;
+                        var ayniGuzergahSatiri = AyniGuzergahSatirlari.Any(g => g.Key == guzergahId);
                         <tr>
-                            <td class="@(grup.Planlar.Any(CakismaVarMi) ? "table-warning" : "")" style="position:sticky;left:0;background:var(--bs-body-bg);z-index:1;">@grup.Guzergah</td>
+                            <td class="@(ayniGuzergahSatiri ? "fw-semibold" : "")" style="position:sticky;left:0;z-index:1;@(ayniGuzergahSatiri ? AyniGuzergahSatirStili : "background:var(--bs-body-bg);")" title="@(ayniGuzergahSatiri ? "Aynı güzergâh birden fazla satırda" : grup.Guzergah)">@grup.Guzergah@if (ayniGuzergahSatiri) { <span class="badge text-bg-info ms-1">Tekrar</span> }</td>
                             <td class="@(grup.Planlar.Any(CakismaVarMi) ? "table-warning" : "")" style="position:sticky;left:190px;background:var(--bs-body-bg);z-index:1;">@grup.Plaka</td>
                             <td class="@(grup.Planlar.Any(CakismaVarMi) ? "table-warning" : "")" style="position:sticky;left:300px;background:var(--bs-body-bg);z-index:1;">@grup.Sofor</td>
                             @for (var gun = 1; gun <= AyGunSayisi; gun++)
@@ -292,8 +322,14 @@
                                 var tarih = new DateTime(SeciliYil, SeciliAy, gun);
                                 var planlar = grup.Planlar.Where(p => p.Tarih.Date == tarih.Date).ToList();
                                 var cakismaVar = planlar.Any(CakismaVarMi);
-                                <td class="text-center @(cakismaVar ? "table-danger" : planlar.Any(p => p.Durum == OperasyonPlanDurumu.TeyitEdildi) ? "table-success" : "")"
-                                    title="@(cakismaVar ? CakismaAciklamasi(planlar) : planlar.Any() ? "Plan kaydı" : "")">
+                                    var ayniGuzergahGunu = BirdenFazlaAyniGuzergahGunleri.Any(g => g.Key.Tarih == tarih.Date && g.Key.GuzergahId == guzergahId && g.Any(p => planlar.Any(h => h.Id == p.Id)));
+                                <td class="text-center @(cakismaVar && !ayniGuzergahGunu ? "table-danger" : !ayniGuzergahGunu && planlar.Any(p => p.Durum == OperasyonPlanDurumu.TeyitEdildi) ? "table-success" : "")"
+                                    style="@(ayniGuzergahGunu ? AyniGuzergahHucreStili : "")"
+                                    title="@(ayniGuzergahGunu ? "Aynı gün ve güzergâhta birden fazla plan işaretlenmiş veya aktarılmış" : cakismaVar ? CakismaAciklamasi(planlar) : planlar.Any() ? "Plan kaydı" : "")">
+                                    @if (ayniGuzergahGunu)
+                                    {
+                                        <i class="bi bi-exclamation-triangle-fill text-primary me-1" title="Aynı güzergâh bu gün birden fazla kez seçilmiş"></i>
+                                    }
                                     @foreach (var plan in planlar)
                                     {
                                         @if (TeyitIcinSecilebilirMi(plan))
@@ -344,6 +380,9 @@
     private static readonly CultureInfo TrKultur = CultureInfo.GetCultureInfo("tr-TR");
     private DateTime AyBaslangic => new(SeciliYil, SeciliAy, 1);
     private int AyGunSayisi => DateTime.DaysInMonth(SeciliYil, SeciliAy);
+    private const string AyniGuzergahBaslikStili = "background-color:#8ec5ff !important;box-shadow:none !important;color:#052c65 !important;border:2px solid #2563eb !important;";
+    private const string AyniGuzergahHucreStili = "background-color:#cfe2ff !important;box-shadow:none !important;color:#052c65 !important;border:2px solid #2563eb !important;";
+    private const string AyniGuzergahSatirStili = "background-color:#cff4fc !important;box-shadow:none !important;";
     private IEnumerable<MatrisSatir> MatrisSatirlari => Planlar
         .GroupBy(p => new { p.GuzergahId, p.AracId, p.SoforId })
         .Select(g => new MatrisSatir(
@@ -364,6 +403,16 @@
         Planlar.Any(TeyitIcinSecilebilirMi) &&
         Planlar.Where(TeyitIcinSecilebilirMi).All(p => SecilenIdler.Contains(p.Id));
     private IEnumerable<OperasyonPlanSatiri> SeciliPlanlar => Planlar.Where(p => SecilenIdler.Contains(p.Id) && TeyitIcinSecilebilirMi(p));
+    private bool CakismaDenetimineDahilMi(OperasyonPlanSatiri plan) =>
+        plan.Durum == OperasyonPlanDurumu.TeyitEdildi ||
+        (TeyitIcinSecilebilirMi(plan) && SecilenIdler.Contains(plan.Id));
+    private IEnumerable<OperasyonPlanSatiri> IsaretliVeyaAktarilmisPlanlar => Planlar.Where(CakismaDenetimineDahilMi);
+    private IEnumerable<IGrouping<int, OperasyonPlanSatiri>> AyniGuzergahSatirlari => Planlar
+        .GroupBy(p => p.GuzergahId)
+        .Where(g => g.Select(p => (p.AracId, p.SoforId)).Distinct().Count() > 1);
+    private IEnumerable<IGrouping<(DateTime Tarih, int GuzergahId), OperasyonPlanSatiri>> BirdenFazlaAyniGuzergahGunleri => IsaretliVeyaAktarilmisPlanlar
+        .GroupBy(p => (p.Tarih.Date, p.GuzergahId))
+        .Where(g => g.Count() > 1);
     private IEnumerable<MatrisSatir> CakismaGruplari => MatrisSatirlari.Where(g => g.Planlar.Any(CakismaVarMi));
     private bool DegisiklikVarMi => Planlar.Any(p =>
         BaslangicDegerleri.TryGetValue(p.Id, out var baslangic) &&
@@ -444,20 +493,38 @@
 
     private bool CakismaVarMi(OperasyonPlanSatiri plan)
     {
-        return Planlar.Any(digeri =>
+        return CakismaDenetimineDahilMi(plan) && IsaretliVeyaAktarilmisPlanlar.Any(digeri =>
             digeri.Id != plan.Id &&
             digeri.Tarih.Date == plan.Tarih.Date &&
-            ((digeri.AracId == plan.AracId && digeri.GuzergahId == plan.GuzergahId) ||
+            (digeri.GuzergahId == plan.GuzergahId ||
              (digeri.SoforId == plan.SoforId && digeri.ServisTuru == plan.ServisTuru)));
     }
 
     private string CakismaAciklamasi(IEnumerable<OperasyonPlanSatiri> planlar)
     {
+        var hucrePlanlari = planlar.Where(CakismaDenetimineDahilMi).ToList();
         var aciklamalar = new List<string>();
-        if (planlar.Any(p => Planlar.Count(digeri => digeri.Tarih.Date == p.Tarih.Date && digeri.AracId == p.AracId && digeri.GuzergahId == p.GuzergahId) > 1))
+        var farkliAraclar = hucrePlanlari
+            .SelectMany(p => IsaretliVeyaAktarilmisPlanlar.Where(digeri => digeri.Tarih.Date == p.Tarih.Date && digeri.GuzergahId == p.GuzergahId))
+            .Select(p => p.AracId)
+            .Distinct()
+            .ToList();
+        if (farkliAraclar.Count > 1)
+        {
+            var tarih = hucrePlanlari.First().Tarih.Date;
+            var guzergahId = hucrePlanlari.First().GuzergahId;
+            var plakalar = IsaretliVeyaAktarilmisPlanlar
+                .Where(p => p.Tarih.Date == tarih && p.GuzergahId == guzergahId)
+                .Select(p => GetAracAd(p.AracId))
+                .Distinct()
+                .OrderBy(x => x)
+                .ToList();
+            aciklamalar.Add($"Aynı gün aynı güzergâhta birden fazla araç seçilmiş ({string.Join(", ", plakalar)})");
+        }
+        if (hucrePlanlari.Any(p => IsaretliVeyaAktarilmisPlanlar.Count(digeri => digeri.Tarih.Date == p.Tarih.Date && digeri.AracId == p.AracId && digeri.GuzergahId == p.GuzergahId) > 1))
             aciklamalar.Add("Aynı gün aynı araç aynı güzergâhta birden fazla kez planlanmış");
-        if (planlar.Any(p => Planlar.Count(digeri => digeri.Tarih.Date == p.Tarih.Date && digeri.SoforId == p.SoforId && digeri.ServisTuru == p.ServisTuru) > 1))
-            aciklamalar.Add($"Aynı gün {ServisTuruMetni(planlar.First().ServisTuru)} servisinde şoför birden fazla araçta planlanmış");
+        if (hucrePlanlari.Any(p => IsaretliVeyaAktarilmisPlanlar.Count(digeri => digeri.Tarih.Date == p.Tarih.Date && digeri.SoforId == p.SoforId && digeri.ServisTuru == p.ServisTuru) > 1))
+            aciklamalar.Add($"Aynı gün {ServisTuruMetni(hucrePlanlari.First().ServisTuru)} servisinde şoför birden fazla araçta planlanmış");
         return string.Join("; ", aciklamalar);
     }
 
@@ -473,6 +540,7 @@
 
     private async Task YukleAsync()
     {
+        CakismaOnayiniIptalEt();
         Yukleniyor = true;
         SecilenIdler.Clear();
         HataMesaji = null;
@@ -496,6 +564,7 @@
 
     private void TumunuIsaretle()
     {
+        CakismaOnayiniIptalEt();
         SecilenIdler = Planlar.Where(TeyitIcinSecilebilirMi).Select(p => p.Id).ToHashSet();
     }
 
@@ -637,7 +706,8 @@
         }
     }
 
-    private bool SecilenPlanlardaCakismaVarMi => Planlar.Any(p => SecilenIdler.Contains(p.Id) && CakismaVarMi(p));
+    private bool SecilenPlanlardaCakismaVarMi =>
+        SeciliPlanlar.Any(CakismaVarMi);
 
     private void CakismaOnayiniIptalEt()
     {
@@ -647,11 +717,13 @@
 
     private void SecimDegisti(int id, bool secili)
     {
+        CakismaOnayiniIptalEt();
         if (secili) SecilenIdler.Add(id); else SecilenIdler.Remove(id);
     }
 
     private void TumunuSec(ChangeEventArgs e)
     {
+        CakismaOnayiniIptalEt();
         var secili = (bool)e.Value!;
         SecilenIdler = secili
             ? Planlar.Where(TeyitIcinSecilebilirMi).Select(p => p.Id).ToHashSet()

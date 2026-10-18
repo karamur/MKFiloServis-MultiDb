@@ -53,7 +53,7 @@ public class FinansDashboardService
                 .Sum(x => x.GenelToplam > 0 ? x.GenelToplam : x.Tutar);
 
             toplamHakedisGider = hakedisler
-                .Where(x => x.Tip == HakedisTipi.Tedarikci)
+                .Where(x => x.Tip.GiderMi())
                 .Sum(x => x.GenelToplam > 0 ? x.GenelToplam : x.Tutar);
 
             // Sefer sayısında çift sayımı önlemek için kurum hakedişleri baz alınır.

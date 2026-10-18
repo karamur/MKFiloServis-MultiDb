@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using MKFiloServis.Shared.Entities;
 
 namespace MKFiloServis.Web.Components.Pages.Filo;
@@ -103,6 +103,7 @@ public partial class OperasyonPlanPage
 
     private async Task MesaiOlarakIsaretlePlanlarAsync()
     {
+        CakismaOnayiniIptalEt();
         var seciliPlanlar = Planlar
             .Where(p => SecilenIdler.Contains(p.Id))
             .Where(p => p.Durum == OperasyonPlanDurumu.Planlandi && !p.FiloGunlukPuantajId.HasValue)
@@ -141,6 +142,7 @@ public partial class OperasyonPlanPage
 
     private void SecimleriTarihTipineGoreBelirle(Func<DateTime, bool> tarihKriteri, string basariMesaji)
     {
+        CakismaOnayiniIptalEt();
         var uygunIdler = Planlar
             .Where(p => p.Durum == OperasyonPlanDurumu.Planlandi && !p.FiloGunlukPuantajId.HasValue)
             .Where(p => tarihKriteri(p.Tarih))

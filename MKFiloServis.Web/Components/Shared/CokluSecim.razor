@@ -1,0 +1,142 @@
+﻿@* Çoklu seçim kutusu: açılır panelde arama + onay kutuları. Bootstrap JS'ine bağlı değildir.
+   Seçili anahtar kümesi üst bileşene aittir; her değişiklikte OnDegisti çağrılır. *@
+
+<div class="coklu-secim" @onkeydown="TusaBasildi">
+    @if (!string.IsNullOrWhiteSpace(Etiket))
+    {
+        <label class="form-label small mb-1 d-flex justify-content-between align-items-center">
+            <span>@Etiket</span>
+            @if (Secili.Count > 0)
+            {
+                <a href="javascript:void(0)" class="small text-decoration-none" title="Seçimi temizle"
+                   @onclick="Temizle" @onclick:preventDefault>Temizle</a>
+            }
+        </label>
+    }
+
+    <button type="button" class="form-select form-select-sm text-start coklu-secim-dugme @(Secili.Count > 0 ? "coklu-secim-dolu" : "")"
+            @onclick="Degistir" disabled="@Pasif" aria-haspopup="listbox" aria-expanded="@(acik ? "true" : "false")">
+        <span class="text-truncate d-block">@OzetMetni</span>
+    </button>
+
+    @if (acik)
+    {
+        <div class="coklu-secim-perde" @onclick="Kapat"></div>
+        <div class="dropdown-menu show coklu-secim-panel shadow p-2" role="listbox" aria-multiselectable="true">
+            @if (Secenekler.Count > AramaEsigi)
+            {
+                <input type="search" class="form-control form-control-sm mb-2" placeholder="Ara..."
+                       @bind="arama" @bind:event="oninput" />
+            }
+
+            <div class="d-flex justify-content-between small mb-1 px-1">
+                <a href="javascript:void(0)" class="text-decoration-none" @onclick="GorunenleriSec" @onclick:preventDefault>Görünenleri seç</a>
+                <a href="javascript:void(0)" class="text-decoration-none" @onclick="Temizle" @onclick:preventDefault>Temizle</a>
+            </div>
+
+            <div class="coklu-secim-liste">
+                @foreach (var oge in Gorunenler)
+                {
+                    <label class="coklu-secim-satir d-flex align-items-start gap-2">
+                        <input class="form-check-input flex-shrink-0 mt-1" type="checkbox"
+                               checked="@Secili.Contains(oge.Anahtar)"
+                               @onchange="e => IsaretleAsync(oge.Anahtar, e.Value is true)" />
+                        <span class="flex-grow-1">
+                            <span>@oge.Ad</span>
+                            @if (!string.IsNullOrWhiteSpace(oge.Alt))
+                            {
+                                <small class="text-muted d-block">@oge.Alt</small>
+                            }
+                        </span>
+                    </label>
+                }
+
+                @if (!Gorunenler.Any())
+                {
+                    <div class="text-muted small p-2">Eşleşen seçenek yok.</div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    public sealed record CokluSecimOgesi(string Anahtar, string Ad, string? Alt = null);
+
+    [Parameter] public string? Etiket { get; set; }
+    [Parameter] public string Bos { get; set; } = "Tümü";
+    [Parameter] public IReadOnlyList<CokluSecimOgesi> Secenekler { get; set; } = Array.Empty<CokluSecimOgesi>();
+
+    /// <summary>Seçili anahtarlar. Bileşen bu kümeyi doğrudan günceller.</summary>
+    [Parameter] public HashSet<string> Secili { get; set; } = new();
+
+    [Parameter] public EventCallback OnDegisti { get; set; }
+    [Parameter] public bool Pasif { get; set; }
+
+    /// <summary>Seçenek sayısı bu değeri aşarsa arama kutusu gösterilir.</summary>
+    [Parameter] public int AramaEsigi { get; set; } = 8;
+
+    private bool acik;
+    private string arama = string.Empty;
+
+    private IEnumerable<CokluSecimOgesi> Gorunenler => string.IsNullOrWhiteSpace(arama)
+        ? Secenekler
+        : Secenekler.Where(o => o.Ad.Contains(arama, StringComparison.CurrentCultureIgnoreCase)
+            || (o.Alt?.Contains(arama, StringComparison.CurrentCultureIgnoreCase) ?? false));
+
+    private string OzetMetni
+    {
+        get
+        {
+            if (Secili.Count == 0)
+                return Bos;
+
+            var adlar = Secenekler.Where(o => Secili.Contains(o.Anahtar)).Select(o => o.Ad).ToList();
+            if (adlar.Count == 0)
+                return $"{Secili.Count} seçili";
+
+            return adlar.Count <= 2 ? string.Join(", ", adlar) : $"{adlar.Count} seçili";
+        }
+    }
+
+    private void Degistir()
+    {
+        acik = !acik;
+        arama = string.Empty;
+    }
+
+    private void Kapat() => acik = false;
+
+    private void TusaBasildi(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            acik = false;
+    }
+
+    private async Task IsaretleAsync(string anahtar, bool secili)
+    {
+        if (secili)
+            Secili.Add(anahtar);
+        else
+            Secili.Remove(anahtar);
+
+        await OnDegisti.InvokeAsync();
+    }
+
+    private async Task GorunenleriSec()
+    {
+        foreach (var oge in Gorunenler)
+            Secili.Add(oge.Anahtar);
+
+        await OnDegisti.InvokeAsync();
+    }
+
+    private async Task Temizle()
+    {
+        if (Secili.Count == 0)
+            return;
+
+        Secili.Clear();
+        await OnDegisti.InvokeAsync();
+    }
+}

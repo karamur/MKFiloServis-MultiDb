@@ -43,7 +43,7 @@ public class DenetimService
             .Where(h => h.Tip == HakedisTipi.Kurum)
             .Sum(h => h.GenelToplam > 0 ? h.GenelToplam : h.Tutar);
         var hakedisGider = hakedisler
-            .Where(h => h.Tip == HakedisTipi.Tedarikci)
+            .Where(h => h.Tip.GiderMi())
             .Sum(h => h.GenelToplam > 0 ? h.GenelToplam : h.Tutar);
         var snapshotGelir = snapshot.Sum(s => s.HakedisGelir);
         var snapshotGider = snapshot.Sum(s => s.HakedisGider);

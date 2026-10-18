@@ -8,7 +8,7 @@
 @using Microsoft.AspNetCore.Components
 @inject IServisCalismaService ServisCalismaService
 @inject IOperasyonelHakedisService HakedisService
-@inject IFirmaService FirmaService
+@inject ICariService CariService
 @inject ITasimaTedarikciService TedarikciService
 @inject IAracService AracService
 @inject IFaturaService FaturaService
@@ -261,8 +261,8 @@
             var seferler = (await ServisCalismaService.GetByDateRangeAsync(bas, bit)) ?? new();
             aySefer = seferler.Count;
 
-            // Tüm aktif kurumlar / tedarikçiler / araçlar
-            var firmalar = await FirmaService.GetAktifFirmalarAsync();
+            // Mevcut cariler / tedarikçiler / araçlar
+            var cariler = await CariService.GetAllAsync();
             var tedarikciler = (await TedarikciService.GetAllAsync(true)).ToList();
             var araclar = await AracService.GetActiveAsync();
 
@@ -270,24 +270,26 @@
             var hakedisler = (await HakedisService.GetHakedislerAsync(yil, ay)) ?? new();
             toplamGelir = hakedisler.Where(h => h.Tip == HakedisTipi.Kurum && h.Durum != HakedisDurum.Iptal)
                                     .Sum(h => h.GenelToplam);
-            toplamGider = hakedisler.Where(h => h.Tip == HakedisTipi.Tedarikci && h.Durum != HakedisDurum.Iptal)
+            toplamGider = hakedisler.Where(h => h.Tip.GiderMi() && h.Durum != HakedisDurum.Iptal)
                                     .Sum(h => h.GenelToplam);
 
             // Kurum hakedişi eksikleri
-            var kurumGelirSeferleri = seferler.Where(s => s.Guzergah?.FirmaId != null).ToList();
-            var kurumIdleriHakedisli = hakedisler
+            var kurumGelirSeferleri = seferler.Where(s => (s.Guzergah?.CariId ?? 0) > 0).ToList();
+            var kurumCariIdleriHakedisli = hakedisler
                 .Where(h => h.Tip == HakedisTipi.Kurum && h.Durum != HakedisDurum.Iptal)
                 .Select(h => h.ReferansId).ToHashSet();
-            eksikKurumHakedisleri = firmalar
-                .Where(f => kurumGelirSeferleri.Any(s => s.Guzergah!.FirmaId == f.Id))
-                .Where(f => !kurumIdleriHakedisli.Contains(f.Id))
-                .Select(f =>
+            var kurumCariyeGoreSeferler = kurumGelirSeferleri
+                .GroupBy(s => s.Guzergah!.CariId)
+                .Where(g => !kurumCariIdleriHakedisli.Contains(g.Key));
+            eksikKurumHakedisleri = kurumCariyeGoreSeferler
+                .Select(g =>
                 {
-                    var sList = kurumGelirSeferleri.Where(s => s.Guzergah!.FirmaId == f.Id).ToList();
+                    var cari = cariler.FirstOrDefault(c => c.Id == g.Key);
+                    var sList = g.ToList();
                     return new RefItem
                     {
-                        Id = f.Id,
-                        Ad = f.FirmaAdi,
+                        Id = g.Key,
+                        Ad = cari?.Unvan ?? $"Cari #{g.Key}",
                         SeferSayisi = sList.Count,
                         Tutar = sList.Sum(x => x.HesaplananFiyat)
                     };
@@ -318,12 +320,12 @@
             // Onaylanmış ama faturalanmamış
             faturalanmamisOnayli = hakedisler
                 .Where(h => h.Durum == HakedisDurum.Onaylandi && h.FaturaId == null
-                            && (h.Tip == HakedisTipi.Kurum || h.Tip == HakedisTipi.Tedarikci))
+                            && h.Tip.FaturalanirMi())
                 .Select(h => new HakedisOzet
                 {
                     Id = h.Id,
                     Tip = h.Tip.ToString(),
-                    Referans = ResolveRefAd(h, firmalar.ToList(), tedarikciler, araclar.ToList()),
+                    Referans = ResolveRefAd(h, cariler, tedarikciler, araclar.ToList()),
                     GenelToplam = h.GenelToplam,
                     OnayTarihi = h.OnayTarihi
                 }).ToList();
@@ -424,11 +426,21 @@
         }
     }
 
-    private string? ResolveRefAd(Hakedis h, List<Firma> firmalar, List<TasimaTedarikci> tedarikciler, List<Arac> araclar)
+    private string? ResolveRefAd(Hakedis h, List<Cari> cariler, List<TasimaTedarikci> tedarikciler, List<Arac> araclar)
     {
+        // Müşteri kurumu eşleştirmeden alınan Kurum hakedişi ile araç sahibi hakedişinde ReferansId doğrudan cari kartıdır.
+        if (h.Tip == HakedisTipi.AracSahibi
+            || (h.Tip == HakedisTipi.Kurum && HakedisUretimParametreleri.MusteriEslestirmedenMi(h.GenerationParams)))
+            return cariler.FirstOrDefault(c => c.Id == h.ReferansId)?.Unvan;
+
         return h.Tip switch
         {
-            HakedisTipi.Kurum => firmalar.FirstOrDefault(f => f.Id == h.ReferansId)?.FirmaAdi,
+            HakedisTipi.Kurum => h.Detaylar.Select(d => d.Guzergah?.CariId ?? 0)
+                .Where(id => id > 0).Distinct()
+                .Select(id => cariler.FirstOrDefault(c => c.Id == id)?.Unvan ?? $"Cari #{id}")
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .DefaultIfEmpty(cariler.FirstOrDefault(c => c.Id == h.ReferansId)?.Unvan)
+                .Aggregate((left, right) => string.IsNullOrWhiteSpace(left) ? right : $"{left}, {right}"),
             HakedisTipi.Tedarikci => tedarikciler.FirstOrDefault(t => t.Id == h.ReferansId)?.Unvan,
             HakedisTipi.Arac => araclar.FirstOrDefault(a => a.Id == h.ReferansId)?.AktifPlaka,
             _ => null

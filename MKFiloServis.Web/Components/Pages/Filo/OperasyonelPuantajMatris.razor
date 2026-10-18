@@ -1,4 +1,4 @@
-@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:filoservis")]
+﻿@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:filoservis")]
 @page "/operasyon/puantaj-matris"
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
@@ -81,8 +81,8 @@
                     <input class="form-control form-control-sm" @bind="filtreSofor" @bind:event="oninput" placeholder="Şoför ara..." />
                 </div>
                 <div class="col-md-1">
-                    <label class="form-label small mb-1">Fatura firması</label>
-                    <input class="form-control form-control-sm" @bind="filtreFaturaFirma" @bind:event="oninput" placeholder="Firma..." />
+                    <label class="form-label small mb-1">Hakediş carisi</label>
+                    <input class="form-control form-control-sm" @bind="filtreHakedisCari" @bind:event="oninput" placeholder="Cari ara..." />
                 </div>
                 <div class="col-md-1 text-end">
                     <button class="btn btn-sm btn-outline-secondary" @onclick="FiltreleriTemizle" disabled="@isBusy">
@@ -116,7 +116,8 @@
                                 <th class="text-center">YÖN</th>
                                 <th>PLAKA</th>
                                 <th>ŞOFÖR / TEDARİKÇİ</th>
-                                <th>FATURA FİRMASI</th>
+                                <th>ARAÇ SAHİBİ / TEDARİKÇİ</th>
+                                <th>HAKEDİŞ CARİSİ</th>
                                 @for (var g = 1; g <= AyGunSayisi; g++)
                                 {
                                     var gun = g;
@@ -140,7 +141,7 @@
                             }
                             @if (!filtreli.Any())
                             {
-                                <tr><td colspan="@(17 + AyGunSayisi)" class="text-center text-muted p-4">Filtreye uygun kayıt yok</td></tr>
+                                <tr><td colspan="@(18 + AyGunSayisi)" class="text-center text-muted p-4">Filtreye uygun kayıt yok</td></tr>
                             }
                             else
                             {
@@ -157,7 +158,8 @@
                                         <td class="text-center fw-semibold @(satir.Yon == "S" ? "table-warning" : satir.Yon == "A" ? "table-warning" : "")">@satir.Yon</td>
                                         <td><a href="javascript:void(0)" class="text-decoration-none" @onclick="() => AracDetayAc(satir)">@satir.Plaka</a></td>
                                         <td><a href="javascript:void(0)" class="text-decoration-none" @onclick="() => SoforDetayAc(satir)">@satir.Sofor</a></td>
-                                        <td><a href="javascript:void(0)" class="text-danger text-decoration-none" @onclick="() => FaturaFirmaDetayAc(satir)">@satir.FaturaFirma</a></td>
+                                        <td title="@satir.AracSahibiTip">@satir.AracSahibi</td>
+                                        <td><a href="javascript:void(0)" class="text-danger text-decoration-none" @onclick="() => HakedisCariDetayAc(satir)">@satir.HakedisCari</a></td>
                                         @for (var g = 1; g <= AyGunSayisi; g++)
                                         {
                                             var tarih = new DateTime(seciliYil, seciliAy, g);
@@ -179,7 +181,7 @@
                                     <td colspan="3" class="text-end">TOPLAM</td>
                                     <td class="text-end">@filtreli.Sum(x => x.Gelir).ToString("N2")</td>
                                     <td class="text-end">@filtreli.Sum(x => x.Gider).ToString("N2")</td>
-                                    <td colspan="4"></td>
+                                    <td colspan="5"></td>
                                     @for (var g = 1; g <= AyGunSayisi; g++)
                                     {
                                          var tarih = new DateTime(seciliYil, seciliAy, g);
@@ -257,7 +259,7 @@
     private string filtreYon = string.Empty;
     private string filtrePlaka = string.Empty;
     private string filtreSofor = string.Empty;
-    private string filtreFaturaFirma = string.Empty;
+    private string filtreHakedisCari = string.Empty;
 
     private List<MatrisSatir> matrisSatirlari = new();
 
@@ -318,11 +320,13 @@
                         Yon = ServisYonKodu(ilk.Puantaj.ServisTuru),
                         Plaka = ilk.Puantaj.Arac?.AktifPlaka ?? "-",
                         Sofor = $"{ilk.Puantaj.Sofor?.Ad} {ilk.Puantaj.Sofor?.Soyad}".Trim(),
-                        FaturaFirma = ilk.AracSahibiAd,
+                        HakedisCari = ilk.Puantaj.Guzergah?.Cari?.Unvan ?? "Cari tanımlanmamış",
+                        HakedisCariRef = ilk.Puantaj.Guzergah?.Cari,
                         AracRef = ilk.Puantaj.Arac,
                         SoforRef = ilk.Puantaj.Sofor,
                         MusteriCariRef = ilk.Puantaj.MusteriCari,
                         AracSahibiTip = ilk.AracSahibiTip,
+                        AracSahibi = ilk.AracSahibiAd,
                         GunlukSeferler = gunluk,
                         GunSayisi = gunluk.Count(x => x.Value > 0),
                         SeferSayisi = seferSayisi,
@@ -383,8 +387,8 @@
             && !satir.Sofor.Contains(filtreSofor, StringComparison.OrdinalIgnoreCase))
             return false;
 
-        if (!string.IsNullOrWhiteSpace(filtreFaturaFirma)
-            && !satir.FaturaFirma.Contains(filtreFaturaFirma, StringComparison.OrdinalIgnoreCase))
+        if (!string.IsNullOrWhiteSpace(filtreHakedisCari)
+            && !satir.HakedisCari.Contains(filtreHakedisCari, StringComparison.OrdinalIgnoreCase))
             return false;
 
         return true;
@@ -397,7 +401,7 @@
         filtreYon = string.Empty;
         filtrePlaka = string.Empty;
         filtreSofor = string.Empty;
-        filtreFaturaFirma = string.Empty;
+        filtreHakedisCari = string.Empty;
     }
 
     private async Task ExceleAktarAsync()
@@ -411,7 +415,7 @@
             var ws = workbook.Worksheets.Add("Aylık Puantaj");
 
             var gunSayisi = AyGunSayisi;
-            var sabitBasliklar = new[] { "S.NO", "KURUM", "GÜZERGAH", "GELİR", "GİDER", "YÖN", "PLAKA", "ŞOFÖR / TEDARİKÇİ", "TELEFON", "FATURA FİRMASI", "TELEFON" };
+            var sabitBasliklar = new[] { "S.NO", "KURUM", "GÜZERGAH", "GELİR", "GİDER", "YÖN", "PLAKA", "ŞOFÖR / TEDARİKÇİ", "TELEFON", "ARAÇ SAHİBİ / TEDARİKÇİ", "HAKEDİŞ CARİSİ", "TELEFON" };
             var sonBasliklar = new[] { "GÜN", "SEFER", "TOPLAM GELİR", "TOPLAM GİDER", "KDV ORANI", "KDV MİKTAR", "KESİNTİ", "ÖDENECEK" };
 
             var kolon = 1;
@@ -459,11 +463,12 @@
                 var soforTelefonHucre = ws.Cell(satirNo, c++);
                 soforTelefonHucre.Value = GetSoforTedarikciTelefon(satir);
                 soforTelefonHucre.Style.NumberFormat.Format = "@";
+                ws.Cell(satirNo, c++).Value = satir.AracSahibi;
                 var faturaHucre = ws.Cell(satirNo, c++);
-                faturaHucre.Value = satir.FaturaFirma;
+                faturaHucre.Value = satir.HakedisCari;
                 faturaHucre.Style.Font.FontColor = ClosedXML.Excel.XLColor.Red;
                 var faturaTelefonHucre = ws.Cell(satirNo, c++);
-                faturaTelefonHucre.Value = GetFaturaFirmaTelefon(satir.AracRef);
+                faturaTelefonHucre.Value = satir.HakedisCariRef?.Telefon ?? string.Empty;
                 faturaTelefonHucre.Style.NumberFormat.Format = "@";
 
                 for (var g = 1; g <= gunSayisi; g++)
@@ -625,40 +630,20 @@
         detayModalAcik = true;
     }
 
-    private void FaturaFirmaDetayAc(MatrisSatir satir)
+    private void HakedisCariDetayAc(MatrisSatir satir)
     {
-        var a = satir.AracRef;
-        detayBaslik = $"Fatura Firma Detayı – {satir.FaturaFirma}";
+        var cari = satir.HakedisCariRef;
+        detayBaslik = $"Hakediş Cari Detayı – {satir.HakedisCari}";
         detayIkon = "bi-receipt";
         detaySatirlari = new();
-        detaySatirlari.Add(("Firma / Cari", satir.FaturaFirma));
-        if (!string.IsNullOrWhiteSpace(satir.AracSahibiTip)) detaySatirlari.Add(("Sahiplik Tipi", satir.AracSahibiTip));
-        if (a != null)
+        detaySatirlari.Add(("Cari", satir.HakedisCari));
+        if (cari != null)
         {
-            Cari? cari = a.SahiplikTipi switch
-            {
-                AracSahiplikTipi.Kiralik => a.KiralikCari,
-                AracSahiplikTipi.Komisyon => a.KomisyoncuCari,
-                _ => null
-            };
-
-            if (cari != null)
-            {
-                if (!string.IsNullOrWhiteSpace(cari.VergiNo)) detaySatirlari.Add(("Vergi No", cari.VergiNo));
-                if (!string.IsNullOrWhiteSpace(cari.Telefon)) detaySatirlari.Add(("Telefon", cari.Telefon));
-                if (!string.IsNullOrWhiteSpace(cari.Email)) detaySatirlari.Add(("E-posta", cari.Email));
-                if (!string.IsNullOrWhiteSpace(cari.Il) || !string.IsNullOrWhiteSpace(cari.Ilce)) detaySatirlari.Add(("İl / İlçe", $"{cari.Il} / {cari.Ilce}"));
-            }
-            else if (a.TasimaTedarikci != null)
-            {
-                var t = a.TasimaTedarikci;
-                detaySatirlari.Add(("Tedarikçi Ünvan", t.Unvan));
-                if (!string.IsNullOrWhiteSpace(t.Telefon)) detaySatirlari.Add(("Telefon", t.Telefon));
-            }
-            else if (a.Firma != null)
-            {
-                detaySatirlari.Add(("Firma", a.Firma.FirmaAdi));
-            }
+            if (!string.IsNullOrWhiteSpace(cari.CariKodu)) detaySatirlari.Add(("Cari Kodu", cari.CariKodu));
+            if (!string.IsNullOrWhiteSpace(cari.VergiNo)) detaySatirlari.Add(("Vergi No", cari.VergiNo));
+            if (!string.IsNullOrWhiteSpace(cari.Telefon)) detaySatirlari.Add(("Telefon", cari.Telefon));
+            if (!string.IsNullOrWhiteSpace(cari.Email)) detaySatirlari.Add(("E-posta", cari.Email));
+            if (!string.IsNullOrWhiteSpace(cari.Il) || !string.IsNullOrWhiteSpace(cari.Ilce)) detaySatirlari.Add(("İl / İlçe", $"{cari.Il} / {cari.Ilce}"));
         }
         detayModalAcik = true;
     }
@@ -685,23 +670,6 @@
         return satir.AracRef?.TasimaTedarikci?.Telefon ?? string.Empty;
     }
 
-    private static string GetFaturaFirmaTelefon(Arac? arac)
-    {
-        if (arac is null)
-            return string.Empty;
-
-        if (arac.SahiplikTipi == AracSahiplikTipi.Kiralik && !string.IsNullOrWhiteSpace(arac.KiralikCari?.Unvan))
-            return arac.KiralikCari.Telefon ?? string.Empty;
-
-        if (arac.SahiplikTipi == AracSahiplikTipi.Komisyon && !string.IsNullOrWhiteSpace(arac.KomisyoncuCari?.Unvan))
-            return arac.KomisyoncuCari.Telefon ?? string.Empty;
-
-        if (arac.SahiplikTipi == AracSahiplikTipi.Tedarikci && !string.IsNullOrWhiteSpace(arac.TasimaTedarikci?.Unvan))
-            return arac.TasimaTedarikci.Telefon ?? string.Empty;
-
-        return arac.Firma?.Telefon ?? string.Empty;
-    }
-
     private sealed class MatrisSatir
     {
         public string Kurum { get; set; } = "-";
@@ -711,11 +679,13 @@
         public string Yon { get; set; } = "-";
         public string Plaka { get; set; } = "-";
         public string Sofor { get; set; } = "-";
-        public string FaturaFirma { get; set; } = "-";
+        public string HakedisCari { get; set; } = "-";
+        public Cari? HakedisCariRef { get; set; }
         public Arac? AracRef { get; set; }
         public Sofor? SoforRef { get; set; }
         public Cari? MusteriCariRef { get; set; }
         public string AracSahibiTip { get; set; } = string.Empty;
+        public string AracSahibi { get; set; } = "-";
         public Dictionary<DateTime, decimal> GunlukSeferler { get; set; } = new();
         public int GunSayisi { get; set; }
         public decimal SeferSayisi { get; set; }

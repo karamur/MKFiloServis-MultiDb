@@ -476,7 +476,7 @@
             toplamGelir = kurumH.Sum(h => h.Tutar) + toplamRentACarGeliri;
             toplamGelirSefer = kurumH.Sum(h => h.ToplamSeferSayisi);
 
-            var tedH = hakedisler.Where(h => h.Tip == HakedisTipi.Tedarikci).ToList();
+            var tedH = hakedisler.Where(h => h.Tip.GiderMi()).ToList();
             toplamTedarikciGider = tedH.Sum(h => h.Tutar);
             tedarikciHakedisSayi = tedH.Count;
 
@@ -525,7 +525,7 @@
             var gelir = hakedisler.Where(h => h.Ay == ay && h.Tip == HakedisTipi.Kurum).Sum(h => h.Tutar);
             var rentGelir = rentACarGelirleri.Where(h => h.Ay == ay).Sum(h => h.HareketTuru == RentACarOdemeHareketTuru.KiraTahsilati ? h.Tutar : -h.Tutar);
             var sefer = hakedisler.Where(h => h.Ay == ay && h.Tip == HakedisTipi.Kurum).Sum(h => h.ToplamSeferSayisi);
-            var tedGider = hakedisler.Where(h => h.Ay == ay && h.Tip == HakedisTipi.Tedarikci).Sum(h => h.Tutar);
+            var tedGider = hakedisler.Where(h => h.Ay == ay && h.Tip.GiderMi()).Sum(h => h.Tutar);
             var ozMal = snapshotlar.Where(s => s.Ay == ay).Sum(s => s.ToplamMaliyet);
             var topGider = tedGider + ozMal;
             var toplamGelirAy = gelir + rentGelir;
@@ -779,6 +779,7 @@
     {
         HakedisTipi.Kurum => "bg-success",
         HakedisTipi.Tedarikci => "bg-warning text-dark",
+        HakedisTipi.AracSahibi => "bg-warning text-dark",
         HakedisTipi.Arac => "bg-info text-dark",
         _ => "bg-secondary"
     };

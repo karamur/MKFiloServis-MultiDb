@@ -169,14 +169,22 @@
                     {
                         <div class="col-md-4">
                             <div class="mb-3">
-                                <label class="form-label">Araç Sahibi (Kiralayan) *</label>
-                                <InputSelect @bind-Value="arac.KiralikCariId" class="form-select">
+                                <label class="form-label" for="kiralikCariId">Araç Sahibi (Kiralayan) *</label>
+                                <InputSelect id="kiralikCariId" @bind-Value="arac.KiralikCariId" class="@(KiralikSahipHatali ? "form-select is-invalid" : "form-select")">
                                     <option value="">-- Seçiniz --</option>
                                     @foreach (var cari in tedarikciCariler)
                                     {
                                         <option value="@cari.Id">@cari.Unvan</option>
                                     }
                                 </InputSelect>
+                                @if (KiralikSahipHatali)
+                                {
+                                    <div class="invalid-feedback">@AracKurallari.KiralikSahipZorunluMesaji</div>
+                                }
+                                @if (tedarikciCariler.Count == 0)
+                                {
+                                    <small class="text-muted">Tedarikçi türünde cari yok. Önce <a href="/cariler/yeni">Cariler</a> bölümünden araç sahibini ekleyin.</small>
+                                }
                             </div>
                         </div>
                         <div class="col-md-4">
@@ -952,6 +960,10 @@
     private bool isSaving;
     private long transferVersion;
 
+    // Kaydet denendikten sonra eksik kiralık araç sahibi alanda kırmızı gösterilir; seçim yapılınca kendiliğinden kalkar.
+    private bool kiralikSahipKontrolEdildi;
+    private bool KiralikSahipHatali => kiralikSahipKontrolEdildi && AracKurallari.KiralikSahipEksik(arac.SahiplikTipi, arac.KiralikCariId);
+
     private void TransferFirmaDegisti()
     {
         System.Threading.Interlocked.Increment(ref transferVersion);
@@ -1040,6 +1052,7 @@
         System.Threading.Interlocked.Increment(ref transferVersion);
         showFirmaDegisiklikModal = false;
         transferItems = null;
+        kiralikSahipKontrolEdildi = false;
         if (IsEdit)
         {
             try
@@ -1108,6 +1121,7 @@
         showEvrakDetayModal = false;
         showDosyaYukleModal = false;
         showDosyaOnizlemeModal = false;
+        kiralikSahipKontrolEdildi = false;
     }
 
     private async Task EvraklariYukle()
@@ -1227,6 +1241,8 @@
                 showFirmaDegisiklikModal = false;
                 transferItems = null;
                 ToastService.ShowSuccess($"Araç taşındı ({moved} ilişkili kayıt).");
+                if (AracKurallari.KiralikSahipEksik(arac.SahiplikTipi, arac.KiralikCariId))
+                    ToastService.ShowWarning("Kiralık araç sahibi (cari) hedef firmada tanımlı değil; hedef firmayı seçip araç kartından sahibini belirleyin.");
                 Navigation.NavigateTo("/araclar");
             }
         }
@@ -1244,6 +1260,7 @@
         if (Enum.TryParse<AracSahiplikTipi>(e.Value?.ToString(), out var tip))
         {
             arac.SahiplikTipi = tip;
+            kiralikSahipKontrolEdildi = false;
             if (tip == AracSahiplikTipi.Ozmal)
             {
                 arac.KiralikCariId = null;
@@ -1335,6 +1352,15 @@
             return;
         }
 
+        // Firma taşıma akışı hedef firmadaki cari bağlantısını ayrıca ister; normal kayıtta kiralık araç sahibi zorunludur.
+        kiralikSahipKontrolEdildi = true;
+        if (AracKurallari.KiralikSahipEksik(arac.SahiplikTipi, arac.KiralikCariId))
+        {
+            ToastService.ShowError(AracKurallari.KiralikSahipZorunluMesaji);
+            await KiralikSahipAlaninaGitAsync();
+            return;
+        }
+
         try
         {
             isSaving = true;
@@ -1362,6 +1388,18 @@
         {
             isSaving = false;
             if (!transferDisposed) StateHasChanged();
+        }
+    }
+
+    private async Task KiralikSahipAlaninaGitAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("scrollToElementById", "kiralikCariId");
+        }
+        catch
+        {
+            // JS helper yoksa sessiz geç; alan zaten kırmızı gösterilir.
         }
     }
 

@@ -1,4 +1,4 @@
-@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:filoservis")]
+﻿@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:filoservis")]
 @page "/operasyonel-hakedis"
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
@@ -20,1316 +20,813 @@
 
 <PageTitle>Operasyonel Hakediş</PageTitle>
 
-<div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h3><i class="bi bi-receipt-cutoff me-2"></i>Operasyonel Hakediş</h3>
-        <div class="d-flex gap-2">
-            <button class="btn btn-outline-success" @onclick="ExceleAktarAsync" disabled="@(isBusy || !hakedisler.Any())">
-                <i class="bi bi-file-earmark-excel me-1"></i>Excel'e Aktar
-            </button>
-            <button class="btn btn-success" @onclick="DetayliRaporuExceleAktarAsync" disabled="@(isBusy || !FiltreliRaporSatirlari.Any())">
-                <i class="bi bi-file-earmark-spreadsheet me-1"></i>Detaylı Rapor
-            </button>
-            <button class="btn btn-outline-danger" @onclick="DetayliRaporuPdfAktarAsync" disabled="@(isBusy || !FiltreliRaporSatirlari.Any())">
-                <i class="bi bi-file-earmark-pdf me-1"></i>PDF
-            </button>
-            <button class="btn btn-outline-secondary" @onclick="YukleAsync" disabled="@isBusy">
-                <i class="bi bi-arrow-clockwise me-1"></i>Yenile
-            </button>
-            <button class="btn btn-primary" @onclick="TopluUretAsync" disabled="@isBusy" title="Taslak hakedişleri güncel puantaj verilerinden yeniden üretir">
-                <i class="bi bi-arrow-repeat me-1"></i>Güncelle
+<div class="container-fluid hakedis-sayfa">
+
+    @* ── Başlık, dönem ve hakediş türü ─────────────────────────────────── *@
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3">
+        <div>
+            <h3 class="mb-1"><i class="bi bi-receipt-cutoff me-2 text-primary"></i>Operasyonel Hakediş</h3>
+            <div class="text-muted small">Dönemi ve hakediş türünü seçin, kapsamı daraltın, önizleyin; sonra hakedişi oluşturun.</div>
+        </div>
+        <div class="d-flex flex-wrap align-items-end gap-2">
+            <div class="input-group input-group-sm hakedis-donem">
+                <button type="button" class="btn btn-outline-secondary" title="Önceki ay" @onclick="() => AyGitAsync(-1)" disabled="@isBusy">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+                <select class="form-select" @bind="ay" @bind:after="DonemDegistiAsync" disabled="@isBusy" aria-label="Ay">
+                    @for (var i = 1; i <= 12; i++)
+                    {
+                        <option value="@i">@AyAdlari[i - 1]</option>
+                    }
+                </select>
+                <input type="number" class="form-control hakedis-yil" @bind="yil" @bind:after="DonemDegistiAsync"
+                       min="2000" max="2100" disabled="@isBusy" aria-label="Yıl" />
+                <button type="button" class="btn btn-outline-secondary" title="Sonraki ay" @onclick="() => AyGitAsync(1)" disabled="@isBusy">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="BuAyaGitAsync" disabled="@isBusy">Bu ay</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" title="Verileri yeniden yükle" @onclick="TumunuYukleAsync" disabled="@isBusy">
+                <i class="bi bi-arrow-clockwise"></i>
             </button>
         </div>
+    </div>
+
+    <div class="row g-2 mb-3">
+        @foreach (var tur in TurSecenekleri)
+        {
+            <div class="col-12 col-md-6 col-xl-3">
+                <button type="button" class="tur-karti @(seciliTip == tur.Tip ? "aktif" : "")"
+                        @onclick="() => TipSecAsync(tur.Tip)" disabled="@isBusy" aria-pressed="@(seciliTip == tur.Tip ? "true" : "false")">
+                    <span class="tur-ikon"><i class="bi @tur.Ikon"></i></span>
+                    <span class="tur-metin">
+                        <span class="fw-semibold d-block">@tur.Baslik</span>
+                        <small class="text-muted d-block">@tur.Aciklama</small>
+                    </span>
+                </button>
+            </div>
+        }
     </div>
 
     @if (!string.IsNullOrWhiteSpace(hataMesaji))
     {
-        <div class="alert alert-danger">@hataMesaji</div>
+        <div class="alert alert-danger alert-dismissible py-2" role="alert">
+            @hataMesaji
+            <button type="button" class="btn-close" aria-label="Kapat" @onclick="() => hataMesaji = null"></button>
+        </div>
     }
 
     @if (!string.IsNullOrWhiteSpace(bilgiMesaji))
     {
-        <div class="alert alert-success">@bilgiMesaji</div>
+        <div class="alert alert-success alert-dismissible py-2" role="status">
+            @bilgiMesaji
+            <button type="button" class="btn-close" aria-label="Kapat" @onclick="() => bilgiMesaji = null"></button>
+        </div>
     }
 
-    <div class="card shadow-sm mb-3">
-        <div class="card-body">
-            <div class="row g-2 align-items-end">
-                <div class="col-md-2">
-                    <label class="form-label small mb-1">Yıl</label>
-                    <InputNumber class="form-control" @bind-Value="yil" />
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <button type="button" class="nav-link @(aktifSekme == Sekme.Hazirla ? "active" : "")" @onclick="() => aktifSekme = Sekme.Hazirla">
+                <i class="bi bi-sliders me-1"></i>Hakediş Hazırla
+            </button>
+        </li>
+        <li class="nav-item">
+            <button type="button" class="nav-link @(aktifSekme == Sekme.Hakedisler ? "active" : "")" @onclick="() => aktifSekme = Sekme.Hakedisler">
+                <i class="bi bi-card-checklist me-1"></i>Oluşturulan Hakedişler
+                <span class="badge rounded-pill @(hakedisler.Count > 0 ? "bg-primary" : "bg-secondary") ms-1">@hakedisler.Count</span>
+            </button>
+        </li>
+    </ul>
+
+    @if (aktifSekme == Sekme.Hazirla)
+    {
+        @* ── 1) Kapsam / filtreler ─────────────────────────────────────── *@
+        <div class="card shadow-sm mb-3">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2 py-2">
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <strong><i class="bi bi-funnel me-1"></i>Kapsam</strong>
+                    <span class="text-muted small">Filtreler birlikte uygulanır; boş bırakılan filtre "tümü" demektir.</span>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label small mb-1">Ay</label>
-                    <InputNumber class="form-control" @bind-Value="ay" min="1" max="12" />
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label small mb-1">Tip</label>
-                    <InputSelect class="form-select" @bind-Value="seciliTip">
-                        <option value="@HakedisTipi.Kurum">Kurum</option>
-                        <option value="@HakedisTipi.Tedarikci">Tedarikçi</option>
-                        <option value="@HakedisTipi.Arac">Araç</option>
-                    </InputSelect>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small mb-1">Gruplama</label>
-                    <select class="form-select form-select-sm" @bind="selectedGrouping">
-                        <option value="cari">Cari</option>
-                        <option value="referans">Referans</option>
-                    </select>
-                </div>
-                <div class="col-md-2 d-flex gap-2 justify-content-end">
-                    <button class="btn btn-primary" @onclick="TopluUretAsync" disabled="@isBusy">
-                        <i class="bi bi-magic me-1"></i>Toplu Hakediş Üret
+                @if (FiltreVar)
+                {
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="FiltreleriTemizleAsync" disabled="@onizlemeYukleniyor">
+                        <i class="bi bi-x-lg me-1"></i>Filtreleri temizle
                     </button>
-                    <button class="btn btn-outline-primary" @onclick="YukleAsync" disabled="@isBusy">
-                        <i class="bi bi-list-ul me-1"></i>Listele
+                }
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <div class="filtre-grup-baslik"><i class="bi bi-person-badge me-1"></i>Araç sahibi</div>
+                        <div class="form-label small mb-1">Sahiplik türü</div>
+                        <div class="d-flex flex-wrap gap-1 mb-2">
+                            @foreach (var tip in SahiplikSecenekleri)
+                            {
+                                var secili = secSahiplik.Contains(tip);
+                                <button type="button" class="btn btn-sm rounded-pill @(secili ? "btn-primary" : "btn-outline-secondary")"
+                                        @onclick="() => SahiplikDegistirAsync(tip)" aria-pressed="@(secili ? "true" : "false")">
+                                    <i class="bi @SahiplikHelper.GetIcon(tip) me-1"></i>@SahiplikHelper.GetMetin(tip)
+                                </button>
+                            }
+                            @if (!SahiplikSecenekleri.Any())
+                            {
+                                <span class="text-muted small">Bu dönemde puantaj yok.</span>
+                            }
+                        </div>
+                        <div class="mb-2">
+                            <CokluSecim Etiket="Araç sahibi" Secenekler="Ogeler(SahipSecenekleri)" Secili="secSahip" OnDegisti="FiltreDegistiAsync" />
+                        </div>
+                        <CokluSecim Etiket="Araç (plaka)" Secenekler="Ogeler(AracSecenekleri)" Secili="secArac" OnDegisti="FiltreDegistiAsync" />
+                    </div>
+
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <div class="filtre-grup-baslik"><i class="bi bi-signpost-split me-1"></i>Güzergâh bilgileri</div>
+                        <div class="mb-2">
+                            <div class="form-label small mb-1">Müşteri kurum nereden alınsın?</div>
+                            <div class="btn-group btn-group-sm w-100" role="group" aria-label="Müşteri kurum kaynağı">
+                                <button type="button" class="btn @(musteriKaynagi == HakedisMusteriKaynagi.Eslestirme ? "btn-primary" : "btn-outline-secondary")"
+                                        @onclick="() => MusteriKaynagiSecAsync(HakedisMusteriKaynagi.Eslestirme)" disabled="@onizlemeYukleniyor"
+                                        title="Eşleştirmedeki &quot;Müşteri Kurum&quot; (eşleştirmesiz puantajda puantajın kendi müşterisi)">
+                                    Eşleştirme
+                                </button>
+                                <button type="button" class="btn @(musteriKaynagi == HakedisMusteriKaynagi.Guzergah ? "btn-primary" : "btn-outline-secondary")"
+                                        @onclick="() => MusteriKaynagiSecAsync(HakedisMusteriKaynagi.Guzergah)" disabled="@onizlemeYukleniyor"
+                                        title="Güzergâh kartında bağlı olan cari">
+                                    Güzergâh kartı
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <CokluSecim Etiket="Cari / kurum" Secenekler="Ogeler(CariSecenekleri)" Secili="secCari" OnDegisti="FiltreDegistiAsync" />
+                        </div>
+                        <div class="mb-2">
+                            <CokluSecim Etiket="Güzergâh" Secenekler="Ogeler(GuzergahSecenekleri)" Secili="secGuzergah" OnDegisti="FiltreDegistiAsync" />
+                        </div>
+                        <CokluSecim Etiket="Servis türü" Secenekler="ServisOgeleri" Secili="secServis" OnDegisti="FiltreDegistiAsync" />
+                    </div>
+
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <div class="filtre-grup-baslik"><i class="bi bi-link-45deg me-1"></i>Eşleştirme bilgileri</div>
+                        <div class="mb-2">
+                            <CokluSecim Etiket="Eşleştirme (kurum • güzergâh • araç • şoför)" Secenekler="Ogeler(EslestirmeSecenekleri)" Secili="secEslestirme" OnDegisti="FiltreDegistiAsync" />
+                        </div>
+                        <CokluSecim Etiket="Şoför" Secenekler="Ogeler(SoforSecenekleri)" Secili="secSofor" OnDegisti="FiltreDegistiAsync" />
+                        @if (seciliTip == HakedisTipi.Arac)
+                        {
+                            <div class="mt-2">
+                                <label class="form-label small mb-1" for="birimFiyatKaynagi">Birim fiyat (araç hakedişi)</label>
+                                <select id="birimFiyatKaynagi" class="form-select form-select-sm" @bind="birimFiyatKaynagi" @bind:after="OnizlemeYenileAsync">
+                                    <option value="@HakedisBirimFiyatKaynagi.EslestirmeOdenen">Eşleştirme: taşerona / şoföre ödenen</option>
+                                    <option value="@HakedisBirimFiyatKaynagi.EslestirmeKesilecek">Eşleştirme: kuruma kesilecek ücret</option>
+                                    <option value="@HakedisBirimFiyatKaynagi.MaliyetKaydi">Araç maliyet kaydı (eski)</option>
+                                </select>
+                            </div>
+                        }
+                        <div class="form-text">Eşleştirmeler, "Tanımları Yönet" sekmesindeki araç–şoför–güzergâh şablonlarıdır.</div>
+                    </div>
+
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <div class="filtre-grup-baslik"><i class="bi bi-calendar-range me-1"></i>Gün aralığı</div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label small mb-1">Başlangıç</label>
+                                <input type="date" class="form-control form-control-sm" value="@TarihDegeri(gunBaslangic)"
+                                       min="@DonemIlkGun" max="@DonemSonGun" @onchange="e => GunDegistiAsync(e, true)" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small mb-1">Bitiş</label>
+                                <input type="date" class="form-control form-control-sm" value="@TarihDegeri(gunBitis)"
+                                       min="@DonemIlkGun" max="@DonemSonGun" @onchange="e => GunDegistiAsync(e, false)" />
+                            </div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-1">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => HazirGunAraligiAsync(1, 15)">1 – 15</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => HazirGunAraligiAsync(16, null)">16 – ay sonu</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => HazirGunAraligiAsync(null, null)">Tüm ay</button>
+                        </div>
+                        <div class="form-text">Boş bırakılırsa ayın tamamı alınır. Farklı gün aralıkları ayrı hakediş olarak oluşturulabilir.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (onizleme is not null)
+        {
+            var toplamSatirlar = GorunenSatirlar;
+            var sefer = toplamSatirlar.Sum(s => s.Sefer);
+            var gelir = toplamSatirlar.Sum(s => s.Gelir);
+            var gider = toplamSatirlar.Sum(s => s.Gider);
+            var maliyet = toplamSatirlar.Sum(s => s.Maliyet);
+            var net = gelir - gider - maliyet;
+
+            @* ── 2) Özet ve hakediş oluşturma ─────────────────────────── *@
+            <div class="row g-2 mb-2">
+                <div class="col-6 col-lg">
+                    <div class="ozet-kutu ozet-birincil">
+                        <div class="etiket">Sefer</div>
+                        <div class="deger">@Sayi(sefer)</div>
+                        <div class="alt">@toplamSatirlar.Sum(s => s.PuantajSayisi) puantaj kaydı</div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg">
+                    <div class="ozet-kutu ozet-basari">
+                        <div class="etiket">Gelir (kuruma kesilecek)</div>
+                        <div class="deger">@Tl(gelir)</div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg">
+                    <div class="ozet-kutu ozet-tehlike">
+                        <div class="etiket">Gider (taşeron / araç sahibi)</div>
+                        <div class="deger">@Tl(gider)</div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg">
+                    <div class="ozet-kutu ozet-uyari">
+                        <div class="etiket">İç maliyet (özmal / kiralık)</div>
+                        <div class="deger">@Tl(maliyet)</div>
+                    </div>
+                </div>
+                <div class="col-12 col-lg">
+                    <div class="ozet-kutu @(net >= 0 ? "ozet-basari" : "ozet-tehlike")">
+                        <div class="etiket">Net</div>
+                        <div class="deger">@Tl(net)</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="olustur-cubugu mb-3">
+                <div>
+                    @if (onizleme.OlusacakHakedisSayisi > 0)
+                    {
+                        <div class="fw-semibold">
+                            @onizleme.OlusacakHakedisSayisi adet @GetTipText(seciliTip).ToLower(new System.Globalization.CultureInfo("tr-TR")) hakedişi oluşacak
+                            <span class="text-muted fw-normal">· @TutarBasligi: @Tl(OlusacakTutar) (KDV hariç)</span>
+                        </div>
+                        <div class="small text-muted">Kapsam: @KapsamOzetiMetni</div>
+                    }
+                    else
+                    {
+                        <div class="fw-semibold">Bu kapsamda yeni hakedişe girecek satır yok</div>
+                        <div class="small text-muted">Kapsam: @KapsamOzetiMetni</div>
+                    }
+                </div>
+                <button type="button" class="btn btn-primary" @onclick="HakedisOlusturAsync"
+                        disabled="@(isBusy || onizlemeYukleniyor || onizleme.OlusacakHakedisSayisi == 0)"
+                        title="Seçili kapsam için taslak hakediş oluşturur; aynı kapsamdaki taslak varsa günceller">
+                    <i class="bi bi-magic me-1"></i>Hakediş Oluştur
+                </button>
+            </div>
+
+            @if (HakedistekiPuantaj > 0)
+            {
+                <div class="alert alert-info py-2 small">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Kapsamdaki <strong>@HakedistekiPuantaj</strong> puantaj kaydı (@Sayi(HakedistekiSefer) sefer) onaylı veya faturalı bir hakedişte
+                    olduğu için yeni hakedişe girmez@(hakedistekileriGoster ? "; tabloda soluk gösteriliyor." : "; tabloda gizli. Görmek için aşağıdaki \"Hakedişte olanları da göster\" seçeneğini açın.")
+                </div>
+            }
+
+            @if (UygunsuzPuantaj > 0)
+            {
+                <div class="alert alert-warning py-2 small">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    <strong>@UygunsuzPuantaj</strong> puantaj kaydı hakedişe alınamıyor (tabloda kırmızı):
+                    @string.Join("; ", UygunsuzNedenleri). Eksik kaydı tamamlayıp önizlemeyi yenileyin.
+                </div>
+            }
+
+            @if (onizleme.TurDisiPuantajSayisi > 0)
+            {
+                <div class="alert alert-secondary py-2 small">
+                    <i class="bi bi-info-circle me-1"></i>
+                    @TurKapsamiAciklamasi Kapsamınızdaki
+                    <strong>@onizleme.TurDisiPuantajSayisi</strong> puantaj kaydı (@Sayi(onizleme.TurDisiSefer) sefer) bu türe girmediği
+                    için listelenmiyor.
+                </div>
+            }
+        }
+
+        @* ── 3) Önizleme tablosu ───────────────────────────────────────── *@
+        <div class="card shadow-sm">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2 py-2">
+                <div>
+                    <strong><i class="bi bi-table me-1"></i>Önizleme</strong>
+                    <span class="text-muted small ms-2">@(DonemGecerli ? AyAdlari[ay - 1] : "") @yil · @GetTipText(seciliTip) hakedişi</span>
+                </div>
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-success" @onclick="OnizlemeExceleAktarAsync" disabled="@(GorunenSatirlar.Count == 0)">
+                        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-danger" @onclick="OnizlemePdfAktarAsync" disabled="@(GorunenSatirlar.Count == 0)">
+                        <i class="bi bi-file-earmark-pdf me-1"></i>PDF
                     </button>
                 </div>
             </div>
-            <div class="row g-2 align-items-end mt-1">
-                <div class="col-md-3">
-                    <label class="form-label small mb-1">Durum</label>
-                    <select class="form-select form-select-sm" @bind="durumFiltre">
-                        <option value="">Tümü</option>
-                        @foreach (var d in Enum.GetValues<HakedisDurum>())
+            <div class="card-body border-bottom py-2">
+                <div class="d-flex flex-wrap align-items-center gap-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="small text-muted mb-0" for="gruplamaSecimi">Grupla:</label>
+                        <select id="gruplamaSecimi" class="form-select form-select-sm w-auto" @bind="gruplama" @bind:after="GruplamaDegisti">
+                            @foreach (var g in GruplamaSecenekleri)
+                            {
+                                <option value="@g">@HakedisRaporOlusturucu.GruplamaAdi(g)</option>
+                            }
+                        </select>
+                        @if (gruplama != HakedisGruplama.Yok)
                         {
-                            <option value="@d">@d</option>
+                            <button type="button" class="btn btn-sm btn-link text-decoration-none p-0" @onclick="OnizlemeGruplariniAcKapat">
+                                @(onizlemeTumuAcik ? "Grupları kapat" : "Grupları aç")
+                            </button>
                         }
-                    </select>
-                </div>
-                <div class="col-md-5">
-                    <label class="form-label small mb-1">Arama (referans / güzergah)</label>
-                    <input class="form-control form-control-sm" placeholder="Kelime yazın..." @bind="aramaMetni" @bind:event="oninput" />
-                </div>
-                <div class="col-md-4 d-flex justify-content-end">
-                    @if (!string.IsNullOrWhiteSpace(aramaMetni) || !string.IsNullOrWhiteSpace(durumFiltre))
+                    </div>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="karlilikKolonlari" @bind="karlilikKolonlari" />
+                        <label class="form-check-label small" for="karlilikKolonlari">Kârlılık sütunları (gelir / gider / maliyet / net)</label>
+                    </div>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="hakedistekileriGoster" @bind="hakedistekileriGoster" />
+                        <label class="form-check-label small" for="hakedistekileriGoster">Hakedişte olanları da göster</label>
+                    </div>
+                    @if (onizlemeYukleniyor)
                     {
-                        <button class="btn btn-sm btn-outline-secondary" @onclick="FiltreleriTemizle">
-                            <i class="bi bi-x-lg me-1"></i>Filtreleri Temizle
-                        </button>
+                        <div class="spinner-border spinner-border-sm text-primary" role="status" aria-label="Yükleniyor"></div>
                     }
                 </div>
             </div>
-            @if (seciliTip == HakedisTipi.Kurum)
+
+            @if (onizleme is null)
             {
-                <div class="row g-2 align-items-end mt-1">
-                    <div class="col-md-4">
-                        <label class="form-label small mb-1">Cari Kartı / Firma</label>
-                        <select class="form-select form-select-sm" multiple size="3" @onchange="KurumFiltresiDegisti">
-                            @foreach (var kurum in KurumFiltreSecenekleri)
+                <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+            }
+            else if (GorunenSatirlar.Count == 0)
+            {
+                <div class="text-center text-muted py-5 px-3">
+                    <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                    @if (onizleme.Satirlar.Count > 0)
+                    {
+                        <div class="fw-semibold">Kapsamdaki tüm satırlar onaylı / faturalı hakedişlerde.</div>
+                        <div class="small mb-2">Yeni hakedişe girecek satır kalmadı.</div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => hakedistekileriGoster = true">Hakedişte olanları göster</button>
+                    }
+                    else
+                    {
+                        <div class="fw-semibold">Bu kapsamda puantaj bulunamadı.</div>
+                        <div class="small mb-2">Dönemi değiştirin, hakediş türünü kontrol edin ya da filtreleri gevşetin.</div>
+                        @if (FiltreVar)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="FiltreleriTemizleAsync">Filtreleri temizle</button>
+                        }
+                    }
+                </div>
+            }
+            else
+            {
+                var gruplar = GorunenGruplar;
+                var tumSatirlar = GorunenSatirlar;
+                var etiketKolonlari = GrupEtiketKolonSayisi;
+
+                <div class="table-responsive onizleme-tablo @(onizlemeYukleniyor ? "opacity-50" : "")">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                @if (GosterCari) { <th>Cari</th> }
+                                @if (GosterGuzergah) { <th>Güzergâh</th> }
+                                @if (GosterPlaka) { <th>Plaka</th> }
+                                @if (GosterSahip) { <th>Araç sahibi</th> }
+                                @if (GosterSofor) { <th>Şoför</th> }
+                                <th class="text-end">Sefer</th>
+                                @if (karlilikKolonlari)
+                                {
+                                    <th class="text-end">Gelir</th>
+                                    <th class="text-end">Gider</th>
+                                    <th class="text-end">İç maliyet</th>
+                                    <th class="text-end">Net</th>
+                                }
+                                else
+                                {
+                                    <th class="text-end">Birim fiyat</th>
+                                    <th class="text-end">@TutarBasligi</th>
+                                }
+                                @if (GorunenHakedisteVar) { <th>Durum</th> }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var grup in gruplar)
                             {
-                                <option value="@kurum.Id">@kurum.Ad</option>
+                                @if (gruplama != HakedisGruplama.Yok)
+                                {
+                                    var acik = OnizlemeGrubuAcik(grup.Anahtar);
+                                    <tr class="grup-satiri" @onclick="() => OnizlemeGrubuDegistir(grup.Anahtar)">
+                                        <td colspan="@etiketKolonlari">
+                                            <i class="bi @(acik ? "bi-chevron-down" : "bi-chevron-right") me-1"></i>
+                                            @grup.Baslik
+                                            @if (!string.IsNullOrWhiteSpace(grup.Alt))
+                                            {
+                                                <span class="text-muted fw-normal small ms-1">(@grup.Alt)</span>
+                                            }
+                                            <span class="badge rounded-pill bg-secondary ms-1">@grup.Satirlar.Count</span>
+                                        </td>
+                                        <td class="text-end">@Sayi(grup.Sefer)</td>
+                                        @if (karlilikKolonlari)
+                                        {
+                                            <td class="text-end">@Sayi(grup.Gelir)</td>
+                                            <td class="text-end">@Sayi(grup.Gider)</td>
+                                            <td class="text-end">@Sayi(grup.Maliyet)</td>
+                                            <td class="text-end">@Sayi(grup.Net)</td>
+                                        }
+                                        else
+                                        {
+                                            <td></td>
+                                            <td class="text-end">@Sayi(grup.HakedisTutari)</td>
+                                        }
+                                        @if (GorunenHakedisteVar) { <td></td> }
+                                    </tr>
+                                }
+
+                                @if (gruplama == HakedisGruplama.Yok || OnizlemeGrubuAcik(grup.Anahtar))
+                                {
+                                    @foreach (var s in grup.Satirlar)
+                                    {
+                                        <tr class="@(!s.Uygun ? "table-danger" : s.HakedisteMi ? "text-muted satir-hakedistede" : "")">
+                                            @if (GosterCari) { <td>@s.CariAd</td> }
+                                            @if (GosterGuzergah) { <td>@s.GuzergahAd</td> }
+                                            @if (GosterPlaka)
+                                            {
+                                                <td class="text-nowrap fw-semibold">@s.Plaka <SahiplikBadge Tip="s.SahiplikTipi" CssClass="ms-1 fw-normal" /></td>
+                                            }
+                                            @if (GosterSahip) { <td>@(s.SahiplikTipi == AracSahiplikTipi.Ozmal ? "Firma aracı" : s.SahipAd)</td> }
+                                            @if (GosterSofor) { <td>@s.SoforAd</td> }
+                                            <td class="text-end" title="@s.PuantajSayisi puantaj kaydı">@Sayi(s.Sefer)</td>
+                                            @if (karlilikKolonlari)
+                                            {
+                                                <td class="text-end">@Sayi(s.Gelir)</td>
+                                                <td class="text-end">@Sayi(s.Gider)</td>
+                                                <td class="text-end">@Sayi(s.Maliyet)</td>
+                                                <td class="text-end fw-semibold">@Sayi(s.Net)</td>
+                                            }
+                                            else
+                                            {
+                                                <td class="text-end">@Sayi(s.Sefer > 0 ? s.HakedisTutari / s.Sefer : 0m)</td>
+                                                <td class="text-end fw-semibold">@Sayi(s.HakedisTutari)</td>
+                                            }
+                                            @if (GorunenHakedisteVar)
+                                            {
+                                                <td class="text-nowrap">
+                                                    @if (!s.Uygun)
+                                                    {
+                                                        <span class="badge bg-danger" title="@s.UygunsuzlukNedeni">Hakedişe girmez</span>
+                                                    }
+                                                    else if (s.HakedisteMi)
+                                                    {
+                                                        <span class="badge bg-info text-dark" title="Aynı türde onaylı / faturalı bir hakedişte zaten var">Hakedişte</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-success">Yeni</span>
+                                                    }
+                                                </td>
+                                            }
+                                        </tr>
+                                    }
+                                }
                             }
-                        </select>
-                        <div class="form-text">Seçilen cari kartına ve etkin firmaya bağlı güzergâhlar gösterilir. Boş bırakılırsa etkin firmadaki tüm cariler alınır.</div>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small mb-1">Güzergâh</label>
-                        <select class="form-select form-select-sm" @bind="seciliGuzergahId">
-                            <option value="0">Tüm güzergâhlar</option>
-                            @foreach (var guzergah in GuzergahFiltreSecenekleri)
-                            {
-                                <option value="@guzergah.Id">@guzergah.Ad</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="col-md-4 small text-muted">
-                        <i class="bi bi-info-circle me-1"></i>Detaylı rapor; firma, güzergâh, plaka, şoför, sefer ve kesilecek fatura tutarını içerir.
-                    </div>
-                    <div class="col-md-4 form-check form-switch mt-2">
-                        <input class="form-check-input" type="checkbox" id="firmalariGrupla" @bind="firmalariGrupla" />
-                        <label class="form-check-label" for="firmalariGrupla">Firmaları grupla ve ara toplamları göster</label>
-                    </div>
+                        </tbody>
+                        <tfoot>
+                            <tr class="fw-bold toplam-satiri">
+                                <td colspan="@etiketKolonlari">GENEL TOPLAM <span class="fw-normal text-muted small">(@tumSatirlar.Count satır)</span></td>
+                                <td class="text-end">@Sayi(tumSatirlar.Sum(x => x.Sefer))</td>
+                                @if (karlilikKolonlari)
+                                {
+                                    <td class="text-end">@Sayi(tumSatirlar.Sum(x => x.Gelir))</td>
+                                    <td class="text-end">@Sayi(tumSatirlar.Sum(x => x.Gider))</td>
+                                    <td class="text-end">@Sayi(tumSatirlar.Sum(x => x.Maliyet))</td>
+                                    <td class="text-end">@Sayi(tumSatirlar.Sum(x => x.Net))</td>
+                                }
+                                else
+                                {
+                                    <td></td>
+                                    <td class="text-end">@Sayi(tumSatirlar.Sum(x => x.HakedisTutari))</td>
+                                }
+                                @if (GorunenHakedisteVar) { <td></td> }
+                            </tr>
+                        </tfoot>
+                    </table>
                 </div>
             }
         </div>
-    </div>
-
-    @if (seciliTip == HakedisTipi.Kurum && FiltreliRaporSatirlari.Any())
+    }
+    else
     {
-        <div class="card shadow-sm mb-3">
-            <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                <div>
-                    <strong>Firma / Güzergâh Detay Raporu</strong>
-                    <div class="small text-muted">Rapor dönemi: @ay.ToString("D2")/@yil</div>
+        @* ── Oluşturulan hakedişler ─────────────────────────────────────── *@
+        @if (sonUretimSonucu is not null)
+        {
+            <div class="card shadow-sm mb-3 border-success">
+                <div class="card-header d-flex justify-content-between align-items-center py-2">
+                    <strong><i class="bi bi-check2-circle text-success me-1"></i>Son oluşturma sonucu</strong>
+                    <button type="button" class="btn-close" aria-label="Kapat" @onclick="() => sonUretimSonucu = null"></button>
                 </div>
-                <span class="small text-muted">@FiltreliRaporSatirlari.Count satır</span>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-sm table-striped table-hover mb-0 align-middle">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Firma</th>
-                            <th>Güzergâh</th>
-                            <th>Plaka</th>
-                            <th>Şoför</th>
-                            <th class="text-end">Sefer</th>
-                            <th class="text-end">Birim Fiyat</th>
-                            <th class="text-end">Kesilecek Fatura</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var grup in DetayRaporGruplari)
-                        {
-                            @if (firmalariGrupla)
-                            {
-                                <tr class="table-primary"><td colspan="7" class="fw-bold">FİRMA: @grup.Key</td></tr>
-                            }
-                            @foreach (var satir in grup)
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Referans</th>
+                                <th>Sonuç</th>
+                                <th class="text-end">Sefer</th>
+                                <th class="text-end">Genel toplam</th>
+                                <th>Açıklama</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var s in sonUretimSonucu.Satirlar)
                             {
                                 <tr>
-                                    <td>@satir.Firma</td>
-                                    <td>@satir.Guzergah</td>
-                                    <td>@satir.Plaka</td>
-                                    <td>@satir.Sofor</td>
-                                    <td class="text-end">@satir.SeferSayisi.ToString("N2")</td>
-                                    <td class="text-end">@satir.BirimFiyat.ToString("N2") ₺</td>
-                                    <td class="text-end fw-semibold">@satir.FaturaTutari.ToString("N2") ₺</td>
+                                    <td>@s.ReferansAd</td>
+                                    <td>
+                                        <span class="badge @(s.Sonuc == "Üretildi" ? "bg-success" : s.Sonuc == "Hata" ? "bg-danger" : "bg-warning text-dark")">@s.Sonuc</span>
+                                    </td>
+                                    <td class="text-end">@Sayi(s.Sefer)</td>
+                                    <td class="text-end">@(s.Tutar > 0 ? Tl(s.Tutar) : "-")</td>
+                                    <td class="small text-muted">@s.Mesaj</td>
                                 </tr>
                             }
-                            @if (firmalariGrupla)
-                            {
-                                <tr class="table-light fw-bold">
-                                    <td colspan="4">@grup.Key Ara Toplam</td>
-                                    <td class="text-end">@grup.Sum(x => x.SeferSayisi).ToString("N2")</td>
-                                    <td></td>
-                                    <td class="text-end">@grup.Sum(x => x.FaturaTutari).ToString("N2") ₺</td>
-                                </tr>
-                            }
-                        }
-                    </tbody>
-                    <tfoot class="table-light fw-bold">
-                        <tr>
-                            <td colspan="4">GENEL TOPLAM</td>
-                            <td class="text-end">@FiltreliRaporSatirlari.Sum(x => x.SeferSayisi).ToString("N2")</td>
-                            <td></td>
-                            <td class="text-end">@FiltreliRaporSatirlari.Sum(x => x.FaturaTutari).ToString("N2") ₺</td>
-                        </tr>
-                    </tfoot>
-                </table>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
-    }
+        }
 
-    <div class="row g-3 mb-3">
-        <div class="col-md-3">
-            <div class="card border-0 bg-primary text-white shadow-sm">
-                <div class="card-body py-2">
-                    <div class="small opacity-75">Toplam</div>
-                    <div class="fs-4 fw-bold">@hakedisler.Count</div>
+        <div class="row g-2 mb-3">
+            <div class="col-6 col-lg-3">
+                <div class="ozet-kutu ozet-birincil">
+                    <div class="etiket">Hakediş</div>
+                    <div class="deger">@FiltreliHakedisler.Count</div>
+                    <div class="alt">@GetTipText(seciliTip) · @hakedisler.Count(x => x.Durum == HakedisDurum.Taslak) taslak, @hakedisler.Count(x => x.Durum == HakedisDurum.Onaylandi) onaylı</div>
                 </div>
             </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-0 bg-success text-white shadow-sm">
-                <div class="card-body py-2">
-                    <div class="small opacity-75">Taslak</div>
-                    <div class="fs-4 fw-bold">@hakedisler.Count(x => x.Durum == HakedisDurum.Taslak)</div>
+            <div class="col-6 col-lg-3">
+                <div class="ozet-kutu ozet-basari">
+                    <div class="etiket">Tutar (KDV hariç)</div>
+                    <div class="deger">@Tl(FiltreliHakedisler.Sum(x => x.Tutar))</div>
                 </div>
             </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-0 bg-warning text-dark shadow-sm">
-                <div class="card-body py-2">
-                    <div class="small">Onaylı</div>
-                    <div class="fs-4 fw-bold">@hakedisler.Count(x => x.Durum == HakedisDurum.Onaylandi)</div>
+            <div class="col-6 col-lg-3">
+                <div class="ozet-kutu ozet-uyari">
+                    <div class="etiket">KDV</div>
+                    <div class="deger">@Tl(FiltreliHakedisler.Sum(x => x.KdvTutar))</div>
                 </div>
             </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-0 bg-secondary text-white shadow-sm">
-                <div class="card-body py-2">
-                    <div class="small opacity-75">Faturalı</div>
-                    <div class="fs-4 fw-bold">@hakedisler.Count(x => x.Durum == HakedisDurum.Faturalandi)</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="card border-0 border-start border-success border-4 shadow-sm">
-                <div class="card-body py-2">
-                    <div class="small text-success fw-semibold">Sefer × Gelir Genel Toplam</div>
-                    <div class="fs-4 fw-bold text-success">@ToplamSeferGelir.ToString("N2") ₺</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="card border-0 border-start border-danger border-4 shadow-sm">
-                <div class="card-body py-2">
-                    <div class="small text-danger fw-semibold">Sefer × Gider Genel Toplam</div>
-                    <div class="fs-4 fw-bold text-danger">@ToplamSeferGider.ToString("N2") ₺</div>
+            <div class="col-6 col-lg-3">
+                <div class="ozet-kutu ozet-birincil">
+                    <div class="etiket">Genel toplam</div>
+                    <div class="deger">@Tl(FiltreliHakedisler.Sum(x => x.GenelToplam))</div>
                 </div>
             </div>
         </div>
 
         @if (puantajDonemOzeti is not null)
         {
-            <div class="col-12">
-                <div class="card border-0 shadow-sm @(MutabakatSorunuVar ? "border-start border-4 border-warning" : "border-start border-4 border-success")">
-                    <div class="card-body py-2">
-                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
-                            <div class="fw-semibold">Tek Paket Mutabakat Özeti (Puantaj ↔ Hakediş)</div>
-                            @if (MutabakatSorunuVar)
+            <div class="card shadow-sm mb-3 border-0 border-start border-4 @(MutabakatSorunuVar ? "border-warning" : "border-success")">
+                <div class="card-body py-2">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <div class="fw-semibold"><i class="bi bi-shield-check me-1"></i>Mutabakat (puantaj ↔ hakediş)</div>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge @(MutabakatSorunuVar ? "bg-warning text-dark" : "bg-success")">@(MutabakatSorunuVar ? "Fark var" : "Uyumlu")</span>
+                            <button type="button" class="btn btn-sm btn-link text-decoration-none p-0" @onclick="() => mutabakatAcik = !mutabakatAcik">
+                                @(mutabakatAcik ? "Gizle" : "Ayrıntı")
+                            </button>
+                        </div>
+                    </div>
+                    @if (mutabakatAcik)
+                    {
+                        <div class="row g-2 small mt-1">
+                            <div class="col-md-4">
+                                <div>Puantaj sefer: <strong>@Sayi(puantajDonemOzeti.ToplamSefer)</strong></div>
+                                <div>Hakediş sefer: <strong>@Sayi(HakedisToplamSefer)</strong></div>
+                                <div>Fark: <strong class="@(Math.Abs(SeferFarki) > 0.01m ? "text-warning" : "text-success")">@Sayi(SeferFarki)</strong></div>
+                            </div>
+                            <div class="col-md-4">
+                                <div>Puantaj gelir: <strong>@Tl(puantajDonemOzeti.ToplamGelir)</strong></div>
+                                <div>Hakediş gelir: <strong>@Tl(HakedisToplamGelir)</strong></div>
+                                <div>Fark: <strong class="@(Math.Abs(GelirFarki) > 0.01m ? "text-warning" : "text-success")">@Tl(GelirFarki)</strong></div>
+                            </div>
+                            <div class="col-md-4">
+                                <div>Puantaj gider: <strong>@Tl(puantajDonemOzeti.ToplamGider)</strong></div>
+                                <div>Hakediş gider: <strong>@Tl(HakedisToplamGider)</strong></div>
+                                <div>Fark: <strong class="@(Math.Abs(GiderFarki) > 0.01m ? "text-warning" : "text-success")">@Tl(GiderFarki)</strong></div>
+                            </div>
+                        </div>
+                        <div class="small text-muted mt-2">
+                            Güzergâh kartı fiyatıyla: gelir <strong>@Tl(ToplamSeferGelir)</strong>, gider <strong>@Tl(ToplamSeferGider)</strong>.
+                            Kapsamlı (filtreli) hakedişler dönemin tamamını kapsamadığı için fark çıkması normaldir.
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (isBusy && hakedisler.Count == 0)
+        {
+            <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+        }
+        else
+        {
+            <div class="card shadow-sm">
+                <div class="card-header py-2">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <div class="d-flex flex-wrap align-items-center gap-1">
+                            <button type="button" class="btn btn-sm rounded-pill @(string.IsNullOrEmpty(durumFiltre) ? "btn-primary" : "btn-outline-secondary")"
+                                    @onclick='() => DurumSec("")'>Tümü <span class="opacity-75">(@hakedisler.Count)</span></button>
+                            @foreach (var d in Enum.GetValues<HakedisDurum>().Where(x => DurumAdedi(x) > 0))
                             {
-                                <span class="badge bg-warning text-dark">Fark Var</span>
-                            }
-                            else
-                            {
-                                <span class="badge bg-success">Uyumlu</span>
+                                <button type="button" class="btn btn-sm rounded-pill @(durumFiltre == d.ToString() ? "btn-primary" : "btn-outline-secondary")"
+                                        @onclick="() => DurumSec(d.ToString())">@GetDurumText(d) <span class="opacity-75">(@DurumAdedi(d))</span></button>
                             }
                         </div>
-                        <div class="row g-2 small">
-                            <div class="col-md-4">
-                                <div>Puantaj Sefer: <strong>@puantajDonemOzeti.ToplamSefer.ToString("N2")</strong></div>
-                                <div>Hakediş Sefer: <strong>@HakedisToplamSefer.ToString("N2")</strong></div>
-                                <div>Fark: <strong class="@(Math.Abs(SeferFarki) > 0.01m ? "text-warning" : "text-success")">@SeferFarki.ToString("N2")</strong></div>
-                            </div>
-                            <div class="col-md-4">
-                                <div>Puantaj Gelir: <strong>@puantajDonemOzeti.ToplamGelir.ToString("N2") ₺</strong></div>
-                                <div>Hakediş Gelir: <strong>@HakedisToplamGelir.ToString("N2") ₺</strong></div>
-                                <div>Fark: <strong class="@(Math.Abs(GelirFarki) > 0.01m ? "text-warning" : "text-success")">@GelirFarki.ToString("N2") ₺</strong></div>
-                            </div>
-                            <div class="col-md-4">
-                                <div>Puantaj Gider: <strong>@puantajDonemOzeti.ToplamGider.ToString("N2") ₺</strong></div>
-                                <div>Hakediş Gider: <strong>@HakedisToplamGider.ToString("N2") ₺</strong></div>
-                                <div>Fark: <strong class="@(Math.Abs(GiderFarki) > 0.01m ? "text-warning" : "text-success")">@GiderFarki.ToString("N2") ₺</strong></div>
-                            </div>
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <input class="form-control form-control-sm hakedis-arama" placeholder="Referans, güzergâh veya kapsam ara..."
+                                   @bind="aramaMetni" @bind:event="oninput" aria-label="Ara" />
+                            <select class="form-select form-select-sm w-auto" @bind="selectedGrouping" aria-label="Gruplama">
+                                <option value="cari">Cariye göre grupla</option>
+                                <option value="referans">Referansa göre grupla</option>
+                            </select>
+                            @if (!string.IsNullOrWhiteSpace(aramaMetni) || !string.IsNullOrWhiteSpace(durumFiltre))
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ListeFiltreleriniTemizle">
+                                    <i class="bi bi-x-lg me-1"></i>Temizle
+                                </button>
+                            }
+                            <button type="button" class="btn btn-sm btn-outline-success" @onclick="ExceleAktarAsync" disabled="@(isBusy || !FiltreliHakedisler.Any())">
+                                <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                            </button>
                         </div>
+                    </div>
+                </div>
+                <div class="card-body border-bottom py-2">
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="TumunuSecKaldir" disabled="@(isBusy || !FiltreliHakedisler.Any())">
+                            <i class="bi bi-check2-square me-1"></i>@(TumSeciliMi ? "Seçimi temizle" : "Tümünü seç")
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-success" @onclick="TopluOnaylaSecilenAsync" disabled="@(isBusy || !SeciliTaslakIdler.Any())"
+                                title="Seçili taslakları onaylar">
+                            <i class="bi bi-check2-circle me-1"></i>Onayla (@SeciliTaslakIdler.Count)
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="TopluFaturalaSecilenAsync" disabled="@(isBusy || !SeciliFaturalanabilirIdler.Any())"
+                                title="Seçili onaylı hakedişleri faturaya dönüştürür">
+                            <i class="bi bi-receipt me-1"></i>Faturala (@SeciliFaturalanabilirIdler.Count)
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="TaslaklariYenileSecilenAsync" disabled="@(isBusy || !SeciliTaslakIdler.Any())"
+                                title="Seçili taslakları, oluşturuldukları kapsamla güncel puantajdan yeniden üretir">
+                            <i class="bi bi-arrow-repeat me-1"></i>Taslakları yenile (@SeciliTaslakIdler.Count)
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="TopluSilSecilenAsync" disabled="@(isBusy || !SeciliSilinebilirIdler.Any())"
+                                title="Seçili (faturalanmamış) hakedişleri siler">
+                            <i class="bi bi-trash me-1"></i>Sil (@SeciliSilinebilirIdler.Count)
+                        </button>
+                        <button type="button" class="btn btn-sm btn-link text-decoration-none ms-auto" @onclick="ListeGruplariniAcKapat">
+                            @(listeTumuAcik ? "Grupları kapat" : "Grupları aç")
+                        </button>
+                        <span class="text-muted small">Seçili: <strong>@seciliHakedisIds.Count</strong></span>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width:40px">
+                                        <input type="checkbox" class="form-check-input" checked="@TumSeciliMi" @onchange="_ => TumunuSecKaldir()"
+                                               disabled="@(isBusy || !hakedisler.Any())" aria-label="Tümünü seç" />
+                                    </th>
+                                    <th>#</th>
+                                    <th>Referans</th>
+                                    <th>Kapsam</th>
+                                    <th>Güzergâh</th>
+                                    <th class="text-end">Sefer</th>
+                                    <th class="text-end">Tutar</th>
+                                    <th class="text-end">KDV</th>
+                                    <th class="text-end">Genel toplam</th>
+                                    <th>Durum</th>
+                                    <th class="text-end">İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (!FiltreliHakedisler.Any())
+                                {
+                                    <tr>
+                                        <td colspan="11" class="text-center text-muted p-4">
+                                            @if (hakedisler.Count == 0)
+                                            {
+                                                <div>Bu dönemde @GetTipText(seciliTip).ToLower(new System.Globalization.CultureInfo("tr-TR")) hakedişi yok.</div>
+                                                <button type="button" class="btn btn-sm btn-primary mt-2" @onclick="() => aktifSekme = Sekme.Hazirla">
+                                                    <i class="bi bi-sliders me-1"></i>Hakediş hazırla
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <div>Filtreye uyan hakediş bulunamadı.</div>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var group in GetGroupedData())
+                                    {
+                                        var acik = ListeGrubuAcik(group.Key);
+                                        <tr class="grup-satiri" @onclick="() => ToggleGroup(group.Key)">
+                                            <td colspan="11">
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <i class="bi @(acik ? "bi-chevron-down" : "bi-chevron-right")"></i>
+                                                    <strong>@group.Key</strong>
+                                                    <span class="badge rounded-pill bg-secondary">@group.Value.Count</span>
+                                                    <span class="text-muted small ms-auto">
+                                                        Toplam: @Tl(group.Value.Sum(x => x.GenelToplam))
+                                                    </span>
+                                                </div>
+                                            </td>
+                                        </tr>
+
+                                        @if (acik)
+                                        {
+                                            @foreach (var h in group.Value.OrderByDescending(x => x.Id))
+                                            {
+                                                <tr>
+                                                    <td>
+                                                        <input type="checkbox" class="form-check-input" checked="@seciliHakedisIds.Contains(h.Id)"
+                                                               @onchange="_ => SecimiDegistir(h.Id)" disabled="@isBusy" aria-label="Seç" />
+                                                    </td>
+                                                    <td>@h.Id</td>
+                                                    <td title="@GetCariTooltip(h)">@GetReferansAd(h)</td>
+                                                    <td class="small">
+                                                        @if (KapsamliMi(h))
+                                                        {
+                                                            <span class="badge bg-info text-dark text-wrap text-start" title="Bu hakediş yalnızca seçilen kapsam için oluşturuldu">@GetKapsamOzeti(h)</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">Tüm dönem</span>
+                                                        }
+                                                    </td>
+                                                    <td class="small">
+                                                        <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none text-start" @onclick="() => ToggleHakedisDetay(h.Id)" @onclick:stopPropagation="true">
+                                                            <i class="bi @(acikHakedisDetaylari.Contains(h.Id) ? "bi-chevron-down" : "bi-chevron-right") me-1"></i>@GetGuzergahOzet(h, kisalt: true)
+                                                        </button>
+                                                        @if (acikHakedisDetaylari.Contains(h.Id))
+                                                        {
+                                                            <div class="mt-1 ps-3 border-start">
+                                                                @foreach (var d in GetGuzergahDetaylari(h))
+                                                                {
+                                                                    <div class="mb-1">
+                                                                        <div class="fw-semibold">@d.Ad</div>
+                                                                        <div class="d-flex flex-wrap gap-3 small">
+                                                                            <span class="text-success">Gelir: @Sayi(d.Sefer) sefer × @Sayi(d.GelirBirim) = @Tl(d.GelirToplam)</span>
+                                                                            <span class="text-danger">Gider: @Sayi(d.Sefer) sefer × @Sayi(d.GiderBirim) = @Tl(d.GiderToplam)</span>
+                                                                        </div>
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                        }
+                                                    </td>
+                                                    <td class="text-end">@Sayi(h.ToplamSeferSayisi)</td>
+                                                    <td class="text-end">@Sayi(h.Tutar)</td>
+                                                    <td class="text-end">@Sayi(h.KdvTutar)</td>
+                                                    <td class="text-end fw-semibold">@Sayi(h.GenelToplam)</td>
+                                                    <td><span class="badge @GetDurumBadge(h.Durum)">@GetDurumText(h.Durum)</span></td>
+                                                    <td class="text-end text-nowrap">
+                                                        <button type="button" class="btn btn-sm btn-outline-secondary me-1" @onclick="() => PdfIndirAsync(h.Id)" disabled="@isBusy" title="PDF indir">
+                                                            <i class="bi bi-filetype-pdf"></i>
+                                                        </button>
+                                                        @if (h.Durum == HakedisDurum.Taslak)
+                                                        {
+                                                            <button type="button" class="btn btn-sm btn-outline-success me-1" @onclick="() => OnaylaAsync(h.Id)" disabled="@isBusy" title="Onayla">
+                                                                <i class="bi bi-check2-circle"></i>
+                                                            </button>
+                                                            <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => SilAsync(h.Id)" disabled="@isBusy" title="Sil">
+                                                                <i class="bi bi-trash"></i>
+                                                            </button>
+                                                        }
+                                                        else if (h.Durum == HakedisDurum.Onaylandi)
+                                                        {
+                                                            <button type="button" class="btn btn-sm btn-outline-primary me-1" @onclick="() => FaturalaAsync(h.Id)"
+                                                                    disabled="@(isBusy || h.Tip == HakedisTipi.Arac)"
+                                                                    title="@(h.Tip == HakedisTipi.Arac ? "Araç hakedişi faturalanmaz" : "Faturaya dönüştür")">
+                                                                <i class="bi bi-receipt"></i>
+                                                            </button>
+                                                            <button type="button" class="btn btn-sm btn-outline-warning" @onclick="() => IptalAsync(h.Id)" disabled="@isBusy" title="İptal et">
+                                                                <i class="bi bi-x-circle"></i>
+                                                            </button>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                    }
+                                }
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         }
-    </div>
-
-    @if (isBusy)
-    {
-        <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
-    }
-    else
-    {
-        <div class="card shadow-sm">
-            <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                <strong>@yil/@ay Dönemi - @GetTipText(seciliTip) Hakedişleri</strong>
-                <small class="text-muted">Seçilen satırlar için toplu işlem yapılabilir.</small>
-            </div>
-            <div class="card-body border-bottom">
-                <div class="d-flex flex-wrap gap-2 align-items-center">
-                    <button class="btn btn-sm btn-outline-secondary" @onclick="TumunuSecKaldir" disabled="@isBusy || !hakedisler.Any()">
-                        <i class="bi bi-check2-square me-1"></i>
-                        @(TumSeciliMi ? "Seçimi Temizle" : "Tümünü Seç")
-                    </button>
-                    <button class="btn btn-sm btn-outline-success" @onclick="TopluOnaylaSecilenAsync" disabled="@isBusy || !SeciliTaslakIdler.Any()">
-                        <i class="bi bi-check2-circle me-1"></i>Toplu Onayla (@SeciliTaslakIdler.Count)
-                    </button>
-                    <button class="btn btn-sm btn-outline-primary" @onclick="TopluFaturalaSecilenAsync" disabled="@isBusy || !SeciliFaturalanabilirIdler.Any()">
-                        <i class="bi bi-receipt me-1"></i>Toplu Faturala (@SeciliFaturalanabilirIdler.Count)
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger" @onclick="TopluSilSecilenAsync" disabled="@isBusy || !SeciliSilinebilirIdler.Any()">
-                        <i class="bi bi-trash me-1"></i>Toplu Sil (@SeciliSilinebilirIdler.Count)
-                    </button>
-                    <span class="text-muted small ms-auto">Seçili: <strong>@seciliHakedisIds.Count</strong></span>
-                </div>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover align-middle mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="width:40px">
-                                    <input type="checkbox" class="form-check-input" checked="@TumSeciliMi" @onchange="_ => TumunuSecKaldir()" disabled="@isBusy || !hakedisler.Any()" />
-                                </th>
-                                <th>#</th>
-                                <th>Tip</th>
-                                <th>Referans</th>
-                                <th>Güzergah</th>
-                                <th class="text-end">Toplam Sefer</th>
-                                <th class="text-end">Tutar</th>
-                                <th class="text-end">KDV</th>
-                                <th class="text-end">Genel Toplam</th>
-                                <th>Durum</th>
-                                <th class="text-end">İşlem</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @if (!FiltreliHakedisler.Any())
-                            {
-                                <tr><td colspan="11" class="text-center text-muted p-4">Kayıt bulunamadı</td></tr>
-                            }
-                            else
-                            {
-                                @foreach (var group in GetGroupedData())
-                                {
-                                    var isExpanded = expandedGroups.ContainsKey(group.Key) && expandedGroups[group.Key];
-                                    <tr style="background-color: #f8f9fa; cursor: pointer;" @onclick="() => ToggleGroup(group.Key)">
-                                        <td colspan="11">
-                                            <div class="d-flex align-items-center gap-2">
-                                                <i class="bi @(isExpanded ? "bi-chevron-down" : "bi-chevron-right")"></i>
-                                                <strong>@group.Key</strong>
-                                                <span class="badge bg-secondary">@group.Value.Count</span>
-                                                <span class="text-muted small ms-auto">
-                                                    Toplam: @group.Value.Sum(x => x.GenelToplam).ToString("N2") ₺
-                                                </span>
-                                            </div>
-                                        </td>
-                                    </tr>
-
-                                    @if (isExpanded)
-                                    {
-                                        @foreach (var h in group.Value.OrderByDescending(x => x.Id))
-                                        {
-                                            <tr>
-                                                <td>
-                                                    <input type="checkbox" class="form-check-input" checked="@seciliHakedisIds.Contains(h.Id)" @onchange="_ => SecimiDegistir(h.Id)" disabled="@isBusy" />
-                                                </td>
-                                                <td>@h.Id</td>
-                                                <td><span class="badge @GetTipBadge(h.Tip)">@GetTipText(h.Tip)</span></td>
-                                                <td title="@GetCariTooltip(h)">@GetReferansAd(h)</td>
-                                                <td class="small">
-                                                    <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none" @onclick="() => ToggleHakedisDetay(h.Id)" @onclick:stopPropagation="true">
-                                                        <i class="bi @(acikHakedisDetaylari.Contains(h.Id) ? "bi-chevron-down" : "bi-chevron-right") me-1"></i>@GetGuzergahOzet(h, kisalt: true)
-                                                    </button>
-                                                    @if (acikHakedisDetaylari.Contains(h.Id))
-                                                    {
-                                                        <div class="mt-1 ps-3 border-start">
-                                                            @foreach (var d in GetGuzergahDetaylari(h))
-                                                            {
-                                                                <div class="mb-1">
-                                                                    <div class="fw-semibold">@d.Ad</div>
-                                                                    <div class="d-flex flex-wrap gap-3 small">
-                                                                        <span class="text-success">Gelir: @d.Sefer.ToString("N2") sefer × @d.GelirBirim.ToString("N2") = @d.GelirToplam.ToString("N2") ₺</span>
-                                                                        <span class="text-danger">Gider: @d.Sefer.ToString("N2") sefer × @d.GiderBirim.ToString("N2") = @d.GiderToplam.ToString("N2") ₺</span>
-                                                                    </div>
-                                                                </div>
-                                                            }
-                                                        </div>
-                                                    }
-                                                </td>
-                                                <td class="text-end">@h.ToplamSeferSayisi.ToString("N2")</td>
-                                                <td class="text-end">@h.Tutar.ToString("N2")</td>
-                                                <td class="text-end">@h.KdvTutar.ToString("N2")</td>
-                                                <td class="text-end fw-semibold">@h.GenelToplam.ToString("N2")</td>
-                                                <td><span class="badge @GetDurumBadge(h.Durum)">@h.Durum</span></td>
-                                                <td class="text-end" style="white-space:nowrap">
-                                                    <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => PdfIndirAsync(h.Id)" disabled="@isBusy" title="PDF indir">
-                                                        <i class="bi bi-filetype-pdf"></i>
-                                                    </button>
-                                                    @if (h.Durum == HakedisDurum.Taslak)
-                                                    {
-                                                        <button class="btn btn-sm btn-outline-success me-1" @onclick="() => OnaylaAsync(h.Id)" disabled="@isBusy">
-                                                            <i class="bi bi-check2-circle"></i>
-                                                        </button>
-                                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => SilAsync(h.Id)" disabled="@isBusy">
-                                                            <i class="bi bi-trash"></i>
-                                                        </button>
-                                                    }
-                                                    else if (h.Durum == HakedisDurum.Onaylandi)
-                                                    {
-                                                        <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => FaturalaAsync(h.Id)" disabled="@isBusy || h.Tip == HakedisTipi.Arac">
-                                                            <i class="bi bi-receipt"></i>
-                                                        </button>
-                                                        <button class="btn btn-sm btn-outline-warning" @onclick="() => IptalAsync(h.Id)" disabled="@isBusy">
-                                                            <i class="bi bi-x-circle"></i>
-                                                        </button>
-                                                    }
-                                                </td>
-                                            </tr>
-                                        }
-                                    }
-
-                                }
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
     }
 </div>
-
-@code {
-    private bool isBusy;
-    private string? hataMesaji;
-    private string? bilgiMesaji;
-
-    private int yil = MKFiloServis.Shared.Time.BusinessTime.Today.Year;
-    private int ay = MKFiloServis.Shared.Time.BusinessTime.Today.Month;
-    private HakedisTipi seciliTip = HakedisTipi.Kurum;
-
-    private string _selectedGrouping = "cari";
-    private string selectedGrouping
-    {
-        get => _selectedGrouping;
-        set
-        {
-            if (_selectedGrouping != value)
-            {
-                _selectedGrouping = value;
-                expandedGroups.Clear();
-            }
-        }
-    }
-
-    private Dictionary<string, bool> expandedGroups = new();
-
-    private readonly Dictionary<int, string> kurumAdlari = new();
-    private readonly Dictionary<int, string> tedarikciAdlari = new();
-    private readonly Dictionary<int, string> aracAdlari = new();
-    private readonly Dictionary<int, string> aracSahibiAdlari = new();
-    private readonly Dictionary<int, Cari> cariDetaylari = new();
-    private readonly HashSet<int> seciliHakedisIds = new();
-
-    private List<Hakedis> hakedisler = new();
-    private PuantajDonemOzetDto? puantajDonemOzeti;
-    private List<int> seciliKurumIdleri = new();
-    private int seciliGuzergahId;
-    private bool firmalariGrupla = true;
-
-    private string durumFiltre = "";
-    private string aramaMetni = "";
-
-    private int EtkinFirmaId => AktifFirmaProvider.AktifFirmaId ?? AktifFirmaProvider.Mevcut.FirmaId;
-
-    private IEnumerable<Hakedis> EtkinFirmaKurumHakedisleri => hakedisler
-        .Where(h => h.Tip == HakedisTipi.Kurum)
-        .Where(h => EtkinFirmaId <= 0 || h.FirmaId == EtkinFirmaId);
-
-    private IEnumerable<(int Id, string Ad)> KurumFiltreSecenekleri => EtkinFirmaKurumHakedisleri
-        .Where(h => cariDetaylari.TryGetValue(h.ReferansId, out var cari)
-            && (EtkinFirmaId <= 0 || cari.FirmaId == EtkinFirmaId))
-        .Select(h => (h.ReferansId, GetReferansAd(h)))
-        .DistinctBy(x => x.ReferansId)
-        .OrderBy(x => x.Item2)
-        .Select(x => (x.ReferansId, x.Item2));
-
-    private IEnumerable<(int Id, string Ad)> GuzergahFiltreSecenekleri => EtkinFirmaKurumHakedisleri
-        .Where(h => seciliKurumIdleri.Count == 0 || seciliKurumIdleri.Contains(h.ReferansId))
-        .SelectMany(h => h.Detaylar
-            .Where(d => d.GuzergahId.HasValue && d.Guzergah != null
-                && d.Guzergah.CariId == h.ReferansId
-                && (EtkinFirmaId <= 0 || d.Guzergah.FirmaId == EtkinFirmaId)))
-        .Select(d => (d.GuzergahId!.Value, d.Guzergah!.GuzergahAdi ?? $"Güzergâh #{d.GuzergahId}"))
-        .DistinctBy(x => x.Item1)
-        .OrderBy(x => x.Item2)
-        .Select(x => (x.Item1, x.Item2));
-
-    private List<DetayliHakedisRaporSatiri> FiltreliRaporSatirlari => EtkinFirmaKurumHakedisleri
-        .Where(h => seciliKurumIdleri.Count == 0 || seciliKurumIdleri.Contains(h.ReferansId))
-        .SelectMany(h => h.Detaylar.Select(d => new { Hakedis = h, Detay = d }))
-        .Where(x => x.Detay.Guzergah != null
-            && x.Detay.Guzergah.CariId == x.Hakedis.ReferansId
-            && (EtkinFirmaId <= 0 || x.Detay.Guzergah.FirmaId == EtkinFirmaId))
-        .Where(x => seciliGuzergahId == 0 || x.Detay.GuzergahId == seciliGuzergahId)
-        .GroupBy(x => new
-        {
-            Firma = GetReferansAd(x.Hakedis),
-            Guzergah = x.Detay.Guzergah?.GuzergahAdi ?? $"Güzergâh #{x.Detay.GuzergahId}",
-            Plaka = x.Detay.Arac?.AktifPlaka ?? x.Detay.Arac?.Plaka ?? $"Araç #{x.Detay.AracId}",
-            Sofor = x.Detay.Sofor?.TamAd ?? $"Şoför #{x.Detay.SoforId}"
-        })
-        .Select(g =>
-        {
-            var sefer = g.Sum(x => x.Detay.SeferSayisi);
-            var tutar = g.Sum(x => x.Detay.Tutar);
-            return new DetayliHakedisRaporSatiri(g.Key.Firma, g.Key.Guzergah, g.Key.Plaka, g.Key.Sofor,
-                sefer, sefer > 0 ? tutar / sefer : 0m, tutar);
-        })
-        .OrderBy(x => x.Firma)
-        .ThenBy(x => x.Guzergah)
-        .ThenBy(x => x.Plaka)
-        .ThenBy(x => x.Sofor)
-        .ToList();
-
-    private sealed record DetayliHakedisRaporSatiri(string Firma, string Guzergah, string Plaka, string Sofor,
-        decimal SeferSayisi, decimal BirimFiyat, decimal FaturaTutari);
-
-    private IEnumerable<IGrouping<string, DetayliHakedisRaporSatiri>> DetayRaporGruplari =>
-        FiltreliRaporSatirlari.GroupBy(x => x.Firma).OrderBy(x => x.Key);
-
-    private List<Hakedis> FiltreliHakedisler
-    {
-        get
-        {
-            IEnumerable<Hakedis> sonuc = hakedisler;
-
-            if (!string.IsNullOrWhiteSpace(durumFiltre) && Enum.TryParse<HakedisDurum>(durumFiltre, out var durum))
-                sonuc = sonuc.Where(h => h.Durum == durum);
-
-            if (!string.IsNullOrWhiteSpace(aramaMetni))
-            {
-                var kelimeler = aramaMetni.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                sonuc = sonuc.Where(h =>
-                {
-                    var metin = $"{GetReferansAd(h)} {GetGuzergahOzet(h)}";
-                    return kelimeler.All(k => metin.Contains(k, StringComparison.OrdinalIgnoreCase));
-                });
-            }
-
-            return sonuc.ToList();
-        }
-    }
-
-    private void FiltreleriTemizle()
-    {
-        durumFiltre = "";
-        aramaMetni = "";
-        seciliKurumIdleri.Clear();
-        seciliGuzergahId = 0;
-    }
-
-    private void KurumFiltresiDegisti(ChangeEventArgs args)
-    {
-        seciliKurumIdleri = args.Value switch
-        {
-            string[] secimler => secimler
-                .Select(x => int.TryParse(x, out var id) ? (int?)id : null)
-                .Where(x => x.HasValue)
-                .Select(x => x!.Value)
-                .ToList(),
-            IEnumerable<string> secimler => secimler
-                .Select(x => int.TryParse(x, out var id) ? (int?)id : null)
-                .Where(x => x.HasValue)
-                .Select(x => x!.Value)
-                .ToList(),
-            string secim when int.TryParse(secim, out var id) => new List<int> { id },
-            _ => new List<int>()
-        };
-        if (seciliGuzergahId > 0 && !GuzergahFiltreSecenekleri.Any(g => g.Id == seciliGuzergahId))
-            seciliGuzergahId = 0;
-    }
-
-    private bool TumSeciliMi => FiltreliHakedisler.Any() && FiltreliHakedisler.All(h => seciliHakedisIds.Contains(h.Id));
-    private List<int> SeciliTaslakIdler => hakedisler.Where(h => seciliHakedisIds.Contains(h.Id) && h.Durum == HakedisDurum.Taslak).Select(h => h.Id).ToList();
-    private List<int> SeciliFaturalanabilirIdler => hakedisler.Where(h => seciliHakedisIds.Contains(h.Id) && h.Durum == HakedisDurum.Onaylandi && h.Tip != HakedisTipi.Arac).Select(h => h.Id).ToList();
-    private List<int> SeciliSilinebilirIdler => hakedisler.Where(h => seciliHakedisIds.Contains(h.Id) && h.Durum is not (HakedisDurum.Faturalandi or HakedisDurum.TahsilEdildi or HakedisDurum.Odendi)).Select(h => h.Id).ToList();
-
-    // Gruplama sonuçları
-    private Dictionary<string, List<Hakedis>> GetGroupedData()
-    {
-        var kaynak = FiltreliHakedisler;
-        return selectedGrouping switch
-        {
-            "referans" => kaynak
-                .GroupBy(GetReferansAd)
-                .OrderBy(g => g.Key)
-                .ToDictionary(g => g.Key, g => g.ToList()),
-
-            _ => // "cari" (default)
-                kaynak
-                    .GroupBy(GetCariGrupAnahtari)
-                    .OrderBy(g => g.Key)
-                    .ToDictionary(g => g.Key, g => g.ToList()),
-        };
-    }
-
-    private void ToggleGroup(string groupKey)
-    {
-        if (!expandedGroups.ContainsKey(groupKey))
-            expandedGroups[groupKey] = true;
-        else
-            expandedGroups[groupKey] = !expandedGroups[groupKey];
-    }
-
-    private async Task ExceleAktarAsync()
-    {
-        try
-        {
-            if (!FiltreliHakedisler.Any()) return;
-
-            using var workbook = new ClosedXML.Excel.XLWorkbook();
-            var ws = workbook.Worksheets.Add("Hakediş");
-
-            var basliklar = new[] { "#", "Tip", "Referans", "Güzergah", "Toplam Sefer", "Birim Fiyat", "Tutar", "KDV Oran %", "KDV Tutar", "Genel Toplam", "Durum" };
-            for (var i = 0; i < basliklar.Length; i++)
-            {
-                var hucre = ws.Cell(1, i + 1);
-                hucre.Value = basliklar[i];
-                hucre.Style.Font.Bold = true;
-                hucre.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
-            }
-
-            var satir = 2;
-            foreach (var h in FiltreliHakedisler.OrderBy(x => GetReferansAd(x)))
-            {
-                ws.Cell(satir, 1).Value = h.Id;
-                ws.Cell(satir, 2).Value = GetTipText(h.Tip);
-                ws.Cell(satir, 3).Value = GetReferansAd(h);
-                ws.Cell(satir, 4).Value = GetGuzergahOzet(h);
-                ws.Cell(satir, 5).Value = h.ToplamSeferSayisi;
-                ws.Cell(satir, 6).Value = h.BirimFiyat;
-                ws.Cell(satir, 7).Value = h.Tutar;
-                ws.Cell(satir, 8).Value = h.KdvOran;
-                ws.Cell(satir, 9).Value = h.KdvTutar;
-                ws.Cell(satir, 10).Value = h.GenelToplam;
-                ws.Cell(satir, 11).Value = h.Durum.ToString();
-                satir++;
-            }
-
-            // Toplam satırı
-            ws.Cell(satir, 4).Value = "TOPLAM";
-            ws.Cell(satir, 4).Style.Font.Bold = true;
-            foreach (var col in new[] { 5, 7, 9, 10 })
-            {
-                var hucre = ws.Cell(satir, col);
-                hucre.FormulaA1 = $"SUM({ws.Cell(2, col).Address}:{ws.Cell(satir - 1, col).Address})";
-                hucre.Style.Font.Bold = true;
-            }
-
-            ws.Range(2, 5, satir, 10).Style.NumberFormat.Format = "#,##0.00";
-            ws.Columns().AdjustToContents();
-            ws.SheetView.FreezeRows(1);
-
-            using var stream = new MemoryStream();
-            workbook.SaveAs(stream);
-            var dosyaAdi = $"OperasyonelHakedis_{yil}-{ay:D2}_{GetTipText(seciliTip)}.xlsx";
-            var base64 = Convert.ToBase64String(stream.ToArray());
-            await JS.InvokeVoidAsync("downloadFile", dosyaAdi, base64, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        }
-        catch (Exception ex)
-        {
-            hataMesaji = $"Excel oluşturulurken hata: {ex.Message}";
-        }
-    }
-
-    private async Task DetayliRaporuExceleAktarAsync()
-    {
-        try
-        {
-            var satirlar = FiltreliRaporSatirlari;
-            if (!satirlar.Any()) return;
-
-            using var workbook = new ClosedXML.Excel.XLWorkbook();
-            var ws = workbook.Worksheets.Add("Firma Güzergah Raporu");
-            ws.Cell(1, 1).Value = $"HAKEDİŞ DETAY RAPORU - {ay:D2}/{yil}";
-            ws.Range(1, 1, 1, 7).Merge();
-            ws.Cell(1, 1).Style.Font.Bold = true;
-            ws.Cell(1, 1).Style.Font.FontSize = 14;
-            var basliklar = new[] { "Firma", "Güzergâh", "Plaka", "Şoför", "Sefer Sayısı", "Birim Fiyat", "Firmaya Kesilecek Güzergâh Faturası" };
-            for (var i = 0; i < basliklar.Length; i++)
-            {
-                ws.Cell(3, i + 1).Value = basliklar[i];
-                ws.Cell(3, i + 1).Style.Font.Bold = true;
-                ws.Cell(3, i + 1).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightBlue;
-            }
-
-            var excelSatir = 4;
-            foreach (var grup in DetayRaporGruplari)
-            {
-                if (firmalariGrupla)
-                {
-                    ws.Cell(excelSatir, 1).Value = $"FİRMA: {grup.Key}";
-                    ws.Range(excelSatir, 1, excelSatir, 7).Merge();
-                    ws.Range(excelSatir, 1, excelSatir, 7).Style.Font.Bold = true;
-                    ws.Range(excelSatir, 1, excelSatir, 7).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightBlue;
-                    excelSatir++;
-                }
-
-                foreach (var satir in grup)
-                {
-                    ws.Cell(excelSatir, 1).Value = satir.Firma;
-                    ws.Cell(excelSatir, 2).Value = satir.Guzergah;
-                    ws.Cell(excelSatir, 3).Value = satir.Plaka;
-                    ws.Cell(excelSatir, 4).Value = satir.Sofor;
-                    ws.Cell(excelSatir, 5).Value = satir.SeferSayisi;
-                    ws.Cell(excelSatir, 6).Value = satir.BirimFiyat;
-                    ws.Cell(excelSatir, 7).Value = satir.FaturaTutari;
-                    excelSatir++;
-                }
-
-                if (firmalariGrupla)
-                {
-                    ws.Cell(excelSatir, 1).Value = $"{grup.Key} Ara Toplam";
-                    ws.Cell(excelSatir, 5).Value = grup.Sum(x => x.SeferSayisi);
-                    ws.Cell(excelSatir, 7).Value = grup.Sum(x => x.FaturaTutari);
-                    ws.Range(excelSatir, 1, excelSatir, 7).Style.Font.Bold = true;
-                    excelSatir++;
-                }
-            }
-
-            ws.Cell(excelSatir, 1).Value = "GENEL TOPLAM";
-            ws.Cell(excelSatir, 5).Value = satirlar.Sum(x => x.SeferSayisi);
-            ws.Cell(excelSatir, 7).Value = satirlar.Sum(x => x.FaturaTutari);
-            ws.Range(excelSatir, 1, excelSatir, 7).Style.Font.Bold = true;
-            ws.Range(4, 5, excelSatir, 7).Style.NumberFormat.Format = "#,##0.00";
-            ws.Columns().AdjustToContents();
-            ws.SheetView.FreezeRows(3);
-
-            using var stream = new MemoryStream();
-            workbook.SaveAs(stream);
-            await JS.InvokeVoidAsync("downloadFile", $"Hakedis_Detay_Raporu_{yil}-{ay:D2}.xlsx", Convert.ToBase64String(stream.ToArray()), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        }
-        catch (Exception ex)
-        {
-            hataMesaji = $"Detaylı rapor oluşturulurken hata: {ex.Message}";
-        }
-    }
-
-    private async Task DetayliRaporuPdfAktarAsync()
-    {
-        try
-        {
-            var satirlar = FiltreliRaporSatirlari;
-            if (!satirlar.Any()) return;
-
-            var model = new HakedisDetayRaporModel
-            {
-                Yil = yil,
-                Ay = ay,
-                FirmalariGrupla = firmalariGrupla,
-                Satirlar = satirlar.Select(x => new HakedisDetayRaporSatiri
-                {
-                    Firma = x.Firma,
-                    Guzergah = x.Guzergah,
-                    Plaka = x.Plaka,
-                    Sofor = x.Sofor,
-                    SeferSayisi = x.SeferSayisi,
-                    BirimFiyat = x.BirimFiyat,
-                    FaturaTutari = x.FaturaTutari
-                }).ToList()
-            };
-
-            var bytes = PdfService.GenerateHakedisDetayRaporPdf(model);
-            await JS.InvokeVoidAsync("downloadFile", $"Hakedis_Detay_Raporu_{yil}-{ay:D2}.pdf", Convert.ToBase64String(bytes), "application/pdf");
-        }
-        catch (Exception ex)
-        {
-            hataMesaji = $"PDF oluşturulurken hata: {ex.GetBaseException().Message}";
-        }
-    }
-
-    protected override async Task OnInitializedAsync()
-    {
-        if (!AktifFirmaProvider.HasAktifFirma)
-        {
-            Navigation.NavigateTo("/firma-sec?returnUrl=%2Foperasyonel-hakedis", forceLoad: false);
-            return;
-        }
-
-        await YukleAsync();
-    }
-
-    private async Task YukleAsync()
-    {
-        hataMesaji = null;
-        bilgiMesaji = null;
-
-        if (yil < 2000 || ay < 1 || ay > 12)
-        {
-            hataMesaji = "Geçersiz dönem seçimi.";
-            return;
-        }
-
-        isBusy = true;
-        try
-        {
-            await YukleHakedisVeMutabakatAsync();
-        }
-        catch (Exception ex)
-        {
-            hataMesaji = ex.GetBaseException().Message;
-        }
-        finally
-        {
-            isBusy = false;
-        }
-    }
-
-    private async Task TopluUretAsync()
-    {
-        hataMesaji = null;
-        bilgiMesaji = null;
-
-        isBusy = true;
-        try
-        {
-            // Önce dönem puantaj tahakkuklarını güncel kurallara göre yeniden hesapla
-            // (eski çarpanlı 2x değerleri temizler)
-            var firmaId = AktifFirmaProvider.AktifFirmaId ?? AktifFirmaProvider.Mevcut.FirmaId;
-            if (firmaId > 0)
-                await FiloKomisyonService.TahakkuklariYenidenHesaplaAsync(firmaId, yil, ay);
-
-            var sonuc = await HakedisService.TopluUretAsync(seciliTip, yil, ay);
-            bilgiMesaji = $"Toplu üretim tamamlandı. Üretilen: {sonuc.UretilenAdet}, Atlanan: {sonuc.AtlananAdet}, Hatalı: {sonuc.HataliAdet}";
-            await YukleHakedisVeMutabakatAsync();
-            seciliHakedisIds.Clear();
-        }
-        catch (Exception ex)
-        {
-            hataMesaji = ex.GetBaseException().Message;
-        }
-        finally
-        {
-            isBusy = false;
-        }
-    }
-
-    private async Task OnaylaAsync(int hakedisId)
-    {
-        hataMesaji = null;
-        bilgiMesaji = null;
-
-        isBusy = true;
-        try
-        {
-            await HakedisService.OnaylaAsync(hakedisId, "Operasyon");
-            bilgiMesaji = "Hakediş onaylandı.";
-            await YukleHakedisVeMutabakatAsync();
-            seciliHakedisIds.Remove(hakedisId);
-        }
-        catch (Exception ex)
-        {
-            hataMesaji = ex.GetBaseException().Message;
-        }
-        finally
-        {
-            isBusy = false;
-        }
-    }
-
-    private async Task IptalAsync(int hakedisId)
-    {
-        hataMesaji = null;
-        bilgiMesaji = null;
-
-        isBusy = true;
-        try
-        {
-            await HakedisService.IptalEtAsync(hakedisId, "UI üzerinden iptal");
-            bilgiMesaji = "Hakediş iptal edildi.";
-            await YukleHakedisVeMutabakatAsync();
-            seciliHakedisIds.Remove(hakedisId);
-        }
-        catch (Exception ex)
-        {
-            hataMesaji = ex.GetBaseException().Message;
-        }
-        finally
-        {
-            isBusy = false;
-        }
-    }
-
-    private async Task FaturalaAsync(int hakedisId)
-    {
-        hataMesaji = null;
-        bilgiMesaji = null;
-
-        isBusy = true;
-        try
-        {
-            var fatura = await HakedisService.FaturayaDonustureAsync(hakedisId, MKFiloServis.Shared.Time.BusinessTime.Today);
-            bilgiMesaji = $"Hakediş faturaya dönüştürüldü. Fatura No: {fatura.FaturaNo}";
-            await YukleHakedisVeMutabakatAsync();
-            seciliHakedisIds.Remove(hakedisId);
-        }
-        catch (Exception ex)
-        {
-            hataMesaji = ex.GetBaseException().Message;
-        }
-        finally
-        {
-            isBusy = false;
-        }
-    }
-
-    private async Task SilAsync(int hakedisId)
-    {
-        hataMesaji = null;
-        bilgiMesaji = null;
-
-        isBusy = true;
-        try
-        {
-            await HakedisService.SilAsync(hakedisId);
-            bilgiMesaji = "Hakediş silindi.";
-            await YukleHakedisVeMutabakatAsync();
-            seciliHakedisIds.Remove(hakedisId);
-        }
-        catch (Exception ex)
-        {
-            hataMesaji = ex.GetBaseException().Message;
-        }
-        finally
-        {
-            isBusy = false;
-        }
-    }
-
-    private async Task PdfIndirAsync(int hakedisId)
-    {
-        hataMesaji = null;
-        bilgiMesaji = null;
-
-        isBusy = true;
-        try
-        {
-            var hakedis = await HakedisService.GetByIdAsync(hakedisId)
-                ?? throw new InvalidOperationException("Hakediş bulunamadı.");
-
-            var listedeki = hakedisler.FirstOrDefault(x => x.Id == hakedisId);
-            var referansAd = listedeki is null ? null : GetReferansAd(listedeki);
-            var bytes = PdfService.GenerateHakedisPdf(hakedis, referansAd);
-
-            var dosyaAdi = $"Hakedis_{GetTipText(hakedis.Tip)}_{hakedis.Yil}{hakedis.Ay:D2}_{hakedis.Id}.pdf";
-            await JS.InvokeVoidAsync("downloadFileFromBytes", dosyaAdi, "application/pdf", bytes);
-            bilgiMesaji = "Hakediş PDF indirildi.";
-        }
-        catch (Exception ex)
-        {
-            hataMesaji = ex.GetBaseException().Message;
-        }
-        finally
-        {
-            isBusy = false;
-        }
-    }
-
-    private void SecimiDegistir(int hakedisId)
-    {
-        if (!seciliHakedisIds.Add(hakedisId))
-            seciliHakedisIds.Remove(hakedisId);
-    }
-
-    private void TumunuSecKaldir()
-    {
-        if (TumSeciliMi)
-            seciliHakedisIds.Clear();
-        else
-            seciliHakedisIds.UnionWith(FiltreliHakedisler.Select(h => h.Id));
-    }
-
-    private async Task TopluOnaylaSecilenAsync()
-    {
-        var ids = SeciliTaslakIdler;
-        if (!ids.Any())
-        {
-            bilgiMesaji = "Toplu onay için uygun (Taslak) seçili kayıt yok.";
-            return;
-        }
-
-        hataMesaji = null;
-        bilgiMesaji = null;
-        isBusy = true;
-        try
-        {
-            var sonuc = await HakedisService.TopluOnaylaAsync(ids, "Operasyon");
-            bilgiMesaji = $"Toplu onay tamamlandı. Başarılı: {sonuc.BasariliAdet}, Atlanan: {sonuc.AtlananAdet}, Hatalı: {sonuc.HataliAdet}";
-            await YukleHakedisVeMutabakatAsync();
-            seciliHakedisIds.Clear();
-        }
-        catch (Exception ex)
-        {
-            hataMesaji = ex.GetBaseException().Message;
-        }
-        finally
-        {
-            isBusy = false;
-        }
-    }
-
-    private async Task TopluFaturalaSecilenAsync()
-    {
-        var ids = SeciliFaturalanabilirIdler;
-        if (!ids.Any())
-        {
-            bilgiMesaji = "Toplu faturalama için uygun (Onaylı ve Araç dışı) seçili kayıt yok.";
-            return;
-        }
-
-        hataMesaji = null;
-        bilgiMesaji = null;
-        isBusy = true;
-        try
-        {
-            var sonuc = await HakedisService.TopluFaturalaAsync(ids, MKFiloServis.Shared.Time.BusinessTime.Today);
-            bilgiMesaji = $"Toplu faturalama tamamlandı. Başarılı: {sonuc.BasariliAdet}, Atlanan: {sonuc.AtlananAdet}, Hatalı: {sonuc.HataliAdet}";
-            await YukleHakedisVeMutabakatAsync();
-            seciliHakedisIds.Clear();
-        }
-        catch (Exception ex)
-        {
-            hataMesaji = ex.GetBaseException().Message;
-        }
-        finally
-        {
-            isBusy = false;
-        }
-    }
-
-    private async Task TopluSilSecilenAsync()
-    {
-        var ids = SeciliSilinebilirIdler;
-        if (!ids.Any())
-        {
-            bilgiMesaji = "Toplu silme için uygun seçili kayıt yok.";
-            return;
-        }
-
-        hataMesaji = null;
-        bilgiMesaji = null;
-        isBusy = true;
-        try
-        {
-            var sonuc = await HakedisService.TopluSilAsync(ids);
-            bilgiMesaji = $"Toplu silme tamamlandı. Başarılı: {sonuc.BasariliAdet}, Atlanan: {sonuc.AtlananAdet}, Hatalı: {sonuc.HataliAdet}";
-            await YukleHakedisVeMutabakatAsync();
-            seciliHakedisIds.Clear();
-        }
-        catch (Exception ex)
-        {
-            hataMesaji = ex.GetBaseException().Message;
-        }
-        finally
-        {
-            isBusy = false;
-        }
-    }
-
-    private async Task YukleHakedisVeMutabakatAsync()
-    {
-        hakedisler = await HakedisService.GetHakedislerAsync(yil, ay, seciliTip);
-        await ReferansAdlariniYukleAsync();
-
-        var firmaId = AktifFirmaProvider.AktifFirmaId ?? AktifFirmaProvider.Mevcut.FirmaId;
-        puantajDonemOzeti = firmaId > 0
-            ? await FiloKomisyonService.GetPuantajDonemOzetiAsync(firmaId, yil, ay)
-            : null;
-    }
-
-    private async Task ReferansAdlariniYukleAsync()
-    {
-        var referansIdler = hakedisler
-            .Select(h => h.ReferansId)
-            .Where(id => id > 0)
-            .Distinct()
-            .ToList();
-
-        if (!referansIdler.Any())
-            return;
-
-        switch (seciliTip)
-        {
-            case HakedisTipi.Kurum:
-                // KurumFirmaId aslında Cari tablosuna (MusteriCari) işaret ediyor
-                var kurumCariler = await CariService.GetAllAsync();
-                kurumAdlari.Clear();
-                cariDetaylari.Clear();
-                foreach (var c in kurumCariler.Where(c => referansIdler.Contains(c.Id)
-                    && (EtkinFirmaId <= 0 || c.FirmaId == EtkinFirmaId)))
-                {
-                    kurumAdlari[c.Id] = c.Unvan;
-                    cariDetaylari[c.Id] = c;
-                }
-
-                break;
-
-            case HakedisTipi.Tedarikci:
-                var tedarikciler = await TedarikciService.GetAllAsync(false);
-                tedarikciAdlari.Clear();
-                foreach (var t in tedarikciler.Where(t => referansIdler.Contains(t.Id)))
-                    tedarikciAdlari[t.Id] = t.Unvan;
-                break;
-
-            case HakedisTipi.Arac:
-                var araclar = await AracService.GetAllAsync();
-                var cariler = await CariService.GetAllAsync();
-                var tumTedarikciler = await TedarikciService.GetAllAsync(false);
-
-                aracAdlari.Clear();
-                aracSahibiAdlari.Clear();
-                cariDetaylari.Clear();
-
-                var cariById = cariler.ToDictionary(c => c.Id, c => c);
-                var tedarikciById = tumTedarikciler.ToDictionary(t => t.Id, t => t);
-
-                foreach (var a in araclar.Where(a => referansIdler.Contains(a.Id)))
-                {
-                    aracAdlari[a.Id] = !string.IsNullOrWhiteSpace(a.AktifPlaka) ? a.AktifPlaka : a.Plaka;
-
-                    string sahipAd = "Bilinmeyen Sahip";
-                    Cari? sahipCari = null;
-
-                    if (a.SahiplikTipi == AracSahiplikTipi.Kiralik && a.KiralikCariId.HasValue && cariById.TryGetValue(a.KiralikCariId.Value, out var kiralikCari))
-                    {
-                        sahipAd = kiralikCari.Unvan;
-                        sahipCari = kiralikCari;
-                    }
-                    else if (a.SahiplikTipi == AracSahiplikTipi.Komisyon && a.KomisyoncuCariId.HasValue && cariById.TryGetValue(a.KomisyoncuCariId.Value, out var komisyonCari))
-                    {
-                        sahipAd = komisyonCari.Unvan;
-                        sahipCari = komisyonCari;
-                    }
-                    else if (a.SahiplikTipi == AracSahiplikTipi.Tedarikci && a.TasimaTedarikciId.HasValue && tedarikciById.TryGetValue(a.TasimaTedarikciId.Value, out var t))
-                    {
-                        sahipAd = t.Unvan;
-                        if (t.CariId.HasValue && cariById.TryGetValue(t.CariId.Value, out var tCari))
-                            sahipCari = tCari;
-                    }
-                    else if (!string.IsNullOrWhiteSpace(a.Firma?.FirmaAdi))
-                    {
-                        sahipAd = a.Firma.FirmaAdi;
-                    }
-
-                    aracSahibiAdlari[a.Id] = sahipAd;
-                    if (sahipCari != null)
-                        cariDetaylari[a.Id] = sahipCari;
-                }
-                break;
-        }
-    }
-
-    private string GetCariGrupAnahtari(Hakedis h)
-    {
-        return h.Tip switch
-        {
-            HakedisTipi.Kurum => $"Cari: {GetReferansAd(h)}",
-            HakedisTipi.Tedarikci => tedarikciAdlari.TryGetValue(h.ReferansId, out var tedarikciAd) ? $"Cari: {tedarikciAd}" : $"Tedarikçi #{h.ReferansId}",
-            HakedisTipi.Arac => aracSahibiAdlari.TryGetValue(h.ReferansId, out var sahipAd) ? $"Cari: {sahipAd}" : "Cari: Bilinmeyen Sahip",
-            _ => h.ReferansId.ToString()
-        };
-    }
-
-    private string GetReferansAd(Hakedis h) => h.Tip switch
-    {
-        // Kurum hakedişinde ReferansId, eşleştirmede seçilen müşteri cariye (Cari.Id) işaret eder.
-        // Öncelik seçili cari ünvanındadır; bulunamazsa güzergah kurum adına düşülür.
-        HakedisTipi.Kurum => kurumAdlari.TryGetValue(h.ReferansId, out var kurumAd)
-            ? kurumAd
-            : GetKurumMusteriAd(h) ?? $"Kurum #{h.ReferansId}",
-        HakedisTipi.Tedarikci => tedarikciAdlari.TryGetValue(h.ReferansId, out var tedarikciAd)
-            ? tedarikciAd
-            : $"Tedarikçi #{h.ReferansId}",
-        HakedisTipi.Arac => aracAdlari.TryGetValue(h.ReferansId, out var aracAd)
-            ? (aracSahibiAdlari.TryGetValue(h.ReferansId, out var sahipAd) ? $"{aracAd} • {sahipAd}" : aracAd)
-            : $"Araç #{h.ReferansId}",
-        _ => h.ReferansId.ToString()
-    };
-
-    private string GetCariTooltip(Hakedis h)
-    {
-        Cari? cari = null;
-
-        if (h.Tip is HakedisTipi.Arac or HakedisTipi.Kurum)
-            cariDetaylari.TryGetValue(h.ReferansId, out cari);
-
-        if (cari is null)
-            return GetReferansAd(h);
-
-        return $"Cari: {cari.Unvan} | VergiNo: {cari.VergiNo ?? "-"} | Telefon: {cari.Telefon ?? "-"} | İl/İlçe: {cari.Il ?? "-"}/{cari.Ilce ?? "-"}";
-    }
-
-    private readonly HashSet<int> acikHakedisDetaylari = new();
-
-    private void ToggleHakedisDetay(int hakedisId)
-    {
-        if (!acikHakedisDetaylari.Add(hakedisId))
-            acikHakedisDetaylari.Remove(hakedisId);
-    }
-
-    private sealed record GuzergahDetaySatiri(string Ad, decimal Sefer, decimal GelirBirim, decimal GelirToplam, decimal GiderBirim, decimal GiderToplam);
-
-    private static List<GuzergahDetaySatiri> GetGuzergahDetaylari(Hakedis h)
-    {
-        return h.Detaylar
-            .Where(d => d.Guzergah != null && !string.IsNullOrWhiteSpace(d.Guzergah!.GuzergahAdi))
-            .GroupBy(d => d.Guzergah!.GuzergahAdi.Trim(), StringComparer.OrdinalIgnoreCase)
-            .OrderBy(g => g.Key)
-            .Select(g =>
-            {
-                var sefer = g.Sum(x => x.SeferSayisi);
-                var guzergah = g.First().Guzergah!;
-
-                // Sefer fiyatı doğrudan güzergah kartındaki fiyatlardan alınır.
-                var gelirBirim = guzergah.GelirFiyat;
-                var gelirToplam = sefer * gelirBirim;
-
-                var giderBirim = guzergah.GiderFiyat;
-                var giderToplam = sefer * giderBirim;
-
-                return new GuzergahDetaySatiri(
-                    g.Key,
-                    sefer,
-                    gelirBirim,
-                    gelirToplam,
-                    giderBirim,
-                    giderToplam);
-            })
-            .ToList();
-    }
-
-    private decimal ToplamSeferGelir => FiltreliHakedisler.SelectMany(h => GetGuzergahDetaylari(h)).Sum(d => d.GelirToplam);
-    private decimal ToplamSeferGider => FiltreliHakedisler.SelectMany(h => GetGuzergahDetaylari(h)).Sum(d => d.GiderToplam);
-
-    private decimal HakedisToplamSefer => FiltreliHakedisler.Sum(h => h.ToplamSeferSayisi);
-    private decimal HakedisToplamGelir => FiltreliHakedisler.Sum(h => h.Tutar);
-    private decimal HakedisToplamGider => ToplamSeferGider;
-    private decimal SeferFarki => (puantajDonemOzeti?.ToplamSefer ?? 0m) - HakedisToplamSefer;
-    private decimal GelirFarki => (puantajDonemOzeti?.ToplamGelir ?? 0m) - HakedisToplamGelir;
-    private decimal GiderFarki => (puantajDonemOzeti?.ToplamGider ?? 0m) - HakedisToplamGider;
-    private bool MutabakatSorunuVar => seciliTip switch
-    {
-        HakedisTipi.Kurum => Math.Abs(SeferFarki) > 0.01m || Math.Abs(GelirFarki) > 0.01m,
-        HakedisTipi.Tedarikci => Math.Abs(SeferFarki) > 0.01m || Math.Abs(GiderFarki) > 0.01m,
-        HakedisTipi.Arac => Math.Abs(SeferFarki) > 0.01m,
-        _ => Math.Abs(SeferFarki) > 0.01m || Math.Abs(GelirFarki) > 0.01m || Math.Abs(GiderFarki) > 0.01m
-    };
-
-    private static string? GetKurumMusteriAd(Hakedis h)
-    {
-        var kurumAdlari = h.Detaylar
-            .Where(d => !string.IsNullOrWhiteSpace(d.Guzergah?.Kurum?.KurumAdi))
-            .Select(d => d.Guzergah!.Kurum!.KurumAdi.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(ad => ad)
-            .ToList();
-
-        if (kurumAdlari.Count == 0)
-            return null;
-
-        return string.Join(", ", kurumAdlari);
-    }
-
-    private static string GetGuzergahOzet(Hakedis h, bool kisalt = false)
-    {
-        var guzergahlar = h.Detaylar
-            .Where(d => d.Guzergah != null)
-            .Select(d => d.Guzergah!.GuzergahAdi)
-            .Where(ad => !string.IsNullOrWhiteSpace(ad))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(ad => ad)
-            .ToList();
-
-        if (!guzergahlar.Any()) return "-";
-
-        if (kisalt && guzergahlar.Count > 2)
-            return $"{guzergahlar[0]}, {guzergahlar[1]} (+{guzergahlar.Count - 2})";
-
-        return string.Join(", ", guzergahlar);
-    }
-
-    private static string GetTipText(HakedisTipi tip) => tip switch
-    {
-        HakedisTipi.Kurum => "Kurum",
-        HakedisTipi.Tedarikci => "Tedarikçi",
-        HakedisTipi.Arac => "Araç",
-        _ => tip.ToString()
-    };
-
-    private static string GetTipBadge(HakedisTipi tip) => tip switch
-    {
-        HakedisTipi.Kurum => "bg-primary",
-        HakedisTipi.Tedarikci => "bg-success",
-        HakedisTipi.Arac => "bg-info text-dark",
-        _ => "bg-secondary"
-    };
-
-    private static string GetDurumBadge(HakedisDurum durum) => durum switch
-    {
-        HakedisDurum.Taslak => "bg-secondary",
-        HakedisDurum.Onaylandi => "bg-warning text-dark",
-        HakedisDurum.Faturalandi => "bg-primary",
-        HakedisDurum.TahsilEdildi => "bg-success",
-        HakedisDurum.Odendi => "bg-success",
-        HakedisDurum.Iptal => "bg-danger",
-        _ => "bg-light text-dark"
-    };
-}

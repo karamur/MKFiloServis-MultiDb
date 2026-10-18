@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Time;
+﻿using MKFiloServis.Shared.Time;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Services.Interfaces;
@@ -197,6 +197,9 @@ public class AracService : IAracService
     public async Task<Arac> CreateAsync(Arac arac, string plaka, PlakaIslemTipi islemTipi = PlakaIslemTipi.Alis,
         decimal? islemTutari = null, int? cariId = null, string? aciklama = null)
     {
+        if (AracKurallari.KiralikSahipEksik(arac.SahiplikTipi, arac.KiralikCariId))
+            throw new InvalidOperationException(AracKurallari.KiralikSahipZorunluMesaji);
+
         await using var context = await _contextFactory.CreateDbContextAsync();
         // Şase no kontrolü
         if (await SaseNoMevcutMu(arac.SaseNo))
@@ -277,9 +280,7 @@ public class AracService : IAracService
         await using var context = await _contextFactory.CreateDbContextAsync();
         try
         {
-            var principal = _httpContextAccessor.HttpContext is { } http
-                ? http.User
-                : (await _authenticationStateProvider.GetAuthenticationStateAsync()).User;
+            var principal = await GetIslemKullanicisiAsync();
             if (principal.Identity?.IsAuthenticated != true ||
                 !int.TryParse(principal.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? principal.FindFirst("KullaniciId")?.Value, out var userId) ||
                 userId <= 0 || !await context.Kullanicilar.AnyAsync(k => k.Id == userId && k.Aktif && !k.IsDeleted && !k.Rol.IsDeleted))
@@ -293,6 +294,8 @@ public class AracService : IAracService
             var existing = await context.Araclar.AsTracking()
                 .FirstOrDefaultAsync(a => a.Id == arac.Id && a.FirmaId == firmaId.Value && !a.IsDeleted);
             if (existing == null) throw new InvalidOperationException("Araç bulunamadı veya seçili firmada erişilebilir değil.");
+            if (AracKurallari.GuncellemeSahipsizKiralikBirakiyor(existing.SahiplikTipi, existing.KiralikCariId, arac.SahiplikTipi, arac.KiralikCariId))
+                throw new InvalidOperationException(AracKurallari.KiralikSahipZorunluMesaji);
             var firmalar = admin ? context.Firmalar.IgnoreQueryFilters() : context.Firmalar.AsQueryable();
             if (!await firmalar.AnyAsync(f => f.Id == hedefFirmaId && !f.IsDeleted))
                 throw new InvalidOperationException("Hedef firma bulunamadı veya erişilebilir değil.");
@@ -349,6 +352,9 @@ public class AracService : IAracService
         existing.AracTipi = arac.AracTipi;
         existing.AracSinifi = arac.AracSinifi;
         existing.SahiplikTipi = arac.SahiplikTipi;
+        existing.TasimaTedarikciId = arac.SahiplikTipi == AracSahiplikTipi.Tedarikci && arac.TasimaTedarikciId > 0
+            ? arac.TasimaTedarikciId
+            : null;
         existing.GunlukKiraBedeli = arac.GunlukKiraBedeli;
         existing.AylikKiraBedeli = arac.AylikKiraBedeli;
         existing.SeferBasinaKiraBedeli = arac.SeferBasinaKiraBedeli;
@@ -445,11 +451,20 @@ public class AracService : IAracService
         finally { _aktifFirmaProvider.AktifFirmaDegisti -= FirmaDegisimi; }
     }
 
+    private async Task<ClaimsPrincipal> GetIslemKullanicisiAsync()
+    {
+        // Blazor etkileşimli oturumu, ilk HTTP isteğinden sonra giriş yapmış olabilir.
+        // Anonim HTTP kullanıcısı açık circuit oturumunu gölgelememelidir.
+        var httpUser = _httpContextAccessor.HttpContext?.User;
+        if (httpUser?.Identity?.IsAuthenticated == true)
+            return httpUser;
+
+        return (await _authenticationStateProvider.GetAuthenticationStateAsync()).User;
+    }
+
     private async Task<bool> FirmaBakimYoneticisiMiAsync(ApplicationDbContext context)
     {
-        var principal = _httpContextAccessor.HttpContext is { } http
-            ? http.User
-            : (await _authenticationStateProvider.GetAuthenticationStateAsync()).User;
+        var principal = await GetIslemKullanicisiAsync();
         if (principal.Identity?.IsAuthenticated != true ||
             !int.TryParse(principal.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? principal.FindFirst("KullaniciId")?.Value, out var userId) || userId <= 0)
             return false;
@@ -1036,7 +1051,7 @@ public class AracService : IAracService
         {
             "Şase No *", "Plaka", "Marka", "Model", "Model Yılı", "Motor No", "Renk", "Koltuk Sayısı",
             "Araç Tipi", "Sahiplik Tipi", "KM", "Muayene Bitiş Tarihi", "Trafik Sigortası Bitiş Tarihi",
-            "Kasko Bitiş Tarihi", "Aktif", "Notlar"
+            "Kasko Bitiş Tarihi", "Aktif", "Notlar", "Araç Sahibi (Cari)"
         };
 
         for (int i = 0; i < headers.Length; i++)
@@ -1073,6 +1088,7 @@ public class AracService : IAracService
         ws.Cell(9, 1).Value = "* Tarih alanları: GG.AA.YYYY formatında";
         ws.Cell(10, 1).Value = "* Aktif: Evet/Hayır, Aktif/Pasif, True/False";
         ws.Cell(11, 1).Value = "* Plaka opsiyoneldir, varsa aktif plaka olarak kaydedilir";
+        ws.Cell(12, 1).Value = "* Araç Sahibi (Cari): Sahiplik Tipi Kiralık ise zorunlu; Cariler'deki tedarikçi unvanı veya cari kodu yazılır";
 
         ws.Columns().AdjustToContents();
 
@@ -1173,6 +1189,26 @@ public class AracService : IAracService
                 .ToDictionary(g => g.Key, g => g.First().AracId, StringComparer.OrdinalIgnoreCase);
             var excelPlakaSaseMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+            // Kiralık araç sahibi: araç kartındaki liste gibi yalnız tedarikçi carileri; unvan veya cari koduyla eşleşir.
+            var sahipCariIndeksi = new Dictionary<string, List<int>>();
+            if (kolonlar.ContainsKey(AracSahibiBaslik) || kolonlar.ContainsKey(AracSahibiKisaBaslik))
+            {
+                var sahipAdaylari = await context.Cariler
+                    .Where(c => c.FirmaId == firmaId.Value && !c.IsDeleted &&
+                                (c.CariTipi == CariTipi.Tedarikci || c.CariTipi == CariTipi.MusteriTedarikci))
+                    .Select(c => new { c.Id, c.Unvan, c.CariKodu })
+                    .ToListAsync();
+                foreach (var cari in sahipAdaylari)
+                {
+                    foreach (var anahtar in new[] { NormalizeExcelHeader(cari.Unvan), NormalizeExcelHeader(cari.CariKodu) }.Where(a => a.Length > 0).Distinct())
+                    {
+                        if (!sahipCariIndeksi.TryGetValue(anahtar, out var idler))
+                            sahipCariIndeksi[anahtar] = idler = new List<int>();
+                        idler.Add(cari.Id);
+                    }
+                }
+            }
+
             for (int row = 2; row <= lastRow; row++)
             {
                 try
@@ -1222,9 +1258,33 @@ public class AracService : IAracService
                     var mevcutAracOzet = isUpdate
                         ? await context.Araclar
                             .Where(a => a.FirmaId == firmaId.Value && a.SaseNo.ToUpper() == saseNo && !a.IsDeleted)
-                            .Select(a => new { a.Id, a.AktifPlaka })
+                            .Select(a => new { a.Id, a.AktifPlaka, a.SahiplikTipi, a.KiralikCariId })
                             .FirstOrDefaultAsync()
                         : null;
+
+                    // Kiralık araçta sahip (cari) zorunlu. Sahiplik ve sahibe dokunmayan güncellemeler (km, tarih vb.)
+                    // eski sahipsiz kayıtları engellemez.
+                    var sahipMetni = GetCellValue(ws, row, kolonlar, AracSahibiBaslik) ?? GetCellValue(ws, row, kolonlar, AracSahibiKisaBaslik);
+                    var (sahipCariId, sahipHatasi) = AracSahibiCoz(sahipMetni, sahipCariIndeksi);
+                    var yeniSahiplikTipi = mevcutAracOzet != null && string.IsNullOrWhiteSpace(sahiplikTipiStr)
+                        ? mevcutAracOzet.SahiplikTipi
+                        : sahiplikTipi;
+                    if (yeniSahiplikTipi == AracSahiplikTipi.Kiralik)
+                    {
+                        if (sahipHatasi != null)
+                            throw new InvalidDataException(sahipHatasi);
+
+                        var yeniKiralikCariId = sahipCariId ?? mevcutAracOzet?.KiralikCariId;
+                        var sahipsizKiralik = mevcutAracOzet != null
+                            ? AracKurallari.GuncellemeSahipsizKiralikBirakiyor(mevcutAracOzet.SahiplikTipi, mevcutAracOzet.KiralikCariId, yeniSahiplikTipi, yeniKiralikCariId)
+                            : AracKurallari.KiralikSahipEksik(yeniSahiplikTipi, yeniKiralikCariId);
+                        if (sahipsizKiralik)
+                            throw new InvalidDataException($"{AracKurallari.KiralikSahipZorunluMesaji} Excel'deki 'Araç Sahibi (Cari)' sütununu doldurun.");
+                    }
+                    else
+                    {
+                        sahipCariId = null;
+                    }
 
                     if (!string.IsNullOrWhiteSpace(plaka))
                     {
@@ -1272,6 +1332,7 @@ public class AracService : IAracService
                             if (km.HasValue) mevcutArac.KmDurumu = km;
                             if (!string.IsNullOrWhiteSpace(aracTipiStr)) mevcutArac.AracTipi = aracTipi;
                             if (!string.IsNullOrWhiteSpace(sahiplikTipiStr)) mevcutArac.SahiplikTipi = sahiplikTipi;
+                            if (sahipCariId.HasValue) mevcutArac.KiralikCariId = sahipCariId;
                             if (muayeneBitis.HasValue) mevcutArac.MuayeneBitisTarihi = DateTime.SpecifyKind(muayeneBitis.Value.Date, DateTimeKind.Utc);
                             if (trafikSigortaBitis.HasValue) mevcutArac.TrafikSigortaBitisTarihi = DateTime.SpecifyKind(trafikSigortaBitis.Value.Date, DateTimeKind.Utc);
                             if (kaskoBitis.HasValue) mevcutArac.KaskoBitisTarihi = DateTime.SpecifyKind(kaskoBitis.Value.Date, DateTimeKind.Utc);
@@ -1344,6 +1405,7 @@ public class AracService : IAracService
                             KoltukSayisi = koltukSayisi,
                             AracTipi = aracTipi,
                             SahiplikTipi = sahiplikTipi,
+                            KiralikCariId = sahipCariId,
                             KmDurumu = km,
                             MuayeneBitisTarihi = muayeneBitis.HasValue ? DateTime.SpecifyKind(muayeneBitis.Value.Date, DateTimeKind.Utc) : null,
                             TrafikSigortaBitisTarihi = trafikSigortaBitis.HasValue ? DateTime.SpecifyKind(trafikSigortaBitis.Value.Date, DateTimeKind.Utc) : null,
@@ -1589,6 +1651,23 @@ public class AracService : IAracService
             "PANELVAN" => AracTipi.Panelvan,
             _ => AracTipi.Minibus
         };
+    }
+
+    // Excel başlıkları NormalizeExcelHeader biçiminde aranır.
+    private const string AracSahibiBaslik = "ARAC SAHIBI (CARI)";
+    private const string AracSahibiKisaBaslik = "ARAC SAHIBI";
+
+    private static (int? CariId, string? Hata) AracSahibiCoz(string? metin, Dictionary<string, List<int>> indeks)
+    {
+        if (string.IsNullOrWhiteSpace(metin))
+            return (null, null);
+
+        var adi = metin.Trim();
+        if (!indeks.TryGetValue(NormalizeExcelHeader(adi), out var idler))
+            return (null, $"Araç Sahibi (Cari) '{adi}' tedarikçi carileri arasında bulunamadı.");
+        if (idler.Count > 1)
+            return (null, $"Araç Sahibi (Cari) '{adi}' birden fazla cariyle eşleşiyor; cari kodunu yazın.");
+        return (idler[0], null);
     }
 
     private AracSahiplikTipi ParseAracSahiplikTipi(string? tip)

@@ -128,7 +128,7 @@
             var buAy = await HakedisService.GetHakedislerAsync(now.Year, now.Month);
             buAyAdet = buAy.Count;
             gelirTutar = buAy.Where(h => h.Tip == HakedisTipi.Kurum).Sum(h => h.GenelToplam);
-            giderTutar = buAy.Where(h => h.Tip == HakedisTipi.Tedarikci).Sum(h => h.GenelToplam);
+            giderTutar = buAy.Where(h => h.Tip.GiderMi()).Sum(h => h.GenelToplam);
         }
         catch
         {
