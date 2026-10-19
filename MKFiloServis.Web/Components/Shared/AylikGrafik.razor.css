@@ -1,0 +1,193 @@
+﻿/* Aylık sütun grafiği. Renkler app.css'teki --crm-* değişkenlerinden gelir (koyu temada otomatik uyum). */
+
+.ag {
+    width: 100%;
+}
+
+.ag-govde {
+    position: relative;
+    display: flex;
+    padding-top: .5rem;
+}
+
+.ag-eksen {
+    position: relative;
+    flex: 0 0 3.2rem;
+}
+
+.ag-eksen-deger {
+    position: absolute;
+    right: .4rem;
+    transform: translateY(50%);
+    font-size: .66rem;
+    line-height: 1;
+    color: var(--crm-text-muted, #64748b);
+    white-space: nowrap;
+}
+
+.ag-alan {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.ag-izgara {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 0;
+    border-top: 1px dashed var(--crm-border, #e2e8f0);
+    pointer-events: none;
+}
+
+.ag-taban {
+    border-top-style: solid;
+}
+
+.ag-cubuklar {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    gap: 2px;
+}
+
+.ag-ay {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 2px;
+    padding: 0 1px;
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.ag-ay:hover,
+.ag-secili {
+    background: rgba(59, 130, 246, .12);
+}
+
+.ag-ay:focus-visible {
+    outline: 2px solid var(--crm-primary, #2563eb);
+    outline-offset: -2px;
+}
+
+.ag-cubuk {
+    flex: 1 1 0;
+    min-width: 3px;
+    max-width: 16px;
+    border-radius: 3px 3px 0 0;
+    transition: height .25s ease;
+}
+
+.ag-yigin {
+    width: 100%;
+    max-width: 24px;
+    display: flex;
+    flex-direction: column-reverse;
+    border-radius: 3px 3px 0 0;
+    overflow: hidden;
+    transition: height .25s ease;
+}
+
+.ag-parca {
+    display: block;
+    flex-basis: 0;
+    flex-shrink: 0;
+    min-height: 2px;
+}
+
+.ag-gelecek .ag-cubuk,
+.ag-gelecek .ag-yigin {
+    opacity: .55;
+}
+
+.ag-etiketler {
+    display: flex;
+    gap: 2px;
+    margin: 4px 0 0 3.2rem;
+}
+
+.ag-etiket {
+    flex: 1 1 0;
+    min-width: 0;
+    text-align: center;
+    font-size: .68rem;
+    line-height: 1.1;
+    color: var(--crm-text-muted, #64748b);
+    white-space: nowrap;
+}
+
+.ag-bu-ay {
+    font-weight: 700;
+    color: var(--crm-text, #0f172a);
+}
+
+.ag-detay {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .15rem .6rem;
+    margin-top: .55rem;
+    padding: .35rem .55rem;
+    min-height: 2rem;
+    border-radius: 8px;
+    background: var(--crm-surface-alt, rgba(100, 116, 139, .08));
+    font-size: .78rem;
+}
+
+.ag-ayrac,
+.ag-soluk {
+    color: var(--crm-text-muted, #64748b);
+}
+
+.ag-aciklama {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem .9rem;
+    margin-top: .45rem;
+    font-size: .72rem;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.ag-nokta {
+    display: inline-block;
+    width: .6rem;
+    height: .6rem;
+    margin-right: .3rem;
+    border-radius: 2px;
+    vertical-align: -1px;
+}
+
+.ag-mavi {
+    background-color: #3b82f6;
+}
+
+.ag-yesil {
+    background-color: #10b981;
+}
+
+.ag-kirmizi {
+    background-color: #ef4444;
+}
+
+.ag-turuncu {
+    background-color: #f59e0b;
+}
+
+.ag-mor {
+    background-color: #8b5cf6;
+}
+
+.ag-gri {
+    background-color: #94a3b8;
+}
+
+/* Planlı (henüz gerçekleşmemiş) değer: aynı rengin çizgili hali */
+.ag-desen {
+    background-image: repeating-linear-gradient(45deg, rgba(255, 255, 255, .6) 0, rgba(255, 255, 255, .6) 2px, transparent 2px, transparent 5px);
+}

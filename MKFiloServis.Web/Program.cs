@@ -328,6 +328,7 @@ builder.Services.AddScoped<BankaImportService>();
 builder.Services.AddScoped<PuantajExcelService>();
 builder.Services.AddScoped<IBelgeUyariService, BelgeUyariService>();
 builder.Services.AddScoped<IDashboardGrafikService, DashboardGrafikService>();
+builder.Services.AddScoped<IYoneticiOzetService, YoneticiOzetService>(); // Yönetici özeti: dönem bazlı "yapılan işler" raporu
 builder.Services.AddScoped<IDataExportService, DataExportService>();
 builder.Services.AddScoped<IGlobalSearchService, GlobalSearchService>();
 builder.Services.AddScoped<IToastService, ToastService>();

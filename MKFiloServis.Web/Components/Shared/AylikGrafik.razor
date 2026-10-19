@@ -1,0 +1,229 @@
+﻿@using MKFiloServis.Web.Helpers
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+
+@* Aylık sütun grafiği: 12 ay, JS gerektirmez. Dikey ölçek yuvarlak adımlıdır (GrafikOlcegi); her ay bir düğmedir:
+   fare ipucu verir, dokunmatik ekranda tıklayınca ay ayrıntısı grafiğin altında görünür.
+   Yigili=true: ikinci seri aynı sütunda üst üste, desenli (ör. yapılan + planlı sefer). *@
+
+<div class="ag" role="group" aria-label="@AriaEtiketi">
+    <div class="ag-govde" style="height:@(Yukseklik)px">
+        <div class="ag-eksen" aria-hidden="true">
+            @foreach (var isaret in olcek.Isaretler)
+            {
+                <span class="ag-eksen-deger" style="bottom:@(Konum(isaret))%">@GrafikOlcegi.EksenMetni(isaret)</span>
+            }
+        </div>
+        <div class="ag-alan">
+            @foreach (var isaret in olcek.Isaretler)
+            {
+                <i class="ag-izgara @(isaret == 0 ? "ag-taban" : null)" style="bottom:@(Konum(isaret))%"></i>
+            }
+            <div class="ag-cubuklar">
+                @for (var i = 0; i < Seri.Noktalar.Count; i++)
+                {
+                    var index = i;
+                    var n = Seri.Noktalar[i];
+                    <button type="button"
+                            class="ag-ay @(n.Gelecek ? "ag-gelecek" : null) @(secili == index ? "ag-secili" : null)"
+                            title="@Ayrinti(n)" aria-label="@Ayrinti(n)" aria-pressed="@(secili == index ? "true" : "false")"
+                            @onclick="() => Sec(index)">
+                        @if (Yigili)
+                        {
+                            if (n.Deger1 + n.Deger2 > 0)
+                            {
+                                <span class="ag-yigin" style="height:@(Yuzde(n.Deger1 + n.Deger2))%">
+                                    @if (n.Deger1 > 0)
+                                    {
+                                        <span class="ag-parca @Sinif(Renk1)" style="flex-grow:@(Oran(n.Deger1, n.Deger1 + n.Deger2))"></span>
+                                    }
+                                    @if (n.Deger2 > 0)
+                                    {
+                                        <span class="ag-parca ag-desen @Sinif(Renk1)" style="flex-grow:@(Oran(n.Deger2, n.Deger1 + n.Deger2))"></span>
+                                    }
+                                </span>
+                            }
+                        }
+                        else
+                        {
+                            <span class="ag-cubuk @Sinif(Renk1)" style="height:@(Yuzde(n.Deger1))%"></span>
+                            @if (IkiSeri)
+                            {
+                                <span class="ag-cubuk @Sinif(Renk2)" style="height:@(Yuzde(n.Deger2))%"></span>
+                            }
+                        }
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="ag-etiketler" aria-hidden="true">
+        @foreach (var n in Seri.Noktalar)
+        {
+            <span class="ag-etiket @(BuAyMi(n) ? "ag-bu-ay" : null)">@n.Etiket</span>
+        }
+    </div>
+
+    <div class="ag-detay" aria-live="polite">
+        @if (secili is { } s && s < Seri.Noktalar.Count)
+        {
+            var n = Seri.Noktalar[s];
+            <strong>@n.Aciklama</strong>
+            <span class="ag-ayrac">·</span>
+            <span><i class="ag-nokta @Sinif(Renk1)"></i>@Seri.Etiket1 <strong>@Deger(n.Deger1)</strong></span>
+            @if (IkiSeri)
+            {
+                <span><i class="ag-nokta @Sinif(Renk2) @(Yigili ? "ag-desen" : null)"></i>@Seri.Etiket2 <strong>@Deger(n.Deger2)</strong></span>
+            }
+        }
+        else if (IkiSeri && !Yigili && (zirve is not null || zirve2 is not null))
+        {
+            // İki bağımsız seri: her birinin en yüksek ayı ayrı gösterilir (ödeme tahsilattan çok büyük olabilir).
+            <span class="ag-soluk">En yüksek ay</span>
+            @if (zirve is { } z1)
+            {
+                var n = Seri.Noktalar[z1];
+                <span><i class="ag-nokta @Sinif(Renk1)"></i>@Seri.Etiket1: <strong>@n.Aciklama</strong> · @Deger(n.Deger1)</span>
+            }
+            @if (zirve2 is { } z2)
+            {
+                var n = Seri.Noktalar[z2];
+                <span><i class="ag-nokta @Sinif(Renk2)"></i>@Seri.Etiket2: <strong>@n.Aciklama</strong> · @Deger(n.Deger2)</span>
+            }
+        }
+        else if (zirve is { } z)
+        {
+            var n = Seri.Noktalar[z];
+            <span>En yüksek ay: <strong>@n.Aciklama</strong></span>
+            <span class="ag-ayrac">·</span>
+            <span>@Deger(Yigili ? n.Deger1 + n.Deger2 : n.Deger1)</span>
+        }
+        else
+        {
+            <span class="ag-soluk">Bu yıl için grafik verisi yok</span>
+        }
+    </div>
+
+    @if (IkiSeri || !string.IsNullOrEmpty(Seri.Etiket1))
+    {
+        <div class="ag-aciklama">
+            <span><i class="ag-nokta @Sinif(Renk1)"></i>@Seri.Etiket1</span>
+            @if (IkiSeri)
+            {
+                <span><i class="ag-nokta @Sinif(Renk2) @(Yigili ? "ag-desen" : null)"></i>@Seri.Etiket2</span>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ZamanSerisi Seri { get; set; } = ZamanSerisi.Bos;
+
+    [Parameter] public AylikBirim Birim { get; set; } = AylikBirim.Adet;
+
+    /// <summary>Adet değerlerinin yanına yazılan birim ("sefer", "kayıt").</summary>
+    [Parameter] public string? AdetEki { get; set; }
+
+    [Parameter] public GrafikRengi Renk1 { get; set; } = GrafikRengi.Mavi;
+
+    [Parameter] public GrafikRengi Renk2 { get; set; } = GrafikRengi.Gri;
+
+    [Parameter] public bool Yigili { get; set; }
+
+    /// <summary>İçinde bulunulan ayın etiketini vurgulamak için (grafik başka bir yılı gösteriyorsa vurgulanmaz).</summary>
+    [Parameter] public DateTime? Bugun { get; set; }
+
+    [Parameter] public int Yukseklik { get; set; } = 150;
+
+    private GrafikOlcegi olcek = GrafikOlcegi.Hesapla(0m, AylikBirim.Adet);
+    private int? secili;
+    private int? zirve;
+    private int? zirve2;
+    private ZamanSerisi? sonSeri;
+
+    private bool IkiSeri => !string.IsNullOrEmpty(Seri.Etiket2);
+
+    protected override void OnParametersSet()
+    {
+        // Yeni yıl/veri geldiğinde seçili ay sıfırlanır.
+        if (!ReferenceEquals(sonSeri, Seri))
+        {
+            secili = null;
+            sonSeri = Seri;
+        }
+
+        var azami = Seri.Noktalar.Count == 0
+            ? 0m
+            : Seri.Noktalar.Max(n => Yigili ? n.Deger1 + n.Deger2 : Math.Max(n.Deger1, n.Deger2));
+        olcek = GrafikOlcegi.Hesapla(azami, Birim);
+
+        // "En yüksek ay": birinci serinin (yığılıda toplamın) ve varsa ikinci serinin en büyük değeri.
+        zirve = EnYuksekAy(n => Yigili ? n.Deger1 + n.Deger2 : n.Deger1);
+        zirve2 = IkiSeri && !Yigili ? EnYuksekAy(n => n.Deger2) : null;
+    }
+
+    private int? EnYuksekAy(Func<SeriNoktasi, decimal> deger)
+    {
+        int? enYuksek = null;
+        var enBuyuk = 0m;
+        for (var i = 0; i < Seri.Noktalar.Count; i++)
+        {
+            var d = deger(Seri.Noktalar[i]);
+            if (d > enBuyuk)
+            {
+                enBuyuk = d;
+                enYuksek = i;
+            }
+        }
+
+        return enYuksek;
+    }
+
+    private void Sec(int index) => secili = secili == index ? null : index;
+
+    // Yüzde ve oranlar tam sayıdır: ondalık ayırıcı kültüre göre değişip CSS'i bozmasın.
+    private int Konum(decimal deger) => olcek.Ust <= 0 ? 0 : (int)Math.Round(deger / olcek.Ust * 100m, MidpointRounding.AwayFromZero);
+
+    private int Yuzde(decimal deger)
+    {
+        if (deger <= 0 || olcek.Ust <= 0)
+            return 0;
+        return Math.Clamp((int)Math.Round(deger / olcek.Ust * 100m, MidpointRounding.AwayFromZero), 2, 100);
+    }
+
+    private static int Oran(decimal parca, decimal toplam)
+        => toplam <= 0 ? 0 : Math.Max(1, (int)Math.Round(parca / toplam * 1000m, MidpointRounding.AwayFromZero));
+
+    private bool BuAyMi(SeriNoktasi n)
+        => Bugun is { } b && n.Baslangic.Year == b.Year && n.Baslangic.Month == b.Month;
+
+    private static string Sinif(GrafikRengi renk) => renk switch
+    {
+        GrafikRengi.Yesil => "ag-yesil",
+        GrafikRengi.Kirmizi => "ag-kirmizi",
+        GrafikRengi.Turuncu => "ag-turuncu",
+        GrafikRengi.Mor => "ag-mor",
+        GrafikRengi.Gri => "ag-gri",
+        _ => "ag-mavi"
+    };
+
+    // Ayrıntı satırı kısa (1,2 Mn TL); fare ipucu tam tutar verir (1.234.567 TL).
+    private string Deger(decimal deger) => Birim == AylikBirim.Para
+        ? YoneticiOzetMetni.ParaKisalt(deger)
+        : Adet(deger);
+
+    private string Adet(decimal deger)
+        => string.IsNullOrWhiteSpace(AdetEki) ? YoneticiOzetMetni.Sayi(deger) : $"{YoneticiOzetMetni.Sayi(deger)} {AdetEki}";
+
+    private string Tam(decimal deger) => Birim == AylikBirim.Para ? ParaFormat.FormatKisa(deger) : Adet(deger);
+
+    private string Ayrinti(SeriNoktasi n)
+        => IkiSeri
+            ? $"{n.Aciklama} — {Seri.Etiket1}: {Tam(n.Deger1)}, {Seri.Etiket2}: {Tam(n.Deger2)}"
+            : $"{n.Aciklama} — {Seri.Etiket1}: {Tam(n.Deger1)}";
+
+    private string AriaEtiketi => Seri.VeriVar
+        ? (IkiSeri ? $"{Seri.Etiket1} / {Seri.Etiket2} aylık grafiği" : $"{Seri.Etiket1} aylık grafiği")
+        : "Bu yıl için grafik verisi yok";
+}

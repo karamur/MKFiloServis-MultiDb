@@ -1,0 +1,287 @@
+﻿@using MKFiloServis.Shared.Time
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+@inject IYoneticiOzetService OzetServisi
+@inject ILogger<YoneticiAylikRapor> Logger
+
+@* Aylık grafik raporu: seçilen yılın 12 ayı için her bölümün grafiği, yıl toplamı ve geçen yılın aynı dönemiyle
+   karşılaştırma. Bölümler kullanıcı yetkisine göre (Kapsam) açılır; veriyi IYoneticiOzetService üretir. *@
+
+@if (Kapsam.HerhangiBiri)
+{
+    <section class="ay mb-4" aria-label="Aylık grafik raporu">
+        <div class="ay-ust mb-3">
+            <div>
+                <h4 class="ay-baslik">
+                    <i class="bi bi-bar-chart-line me-2"></i>Aylık Grafik Raporu
+                    <span class="ay-baslik-alt">· Bölüm bölüm 12 aylık gelişim</span>
+                </h4>
+                @if (rapor != null)
+                {
+                    <div class="ay-alt">
+                        <span class="fw-semibold ay-ana-metin">@rapor.Yil</span>
+                        @if (!string.IsNullOrWhiteSpace(rapor.KapsamAdi))
+                        {
+                            <span class="badge text-bg-light border ms-1">@rapor.KapsamAdi</span>
+                        }
+                        <span> · @DonemMetni(rapor)</span>
+                    </div>
+                    @if (rapor.KesimGunu.HasValue && rapor.Kartlar.Any(k => k.Degisim1.Yon == DegisimYonu.Yeni || k.Degisim2.Yon == DegisimYonu.Yeni))
+                    {
+                        <div class="ay-alt">Geçen yıl kaydı olmayan bölümlerde değişim yüzdesi gösterilmez.</div>
+                    }
+                }
+            </div>
+
+            <div class="ay-kontroller">
+                <div class="btn-group btn-group-sm" role="group" aria-label="Yıl seçimi">
+                    <button type="button" class="btn btn-outline-primary" title="Önceki yıl" aria-label="Önceki yıl"
+                            disabled="@(yukleniyor || yil <= EnErkenYil)" @onclick="() => YilDegistirAsync(-1)">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    <select class="form-select form-select-sm ay-yil" aria-label="Yıl" value="@yil" disabled="@yukleniyor"
+                            @onchange="YilSecildiAsync">
+                        @for (var y = EnGecYil; y >= EnErkenYil; y--)
+                        {
+                            <option value="@y">@y</option>
+                        }
+                    </select>
+                    <button type="button" class="btn btn-outline-primary" title="Sonraki yıl" aria-label="Sonraki yıl"
+                            disabled="@(yukleniyor || yil >= EnGecYil)" @onclick="() => YilDegistirAsync(1)">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+                @if (yil != BugunYil)
+                {
+                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@yukleniyor"
+                            @onclick="() => YilGitAsync(BugunYil)">
+                        Bu yıl
+                    </button>
+                }
+                <button type="button" class="btn btn-sm btn-outline-secondary" title="Yenile" aria-label="Yenile"
+                        disabled="@yukleniyor" @onclick="YukleAsync">
+                    <i class="bi bi-arrow-clockwise @(yukleniyor ? "ay-don" : null)"></i>
+                </button>
+            </div>
+        </div>
+
+        @if (rapor == null && hata == null)
+        {
+            <div class="row g-3" aria-busy="true">
+                @for (var i = 0; i < 6; i++)
+                {
+                    <div class="col-12 col-lg-6 col-xxl-4">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body placeholder-glow">
+                                <span class="placeholder col-5 mb-3 d-block"></span>
+                                <span class="placeholder col-12 d-block ay-iskelet"></span>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else if (rapor == null)
+        {
+            <div class="alert alert-warning d-flex align-items-center" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                <div class="flex-grow-1">@hata</div>
+                <button type="button" class="btn btn-sm btn-outline-warning" @onclick="YukleAsync">Yeniden dene</button>
+            </div>
+        }
+        else
+        {
+            <div class="@(yukleniyor ? "ay-yenileniyor" : null)">
+                @if (rapor.Hatalar.Count > 0)
+                {
+                    <div class="alert alert-warning py-2 small" role="alert">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        Bazı grafikler yüklenemedi: <strong>@string.Join(", ", rapor.Hatalar)</strong>.
+                        Diğerleri eksiksiz gösteriliyor; "Yenile" ile tekrar deneyebilirsiniz.
+                    </div>
+                }
+
+                @if (rapor.Kartlar.Count > 0 && rapor.Bos)
+                {
+                    <div class="ay-bilgi mb-3">
+                        <i class="bi bi-info-circle me-2"></i>@rapor.Yil yılı için kayıtlı hareket bulunmuyor. Başka bir yıl seçerek geçmiş dönemleri inceleyebilirsiniz.
+                    </div>
+                }
+
+                <div class="row g-3 mb-3">
+                    @foreach (var k in rapor.Kartlar)
+                    {
+                        <div class="col-12 col-lg-6 col-xxl-4">
+                            <div class="card border-0 shadow-sm h-100 ay-kart">
+                                <div class="card-body">
+                                    <div class="ay-kart-baslik">
+                                        <span class="ay-ikon bg-@(k.Renk)-subtle text-@(k.Renk)"><i class="bi @k.Ikon"></i></span>
+                                        <div class="flex-grow-1 ay-min0">
+                                            <div class="fw-semibold">@k.Baslik</div>
+                                            <div class="small ay-soluk text-truncate" title="@k.AltBaslik">@k.AltBaslik</div>
+                                        </div>
+                                        <a href="@k.Link" class="small text-nowrap">Detay<i class="bi bi-arrow-right-short"></i></a>
+                                    </div>
+
+                                    @if (k.Bos)
+                                    {
+                                        <div class="ay-bos"><i class="bi bi-bar-chart me-1"></i>@rapor.Yil yılında bu bölümde kayıt yok.</div>
+                                    }
+                                    else
+                                    {
+                                        <div class="ay-toplamlar">
+                                            @Toplam(k, k.Seri.Etiket1, k.Renk1, k.Toplam1, k.OncekiYilToplam1, k.Degisim1, k.YuksekIyi1)
+                                            @if (k.IkiSeri && !k.Yigili && (k.Toplam2 != 0 || k.OncekiYilToplam2 != 0))
+                                            {
+                                                @Toplam(k, k.Seri.Etiket2, k.Renk2, k.Toplam2, k.OncekiYilToplam2, k.Degisim2, k.YuksekIyi2)
+                                            }
+                                        </div>
+                                        @if (k.Yigili && PlanliToplam(k) is var planli and > 0)
+                                        {
+                                            <div class="small ay-soluk mb-1">
+                                                <i class="bi bi-calendar-event me-1"></i>Planlı (kalan günler): <strong>@Deger(k, planli)</strong>
+                                            </div>
+                                        }
+
+                                        <AylikGrafik Seri="k.Seri" Birim="k.Birim" AdetEki="@k.AdetEki" Renk1="k.Renk1" Renk2="k.Renk2"
+                                                     Yigili="k.Yigili" Bugun="rapor.Bugun" />
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <div class="small ay-soluk">
+                    Toplamlar yalnızca gerçekleşen işleri kapsar; planlı sefer ve bütçe ödemeleri ileri aylarda da gösterilir.
+                    Bir aya tıklayarak o ayın ayrıntısını görebilirsiniz. Rakamlar kayıtlı verilerden hesaplanır.
+                </div>
+            </div>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public YoneticiOzetKapsami Kapsam { get; set; } = YoneticiOzetKapsami.Hicbiri;
+
+    private AylikGrafikRaporu? rapor;
+    private int yil = BusinessTime.Today.Year;
+    private bool yukleniyor = true;
+    private string? hata;
+    private int istekNo;
+
+    private static int BugunYil => BusinessTime.Today.Year;
+
+    private static int EnErkenYil => AylikGrafikIstegi.YilSiniri(BusinessTime.Today).EnErken;
+
+    private static int EnGecYil => AylikGrafikIstegi.YilSiniri(BusinessTime.Today).EnGec;
+
+    protected override async Task OnInitializedAsync() => await YukleAsync();
+
+    private async Task YilDegistirAsync(int fark) => await YilGitAsync(Math.Clamp(yil + fark, EnErkenYil, EnGecYil));
+
+    private async Task YilSecildiAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var secilen))
+            await YilGitAsync(Math.Clamp(secilen, EnErkenYil, EnGecYil));
+    }
+
+    private async Task YilGitAsync(int hedef)
+    {
+        if (hedef == yil && rapor != null)
+            return;
+
+        yil = hedef;
+        await YukleAsync();
+    }
+
+    private async Task YukleAsync()
+    {
+        var no = ++istekNo;
+        yukleniyor = true;
+        hata = null;
+
+        try
+        {
+            var sonuc = await OzetServisi.GetAylikGrafikAsync(new AylikGrafikIstegi { Yil = yil, Kapsam = Kapsam });
+
+            // Daha yeni bir istek başladıysa eski sonucu atar (hızlı yıl değiştirme).
+            if (no != istekNo)
+                return;
+
+            rapor = sonuc;
+        }
+        catch (Exception ex)
+        {
+            if (no != istekNo)
+                return;
+
+            Logger.LogError(ex, "Aylık grafik raporu yüklenemedi");
+            hata = "Aylık grafik raporu şu anda yüklenemedi.";
+        }
+        finally
+        {
+            if (no == istekNo)
+                yukleniyor = false;
+        }
+    }
+
+    // ---- görünüm yardımcıları ----
+
+    private static string DonemMetni(AylikGrafikRaporu r)
+    {
+        if (r.KesimGunu is not { } kesim)
+            return "Gelecek yıl: yalnızca planlı sefer ve bütçe ödemeleri gösterilir.";
+
+        return kesim.Date == new DateTime(r.Yil, 12, 31)
+            ? $"Toplamlar yılın tamamıdır; değişim {r.Yil - 1} yılına göredir."
+            : $"Toplamlar {YoneticiOzetDonemi.AralikEtiketi(new DateTime(r.Yil, 1, 1), kesim)} arasıdır; değişim geçen yılın aynı dönemine ({r.KarsilastirmaMetni}) göredir.";
+    }
+
+    private static decimal PlanliToplam(AylikGrafikKarti k) => k.Seri.Noktalar.Sum(n => n.Deger2);
+
+    private static string Deger(AylikGrafikKarti k, decimal deger) => k.Birim == AylikBirim.Para
+        ? YoneticiOzetMetni.ParaKisalt(deger)
+        : string.IsNullOrWhiteSpace(k.AdetEki) ? YoneticiOzetMetni.Sayi(deger) : $"{YoneticiOzetMetni.Sayi(deger)} {k.AdetEki}";
+
+    private static string RenkSinifi(GrafikRengi renk) => renk switch
+    {
+        GrafikRengi.Yesil => "ay-yesil",
+        GrafikRengi.Kirmizi => "ay-kirmizi",
+        GrafikRengi.Turuncu => "ay-turuncu",
+        GrafikRengi.Mor => "ay-mor",
+        GrafikRengi.Gri => "ay-gri",
+        _ => "ay-mavi"
+    };
+
+    private RenderFragment Toplam(
+        AylikGrafikKarti k, string etiket, GrafikRengi renk, decimal toplam, decimal onceki, OzetDegisim degisim, bool yuksekIyi) => __builder =>
+    {
+        <div class="ay-toplam">
+            <span class="ay-toplam-etiket"><i class="ay-nokta @RenkSinifi(renk)"></i>@etiket</span>
+            <span class="ay-toplam-deger">@Deger(k, toplam)</span>
+            @DegisimRozeti(degisim, yuksekIyi, k.KarsilastirmaVar ? $"Geçen yılın aynı dönemi: {Deger(k, onceki)}" : null)
+        </div>
+    };
+
+    private RenderFragment DegisimRozeti(OzetDegisim d, bool yuksekIyi, string? ipucu) => __builder =>
+    {
+        switch (d.Yon)
+        {
+            case DegisimYonu.Artti:
+                <span class="ay-delta @(yuksekIyi ? "ay-iyi" : "ay-notr")" title="Geçen yılın aynı dönemine göre artış. @ipucu"><i class="bi bi-arrow-up-short"></i>%@d.Yuzde</span>
+                break;
+            case DegisimYonu.Azaldi:
+                <span class="ay-delta @(yuksekIyi ? "ay-kotu" : "ay-notr")" title="Geçen yılın aynı dönemine göre azalış. @ipucu"><i class="bi bi-arrow-down-short"></i>%@d.Yuzde</span>
+                break;
+            case DegisimYonu.Yeni:
+                // Geçen yıl kaydı yoksa yüzde hesaplanamaz; kartlarda gürültü yapmasın diye üst başlıktaki notla anlatılır.
+                break;
+            case DegisimYonu.Ayni:
+                <span class="ay-delta ay-notr" title="Geçen yılın aynı dönemiyle aynı. @ipucu">=</span>
+                break;
+            default:
+                break;
+        }
+    };
+}

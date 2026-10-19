@@ -1,0 +1,90 @@
+﻿.yg {
+    width: 100%;
+}
+
+.yg-cubuklar {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    border-bottom: 1px solid var(--crm-border, #e2e8f0);
+}
+
+.yg-grup {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 1px;
+}
+
+.yg-cubuk {
+    flex: 1 1 0;
+    min-width: 2px;
+    max-width: 18px;
+    border-radius: 3px 3px 0 0;
+    transition: height .25s ease;
+}
+
+.yg-gelecek {
+    opacity: .85;
+}
+
+.yg-etiketler {
+    display: flex;
+    gap: 2px;
+    margin-top: 3px;
+}
+
+.yg-etiket {
+    flex: 1 1 0;
+    min-width: 0;
+    text-align: center;
+    font-size: .68rem;
+    line-height: 1;
+    color: var(--crm-text-muted, #64748b);
+    white-space: nowrap;
+    overflow: visible;
+}
+
+.yg-aciklama {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem .9rem;
+    margin-top: .45rem;
+    font-size: .72rem;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.yg-nokta {
+    display: inline-block;
+    width: .6rem;
+    height: .6rem;
+    margin-right: .3rem;
+    border-radius: 2px;
+    vertical-align: -1px;
+}
+
+.yg-mavi {
+    background: #3b82f6;
+}
+
+.yg-yesil {
+    background: #10b981;
+}
+
+.yg-kirmizi {
+    background: #ef4444;
+}
+
+.yg-gri {
+    background: #94a3b8;
+}
+
+/* Planlı (henüz yapılmamış) iş: dolgusuz çizgili sütun */
+.yg-planli {
+    background: repeating-linear-gradient(45deg, rgba(59, 130, 246, .35), rgba(59, 130, 246, .35) 3px, rgba(59, 130, 246, .12) 3px, rgba(59, 130, 246, .12) 6px);
+    border: 1px solid rgba(59, 130, 246, .45);
+    border-bottom: 0;
+}

@@ -1,0 +1,826 @@
+﻿@using MKFiloServis.Web.Helpers
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+@inject IYoneticiOzetService OzetServisi
+@inject ILogger<YoneticiOzetPaneli> Logger
+
+@* Yönetici özeti: seçilen dönemde sistemde yapılan işlerin tek bakışta raporu.
+   Bölümler kullanıcı yetkisine göre (Kapsam) açılır; veriyi IYoneticiOzetService üretir. *@
+
+@if (Kapsam.HerhangiBiri)
+{
+    <section class="yo mb-4" aria-label="Yönetici özeti">
+        <div class="yo-ust mb-3">
+            <div>
+                <h4 class="yo-baslik">
+                    <i class="bi bi-speedometer2 me-2"></i>Yönetici Özeti
+                    <span class="yo-baslik-alt">· Yapılan İşler Raporu</span>
+                </h4>
+                @if (rapor != null)
+                {
+                    <div class="yo-alt">
+                        <span class="fw-semibold yo-ana-metin">@rapor.Donem.Etiket</span>
+                        @if (rapor.Donem.Etiket != rapor.Donem.EtkinAralikMetni)
+                        {
+                            <span> · rakamlar @rapor.Donem.EtkinAralikMetni arası</span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(rapor.KapsamAdi))
+                        {
+                            <span class="badge text-bg-light border ms-1">@rapor.KapsamAdi</span>
+                        }
+                    </div>
+                    <div class="yo-alt">
+                        Önceki dönemle karşılaştırma: @rapor.Donem.KarsilastirmaMetni
+                        · güncelleme @rapor.UretimZamani.ToString("HH:mm")
+                    </div>
+                }
+            </div>
+
+            <div class="yo-kontroller">
+                <div class="btn-group btn-group-sm flex-wrap" role="group" aria-label="Dönem seçimi">
+                    @foreach (var (tur, ad) in Donemler)
+                    {
+                        <button type="button"
+                                class="btn @(donemTuru == tur ? "btn-primary" : "btn-outline-primary")"
+                                aria-pressed="@(donemTuru == tur ? "true" : "false")"
+                                @onclick="() => DonemSecAsync(tur)">
+                            @ad
+                        </button>
+                    }
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" title="Yenile" aria-label="Yenile"
+                        disabled="@yukleniyor" @onclick="YukleAsync">
+                    <i class="bi bi-arrow-clockwise @(yukleniyor ? "yo-don" : null)"></i>
+                </button>
+            </div>
+        </div>
+
+        @if (donemTuru == YoneticiOzetDonemTuru.Ozel)
+        {
+            <div class="yo-ozel mb-3">
+                <label class="small">
+                    Başlangıç
+                    <input type="date" class="form-control form-control-sm" @bind="ozelBaslangic" @bind:format="yyyy-MM-dd" />
+                </label>
+                <label class="small">
+                    Bitiş
+                    <input type="date" class="form-control form-control-sm" @bind="ozelBitis" @bind:format="yyyy-MM-dd" />
+                </label>
+                <button type="button" class="btn btn-sm btn-primary" disabled="@yukleniyor" @onclick="YukleAsync">
+                    <i class="bi bi-check2 me-1"></i>Uygula
+                </button>
+                <span class="small yo-soluk">En fazla @YoneticiOzetDonemi.AzamiOzelGun gün seçilebilir.</span>
+            </div>
+        }
+
+        @if (rapor == null && hata == null)
+        {
+            <div class="row g-3" aria-busy="true">
+                @for (var i = 0; i < 6; i++)
+                {
+                    <div class="col-6 col-md-4 col-xl">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body placeholder-glow">
+                                <span class="placeholder col-5 mb-2 d-block"></span>
+                                <span class="placeholder col-8 placeholder-lg d-block"></span>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else if (rapor == null)
+        {
+            <div class="alert alert-warning d-flex align-items-center" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                <div class="flex-grow-1">@hata</div>
+                <button type="button" class="btn btn-sm btn-outline-warning" @onclick="YukleAsync">Yeniden dene</button>
+            </div>
+        }
+        else
+        {
+            var bos = YoneticiOzetMetni.Bos(rapor);
+            <div class="@(yukleniyor ? "yo-yenileniyor" : null)">
+                @if (rapor.Hatalar.Count > 0)
+                {
+                    <div class="alert alert-warning py-2 small" role="alert">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        Bazı bölümler yüklenemedi: <strong>@string.Join(", ", rapor.Hatalar)</strong>.
+                        Diğer bölümler eksiksiz gösteriliyor; "Yenile" ile tekrar deneyebilirsiniz.
+                    </div>
+                }
+
+                @* 1) Dönem özeti (cümleler) + dikkat gerektirenler *@
+                <div class="row g-3 mb-3">
+                    <div class="col-12 @(DikkatBolumuVar ? "col-xl-7" : null)">
+                        <div class="yo-ozet h-100">
+                            <div class="yo-ozet-baslik">
+                                <i class="bi bi-chat-square-text me-1"></i>Dönem Özeti
+                            </div>
+                            <ul class="yo-ozet-liste">
+                                @foreach (var cumle in cumleler)
+                                {
+                                    <li>@cumle</li>
+                                }
+                            </ul>
+                            @if (bos)
+                            {
+                                <div class="small yo-soluk">Farklı bir dönem seçerek geçmiş çalışmaları inceleyebilirsiniz.</div>
+                            }
+                        </div>
+                    </div>
+
+                    @if (DikkatBolumuVar)
+                    {
+                        <div class="col-12 col-xl-5">
+                            <div class="card border-0 shadow-sm h-100">
+                                <div class="card-header bg-transparent border-0 d-flex align-items-center pb-0">
+                                    <span class="yo-ikon bg-danger-subtle text-danger me-2"><i class="bi bi-bell"></i></span>
+                                    <div class="fw-semibold">Dikkat Gerektirenler</div>
+                                    @if (rapor.Dikkat.Count > 0)
+                                    {
+                                        <span class="badge text-bg-danger ms-2">@rapor.Dikkat.Count</span>
+                                    }
+                                </div>
+                                <div class="card-body pt-2">
+                                    @if (rapor.Dikkat.Count == 0)
+                                    {
+                                        <div class="yo-tamam">
+                                            <i class="bi bi-check-circle-fill me-2"></i>Her şey yolunda: bekleyen kritik kalem yok.
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="yo-dikkat-liste">
+                                            @foreach (var k in rapor.Dikkat)
+                                            {
+                                                <a href="@k.Link" class="yo-dikkat @SeviyeSinifi(k.Seviye)">
+                                                    <span class="yo-dikkat-ikon"><i class="bi @k.Ikon"></i></span>
+                                                    <span class="yo-dikkat-metin">
+                                                        <span class="fw-semibold">@k.Baslik</span>
+                                                        @if (!string.IsNullOrWhiteSpace(k.Aciklama))
+                                                        {
+                                                            <span class="d-block small yo-soluk">@k.Aciklama</span>
+                                                        }
+                                                    </span>
+                                                    <span class="yo-dikkat-sayi">
+                                                        <span class="badge @SeviyeRozeti(k.Seviye)">@k.Adet</span>
+                                                        @if (k.Tutar.HasValue)
+                                                        {
+                                                            <span class="d-block small fw-semibold">@ParaFormat.FormatKisa(k.Tutar.Value)</span>
+                                                        }
+                                                    </span>
+                                                </a>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @if (!bos)
+                {
+                    @* 2) Büyük rakamlar *@
+                    @if (gostergeler.Count > 0)
+                    {
+                        <div class="row g-3 mb-3">
+                            @foreach (var g in gostergeler)
+                            {
+                                <div class="col-6 col-md-4 col-xl">
+                                    <a href="@g.Link" class="yo-tile-baglanti" title="@g.Ipucu">
+                                        <div class="card border-0 shadow-sm h-100 yo-tile">
+                                            <div class="card-body">
+                                                <div class="d-flex align-items-center mb-2">
+                                                    <span class="yo-ikon bg-@(g.Renk)-subtle text-@(g.Renk) me-2"><i class="bi @g.Ikon"></i></span>
+                                                    <span class="yo-tile-baslik">@g.Baslik</span>
+                                                </div>
+                                                <div class="yo-tile-deger @g.DegerSinifi">@g.Deger</div>
+                                                <div class="d-flex align-items-center justify-content-between gap-2 mt-1">
+                                                    <span class="small yo-soluk text-truncate">@g.Alt</span>
+                                                    @DegisimRozeti(g.Degisim, g.YuksekIyi)
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </a>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    @* 3) Modül modül yapılan işler *@
+                    <div class="row g-3 mb-3">
+                        @if (rapor.Servis is { } s)
+                        {
+                            <div class="col-12 col-lg-6 col-xxl-4">
+                                <div class="card border-0 shadow-sm h-100 yo-kart">
+                                    <div class="card-body">
+                                        @KartBasligi("Servis Operasyonu", "Günlük servis puantajı", "bi-truck", "primary", "/operasyon/puantaj")
+                                        @if (s.Bos)
+                                        {
+                                            <div class="yo-bos">Bu dönemde servis kaydı yok.</div>
+                                        }
+                                        else
+                                        {
+                                            <div class="yo-satir"><span>Yapılan sefer</span><strong>@YoneticiOzetMetni.Sayi(s.YapilanSefer)</strong></div>
+                                            <div class="yo-satir"><span>Çalışan araç · çalışılan gün</span><strong>@s.CalisanAracSayisi · @s.CalisilanGunSayisi</strong></div>
+                                            @if (s.PlanliSefer > 0)
+                                            {
+                                                <div class="yo-satir"><span>Planlı (kalan günler)</span><strong>@YoneticiOzetMetni.Sayi(s.PlanliSefer) sefer</strong></div>
+                                            }
+                                            @if (s.YapilamayanKayit > 0)
+                                            {
+                                                <div class="yo-satir"><span>Yapılamayan (gitmedi/iptal)</span><strong class="yo-uyari-metin">@s.YapilamayanKayit kayıt</strong></div>
+                                            }
+                                            @if (s.ArizaKaydi > 0)
+                                            {
+                                                <div class="yo-satir"><span>Arıza</span><strong class="text-danger">@s.ArizaKaydi kayıt</strong></div>
+                                            }
+                                            <div class="yo-satir"><span>Kurum tahakkuku</span><strong>@ParaFormat.FormatKisa(s.KurumTahakkuku)</strong></div>
+                                            <div class="yo-satir"><span>Taşeron tahakkuku</span><strong>@ParaFormat.FormatKisa(s.TaseronTahakkuku)</strong></div>
+                                            <div class="yo-satir"><span>Brüt fark</span><strong class="@TutarSinifi(s.BrutFark)">@YoneticiOzetMetni.Isaretli(s.BrutFark)</strong></div>
+                                            @Ilerleme(s.OnayYuzdesi, "bg-success", $"Puantaj onayı: {s.OnayliKayitSayisi}/{s.KayitSayisi} (%{s.OnayYuzdesi})")
+                                            @if (s.Seri.VeriVar)
+                                            {
+                                                <div class="mt-3">
+                                                    <YoneticiOzetGrafik Seri="s.Seri" Sinif1="yg-mavi" Sinif2="yg-planli" Birlesik="true"
+                                                                        Bicim="@(v => YoneticiOzetMetni.Sayi(v))" />
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if (rapor.Hakedis is { } h)
+                        {
+                            <div class="col-12 col-lg-6 col-xxl-4">
+                                <div class="card border-0 shadow-sm h-100 yo-kart">
+                                    <div class="card-body">
+                                        @KartBasligi("Hakediş", "Üretilen ve onaylanan hakedişler", "bi-receipt-cutoff", "info", "/operasyonel-hakedis")
+                                        @if (h.Bos)
+                                        {
+                                            <div class="yo-bos">Bu dönemde hakediş üretilmedi veya onaylanmadı.</div>
+                                        }
+                                        else
+                                        {
+                                            <div class="yo-satir"><span>Üretilen hakediş</span><strong>@h.UretilenAdet</strong></div>
+                                            <div class="yo-satir"><span>Gelir hakedişi (kurum)</span><strong>@h.GelirAdet · @ParaFormat.FormatKisa(h.GelirTutari)</strong></div>
+                                            <div class="yo-satir"><span>Gider hakedişi (tedarikçi/araç sahibi)</span><strong>@h.GiderAdet · @ParaFormat.FormatKisa(h.GiderTutari)</strong></div>
+                                            @if (h.IcAdet > 0)
+                                            {
+                                                <div class="yo-satir"><span>Araç iç maliyet (faturalanmaz)</span><strong>@h.IcAdet · @ParaFormat.FormatKisa(h.IcTutar)</strong></div>
+                                            }
+                                            <div class="yo-satir"><span>Net (gelir − gider)</span><strong class="@TutarSinifi(h.NetTutar)">@YoneticiOzetMetni.Isaretli(h.NetTutar)</strong></div>
+                                            <div class="yo-satir"><span>Bu dönemde onaylanan</span><strong>@h.OnaylananAdet</strong></div>
+                                            <div class="yo-rozetler" title="Bu dönemde üretilen hakedişlerin şu anki durumu">
+                                                <span class="badge text-bg-secondary">Taslak @h.TaslakAdet</span>
+                                                <span class="badge text-bg-info">Onaylı @h.OnayliAdet</span>
+                                                <span class="badge text-bg-primary">Faturalı @h.FaturaliAdet</span>
+                                                <span class="badge text-bg-success">Tahsil/Ödendi @h.TamamlananAdet</span>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if (rapor.Fatura is { } f)
+                        {
+                            <div class="col-12 col-lg-6 col-xxl-4">
+                                <div class="card border-0 shadow-sm h-100 yo-kart">
+                                    <div class="card-body">
+                                        @KartBasligi("Faturalar", "Kesilen ve alınan faturalar", "bi-receipt", "success", "/faturalar")
+                                        @if (f.Bos)
+                                        {
+                                            <div class="yo-bos">Bu dönemde fatura kaydı yok.</div>
+                                        }
+                                        else
+                                        {
+                                            <div class="yo-satir"><span>Kesilen fatura</span><strong>@f.KesilenAdet · @ParaFormat.FormatKisa(f.KesilenTutar)</strong></div>
+                                            @if (f.KesilenTutar > 0)
+                                            {
+                                                @Ilerleme(f.TahsilatYuzdesi, "bg-success", $"Tahsil edilen: {ParaFormat.FormatKisa(f.KesilenTahsilEdilen)} (%{f.TahsilatYuzdesi})")
+                                            }
+                                            <div class="yo-satir mt-2"><span>Alınan fatura</span><strong>@f.AlinanAdet · @ParaFormat.FormatKisa(f.AlinanTutar)</strong></div>
+                                            @if (f.AlinanTutar > 0)
+                                            {
+                                                @Ilerleme(f.OdemeYuzdesi, "bg-warning", $"Ödenen: {ParaFormat.FormatKisa(f.AlinanOdenen)} (%{f.OdemeYuzdesi})")
+                                            }
+                                            @if (f.IadeAdet > 0)
+                                            {
+                                                <div class="yo-satir mt-2"><span>İade faturası</span><strong>@f.IadeAdet</strong></div>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if (rapor.Kasa is { } k)
+                        {
+                            <div class="col-12 col-lg-6 col-xxl-4">
+                                <div class="card border-0 shadow-sm h-100 yo-kart">
+                                    <div class="card-body">
+                                        @KartBasligi("Banka / Kasa", "Nakit giriş ve çıkışları", "bi-bank", "warning", "/banka-hareketleri")
+                                        @if (k.Bos)
+                                        {
+                                            <div class="yo-bos">Bu dönemde banka/kasa hareketi yok.</div>
+                                        }
+                                        else
+                                        {
+                                            <div class="yo-satir"><span>Tahsilat (@k.TahsilatAdet hareket)</span><strong class="text-success">@ParaFormat.FormatKisa(k.TahsilatTutari)</strong></div>
+                                            <div class="yo-satir"><span>Ödeme (@k.OdemeAdet hareket)</span><strong class="text-danger">@ParaFormat.FormatKisa(k.OdemeTutari)</strong></div>
+                                            <div class="yo-satir"><span>Net nakit</span><strong class="@TutarSinifi(k.NetNakit)">@YoneticiOzetMetni.Isaretli(k.NetNakit)</strong></div>
+                                            @if (k.Seri.VeriVar)
+                                            {
+                                                <div class="mt-3">
+                                                    <YoneticiOzetGrafik Seri="k.Seri" Sinif1="yg-yesil" Sinif2="yg-kirmizi" Birlesik="false"
+                                                                        Bicim="@(v => ParaFormat.FormatKisa(v))" />
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if (rapor.Butce is { } b)
+                        {
+                            <div class="col-12 col-lg-6 col-xxl-4">
+                                <div class="card border-0 shadow-sm h-100 yo-kart">
+                                    <div class="card-body">
+                                        @KartBasligi("Bütçe ve Ödemeler", "Ödeme tarihi bu dönemde olanlar", "bi-wallet2", "danger", "/butce/odemeler")
+                                        @if (b.Bos)
+                                        {
+                                            <div class="yo-bos">Bu dönem için bütçe ödemesi planlanmamış.</div>
+                                        }
+                                        else
+                                        {
+                                            <div class="yo-satir"><span>Planlanan ödeme (@b.KalemSayisi kalem)</span><strong>@ParaFormat.FormatKisa(b.Planlanan)</strong></div>
+                                            <div class="yo-satir"><span>Ödenen (@b.OdenenKalem kalem)</span><strong class="text-success">@ParaFormat.FormatKisa(b.Odenen)</strong></div>
+                                            <div class="yo-satir"><span>Bekleyen (@b.BekleyenKalem kalem)</span><strong class="yo-uyari-metin">@ParaFormat.FormatKisa(b.Bekleyen)</strong></div>
+                                            @Ilerleme(Math.Min(b.GerceklesmeYuzdesi, 100), "bg-success", $"Gerçekleşme {b.GerceklesmeMetni}")
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if (rapor.Personel is { } p)
+                        {
+                            <div class="col-12 col-lg-6 col-xxl-4">
+                                <div class="card border-0 shadow-sm h-100 yo-kart">
+                                    <div class="card-body">
+                                        @KartBasligi("Personel ve Maaş", "Puantaj, maaş dönem kaydı, avans", "bi-people", "secondary", "/personel/puantaj")
+                                        <div class="yo-satir"><span>Aktif personel</span><strong>@p.AktifPersonel</strong></div>
+                                        @if (AylikKayitNotuGerekli)
+                                        {
+                                            <div class="small yo-soluk py-1">Puantaj ve maaş kayıtları aylıktır; kısa dönemlerde ilgili ayın kayıtları gösterilir.</div>
+                                        }
+                                        @if (p.Bos)
+                                        {
+                                            <div class="yo-bos">Bu dönemde puantaj, maaş kaydı veya avans yok.</div>
+                                        }
+                                        else
+                                        {
+                                            @if (p.PuantajKaydi > 0)
+                                            {
+                                                <div class="yo-satir"><span>Puantaj kaydı</span><strong>@p.PuantajKaydi</strong></div>
+                                                <div class="yo-rozetler">
+                                                    <span class="badge text-bg-success">Onaylı @p.PuantajOnayli</span>
+                                                    <span class="badge text-bg-warning">Onay bekleyen @p.PuantajOnayBekleyen</span>
+                                                    <span class="badge text-bg-secondary">Taslak @p.PuantajTaslak</span>
+                                                    @if (p.PuantajReddedilen > 0)
+                                                    {
+                                                        <span class="badge text-bg-danger">Reddedilen @p.PuantajReddedilen</span>
+                                                    }
+                                                </div>
+                                            }
+                                            @if (p.MaasKaydiPersonel > 0)
+                                            {
+                                                <div class="yo-satir mt-2"><span>Maaş dönem kaydı (@p.MaasKaydiPersonel personel)</span><strong>@ParaFormat.FormatKisa(p.MaasOdenecek)</strong></div>
+                                            }
+                                            @if (p.AvansAdet > 0)
+                                            {
+                                                <div class="yo-satir"><span>Verilen avans (@p.AvansAdet adet)</span><strong>@ParaFormat.FormatKisa(p.AvansTutar)</strong></div>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if (rapor.Arac is { } a)
+                        {
+                            <div class="col-12 col-lg-6 col-xxl-4">
+                                <div class="card border-0 shadow-sm h-100 yo-kart">
+                                    <div class="card-body">
+                                        @KartBasligi("Araç ve Filo", "Filo ve araç masrafları", "bi-car-front", "primary", "/araclar")
+                                        <div class="yo-satir"><span>Aktif araç</span><strong>@a.AktifArac</strong></div>
+                                        @if (a.YeniArac > 0)
+                                        {
+                                            <div class="yo-satir"><span>Yeni eklenen araç</span><strong>@a.YeniArac</strong></div>
+                                        }
+                                        @if (a.MasrafAdet > 0)
+                                        {
+                                            <div class="yo-satir"><span>Araç masrafı (@a.MasrafAdet kayıt)</span><strong>@ParaFormat.FormatKisa(a.MasrafTutari)</strong></div>
+                                        }
+                                        else
+                                        {
+                                            <div class="yo-bos">Bu dönemde araç masrafı girilmedi.</div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if (rapor.RentACar is { } r)
+                        {
+                            <div class="col-12 col-lg-6 col-xxl-4">
+                                <div class="card border-0 shadow-sm h-100 yo-kart">
+                                    <div class="card-body">
+                                        @KartBasligi("Rent a Car", "Kiralama hareketleri", "bi-key", "info", "/rent-a-car")
+                                        <div class="yo-satir"><span>Şu an aktif kiralama</span><strong>@r.AktifKiralama</strong></div>
+                                        @if (r.Bos)
+                                        {
+                                            <div class="yo-bos">Bu dönemde yeni veya tamamlanan kiralama yok.</div>
+                                        }
+                                        else
+                                        {
+                                            <div class="yo-satir"><span>Yeni kiralama / rezervasyon</span><strong>@r.YeniKiralama</strong></div>
+                                            <div class="yo-satir"><span>Tamamlanan kiralama</span><strong>@r.TamamlananKiralama</strong></div>
+                                            @if (r.TamamlananCiro > 0)
+                                            {
+                                                <div class="yo-satir"><span>Tamamlanan kiralama tutarı</span><strong>@ParaFormat.FormatKisa(r.TamamlananCiro)</strong></div>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if (rapor.Kayitlar is { Bos: false } y)
+                        {
+                            <div class="col-12 col-lg-6 col-xxl-4">
+                                <div class="card border-0 shadow-sm h-100 yo-kart">
+                                    <div class="card-body">
+                                        @KartBasligi("Yeni Kayıtlar", "Cari, personel ve evrak girişleri", "bi-journal-plus", "success", "/cariler")
+                                        @if (y.YeniCari is > 0)
+                                        {
+                                            <div class="yo-satir"><span>Yeni cari</span><strong>@y.YeniCari</strong></div>
+                                        }
+                                        @if (y.YeniPersonel is > 0)
+                                        {
+                                            <div class="yo-satir"><span>Yeni personel</span><strong>@y.YeniPersonel</strong></div>
+                                        }
+                                        @if (y.GelenEvrak is > 0)
+                                        {
+                                            <div class="yo-satir"><span>Gelen evrak</span><strong>@y.GelenEvrak</strong></div>
+                                        }
+                                        @if (y.GidenEvrak is > 0)
+                                        {
+                                            <div class="yo-satir"><span>Giden evrak</span><strong>@y.GidenEvrak</strong></div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    @* 4) Ekip hareketleri (aktivite günlüğü) *@
+                    @if (rapor.Ekip is { } e)
+                    {
+                        <div class="card border-0 shadow-sm yo-kart mb-3">
+                            <div class="card-body">
+                                @KartBasligi("Ekip Hareketleri", "Kullanıcıların yaptığı kayıt işlemleri (aktivite günlüğünden)", "bi-activity", "primary", "/aktivite-log")
+                                @if (e.Bos)
+                                {
+                                    <div class="yo-bos">Bu dönemde kullanıcı adına kaydedilmiş işlem yok (sistem/otomatik işlemler sayılmaz).</div>
+                                }
+                                else
+                                {
+                                    <div class="row g-4">
+                                        <div class="col-12 col-xl-5">
+                                            <div class="small yo-soluk mb-2">
+                                                <strong class="yo-ana-metin">@e.ToplamIslem</strong> kayıt işlemi · <strong class="yo-ana-metin">@e.AktifKullanici</strong> kullanıcı
+                                            </div>
+                                            @{
+                                                var enCok = e.Kullanicilar.Count == 0 ? 1 : e.Kullanicilar.Max(x => x.Toplam);
+                                            }
+                                            @foreach (var u in e.Kullanicilar)
+                                            {
+                                                <div class="yo-kullanici" title="Son işlem: @u.SonIslem.ToString("dd.MM.yyyy HH:mm")">
+                                                    <div class="d-flex justify-content-between align-items-baseline">
+                                                        <span class="fw-semibold text-truncate">@u.KullaniciAdi</span>
+                                                        <span class="small yo-soluk text-nowrap">
+                                                            <span class="text-success">+@u.Eklenen</span> ·
+                                                            <span class="text-primary">~@u.Guncellenen</span> ·
+                                                            <span class="text-danger">−@u.Silinen</span>
+                                                        </span>
+                                                    </div>
+                                                    <div class="progress yo-ilerleme">
+                                                        <div class="progress-bar" role="progressbar" style="width:@(Yuzde(u.Toplam, enCok))%"
+                                                             aria-valuenow="@u.Toplam" aria-valuemin="0" aria-valuemax="@enCok"></div>
+                                                    </div>
+                                                </div>
+                                            }
+                                            @if (e.IsTurleri.Count > 0)
+                                            {
+                                                <div class="yo-rozetler mt-3">
+                                                    @foreach (var t in e.IsTurleri)
+                                                    {
+                                                        <span class="badge text-bg-light border">@t.Etiket <strong>@t.Adet</strong></span>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                        <div class="col-12 col-xl-7">
+                                            <div class="small fw-semibold mb-2"><i class="bi bi-clock-history me-1"></i>Son yapılan işlemler</div>
+                                            <ul class="yo-akis">
+                                                @foreach (var i in e.SonIslemler)
+                                                {
+                                                    <li>
+                                                        <span class="yo-akis-saat">@i.Zaman.ToString(AkisSaatBicimi(i.Zaman))</span>
+                                                        <span class="yo-akis-metin">
+                                                            <strong>@i.Kullanici</strong>
+                                                            · @i.Etiket @IslemFiili(i.Tur)
+                                                            @if (!string.IsNullOrWhiteSpace(i.Ayrinti))
+                                                            {
+                                                                <span class="yo-soluk">— @i.Ayrinti</span>
+                                                            }
+                                                        </span>
+                                                    </li>
+                                                }
+                                            </ul>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+
+                <div class="small yo-soluk">
+                    Gerçekleşen işler bugüne kadar sayılır; planlı sefer ve bütçe ödemeleri dönem sonuna kadar gösterilir.
+                    Rakamlar kayıtlı verilerden hesaplanır.
+                </div>
+            </div>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public YoneticiOzetKapsami Kapsam { get; set; } = YoneticiOzetKapsami.Hicbiri;
+
+    /// <summary>Dashboard'un belge uyarısı servisinden zaten aldığı kritik belge sayısı (varsa listeye eklenir).</summary>
+    [Parameter] public int? KritikBelgeSayisi { get; set; }
+
+    private static readonly (YoneticiOzetDonemTuru Tur, string Ad)[] Donemler =
+    [
+        (YoneticiOzetDonemTuru.Bugun, "Bugün"),
+        (YoneticiOzetDonemTuru.BuHafta, "Bu Hafta"),
+        (YoneticiOzetDonemTuru.BuAy, "Bu Ay"),
+        (YoneticiOzetDonemTuru.GecenAy, "Geçen Ay"),
+        (YoneticiOzetDonemTuru.BuYil, "Bu Yıl"),
+        (YoneticiOzetDonemTuru.Ozel, "Özel")
+    ];
+
+    private sealed record Gosterge(
+        string Baslik,
+        string Deger,
+        string? Alt,
+        string Ikon,
+        string Renk,
+        OzetDegisim Degisim,
+        bool YuksekIyi,
+        string Link,
+        string? Ipucu,
+        string? DegerSinifi = null);
+
+    private YoneticiOzetRapor? rapor;
+    private IReadOnlyList<string> cumleler = Array.Empty<string>();
+    private List<Gosterge> gostergeler = new();
+    private YoneticiOzetDonemTuru donemTuru = YoneticiOzetDonemTuru.BuAy;
+    private DateTime? ozelBaslangic;
+    private DateTime? ozelBitis;
+    private bool yukleniyor = true;
+    private string? hata;
+    private int istekNo;
+
+    private bool DikkatBolumuVar => Kapsam.Hakedis || Kapsam.Servis || Kapsam.Personel || Kapsam.Fatura || Kapsam.Finans || Kapsam.Evrak;
+
+    // Puantaj ve maaş dönem kaydı aylık tutulur; ay'dan kısa dönemlerde (bugün, hafta, kısa özel aralık) bunu belirtiriz.
+    private bool AylikKayitNotuGerekli => rapor is { } r
+        && (r.Donem.Tur is YoneticiOzetDonemTuru.Bugun or YoneticiOzetDonemTuru.BuHafta
+            || (r.Donem.Tur == YoneticiOzetDonemTuru.Ozel && r.Donem.ToplamGunSayisi < 28));
+
+    protected override async Task OnInitializedAsync() => await YukleAsync();
+
+    private async Task DonemSecAsync(YoneticiOzetDonemTuru tur)
+    {
+        donemTuru = tur;
+        if (tur == YoneticiOzetDonemTuru.Ozel)
+        {
+            var bugun = MKFiloServis.Shared.Time.BusinessTime.Today;
+            ozelBitis ??= bugun;
+            ozelBaslangic ??= bugun.AddDays(-29);
+        }
+        await YukleAsync();
+    }
+
+    private async Task YukleAsync()
+    {
+        var no = ++istekNo;
+        yukleniyor = true;
+        hata = null;
+
+        try
+        {
+            var sonuc = await OzetServisi.GetRaporAsync(new YoneticiOzetIstegi
+            {
+                DonemTuru = donemTuru,
+                OzelBaslangic = ozelBaslangic,
+                OzelBitis = ozelBitis,
+                Kapsam = Kapsam,
+                KritikBelgeSayisi = KritikBelgeSayisi
+            });
+
+            // Daha yeni bir istek başladıysa eski sonucu atar (hızlı dönem değiştirme).
+            if (no != istekNo)
+                return;
+
+            rapor = sonuc;
+            cumleler = YoneticiOzetMetni.Olustur(sonuc);
+            gostergeler = GostergeleriKur(sonuc);
+        }
+        catch (Exception ex)
+        {
+            if (no != istekNo)
+                return;
+
+            Logger.LogError(ex, "Yönetici özeti yüklenemedi");
+            hata = "Yönetici özeti şu anda yüklenemedi.";
+        }
+        finally
+        {
+            if (no == istekNo)
+                yukleniyor = false;
+        }
+    }
+
+    private static List<Gosterge> GostergeleriKur(YoneticiOzetRapor r)
+    {
+        var liste = new List<Gosterge>();
+        var onceki = $"Önceki dönem ({r.Donem.KarsilastirmaMetni})";
+
+        if (r.Servis is { } s)
+        {
+            liste.Add(new Gosterge(
+                "Yapılan Sefer",
+                YoneticiOzetMetni.Sayi(s.YapilanSefer),
+                s.CalisanAracSayisi > 0 ? $"{s.CalisanAracSayisi} araç · {s.CalisilanGunSayisi} gün" : "bu dönemde sefer yok",
+                "bi-truck", "primary",
+                OzetDegisim.Hesapla(s.YapilanSefer, s.OncekiYapilanSefer), true,
+                "/operasyon/puantaj",
+                $"{onceki}: {YoneticiOzetMetni.Sayi(s.OncekiYapilanSefer)} sefer"));
+        }
+
+        if (r.Hakedis is { } h)
+        {
+            var alt = new List<string>();
+            if (h.GelirTutari > 0)
+                alt.Add($"{YoneticiOzetMetni.ParaKisalt(h.GelirTutari)} gelir");
+            if (h.GiderTutari > 0)
+                alt.Add($"{YoneticiOzetMetni.ParaKisalt(h.GiderTutari)} gider");
+            liste.Add(new Gosterge(
+                "Üretilen Hakediş",
+                h.UretilenAdet.ToString(),
+                alt.Count > 0 ? string.Join(" · ", alt) : "bu dönemde hakediş yok",
+                "bi-receipt-cutoff", "info",
+                OzetDegisim.Hesapla(h.UretilenAdet, h.OncekiUretilenAdet), true,
+                "/operasyonel-hakedis",
+                $"{onceki}: {h.OncekiUretilenAdet} hakediş"));
+        }
+
+        if (r.Fatura is { } f)
+        {
+            liste.Add(new Gosterge(
+                "Kesilen Fatura",
+                f.KesilenAdet.ToString(),
+                f.KesilenAdet > 0 ? YoneticiOzetMetni.ParaKisalt(f.KesilenTutar) : "bu dönemde fatura yok",
+                "bi-receipt", "success",
+                OzetDegisim.Hesapla(f.KesilenAdet, f.OncekiKesilenAdet), true,
+                "/faturalar",
+                $"{onceki}: {f.OncekiKesilenAdet} fatura · {ParaFormat.FormatKisa(f.OncekiKesilenTutar)}"));
+        }
+
+        if (r.Kasa is { } k)
+        {
+            liste.Add(new Gosterge(
+                "Tahsilat",
+                YoneticiOzetMetni.ParaKisalt(k.TahsilatTutari),
+                $"{k.TahsilatAdet} hareket",
+                "bi-cash-stack", "success",
+                OzetDegisim.Hesapla(k.TahsilatTutari, k.OncekiTahsilat), true,
+                "/banka-hareketleri",
+                $"{onceki}: {ParaFormat.FormatKisa(k.OncekiTahsilat)}"));
+            liste.Add(new Gosterge(
+                "Ödeme",
+                YoneticiOzetMetni.ParaKisalt(k.OdemeTutari),
+                $"{k.OdemeAdet} hareket",
+                "bi-credit-card", "danger",
+                OzetDegisim.Hesapla(k.OdemeTutari, k.OncekiOdeme), false,
+                "/banka-hareketleri",
+                $"{onceki}: {ParaFormat.FormatKisa(k.OncekiOdeme)}"));
+            liste.Add(new Gosterge(
+                "Net Nakit",
+                YoneticiOzetMetni.Isaretli(k.NetNakit),
+                "tahsilat − ödeme",
+                "bi-graph-up-arrow", "warning",
+                OzetDegisim.Hesapla(k.NetNakit, k.OncekiNetNakit), true,
+                "/banka-hareketleri",
+                $"{onceki}: {YoneticiOzetMetni.Isaretli(k.OncekiNetNakit)}",
+                TutarSinifi(k.NetNakit)));
+        }
+
+        return liste;
+    }
+
+    // ---- görünüm yardımcıları ----
+
+    private static string TutarSinifi(decimal tutar) => tutar > 0 ? "text-success" : tutar < 0 ? "text-danger" : string.Empty;
+
+    private static int Yuzde(int deger, int azami) => azami <= 0 ? 0 : Math.Clamp((int)Math.Round(100.0 * deger / azami), 3, 100);
+
+    private static string SeviyeSinifi(DikkatSeviyesi seviye) => seviye switch
+    {
+        DikkatSeviyesi.Kritik => "yo-dikkat-kritik",
+        DikkatSeviyesi.Uyari => "yo-dikkat-uyari",
+        _ => "yo-dikkat-bilgi"
+    };
+
+    private static string SeviyeRozeti(DikkatSeviyesi seviye) => seviye switch
+    {
+        DikkatSeviyesi.Kritik => "text-bg-danger",
+        DikkatSeviyesi.Uyari => "text-bg-warning",
+        _ => "text-bg-info"
+    };
+
+    private static string IslemFiili(EkipIslemTuru tur) => tur switch
+    {
+        EkipIslemTuru.Eklendi => "eklendi",
+        EkipIslemTuru.Silindi => "silindi",
+        _ => "güncellendi"
+    };
+
+    // Bugünün işlemlerinde yalnız saat, öncekilerde gün.ay da gösterilir.
+    private string AkisSaatBicimi(DateTime zaman)
+        => zaman.Date == (rapor?.Donem.Bugun ?? zaman.Date) ? "HH:mm" : "dd.MM HH:mm";
+
+    private RenderFragment KartBasligi(string baslik, string altBaslik, string ikon, string renk, string link) => __builder =>
+    {
+        <div class="yo-kart-baslik">
+            <span class="yo-ikon bg-@(renk)-subtle text-@(renk)"><i class="bi @ikon"></i></span>
+            <div class="flex-grow-1 yo-min0">
+                <div class="fw-semibold">@baslik</div>
+                <div class="small yo-soluk text-truncate">@altBaslik</div>
+            </div>
+            <a href="@link" class="small text-nowrap">Detay<i class="bi bi-arrow-right-short"></i></a>
+        </div>
+    };
+
+    private RenderFragment Ilerleme(int yuzde, string renkSinifi, string etiket) => __builder =>
+    {
+        <div class="yo-ilerleme-kutu">
+            <div class="progress yo-ilerleme" role="progressbar" aria-valuenow="@yuzde" aria-valuemin="0" aria-valuemax="100" aria-label="@etiket">
+                <div class="progress-bar @renkSinifi" style="width:@(Math.Clamp(yuzde, 0, 100))%"></div>
+            </div>
+            <div class="small yo-soluk mt-1">@etiket</div>
+        </div>
+    };
+
+    private RenderFragment DegisimRozeti(OzetDegisim d, bool yuksekIyi) => __builder =>
+    {
+        switch (d.Yon)
+        {
+            case DegisimYonu.Artti:
+                <span class="yo-delta @(yuksekIyi ? "yo-iyi" : "yo-notr")" title="Önceki döneme göre artış"><i class="bi bi-arrow-up-short"></i>%@d.Yuzde</span>
+                break;
+            case DegisimYonu.Azaldi:
+                <span class="yo-delta @(yuksekIyi ? "yo-kotu" : "yo-notr")" title="Önceki döneme göre azalış"><i class="bi bi-arrow-down-short"></i>%@d.Yuzde</span>
+                break;
+            case DegisimYonu.Yeni:
+                <span class="yo-delta yo-notr" title="Önceki dönemde kayıt yoktu; yüzde hesaplanamıyor">önceki yok</span>
+                break;
+            case DegisimYonu.Ayni:
+                <span class="yo-delta yo-notr" title="Önceki dönemle aynı">=</span>
+                break;
+            default:
+                <span class="yo-delta yo-yok" title="İki dönemde de kayıt yok">—</span>
+                break;
+        }
+    };
+}

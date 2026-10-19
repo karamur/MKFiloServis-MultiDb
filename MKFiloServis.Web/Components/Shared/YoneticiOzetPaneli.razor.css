@@ -1,0 +1,352 @@
+﻿/* Yönetici özeti paneli. Renkler app.css'teki --crm-* değişkenlerinden gelir (koyu temada otomatik uyum). */
+
+.yo-ust {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: .75rem 1rem;
+}
+
+.yo-baslik {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin: 0 0 .15rem;
+}
+
+.yo-baslik-alt {
+    font-weight: 500;
+    font-size: .95rem;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.yo-alt {
+    font-size: .82rem;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.yo-ana-metin {
+    color: var(--crm-text, #0f172a);
+}
+
+.yo-soluk {
+    color: var(--crm-text-muted, #64748b);
+}
+
+.yo-min0 {
+    min-width: 0;
+}
+
+.yo-kontroller {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    flex-wrap: wrap;
+}
+
+.yo-ozel {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: .75rem;
+    padding: .6rem .8rem;
+    border: 1px dashed var(--crm-border, #e2e8f0);
+    border-radius: 10px;
+}
+
+.yo-don {
+    display: inline-block;
+    animation: yo-don 1s linear infinite;
+}
+
+@keyframes yo-don {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.yo-yenileniyor {
+    opacity: .55;
+    pointer-events: none;
+    transition: opacity .15s;
+}
+
+/* Dönem özeti cümleleri */
+.yo-ozet {
+    background: var(--crm-surface, #fff);
+    border-left: 4px solid var(--crm-primary, #2563eb);
+    border-radius: 12px;
+    padding: .9rem 1.1rem;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, .08);
+}
+
+.yo-ozet-baslik {
+    font-weight: 600;
+    margin-bottom: .4rem;
+}
+
+.yo-ozet-liste {
+    margin: 0 0 .25rem;
+    padding-left: 1.1rem;
+}
+
+.yo-ozet-liste li {
+    margin: .2rem 0;
+    line-height: 1.4;
+}
+
+.yo-ikon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px;
+    border-radius: 50%;
+    font-size: 1.05rem;
+}
+
+/* Büyük rakam kutuları */
+.yo-tile-baglanti {
+    display: block;
+    height: 100%;
+    color: inherit;
+    text-decoration: none;
+}
+
+.yo-tile {
+    transition: transform .12s ease, box-shadow .12s ease;
+}
+
+.yo-tile-baglanti:hover .yo-tile {
+    transform: translateY(-2px);
+    box-shadow: 0 .5rem 1rem rgba(15, 23, 42, .12) !important;
+}
+
+.yo-tile-baslik {
+    font-size: .82rem;
+    font-weight: 600;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.yo-tile-deger {
+    font-size: 1.55rem;
+    font-weight: 700;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+}
+
+.yo-delta {
+    display: inline-flex;
+    align-items: center;
+    padding: .1rem .45rem;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.yo-iyi {
+    background: rgba(16, 185, 129, .14);
+    color: #047857;
+}
+
+.yo-kotu {
+    background: rgba(239, 68, 68, .14);
+    color: #b91c1c;
+}
+
+.yo-notr {
+    background: rgba(100, 116, 139, .14);
+    color: #475569;
+}
+
+.yo-yok {
+    color: var(--crm-text-muted, #94a3b8);
+}
+
+[data-theme="dark"] .yo-iyi {
+    color: #34d399;
+}
+
+[data-theme="dark"] .yo-kotu {
+    color: #f87171;
+}
+
+[data-theme="dark"] .yo-notr {
+    color: #cbd5e1;
+}
+
+/* Modül kartları */
+.yo-kart-baslik {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+    margin-bottom: .75rem;
+}
+
+.yo-satir {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: .75rem;
+    padding: .3rem 0;
+    border-bottom: 1px dashed var(--crm-border, #e2e8f0);
+    font-size: .9rem;
+}
+
+.yo-satir:last-child {
+    border-bottom: 0;
+}
+
+.yo-satir > span {
+    color: var(--crm-text-muted, #64748b);
+}
+
+.yo-satir > strong {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.yo-bos {
+    padding: .5rem 0;
+    font-size: .88rem;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.yo-rozetler {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .3rem;
+    margin-top: .5rem;
+}
+
+.yo-ilerleme-kutu {
+    margin-top: .6rem;
+}
+
+.yo-ilerleme {
+    height: 8px;
+    border-radius: 999px;
+}
+
+[data-theme="dark"] .yo-ilerleme {
+    background-color: var(--crm-border, #334155);
+}
+
+/* Uyarı rengi: açık temada koyu amber, koyu temada açık amber (text-warning-emphasis koyu zeminde okunmuyordu) */
+.yo-uyari-metin {
+    color: #b45309;
+}
+
+[data-theme="dark"] .yo-uyari-metin {
+    color: #fbbf24;
+}
+
+/* Dikkat gerektirenler */
+.yo-dikkat-liste {
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+}
+
+.yo-dikkat {
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+    padding: .55rem .7rem;
+    border: 1px solid var(--crm-border, #e2e8f0);
+    border-left-width: 4px;
+    border-radius: 10px;
+    color: inherit;
+    text-decoration: none;
+    transition: background .12s;
+}
+
+.yo-dikkat:hover {
+    background: var(--crm-surface-alt, #f8fafc);
+}
+
+.yo-dikkat-kritik {
+    border-left-color: #dc2626;
+}
+
+.yo-dikkat-uyari {
+    border-left-color: #f59e0b;
+}
+
+.yo-dikkat-bilgi {
+    border-left-color: #0ea5e9;
+}
+
+.yo-dikkat-ikon {
+    font-size: 1.15rem;
+}
+
+.yo-dikkat-kritik .yo-dikkat-ikon {
+    color: #dc2626;
+}
+
+.yo-dikkat-uyari .yo-dikkat-ikon {
+    color: #d97706;
+}
+
+.yo-dikkat-bilgi .yo-dikkat-ikon {
+    color: #0284c7;
+}
+
+.yo-dikkat-metin {
+    flex: 1 1 auto;
+    min-width: 0;
+    line-height: 1.25;
+}
+
+.yo-dikkat-sayi {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.yo-tamam {
+    display: flex;
+    align-items: center;
+    padding: .6rem .2rem;
+    font-weight: 600;
+    color: #047857;
+}
+
+[data-theme="dark"] .yo-tamam {
+    color: #34d399;
+}
+
+/* Ekip hareketleri */
+.yo-kullanici {
+    margin-bottom: .65rem;
+}
+
+.yo-akis {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.yo-akis li {
+    display: flex;
+    gap: .75rem;
+    padding: .3rem 0;
+    border-bottom: 1px dashed var(--crm-border, #e2e8f0);
+    font-size: .88rem;
+}
+
+.yo-akis li:last-child {
+    border-bottom: 0;
+}
+
+.yo-akis-saat {
+    flex: 0 0 5.2rem;
+    color: var(--crm-text-muted, #64748b);
+    font-variant-numeric: tabular-nums;
+}
+
+.yo-akis-metin {
+    min-width: 0;
+}

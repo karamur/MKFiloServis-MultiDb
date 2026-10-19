@@ -1,0 +1,75 @@
+﻿@using MKFiloServis.Web.Services.Interfaces
+
+@* Yönetici özeti mini sütun grafiği: JS gerektirmez, her kova için ipucu (title) taşır.
+   Birlesik=true: tek sütun (Deger1+Deger2), gelecek günler Sinif2 rengiyle (ör. yapılan / planlı sefer).
+   Birlesik=false: iki yan yana sütun (ör. tahsilat / ödeme). *@
+
+<div class="yg" role="img" aria-label="@AriaEtiketi">
+    <div class="yg-cubuklar" style="height:@(Yukseklik)px">
+        @foreach (var n in Seri.Noktalar)
+        {
+            <div class="yg-grup @(n.Gelecek ? "yg-gelecek" : null)" title="@Ipucu(n)">
+                @if (Birlesik)
+                {
+                    <span class="yg-cubuk @(n.Gelecek ? Sinif2 : Sinif1)" style="height:@(Yuzde(n.Deger1 + n.Deger2))%"></span>
+                }
+                else
+                {
+                    <span class="yg-cubuk @Sinif1" style="height:@(Yuzde(n.Deger1))%"></span>
+                    <span class="yg-cubuk @Sinif2" style="height:@(Yuzde(n.Deger2))%"></span>
+                }
+            </div>
+        }
+    </div>
+    <div class="yg-etiketler" aria-hidden="true">
+        @{
+            var sira = 0;
+        }
+        @foreach (var n in Seri.Noktalar)
+        {
+            <span class="yg-etiket">@(sira++ % EtiketAdimi == 0 ? n.Etiket : string.Empty)</span>
+        }
+    </div>
+    <div class="yg-aciklama">
+        <span><i class="yg-nokta @Sinif1"></i>@Seri.Etiket1</span>
+        <span><i class="yg-nokta @Sinif2"></i>@Seri.Etiket2</span>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ZamanSerisi Seri { get; set; } = ZamanSerisi.Bos;
+
+    /// <summary>Birinci seri sütun rengi (yg-mavi, yg-yesil, yg-kirmizi, yg-gri, yg-planli).</summary>
+    [Parameter] public string Sinif1 { get; set; } = "yg-mavi";
+
+    [Parameter] public string Sinif2 { get; set; } = "yg-planli";
+
+    [Parameter] public bool Birlesik { get; set; }
+
+    /// <summary>Değerleri ipucunda biçimler (ör. sefer sayısı veya para).</summary>
+    [Parameter] public Func<decimal, string> Bicim { get; set; } = v => v.ToString("N0");
+
+    [Parameter] public int Yukseklik { get; set; } = 84;
+
+    private decimal Azami => Birlesik
+        ? (Seri.Noktalar.Count == 0 ? 0 : Seri.Noktalar.Max(n => n.Deger1 + n.Deger2))
+        : Seri.Azami;
+
+    private int EtiketAdimi => Seri.Noktalar.Count <= 12 ? 1 : (int)Math.Ceiling(Seri.Noktalar.Count / 8.0);
+
+    // Yüzde tam sayıya yuvarlanır: ondalık ayırıcı kültüre göre değişip CSS'i bozmasın.
+    private int Yuzde(decimal deger)
+    {
+        if (deger <= 0 || Azami <= 0)
+            return 0;
+        return Math.Max(3, (int)Math.Round(deger / Azami * 100m, MidpointRounding.AwayFromZero));
+    }
+
+    private string Ipucu(SeriNoktasi n) => Birlesik
+        ? $"{n.Aciklama}: {Bicim(n.Deger1 + n.Deger2)} ({(n.Gelecek ? Seri.Etiket2 : Seri.Etiket1)})"
+        : $"{n.Aciklama} — {Seri.Etiket1}: {Bicim(n.Deger1)}, {Seri.Etiket2}: {Bicim(n.Deger2)}";
+
+    private string AriaEtiketi => Seri.VeriVar
+        ? $"{Seri.Etiket1} / {Seri.Etiket2} zaman grafiği"
+        : "Bu dönemde grafik verisi yok";
+}

@@ -1,0 +1,206 @@
+﻿/* Aylık grafik raporu. Renkler app.css'teki --crm-* değişkenlerinden gelir (koyu temada otomatik uyum). */
+
+.ay-ust {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: .75rem 1rem;
+}
+
+.ay-baslik {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin: 0 0 .15rem;
+}
+
+.ay-baslik-alt {
+    font-weight: 500;
+    font-size: .95rem;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.ay-alt {
+    font-size: .82rem;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.ay-ana-metin {
+    color: var(--crm-text, #0f172a);
+}
+
+.ay-soluk {
+    color: var(--crm-text-muted, #64748b);
+}
+
+.ay-min0 {
+    min-width: 0;
+}
+
+.ay-kontroller {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    flex-wrap: wrap;
+}
+
+.ay-yil {
+    width: 5.5rem;
+    border-radius: 0;
+    text-align: center;
+    font-weight: 600;
+}
+
+.ay-don {
+    display: inline-block;
+    animation: ay-don 1s linear infinite;
+}
+
+@keyframes ay-don {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.ay-yenileniyor {
+    opacity: .55;
+    pointer-events: none;
+    transition: opacity .15s;
+}
+
+.ay-iskelet {
+    height: 9rem;
+}
+
+.ay-bilgi {
+    padding: .65rem .9rem;
+    border-radius: 10px;
+    border: 1px dashed var(--crm-border, #e2e8f0);
+    color: var(--crm-text-muted, #64748b);
+    font-size: .9rem;
+}
+
+/* Kartlar */
+.ay-kart-baslik {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+    margin-bottom: .75rem;
+}
+
+.ay-ikon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px;
+    border-radius: 50%;
+    font-size: 1.05rem;
+}
+
+.ay-bos {
+    padding: 1.2rem .5rem;
+    text-align: center;
+    font-size: .88rem;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.ay-toplamlar {
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    margin-bottom: .6rem;
+}
+
+.ay-toplam {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .2rem .6rem;
+}
+
+.ay-toplam-etiket {
+    min-width: 7.5rem;
+    font-size: .82rem;
+    font-weight: 600;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.ay-toplam-deger {
+    font-size: 1.3rem;
+    font-weight: 700;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+}
+
+.ay-nokta {
+    display: inline-block;
+    width: .6rem;
+    height: .6rem;
+    margin-right: .35rem;
+    border-radius: 2px;
+    vertical-align: -1px;
+}
+
+.ay-mavi {
+    background-color: #3b82f6;
+}
+
+.ay-yesil {
+    background-color: #10b981;
+}
+
+.ay-kirmizi {
+    background-color: #ef4444;
+}
+
+.ay-turuncu {
+    background-color: #f59e0b;
+}
+
+.ay-mor {
+    background-color: #8b5cf6;
+}
+
+.ay-gri {
+    background-color: #94a3b8;
+}
+
+/* Geçen yılın aynı dönemine göre değişim rozetleri */
+.ay-delta {
+    display: inline-flex;
+    align-items: center;
+    padding: .1rem .45rem;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.ay-iyi {
+    background: rgba(16, 185, 129, .14);
+    color: #047857;
+}
+
+.ay-kotu {
+    background: rgba(239, 68, 68, .14);
+    color: #b91c1c;
+}
+
+.ay-notr {
+    background: rgba(100, 116, 139, .14);
+    color: #475569;
+}
+
+[data-theme="dark"] .ay-iyi {
+    color: #34d399;
+}
+
+[data-theme="dark"] .ay-kotu {
+    color: #f87171;
+}
+
+[data-theme="dark"] .ay-notr {
+    color: #cbd5e1;
+}

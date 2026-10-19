@@ -75,9 +75,14 @@ else
         </div>
     }
 
-    @if (ModuleLicenses.HasModulePermission("filoservis"))
+    @* Yönetici özeti: dönem seçmeli "yapılan işler" raporu; eski hakediş bandının dört rakamı artık bunun içinde. *@
+    @if (YoneticiKapsami.HerhangiBiri)
     {
-        <MKFiloServis.Web.Components.Shared.OperasyonelOzetBandi />
+        <MKFiloServis.Web.Components.Shared.YoneticiOzetPaneli Kapsam="YoneticiKapsami"
+                                                               KritikBelgeSayisi="belgeUyarilar?.ToplamKritikUyari" />
+
+        @* Aylık grafik raporu: aynı yetki kapsamıyla, bölüm bölüm 12 aylık grafikler (yıl seçilebilir). *@
+        <MKFiloServis.Web.Components.Shared.YoneticiAylikRapor Kapsam="YoneticiKapsami" />
     }
 
     @if (HasYetki("rentacar.oku"))
@@ -245,7 +250,7 @@ else
 
     <div class="dashboard-flex-widgets" style="display:flex;flex-direction:column;">
     <!-- Hızlı İşlemler Paneli -->
-    @if (WidgetGorünür("hizli-islemler"))
+    @if (WidgetGorünür("hizli-islemler") && HizliIslemVar)
     {
     <div class="card mb-4 border-0 shadow-sm" style='order: @GetWidgetOrder("hizli-islemler")'>
         <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
@@ -1328,6 +1333,26 @@ else
         kullaniciYetkileri.Contains("*"));
     private bool CanViewBelgeUyarilari => ModuleLicenses.HasModulePermission("ebys") && (kullaniciYetkileri.Contains(Yetkiler.BelgeUyarilariOku) || kullaniciYetkileri.Contains("*"));
     private bool CanViewEbys => ModuleLicenses.HasModulePermission("ebys") && (kullaniciYetkileri.Contains("menu.ebys") || kullaniciYetkileri.Contains("*"));
+
+    // Hızlı işlem düğmelerinden hiçbiri yetkili değilse boş kart göstermeyiz.
+    private bool HizliIslemVar => HasYetki("servis.ekle") || HasYetki("aracmasraf.ekle") || HasYetki("kesilenfatura.ekle")
+        || HasYetki("tahsilat.ekle") || HasYetki("odeme.ekle") || HasYetki("cariler.ekle");
+
+    // Yönetici özeti bölümleri, bu sayfadaki yetki/lisans kontrolleriyle aynı kurallara göre açılır.
+    // Yetkiler Dashboard açılırken bir kez yüklendiği için sonuç önbelleğe alınır (alt bileşene aynı örnek geçer).
+    private YoneticiOzetKapsami? yoneticiKapsami;
+    private YoneticiOzetKapsami YoneticiKapsami => yoneticiKapsami ??= new YoneticiOzetKapsami(
+        Servis: CanViewServisler,
+        Hakedis: ModuleLicenses.HasModulePermission("filoservis") && (CanViewServisler || CanViewFinans || kullaniciYetkileri.Contains("*")),
+        Fatura: CanViewFaturalar,
+        Finans: CanViewFinans,
+        // Maaş dönem tutarları da gösterildiği için personel kartı maaş yetkisi ister.
+        Personel: CanViewSoforler && (kullaniciYetkileri.Contains(Yetkiler.MaasOku) || kullaniciYetkileri.Contains("*")),
+        Cari: CanViewCariler,
+        Arac: CanViewAraclar,
+        Evrak: CanViewEbys,
+        RentACar: HasYetki("rentacar.oku"),
+        Ekip: HasYetki(Yetkiler.AktiviteLogOku));
 
     protected override async Task OnInitializedAsync()
     {
