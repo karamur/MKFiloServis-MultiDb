@@ -718,11 +718,6 @@ builder.Services.AddSwaggerGen(options =>
         Description = "Kurumsal Filo Yönetimi & ERP Platformu — REST API dokümantasyonu.\n\n" +
                       "🚚 Araç, sürücü, muhasebe, bordro, EBYS, CRM ve ihale modülleri için uçtan uca endpoint'ler.\n\n" +
                       "🔐 Korumalı endpoint'leri çağırmak için önce `/api/auth/login` ile token alıp sağ üstteki **Authorize** butonu ile `Bearer {token}` formatında girin.",
-        Contact = new Microsoft.OpenApi.Models.OpenApiContact
-        {
-            Name = "Allbatros Global Teknoloji",
-            Url = new Uri("https://github.com/karamur/MKFiloServis")
-        },
         License = new Microsoft.OpenApi.Models.OpenApiLicense
         {
             Name = "Ticari Lisans",
