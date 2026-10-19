@@ -7,6 +7,7 @@
 @using MKFiloServis.Web.Services.RentACar
 @inject IRentACarKiralamaSorguServisi KiralamaSorguServisi
 @inject IRentACarRezervasyonServisi RezervasyonServisi
+@inject ICariService CariService
 @inject IExcelService ExcelService
 @inject IPdfService PdfService
 @inject IJSRuntime JS
@@ -55,13 +56,19 @@
                         <div class="row g-3 align-items-end">
                             <div class="col-md-3">
                                 <label class="form-label">Müşteri</label>
-                                <InputSelect class="form-select" @bind-Value="rezervasyon.MusteriId" @bind-Value:after="MusteriSecildiAsync">
-                                    <option value="0">Müşteri seçin</option>
-                                    @foreach (var musteri in musteriler)
-                                    {
-                                        <option value="@musteri.Id">@musteri.Unvan</option>
-                                    }
-                                </InputSelect>
+                                <div class="input-group">
+                                    <InputSelect class="form-select" @bind-Value="rezervasyon.MusteriId" @bind-Value:after="MusteriSecildiAsync">
+                                        <option value="0">Müşteri seçin</option>
+                                        @foreach (var musteri in musteriler)
+                                        {
+                                            <option value="@musteri.Id">@musteri.Unvan</option>
+                                        }
+                                    </InputSelect>
+                                    <button type="button" class="btn btn-outline-success" title="Hızlı müşteri ekle" aria-label="Hızlı müşteri ekle"
+                                            @onclick="() => HizliMusteriAc(HizliMusteriHedefi.YeniRezervasyon)">
+                                        <i class="bi bi-person-plus"></i>
+                                    </button>
+                                </div>
                                 <ValidationMessage For="@(() => rezervasyon.MusteriId)" class="text-danger" />
                             </div>
                             <div class="col-md-2">
@@ -493,7 +500,7 @@
                                     <tr><th>Araç</th><td>@BelgeDegeri(onizlenenKiralama.AracTanimi)</td><th>Plaka</th><td>@BelgeDegeri(onizlenenKiralama.Plaka)</td></tr>
                                         <tr><th>Müşteri</th><td>@BelgeDegeri(onizlenenKiralama.MusteriUnvan)</td><th>Durum</th><td>@onizlenenKiralama.Durum</td></tr>
                                     <tr><th>Başlangıç</th><td>@onizlenenKiralama.BaslangicTarihi.ToString("dd.MM.yyyy HH:mm")</td><th>Planlanan iade</th><td>@onizlenenKiralama.PlanlananBitisTarihi.ToString("dd.MM.yyyy HH:mm")</td></tr>
-                                        <tr><th>Gerçek teslim</th><td>@(onizlenenKiralama.GercekBaslangicTarihi?.ToString("dd.MM.yyyy HH:mm") ?? "Teslim edilmedi")</td><th>Gerçek iade</th><td>@(onizlenenKiralama.GercekBitisTarihi?.ToString("dd.MM.yyyy HH:mm") ?? string.Empty)</td></tr>
+                                        <tr><th>Gerçek teslim</th><td>@(onizlenenKiralama.GercekBaslangicTarihi?.ToString("dd.MM.yyyy HH:mm") ?? string.Empty)</td><th>Gerçek iade</th><td>@(onizlenenKiralama.GercekBitisTarihi?.ToString("dd.MM.yyyy HH:mm") ?? string.Empty)</td></tr>
                                     <tr><th>Plan</th><td>@KiralamaPlaniMetni(onizlenenKiralama.KiralamaPlani)</td><th>Toplam</th><td>@onizlenenKiralama.ToplamTutar.ToString("N2") ₺</td></tr>
                                     <tr><th>Birim bedel</th><td>@BirimFiyatMetni(onizlenenKiralama)</td><th>Depozito</th><td>@(onizlenenKiralama.Depozito?.ToString("N2") ?? "-") ₺</td></tr>
                                     <tr><th>Ödeme</th><td colspan="3">@onizlenenKiralama.OdemeDurumu</td></tr>
@@ -515,7 +522,7 @@
                                 <h3 class="h6 mt-4">Araç teslim kaydı</h3>
                                 <table class="table table-bordered table-sm">
                                     <tbody>
-                                        <tr><th>Tarih / saat</th><td>@(onizlenenKiralama.GercekBaslangicTarihi?.ToString("dd.MM.yyyy HH:mm") ?? "Teslim edilmedi")</td><th>Kilometre</th><td>@(onizlenenKiralama.BaslangicKm?.ToString("N0") ?? string.Empty)</td></tr>
+                                        <tr><th>Tarih / saat</th><td>@(onizlenenKiralama.GercekBaslangicTarihi?.ToString("dd.MM.yyyy HH:mm") ?? string.Empty)</td><th>Kilometre</th><td>@(onizlenenKiralama.BaslangicKm?.ToString("N0") ?? string.Empty)</td></tr>
                                         <tr><th>Yakıt seviyesi</th><td colspan="3"><span class="fw-semibold">@BelgeDegeri(onizlenenKiralama.TeslimYakitSeviyesi)</span></td></tr>
                                         <tr><th>Hasar / eksik</th><td colspan="3">@BelgeDegeri(onizlenenKiralama.TeslimHasarNotlari)</td></tr>
                                         <tr><th>Aksesuar / ekipman</th><td colspan="3">@BelgeDegeri(onizlenenKiralama.TeslimAksesuarlar)</td></tr>
@@ -536,7 +543,7 @@
                                 <table class="table table-bordered table-sm">
                                     <tbody>
                                         <tr><th>Rezervasyon notları</th><td>@BelgeDegeri(onizlenenKiralama.Notlar)</td></tr>
-                                        <tr><th>Teslim durumu</th><td>@(onizlenenKiralama.GercekBaslangicTarihi.HasValue ? "Teslim kaydı tamamlandı" : "Teslim kaydı bekleniyor")</td></tr>
+                                        <tr><th>Teslim durumu</th><td>@(onizlenenKiralama.GercekBaslangicTarihi.HasValue ? "Teslim kaydı tamamlandı" : string.Empty)</td></tr>
                                         <tr><th>İade durumu</th><td>@(onizlenenKiralama.GercekBitisTarihi.HasValue ? "İade kaydı tamamlandı" : string.Empty)</td></tr>
                                     </tbody>
                                 </table>
@@ -689,13 +696,19 @@
                             <div class="row g-3">
                                 <div class="col-md-6">
                                     <label class="form-label">Müşteri</label>
-                                    <InputSelect class="form-select" @bind-Value="duzenlemeTalebi.MusteriId">
-                                        <option value="0">Müşteri seçin</option>
-                                        @foreach (var musteri in musteriler)
-                                        {
-                                            <option value="@musteri.Id">@musteri.Unvan</option>
-                                        }
-                                    </InputSelect>
+                                    <div class="input-group">
+                                        <InputSelect class="form-select" @bind-Value="duzenlemeTalebi.MusteriId">
+                                            <option value="0">Müşteri seçin</option>
+                                            @foreach (var musteri in musteriler)
+                                            {
+                                                <option value="@musteri.Id">@musteri.Unvan</option>
+                                            }
+                                        </InputSelect>
+                                        <button type="button" class="btn btn-outline-success" title="Hızlı müşteri ekle" aria-label="Hızlı müşteri ekle"
+                                                @onclick="() => HizliMusteriAc(HizliMusteriHedefi.RezervasyonDuzenleme)">
+                                            <i class="bi bi-person-plus"></i>
+                                        </button>
+                                    </div>
                                     <ValidationMessage For="@(() => duzenlemeTalebi.MusteriId)" class="text-danger" />
                                 </div>
                                 <div class="col-md-6">
@@ -750,6 +763,68 @@
                                 </button>
                             </div>
                         </EditForm>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Hızlı müşteri ekleme: rezervasyon formundan ayrılmadan yeni müşteri kaydedip seçer *@
+    @if (hizliMusteriAcik)
+    {
+        <div class="modal d-block" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="hizliMusteriBaslik"
+             style="background-color: rgba(0,0,0,.45); z-index: 1065;">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="hizliMusteriBaslik"><i class="bi bi-person-plus me-2"></i>Hızlı müşteri ekle</h5>
+                        <button type="button" class="btn-close" aria-label="Kapat" @onclick="HizliMusteriKapat" disabled="@hizliMusteriKaydediliyor"></button>
+                    </div>
+                    <div class="modal-body">
+                        @if (!string.IsNullOrWhiteSpace(hizliMusteriHata))
+                        {
+                            <div class="alert alert-danger py-2" role="alert" aria-live="assertive">@hizliMusteriHata</div>
+                        }
+                        <div class="mb-3">
+                            <label class="form-label" for="hizliMusteriUnvan">Ad soyad / unvan <span class="text-danger">*</span></label>
+                            <input id="hizliMusteriUnvan" @ref="hizliMusteriUnvanGirisi" class="form-control" maxlength="200"
+                                   placeholder="Kişi adı veya firma unvanı"
+                                   @bind="hizliMusteri.Unvan" @bind:event="oninput" @onkeydown="HizliMusteriTusuAsync" />
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="hizliMusteriTelefon">Telefon</label>
+                                <input id="hizliMusteriTelefon" type="tel" class="form-control" maxlength="30" placeholder="0xxx xxx xx xx"
+                                       @bind="hizliMusteri.Telefon" @bind:event="oninput" @onkeydown="HizliMusteriTusuAsync" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="hizliMusteriNo">T.C. kimlik / vergi no</label>
+                                <input id="hizliMusteriNo" class="form-control" maxlength="11" inputmode="numeric" placeholder="11 hane T.C. veya 10 hane vergi no"
+                                       @bind="hizliMusteri.KimlikVergiNo" @bind:event="oninput" @onkeydown="HizliMusteriTusuAsync" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" for="hizliMusteriAdres">Adres</label>
+                                <input id="hizliMusteriAdres" class="form-control" maxlength="300" placeholder="İsteğe bağlı"
+                                       @bind="hizliMusteri.Adres" @bind:event="oninput" @onkeydown="HizliMusteriTusuAsync" />
+                            </div>
+                        </div>
+                        <p class="small text-muted mb-0 mt-3">
+                            Müşteri aktif ve "Müşteri" türünde bu firmaya eklenir; diğer ayrıntılar sonra Cari ekranından tamamlanabilir.
+                        </p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="HizliMusteriKapat" disabled="@hizliMusteriKaydediliyor">Vazgeç</button>
+                        <button type="button" class="btn btn-success" @onclick="HizliMusteriKaydetAsync" disabled="@hizliMusteriKaydediliyor">
+                            @if (hizliMusteriKaydediliyor)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-check-lg me-1"></i>
+                            }
+                            Kaydet ve seç
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1146,6 +1221,129 @@
             hataMesaji = "Müşteri listesi yüklenirken bir hata oluştu.";
         }
         await YenileAsync();
+    }
+
+    // ---- Hızlı müşteri ekleme ----
+
+    private enum HizliMusteriHedefi { YeniRezervasyon, RezervasyonDuzenleme }
+
+    private sealed class HizliMusteriFormu
+    {
+        public string? Unvan { get; set; }
+        public string? Telefon { get; set; }
+        public string? KimlikVergiNo { get; set; }
+        public string? Adres { get; set; }
+    }
+
+    private bool hizliMusteriAcik;
+    private bool hizliMusteriKaydediliyor;
+    private bool hizliMusteriOdakBekliyor;
+    private string? hizliMusteriHata;
+    private HizliMusteriHedefi hizliMusteriHedef;
+    private HizliMusteriFormu hizliMusteri = new();
+    private ElementReference hizliMusteriUnvanGirisi;
+
+    private void HizliMusteriAc(HizliMusteriHedefi hedef)
+    {
+        hizliMusteriHedef = hedef;
+        hizliMusteri = new HizliMusteriFormu();
+        hizliMusteriHata = null;
+        hizliMusteriOdakBekliyor = true;
+        hizliMusteriAcik = true;
+    }
+
+    private void HizliMusteriKapat()
+    {
+        if (hizliMusteriKaydediliyor) return;
+        hizliMusteriAcik = false;
+        hizliMusteriHata = null;
+    }
+
+    private async Task HizliMusteriTusuAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await HizliMusteriKaydetAsync();
+        else if (e.Key == "Escape") HizliMusteriKapat();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (hizliMusteriOdakBekliyor && hizliMusteriAcik)
+        {
+            hizliMusteriOdakBekliyor = false;
+            try { await hizliMusteriUnvanGirisi.FocusAsync(); } catch { /* odak verilemese de pencere kullanılabilir */ }
+        }
+    }
+
+    private async Task HizliMusteriKaydetAsync()
+    {
+        if (hizliMusteriKaydediliyor) return;
+
+        var unvan = hizliMusteri.Unvan?.Trim();
+        if (string.IsNullOrWhiteSpace(unvan))
+        {
+            hizliMusteriHata = "Ad soyad / unvan zorunludur.";
+            return;
+        }
+
+        var no = new string((hizliMusteri.KimlikVergiNo ?? string.Empty).Where(char.IsDigit).ToArray());
+        if (no.Length != 0 && no.Length != 10 && no.Length != 11)
+        {
+            hizliMusteriHata = "T.C. kimlik no 11 haneli, vergi no 10 haneli olmalıdır.";
+            return;
+        }
+
+        // Aynı kimlik/vergi numarasıyla kayıtlı müşteri varsa yenisini açmak yerine onu seç.
+        if (no.Length != 0)
+        {
+            var mevcut = musteriler.FirstOrDefault(x => x.TcKimlikNo == no || x.VergiNo == no);
+            if (mevcut is not null)
+            {
+                await HizliMusteriSecAsync(mevcut.Id);
+                return;
+            }
+        }
+
+        hizliMusteriKaydediliyor = true;
+        hizliMusteriHata = null;
+        try
+        {
+            var cari = new Cari
+            {
+                CariKodu = await CariService.GenerateNextKodAsync(),
+                Unvan = unvan,
+                CariTipi = CariTipi.Musteri,
+                Aktif = true,
+                Telefon = string.IsNullOrWhiteSpace(hizliMusteri.Telefon) ? null : hizliMusteri.Telefon.Trim(),
+                Adres = string.IsNullOrWhiteSpace(hizliMusteri.Adres) ? null : hizliMusteri.Adres.Trim(),
+                TcKimlikNo = no.Length == 11 ? no : null,
+                VergiNo = no.Length == 10 ? no : null
+            };
+            var kayit = await CariService.CreateAsync(cari);
+            musteriler = await RezervasyonServisi.GetAktifMusterilerAsync();
+            await HizliMusteriSecAsync(kayit.Id);
+        }
+        catch (Exception ex)
+        {
+            hizliMusteriHata = $"Müşteri kaydedilemedi: {ex.GetBaseException().Message}";
+        }
+        finally
+        {
+            hizliMusteriKaydediliyor = false;
+        }
+    }
+
+    private async Task HizliMusteriSecAsync(int musteriId)
+    {
+        hizliMusteriAcik = false;
+        hizliMusteriHata = null;
+        if (hizliMusteriHedef == HizliMusteriHedefi.RezervasyonDuzenleme)
+        {
+            duzenlemeTalebi.MusteriId = musteriId;
+            return;
+        }
+
+        rezervasyon.MusteriId = musteriId;
+        await MusteriSecildiAsync();   // kara liste kontrolünü seçimle aynı yoldan yürüt
     }
 
     private void RezervasyonTarihiDegisti(bool mesajGosterilmeyeDevamEtsin = false)
