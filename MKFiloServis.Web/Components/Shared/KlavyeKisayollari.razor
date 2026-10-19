@@ -80,7 +80,7 @@
     }
 
     [JSInvokable]
-    public void OnShortcut(string shortcut)
+    public async Task OnShortcut(string shortcut)
     {
         switch (shortcut)
         {
@@ -94,10 +94,18 @@
                 Navigation.NavigateTo("/");
                 break;
             case "Search":
-                // future: global search panel
+                // Ctrl+K: genel arama kutusuna odaklan
+                try
+                {
+                    await JS.InvokeVoidAsync("keyboardShortcuts.focusSearch");
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogDebug(ex, "Arama kutusuna odaklanılamadı");
+                }
                 break;
         }
-        InvokeAsync(StateHasChanged);
+        await InvokeAsync(StateHasChanged);
     }
 
     private void Kapat() => goster = false;

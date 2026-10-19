@@ -7,14 +7,21 @@
 @rendermode InteractiveServer
 
 <div class="global-search-container position-relative">
+    @* Sonuç açıkken dışarı tıklanınca kapatır (girdi ve liste bunun üstünde kalır). *@
+    @if (showResults)
+    {
+        <div class="search-backdrop" @onclick="KapatSonuclar"></div>
+    }
     <div class="input-group">
         <span class="input-group-text bg-dark border-secondary">
             <i class="bi bi-search text-light"></i>
         </span>
-        <input type="text" 
-               class="form-control bg-dark text-light border-secondary" 
-               placeholder="Ara... (Cari, Arac, Personel, Fatura)" 
-               @bind="searchTerm" 
+        <input type="text"
+               class="form-control bg-dark text-light border-secondary"
+               placeholder="Ara: cari, araç, personel, fatura… (Ctrl+K)"
+               autocomplete="off"
+               aria-label="Genel arama"
+               @bind="searchTerm"
                @bind:event="oninput"
                @bind:after="OnSearchAsync"
                @onfocus="ShowResults"
@@ -148,6 +155,24 @@
         border-color: #6c757d;
     }
 
+    /* Koyu girdide yer tutucu metin okunmuyordu (Bootstrap'in koyu gri yer tutucusu koyu zemin üstünde kayboluyordu). */
+    .global-search-container .form-control::placeholder {
+        color: rgba(255, 255, 255, 0.55);
+        opacity: 1;
+    }
+
+    .global-search-container .input-group {
+        position: relative;
+        z-index: 1051;
+    }
+
+    .search-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1040;
+        background: transparent;
+    }
+
     .search-result-item:hover {
         background-color: #f8f9fa;
     }
@@ -186,27 +211,38 @@
         debounceTimer?.Start();
     }
 
+    // Eski (daha yavaş dönen) sorgunun sonucu yeni aramanın sonucunu ezmesin.
+    private int aramaSurumu;
+
     private async Task PerformSearchAsync()
     {
         await InvokeAsync(async () =>
         {
+            var surum = ++aramaSurumu;
+            var aranan = searchTerm;
             isSearching = true;
             showResults = true;
             StateHasChanged();
 
             try
             {
-                searchResult = await SearchService.SearchAsync(searchTerm);
+                var sonuc = await SearchService.SearchAsync(aranan);
+                if (surum == aramaSurumu)
+                    searchResult = sonuc;
             }
             catch (Exception ex)
             {
-                Logger.LogWarning(ex, "GlobalSearch arama yapilirken hata olustu (Term={Term})", searchTerm);
-                searchResult = null;
+                Logger.LogWarning(ex, "GlobalSearch arama yapilirken hata olustu (Term={Term})", aranan);
+                if (surum == aramaSurumu)
+                    searchResult = null;
             }
             finally
             {
-                isSearching = false;
-                StateHasChanged();
+                if (surum == aramaSurumu)
+                {
+                    isSearching = false;
+                    StateHasChanged();
+                }
             }
         });
     }
@@ -223,13 +259,28 @@
     {
         showResults = false;
         searchTerm = "";
+        aramaSurumu++;   // yolda olan aramayı geçersiz kıl
     }
+
+    // Dışarı tıklayınca yalnızca listeyi kapatır; yazılan metin kalır, girdiye dönünce liste yeniden açılır.
+    private void KapatSonuclar() => showResults = false;
 
     private void HandleKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Escape")
         {
             HideResults();
+        }
+        else if (e.Key == "Enter" && searchResult is { ToplamSonuc: > 0 })
+        {
+            // Enter: en iyi eşleşmeyi aç
+            var ilk = searchResult.TumSonuclar.FirstOrDefault();
+            if (ilk != null && !string.IsNullOrWhiteSpace(ilk.Url))
+            {
+                var url = ilk.Url;
+                HideResults();
+                Navigation.NavigateTo(url);
+            }
         }
     }
 

@@ -93,6 +93,14 @@ window.keyboardShortcuts = {
         if (this._handler) document.removeEventListener('keydown', this._handler);
         this._handler = null;
         this._dotnet = null;
+    },
+    // Ctrl+K: kenar çubuğundaki genel arama kutusuna odaklanır.
+    focusSearch: function () {
+        var el = document.querySelector('.global-search-container input');
+        if (el) {
+            el.focus();
+            el.select();
+        }
     }
 };
 
