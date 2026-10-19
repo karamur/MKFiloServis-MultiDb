@@ -500,7 +500,9 @@ public class BudgetService : IBudgetService
     }
 
     /// <summary>
-    /// Ödeme geri alma - Ödeme durumunu Bekliyor yapar ve ilişkili BankaKasaHareket kaydını siler
+    /// Ödeme geri alma - Ödeme durumunu Bekliyor yapar ve ilişkili BankaKasaHareket kaydını siler.
+    /// Kısmi ödemede tüm işlem birlikte geri alınır: kısmi ödeme hareketlerinin hepsi silinir,
+    /// sonraki döneme aktarılan kalan tutar (devir) kaydı kaldırılır ve kalan tutar ödemeye geri eklenir.
     /// </summary>
     public async Task<BudgetOdeme> OdemeGeriAlAsync(int odemeId)
     {
@@ -511,8 +513,14 @@ public class BudgetService : IBudgetService
             ?? throw new InvalidOperationException("Ödeme bulunamadı veya erişilebilir değil.");
         if (odeme.FaturaIleKapatildi || odeme.FaturaId.HasValue)
             throw new InvalidOperationException("Fatura bağlantılı ödeme, fatura iptal/eşleme akışından geri alınmalıdır.");
+
         if (odeme.KismiOdemeMi || odeme.ToplamKismiOdenen != 0 || odeme.SonrakiDonemOdemeId.HasValue)
-            throw new InvalidOperationException("Kısmi veya sonraki döneme aktarılmış ödeme için ilişkili ödeme hareketlerinin birlikte geri alınması gerekir.");
+        {
+            await KismiOdemeyiTamamenGeriAlAsync(context, odeme);
+            // Hareketlerin silinmesi, devir kaydının kaldırılması, ödeme sıfırlaması ve audit ortak SaveChanges transaction'ındadır.
+            await context.SaveChangesAsync();
+            return odeme;
+        }
 
         if (odeme.BankaKasaHareketId.HasValue)
         {
@@ -520,24 +528,28 @@ public class BudgetService : IBudgetService
                 .Include(h => h.OdemeEslestirmeleri)
                 .FirstOrDefaultAsync(h => h.Id == odeme.BankaKasaHareketId.Value && !h.IsDeleted)
                 ?? throw new InvalidOperationException("İlişkili banka hareketi bulunamadı veya erişilebilir değil; ödeme bağlantısını kontrol edin.");
-            if (odeme.FirmaId is not > 0 || hareket.FirmaId != odeme.FirmaId)
-                throw new InvalidOperationException("Ödeme ve banka hareketinin firma bağlantıları eşleşmelidir.");
-            if (hareket.MuhasebeFisId.HasValue || hareket.MahsupHareketId.HasValue || hareket.MahsupGrupId.HasValue ||
-                hareket.PersonelCebindenId.HasValue || hareket.PersonelGeriOdemeHareketId.HasValue || hareket.AracMasrafId.HasValue)
-                throw new InvalidOperationException("Muhasebe, mahsup, personel veya araç masrafı bağlantılı banka hareketi kendi iptal akışından geri alınmalıdır.");
-            if (hareket.OdemeEslestirmeleri.Any() || await context.OdemeEslestirmeleri.IgnoreQueryFilters()
-                .AnyAsync(e => e.BankaKasaHareketId == hareket.Id && !e.IsDeleted))
-                throw new InvalidOperationException("Faturayla eşleşmiş banka hareketinin eşlemeleri önce kendi iptal akışında çözülmelidir.");
-            if (await context.BudgetOdemeler.IgnoreQueryFilters()
-                .AnyAsync(o => o.Id != odemeId && !o.IsDeleted && o.BankaKasaHareketId == hareket.Id) ||
-                await context.BankaKasaHareketleri.IgnoreQueryFilters()
-                .AnyAsync(h => h.Id != hareket.Id && !h.IsDeleted &&
-                    (h.MahsupHareketId == hareket.Id || h.PersonelGeriOdemeHareketId == hareket.Id)))
-                throw new InvalidOperationException("Banka hareketi başka bir kayıtta kullanılıyor; birlikte iptal edilmelidir.");
+            await HareketGeriAlinabilirMiAsync(context, odeme, hareket);
             // Mevcut fiziksel silme davranışı korunur; ödeme sıfırlamasıyla aynı SaveChanges'tadır.
             context.BankaKasaHareketleri.Remove(hareket);
         }
 
+        OdemeBilgileriniSifirla(odeme);
+        odeme.UpdatedAt = DateTime.UtcNow;
+        // Hareket silme, ödeme güncelleme ve audit ortak SaveChanges transaction'ındadır.
+        await context.SaveChangesAsync();
+        return odeme;
+    }
+
+    /// <summary>
+    /// Kısmi ödeme hareketlerinin belge numarası ön eki. Ana kayıtta yalnız son hareketin kimliği tutulduğundan,
+    /// önceki kısmi ödeme hareketleri geri alma sırasında bu ön ekle bulunur.
+    /// </summary>
+    private static string KismiOdemeBelgeOnEki(int odemeId) => $"KO-{odemeId}-";
+
+    private static string AyAdiGoster(int ay) => ay is >= 1 and <= 12 ? AyAdlari[ay] : ay.ToString();
+
+    private static void OdemeBilgileriniSifirla(BudgetOdeme odeme)
+    {
         odeme.Durum = OdemeDurum.Bekliyor;
         odeme.GercekOdemeTarihi = null;
         odeme.OdenenTutar = null;
@@ -548,10 +560,117 @@ public class BudgetService : IBudgetService
         odeme.CezaKesintisi = 0;
         odeme.DigerKesinti = 0;
         odeme.KesintiAciklamasi = null;
-        odeme.UpdatedAt = DateTime.UtcNow;
-        // Hareket silme, ödeme güncelleme ve audit ortak SaveChanges transaction'ındadır.
-        await context.SaveChangesAsync();
-        return odeme;
+    }
+
+    /// <summary>
+    /// Ödemeye bağlı banka hareketinin ödeme geri alma akışında silinebilir olduğunu doğrular.
+    /// </summary>
+    private static async Task HareketGeriAlinabilirMiAsync(ApplicationDbContext context, BudgetOdeme odeme, BankaKasaHareket hareket)
+    {
+        if (odeme.FirmaId is not > 0 || hareket.FirmaId != odeme.FirmaId)
+            throw new InvalidOperationException("Ödeme ve banka hareketinin firma bağlantıları eşleşmelidir.");
+        if (hareket.MuhasebeFisId.HasValue || hareket.MahsupHareketId.HasValue || hareket.MahsupGrupId.HasValue ||
+            hareket.PersonelCebindenId.HasValue || hareket.PersonelGeriOdemeHareketId.HasValue || hareket.AracMasrafId.HasValue)
+            throw new InvalidOperationException("Muhasebe, mahsup, personel veya araç masrafı bağlantılı banka hareketi kendi iptal akışından geri alınmalıdır.");
+        if (hareket.OdemeEslestirmeleri.Any() || await context.OdemeEslestirmeleri.IgnoreQueryFilters()
+            .AnyAsync(e => e.BankaKasaHareketId == hareket.Id && !e.IsDeleted))
+            throw new InvalidOperationException("Faturayla eşleşmiş banka hareketinin eşlemeleri önce kendi iptal akışında çözülmelidir.");
+        if (await context.BudgetOdemeler.IgnoreQueryFilters()
+            .AnyAsync(o => o.Id != odeme.Id && !o.IsDeleted && o.BankaKasaHareketId == hareket.Id) ||
+            await context.BankaKasaHareketleri.IgnoreQueryFilters()
+            .AnyAsync(h => h.Id != hareket.Id && !h.IsDeleted &&
+                (h.MahsupHareketId == hareket.Id || h.PersonelGeriOdemeHareketId == hareket.Id)))
+            throw new InvalidOperationException("Banka hareketi başka bir kayıtta kullanılıyor; birlikte iptal edilmelidir.");
+    }
+
+    /// <summary>
+    /// Kısmi ödemeyle ilgili tüm işlemi geri alır; kaydetmez, çağıran tek SaveChanges ile kaydeder.
+    /// Kısmi ödeme hareketleri silinir, kalanın aktarıldığı devir kaydı kaldırılır ve kalan tutar
+    /// ödemeye geri eklenerek orijinal tutara dönülür. Herhangi bir doğrulama başarısızsa hiçbir şey değişmez.
+    /// </summary>
+    private async Task KismiOdemeyiTamamenGeriAlAsync(ApplicationDbContext context, BudgetOdeme odeme)
+    {
+        var simdi = DateTime.UtcNow;
+        var odemeId = odeme.Id;
+        var sonrakiDonemId = odeme.SonrakiDonemOdemeId;
+        var bagliHareketId = odeme.BankaKasaHareketId;
+
+        // Kalanın aktarıldığı devir kaydı. Silinmiş olsa bile tutarı kalan kısmı gösterir. Devir bağlantısı benzersiz
+        // indekslidir; geri alınca bağlantı çözülmezse aynı ödeme yeniden kısmi ödenip aktarılırken çakışır.
+        var devirler = await context.BudgetOdemeler.IgnoreQueryFilters().AsTracking()
+            .Where(o => o.OncekiDonemOdemeId == odemeId || (sonrakiDonemId.HasValue && o.Id == sonrakiDonemId.Value))
+            .OrderBy(o => o.Id)
+            .ToListAsync();
+        foreach (var devir in devirler.Where(d => !d.IsDeleted))
+        {
+            if ((devir.Durum is OdemeDurum.Odendi or OdemeDurum.KismiOdendi) || devir.KismiOdemeMi || devir.ToplamKismiOdenen != 0 ||
+                devir.OdenenTutar.HasValue || devir.BankaKasaHareketId.HasValue || devir.FaturaId.HasValue ||
+                devir.FaturaIleKapatildi || devir.SonrakiDonemOdemeId.HasValue)
+                throw new InvalidOperationException(
+                    $"Sonraki döneme aktarılan kalan tutar kaydı ({AyAdiGoster(devir.OdemeAy)} {devir.OdemeYil}) ödenmiş veya işlem görmüş; önce o kaydın ödemesini geri alın.");
+        }
+
+        // Kalan tutar yalnız aktarılmış kayıtta ödemeye geri eklenir: aktarımda ana kaydın tutarı ödenen tutara indirilmişti.
+        var kalanAktarilmis = odeme.KalanSonrakiDonemeAktarilsin && sonrakiDonemId.HasValue;
+        var kalanTutar = kalanAktarilmis
+            ? (devirler.FirstOrDefault(d => d.Id == sonrakiDonemId!.Value) ?? devirler.FirstOrDefault())?.Miktar ?? 0m
+            : 0m;
+        var orijinalMiktar = kalanAktarilmis
+            ? RoundCurrency(Math.Max(odeme.Miktar, odeme.ToplamKismiOdenen + kalanTutar))
+            : odeme.Miktar;
+
+        // Kısmi ödeme hareketleri: ana kayıtta yalnız sonuncusunun kimliği vardır, öncekiler belge no ön ekiyle bulunur.
+        var belgeOnEki = KismiOdemeBelgeOnEki(odemeId);
+        var hareketler = await context.BankaKasaHareketleri.AsTracking()
+            .Include(h => h.OdemeEslestirmeleri)
+            .Where(h => !h.IsDeleted &&
+                ((bagliHareketId.HasValue && h.Id == bagliHareketId.Value) ||
+                 (h.IslemKaynak == IslemKaynak.Butce && h.BelgeNo != null && h.BelgeNo.StartsWith(belgeOnEki))))
+            .ToListAsync();
+        if (bagliHareketId.HasValue && hareketler.All(h => h.Id != bagliHareketId.Value))
+            throw new InvalidOperationException("İlişkili banka hareketi bulunamadı veya erişilebilir değil; ödeme bağlantısını kontrol edin.");
+        foreach (var hareket in hareketler)
+            await HareketGeriAlinabilirMiAsync(context, odeme, hareket);
+
+        // Kredi kartıyla yapılan kısmi ödemelerde oluşan ekstre borcu kaydı (kaynak ödeme kimliğiyle işaretlidir).
+        var kartBorcuIsareti = $"[KaynakOdemeId:{odemeId}]";
+        var kartBorclari = await context.BudgetOdemeler.AsTracking()
+            .Where(o => o.MasrafKalemi == "Kredi Kartı" && o.Notlar != null && o.Notlar.Contains(kartBorcuIsareti))
+            .ToListAsync();
+        foreach (var borc in kartBorclari)
+        {
+            if ((borc.Durum is OdemeDurum.Odendi or OdemeDurum.KismiOdendi) || borc.KismiOdemeMi || borc.ToplamKismiOdenen != 0 ||
+                borc.BankaKasaHareketId.HasValue || borc.FaturaId.HasValue || borc.FaturaIleKapatildi)
+                throw new InvalidOperationException(
+                    $"Bu ödemenin kredi kartı borç kaydı ({AyAdiGoster(borc.OdemeAy)} {borc.OdemeYil}) ödenmiş veya işlem görmüş; önce o kaydın ödemesini geri alın.");
+        }
+
+        // Doğrulamalar tamam; değişiklikleri uygula.
+        context.BankaKasaHareketleri.RemoveRange(hareketler);
+        foreach (var borc in kartBorclari)
+        {
+            borc.IsDeleted = true;
+            borc.DeletedAt = simdi;
+            borc.UpdatedAt = simdi;
+        }
+        foreach (var devir in devirler)
+        {
+            devir.OncekiDonemOdemeId = null;
+            if (!devir.IsDeleted)
+            {
+                devir.IsDeleted = true;
+                devir.DeletedAt = simdi;
+            }
+            devir.UpdatedAt = simdi;
+        }
+
+        OdemeBilgileriniSifirla(odeme);
+        odeme.Miktar = orijinalMiktar;
+        odeme.ToplamKismiOdenen = 0;
+        odeme.KismiOdemeMi = false;
+        odeme.KalanSonrakiDonemeAktarilsin = false;
+        odeme.SonrakiDonemOdemeId = null;
+        odeme.UpdatedAt = simdi;
     }
 
     #endregion
@@ -2342,7 +2461,7 @@ public class BudgetService : IBudgetService
                 Tutar = odenecekTutar + masrafKesintisi + cezaKesintisi + digerKesinti,
                 IslemKaynak = IslemKaynak.Butce,
                 Aciklama = $"[Kısmi Ödeme] {odeme.MasrafKalemi} - {odeme.Aciklama}",
-                BelgeNo = $"KO-{odeme.Id}-{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMddHHmmss}",
+                BelgeNo = $"{KismiOdemeBelgeOnEki(odeme.Id)}{MKFiloServis.Shared.Time.BusinessTime.Now:yyyyMMddHHmmss}",
                 CariId = request.CariId,
                 CreatedAt = DateTime.UtcNow
             };
@@ -2813,6 +2932,14 @@ public class BudgetService : IBudgetService
                 .FirstOrDefaultAsync(o => o.Id == devir.OncekiDonemOdemeId!.Value);
 
             if (anaKayit == null) continue;
+
+            // Kalan sonraki döneme aktarılırken ana kaydın tutarı ödenen tutara indirilir (KismiOdemeYapAsync);
+            // bu durumda Miktar - ToplamKismiOdenen her zaman 0 çıkar ve kalan tutarın tek kaynağı devir kaydıdır.
+            // Devir kaydını "gereksiz" sayıp silmek, aktarılan kalan tutarı yok eder.
+            if (anaKayit.KismiOdemeMi && anaKayit.KalanSonrakiDonemeAktarilsin
+                && anaKayit.SonrakiDonemOdemeId == devir.Id
+                && anaKayit.Miktar <= anaKayit.ToplamKismiOdenen)
+                continue;
 
             // Devir tutarı = orijinal miktar - ödenen
             var dogruKalanTutar = RoundCurrency(anaKayit.Miktar - anaKayit.ToplamKismiOdenen);

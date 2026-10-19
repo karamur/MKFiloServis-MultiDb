@@ -300,6 +300,12 @@
                                                 <small class="text-muted">Hareket #: @odeme.BankaKasaHareketId</small>
                                             </div>
                                         }
+                                        @if (odeme.KalanSonrakiDonemeAktarilsin && odeme.SonrakiDonemOdemeId.HasValue)
+                                        {
+                                            <div>
+                                                <span class="badge bg-warning text-dark"><i class="bi bi-arrow-right-circle me-1"></i>Kalan tutar sonraki döneme aktarıldı</span>
+                                            </div>
+                                        }
                                         @if (odeme.OncekiDonemOdemeId.HasValue)
                                         {
                                             <div>
@@ -347,9 +353,9 @@
                                                     <i class="bi bi-cash"></i>
                                                 </button>
                                             }
-                                            @if (odeme.Durum == OdemeDurum.Odendi)
+                                            @if (odeme.Durum == OdemeDurum.Odendi || odeme.Durum == OdemeDurum.KismiOdendi)
                                             {
-                                                <button class="btn btn-outline-warning" @onclick="() => OdemeGeriAl(odeme)" title="Odeme Geri Al">
+                                                <button class="btn btn-outline-warning" @onclick="() => OdemeGeriAl(odeme)" title="@(KismiOdemeIslemiMi(odeme) ? "Kısmi Ödemeyi Geri Al" : "Odeme Geri Al")">
                                                     <i class="bi bi-arrow-counterclockwise"></i>
                                                 </button>
                                             }
@@ -891,7 +897,14 @@
                     <button type="button" class="btn-close" @onclick="OdemeGeriAlIptal"></button>
                 </div>
                 <div class="modal-body">
-                    <p>'<strong>@_onayOdeme.MasrafKalemi</strong>' ödemesini geri almak istediğinize emin misiniz? İlişkili kasa/banka hareketi de silinecektir.</p>
+                    @if (KismiOdemeIslemiMi(_onayOdeme))
+                    {
+                        <p>'<strong>@_onayOdeme.MasrafKalemi</strong>' ödemesi kısmi ödeme içeriyor. Geri aldığınızda bu ödemeye ait tüm kısmi ödeme hareketleri silinecek, sonraki döneme aktarılan kalan tutar kaydı kaldırılacak ve kalan tutar bu ödemeye geri eklenecektir. Emin misiniz?</p>
+                    }
+                    else
+                    {
+                        <p>'<strong>@_onayOdeme.MasrafKalemi</strong>' ödemesini geri almak istediğinize emin misiniz? İlişkili kasa/banka hareketi de silinecektir.</p>
+                    }
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-primary" @onclick="OdemeGeriAlOnayla">
@@ -953,6 +966,7 @@
     private decimal GetBekleyenTutar(BudgetOdeme odeme) => odeme.Durum == OdemeDurum.KismiOdendi ? odeme.KalanTutar : odeme.Miktar;
     private decimal GetOdenenTutar(BudgetOdeme odeme) => odeme.Durum == OdemeDurum.KismiOdendi ? odeme.ToplamKismiOdenen : (odeme.OdenenTutar ?? odeme.Miktar);
     private decimal GetGorunenTutar(BudgetOdeme odeme) => odeme.Durum == OdemeDurum.KismiOdendi ? odeme.KalanTutar : odeme.Miktar;
+    private static bool KismiOdemeIslemiMi(BudgetOdeme odeme) => odeme.KismiOdemeMi || odeme.ToplamKismiOdenen != 0 || odeme.SonrakiDonemOdemeId.HasValue;
     private bool isLoading = true;
     private List<BudgetOdeme> odemeler = new();
     private List<BudgetOdeme> filtrelenmisOdemeler = new();
@@ -1376,8 +1390,11 @@
         _onayOdeme = null;
         try
         {
-            await BudgetService.OdemeGeriAlAsync(odeme.Id);
-            ToastService.ShowSuccess("Odeme geri alindi ve hareket silindi.");
+            var kismiOdemeydi = KismiOdemeIslemiMi(odeme);
+            var geriAlinan = await BudgetService.OdemeGeriAlAsync(odeme.Id);
+            ToastService.ShowSuccess(kismiOdemeydi
+                ? $"Kısmi ödeme tamamen geri alındı; kalan tutar ödemeye geri eklendi. Ödeme {FormatPara(geriAlinan.Miktar)} tutarıyla yeniden bekliyor."
+                : "Odeme geri alindi ve hareket silindi.");
             await LoadDataAsync();
         }
         catch (Exception ex)
