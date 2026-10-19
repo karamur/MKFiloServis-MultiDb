@@ -3683,6 +3683,13 @@ public class ApplicationDbContext : DbContext
             .Where(x => (x.State == EntityState.Added || x.State == EntityState.Modified || x.State == EntityState.Deleted) && !(x.Entity is AktiviteLog))
             .ToList();
 
+        if (modifiedEntities.Count == 0)
+            return;
+
+        // Girişte ICurrentUserAccessor'a yazılan AsyncLocal sonraki Blazor olaylarına akmaz; bu yüzden arayüzden
+        // yapılan işlemler "Sistem" adına yazılıyordu. Devrenin kendi oturumundaki kullanıcı da kullanılır.
+        var oturumKullanicisi = ResolveOturumKullanicisi();
+
         foreach (var entry in modifiedEntities)
         {
             var entityType = entry.Entity.GetType();
@@ -3714,6 +3721,14 @@ public class ApplicationDbContext : DbContext
                 {
                     if (int.TryParse(userIdClaim, out var userId) && userId > 0) log.KullaniciId = userId;
                     if (log.KullaniciAdi == "Sistem") log.KullaniciAdi = user.Identity.Name ?? userIdClaim;
+                }
+                if (oturumKullanicisi != null)
+                {
+                    log.KullaniciId ??= oturumKullanicisi.Id;
+                    if (log.KullaniciAdi == "Sistem")
+                        log.KullaniciAdi = !string.IsNullOrWhiteSpace(oturumKullanicisi.AdSoyad)
+                            ? oturumKullanicisi.AdSoyad
+                            : oturumKullanicisi.KullaniciAdi;
                 }
                 log.IpAdresi = http?.Connection.RemoteIpAddress?.ToString();
                 log.Tarayici = http?.Request.Headers.UserAgent.ToString();
@@ -3769,6 +3784,28 @@ public class ApplicationDbContext : DbContext
             {
                 throw new InvalidOperationException($"{entityType.Name} denetim kaydı oluşturulamadı; işlem kaydedilmedi.", ex);
             }
+        }
+    }
+
+    /// <summary>
+    /// Bu bağlamın DI kapsamındaki (Blazor devresi) oturum açmış kullanıcı; kapsam yoksa veya oturum açılmamışsa null.
+    /// Hizmet çözümlenemezse denetim yazımı asla bozulmaz.
+    /// </summary>
+    private Kullanici? ResolveOturumKullanicisi()
+    {
+        try
+        {
+            return (_serviceProvider ?? AmbientServiceProvider.Value)
+                ?.GetService<MKFiloServis.Web.Services.AppAuthenticationStateProvider>()
+                ?.GetAktifKullanici();
+        }
+        catch (ObjectDisposedException)
+        {
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
         }
     }
 
