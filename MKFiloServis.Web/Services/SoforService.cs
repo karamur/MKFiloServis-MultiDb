@@ -779,7 +779,7 @@ public class SoforService : ISoforService
         {
             "Personel Kodu", "Ad", "Soyad", "TC Kimlik", "Telefon", "Email",
             "Görev", "Departman", "Pozisyon", "İşe Başlama", "Durum",
-            "Brüt Maaş", "Net Maaş", "SGK Bordrolu", "Bordro Tipi"
+            "Brüt Maaş", "Net Maaş", "SGK Durumu", "Bordro Tipi"
         };
 
         for (int i = 0; i < headers.Length; i++)
@@ -808,7 +808,7 @@ public class SoforService : ISoforService
             ws.Cell(row, 11).Value = p.Aktif ? "Aktif" : "Pasif";
             ws.Cell(row, 12).Value = p.BrutMaas;
             ws.Cell(row, 13).Value = p.NetMaas;
-            ws.Cell(row, 14).Value = p.SGKBordroDahilMi ? "Evet" : "Hayır";
+            ws.Cell(row, 14).Value = p.SGKBordroDahilMi ? "SGK'lı" : "SGK'sız";
             ws.Cell(row, 15).Value = GetBordroTipiAdi(p.BordroTipiPersonel);
 
             ws.Cell(row, 12).Style.NumberFormat.Format = "#,##0.00";
@@ -825,6 +825,8 @@ public class SoforService : ISoforService
         ws.Cell(row, 1).Value = $"Toplam Personel: {personeller.Count}";
         row++;
         ws.Cell(row, 1).Value = $"Aktif Personel: {personeller.Count(p => p.Aktif)}";
+        row++;
+        ws.Cell(row, 1).Value = $"SGK'lı: {personeller.Count(p => p.SGKBordroDahilMi)}  /  SGK'sız: {personeller.Count(p => !p.SGKBordroDahilMi)}";
         row++;
         ws.Cell(row, 1).Value = $"Toplam Net Maaş: {personeller.Where(p => p.Aktif).Sum(p => p.NetMaas):C0}";
 

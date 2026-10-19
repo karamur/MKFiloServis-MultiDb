@@ -172,6 +172,16 @@
                             </div>
                         </div>
                     </div>
+                    <!-- SGK süzgeci: SGK bordrosuna dahil (SGK'lı) ve dahil olmayan (SGK'sız) personeli ayırır -->
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2" role="group" aria-label="SGK durumu süzgeci">
+                        @foreach (var (anahtar, etiket, simge, adet) in SgkSuzgecleri)
+                        {
+                            <button type="button" class="btn btn-sm @(durSgkFiltre == anahtar ? "btn-success" : "btn-outline-success")"
+                                    @onclick="() => SgkSuzgeciSec(anahtar)">
+                                <i class="bi @simge me-1"></i>@etiket <span class="badge @(durSgkFiltre == anahtar ? "text-bg-light" : "text-bg-success") ms-1">@adet</span>
+                            </button>
+                        }
+                    </div>
                     <!-- Durum süzgeçleri -->
                     <div class="d-flex flex-wrap align-items-center gap-2 mb-2" role="group" aria-label="Durum süzgeci">
                         @foreach (var (anahtar, etiket, simge, adet) in DurumSuzgecleri)
@@ -220,6 +230,14 @@
                                                     @if (s.KartBulunamadi)
                                                     {
                                                         <span class="badge text-bg-light border ms-1" style="font-size:0.6rem;" title="Personel kartı artık bulunmuyor; bilgiler dönem kaydından alındı">Kayıtlı değil</span>
+                                                    }
+                                                    else if (s.SgkliMi == true)
+                                                    {
+                                                        <span class="badge text-bg-success ms-1" style="font-size:0.6rem;" title="SGK bordrosuna dahil">SGK'lı</span>
+                                                    }
+                                                    else if (s.SgkliMi == false)
+                                                    {
+                                                        <span class="badge text-bg-secondary ms-1" style="font-size:0.6rem;" title="SGK bordrosuna dahil değil">SGK'sız</span>
                                                     }
                                                     <br />
                                                     <small class="text-muted">@s.SoforKodu@(kompakt ? " · " + s.GorevAdi : "")</small>
@@ -1378,6 +1396,7 @@
     private BordroDetay? durBordroDetay;
     private List<PersonelCebindenHarcamaItem> durCebHarcamalar = new();
     private string durDurumFiltre = string.Empty; // "" | elden | banka | devir | alacak | yok
+    private string durSgkFiltre = string.Empty;   // "" | sgkli | sgksiz (SGK bordrosuna dahil mi)
     private (int Yil, int Ay)? durYuklenenDonem;
     private string? durKayitBilgisi;
     private string? durKayitAciklama;
@@ -1393,13 +1412,16 @@
         .ThenBy(s => s.Ad)
         .ThenBy(s => s.Soyad)
         .ToList();
-    // Arama ve görev süzgeci; durum düğmelerindeki adetler bu kümeden sayılır.
-    private IEnumerable<PersonelDurumSatir> DurAramaGorevSatirlari => durSatirlar
+    // Arama ve görev süzgeci (SGK düğmelerindeki adetler bu kümeden sayılır).
+    private IEnumerable<PersonelDurumSatir> DurAramaGorevSgkOncesiSatirlari => durSatirlar
         .Where(s => (string.IsNullOrWhiteSpace(durAramaMetni)
                 || s.AdSoyad.Contains(durAramaMetni, StringComparison.OrdinalIgnoreCase)
                 || s.SoforKodu.Contains(durAramaMetni, StringComparison.OrdinalIgnoreCase))
             && (string.IsNullOrWhiteSpace(durSecilenGorev)
                 || s.GorevEnum.ToString() == durSecilenGorev));
+    // Arama + görev + SGK durumu süzgeci; durum düğmelerindeki adetler bu kümeden sayılır.
+    private IEnumerable<PersonelDurumSatir> DurAramaGorevSatirlari => DurAramaGorevSgkOncesiSatirlari
+        .Where(s => SgkUyar(s, durSgkFiltre));
     private IEnumerable<PersonelDurumSatir> DurFiltreliSatirlar => DurAramaGorevSatirlari
         .Where(s => DurumUyar(s, durDurumFiltre));
     private PersonelDurumSatir? DurSecilenSatir => durSecilenPersonelId > 0
@@ -1435,6 +1457,27 @@
             }
         }
     }
+
+    // SGK'lı = SGK bordrosuna dahil (Personel Listesi ve Banka Ödeme Listesi ile aynı tanım); kartı olmayan satırlar bilinmeyen sayılır.
+    private static bool SgkUyar(PersonelDurumSatir satir, string anahtar) => anahtar switch
+    {
+        "sgkli" => satir.SgkliMi == true,
+        "sgksiz" => satir.SgkliMi == false,
+        _ => true
+    };
+
+    private IEnumerable<(string Anahtar, string Etiket, string Simge, int Adet)> SgkSuzgecleri
+    {
+        get
+        {
+            var satirlar = DurAramaGorevSgkOncesiSatirlari.ToList();
+            yield return ("", "SGK: Tümü", "bi-people", satirlar.Count);
+            yield return ("sgkli", "SGK'lı", "bi-shield-check", satirlar.Count(s => s.SgkliMi == true));
+            yield return ("sgksiz", "SGK'sız", "bi-shield-slash", satirlar.Count(s => s.SgkliMi == false));
+        }
+    }
+
+    private void SgkSuzgeciSec(string anahtar) => durSgkFiltre = anahtar;
 
     private static bool DurumUyar(PersonelDurumSatir satir, string anahtar) => anahtar switch
     {
@@ -3118,6 +3161,9 @@ td {{ padding: 4px; border-bottom: 1px solid #ddd; font-size: 10px; }}
         public int? FirmaId { get; set; }
         public string? FirmaAdi { get; set; }
         public string? SgkDurum { get; set; }
+
+        /// <summary>true = SGK'lı, false = SGK'sız, null = personel kartı yok (dönem kaydından gelen satır).</summary>
+        public bool? SgkliMi => SgkDurum switch { "SGK'lı" => true, "SGK'sız" => false, _ => null };
         public DateTime? IseGirisTarihi { get; set; }
         public DateTime? IstenCikisTarihi { get; set; }
     }

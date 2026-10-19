@@ -53,8 +53,14 @@
                     <option value="@t.Id">@t.Unvan</option>
                 }
             </select>
+            <select class="form-select" style="width: 170px;" @bind="secilenSgkDurum" @bind:after="FiltreleAsync" aria-label="SGK durumu"
+                    title="SGK bordrosuna dahil olan (SGK'lı) ve olmayan (SGK'sız) personeli ayır">
+                <option value="">Tüm SGK Durumları</option>
+                <option value="sgkli">SGK'lı</option>
+                <option value="sgksiz">SGK'sız</option>
+            </select>
             <div class="btn-group" role="group" aria-label="Durum filtresi">
-                <button type="button" class="btn @(secilenAktifDurum == "" ? "btn-secondary" : "btn-outline-secondary")" 
+                <button type="button" class="btn @(secilenAktifDurum == "" ? "btn-secondary" : "btn-outline-secondary")"
                         @onclick='() => AktifDurumFiltrele("")'>
                     <i class="bi bi-people me-1"></i>Tümü
                 </button>
@@ -129,6 +135,7 @@
                                 <th>Araç</th>
                                 <th>İşe Başlama</th>
                                 <th>İşten Çıkış</th>
+                                <th class="text-center">SGK</th>
                                 <th>SGK Çıkış</th>
                                 <th class="text-end">Maaş</th>
                                 <th class="text-center">Belgeler</th>
@@ -179,6 +186,16 @@
                                     </td>
                                     <td>@personel.IseBaslamaTarihi?.ToString("dd.MM.yyyy")</td>
                                      <td>@personel.IstenAyrilmaTarihi?.ToString("dd.MM.yyyy")</td>
+                                     <td class="text-center">
+                                         @if (personel.SGKBordroDahilMi)
+                                         {
+                                             <span class="badge bg-success" title="@SgkBilgiMetni(personel)">SGK'lı</span>
+                                         }
+                                         else
+                                         {
+                                             <span class="badge bg-secondary" title="SGK bordrosuna dahil değil">SGK'sız</span>
+                                         }
+                                     </td>
                                      <td>@personel.SgkCikisTarihi?.ToString("dd.MM.yyyy")</td>
                                     <td class="text-end">@personel.NetMaas.ToString("C2", System.Globalization.CultureInfo.GetCultureInfo("tr-TR"))</td>
                                     <td class="text-center">
@@ -255,8 +272,8 @@
         </div>
         
         <!-- Özet Bilgiler -->
-        <div class="row mt-3">
-            <div class="col-md-3">
+        <div class="row mt-3 g-2">
+            <div class="col-6 col-md">
                 <div class="card bg-light">
                     <div class="card-body py-2 text-center">
                         <small class="text-muted">Gösterilen / Toplam</small>
@@ -264,7 +281,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-6 col-md">
                 <div class="card bg-light">
                     <div class="card-body py-2 text-center">
                         <small class="text-muted">Şoför Sayısı</small>
@@ -272,7 +289,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-6 col-md">
                 <div class="card bg-light">
                     <div class="card-body py-2 text-center">
                         <small class="text-muted">Aktif Personel</small>
@@ -280,7 +297,19 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-6 col-md">
+                <div class="card bg-light">
+                    <div class="card-body py-2 text-center" title="SGK bordrosuna dahil olan / olmayan personel (gösterilen listede)">
+                        <small class="text-muted">SGK'lı / SGK'sız</small>
+                        <h5 class="mb-0">
+                            <span class="text-success">@personeller.Count(p => p.SGKBordroDahilMi)</span>
+                            <span class="text-muted">/</span>
+                            <span class="text-secondary">@personeller.Count(p => !p.SGKBordroDahilMi)</span>
+                        </h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md">
                 <div class="card bg-light">
                     <div class="card-body py-2 text-center">
                         <small class="text-muted">Toplam Maaş</small>
@@ -458,7 +487,19 @@
     private int secilenFirmaId = 0;
     private int secilenTedarikciId = 0;
     private string secilenPersonelKaynak = "";
+    private string secilenSgkDurum = "";
     private string secilenSiralam = "sira";
+
+    // Rozetin ipucu: SGK'lı personelin çalışma türü ve varsa SGK'dan çıkış tarihi
+    private static string SgkBilgiMetni(Sofor personel)
+    {
+        var parcalar = new List<string> { "SGK bordrosuna dahil" };
+        if (personel.SgkCalismaTuru.HasValue)
+            parcalar.Add($"Çalışma türü: {personel.SgkCalismaTuru.Value}");
+        if (personel.SgkCikisTarihi.HasValue)
+            parcalar.Add($"SGK çıkış: {personel.SgkCikisTarihi.Value:dd.MM.yyyy}");
+        return string.Join(" · ", parcalar);
+    }
 
     private IEnumerable<Sofor> SiraliPersoneller
     {
@@ -551,6 +592,8 @@
                 IseBaslamaTarihi = s.IseBaslamaTarihi,
                 IstenAyrilmaTarihi = s.IstenAyrilmaTarihi,
                 SgkCikisTarihi = s.SgkCikisTarihi,
+                SGKBordroDahilMi = s.SGKBordroDahilMi,
+                SgkCalismaTuru = s.SgkCalismaTuru,
                 NetMaas = s.NetMaas,
                 EhliyetGecerlilikTarihi = s.EhliyetGecerlilikTarihi,
                 MykBelgesiGecerlilikTarihi = s.MykBelgesiGecerlilikTarihi,
@@ -604,6 +647,12 @@
             sorgu = sorgu.Where(p => !p.TasimaTedarikciId.HasValue);
         else if (secilenPersonelKaynak == "tedarikci")
             sorgu = sorgu.Where(p => p.TasimaTedarikciId.HasValue);
+
+        // SGK'lı = SGK bordrosuna dahil (Maaş ve Banka Ödeme listeleriyle aynı tanım)
+        if (secilenSgkDurum == "sgkli")
+            sorgu = sorgu.Where(p => p.SGKBordroDahilMi);
+        else if (secilenSgkDurum == "sgksiz")
+            sorgu = sorgu.Where(p => !p.SGKBordroDahilMi);
 
         personeller = sorgu.ToList();
     }
