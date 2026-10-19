@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Win32;
 using System.Runtime.Versioning;
+using MKFiloServis.Shared.Licensing;
 
 namespace MKFiloServis.Shared;
 
@@ -88,16 +89,42 @@ public static class LisansHelper
     {
         try
         {
-            var searcher = new ManagementObjectSearcher("SELECT SerialNumber FROM Win32_PhysicalMedia");
-            foreach (ManagementObject obj in searcher.Get())
-            {
-                var serial = obj["SerialNumber"]?.ToString()?.Trim();
-                if (!string.IsNullOrEmpty(serial))
-                    return serial;
-            }
+            // USB bellek/harici diskler takılıp çıkarılabilir ve WMI listesinde dahili diskten önce gelebilir;
+            // atlanmazsa USB takılınca makine kodu (dolayısıyla lisans eşleşmesi) değişir.
+            var serial = DiskSerialSelector.Pick(ReadPhysicalMedia(), GetUsbDriveIds());
+            if (serial != null)
+                return serial;
         }
         catch { }
         return "DISK-UNKNOWN";
+    }
+
+    private static IEnumerable<(string? Tag, string? Serial)> ReadPhysicalMedia()
+    {
+        var searcher = new ManagementObjectSearcher("SELECT SerialNumber, Tag FROM Win32_PhysicalMedia");
+        foreach (ManagementObject obj in searcher.Get())
+        {
+            yield return (obj["Tag"]?.ToString(), obj["SerialNumber"]?.ToString());
+        }
+    }
+
+    /// <summary>USB veri yolundaki fiziksel disklerin kimlikleri (örn. \\.\PHYSICALDRIVE1); Win32_PhysicalMedia.Tag ile eşleşir.</summary>
+    private static HashSet<string> GetUsbDriveIds()
+    {
+        var kimlikler = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var searcher = new ManagementObjectSearcher("SELECT DeviceID, InterfaceType, PNPDeviceID FROM Win32_DiskDrive");
+            foreach (ManagementObject obj in searcher.Get())
+            {
+                var deviceId = obj["DeviceID"]?.ToString();
+                if (!string.IsNullOrEmpty(deviceId) &&
+                    DiskSerialSelector.IsUsbDrive(obj["InterfaceType"]?.ToString(), obj["PNPDeviceID"]?.ToString()))
+                    kimlikler.Add(deviceId);
+            }
+        }
+        catch { }
+        return kimlikler;
     }
 
     private static string BuildDeterministicFallbackSource()
