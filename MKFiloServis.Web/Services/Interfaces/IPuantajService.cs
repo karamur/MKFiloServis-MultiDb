@@ -18,6 +18,15 @@ public interface IPuantajService
     // Günlük Puantaj
     Task<List<GunlukPuantaj>> GetGunlukPuantajlarAsync(int puantajId);
     Task<GunlukPuantaj> SaveGunlukPuantajAsync(GunlukPuantaj gunluk);
+
+    /// <summary>Bir ayın bütün personel günlük kayıtları, puantaj Id'sine göre gruplu (tek sorgu).</summary>
+    Task<Dictionary<int, List<GunlukPuantaj>>> GetAylikGunlukleriAsync(int firmaId, int yil, int ay);
+
+    /// <summary>
+    /// Bir puantajın günlük kayıtlarını tek işlemde yazar (olmayan gün eklenir, olan güncellenir) ve aylık özeti
+    /// (gün sayıları, fazla mesai, saatlik personelde brüt/net) aynı işlemde günceller. Onaylı puantaj değiştirilemez.
+    /// </summary>
+    Task<PersonelPuantaj> GunlukleriKaydetAsync(int puantajId, IReadOnlyCollection<GunlukPuantaj> gunler);
     Task OtomatikGunlukPuantajOlusturAsync(int puantajId, int yil, int ay, bool cumartesiCalisir = true, bool pazarCalisir = false, List<DateTime>? resmiTatiller = null, List<int>? calisilanGunler = null, decimal? gunlukSaat = null);
 
     // Hesaplamalar

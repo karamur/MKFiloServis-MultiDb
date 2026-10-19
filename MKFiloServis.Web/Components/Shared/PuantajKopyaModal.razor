@@ -1,0 +1,434 @@
+﻿@using System.Globalization
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+
+@* Geçen ayın puantajını seçili personellere toplu kopyalama penceresi: önizleme tablosu, kart kontrolü, haftanın günü / ayın günü eşleştirmesi. *@
+@if (Goster)
+{
+    var seciliSayisi = secili.Count;
+
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1" role="dialog" aria-modal="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white py-2">
+                    <h6 class="modal-title"><i class="bi bi-copy me-2"></i>Geçen Aydan Kopyala — @AyAdi(kaynakAy) @kaynakYil → @AyAdi(Ay) @Yil</h6>
+                    <button type="button" class="btn-close btn-close-white" @onclick="KapatAsync" aria-label="Kapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-2 align-items-end mb-2">
+                        <div class="col-md-3">
+                            <label class="form-label small mb-1 fw-bold">Kopyalanacak ay</label>
+                            <select class="form-select form-select-sm" value="@KaynakDegeri" @onchange="KaynakAyDegistiAsync" disabled="@(yukleniyor || uygulaniyor)">
+                                @foreach (var secenek in KaynakAylari())
+                                {
+                                    <option value="@($"{secenek.Yil}-{secenek.Ay}")">@AyAdi(secenek.Ay) @secenek.Yil</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small mb-1 fw-bold">Günler nasıl eşleşsin?</label>
+                            <select class="form-select form-select-sm" @bind="hizalama" @bind:after="OnizlemeleriYenile" disabled="@uygulaniyor">
+                                <option value="@PuantajKopyaHizalama.HaftaninGunu">Haftanın günlerine göre (önerilen)</option>
+                                <option value="@PuantajKopyaHizalama.AyinGunu">Ayın gün numarasına göre</option>
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small mb-1 fw-bold">Bu ayda zaten girilmiş günler</label>
+                            <select class="form-select form-select-sm" @bind="sadeceBosGunler" @bind:after="OnizlemeleriYenile" disabled="@uygulaniyor">
+                                <option value="@true">Dokunma, yalnız boş günleri doldur</option>
+                                <option value="@false">Üzerine yaz (bütün ayı kopyadan al)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="d-flex flex-wrap gap-3 mb-2 small">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="pkm-fm" @bind="fazlaMesai" @bind:after="OnizlemeleriYenile" disabled="@uygulaniyor" />
+                            <label class="form-check-label" for="pkm-fm">Fazla mesai saatlerini de kopyala</label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="pkm-izin" @bind="izinMazeret" @bind:after="OnizlemeleriYenile" disabled="@uygulaniyor" />
+                            <label class="form-check-label" for="pkm-izin">İzin / mazeret günlerini de kopyala</label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="pkm-tatil" @bind="resmiTatil" @bind:after="OnizlemeleriYenile" disabled="@uygulaniyor" />
+                            <label class="form-check-label" for="pkm-tatil">Bu aydaki resmi tatilleri boş bırak</label>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(hata))
+                    {
+                        <div class="alert alert-danger py-2 small"><i class="bi bi-x-octagon me-1"></i>@hata</div>
+                    }
+
+                    @if (yukleniyor)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border spinner-border-sm text-success me-2" role="status"></div>
+                            <span class="text-muted small">Puantajlar yükleniyor...</span>
+                        </div>
+                    }
+                    else if (adaylar.Count == 0)
+                    {
+                        <div class="alert alert-light border small mb-0"><i class="bi bi-info-circle me-1"></i>Kopyalanacak personel bulunamadı.</div>
+                    }
+                    else
+                    {
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <small class="text-muted">
+                                İzin, mazeret ve resmi tatil gibi o aya özgü günler varsayılan olarak kopyalanmaz; yerine aynı hafta gününün başka bir haftadaki normal günü esas alınır.
+                            </small>
+                            <div class="btn-group btn-group-sm">
+                                <button type="button" class="btn btn-outline-secondary" @onclick="TumunuSec" disabled="@uygulaniyor">Tümünü seç</button>
+                                <button type="button" class="btn btn-outline-secondary" @onclick="SecimiTemizle" disabled="@uygulaniyor">Temizle</button>
+                            </div>
+                        </div>
+                        <div class="table-responsive border rounded" style="max-height: 46vh; overflow-y: auto;">
+                            <table class="table table-sm table-hover align-middle mb-0" style="font-size: 0.8rem;">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th style="width: 34px;"></th>
+                                        <th>Personel</th>
+                                        <th class="text-end">@AyAdi(kaynakAy) (kaynak)</th>
+                                        <th class="text-end">@AyAdi(Ay) (şimdi)</th>
+                                        <th class="text-end">Kopyalanınca</th>
+                                        <th>Karta göre</th>
+                                        <th>Durum</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var aday in adaylar)
+                                    {
+                                        var secilebilir = Secilebilir(aday);
+                                        var onizleme = onizlemeler.GetValueOrDefault(aday.Personel.Id);
+                                        var kaynakGun = aday.Kaynak?.Gunler.Count(g => g.Calisti) ?? 0;
+                                        var kaynakSaat = aday.Kaynak == null ? 0 : PuantajKartKontrolu.ToplamSaat(aday.Kaynak.Gunler);
+                                        var simdiGun = aday.MevcutGunler.Count(g => g.Calisti);
+                                        var simdiSaat = PuantajKartKontrolu.ToplamSaat(aday.MevcutGunler);
+                                        var saatlik = aday.Personel.BrutMaasHesaplamaTipi == BrutMaasHesaplamaTipi.Saatlik;
+                                        var personelId = aday.Personel.Id;
+                                        <tr class="@(secilebilir ? "" : "text-muted")">
+                                            <td class="text-center">
+                                                <input type="checkbox" class="form-check-input" disabled="@(!secilebilir || uygulaniyor)"
+                                                       checked="@secili.Contains(personelId)"
+                                                       @onchange="e => SecimDegisti(personelId, e)" />
+                                            </td>
+                                            <td>
+                                                <strong>@aday.Personel.TamAd</strong>
+                                                <span class="badge @UcretRozeti(aday.Personel) ms-1" style="font-size: 0.6rem;">@UcretAdi(aday.Personel)</span>
+                                                @if (!string.IsNullOrWhiteSpace(aday.Personel.SoforKodu))
+                                                {
+                                                    <br /><small class="text-muted">@aday.Personel.SoforKodu</small>
+                                                }
+                                            </td>
+                                            <td class="text-end">@Ozet(aday.Kaynak == null ? null : kaynakGun, kaynakSaat, saatlik)</td>
+                                            <td class="text-end">@Ozet(aday.MevcutPuantajId == null ? null : simdiGun, simdiSaat, saatlik)</td>
+                                            <td class="text-end fw-semibold">
+                                                @if (onizleme != null)
+                                                {
+                                                    @Ozet(onizleme.Gun, onizleme.Saat, saatlik)
+                                                }
+                                                else
+                                                {
+                                                    <span>–</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (onizleme != null && onizleme.Kart.Durum != KartKontrolDurumu.Tanimsiz)
+                                                {
+                                                    <span class="badge @KartRozeti(onizleme.Kart.Durum)" title="@onizleme.Kart.Mesaj" style="font-size: 0.65rem;">@onizleme.Kart.Ozet</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (aday.Onayli)
+                                                {
+                                                    <span class="badge bg-secondary">Onaylı — değiştirilemez</span>
+                                                }
+                                                else if (!secilebilir)
+                                                {
+                                                    <span class="text-muted">Geçen ay puantajı yok</span>
+                                                }
+                                                else if (aday.MevcutPuantajId == null)
+                                                {
+                                                    <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">Yeni oluşturulacak</span>
+                                                }
+                                                else if (aday.MevcutDolu)
+                                                {
+                                                    <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">@(sadeceBosGunler ? "Boş günler dolacak" : "Üzerine yazılacak")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">Günler doldurulacak</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer py-2">
+                    <small class="text-muted me-auto">@seciliSayisi personel seçili</small>
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="KapatAsync" disabled="@uygulaniyor">İptal</button>
+                    <button type="button" class="btn btn-success btn-sm" @onclick="UygulaAsync" disabled="@(seciliSayisi == 0 || yukleniyor || uygulaniyor)">
+                        @if (uygulaniyor)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check-lg me-1"></i>
+                        }
+                        Kopyala (@seciliSayisi)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private static readonly CultureInfo Tr = CultureInfo.GetCultureInfo("tr-TR");
+
+    [Parameter] public bool Goster { get; set; }
+
+    /// <summary>Hedef ay (kopyanın yazılacağı ay).</summary>
+    [Parameter] public int Yil { get; set; }
+    [Parameter] public int Ay { get; set; }
+
+    /// <summary>Verilen kaynak ay (yıl, ay) için aday personelleri; mevcut puantajları ve kaynak aydaki kayıtlarıyla birlikte getirir.</summary>
+    [Parameter] public Func<int, int, Task<IReadOnlyList<PuantajKopyaAday>>>? AdaylariYukle { get; set; }
+
+    /// <summary>Bir aydaki resmi tatiller.</summary>
+    [Parameter] public Func<int, int, IReadOnlyCollection<DateTime>>? ResmiTatiller { get; set; }
+
+    /// <summary>Pencere açılırken önceden seçilecek personeller; boşsa puantajı olmayan/boş olanlar seçilir.</summary>
+    [Parameter] public IReadOnlyCollection<int>? SeciliPersonelIds { get; set; }
+
+    /// <summary>Kopyala'ya basılınca seçili personellerin yeni günlük kayıtları.</summary>
+    [Parameter] public EventCallback<IReadOnlyList<PuantajKopyaSonucu>> OnUygula { get; set; }
+
+    [Parameter] public EventCallback OnKapat { get; set; }
+
+    private sealed record Onizleme(IReadOnlyList<GunlukPuantaj> YeniGunler, int Gun, decimal Saat, KartKontrolSonucu Kart);
+
+    private IReadOnlyList<PuantajKopyaAday> adaylar = [];
+    private readonly HashSet<int> secili = new();
+    private readonly Dictionary<int, Onizleme> onizlemeler = new();
+    private int kaynakYil;
+    private int kaynakAy;
+    private PuantajKopyaHizalama hizalama = PuantajKopyaHizalama.HaftaninGunu;
+    private bool sadeceBosGunler = true;
+    private bool fazlaMesai = true;
+    private bool izinMazeret;
+    private bool resmiTatil = true;
+    private bool yukleniyor;
+    private bool uygulaniyor;
+    private string? hata;
+    private bool oncekiGoster;
+
+    private string KaynakDegeri => $"{kaynakYil}-{kaynakAy}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Goster && !oncekiGoster)
+        {
+            var onceki = new DateTime(Yil, Ay, 1).AddMonths(-1);
+            kaynakYil = onceki.Year;
+            kaynakAy = onceki.Month;
+            hizalama = PuantajKopyaHizalama.HaftaninGunu;
+            sadeceBosGunler = true;
+            fazlaMesai = true;
+            izinMazeret = false;
+            resmiTatil = true;
+            uygulaniyor = false;
+            oncekiGoster = true;
+            await YukleAsync();
+            return;
+        }
+
+        oncekiGoster = Goster;
+    }
+
+    private IEnumerable<(int Yil, int Ay)> KaynakAylari()
+    {
+        var hedef = new DateTime(Yil, Ay, 1);
+        for (var i = 1; i <= 6; i++)
+        {
+            var tarih = hedef.AddMonths(-i);
+            yield return (tarih.Year, tarih.Month);
+        }
+    }
+
+    private async Task KaynakAyDegistiAsync(ChangeEventArgs e)
+    {
+        var parcalar = (e.Value?.ToString() ?? "").Split('-');
+        if (parcalar.Length != 2 || !int.TryParse(parcalar[0], out var yil) || !int.TryParse(parcalar[1], out var ay))
+            return;
+
+        kaynakYil = yil;
+        kaynakAy = ay;
+        await YukleAsync();
+    }
+
+    private async Task YukleAsync()
+    {
+        yukleniyor = true;
+        hata = null;
+        StateHasChanged();
+        try
+        {
+            adaylar = AdaylariYukle == null ? [] : await AdaylariYukle(kaynakYil, kaynakAy);
+            secili.Clear();
+            var onSecim = SeciliPersonelIds is { Count: > 0 } ? SeciliPersonelIds : null;
+            foreach (var aday in adaylar.Where(Secilebilir))
+            {
+                var iste = onSecim != null ? onSecim.Contains(aday.Personel.Id) : !aday.MevcutDolu;
+                if (iste)
+                    secili.Add(aday.Personel.Id);
+            }
+
+            OnizlemeleriYenile();
+        }
+        catch (Exception ex)
+        {
+            hata = ex.Message;
+            adaylar = [];
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+    }
+
+    private static bool Secilebilir(PuantajKopyaAday aday)
+        => !aday.Onayli && aday.Kaynak != null && aday.Kaynak.Gunler.Any(g => g.Calisti || g.Izinli || g.Mazeret);
+
+    private void OnizlemeleriYenile()
+    {
+        onizlemeler.Clear();
+        foreach (var aday in adaylar.Where(Secilebilir))
+        {
+            var yeniGunler = KopyaUret(aday);
+            onizlemeler[aday.Personel.Id] = new Onizleme(
+                yeniGunler,
+                yeniGunler.Count(g => g.Calisti),
+                PuantajKartKontrolu.ToplamSaat(yeniGunler),
+                PuantajKartKontrolu.Hesapla(aday.Personel, yeniGunler));
+        }
+    }
+
+    private List<GunlukPuantaj> KopyaUret(PuantajKopyaAday aday)
+    {
+        var secenek = new PuantajKopyaSecenekleri(hizalama, izinMazeret, fazlaMesai, resmiTatil);
+        var tatiller = ResmiTatiller?.Invoke(Yil, Ay) ?? [];
+        var uretilen = PuantajKopyalama.Uret(Yil, Ay, aday.Kaynak!, secenek, tatiller);
+        if (!sadeceBosGunler || !aday.MevcutDolu)
+            return uretilen;
+
+        // Bu ayda girilmiş günler korunur; yalnız boş günler kopyayla dolar.
+        var dolu = aday.MevcutGunler
+            .Where(g => g.Calisti || g.Izinli || g.Mazeret)
+            .GroupBy(g => g.Tarih.Day)
+            .ToDictionary(g => g.Key, g => g.First());
+        foreach (var gun in uretilen)
+        {
+            if (!dolu.TryGetValue(gun.Gun, out var mevcut))
+                continue;
+
+            gun.Calisti = mevcut.Calisti;
+            gun.Izinli = mevcut.Izinli;
+            gun.Mazeret = mevcut.Mazeret;
+            gun.CalismaSaati = mevcut.CalismaSaati;
+            gun.FazlaMesaiSaat = mevcut.FazlaMesaiSaat;
+            gun.Durum = mevcut.Calisti ? 1 : mevcut.Izinli ? 2 : 3;
+        }
+
+        return uretilen;
+    }
+
+    private void SecimDegisti(int personelId, ChangeEventArgs e)
+    {
+        if (e.Value is true)
+            secili.Add(personelId);
+        else
+            secili.Remove(personelId);
+    }
+
+    private void TumunuSec()
+    {
+        foreach (var aday in adaylar.Where(Secilebilir))
+            secili.Add(aday.Personel.Id);
+    }
+
+    private void SecimiTemizle() => secili.Clear();
+
+    private async Task UygulaAsync()
+    {
+        if (uygulaniyor || secili.Count == 0)
+            return;
+
+        var sonuclar = adaylar
+            .Where(a => secili.Contains(a.Personel.Id) && onizlemeler.ContainsKey(a.Personel.Id))
+            .Select(a => new PuantajKopyaSonucu(a, onizlemeler[a.Personel.Id].YeniGunler))
+            .ToList();
+        if (sonuclar.Count == 0)
+            return;
+
+        uygulaniyor = true;
+        try
+        {
+            await OnUygula.InvokeAsync(sonuclar);
+        }
+        finally
+        {
+            uygulaniyor = false;
+        }
+    }
+
+    private async Task KapatAsync()
+    {
+        if (!uygulaniyor)
+            await OnKapat.InvokeAsync();
+    }
+
+    private static MarkupString Ozet(int? gun, decimal saat, bool saatlik)
+    {
+        if (gun == null)
+            return new MarkupString("<span class=\"text-muted\">–</span>");
+
+        var metin = saatlik
+            ? $"{gun} gün / {saat.ToString("0.##", Tr)} s"
+            : $"{gun} gün";
+        return new MarkupString(System.Net.WebUtility.HtmlEncode(metin));
+    }
+
+    private static string UcretAdi(Sofor personel) => personel.BrutMaasHesaplamaTipi switch
+    {
+        BrutMaasHesaplamaTipi.Saatlik => "Saatlik",
+        BrutMaasHesaplamaTipi.Gunluk => "Günlük",
+        BrutMaasHesaplamaTipi.Aylik => "Aylık",
+        _ => "Manuel"
+    };
+
+    private static string UcretRozeti(Sofor personel) => personel.BrutMaasHesaplamaTipi switch
+    {
+        BrutMaasHesaplamaTipi.Saatlik => "bg-info",
+        BrutMaasHesaplamaTipi.Gunluk => "bg-primary",
+        BrutMaasHesaplamaTipi.Aylik => "bg-success",
+        _ => "bg-secondary"
+    };
+
+    private static string KartRozeti(KartKontrolDurumu durum) => durum switch
+    {
+        KartKontrolDurumu.Uyumlu => "bg-success-subtle text-success-emphasis border border-success-subtle",
+        KartKontrolDurumu.Az => "bg-danger-subtle text-danger-emphasis border border-danger-subtle",
+        _ => "bg-warning-subtle text-warning-emphasis border border-warning-subtle"
+    };
+
+    private static string AyAdi(int ay) => new DateTime(2024, ay, 1).ToString("MMMM", Tr);
+}

@@ -190,6 +190,82 @@ public class PuantajService : IPuantajService
             .ToListAsync();
     }
 
+    public async Task<Dictionary<int, List<GunlukPuantaj>>> GetAylikGunlukleriAsync(int firmaId, int yil, int ay)
+    {
+        using var context = await _contextFactory.CreateDbContextAsync();
+        var gunler = await context.GunlukPuantajlar
+            .AsNoTracking()
+            .Where(g => !g.IsDeleted
+                && g.PersonelPuantaj != null
+                && !g.PersonelPuantaj.IsDeleted
+                && g.PersonelPuantaj.FirmaId == firmaId
+                && g.PersonelPuantaj.Yil == yil
+                && g.PersonelPuantaj.Ay == ay)
+            .OrderBy(g => g.Tarih)
+            .ToListAsync();
+
+        return gunler
+            .GroupBy(g => g.PersonelPuantajId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+    }
+
+    public async Task<PersonelPuantaj> GunlukleriKaydetAsync(int puantajId, IReadOnlyCollection<GunlukPuantaj> gunler)
+    {
+        ArgumentNullException.ThrowIfNull(gunler);
+
+        using var context = await _contextFactory.CreateDbContextAsync();
+        var puantaj = await context.PersonelPuantajlar
+            .AsTracking()
+            .Include(p => p.Personel)
+            .FirstOrDefaultAsync(p => p.Id == puantajId && !p.IsDeleted)
+            ?? throw new InvalidOperationException("Puantaj bulunamadı.");
+
+        if (puantaj.OnayDurumu == PersonelPuantajOnayDurumu.Onaylandi)
+            throw new InvalidOperationException("Onaylanmış puantajın günlük kayıtları değiştirilemez.");
+
+        var mevcutlar = await context.GunlukPuantajlar
+            .AsTracking()
+            .Where(g => g.PersonelPuantajId == puantajId && !g.IsDeleted)
+            .ToListAsync();
+
+        foreach (var gelen in gunler)
+        {
+            var tarih = gelen.Tarih.Date;
+            var kayit = mevcutlar.FirstOrDefault(g => g.Tarih.Date == tarih);
+            if (kayit == null)
+            {
+                kayit = new GunlukPuantaj
+                {
+                    PersonelPuantajId = puantajId,
+                    FirmaId = puantaj.FirmaId,
+                    Gun = tarih.Day,
+                    Tarih = DateTime.SpecifyKind(tarih, DateTimeKind.Utc),
+                    CreatedAt = DateTime.UtcNow
+                };
+                context.GunlukPuantajlar.Add(kayit);
+                mevcutlar.Add(kayit);
+            }
+            else
+            {
+                kayit.UpdatedAt = DateTime.UtcNow;
+            }
+
+            kayit.Durum = gelen.Calisti ? 1 : gelen.Izinli ? 2 : gelen.Mazeret ? 3 : 0;
+            kayit.Calisti = gelen.Calisti;
+            kayit.Izinli = gelen.Izinli;
+            kayit.Mazeret = gelen.Mazeret;
+            kayit.CalismaSaati = gelen.CalismaSaati;
+            kayit.FazlaMesaiSaat = gelen.FazlaMesaiSaat;
+            if (gelen.Notlar != null)
+                kayit.Notlar = gelen.Notlar;
+        }
+
+        PuantajOzet.Uygula(puantaj, puantaj.Personel, mevcutlar);
+        puantaj.UpdatedAt = DateTime.UtcNow;
+        await context.SaveChangesAsync();
+        return puantaj;
+    }
+
     public async Task<GunlukPuantaj> SaveGunlukPuantajAsync(GunlukPuantaj gunluk)
     {
         using var context = await _contextFactory.CreateDbContextAsync();

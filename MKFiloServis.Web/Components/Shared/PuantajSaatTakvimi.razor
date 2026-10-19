@@ -1,0 +1,559 @@
+﻿@using System.Globalization
+@using MKFiloServis.Shared.Entities
+@using MKFiloServis.Web.Services
+
+@* Saatlik personelin bir ayını takvim üzerinde saat saat girme penceresi: haftalık düzen, geçen aydan kopyalama, canlı toplam ve tutar. *@
+@if (Goster && Personel != null)
+{
+    var ozet = Ozet();
+    var ucret = PuantajUcretHesabi.Hesapla(Personel, SentetikGunler());
+    var kart = PuantajKartKontrolu.Degerlendir(Personel, ozet.Toplam, ozet.FazlaMesai, ozet.Gun);
+    var ilkIndeks = HaftaIndeksi(new DateTime(Yil, Ay, 1).DayOfWeek);
+    var satirSayisi = (ilkIndeks + AyGunSayisi + 6) / 7;
+
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1" role="dialog" aria-modal="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white py-2">
+                    <h6 class="modal-title">
+                        <i class="bi bi-clock me-2"></i>Saat Takvimi — @Personel.TamAd
+                        <span class="badge bg-light text-dark ms-2">Saatlik @Personel.BirimUcret.ToString("N2", Tr) ₺/saat</span>
+                        <span class="ms-2 fw-normal">@AyAdi(Ay) @Yil</span>
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" @onclick="KapatAsync" aria-label="Kapat"></button>
+                </div>
+                <div class="modal-body">
+                    @if (Kilitli)
+                    {
+                        <div class="alert alert-secondary py-2 small"><i class="bi bi-lock me-1"></i>Bu puantaj onaylı olduğu için değiştirilemez; önce onayı geri alın.</div>
+                    }
+
+                    <div class="card mb-2 border-info">
+                        <div class="card-body py-2">
+                            <div class="d-flex flex-wrap align-items-end gap-2">
+                                <span class="small fw-bold text-info me-1 align-self-center">Haftalık düzen:</span>
+                                @for (var w = 0; w < 7; w++)
+                                {
+                                    var hafta = w;
+                                    <div style="width: 62px;">
+                                        <label class="form-label small mb-0 text-muted">@GunAdlari[hafta]</label>
+                                        <input type="text" inputmode="decimal" class="form-control form-control-sm text-center"
+                                               value="@Bicim(haftalik[hafta])" placeholder="–" disabled="@Kilitli"
+                                               @onchange="e => HaftalikDegisti(hafta, e.Value)" />
+                                    </div>
+                                }
+                                <button type="button" class="btn btn-info btn-sm text-white" @onclick="DuzeniUygula" disabled="@Kilitli"
+                                        title="Haftalık düzendeki saatleri ayın bütün günlerine yazar (izinli ve mazeretli günlere dokunmaz)">
+                                    <i class="bi bi-calendar-week me-1"></i>Düzeni aya uygula
+                                </button>
+                                <div class="btn-group btn-group-sm" role="group" aria-label="Hazır düzenler">
+                                    <button type="button" class="btn btn-outline-info" @onclick='() => HazirDuzen("haftaici")' disabled="@Kilitli">Hafta içi</button>
+                                    <button type="button" class="btn btn-outline-info" @onclick='() => HazirDuzen("cumartesi")' disabled="@Kilitli">Pzt–Cmt</button>
+                                    <button type="button" class="btn btn-outline-info" @onclick='() => HazirDuzen("hergun")' disabled="@Kilitli">Her gün</button>
+                                </div>
+                                <div class="form-check ms-1 mb-1">
+                                    <input type="checkbox" class="form-check-input" id="stk-tatil" @bind="tatilleriBosBirak" disabled="@Kilitli" />
+                                    <label class="form-check-label small" for="stk-tatil">Resmi tatilleri boş bırak</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                        @if (GecenAyYukle != null)
+                        {
+                            <div class="input-group input-group-sm w-auto">
+                                <select class="form-select form-select-sm" @bind="hizalama" disabled="@(Kilitli || kaynakYukleniyor)" title="Geçen ayın günleri nasıl eşleşsin?">
+                                    <option value="@PuantajKopyaHizalama.HaftaninGunu">Haftanın günlerine göre</option>
+                                    <option value="@PuantajKopyaHizalama.AyinGunu">Ayın gün numarasına göre</option>
+                                </select>
+                                <button type="button" class="btn btn-outline-success" @onclick="GecenAydanKopyalaAsync" disabled="@(Kilitli || kaynakYukleniyor)">
+                                    @if (kaynakYukleniyor)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-copy me-1"></i>
+                                    }
+                                    Geçen aydan kopyala
+                                </button>
+                            </div>
+                        }
+                        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="Temizle" disabled="@Kilitli"><i class="bi bi-eraser me-1"></i>Tümünü temizle</button>
+                        @if (!string.IsNullOrEmpty(bilgi))
+                        {
+                            <span class="small text-success"><i class="bi bi-check-circle me-1"></i>@bilgi</span>
+                        }
+                        @if (!string.IsNullOrEmpty(hata))
+                        {
+                            <span class="small text-danger"><i class="bi bi-exclamation-circle me-1"></i>@hata</span>
+                        }
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-lg-9">
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm mb-0 align-middle">
+                                    <thead class="table-light">
+                                        <tr class="text-center small">
+                                            @for (var w = 0; w < 7; w++)
+                                            {
+                                                <th class="@(w == 5 ? "table-warning" : w == 6 ? "table-danger" : "")" style="width: 12%;">@GunAdlari[w]</th>
+                                            }
+                                            <th style="width: 10%;" title="Hafta toplamı (saat)">Hafta</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (var satir = 0; satir < satirSayisi; satir++)
+                                        {
+                                            decimal haftaToplami = 0;
+                                            <tr>
+                                                @for (var sutun = 0; sutun < 7; sutun++)
+                                                {
+                                                    var gun = satir * 7 + sutun - ilkIndeks + 1;
+                                                    if (gun < 1 || gun > AyGunSayisi)
+                                                    {
+                                                        <td class="bg-light"></td>
+                                                        continue;
+                                                    }
+
+                                                    var tarih = new DateTime(Yil, Ay, gun);
+                                                    var saat = saatler.GetValueOrDefault(gun);
+                                                    haftaToplami += saat;
+                                                    var tatil = TatilMi(tarih);
+                                                    var izinli = saat <= 0 && izinGunleri.Contains(gun);
+                                                    var mazeretli = saat <= 0 && !izinli && mazeretGunleri.Contains(gun);
+                                                    var fazlaMesai = PuantajKartKontrolu.Bol(saat).FazlaMesai;
+                                                    var gunNo = gun;
+                                                    <td class="p-1 @(sutun == 6 ? "table-danger" : sutun == 5 ? "table-warning" : "")" style="vertical-align: top;">
+                                                        <div class="d-flex justify-content-between align-items-center small mb-1">
+                                                            <button type="button" class="btn btn-link p-0 text-decoration-none fw-bold @(tatil ? "text-danger" : "")"
+                                                                    title="Çalıştı / boş arasında değiştir" disabled="@Kilitli"
+                                                                    @onclick="() => GunDegistir(gunNo)">@gun</button>
+                                                            @if (tatil)
+                                                            {
+                                                                <i class="bi bi-flag-fill text-danger" title="Resmi tatil"></i>
+                                                            }
+                                                            @if (izinli)
+                                                            {
+                                                                <span class="badge bg-warning text-dark" title="İzinli">İ</span>
+                                                            }
+                                                            else if (mazeretli)
+                                                            {
+                                                                <span class="badge bg-danger" title="Mazeret / rapor">M</span>
+                                                            }
+                                                        </div>
+                                                        <input type="text" inputmode="decimal" class="form-control form-control-sm text-center @(saat > 0 ? "border-info fw-semibold" : "")"
+                                                               value="@Bicim(saat)" placeholder="–" disabled="@Kilitli"
+                                                               @onchange="e => SaatDegisti(gunNo, e.Value)" />
+                                                        @if (fazlaMesai > 0)
+                                                        {
+                                                            <div class="small text-info text-center" title="Günlük 7,5 saati aşan kısım fazla mesaidir">+@fazlaMesai.ToString("0.##", Tr) FM</div>
+                                                        }
+                                                    </td>
+                                                }
+                                                <td class="text-center fw-semibold @(haftaToplami > HaftalikUyariSaati ? "text-warning-emphasis bg-warning-subtle" : "")"
+                                                    title="@(haftaToplami > HaftalikUyariSaati ? $"Haftalık {HaftalikUyariSaati} saati aşıyor" : "Hafta toplamı")">
+                                                    @(haftaToplami > 0 ? haftaToplami.ToString("0.##", Tr) : "")
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="small text-muted mt-1">
+                                Saati yazıp <kbd>Tab</kbd> ile sonraki güne geçin. Gün numarasına tıklamak günü çalıştı/boş yapar. Günlük 7,5 saati aşan süre fazla mesai olarak ayrılır.
+                            </div>
+                        </div>
+
+                        <div class="col-lg-3">
+                            <div class="card">
+                                <div class="card-header py-1 bg-light"><strong>Ay özeti</strong></div>
+                                <ul class="list-group list-group-flush small">
+                                    <li class="list-group-item d-flex justify-content-between"><span>Çalışılan gün</span><strong>@ozet.Gun</strong></li>
+                                    <li class="list-group-item d-flex justify-content-between"><span>Normal saat</span><strong>@ozet.Normal.ToString("0.##", Tr)</strong></li>
+                                    <li class="list-group-item d-flex justify-content-between"><span>Fazla mesai</span><strong class="text-info">@ozet.FazlaMesai.ToString("0.##", Tr)</strong></li>
+                                    <li class="list-group-item d-flex justify-content-between bg-info-subtle"><span class="fw-semibold">Toplam saat</span><strong class="fs-6">@ozet.Toplam.ToString("0.##", Tr)</strong></li>
+                                    <li class="list-group-item d-flex justify-content-between"><span>Saatlik ücret</span><span>@Personel.BirimUcret.ToString("N2", Tr) ₺</span></li>
+                                    <li class="list-group-item d-flex justify-content-between"><span>Brüt tutar</span><strong>@(ucret.Hesaplandi ? ucret.Brut.ToString("N2", Tr) + " ₺" : "-")</strong></li>
+                                    @if (ucret.Net.HasValue)
+                                    {
+                                        <li class="list-group-item d-flex justify-content-between" title="Karttaki net maaş × (puantaj brütü ÷ kart brütü)"><span>Net (kart oranıyla)</span><strong>@ucret.Net.Value.ToString("N2", Tr) ₺</strong></li>
+                                    }
+                                </ul>
+                            </div>
+                            @if (kart.Durum != KartKontrolDurumu.Tanimsiz)
+                            {
+                                <div class="alert @(kart.Uyarili ? "alert-warning" : "alert-success") py-2 small mt-2 mb-0">
+                                    <i class="bi @(kart.Uyarili ? "bi-exclamation-triangle" : "bi-check-circle") me-1"></i>
+                                    <strong>Karta göre: @kart.Ozet</strong><br />@kart.Mesaj
+                                    @if (kart.Uyarili)
+                                    {
+                                        <div class="text-muted">Kaydetmeyi engellemez; kaydederken onay istenir.</div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="small text-muted mt-2"><i class="bi bi-info-circle me-1"></i>Kartta aylık çalışılan saat yazmadığı için kart kontrolü yapılmıyor.</div>
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="KapatAsync">İptal</button>
+                    <button type="button" class="btn btn-info btn-sm text-white" @onclick="KaydetAsync" disabled="@(Kilitli || kaydediliyor)">
+                        @if (kaydediliyor)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check-lg me-1"></i>
+                        }
+                        Kaydet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private const int HaftalikUyariSaati = 45;
+    private static readonly CultureInfo Tr = CultureInfo.GetCultureInfo("tr-TR");
+    private static readonly string[] GunAdlari = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
+
+    [Parameter] public bool Goster { get; set; }
+    [Parameter] public Sofor? Personel { get; set; }
+    [Parameter] public int Yil { get; set; }
+    [Parameter] public int Ay { get; set; }
+
+    /// <summary>Puantajın mevcut günlük kayıtları (olmayan gün boş sayılır).</summary>
+    [Parameter] public IReadOnlyList<GunlukPuantaj> Gunler { get; set; } = [];
+
+    /// <summary>Bu aydaki resmi tatiller.</summary>
+    [Parameter] public IReadOnlyCollection<DateTime> ResmiTatiller { get; set; } = [];
+
+    /// <summary>Onaylı puantaj: yalnızca görüntülenir.</summary>
+    [Parameter] public bool Kilitli { get; set; }
+
+    /// <summary>Geçen ayın bu personele ait kayıtlarını getirir; null ise "Geçen aydan kopyala" gösterilmez.</summary>
+    [Parameter] public Func<Task<PuantajKaynakAy?>>? GecenAyYukle { get; set; }
+
+    /// <summary>Kaydet'e basılınca ayın bütün günleri için oluşturulan günlük kayıtlar.</summary>
+    [Parameter] public EventCallback<IReadOnlyList<GunlukPuantaj>> OnKaydet { get; set; }
+
+    [Parameter] public EventCallback OnKapat { get; set; }
+
+    private readonly Dictionary<int, decimal> saatler = new();
+    private readonly HashSet<int> izinGunleri = new();
+    private readonly HashSet<int> mazeretGunleri = new();
+    private readonly decimal[] haftalik = new decimal[7];
+    private bool tatilleriBosBirak = true;
+    private PuantajKopyaHizalama hizalama = PuantajKopyaHizalama.HaftaninGunu;
+    private bool kaynakYukleniyor;
+    private bool kaydediliyor;
+    private string? bilgi;
+    private string? hata;
+    private bool oncekiAcik;
+
+    private int AyGunSayisi => DateTime.DaysInMonth(Yil, Ay);
+
+    protected override void OnParametersSet()
+    {
+        var acik = Goster && Personel != null;
+        if (acik && !oncekiAcik)
+            Baslat();
+        oncekiAcik = acik;
+    }
+
+    private void Baslat()
+    {
+        saatler.Clear();
+        izinGunleri.Clear();
+        mazeretGunleri.Clear();
+        bilgi = null;
+        hata = null;
+        kaydediliyor = false;
+        kaynakYukleniyor = false;
+        tatilleriBosBirak = true;
+        hizalama = PuantajKopyaHizalama.HaftaninGunu;
+
+        foreach (var gun in Gunler.Where(g => g.Tarih.Year == Yil && g.Tarih.Month == Ay))
+        {
+            if (gun.Calisti)
+                saatler[gun.Tarih.Day] = gun.CalismaSaati + gun.FazlaMesaiSaat;
+            else if (gun.Izinli)
+                izinGunleri.Add(gun.Tarih.Day);
+            else if (gun.Mazeret)
+                mazeretGunleri.Add(gun.Tarih.Day);
+        }
+
+        HaftalikDuzeniCikar();
+    }
+
+    /// <summary>Haftalık düzen kutularını ayda girilmiş saatlerden (haftanın günü başına en sık değer) çıkarır; veri yoksa hafta içi varsayılan saat.</summary>
+    private void HaftalikDuzeniCikar()
+    {
+        var varsayilan = PuantajKartKontrolu.VarsayilanGunlukSaat(Personel);
+        var veriVar = saatler.Values.Any(s => s > 0);
+
+        for (var w = 0; w < 7; w++)
+        {
+            if (!veriVar)
+            {
+                haftalik[w] = w < 5 ? varsayilan : 0;
+                continue;
+            }
+
+            haftalik[w] = saatler
+                .Where(kv => kv.Value > 0 && HaftaIndeksi(new DateTime(Yil, Ay, kv.Key).DayOfWeek) == w)
+                .GroupBy(kv => kv.Value)
+                .OrderByDescending(g => g.Count())
+                .ThenByDescending(g => g.Key)
+                .Select(g => g.Key)
+                .FirstOrDefault();
+        }
+    }
+
+    private (int Gun, decimal Normal, decimal FazlaMesai, decimal Toplam) Ozet()
+    {
+        var gun = 0;
+        decimal normal = 0, fazlaMesai = 0;
+        foreach (var saat in saatler.Values)
+        {
+            if (saat <= 0)
+                continue;
+
+            gun++;
+            var (n, f) = PuantajKartKontrolu.Bol(saat);
+            normal += n;
+            fazlaMesai += f;
+        }
+
+        return (gun, normal, fazlaMesai, normal + fazlaMesai);
+    }
+
+    private List<GunlukPuantaj> SentetikGunler()
+    {
+        var liste = new List<GunlukPuantaj>();
+        foreach (var (gun, saat) in saatler)
+        {
+            if (saat <= 0)
+                continue;
+
+            var (normal, fazlaMesai) = PuantajKartKontrolu.Bol(saat);
+            liste.Add(new GunlukPuantaj { Gun = gun, Calisti = true, CalismaSaati = normal, FazlaMesaiSaat = fazlaMesai });
+        }
+
+        return liste;
+    }
+
+    private bool TatilMi(DateTime tarih) => ResmiTatiller.Any(t => t.Date == tarih.Date);
+
+    private decimal VarsayilanSaat()
+    {
+        var ilk = haftalik.FirstOrDefault(s => s > 0);
+        return ilk > 0 ? ilk : PuantajKartKontrolu.VarsayilanGunlukSaat(Personel);
+    }
+
+    private void SaatDegisti(int gun, object? deger)
+    {
+        if (Kilitli)
+            return;
+
+        var saat = Ayristir(deger);
+        if (saat > 0)
+            saatler[gun] = saat;
+        else
+            saatler.Remove(gun);
+        bilgi = null;
+    }
+
+    private void HaftalikDegisti(int hafta, object? deger)
+        => haftalik[hafta] = Ayristir(deger);
+
+    private void GunDegistir(int gun)
+    {
+        if (Kilitli)
+            return;
+
+        if (saatler.GetValueOrDefault(gun) > 0)
+        {
+            saatler.Remove(gun);
+        }
+        else
+        {
+            var hafta = HaftaIndeksi(new DateTime(Yil, Ay, gun).DayOfWeek);
+            saatler[gun] = haftalik[hafta] > 0 ? haftalik[hafta] : VarsayilanSaat();
+        }
+
+        bilgi = null;
+    }
+
+    private void DuzeniUygula()
+    {
+        if (Kilitli)
+            return;
+
+        for (var gun = 1; gun <= AyGunSayisi; gun++)
+        {
+            if (izinGunleri.Contains(gun) || mazeretGunleri.Contains(gun))
+                continue;
+
+            var tarih = new DateTime(Yil, Ay, gun);
+            var saat = haftalik[HaftaIndeksi(tarih.DayOfWeek)];
+            if (tatilleriBosBirak && TatilMi(tarih))
+                saat = 0;
+
+            if (saat > 0)
+                saatler[gun] = saat;
+            else
+                saatler.Remove(gun);
+        }
+
+        hata = null;
+        bilgi = "Haftalık düzen aya uygulandı; kaydetmeden önce günleri değiştirebilirsiniz.";
+    }
+
+    private void HazirDuzen(string tur)
+    {
+        var saat = VarsayilanSaat();
+        for (var w = 0; w < 7; w++)
+        {
+            haftalik[w] = tur switch
+            {
+                "haftaici" => w < 5 ? saat : 0,
+                "cumartesi" => w < 6 ? saat : 0,
+                _ => saat
+            };
+        }
+
+        DuzeniUygula();
+    }
+
+    private void Temizle()
+    {
+        if (Kilitli)
+            return;
+
+        saatler.Clear();
+        hata = null;
+        bilgi = "Bütün günler temizlendi; kaydedene kadar kayıt değişmez.";
+    }
+
+    private async Task GecenAydanKopyalaAsync()
+    {
+        if (GecenAyYukle == null || Kilitli)
+            return;
+
+        kaynakYukleniyor = true;
+        hata = null;
+        bilgi = null;
+        try
+        {
+            var kaynak = await GecenAyYukle();
+            if (kaynak == null || !kaynak.Gunler.Any(g => g.Calisti || g.Izinli || g.Mazeret))
+            {
+                hata = "Geçen ay için bu personelin puantajı bulunamadı.";
+                return;
+            }
+
+            var secenek = new PuantajKopyaSecenekleri(hizalama, IzinMazeretKopyala: false, FazlaMesaiKopyala: true, ResmiTatilleriAtla: tatilleriBosBirak);
+            foreach (var gun in PuantajKopyalama.Uret(Yil, Ay, kaynak, secenek, ResmiTatiller))
+            {
+                if (izinGunleri.Contains(gun.Gun) || mazeretGunleri.Contains(gun.Gun))
+                    continue;
+
+                var saat = gun.Calisti ? gun.CalismaSaati + gun.FazlaMesaiSaat : 0;
+                if (saat > 0)
+                    saatler[gun.Gun] = saat;
+                else
+                    saatler.Remove(gun.Gun);
+            }
+
+            HaftalikDuzeniCikar();
+            var gunSayisi = kaynak.Gunler.Count(g => g.Calisti);
+            var saatToplami = PuantajKartKontrolu.ToplamSaat(kaynak.Gunler);
+            bilgi = $"{AyAdi(kaynak.Ay)} {kaynak.Yil}: {gunSayisi} gün / {saatToplami.ToString("0.##", Tr)} saat bu aya kopyalandı; kaydetmeden önce değiştirebilirsiniz.";
+        }
+        catch (Exception ex)
+        {
+            hata = ex.Message;
+        }
+        finally
+        {
+            kaynakYukleniyor = false;
+        }
+    }
+
+    private async Task KaydetAsync()
+    {
+        if (Kilitli || kaydediliyor)
+            return;
+
+        var liste = new List<GunlukPuantaj>(AyGunSayisi);
+        for (var gun = 1; gun <= AyGunSayisi; gun++)
+        {
+            var kayit = new GunlukPuantaj { Gun = gun, Tarih = new DateTime(Yil, Ay, gun) };
+            var saat = saatler.GetValueOrDefault(gun);
+            if (saat > 0)
+            {
+                var (normal, fazlaMesai) = PuantajKartKontrolu.Bol(saat);
+                kayit.Calisti = true;
+                kayit.Durum = 1;
+                kayit.CalismaSaati = normal;
+                kayit.FazlaMesaiSaat = fazlaMesai;
+            }
+            else if (izinGunleri.Contains(gun))
+            {
+                kayit.Izinli = true;
+                kayit.Durum = 2;
+            }
+            else if (mazeretGunleri.Contains(gun))
+            {
+                kayit.Mazeret = true;
+                kayit.Durum = 3;
+            }
+
+            liste.Add(kayit);
+        }
+
+        kaydediliyor = true;
+        try
+        {
+            await OnKaydet.InvokeAsync(liste);
+        }
+        finally
+        {
+            kaydediliyor = false;
+        }
+    }
+
+    private async Task KapatAsync()
+    {
+        if (!kaydediliyor)
+            await OnKapat.InvokeAsync();
+    }
+
+    private static decimal Ayristir(object? deger)
+    {
+        var metin = deger?.ToString()?.Trim().Replace(',', '.');
+        if (string.IsNullOrEmpty(metin))
+            return 0;
+
+        if (!decimal.TryParse(metin, NumberStyles.Number, CultureInfo.InvariantCulture, out var saat))
+            return 0;
+
+        return Math.Round(Math.Clamp(saat, 0m, 24m), 2);
+    }
+
+    private static string Bicim(decimal saat) => saat > 0 ? saat.ToString("0.##", Tr) : "";
+
+    private static string AyAdi(int ay) => new DateTime(2024, ay, 1).ToString("MMMM", Tr);
+
+    /// <summary>Pazartesi = 0 ... Pazar = 6.</summary>
+    private static int HaftaIndeksi(DayOfWeek gun) => ((int)gun + 6) % 7;
+}
