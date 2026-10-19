@@ -107,14 +107,42 @@ public class ProformaFaturaService : IProformaFaturaService
             proforma.ProformaNo = await GenerateNextProformaNoAsync();
         }
 
+        // Proforma numarası genel (firmalar ve silinmiş kayıtlar dahil) benzersizdir. Form numarayı sayfa açılırken
+        // üretir; sayaç geride kalmışsa/numara başka yerde kullanılmışsa kayıt "entity changes" hatasıyla düşmesin,
+        // sıradaki boş numara alınsın.
+        for (var deneme = 0; deneme < 25 && await NoKullanimdaMiAsync(context, proforma.ProformaNo); deneme++)
+        {
+            proforma.ProformaNo = await GenerateNextProformaNoAsync();
+        }
+
         proforma.CreatedAt = DateTime.UtcNow;
         proforma = await HesaplaAsync(proforma);
 
         context.ProformaFaturalar.Add(proforma);
-        await context.SaveChangesAsync();
+        try
+        {
+            await context.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex)
+        {
+            _logger.LogError(ex, "Proforma fatura kaydedilemedi: {ProformaNo}", proforma.ProformaNo);
+            throw new InvalidOperationException(KaydetmeHatasiMetni(ex), ex);
+        }
 
         _logger.LogInformation("Proforma fatura oluşturuldu: {ProformaNo}", proforma.ProformaNo);
         return proforma;
+    }
+
+    private static Task<bool> NoKullanimdaMiAsync(ApplicationDbContext context, string proformaNo)
+        => context.ProformaFaturalar.IgnoreQueryFilters().AsNoTracking().AnyAsync(p => p.ProformaNo == proformaNo);
+
+    /// <summary>Genel "An error occurred while saving the entity changes" yerine kullanıcıya anlaşılır neden verir.</summary>
+    private static string KaydetmeHatasiMetni(DbUpdateException ex)
+    {
+        var neden = ex.GetBaseException().Message;
+        return neden.Contains("ProformaNo", StringComparison.OrdinalIgnoreCase)
+            ? "Bu proforma numarası zaten kullanılıyor. Sayfayı yenileyip yeni numarayla tekrar deneyin."
+            : $"Proforma kaydedilemedi: {neden}";
     }
 
     public async Task<ProformaFatura> UpdateAsync(ProformaFatura proforma)

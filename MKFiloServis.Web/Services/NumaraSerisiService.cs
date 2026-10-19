@@ -83,6 +83,13 @@ public class NumaraSerisiService
     /// <summary>
     /// Belirtilen prefix ve firma için formatlı numara üretir.
     /// </summary>
+    /// <remarks>
+    /// Numara yalnız yılı içerdiği için sayaç da <b>yıllıktır</b>. Eskiden sayaç aylık tutuluyordu: her ay 1'den
+    /// başlayıp önceki aylarda verilmiş numaraları ("PRF-2026-00001") yeniden üretiyor, benzersiz indeksli belgeler
+    /// (proforma, fatura) "An error occurred while saving the entity changes" ile kaydedilemiyordu.
+    /// Yıllık sayaç ilk kullanımda aynı yılın aylık sayaçlarının en büyüğünden devam eder; böylece geçiş sırasında
+    /// verilmiş hiçbir numara tekrarlanmaz.
+    /// </remarks>
     /// <param name="prefix">Ön ek (örn: "SF" → "SF-2026-000001")</param>
     /// <param name="firmaId">Firma Id</param>
     /// <param name="digitCount">Basamak sayısı (varsayılan 6)</param>
@@ -90,10 +97,47 @@ public class NumaraSerisiService
     public async Task<string> GenerateFormattedAsync(string prefix, int firmaId, int digitCount = 6)
     {
         var yil = DateTime.UtcNow.Year;
-        var yilAy = DateTime.UtcNow.ToString("yyyyMM");
-        var sonNo = await GenerateNextAsync(prefix, firmaId, yilAy);
+        var sonNo = await GenerateNextForYearAsync(prefix, firmaId, yil);
         var format = new string('0', digitCount);
         return $"{prefix}-{yil}-{sonNo.ToString(format)}";
+    }
+
+    private async Task<int> GenerateNextForYearAsync(string prefix, int firmaId, int yil)
+    {
+        await using var ctx = await _dbFactory.CreateDbContextAsync();
+        var conn = ctx.Database.GetDbConnection();
+        if (conn.State != System.Data.ConnectionState.Open)
+            await conn.OpenAsync();
+
+        await using var cmd = conn.CreateCommand();
+        // Yıllık satır ("2026") yoksa aynı yılın aylık satırlarının ("202608"…) en büyük SonNo'sundan başlar;
+        // varsa ON CONFLICT bir artırır. İki eşzamanlı ilk çağrıda biri ekler, diğeri artırır: numaralar çakışmaz.
+        cmd.CommandText = @"
+            INSERT INTO ""FisNoCounters"" (""Prefix"", ""FirmaId"", ""YilAy"", ""SonNo"")
+            VALUES (@prefix, @firmaId, @yil,
+                    COALESCE((SELECT MAX(""SonNo"") FROM ""FisNoCounters""
+                              WHERE ""Prefix"" = @prefix AND ""FirmaId"" = @firmaId
+                                AND ""YilAy"" LIKE @aylar AND LENGTH(""YilAy"") = 6), 0) + 1)
+            ON CONFLICT (""Prefix"", ""FirmaId"", ""YilAy"")
+            DO UPDATE SET ""SonNo"" = ""FisNoCounters"".""SonNo"" + 1
+            RETURNING ""SonNo"";";
+
+        void Ekle(string ad, System.Data.DbType tur, object deger)
+        {
+            var p = cmd.CreateParameter();
+            p.ParameterName = ad;
+            p.DbType = tur;
+            p.Value = deger;
+            cmd.Parameters.Add(p);
+        }
+
+        Ekle("@prefix", System.Data.DbType.String, prefix);
+        Ekle("@firmaId", System.Data.DbType.Int32, firmaId);
+        Ekle("@yil", System.Data.DbType.String, yil.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Ekle("@aylar", System.Data.DbType.String, yil.ToString(System.Globalization.CultureInfo.InvariantCulture) + "%");
+
+        var sonuc = await cmd.ExecuteScalarAsync();
+        return Convert.ToInt32(sonuc);
     }
 
 }
