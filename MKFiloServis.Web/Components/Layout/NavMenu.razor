@@ -6,16 +6,10 @@
 @inject AppAuthenticationStateProvider AuthProvider
 @inject IAktifFirmaProvider AktifFirmaProvider
 @inject ILogger<NavMenu> Logger
-@inject BrandingService BrandingService
 @inject LicenseService ModuleLicenses
 
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="dashboard">
-            <img src="@brandingTextSrc" alt="Marka" class="nav-logo-text" />
-        </a>
-    </div>
-</div>
+@* Kenar çubuğunda logo gösterilmez; şerit yalnızca mobildeki menü düğmesine yer açar. *@
+<div class="top-row ps-3 navbar navbar-dark"></div>
 
 <!-- Global Arama -->
 <div class="px-3 py-2">
@@ -258,7 +252,7 @@
                                         </div>
                                         <div class="nav-item px-3">
                                             <NavLink class="nav-link" href="araclar/plaka-takip">
-                                                <i class="bi bi-card-text me-2 text-primary"></i> Plaka Takip
+                                                <i class="bi bi-card-text me-2 text-primary"></i> Kiralık Plaka Takip
                                             </NavLink>
                                         </div>
 
@@ -1228,15 +1222,12 @@
     private bool isSuperAdmin = false;
     private bool disposed = false;
     private readonly SemaphoreSlim yetkiYukleGate = new(1, 1);
-    private string brandingTextSrc = BrandingService.DefaultTextLogoPath;
 
     protected override async Task OnInitializedAsync()
     {
         // Once subscribe ol, sonra ilk yuklemeyi yap. Aksi halde yukleme sirasinda
         // gerceklesen AuthenticationStateChanged olaylari kacirilir.
         AuthProvider.AuthenticationStateChanged += OnAuthStateChanged;
-        var branding = await BrandingService.GetAsync();
-        brandingTextSrc = branding.ResolvedTextLogo;
         await YetkileriYukle();
     }
 
