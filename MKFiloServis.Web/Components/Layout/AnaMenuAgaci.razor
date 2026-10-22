@@ -1,0 +1,171 @@
+﻿@implements IDisposable
+@inject NavigationManager Navigation
+
+@* Ana menü ağacı: AnaMenuYapisi'ndeki veriyi çizer. Görünürlük MenuGorunurluk ile hesaplanır; görünür öğesi olmayan
+   grup/alt grup çizilmez. Açık sayfanın bağlantısı TEK olarak vurgulanır ve grubu otomatik açılır. *@
+
+@foreach (var kok in gorunenler)
+{
+    if (kok.Oge is { } tekOge)
+    {
+        @OgeSatiri(tekOge)
+    }
+    else if (kok.Grup is { } g)
+    {
+        var grupAcik = acikGruplar.Contains(g.Grup.Anahtar);
+        var grupAktif = aktifGrupAnahtari == g.Grup.Anahtar;
+        <div class="nav-section">
+            <button type="button" id="@g.Grup.HtmlKimligi"
+                    class="nav-section-header @(grupAktif ? "nav-section-aktif" : null)"
+                    aria-expanded="@(grupAcik ? "true" : "false")"
+                    @onclick="() => GrupDegistir(g.Grup.Anahtar)">
+                <span><i class="bi @g.Grup.Ikon me-2"></i>@g.Grup.Baslik</span>
+                <i class="bi @(grupAcik ? "bi-chevron-up" : "bi-chevron-down")"></i>
+            </button>
+            @if (grupAcik)
+            {
+                <div class="nav-section-content">
+                    @foreach (var alt in g.Altlar)
+                    {
+                        if (alt.Alt.Baslik is null)
+                        {
+                            foreach (var oge in alt.Ogeler)
+                            {
+                                @OgeSatiri(oge)
+                            }
+                        }
+                        else
+                        {
+                            var altAcik = acikAltGruplar.Contains(alt.Anahtar);
+                            var altAktif = aktifAltAnahtari == alt.Anahtar;
+                            <div class="nav-subsection">
+                                <button type="button"
+                                        class="nav-subsection-header @(altAktif ? "nav-subsection-aktif" : null)"
+                                        aria-expanded="@(altAcik ? "true" : "false")"
+                                        @onclick="() => AltGrupDegistir(alt.Anahtar)">
+                                    <span><i class="bi @alt.Alt.Ikon me-2"></i>@alt.Alt.Baslik</span>
+                                    <i class="bi @(altAcik ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                                </button>
+                                @if (altAcik)
+                                {
+                                    <div class="nav-subsection-content">
+                                        @foreach (var oge in alt.Ogeler)
+                                        {
+                                            @OgeSatiri(oge)
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    /// <summary>Menü tanımı (<see cref="AnaMenuYapisi.Kokler"/>).</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<IMenuDugumu> Kokler { get; set; } = Array.Empty<IMenuDugumu>();
+
+    /// <summary>Kullanıcının yetki/lisans durumuna göre görünürlük hesaplayıcısı.</summary>
+    [Parameter, EditorRequired] public MenuGorunurluk Gorunurluk { get; set; } = default!;
+
+    private IReadOnlyList<GorunenKok> gorunenler = Array.Empty<GorunenKok>();
+    private MenuOgesi? aktifOge;
+    private string? aktifGrupAnahtari;
+    private string? aktifAltAnahtari;
+    private readonly HashSet<string> acikGruplar = new(StringComparer.Ordinal);
+    private readonly HashSet<string> acikAltGruplar = new(StringComparer.Ordinal);
+    private bool baslatildi;
+
+    protected override void OnInitialized() => Navigation.LocationChanged += KonumDegisti;
+
+    protected override void OnParametersSet()
+    {
+        gorunenler = MenuFiltresi.Filtrele(Kokler, Gorunurluk);
+        AktifiHesapla();
+
+        if (!baslatildi)
+        {
+            baslatildi = true;
+            // Her grubun ana alt grubu (VarsayilanAcik), grup açılınca hazır gelir.
+            foreach (var kok in gorunenler)
+            {
+                if (kok.Grup is null)
+                    continue;
+                foreach (var alt in kok.Grup.Altlar.Where(a => a.Alt.VarsayilanAcik))
+                    acikAltGruplar.Add(alt.Anahtar);
+            }
+
+            AktifGrubuAc();
+        }
+    }
+
+    // Bağlantıya tıklanınca (ya da dışarıdan gidilince) açık sayfanın grubu ve alt grubu açılır; kullanıcının
+    // kapattığı gruplar yalnız konum değişince yeniden açılır, her yeniden çizimde değil.
+    private void KonumDegisti(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        AktifiHesapla();
+        AktifGrubuAc();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void AktifiHesapla()
+    {
+        var tumOgeler = gorunenler.SelectMany(k => k.TumOgeler).ToList();
+
+        aktifOge = MenuEslestirici.EnIyiEslesme(tumOgeler, Navigation.ToBaseRelativePath(Navigation.Uri));
+        aktifGrupAnahtari = null;
+        aktifAltAnahtari = null;
+
+        if (aktifOge is null)
+            return;
+
+        foreach (var kok in gorunenler.Where(k => k.Grup is not null))
+        {
+            foreach (var alt in kok.Grup!.Altlar)
+            {
+                if (alt.Ogeler.Contains(aktifOge))
+                {
+                    aktifGrupAnahtari = kok.Grup.Grup.Anahtar;
+                    aktifAltAnahtari = alt.Alt.Baslik is null ? null : alt.Anahtar;
+                    return;
+                }
+            }
+        }
+    }
+
+    private void AktifGrubuAc()
+    {
+        if (aktifGrupAnahtari is not null)
+            acikGruplar.Add(aktifGrupAnahtari);
+        if (aktifAltAnahtari is not null)
+            acikAltGruplar.Add(aktifAltAnahtari);
+    }
+
+    private void GrupDegistir(string anahtar)
+    {
+        if (!acikGruplar.Add(anahtar))
+            acikGruplar.Remove(anahtar);
+    }
+
+    private void AltGrupDegistir(string anahtar)
+    {
+        if (!acikAltGruplar.Add(anahtar))
+            acikAltGruplar.Remove(anahtar);
+    }
+
+    private RenderFragment OgeSatiri(MenuOgesi oge) => __builder =>
+    {
+        var aktif = ReferenceEquals(oge, aktifOge);
+        <div class="nav-item px-3">
+            <a id="@oge.HtmlKimligi" class="nav-link @(aktif ? "active" : null)" href="@oge.Href"
+               aria-current="@(aktif ? "page" : null)">
+                <i class="bi @oge.Ikon me-2 @oge.IkonRengi"></i> @oge.Etiket
+            </a>
+        </div>
+    };
+
+    public void Dispose() => Navigation.LocationChanged -= KonumDegisti;
+}

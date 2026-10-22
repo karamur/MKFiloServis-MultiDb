@@ -5,9 +5,9 @@ Bu kılavuz, servis operasyon kontratından aylık puantaj ve fatura kontrolüne
 ## 1. Servis Operasyon Güzergah Kaydı
 
 Menü yolu:
-`Servis Operasyon -> Güzergahlar`
+`Filo ve Servis Operasyonu -> Servis Operasyonu -> Güzergahlar`
 veya 
-`Servis Operasyon -> Güzergahlar -> Yeni Güzergah`
+`Filo ve Servis Operasyonu -> Servis Operasyonu -> Güzergahlar -> Yeni Güzergah`
 
 ![Görsel 1 - Güzergah ekranı genel görünüm](images/puantaj-fatura/gorsel-01-yeni-kontrat-genel.png)
 
@@ -94,7 +94,7 @@ Bu bölüm, puantaj verisinin faturalamaya hazır olup olmadığını hızlı ko
 ## 4. Fatura Süreci
 
 Menü yolu:
-`Cari Yönetimi -> Faturalar`
+`Faturalar -> Listeler -> Kesilen Faturalar (Satış)` veya `Gelen Faturalar (Alış)`
 
 ![Görsel 8 - Giden ve gelen fatura giriş ekranı](images/puantaj-fatura/gorsel-08-fatura-giris.png)
 
