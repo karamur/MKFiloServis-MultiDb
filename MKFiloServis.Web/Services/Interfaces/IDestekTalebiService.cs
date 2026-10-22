@@ -1,114 +1,137 @@
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Models;
+using MKFiloServis.Web.Services.Destek;
 
 namespace MKFiloServis.Web.Services.Interfaces;
 
 /// <summary>
-/// Destek Talebi (Ticket) Servisi Interface - osTicket benzeri
+/// Destek talebi servisi. Her işlem, oturumdaki kullanıcıyı ve güncel yetkilerini kendisi doğrular
+/// (bkz. <see cref="DestekErisim"/>); sayfalar yalnız gösterim için yetki bilgisi kullanır.
 /// </summary>
 public interface IDestekTalebiService
 {
-    // === Talep CRUD ===
-    Task<List<DestekTalebi>> GetAllAsync();
+    /// <summary>Oturumdaki kullanıcı ve Destek yetkileri (oturum yoksa null).</summary>
+    Task<DestekKullanici?> GetAktifKullaniciAsync();
+
+    // === Talep eden ===
+
+    /// <summary>Oturumdaki kullanıcı adına talep açar (taslak ya da gönderilmiş).</summary>
+    Task<DestekTalebi> TalepOlusturAsync(DestekTalebi talep, bool taslak);
+
+    /// <summary>Kendi taslağını günceller; <paramref name="gonder"/> ise gönderir.</summary>
+    Task<DestekTalebi> TaslakGuncelleAsync(DestekTalebi talep, bool gonder);
+
+    Task TaslakSilAsync(int talepId);
+
+    /// <summary>"Sorun Bildir" penceresinden talep açar; sayfa/hata bilgisi eklenir, teknik ayrıntı dahili nota yazılır.</summary>
+    Task<DestekTalebi> HataBildirimiOlusturAsync(SorunBildirimi bildirim);
+
+    Task<List<DestekTalebi>> GetTaleplerimAsync();
+
+    // === Talep detayı ve yazışma (talep eden ve ekip) ===
+
+    /// <summary>Erişim yoksa null.</summary>
+    Task<DestekTalepDetayi?> GetDetayAsync(int talepId);
+
+    Task<DestekTalebiYanit> YanitEkleAsync(int talepId, DestekYanitIstegi istek);
+
+    Task EylemUygulaAsync(int talepId, DestekEylem eylem, DestekEylemIstegi? istek = null);
+
+    Task<DestekTalebiEk> EkYukleAsync(int talepId, string dosyaAdi, string mimeTipi, Stream icerik, long boyut);
+
+    Task<DestekEkIcerigi?> EkIndirAsync(int ekId);
+
+    // === Ekip ===
+
     Task<PagedResult<DestekTalebi>> GetPagedAsync(DestekTalebiFilterParams filter);
-    Task<DestekTalebi?> GetByIdAsync(int id);
-    Task<DestekTalebi?> GetByIdWithDetailsAsync(int id);
-    Task<DestekTalebi?> GetByTalepNoAsync(string talepNo);
-    Task<DestekTalebi> CreateAsync(DestekTalebi talep);
-    Task<DestekTalebi> UpdateAsync(DestekTalebi talep);
-    Task DeleteAsync(int id);
-    Task<string> GenerateNextTalepNoAsync();
-    
-    // === Durum ve Atama ===
-    Task<bool> UpdateDurumAsync(int talepId, DestekDurum yeniDurum, int? kullaniciId = null);
-    Task<bool> UpdateOncelikAsync(int talepId, DestekOncelik yeniOncelik, int? kullaniciId = null);
-    Task<bool> AtaAsync(int talepId, int atananKullaniciId, int? atayanKullaniciId = null);
-    Task<bool> TransferEtAsync(int talepId, int yeniDepartmanId, int? kullaniciId = null);
-    Task<bool> KapatAsync(int talepId, int? kullaniciId = null, string? kapatmaNotu = null);
-    Task<bool> YenidenAcAsync(int talepId, int? kullaniciId = null, string? aciklamaNotu = null);
-    Task<bool> BirlestirAsync(int anaTalepId, int birlestirilecekTalepId, int? kullaniciId = null);
-    
-    // === Yanıt İşlemleri ===
-    Task<DestekTalebiYanit> AddYanitAsync(int talepId, DestekTalebiYanit yanit);
-    Task<List<DestekTalebiYanit>> GetYanitlarAsync(int talepId);
-    Task<bool> DeleteYanitAsync(int yanitId);
-    
-    // === Dosya Ekleri ===
-    Task<DestekTalebiEk> AddEkAsync(int talepId, DestekTalebiEk ek, Stream fileStream);
-    Task<DestekTalebiEk> AddYanitEkAsync(int yanitId, DestekTalebiEk ek, Stream fileStream);
-    Task<List<DestekTalebiEk>> GetEklerAsync(int talepId);
-    Task<DestekTalebiEk?> GetEkByIdAsync(int ekId);
-    Task<Stream?> GetEkDosyaStreamAsync(int ekId);
-    Task<bool> DeleteEkAsync(int ekId);
-    
-    // === Filtre ve Arama ===
-    Task<List<DestekTalebi>> GetByDurumAsync(DestekDurum durum);
-    Task<List<DestekTalebi>> GetByDepartmanAsync(int departmanId);
-    Task<List<DestekTalebi>> GetByKategoriAsync(int kategoriId);
-    Task<List<DestekTalebi>> GetByAtananKullaniciAsync(int kullaniciId);
-    Task<List<DestekTalebi>> GetByCariAsync(int cariId);
-    Task<List<DestekTalebi>> AramaAsync(string aramaMetni);
-    Task<List<DestekTalebi>> GetSlaAsildiBekleyenlerAsync();
-    
-    // === Departman CRUD ===
-    Task<List<DestekDepartman>> GetDepartmanlarAsync();
-    Task<DestekDepartman?> GetDepartmanByIdAsync(int id);
-    Task<DestekDepartman> CreateDepartmanAsync(DestekDepartman departman);
-    Task<DestekDepartman> UpdateDepartmanAsync(DestekDepartman departman);
-    Task DeleteDepartmanAsync(int id);
-    Task<List<DestekDepartmanUye>> GetDepartmanUyeleriAsync(int departmanId);
-    Task<bool> AddDepartmanUyeAsync(int departmanId, int kullaniciId, bool yonetici = false);
-    Task<bool> RemoveDepartmanUyeAsync(int departmanId, int kullaniciId);
-    
-    // === Kategori CRUD ===
-    Task<List<DestekKategori>> GetKategorilerAsync();
-    Task<List<DestekKategori>> GetKategorilerByDepartmanAsync(int departmanId);
-    Task<DestekKategori?> GetKategoriByIdAsync(int id);
-    Task<DestekKategori> CreateKategoriAsync(DestekKategori kategori);
-    Task<DestekKategori> UpdateKategoriAsync(DestekKategori kategori);
-    Task DeleteKategoriAsync(int id);
-    
-    // === Hazır Yanıtlar ===
-    Task<List<DestekHazirYanit>> GetHazirYanitlarAsync(int? departmanId = null, int? kategoriId = null);
-    Task<DestekHazirYanit?> GetHazirYanitByIdAsync(int id);
-    Task<DestekHazirYanit> CreateHazirYanitAsync(DestekHazirYanit hazirYanit);
-    Task<DestekHazirYanit> UpdateHazirYanitAsync(DestekHazirYanit hazirYanit);
-    Task DeleteHazirYanitAsync(int id);
-    Task IncrementHazirYanitKullanimAsync(int hazirYanitId);
-    
-    // === Bilgi Bankası ===
-    Task<PagedResult<DestekBilgiBankasi>> GetBilgiBankasiPagedAsync(BilgiBankasiFilterParams filter);
-    Task<List<DestekBilgiBankasi>> GetBilgiBankasiAramaAsync(string aramaMetni);
-    Task<DestekBilgiBankasi?> GetBilgiBankasiByIdAsync(int id);
-    Task<DestekBilgiBankasi?> GetBilgiBankasiBySlugAsync(string slug);
-    Task<DestekBilgiBankasi> CreateBilgiBankasiAsync(DestekBilgiBankasi makale);
-    Task<DestekBilgiBankasi> UpdateBilgiBankasiAsync(DestekBilgiBankasi makale);
-    Task DeleteBilgiBankasiAsync(int id);
-    Task IncrementBilgiBankasiGoruntulenmeAsync(int makaleId);
-    Task<bool> YararliBulAsync(int makaleId, bool yararli);
-    
-    // === SLA ===
-    Task<List<DestekSla>> GetSlaListesiAsync();
-    Task<DestekSla?> GetSlaByIdAsync(int id);
-    Task<DestekSla?> GetSlaByOncelikAsync(DestekOncelik oncelik);
-    Task<DestekSla> CreateSlaAsync(DestekSla sla);
-    Task<DestekSla> UpdateSlaAsync(DestekSla sla);
-    Task DeleteSlaAsync(int id);
-    Task<int> CheckAndUpdateSlaViolationsAsync();
-    
-    // === Aktivite ve Raporlama ===
-    Task<List<DestekTalebiAktivite>> GetAktivitelerAsync(int talepId);
-    Task LogAktiviteAsync(int talepId, AktiviteTuru aktiviteTuru, string aciklama, int? kullaniciId = null, string? eskiDeger = null, string? yeniDeger = null);
-    
-    // === Dashboard ve İstatistikler ===
+
+    /// <summary>Talep Yönetimi panosu: açık ve onay bekleyen talepler.</summary>
+    Task<List<DestekTalebi>> GetPanoAsync();
+
+    /// <summary>Destek personeli, hesabı olmayan bir müşteri adına talep açar.</summary>
+    Task<DestekTalebi> PersonelTalepOlusturAsync(DestekTalebi talep);
+
+    Task AtaAsync(int talepId, int kullaniciId, string? not = null);
+
+    Task TransferEtAsync(int talepId, int departmanId, string gerekce);
+
+    Task OncelikDegistirAsync(int talepId, DestekOncelik oncelik);
+
+    Task EtiketleriGuncelleAsync(int talepId, string? etiketler);
+
+    Task SilAsync(int talepId);
+
+    Task<List<DestekAtanabilirKullanici>> GetAtanabilirKullanicilarAsync(int? departmanId);
+
     Task<DestekDashboardStats> GetDashboardStatsAsync();
+
     Task<DestekRaporStats> GetRaporStatsAsync(DateTime baslangic, DateTime bitis, int? departmanId = null);
+
     Task<List<DestekPerformansRapor>> GetPersonelPerformansRaporuAsync(DateTime baslangic, DateTime bitis, int? departmanId = null);
-    
-    // === Ayarlar ===
-    Task<string?> GetAyarAsync(string anahtar);
-    Task SetAyarAsync(string anahtar, string deger, string? aciklama = null, string? grup = null);
-    Task<Dictionary<string, string>> GetAyarlarByGrupAsync(string grup);
+
+    // === Tanımlar (okuma herkese açık; yazma destektalebi.duzenle) ===
+
+    Task<List<DestekDepartman>> GetDepartmanlarAsync(bool pasiflerDahil = false);
+
+    Task<DestekDepartman> DepartmanKaydetAsync(DestekDepartman departman);
+
+    /// <summary>Talebi olan departman silinmez, pasifleştirilir; sonucu açıklayan metin döner.</summary>
+    Task<string> DepartmanSilAsync(int departmanId);
+
+    Task<List<DestekDepartmanUye>> GetDepartmanUyeleriAsync(int departmanId);
+
+    Task DepartmanUyesiEkleAsync(int departmanId, int kullaniciId, bool yonetici);
+
+    Task DepartmanUyesiCikarAsync(int departmanId, int kullaniciId);
+
+    Task<List<DestekKategori>> GetKategorilerAsync(bool pasiflerDahil = false);
+
+    Task<DestekKategori> KategoriKaydetAsync(DestekKategori kategori);
+
+    Task KategoriSilAsync(int kategoriId);
+
+    Task<List<DestekSla>> GetSlaListesiAsync();
+
+    Task<DestekSla> SlaKaydetAsync(DestekSla sla);
+
+    Task SlaSilAsync(int slaId);
+
+    Task<List<DestekHazirYanit>> GetHazirYanitlarAsync(int? departmanId = null, int? kategoriId = null, bool pasiflerDahil = false);
+
+    Task<DestekHazirYanit> HazirYanitKaydetAsync(DestekHazirYanit hazirYanit);
+
+    Task HazirYanitSilAsync(int hazirYanitId);
+
+    Task<DestekGenelAyarlar> GetGenelAyarlarAsync();
+
+    Task GenelAyarlariKaydetAsync(DestekGenelAyarlar ayarlar);
+
+    /// <summary>Departman üyeliği ve atama listeleri için aktif kullanıcılar (destektalebi.duzenle).</summary>
+    Task<List<Kullanici>> GetAktifKullanicilarAsync();
+
+    // === Bilgi bankası (okuma herkese; yazma destek personeli ya da destektalebi.duzenle) ===
+
+    Task<PagedResult<DestekBilgiBankasi>> GetBilgiBankasiPagedAsync(BilgiBankasiFilterParams filter);
+
+    Task<DestekBilgiBankasi?> GetBilgiBankasiByIdAsync(int makaleId);
+
+    Task<DestekBilgiBankasi> BilgiBankasiKaydetAsync(DestekBilgiBankasi makale);
+
+    Task BilgiBankasiSilAsync(int makaleId);
+
+    Task IncrementBilgiBankasiGoruntulenmeAsync(int makaleId);
+
+    Task YararliBulAsync(int makaleId, bool yararli);
+
+    Task<BilgiBankasiOzeti> GetBilgiBankasiOzetiAsync();
+
+    // === Zamanlanmış işler (oturumsuz) ===
+
+    /// <summary>SLA süresi geçen açık talepleri işaretler ve ilgililere bildirir.</summary>
+    Task<int> CheckAndUpdateSlaViolationsAsync();
+
+    /// <summary>Çözüldü durumunda ayarlanan gün kadar bekleyen talepleri kapatır.</summary>
+    Task<int> CozulenTalepleriOtomatikKapatAsync();
 }
 
 /// <summary>
@@ -124,6 +147,8 @@ public class DestekTalebiFilterParams
     public DestekKaynak? Kaynak { get; set; }
     public int? DepartmanId { get; set; }
     public int? KategoriId { get; set; }
+
+    /// <summary>0 = atanmamış talepler.</summary>
     public int? AtananKullaniciId { get; set; }
     public int? CariId { get; set; }
     public DateTime? BaslangicTarihi { get; set; }
@@ -157,29 +182,30 @@ public class DestekDashboardStats
     // Genel İstatistikler
     public int ToplamTalepSayisi { get; set; }
     public int AcikTalepSayisi { get; set; }
+    public int OnayBekleyenTalepSayisi { get; set; }
     public int BugunAcilanTalepSayisi { get; set; }
     public int BugunKapatilanTalepSayisi { get; set; }
     public int SlaAsildiSayisi { get; set; }
-    
+
     // Öncelik Dağılımı
     public Dictionary<DestekOncelik, int> OncelikDagilimi { get; set; } = new();
-    
+
     // Durum Dağılımı
     public Dictionary<DestekDurum, int> DurumDagilimi { get; set; } = new();
-    
+
     // Departman Dağılımı
     public Dictionary<string, int> DepartmanDagilimi { get; set; } = new();
-    
+
     // Kaynak Dağılımı
     public Dictionary<DestekKaynak, int> KaynakDagilimi { get; set; } = new();
-    
+
     // Son Talepler
     public List<DestekTalebi> SonTalepler { get; set; } = new();
-    
-    // Performans Metrikleri
-    public double OrtalamaIlkYanitSuresiSaat { get; set; }
-    public double OrtalamaCozumSuresiSaat { get; set; }
-    public double OrtalamaMemuniyetPuani { get; set; }
+
+    // Performans Metrikleri (veri yoksa null)
+    public double? OrtalamaIlkYanitSuresiSaat { get; set; }
+    public double? OrtalamaCozumSuresiSaat { get; set; }
+    public double? OrtalamaMemuniyetPuani { get; set; }
 }
 
 /// <summary>
@@ -189,18 +215,18 @@ public class DestekRaporStats
 {
     public DateTime BaslangicTarihi { get; set; }
     public DateTime BitisTarihi { get; set; }
-    
+
     public int ToplamAcilanTalep { get; set; }
     public int ToplamKapatilanTalep { get; set; }
     public int ToplamSlaAsimi { get; set; }
-    
+
     public double OrtalamaIlkYanitSuresiDakika { get; set; }
     public double OrtalamaCozumSuresiDakika { get; set; }
     public double OrtalamaMemuniyetPuani { get; set; }
-    
+
     // Günlük trend
     public List<GunlukTalepTrend> GunlukTrend { get; set; } = new();
-    
+
     // Kategori bazlı
     public List<KategoriTalepStats> KategoriBazli { get; set; } = new();
 }
@@ -241,6 +267,3 @@ public class DestekPerformansRapor
     public double OrtalamaMemuniyetPuani { get; set; }
     public int ToplamYanitSayisi { get; set; }
 }
-
-
-

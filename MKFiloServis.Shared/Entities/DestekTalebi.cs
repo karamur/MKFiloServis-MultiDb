@@ -192,10 +192,10 @@ public class DestekTalebi : BaseEntity
     public int YanitSayisi => Yanitlar?.Count ?? 0;
 
     /// <summary>
-    /// Açık mı?
+    /// Açık mı? (gönderilmiş ve henüz çözülmemiş)
     /// </summary>
     [NotMapped]
-    public bool Acik => Durum != DestekDurum.Kapali && Durum != DestekDurum.Cozuldu;
+    public bool Acik => Durum is DestekDurum.Yeni or DestekDurum.Islemde or DestekDurum.BilgiBekleniyor or DestekDurum.YazilimEkibinde;
 
     /// <summary>
     /// Bekleyen SLA zamanı
@@ -798,33 +798,29 @@ public class DestekAyar : BaseEntity
 // === ENUM'lar ===
 
 /// <summary>
-/// Destek talebi durumu
+/// Destek talebi durumu. Tek akış: Taslak → Yeni → İşlemde (⇄ Bilgi Bekleniyor, ⇄ Yazılım Ekibinde)
+/// → Çözüldü (talep eden onaylar ya da itiraz eder) → Kapandı.
+/// <para>
+/// Eski kodlar (2 Açık, 3 Beklemede, 7 Gönderildi, 9 Bitti, 10 Onaylandı) artık kullanılmaz;
+/// uygulama açılışında yeni karşılıklarına çevrilir (bkz. DbInitializer).
+/// </para>
 /// </summary>
 public enum DestekDurum
 {
+    /// <summary>Henüz gönderilmedi; yalnız talep eden görür.</summary>
     Taslak = 0,
+    /// <summary>Gönderildi, destek ekibi henüz üstlenmedi.</summary>
     Yeni = 1,
-    Acik = 2,
-    Beklemede = 3,
-    YanitBekleniyor = 4,
+    /// <summary>Talep edenden bilgi bekleniyor (eski adı YanitBekleniyor).</summary>
+    BilgiBekleniyor = 4,
+    /// <summary>Çözüldü; talep edenin onayı bekleniyor.</summary>
     Cozuldu = 5,
+    /// <summary>Kapandı (onaylandı ya da destek ekibi kapattı).</summary>
     Kapali = 6,
-    /// <summary>
-    /// Gönderildi - Atama bekliyor (osTicket benzeri)
-    /// </summary>
-    Gonderildi = 7,
-    /// <summary>
-    /// İşlemde - Yetkili üzerinde çalışıyor
-    /// </summary>
+    /// <summary>Destek ekibi üzerinde çalışıyor.</summary>
     Islemde = 8,
-    /// <summary>
-    /// Bitti - Tamamlandı, onay bekliyor
-    /// </summary>
-    Bitti = 9,
-    /// <summary>
-    /// Onaylandi - Kullanıcı tarafından onaylandı
-    /// </summary>
-    Onaylandi = 10
+    /// <summary>Yazılım ekibine aktarıldı.</summary>
+    YazilimEkibinde = 11
 }
 
 /// <summary>
@@ -849,7 +845,9 @@ public enum DestekKaynak
     Telefon = 3,
     Api = 4,
     WhatsApp = 5,
-    MobilUygulama = 6
+    MobilUygulama = 6,
+    /// <summary>Program içindeki "Sorun Bildir" ile açılan talep (sayfa ve hata bilgisi otomatik eklenir).</summary>
+    HataBildirimi = 7
 }
 
 /// <summary>
@@ -879,7 +877,11 @@ public enum AktiviteTuru
     Kapandi = 9,
     YenidenAcildi = 10,
     SlaBilgilendirme = 11,
-    Birlestirildi = 12
+    Birlestirildi = 12,
+    YazilimEkibineAktarildi = 13,
+    DestegeGeriGonderildi = 14,
+    CozumOnaylandi = 15,
+    CozumeItirazEdildi = 16
 }
 
 /// <summary>

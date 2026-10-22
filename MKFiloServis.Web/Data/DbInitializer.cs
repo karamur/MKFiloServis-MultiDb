@@ -3073,10 +3073,92 @@ WHERE IsDeleted = 0;");
                 await context.SaveChangesAsync();
                 Console.WriteLine("Destek ayarları eklendi.");
             }
+
+            await DestekYazilimEkibiniHazirlaAsync(context);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Destek talebi seed hatası: {ex.Message}");
+            context.ChangeTracker.Clear();
+        }
+
+        await DestekVerileriniOnarAsync(context);
+    }
+
+    /// <summary>
+    /// "Yazılım Ekibine Aktar" için departman ve ayar. Ayar satırı hiç yoksa bir kez hazırlanır; yönetici ayarı
+    /// sonradan boşaltırsa ya da başka departman seçerse dokunulmaz.
+    /// </summary>
+    private static async Task DestekYazilimEkibiniHazirlaAsync(ApplicationDbContext context)
+    {
+        const string anahtar = "YazilimEkibiDepartmanId";
+        if (await context.DestekAyarlari.IgnoreQueryFilters().AnyAsync(a => a.Anahtar == anahtar))
+            return;
+
+        var departmanlar = await context.DestekDepartmanlari.ToListAsync();
+        var departman = departmanlar.FirstOrDefault(d => MKFiloServis.Web.Services.AramaMetni.Katla(d.Ad) == "yazilim ekibi");
+        if (departman == null)
+        {
+            departman = new DestekDepartman
+            {
+                Ad = "Yazılım Ekibi",
+                Aciklama = "Destek ekibinin aktardığı yazılım hataları ve geliştirme talepleri",
+                SiraNo = 5,
+                Aktif = true,
+                VarsayilanSlaSuresi = 72,
+                CreatedAt = DateTime.UtcNow
+            };
+            context.DestekDepartmanlari.Add(departman);
+            await context.SaveChangesAsync();
+        }
+
+        context.DestekAyarlari.Add(new DestekAyar
+        {
+            Anahtar = anahtar,
+            Deger = departman.Id.ToString(),
+            Grup = "Destek",
+            Aciklama = "Yazılım ekibine aktarılan taleplerin departmanı",
+            CreatedAt = DateTime.UtcNow
+        });
+        await context.SaveChangesAsync();
+        Console.WriteLine("Destek: Yazılım Ekibi departmanı hazırlandı.");
+    }
+
+    /// <summary>
+    /// Destek verisinin açılış onarımı (her açılışta, tekrar çalışması zararsız): birleştirilmeden önceki durum
+    /// kodlarını tek akışa çevirir; silinmiş departmanda kalan talepleri görünür kılar.
+    /// </summary>
+    private static async Task DestekVerileriniOnarAsync(ApplicationDbContext context)
+    {
+        try
+        {
+            var talepler = context.DestekTalepleri.IgnoreQueryFilters();
+            var degisen = 0;
+            // 7 Gönderildi → Yeni, 2 Açık / 3 Beklemede → İşlemde, 9 Bitti → Çözüldü, 10 Onaylandı → Kapandı
+            degisen += await talepler.Where(t => (int)t.Durum == 7)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.Durum, DestekDurum.Yeni));
+            degisen += await talepler.Where(t => (int)t.Durum == 2 || (int)t.Durum == 3)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.Durum, DestekDurum.Islemde));
+            degisen += await talepler.Where(t => (int)t.Durum == 9)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.Durum, DestekDurum.Cozuldu));
+            degisen += await talepler.Where(t => (int)t.Durum == 10)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(t => t.Durum, DestekDurum.Kapali)
+                    .SetProperty(t => t.KapatilmaTarihi, t => t.KapatilmaTarihi ?? t.UpdatedAt ?? t.SonAktiviteTarihi));
+            if (degisen > 0)
+                Console.WriteLine($"Destek: {degisen} talebin eski durum kodu yeni akışa çevrildi.");
+
+            // Zorunlu Departman ilişkisi, silinmiş departmanı INNER JOIN ile eler: o departmandaki talepler hiçbir
+            // listede ve detayda görünmez. Böyle departmanlar pasif olarak geri alınır.
+            var gizliKalan = await context.DestekDepartmanlari.IgnoreQueryFilters()
+                .Where(d => d.IsDeleted && context.DestekTalepleri.Any(t => t.DepartmanId == d.Id))
+                .ExecuteUpdateAsync(s => s.SetProperty(d => d.IsDeleted, false).SetProperty(d => d.Aktif, false));
+            if (gizliKalan > 0)
+                Console.WriteLine($"Destek: talebi olan {gizliKalan} silinmiş departman pasif olarak geri alındı.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Destek veri onarımı hatası: {ex.Message}");
         }
     }
 
@@ -3105,6 +3187,8 @@ WHERE IsDeleted = 0;");
         catch (Exception ex)
         {
             Console.WriteLine($"Seed hatasi: {ex.Message}");
+            // Kaydedilemeyen nesneler bağlamda kalırsa sonraki seed adımları da aynı hatayla düşer.
+            context.ChangeTracker.Clear();
         }
     }
 
@@ -3199,6 +3283,9 @@ WHERE IsDeleted = 0;");
         catch (Exception ex)
         {
             Console.WriteLine($"Araç masraf kalemi seed hatası: {ex.Message}");
+            // Açılışta aktif firma yoktur: yeni kurulumda firmasız MasrafKalemi eklenemez. Bağlamda kalan
+            // nesneler temizlenmezse ardından gelen Destek ve EBYS seed'leri de aynı hatayla düşer.
+            context.ChangeTracker.Clear();
         }
     }
 
@@ -3524,6 +3611,7 @@ WHERE IsDeleted = 0;");
         catch (Exception ex)
         {
             Console.WriteLine($"EBYS örnek veri ekleme hatası: {ex.Message}");
+            context.ChangeTracker.Clear();
         }
     }
 

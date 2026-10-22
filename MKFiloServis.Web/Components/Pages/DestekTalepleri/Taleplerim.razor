@@ -1,170 +1,140 @@
 @page "/destek-talepleri/taleplerim"
 @rendermode InteractiveServer
-@using MKFiloServis.Shared.Entities
-@using MKFiloServis.Web.Services
 @inject IDestekTalebiService DestekService
-@inject IKullaniciService KullaniciService
-@inject AppAuthenticationStateProvider AuthProvider
-@inject NavigationManager Navigation
+@inject IToastService ToastService
+@inject AppIssueStateService AppIssueState
 @inject IJSRuntime JS
 
 <PageTitle>Taleplerim</PageTitle>
 
 <div class="container-fluid">
-    <div class="row mb-3">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
-                <h3><i class="bi bi-ticket-detailed-fill text-primary me-2"></i>Taleplerim</h3>
-                <div class="d-flex gap-2">
-                    <a href="destek-talepleri" class="btn btn-outline-secondary">
-                        <i class="bi bi-list me-1"></i>Tüm Talepler
-                    </a>
-                    <a href="destek-talepleri/talep-giris" class="btn btn-primary">
-                        <i class="bi bi-plus-lg me-1"></i>Yeni Talep
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    @if (!string.IsNullOrWhiteSpace(errorMessage))
-    {
-        <div class="alert alert-danger alert-dismissible fade show">
-            <i class="bi bi-exclamation-triangle me-2"></i>@errorMessage
-            <button type="button" class="btn-close" @onclick="() => errorMessage = string.Empty"></button>
-        </div>
-    }
-
-    @if (!string.IsNullOrWhiteSpace(successMessage))
-    {
-        <div class="alert alert-success alert-dismissible fade show">
-            <i class="bi bi-check-circle me-2"></i>@successMessage
-            <button type="button" class="btn-close" @onclick="() => successMessage = string.Empty"></button>
-        </div>
-    }
-
-    <!-- Durum Filtreleri -->
-    <div class="row mb-3">
-        <div class="col-12">
-            <div class="btn-group" role="group">
-                <button type="button" class="btn @(selectedDurum == null ? "btn-primary" : "btn-outline-primary")" @onclick="() => FilterByDurum(null)">
-                    Tümü <span class="badge bg-light text-dark ms-1">@talepler.Count</span>
-                </button>
-                <button type="button" class="btn @(selectedDurum == DestekDurum.Taslak ? "btn-secondary" : "btn-outline-secondary")" @onclick="() => FilterByDurum(DestekDurum.Taslak)">
-                    <i class="bi bi-file-earmark me-1"></i>Taslak <span class="badge bg-light text-dark ms-1">@talepler.Count(t => t.Durum == DestekDurum.Taslak)</span>
-                </button>
-                <button type="button" class="btn @(selectedDurum == DestekDurum.Gonderildi ? "btn-info" : "btn-outline-info")" @onclick="() => FilterByDurum(DestekDurum.Gonderildi)">
-                    <i class="bi bi-send me-1"></i>Gönderildi <span class="badge bg-light text-dark ms-1">@talepler.Count(t => t.Durum == DestekDurum.Gonderildi)</span>
-                </button>
-                <button type="button" class="btn @(selectedDurum == DestekDurum.Islemde ? "btn-warning" : "btn-outline-warning")" @onclick="() => FilterByDurum(DestekDurum.Islemde)">
-                    <i class="bi bi-gear me-1"></i>İşlemde <span class="badge bg-light text-dark ms-1">@talepler.Count(t => t.Durum == DestekDurum.Islemde)</span>
-                </button>
-                <button type="button" class="btn @(selectedDurum == DestekDurum.Bitti ? "btn-success" : "btn-outline-success")" @onclick="() => FilterByDurum(DestekDurum.Bitti)">
-                    <i class="bi bi-check-circle me-1"></i>Bitti <span class="badge bg-light text-dark ms-1">@talepler.Count(t => t.Durum == DestekDurum.Bitti)</span>
-                </button>
-                <button type="button" class="btn @(selectedDurum == DestekDurum.Onaylandi ? "btn-primary" : "btn-outline-primary")" @onclick="() => FilterByDurum(DestekDurum.Onaylandi)">
-                    <i class="bi bi-check2-all me-1"></i>Onaylandı <span class="badge bg-light text-dark ms-1">@talepler.Count(t => t.Durum == DestekDurum.Onaylandi)</span>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Talep Listesi -->
-    @if (isLoading)
-    {
-        <div class="text-center py-5">
-            <div class="spinner-border text-primary" role="status"></div>
-            <p class="mt-2">Yükleniyor...</p>
-        </div>
-    }
-    else if (!filteredTalepler.Any())
-    {
-        <div class="alert alert-info">
-            <i class="bi bi-info-circle me-2"></i>
-            @if (selectedDurum != null)
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h3 class="mb-0"><i class="bi bi-ticket-detailed-fill text-primary me-2"></i>Taleplerim</h3>
+        <div class="d-flex flex-wrap gap-2">
+            @if (aktor?.EkipUyesi == true)
             {
-                <span>Bu durumda talep bulunmuyor.</span>
+                <a href="destek-talepleri" class="btn btn-outline-secondary"><i class="bi bi-list me-1"></i>Tüm Talepler</a>
+            }
+            <button type="button" class="btn btn-outline-danger" @onclick="() => AppIssueState.RequestReportForm()">
+                <i class="bi bi-bug me-1"></i>Sorun Bildir
+            </button>
+            <a href="destek-talepleri/talep-giris" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Yeni Talep</a>
+        </div>
+    </div>
+
+    @if (yuklemeHatasi != null)
+    {
+        <div class="alert alert-warning d-flex justify-content-between align-items-start">
+            <div><i class="bi bi-exclamation-triangle me-2"></i>@yuklemeHatasi</div>
+            <button class="btn btn-outline-warning btn-sm" @onclick="YukleAsync"><i class="bi bi-arrow-clockwise me-1"></i>Tekrar Dene</button>
+        </div>
+    }
+
+    @if (bekleyenSayisi > 0)
+    {
+        <div class="alert alert-info d-flex align-items-center gap-2">
+            <i class="bi bi-hand-index-thumb fs-5"></i>
+            <div>
+                <strong>@bekleyenSayisi talep sizi bekliyor.</strong>
+                Destek ekibi sizden bilgi istedi ya da çözümün onaylanmasını bekliyor.
+                <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @onclick="() => Sec(Suzgec.Bekleyen)">Göster</button>
+            </div>
+        </div>
+    }
+
+    <div class="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Durum süzgeci">
+        @foreach (var secenek in Enum.GetValues<Suzgec>())
+        {
+            <button type="button" class="btn btn-sm @(suzgec == secenek ? "btn-primary" : "btn-outline-primary")" @onclick="() => Sec(secenek)">
+                @SuzgecEtiketi(secenek) <span class="badge @(suzgec == secenek ? "bg-light text-dark" : "bg-primary") ms-1">@Say(secenek)</span>
+            </button>
+        }
+    </div>
+
+    @if (yukleniyor)
+    {
+        <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
+    }
+    else if (!Gorunen.Any())
+    {
+        <div class="alert alert-light border text-center py-4">
+            <i class="bi bi-inbox fs-3 d-block mb-2 text-muted"></i>
+            @if (talepler.Count == 0)
+            {
+                <span>Henüz talebiniz yok. Bir sorun yaşadığınızda <strong>Sorun Bildir</strong> ya da <a href="destek-talepleri/talep-giris">Yeni Talep</a> ile destek ekibine ulaşabilirsiniz.</span>
             }
             else
             {
-                <span>Henüz hiç talebiniz yok. <a href="destek-talepleri/talep-giris">Yeni talep oluşturun</a></span>
+                <span>Bu süzgece uyan talep yok.</span>
             }
         </div>
     }
     else
     {
         <div class="table-responsive">
-            <table class="table table-hover">
+            <table class="table table-hover align-middle">
                 <thead class="table-light">
                     <tr>
-                        <th style="width: 120px;">Talep No</th>
+                        <th style="width: 140px;">Talep No</th>
                         <th>Konu</th>
-                        <th style="width: 120px;">Departman</th>
-                        <th style="width: 100px;">Öncelik</th>
-                        <th style="width: 110px;">Durum</th>
-                        <th style="width: 140px;">Atanan Yetkili</th>
-                        <th style="width: 130px;">Son Güncelleme</th>
-                        <th style="width: 100px;">İşlem</th>
+                        <th class="d-none d-md-table-cell" style="width: 130px;">Departman</th>
+                        <th style="width: 90px;">Öncelik</th>
+                        <th style="width: 150px;">Durum</th>
+                        <th class="d-none d-lg-table-cell" style="width: 150px;">Yetkili</th>
+                        <th class="d-none d-md-table-cell" style="width: 140px;">Son Güncelleme</th>
+                        <th style="width: 120px;"></th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var talep in filteredTalepler.OrderByDescending(t => t.SonAktiviteTarihi))
+                    @foreach (var talep in Gorunen)
                     {
-                        <tr class="@(talep.Durum == DestekDurum.Bitti ? "table-success" : "")">
+                        var bekliyor = talep.Durum is DestekDurum.BilgiBekleniyor or DestekDurum.Cozuldu;
+                        <tr class="@(bekliyor ? "table-info" : string.Empty)">
                             <td>
-                                <a href="destek-talepleri/talep-takip/@talep.Id" class="fw-bold text-decoration-none">
-                                    @talep.TalepNo
-                                </a>
+                                <a href="@Adres(talep)" class="fw-bold text-decoration-none">@talep.TalepNo</a>
                             </td>
                             <td>
-                                <div class="text-truncate" style="max-width: 300px;" title="@talep.Konu">
-                                    @talep.Konu
-                                </div>
+                                <div class="text-truncate" style="max-width: 320px;" title="@talep.Konu">@talep.Konu</div>
+                                @if (talep.Kaynak == DestekKaynak.HataBildirimi)
+                                {
+                                    <small class="text-muted"><i class="bi bi-bug me-1"></i>Hata bildirimi</small>
+                                }
                             </td>
-                            <td>@(talep.Departman?.Ad ?? "-")</td>
+                            <td class="d-none d-md-table-cell">@(talep.Departman?.Ad ?? "-")</td>
+                            <td><DestekOncelikRozeti Oncelik="talep.Oncelik" /></td>
                             <td>
-                                <span class="badge @GetOncelikBadgeClass(talep.Oncelik)">@GetOncelikText(talep.Oncelik)</span>
+                                <DestekDurumRozeti Durum="talep.Durum" Baslik="@DestekKurallari.TalepEdenAciklamasi(talep.Durum)" />
+                                @if (bekliyor)
+                                {
+                                    <div class="small text-info-emphasis">@(talep.Durum == DestekDurum.Cozuldu ? "Onayınız bekleniyor" : "Yanıtınız bekleniyor")</div>
+                                }
                             </td>
-                            <td>
-                                <span class="badge @GetDurumBadgeClass(talep.Durum)">@GetDurumText(talep.Durum)</span>
-                            </td>
-                            <td>
+                            <td class="d-none d-lg-table-cell">
                                 @if (talep.AtananKullanici != null)
                                 {
                                     <small><i class="bi bi-person me-1"></i>@talep.AtananKullanici.AdSoyad</small>
                                 }
                                 else
                                 {
-                                    <small class="text-muted">Atanmadı</small>
+                                    <small class="text-muted">Henüz atanmadı</small>
                                 }
                             </td>
-                            <td>
-                                <small>@talep.SonAktiviteTarihi.ToString("dd.MM.yyyy HH:mm")</small>
-                            </td>
-                            <td>
-                                <div class="btn-group btn-group-sm">
-                                    @if (talep.Durum == DestekDurum.Taslak)
-                                    {
-                                        <a href="destek-talepleri/talep-giris/@talep.Id" class="btn btn-outline-primary" title="Düzenle">
-                                            <i class="bi bi-pencil"></i>
-                                        </a>
-                                        <button class="btn btn-outline-danger" @onclick="() => TalepSil(talep.Id)" title="Sil">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    }
-                                    else if (talep.Durum == DestekDurum.Bitti)
-                                    {
-                                        <button class="btn btn-success" @onclick="() => TalebiOnayla(talep.Id)" title="Onayla">
-                                            <i class="bi bi-check2-all me-1"></i>Onayla
-                                        </button>
-                                    }
-                                    else
-                                    {
-                                        <a href="destek-talepleri/talep-takip/@talep.Id" class="btn btn-outline-info" title="Takip Et">
-                                            <i class="bi bi-eye"></i>
-                                        </a>
-                                    }
-                                </div>
+                            <td class="d-none d-md-table-cell"><small>@MKFiloServis.Shared.Time.BusinessTime.LocalAt(talep.SonAktiviteTarihi).ToString("dd.MM.yyyy HH:mm")</small></td>
+                            <td class="text-end">
+                                @if (talep.Durum == DestekDurum.Taslak)
+                                {
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="destek-talepleri/talep-giris/@talep.Id" class="btn btn-outline-primary" title="Düzenle"><i class="bi bi-pencil"></i></a>
+                                        <button class="btn btn-outline-success" title="Gönder" @onclick="() => GonderAsync(talep)"><i class="bi bi-send"></i></button>
+                                        <button class="btn btn-outline-danger" title="Sil" @onclick="() => SilAsync(talep)"><i class="bi bi-trash"></i></button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <a href="destek-talepleri/talep-takip/@talep.Id" class="btn btn-sm @(bekliyor ? "btn-info" : "btn-outline-info")">
+                                        <i class="bi bi-eye me-1"></i>@(bekliyor ? "Yanıtla" : "Takip")
+                                    </a>
+                                }
                             </td>
                         </tr>
                     }
@@ -175,138 +145,95 @@
 </div>
 
 @code {
+    private enum Suzgec { Tumu, Bekleyen, Acik, Taslak, Kapali }
+
     private List<DestekTalebi> talepler = new();
-    private List<DestekTalebi> filteredTalepler = new();
-    private DestekDurum? selectedDurum = null;
-    
-    private string errorMessage = string.Empty;
-    private string successMessage = string.Empty;
-    private bool isLoading = true;
-    private int? aktifKullaniciId;
+    private DestekKullanici? aktor;
+    private Suzgec suzgec = Suzgec.Tumu;
+    private bool yukleniyor = true;
+    private string? yuklemeHatasi;
+
+    private int bekleyenSayisi => Say(Suzgec.Bekleyen);
+
+    private IEnumerable<DestekTalebi> Gorunen => talepler.Where(t => Uyar(t, suzgec));
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadDataAsync();
+        await YukleAsync();
     }
 
-    private async Task LoadDataAsync()
+    private async Task YukleAsync()
     {
-        isLoading = true;
+        yukleniyor = true;
+        yuklemeHatasi = null;
         try
         {
-            var aktifKullanici = AuthProvider.GetAktifKullanici();
-            aktifKullaniciId = aktifKullanici?.Id;
-
-            if (aktifKullaniciId == null)
-            {
-                errorMessage = "Oturum bilgisi alınamadı.";
-                return;
-            }
-
-            // Kullanıcının kendi taleplerini getir
-            var allTalepler = await DestekService.GetAllAsync();
-            talepler = allTalepler.Where(t => t.OlusturanKullaniciId == aktifKullaniciId).ToList();
-            FilterByDurum(selectedDurum);
+            aktor = await DestekService.GetAktifKullaniciAsync();
+            talepler = await DestekService.GetTaleplerimAsync();
         }
         catch (Exception ex)
         {
-            errorMessage = $"Veriler yüklenirken hata: {ex.Message}";
+            yuklemeHatasi = $"Talepler yüklenemedi: {ex.GetBaseException().Message}";
         }
         finally
         {
-            isLoading = false;
+            yukleniyor = false;
         }
     }
 
-    private void FilterByDurum(DestekDurum? durum)
-    {
-        selectedDurum = durum;
-        filteredTalepler = durum == null 
-            ? talepler.ToList() 
-            : talepler.Where(t => t.Durum == durum).ToList();
-    }
+    private void Sec(Suzgec secenek) => suzgec = secenek;
 
-    private async Task TalepSil(int talepId)
-    {
-        var confirm = await JS.InvokeAsync<bool>("confirm", "Bu taslak talebi silmek istediğinize emin misiniz?");
-        if (!confirm) return;
+    private int Say(Suzgec secenek) => talepler.Count(t => Uyar(t, secenek));
 
+    private static bool Uyar(DestekTalebi talep, Suzgec secenek) => secenek switch
+    {
+        Suzgec.Bekleyen => talep.Durum is DestekDurum.BilgiBekleniyor or DestekDurum.Cozuldu,
+        Suzgec.Acik => DestekKurallari.AcikMi(talep.Durum),
+        Suzgec.Taslak => talep.Durum == DestekDurum.Taslak,
+        Suzgec.Kapali => talep.Durum == DestekDurum.Kapali,
+        _ => true
+    };
+
+    private static string SuzgecEtiketi(Suzgec secenek) => secenek switch
+    {
+        Suzgec.Bekleyen => "Sizi bekleyen",
+        Suzgec.Acik => "Açık",
+        Suzgec.Taslak => "Taslak",
+        Suzgec.Kapali => "Kapanan",
+        _ => "Tümü"
+    };
+
+    private static string Adres(DestekTalebi talep) =>
+        talep.Durum == DestekDurum.Taslak ? $"destek-talepleri/talep-giris/{talep.Id}" : $"destek-talepleri/talep-takip/{talep.Id}";
+
+    private async Task GonderAsync(DestekTalebi talep)
+    {
         try
         {
-            await DestekService.DeleteAsync(talepId);
-            successMessage = "Talep silindi.";
-            await LoadDataAsync();
+            await DestekService.EylemUygulaAsync(talep.Id, DestekEylem.Gonder);
+            ToastService.ShowSuccess($"{talep.TalepNo} gönderildi.");
+            await YukleAsync();
         }
         catch (Exception ex)
         {
-            errorMessage = $"Silme hatası: {ex.Message}";
+            ToastService.ShowError($"Gönderilemedi: {ex.GetBaseException().Message}");
         }
     }
 
-    private async Task TalebiOnayla(int talepId)
+    private async Task SilAsync(DestekTalebi talep)
     {
+        if (!await JS.InvokeAsync<bool>("confirm", $"{talep.TalepNo} taslağı silinsin mi?"))
+            return;
+
         try
         {
-            await DestekService.UpdateDurumAsync(talepId, DestekDurum.Onaylandi, aktifKullaniciId);
-            successMessage = "Talep onaylandı. Teşekkür ederiz!";
-            await LoadDataAsync();
+            await DestekService.TaslakSilAsync(talep.Id);
+            ToastService.ShowSuccess("Taslak silindi.");
+            await YukleAsync();
         }
         catch (Exception ex)
         {
-            errorMessage = $"Onaylama hatası: {ex.Message}";
+            ToastService.ShowError($"Silinemedi: {ex.GetBaseException().Message}");
         }
     }
-
-    private string GetDurumText(DestekDurum durum) => durum switch
-    {
-        DestekDurum.Taslak => "Taslak",
-        DestekDurum.Gonderildi => "Gönderildi",
-        DestekDurum.Islemde => "İşlemde",
-        DestekDurum.Bitti => "Bitti",
-        DestekDurum.Onaylandi => "Onaylandı",
-        DestekDurum.Yeni => "Yeni",
-        DestekDurum.Acik => "Açık",
-        DestekDurum.Beklemede => "Beklemede",
-        DestekDurum.YanitBekleniyor => "Yanıt Bekleniyor",
-        DestekDurum.Cozuldu => "Çözüldü",
-        DestekDurum.Kapali => "Kapalı",
-        _ => durum.ToString()
-    };
-
-    private string GetDurumBadgeClass(DestekDurum durum) => durum switch
-    {
-        DestekDurum.Taslak => "bg-secondary",
-        DestekDurum.Gonderildi => "bg-info",
-        DestekDurum.Islemde => "bg-warning text-dark",
-        DestekDurum.Bitti => "bg-success",
-        DestekDurum.Onaylandi => "bg-primary",
-        DestekDurum.Yeni => "bg-primary",
-        DestekDurum.Acik => "bg-warning text-dark",
-        DestekDurum.Beklemede => "bg-secondary",
-        DestekDurum.YanitBekleniyor => "bg-info",
-        DestekDurum.Cozuldu => "bg-success",
-        DestekDurum.Kapali => "bg-dark",
-        _ => "bg-secondary"
-    };
-
-    private string GetOncelikText(DestekOncelik oncelik) => oncelik switch
-    {
-        DestekOncelik.Dusuk => "Düşük",
-        DestekOncelik.Normal => "Normal",
-        DestekOncelik.Yuksek => "Yüksek",
-        DestekOncelik.Acil => "Acil",
-        DestekOncelik.Kritik => "Kritik",
-        _ => oncelik.ToString()
-    };
-
-    private string GetOncelikBadgeClass(DestekOncelik oncelik) => oncelik switch
-    {
-        DestekOncelik.Dusuk => "bg-secondary",
-        DestekOncelik.Normal => "bg-info",
-        DestekOncelik.Yuksek => "bg-warning text-dark",
-        DestekOncelik.Acil => "bg-danger",
-        DestekOncelik.Kritik => "bg-dark",
-        _ => "bg-secondary"
-    };
 }
-

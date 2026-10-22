@@ -1,0 +1,274 @@
+@implements IDisposable
+@using System.Reflection
+@using Microsoft.AspNetCore.Components.Forms
+@using MKFiloServis.Web.Services.Destek
+@inject IDestekTalebiService DestekService
+@inject AppIssueStateService AppIssueState
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+@* Üst çubuktaki "Sorun Bildir": destek ekibine, bulunulan sayfa ve son görülen hata eklenmiş bir talep açar.
+   Hata kutularındaki ve hata panelindeki "Sorunu bildir" düğmeleri de bu pencereyi açar (AppIssueStateService). *@
+
+<button type="button" class="btn btn-sm btn-outline-danger border" title="Sorun Bildir — destek ekibine talep açın"
+        @onclick="() => AcAsync(null)">
+    <i class="bi bi-bug"></i><span class="d-none d-xl-inline ms-1">Sorun Bildir</span>
+</button>
+
+@if (acik)
+{
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="sorunBildirBaslik"
+         style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="sorunBildirBaslik"><i class="bi bi-bug text-danger me-2"></i>Sorun Bildir</h5>
+                    <button type="button" class="btn-close" aria-label="Kapat" @onclick="Kapat"></button>
+                </div>
+                <div class="modal-body">
+                    @if (olusan != null)
+                    {
+                        <div class="text-center py-3">
+                            <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
+                            <h5 class="mt-3 mb-1">Talebiniz alındı</h5>
+                            <p class="mb-2">Talep numaranız: <strong>@olusan.TalepNo</strong></p>
+                            <p class="text-muted small mb-0">
+                                Destek ekibine iletildi. Durum değiştikçe sağ üstteki <i class="bi bi-bell"></i> simgesinden bildirim alacaksınız;
+                                talebinizi "Taleplerim" ekranından izleyebilirsiniz.
+                            </p>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted small mb-3">
+                            Destek ekibine bir talep açılır. Bulunduğunuz sayfa ve son görülen hata otomatik eklenir; talebin durumu
+                            değiştikçe sağ üstteki zil simgesinden bildirim alırsınız.
+                        </p>
+
+                        @if (!string.IsNullOrWhiteSpace(rapor?.ErrorMessage))
+                        {
+                            <div class="alert alert-warning py-2 small">
+                                <i class="bi bi-exclamation-triangle me-1"></i><strong>Görülen hata:</strong> @rapor.ErrorMessage
+                            </div>
+                        }
+
+                        <div class="mb-3">
+                            <label class="form-label" for="sorunKonu">Konu</label>
+                            <input id="sorunKonu" class="form-control" @bind="konu" maxlength="200"
+                                   placeholder="Boş bırakırsanız hata mesajından oluşturulur" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="sorunAciklama">Ne yapmaya çalışıyordunuz, ne oldu? <span class="text-danger">*</span></label>
+                            <textarea id="sorunAciklama" class="form-control" rows="5" @bind="aciklama"
+                                      placeholder="Örn: Kesilen faturalar listesinde Excel'e aktar dedim, ekranda hata çıktı."></textarea>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-5">
+                                <label class="form-label" for="sorunOncelik">Önem</label>
+                                <select id="sorunOncelik" class="form-select" @bind="oncelik">
+                                    @foreach (var secenek in Enum.GetValues<DestekOncelik>())
+                                    {
+                                        <option value="@secenek">@DestekKurallari.OncelikEtiketi(secenek)</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-7">
+                                <label class="form-label" for="sorunEk">Ekran görüntüsü (isteğe bağlı)</label>
+                                <InputFile id="sorunEk" class="form-control" accept="image/*" OnChange="EkSecildiAsync" />
+                                <div class="form-text">@(ekAdi != null ? $"Eklenecek: {ekAdi}" : $"Resim dosyası, en fazla {enFazlaMb} MB")</div>
+                            </div>
+                        </div>
+
+                        <details class="mt-3 small text-muted">
+                            <summary>Otomatik eklenecek bilgiler</summary>
+                            <ul class="mb-0 mt-2">
+                                <li>Sayfa: @sayfa</li>
+                                @if (rapor != null)
+                                {
+                                    <li>Hata zamanı: @MKFiloServis.Shared.Time.BusinessTime.LocalAt(rapor.ErrorTime).ToString("dd.MM.yyyy HH:mm:ss")</li>
+                                    <li>Hata türü: @rapor.ErrorType</li>
+                                }
+                                <li>Tarayıcı ve uygulama sürümü (teknik ayrıntılar yalnız destek ekibine görünür)</li>
+                            </ul>
+                        </details>
+
+                        @if (hata != null)
+                        {
+                            <div class="alert alert-danger mt-3 mb-0 py-2 small" role="alert">@hata</div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    @if (olusan != null)
+                    {
+                        <button type="button" class="btn btn-secondary" @onclick="Kapat">Kapat</button>
+                        <button type="button" class="btn btn-primary" @onclick="TakipEt">
+                            <i class="bi bi-eye me-1"></i>Talebi takip et
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-secondary" @onclick="Kapat" disabled="@gonderiliyor">Vazgeç</button>
+                        <button type="button" class="btn btn-danger" @onclick="GonderAsync" disabled="@gonderiliyor">
+                            @if (gonderiliyor)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            <i class="bi bi-send me-1"></i>Gönder
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private static readonly string Surum =
+        typeof(SorunBildir).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion?.Split('+')[0]
+        ?? typeof(SorunBildir).Assembly.GetName().Version?.ToString()
+        ?? "-";
+
+    private bool acik;
+    private bool gonderiliyor;
+    private AppIssueReport? rapor;
+    private string? sayfa;
+    private string? konu;
+    private string? aciklama;
+    private string? hata;
+    private DestekOncelik oncelik = DestekOncelik.Normal;
+    private string? ekAdi;
+    private string? ekMime;
+    private byte[]? ekIcerik;
+    private int enFazlaMb = 10;
+    private DestekTalebi? olusan;
+
+    protected override void OnInitialized()
+    {
+        AppIssueState.ReportFormRequested += IstekGeldi;
+    }
+
+    private void IstekGeldi(AppIssueReport? gelen) => _ = InvokeAsync(() => AcAsync(gelen));
+
+    private async Task AcAsync(AppIssueReport? gelen)
+    {
+        // Doğrudan açılışta son 15 dakikada görülen hata (varsa) eklenir.
+        rapor = gelen ?? AppIssueState.RecentIssue(TimeSpan.FromMinutes(15));
+        sayfa = rapor?.CurrentPage ?? "/" + Navigation.ToBaseRelativePath(Navigation.Uri);
+        konu = null;
+        aciklama = null;
+        hata = null;
+        oncelik = DestekOncelik.Normal;
+        ekAdi = null;
+        ekMime = null;
+        ekIcerik = null;
+        olusan = null;
+        acik = true;
+        StateHasChanged();
+
+        try
+        {
+            enFazlaMb = (await DestekService.GetGenelAyarlarAsync()).MaksimumDosyaBoyutuMB;
+        }
+        catch
+        {
+            enFazlaMb = 10;
+        }
+        StateHasChanged();
+    }
+
+    private async Task EkSecildiAsync(InputFileChangeEventArgs e)
+    {
+        hata = null;
+        ekAdi = null;
+        ekIcerik = null;
+        var dosya = e.File;
+        var sinir = enFazlaMb * 1024L * 1024L;
+        if (!dosya.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            hata = "Yalnız resim dosyası (ekran görüntüsü) ekleyebilirsiniz.";
+            return;
+        }
+        if (dosya.Size > sinir)
+        {
+            hata = $"Dosya en fazla {enFazlaMb} MB olabilir.";
+            return;
+        }
+
+        await using var akis = dosya.OpenReadStream(sinir);
+        using var bellek = new MemoryStream();
+        await akis.CopyToAsync(bellek);
+        ekIcerik = bellek.ToArray();
+        ekAdi = dosya.Name;
+        ekMime = dosya.ContentType;
+    }
+
+    private async Task GonderAsync()
+    {
+        if (string.IsNullOrWhiteSpace(aciklama))
+        {
+            hata = "Lütfen ne yapmaya çalıştığınızı ve ne olduğunu kısaca yazın.";
+            return;
+        }
+
+        gonderiliyor = true;
+        hata = null;
+        try
+        {
+            string? tarayici = null;
+            try
+            {
+                tarayici = await JS.InvokeAsync<string>("sorunBildir.tarayici");
+            }
+            catch
+            {
+                // Eski önbellekteki app.js'de yardımcı yoksa tarayıcı bilgisi eklenmez.
+            }
+
+            olusan = await DestekService.HataBildirimiOlusturAsync(new SorunBildirimi
+            {
+                Konu = konu,
+                Aciklama = aciklama!,
+                Oncelik = oncelik,
+                Sayfa = sayfa,
+                OncekiSayfa = rapor?.PreviousPage ?? AppIssueState.PreviousPage,
+                HataMesaji = rapor?.ErrorMessage,
+                HataTuru = rapor?.ErrorType,
+                YiginIzi = rapor?.StackTrace,
+                HataZamaniUtc = rapor?.ErrorTime,
+                Tarayici = tarayici,
+                UygulamaSurumu = Surum,
+                EkDosyaAdi = ekAdi,
+                EkMimeTipi = ekMime,
+                EkIcerik = ekIcerik
+            });
+        }
+        catch (Exception ex)
+        {
+            // Hata kutusu (toast) kullanılmaz: onun "Sorunu bildir" düğmesi bu pencereyi yeniden açardı.
+            hata = $"Talep gönderilemedi: {ex.GetBaseException().Message}";
+        }
+        finally
+        {
+            gonderiliyor = false;
+        }
+    }
+
+    private void TakipEt()
+    {
+        var id = olusan?.Id;
+        acik = false;
+        if (id.HasValue)
+            Navigation.NavigateTo($"destek-talepleri/talep-takip/{id}");
+    }
+
+    private void Kapat()
+    {
+        acik = false;
+    }
+
+    public void Dispose()
+    {
+        AppIssueState.ReportFormRequested -= IstekGeldi;
+    }
+}

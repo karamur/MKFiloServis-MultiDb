@@ -310,17 +310,19 @@ public static class AnaMenuYapisi
                 ]),
             ]),
 
-        // ── DESTEK (eskiden Ayarlar'ın içindeydi; erişim kuralı aynı: menu.ayarlar + destek yetkisi) ──
-        Grup("destek", "DESTEK", "bi-headset", kural: Menu("menu.ayarlar"),
+        // ── DESTEK: talep açmak, kendi taleplerini izlemek ve bilgi bankası herkese açık (sorun bildirebilsin);
+        //    ekip ekranları destek personeli (destektalebi.yaz) ya da yazılım ekibi (destektalebi.yazilim) ister ──
+        Grup("destek", "DESTEK", "bi-headset",
             altlar:
             [
                 Alt(null, null,
                 [
-                    Oge("Yeni Talep", "/destek-talepleri/talep-giris", "bi-plus-circle", "text-success", Yetki("destektalebi.oku")),
-                    Oge("Taleplerim", "/destek-talepleri/taleplerim", "bi-ticket-detailed", "text-info", Yetki("destektalebi.oku")),
-                    Oge("Bilgi Bankası", "/destek-talepleri/bilgi-bankasi", "bi-book-fill", "text-info", Yetki("destektalebi.oku")),
-                    Oge("Tüm Talepler", "/destek-talepleri", "bi-ticket-detailed-fill", "text-primary", Yetki("destektalebi.yaz")),
-                    Oge("Talep Yönetimi", "/destek-talepleri/yonetim", "bi-kanban", "text-warning", Yetki("destektalebi.yaz")),
+                    Oge("Yeni Talep", "/destek-talepleri/talep-giris", "bi-plus-circle", "text-success", HerKullanici("destektalebi.oku")),
+                    Oge("Taleplerim", "/destek-talepleri/taleplerim", "bi-ticket-detailed", "text-info", HerKullanici("destektalebi.oku")),
+                    Oge("Bilgi Bankası", "/destek-talepleri/bilgi-bankasi", "bi-book-fill", "text-info", HerKullanici("destektalebi.oku")),
+                    Oge("Tüm Talepler", "/destek-talepleri", "bi-ticket-detailed-fill", "text-primary", Herhangi("destektalebi.yaz", "destektalebi.yazilim")),
+                    Oge("Talep Yönetimi", "/destek-talepleri/yonetim", "bi-kanban", "text-warning", Herhangi("destektalebi.yaz", "destektalebi.yazilim")),
+                    Oge("Destek Ayarları", "/destek-talepleri/ayarlar", "bi-sliders", "text-secondary", Yetki("destektalebi.duzenle")),
                 ]),
             ]),
     ];

@@ -1,66 +1,137 @@
+using System.Net;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace MKFiloServis.Web.Helpers;
 
 /// <summary>
-/// Hafif HTML sanitizer — kullanıcı girdisindeki tehlikeli HTML/script etiketlerini temizler.
-/// Harici NuGet bağımlılığı yok. MarkupString render öncesi çağrılmalıdır.
+/// Kullanıcı girdisini <c>MarkupString</c> olarak basmadan önce güvenli hale getirir.
+/// <para>
+/// İzin listesi yaklaşımı: yalnız biçim etiketleri (p, br, b, strong, i, em, u, ul, ol, li, başlıklar, alıntı, kod)
+/// özniteliksiz yeniden yazılır; diğer bütün etiketler atılır, script/style/iframe gibi kapsayıcıların içeriği de
+/// atılır, metin her zaman HTML kodlanır. Öznitelik hiç yazılmadığı için <c>onerror=</c>, <c>href="javascript:"</c>,
+/// <c>&lt;svg/onload&gt;</c> gibi kalıplar çalışamaz.
+/// </para>
 /// </summary>
 public static class HtmlSanitizerHelper
 {
-    // Tehlikeli etiketler — tamamen kaldırılır (içeriğiyle birlikte)
-    private static readonly Regex DangerousTagRegex = new(
-        @"<\s*(script|iframe|object|embed|form|input|button|link|meta|style|base|applet|frame|frameset|ilayer|layer|bgsound|title|head|html|body)\b[^>]*>.*?<\s*/\s*\1\s*>",
-        RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
+    private static readonly Regex YorumRegex = new(@"<!--.*?(-->|$)", RegexOptions.Singleline | RegexOptions.Compiled);
 
-    // Kendiliğinden kapanan tehlikeli etiketler
-    private static readonly Regex DangerousSelfClosingRegex = new(
-        @"<\s*(script|iframe|object|embed|link|meta|base|input)\b[^>]*/?>",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // < ile başlayıp > ile biten etiket: </b>, <p class="x">, <svg/onload=...>, <br/>
+    private static readonly Regex EtiketRegex = new(@"<(/?)([a-zA-Z][a-zA-Z0-9]*)\b[^<>]*>", RegexOptions.Compiled);
 
-    // Event handler attribute'ları (onclick, onerror, onload vb.)
-    private static readonly Regex EventHandlerRegex = new(
-        @"\s+on\w+\s*=\s*""[^""]*""",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly HashSet<string> IzinliEtiketler = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "p", "br", "b", "strong", "i", "em", "u", "ul", "ol", "li", "h3", "h4", "h5", "h6", "blockquote", "code", "pre", "hr"
+    };
 
-    private static readonly Regex EventHandlerSingleQuoteRegex = new(
-        @"\s+on\w+\s*=\s*'[^']*'",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly HashSet<string> BosEtiketler = new(StringComparer.OrdinalIgnoreCase) { "br", "hr" };
 
-    // javascript: URL'leri
-    private static readonly Regex JavascriptUrlRegex = new(
-        @"\b(javascript|vbscript|data)\s*:",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // İçeriğiyle birlikte atılan kapsayıcılar
+    private static readonly HashSet<string> IcerigiAtilanEtiketler = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "script", "style", "iframe", "object", "embed", "template", "noscript", "textarea", "title", "xmp", "svg", "math", "head"
+    };
 
     /// <summary>
-    /// Kullanıcı girdisini güvenli hale getirir.
-    /// - &lt;script&gt;, &lt;iframe&gt; vb. tamamen kaldırılır
-    /// - on* event handler'ları kaldırılır
-    /// - javascript: URL'leri kaldırılır
-    /// - &lt;br&gt;, &lt;b&gt;, &lt;i&gt;, &lt;u&gt;, &lt;p&gt;, &lt;ul&gt;, &lt;li&gt; gibi güvenli etiketler korunur
+    /// Girdiyi izin listesine göre temizler.
     /// </summary>
-    public static string Sanitize(string? input)
+    /// <param name="input">Düz metin ya da basit HTML.</param>
+    /// <param name="satirSonlariniKoru">Metindeki satır sonlarını <c>&lt;br&gt;</c> yapar (textarea'dan gelen içerik için).</param>
+    public static string Sanitize(string? input, bool satirSonlariniKoru = false)
     {
         if (string.IsNullOrWhiteSpace(input))
             return string.Empty;
 
-        var result = input;
+        var kaynak = YorumRegex.Replace(input.Replace("\r\n", "\n"), string.Empty);
+        var sonuc = new StringBuilder(kaynak.Length + 16);
+        var konum = 0;
+        string? atlananKapsayici = null;
 
-        // 1) Tehlikeli etiketleri içeriğiyle birlikte kaldır
-        result = DangerousTagRegex.Replace(result, string.Empty);
+        foreach (Match etiket in EtiketRegex.Matches(kaynak))
+        {
+            var kapanis = etiket.Groups[1].Value == "/";
+            var ad = etiket.Groups[2].Value;
 
-        // 2) Kendiliğinden kapanan tehlikeli etiketleri kaldır
-        result = DangerousSelfClosingRegex.Replace(result, string.Empty);
+            if (atlananKapsayici != null)
+            {
+                // Tehlikeli kapsayıcının içindeyiz: yalnız kendi kapanışını ara, aradaki her şeyi at.
+                if (kapanis && string.Equals(ad, atlananKapsayici, StringComparison.OrdinalIgnoreCase))
+                {
+                    atlananKapsayici = null;
+                    konum = etiket.Index + etiket.Length;
+                }
+                continue;
+            }
 
-        // 3) Event handler attribute'larını kaldır
-        result = EventHandlerRegex.Replace(result, string.Empty);
-        result = EventHandlerSingleQuoteRegex.Replace(result, string.Empty);
+            MetinEkle(sonuc, kaynak.AsSpan(konum, etiket.Index - konum), satirSonlariniKoru);
+            konum = etiket.Index + etiket.Length;
 
-        // 4) javascript: URL'lerini kaldır
-        result = JavascriptUrlRegex.Replace(result, "yasak:");
+            if (!kapanis && IcerigiAtilanEtiketler.Contains(ad))
+            {
+                if (!etiket.Value.EndsWith("/>", StringComparison.Ordinal))
+                    atlananKapsayici = ad;
+                continue;
+            }
 
-        return result;
+            if (!IzinliEtiketler.Contains(ad))
+                continue;
+
+            var kucukAd = ad.ToLowerInvariant();
+            if (BosEtiketler.Contains(kucukAd))
+            {
+                if (!kapanis) sonuc.Append('<').Append(kucukAd).Append('>');
+                continue;
+            }
+
+            sonuc.Append(kapanis ? "</" : "<").Append(kucukAd).Append('>');
+        }
+
+        if (atlananKapsayici == null && konum < kaynak.Length)
+            MetinEkle(sonuc, kaynak.AsSpan(konum), satirSonlariniKoru);
+
+        return sonuc.ToString();
+    }
+
+    /// <summary>
+    /// Metni olduğu gibi (HTML yorumlamadan) gösterilecek biçime getirir: her karakter kodlanır, satır sonları
+    /// <c>&lt;br&gt;</c> olur. Yığın izi gibi <c>&lt;Metot&gt;</c> içeren teknik metinler için.
+    /// </summary>
+    public static string MetinOlarak(string? metin)
+    {
+        if (string.IsNullOrEmpty(metin))
+            return string.Empty;
+
+        return WebUtility.HtmlEncode(metin.Replace("\r\n", "\n")).Replace("\n", "<br>");
+    }
+
+    /// <summary>
+    /// HTML'i düz metne çevirir (hazır yanıt şablonunu metin kutusuna koymak için):
+    /// paragraf/satır/madde sonları satır sonu olur, etiketler atılır, karakter varlıkları çözülür.
+    /// </summary>
+    public static string DuzMetin(string? html)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+            return string.Empty;
+
+        var metin = YorumRegex.Replace(html.Replace("\r\n", "\n"), string.Empty);
+        metin = Regex.Replace(metin, @"<\s*br\s*/?\s*>", "\n", RegexOptions.IgnoreCase);
+        metin = Regex.Replace(metin, @"<\s*li\b[^>]*>", "\n• ", RegexOptions.IgnoreCase);
+        metin = Regex.Replace(metin, @"</\s*(p|div|h[1-6]|ul|ol|blockquote|pre)\s*>", "\n", RegexOptions.IgnoreCase);
+        metin = Regex.Replace(metin, @"<(script|style)\b.*?</\1\s*>", string.Empty, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        metin = EtiketRegex.Replace(metin, string.Empty);
+        metin = WebUtility.HtmlDecode(metin);
+        metin = Regex.Replace(metin, @"[ \t]+\n", "\n");
+        metin = Regex.Replace(metin, @"\n{3,}", "\n\n");
+        return metin.Trim();
+    }
+
+    private static void MetinEkle(StringBuilder hedef, ReadOnlySpan<char> parca, bool satirSonlariniKoru)
+    {
+        if (parca.IsEmpty) return;
+
+        // Önce varlıkları çöz, sonra yeniden kodla: "&#60;script&#62;" metin olarak görünür, çift kodlama olmaz.
+        var kodlu = WebUtility.HtmlEncode(WebUtility.HtmlDecode(parca.ToString()));
+        hedef.Append(satirSonlariniKoru ? kodlu.Replace("\n", "<br>") : kodlu);
     }
 }
-
-

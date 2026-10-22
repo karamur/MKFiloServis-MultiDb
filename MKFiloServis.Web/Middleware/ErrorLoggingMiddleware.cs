@@ -36,7 +36,7 @@ public class ErrorLoggingMiddleware
 
                 var userId = context.User?.Identity?.Name ?? context.User?.FindFirst("sub")?.Value;
 
-                db.AppErrorLogs.Add(new AppErrorLog
+                var log = new AppErrorLog
                 {
                     Message = ex.Message.Length > 500 ? ex.Message[..500] : ex.Message,
                     StackTrace = ex.StackTrace,
@@ -44,7 +44,21 @@ public class ErrorLoggingMiddleware
                     UserId = userId,
                     Severity = "Critical",
                     CreatedAt = DateTime.UtcNow
-                });
+                };
+
+                // AppErrorLog firmaya bağlıdır; HTTP hattında aktif firma yoksa firma koruması kaydı reddeder ve hata
+                // hiç yazılmaz. Bu durumda kayıt varsayılan firmaya yazılır.
+                var aktifFirmaId = context.RequestServices.GetService<MKFiloServis.Web.Services.IAktifFirmaProvider>()?.AktifFirmaId;
+                if (aktifFirmaId is not > 0)
+                {
+                    log.FirmaId = await db.Firmalar.AsNoTracking()
+                        .OrderByDescending(f => f.VarsayilanFirma)
+                        .ThenBy(f => f.Id)
+                        .Select(f => (int?)f.Id)
+                        .FirstOrDefaultAsync();
+                }
+
+                db.AppErrorLogs.Add(log);
 
                 await db.SaveChangesAsync();
             }

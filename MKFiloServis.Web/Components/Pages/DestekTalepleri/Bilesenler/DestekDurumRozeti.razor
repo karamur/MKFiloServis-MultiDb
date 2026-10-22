@@ -1,0 +1,9 @@
+<span class="badge @DestekKurallari.RozetSinifi(Durum) @Sinif" title="@Baslik">
+    <i class="bi @DestekKurallari.Ikon(Durum) me-1"></i>@DestekKurallari.Etiket(Durum)
+</span>
+
+@code {
+    [Parameter, EditorRequired] public DestekDurum Durum { get; set; }
+    [Parameter] public string? Sinif { get; set; }
+    [Parameter] public string? Baslik { get; set; }
+}

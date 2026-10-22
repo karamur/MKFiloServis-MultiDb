@@ -1,0 +1,116 @@
+@using Microsoft.AspNetCore.Components.Forms
+@inject IDestekTalebiService DestekService
+@inject IJSRuntime JS
+@inject IToastService ToastService
+
+@* Talebe eklenen dosyalar (yanıtlara eklenenler yazışmada gösterilir). İndirme ve yükleme servis tarafında yetki denetimlidir. *@
+
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-paperclip me-2"></i>Ekler (@Liste.Count)</span>
+        @if (YuklemeAcik)
+        {
+            <label class="btn btn-outline-primary btn-sm mb-0 @(yukleniyor ? "disabled" : string.Empty)" title="Dosya ekle">
+                <i class="bi bi-upload me-1"></i>Dosya ekle
+                <InputFile class="d-none" multiple OnChange="YukleAsync" accept="@KabulEdilen" disabled="@yukleniyor" />
+            </label>
+        }
+    </div>
+    <div class="card-body">
+        @if (yukleniyor)
+        {
+            <div class="small text-muted mb-2"><span class="spinner-border spinner-border-sm me-1"></span>Yükleniyor...</div>
+        }
+        @if (Liste.Count == 0)
+        {
+            <span class="text-muted small">Henüz dosya eklenmedi.</span>
+        }
+        else
+        {
+            @foreach (var ek in Liste)
+            {
+                <button type="button" class="btn btn-outline-secondary btn-sm me-1 mb-1" @onclick="() => DestekEkIndirici.IndirAsync(DestekService, JS, ToastService, ek.Id)">
+                    <i class="bi @DestekEkIndirici.Ikon(ek.MimeTipi) me-1"></i>@ek.OrijinalDosyaAdi
+                    <small class="text-muted ms-1">(@DestekEkIndirici.Boyut(ek.DosyaBoyutu))</small>
+                </button>
+            }
+        }
+        @if (YuklemeAcik && ayarlar != null)
+        {
+            <div class="form-text mt-2">
+                En fazla @ayarlar.MaksimumDosyaBoyutuMB MB; izin verilenler: @string.Join(", ", ayarlar.IzinliUzantilar())
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private const int EnFazlaDosya = 5;
+
+    [Parameter, EditorRequired] public int TalepId { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<DestekTalebiEk> Ekler { get; set; } = [];
+    [Parameter] public bool YuklemeAcik { get; set; }
+    [Parameter] public EventCallback OnDegisti { get; set; }
+
+    private DestekGenelAyarlar? ayarlar;
+    private bool yukleniyor;
+
+    private List<DestekTalebiEk> Liste => Ekler.Where(e => e.YanitId == null).ToList();
+
+    private string KabulEdilen => ayarlar == null ? string.Empty : string.Join(",", ayarlar.IzinliUzantilar());
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (YuklemeAcik && ayarlar == null)
+        {
+            try
+            {
+                ayarlar = await DestekService.GetGenelAyarlarAsync();
+            }
+            catch
+            {
+                ayarlar = new DestekGenelAyarlar();
+            }
+        }
+    }
+
+    private async Task YukleAsync(InputFileChangeEventArgs e)
+    {
+        var sinir = (ayarlar?.MaksimumDosyaBoyutuMB ?? 10) * 1024L * 1024L;
+        var dosyalar = e.GetMultipleFiles(EnFazlaDosya);
+        if (e.FileCount > EnFazlaDosya)
+            ToastService.ShowWarning($"Bir seferde en fazla {EnFazlaDosya} dosya eklenebilir; ilk {EnFazlaDosya} dosya yükleniyor.");
+
+        yukleniyor = true;
+        var basarili = 0;
+        try
+        {
+            foreach (var dosya in dosyalar)
+            {
+                try
+                {
+                    if (dosya.Size > sinir)
+                        throw new InvalidOperationException($"{dosya.Name}: dosya en fazla {sinir / 1024 / 1024} MB olabilir.");
+
+                    await using var akis = dosya.OpenReadStream(sinir);
+                    await DestekService.EkYukleAsync(TalepId, dosya.Name, dosya.ContentType, akis, dosya.Size);
+                    basarili++;
+                }
+                catch (Exception ex)
+                {
+                    ToastService.ShowWarning(ex.GetBaseException().Message);
+                }
+            }
+        }
+        finally
+        {
+            yukleniyor = false;
+        }
+
+        if (basarili > 0)
+        {
+            ToastService.ShowSuccess(basarili == 1 ? "Dosya eklendi." : $"{basarili} dosya eklendi.");
+            await OnDegisti.InvokeAsync();
+        }
+    }
+}

@@ -445,6 +445,7 @@ builder.Services.AddScoped<ICariHatirlatmaService, CariHatirlatmaService>(); // 
 builder.Services.AddScoped<BelgeUyariAyarlariService>(); // Belge uyarı ayarları (JSON) + önizleme sorguları
 builder.Services.AddScoped<CariHatirlatmaBackgroundService>(); // Quartz job tarafından tetiklenen cari hatırlatma servisi
 builder.Services.AddScoped<IFaturaSablonService, FaturaSablonService>(); // Fatura Şablon Yönetimi Servisi
+builder.Services.AddScoped<MKFiloServis.Web.Services.Destek.IDestekKullaniciSaglayici, MKFiloServis.Web.Services.Destek.DestekKullaniciSaglayici>();
 builder.Services.AddScoped<IDestekTalebiService, DestekTalebiService>(); // Destek Talebi (Ticket) Servisi - osTicket benzeri
 builder.Services.AddScoped<IEbysEvrakService, EbysEvrakService>(); // EBYS Gelen/Giden Evrak Servisi
 builder.Services.AddScoped<IBelgeVersiyonService, BelgeVersiyonService>(); // EBYS Belge Versiyon Yönetimi Servisi
@@ -587,6 +588,14 @@ builder.Services.AddQuartz(q =>
         .ForJob("luca-portal-senkron-job")
         .WithIdentity("luca-portal-senkron-trigger")
         .WithSchedule(CronScheduleBuilder.DailyAtHourAndMinute(3, 0)));
+
+    // Destek SLA kontrolü ve çözülmüş taleplerin otomatik kapatılması - 15 dakikada bir
+    q.AddJob<DestekSlaKontrolJob>(opts => opts.WithIdentity("destek-sla-kontrol-job"));
+    q.AddTrigger(opts => opts
+        .ForJob("destek-sla-kontrol-job")
+        .WithIdentity("destek-sla-kontrol-trigger")
+        .StartAt(DateBuilder.FutureDate(4, IntervalUnit.Minute))
+        .WithSimpleSchedule(x => x.WithIntervalInMinutes(15).RepeatForever()));
 
     // Puantaj Anomali Tarama - her Pazartesi sabah 06:00
     q.AddJob<PuantajAnomaliJob>(opts => opts.WithIdentity("puantaj-anomali-job"));

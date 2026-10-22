@@ -1,0 +1,104 @@
+@* Not/gerekçe ya da memnuniyet puanı isteyen durum işlemleri için pencere. *@
+
+@if (Tanim != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi @Tanim.Ikon me-2"></i>@Tanim.Etiket</h5>
+                    <button type="button" class="btn-close" aria-label="Kapat" @onclick="() => OnKapat.InvokeAsync()" disabled="@Kaydediliyor"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrWhiteSpace(TalepBasligi))
+                    {
+                        <div class="p-2 mb-3 rounded border small"><strong>@TalepBasligi</strong></div>
+                    }
+                    <p class="text-muted small">@Aciklama(Tanim.Eylem)</p>
+
+                    @if (Tanim.Eylem == DestekEylem.Onayla)
+                    {
+                        <label class="form-label">Memnuniyetiniz (isteğe bağlı)</label>
+                        <div class="d-flex gap-1 mb-3" role="radiogroup" aria-label="Memnuniyet puanı">
+                            @for (var i = 1; i <= 5; i++)
+                            {
+                                var deger = i;
+                                <button type="button" class="btn btn-sm @(puan >= deger ? "btn-warning" : "btn-outline-secondary")"
+                                        aria-label="@deger puan" @onclick="() => puan = puan == deger ? null : deger">
+                                    <i class="bi @(puan >= deger ? "bi-star-fill" : "bi-star")"></i>
+                                </button>
+                            }
+                        </div>
+                        <label class="form-label" for="eylemYorum">Yorumunuz</label>
+                        <textarea id="eylemYorum" class="form-control" rows="3" @bind="yorum" placeholder="İsteğe bağlı"></textarea>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(Tanim.NotBasligi))
+                    {
+                        <label class="form-label" for="eylemNot">
+                            @Tanim.NotBasligi @if (Tanim.NotZorunlu)
+                            {
+                                <span class="text-danger">*</span>
+                            }
+                        </label>
+                        <textarea id="eylemNot" class="form-control" rows="4" @bind="not" @bind:event="oninput"></textarea>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => OnKapat.InvokeAsync()" disabled="@Kaydediliyor">Vazgeç</button>
+                    <button type="button" class="btn @Tanim.DugmeSinifi" @onclick="OnaylaAsync"
+                            disabled="@(Kaydediliyor || (Tanim.NotZorunlu && string.IsNullOrWhiteSpace(not)))">
+                        @if (Kaydediliyor)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi @Tanim.Ikon me-1"></i>@Tanim.Etiket
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public DestekEylemTanimi? Tanim { get; set; }
+    [Parameter] public string? TalepBasligi { get; set; }
+    [Parameter] public bool Kaydediliyor { get; set; }
+    [Parameter] public EventCallback<DestekEylemIstegi> OnOnayla { get; set; }
+    [Parameter] public EventCallback OnKapat { get; set; }
+
+    private DestekEylemTanimi? oncekiTanim;
+    private string? not;
+    private int? puan;
+    private string? yorum;
+
+    protected override void OnParametersSet()
+    {
+        if (!ReferenceEquals(Tanim, oncekiTanim))
+        {
+            not = null;
+            puan = null;
+            yorum = null;
+            oncekiTanim = Tanim;
+        }
+    }
+
+    private Task OnaylaAsync() => OnOnayla.InvokeAsync(new DestekEylemIstegi
+    {
+        Not = not,
+        MemnuniyetPuani = puan,
+        MemnuniyetYorumu = yorum
+    });
+
+    private static string Aciklama(DestekEylem eylem) => eylem switch
+    {
+        DestekEylem.BilgiIste => "Mesajınız talep edene gönderilir ve talep \"Bilgi Bekleniyor\" durumuna geçer. Talep eden yanıt yazınca talep yeniden \"İşlemde\" olur.",
+        DestekEylem.YazilimaAktar => "Talep yazılım ekibine aktarılır. Gerekçe yalnız ekip tarafından görülür; talep edene \"yazılım ekibine iletildi\" bildirimi gider.",
+        DestekEylem.DestegeGeriGonder => "Talep, yazılım ekibine aktarılmadan önceki departmana ve yetkiliye döner. Not yalnız ekip tarafından görülür.",
+        DestekEylem.Coz => "Açıklamanız talep edene gönderilir. Talep eden onaylayınca talep kapanır; onay gelmezse ayarlardaki süre sonunda kendiliğinden kapanır.",
+        DestekEylem.Onayla => "Talep kapanır. İsterseniz aldığınız destekten memnuniyetinizi puanlayın.",
+        DestekEylem.ItirazEt => "Talep yeniden \"İşlemde\" durumuna döner ve destek ekibine bildirilir.",
+        DestekEylem.Kapat => "Talep kapanır; yazdığınız neden talep edene gösterilir.",
+        DestekEylem.YenidenAc => "Talep \"İşlemde\" durumuna döner ve SLA süresi yeniden başlar. Not yalnız ekip tarafından görülür.",
+        _ => string.Empty
+    };
+}

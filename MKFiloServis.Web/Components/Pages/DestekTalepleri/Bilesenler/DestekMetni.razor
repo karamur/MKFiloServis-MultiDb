@@ -1,0 +1,9 @@
+@* Kullanıcı metnini güvenle gösterir. Html=false: her şey metin (açıklama, sistem notu, yığın izi);
+   Html=true: yalnız biçim etiketleri, özniteliksiz (hazır yanıtlar ve eski kayıtlar). *@
+<div class="destek-metin @Sinif">@((MarkupString)(Html ? HtmlSanitizerHelper.Sanitize(Metin, satirSonlariniKoru: true) : HtmlSanitizerHelper.MetinOlarak(Metin)))</div>
+
+@code {
+    [Parameter] public string? Metin { get; set; }
+    [Parameter] public bool Html { get; set; }
+    [Parameter] public string? Sinif { get; set; }
+}

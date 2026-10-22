@@ -61,6 +61,9 @@ public interface IMenuYetkiBaglami
 
     /// <summary>Kullanıcının rolü.</summary>
     bool Rol(string rolAdi);
+
+    /// <summary>Yetki istemeyen bağlantı: oturum açmış her kullanıcı, kodun modülü lisanslıysa.</summary>
+    bool HerKullanici(string lisansKodu);
 }
 
 /// <summary>Menü öğesi/grubu için görünürlük koşulu.</summary>
@@ -75,6 +78,9 @@ public abstract class MenuKurali
     public static MenuKurali Menu(string menuKodu) => new MenuKoduKurali(menuKodu);
 
     public static MenuKurali Rol(string rolAdi) => new RolKurali(rolAdi);
+
+    /// <summary>Oturum açmış her kullanıcıya açık (yalnız modül lisansına bakılır).</summary>
+    public static MenuKurali HerKullanici(string lisansKodu) => new HerKullaniciKurali(lisansKodu);
 
     public static MenuKurali Ve(params MenuKurali[] kurallar) => new VeKurali(kurallar);
 
@@ -106,6 +112,13 @@ public abstract class MenuKurali
         public override bool Degerlendir(IMenuYetkiBaglami baglam) => baglam.Rol(rolAdi);
 
         public override string ToString() => $"Rol({rolAdi})";
+    }
+
+    private sealed class HerKullaniciKurali(string lisansKodu) : MenuKurali
+    {
+        public override bool Degerlendir(IMenuYetkiBaglami baglam) => baglam.HerKullanici(lisansKodu);
+
+        public override string ToString() => $"HerKullanici({lisansKodu})";
     }
 
     private sealed class VeKurali(MenuKurali[] kurallar) : MenuKurali

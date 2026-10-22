@@ -1,0 +1,80 @@
+@inject IDestekTalebiService DestekService
+@inject IJSRuntime JS
+@inject IToastService ToastService
+
+@* Talebin yazışması. Ekip görünümünde dahili notlar da gösterilir (servis talep edene zaten göndermez). *@
+
+@if (Yanitlar.Count == 0)
+{
+    <div class="text-center text-muted py-4">
+        <i class="bi bi-chat-left-text fs-2 d-block mb-2"></i>Henüz mesaj yok.
+    </div>
+}
+else
+{
+    <div class="destek-yazisma">
+        @foreach (var yanit in Yanitlar)
+        {
+            var tur = Tur(yanit);
+            var ekleri = Ekler.Where(e => e.YanitId == yanit.Id).ToList();
+            <div class="mesaj mesaj-@(tur) @(SagdaMi(tur) ? "mesaj-sag" : tur == "sistem" ? string.Empty : "mesaj-sol")">
+                <div class="mesaj-ust">
+                    <span class="mesaj-yazar"><i class="bi @Ikon(tur) me-1"></i>@Yazar(yanit, tur)</span>
+                    @if (tur == "dahili")
+                    {
+                        <span class="badge bg-warning text-dark"><i class="bi bi-lock me-1"></i>Dahili not</span>
+                    }
+                    <span class="mesaj-zaman">@MKFiloServis.Shared.Time.BusinessTime.LocalAt(yanit.CreatedAt).ToString("dd.MM.yyyy HH:mm")</span>
+                </div>
+                <DestekMetni Metin="@yanit.Icerik" Html="@(yanit.YanitTuru != YanitTuru.SistemMesaji)" />
+                @if (ekleri.Count > 0)
+                {
+                    <div class="mt-2">
+                        @foreach (var ek in ekleri)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-secondary me-1 mb-1" @onclick="() => DestekEkIndirici.IndirAsync(DestekService, JS, ToastService, ek.Id)">
+                                <i class="bi @DestekEkIndirici.Ikon(ek.MimeTipi) me-1"></i>@ek.OrijinalDosyaAdi
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<DestekTalebiYanit> Yanitlar { get; set; } = [];
+    [Parameter] public IReadOnlyList<DestekTalebiEk> Ekler { get; set; } = [];
+
+    /// <summary>Ekip olarak bakılıyor (kendi mesajları sağda, dahili notlar görünür).</summary>
+    [Parameter] public bool EkipGorunumu { get; set; }
+
+    [Parameter] public string? TalepEdenAdi { get; set; }
+
+    private static string Tur(DestekTalebiYanit yanit) =>
+        yanit.DahiliNot ? "dahili"
+        : yanit.YanitTuru == YanitTuru.SistemMesaji ? "sistem"
+        : yanit.MusteriYaniti ? "talep-eden"
+        : "ekip";
+
+    private bool SagdaMi(string tur) => EkipGorunumu ? tur is "ekip" or "dahili" : tur == "talep-eden";
+
+    private static string Ikon(string tur) => tur switch
+    {
+        "dahili" => "bi-lock",
+        "sistem" => "bi-info-circle",
+        "talep-eden" => "bi-person-circle",
+        _ => "bi-headset"
+    };
+
+    private string Yazar(DestekTalebiYanit yanit, string tur) => tur switch
+    {
+        "sistem" => "Sistem",
+        "dahili" => yanit.Kullanici?.AdSoyad ?? "Sistem",
+        "talep-eden" => yanit.MusteriAdi ?? TalepEdenAdi ?? "Talep eden",
+        _ => EkipGorunumu
+            ? yanit.Kullanici?.AdSoyad ?? "Destek Ekibi"
+            : yanit.Kullanici != null ? $"Destek Ekibi · {yanit.Kullanici.AdSoyad}" : "Destek Ekibi"
+    };
+}

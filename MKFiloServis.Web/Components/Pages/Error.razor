@@ -58,13 +58,17 @@
                         </details>
                     }
 
-                    <div class="d-flex gap-2 mt-4">
-                        <button class="btn btn-outline-secondary" @onclick="OncekiSayfayaDonAsync">
+                    @* Bağlantılar statik çizimde de çalışır (hata sayfası ayrı bir istekte, etkileşimsiz açılabilir). *@
+                    <div class="d-flex flex-wrap gap-2 mt-4">
+                        <a class="btn btn-danger" href="@SorunBildirAdresi">
+                            <i class="bi bi-bug me-1"></i>Sorunu Bildir
+                        </a>
+                        <a class="btn btn-outline-secondary" href="@(report?.PreviousPage ?? "/dashboard")">
                             <i class="bi bi-arrow-left me-1"></i>Önceki Sayfaya Dön
-                        </button>
-                        <button class="btn btn-primary" @onclick="AnaSayfayaGit">
+                        </a>
+                        <a class="btn btn-primary" href="/dashboard">
                             <i class="bi bi-house-door me-1"></i>Ana Sayfaya Git
-                        </button>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -73,28 +77,36 @@
 </div>
 
 @code {
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
     private MKFiloServis.Web.Services.AppIssueReport? report;
 
     protected override void OnInitialized()
     {
         report = AppIssueState.LastReport;
+
+        // Sunucu hatasında (UseExceptionHandler) sayfa ayrı bir istekte açılır: hatanın yolu istek özelliğinden okunur.
+        var hataYolu = HttpContext?.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerPathFeature>();
+        if (report == null && hataYolu != null)
+        {
+            report = new MKFiloServis.Web.Services.AppIssueReport
+            {
+                ErrorTime = DateTime.UtcNow,
+                CurrentPage = hataYolu.Path,
+                ErrorMessage = hataYolu.Error.Message,
+                ErrorType = hataYolu.Error.GetType().FullName ?? hataYolu.Error.GetType().Name
+            };
+        }
     }
 
-    private async Task OncekiSayfayaDonAsync()
+    private string SorunBildirAdresi
     {
-        try
+        get
         {
-            await JS.InvokeVoidAsync("goBackInHistory");
+            var mesaj = report?.ErrorMessage ?? string.Empty;
+            if (mesaj.Length > 300) mesaj = mesaj[..300];
+            return $"/destek-talepleri/talep-giris?kaynak=hata&sayfa={Uri.EscapeDataString(report?.CurrentPage ?? string.Empty)}&mesaj={Uri.EscapeDataString(mesaj)}";
         }
-        catch
-        {
-            Navigation.NavigateTo(report?.PreviousPage ?? "/dashboard", true);
-        }
-    }
-
-    private void AnaSayfayaGit()
-    {
-        Navigation.NavigateTo("/dashboard", true);
     }
 }
 

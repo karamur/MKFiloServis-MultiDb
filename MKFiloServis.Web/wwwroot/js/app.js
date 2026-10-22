@@ -186,3 +186,11 @@ window.analitikTest = async function (url, token) {
         throw new Error(e.message || 'Bağlantı hatası');
     }
 };
+
+// "Sorun Bildir" penceresi: talebe eklenecek tarayıcı bilgisi
+window.sorunBildir = {
+    tarayici: function () {
+        return (navigator.userAgent || '') + (navigator.language ? ' · ' + navigator.language : '') +
+            ' · ' + window.screen.width + 'x' + window.screen.height;
+    }
+};

@@ -1,6 +1,7 @@
 @using MKFiloServis.Web.Services
 @using Microsoft.Extensions.Logging
 @inject IToastService ToastService
+@inject AppIssueStateService AppIssueState
 @inject ILogger<ToastContainer> Logger
 @implements IDisposable
 @rendermode InteractiveServer
@@ -13,17 +14,30 @@
                 <i class="bi @toast.IconClass me-2"></i>
                 <strong class="me-auto">@toast.Title</strong>
                 <small>simdi</small>
-                <button type="button" class="btn-close @(toast.Type != ToastType.Warning ? "btn-close-white" : "")" 
+                <button type="button" class="btn-close @(toast.Type != ToastType.Warning ? "btn-close-white" : "")"
                         @onclick="() => RemoveToast(toast.Id)"></button>
             </div>
             <div class="toast-body">
                 @toast.Message
+                @if (toast.Type == ToastType.Error)
+                {
+                    <div class="mt-2 pt-2 border-top border-light border-opacity-50">
+                        <button type="button" class="btn btn-light btn-sm" @onclick="() => SorunuBildir(toast)"
+                                title="Bu hatayı destek ekibine talep olarak iletin">
+                            <i class="bi bi-bug me-1"></i>Sorunu bildir
+                        </button>
+                    </div>
+                }
             </div>
         </div>
     }
 </div>
 
 @code {
+    // Hata kutuları "Sorunu bildir" düğmesine basılabilsin diye daha uzun açık kalır.
+    private static readonly TimeSpan KisaSure = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan HataSuresi = TimeSpan.FromSeconds(12);
+
     private List<ToastMessage> toasts = new();
 
     protected override void OnInitialized()
@@ -33,6 +47,9 @@
 
     private void ShowToast(ToastMessage toast)
     {
+        if (toast.Type == ToastType.Error)
+            AppIssueState.ReportVisibleError(toast.Message);
+
         _ = InvokeAsync(async () =>
         {
             toasts.Add(toast);
@@ -40,7 +57,7 @@
 
             try
             {
-                await Task.Delay(5000);
+                await Task.Delay(toast.Type == ToastType.Error ? HataSuresi : KisaSure);
                 if (toasts.Remove(toast))
                 {
                     StateHasChanged();
@@ -50,6 +67,19 @@
             {
                 Logger.LogDebug(ex, "ToastContainer otomatik kapatma sirasinda hata (circuit kapanmis olabilir)");
             }
+        });
+    }
+
+    private void SorunuBildir(ToastMessage toast)
+    {
+        RemoveToast(toast.Id);
+        AppIssueState.RequestReportForm(new AppIssueReport
+        {
+            ErrorTime = toast.CreatedAt,
+            CurrentPage = AppIssueState.CurrentPage,
+            PreviousPage = AppIssueState.PreviousPage,
+            ErrorMessage = toast.Message,
+            ErrorType = "Ekranda gösterilen hata"
         });
     }
 

@@ -1,0 +1,19 @@
+.destek-metin {
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+}
+
+.destek-metin ::deep p:last-child,
+.destek-metin ::deep ul:last-child,
+.destek-metin ::deep ol:last-child {
+    margin-bottom: 0;
+}
+
+.destek-metin ::deep pre {
+    white-space: pre-wrap;
+    background: var(--crm-surface-alt, #f8fafc);
+    border: 1px solid var(--crm-border, #e2e8f0);
+    border-radius: 6px;
+    padding: .5rem .75rem;
+    font-size: .8rem;
+}

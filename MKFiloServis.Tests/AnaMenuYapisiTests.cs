@@ -140,7 +140,7 @@ public sealed class AnaMenuYapisiTests
         var gorunen = Gorunenler(Bagla([], yonetici: true));
 
         Assert.Equal(TumOgeler.Count, gorunen.Count);
-        Assert.Equal(115, TumOgeler.Count);
+        Assert.Equal(116, TumOgeler.Count);   // 115 + Destek Ayarları
     }
 
     [Fact]
@@ -219,17 +219,41 @@ public sealed class AnaMenuYapisiTests
     }
 
     [Fact]
-    public void Destek_ve_Ayarlar_ayri_gruplardir_destek_yetkisi_yalniz_Destek_grubunu_acar()
+    public void Destek_talep_acma_herkese_aciktir_ekip_ekranlari_yetki_ister()
     {
-        var baglam = Bagla(["destektalebi.oku"]);
+        // Yetkisi olmayan kullanıcı da sorun bildirebilmeli: talep açma, Taleplerim ve Bilgi Bankası herkese açık.
+        var yetkisiz = Bagla([]);
+        var gorunen = Gorunenler(yetkisiz);
 
-        var gruplar = GorunenGruplar(baglam);
-        var gorunen = Gorunenler(baglam);
-
-        Assert.Contains("destek", gruplar);
+        Assert.Contains("destek", GorunenGruplar(yetkisiz));
         Assert.Contains("/destek-talepleri/talep-giris", gorunen);
-        Assert.DoesNotContain("/destek-talepleri/yonetim", gorunen);   // destektalebi.yaz gerekir
-        Assert.DoesNotContain("/ayarlar/firmalar", gorunen);
+        Assert.Contains("/destek-talepleri/taleplerim", gorunen);
+        Assert.Contains("/destek-talepleri/bilgi-bankasi", gorunen);
+        Assert.DoesNotContain("/destek-talepleri", gorunen);
+        Assert.DoesNotContain("/destek-talepleri/yonetim", gorunen);
+        Assert.DoesNotContain("/destek-talepleri/ayarlar", gorunen);
+        Assert.DoesNotContain("ayarlar", GorunenGruplar(yetkisiz));
+    }
+
+    [Theory]
+    [InlineData("destektalebi.yaz")]
+    [InlineData("destektalebi.yazilim")]
+    public void Destek_ekip_ekranlari_personel_ya_da_yazilim_yetkisiyle_gorunur(string yetki)
+    {
+        var gorunen = Gorunenler(Bagla([yetki]));
+
+        Assert.Contains("/destek-talepleri", gorunen);
+        Assert.Contains("/destek-talepleri/yonetim", gorunen);
+        Assert.DoesNotContain("/destek-talepleri/ayarlar", gorunen);   // destektalebi.duzenle gerekir
+    }
+
+    [Fact]
+    public void Destek_ayarlari_duzenle_yetkisiyle_gorunur()
+    {
+        var baglam = Bagla(["destektalebi.duzenle"]);
+
+        Assert.Contains("/destek-talepleri/ayarlar", Gorunenler(baglam));
+        Assert.DoesNotContain("/ayarlar/firmalar", Gorunenler(baglam));
     }
 
     // ── adres eşleştirme (tek vurgu) ─────────────────────────────────────────────

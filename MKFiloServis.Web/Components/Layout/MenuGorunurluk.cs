@@ -95,6 +95,9 @@ public sealed class MenuGorunurluk : IMenuYetkiBaglami
 
     public bool Rol(string rolAdi) => string.Equals(_rolAdi, rolAdi, StringComparison.Ordinal);
 
+    /// <summary>Yetki istemeyen bağlantı; yetkiler okunana kadar (yönetici dışında) yine gösterilmez.</summary>
+    public bool HerKullanici(string lisansKodu) => _lisansli(lisansKodu) && (_yonetici || _yetkilerYuklendi);
+
     /// <summary>Ana menü kodunu açan yetki önekleri (kullanıcıda bu önekle başlayan herhangi bir yetki varsa menü açılır).</summary>
     internal static readonly IReadOnlyDictionary<string, HashSet<string>> MenuOnekleri = new Dictionary<string, HashSet<string>>
     {

@@ -1,0 +1,71 @@
+@* Talebin geçmişi (yeniden eskiye). Talep eden görünümünde metin türden üretilir; iç kayıtlar gösterilmez. *@
+
+@if (!Satirlar.Any())
+{
+    <div class="p-3 text-center text-muted small">Kayıt yok.</div>
+}
+else
+{
+    <ul class="list-group list-group-flush">
+        @foreach (var (aktivite, metin) in Satirlar.Take(Limit ?? int.MaxValue))
+        {
+            <li class="list-group-item py-2">
+                <div class="d-flex gap-2 align-items-start">
+                    <i class="bi @Ikon(aktivite.AktiviteTuru) @Renk(aktivite.AktiviteTuru) mt-1"></i>
+                    <div class="flex-grow-1">
+                        <div class="small">@metin</div>
+                        <div class="text-muted" style="font-size: .75rem;">
+                            @MKFiloServis.Shared.Time.BusinessTime.LocalAt(aktivite.CreatedAt).ToString("dd.MM.yyyy HH:mm")
+                            @if (!TalepEdenGorunumu && aktivite.Kullanici != null)
+                            {
+                                <span> · @aktivite.Kullanici.AdSoyad</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<DestekTalebiAktivite> Aktiviteler { get; set; } = [];
+    [Parameter] public bool TalepEdenGorunumu { get; set; }
+    [Parameter] public int? Limit { get; set; }
+
+    private IEnumerable<(DestekTalebiAktivite Aktivite, string Metin)> Satirlar =>
+        Aktiviteler
+            .Select(a => (Aktivite: a, Metin: TalepEdenGorunumu ? DestekKurallari.TalepEdenAktiviteMetni(a) : a.Aciklama))
+            .Where(x => !string.IsNullOrWhiteSpace(x.Metin))
+            .Select(x => (x.Aktivite, x.Metin!));
+
+    private static string Ikon(AktiviteTuru tur) => tur switch
+    {
+        AktiviteTuru.Olusturuldu => "bi-plus-circle",
+        AktiviteTuru.Guncellendi => "bi-pencil",
+        AktiviteTuru.DurumDegisti => "bi-arrow-repeat",
+        AktiviteTuru.OncelikDegisti => "bi-flag",
+        AktiviteTuru.Atandi => "bi-person-check",
+        AktiviteTuru.Transferedildi => "bi-arrow-right-circle",
+        AktiviteTuru.YanitEklendi => "bi-chat-dots",
+        AktiviteTuru.DosyaEklendi => "bi-paperclip",
+        AktiviteTuru.Kapandi => "bi-x-circle",
+        AktiviteTuru.YenidenAcildi => "bi-arrow-counterclockwise",
+        AktiviteTuru.SlaBilgilendirme => "bi-alarm",
+        AktiviteTuru.Birlestirildi => "bi-link",
+        AktiviteTuru.YazilimEkibineAktarildi => "bi-code-slash",
+        AktiviteTuru.DestegeGeriGonderildi => "bi-arrow-return-left",
+        AktiviteTuru.CozumOnaylandi => "bi-check2-all",
+        AktiviteTuru.CozumeItirazEdildi => "bi-exclamation-circle",
+        _ => "bi-circle"
+    };
+
+    private static string Renk(AktiviteTuru tur) => tur switch
+    {
+        AktiviteTuru.Olusturuldu => "text-primary",
+        AktiviteTuru.Kapandi or AktiviteTuru.CozumOnaylandi => "text-success",
+        AktiviteTuru.SlaBilgilendirme or AktiviteTuru.CozumeItirazEdildi => "text-danger",
+        AktiviteTuru.YazilimEkibineAktarildi => "text-dark",
+        _ => "text-secondary"
+    };
+}

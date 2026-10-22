@@ -99,6 +99,7 @@
                             <MKFiloServis.Web.Components.Shared.FavorilerDropdown />
                             <MKFiloServis.Web.Components.Shared.OpenInNewTab />
                             <MKFiloServis.Web.Components.Shared.OperasyonAlarmDropdown />
+                            <MKFiloServis.Web.Components.Shared.SorunBildir />
                             <MKFiloServis.Web.Components.Shared.BildirimDropdown />
 
                             @if (IsFirmaYoneticisi)
@@ -178,7 +179,16 @@
                     </div>
 
                     <article class="content px-4">
-                        @Body
+                        @* Etkileşimli sayfa hataları burada yakalanır (App.razor'daki sınır yalnız ön çizimi kapsar);
+                           menü ve üst çubuk çalışmaya devam eder, kullanıcı hatayı "Sorun Bildir" ile iletebilir. *@
+                        <MKFiloServis.Web.Components.Shared.AppErrorBoundary @ref="hataSiniri">
+                            <ChildContent>
+                                @Body
+                            </ChildContent>
+                            <ErrorContent Context="hata">
+                                <MKFiloServis.Web.Components.Shared.HataPaneli Hata="hata" />
+                            </ErrorContent>
+                        </MKFiloServis.Web.Components.Shared.AppErrorBoundary>
                     </article>
                 </main>
             </div>
@@ -204,8 +214,9 @@
                 </div>
             </div>
 
+            <MKFiloServis.Web.Components.Shared.AppRouteTracker />
             <MKFiloServis.Web.Components.Shared.ToastContainer />
-            
+
             <MKFiloServis.Web.Components.Shared.KlavyeKisayollari />
         }
     </Authorized>
@@ -237,8 +248,10 @@
 </AuthorizeView>
 
 <div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
+    Beklenmeyen bir hata oluştu; sayfa yanıt vermiyor olabilir.
+    <a href="." class="reload">Sayfayı yenile</a>
+    <a href="/destek-talepleri/talep-giris?kaynak=hata" class="ms-2"
+       onclick="this.href='/destek-talepleri/talep-giris?kaynak=hata&amp;sayfa='+encodeURIComponent(location.pathname+location.search);">Sorunu bildir</a>
     <span class="dismiss">X</span>
 </div>
 
@@ -381,9 +394,18 @@
         }
     }
 
+    private MKFiloServis.Web.Components.Shared.AppErrorBoundary? hataSiniri;
+
+    // Hata panelinden başka sayfaya geçilince sınır sıfırlanır; yeni sayfa normal çizilir.
+    private void SayfaDegisti(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        _ = InvokeAsync(() => hataSiniri?.Recover());
+    }
+
     public void Dispose()
     {
         AuthProvider.AuthenticationStateChanged -= OnAuthenticationStateChanged;
+        Navigation.LocationChanged -= SayfaDegisti;
     }
     private async Task ToggleDarkMode()
     {
@@ -395,6 +417,7 @@
     protected override async Task OnInitializedAsync()
     {
         AuthProvider.AuthenticationStateChanged += OnAuthenticationStateChanged;
+        Navigation.LocationChanged += SayfaDegisti;
         try
         {
             var currentUri = Navigation.Uri;

@@ -1,200 +1,688 @@
 @page "/destek-talepleri/ayarlar"
 @rendermode InteractiveServer
-@using MKFiloServis.Shared.Entities
-@using MKFiloServis.Web.Services
 @inject IDestekTalebiService DestekService
 @inject IToastService ToastService
+@inject IJSRuntime JS
 
 <PageTitle>Destek Ayarları</PageTitle>
 
 <div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h4 class="mb-0"><i class="bi bi-gear me-2"></i>Destek Ayarları</h4>
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h4 class="mb-0"><i class="bi bi-sliders me-2"></i>Destek Ayarları</h4>
         <div class="d-flex gap-2">
-            <a href="/destek-talepleri" class="btn btn-outline-primary">
-                <i class="bi bi-ticket-detailed me-1"></i>Talepler
-            </a>
-            <a href="/destek-talepleri/bilgi-bankasi" class="btn btn-outline-info">
-                <i class="bi bi-book me-1"></i>Bilgi Bankası
-            </a>
-            <button class="btn btn-primary" @onclick="Kaydet" disabled="@isSaving">
-                @if (isSaving)
-                {
-                    <span class="spinner-border spinner-border-sm me-1"></span>
-                }
-                <i class="bi bi-check-lg me-1"></i>Kaydet
-            </button>
+            <a href="/destek-talepleri" class="btn btn-outline-primary btn-sm"><i class="bi bi-ticket-detailed me-1"></i>Talepler</a>
+            <a href="/destek-talepleri/bilgi-bankasi" class="btn btn-outline-info btn-sm"><i class="bi bi-book me-1"></i>Bilgi Bankası</a>
         </div>
     </div>
 
-    @if (!string.IsNullOrWhiteSpace(loadError))
+    @if (yetkisiz)
     {
-        <div class="alert alert-warning d-flex justify-content-between align-items-start mb-3">
-            <div>
-                <i class="bi bi-exclamation-triangle me-2"></i>
-                <strong>Destek ayarları yüklenirken sorun oluştu.</strong>
-                <div class="small mt-1">@loadError</div>
-            </div>
-            <button class="btn btn-outline-warning btn-sm" @onclick="SayfayiYenile">
-                <i class="bi bi-arrow-clockwise me-1"></i>Tekrar Dene
-            </button>
-        </div>
+        <div class="alert alert-warning"><i class="bi bi-shield-lock me-2"></i>Destek ayarlarını değiştirmek için <strong>destektalebi.duzenle</strong> yetkisi gerekir.</div>
     }
-
-    @if (isLoading)
+    else if (yukleniyor)
     {
-        <div class="text-center py-5">
-            <div class="spinner-border text-primary" role="status"></div>
-            <p class="mt-2">Yükleniyor...</p>
-        </div>
+        <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
     }
     else
     {
-        <div class="row g-3">
-            <div class="col-lg-6">
-                <div class="card h-100">
-                    <div class="card-header bg-white">
-                        <strong>Genel Ayarlar</strong>
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <label class="form-label">Destek E-posta Adresi</label>
-                            <input type="email" class="form-control" @bind="destekEmail" placeholder="destek@firma.com" />
+        <ul class="nav nav-tabs mb-3" role="tablist">
+            @foreach (var secenek in Enum.GetValues<Sekme>())
+            {
+                <li class="nav-item" role="presentation">
+                    <button type="button" class="nav-link @(sekme == secenek ? "active" : string.Empty)" role="tab" @onclick="() => sekme = secenek">
+                        <i class="bi @SekmeIkonu(secenek) me-1"></i>@SekmeBasligi(secenek)
+                    </button>
+                </li>
+            }
+        </ul>
+
+        @switch (sekme)
+        {
+            case Sekme.Genel:
+                <div class="row g-3">
+                    <div class="col-lg-7">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="daVarsayilan">Sorun bildirimlerinin departmanı</label>
+                                        <select id="daVarsayilan" class="form-select" @bind="ayarlar.VarsayilanDepartmanId">
+                                            <option value="">Otomatik ("Teknik Destek" ya da ilk departman)</option>
+                                            @foreach (var departman in departmanlar.Where(d => d.Aktif))
+                                            {
+                                                <option value="@departman.Id">@departman.Ad</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="daYazilim">Yazılım ekibi departmanı</label>
+                                        <select id="daYazilim" class="form-select" @bind="ayarlar.YazilimEkibiDepartmanId">
+                                            <option value="">Seçilmedi (aktarılan talep departman değiştirmez)</option>
+                                            @foreach (var departman in departmanlar.Where(d => d.Aktif))
+                                            {
+                                                <option value="@departman.Id">@departman.Ad</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="daEposta">Destek e-posta adresi</label>
+                                        <input id="daEposta" type="email" class="form-control" @bind="ayarlar.DestekEmail" placeholder="destek@firma.com" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="daKapatma">Onay gelmezse otomatik kapatma (gün)</label>
+                                        <input id="daKapatma" type="number" min="0" max="90" class="form-control" @bind="ayarlar.OtomatikKapatmaGun" />
+                                        <div class="form-text">0 = kapatma. "Çözüldü" talep bu süre yanıtsız kalırsa kapanır.</div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="daBoyut">En büyük dosya (MB)</label>
+                                        <input id="daBoyut" type="number" min="1" max="50" class="form-control" @bind="ayarlar.MaksimumDosyaBoyutuMB" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="daTipler">İzin verilen dosya türleri</label>
+                                        <input id="daTipler" class="form-control" @bind="ayarlar.IzinliDosyaTipleri" />
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="daSla" @bind="ayarlar.OtomatikSlaKontrolu" />
+                                            <label class="form-check-label" for="daSla">SLA süresi aşılan talepleri 15 dakikada bir işaretle ve bildir</label>
+                                        </div>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="daEmail" @bind="ayarlar.EmailBildirimAktif" />
+                                            <label class="form-check-label" for="daEmail">E-posta bildirimleri (SMTP ayarlı olmalıdır)</label>
+                                        </div>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="daBilgi" @bind="ayarlar.BilgiBankasiAcik" />
+                                            <label class="form-check-label" for="daBilgi">Bilgi bankası açık</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-footer text-end">
+                                <button class="btn btn-primary" @onclick="GenelKaydetAsync" disabled="@kaydediliyor">
+                                    @if (kaydediliyor)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                    }
+                                    <i class="bi bi-save me-1"></i>Kaydet
+                                </button>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Varsayılan Departman</label>
-                            <select class="form-select" @bind="varsayilanDepartmanId">
+                    </div>
+                    <div class="col-lg-5">
+                        <div class="card">
+                            <div class="card-header"><strong>Bildirimler ve yetkiler</strong></div>
+                            <div class="card-body small">
+                                <p class="mb-2"><i class="bi bi-bell me-1"></i>Program içi bildirimler (zil) her zaman açıktır:</p>
+                                <ul>
+                                    <li>Yeni talep → departman üyeleri (üye yoksa destek personeli)</li>
+                                    <li>Atama, yanıt, bilgi isteme, çözüm, kapanış → talep eden</li>
+                                    <li>Talep edenin yanıtı, onayı, itirazı → atanan kişi</li>
+                                    <li>Yazılım ekibine aktarma → yazılım ekibi departmanı üyeleri</li>
+                                    <li>SLA aşımı → atanan kişi ya da departman</li>
+                                </ul>
+                                <p class="mb-2"><i class="bi bi-shield-check me-1"></i>Rol yetkileri (Rol Yönetimi):</p>
+                                <ul class="mb-0">
+                                    <li><strong>Herkes</strong>: talep açar, kendi taleplerini izler, sorun bildirir.</li>
+                                    <li><strong>destektalebi.yaz</strong>: destek personeli, tüm talepler.</li>
+                                    <li><strong>destektalebi.yazilim</strong>: yazılım ekibi, aktarılan talepler.</li>
+                                    <li><strong>destektalebi.duzenle</strong>: bu ekran.</li>
+                                    <li><strong>destektalebi.sil</strong>: talep silme.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                break;
+
+            case Sekme.Departmanlar:
+                <div class="d-flex justify-content-end mb-2">
+                    <button class="btn btn-primary btn-sm" @onclick="() => duzenlenenDepartman = new DestekDepartman { Aktif = true, SiraNo = departmanlar.Count + 1 }"><i class="bi bi-plus-lg me-1"></i>Yeni Departman</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle">
+                        <thead class="table-light"><tr><th>Ad</th><th class="d-none d-md-table-cell">Açıklama</th><th>SLA (sa)</th><th>Üye</th><th>Durum</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var departman in departmanlar)
+                            {
+                                <tr class="@(departman.Aktif ? string.Empty : "text-muted")">
+                                    <td>
+                                        <strong>@departman.Ad</strong>
+                                        @if (departman.Id == ayarlar.YazilimEkibiDepartmanId)
+                                        {
+                                            <span class="badge bg-dark ms-1"><i class="bi bi-code-slash me-1"></i>Yazılım ekibi</span>
+                                        }
+                                        @if (departman.Id == ayarlar.VarsayilanDepartmanId)
+                                        {
+                                            <span class="badge bg-danger ms-1"><i class="bi bi-bug me-1"></i>Sorun bildirimleri</span>
+                                        }
+                                    </td>
+                                    <td class="d-none d-md-table-cell small">@departman.Aciklama</td>
+                                    <td>@(departman.VarsayilanSlaSuresi?.ToString() ?? "-")</td>
+                                    <td><span class="badge bg-secondary">@departman.Uyeler.Count</span></td>
+                                    <td>@(departman.Aktif ? "Aktif" : "Pasif")</td>
+                                    <td class="text-end">
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" title="Düzenle" @onclick="() => duzenlenenDepartman = Kopya(departman)"><i class="bi bi-pencil"></i></button>
+                                            <button class="btn btn-outline-secondary" title="Üyeler" @onclick="() => UyeleriAcAsync(departman)"><i class="bi bi-people"></i></button>
+                                            <button class="btn btn-outline-danger" title="Sil" @onclick="() => DepartmanSilAsync(departman)"><i class="bi bi-trash"></i></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                break;
+
+            case Sekme.Kategoriler:
+                <div class="d-flex justify-content-end mb-2">
+                    <button class="btn btn-primary btn-sm" @onclick="() => duzenlenenKategori = new DestekKategori { Aktif = true }"><i class="bi bi-plus-lg me-1"></i>Yeni Kategori</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle">
+                        <thead class="table-light"><tr><th>Ad</th><th>Departman</th><th class="d-none d-md-table-cell">Sıra</th><th>Durum</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var kategori in kategoriler)
+                            {
+                                <tr class="@(kategori.Aktif ? string.Empty : "text-muted")">
+                                    <td><span class="badge" style="background-color: @(kategori.Renk ?? "#6c757d")"><i class="bi @(kategori.Simge ?? "bi-tag") me-1"></i>@kategori.Ad</span></td>
+                                    <td>@(kategori.Departman?.Ad ?? "Tüm departmanlar")</td>
+                                    <td class="d-none d-md-table-cell">@kategori.SiraNo</td>
+                                    <td>@(kategori.Aktif ? "Aktif" : "Pasif")</td>
+                                    <td class="text-end">
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" title="Düzenle" @onclick="() => duzenlenenKategori = Kopya(kategori)"><i class="bi bi-pencil"></i></button>
+                                            <button class="btn btn-outline-danger" title="Sil" @onclick="() => KategoriSilAsync(kategori)"><i class="bi bi-trash"></i></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                break;
+
+            case Sekme.Sla:
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <small class="text-muted">Her öncelik için tek aktif SLA. Tanım yoksa departmanın varsayılan süresi kullanılır.</small>
+                    <button class="btn btn-primary btn-sm" @onclick="() => duzenlenenSla = new DestekSla { Aktif = true, Oncelik = DestekOncelik.Normal, CozumSuresi = 48, IlkYanitSuresi = 8 }"><i class="bi bi-plus-lg me-1"></i>Yeni SLA</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle">
+                        <thead class="table-light"><tr><th>Ad</th><th>Öncelik</th><th>İlk yanıt (sa)</th><th>Çözüm (sa)</th><th>Durum</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var sla in slalar)
+                            {
+                                <tr class="@(sla.Aktif ? string.Empty : "text-muted")">
+                                    <td>@sla.Ad</td>
+                                    <td><DestekOncelikRozeti Oncelik="sla.Oncelik" /></td>
+                                    <td>@sla.IlkYanitSuresi</td>
+                                    <td>@sla.CozumSuresi</td>
+                                    <td>@(sla.Aktif ? "Aktif" : "Pasif")</td>
+                                    <td class="text-end">
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" title="Düzenle" @onclick="() => duzenlenenSla = Kopya(sla)"><i class="bi bi-pencil"></i></button>
+                                            <button class="btn btn-outline-danger" title="Sil" @onclick="() => SlaSilAsync(sla)"><i class="bi bi-trash"></i></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                break;
+
+            case Sekme.HazirYanitlar:
+                <div class="d-flex justify-content-end mb-2">
+                    <button class="btn btn-primary btn-sm" @onclick="() => duzenlenenHazir = new DestekHazirYanit { Aktif = true }"><i class="bi bi-plus-lg me-1"></i>Yeni Hazır Yanıt</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle">
+                        <thead class="table-light"><tr><th>Ad</th><th class="d-none d-md-table-cell">Departman</th><th class="d-none d-md-table-cell">Kullanım</th><th>Durum</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var hazir in hazirYanitlar)
+                            {
+                                <tr class="@(hazir.Aktif ? string.Empty : "text-muted")">
+                                    <td>@hazir.Ad</td>
+                                    <td class="d-none d-md-table-cell">@(hazir.Departman?.Ad ?? "Tümü")</td>
+                                    <td class="d-none d-md-table-cell">@hazir.KullanimSayisi</td>
+                                    <td>@(hazir.Aktif ? "Aktif" : "Pasif")</td>
+                                    <td class="text-end">
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" title="Düzenle" @onclick="() => HazirDuzenle(hazir)"><i class="bi bi-pencil"></i></button>
+                                            <button class="btn btn-outline-danger" title="Sil" @onclick="() => HazirSilAsync(hazir)"><i class="bi bi-trash"></i></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                break;
+        }
+    }
+</div>
+
+@if (duzenlenenDepartman != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(duzenlenenDepartman.Id > 0 ? "Departmanı Düzenle" : "Yeni Departman")</h5>
+                    <button type="button" class="btn-close" @onclick="() => duzenlenenDepartman = null"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3"><label class="form-label" for="ddAd">Ad <span class="text-danger">*</span></label><input id="ddAd" class="form-control" maxlength="100" @bind="duzenlenenDepartman.Ad" /></div>
+                    <div class="mb-3"><label class="form-label" for="ddAciklama">Açıklama</label><textarea id="ddAciklama" class="form-control" rows="2" @bind="duzenlenenDepartman.Aciklama"></textarea></div>
+                    <div class="row g-3">
+                        <div class="col-md-6"><label class="form-label" for="ddEposta">E-posta</label><input id="ddEposta" type="email" class="form-control" @bind="duzenlenenDepartman.Email" /></div>
+                        <div class="col-md-3"><label class="form-label" for="ddSla">SLA (sa)</label><input id="ddSla" type="number" min="0" class="form-control" @bind="duzenlenenDepartman.VarsayilanSlaSuresi" /></div>
+                        <div class="col-md-3"><label class="form-label" for="ddSira">Sıra</label><input id="ddSira" type="number" class="form-control" @bind="duzenlenenDepartman.SiraNo" /></div>
+                    </div>
+                    <div class="form-check form-switch mt-3"><input class="form-check-input" type="checkbox" id="ddAktif" @bind="duzenlenenDepartman.Aktif" /><label class="form-check-label" for="ddAktif">Aktif (yeni taleplerde seçilebilir)</label></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => duzenlenenDepartman = null">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="DepartmanKaydetAsync" disabled="@kaydediliyor"><i class="bi bi-save me-1"></i>Kaydet</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (uyeDepartmani != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-people me-2"></i>@uyeDepartmani.Ad · Üyeler</h5>
+                    <button type="button" class="btn-close" @onclick="UyeleriKapatAsync"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted">Üyeler bu departmana gelen taleplerden haberdar edilir ve atama listesinde öne çıkar. Talepleri görmek için rolde destek yetkisi de gerekir.</p>
+                    <div class="row g-2 align-items-end mb-3">
+                        <div class="col-md-7">
+                            <label class="form-label" for="duKullanici">Kullanıcı</label>
+                            <select id="duKullanici" class="form-select" @bind="yeniUyeId">
                                 <option value="">Seçiniz...</option>
+                                @foreach (var kullanici in kullanicilar.Where(k => uyeler.All(u => u.KullaniciId != k.Id)))
+                                {
+                                    <option value="@kullanici.Id">@kullanici.AdSoyad (@kullanici.Rol?.RolAdi)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-check"><input class="form-check-input" type="checkbox" id="duYonetici" @bind="yeniUyeYonetici" /><label class="form-check-label" for="duYonetici">Yönetici</label></div>
+                        </div>
+                        <div class="col-md-2"><button class="btn btn-primary w-100" @onclick="UyeEkleAsync" disabled="@(kaydediliyor || yeniUyeId == null)"><i class="bi bi-plus-lg"></i> Ekle</button></div>
+                    </div>
+                    @if (uyeler.Count == 0)
+                    {
+                        <div class="text-muted small">Bu departmanın üyesi yok.</div>
+                    }
+                    else
+                    {
+                        <ul class="list-group">
+                            @foreach (var uye in uyeler)
+                            {
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>@uye.Kullanici?.AdSoyad @if (uye.Yonetici)
+                                        {
+                                            <span class="badge bg-primary ms-1">Yönetici</span>
+                                        }</span>
+                                    <button class="btn btn-outline-danger btn-sm" title="Çıkar" @onclick="() => UyeCikarAsync(uye)" disabled="@kaydediliyor"><i class="bi bi-person-dash"></i></button>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-secondary" @onclick="UyeleriKapatAsync">Kapat</button></div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (duzenlenenKategori != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(duzenlenenKategori.Id > 0 ? "Kategoriyi Düzenle" : "Yeni Kategori")</h5>
+                    <button type="button" class="btn-close" @onclick="() => duzenlenenKategori = null"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3"><label class="form-label" for="dkAd">Ad <span class="text-danger">*</span></label><input id="dkAd" class="form-control" maxlength="100" @bind="duzenlenenKategori.Ad" /></div>
+                    <div class="mb-3">
+                        <label class="form-label" for="dkDepartman">Departman</label>
+                        <select id="dkDepartman" class="form-select" @bind="duzenlenenKategori.DepartmanId">
+                            <option value="">Tüm departmanlar</option>
+                            @foreach (var departman in departmanlar)
+                            {
+                                <option value="@departman.Id">@departman.Ad</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-4"><label class="form-label" for="dkRenk">Renk</label><input id="dkRenk" type="color" class="form-control form-control-color" @bind="duzenlenenKategori.Renk" /></div>
+                        <div class="col-md-5"><label class="form-label" for="dkSimge">Simge (bi-...)</label><input id="dkSimge" class="form-control" @bind="duzenlenenKategori.Simge" placeholder="bi-bug" /></div>
+                        <div class="col-md-3"><label class="form-label" for="dkSira">Sıra</label><input id="dkSira" type="number" class="form-control" @bind="duzenlenenKategori.SiraNo" /></div>
+                    </div>
+                    <div class="form-check form-switch mt-3"><input class="form-check-input" type="checkbox" id="dkAktif" @bind="duzenlenenKategori.Aktif" /><label class="form-check-label" for="dkAktif">Aktif</label></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => duzenlenenKategori = null">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="KategoriKaydetAsync" disabled="@kaydediliyor"><i class="bi bi-save me-1"></i>Kaydet</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (duzenlenenSla != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(duzenlenenSla.Id > 0 ? "SLA'yı Düzenle" : "Yeni SLA")</h5>
+                    <button type="button" class="btn-close" @onclick="() => duzenlenenSla = null"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3"><label class="form-label" for="dsAd">Ad <span class="text-danger">*</span></label><input id="dsAd" class="form-control" maxlength="100" @bind="duzenlenenSla.Ad" /></div>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label" for="dsOncelik">Öncelik</label>
+                            <select id="dsOncelik" class="form-select" @bind="duzenlenenSla.Oncelik">
+                                @foreach (var oncelik in Enum.GetValues<DestekOncelik>())
+                                {
+                                    <option value="@oncelik">@DestekKurallari.OncelikEtiketi(oncelik)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4"><label class="form-label" for="dsIlk">İlk yanıt (sa)</label><input id="dsIlk" type="number" min="0" class="form-control" @bind="duzenlenenSla.IlkYanitSuresi" /></div>
+                        <div class="col-md-4"><label class="form-label" for="dsCozum">Çözüm (sa)</label><input id="dsCozum" type="number" min="1" class="form-control" @bind="duzenlenenSla.CozumSuresi" /></div>
+                    </div>
+                    <div class="form-check form-switch mt-3"><input class="form-check-input" type="checkbox" id="dsAktif" @bind="duzenlenenSla.Aktif" /><label class="form-check-label" for="dsAktif">Aktif</label></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => duzenlenenSla = null">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="SlaKaydetAsync" disabled="@kaydediliyor"><i class="bi bi-save me-1"></i>Kaydet</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (duzenlenenHazir != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(duzenlenenHazir.Id > 0 ? "Hazır Yanıtı Düzenle" : "Yeni Hazır Yanıt")</h5>
+                    <button type="button" class="btn-close" @onclick="() => duzenlenenHazir = null"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3"><label class="form-label" for="dhAd">Ad <span class="text-danger">*</span></label><input id="dhAd" class="form-control" maxlength="200" @bind="duzenlenenHazir.Ad" /></div>
+                    <div class="mb-3"><label class="form-label" for="dhIcerik">İçerik <span class="text-danger">*</span></label><textarea id="dhIcerik" class="form-control" rows="6" @bind="duzenlenenHazir.Icerik"></textarea></div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="dhDepartman">Departman</label>
+                            <select id="dhDepartman" class="form-select" @bind="duzenlenenHazir.DepartmanId">
+                                <option value="">Tüm departmanlar</option>
                                 @foreach (var departman in departmanlar)
                                 {
                                     <option value="@departman.Id">@departman.Ad</option>
                                 }
                             </select>
                         </div>
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" id="emailAktif" @bind="emailBildirimAktif" />
-                            <label class="form-check-label" for="emailAktif">E-posta bildirimleri aktif</label>
-                        </div>
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" id="slaKontrol" @bind="otomatikSlaKontrolu" />
-                            <label class="form-check-label" for="slaKontrol">Otomatik SLA kontrolü aktif</label>
-                        </div>
-                        <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="bilgiBankasiAcik" @bind="bilgiBankasiAcik" />
-                            <label class="form-check-label" for="bilgiBankasiAcik">Bilgi bankası aktif</label>
+                        <div class="col-md-6">
+                            <label class="form-label" for="dhSira">Sıra</label>
+                            <input id="dhSira" type="number" class="form-control" @bind="duzenlenenHazir.SiraNo" />
                         </div>
                     </div>
+                    <div class="form-check form-switch mt-3"><input class="form-check-input" type="checkbox" id="dhAktif" @bind="duzenlenenHazir.Aktif" /><label class="form-check-label" for="dhAktif">Aktif</label></div>
                 </div>
-            </div>
-
-            <div class="col-lg-6">
-                <div class="card h-100">
-                    <div class="card-header bg-white">
-                        <strong>Bilgi</strong>
-                    </div>
-                    <div class="card-body">
-                        <div class="alert alert-success mb-3">
-                            <i class="bi bi-envelope-check me-1"></i>
-                            <strong>E-posta entegrasyonu aktif.</strong> Bildirimler için yukarıdaki "E-posta bildirimleri aktif" seçeneğini açın.
-                        </div>
-                        <div class="alert alert-info mb-0">
-                            <ul class="mb-0 ps-3">
-                                <li>Bu sayfa destek modülü için temel sistem ayarlarını saklar.</li>
-                                <li>Ayarlar <code>DestekAyar</code> tablosunda tutulur.</li>
-                                <li><strong>E-posta bildirimleri aktifken</strong> şu olaylarda otomatik e-posta gönderilir:
-                                    <ul class="mt-1">
-                                        <li>Yeni talep oluşturulduğunda → müşteriye onay</li>
-                                        <li>Temsilci yanıt eklediğinde → müşteriye bildirim</li>
-                                        <li>Talep durumu değiştiğinde → müşteriye bildirim</li>
-                                        <li>Talep atandığında → temsilciye bildirim</li>
-                                    </ul>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => duzenlenenHazir = null">İptal</button>
+                    <button type="button" class="btn btn-primary" @onclick="HazirKaydetAsync" disabled="@kaydediliyor"><i class="bi bi-save me-1"></i>Kaydet</button>
                 </div>
             </div>
         </div>
-    }
-</div>
+    </div>
+}
 
 @code {
-    private List<DestekDepartman> departmanlar = new();
-    private bool isLoading = true;
-    private bool isSaving;
-    private string? loadError;
+    private enum Sekme { Genel, Departmanlar, Kategoriler, Sla, HazirYanitlar }
 
-    private string destekEmail = string.Empty;
-    private int? varsayilanDepartmanId;
-    private bool emailBildirimAktif;
-    private bool otomatikSlaKontrolu = true;
-    private bool bilgiBankasiAcik = true;
+    private Sekme sekme = Sekme.Genel;
+    private bool yukleniyor = true;
+    private bool yetkisiz;
+    private bool kaydediliyor;
+
+    private DestekGenelAyarlar ayarlar = new();
+    private List<DestekDepartman> departmanlar = new();
+    private List<DestekKategori> kategoriler = new();
+    private List<DestekSla> slalar = new();
+    private List<DestekHazirYanit> hazirYanitlar = new();
+    private List<Kullanici> kullanicilar = new();
+
+    private DestekDepartman? duzenlenenDepartman;
+    private DestekDepartman? uyeDepartmani;
+    private List<DestekDepartmanUye> uyeler = new();
+    private int? yeniUyeId;
+    private bool yeniUyeYonetici;
+    private DestekKategori? duzenlenenKategori;
+    private DestekSla? duzenlenenSla;
+    private DestekHazirYanit? duzenlenenHazir;
 
     protected override async Task OnInitializedAsync()
     {
-        await SayfayiYenile();
+        var aktor = await DestekService.GetAktifKullaniciAsync();
+        if (aktor?.TanimYonetir != true)
+        {
+            yetkisiz = true;
+            yukleniyor = false;
+            return;
+        }
+
+        await YukleAsync();
+        yukleniyor = false;
     }
 
-    private async Task SayfayiYenile()
+    private async Task YukleAsync()
     {
-        loadError = null;
-        await Yukle();
-    }
-
-    private async Task Yukle()
-    {
-        isLoading = true;
         try
         {
-            departmanlar = await DestekService.GetDepartmanlarAsync();
-            var ayarlar = await DestekService.GetAyarlarByGrupAsync("Destek");
-
-            destekEmail = ayarlar.GetValueOrDefault("DestekEmail") ?? string.Empty;
-            varsayilanDepartmanId = int.TryParse(ayarlar.GetValueOrDefault("VarsayilanDepartmanId"), out var departmanId)
-                ? departmanId
-                : null;
-            emailBildirimAktif = bool.TryParse(ayarlar.GetValueOrDefault("EmailBildirimAktif"), out var emailAktif) && emailAktif;
-            otomatikSlaKontrolu = !bool.TryParse(ayarlar.GetValueOrDefault("OtomatikSlaKontrolu"), out var slaKontrol) || slaKontrol;
-            bilgiBankasiAcik = !bool.TryParse(ayarlar.GetValueOrDefault("BilgiBankasiAcik"), out var bilgiBankasi) || bilgiBankasi;
+            ayarlar = await DestekService.GetGenelAyarlarAsync();
+            departmanlar = await DestekService.GetDepartmanlarAsync(pasiflerDahil: true);
+            kategoriler = await DestekService.GetKategorilerAsync(pasiflerDahil: true);
+            slalar = await DestekService.GetSlaListesiAsync();
+            hazirYanitlar = await DestekService.GetHazirYanitlarAsync(pasiflerDahil: true);
         }
         catch (Exception ex)
         {
-            departmanlar = new();
-            destekEmail = string.Empty;
-            varsayilanDepartmanId = null;
-            emailBildirimAktif = false;
-            otomatikSlaKontrolu = true;
-            bilgiBankasiAcik = true;
-            loadError = ex.GetBaseException().Message;
-            ToastService.ShowError($"Destek ayarları yüklenemedi: {ex.GetBaseException().Message}");
-        }
-        finally
-        {
-            isLoading = false;
+            ToastService.ShowError($"Ayarlar yüklenemedi: {ex.GetBaseException().Message}");
         }
     }
 
-    private async Task Kaydet()
+    private static string SekmeBasligi(Sekme s) => s switch
     {
-        isSaving = true;
+        Sekme.Genel => "Genel",
+        Sekme.Departmanlar => "Departmanlar",
+        Sekme.Kategoriler => "Kategoriler",
+        Sekme.Sla => "SLA",
+        _ => "Hazır Yanıtlar"
+    };
+
+    private static string SekmeIkonu(Sekme s) => s switch
+    {
+        Sekme.Genel => "bi-gear",
+        Sekme.Departmanlar => "bi-diagram-3",
+        Sekme.Kategoriler => "bi-tags",
+        Sekme.Sla => "bi-alarm",
+        _ => "bi-chat-square-text"
+    };
+
+    private async Task IslemAsync(Func<Task> islem, string basari, Action? sonra = null)
+    {
+        kaydediliyor = true;
         try
         {
-            await DestekService.SetAyarAsync("DestekEmail", destekEmail ?? string.Empty, "Destek modülü e-posta adresi", "Destek");
-            await DestekService.SetAyarAsync("VarsayilanDepartmanId", varsayilanDepartmanId?.ToString() ?? string.Empty, "Varsayılan destek departmanı", "Destek");
-            await DestekService.SetAyarAsync("EmailBildirimAktif", emailBildirimAktif.ToString(), "Destek modülü e-posta bildirimleri aktif mi", "Destek");
-            await DestekService.SetAyarAsync("OtomatikSlaKontrolu", otomatikSlaKontrolu.ToString(), "SLA kontrolü otomatik çalışsın mı", "Destek");
-            await DestekService.SetAyarAsync("BilgiBankasiAcik", bilgiBankasiAcik.ToString(), "Bilgi bankası aktif mi", "Destek");
-
-            ToastService.ShowSuccess("Destek ayarları kaydedildi.");
+            await islem();
+            sonra?.Invoke();
+            ToastService.ShowSuccess(basari);
+            await YukleAsync();
         }
         catch (Exception ex)
         {
-            ToastService.ShowError($"Destek ayarları kaydedilemedi: {ex.GetBaseException().Message}");
+            ToastService.ShowError(ex.GetBaseException().Message);
         }
         finally
         {
-            isSaving = false;
+            kaydediliyor = false;
         }
+    }
+
+    private Task GenelKaydetAsync() => IslemAsync(() => DestekService.GenelAyarlariKaydetAsync(ayarlar), "Ayarlar kaydedildi.");
+
+    private static DestekDepartman Kopya(DestekDepartman d) => new()
+    {
+        Id = d.Id, Ad = d.Ad, Aciklama = d.Aciklama, Email = d.Email, VarsayilanSlaSuresi = d.VarsayilanSlaSuresi,
+        SiraNo = d.SiraNo, Aktif = d.Aktif, OtomatikAtama = d.OtomatikAtama
+    };
+
+    private static DestekKategori Kopya(DestekKategori k) => new()
+    {
+        Id = k.Id, Ad = k.Ad, Aciklama = k.Aciklama, Renk = k.Renk, Simge = k.Simge, SiraNo = k.SiraNo, Aktif = k.Aktif, DepartmanId = k.DepartmanId
+    };
+
+    private static DestekSla Kopya(DestekSla s) => new()
+    {
+        Id = s.Id, Ad = s.Ad, Aciklama = s.Aciklama, Oncelik = s.Oncelik, IlkYanitSuresi = s.IlkYanitSuresi, CozumSuresi = s.CozumSuresi,
+        Aktif = s.Aktif, SadeceMesaiSaatleri = s.SadeceMesaiSaatleri, SadeceHaftaIci = s.SadeceHaftaIci
+    };
+
+    private void HazirDuzenle(DestekHazirYanit h) => duzenlenenHazir = new DestekHazirYanit
+    {
+        Id = h.Id, Ad = h.Ad, Icerik = HtmlSanitizerHelper.DuzMetin(h.Icerik), KonuSablonu = h.KonuSablonu, Aciklama = h.Aciklama,
+        DepartmanId = h.DepartmanId, KategoriId = h.KategoriId, SiraNo = h.SiraNo, Aktif = h.Aktif
+    };
+
+    private Task DepartmanKaydetAsync() =>
+        IslemAsync(() => DestekService.DepartmanKaydetAsync(duzenlenenDepartman!), "Departman kaydedildi.", () => duzenlenenDepartman = null);
+
+    private async Task DepartmanSilAsync(DestekDepartman departman)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"'{departman.Ad}' silinsin mi? Talebi olan departman yalnız pasifleştirilir."))
+            return;
+
+        kaydediliyor = true;
+        try
+        {
+            ToastService.ShowSuccess(await DestekService.DepartmanSilAsync(departman.Id));
+            await YukleAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex.GetBaseException().Message);
+        }
+        finally
+        {
+            kaydediliyor = false;
+        }
+    }
+
+    private async Task UyeleriAcAsync(DestekDepartman departman)
+    {
+        try
+        {
+            if (kullanicilar.Count == 0)
+                kullanicilar = await DestekService.GetAktifKullanicilarAsync();
+            uyeler = await DestekService.GetDepartmanUyeleriAsync(departman.Id);
+            yeniUyeId = null;
+            yeniUyeYonetici = false;
+            uyeDepartmani = departman;
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex.GetBaseException().Message);
+        }
+    }
+
+    private async Task UyeEkleAsync()
+    {
+        if (uyeDepartmani == null || yeniUyeId == null) return;
+        kaydediliyor = true;
+        try
+        {
+            await DestekService.DepartmanUyesiEkleAsync(uyeDepartmani.Id, yeniUyeId.Value, yeniUyeYonetici);
+            uyeler = await DestekService.GetDepartmanUyeleriAsync(uyeDepartmani.Id);
+            yeniUyeId = null;
+            yeniUyeYonetici = false;
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex.GetBaseException().Message);
+        }
+        finally
+        {
+            kaydediliyor = false;
+        }
+    }
+
+    private async Task UyeCikarAsync(DestekDepartmanUye uye)
+    {
+        if (uyeDepartmani == null) return;
+        kaydediliyor = true;
+        try
+        {
+            await DestekService.DepartmanUyesiCikarAsync(uyeDepartmani.Id, uye.KullaniciId);
+            uyeler = await DestekService.GetDepartmanUyeleriAsync(uyeDepartmani.Id);
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex.GetBaseException().Message);
+        }
+        finally
+        {
+            kaydediliyor = false;
+        }
+    }
+
+    private async Task UyeleriKapatAsync()
+    {
+        uyeDepartmani = null;
+        await YukleAsync();
+    }
+
+    private Task KategoriKaydetAsync() =>
+        IslemAsync(() => DestekService.KategoriKaydetAsync(duzenlenenKategori!), "Kategori kaydedildi.", () => duzenlenenKategori = null);
+
+    private async Task KategoriSilAsync(DestekKategori kategori)
+    {
+        if (await JS.InvokeAsync<bool>("confirm", $"'{kategori.Ad}' kategorisi silinsin mi?"))
+            await IslemAsync(() => DestekService.KategoriSilAsync(kategori.Id), "Kategori silindi.");
+    }
+
+    private Task SlaKaydetAsync() =>
+        IslemAsync(() => DestekService.SlaKaydetAsync(duzenlenenSla!), "SLA kaydedildi.", () => duzenlenenSla = null);
+
+    private async Task SlaSilAsync(DestekSla sla)
+    {
+        if (await JS.InvokeAsync<bool>("confirm", $"'{sla.Ad}' silinsin mi?"))
+            await IslemAsync(() => DestekService.SlaSilAsync(sla.Id), "SLA silindi.");
+    }
+
+    private Task HazirKaydetAsync() =>
+        IslemAsync(() => DestekService.HazirYanitKaydetAsync(duzenlenenHazir!), "Hazır yanıt kaydedildi.", () => duzenlenenHazir = null);
+
+    private async Task HazirSilAsync(DestekHazirYanit hazir)
+    {
+        if (await JS.InvokeAsync<bool>("confirm", $"'{hazir.Ad}' silinsin mi?"))
+            await IslemAsync(() => DestekService.HazirYanitSilAsync(hazir.Id), "Hazır yanıt silindi.");
     }
 }
-

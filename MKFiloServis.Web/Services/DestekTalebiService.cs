@@ -1,23 +1,30 @@
+using System.Text;
+using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Shared.Entities;
+using MKFiloServis.Shared.Time;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Helpers;
-using MKFiloServis.Web.Models;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
+using MKFiloServis.Web.Services.Destek;
 using MKFiloServis.Web.Services.Interfaces;
 
 namespace MKFiloServis.Web.Services;
 
 /// <summary>
-/// Destek Talebi (Ticket) Servisi - osTicket benzeri implementasyon
+/// Destek talebi servisi. Akış kuralları <see cref="DestekKurallari"/>, erişim kuralları <see cref="DestekErisim"/>'dedir;
+/// her işlem oturumdaki kullanıcıyı <see cref="IDestekKullaniciSaglayici"/> ile yeniden doğrular.
+/// Bu dosya: talep açma, detay, yazışma ve ekler. Diğer parçalar: <c>.Akis</c>, <c>.Tanimlar</c>, <c>.Rapor</c>.
 /// </summary>
-public class DestekTalebiService : IDestekTalebiService
+public partial class DestekTalebiService : IDestekTalebiService
 {
+    private const int AramaAdayLimiti = 1000;
+    private const int TeknikMetinLimiti = 6000;
+
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly ILogger<DestekTalebiService> _logger;
     private readonly IEmailService _emailService;
     private readonly NumaraSerisiService _numaraSerisi;
     private readonly ISecureFileService _secureFileService;
+    private readonly IDestekKullaniciSaglayici _kullaniciSaglayici;
     private readonly string _uploadPath;
 
     public DestekTalebiService(
@@ -26,646 +33,702 @@ public class DestekTalebiService : IDestekTalebiService
         IWebHostEnvironment env,
         IEmailService emailService,
         NumaraSerisiService numaraSerisi,
-        ISecureFileService secureFileService)
+        ISecureFileService secureFileService,
+        IDestekKullaniciSaglayici kullaniciSaglayici)
     {
         _contextFactory = contextFactory;
         _logger = logger;
         _emailService = emailService;
         _numaraSerisi = numaraSerisi;
         _secureFileService = secureFileService;
+        _kullaniciSaglayici = kullaniciSaglayici;
         _uploadPath = Path.Combine(env.WebRootPath, "uploads", "destek");
-        
-        // Upload klasörünü oluştur
+
+        // Eski düz dosya ekleri bu klasördedir (yeni ekler şifreli depoya yazılır).
         if (!Directory.Exists(_uploadPath))
             Directory.CreateDirectory(_uploadPath);
     }
 
-    #region Talep CRUD
+    public Task<DestekKullanici?> GetAktifKullaniciAsync() => _kullaniciSaglayici.GetirAsync();
 
-    public async Task<List<DestekTalebi>> GetAllAsync()
+    #region Talep eden
+
+    public async Task<DestekTalebi> TalepOlusturAsync(DestekTalebi girdi, bool taslak)
     {
+        var aktor = await OturumGerekliAsync();
         await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekTalepleri
-            .AsNoTracking()
-            .Include(x => x.Departman)
-            .Include(x => x.Kategori)
-            .Include(x => x.AtananKullanici)
-            .OrderByDescending(x => x.SonAktiviteTarihi)
-            .ToListAsync();
+
+        var talep = new DestekTalebi
+        {
+            Konu = girdi.Konu,
+            Aciklama = girdi.Aciklama,
+            DepartmanId = girdi.DepartmanId,
+            KategoriId = girdi.KategoriId,
+            Oncelik = girdi.Oncelik,
+            Kaynak = DestekKaynak.Web,
+            OlusturanKullaniciId = aktor.Id,
+            MusteriAdi = string.IsNullOrWhiteSpace(girdi.MusteriAdi) ? aktor.AdSoyad : girdi.MusteriAdi,
+            MusteriEmail = string.IsNullOrWhiteSpace(girdi.MusteriEmail) ? aktor.Email ?? string.Empty : girdi.MusteriEmail,
+            MusteriTelefon = girdi.MusteriTelefon,
+            Durum = taslak ? DestekDurum.Taslak : DestekDurum.Yeni
+        };
+
+        await TalepAlanlariniDogrulaAsync(context, talep);
+        await YeniTalepKaydetAsync(context, talep, aktor, taslak ? "Talep taslak olarak kaydedildi" : "Talep gönderildi");
+        return talep;
     }
 
-    public async Task<PagedResult<DestekTalebi>> GetPagedAsync(DestekTalebiFilterParams filter)
+    public async Task<DestekTalebi> TaslakGuncelleAsync(DestekTalebi girdi, bool gonder)
     {
+        var aktor = await OturumGerekliAsync();
         await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var query = context.DestekTalepleri
-            .AsNoTracking()
-            .Include(x => x.Departman)
-            .Include(x => x.Kategori)
-            .Include(x => x.AtananKullanici)
-            .Include(x => x.Cari)
-            .AsQueryable();
 
-        // Filtreler
-        if (!string.IsNullOrWhiteSpace(filter.AramaMetni))
+        var talep = await TalepYukleAsync(context, girdi.Id);
+        if (talep.OlusturanKullaniciId != aktor.Id)
+            throw YetkiYok("Yalnız kendi taslağınızı düzenleyebilirsiniz.");
+        if (talep.Durum != DestekDurum.Taslak)
+            throw new InvalidOperationException("Gönderilmiş talep düzenlenemez; bilgi eklemek için talebe mesaj yazın.");
+
+        talep.Konu = girdi.Konu;
+        talep.Aciklama = girdi.Aciklama;
+        talep.DepartmanId = girdi.DepartmanId;
+        talep.KategoriId = girdi.KategoriId;
+        talep.Oncelik = girdi.Oncelik;
+        talep.MusteriEmail = string.IsNullOrWhiteSpace(girdi.MusteriEmail) ? aktor.Email ?? string.Empty : girdi.MusteriEmail;
+        talep.MusteriTelefon = girdi.MusteriTelefon;
+        await TalepAlanlariniDogrulaAsync(context, talep);
+
+        var simdi = DateTime.UtcNow;
+        talep.UpdatedAt = simdi;
+        talep.SonAktiviteTarihi = simdi;
+
+        if (gonder)
         {
-            var arama = filter.AramaMetni.ToLower();
-            query = query.Where(x => 
-                x.TalepNo.ToLower().Contains(arama) ||
-                x.Konu.ToLower().Contains(arama) ||
-                x.MusteriAdi.ToLower().Contains(arama) ||
-                x.MusteriEmail.ToLower().Contains(arama));
+            // Süreler (ilk yanıt, çözüm, SLA) talebin gönderildiği andan ölçülür, taslağın açıldığı andan değil.
+            talep.CreatedAt = simdi;
+            talep.Durum = DestekDurum.Yeni;
+            await SlaUygulaAsync(context, talep, simdi);
+            Aktivite(context, talep, AktiviteTuru.DurumDegisti, "Talep gönderildi", aktor.Id,
+                DestekKurallari.Etiket(DestekDurum.Taslak), DestekKurallari.Etiket(DestekDurum.Yeni));
+        }
+        else
+        {
+            Aktivite(context, talep, AktiviteTuru.Guncellendi, "Taslak güncellendi", aktor.Id);
         }
 
-        if (filter.Durum.HasValue)
-            query = query.Where(x => x.Durum == filter.Durum.Value);
+        await context.SaveChangesAsync();
 
-        if (filter.Oncelik.HasValue)
-            query = query.Where(x => x.Oncelik == filter.Oncelik.Value);
+        if (gonder)
+            await GonderilenTalebiDuyurAsync(context, talep, aktor);
 
-        if (filter.Kaynak.HasValue)
-            query = query.Where(x => x.Kaynak == filter.Kaynak.Value);
+        return talep;
+    }
 
-        if (filter.DepartmanId.HasValue)
-            query = query.Where(x => x.DepartmanId == filter.DepartmanId.Value);
+    public async Task TaslakSilAsync(int talepId)
+    {
+        var aktor = await OturumGerekliAsync();
+        await using var context = await _contextFactory.CreateDbContextAsync();
 
-        if (filter.KategoriId.HasValue)
-            query = query.Where(x => x.KategoriId == filter.KategoriId.Value);
+        var talep = await TalepYukleAsync(context, talepId);
+        if (talep.OlusturanKullaniciId != aktor.Id && !aktor.Silebilir)
+            throw YetkiYok("Yalnız kendi taslağınızı silebilirsiniz.");
+        if (talep.Durum != DestekDurum.Taslak && !aktor.Silebilir)
+            throw new InvalidOperationException("Yalnız taslak talepler silinebilir.");
 
-        if (filter.AtananKullaniciId.HasValue)
-            query = query.Where(x => x.AtananKullaniciId == filter.AtananKullaniciId.Value);
+        talep.IsDeleted = true;
+        talep.UpdatedAt = DateTime.UtcNow;
+        await context.SaveChangesAsync();
+    }
 
-        if (filter.CariId.HasValue)
-            query = query.Where(x => x.CariId == filter.CariId.Value);
+    public async Task<DestekTalebi> HataBildirimiOlusturAsync(SorunBildirimi bildirim)
+    {
+        var aktor = await OturumGerekliAsync();
+        if (string.IsNullOrWhiteSpace(bildirim.Aciklama))
+            throw new InvalidOperationException("Lütfen ne yapmaya çalıştığınızı ve ne olduğunu kısaca yazın.");
 
-        if (filter.BaslangicTarihi.HasValue)
-            query = query.Where(x => x.CreatedAt >= filter.BaslangicTarihi.Value);
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var ayarlar = await AyarlariOkuAsync(context);
 
-        if (filter.BitisTarihi.HasValue)
-            query = query.Where(x => x.CreatedAt <= filter.BitisTarihi.Value);
+        // Ek, talep açılmadan önce denetlenir: uygunsuz dosya yüzünden yarım talep oluşmasın.
+        if (bildirim.EkIcerik is { Length: > 0 })
+            EkDosyasiniDenetle(bildirim.EkDosyaAdi ?? "ekran-goruntusu.png", bildirim.EkIcerik.LongLength, ayarlar);
 
-        if (filter.SlaAsildi.HasValue)
-            query = query.Where(x => x.SlaAsildi == filter.SlaAsildi.Value);
+        var departmanId = await VarsayilanDepartmanAsync(context, ayarlar)
+            ?? throw new InvalidOperationException("Destek departmanı tanımlı değil; lütfen sistem yöneticinize başvurun.");
 
-        if (filter.SadeceAcik == true)
-            query = query.Where(x => x.Durum != DestekDurum.Kapali && x.Durum != DestekDurum.Cozuldu);
+        var konu = !string.IsNullOrWhiteSpace(bildirim.Konu)
+            ? bildirim.Konu
+            : !string.IsNullOrWhiteSpace(bildirim.HataMesaji)
+                ? $"Hata: {DestekBildirimci.Kisalt(bildirim.HataMesaji, 150)}"
+                : $"Sorun bildirimi: {bildirim.Sayfa ?? "program"}";
 
-        // Sıralama
-        query = filter.SortBy?.ToLower() switch
+        var talep = new DestekTalebi
         {
-            "talepno" => filter.SortDesc ? query.OrderByDescending(x => x.TalepNo) : query.OrderBy(x => x.TalepNo),
-            "konu" => filter.SortDesc ? query.OrderByDescending(x => x.Konu) : query.OrderBy(x => x.Konu),
-            "durum" => filter.SortDesc ? query.OrderByDescending(x => x.Durum) : query.OrderBy(x => x.Durum),
-            "oncelik" => filter.SortDesc ? query.OrderByDescending(x => x.Oncelik) : query.OrderBy(x => x.Oncelik),
-            "createdat" => filter.SortDesc ? query.OrderByDescending(x => x.CreatedAt) : query.OrderBy(x => x.CreatedAt),
-            _ => filter.SortDesc ? query.OrderByDescending(x => x.SonAktiviteTarihi) : query.OrderBy(x => x.SonAktiviteTarihi)
+            Konu = konu,
+            Aciklama = HataAciklamasi(bildirim),
+            DepartmanId = departmanId,
+            Oncelik = bildirim.Oncelik,
+            Kaynak = DestekKaynak.HataBildirimi,
+            Durum = DestekDurum.Yeni,
+            OlusturanKullaniciId = aktor.Id,
+            MusteriAdi = aktor.AdSoyad,
+            MusteriEmail = aktor.Email ?? string.Empty
+        };
+        await TalepAlanlariniDogrulaAsync(context, talep);
+
+        var teknikNot = new DestekTalebiYanit
+        {
+            Icerik = TeknikNot(bildirim),
+            DahiliNot = true,
+            YanitTuru = YanitTuru.SistemMesaji
         };
 
-        var totalCount = await query.CountAsync();
-        var items = await query
-            .Skip((filter.Page - 1) * filter.PageSize)
-            .Take(filter.PageSize)
-            .ToListAsync();
+        await YeniTalepKaydetAsync(context, talep, aktor, "Program içinden sorun bildirildi", [teknikNot]);
 
-        return new PagedResult<DestekTalebi>
+        if (bildirim.EkIcerik is { Length: > 0 })
         {
-            Items = items,
-            TotalCount = totalCount,
-            PageNumber = filter.Page,
-            PageSize = filter.PageSize
-        };
-    }
-
-    public async Task<DestekTalebi?> GetByIdAsync(int id)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekTalepleri
-            .AsNoTracking()
-            .Include(x => x.Departman)
-            .Include(x => x.Kategori)
-            .Include(x => x.AtananKullanici)
-            .Include(x => x.OlusturanKullanici)
-            .Include(x => x.Cari)
-            .FirstOrDefaultAsync(x => x.Id == id);
-    }
-
-    public async Task<DestekTalebi?> GetByIdWithDetailsAsync(int id)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekTalepleri
-            .AsNoTracking()
-            .Include(x => x.Departman)
-            .Include(x => x.Kategori)
-            .Include(x => x.AtananKullanici)
-            .Include(x => x.OlusturanKullanici)
-            .Include(x => x.Cari)
-            .Include(x => x.Yanitlar.OrderBy(y => y.CreatedAt))
-                .ThenInclude(y => y.Kullanici)
-            .Include(x => x.Yanitlar)
-                .ThenInclude(y => y.Ekler)
-            .Include(x => x.Ekler)
-            .Include(x => x.Aktiviteler.OrderByDescending(a => a.CreatedAt))
-                .ThenInclude(a => a.Kullanici)
-            .FirstOrDefaultAsync(x => x.Id == id);
-    }
-
-    public async Task<DestekTalebi?> GetByTalepNoAsync(string talepNo)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekTalepleri
-            .AsNoTracking()
-            .Include(x => x.Departman)
-            .Include(x => x.Kategori)
-            .FirstOrDefaultAsync(x => x.TalepNo == talepNo);
-    }
-
-    public async Task<DestekTalebi> CreateAsync(DestekTalebi talep)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        if (string.IsNullOrEmpty(talep.TalepNo))
-            talep.TalepNo = await GenerateNextTalepNoAsync();
-        
-        talep.CreatedAt = DateTime.UtcNow;
-        talep.SonAktiviteTarihi = DateTime.UtcNow;
-        
-        // SLA hesapla
-        if (!talep.SlaSuresi.HasValue)
-        {
-            var sla = await context.DestekSlaListesi
-                .AsNoTracking()
-                .FirstOrDefaultAsync(x => x.Oncelik == talep.Oncelik && x.Aktif);
-            
-            if (sla != null)
+            try
             {
-                talep.SlaSuresi = sla.CozumSuresi;
-                talep.SlaBitisTarihi = DateTime.UtcNow.AddHours(sla.CozumSuresi);
+                await EkKaydetAsync(context, talep, aktor, bildirim.EkDosyaAdi ?? "ekran-goruntusu.png",
+                    bildirim.EkMimeTipi ?? "image/png", bildirim.EkIcerik, ayarlar);
+            }
+            catch (Exception ex)
+            {
+                // Talep açıldı; ek yazılamadıysa kullanıcı talebe sonradan dosya ekleyebilir.
+                _logger.LogWarning(ex, "Sorun bildiriminin eki kaydedilemedi. TalepId={TalepId}", talep.Id);
             }
         }
-        
-        context.DestekTalepleri.Add(talep);
-        await context.SaveChangesAsync();
-
-        // Aktivite kaydı
-        await LogAktiviteInternalAsync(context, talep.Id, AktiviteTuru.Olusturuldu, 
-            $"Talep oluşturuldu: {talep.TalepNo}", talep.OlusturanKullaniciId);
-
-        // E-posta bildirimi: Yeni talep → müşteriye onay
-        _ = SendDestekEmailSafeAsync(() => SendYeniTalepEmailAsync(talep));
 
         return talep;
     }
 
-    public async Task<DestekTalebi> UpdateAsync(DestekTalebi talep)
+    public async Task<List<DestekTalebi>> GetTaleplerimAsync()
     {
+        var aktor = await OturumGerekliAsync();
         await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        talep.UpdatedAt = DateTime.UtcNow;
-        talep.SonAktiviteTarihi = DateTime.UtcNow;
-        
-        context.DestekTalepleri.Update(talep);
-        await context.SaveChangesAsync();
-        
-        return talep;
-    }
 
-    public async Task DeleteAsync(int id)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var talep = await context.DestekTalepleri.FindAsync(id);
-        if (talep != null)
-        {
-            talep.IsDeleted = true;
-            talep.UpdatedAt = DateTime.UtcNow;
-            await context.SaveChangesAsync();
-        }
-    }
-
-    public async Task<string> GenerateNextTalepNoAsync()
-    {
-        // Kural 15: Atomik numara üretimi
-        return await _numaraSerisi.GenerateFormattedAsync("TKT", 0, 6);
-    }
-
-    #endregion
-
-    #region Durum ve Atama
-
-    public async Task<bool> UpdateDurumAsync(int talepId, DestekDurum yeniDurum, int? kullaniciId = null)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var talep = await context.DestekTalepleri.FindAsync(talepId);
-        if (talep == null) return false;
-
-        var eskiDurum = talep.Durum;
-        talep.Durum = yeniDurum;
-        talep.SonAktiviteTarihi = DateTime.UtcNow;
-        talep.UpdatedAt = DateTime.UtcNow;
-        
-        if (yeniDurum == DestekDurum.Kapali || yeniDurum == DestekDurum.Cozuldu)
-        {
-            talep.KapatilmaTarihi = DateTime.UtcNow;
-            talep.CozumSuresiDakika = (int)(DateTime.UtcNow - talep.CreatedAt).TotalMinutes;
-        }
-        
-        await context.SaveChangesAsync();
-
-        await LogAktiviteInternalAsync(context, talepId, AktiviteTuru.DurumDegisti, 
-            $"Durum değiştirildi", kullaniciId, eskiDurum.ToString(), yeniDurum.ToString());
-
-        // E-posta bildirimi: Durum değişikliği → müşteriye
-        _ = SendDestekEmailSafeAsync(() => SendDurumDegisiklikEmailAsync(talep.Id, eskiDurum, yeniDurum));
-
-        return true;
-    }
-
-    public async Task<bool> UpdateOncelikAsync(int talepId, DestekOncelik yeniOncelik, int? kullaniciId = null)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var talep = await context.DestekTalepleri.FindAsync(talepId);
-        if (talep == null) return false;
-
-        var eskiOncelik = talep.Oncelik;
-        talep.Oncelik = yeniOncelik;
-        talep.SonAktiviteTarihi = DateTime.UtcNow;
-        talep.UpdatedAt = DateTime.UtcNow;
-        
-        // Yeni SLA hesapla
-        var sla = await context.DestekSlaListesi
+        var talepler = await context.DestekTalepleri
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Oncelik == yeniOncelik && x.Aktif);
-        
-        if (sla != null)
-        {
-            talep.SlaSuresi = sla.CozumSuresi;
-            talep.SlaBitisTarihi = DateTime.UtcNow.AddHours(sla.CozumSuresi);
-        }
-        
-        await context.SaveChangesAsync();
-        
-        await LogAktiviteInternalAsync(context, talepId, AktiviteTuru.OncelikDegisti, 
-            $"Öncelik değiştirildi", kullaniciId, eskiOncelik.ToString(), yeniOncelik.ToString());
-        
-        return true;
-    }
-
-    public async Task<bool> AtaAsync(int talepId, int atananKullaniciId, int? atayanKullaniciId = null)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var talep = await context.DestekTalepleri.FindAsync(talepId);
-        if (talep == null) return false;
-
-        var kullanici = await context.Kullanicilar.AsNoTracking().FirstOrDefaultAsync(x => x.Id == atananKullaniciId);
-        if (kullanici == null) return false;
-
-        var eskiAtanan = talep.AtananKullaniciId;
-        talep.AtananKullaniciId = atananKullaniciId;
-        talep.SonAktiviteTarihi = DateTime.UtcNow;
-        talep.UpdatedAt = DateTime.UtcNow;
-        
-        if (talep.Durum == DestekDurum.Yeni)
-            talep.Durum = DestekDurum.Acik;
-        
-        await context.SaveChangesAsync();
-
-        await LogAktiviteInternalAsync(context, talepId, AktiviteTuru.Atandi, 
-            $"Talep {kullanici.AdSoyad} kullanıcısına atandı", atayanKullaniciId);
-
-        // E-posta bildirimi: Atama → temsilciye
-        _ = SendDestekEmailSafeAsync(() => SendAtamaEmailAsync(talep.Id, kullanici));
-
-        return true;
-    }
-
-    public async Task<bool> TransferEtAsync(int talepId, int yeniDepartmanId, int? kullaniciId = null)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var talep = await context.DestekTalepleri.FindAsync(talepId);
-        if (talep == null) return false;
-
-        var departman = await context.DestekDepartmanlari.AsNoTracking().FirstOrDefaultAsync(x => x.Id == yeniDepartmanId);
-        if (departman == null) return false;
-
-        var eskiDepartmanId = talep.DepartmanId;
-        talep.DepartmanId = yeniDepartmanId;
-        talep.AtananKullaniciId = null; // Atamayı sıfırla
-        talep.SonAktiviteTarihi = DateTime.UtcNow;
-        talep.UpdatedAt = DateTime.UtcNow;
-        
-        await context.SaveChangesAsync();
-        
-        await LogAktiviteInternalAsync(context, talepId, AktiviteTuru.Transferedildi, 
-            $"Talep '{departman.Ad}' departmanına transfer edildi", kullaniciId);
-        
-        return true;
-    }
-
-    public async Task<bool> KapatAsync(int talepId, int? kullaniciId = null, string? kapatmaNotu = null)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var talep = await context.DestekTalepleri.FindAsync(talepId);
-        if (talep == null) return false;
-
-        talep.Durum = DestekDurum.Kapali;
-        talep.KapatilmaTarihi = DateTime.UtcNow;
-        talep.CozumSuresiDakika = (int)(DateTime.UtcNow - talep.CreatedAt).TotalMinutes;
-        talep.SonAktiviteTarihi = DateTime.UtcNow;
-        talep.UpdatedAt = DateTime.UtcNow;
-        
-        if (!string.IsNullOrEmpty(kapatmaNotu))
-            talep.DahiliNotlar = (talep.DahiliNotlar ?? "") + $"\n[Kapatma Notu - {MKFiloServis.Shared.Time.BusinessTime.Now:dd.MM.yyyy HH:mm}]: {kapatmaNotu}";
-        
-        await context.SaveChangesAsync();
-
-        await LogAktiviteInternalAsync(context, talepId, AktiviteTuru.Kapandi, 
-            $"Talep kapatıldı{(string.IsNullOrEmpty(kapatmaNotu) ? "" : $": {kapatmaNotu}")}", kullaniciId);
-
-        // E-posta bildirimi: Kapatma → müşteriye
-        _ = SendDestekEmailSafeAsync(() => SendDurumDegisiklikEmailAsync(talep.Id, DestekDurum.Acik, DestekDurum.Kapali));
-
-        return true;
-    }
-
-    public async Task<bool> YenidenAcAsync(int talepId, int? kullaniciId = null, string? aciklamaNotu = null)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var talep = await context.DestekTalepleri.FindAsync(talepId);
-        if (talep == null) return false;
-
-        talep.Durum = DestekDurum.Acik;
-        talep.KapatilmaTarihi = null;
-        talep.SonAktiviteTarihi = DateTime.UtcNow;
-        talep.UpdatedAt = DateTime.UtcNow;
-        
-        await context.SaveChangesAsync();
-        
-        await LogAktiviteInternalAsync(context, talepId, AktiviteTuru.YenidenAcildi, 
-            $"Talep yeniden açıldı{(string.IsNullOrEmpty(aciklamaNotu) ? "" : $": {aciklamaNotu}")}", kullaniciId);
-        
-        return true;
-    }
-
-    public async Task<bool> BirlestirAsync(int anaTalepId, int birlestirilecekTalepId, int? kullaniciId = null)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var anaTalep = await context.DestekTalepleri.FindAsync(anaTalepId);
-        var birlestirilecekTalep = await context.DestekTalepleri.FindAsync(birlestirilecekTalepId);
-        
-        if (anaTalep == null || birlestirilecekTalep == null) return false;
-
-        // İlişki oluştur
-        var iliski = new DestekTalebiIliski
-        {
-            AnaTalepId = anaTalepId,
-            IliskiliTalepId = birlestirilecekTalepId,
-            IliskiTuru = IliskiTuru.Birlestirildi,
-            CreatedAt = DateTime.UtcNow
-        };
-        context.DestekTalebiIliskileri.Add(iliski);
-        
-        // Birleştirilen talebi kapat
-        birlestirilecekTalep.Durum = DestekDurum.Kapali;
-        birlestirilecekTalep.KapatilmaTarihi = DateTime.UtcNow;
-        birlestirilecekTalep.DahiliNotlar = (birlestirilecekTalep.DahiliNotlar ?? "") + 
-            $"\n[Birleştirildi - {MKFiloServis.Shared.Time.BusinessTime.Now:dd.MM.yyyy HH:mm}]: #{anaTalep.TalepNo} ile birleştirildi";
-        birlestirilecekTalep.UpdatedAt = DateTime.UtcNow;
-        
-        await context.SaveChangesAsync();
-        
-        await LogAktiviteInternalAsync(context, anaTalepId, AktiviteTuru.Birlestirildi, 
-            $"#{birlestirilecekTalep.TalepNo} talebi bu talep ile birleştirildi", kullaniciId);
-        
-        await LogAktiviteInternalAsync(context, birlestirilecekTalepId, AktiviteTuru.Birlestirildi, 
-            $"#{anaTalep.TalepNo} talebi ile birleştirildi ve kapatıldı", kullaniciId);
-        
-        return true;
+            .Include(x => x.Departman)
+            .Include(x => x.AtananKullanici)
+            .Where(x => x.OlusturanKullaniciId == aktor.Id)
+            .OrderByDescending(x => x.SonAktiviteTarihi)
+            .ToListAsync();
+        Normallestir(talepler);
+        return talepler;
     }
 
     #endregion
 
-    #region Yanıt İşlemleri
+    #region Detay, yazışma ve ekler
 
-    public async Task<DestekTalebiYanit> AddYanitAsync(int talepId, DestekTalebiYanit yanit)
+    public async Task<DestekTalepDetayi?> GetDetayAsync(int talepId)
     {
+        var aktor = await _kullaniciSaglayici.GetirAsync();
+        if (aktor == null) return null;
+
         await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var talep = await context.DestekTalepleri.FindAsync(talepId);
-        if (talep == null)
-            throw new InvalidOperationException("Talep bulunamadı");
+        var talep = await context.DestekTalepleri
+            .AsNoTracking()
+            .Include(x => x.Departman)
+            .Include(x => x.Kategori)
+            .Include(x => x.AtananKullanici)
+            .Include(x => x.OlusturanKullanici)
+            .Include(x => x.Cari)
+            .FirstOrDefaultAsync(x => x.Id == talepId);
+        if (talep == null) return null;
+        talep.Durum = DestekKurallari.Normallestir(talep.Durum);
 
-        yanit.DestekTalebiId = talepId;
-        yanit.CreatedAt = DateTime.UtcNow;
-        
+        var yazilimDepartmanId = await YazilimDepartmanIdAsync(context);
+        var rol = DestekErisim.Rol(aktor, talep, yazilimDepartmanId);
+        if (!DestekErisim.Gorebilir(rol)) return null;
+        var ekipGorunumu = DestekErisim.Isleyebilir(rol);
+
+        var yanitlar = await context.DestekTalebiYanitlari
+            .AsNoTracking()
+            .Include(y => y.Kullanici)
+            .Where(y => y.DestekTalebiId == talepId && (ekipGorunumu || !y.DahiliNot))
+            .OrderBy(y => y.CreatedAt).ThenBy(y => y.Id)
+            .ToListAsync();
+
+        var aktiviteler = await context.DestekTalebiAktiviteleri
+            .AsNoTracking()
+            .Include(a => a.Kullanici)
+            .Where(a => a.DestekTalebiId == talepId)
+            .OrderByDescending(a => a.CreatedAt).ThenByDescending(a => a.Id)
+            .ToListAsync();
+        if (!ekipGorunumu)
+            aktiviteler = aktiviteler.Where(a => DestekKurallari.TalepEdenAktiviteMetni(a) != null).ToList();
+
+        var ekler = await context.DestekTalebiEkleri
+            .AsNoTracking()
+            .Include(e => e.YukleyenKullanici)
+            .Where(e => e.DestekTalebiId == talepId)
+            .OrderBy(e => e.CreatedAt)
+            .ToListAsync();
+        if (!ekipGorunumu)
+        {
+            var dahiliYanitlar = await context.DestekTalebiYanitlari.AsNoTracking()
+                .Where(y => y.DestekTalebiId == talepId && y.DahiliNot)
+                .Select(y => y.Id)
+                .ToListAsync();
+            ekler = ekler.Where(e => e.YanitId == null || !dahiliYanitlar.Contains(e.YanitId.Value)).ToList();
+        }
+
+        return new DestekTalepDetayi
+        {
+            Talep = talep,
+            Yanitlar = yanitlar,
+            Aktiviteler = aktiviteler,
+            Ekler = ekler,
+            Rol = rol,
+            Eylemler = DestekKurallari.IzinliEylemler(talep.Durum, rol),
+            YazilimDepartmanId = yazilimDepartmanId
+        };
+    }
+
+    public async Task<DestekTalebiYanit> YanitEkleAsync(int talepId, DestekYanitIstegi istek)
+    {
+        var aktor = await OturumGerekliAsync();
+        var icerik = istek.Icerik?.Trim();
+        if (string.IsNullOrWhiteSpace(icerik))
+            throw new InvalidOperationException("Mesaj boş olamaz.");
+
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var talep = await TalepYukleAsync(context, talepId);
+        var rol = DestekErisim.Rol(aktor, talep, await YazilimDepartmanIdAsync(context));
+        if (!DestekErisim.Gorebilir(rol)) throw YetkiYok();
+        if (talep.Durum == DestekDurum.Kapali)
+            throw new InvalidOperationException("Kapanmış talebe mesaj yazılamaz. Sorun sürüyorsa yeni bir talep açın.");
+        if (talep.Durum == DestekDurum.Taslak)
+            throw new InvalidOperationException("Taslağa mesaj yazılamaz; önce talebi gönderin.");
+
+        var ekip = DestekErisim.Isleyebilir(rol);
+        var simdi = DateTime.UtcNow;
+        var eskiDurum = talep.Durum;
+        var eskiAtanan = talep.AtananKullaniciId;
+        var yanit = new DestekTalebiYanit
+        {
+            DestekTalebiId = talep.Id,
+            Icerik = icerik,
+            KullaniciId = aktor.Id,
+            CreatedAt = simdi
+        };
+
+        if (ekip)
+        {
+            yanit.DahiliNot = istek.DahiliNot;
+            yanit.YanitTuru = istek.DahiliNot ? YanitTuru.DahiliNot : YanitTuru.Yanit;
+            yanit.HazirYanitId = istek.HazirYanitId;
+            if (!istek.DahiliNot)
+            {
+                talep.IlkYanitSuresiDakika ??= Dakika(talep.CreatedAt, simdi);
+                if (istek.BilgiIste && DestekKurallari.IzinliMi(DestekEylem.BilgiIste, talep.Durum, rol))
+                {
+                    talep.Durum = DestekDurum.BilgiBekleniyor;
+                }
+                else if (talep.Durum == DestekDurum.Yeni)
+                {
+                    // Yeni talebe ilk yanıtı yazan talebi üstlenmiş olur.
+                    talep.Durum = DestekDurum.Islemde;
+                    talep.AtananKullaniciId ??= aktor.Id;
+                }
+            }
+        }
+        else
+        {
+            yanit.MusteriYaniti = true;
+            yanit.MusteriAdi = DestekBildirimci.Kisalt(aktor.AdSoyad, 200);
+            yanit.YanitTuru = YanitTuru.Yanit;
+            if (talep.Durum == DestekDurum.BilgiBekleniyor)
+                talep.Durum = DestekDurum.Islemde;
+        }
+
         context.DestekTalebiYanitlari.Add(yanit);
-        
-        // Talep güncelle
-        talep.SonAktiviteTarihi = DateTime.UtcNow;
-        talep.UpdatedAt = DateTime.UtcNow;
-        
-        // İlk yanıt süresi hesapla
-        if (!talep.IlkYanitSuresiDakika.HasValue && yanit.KullaniciId.HasValue && !yanit.MusteriYaniti)
-        {
-            talep.IlkYanitSuresiDakika = (int)(DateTime.UtcNow - talep.CreatedAt).TotalMinutes;
-        }
-        
-        // Müşteri yanıtı ise durumu değiştir
-        if (yanit.MusteriYaniti && talep.Durum == DestekDurum.YanitBekleniyor)
-        {
-            talep.Durum = DestekDurum.Acik;
-        }
-        // Temsilci yanıtı ise
-        else if (!yanit.MusteriYaniti && !yanit.DahiliNot)
-        {
-            talep.Durum = DestekDurum.YanitBekleniyor;
-        }
-        
-        await context.SaveChangesAsync();
-        
-        // Hazır yanıt kullanım sayacı
-        if (yanit.HazirYanitId.HasValue)
-        {
-            await IncrementHazirYanitKullanimAsync(yanit.HazirYanitId.Value);
-        }
-        
-        // Aktivite kaydı
-        var aktiviteTuru = yanit.DahiliNot ? AktiviteTuru.YanitEklendi : AktiviteTuru.YanitEklendi;
-        var aciklama = yanit.MusteriYaniti ? "Müşteri yanıtı eklendi" : 
-                       yanit.DahiliNot ? "Dahili not eklendi" : "Yanıt eklendi";
-        await LogAktiviteInternalAsync(context, talepId, aktiviteTuru, aciklama, yanit.KullaniciId);
+        talep.SonAktiviteTarihi = simdi;
+        talep.UpdatedAt = simdi;
 
-        // E-posta bildirimi: Yanıt → müşteriye (temsilci yanıtıysa ve dahili not değilse)
-        if (!yanit.DahiliNot && !yanit.MusteriYaniti)
+        Aktivite(context, talep, AktiviteTuru.YanitEklendi,
+            yanit.DahiliNot ? "Dahili not eklendi" : ekip ? "Destek ekibi yanıt verdi" : "Talep eden mesaj yazdı", aktor.Id);
+        if (eskiAtanan != talep.AtananKullaniciId)
+            Aktivite(context, talep, AktiviteTuru.Atandi, $"Talep {aktor.AdSoyad} tarafından üstlenildi", aktor.Id);
+        if (eskiDurum != talep.Durum)
+            DurumAktivitesi(context, talep, eskiDurum, aktor.Id);
+
+        await context.SaveChangesAsync();
+
+        if (yanit.HazirYanitId.HasValue)
+            await HazirYanitKullanimiArttirAsync(context, yanit.HazirYanitId.Value);
+
+        await BildirAsync(context, async () =>
         {
-            _ = SendDestekEmailSafeAsync(() => SendYanitEmailAsync(talep, yanit.Icerik));
-        }
+            if (yanit.DahiliNot)
+            {
+                await DestekBildirimci.EkleAsync(context, [talep.AtananKullaniciId], aktor.Id, talep,
+                    "Dahili not eklendi", icerik, ekipLinki: true);
+            }
+            else if (ekip)
+            {
+                var bilgiIsteniyor = talep.Durum == DestekDurum.BilgiBekleniyor;
+                await DestekBildirimci.EkleAsync(context, [talep.OlusturanKullaniciId], aktor.Id, talep,
+                    bilgiIsteniyor ? "Destek ekibi sizden bilgi bekliyor" : "Talebinize yanıt verildi", icerik,
+                    ekipLinki: false, bilgiIsteniyor ? BildirimOncelik.Yuksek : BildirimOncelik.Normal);
+            }
+            else
+            {
+                await DestekBildirimci.EkleAsync(context, await EkipIlgilileriAsync(context, talep), aktor.Id, talep,
+                    "Talep eden mesaj yazdı", icerik, ekipLinki: true);
+            }
+        });
+
+        if (ekip && !yanit.DahiliNot)
+            _ = SendDestekEmailSafeAsync(() => SendYanitEmailAsync(talep, icerik));
 
         return yanit;
     }
 
-    public async Task<List<DestekTalebiYanit>> GetYanitlarAsync(int talepId)
+    public async Task<DestekTalebiEk> EkYukleAsync(int talepId, string dosyaAdi, string mimeTipi, Stream icerik, long boyut)
     {
+        var aktor = await OturumGerekliAsync();
         await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekTalebiYanitlari
-            .AsNoTracking()
-            .Include(x => x.Kullanici)
-            .Include(x => x.Ekler)
-            .Where(x => x.DestekTalebiId == talepId && !x.IsDeleted)
-            .OrderBy(x => x.CreatedAt)
-            .ToListAsync();
+
+        var talep = await TalepYukleAsync(context, talepId);
+        var rol = DestekErisim.Rol(aktor, talep, await YazilimDepartmanIdAsync(context));
+        if (!DestekErisim.Gorebilir(rol)) throw YetkiYok();
+        if (talep.Durum == DestekDurum.Kapali)
+            throw new InvalidOperationException("Kapanmış talebe dosya eklenemez.");
+
+        var ayarlar = await AyarlariOkuAsync(context);
+        EkDosyasiniDenetle(dosyaAdi, boyut, ayarlar);
+
+        using var bellek = new MemoryStream();
+        await icerik.CopyToAsync(bellek);
+        var ek = await EkKaydetAsync(context, talep, aktor, dosyaAdi, mimeTipi, bellek.ToArray(), ayarlar);
+
+        var ekip = DestekErisim.Isleyebilir(rol);
+        await BildirAsync(context, async () =>
+        {
+            if (ekip)
+                await DestekBildirimci.EkleAsync(context, [talep.OlusturanKullaniciId], aktor.Id, talep,
+                    "Talebinize dosya eklendi", ek.OrijinalDosyaAdi, ekipLinki: false);
+            else
+                await DestekBildirimci.EkleAsync(context, await EkipIlgilileriAsync(context, talep), aktor.Id, talep,
+                    "Talep eden dosya ekledi", ek.OrijinalDosyaAdi, ekipLinki: true);
+        });
+
+        return ek;
     }
 
-    public async Task<bool> DeleteYanitAsync(int yanitId)
+    public async Task<DestekEkIcerigi?> EkIndirAsync(int ekId)
     {
+        var aktor = await OturumGerekliAsync();
         await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var yanit = await context.DestekTalebiYanitlari.FindAsync(yanitId);
-        if (yanit == null) return false;
 
-        yanit.IsDeleted = true;
-        yanit.UpdatedAt = DateTime.UtcNow;
-        await context.SaveChangesAsync();
-        
-        return true;
+        var ek = await context.DestekTalebiEkleri.AsNoTracking().FirstOrDefaultAsync(e => e.Id == ekId);
+        if (ek?.DestekTalebiId == null) return null;
+
+        var talep = await context.DestekTalepleri.AsNoTracking().FirstOrDefaultAsync(t => t.Id == ek.DestekTalebiId);
+        if (talep == null) return null;
+        talep.Durum = DestekKurallari.Normallestir(talep.Durum);
+
+        var rol = DestekErisim.Rol(aktor, talep, await YazilimDepartmanIdAsync(context));
+        if (!DestekErisim.Gorebilir(rol)) throw YetkiYok();
+        if (!DestekErisim.Isleyebilir(rol) && ek.YanitId.HasValue &&
+            await context.DestekTalebiYanitlari.AnyAsync(y => y.Id == ek.YanitId && y.DahiliNot))
+            throw YetkiYok();
+
+        byte[]? icerik;
+        if (string.IsNullOrWhiteSpace(ek.DosyaYolu))
+        {
+            icerik = null;
+        }
+        else if (Path.IsPathRooted(ek.DosyaYolu))
+        {
+            var eskiYol = ResolveLegacyAttachmentPath(ek.DosyaYolu);
+            icerik = File.Exists(eskiYol) ? await File.ReadAllBytesAsync(eskiYol) : null;
+        }
+        else
+        {
+            icerik = await _secureFileService.ReadDecryptedAsync(ek.DosyaYolu);
+        }
+
+        if (icerik == null) return null;
+        var mime = string.IsNullOrWhiteSpace(ek.MimeTipi) ? "application/octet-stream" : ek.MimeTipi;
+        return new DestekEkIcerigi(ek.OrijinalDosyaAdi, mime, icerik);
     }
 
     #endregion
 
-    #region Dosya Ekleri
+    #region Ortak yardımcılar
 
-    public async Task<DestekTalebiEk> AddEkAsync(int talepId, DestekTalebiEk ek, Stream fileStream)
+    private async Task<DestekKullanici> OturumGerekliAsync() =>
+        await _kullaniciSaglayici.GetirAsync() ?? throw new UnauthorizedAccessException("Bu işlem için oturum açmalısınız.");
+
+    private static UnauthorizedAccessException YetkiYok(string? mesaj = null) =>
+        new(mesaj ?? "Bu talep üzerinde bu işlem için yetkiniz yok.");
+
+    /// <summary>Talebi değiştirmek üzere (izlenen) yükler; eski durum kodunu yeni akışa çevirir.</summary>
+    private static async Task<DestekTalebi> TalepYukleAsync(ApplicationDbContext context, int talepId)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var talep = await context.DestekTalepleri.FindAsync(talepId);
-        if (talep == null)
-            throw new InvalidOperationException("Talep bulunamadı");
-
-        using var content = new MemoryStream();
-        await fileStream.CopyToAsync(content);
-        var dosyaAdi = $"{Guid.NewGuid()}_{Path.GetFileName(ek.OrijinalDosyaAdi)}";
-        var dosyaYolu = await _secureFileService.SaveEncryptedAsync(
-            $"destek/{talepId}", dosyaAdi, content.ToArray());
-        
-        ek.DestekTalebiId = talepId;
-        ek.DosyaAdi = dosyaAdi;
-        ek.DosyaYolu = dosyaYolu;
-        ek.CreatedAt = DateTime.UtcNow;
-        
-        context.DestekTalebiEkleri.Add(ek);
-        
-        talep.SonAktiviteTarihi = DateTime.UtcNow;
-        talep.UpdatedAt = DateTime.UtcNow;
-        
-        try
-        {
-            await context.SaveChangesAsync();
-        }
-        catch (Exception saveException)
-        {
-            await CompensateAttachmentSaveAsync(dosyaYolu, saveException);
-            throw;
-        }
-        
-        await LogAktiviteInternalAsync(context, talepId, AktiviteTuru.DosyaEklendi, 
-            $"Dosya eklendi: {ek.OrijinalDosyaAdi}", ek.YukleyenKullaniciId);
-        
-        return ek;
+        var talep = await context.DestekTalepleri.FirstOrDefaultAsync(t => t.Id == talepId)
+            ?? throw new InvalidOperationException("Talep bulunamadı.");
+        talep.Durum = DestekKurallari.Normallestir(talep.Durum);
+        return talep;
     }
 
-    public async Task<DestekTalebiEk> AddYanitEkAsync(int yanitId, DestekTalebiEk ek, Stream fileStream)
+    private static void Normallestir(IEnumerable<DestekTalebi> talepler)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var yanit = await context.DestekTalebiYanitlari.FindAsync(yanitId);
-        if (yanit == null)
-            throw new InvalidOperationException("Yanıt bulunamadı");
+        foreach (var talep in talepler)
+            talep.Durum = DestekKurallari.Normallestir(talep.Durum);
+    }
 
-        using var content = new MemoryStream();
-        await fileStream.CopyToAsync(content);
-        var dosyaAdi = $"{Guid.NewGuid()}_{Path.GetFileName(ek.OrijinalDosyaAdi)}";
-        var dosyaYolu = await _secureFileService.SaveEncryptedAsync(
-            $"destek/{yanit.DestekTalebiId}", dosyaAdi, content.ToArray());
-        
-        ek.YanitId = yanitId;
-        ek.DestekTalebiId = yanit.DestekTalebiId;
-        ek.DosyaAdi = dosyaAdi;
-        ek.DosyaYolu = dosyaYolu;
-        ek.CreatedAt = DateTime.UtcNow;
-        
-        context.DestekTalebiEkleri.Add(ek);
-        try
+    private static int Dakika(DateTime baslangic, DateTime bitis) => Math.Max(0, (int)(bitis - baslangic).TotalMinutes);
+
+    private static string Kirp(string? metin, int uzunluk)
+    {
+        var temiz = metin?.Trim() ?? string.Empty;
+        return temiz.Length <= uzunluk ? temiz : temiz[..uzunluk];
+    }
+
+    private static async Task TalepAlanlariniDogrulaAsync(ApplicationDbContext context, DestekTalebi talep)
+    {
+        talep.Konu = Kirp(talep.Konu, 500);
+        talep.Aciklama = talep.Aciklama?.Trim() ?? string.Empty;
+        talep.MusteriAdi = Kirp(talep.MusteriAdi, 200);
+        talep.MusteriEmail = Kirp(talep.MusteriEmail, 200);
+        talep.MusteriTelefon = string.IsNullOrWhiteSpace(talep.MusteriTelefon) ? null : Kirp(talep.MusteriTelefon, 20);
+        talep.Etiketler = EtiketleriDuzenle(talep.Etiketler);
+
+        if (string.IsNullOrWhiteSpace(talep.Konu))
+            throw new InvalidOperationException("Konu zorunludur.");
+        if (string.IsNullOrWhiteSpace(talep.Aciklama))
+            throw new InvalidOperationException("Açıklama zorunludur.");
+        if (!await context.DestekDepartmanlari.AnyAsync(d => d.Id == talep.DepartmanId && d.Aktif))
+            throw new InvalidOperationException("Geçerli bir departman seçin.");
+
+        if (talep.KategoriId.HasValue &&
+            !await context.DestekKategorileri.AnyAsync(k => k.Id == talep.KategoriId && k.Aktif &&
+                                                           (k.DepartmanId == null || k.DepartmanId == talep.DepartmanId)))
+            talep.KategoriId = null;
+    }
+
+    private static string? EtiketleriDuzenle(string? etiketler)
+    {
+        if (string.IsNullOrWhiteSpace(etiketler)) return null;
+        var liste = etiketler
+            .Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(e => Kirp(e, 40))
+            .Where(e => e.Length > 0)
+            .Distinct(StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+        var birlesik = string.Join(", ", liste);
+        return birlesik.Length == 0 ? null : Kirp(birlesik, 500);
+    }
+
+    /// <summary>Yeni talebi (ve varsa sistem notlarını) kaydeder; gönderilmişse ekibe duyurur.</summary>
+    private async Task YeniTalepKaydetAsync(
+        ApplicationDbContext context, DestekTalebi talep, DestekKullanici? aktor, string aktiviteMetni,
+        IEnumerable<DestekTalebiYanit>? ekYanitlar = null)
+    {
+        talep.TalepNo = await _numaraSerisi.GenerateFormattedAsync("TKT", 0, 6);
+        var simdi = DateTime.UtcNow;
+        talep.CreatedAt = simdi;
+        talep.SonAktiviteTarihi = simdi;
+        if (talep.Durum != DestekDurum.Taslak)
+            await SlaUygulaAsync(context, talep, simdi);
+
+        context.DestekTalepleri.Add(talep);
+        Aktivite(context, talep, AktiviteTuru.Olusturuldu, aktiviteMetni, aktor?.Id, null, DestekKurallari.Etiket(talep.Durum));
+        foreach (var yanit in ekYanitlar ?? [])
         {
-            await context.SaveChangesAsync();
-        }
-        catch (Exception saveException)
-        {
-            await CompensateAttachmentSaveAsync(dosyaYolu, saveException);
-            throw;
-        }
-        
-        return ek;
-    }
-
-    public async Task<List<DestekTalebiEk>> GetEklerAsync(int talepId)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekTalebiEkleri
-            .AsNoTracking()
-            .Include(x => x.YukleyenKullanici)
-            .Where(x => x.DestekTalebiId == talepId && !x.IsDeleted)
-            .OrderBy(x => x.CreatedAt)
-            .ToListAsync();
-    }
-
-    public async Task<DestekTalebiEk?> GetEkByIdAsync(int ekId)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekTalebiEkleri
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == ekId);
-    }
-
-    public async Task<Stream?> GetEkDosyaStreamAsync(int ekId)
-    {
-        var ek = await GetEkByIdAsync(ekId);
-        if (ek == null || string.IsNullOrWhiteSpace(ek.DosyaYolu))
-            return null;
-
-        if (Path.IsPathRooted(ek.DosyaYolu))
-        {
-            var legacyPath = ResolveLegacyAttachmentPath(ek.DosyaYolu);
-            return File.Exists(legacyPath)
-                ? new FileStream(legacyPath, FileMode.Open, FileAccess.Read)
-                : null;
+            yanit.DestekTalebi = talep;
+            yanit.CreatedAt = simdi;
+            context.DestekTalebiYanitlari.Add(yanit);
         }
 
-        var content = await _secureFileService.ReadDecryptedAsync(ek.DosyaYolu);
-        return content == null ? null : new MemoryStream(content, writable: false);
-    }
-
-    public async Task<bool> DeleteEkAsync(int ekId)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var ek = await context.DestekTalebiEkleri.FindAsync(ekId);
-        if (ek == null) return false;
-
-        ek.IsDeleted = true;
-        ek.UpdatedAt = DateTime.UtcNow;
         await context.SaveChangesAsync();
 
-        // Soft-delete geri alınabilir. Hem eski düz dosya hem şifreli dosya korunur.
-        _logger.LogInformation("Destek eki pasifleştirildi; dosya geri alma için korundu. EkId={EkId}", ekId);
-        
-        return true;
+        if (talep.Durum == DestekDurum.Yeni)
+            await GonderilenTalebiDuyurAsync(context, talep, aktor);
+    }
+
+    /// <summary>Gönderilen talebi departman ekibine bildirir, talep edene onay e-postası atar.</summary>
+    private async Task GonderilenTalebiDuyurAsync(ApplicationDbContext context, DestekTalebi talep, DestekKullanici? aktor)
+    {
+        await BildirAsync(context, async () =>
+        {
+            var alicilar = await DestekBildirimci.EkipAlicilariAsync(context, talep.DepartmanId, DestekKurallari.PersonelYetkisi);
+            await DestekBildirimci.EkleAsync(context, alicilar, aktor?.Id, talep,
+                talep.Kaynak == DestekKaynak.HataBildirimi ? "Yeni hata bildirimi" : "Yeni destek talebi",
+                $"{talep.MusteriAdi}: {talep.Konu}", ekipLinki: true,
+                talep.Oncelik >= DestekOncelik.Acil ? BildirimOncelik.Yuksek : BildirimOncelik.Normal);
+        });
+
+        _ = SendDestekEmailSafeAsync(() => SendYeniTalepEmailAsync(talep));
+    }
+
+    private static async Task SlaUygulaAsync(ApplicationDbContext context, DestekTalebi talep, DateTime baslangic)
+    {
+        var saat = await context.DestekSlaListesi.AsNoTracking()
+            .Where(x => x.Oncelik == talep.Oncelik && x.Aktif)
+            .OrderBy(x => x.Id)
+            .Select(x => (int?)x.CozumSuresi)
+            .FirstOrDefaultAsync();
+        if (saat is null or <= 0)
+            saat = await context.DestekDepartmanlari.AsNoTracking()
+                .Where(d => d.Id == talep.DepartmanId)
+                .Select(d => d.VarsayilanSlaSuresi)
+                .FirstOrDefaultAsync();
+
+        if (saat is > 0)
+        {
+            talep.SlaSuresi = saat;
+            talep.SlaBitisTarihi = baslangic.AddHours(saat.Value);
+        }
+        else
+        {
+            talep.SlaSuresi = null;
+            talep.SlaBitisTarihi = null;
+        }
+        talep.SlaAsildi = false;
+    }
+
+    private static void Aktivite(
+        ApplicationDbContext context, DestekTalebi talep, AktiviteTuru tur, string aciklama, int? kullaniciId,
+        string? eskiDeger = null, string? yeniDeger = null)
+    {
+        context.DestekTalebiAktiviteleri.Add(new DestekTalebiAktivite
+        {
+            DestekTalebi = talep,
+            AktiviteTuru = tur,
+            Aciklama = Kirp(aciklama, 1000),
+            KullaniciId = kullaniciId,
+            EskiDeger = eskiDeger == null ? null : Kirp(eskiDeger, 500),
+            YeniDeger = yeniDeger == null ? null : Kirp(yeniDeger, 500),
+            CreatedAt = DateTime.UtcNow
+        });
+    }
+
+    private static void DurumAktivitesi(ApplicationDbContext context, DestekTalebi talep, DestekDurum eskiDurum, int? kullaniciId)
+    {
+        var eski = DestekKurallari.Etiket(eskiDurum);
+        var yeni = DestekKurallari.Etiket(talep.Durum);
+        Aktivite(context, talep, AktiviteTuru.DurumDegisti, $"Durum: {eski} → {yeni}", kullaniciId, eski, yeni);
+    }
+
+    /// <summary>Ekipten bu talepten haberdar edilecekler: atanan kişi, yoksa departman ekibi.</summary>
+    private static async Task<List<int?>> EkipIlgilileriAsync(ApplicationDbContext context, DestekTalebi talep)
+    {
+        if (talep.AtananKullaniciId.HasValue) return [talep.AtananKullaniciId];
+        var yetki = talep.Durum == DestekDurum.YazilimEkibinde ? DestekKurallari.YazilimYetkisi : DestekKurallari.PersonelYetkisi;
+        return await DestekBildirimci.EkipAlicilariAsync(context, talep.DepartmanId, yetki);
+    }
+
+    /// <summary>Bildirimleri yazar; bildirim hatası işlemi bozmaz.</summary>
+    private async Task BildirAsync(ApplicationDbContext context, Func<Task> ekle)
+    {
+        try
+        {
+            await ekle();
+            await context.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Destek bildirimi yazılamadı");
+            foreach (var giris in context.ChangeTracker.Entries<Bildirim>().Where(g => g.State == EntityState.Added).ToList())
+                giris.State = EntityState.Detached;
+        }
+    }
+
+    private static string HataAciklamasi(SorunBildirimi bildirim)
+    {
+        var metin = new StringBuilder(bildirim.Aciklama.Trim());
+        metin.AppendLine().AppendLine().AppendLine("— Otomatik eklenen bilgiler —");
+        if (!string.IsNullOrWhiteSpace(bildirim.Sayfa))
+            metin.AppendLine($"Sayfa: {bildirim.Sayfa}");
+        if (!string.IsNullOrWhiteSpace(bildirim.HataMesaji))
+            metin.AppendLine($"Görülen hata: {DestekBildirimci.Kisalt(bildirim.HataMesaji, 500)}");
+        if (bildirim.HataZamaniUtc.HasValue)
+            metin.AppendLine($"Hata zamanı: {BusinessTime.LocalAt(bildirim.HataZamaniUtc.Value):dd.MM.yyyy HH:mm:ss}");
+        metin.Append($"Bildirim zamanı: {BusinessTime.Now:dd.MM.yyyy HH:mm:ss}");
+        return metin.ToString();
+    }
+
+    private static string TeknikNot(SorunBildirimi bildirim)
+    {
+        var metin = new StringBuilder("Otomatik teknik bilgiler (yalnız ekip görür)");
+        void Satir(string baslik, string? deger)
+        {
+            if (!string.IsNullOrWhiteSpace(deger)) metin.Append('\n').Append(baslik).Append(": ").Append(deger.Trim());
+        }
+
+        Satir("Sayfa", bildirim.Sayfa);
+        Satir("Önceki sayfa", bildirim.OncekiSayfa);
+        Satir("Hata zamanı", bildirim.HataZamaniUtc.HasValue ? BusinessTime.LocalAt(bildirim.HataZamaniUtc.Value).ToString("dd.MM.yyyy HH:mm:ss") : null);
+        Satir("Hata türü", bildirim.HataTuru);
+        Satir("Hata mesajı", bildirim.HataMesaji);
+        Satir("Tarayıcı", bildirim.Tarayici);
+        Satir("Uygulama sürümü", bildirim.UygulamaSurumu);
+        if (!string.IsNullOrWhiteSpace(bildirim.YiginIzi))
+            metin.Append("\nYığın izi:\n").Append(bildirim.YiginIzi.Trim());
+
+        var sonuc = metin.ToString();
+        return sonuc.Length <= TeknikMetinLimiti ? sonuc : sonuc[..TeknikMetinLimiti] + "\n…(kısaltıldı)";
+    }
+
+    private static void EkDosyasiniDenetle(string dosyaAdi, long boyut, DestekGenelAyarlar ayarlar)
+    {
+        var uzanti = Path.GetExtension(Path.GetFileName(dosyaAdi) ?? string.Empty).ToLowerInvariant();
+        var izinli = ayarlar.IzinliUzantilar();
+        if (string.IsNullOrEmpty(uzanti) || !izinli.Contains(uzanti))
+            throw new InvalidOperationException($"Bu dosya türü eklenemez ({(string.IsNullOrEmpty(uzanti) ? "uzantısız" : uzanti)}). İzin verilenler: {string.Join(", ", izinli)}");
+
+        var sinirMb = Math.Clamp(ayarlar.MaksimumDosyaBoyutuMB, 1, 50);
+        if (boyut <= 0)
+            throw new InvalidOperationException("Dosya boş.");
+        if (boyut > sinirMb * 1024L * 1024L)
+            throw new InvalidOperationException($"Dosya en fazla {sinirMb} MB olabilir.");
+    }
+
+    private async Task<DestekTalebiEk> EkKaydetAsync(
+        ApplicationDbContext context, DestekTalebi talep, DestekKullanici aktor, string dosyaAdi, string mimeTipi,
+        byte[] icerik, DestekGenelAyarlar ayarlar)
+    {
+        var ad = Path.GetFileName(dosyaAdi);
+        if (string.IsNullOrWhiteSpace(ad)) ad = "dosya";
+        EkDosyasiniDenetle(ad, icerik.LongLength, ayarlar);
+
+        var depoAdi = Kirp($"{Guid.NewGuid()}_{ad}", 255);
+        var yol = await _secureFileService.SaveEncryptedAsync($"destek/{talep.Id}", depoAdi, icerik);
+
+        var simdi = DateTime.UtcNow;
+        var ek = new DestekTalebiEk
+        {
+            DestekTalebiId = talep.Id,
+            DosyaAdi = depoAdi,
+            OrijinalDosyaAdi = Kirp(ad, 255),
+            DosyaYolu = yol,
+            DosyaBoyutu = icerik.LongLength,
+            MimeTipi = Kirp(string.IsNullOrWhiteSpace(mimeTipi) ? "application/octet-stream" : mimeTipi, 100),
+            YukleyenKullaniciId = aktor.Id,
+            CreatedAt = simdi
+        };
+        context.DestekTalebiEkleri.Add(ek);
+        talep.SonAktiviteTarihi = simdi;
+        talep.UpdatedAt = simdi;
+        Aktivite(context, talep, AktiviteTuru.DosyaEklendi, $"Dosya eklendi: {ek.OrijinalDosyaAdi}", aktor.Id);
+
+        try
+        {
+            await context.SaveChangesAsync();
+        }
+        catch (Exception saveException)
+        {
+            await CompensateAttachmentSaveAsync(yol, saveException);
+            throw;
+        }
+
+        return ek;
     }
 
     private async Task CompensateAttachmentSaveAsync(string path, Exception saveException)
@@ -697,936 +760,14 @@ public class DestekTalebiService : IDestekTalebiService
 
     #endregion
 
-    #region Filtre ve Arama
-
-    public async Task<List<DestekTalebi>> GetByDurumAsync(DestekDurum durum)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekTalepleri
-            .AsNoTracking()
-            .Include(x => x.Departman)
-            .Include(x => x.AtananKullanici)
-            .Where(x => x.Durum == durum)
-            .OrderByDescending(x => x.SonAktiviteTarihi)
-            .ToListAsync();
-    }
-
-    public async Task<List<DestekTalebi>> GetByDepartmanAsync(int departmanId)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekTalepleri
-            .AsNoTracking()
-            .Include(x => x.Kategori)
-            .Include(x => x.AtananKullanici)
-            .Where(x => x.DepartmanId == departmanId)
-            .OrderByDescending(x => x.SonAktiviteTarihi)
-            .ToListAsync();
-    }
-
-    public async Task<List<DestekTalebi>> GetByKategoriAsync(int kategoriId)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekTalepleri
-            .AsNoTracking()
-            .Include(x => x.Departman)
-            .Include(x => x.AtananKullanici)
-            .Where(x => x.KategoriId == kategoriId)
-            .OrderByDescending(x => x.SonAktiviteTarihi)
-            .ToListAsync();
-    }
-
-    public async Task<List<DestekTalebi>> GetByAtananKullaniciAsync(int kullaniciId)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekTalepleri
-            .AsNoTracking()
-            .Include(x => x.Departman)
-            .Include(x => x.Kategori)
-            .Where(x => x.AtananKullaniciId == kullaniciId)
-            .OrderByDescending(x => x.SonAktiviteTarihi)
-            .ToListAsync();
-    }
-
-    public async Task<List<DestekTalebi>> GetByCariAsync(int cariId)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekTalepleri
-            .AsNoTracking()
-            .Include(x => x.Departman)
-            .Include(x => x.Kategori)
-            .Where(x => x.CariId == cariId)
-            .OrderByDescending(x => x.SonAktiviteTarihi)
-            .ToListAsync();
-    }
-
-    public async Task<List<DestekTalebi>> AramaAsync(string aramaMetni)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var arama = aramaMetni.ToLower();
-        return await context.DestekTalepleri
-            .AsNoTracking()
-            .Include(x => x.Departman)
-            .Include(x => x.Kategori)
-            .Where(x => 
-                x.TalepNo.ToLower().Contains(arama) ||
-                x.Konu.ToLower().Contains(arama) ||
-                x.Aciklama.ToLower().Contains(arama) ||
-                x.MusteriAdi.ToLower().Contains(arama) ||
-                x.MusteriEmail.ToLower().Contains(arama) ||
-                (x.Etiketler != null && x.Etiketler.ToLower().Contains(arama)))
-            .OrderByDescending(x => x.SonAktiviteTarihi)
-            .Take(50)
-            .ToListAsync();
-    }
-
-    public async Task<List<DestekTalebi>> GetSlaAsildiBekleyenlerAsync()
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekTalepleri
-            .AsNoTracking()
-            .Include(x => x.Departman)
-            .Include(x => x.AtananKullanici)
-            .Where(x => x.SlaAsildi && x.Durum != DestekDurum.Kapali && x.Durum != DestekDurum.Cozuldu)
-            .OrderByDescending(x => x.SonAktiviteTarihi)
-            .ToListAsync();
-    }
-
-    #endregion
-
-    #region Departman CRUD
-
-    public async Task<List<DestekDepartman>> GetDepartmanlarAsync()
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekDepartmanlari
-            .AsNoTracking()
-            .Include(x => x.Kategoriler.Where(k => !k.IsDeleted && k.Aktif))
-            .Where(x => !x.IsDeleted)
-            .OrderBy(x => x.SiraNo)
-            .ThenBy(x => x.Ad)
-            .ToListAsync();
-    }
-
-    public async Task<DestekDepartman?> GetDepartmanByIdAsync(int id)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekDepartmanlari
-            .AsNoTracking()
-            .Include(x => x.Kategoriler)
-            .Include(x => x.Uyeler)
-                .ThenInclude(u => u.Kullanici)
-            .FirstOrDefaultAsync(x => x.Id == id);
-    }
-
-    public async Task<DestekDepartman> CreateDepartmanAsync(DestekDepartman departman)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        departman.CreatedAt = DateTime.UtcNow;
-        context.DestekDepartmanlari.Add(departman);
-        await context.SaveChangesAsync();
-        return departman;
-    }
-
-    public async Task<DestekDepartman> UpdateDepartmanAsync(DestekDepartman departman)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        departman.UpdatedAt = DateTime.UtcNow;
-        context.DestekDepartmanlari.Update(departman);
-        await context.SaveChangesAsync();
-        return departman;
-    }
-
-    public async Task DeleteDepartmanAsync(int id)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var departman = await context.DestekDepartmanlari.FindAsync(id);
-        if (departman != null)
-        {
-            departman.IsDeleted = true;
-            departman.UpdatedAt = DateTime.UtcNow;
-            await context.SaveChangesAsync();
-        }
-    }
-
-    public async Task<List<DestekDepartmanUye>> GetDepartmanUyeleriAsync(int departmanId)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekDepartmanUyeleri
-            .AsNoTracking()
-            .Include(x => x.Kullanici)
-            .Where(x => x.DepartmanId == departmanId && !x.IsDeleted)
-            .ToListAsync();
-    }
-
-    public async Task<bool> AddDepartmanUyeAsync(int departmanId, int kullaniciId, bool yonetici = false)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var mevcut = await context.DestekDepartmanUyeleri
-            .FirstOrDefaultAsync(x => x.DepartmanId == departmanId && x.KullaniciId == kullaniciId);
-        
-        if (mevcut != null)
-        {
-            if (mevcut.IsDeleted)
-            {
-                mevcut.IsDeleted = false;
-                mevcut.Yonetici = yonetici;
-                mevcut.UpdatedAt = DateTime.UtcNow;
-                await context.SaveChangesAsync();
-            }
-            return true;
-        }
-
-        var uye = new DestekDepartmanUye
-        {
-            DepartmanId = departmanId,
-            KullaniciId = kullaniciId,
-            Yonetici = yonetici,
-            CreatedAt = DateTime.UtcNow
-        };
-        context.DestekDepartmanUyeleri.Add(uye);
-        await context.SaveChangesAsync();
-        return true;
-    }
-
-    public async Task<bool> RemoveDepartmanUyeAsync(int departmanId, int kullaniciId)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var uye = await context.DestekDepartmanUyeleri
-            .FirstOrDefaultAsync(x => x.DepartmanId == departmanId && x.KullaniciId == kullaniciId);
-        
-        if (uye == null) return false;
-
-        uye.IsDeleted = true;
-        uye.UpdatedAt = DateTime.UtcNow;
-        await context.SaveChangesAsync();
-        return true;
-    }
-
-    #endregion
-
-    #region Kategori CRUD
-
-    public async Task<List<DestekKategori>> GetKategorilerAsync()
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekKategorileri
-            .AsNoTracking()
-            .Include(x => x.Departman)
-            .Where(x => !x.IsDeleted)
-            .OrderBy(x => x.SiraNo)
-            .ThenBy(x => x.Ad)
-            .ToListAsync();
-    }
-
-    public async Task<List<DestekKategori>> GetKategorilerByDepartmanAsync(int departmanId)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekKategorileri
-            .AsNoTracking()
-            .Where(x => x.DepartmanId == departmanId && !x.IsDeleted && x.Aktif)
-            .OrderBy(x => x.SiraNo)
-            .ThenBy(x => x.Ad)
-            .ToListAsync();
-    }
-
-    public async Task<DestekKategori?> GetKategoriByIdAsync(int id)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekKategorileri
-            .AsNoTracking()
-            .Include(x => x.Departman)
-            .FirstOrDefaultAsync(x => x.Id == id);
-    }
-
-    public async Task<DestekKategori> CreateKategoriAsync(DestekKategori kategori)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        kategori.CreatedAt = DateTime.UtcNow;
-        context.DestekKategorileri.Add(kategori);
-        await context.SaveChangesAsync();
-        return kategori;
-    }
-
-    public async Task<DestekKategori> UpdateKategoriAsync(DestekKategori kategori)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        kategori.UpdatedAt = DateTime.UtcNow;
-        context.DestekKategorileri.Update(kategori);
-        await context.SaveChangesAsync();
-        return kategori;
-    }
-
-    public async Task DeleteKategoriAsync(int id)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var kategori = await context.DestekKategorileri.FindAsync(id);
-        if (kategori != null)
-        {
-            kategori.IsDeleted = true;
-            kategori.UpdatedAt = DateTime.UtcNow;
-            await context.SaveChangesAsync();
-        }
-    }
-
-    #endregion
-
-    #region Hazır Yanıtlar
-
-    public async Task<List<DestekHazirYanit>> GetHazirYanitlarAsync(int? departmanId = null, int? kategoriId = null)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var query = context.DestekHazirYanitlari
-            .AsNoTracking()
-            .Include(x => x.Departman)
-            .Include(x => x.Kategori)
-            .Where(x => !x.IsDeleted && x.Aktif);
-
-        if (departmanId.HasValue)
-            query = query.Where(x => x.DepartmanId == null || x.DepartmanId == departmanId.Value);
-
-        if (kategoriId.HasValue)
-            query = query.Where(x => x.KategoriId == null || x.KategoriId == kategoriId.Value);
-
-        return await query
-            .OrderBy(x => x.SiraNo)
-            .ThenBy(x => x.Ad)
-            .ToListAsync();
-    }
-
-    public async Task<DestekHazirYanit?> GetHazirYanitByIdAsync(int id)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekHazirYanitlari
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == id);
-    }
-
-    public async Task<DestekHazirYanit> CreateHazirYanitAsync(DestekHazirYanit hazirYanit)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        hazirYanit.CreatedAt = DateTime.UtcNow;
-        context.DestekHazirYanitlari.Add(hazirYanit);
-        await context.SaveChangesAsync();
-        return hazirYanit;
-    }
-
-    public async Task<DestekHazirYanit> UpdateHazirYanitAsync(DestekHazirYanit hazirYanit)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        hazirYanit.UpdatedAt = DateTime.UtcNow;
-        context.DestekHazirYanitlari.Update(hazirYanit);
-        await context.SaveChangesAsync();
-        return hazirYanit;
-    }
-
-    public async Task DeleteHazirYanitAsync(int id)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var hazirYanit = await context.DestekHazirYanitlari.FindAsync(id);
-        if (hazirYanit != null)
-        {
-            hazirYanit.IsDeleted = true;
-            hazirYanit.UpdatedAt = DateTime.UtcNow;
-            await context.SaveChangesAsync();
-        }
-    }
-
-    public async Task IncrementHazirYanitKullanimAsync(int hazirYanitId)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        await context.DestekHazirYanitlari
-            .Where(x => x.Id == hazirYanitId)
-            .ExecuteUpdateAsync(x => x.SetProperty(p => p.KullanimSayisi, p => p.KullanimSayisi + 1));
-    }
-
-    #endregion
-
-    #region Bilgi Bankası
-
-    public async Task<PagedResult<DestekBilgiBankasi>> GetBilgiBankasiPagedAsync(BilgiBankasiFilterParams filter)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var query = context.DestekBilgiBankasiMakaleleri
-            .AsNoTracking()
-            .Include(x => x.Kategori)
-            .Include(x => x.Yazar)
-            .Where(x => !x.IsDeleted);
-
-        if (!string.IsNullOrWhiteSpace(filter.AramaMetni))
-        {
-            var arama = filter.AramaMetni.ToLower();
-            query = query.Where(x => 
-                x.Baslik.ToLower().Contains(arama) ||
-                x.Icerik.ToLower().Contains(arama) ||
-                (x.Etiketler != null && x.Etiketler.ToLower().Contains(arama)));
-        }
-
-        if (filter.KategoriId.HasValue)
-            query = query.Where(x => x.KategoriId == filter.KategoriId.Value);
-
-        if (filter.Durum.HasValue)
-            query = query.Where(x => x.Durum == filter.Durum.Value);
-
-        if (!string.IsNullOrWhiteSpace(filter.Etiket))
-            query = query.Where(x => x.Etiketler != null && x.Etiketler.Contains(filter.Etiket));
-
-        query = filter.SortBy?.ToLower() switch
-        {
-            "baslik" => filter.SortDesc ? query.OrderByDescending(x => x.Baslik) : query.OrderBy(x => x.Baslik),
-            "goruntulemesayisi" => filter.SortDesc ? query.OrderByDescending(x => x.GoruntulemeSayisi) : query.OrderBy(x => x.GoruntulemeSayisi),
-            _ => filter.SortDesc ? query.OrderByDescending(x => x.CreatedAt) : query.OrderBy(x => x.CreatedAt)
-        };
-
-        var totalCount = await query.CountAsync();
-        var items = await query
-            .Skip((filter.Page - 1) * filter.PageSize)
-            .Take(filter.PageSize)
-            .ToListAsync();
-
-        return new PagedResult<DestekBilgiBankasi>
-        {
-            Items = items,
-            TotalCount = totalCount,
-            PageNumber = filter.Page,
-            PageSize = filter.PageSize
-        };
-    }
-
-    public async Task<List<DestekBilgiBankasi>> GetBilgiBankasiAramaAsync(string aramaMetni)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var arama = aramaMetni.ToLower();
-        return await context.DestekBilgiBankasiMakaleleri
-            .AsNoTracking()
-            .Include(x => x.Kategori)
-            .Where(x => !x.IsDeleted && x.Durum == BilgiBankasiDurum.Yayinda &&
-                (x.Baslik.ToLower().Contains(arama) ||
-                 x.Icerik.ToLower().Contains(arama) ||
-                 (x.Etiketler != null && x.Etiketler.ToLower().Contains(arama))))
-            .OrderByDescending(x => x.GoruntulemeSayisi)
-            .Take(20)
-            .ToListAsync();
-    }
-
-    public async Task<DestekBilgiBankasi?> GetBilgiBankasiByIdAsync(int id)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekBilgiBankasiMakaleleri
-            .AsNoTracking()
-            .Include(x => x.Kategori)
-            .Include(x => x.Yazar)
-            .FirstOrDefaultAsync(x => x.Id == id);
-    }
-
-    public async Task<DestekBilgiBankasi?> GetBilgiBankasiBySlugAsync(string slug)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekBilgiBankasiMakaleleri
-            .AsNoTracking()
-            .Include(x => x.Kategori)
-            .Include(x => x.Yazar)
-            .FirstOrDefaultAsync(x => x.Slug == slug && x.Durum == BilgiBankasiDurum.Yayinda);
-    }
-
-    public async Task<DestekBilgiBankasi> CreateBilgiBankasiAsync(DestekBilgiBankasi makale)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        // Slug oluştur
-        if (string.IsNullOrEmpty(makale.Slug))
-            makale.Slug = GenerateSlug(makale.Baslik);
-        
-        makale.CreatedAt = DateTime.UtcNow;
-        
-        if (makale.Durum == BilgiBankasiDurum.Yayinda && !makale.YayinlanmaTarihi.HasValue)
-            makale.YayinlanmaTarihi = DateTime.UtcNow;
-        
-        context.DestekBilgiBankasiMakaleleri.Add(makale);
-        await context.SaveChangesAsync();
-        return makale;
-    }
-
-    public async Task<DestekBilgiBankasi> UpdateBilgiBankasiAsync(DestekBilgiBankasi makale)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        makale.UpdatedAt = DateTime.UtcNow;
-        
-        if (makale.Durum == BilgiBankasiDurum.Yayinda && !makale.YayinlanmaTarihi.HasValue)
-            makale.YayinlanmaTarihi = DateTime.UtcNow;
-        
-        context.DestekBilgiBankasiMakaleleri.Update(makale);
-        await context.SaveChangesAsync();
-        return makale;
-    }
-
-    public async Task DeleteBilgiBankasiAsync(int id)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var makale = await context.DestekBilgiBankasiMakaleleri.FindAsync(id);
-        if (makale != null)
-        {
-            makale.IsDeleted = true;
-            makale.UpdatedAt = DateTime.UtcNow;
-            await context.SaveChangesAsync();
-        }
-    }
-
-    public async Task IncrementBilgiBankasiGoruntulenmeAsync(int makaleId)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        await context.DestekBilgiBankasiMakaleleri
-            .Where(x => x.Id == makaleId)
-            .ExecuteUpdateAsync(x => x.SetProperty(p => p.GoruntulemeSayisi, p => p.GoruntulemeSayisi + 1));
-    }
-
-    public async Task<bool> YararliBulAsync(int makaleId, bool yararli)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        if (yararli)
-        {
-            await context.DestekBilgiBankasiMakaleleri
-                .Where(x => x.Id == makaleId)
-                .ExecuteUpdateAsync(x => x.SetProperty(p => p.YararliBulmaSayisi, p => p.YararliBulmaSayisi + 1));
-        }
-        else
-        {
-            await context.DestekBilgiBankasiMakaleleri
-                .Where(x => x.Id == makaleId)
-                .ExecuteUpdateAsync(x => x.SetProperty(p => p.YararsizBulmaSayisi, p => p.YararsizBulmaSayisi + 1));
-        }
-        
-        return true;
-    }
-
-    private static string GenerateSlug(string text)
-    {
-        var slug = text.ToLower()
-            .Replace("ş", "s").Replace("ı", "i").Replace("ğ", "g")
-            .Replace("ü", "u").Replace("ö", "o").Replace("ç", "c")
-            .Replace(" ", "-");
-        
-        // Sadece alfanumerik ve tire
-        slug = System.Text.RegularExpressions.Regex.Replace(slug, @"[^a-z0-9\-]", "");
-        slug = System.Text.RegularExpressions.Regex.Replace(slug, @"-+", "-");
-        
-        return slug.Trim('-');
-    }
-
-    #endregion
-
-    #region SLA
-
-    public async Task<List<DestekSla>> GetSlaListesiAsync()
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekSlaListesi
-            .AsNoTracking()
-            .Where(x => !x.IsDeleted)
-            .OrderBy(x => x.Oncelik)
-            .ToListAsync();
-    }
-
-    public async Task<DestekSla?> GetSlaByIdAsync(int id)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekSlaListesi
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == id);
-    }
-
-    public async Task<DestekSla?> GetSlaByOncelikAsync(DestekOncelik oncelik)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekSlaListesi
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Oncelik == oncelik && x.Aktif && !x.IsDeleted);
-    }
-
-    public async Task<DestekSla> CreateSlaAsync(DestekSla sla)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        sla.CreatedAt = DateTime.UtcNow;
-        context.DestekSlaListesi.Add(sla);
-        await context.SaveChangesAsync();
-        return sla;
-    }
-
-    public async Task<DestekSla> UpdateSlaAsync(DestekSla sla)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        sla.UpdatedAt = DateTime.UtcNow;
-        context.DestekSlaListesi.Update(sla);
-        await context.SaveChangesAsync();
-        return sla;
-    }
-
-    public async Task DeleteSlaAsync(int id)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var sla = await context.DestekSlaListesi.FindAsync(id);
-        if (sla != null)
-        {
-            sla.IsDeleted = true;
-            sla.UpdatedAt = DateTime.UtcNow;
-            await context.SaveChangesAsync();
-        }
-    }
-
-    public async Task<int> CheckAndUpdateSlaViolationsAsync()
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var now = DateTime.UtcNow;
-        var asilan = await context.DestekTalepleri
-            .Where(x => !x.SlaAsildi && 
-                       x.SlaBitisTarihi.HasValue && 
-                       x.SlaBitisTarihi < now &&
-                       x.Durum != DestekDurum.Kapali && 
-                       x.Durum != DestekDurum.Cozuldu)
-            .ToListAsync();
-
-        foreach (var talep in asilan)
-        {
-            talep.SlaAsildi = true;
-            talep.UpdatedAt = now;
-            
-            await LogAktiviteInternalAsync(context, talep.Id, AktiviteTuru.SlaBilgilendirme, 
-                "SLA süresi aşıldı!");
-        }
-
-        await context.SaveChangesAsync();
-        return asilan.Count;
-    }
-
-    #endregion
-
-    #region Aktivite ve Raporlama
-
-    public async Task<List<DestekTalebiAktivite>> GetAktivitelerAsync(int talepId)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekTalebiAktiviteleri
-            .AsNoTracking()
-            .Include(x => x.Kullanici)
-            .Where(x => x.DestekTalebiId == talepId)
-            .OrderByDescending(x => x.CreatedAt)
-            .ToListAsync();
-    }
-
-    public async Task LogAktiviteAsync(int talepId, AktiviteTuru aktiviteTuru, string aciklama, 
-        int? kullaniciId = null, string? eskiDeger = null, string? yeniDeger = null)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        await LogAktiviteInternalAsync(context, talepId, aktiviteTuru, aciklama, kullaniciId, eskiDeger, yeniDeger);
-    }
-
-    private async Task LogAktiviteInternalAsync(ApplicationDbContext context, int talepId, 
-        AktiviteTuru aktiviteTuru, string aciklama, int? kullaniciId = null, 
-        string? eskiDeger = null, string? yeniDeger = null)
-    {
-        var aktivite = new DestekTalebiAktivite
-        {
-            DestekTalebiId = talepId,
-            AktiviteTuru = aktiviteTuru,
-            Aciklama = aciklama,
-            KullaniciId = kullaniciId,
-            EskiDeger = eskiDeger,
-            YeniDeger = yeniDeger,
-            CreatedAt = DateTime.UtcNow
-        };
-        
-        context.DestekTalebiAktiviteleri.Add(aktivite);
-        await context.SaveChangesAsync();
-    }
-
-    #endregion
-
-    #region Dashboard ve İstatistikler
-
-    public async Task<DestekDashboardStats> GetDashboardStatsAsync()
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var bugun = DateTime.UtcNow.Date;
-        var stats = new DestekDashboardStats();
-
-        // Genel sayılar
-        stats.ToplamTalepSayisi = await context.DestekTalepleri.CountAsync();
-        stats.AcikTalepSayisi = await context.DestekTalepleri
-            .CountAsync(x => x.Durum != DestekDurum.Kapali && x.Durum != DestekDurum.Cozuldu);
-        stats.BugunAcilanTalepSayisi = await context.DestekTalepleri
-            .CountAsync(x => x.CreatedAt.Date == bugun);
-        stats.BugunKapatilanTalepSayisi = await context.DestekTalepleri
-            .CountAsync(x => x.KapatilmaTarihi.HasValue && x.KapatilmaTarihi.Value.Date == bugun);
-        stats.SlaAsildiSayisi = await context.DestekTalepleri
-            .CountAsync(x => x.SlaAsildi && x.Durum != DestekDurum.Kapali && x.Durum != DestekDurum.Cozuldu);
-
-        // Öncelik dağılımı
-        var oncelikGruplari = await context.DestekTalepleri
-            .Where(x => x.Durum != DestekDurum.Kapali && x.Durum != DestekDurum.Cozuldu)
-            .GroupBy(x => x.Oncelik)
-            .Select(g => new { Oncelik = g.Key, Sayi = g.Count() })
-            .ToListAsync();
-        stats.OncelikDagilimi = oncelikGruplari.ToDictionary(x => x.Oncelik, x => x.Sayi);
-
-        // Durum dağılımı
-        var durumGruplari = await context.DestekTalepleri
-            .GroupBy(x => x.Durum)
-            .Select(g => new { Durum = g.Key, Sayi = g.Count() })
-            .ToListAsync();
-        stats.DurumDagilimi = durumGruplari.ToDictionary(x => x.Durum, x => x.Sayi);
-
-        // Departman dağılımı
-        var departmanGruplari = await context.DestekTalepleri
-            .Where(x => x.Durum != DestekDurum.Kapali && x.Durum != DestekDurum.Cozuldu)
-            .Include(x => x.Departman)
-            .GroupBy(x => x.Departman.Ad)
-            .Select(g => new { DepartmanAdi = g.Key, Sayi = g.Count() })
-            .ToListAsync();
-        stats.DepartmanDagilimi = departmanGruplari.ToDictionary(x => x.DepartmanAdi, x => x.Sayi);
-
-        // Kaynak dağılımı
-        var kaynakGruplari = await context.DestekTalepleri
-            .GroupBy(x => x.Kaynak)
-            .Select(g => new { Kaynak = g.Key, Sayi = g.Count() })
-            .ToListAsync();
-        stats.KaynakDagilimi = kaynakGruplari.ToDictionary(x => x.Kaynak, x => x.Sayi);
-
-        // Son talepler
-        stats.SonTalepler = await context.DestekTalepleri
-            .AsNoTracking()
-            .Include(x => x.Departman)
-            .Include(x => x.AtananKullanici)
-            .OrderByDescending(x => x.CreatedAt)
-            .Take(10)
-            .ToListAsync();
-
-        // Performans metrikleri
-        var kapananTalepler = await context.DestekTalepleri
-            .Where(x => x.KapatilmaTarihi.HasValue)
-            .ToListAsync();
-
-        if (kapananTalepler.Any())
-        {
-            stats.OrtalamaIlkYanitSuresiSaat = kapananTalepler
-                .Where(x => x.IlkYanitSuresiDakika.HasValue)
-                .Average(x => x.IlkYanitSuresiDakika!.Value) / 60.0;
-            
-            stats.OrtalamaCozumSuresiSaat = kapananTalepler
-                .Where(x => x.CozumSuresiDakika.HasValue)
-                .Average(x => x.CozumSuresiDakika!.Value) / 60.0;
-            
-            stats.OrtalamaMemuniyetPuani = kapananTalepler
-                .Where(x => x.MemnuniyetPuani.HasValue)
-                .DefaultIfEmpty()
-                .Average(x => x?.MemnuniyetPuani ?? 0);
-        }
-
-        return stats;
-    }
-
-    public async Task<DestekRaporStats> GetRaporStatsAsync(DateTime baslangic, DateTime bitis, int? departmanId = null)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var query = context.DestekTalepleri.AsNoTracking().AsQueryable();
-        
-        if (departmanId.HasValue)
-            query = query.Where(x => x.DepartmanId == departmanId.Value);
-
-        var stats = new DestekRaporStats
-        {
-            BaslangicTarihi = baslangic,
-            BitisTarihi = bitis
-        };
-
-        stats.ToplamAcilanTalep = await query
-            .CountAsync(x => x.CreatedAt >= baslangic && x.CreatedAt <= bitis);
-        
-        stats.ToplamKapatilanTalep = await query
-            .CountAsync(x => x.KapatilmaTarihi.HasValue && 
-                            x.KapatilmaTarihi >= baslangic && 
-                            x.KapatilmaTarihi <= bitis);
-        
-        stats.ToplamSlaAsimi = await query
-            .CountAsync(x => x.SlaAsildi && 
-                            x.CreatedAt >= baslangic && 
-                            x.CreatedAt <= bitis);
-
-        var kapananlar = await query
-            .Where(x => x.KapatilmaTarihi.HasValue && 
-                       x.KapatilmaTarihi >= baslangic && 
-                       x.KapatilmaTarihi <= bitis)
-            .ToListAsync();
-
-        if (kapananlar.Any())
-        {
-            stats.OrtalamaIlkYanitSuresiDakika = kapananlar
-                .Where(x => x.IlkYanitSuresiDakika.HasValue)
-                .DefaultIfEmpty()
-                .Average(x => x?.IlkYanitSuresiDakika ?? 0);
-            
-            stats.OrtalamaCozumSuresiDakika = kapananlar
-                .Where(x => x.CozumSuresiDakika.HasValue)
-                .DefaultIfEmpty()
-                .Average(x => x?.CozumSuresiDakika ?? 0);
-            
-            stats.OrtalamaMemuniyetPuani = kapananlar
-                .Where(x => x.MemnuniyetPuani.HasValue)
-                .DefaultIfEmpty()
-                .Average(x => x?.MemnuniyetPuani ?? 0);
-        }
-
-        // Günlük trend
-        var gunler = (bitis - baslangic).Days + 1;
-        stats.GunlukTrend = new List<GunlukTalepTrend>();
-        
-        for (int i = 0; i < gunler; i++)
-        {
-            var gun = baslangic.AddDays(i).Date;
-            stats.GunlukTrend.Add(new GunlukTalepTrend
-            {
-                Tarih = gun,
-                AcilanTalep = await query.CountAsync(x => x.CreatedAt.Date == gun),
-                KapatilanTalep = await query.CountAsync(x => x.KapatilmaTarihi.HasValue && x.KapatilmaTarihi.Value.Date == gun)
-            });
-        }
-
-        return stats;
-    }
-
-    public async Task<List<DestekPerformansRapor>> GetPersonelPerformansRaporuAsync(DateTime baslangic, DateTime bitis, int? departmanId = null)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var query = context.DestekTalepleri
-            .AsNoTracking()
-            .Where(x => x.AtananKullaniciId.HasValue &&
-                       x.CreatedAt >= baslangic && 
-                       x.CreatedAt <= bitis);
-
-        if (departmanId.HasValue)
-            query = query.Where(x => x.DepartmanId == departmanId.Value);
-
-        var gruplar = await query
-            .Include(x => x.AtananKullanici)
-            .GroupBy(x => new { x.AtananKullaniciId, x.AtananKullanici!.AdSoyad })
-            .Select(g => new
-            {
-                KullaniciId = g.Key.AtananKullaniciId!.Value,
-                KullaniciAdi = g.Key.AdSoyad,
-                AtananTalepSayisi = g.Count(),
-                CozulenTalepSayisi = g.Count(x => x.Durum == DestekDurum.Cozuldu || x.Durum == DestekDurum.Kapali),
-                SlaAsimSayisi = g.Count(x => x.SlaAsildi),
-                ToplamYanitSuresi = g.Sum(x => x.IlkYanitSuresiDakika ?? 0),
-                YanitSayisi = g.Count(x => x.IlkYanitSuresiDakika.HasValue),
-                ToplamCozumSuresi = g.Sum(x => x.CozumSuresiDakika ?? 0),
-                CozumSayisi = g.Count(x => x.CozumSuresiDakika.HasValue),
-                ToplamMemnuniyet = g.Sum(x => x.MemnuniyetPuani ?? 0),
-                MemnuniyetSayisi = g.Count(x => x.MemnuniyetPuani.HasValue)
-            })
-            .ToListAsync();
-
-        // Yanıt sayılarını al
-        var yanitSayilari = await context.DestekTalebiYanitlari
-            .Where(x => x.KullaniciId.HasValue &&
-                       x.CreatedAt >= baslangic &&
-                       x.CreatedAt <= bitis &&
-                       !x.MusteriYaniti)
-            .GroupBy(x => x.KullaniciId)
-            .Select(g => new { KullaniciId = g.Key!.Value, Sayi = g.Count() })
-            .ToDictionaryAsync(x => x.KullaniciId, x => x.Sayi);
-
-        return gruplar.Select(g => new DestekPerformansRapor
-        {
-            KullaniciId = g.KullaniciId,
-            KullaniciAdi = g.KullaniciAdi,
-            AtananTalepSayisi = g.AtananTalepSayisi,
-            CozulenTalepSayisi = g.CozulenTalepSayisi,
-            SlaAsimSayisi = g.SlaAsimSayisi,
-            OrtalamaYanitSuresiDakika = g.YanitSayisi > 0 ? (double)g.ToplamYanitSuresi / g.YanitSayisi : 0,
-            OrtalamaCozumSuresiDakika = g.CozumSayisi > 0 ? (double)g.ToplamCozumSuresi / g.CozumSayisi : 0,
-            OrtalamaMemuniyetPuani = g.MemnuniyetSayisi > 0 ? (double)g.ToplamMemnuniyet / g.MemnuniyetSayisi : 0,
-            ToplamYanitSayisi = yanitSayilari.GetValueOrDefault(g.KullaniciId, 0)
-        }).ToList();
-    }
-
-    #endregion
-
-    #region Ayarlar
-
-    public async Task<string?> GetAyarAsync(string anahtar)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var ayar = await context.DestekAyarlari
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Anahtar == anahtar);
-        return ayar?.Deger;
-    }
-
-    public async Task SetAyarAsync(string anahtar, string deger, string? aciklama = null, string? grup = null)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        
-        var ayar = await context.DestekAyarlari.FirstOrDefaultAsync(x => x.Anahtar == anahtar);
-        
-        if (ayar != null)
-        {
-            ayar.Deger = deger;
-            ayar.UpdatedAt = DateTime.UtcNow;
-            if (aciklama != null) ayar.Aciklama = aciklama;
-            if (grup != null) ayar.Grup = grup;
-        }
-        else
-        {
-            ayar = new DestekAyar
-            {
-                Anahtar = anahtar,
-                Deger = deger,
-                Aciklama = aciklama,
-                Grup = grup,
-                CreatedAt = DateTime.UtcNow
-            };
-            context.DestekAyarlari.Add(ayar);
-        }
-        
-        await context.SaveChangesAsync();
-    }
-
-    public async Task<Dictionary<string, string>> GetAyarlarByGrupAsync(string grup)
-    {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.DestekAyarlari
-            .AsNoTracking()
-            .Where(x => x.Grup == grup)
-            .ToDictionaryAsync(x => x.Anahtar, x => x.Deger);
-    }
-
-    #endregion
-
-    #region E-posta Bildirim Yardımcıları
-
-    private async Task<bool> IsEmailBildirimAktifAsync()
-    {
-        try
-        {
-            var ayar = await GetAyarAsync("EmailBildirimAktif");
-            return bool.TryParse(ayar, out var aktif) && aktif;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+    #region E-posta bildirimleri (Destek Ayarları'ndan açılır)
 
     private async Task SendDestekEmailSafeAsync(Func<Task> emailAction)
     {
         try
         {
-            if (!await IsEmailBildirimAktifAsync())
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            if (!(await AyarlariOkuAsync(context)).EmailBildirimAktif)
             {
                 _logger.LogDebug("Destek e-posta bildirimleri devre dışı");
                 return;
@@ -1648,15 +789,14 @@ public class DestekTalebiService : IDestekTalebiService
             talep.MusteriAdi,
             talep.TalepNo,
             talep.Konu,
-            talep.Oncelik.ToString());
+            DestekKurallari.OncelikEtiketi(talep.Oncelik));
     }
 
     private async Task SendYanitEmailAsync(DestekTalebi talep, string yanitIcerik)
     {
         if (string.IsNullOrWhiteSpace(talep.MusteriEmail)) return;
 
-        // HTML etiketlerini temizle - özet için
-        var ozet = System.Text.RegularExpressions.Regex.Replace(yanitIcerik, "<[^>]+>", " ");
+        var ozet = HtmlSanitizerHelper.DuzMetin(yanitIcerik);
         if (ozet.Length > 300) ozet = ozet[..300] + "...";
 
         await _emailService.SendDestekYanitEmailAsync(
@@ -1667,51 +807,31 @@ public class DestekTalebiService : IDestekTalebiService
             ozet);
     }
 
-    private async Task SendDurumDegisiklikEmailAsync(int talepId, DestekDurum eskiDurum, DestekDurum yeniDurum)
+    private async Task SendDurumDegisiklikEmailAsync(DestekTalebi talep, DestekDurum eskiDurum, DestekDurum yeniDurum)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var talep = await context.DestekTalepleri.AsNoTracking().FirstOrDefaultAsync(x => x.Id == talepId);
-        if (talep == null || string.IsNullOrWhiteSpace(talep.MusteriEmail)) return;
+        if (string.IsNullOrWhiteSpace(talep.MusteriEmail)) return;
 
         await _emailService.SendDestekDurumEmailAsync(
             talep.MusteriEmail,
             talep.MusteriAdi,
             talep.TalepNo,
             talep.Konu,
-            GetDurumText(eskiDurum),
-            GetDurumText(yeniDurum));
+            DestekKurallari.Etiket(eskiDurum),
+            DestekKurallari.Etiket(yeniDurum));
     }
 
-    private async Task SendAtamaEmailAsync(int talepId, Kullanici kullanici)
+    private async Task SendAtamaEmailAsync(DestekTalebi talep, string? email, string adSoyad)
     {
-        if (string.IsNullOrWhiteSpace(kullanici.Email)) return;
-
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var talep = await context.DestekTalepleri.AsNoTracking().FirstOrDefaultAsync(x => x.Id == talepId);
-        if (talep == null) return;
+        if (string.IsNullOrWhiteSpace(email)) return;
 
         await _emailService.SendDestekAtamaEmailAsync(
-            kullanici.Email,
-            kullanici.AdSoyad,
+            email,
+            adSoyad,
             talep.TalepNo,
             talep.Konu,
             talep.MusteriAdi,
-            talep.Oncelik.ToString());
+            DestekKurallari.OncelikEtiketi(talep.Oncelik));
     }
-
-    private static string GetDurumText(DestekDurum durum) => durum switch
-    {
-        DestekDurum.Yeni => "Yeni",
-        DestekDurum.Acik => "Açık",
-        DestekDurum.YanitBekleniyor => "Yanıt Bekleniyor",
-        DestekDurum.Beklemede => "Beklemede",
-        DestekDurum.Cozuldu => "Çözüldü",
-        DestekDurum.Kapali => "Kapalı",
-        _ => durum.ToString()
-    };
 
     #endregion
 }
-
-
-

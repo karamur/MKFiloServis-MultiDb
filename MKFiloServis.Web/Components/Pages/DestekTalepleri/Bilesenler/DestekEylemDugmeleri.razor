@@ -1,0 +1,17 @@
+@* Kullanıcının bu durumda yapabileceği işlemler (DestekKurallari.Eylemler; servis aynı tabloyla yeniden denetler). *@
+
+@foreach (var eylem in Eylemler)
+{
+    <button type="button" class="btn @eylem.DugmeSinifi @(Kucuk ? "btn-sm" : string.Empty) @DugmeSinifi" disabled="@Devre"
+            @onclick="() => OnSec.InvokeAsync(eylem)">
+        <i class="bi @eylem.Ikon me-1"></i>@eylem.Etiket
+    </button>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<DestekEylemTanimi> Eylemler { get; set; } = [];
+    [Parameter] public EventCallback<DestekEylemTanimi> OnSec { get; set; }
+    [Parameter] public bool Kucuk { get; set; }
+    [Parameter] public bool Devre { get; set; }
+    [Parameter] public string? DugmeSinifi { get; set; }
+}

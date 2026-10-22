@@ -194,7 +194,7 @@ public sealed class AnaMenuAgaciTests
 
         var hrefler = Regex.Matches(html, @"<a [^>]*href=""([^""]+)""").Select(m => m.Groups[1].Value).ToList();
 
-        Assert.Equal(115, hrefler.Count);
+        Assert.Equal(116, hrefler.Count);   // 115 + Destek Ayarları
         Assert.Equal(hrefler.Count, hrefler.Distinct(StringComparer.Ordinal).Count());
     }
 
