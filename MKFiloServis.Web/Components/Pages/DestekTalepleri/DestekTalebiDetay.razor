@@ -93,7 +93,7 @@ else
                     </div>
                 </div>
 
-                <DestekEkler TalepId="talep.Id" Ekler="detay.Ekler" YuklemeAcik="@(talep.Durum != DestekDurum.Kapali)" OnDegisti="YukleAsync" />
+                <DestekEkler TalepId="talep.Id" Ekler="detay.Ekler" YuklemeAcik="@(talep.Durum is not (DestekDurum.Kapali or DestekDurum.IptalEdildi))" OnDegisti="YukleAsync" />
 
                 <div class="card mb-3">
                     <div class="card-header"><i class="bi bi-chat-dots me-2"></i>Yazışma (@detay.Yanitlar.Count)</div>

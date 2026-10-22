@@ -22,6 +22,7 @@ public interface IDestekTalebiService
     Task<DestekTalebi> TaslakGuncelleAsync(DestekTalebi talep, bool gonder);
 
     Task TaslakSilAsync(int talepId);
+    Task YeniTalebiIptalEtAsync(int talepId);
 
     /// <summary>"Sorun Bildir" penceresinden talep açar; sayfa/hata bilgisi eklenir, teknik ayrıntı dahili nota yazılır.</summary>
     Task<DestekTalebi> HataBildirimiOlusturAsync(SorunBildirimi bildirim);

@@ -316,6 +316,7 @@ public static class AnaMenuYapisi
             [
                 Alt(null, null,
                 [
+                    Oge("Destek Dashboard", "/destek-talepleri/dashboard", "bi-speedometer2", "text-primary", Yetki("destektalebi.yaz")),
                     Oge("Yeni Talep", "/destek-talepleri/talep-giris", "bi-plus-circle", "text-success", HerKullanici("destektalebi.oku")),
                     Oge("Taleplerim", "/destek-talepleri/taleplerim", "bi-ticket-detailed", "text-info", HerKullanici("destektalebi.oku")),
                     Oge("Bilgi Bankası", "/destek-talepleri/bilgi-bankasi", "bi-book-fill", "text-info", HerKullanici("destektalebi.oku")),

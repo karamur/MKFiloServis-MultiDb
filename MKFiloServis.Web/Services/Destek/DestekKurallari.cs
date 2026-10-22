@@ -76,7 +76,7 @@ public static class DestekKurallari
 
     /// <summary>Listelerde seçilebilen durumlar (taslaklar yalnız sahibine görünür).</summary>
     public static readonly IReadOnlyList<DestekDurum> EkipDurumlari =
-        [DestekDurum.Yeni, DestekDurum.Islemde, DestekDurum.BilgiBekleniyor, DestekDurum.YazilimEkibinde, DestekDurum.Cozuldu, DestekDurum.Kapali];
+        [DestekDurum.Yeni, DestekDurum.Islemde, DestekDurum.BilgiBekleniyor, DestekDurum.YazilimEkibinde, DestekDurum.Cozuldu, DestekDurum.Kapali, DestekDurum.IptalEdildi];
 
     /// <summary>
     /// Birleştirmeden önceki durum kodlarının karşılığı (2 Açık, 3 Beklemede, 7 Gönderildi, 9 Bitti, 10 Onaylandı).
@@ -158,6 +158,7 @@ public static class DestekKurallari
         DestekDurum.YazilimEkibinde => "Yazılım Ekibinde",
         DestekDurum.Cozuldu => "Çözüldü",
         DestekDurum.Kapali => "Kapandı",
+        DestekDurum.IptalEdildi => "İptal Edildi",
         _ => "Bilinmiyor"
     };
 
@@ -179,6 +180,7 @@ public static class DestekKurallari
         DestekDurum.YazilimEkibinde => "Talebiniz yazılım ekibine iletildi; inceleniyor.",
         DestekDurum.Cozuldu => "Talebiniz çözüldü. Lütfen onaylayın; sorun sürüyorsa \"Sorun Devam Ediyor\" deyin.",
         DestekDurum.Kapali => "Talep kapandı.",
+        DestekDurum.IptalEdildi => "Talebi iptal ettiniz. Kayıt iptal edilenlerde saklanır.",
         _ => string.Empty
     };
 
@@ -191,6 +193,7 @@ public static class DestekKurallari
         DestekDurum.YazilimEkibinde => "bg-dark",
         DestekDurum.Cozuldu => "bg-success",
         DestekDurum.Kapali => "bg-light text-dark border",
+        DestekDurum.IptalEdildi => "bg-secondary",
         _ => "bg-secondary"
     };
 
@@ -203,6 +206,7 @@ public static class DestekKurallari
         DestekDurum.YazilimEkibinde => "bi-code-slash",
         DestekDurum.Cozuldu => "bi-check-circle",
         DestekDurum.Kapali => "bi-check2-all",
+        DestekDurum.IptalEdildi => "bi-x-circle",
         _ => "bi-circle"
     };
 
@@ -250,6 +254,7 @@ public static class DestekKurallari
         AktiviteTuru.Transferedildi => "Talep ilgili ekibe aktarıldı",
         AktiviteTuru.YazilimEkibineAktarildi => "Talep yazılım ekibine aktarıldı",
         AktiviteTuru.Kapandi => "Talep kapandı",
+        AktiviteTuru.IptalEdildi => "Talep sahibi talebi iptal etti",
         AktiviteTuru.YenidenAcildi => "Talep yeniden açıldı",
         AktiviteTuru.CozumOnaylandi => "Çözüm onaylandı",
         AktiviteTuru.CozumeItirazEdildi => "Çözüme itiraz edildi",
@@ -258,6 +263,9 @@ public static class DestekKurallari
 
     /// <summary>Talep edenin takip ekranındaki adımlar.</summary>
     public static IReadOnlyList<DestekDurum> TakipAdimlari(DestekDurum durum) =>
+        Normallestir(durum) == DestekDurum.IptalEdildi
+            ? [DestekDurum.Yeni, DestekDurum.IptalEdildi]
+            :
         Normallestir(durum) == DestekDurum.YazilimEkibinde
             ? [DestekDurum.Yeni, DestekDurum.Islemde, DestekDurum.YazilimEkibinde, DestekDurum.Cozuldu, DestekDurum.Kapali]
             : [DestekDurum.Yeni, DestekDurum.Islemde, DestekDurum.Cozuldu, DestekDurum.Kapali];
@@ -273,6 +281,7 @@ public static class DestekKurallari
             DestekDurum.YazilimEkibinde => 3,
             DestekDurum.Cozuldu => 4,
             DestekDurum.Kapali => 5,
+            DestekDurum.IptalEdildi => 6,
             _ => 0
         };
         return Sira(Normallestir(mevcut)) >= Sira(adim);

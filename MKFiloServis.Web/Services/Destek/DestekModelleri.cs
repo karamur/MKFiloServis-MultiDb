@@ -28,7 +28,7 @@ public sealed class DestekTalepDetayi
     public bool Sahip => Rol.HasFlag(DestekRol.Sahip);
 
     /// <summary>Mesaj yazılabilir mi (kapanmış ve taslak taleplere yazılmaz).</summary>
-    public bool MesajYazilabilir => Talep.Durum is not (DestekDurum.Kapali or DestekDurum.Taslak);
+    public bool MesajYazilabilir => Talep.Durum is not (DestekDurum.Kapali or DestekDurum.Taslak or DestekDurum.IptalEdildi);
 }
 
 /// <summary>Yazışmaya eklenecek mesaj.</summary>

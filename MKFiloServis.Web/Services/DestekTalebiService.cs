@@ -141,6 +141,28 @@ public partial class DestekTalebiService : IDestekTalebiService
         await context.SaveChangesAsync();
     }
 
+    public async Task YeniTalebiIptalEtAsync(int talepId)
+    {
+        var aktor = await OturumGerekliAsync();
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var talep = await TalepYukleAsync(context, talepId);
+        if (talep.OlusturanKullaniciId != aktor.Id)
+            throw YetkiYok("Yalnız kendi talebinizi iptal edebilirsiniz.");
+        if (talep.Durum != DestekDurum.Yeni)
+            throw new InvalidOperationException("Yalnız yeni durumundaki talepler iptal edilebilir.");
+
+        var simdi = DateTime.UtcNow;
+        talep.Durum = DestekDurum.IptalEdildi;
+        talep.KapatilmaTarihi = simdi;
+        talep.SonAktiviteTarihi = simdi;
+        talep.UpdatedAt = simdi;
+        Aktivite(context, talep, AktiviteTuru.IptalEdildi, "Talep sahibi talebi iptal etti", aktor.Id);
+        await context.SaveChangesAsync();
+        await BildirAsync(context, async () =>
+            await DestekBildirimci.EkleAsync(context, await EkipIlgilileriAsync(context, talep), aktor.Id, talep,
+                "Talep sahibi talebi iptal etti", talep.Konu, ekipLinki: true));
+    }
+
     public async Task<DestekTalebi> HataBildirimiOlusturAsync(SorunBildirimi bildirim)
     {
         var aktor = await OturumGerekliAsync();
@@ -339,7 +361,7 @@ public partial class DestekTalebiService : IDestekTalebiService
         var talep = await TalepYukleAsync(context, talepId);
         var rol = DestekErisim.Rol(aktor, talep, await YazilimDepartmanIdAsync(context));
         if (!DestekErisim.Gorebilir(rol)) throw YetkiYok();
-        if (talep.Durum == DestekDurum.Kapali)
+        if (talep.Durum is DestekDurum.Kapali or DestekDurum.IptalEdildi)
             throw new InvalidOperationException("Kapanmış talebe mesaj yazılamaz. Sorun sürüyorsa yeni bir talep açın.");
         if (talep.Durum == DestekDurum.Taslak)
             throw new InvalidOperationException("Taslağa mesaj yazılamaz; önce talebi gönderin.");
@@ -436,7 +458,7 @@ public partial class DestekTalebiService : IDestekTalebiService
         var talep = await TalepYukleAsync(context, talepId);
         var rol = DestekErisim.Rol(aktor, talep, await YazilimDepartmanIdAsync(context));
         if (!DestekErisim.Gorebilir(rol)) throw YetkiYok();
-        if (talep.Durum == DestekDurum.Kapali)
+        if (talep.Durum is DestekDurum.Kapali or DestekDurum.IptalEdildi)
             throw new InvalidOperationException("Kapanmış talebe dosya eklenemez.");
 
         var ayarlar = await AyarlariOkuAsync(context);

@@ -30,7 +30,7 @@ else
                 <span class="h4 mb-0"><span class="text-muted">#</span>@talep.TalepNo</span>
                 <DestekDurumRozeti Durum="talep.Durum" />
             </div>
-            @if (detay.Isleyebilir)
+            @if (ekipGorunumuAcik && detay.Isleyebilir)
             {
                 <a href="destek-talepleri/@talep.Id" class="btn btn-outline-primary btn-sm"><i class="bi bi-headset me-1"></i>Ekip görünümü</a>
             }
@@ -98,7 +98,7 @@ else
                     }
                 </div>
 
-                <DestekEkler TalepId="talep.Id" Ekler="detay.Ekler" YuklemeAcik="@(talep.Durum != DestekDurum.Kapali)" OnDegisti="YukleAsync" />
+                <DestekEkler TalepId="talep.Id" Ekler="detay.Ekler" YuklemeAcik="@(talep.Durum is not (DestekDurum.Kapali or DestekDurum.IptalEdildi))" OnDegisti="YukleAsync" />
             </div>
 
             <div class="col-lg-4">
@@ -134,6 +134,7 @@ else
     [Parameter] public int TalepId { get; set; }
 
     private DestekTalepDetayi? detay;
+    private bool ekipGorunumuAcik;
     private bool yukleniyor = true;
     private bool kaydediliyor;
     private string? yuklemeHatasi;
@@ -151,12 +152,16 @@ else
         {
             yuklemeHatasi = null;
             detay = await DestekService.GetDetayAsync(TalepId);
+            var kullanici = await DestekService.GetAktifKullaniciAsync();
+            ekipGorunumuAcik = kullanici?.Yetkiler.Contains(DestekKurallari.PersonelYetkisi) == true
+                || kullanici?.Yetkiler.Contains(DestekKurallari.YazilimYetkisi) == true;
             if (detay?.Talep.Durum == DestekDurum.Taslak)
                 Navigation.NavigateTo($"destek-talepleri/talep-giris/{TalepId}");
         }
         catch (Exception ex)
         {
             detay = null;
+            ekipGorunumuAcik = false;
             yuklemeHatasi = $"Talep yüklenemedi: {ex.GetBaseException().Message}";
         }
         finally

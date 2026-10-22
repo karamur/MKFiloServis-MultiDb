@@ -820,7 +820,9 @@ public enum DestekDurum
     /// <summary>Destek ekibi üzerinde çalışıyor.</summary>
     Islemde = 8,
     /// <summary>Yazılım ekibine aktarıldı.</summary>
-    YazilimEkibinde = 11
+    YazilimEkibinde = 11,
+    /// <summary>Talep sahibi, ekip işlemine başlamadan iptal etti.</summary>
+    IptalEdildi = 12
 }
 
 /// <summary>
@@ -881,7 +883,8 @@ public enum AktiviteTuru
     YazilimEkibineAktarildi = 13,
     DestegeGeriGonderildi = 14,
     CozumOnaylandi = 15,
-    CozumeItirazEdildi = 16
+    CozumeItirazEdildi = 16,
+    IptalEdildi = 17
 }
 
 /// <summary>

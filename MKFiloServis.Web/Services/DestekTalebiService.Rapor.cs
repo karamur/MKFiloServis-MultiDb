@@ -25,7 +25,7 @@ public partial class DestekTalebiService
             AcikTalepSayisi = await kapsam.CountAsync(x => acik.Contains(x.Durum)),
             OnayBekleyenTalepSayisi = await kapsam.CountAsync(x => x.Durum == DestekDurum.Cozuldu),
             BugunAcilanTalepSayisi = await kapsam.CountAsync(x => x.CreatedAt >= gunBasi && x.CreatedAt < gunSonu),
-            BugunKapatilanTalepSayisi = await kapsam.CountAsync(x => x.KapatilmaTarihi >= gunBasi && x.KapatilmaTarihi < gunSonu),
+            BugunKapatilanTalepSayisi = await kapsam.CountAsync(x => x.Durum == DestekDurum.Kapali && x.KapatilmaTarihi >= gunBasi && x.KapatilmaTarihi < gunSonu),
             SlaAsildiSayisi = await kapsam.CountAsync(x => x.SlaAsildi && acik.Contains(x.Durum))
         };
 
@@ -77,11 +77,11 @@ public partial class DestekTalebiService
         var satirlar = await query
             .Where(x => (x.CreatedAt >= baslangic && x.CreatedAt <= bitis) ||
                         (x.KapatilmaTarihi >= baslangic && x.KapatilmaTarihi <= bitis))
-            .Select(x => new { x.CreatedAt, x.KapatilmaTarihi, x.SlaAsildi, x.IlkYanitSuresiDakika, x.CozumSuresiDakika, x.MemnuniyetPuani })
+            .Select(x => new { x.CreatedAt, x.KapatilmaTarihi, x.Durum, x.SlaAsildi, x.IlkYanitSuresiDakika, x.CozumSuresiDakika, x.MemnuniyetPuani })
             .ToListAsync();
 
         var acilan = satirlar.Where(x => x.CreatedAt >= baslangic && x.CreatedAt <= bitis).ToList();
-        var kapanan = satirlar.Where(x => x.KapatilmaTarihi >= baslangic && x.KapatilmaTarihi <= bitis).ToList();
+        var kapanan = satirlar.Where(x => x.KapatilmaTarihi >= baslangic && x.KapatilmaTarihi <= bitis && x.Durum != DestekDurum.IptalEdildi).ToList();
         var stats = new DestekRaporStats
         {
             BaslangicTarihi = baslangic,

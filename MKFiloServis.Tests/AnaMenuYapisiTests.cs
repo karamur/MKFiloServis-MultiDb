@@ -140,7 +140,7 @@ public sealed class AnaMenuYapisiTests
         var gorunen = Gorunenler(Bagla([], yonetici: true));
 
         Assert.Equal(TumOgeler.Count, gorunen.Count);
-        Assert.Equal(116, TumOgeler.Count);   // 115 + Destek Ayarları
+        Assert.Equal(117, TumOgeler.Count);   // Destek Dashboard dahil
     }
 
     [Fact]

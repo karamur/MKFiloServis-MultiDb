@@ -119,9 +119,17 @@
                                 }
                                 else
                                 {
-                                    <a href="destek-talepleri/talep-takip/@talep.Id" class="btn btn-sm @(bekliyor ? "btn-info" : "btn-outline-info")">
-                                        <i class="bi bi-eye me-1"></i>@(bekliyor ? "Yanıtla" : "Takip Et")
-                                    </a>
+                                    <div class="d-inline-flex gap-1">
+                                        <a href="destek-talepleri/talep-takip/@talep.Id" class="btn btn-sm @(bekliyor ? "btn-info" : "btn-outline-info")">
+                                            <i class="bi bi-eye me-1"></i>@(bekliyor ? "Yanıtla" : "Takip Et")
+                                        </a>
+                                        @if (talep.Durum == DestekDurum.Yeni)
+                                        {
+                                            <button class="btn btn-sm btn-outline-danger" title="Talebi iptal et" aria-label="Talebi iptal et" @onclick="() => IptalEtAsync(talep)">
+                                                <i class="bi bi-x-circle"></i>
+                                            </button>
+                                        }
+                                    </div>
                                 }
                             </td>
                         </tr>
@@ -133,7 +141,7 @@
 </div>
 
 @code {
-    private enum Suzgec { Tumu, Bekleyen, Acik, Taslak, Kapali }
+    private enum Suzgec { Tumu, Bekleyen, Acik, Taslak, Kapali, IptalEdilenler }
 
     private List<DestekTalebi> talepler = new();
     private DestekKullanici? aktor;
@@ -179,6 +187,7 @@
         Suzgec.Acik => DestekKurallari.AcikMi(talep.Durum),
         Suzgec.Taslak => talep.Durum == DestekDurum.Taslak,
         Suzgec.Kapali => talep.Durum == DestekDurum.Kapali,
+        Suzgec.IptalEdilenler => talep.Durum == DestekDurum.IptalEdildi,
         _ => true
     };
 
@@ -188,6 +197,7 @@
         Suzgec.Acik => "Açık",
         Suzgec.Taslak => "Taslak",
         Suzgec.Kapali => "Kapanan",
+        Suzgec.IptalEdilenler => "İptal Edilenler",
         _ => "Tümü"
     };
 
@@ -219,6 +229,23 @@
         catch (Exception ex)
         {
             ToastService.ShowError($"Silinemedi: {ex.GetBaseException().Message}");
+        }
+    }
+
+    private async Task IptalEtAsync(DestekTalebi talep)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"{talep.TalepNo} iptal edilsin mi? Talep, İptal Edilenler bölümünde kalacak."))
+            return;
+        try
+        {
+            await DestekService.YeniTalebiIptalEtAsync(talep.Id);
+            ToastService.ShowSuccess("Talep iptal edildi.");
+            suzgec = Suzgec.IptalEdilenler;
+            await YukleAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"İptal edilemedi: {ex.GetBaseException().Message}");
         }
     }
 }
