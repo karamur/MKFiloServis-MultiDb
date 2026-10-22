@@ -102,7 +102,19 @@ public class NumaraSerisiService
         return $"{prefix}-{yil}-{sonNo.ToString(format)}";
     }
 
-    private async Task<int> GenerateNextForYearAsync(string prefix, int firmaId, int yil)
+    /// <summary>
+    /// Seri sayacını ve eski kayıtlardaki en büyük numarayı birlikte dikkate alarak numara üretir.
+    /// Sayaç satırı geride kalmış olsa da numaranın benzersiz kalmasını sağlar.
+    /// </summary>
+    public async Task<string> GenerateFormattedAtLeastAsync(string prefix, int firmaId, int digitCount, int minimumNextNumber)
+    {
+        var yil = DateTime.UtcNow.Year;
+        var sonNo = await GenerateNextForYearAsync(prefix, firmaId, yil, Math.Max(1, minimumNextNumber));
+        var format = new string('0', digitCount);
+        return $"{prefix}-{yil}-{sonNo.ToString(format)}";
+    }
+
+    private async Task<int> GenerateNextForYearAsync(string prefix, int firmaId, int yil, int minimumNextNumber = 1)
     {
         await using var ctx = await _dbFactory.CreateDbContextAsync();
         var conn = ctx.Database.GetDbConnection();
@@ -115,11 +127,21 @@ public class NumaraSerisiService
         cmd.CommandText = @"
             INSERT INTO ""FisNoCounters"" (""Prefix"", ""FirmaId"", ""YilAy"", ""SonNo"")
             VALUES (@prefix, @firmaId, @yil,
-                    COALESCE((SELECT MAX(""SonNo"") FROM ""FisNoCounters""
-                              WHERE ""Prefix"" = @prefix AND ""FirmaId"" = @firmaId
-                                AND ""YilAy"" LIKE @aylar AND LENGTH(""YilAy"") = 6), 0) + 1)
+                    CASE
+                        WHEN COALESCE((SELECT MAX(""SonNo"") FROM ""FisNoCounters""
+                                       WHERE ""Prefix"" = @prefix AND ""FirmaId"" = @firmaId
+                                         AND ""YilAy"" LIKE @aylar AND LENGTH(""YilAy"") = 6), 0) + 1 > @minimumNextNumber
+                        THEN COALESCE((SELECT MAX(""SonNo"") FROM ""FisNoCounters""
+                                       WHERE ""Prefix"" = @prefix AND ""FirmaId"" = @firmaId
+                                         AND ""YilAy"" LIKE @aylar AND LENGTH(""YilAy"") = 6), 0) + 1
+                        ELSE @minimumNextNumber
+                    END)
             ON CONFLICT (""Prefix"", ""FirmaId"", ""YilAy"")
-            DO UPDATE SET ""SonNo"" = ""FisNoCounters"".""SonNo"" + 1
+            DO UPDATE SET ""SonNo"" = CASE
+                WHEN ""FisNoCounters"".""SonNo"" >= excluded.""SonNo""
+                THEN ""FisNoCounters"".""SonNo"" + 1
+                ELSE excluded.""SonNo""
+            END
             RETURNING ""SonNo"";";
 
         void Ekle(string ad, System.Data.DbType tur, object deger)
@@ -135,6 +157,7 @@ public class NumaraSerisiService
         Ekle("@firmaId", System.Data.DbType.Int32, firmaId);
         Ekle("@yil", System.Data.DbType.String, yil.ToString(System.Globalization.CultureInfo.InvariantCulture));
         Ekle("@aylar", System.Data.DbType.String, yil.ToString(System.Globalization.CultureInfo.InvariantCulture) + "%");
+        Ekle("@minimumNextNumber", System.Data.DbType.Int32, minimumNextNumber);
 
         var sonuc = await cmd.ExecuteScalarAsync();
         return Convert.ToInt32(sonuc);

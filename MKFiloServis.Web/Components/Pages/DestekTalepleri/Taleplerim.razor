@@ -9,7 +9,10 @@
 
 <div class="container-fluid">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-        <h3 class="mb-0"><i class="bi bi-ticket-detailed-fill text-primary me-2"></i>Taleplerim</h3>
+        <div>
+            <h3 class="mb-1"><i class="bi bi-ticket-detailed-fill text-primary me-2"></i>Taleplerim</h3>
+            <div class="text-muted small">Destek taleplerinizi buradan takip edebilir ve ekiple mesajlaşabilirsiniz.</div>
+        </div>
         <div class="d-flex flex-wrap gap-2">
             @if (aktor?.EkipUyesi == true)
             {
@@ -36,7 +39,7 @@
             <i class="bi bi-hand-index-thumb fs-5"></i>
             <div>
                 <strong>@bekleyenSayisi talep sizi bekliyor.</strong>
-                Destek ekibi sizden bilgi istedi ya da çözümün onaylanmasını bekliyor.
+                Destek ekibi sizden bilgi istedi ya da çözümü incelemenizi bekliyor.
                 <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @onclick="() => Sec(Suzgec.Bekleyen)">Göster</button>
             </div>
         </div>
@@ -77,12 +80,9 @@
                     <tr>
                         <th style="width: 140px;">Talep No</th>
                         <th>Konu</th>
-                        <th class="d-none d-md-table-cell" style="width: 130px;">Departman</th>
-                        <th style="width: 90px;">Öncelik</th>
                         <th style="width: 150px;">Durum</th>
-                        <th class="d-none d-lg-table-cell" style="width: 150px;">Yetkili</th>
-                        <th class="d-none d-md-table-cell" style="width: 140px;">Son Güncelleme</th>
-                        <th style="width: 120px;"></th>
+                        <th class="d-none d-sm-table-cell" style="width: 160px;">Son Güncelleme</th>
+                        <th style="width: 130px;"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -91,7 +91,7 @@
                         var bekliyor = talep.Durum is DestekDurum.BilgiBekleniyor or DestekDurum.Cozuldu;
                         <tr class="@(bekliyor ? "table-info" : string.Empty)">
                             <td>
-                                <a href="@Adres(talep)" class="fw-bold text-decoration-none">@talep.TalepNo</a>
+                                <span class="fw-bold text-primary">@talep.TalepNo</span>
                             </td>
                             <td>
                                 <div class="text-truncate" style="max-width: 320px;" title="@talep.Konu">@talep.Konu</div>
@@ -100,8 +100,6 @@
                                     <small class="text-muted"><i class="bi bi-bug me-1"></i>Hata bildirimi</small>
                                 }
                             </td>
-                            <td class="d-none d-md-table-cell">@(talep.Departman?.Ad ?? "-")</td>
-                            <td><DestekOncelikRozeti Oncelik="talep.Oncelik" /></td>
                             <td>
                                 <DestekDurumRozeti Durum="talep.Durum" Baslik="@DestekKurallari.TalepEdenAciklamasi(talep.Durum)" />
                                 @if (bekliyor)
@@ -109,17 +107,7 @@
                                     <div class="small text-info-emphasis">@(talep.Durum == DestekDurum.Cozuldu ? "Onayınız bekleniyor" : "Yanıtınız bekleniyor")</div>
                                 }
                             </td>
-                            <td class="d-none d-lg-table-cell">
-                                @if (talep.AtananKullanici != null)
-                                {
-                                    <small><i class="bi bi-person me-1"></i>@talep.AtananKullanici.AdSoyad</small>
-                                }
-                                else
-                                {
-                                    <small class="text-muted">Henüz atanmadı</small>
-                                }
-                            </td>
-                            <td class="d-none d-md-table-cell"><small>@MKFiloServis.Shared.Time.BusinessTime.LocalAt(talep.SonAktiviteTarihi).ToString("dd.MM.yyyy HH:mm")</small></td>
+                            <td class="d-none d-sm-table-cell"><small>@MKFiloServis.Shared.Time.BusinessTime.LocalAt(talep.SonAktiviteTarihi).ToString("dd.MM.yyyy HH:mm")</small></td>
                             <td class="text-end">
                                 @if (talep.Durum == DestekDurum.Taslak)
                                 {
@@ -132,7 +120,7 @@
                                 else
                                 {
                                     <a href="destek-talepleri/talep-takip/@talep.Id" class="btn btn-sm @(bekliyor ? "btn-info" : "btn-outline-info")">
-                                        <i class="bi bi-eye me-1"></i>@(bekliyor ? "Yanıtla" : "Takip")
+                                        <i class="bi bi-eye me-1"></i>@(bekliyor ? "Yanıtla" : "Takip Et")
                                     </a>
                                 }
                             </td>
@@ -202,9 +190,6 @@
         Suzgec.Kapali => "Kapanan",
         _ => "Tümü"
     };
-
-    private static string Adres(DestekTalebi talep) =>
-        talep.Durum == DestekDurum.Taslak ? $"destek-talepleri/talep-giris/{talep.Id}" : $"destek-talepleri/talep-takip/{talep.Id}";
 
     private async Task GonderAsync(DestekTalebi talep)
     {

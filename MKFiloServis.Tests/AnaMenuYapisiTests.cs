@@ -209,26 +209,26 @@ public sealed class AnaMenuYapisiTests
     }
 
     [Fact]
-    public void Belge_uyarilari_artik_Belge_Yonetimi_grubundadir_ve_ebys_yetkisi_istemez()
+    public void Belge_uyarilari_anamenude_en_usttedir_ve_ebys_yetkisi_istemez()
     {
-        // Eskiden grubun dışında, yalnız belgeuyari.oku ile görünürdü; aynı kural korunur.
         var baglam = Bagla(["belgeuyari.oku"]);
-        var ebys = MenuFiltresi.Filtrele(AnaMenuYapisi.Kokler, baglam).Single(k => k.Grup?.Grup.Anahtar == "ebys");
+        var gorunen = MenuFiltresi.Filtrele(AnaMenuYapisi.Kokler, baglam);
 
-        Assert.Contains(ebys.TumOgeler, o => o.Href == "/belge-uyarilari");
+        Assert.Equal("/belge-uyarilari", gorunen[0].Oge?.Href);
+        Assert.Equal("/dashboard", gorunen[1].Oge?.Href);
     }
 
     [Fact]
-    public void Destek_talep_acma_herkese_aciktir_ekip_ekranlari_yetki_ister()
+    public void Destek_menusu_normal_kullaniciya_kapalidir()
     {
-        // Yetkisi olmayan kullanıcı da sorun bildirebilmeli: talep açma, Taleplerim ve Bilgi Bankası herkese açık.
+        // Sorun Bildir ve Taleplerim üst çubukta; ekip menüsü normal kullanıcıya gösterilmez.
         var yetkisiz = Bagla([]);
         var gorunen = Gorunenler(yetkisiz);
 
-        Assert.Contains("destek", GorunenGruplar(yetkisiz));
-        Assert.Contains("/destek-talepleri/talep-giris", gorunen);
-        Assert.Contains("/destek-talepleri/taleplerim", gorunen);
-        Assert.Contains("/destek-talepleri/bilgi-bankasi", gorunen);
+        Assert.DoesNotContain("destek", GorunenGruplar(yetkisiz));
+        Assert.DoesNotContain("/destek-talepleri/talep-giris", gorunen);
+        Assert.DoesNotContain("/destek-talepleri/taleplerim", gorunen);
+        Assert.DoesNotContain("/destek-talepleri/bilgi-bankasi", gorunen);
         Assert.DoesNotContain("/destek-talepleri", gorunen);
         Assert.DoesNotContain("/destek-talepleri/yonetim", gorunen);
         Assert.DoesNotContain("/destek-talepleri/ayarlar", gorunen);

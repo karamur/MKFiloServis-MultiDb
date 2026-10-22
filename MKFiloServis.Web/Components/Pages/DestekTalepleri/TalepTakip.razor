@@ -29,7 +29,6 @@ else
                 <a href="destek-talepleri/taleplerim" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Geri</a>
                 <span class="h4 mb-0"><span class="text-muted">#</span>@talep.TalepNo</span>
                 <DestekDurumRozeti Durum="talep.Durum" />
-                <DestekOncelikRozeti Oncelik="talep.Oncelik" />
             </div>
             @if (detay.Isleyebilir)
             {
@@ -104,47 +103,24 @@ else
 
             <div class="col-lg-4">
                 <div class="card mb-3">
-                    <div class="card-header"><h6 class="mb-0"><i class="bi bi-person-badge me-2"></i>İlgilenen Yetkili</h6></div>
-                    <div class="card-body">
-                        @if (talep.AtananKullanici != null)
-                        {
-                            <div class="d-flex align-items-center">
-                                <i class="bi bi-person-circle fs-2 text-primary me-3"></i>
-                                <div>
-                                    <strong>@talep.AtananKullanici.AdSoyad</strong>
-                                    <div class="small text-muted">@talep.Departman?.Ad</div>
-                                </div>
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="text-muted text-center small"><i class="bi bi-hourglass-split fs-3 d-block mb-2"></i>Talebiniz henüz bir yetkiliye atanmadı.</div>
-                        }
-                    </div>
-                </div>
-
-                <div class="card mb-3">
-                    <div class="card-header"><h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Talep Bilgileri</h6></div>
+                    <div class="card-header"><h6 class="mb-0"><i class="bi bi-ticket-perforated me-2"></i>Talep Özeti</h6></div>
                     <div class="card-body small">
-                        <div class="d-flex justify-content-between mb-1"><span class="text-muted">Departman</span><span>@(talep.Departman?.Ad ?? "-")</span></div>
-                        <div class="d-flex justify-content-between mb-1"><span class="text-muted">Kategori</span><span>@(talep.Kategori?.Ad ?? "-")</span></div>
-                        <div class="d-flex justify-content-between mb-1"><span class="text-muted">Oluşturulma</span><span>@MKFiloServis.Shared.Time.BusinessTime.LocalAt(talep.CreatedAt).ToString("dd.MM.yyyy HH:mm")</span></div>
+                        <div class="d-flex justify-content-between mb-2"><span class="text-muted">Talep No</span><strong>@talep.TalepNo</strong></div>
+                        <div class="d-flex justify-content-between mb-2"><span class="text-muted">Oluşturulma</span><span>@MKFiloServis.Shared.Time.BusinessTime.LocalAt(talep.CreatedAt).ToString("dd.MM.yyyy HH:mm")</span></div>
+                        <div class="d-flex justify-content-between"><span class="text-muted">Son güncelleme</span><span>@MKFiloServis.Shared.Time.BusinessTime.LocalAt(talep.SonAktiviteTarihi).ToString("dd.MM.yyyy HH:mm")</span></div>
                         @if (talep.KapatilmaTarihi.HasValue)
                         {
-                            <div class="d-flex justify-content-between mb-1"><span class="text-muted">Kapanma</span><span>@MKFiloServis.Shared.Time.BusinessTime.LocalAt(talep.KapatilmaTarihi.Value).ToString("dd.MM.yyyy HH:mm")</span></div>
+                            <div class="d-flex justify-content-between mt-2"><span class="text-muted">Kapanma</span><span>@MKFiloServis.Shared.Time.BusinessTime.LocalAt(talep.KapatilmaTarihi.Value).ToString("dd.MM.yyyy HH:mm")</span></div>
                         }
                         @if (talep.MemnuniyetPuani.HasValue)
                         {
-                            <div class="d-flex justify-content-between"><span class="text-muted">Memnuniyetiniz</span><span class="text-warning">@(new string('★', talep.MemnuniyetPuani.Value))</span></div>
+                            <div class="d-flex justify-content-between mt-2"><span class="text-muted">Memnuniyetiniz</span><span class="text-warning">@(new string('★', talep.MemnuniyetPuani.Value))</span></div>
                         }
                     </div>
                 </div>
-
-                <div class="card">
-                    <div class="card-header"><h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Geçmiş</h6></div>
-                    <div class="card-body p-0" style="max-height: 420px; overflow-y: auto;">
-                        <DestekZamanCizelgesi Aktiviteler="detay.Aktiviteler" TalepEdenGorunumu="true" />
-                    </div>
+                <div class="alert alert-light border small mb-0">
+                    <i class="bi bi-shield-check text-success me-1"></i>
+                    Burada yalnızca sizinle destek ekibi arasındaki mesajlar görünür. Ekibin iç notları size gösterilmez.
                 </div>
             </div>
         </div>

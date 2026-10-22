@@ -17,7 +17,6 @@ main {
 
 .top-row {
     background-color: rgba(255, 255, 255, 0.92);
-    backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--crm-border);
     justify-content: flex-end;
     min-height: 4rem;
@@ -99,6 +98,10 @@ main {
         position: sticky;
         top: 0;
         z-index: 10;
+    }
+
+    .top-row:has(.sorun-bildir-modal) {
+        z-index: 2000;
     }
 
     .top-row.auth ::deep a:first-child {

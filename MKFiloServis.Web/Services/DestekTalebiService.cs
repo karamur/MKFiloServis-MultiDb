@@ -1,4 +1,5 @@
 using System.Text;
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Shared.Entities;
 using MKFiloServis.Shared.Time;
@@ -209,10 +210,17 @@ public partial class DestekTalebiService : IDestekTalebiService
 
         var talepler = await context.DestekTalepleri
             .AsNoTracking()
-            .Include(x => x.Departman)
-            .Include(x => x.AtananKullanici)
             .Where(x => x.OlusturanKullaniciId == aktor.Id)
             .OrderByDescending(x => x.SonAktiviteTarihi)
+            .Select(x => new DestekTalebi
+            {
+                Id = x.Id,
+                TalepNo = x.TalepNo,
+                Konu = x.Konu,
+                Durum = x.Durum,
+                Kaynak = x.Kaynak,
+                SonAktiviteTarihi = x.SonAktiviteTarihi
+            })
             .ToListAsync();
         Normallestir(talepler);
         return talepler;
@@ -227,6 +235,17 @@ public partial class DestekTalebiService : IDestekTalebiService
         var aktor = await _kullaniciSaglayici.GetirAsync();
         if (aktor == null) return null;
 
+        return await DetayGetirAsync(talepId, aktor, ekipEkrani: false);
+    }
+
+    public async Task<DestekTalepDetayi?> GetEkipDetayAsync(int talepId)
+    {
+        var aktor = await EkipUyesiGerekliAsync();
+        return await DetayGetirAsync(talepId, aktor, ekipEkrani: true);
+    }
+
+    private async Task<DestekTalepDetayi?> DetayGetirAsync(int talepId, DestekKullanici aktor, bool ekipEkrani)
+    {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var talep = await context.DestekTalepleri
             .AsNoTracking()
@@ -238,11 +257,12 @@ public partial class DestekTalebiService : IDestekTalebiService
             .FirstOrDefaultAsync(x => x.Id == talepId);
         if (talep == null) return null;
         talep.Durum = DestekKurallari.Normallestir(talep.Durum);
+        if (!ekipEkrani && talep.OlusturanKullaniciId != aktor.Id) return null;
 
         var yazilimDepartmanId = await YazilimDepartmanIdAsync(context);
         var rol = DestekErisim.Rol(aktor, talep, yazilimDepartmanId);
         if (!DestekErisim.Gorebilir(rol)) return null;
-        var ekipGorunumu = DestekErisim.Isleyebilir(rol);
+        var ekipGorunumu = ekipEkrani && DestekErisim.Isleyebilir(rol);
 
         var yanitlar = await context.DestekTalebiYanitlari
             .AsNoTracking()
@@ -273,6 +293,27 @@ public partial class DestekTalebiService : IDestekTalebiService
                 .Select(y => y.Id)
                 .ToListAsync();
             ekler = ekler.Where(e => e.YanitId == null || !dahiliYanitlar.Contains(e.YanitId.Value)).ToList();
+
+            // Müşteri ekranına yalnız talebini takip etmesi için gereken alanları bırak.
+            talep.Departman = null!;
+            talep.Kategori = null;
+            talep.AtananKullanici = null;
+            talep.OlusturanKullanici = null;
+            talep.Cari = null;
+            talep.DepartmanId = 0;
+            talep.KategoriId = null;
+            talep.AtananKullaniciId = null;
+            talep.OlusturanKullaniciId = null;
+            talep.CariId = null;
+            talep.MusteriEmail = string.Empty;
+            talep.MusteriTelefon = null;
+            talep.SlaSuresi = null;
+            talep.SlaBitisTarihi = null;
+            talep.SlaAsildi = false;
+            talep.CozumSuresiDakika = null;
+            talep.IlkYanitSuresiDakika = null;
+            talep.DahiliNotlar = null;
+            talep.Etiketler = null;
         }
 
         return new DestekTalepDetayi
@@ -530,7 +571,18 @@ public partial class DestekTalebiService : IDestekTalebiService
         ApplicationDbContext context, DestekTalebi talep, DestekKullanici? aktor, string aktiviteMetni,
         IEnumerable<DestekTalebiYanit>? ekYanitlar = null)
     {
-        talep.TalepNo = await _numaraSerisi.GenerateFormattedAsync("TKT", 0, 6);
+        var yilOnEki = $"TKT-{DateTime.UtcNow.Year}-";
+        var mevcutTalepNolari = await context.DestekTalepleri.AsNoTracking()
+            .Where(x => x.TalepNo.StartsWith(yilOnEki))
+            .Select(x => x.TalepNo)
+            .ToListAsync();
+        var enBuyukTalepNo = mevcutTalepNolari
+            .Select(no => int.TryParse(no.AsSpan(yilOnEki.Length), NumberStyles.None, CultureInfo.InvariantCulture, out var sira) ? sira : 0)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        // FisNoCounters tablosu eski/elle açılmış taleplerin gerisinde kalmış olabilir.
+        talep.TalepNo = await _numaraSerisi.GenerateFormattedAtLeastAsync("TKT", 0, 6, enBuyukTalepNo + 1);
         var simdi = DateTime.UtcNow;
         talep.CreatedAt = simdi;
         talep.SonAktiviteTarihi = simdi;

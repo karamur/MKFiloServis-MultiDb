@@ -19,6 +19,7 @@ public static class AnaMenuYapisi
 
     private static IReadOnlyList<IMenuDugumu> Olustur() =>
     [
+        Oge("Belge Uyarıları", "/belge-uyarilari", "bi-exclamation-triangle-fill", "text-warning", Yetki("belgeuyari.oku")),
         Oge("Ana Sayfa", "/dashboard", "bi-house-door-fill"),
 
         // ── CARİ ────────────────────────────────────────────────────────────────
@@ -221,7 +222,6 @@ public static class AnaMenuYapisi
                     Oge("Gelen Evraklar", "/ebys/gelen", "bi-inbox-fill", "text-primary", EbysKurali),
                     Oge("Giden Evraklar", "/ebys/giden", "bi-send-fill", "text-success", EbysKurali),
                     Oge("Evrak Takip", "/ebys/takip", "bi-kanban-fill", "text-warning", EbysKurali),
-                    Oge("Belge Uyarıları", "/belge-uyarilari", "bi-exclamation-triangle-fill", "text-warning", Yetki("belgeuyari.oku")),
                     Oge("Evrak Kategorileri", "/ebys/kategoriler", "bi-folder2", "text-secondary", EbysKurali),
                 ]),
             ]),
@@ -310,8 +310,7 @@ public static class AnaMenuYapisi
                 ]),
             ]),
 
-        // ── DESTEK: talep açmak, kendi taleplerini izlemek ve bilgi bankası herkese açık (sorun bildirebilsin);
-        //    ekip ekranları destek personeli (destektalebi.yaz) ya da yazılım ekibi (destektalebi.yazilim) ister ──
+        // ── DESTEK: sol menü yalnız destek/yazılım ekibine açık. Kullanıcı kendi taleplerine üst çubuktan gider. ──
         Grup("destek", "DESTEK", "bi-headset",
             altlar:
             [
@@ -324,7 +323,7 @@ public static class AnaMenuYapisi
                     Oge("Talep Yönetimi", "/destek-talepleri/yonetim", "bi-kanban", "text-warning", Herhangi("destektalebi.yaz", "destektalebi.yazilim")),
                     Oge("Destek Ayarları", "/destek-talepleri/ayarlar", "bi-sliders", "text-secondary", Yetki("destektalebi.duzenle")),
                 ]),
-            ]),
+            ], kural: Herhangi("destektalebi.yaz", "destektalebi.yazilim", "destektalebi.duzenle")),
     ];
 
     // ── ortak koşullar ──────────────────────────────────────────────────────────

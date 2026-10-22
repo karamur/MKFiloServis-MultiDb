@@ -33,6 +33,9 @@ public interface IDestekTalebiService
     /// <summary>Erişim yoksa null.</summary>
     Task<DestekTalepDetayi?> GetDetayAsync(int talepId);
 
+    /// <summary>İç ekip detay ekranı; destek personeli veya yazılım ekibi yetkisi zorunludur.</summary>
+    Task<DestekTalepDetayi?> GetEkipDetayAsync(int talepId);
+
     Task<DestekTalebiYanit> YanitEkleAsync(int talepId, DestekYanitIstegi istek);
 
     Task EylemUygulaAsync(int talepId, DestekEylem eylem, DestekEylemIstegi? istek = null);

@@ -116,6 +116,16 @@ else
                             <label class="visually-hidden" for="dtYanit">Yanıt</label>
                             <textarea id="dtYanit" class="form-control mb-2" rows="4" @bind="yanitMetni" @bind:event="oninput"
                                       placeholder="@(dahiliNot ? "Yalnız ekibin göreceği not..." : "Talep edene yanıtınız...")"></textarea>
+                            <div class="form-text mb-2">
+                                @if (dahiliNot)
+                                {
+                                    <span>Bu not yalnız destek ve yazılım ekibine görünür; müşteriye bildirim gönderilmez.</span>
+                                }
+                                else
+                                {
+                                    <span>Yanıt müşterinin talep takip ekranında görünür. Müşteriye uygulama bildirimi gönderilir; e-posta bildirimleri açıksa e-posta da iletilir.</span>
+                                }
+                            </div>
                             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
                                 <div class="d-flex flex-wrap gap-3">
                                     <div class="form-check">
@@ -136,7 +146,7 @@ else
                                     {
                                         <span class="spinner-border spinner-border-sm me-1"></span>
                                     }
-                                    <i class="bi @(dahiliNot ? "bi-lock" : "bi-send") me-1"></i>@(dahiliNot ? "Not Ekle" : "Yanıtla")
+                                    <i class="bi @(dahiliNot ? "bi-lock" : "bi-send") me-1"></i>@(dahiliNot ? "Not Ekle" : "Yanıtla ve Bildir")
                                 </button>
                             </div>
                         </div>
@@ -428,7 +438,7 @@ else
         {
             yuklemeHatasi = null;
             aktor ??= await DestekService.GetAktifKullaniciAsync();
-            detay = await DestekService.GetDetayAsync(TalepId);
+            detay = await DestekService.GetEkipDetayAsync(TalepId);
             if (detay != null && DestekErisim.YalnizSahip(detay.Rol))
             {
                 // Ekip yetkisi olmayan talep sahibi kendi takip ekranını kullanır.
@@ -490,7 +500,7 @@ else
                 BilgiIste = bilgiIste && !dahiliNot,
                 HazirYanitId = hazirYanitId
             });
-            ToastService.ShowSuccess(dahiliNot ? "Dahili not eklendi." : "Yanıt gönderildi.");
+            ToastService.ShowSuccess(dahiliNot ? "Dahili not eklendi." : "Müşteriye açık yanıt kaydedildi.");
             yanitMetni = string.Empty;
             dahiliNot = false;
             bilgiIste = false;
